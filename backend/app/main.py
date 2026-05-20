@@ -81,6 +81,35 @@ def _safe_add_column(table: str, col_name: str, col_type: str) -> None:
         )
 
 
+def _backfill_work_items_service_from_module() -> None:
+    """Phase B (knowledge-workitem-linkage) — module → service 1회성 backfill.
+
+    Idempotent: ``WHERE service IS NULL`` 조건으로 이미 채워진 행은 건드리지 않음.
+    매핑: monitoring→prometheus, infra→etcd, backend/frontend→skip(서비스 아님),
+    나머지는 module 값을 service 에 1:1 복사 (k8s↔k8s 등).
+    """
+    from sqlalchemy import text as _text
+    sql = _text("""
+        UPDATE work_items
+           SET service =
+             CASE module
+               WHEN 'monitoring' THEN 'prometheus'
+               WHEN 'infra'      THEN 'etcd'
+               ELSE module
+             END
+         WHERE service IS NULL
+           AND module IS NOT NULL
+           AND module NOT IN ('backend', 'frontend')
+    """)
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(sql)
+            n = result.rowcount if result.rowcount is not None else -1
+        _log.info("backfill: %s rows updated (module → service)", n)
+    except Exception as e:  # noqa: BLE001
+        _log.warning("backfill: failed (%s) — continuing", e)
+
+
 def _safe_exec(sql: str, *, label: str = "") -> None:
     """범용 DDL/DML 실행 헬퍼 — 한 트랜잭션으로 실행하고 예외는 로깅만.
 
@@ -429,6 +458,16 @@ def _run_migrations():
                     f"ALTER TABLE work_items ALTER COLUMN {col} SET NOT NULL",
                     label=f"work_items.{col} SET NOT NULL",
                 )
+
+    # Phase B (knowledge-workitem-linkage) — service 하위 component 컬럼 추가 +
+    # 기존 module 값을 service 로 1회성 backfill (idempotent).
+    if "work_items" in set(inspect(engine).get_table_names()):
+        _safe_add_column("work_items", "component", "VARCHAR(64)")
+        _safe_exec(
+            "CREATE INDEX IF NOT EXISTS ix_work_items_component ON work_items(component)",
+            label="work_items.component index",
+        )
+        _backfill_work_items_service_from_module()
 
     # clusters: statusenum 에 'pending' 값 추가 (PostgreSQL enum 확장)
     try:

@@ -10,6 +10,7 @@ import { ConfluenceUrlInput } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
+import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
 
@@ -105,6 +106,10 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
   const [category, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
   const [service, setService] = useState('');
+  // Phase B — service 하위 component (recommended dropdown + 직접 입력 escape hatch).
+  // 빈 문자열 = 미선택, '__custom__' = 직접 입력 모드 (componentCustom 사용).
+  const [component, setComponent] = useState('');
+  const [componentCustom, setComponentCustom] = useState('');
   const [content, setTaskContent] = useState('');
   const [resolution, setResultContent] = useState('');
   const [startedAt, setScheduledAt] = useState(todayDatetimeLocal());
@@ -154,6 +159,16 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
       setDoneCondition(initial.doneCondition ?? '');
       setIssueId(initial.relatedWorkItemId ?? '');
       setService(initial.service ?? '');
+      // Phase B — initial.component 가 COMPONENT_BY_SERVICE 의 추천 옵션이면 그대로,
+      // 그렇지 않으면 '__custom__' 모드로 진입 + componentCustom 채움.
+      {
+        const initComp = initial.component ?? '';
+        if (initComp) {
+          const known = getComponentsForService(initial.service).includes(initComp);
+          setComponent(known ? initComp : '__custom__');
+          setComponentCustom(known ? '' : initComp);
+        }
+      }
       setHydrated(true);
     } else if (parentItem) {
       setPrimaryAssignee(parentItem.primaryAssignee ?? parentItem.assignee);
@@ -217,6 +232,13 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
       parentId: parentItem?.id,
       relatedWorkItemId: relatedWorkItemId || undefined,
       service: service.trim() || undefined,
+      // Phase B — service 가 있을 때만 component 가 의미. '__custom__' 모드면 input 값을,
+      // 추천 옵션 선택이면 그 값을 그대로 전송. service 가 없으면 component 강제 null.
+      component: service.trim()
+        ? (component === '__custom__'
+            ? (componentCustom.trim() || undefined)
+            : (component || undefined))
+        : undefined,
     };
 
     let savedId: string | undefined;
@@ -313,7 +335,12 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
           <select
             id={f('service')}
             value={service}
-            onChange={(e) => setService(e.target.value)}
+            onChange={(e) => {
+              // Phase B cascade — service 변경 시 component 도 함께 reset (이전 값 잔존 방지)
+              setService(e.target.value);
+              setComponent('');
+              setComponentCustom('');
+            }}
             className={inputClass}
           >
             <option value="">— 선택 안 함 —</option>
@@ -324,6 +351,36 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
               ))}
           </select>
         </div>
+        {/* Phase B — service 가 있을 때만 component dropdown 활성화 */}
+        {service && (
+          <div>
+            <label htmlFor={f('component')} className={labelClass} title="서비스 하위 component (선택)">
+              컴포넌트
+            </label>
+            <select
+              id={f('component')}
+              value={component}
+              onChange={(e) => setComponent(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">— component 선택 (선택) —</option>
+              {getComponentsForService(service).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value="__custom__">직접 입력...</option>
+            </select>
+            {component === '__custom__' && (
+              <input
+                type="text"
+                value={componentCustom}
+                onChange={(e) => setComponentCustom(e.target.value)}
+                placeholder="component 이름"
+                className={`${inputClass} mt-1`}
+                maxLength={64}
+              />
+            )}
+          </div>
+        )}
         <div>
           <label htmlFor={f('priority')} className={labelClass}>우선순위 *</label>
           <select
@@ -543,7 +600,9 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
                 </select>
               </div>
               <div>
-                <label htmlFor={f('module')} className={labelClass}>모듈</label>
+                <label htmlFor={f('module')} className={labelClass} title="추후 deprecate 예정 — 가능하면 위 '서비스/컴포넌트' 사용">
+                  모듈 <span className="text-[9px] text-muted-foreground/60">(legacy)</span>
+                </label>
                 <select
                   id={f('module')}
                   value={module}
