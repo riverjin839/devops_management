@@ -132,7 +132,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
         </div>
       ) : groups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 py-10 text-center text-sm text-muted-foreground">
-          {isToday ? '오늘 예정된 작업이 없습니다.' : '해당 날짜에 예정된 작업이 없습니다.'}
+          {isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
         </div>
       ) : (
         <div className="space-y-2.5 pr-1">

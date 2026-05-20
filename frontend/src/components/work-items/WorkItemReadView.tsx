@@ -33,7 +33,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 }
 
 /**
- * 작업 상세 read 뷰 본문. `TaskDetailPage` (`/work-items/:id`) 에서 사용.
+ * 업무 상세 read 뷰 본문. `WorkItemDetailPage` (`/work-items/:id`) 에서 사용.
  * 헤더(배지·수정 버튼)는 호출 측이 그림.
  */
 export function WorkItemReadView({ item }: WorkItemReadViewProps) {

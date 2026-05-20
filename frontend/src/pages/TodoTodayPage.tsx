@@ -328,7 +328,7 @@ export function TodoTodayPage() {
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            오늘 예정된 작업과 진행 중인 작업을 담당자별로 확인합니다.
+            오늘 예정된 업무와 진행 중인 업무를 담당자별로 확인합니다.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -336,7 +336,7 @@ export function TodoTodayPage() {
             to="/items"
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
           >
-            작업 게시판
+            업무 게시판
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
           <button
@@ -344,7 +344,7 @@ export function TodoTodayPage() {
             className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
-            작업 추가
+            업무 추가
           </button>
           <button
             onClick={() => refetch()}
@@ -406,16 +406,16 @@ export function TodoTodayPage() {
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
           <CalendarCheck2 className="w-12 h-12 opacity-30" />
           <div className="text-center">
-            <p className="text-base font-medium">오늘 예정된 작업이 없습니다</p>
+            <p className="text-base font-medium">오늘 예정된 업무가 없습니다</p>
             <p className="text-sm mt-1 opacity-70">
-              작업 게시판에서 오늘 날짜로 작업을 등록하거나, 진행 중 작업이 있으면 여기에 표시됩니다.
+              업무 게시판에서 오늘 날짜로 업무를 등록하거나, 진행 중 업무가 있으면 여기에 표시됩니다.
             </p>
           </div>
           <Link
             to="/items"
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
           >
-            작업 게시판으로 이동
+            업무 게시판으로 이동
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>

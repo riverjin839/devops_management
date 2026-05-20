@@ -153,7 +153,7 @@ export function WorkItemBoardPage() {
     navigate(`/tasks-mgmt/${item.id}/edit`);
   };
 
-  // 하위 작업 등록.
+  // 하위 업무 등록.
   const handleAddSubItem = (item: WorkItem) => {
     navigate(`/tasks-mgmt/new?parentId=${item.id}`);
   };
@@ -433,14 +433,14 @@ export function WorkItemBoardPage() {
           <div className="text-center py-20">
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
             <p className="text-muted-foreground mb-4">
-              {hasFilters ? '검색 조건에 해당하는 작업이 없습니다.' : '등록된 작업이 없습니다.'}
+              {hasFilters ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
             </p>
             {!hasFilters && (
               <button
                 onClick={handleCreateNew}
                 className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
               >
-                + 첫 번째 작업 등록
+                + 첫 번째 업무 등록
               </button>
             )}
           </div>

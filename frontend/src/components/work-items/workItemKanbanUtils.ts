@@ -38,14 +38,14 @@ export const KANBAN_COLUMNS: KanbanColumnConfig[] = [
     label: 'To Do',
     headerCls: 'border-blue-500/40 bg-blue-500/5',
     dotCls: 'bg-blue-400',
-    emptyText: '이번 스프린트에 할 작업을 추가하세요',
+    emptyText: '이번 스프린트에 할 업무를 추가하세요',
   },
   {
     key: 'in_progress',
     label: 'In Progress',
     headerCls: 'border-amber-500/40 bg-amber-500/5',
     dotCls: 'bg-amber-400',
-    emptyText: '진행 중인 작업이 없습니다',
+    emptyText: '진행 중인 업무가 없습니다',
     wipLimit: 2,
   },
   {
@@ -53,14 +53,14 @@ export const KANBAN_COLUMNS: KanbanColumnConfig[] = [
     label: 'Review & Test',
     headerCls: 'border-purple-500/40 bg-purple-500/5',
     dotCls: 'bg-purple-400',
-    emptyText: '검증 중인 작업이 없습니다',
+    emptyText: '검증 중인 업무가 없습니다',
   },
   {
     key: 'done',
     label: 'Done',
     headerCls: 'border-emerald-500/40 bg-emerald-500/5',
     dotCls: 'bg-emerald-400',
-    emptyText: '완료된 작업이 없습니다',
+    emptyText: '완료된 업무가 없습니다',
   },
 ];
 
