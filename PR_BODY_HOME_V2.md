@@ -1,16 +1,16 @@
 # feature/home-v2 → main 머지 본문
 
-> **From**: `feature/home-v2` @ `38dbfca`
+> **From**: `feature/home-v2` @ `9d5a63e`
 > **To**: `main` @ `aec59eb`
-> **Scope**: 20 commits, 40 files (+5,308 / -1,514)
-> **Status**: ahead 20 / behind 0 — fast-forward 가능
+> **Scope**: 22 commits, 52 files (+5,858 / -1,517)
+> **Status**: ahead 22 / behind 0 — fast-forward 가능
 > **검증**: ESLint(max-warnings 0) ✅ · tsc --noEmit ✅ · 회귀 없음
 
 ---
 
 ## 요약
 
-본 PR 은 한 branch(`feature/home-v2`)에서 진행된 **4 개 묶음 작업**을 한 번에 main 으로 머지합니다. 각 묶음은 자체 commit 시퀀스를 가지며 시간 순서대로 정렬되어 있습니다.
+본 PR 은 한 branch(`feature/home-v2`)에서 진행된 **5 개 묶음 작업**을 한 번에 main 으로 머지합니다. 각 묶음은 자체 commit 시퀀스를 가지며 시간 순서대로 정렬되어 있습니다.
 
 | 묶음 | Commits | 핵심 결과물 |
 |---|---:|---|
@@ -18,6 +18,7 @@
 | **2. work-items 라벨 통일** | 1 | "작업" 옛 용어 잔존 18곳을 "업무" 로 통일. type-specific 한 "작업" 은 유지 |
 | **3. KnowledgeHubPage 단순화** | 2 | cards 뷰 제거 → table only (754 → 445줄, -41%). "미해결 이슈" 빠른 필터 chip 추가 |
 | **4. knowledge-workitem-linkage Phase A (PDCA)** | 6 (merge 1 포함) | ServiceHub ↔ WorkItem 양방향 cross-view + Plan/Design/Analysis/Report 4 문서 archive |
+| **5. knowledge-workitem-linkage Phase B (PDCA)** | 2 | WorkItem.component 컬럼 + COMPONENT_BY_SERVICE constant + Form cascade dropdown + module→service idempotent backfill |
 
 ---
 
@@ -142,15 +143,59 @@ cards 제거로 손실된 "미해결 이슈" 가시성을 table 페이지 안에
 - `report.md` — Value Delivered (4 perspectives with metrics) + Carry Items
 
 ### Carry Items (별도 사이클로 이어짐)
-- **Phase B** (~1-2주): `WorkItem.component` 컬럼 + COMPONENT_BY_SERVICE constant + 마이그레이션
+- ~~Phase B~~ — **묶음 5 에서 완료** ✅
 - **Phase C** (~1-2주): KnowledgeHub + WorkItemBoard 의 service/component/typeLabel chip
 - Moderate gap 1: backend `work_items` 에 `?service=` 쿼리 파라미터 추가
 - Moderate gap 4: opsNotes pagination 도입
 
 ---
 
+## 묶음 5 — knowledge-workitem-linkage Phase B (PDCA cycle)
+
+Phase A 의 cross-view 위에 **component 정밀 좌표** 추가. Q4 합의 (module 보존 + (legacy) 라벨 / backfill 자동 매핑 / cascade reset) 모두 추천안 자율 진행.
+
+### Backend (B1-B3, B7)
+- `backend/app/models/work_item.py` — `component = Column(String(64), nullable=True, index=True)` 추가 (service 와 동일 정책)
+- `backend/app/schemas/work_item.py` — WorkItemBase + Update 에 component 필드
+- `backend/app/main.py` — `_safe_add_column("work_items", "component", "VARCHAR(64)")` + `CREATE INDEX IF NOT EXISTS` + 신규 `_backfill_work_items_service_from_module()` 함수 (idempotent — `WHERE service IS NULL` 조건)
+- `backend/app/routers/work_items.py` — serialize() 에 component, CSV export 에 "서비스" / "컴포넌트" / "모듈(legacy)" 헤더
+
+### Frontend (B4-B6, B8)
+- `frontend/src/components/services/serviceCatalog.ts` — **COMPONENT_BY_SERVICE** constant (12 service × 각 4-7 component = 60+ 좌표)
+  - k8s: api-server / scheduler / etcd / controller-manager / kubelet / kube-proxy / coredns
+  - keycloak / nexus / jenkins / argocd / cilium / prometheus / grafana / etcd / hubble / ingress / storage / other
+- `frontend/src/types/index.ts` — WorkItem/Create/Update 에 `component?: string`
+- `frontend/src/components/work-items/WorkItemForm.tsx`:
+  - state: component + componentCustom (직접 입력 모드)
+  - service onChange — cascade reset (`setComponent('') + setComponentCustom('')`)
+  - service 가 있을 때만 component select 노출
+  - `__custom__` 선택 시 input 활성화 (escape hatch)
+  - module 라벨에 "(legacy)" 표기
+
+### Backfill 매핑
+```
+monitoring → prometheus
+infra      → etcd
+backend, frontend → skip (서비스 아님)
+나머지     → module 값을 service 에 1:1 복사 (k8s↔k8s 등)
+```
+
+### Match Rate 100% (SC-1~8 모두 met, 코드 레벨)
+runtime 검증은 docker-compose 부팅 시 `[backfill] {N} rows: module → service` 로그로 자동 확인.
+
+### Archive
+`docs/archive/2026-05/knowledge-workitem-linkage-phase-b/{plan,design,analysis,report}.md`
+
+---
+
 ## Test plan
 
+- [ ] **Phase B**: backend 부팅 로그에 `[backfill] N rows: module → service` 노출 + 두 번째 부팅에서 N=0
+- [ ] **Phase B**: WorkItemForm 에서 service='k8s' 선택 → 컴포넌트 dropdown 에 7개 옵션 (api-server, scheduler, etcd, controller-manager, kubelet, kube-proxy, coredns) 노출
+- [ ] **Phase B**: service='k8s' → 'keycloak' 변경 시 component 가 빈 값으로 reset
+- [ ] **Phase B**: component '직접 입력...' 선택 시 input 노출되고 입력값이 payload 에 포함됨
+- [ ] **Phase B**: module 라벨에 "(legacy)" 표기 보이는지
+- [ ] **Phase B**: CSV 추출 → 헤더에 "서비스" / "컴포넌트" / "모듈(legacy)" 컬럼 포함
 - [ ] `/batch-jobs` 진입 — 매트릭스 뷰가 잡 중심 단일 리스트로 보이는지, 행 클릭 시 dock 슬라이드오버가 열리는지 (≥1280px), 좁은 창에서 overlay 로 전환되는지
 - [ ] `/batch-jobs` 의 `+ 새 잡` 버튼 — 3-step wizard 정상 동작 (Type → Host → Schedule)
 - [ ] wizard 의 `onCreated(job)` → 슬라이드오버가 즉시 열리는지 (race fix 검증)
@@ -177,11 +222,13 @@ cards 제거로 손실된 "미해결 이슈" 가시성을 table 페이지 안에
 
 | 우선순위 | 작업 | 추정 |
 |---:|---|---|
-| H | knowledge-workitem-linkage Phase B — WorkItem.component 컬럼 + 마이그레이션 | 1-2주 |
-| M | knowledge-workitem-linkage Phase C — KnowledgeHub/WorkItemBoard service/component/typeLabel chip | 1-2주 |
+| ~~H~~ | ~~knowledge-workitem-linkage Phase B~~ — **묶음 5 에서 완료** ✅ | — |
+| H | knowledge-workitem-linkage Phase C — KnowledgeHub/WorkItemBoard service/component/typeLabel chip | 1-2주 |
 | M | IncidentAnalysisPage 결과 영구 저장 (knowledge-services-coherence Gap G2 — 단독 single-file fix 후보) | 2-3일 |
 | M | Issue resolution → Troubleshoot 자동 승격 (Gap G7) | 3-5일 |
+| M | backend work_items 에 ?service= / ?component= 쿼리 파라미터 (frontend filter → server filter) | 2일 |
 | L | 자동 알림/멘션/구독 시스템 (Gap G6) — 기존 `notifier.py` 채널 패턴 재사용 | 1주 |
+| L | opsNotes pagination 도입 | 2일 |
 
 ---
 
