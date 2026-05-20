@@ -1,6 +1,6 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Pencil, Trash2, Plus } from 'lucide-react';
-import { WorkItemForm, WorkItemReadView } from '@/components/work-items';
+import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar } from '@/components/work-items';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
 
 export function WorkItemDetailPage() {
@@ -98,8 +98,12 @@ export function WorkItemDetailPage() {
             />
           </>
         ) : (
-          <div className="bg-card border border-border rounded-2xl p-8 mac-shadow">
-            <WorkItemReadView item={item} />
+          <div className="flex gap-6 items-start">
+            <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl p-8 mac-shadow">
+              <WorkItemReadView item={item} />
+            </div>
+            {/* Cross-view (Phase A) — 같은 service 의 ServiceEntry 5건 sticky sidebar */}
+            {item.service && <RelatedServiceEntriesSidebar service={item.service} />}
           </div>
         )}
       </main>

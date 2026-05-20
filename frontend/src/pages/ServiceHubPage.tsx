@@ -16,6 +16,8 @@ import { useGetServiceDef } from '@/hooks/useServiceCatalog';
 import type { ServiceEntry, ServiceEntryKind } from '@/types';
 import { formatApiError } from '@/lib/utils';
 import { ServiceEntryEditModal } from '@/components/services/ServiceEntryEditModal';
+import { RelatedWorkItemsPanel } from '@/components/services/RelatedWorkItemsPanel';
+import { RelatedOpsNotesPanel } from '@/components/services/RelatedOpsNotesPanel';
 
 type KindFilter = 'all' | ServiceEntryKind;
 
@@ -302,6 +304,10 @@ export function ServiceHubPage() {
               <Loader2 className="w-3 h-3 animate-spin" /> 갱신 중
             </div>
           )}
+
+          {/* Cross-view (Phase A) — 같은 service 의 WorkItem / OpsNote 통합 표시 */}
+          <RelatedWorkItemsPanel service={service} />
+          <RelatedOpsNotesPanel service={service} />
         </div>
       </main>
 
