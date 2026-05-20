@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Save, Loader2, BookOpen, ArrowUp, ArrowDown } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus, Trash2, Save, Loader2, BookOpen, ArrowUp, ArrowDown, Pencil } from 'lucide-react';
 import type { ServiceCatalogEntry } from '@/types';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
-import { useToast } from '@/components/common';
+import { useToast, ClusterIconPicker } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { SERVICE_CATALOG } from '@/components/services/serviceCatalog';
-import { SERVICE_ICON_OPTIONS, getServiceIcon, colorBadgeClass } from '@/hooks/useServiceCatalog';
+import { getServiceIcon, colorBadgeClass } from '@/hooks/useServiceCatalog';
 
 const COLOR_OPTIONS = [
   'sky', 'amber', 'blue', 'orange', 'purple', 'red', 'cyan', 'emerald',
@@ -28,6 +28,10 @@ export function ServiceCatalogManager() {
   const [draft, setDraft] = useState<ServiceCatalogEntry[]>([]);
   const [dirty, setDirty] = useState(false);
   const [slugTouched, setSlugTouched] = useState<Set<number>>(new Set());
+  // ClusterIconPicker 를 띄울 대상 row 와 anchor 좌표 — null 이면 picker 닫힘.
+  const [iconPickerIdx, setIconPickerIdx] = useState<number | null>(null);
+  const [iconAnchor, setIconAnchor] = useState<DOMRect | null>(null);
+  const iconButtonRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
   // 서버 동기화 — 비어있으면 static 카탈로그를 시드.
   useEffect(() => {
@@ -151,9 +155,22 @@ export function ServiceCatalogManager() {
           return (
             <div key={idx} className={`grid grid-cols-12 gap-2 items-start p-2.5 border rounded-lg ${slugConflict ? 'border-red-500/40 bg-red-500/5' : 'border-border'}`}>
               <div className="col-span-1 flex items-center justify-center pt-1">
-                <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border ${colorBadgeClass(s.color || 'slate')}`}>
+                <button
+                  type="button"
+                  ref={(el) => {
+                    if (el) iconButtonRefs.current.set(idx, el);
+                    else iconButtonRefs.current.delete(idx);
+                  }}
+                  onClick={(e) => {
+                    setIconAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+                    setIconPickerIdx(idx);
+                  }}
+                  className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-all hover:ring-2 hover:ring-primary/30 ${colorBadgeClass(s.color || 'slate')}`}
+                  title="아이콘 변경 (lucide / 이모지 / 이미지 업로드)"
+                  aria-label="아이콘 변경"
+                >
                   <Icon className="w-4 h-4" />
-                </span>
+                </button>
               </div>
               <label className="col-span-3 block">
                 <span className="block text-[10px] text-muted-foreground mb-0.5">라벨</span>
@@ -171,14 +188,29 @@ export function ServiceCatalogManager() {
                   placeholder="k8s" className={`${inputCls} font-mono`} />
                 {slugConflict && <p className="text-[10px] text-red-500 mt-0.5">중복</p>}
               </label>
-              <label className="col-span-2 block">
+              <div className="col-span-2 block">
                 <span className="block text-[10px] text-muted-foreground mb-0.5">아이콘</span>
-                <select value={s.icon || ''} onChange={(e) => update(idx, { icon: e.target.value })}
-                  className={inputCls}>
-                  <option value="">기본 (BookOpen)</option>
-                  {SERVICE_ICON_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </label>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setIconAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+                    setIconPickerIdx(idx);
+                  }}
+                  className={`${inputCls} flex items-center gap-1.5 text-left hover:bg-secondary/40`}
+                  title="아이콘 변경"
+                >
+                  <Pencil className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate text-[11px] font-mono">
+                    {s.icon
+                      ? s.icon.startsWith('data:image/')
+                        ? '(업로드 이미지)'
+                        : s.icon.length > 14
+                          ? `${s.icon.slice(0, 14)}…`
+                          : s.icon
+                      : '기본'}
+                  </span>
+                </button>
+              </div>
               <label className="col-span-2 block">
                 <span className="block text-[10px] text-muted-foreground mb-0.5">색상</span>
                 <select value={s.color || 'slate'} onChange={(e) => update(idx, { color: e.target.value })}
@@ -213,6 +245,23 @@ export function ServiceCatalogManager() {
           <Plus className="w-3.5 h-3.5" /> 서비스 추가
         </button>
       </div>
+
+      {/* 아이콘 picker — 행의 아이콘 버튼 클릭 시 우측에 popover 로 노출 */}
+      {iconPickerIdx !== null && (
+        <ClusterIconPicker
+          title="서비스 아이콘 선택"
+          clusterName={draft[iconPickerIdx]?.label}
+          value={draft[iconPickerIdx]?.icon}
+          anchorRect={iconAnchor}
+          onChange={(next) => {
+            update(iconPickerIdx, { icon: next ?? '' });
+          }}
+          onClose={() => {
+            setIconPickerIdx(null);
+            setIconAnchor(null);
+          }}
+        />
+      )}
     </div>
   );
 }

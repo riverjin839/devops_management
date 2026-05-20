@@ -7,6 +7,7 @@ import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, Run
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
 import { ClusterSidebar } from '@/components/common';
+import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
@@ -18,15 +19,10 @@ import { Playbook } from '@/types';
 type PlaybookSortKey = 'name' | 'status' | 'lastRunAt';
 type ViewMode = 'list' | 'card';
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, unknown: 3 };
-const VIEW_MODE_KEY = 'k8s:playbooks:view-mode';
-
-function loadViewMode(): ViewMode {
-  try {
-    const v = localStorage.getItem(VIEW_MODE_KEY);
-    if (v === 'card' || v === 'list') return v;
-  } catch { /* ignore */ }
-  return 'list';
-}
+// localStorage 캐시는 하지 않는다 — 페이지 진입 시 항상 리스트가 기본.
+// 과거 'k8s:playbooks:view-mode' 키에 'card' 가 저장된 사용자도 잔존 캐시를 무력화하기 위해
+// 마운트 시 한 번 삭제. 카드 보기는 우상단 토글로 일시적으로만 사용.
+const LEGACY_VIEW_MODE_KEY = 'k8s:playbooks:view-mode';
 
 function SortableCardCell({ playbook, isRunning, onRun, onEdit, onDelete, onToggleDashboard }: {
   playbook: Playbook; isRunning: boolean;
@@ -70,7 +66,7 @@ export function PlaybooksPage() {
   const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<PlaybookSortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   // 단일 실행 시 자격증명 모달용 — 어떤 playbook 을 실행할지 보관.
   const [credsTarget, setCredsTarget] = useState<Playbook | null>(null);
   // 상세 로그 다이얼로그 — 클릭한 playbook 보관.
@@ -104,10 +100,10 @@ export function PlaybooksPage() {
   const { orderedItems: dndPlaybooks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(basePlaybooks, orderKey);
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  // viewMode 변경 시 localStorage 저장
+  // 과거에 'card' 로 저장된 사용자가 있을 수 있으므로 마운트 시 캐시를 한 번 정리한다.
   useEffect(() => {
-    try { localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch { /* ignore */ }
-  }, [viewMode]);
+    try { localStorage.removeItem(LEGACY_VIEW_MODE_KEY); } catch { /* ignore */ }
+  }, []);
 
   // cluster id → name 맵 (다중 선택 시 행 옆에 라벨로 표시)
   const clusterNameMap = useMemo(() => {
@@ -329,23 +325,27 @@ export function PlaybooksPage() {
                     <Download className="w-4 h-4" />
                     Export .md
                   </button>
-                  <button
-                    onClick={handleRunAll}
-                    className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <Play className="w-4 h-4" />
-                    Run All
-                  </button>
+                  <RoleGate allow={['admin', 'operator']}>
+                    <button
+                      onClick={handleRunAll}
+                      className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <Play className="w-4 h-4" />
+                      Run All
+                    </button>
+                  </RoleGate>
                 </>
               )}
 
-              <button
-                onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
-                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Register Playbook
-              </button>
+              <RoleGate allow={['admin', 'operator']}>
+                <button
+                  onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
+                  className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Register Playbook
+                </button>
+              </RoleGate>
             </div>
           </div>
 
@@ -372,12 +372,14 @@ export function PlaybooksPage() {
                   ? 'No playbooks registered yet'
                   : '선택한 클러스터에 등록된 playbook이 없습니다'}
               </p>
-              <button
-                onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                + Register your first playbook
-              </button>
+              <RoleGate allow={['admin', 'operator']}>
+                <button
+                  onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
+                  className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+                >
+                  + Register your first playbook
+                </button>
+              </RoleGate>
             </div>
           ) : viewMode === 'list' ? (
             <DndContext

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Play, Settings } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
@@ -28,9 +28,18 @@ interface DailyCheckLogLite {
 
 export function DailyCheckReviewPage() {
   const { clusterId = '' } = useParams<{ clusterId: string }>();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [latestLogId, setLatestLogId] = useState<string | null>(null);
   const { data: clusters = [] } = useClusters();
+
+  // /daily-check/review (clusterId 미지정) 진입 시 첫 번째 클러스터로 자동 라우팅.
+  // 메뉴에서 들어오는 사용자가 비어 있는 화면을 보지 않도록.
+  useEffect(() => {
+    if (!clusterId && clusters.length > 0) {
+      navigate(`/daily-check/review/${clusters[0].id}`, { replace: true });
+    }
+  }, [clusterId, clusters, navigate]);
 
   const dailyCheckLogId = params.get('log') || latestLogId || '';
 

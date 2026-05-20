@@ -2,9 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
-import { useIssues } from '@/hooks/useIssues';
-import { useTasks } from '@/hooks/useTasks';
-import type { Task, Issue, Assignee } from '@/types';
+import { useWorkItems } from '@/hooks/useWorkItems';
+import type { WorkItem, Assignee } from '@/types';
 
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
 
@@ -36,8 +35,8 @@ function stripHtml(s: string): string {
 interface MemberBucket {
   assignee: string;
   info?: Assignee;
-  tasks: Task[];
-  issues: Issue[];
+  tasks: WorkItem[];
+  issues: WorkItem[];
   openTasks: number;
   doneTasks: number;
   unresolvedIssues: number;
@@ -48,8 +47,8 @@ interface MemberBucket {
 
 function MemberSection({ bucket, onTaskClick, onIssueClick }: {
   bucket: MemberBucket;
-  onTaskClick: (t: Task) => void;
-  onIssueClick: (i: Issue) => void;
+  onTaskClick: (t: WorkItem) => void;
+  onIssueClick: (i: WorkItem) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -115,11 +114,11 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                     >
                       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-400'}`} />
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
-                      <span className="text-xs text-foreground truncate flex-1" title={stripHtml(t.taskContent)}>
-                        {stripHtml(t.taskContent) || t.taskCategory}
+                      <span className="text-xs text-foreground truncate flex-1" title={stripHtml(t.content)}>
+                        {stripHtml(t.content) || t.category}
                       </span>
                       <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
-                        {formatDate(t.scheduledAt)}
+                        {formatDate(t.startedAt)}
                       </span>
                     </li>
                   );
@@ -149,19 +148,19 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                     onClick={() => onIssueClick(i)}
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/40 cursor-pointer"
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i.resolvedAt ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i.closedAt ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
-                      i.resolvedAt
+                      i.closedAt
                         ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                         : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                     }`}>
-                      {i.resolvedAt ? '완료' : '미조치'}
+                      {i.closedAt ? '완료' : '미조치'}
                     </span>
-                    <span className="text-xs text-foreground truncate flex-1" title={stripHtml(i.issueContent)}>
-                      {i.issueArea}: {stripHtml(i.issueContent)}
+                    <span className="text-xs text-foreground truncate flex-1" title={stripHtml(i.content)}>
+                      {i.category}: {stripHtml(i.content)}
                     </span>
                     <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
-                      {formatDate(i.occurredAt)}
+                      {formatDate(i.startedAt)}
                     </span>
                   </li>
                 ))}
@@ -186,25 +185,25 @@ type MemberFilter = 'all' | 'active' | 'withOpen';
 export function MemberBoardPage() {
   const navigate = useNavigate();
   const { data: assignees = [] } = useAssignees();
-  const { data: taskData } = useTasks();
-  const { data: issueData } = useIssues();
+  const { data: workItemsData } = useWorkItems();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<MemberFilter>('active');
   const [includeSecondary, setIncludeSecondary] = useState(false);
 
   const buckets = useMemo<MemberBucket[]>(() => {
-    const tasks = taskData?.data ?? [];
-    const issues = issueData?.data ?? [];
+    const allItems = workItemsData?.data ?? [];
+    const tasksAll  = allItems.filter((w) => w.type === 'task');
+    const issuesAll = allItems.filter((w) => w.type === 'issue');
 
     // 담당자 이름 집합 = 등록된 Assignee + 작업/이슈에 실제로 등장한 이름
     const nameSet = new Set<string>();
     for (const a of assignees) nameSet.add(a.name);
-    for (const t of tasks) {
+    for (const t of tasksAll) {
       if (t.primaryAssignee) nameSet.add(t.primaryAssignee);
       if (includeSecondary && t.secondaryAssignee) nameSet.add(t.secondaryAssignee);
     }
-    for (const i of issues) {
+    for (const i of issuesAll) {
       if (i.primaryAssignee) nameSet.add(i.primaryAssignee);
       if (includeSecondary && i.secondaryAssignee) nameSet.add(i.secondaryAssignee);
     }
@@ -213,10 +212,10 @@ export function MemberBoardPage() {
     const list: MemberBucket[] = [];
 
     for (const name of nameSet) {
-      const memberTasks = tasks.filter(
+      const memberTasks = tasksAll.filter(
         (t) => t.primaryAssignee === name || (includeSecondary && t.secondaryAssignee === name),
       );
-      const memberIssues = issues.filter(
+      const memberIssues = issuesAll.filter(
         (i) => i.primaryAssignee === name || (includeSecondary && i.secondaryAssignee === name),
       );
       list.push({
@@ -226,8 +225,8 @@ export function MemberBoardPage() {
         issues: memberIssues,
         openTasks: memberTasks.filter((t) => t.kanbanStatus !== 'done').length,
         doneTasks: memberTasks.filter((t) => t.kanbanStatus === 'done').length,
-        unresolvedIssues: memberIssues.filter((i) => !i.resolvedAt).length,
-        resolvedIssues: memberIssues.filter((i) => i.resolvedAt).length,
+        unresolvedIssues: memberIssues.filter((i) => !i.closedAt).length,
+        resolvedIssues: memberIssues.filter((i) => i.closedAt).length,
       });
     }
 
@@ -238,7 +237,7 @@ export function MemberBoardPage() {
     );
 
     return list;
-  }, [assignees, taskData, issueData, includeSecondary]);
+  }, [assignees, workItemsData, includeSecondary]);
 
   const filtered = useMemo(() => {
     let list = buckets;
@@ -341,8 +340,8 @@ export function MemberBoardPage() {
               <MemberSection
                 key={b.assignee}
                 bucket={b}
-                onTaskClick={(t) => navigate(`/tasks/${t.id}/edit`)}
-                onIssueClick={(i) => navigate(`/issues/${i.id}/edit`)}
+                onTaskClick={(t) => navigate(`/tasks-mgmt/${t.id}/edit`)}
+                onIssueClick={(i) => navigate(`/tasks-mgmt/${i.id}/edit`)}
               />
             ))}
           </div>

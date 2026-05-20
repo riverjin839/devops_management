@@ -15,8 +15,10 @@ class User(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(String(64), nullable=False, unique=True, index=True)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(String(16), nullable=False, default="user")  # 'admin' | 'user'
+    # 'admin' | 'operator' | 'viewer'. 레거시 데이터의 'user' 값은 마이그레이션에서 'viewer' 로 변환된다.
+    role = Column(String(16), nullable=False, default="viewer")
     display_name = Column(String(128), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    must_change_password = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -9,12 +9,19 @@ JSON 기반 애플리케이션-레벨 백업. pg_dump 이 아닌 SQLAlchemy 모�
   옵션으로 제외 가능.
 - 대용량 로그성 테이블 (check_logs, daily_check_logs, cluster_config_snapshots,
   trend_*, ontology_events, topology_audit_logs) 은 옵션으로 포함/제외.
+
+## 부팅/스키마 드리프트 안전성 (Fault tolerance)
+prod DB 가 model 보다 컬럼이 적거나(누락 마이그레이션) 추가 컬럼이 있을 수 있다.
+모든 테이블 순회는 **per-table 단위로 try/except** 격리해서 한 테이블이 실패해도
+나머지는 정상 export/import 된다. 실패 테이블은 envelope.errors 와 응답의
+``errors`` 배열에 사유와 함께 기록되어 사용자가 알 수 있도록 한다.
 """
 from __future__ import annotations
 
 import base64
 import io
 import json
+import logging
 import uuid
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
@@ -27,6 +34,8 @@ from sqlalchemy.orm import Session
 
 from app.database import Base
 
+_log = logging.getLogger("k8s_monitor.backup")
+
 BACKUP_VERSION = "1.0"
 
 # 대용량/로그성 — 옵션으로 제외 가능
@@ -38,11 +47,14 @@ LOG_TABLES: frozenset[str] = frozenset({
     "ontology_events",
     "trend_items",
     "trend_digests",
+    "audit_logs",
 })
 
 # 민감 정보 포함 — 옵션으로 마스킹
 SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "clusters": ["kubeconfig_content", "kubeconfig_path"],
+    # bcrypt 해시지만 외부 유출 시 오프라인 브루트포스 가능성이 있어 기본 마스킹.
+    "users": ["hashed_password"],
 }
 
 
@@ -122,25 +134,62 @@ def _filter_tables(include_logs: bool) -> list[Table]:
 
 # ── Export ───────────────────────────────────────────────────────────────
 
+def _safe_select_rows(db: Session, t: Table) -> tuple[list[dict] | None, str | None]:
+    """단일 테이블 SELECT * — 실패 시 (None, error_str). 트랜잭션을 오염시키지 않도록
+    실패 후 rollback 까지 처리. 한 테이블 실패가 다음 테이블로 전파되지 않게 한다.
+    """
+    try:
+        rows = db.execute(t.select()).mappings().all()
+        return list(rows), None
+    except Exception as e:  # noqa: BLE001
+        # PostgreSQL 은 트랜잭션이 abort 되면 후속 query 모두 InFailedSqlTransaction 으로
+        # 막히므로 rollback 으로 트랜잭션 초기화.
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        msg = f"{type(e).__name__}: {str(e)[:300]}"
+        _log.warning("backup: SELECT %s failed — %s", t.name, msg)
+        return None, msg
+
+
 def export_all(
     db: Session,
     *,
     include_logs: bool = False,
     include_sensitive: bool = False,
 ) -> dict:
-    """현재 DB 를 JSON envelope 으로 export."""
+    """현재 DB 를 JSON envelope 으로 export. **per-table fault-tolerant** —
+    한 테이블이 실패해도 다른 테이블은 정상 export 되며 ``errors`` 필드에 사유 기록.
+    """
     tables = _filter_tables(include_logs)
     data: dict[str, list[dict]] = {}
     counts: dict[str, int] = {}
+    errors: dict[str, str] = {}
+    skipped: list[str] = []
 
     for t in tables:
-        rows = db.execute(t.select()).mappings().all()
-        serialized: list[dict] = []
-        for r in rows:
-            row_dict = {k: _serialize_value(v) for k, v in dict(r).items()}
-            serialized.append(_mask_sensitive(t.name, row_dict, include_sensitive))
-        data[t.name] = serialized
-        counts[t.name] = len(serialized)
+        rows, err = _safe_select_rows(db, t)
+        if err is not None:
+            errors[t.name] = err
+            skipped.append(t.name)
+            data[t.name] = []
+            counts[t.name] = 0
+            continue
+        try:
+            serialized: list[dict] = []
+            for r in rows or []:
+                row_dict = {k: _serialize_value(v) for k, v in dict(r).items()}
+                serialized.append(_mask_sensitive(t.name, row_dict, include_sensitive))
+            data[t.name] = serialized
+            counts[t.name] = len(serialized)
+        except Exception as e:  # noqa: BLE001
+            msg = f"serialize {type(e).__name__}: {str(e)[:200]}"
+            _log.exception("backup: serialize %s failed", t.name)
+            errors[t.name] = msg
+            skipped.append(t.name)
+            data[t.name] = []
+            counts[t.name] = 0
 
     return {
         "version": BACKUP_VERSION,
@@ -151,6 +200,10 @@ def export_all(
         },
         "counts": counts,
         "tables": data,
+        # 신규 필드 — 일부 테이블이 실패했어도 export 자체는 성공.
+        # 사용자가 응답에서 어떤 테이블이 빠졌는지 확인 가능.
+        "errors": errors,
+        "skipped_tables": skipped,
     }
 
 
@@ -179,29 +232,28 @@ def _row_pk_values(table: Table, row: dict) -> tuple:
 
 
 def compute_diff(db: Session, envelope: dict, *, include_logs: bool) -> dict:
-    """import 없이 diff 만 계산 — UI 미리보기용.
-
-    반환: {
-      tables: [{
-        name, incoming, existing_pk_count,
-        insert_count, update_count, unchanged_count, delete_candidates
-      }], total_incoming, total_existing
-    }
+    """import 없이 diff 만 계산 — UI 미리보기용. **per-table fault-tolerant** —
+    한 테이블 SELECT 실패는 해당 테이블만 0/0 으로 표시, 다른 테이블 진행.
     """
     tables = _filter_tables(include_logs)
     table_by_name = {t.name: t for t in tables}
     incoming_tables = envelope.get("tables", {})
     report: list[dict] = []
+    errors: list[str] = []
     total_in = 0
     total_ex = 0
 
     for t_name, t in table_by_name.items():
         rows_in = incoming_tables.get(t_name, [])
         total_in += len(rows_in)
-        # 현재 DB 의 PK 집합
+
+        rows, err = _safe_select_rows(db, t)
         existing_pks: set[tuple] = set()
-        for r in db.execute(t.select()).mappings().all():
-            existing_pks.add(tuple(r[pk.name] for pk in t.primary_key.columns))
+        if err is not None:
+            errors.append(f"{t_name}: {err}")
+        else:
+            for r in rows or []:
+                existing_pks.add(tuple(r[pk.name] for pk in t.primary_key.columns))
         total_ex += len(existing_pks)
 
         in_pks: set[tuple] = set()
@@ -232,7 +284,102 @@ def compute_diff(db: Session, envelope: dict, *, include_logs: bool) -> dict:
         "total_incoming": total_in,
         "total_existing": total_ex,
         "tables": report,
+        # 미리보기 단계에서 어떤 테이블이 읽을 수 없었는지 노출.
+        "errors": errors,
     }
+
+
+def _legacy_remap_work_items(envelope: dict) -> None:
+    """레거시 백업 호환 — `issues` / `tasks` 테이블 행을 `work_items` 로 변환해 합친다.
+
+    Issue / Task 모델을 WorkItem 으로 통합한 이후의 환경에서, 통합 이전 시점에
+    생성된 백업 파일도 그대로 import 할 수 있도록 envelope 를 in-place 로 수정한다.
+
+    매핑 규칙은 main.py 의 backfill SQL 과 동일:
+    - issues: type='issue', issue_area→category, issue_content→content,
+      action_content→resolution, occurred_at→started_at, resolved_at→closed_at,
+      kanban_status='done' if resolved_at else 'todo', priority='medium' 기본.
+    - tasks: type='task', task_category→category, task_content→content,
+      result_content→resolution, scheduled_at→started_at, completed_at→closed_at,
+      issue_id→related_work_item_id.
+    """
+    tables = envelope.get("tables")
+    if not isinstance(tables, dict):
+        return
+
+    legacy_issues = tables.pop("issues", None) or []
+    legacy_tasks = tables.pop("tasks", None) or []
+    if not legacy_issues and not legacy_tasks:
+        return
+
+    merged: list[dict] = list(tables.get("work_items", []) or [])
+
+    for row in legacy_issues:
+        if not isinstance(row, dict):
+            continue
+        resolved = row.get("resolved_at")
+        merged.append({
+            "id": row.get("id"),
+            "type": "issue",
+            "assignee": row.get("assignee"),
+            "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
+            "secondary_assignee": row.get("secondary_assignee"),
+            "cluster_id": row.get("cluster_id"),
+            "cluster_name": row.get("cluster_name"),
+            "category": row.get("issue_area"),
+            "content": row.get("issue_content"),
+            "resolution": row.get("action_content"),
+            "detail_content": row.get("detail_content"),
+            "started_at": row.get("occurred_at"),
+            "closed_at": resolved,
+            "remarks": row.get("remarks"),
+            "service": row.get("service"),
+            "confluence_url": row.get("confluence_url"),
+            "priority": "medium",
+            "kanban_status": "done" if resolved else "todo",
+            "module": None,
+            "type_label": None,
+            "effort_hours": None,
+            "done_condition": None,
+            "parent_id": None,
+            "related_work_item_id": None,
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        })
+
+    for row in legacy_tasks:
+        if not isinstance(row, dict):
+            continue
+        merged.append({
+            "id": row.get("id"),
+            "type": "task",
+            "assignee": row.get("assignee"),
+            "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
+            "secondary_assignee": row.get("secondary_assignee"),
+            "cluster_id": row.get("cluster_id"),
+            "cluster_name": row.get("cluster_name"),
+            "category": row.get("task_category"),
+            "content": row.get("task_content"),
+            "resolution": row.get("result_content"),
+            "detail_content": None,
+            "started_at": row.get("scheduled_at"),
+            "closed_at": row.get("completed_at"),
+            "remarks": row.get("remarks"),
+            "service": row.get("service"),
+            "confluence_url": row.get("confluence_url"),
+            "priority": row.get("priority") or "medium",
+            "kanban_status": row.get("kanban_status") or "todo",
+            "module": row.get("module"),
+            "type_label": row.get("type_label"),
+            "effort_hours": row.get("effort_hours"),
+            "done_condition": row.get("done_condition"),
+            "parent_id": row.get("parent_id"),
+            "related_work_item_id": row.get("issue_id"),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        })
+
+    tables["work_items"] = merged
 
 
 def apply_import(
@@ -253,6 +400,9 @@ def apply_import(
     """
     if mode not in ("merge", "replace"):
         raise ValueError(f"unknown mode: {mode}")
+
+    # 레거시 issues/tasks → work_items 통합 (in-place envelope 수정)
+    _legacy_remap_work_items(envelope)
 
     diff = compute_diff(db, envelope, include_logs=include_logs)
     if dry_run:
@@ -353,7 +503,9 @@ def apply_import(
 # ── Meta ────────────────────────────────────────────────────────────────
 
 def current_meta(db: Session) -> dict:
-    """현재 DB 의 테이블 별 row 수 + 전체 요약."""
+    """현재 DB 의 테이블 별 row 수 + 전체 요약. per-table 실패는 0 으로 표시 +
+    실패 후 트랜잭션 rollback 으로 후속 쿼리 보호.
+    """
     tables = list(Base.metadata.sorted_tables)
     counts: dict[str, int] = {}
     for t in tables:
@@ -362,6 +514,10 @@ def current_meta(db: Session) -> dict:
             counts[t.name] = int(r or 0)
         except Exception:
             counts[t.name] = 0
+            try:
+                db.rollback()
+            except Exception:
+                pass
     total = sum(counts.values())
     return {
         "version": BACKUP_VERSION,

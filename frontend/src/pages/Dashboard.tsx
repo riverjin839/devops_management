@@ -20,8 +20,7 @@ import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
-import { useTasks } from '@/hooks/useTasks';
-import { useIssues } from '@/hooks/useIssues';
+import { useWorkItems } from '@/hooks/useWorkItems';
 import { healthApi } from '@/services/api';
 import { Addon, Cluster, MetricCard, Playbook } from '@/types';
 
@@ -187,11 +186,9 @@ export function Dashboard() {
   const { data: metricResults = [] } = useMetricResults();
   const deleteMetricCard = useDeleteMetricCard();
 
-  // Kanban summary data
-  const { data: tasksData, isLoading: tasksLoading } = useTasks();
-  const { data: issuesData, isLoading: issuesLoading } = useIssues();
-  const allTasks = tasksData?.data ?? [];
-  const allIssues = issuesData?.data ?? [];
+  // Kanban summary data — 통합 work items 한 번에 가져와 type 으로 분할
+  const { data: workItemsData, isLoading: workItemsLoading } = useWorkItems();
+  const allWorkItems = workItemsData?.data ?? [];
 
   const handleRunCheck = async () => {
     if (selectedClusterId) {
@@ -434,13 +431,12 @@ export function Dashboard() {
             </MacCard>
           )}
 
-          {/* ── 작업 / 이슈 현황 ─────────────────────────────────────────── */}
-          <MacCard title="작업 / 이슈 현황" bodyPadding="p-4"
+          {/* ── 업무 현황 ─────────────────────────────────────────── */}
+          <MacCard title="업무 현황" bodyPadding="p-4"
             className={dashboardPlaybooks.length === 0 ? 'lg:col-span-2' : ''}>
             <KanbanSummaryCharts
-              tasks={allTasks}
-              issues={allIssues}
-              isLoading={tasksLoading || issuesLoading}
+              items={allWorkItems}
+              isLoading={workItemsLoading}
               selectedClusterId={selectedClusterId}
             />
           </MacCard>

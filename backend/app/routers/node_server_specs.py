@@ -70,6 +70,8 @@ def list_specs(
             | (NodeServerSpec.asset_tag.ilike(like))
             | (NodeServerSpec.internal_ip.ilike(like))
             | (NodeServerSpec.bmc_ip.ilike(like))
+            | (NodeServerSpec.bond0_ip.ilike(like))
+            | (NodeServerSpec.bond1_ip.ilike(like))
             | (NodeServerSpec.vendor.ilike(like))
             | (NodeServerSpec.model.ilike(like))
         )

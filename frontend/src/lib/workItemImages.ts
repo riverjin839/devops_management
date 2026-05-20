@@ -1,6 +1,6 @@
-const STORAGE_KEY_PREFIX = 'k8s:img:issue:';
+const STORAGE_KEY_PREFIX = 'k8s:img:work-item:';
 
-export function saveIssueImages(id: string, images: string[]) {
+export function saveWorkItemImages(id: string, images: string[]) {
   if (images.length === 0) {
     localStorage.removeItem(STORAGE_KEY_PREFIX + id);
   } else {
@@ -8,7 +8,7 @@ export function saveIssueImages(id: string, images: string[]) {
   }
 }
 
-export function loadIssueImages(id?: string): string[] {
+export function loadWorkItemImages(id?: string): string[] {
   if (!id) return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PREFIX + id);

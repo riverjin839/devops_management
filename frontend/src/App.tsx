@@ -1,13 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
-import { IssueBoardPage } from '@/pages/IssueBoardPage';
-import { IssueFormPage } from '@/pages/IssueFormPage';
-import { IssueDetailPage } from '@/pages/IssueDetailPage';
-import { TaskBoardPage } from '@/pages/TaskBoardPage';
-import { TaskFormPage } from '@/pages/TaskFormPage';
-import { TaskDetailPage } from '@/pages/TaskDetailPage';
+import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
+import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
+import { WorkItemDetailPage } from '@/pages/WorkItemDetailPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { WorkSummaryPage } from '@/pages/WorkSummaryPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
@@ -28,6 +25,7 @@ import { McClientPage } from '@/pages/McClientPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { CommandsPage } from '@/pages/CommandsPage';
+import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
 import { OpsNoteDetailPage } from '@/pages/OpsNoteDetailPage';
 import { OpsNoteFormPage } from '@/pages/OpsNoteFormPage';
@@ -46,11 +44,19 @@ import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
+import { UsersPage } from '@/pages/UsersPage';
+import { AuditLogsPage } from '@/pages/AuditLogsPage';
+import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
+
+function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`${to}/${id ?? ''}${suffix}`} replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,14 +79,18 @@ function AppShell() {
               <Route path="/" element={<HomePage />} />
               <Route path="/cluster-overview" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
-              <Route path="/issues" element={<IssueBoardPage />} />
-              <Route path="/issues/new" element={<IssueFormPage />} />
-              <Route path="/issues/:id" element={<IssueDetailPage />} />
-              <Route path="/issues/:id/edit" element={<IssueDetailPage />} />
-              <Route path="/tasks" element={<TaskBoardPage />} />
-              <Route path="/tasks/new" element={<TaskFormPage />} />
-              <Route path="/tasks/:id" element={<TaskDetailPage />} />
-              <Route path="/tasks/:id/edit" element={<TaskDetailPage />} />
+              {/* 업무 관리 — 정식 경로 */}
+              <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
+              <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
+              <Route path="/tasks-mgmt/:id" element={<WorkItemDetailPage />} />
+              <Route path="/tasks-mgmt/:id/edit" element={<WorkItemDetailPage />} />
+              {/* 레거시 경로 — /tasks-mgmt 로 리다이렉트 (북마크/외부 링크 호환) */}
+              <Route path="/work-items" element={<Navigate to="/tasks-mgmt" replace />} />
+              <Route path="/work-items/new" element={<Navigate to="/tasks-mgmt/new" replace />} />
+              <Route path="/work-items/:id" element={<RedirectWithId to="/tasks-mgmt" />} />
+              <Route path="/work-items/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="/edit" />} />
+              <Route path="/issues" element={<Navigate to="/tasks-mgmt" replace />} />
+              <Route path="/tasks" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
               <Route path="/work-summary" element={<WorkSummaryPage />} />
               <Route path="/members" element={<MemberBoardPage />} />
@@ -108,6 +118,8 @@ function AppShell() {
               <Route path="/work-guides/:id" element={<WorkGuidePage />} />
               <Route path="/work-guides/:id/edit" element={<WorkGuidePage />} />
               <Route path="/commands" element={<CommandsPage />} />
+              <Route path="/commands/new" element={<CommandFormPage />} />
+              <Route path="/commands/:id/edit" element={<CommandFormPage />} />
               <Route path="/ops-notes" element={<OpsNotesPage />} />
               <Route path="/ops-notes/new" element={<OpsNoteFormPage />} />
               <Route path="/ops-notes/:id" element={<OpsNoteDetailPage />} />
@@ -120,8 +132,12 @@ function AppShell() {
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
+              <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
+              <Route path="/settings/users" element={<UsersPage />} />
+              <Route path="/settings/audit-logs" element={<AuditLogsPage />} />
+              <Route path="/me/change-password" element={<ChangePasswordPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
       </div>

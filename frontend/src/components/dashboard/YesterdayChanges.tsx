@@ -8,11 +8,10 @@ import {
   ArrowRight,
   CalendarClock,
 } from 'lucide-react';
-import { useTasks } from '@/hooks/useTasks';
-import { useIssues } from '@/hooks/useIssues';
+import { useWorkItems } from '@/hooks/useWorkItems';
 import { useLogs } from '@/hooks/useCluster';
 import { stripHtml } from '@/lib/utils';
-import { Task, Issue, CheckLog } from '@/types';
+import { WorkItem, CheckLog } from '@/types';
 
 interface YesterdayChangesProps {
   selectedClusterId: string | null;
@@ -20,8 +19,8 @@ interface YesterdayChangesProps {
 
 interface Bucket {
   clusterName: string;
-  tasks: Task[];
-  issues: Issue[];
+  tasks: WorkItem[];
+  issues: WorkItem[];
   alerts: CheckLog[];
 }
 
@@ -46,26 +45,26 @@ function isWithinYesterday(iso: string | null | undefined): boolean {
 }
 
 export function YesterdayChanges({ selectedClusterId }: YesterdayChangesProps) {
-  const { data: tasksData } = useTasks();
-  const { data: issuesData } = useIssues();
+  const { data: workItemsData } = useWorkItems();
   const { data: logsData } = useLogs();
   const { startStr } = getDateBoundaries();
 
   const buckets = useMemo<Bucket[]>(() => {
-    const tasks = tasksData?.data ?? [];
-    const issues = issuesData?.data ?? [];
+    const allItems = workItemsData?.data ?? [];
     const logs = logsData?.data ?? [];
 
-    const completedTasks = tasks.filter(
-      (t) =>
-        t.kanbanStatus === 'done' &&
-        isWithinYesterday(t.completedAt) &&
-        (!selectedClusterId || t.clusterId === selectedClusterId),
+    const completedTasks = allItems.filter(
+      (w) =>
+        w.type === 'task' &&
+        w.kanbanStatus === 'done' &&
+        isWithinYesterday(w.closedAt) &&
+        (!selectedClusterId || w.clusterId === selectedClusterId),
     );
-    const resolvedIssues = issues.filter(
-      (i) =>
-        i.resolvedAt === startStr &&
-        (!selectedClusterId || i.clusterId === selectedClusterId),
+    const resolvedIssues = allItems.filter(
+      (w) =>
+        w.type === 'issue' &&
+        w.closedAt?.slice(0, 10) === startStr &&
+        (!selectedClusterId || w.clusterId === selectedClusterId),
     );
     const alertLogs = logs.filter(
       (l) =>
@@ -92,7 +91,7 @@ export function YesterdayChanges({ selectedClusterId }: YesterdayChangesProps) {
       const bTotal = b.tasks.length + b.issues.length + b.alerts.length;
       return bTotal - aTotal;
     });
-  }, [tasksData, issuesData, logsData, selectedClusterId, startStr]);
+  }, [workItemsData, logsData, selectedClusterId, startStr]);
 
   const totals = useMemo(() => {
     let tasks = 0;
@@ -162,7 +161,7 @@ export function YesterdayChanges({ selectedClusterId }: YesterdayChangesProps) {
                     <span className="text-muted-foreground truncate flex-1">
                       <span className="text-foreground font-medium">{t.assignee || '미지정'}</span>
                       <span className="mx-1">·</span>
-                      {stripHtml(t.taskContent) || t.taskCategory}
+                      {stripHtml(t.content) || t.category}
                     </span>
                   </li>
                 ))}
@@ -172,7 +171,7 @@ export function YesterdayChanges({ selectedClusterId }: YesterdayChangesProps) {
                     <span className="text-muted-foreground truncate flex-1">
                       <span className="text-foreground font-medium">{i.assignee || '미지정'}</span>
                       <span className="mx-1">·</span>
-                      {stripHtml(i.issueContent) || i.issueArea}
+                      {stripHtml(i.content) || i.category}
                     </span>
                   </li>
                 ))}
@@ -201,16 +200,10 @@ export function YesterdayChanges({ selectedClusterId }: YesterdayChangesProps) {
 
       <div className="flex items-center justify-end gap-3 text-[11px]">
         <Link
-          to="/tasks"
+          to="/tasks-mgmt"
           className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
         >
-          작업 게시판 <ArrowRight className="w-3 h-3" />
-        </Link>
-        <Link
-          to="/issues"
-          className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-        >
-          이슈 게시판 <ArrowRight className="w-3 h-3" />
+          업무 관리 게시판 <ArrowRight className="w-3 h-3" />
         </Link>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server } from 'lucide-react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
-import { InlineEdit, ClusterIconPicker } from '@/components/common';
+import { InlineEdit } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { STATUS_STYLE } from './constants';
 import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
@@ -70,8 +70,7 @@ function EditableCell({
 export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
   const [editingField, setEditingField] = useState<EditField>(null);
-  const [iconPickerOpen, setIconPickerOpen] = useState(false);
-  const iconAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const iconAnchorRef = useRef<HTMLSpanElement | null>(null);
 
   const quickUpdate = (patch: Partial<Cluster>) => {
     updateCluster.mutate({ id: cluster.id, data: patch }, { onSettled: () => setEditingField(null) });
@@ -99,33 +98,25 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
-          <button
+          {/* 현재 아이콘 표시 (읽기 전용) — 변경은 시스템 → Settings → 클러스터 탭에서 */}
+          <span
             ref={iconAnchorRef}
-            type="button"
-            onClick={() => setIconPickerOpen(true)}
-            className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
-            title="사이드바 아이콘 변경 (현재: status 자동)"
-            aria-label="아이콘 변경"
+            className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground flex-shrink-0"
+            title="아이콘 변경: 시스템 → Settings → 클러스터 탭에서"
+            aria-hidden
           >
-            {resolvedIcon?.kind === 'text'
-              ? <span className="text-base leading-none" aria-hidden>{resolvedIcon.value}</span>
-              : resolvedIcon?.kind === 'lucide'
-                ? <resolvedIcon.Component className="w-4 h-4" />
-                : <FallbackIcon className="w-4 h-4 opacity-50" />}
-          </button>
+            {resolvedIcon?.kind === 'image'
+              ? <img src={resolvedIcon.value} alt="" className="w-5 h-5 rounded object-cover" />
+              : resolvedIcon?.kind === 'text'
+                ? <span className="text-base leading-none">{resolvedIcon.value}</span>
+                : resolvedIcon?.kind === 'lucide'
+                  ? <resolvedIcon.Component className="w-4 h-4" />
+                  : <FallbackIcon className="w-4 h-4 opacity-50" />}
+          </span>
           <span className="font-medium text-sm text-foreground">{cluster.name}</span>
         </div>
         {cluster.hostname && (
           <p className="text-[10px] font-mono text-muted-foreground mt-0.5 ml-4">{cluster.hostname}</p>
-        )}
-        {iconPickerOpen && (
-          <ClusterIconPicker
-            value={cluster.icon}
-            clusterName={cluster.name}
-            anchorRect={iconAnchorRef.current?.getBoundingClientRect() ?? null}
-            onChange={(next) => updateCluster.mutate({ id: cluster.id, data: { icon: next } })}
-            onClose={() => setIconPickerOpen(false)}
-          />
         )}
       </td>
       <td className="px-3 py-2.5">

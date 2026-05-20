@@ -204,16 +204,11 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
 }
 
 // ── 뷰 모드 (테이블 = 디폴트, 카드 = 옵션) ────────────────────────────────────
-const VIEW_MODE_KEY = 'k8s:ops-notes:viewMode';
+// localStorage 캐시는 하지 않는다 — 페이지 진입 시 항상 리스트가 기본.
+// 과거 'k8s:ops-notes:viewMode' 키에 'card' 가 저장된 사용자도 잔존 캐시를 무력화하기 위해
+// 마운트 시 한 번 삭제. 카드 보기는 우상단 토글로 일시적으로만 사용.
+const LEGACY_VIEW_MODE_KEY = 'k8s:ops-notes:viewMode';
 type ViewMode = 'table' | 'card';
-
-function readStoredViewMode(): ViewMode {
-  try {
-    return localStorage.getItem(VIEW_MODE_KEY) === 'card' ? 'card' : 'table';
-  } catch {
-    return 'table';
-  }
-}
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function OpsNotesPage() {
@@ -224,13 +219,14 @@ export function OpsNotesPage() {
   const [filterService, setFilterService] = useState('');
   const [search, setSearch]               = useState('');
   const [deletingId, setDeletingId]       = useState<string | null>(null);
-  const [viewMode, setViewMode]           = useState<ViewMode>(readStoredViewMode);
+  const [viewMode, setViewMode]           = useState<ViewMode>('table');
   const [sortKey, setSortKey]             = useState<OpsNoteSortKey>('updatedAt');
   const [sortDir, setSortDir]             = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
-    try { localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch { /* ignore */ }
-  }, [viewMode]);
+    // 과거에 'card' 로 저장된 사용자가 있을 수 있으므로 마운트 시 캐시를 한 번 정리한다.
+    try { localStorage.removeItem(LEGACY_VIEW_MODE_KEY); } catch { /* ignore */ }
+  }, []);
 
   const handleSort = (key: OpsNoteSortKey) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));

@@ -10,15 +10,15 @@ import {
 import { MacCard } from '@/components/ui/MacCard';
 import { ViewModeBar } from '@/components/common';
 import {
-  opsNotesApi, commandsApi, workGuidesApi, issuesApi, workflowsApi,
+  opsNotesApi, commandsApi, workGuidesApi, workItemsApi, workflowsApi,
 } from '@/services/api';
 import type {
-  OpsNote, CommandEntry, WorkGuide, Issue, Workflow, CommandImportance,
+  OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
 
 // ── 통합 항목 모델 ───────────────────────────────────────────────────────────
-type HubKind = 'note' | 'command' | 'guide' | 'issue' | 'workflow';
+type HubKind = 'note' | 'command' | 'guide' | 'item' | 'workflow';
 
 interface HubItem {
   id: string;
@@ -43,7 +43,7 @@ const KIND_META: Record<HubKind, {
   note:     { label: '노트',       Icon: StickyNote, accent: 'text-amber-500',   chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30' },
   command:  { label: '명령어',     Icon: Terminal,   accent: 'text-sky-500',     chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30' },
   guide:    { label: '가이드',     Icon: BookMarked, accent: 'text-emerald-500', chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
-  issue:    { label: '이슈',       Icon: AlertCircle, accent: 'text-red-500',    chip: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30' },
+  item:    { label: '이슈',       Icon: AlertCircle, accent: 'text-red-500',    chip: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30' },
   workflow: { label: '워크플로우', Icon: GitFork,    accent: 'text-violet-500',  chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30' },
 };
 
@@ -200,7 +200,7 @@ export function KnowledgeHubPage() {
   const { data: opsData,      isLoading: opsLoading      } = useQuery({ queryKey: ['ops-notes'],   queryFn: () => opsNotesApi.getAll().then((r) => r.data),    staleTime: 1000 * 30 });
   const { data: cmdData,      isLoading: cmdLoading      } = useQuery({ queryKey: ['commands'],    queryFn: () => commandsApi.list().then((r) => r.data),      staleTime: 1000 * 30 });
   const { data: guideData,    isLoading: guideLoading    } = useQuery({ queryKey: ['work-guides'], queryFn: () => workGuidesApi.getAll().then((r) => r.data),  staleTime: 1000 * 30 });
-  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['issues'],      queryFn: () => issuesApi.getAll().then((r) => r.data),      staleTime: 1000 * 30 });
+  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],      queryFn: () => workItemsApi.getAll().then((r) => r.data),      staleTime: 1000 * 30 });
   const { data: workflowData, isLoading: workflowLoading } = useQuery({ queryKey: ['workflows'],   queryFn: () => workflowsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
 
   const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading;
@@ -208,11 +208,11 @@ export function KnowledgeHubPage() {
   const opsNotes  = useMemo<OpsNote[]>(()      => opsData?.data ?? [],      [opsData]);
   const commands  = useMemo<CommandEntry[]>(() => cmdData?.data ?? [],      [cmdData]);
   const guides    = useMemo<WorkGuide[]>(()    => guideData?.data ?? [],    [guideData]);
-  const issues    = useMemo<Issue[]>(()        => issueData?.data ?? [],    [issueData]);
+  const workItems = useMemo<WorkItem[]>(()     => issueData?.data ?? [],    [issueData]);
   const workflows = useMemo<Workflow[]>(()     => workflowData?.data ?? [], [workflowData]);
 
   // ── 5종을 단일 HubItem 배열로 정규화 ──
-  const items = useMemo<HubItem[]>(() => {
+  const items: HubItem[] = useMemo<HubItem[]>(() => {
     const out: HubItem[] = [];
 
     for (const n of opsNotes) {
@@ -261,19 +261,20 @@ export function KnowledgeHubPage() {
       });
     }
 
-    for (const i of issues) {
-      const resolved = !!i.resolvedAt;
+    for (const i of workItems) {
+      if (i.type !== 'issue') continue;
+      const resolved = !!i.closedAt;
       out.push({
-        id: `issue-${i.id}`,
-        kind: 'issue',
-        title: i.issueContent.split('\n')[0] || i.issueArea,
-        category: i.issueArea,
+        id: `item-${i.id}`,
+        kind: 'item',
+        title: i.content.split('\n')[0] || i.category,
+        category: i.category,
         service: i.service,
         statusLabel: resolved ? '조치완료' : '미조치',
         statusTone: resolved ? 'emerald' : 'red',
         updatedAt: i.updatedAt,
-        href: `/issues/${i.id}`,
-        searchBlob: `${i.issueContent} ${i.actionContent ?? ''} ${i.issueArea} ${i.assignee} ${i.clusterName ?? ''}`.toLowerCase(),
+        href: `/tasks-mgmt/${i.id}`,
+        searchBlob: `${i.content} ${i.resolution ?? ''} ${i.category} ${i.assignee} ${i.clusterName ?? ''}`.toLowerCase(),
       });
     }
 
@@ -290,7 +291,7 @@ export function KnowledgeHubPage() {
     }
 
     return out;
-  }, [opsNotes, commands, guides, issues, workflows]);
+  }, [opsNotes, commands, guides, workItems, workflows]);
 
   // ── 검색 + 필터 ──
   const trimmed = search.trim().toLowerCase();
@@ -324,12 +325,12 @@ export function KnowledgeHubPage() {
   const recentNotes  = useMemo(() => [...opsNotes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4), [opsNotes]);
   const criticalCmds = useMemo(() => commands.filter((c) => c.importance === 'critical' || c.importance === 'high').slice(0, 5), [commands]);
   const activeGuides = useMemo(() => guides.filter((g) => g.status === 'active').slice(0, 4), [guides]);
-  const openIssues   = useMemo(() => issues.filter((i) => !i.resolvedAt).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 5), [issues]);
+  const openIssues   = useMemo(() => workItems.filter((i) => i.type === 'issue' && !i.closedAt).sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, 5), [workItems]);
   const recentFlows  = useMemo(() => [...workflows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4), [workflows]);
 
   // 5종별 카운트 (필터 chip에 표시)
   const countByKind = useMemo<Record<HubKind, number>>(() => {
-    const map: Record<HubKind, number> = { note: 0, command: 0, guide: 0, issue: 0, workflow: 0 };
+    const map: Record<HubKind, number> = { note: 0, command: 0, guide: 0, item: 0, workflow: 0 };
     for (const it of items) map[it.kind] += 1;
     return map;
   }, [items]);
@@ -603,7 +604,7 @@ export function KnowledgeHubPage() {
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <NavTile to="/work-guides" label="작업 가이드" count={guides.length} Icon={BookMarked} description="운영 절차·트러블슈팅" />
                 <NavTile to="/commands"    label="주요 명령어" count={commands.length} Icon={Terminal} description="kubectl·etcdctl·etc." />
-                <NavTile to="/tasks"       label="작업 게시판" Icon={ClipboardList} description="Kanban 작업 보드" />
+                <NavTile to="/tasks-mgmt"       label="업무 관리" Icon={ClipboardList} description="작업·이슈·회의·교육·기타" />
                 <NavTile to="/todo-today"  label="오늘 할일"   Icon={ClipboardList} description="하루 단위 todo" />
               </div>
 
@@ -661,7 +662,7 @@ export function KnowledgeHubPage() {
             {/* 이슈 / 장애 */}
             <MacCard title="이슈 / 장애" bodyPadding="p-4">
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <NavTile to="/issues"             label="이슈 게시판"   count={issues.length} Icon={AlertCircle} description="등록된 운영 이슈" />
+                <NavTile to="/tasks-mgmt"        label="이슈 게시판"   count={workItems.filter((w) => w.type === 'issue').length} Icon={AlertCircle} description="등록된 운영 이슈" />
                 <NavTile to="/incident-analysis"  label="장애 로그 분석" Icon={Zap} description="AI 기반 사고 분석" />
               </div>
 
@@ -670,7 +671,7 @@ export function KnowledgeHubPage() {
                   <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     미해결 이슈 · {openIssues.length}
                   </span>
-                  <SectionMoreLink to="/issues" />
+                  <SectionMoreLink to="/tasks-mgmt" />
                 </div>
                 {issueLoading ? (
                   <div className="space-y-1.5">
@@ -685,9 +686,9 @@ export function KnowledgeHubPage() {
                     {openIssues.map((i) => (
                       <PreviewRow
                         key={i.id}
-                        to={`/issues/${i.id}`}
-                        title={i.issueContent.split('\n')[0]}
-                        meta={i.occurredAt}
+                        to={`/tasks-mgmt/${i.id}`}
+                        title={i.content.split('\n')[0]}
+                        meta={i.startedAt}
                         Icon={AlertCircle}
                         accent="text-red-500"
                       />

@@ -8,8 +8,7 @@ import {
 import { workflowsApi } from '@/services/api';
 import { useToast } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
-import { useIssues } from '@/hooks/useIssues';
-import { useTasks } from '@/hooks/useTasks';
+import { useWorkItems } from '@/hooks/useWorkItems';
 import { usePlaybooks } from '@/hooks/usePlaybook';
 import { useWorkGuides } from '@/hooks/useWorkGuide';
 import { useMetricCards } from '@/hooks/useMetricCards';
@@ -1114,23 +1113,23 @@ interface ReferenceSelectProps {
 
 function ReferenceSelect({ type, value, onChange }: ReferenceSelectProps) {
   const { data: clusters } = useClusters();
-  const { data: issuesData } = useIssues();
-  const { data: tasksData } = useTasks();
+  const { data: workItemsData } = useWorkItems();
   const { data: playbooksData } = usePlaybooks();
   const { data: workGuidesData } = useWorkGuides();
   const { data: metricCardsData } = useMetricCards();
 
   // 각 hook 의 반환 형태가 제각각이라 분기로 정규화한다.
   // - useClusters / usePlaybooks / useMetricCards 는 배열 자체를 돌려줌
-  // - useIssues / useTasks / useWorkGuides 는 { data: [...] } 형태
+  // - useWorkItems / useWorkGuides 는 { data: [...] } 형태. WorkItem 은 type 으로 issue/task 구분.
   const options = useMemo<{ id: string; label: string }[]>(() => {
+    const allWorkItems = workItemsData?.data ?? [];
     switch (type) {
       case 'cluster':
         return (clusters ?? []).map((c) => ({ id: c.id, label: c.name }));
       case 'issue':
-        return (issuesData?.data ?? []).map((i) => ({ id: i.id, label: i.issueContent }));
+        return allWorkItems.filter((w) => w.type === 'issue').map((i) => ({ id: i.id, label: i.content }));
       case 'task':
-        return (tasksData?.data ?? []).map((t) => ({ id: t.id, label: t.taskContent }));
+        return allWorkItems.filter((w) => w.type === 'task').map((t) => ({ id: t.id, label: t.content }));
       case 'playbook':
         return (playbooksData ?? []).map((p) => ({ id: p.id, label: p.name }));
       case 'work_guide':
@@ -1140,7 +1139,7 @@ function ReferenceSelect({ type, value, onChange }: ReferenceSelectProps) {
       default:
         return [];
     }
-  }, [type, clusters, issuesData, tasksData, playbooksData, workGuidesData, metricCardsData]);
+  }, [type, clusters, workItemsData, playbooksData, workGuidesData, metricCardsData]);
 
   return (
     <select

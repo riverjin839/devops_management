@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ListTodo, Sparkles, Settings, Server,
   Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
-  ClipboardList, CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
+  CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home,
+  KeyRound, ShieldCheck, FileSearch,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -20,10 +21,11 @@ import { InlineEdit } from '@/components/common';
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
   '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
   '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
+  '/daily-check/review': { defaultLabel: '일일 점검 리뷰',  icon: ClipboardCheck },
+  '/daily-check/settings':{ defaultLabel: 'Deep Check 설정', icon: Sparkles },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
-  '/issues':             { defaultLabel: '이슈 게시판',    icon: ClipboardList },
-  '/tasks':              { defaultLabel: '작업 게시판',    icon: ListTodo },
+  '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
   '/todo-today':         { defaultLabel: '오늘 할일',      icon: CalendarCheck2 },
   '/work-summary':       { defaultLabel: '업무 현황',      icon: BarChart3 },
   '/members':            { defaultLabel: '멤버별 업무',    icon: Users },
@@ -59,16 +61,19 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'home',  label: '허브 홈',     paths: ['/docs'] },
   { id: 'ops',   label: '운영 기준',  paths: ['/ops-notes'] },
-  { id: 'work',  label: '작업 기준',  paths: ['/work-guides', '/commands', '/tasks'] },
-  { id: 'issue', label: '이슈/장애',   paths: ['/issues', '/incident-analysis'] },
+  { id: 'issue', label: '이슈/장애',   paths: ['/tasks-mgmt', '/incident-analysis'] },
   { id: 'flow',  label: '흐름/설계',  paths: ['/workflow', '/wbs', '/mindmap'] },
 ];
+
+// 서비스 카탈로그 섹션에 포함되는 작업 기준 경로
+const WORK_STANDARD_PATHS = ['/work-guides', '/commands', '/tasks-mgmt'];
 
 // 사이드바 레일에 표시되는 그룹들
 type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
-  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/cluster-overview', '/playbooks'] },
-  { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/work-summary', '/members'] },
+  // 홈(/) 은 좌측 상단 로고 버튼이 담당하므로 그룹 paths 에서 제외.
+  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
+  { id: 'work',       label: '업무관리', icon: ListTodo,        paths: ['/tasks-mgmt', '/todo-today', '/work-summary', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },
   { id: 'docs',       label: '지식 허브', icon: BookOpen,        paths: [] },  // sections 사용
@@ -86,8 +91,9 @@ interface RailIconButtonProps {
   Icon: ComponentType<{ className?: string }>;
   active?: boolean;
   highlighted?: boolean;
-  /** 클릭 시 호출. 클릭한 버튼의 화면상 위치를 같이 넘겨 — 호출 측이 popover 앵커링에 활용. */
-  onClick: (rect: DOMRect) => void;
+  /** 클릭 시 호출. 클릭한 버튼의 화면상 위치를 같이 넘겨 — 호출 측이 popover 앵커링에 활용.
+   *  popover 가 필요 없는 단순 액션(테마 토글 / 라우팅 / 로그아웃 등) 은 rect 를 무시해도 된다. */
+  onClick: (rect?: DOMRect) => void;
   /** flyout 이 열려있을 때는 툴팁을 숨김 (중복) */
   suppressTooltip?: boolean;
 }
@@ -220,11 +226,13 @@ function FlyoutLink({
 export function Sidebar() {
   const { theme, setTheme } = useThemeStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const { data: settings } = useUiSettings();
   const updateSettings = useUpdateUiSettings();
 
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.clear);
+  const isAdmin = currentUser?.role === 'admin';
 
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
@@ -296,10 +304,10 @@ export function Sidebar() {
     setEditingNavPath(null);
   };
 
-  const toggleGroup = (id: GroupId, rect: DOMRect) => {
+  const toggleGroup = (id: GroupId, rect?: DOMRect) => {
     setEditMode(false);
     setOpenGroup((cur) => (cur === id ? null : id));
-    setOpenAnchor(rect);
+    if (rect) setOpenAnchor(rect);
   };
 
   // 그룹별 flyout 본문 렌더링
@@ -311,24 +319,42 @@ export function Sidebar() {
     if (id === 'docs') {
       return (
         <div className="space-y-1 pb-1">
-          {servicePaths.length > 0 && (
-            <FlyoutSection title="서비스 카탈로그">
-              {servicePaths.map((p) => {
-                const entry = navMap[p];
-                if (!entry) return null;
-                return (
-                  <FlyoutLink
-                    key={p}
-                    to={p}
-                    label={getLabel(p)}
-                    Icon={entry.icon}
-                    active={location.pathname === p}
-                    onSelect={close}
-                  />
-                );
-              })}
-            </FlyoutSection>
-          )}
+          <FlyoutSection title="서비스 카탈로그">
+            {servicePaths.map((p) => {
+              const entry = navMap[p];
+              if (!entry) return null;
+              return (
+                <FlyoutLink
+                  key={p}
+                  to={p}
+                  label={getLabel(p)}
+                  Icon={entry.icon}
+                  active={location.pathname === p}
+                  onSelect={close}
+                />
+              );
+            })}
+            {servicePaths.length > 0 && (
+              <div className="mx-2 my-1 border-t border-zinc-200" />
+            )}
+            <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+              작업 기준
+            </div>
+            {WORK_STANDARD_PATHS.map((p) => {
+              const entry = navMap[p];
+              if (!entry) return null;
+              return (
+                <FlyoutLink
+                  key={p}
+                  to={p}
+                  label={getLabel(p)}
+                  Icon={entry.icon}
+                  active={location.pathname === p}
+                  onSelect={close}
+                />
+              );
+            })}
+          </FlyoutSection>
           {DOCS_SECTIONS.map((sec) => (
             <FlyoutSection key={sec.id} title={sec.label}>
               {sec.paths.map((p) => {
@@ -422,14 +448,18 @@ export function Sidebar() {
         } as React.CSSProperties}
         className="fixed top-0 left-0 h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col z-40"
       >
-        {/* 로고 */}
+        {/* 로고 — 클릭 시 홈으로. 좌측 상단의 공식 홈 버튼 역할. */}
         <div className="flex items-center justify-center py-3 border-b border-border flex-shrink-0">
-          <div
-            className="w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-sm shadow-sm"
-            title={title}
+          <Link
+            to="/"
+            title={`${title} — 홈`}
+            aria-label="홈으로 이동"
+            className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-sm shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+              location.pathname === '/' ? 'ring-2 ring-primary/50' : ''
+            }`}
           >
             ☸
-          </div>
+          </Link>
         </div>
 
         {/* 그룹 아이콘 레일 */}
@@ -463,9 +493,32 @@ export function Sidebar() {
           />
           {currentUser && (
             <RailIconButton
-              label={`${currentUser.displayName || currentUser.username}${currentUser.role === 'admin' ? ' · Admin' : ''}`}
+              label={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}
               Icon={User}
               onClick={() => { /* 호버 툴팁만 — 별도 동작 없음 */ }}
+            />
+          )}
+          {currentUser && (
+            <RailIconButton
+              label="비밀번호 변경"
+              Icon={KeyRound}
+              onClick={() => navigate('/me/change-password')}
+            />
+          )}
+          {isAdmin && (
+            <RailIconButton
+              label="사용자 관리"
+              Icon={ShieldCheck}
+              active={location.pathname === '/settings/users'}
+              onClick={() => navigate('/settings/users')}
+            />
+          )}
+          {isAdmin && (
+            <RailIconButton
+              label="감사 로그"
+              Icon={FileSearch}
+              active={location.pathname === '/settings/audit-logs'}
+              onClick={() => navigate('/settings/audit-logs')}
             />
           )}
           {currentUser && (
@@ -532,7 +585,7 @@ export function Sidebar() {
             <nav className="flex-1 py-2 px-2 overflow-y-auto">
               {GROUPS.map((g) => {
                 const paths = g.id === 'docs'
-                  ? [...servicePaths, ...DOCS_SECTIONS.flatMap((s) => s.paths)]
+                  ? [...servicePaths, ...WORK_STANDARD_PATHS, ...DOCS_SECTIONS.flatMap((s) => s.paths)]
                   : g.paths;
                 if (paths.length === 0) return null;
                 return (

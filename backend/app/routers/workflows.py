@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.schemas.workflow import (
     WorkflowCreate,
     WorkflowUpdate,
@@ -37,7 +39,11 @@ def get_workflow(workflow_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
-def create_workflow(payload: WorkflowCreate, db: Session = Depends(get_db)):
+def create_workflow(
+    payload: WorkflowCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     wf = Workflow(**payload.model_dump())
     db.add(wf)
     db.commit()
@@ -46,7 +52,12 @@ def create_workflow(payload: WorkflowCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{workflow_id}", response_model=WorkflowResponse)
-def update_workflow(workflow_id: UUID, payload: WorkflowUpdate, db: Session = Depends(get_db)):
+def update_workflow(
+    workflow_id: UUID,
+    payload: WorkflowUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
     if not wf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
@@ -58,7 +69,11 @@ def update_workflow(workflow_id: UUID, payload: WorkflowUpdate, db: Session = De
 
 
 @router.delete("/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_workflow(workflow_id: UUID, db: Session = Depends(get_db)):
+def delete_workflow(
+    workflow_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
     if not wf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
@@ -69,7 +84,12 @@ def delete_workflow(workflow_id: UUID, db: Session = Depends(get_db)):
 # ── Step CRUD ──────────────────────────────────────────────────────────────────
 
 @router.post("/{workflow_id}/steps", response_model=WorkflowStepResponse, status_code=status.HTTP_201_CREATED)
-def create_step(workflow_id: UUID, payload: WorkflowStepCreate, db: Session = Depends(get_db)):
+def create_step(
+    workflow_id: UUID,
+    payload: WorkflowStepCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
     if not wf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
@@ -82,7 +102,11 @@ def create_step(workflow_id: UUID, payload: WorkflowStepCreate, db: Session = De
 
 @router.put("/{workflow_id}/steps/{step_id}", response_model=WorkflowStepResponse)
 def update_step(
-    workflow_id: UUID, step_id: UUID, payload: WorkflowStepUpdate, db: Session = Depends(get_db)
+    workflow_id: UUID,
+    step_id: UUID,
+    payload: WorkflowStepUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     step = (
         db.query(WorkflowStep)
@@ -99,7 +123,12 @@ def update_step(
 
 
 @router.delete("/{workflow_id}/steps/{step_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_step(workflow_id: UUID, step_id: UUID, db: Session = Depends(get_db)):
+def delete_step(
+    workflow_id: UUID,
+    step_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     step = (
         db.query(WorkflowStep)
         .filter(WorkflowStep.id == step_id, WorkflowStep.workflow_id == workflow_id)
@@ -114,7 +143,12 @@ def delete_step(workflow_id: UUID, step_id: UUID, db: Session = Depends(get_db))
 # ── Edge CRUD ──────────────────────────────────────────────────────────────────
 
 @router.post("/{workflow_id}/edges", response_model=WorkflowEdgeResponse, status_code=status.HTTP_201_CREATED)
-def create_edge(workflow_id: UUID, payload: WorkflowEdgeCreate, db: Session = Depends(get_db)):
+def create_edge(
+    workflow_id: UUID,
+    payload: WorkflowEdgeCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
     if not wf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
@@ -140,7 +174,12 @@ def create_edge(workflow_id: UUID, payload: WorkflowEdgeCreate, db: Session = De
 
 
 @router.delete("/{workflow_id}/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_edge(workflow_id: UUID, edge_id: UUID, db: Session = Depends(get_db)):
+def delete_edge(
+    workflow_id: UUID,
+    edge_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     edge = (
         db.query(WorkflowEdge)
         .filter(WorkflowEdge.id == edge_id, WorkflowEdge.workflow_id == workflow_id)

@@ -5,8 +5,7 @@ from app.models.daily_check import DailyCheckLog, CheckSchedule, CheckScheduleTy
 from app.models.playbook import Playbook
 from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
-from app.models.issue import Issue
-from app.models.task import Task
+from app.models.work_item import WorkItem
 from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
@@ -22,6 +21,7 @@ from app.models.service_entry import ServiceEntry
 from app.models.batch_job import BatchJob, BatchJobRun
 from app.models.command_entry import CommandEntry
 from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.models.deep_check import (
     DeepCheckDefinition,
     DeepCheckResult,
@@ -42,8 +42,7 @@ __all__ = [
     "AnsiblePlaybookFile",
     "AnsibleInventory",
     "MetricCard",
-    "Issue",
-    "Task",
+    "WorkItem",
     "AppSetting",
     "Workflow",
     "WorkflowStep",
@@ -65,6 +64,7 @@ __all__ = [
     "BatchJobRun",
     "CommandEntry",
     "User",
+    "AuditLog",
     "DeepCheckDefinition",
     "DeepCheckResult",
     "NotificationChannel",

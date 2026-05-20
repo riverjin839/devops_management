@@ -1,11 +1,11 @@
 import { ImagePlus, ExternalLink } from 'lucide-react';
-import { Task } from '@/types';
-import { loadTaskImages } from '@/lib/taskImages';
-import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
+import { WorkItem } from '@/types';
+import { loadWorkItemImages } from '@/lib/workItemImages';
+import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { RichContent } from '@/components/editor';
 
-interface TaskReadViewProps {
-  task: Task;
+interface WorkItemReadViewProps {
+  item: WorkItem;
 }
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
@@ -33,16 +33,16 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 }
 
 /**
- * 작업 상세 read 뷰 본문. `TaskDetailPage` (`/tasks/:id`) 에서 사용.
+ * 작업 상세 read 뷰 본문. `TaskDetailPage` (`/work-items/:id`) 에서 사용.
  * 헤더(배지·수정 버튼)는 호출 측이 그림.
  */
-export function TaskReadView({ task }: TaskReadViewProps) {
-  const images = loadTaskImages(task.id);
-  const isCompleted = !!task.completedAt;
-  const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
-  const moduleCfg = task.module ? MODULE_CONFIG[task.module] : null;
-  const typeCfg = task.typeLabel ? TYPE_LABEL_CONFIG[task.typeLabel] : null;
-  const kanbanLabel = KANBAN_STATUS_LABEL[task.kanbanStatus ?? 'todo'];
+export function WorkItemReadView({ item }: WorkItemReadViewProps) {
+  const images = loadWorkItemImages(item.id);
+  const isCompleted = !!item.closedAt;
+  const pStyle = PRIORITY_STYLES[item.priority] ?? PRIORITY_STYLES.medium;
+  const moduleCfg = item.module ? MODULE_CONFIG[item.module] : null;
+  const typeCfg = item.typeLabel ? TYPE_LABEL_CONFIG[item.typeLabel] : null;
+  const kanbanLabel = KANBAN_STATUS_LABEL[item.kanbanStatus ?? 'todo'];
 
   return (
     <div className="space-y-5">
@@ -71,18 +71,18 @@ export function TaskReadView({ task }: TaskReadViewProps) {
           {pStyle.label}
         </span>
         <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20">
-          {task.taskCategory}
+          {item.category}
         </span>
-        {task.effortHours && (
-          <span className="text-xs text-muted-foreground">{task.effortHours}h</span>
+        {item.effortHours && (
+          <span className="text-xs text-muted-foreground">{item.effortHours}h</span>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="담당자" value={task.assignee} />
-        <Field label="대상 클러스터" value={task.clusterName} />
-        <Field label="작업 예정일" value={formatDateTime(task.scheduledAt)} />
-        <Field label="작업 완료일" value={formatDateTime(task.completedAt)} />
+        <Field label="담당자" value={item.assignee} />
+        <Field label="대상 클러스터" value={item.clusterName} />
+        <Field label="작업 예정일" value={formatDateTime(item.startedAt)} />
+        <Field label="작업 완료일" value={formatDateTime(item.closedAt)} />
       </div>
 
       <div className="border-t border-border" />
@@ -90,41 +90,41 @@ export function TaskReadView({ task }: TaskReadViewProps) {
       <div>
         <p className="text-xs font-medium text-muted-foreground mb-1">작업 내용</p>
         <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
-          <RichContent content={task.taskContent} />
+          <RichContent content={item.content} />
         </div>
       </div>
 
-      {task.resultContent && (
+      {item.resolution && (
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-1">작업 결과</p>
           <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
-            <RichContent content={task.resultContent} />
+            <RichContent content={item.resolution} />
           </div>
         </div>
       )}
 
-      {task.doneCondition && (
+      {item.doneCondition && (
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-1">완료 조건</p>
           <p className="text-sm text-foreground/80 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
-            ✓ {task.doneCondition}
+            ✓ {item.doneCondition}
           </p>
         </div>
       )}
 
-      <Field label="비고" value={task.remarks} />
+      <Field label="비고" value={item.remarks} />
 
-      {task.confluenceUrl && (
+      {item.confluenceUrl && (
         <div className="space-y-1">
           <p className="text-[11px] text-muted-foreground">Confluence 링크</p>
           <a
-            href={task.confluenceUrl}
+            href={item.confluenceUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline break-all"
           >
             <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="truncate max-w-md">{task.confluenceUrl}</span>
+            <span className="truncate max-w-md">{item.confluenceUrl}</span>
           </a>
         </div>
       )}
@@ -150,9 +150,9 @@ export function TaskReadView({ task }: TaskReadViewProps) {
       )}
 
       <div className="text-xs text-muted-foreground border-t border-border pt-3 flex gap-6">
-        <span>등록: {task.createdAt?.slice(0, 10)}</span>
-        {task.updatedAt !== task.createdAt && (
-          <span>수정: {task.updatedAt?.slice(0, 10)}</span>
+        <span>등록: {item.createdAt?.slice(0, 10)}</span>
+        {item.updatedAt !== item.createdAt && (
+          <span>수정: {item.updatedAt?.slice(0, 10)}</span>
         )}
       </div>
     </div>

@@ -6,12 +6,14 @@ class ServiceCatalogItem(BaseModel):
 
     - slug: URL 경로(``/services/<slug>``) 와 service_entries.service 매칭 키 (영문 권장).
     - label: 사이드바·태그 드롭다운에 표시될 라벨 (한글 가능).
-    - icon: lucide-react 아이콘 이름 (Server / Lock / Box …) — 비어있으면 BookOpen.
+    - icon: lucide-react 아이콘 이름 (Server / Lock / Box …) / 이모지 1자 /
+            업로드된 이미지의 base64 data URL ("data:image/...;base64,..."). 비어있으면 BookOpen.
     - color: 카드/뱃지 색상 토큰 (sky/amber/blue/...) — 비어있으면 slate.
     """
     slug: str = Field(..., min_length=1, max_length=64)
     label: str = Field(..., min_length=1, max_length=64)
-    icon: str | None = Field(default=None, max_length=64)
+    # max_length 제한 제거 — base64 data URL (수 KB) 저장 가능하도록.
+    icon: str | None = Field(default=None)
     color: str | None = Field(default=None, max_length=32)
     description: str | None = Field(default=None, max_length=255)
     sort_order: int = 0

@@ -15,9 +15,9 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { todayTasksApi, tasksApi, TodayTaskGroup } from '@/services/api';
+import { todayWorkItemsApi, workItemsApi, TodayTaskGroup } from '@/services/api';
 import { stripHtml } from '@/lib/utils';
-import { Task, KanbanStatus } from '@/types';
+import { WorkItem, KanbanStatus } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 import { ServiceChip } from '@/components/services/ServiceChip';
 
@@ -65,21 +65,21 @@ function formatScheduledAt(dateStr?: string | null): string {
 }
 
 interface TaskCardProps {
-  task: Task;
+  item: WorkItem;
   onStatusChange: (id: string, status: KanbanStatus) => void;
-  onEdit: (task: Task) => void;
+  onEdit: (item: WorkItem) => void;
   isUpdating: boolean;
   highlight?: 'today' | 'inprogress';
 }
 
-function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskCardProps) {
-  const priority = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.medium;
-  const kanban = KANBAN_STYLES[task.kanbanStatus] || KANBAN_STYLES.todo;
+function TaskCard({ item, onStatusChange, onEdit, isUpdating, highlight }: TaskCardProps) {
+  const priority = PRIORITY_STYLES[item.priority] || PRIORITY_STYLES.medium;
+  const kanban = KANBAN_STYLES[item.kanbanStatus] || KANBAN_STYLES.todo;
 
   return (
     <div
       className={`rounded-lg border p-3.5 flex flex-col gap-2 transition-colors hover:border-border/80 ${
-        task.kanbanStatus === 'done'
+        item.kanbanStatus === 'done'
           ? 'bg-muted/20 border-border/40 opacity-60'
           : highlight === 'inprogress'
           ? 'bg-amber-500/5 border-amber-500/20'
@@ -91,14 +91,14 @@ function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskC
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priority.dot}`} />
           <span className={`text-xs font-medium flex-shrink-0 ${priority.text}`}>{priority.label}</span>
-          {task.module && (
+          {item.module && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground flex-shrink-0">
-              {task.module}
+              {item.module}
             </span>
           )}
-          {task.service && <ServiceChip service={task.service} small />}
-          {task.clusterName && (
-            <span className="text-xs text-muted-foreground/60 truncate">{task.clusterName}</span>
+          {item.service && <ServiceChip service={item.service} small />}
+          {item.clusterName && (
+            <span className="text-xs text-muted-foreground/60 truncate">{item.clusterName}</span>
           )}
         </div>
         <div className={`flex items-center gap-1 text-xs flex-shrink-0 ${kanban.color}`}>
@@ -110,10 +110,10 @@ function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskC
       {/* 작업 내용 */}
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm text-foreground leading-snug flex-1 min-w-0">
-          {stripHtml(task.taskContent)}
+          {stripHtml(item.content)}
         </p>
         <button
-          onClick={() => onEdit(task)}
+          onClick={() => onEdit(item)}
           className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0 mt-0.5 transition-colors"
           title="수정"
         >
@@ -123,21 +123,21 @@ function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskC
 
       {/* 카테고리 + 예정시간 */}
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="truncate">{task.taskCategory}</span>
-        {highlight === 'today' && task.scheduledAt && (
+        <span className="truncate">{item.category}</span>
+        {highlight === 'today' && item.startedAt && (
           <span className="flex-shrink-0 flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {formatScheduledAt(task.scheduledAt)}
+            {formatScheduledAt(item.startedAt)}
           </span>
         )}
       </div>
 
       {/* 퀵 액션 버튼 */}
-      {task.kanbanStatus !== 'done' && (
+      {item.kanbanStatus !== 'done' && (
         <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
-          {task.kanbanStatus !== 'in_progress' && (
+          {item.kanbanStatus !== 'in_progress' && (
             <button
-              onClick={() => onStatusChange(task.id, 'in_progress')}
+              onClick={() => onStatusChange(item.id, 'in_progress')}
               disabled={isUpdating}
               className="flex-1 text-xs py-1 px-2 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
             >
@@ -145,7 +145,7 @@ function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskC
             </button>
           )}
           <button
-            onClick={() => onStatusChange(task.id, 'done')}
+            onClick={() => onStatusChange(item.id, 'done')}
             disabled={isUpdating}
             className="flex-1 text-xs py-1 px-2 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
           >
@@ -160,7 +160,7 @@ function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskC
 interface AssigneeColumnProps {
   group: TodayTaskGroup;
   onStatusChange: (id: string, status: KanbanStatus) => void;
-  onEdit: (task: Task) => void;
+  onEdit: (item: WorkItem) => void;
   updatingId: string | null;
 }
 
@@ -204,13 +204,13 @@ function AssigneeColumn({ group, onStatusChange, onEdit, updatingId }: AssigneeC
             <CalendarCheck2 className="w-3.5 h-3.5" />
             <span>오늘 예정 ({group.todayTasks.length})</span>
           </div>
-          {group.todayTasks.map((task) => (
+          {group.todayTasks.map((item) => (
             <TaskCard
-              key={task.id}
-              task={task}
+              key={item.id}
+              item={item}
               onStatusChange={onStatusChange}
               onEdit={onEdit}
-              isUpdating={updatingId === task.id}
+              isUpdating={updatingId === item.id}
               highlight="today"
             />
           ))}
@@ -224,13 +224,13 @@ function AssigneeColumn({ group, onStatusChange, onEdit, updatingId }: AssigneeC
             <Clock className="w-3.5 h-3.5" />
             <span>진행 중 ({group.inProgressTasks.length})</span>
           </div>
-          {group.inProgressTasks.map((task) => (
+          {group.inProgressTasks.map((item) => (
             <TaskCard
-              key={task.id}
-              task={task}
+              key={item.id}
+              item={item}
               onStatusChange={onStatusChange}
               onEdit={onEdit}
-              isUpdating={updatingId === task.id}
+              isUpdating={updatingId === item.id}
               highlight="inprogress"
             />
           ))}
@@ -256,18 +256,18 @@ export function TodoTodayPage() {
   const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['tasks', 'today', selectedDate],
-    queryFn: () => todayTasksApi.getSummary(selectedDate).then((r) => r.data),
+    queryKey: ['items', 'today', selectedDate],
+    queryFn: () => todayWorkItemsApi.getSummary(selectedDate).then((r) => r.data),
     refetchInterval: 60000, // 1분 자동 갱신
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: KanbanStatus }) =>
-      tasksApi.patchStatus(id, status),
+      workItemsApi.patchStatus(id, status),
     onMutate: ({ id }) => setUpdatingId(id),
     onSettled: () => {
       setUpdatingId(null);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     },
   });
 
@@ -275,8 +275,8 @@ export function TodoTodayPage() {
     statusMutation.mutate({ id, status });
   };
 
-  const handleEdit = (task: Task) => {
-    navigate(`/tasks/${task.id}/edit`);
+  const handleEdit = (item: WorkItem) => {
+    navigate(`/tasks-mgmt/${item.id}/edit`);
   };
 
   const totalToday = data?.totalToday ?? 0;
@@ -333,14 +333,14 @@ export function TodoTodayPage() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Link
-            to="/tasks"
+            to="/items"
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
           >
             작업 게시판
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
           <button
-            onClick={() => navigate('/tasks/new')}
+            onClick={() => navigate('/tasks-mgmt/new')}
             className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -412,7 +412,7 @@ export function TodoTodayPage() {
             </p>
           </div>
           <Link
-            to="/tasks"
+            to="/items"
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
           >
             작업 게시판으로 이동

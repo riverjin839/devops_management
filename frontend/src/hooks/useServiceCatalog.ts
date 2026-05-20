@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { createElement, useMemo, type ComponentType } from 'react';
 import { useUiSettings } from './useUiSettings';
 import {
   SERVICE_CATALOG as STATIC_CATALOG,
@@ -6,28 +6,51 @@ import {
   colorBadgeClass,
 } from '@/components/services/serviceCatalog';
 import {
-  Server, Lock, Box, Wrench, GitBranch, Activity, BarChart3, Network,
-  Database, Eye, ArrowRightLeft, Container, MoreHorizontal,
-  BookOpen, BookMarked, FileText, AlertTriangle, Clock, Link2,
-  Layers, Settings, Cpu, HardDrive, ClipboardList, ListTodo, Users, type LucideIcon,
+  BookOpen, type LucideIcon,
 } from 'lucide-react';
+import { resolveClusterIcon, CLUSTER_ICON_OPTIONS } from '@/lib/clusterIcons';
 import type { ServiceCatalogEntry } from '@/types';
 
-/** lucide-react 아이콘 이름 → 컴포넌트 매핑.
- *  Settings 의 서비스 탭에서 string 으로 저장된 아이콘 이름을 React 컴포넌트로 변환. */
-const ICON_MAP: Record<string, LucideIcon> = {
-  Server, Lock, Box, Wrench, GitBranch, Activity, BarChart3, Network,
-  Database, Eye, ArrowRightLeft, Container, MoreHorizontal,
-  BookOpen, BookMarked, FileText, AlertTriangle, Clock, Link2,
-  Layers, Settings, Cpu, HardDrive, ClipboardList, ListTodo, Users,
-};
+/** 서비스 카탈로그의 아이콘 옵션 — cluster 와 같은 lucide 화이트리스트 사용 (재사용성). */
+export const SERVICE_ICON_OPTIONS = Object.keys(CLUSTER_ICON_OPTIONS);
 
-export const SERVICE_ICON_OPTIONS = Object.keys(ICON_MAP);
-
-export function getServiceIcon(name?: string | null): LucideIcon {
-  if (name && ICON_MAP[name]) return ICON_MAP[name];
-  return BookOpen;
+/**
+ * 저장된 아이콘 값(lucide 이름 / emoji / data URL)을 ``ComponentType`` 으로 변환.
+ * 기존 호출자가 ``<Icon className="w-4 h-4" />`` 처럼 쓰는 패턴 그대로 지원.
+ * (이 파일이 .ts 라 JSX 대신 ``createElement`` 사용.)
+ */
+export function getServiceIcon(name?: string | null): ComponentType<{ className?: string }> {
+  const resolved = resolveClusterIcon(name);
+  if (!resolved) return BookOpen;
+  if (resolved.kind === 'lucide') return resolved.Component;
+  if (resolved.kind === 'image') {
+    const src = resolved.value;
+    const Img: ComponentType<{ className?: string }> = ({ className }) =>
+      createElement('img', {
+        src,
+        alt: '',
+        className: `${className ?? ''} object-cover rounded`,
+      });
+    Img.displayName = 'ServiceIcon(image)';
+    return Img;
+  }
+  // emoji / 텍스트
+  const text = resolved.value;
+  const TextIcon: ComponentType<{ className?: string }> = ({ className }) =>
+    createElement(
+      'span',
+      {
+        className: `${className ?? ''} inline-flex items-center justify-center leading-none`,
+        'aria-hidden': true,
+      },
+      text,
+    );
+  TextIcon.displayName = 'ServiceIcon(text)';
+  return TextIcon;
 }
+
+// Re-export for backwards compatibility — 기존 코드가 ``LucideIcon`` 타입을 임포트하던 경우.
+export type { LucideIcon };
 
 /** ui_settings 의 사용자 정의 서비스 카탈로그를 우선, 비어있으면 static 폴백.
  *  ServiceDef 형태로 통일해 기존 페이지/컴포넌트 호환성 유지. */

@@ -11,7 +11,8 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, Assignee } from '@/types';
 import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
-import { useToast, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { useToast, ResizeGrip, DoubleScrollX, ClusterIconPicker } from '@/components/common';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 
@@ -335,6 +336,10 @@ export function SettingsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; detail: string }>>({});
+  // 클러스터 아이콘 picker — 행의 아이콘 버튼 클릭 시 anchor 좌표 보존.
+  const [iconPickerCluster, setIconPickerCluster] = useState<Cluster | null>(null);
+  const [iconPickerAnchor, setIconPickerAnchor] = useState<DOMRect | null>(null);
+  const updateClusterMut = useUpdateCluster();
 
   // Assignee management state
   const { data: assignees = [] } = useAssignees();
@@ -606,12 +611,36 @@ export function SettingsPage() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {clusters.map((cluster) => (
+              {clusters.map((cluster) => {
+                const resolved = resolveClusterIcon(cluster.icon);
+                return (
                 <div
                   key={cluster.id}
                   className="px-6 py-4 flex items-center gap-4 hover:bg-muted/20 transition-colors"
                 >
-                  <span className="text-xl">{getStatusIcon(cluster.status)}</span>
+                  {/* 아이콘 버튼 — 클릭 시 picker 노출. 미설정이면 status emoji 표시. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      setIconPickerAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+                      setIconPickerCluster(cluster);
+                    }}
+                    className="flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-card hover:bg-secondary hover:ring-2 hover:ring-primary/30 transition-all flex-shrink-0"
+                    title={cluster.icon ? '아이콘 변경' : '아이콘 설정 (lucide / 이모지 / 이미지 업로드)'}
+                    aria-label="클러스터 아이콘 설정"
+                  >
+                    {resolved?.kind === 'image' ? (
+                      <img src={resolved.value} alt="" className="w-7 h-7 rounded object-cover" />
+                    ) : resolved?.kind === 'lucide' ? (
+                      <resolved.Component className="w-5 h-5 text-foreground/80" />
+                    ) : resolved?.kind === 'text' ? (
+                      <span className="text-xl leading-none">{resolved.value}</span>
+                    ) : (
+                      <span className="text-xl leading-none" aria-hidden>
+                        {getStatusIcon(cluster.status)}
+                      </span>
+                    )}
+                  </button>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -700,8 +729,25 @@ export function SettingsPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
+          )}
+
+          {/* 클러스터 아이콘 picker — 클러스터 관리 페이지에서 이동됨 */}
+          {iconPickerCluster && (
+            <ClusterIconPicker
+              clusterName={iconPickerCluster.name}
+              value={iconPickerCluster.icon}
+              anchorRect={iconPickerAnchor}
+              onChange={(next) => {
+                updateClusterMut.mutate({ id: iconPickerCluster.id, data: { icon: next } });
+              }}
+              onClose={() => {
+                setIconPickerCluster(null);
+                setIconPickerAnchor(null);
+              }}
+            />
           )}
         </div>}
 

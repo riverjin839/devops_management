@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.ops_note import OpsNote
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.schemas.ops_note import OpsNoteCreate, OpsNoteUpdate, OpsNoteResponse, OpsNoteListResponse
 
 router = APIRouter(prefix="/ops-notes", tags=["ops-notes"])
@@ -32,7 +34,11 @@ def get_ops_note(note_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=OpsNoteResponse, status_code=status.HTTP_201_CREATED)
-def create_ops_note(payload: OpsNoteCreate, db: Session = Depends(get_db)):
+def create_ops_note(
+    payload: OpsNoteCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     note = OpsNote(
         id=str(uuid4()),
         service=payload.service,
@@ -51,7 +57,12 @@ def create_ops_note(payload: OpsNoteCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{note_id}", response_model=OpsNoteResponse)
-def update_ops_note(note_id: str, payload: OpsNoteUpdate, db: Session = Depends(get_db)):
+def update_ops_note(
+    note_id: str,
+    payload: OpsNoteUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     note = db.query(OpsNote).filter(OpsNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
@@ -63,7 +74,11 @@ def update_ops_note(note_id: str, payload: OpsNoteUpdate, db: Session = Depends(
 
 
 @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_ops_note(note_id: str, db: Session = Depends(get_db)):
+def delete_ops_note(
+    note_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     note = db.query(OpsNote).filter(OpsNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")

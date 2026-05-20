@@ -172,16 +172,21 @@ export const CLUSTER_EMOJI_GROUPS: ClusterIconGroup<string>[] = [
 export type ResolvedClusterIcon =
   | { kind: 'lucide'; Component: LucideIcon }
   | { kind: 'text'; value: string }
+  | { kind: 'image'; value: string }   // base64 data URL or http(s) image URL
   | null;
 
-/** Cluster.icon 값을 사이드바에서 어떻게 렌더할지 결정.
+/** icon 값을 어떻게 렌더할지 결정 (cluster / service 카탈로그 공용).
  *  - 화이트리스트의 lucide 컴포넌트 이름 → lucide 컴포넌트
- *  - 그 외 비어있지 않은 값 → 텍스트(주로 emoji) 그대로
+ *  - "data:image/..." 또는 "http(s)://..." 로 시작 → 이미지
+ *  - 그 외 비어있지 않은 값 → 텍스트(주로 emoji)
  *  - null/empty → null (호출자가 status 기반 기본 아이콘으로 fallback) */
 export function resolveClusterIcon(icon?: string | null): ResolvedClusterIcon {
   if (!icon) return null;
   const trimmed = icon.trim();
   if (!trimmed) return null;
+  if (trimmed.startsWith('data:image/') || /^https?:\/\//i.test(trimmed)) {
+    return { kind: 'image', value: trimmed };
+  }
   if (Object.prototype.hasOwnProperty.call(CLUSTER_ICON_OPTIONS, trimmed)) {
     return { kind: 'lucide', Component: CLUSTER_ICON_OPTIONS[trimmed] };
   }

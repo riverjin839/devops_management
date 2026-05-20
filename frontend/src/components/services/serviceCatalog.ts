@@ -2,11 +2,17 @@ import {
   Server, Lock, Box, Wrench, GitBranch, Activity, BarChart3, Network,
   Database, Eye, ArrowRightLeft, Container, MoreHorizontal, type LucideIcon,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
+
+/** 서비스 아이콘은 lucide 컴포넌트 / emoji 텍스트 / 업로드 이미지 모두 받을 수 있도록
+ *  ``ComponentType<{className?: string}>`` 으로 일반화. ``getServiceIcon()`` 이 raw
+ *  문자열 (lucide 이름 / emoji / data URL)을 적절한 렌더러로 변환한다. */
+export type ServiceIconComponent = ComponentType<{ className?: string }>;
 
 export interface ServiceDef {
   key: string;
   label: string;
-  icon: LucideIcon;
+  icon: ServiceIconComponent;
   /** 컬러 — StatusBadge / Card 에서 활용 */
   color: string;
   description?: string;

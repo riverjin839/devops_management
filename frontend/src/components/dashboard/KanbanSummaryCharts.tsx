@@ -1,7 +1,7 @@
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts';
-import type { Task, Issue } from '@/types';
+import type { WorkItem } from '@/types';
 
 // ── 색상 ──────────────────────────────────────────────────────────────────────
 const TASK_COLORS: Record<string, string> = {
@@ -49,16 +49,17 @@ function ChartSkeleton() {
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
 interface KanbanSummaryChartsProps {
-  tasks: Task[];
-  issues: Issue[];
+  /** 통합 work items — 컴포넌트 내부에서 type='task'/'issue' 로 분할. */
+  items: WorkItem[];
   isLoading?: boolean;
   selectedClusterId?: string | null;
 }
 
-export function KanbanSummaryCharts({ tasks, issues, isLoading, selectedClusterId }: KanbanSummaryChartsProps) {
-  // 클러스터 필터 적용
-  const filteredTasks  = selectedClusterId ? tasks.filter((t) => t.clusterId === selectedClusterId)  : tasks;
-  const filteredIssues = selectedClusterId ? issues.filter((i) => i.clusterId === selectedClusterId) : issues;
+export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: KanbanSummaryChartsProps) {
+  // 클러스터 필터 적용 + type 분할
+  const scoped = selectedClusterId ? items.filter((w) => w.clusterId === selectedClusterId) : items;
+  const filteredTasks  = scoped.filter((w) => w.type === 'task');
+  const filteredIssues = scoped.filter((w) => w.type === 'issue');
 
   // 집계 (5컬럼 칸반 기준)
   const taskCounts = {
@@ -70,8 +71,8 @@ export function KanbanSummaryCharts({ tasks, issues, isLoading, selectedClusterI
   };
 
   const issueCounts = {
-    '미해결': filteredIssues.filter((i) => !i.resolvedAt).length,
-    '해결':   filteredIssues.filter((i) => !!i.resolvedAt).length,
+    '미해결': filteredIssues.filter((i) => !i.closedAt).length,
+    '해결':   filteredIssues.filter((i) => !!i.closedAt).length,
   };
 
   const taskData  = Object.entries(taskCounts).map(([name, value]) => ({ name, value }));
@@ -82,7 +83,7 @@ export function KanbanSummaryCharts({ tasks, issues, isLoading, selectedClusterI
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Task 상태 분포 */}
+      {/* WorkItem 상태 분포 */}
       <div className="bg-card border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -125,7 +126,7 @@ export function KanbanSummaryCharts({ tasks, issues, isLoading, selectedClusterI
         )}
       </div>
 
-      {/* Issue 상태 분포 */}
+      {/* WorkItem 상태 분포 */}
       <div className="bg-card border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <div>

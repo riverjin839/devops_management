@@ -4,20 +4,20 @@ import { ClusterSidebar, ViewModeBar, DoubleScrollX} from '@/components/common';
 import { Plus, Download, ListTodo, Search, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { TaskCalendar, TaskKanban, TaskTableRow, AddTaskRow } from '@/components/tasks';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
-import { MODULE_CONFIG } from '@/components/tasks/taskKanbanUtils';
-import { useTasks, useCreateTask, useDeleteTask } from '@/hooks/useTasks';
+import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
+import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
-import { tasksApi } from '@/services/api';
+import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
-import { Task, TaskModule } from '@/types';
+import { WorkItem, WorkItemModule, WorkItemType } from '@/types';
 
 type ViewMode = 'table' | 'calendar' | 'kanban';
 
-type TaskSortKey = 'kanbanStatus' | 'priority' | 'assignee' | 'clusterName' | 'taskCategory' | 'scheduledAt' | 'completedAt';
+type WorkItemSortKey = 'kanbanStatus' | 'priority' | 'assignee' | 'clusterName' | 'category' | 'startedAt' | 'closedAt';
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
@@ -32,10 +32,10 @@ function SortTh({
   onResizeDoubleClick,
 }: {
   label: string;
-  col: TaskSortKey;
-  sortKey: TaskSortKey | '';
+  col: WorkItemSortKey;
+  sortKey: WorkItemSortKey | '';
   sortDir: 'asc' | 'desc';
-  onSort: (col: TaskSortKey) => void;
+  onSort: (col: WorkItemSortKey) => void;
   className?: string;
   onResizeMouseDown?: (e: React.MouseEvent) => void;
   onResizeDoubleClick?: () => void;
@@ -63,24 +63,25 @@ function SortTh({
   );
 }
 
-export function TaskBoardPage() {
+export function WorkItemBoardPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>('all');
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
-  const [filterModule, setFilterModule] = useState<TaskModule | ''>('');
-  const [sortKey, setSortKey] = useState<TaskSortKey | ''>('');
+  const [filterModule, setFilterModule] = useState<WorkItemModule | ''>('');
+  const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const colW = useColumnWidths('task-board-table', {
+  const colW = useColumnWidths('item-board-table', {
     defaults: {
       drag: 28, status: 100, priority: 90, assignee: 200, cluster: 140, category: 120,
       content: 280, result: 280,
-      scheduledAt: 130, completedAt: 130, remarks: 160, actions: 110,
+      startedAt: 130, closedAt: 130, remarks: 160, actions: 110,
     },
     min: 60, max: 800,
   });
@@ -89,22 +90,23 @@ export function TaskBoardPage() {
   useClusters();
 
   const filters = {
+    type: typeFilter === 'all' ? undefined : typeFilter,
     clusterId: filterClusterId || undefined,
     assignee: filterAssignee || undefined,
-    taskCategory: filterCategory || undefined,
+    category: filterCategory || undefined,
     priority: filterPriority || undefined,
     module: filterModule || undefined,
-    scheduledFrom: filterFrom || undefined,
-    scheduledTo: filterTo || undefined,
+    startedFrom: filterFrom || undefined,
+    startedTo: filterTo || undefined,
   };
 
-  const { data, isLoading } = useTasks(filters);
-  const tasks = data?.data ?? [];
+  const { data, isLoading } = useWorkItems(filters);
+  const items = data?.data ?? [];
 
-  const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(tasks, 'k8s:order:tasks');
+  const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleSort = (col: TaskSortKey) => {
+  const handleSort = (col: WorkItemSortKey) => {
     if (sortKey === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -115,7 +117,7 @@ export function TaskBoardPage() {
 
   // Column sort overrides DnD order; when no sort active, use DnD order
   const sortedTasks = sortKey
-    ? [...tasks].sort((a, b) => {
+    ? [...items].sort((a, b) => {
         let cmp = 0;
         if (sortKey === 'kanbanStatus') {
           const ORDER: Record<string, number> = { backlog: 0, todo: 1, in_progress: 2, review_test: 3, done: 4 };
@@ -126,49 +128,55 @@ export function TaskBoardPage() {
           cmp = a.assignee.localeCompare(b.assignee);
         } else if (sortKey === 'clusterName') {
           cmp = (a.clusterName ?? '').localeCompare(b.clusterName ?? '');
-        } else if (sortKey === 'taskCategory') {
-          cmp = a.taskCategory.localeCompare(b.taskCategory);
-        } else if (sortKey === 'scheduledAt') {
-          cmp = a.scheduledAt.localeCompare(b.scheduledAt);
-        } else if (sortKey === 'completedAt') {
-          cmp = (a.completedAt ?? '').localeCompare(b.completedAt ?? '');
+        } else if (sortKey === 'category') {
+          cmp = a.category.localeCompare(b.category);
+        } else if (sortKey === 'startedAt') {
+          cmp = a.startedAt.localeCompare(b.startedAt);
+        } else if (sortKey === 'closedAt') {
+          cmp = (a.closedAt ?? '').localeCompare(b.closedAt ?? '');
         }
         return sortDir === 'asc' ? cmp : -cmp;
       })
     : dndTasks;
 
-  const deleteTask = useDeleteTask();
-  const createTask = useCreateTask();
+  const deleteTask = useDeleteWorkItem();
+  const createTask = useCreateWorkItem();
 
-  const handleDelete = (task: Task) => {
-    if (!confirm(`"${task.taskCategory}" 작업을 삭제하시겠습니까?`)) return;
-    deleteTask.mutate(task.id);
-    localStorage.removeItem('k8s:img:task:' + task.id);
+  const handleDelete = (item: WorkItem) => {
+    if (!confirm(`"${item.category}" 업무를 삭제하시겠습니까?`)) return;
+    deleteTask.mutate(item.id);
+    localStorage.removeItem('k8s:img:work-item:' + item.id);
   };
 
   // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
-  const handleEdit = (task: Task) => {
-    navigate(`/tasks/${task.id}/edit`);
+  const handleEdit = (item: WorkItem) => {
+    navigate(`/tasks-mgmt/${item.id}/edit`);
   };
 
   // 하위 작업 등록.
-  const handleAddSubTask = (task: Task) => {
-    navigate(`/tasks/new?parentId=${task.id}`);
+  const handleAddSubItem = (item: WorkItem) => {
+    navigate(`/tasks-mgmt/new?parentId=${item.id}`);
+  };
+
+  // 신규 등록 — type tab 의 현재 값으로 기본 type 결정 (전체 탭이면 task 가 기본).
+  const handleCreateNew = () => {
+    const t = typeFilter === 'all' ? 'task' : typeFilter;
+    navigate(`/tasks-mgmt/new?type=${t}`);
   };
 
   // 행 / 카드 클릭 — read 라우트로 진입.
-  const openTaskDetail = (task: Task) => {
-    navigate(`/tasks/${task.id}`);
+  const openTaskDetail = (item: WorkItem) => {
+    navigate(`/tasks-mgmt/${item.id}`);
   };
 
   const handleExportCsv = async () => {
     try {
-      const { data: blobData } = await tasksApi.exportCsv(filters);
+      const { data: blobData } = await workItemsApi.exportCsv(filters);
       const blob = blobData instanceof Blob ? blobData : new Blob([blobData], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `tasks-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `items-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -188,8 +196,8 @@ export function TaskBoardPage() {
 
   const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterFrom || filterTo;
 
-  const inProgressCount = tasks.filter((t) => t.kanbanStatus === 'in_progress').length;
-  const doneCount = tasks.filter((t) => t.kanbanStatus === 'done').length;
+  const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
+  const doneCount = items.filter((t) => t.kanbanStatus === 'done').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -199,7 +207,7 @@ export function TaskBoardPage() {
           selectedId={filterClusterId || null}
           onSelect={(id) => setFilterClusterId(id ?? '')}
           allowAll
-          allLabel="전체 작업"
+          allLabel="전체 업무"
           iconOnly
         />
         <div className="flex-1 min-w-0">
@@ -207,11 +215,11 @@ export function TaskBoardPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <ListTodo className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">작업 관리 게시판</h1>
-            {tasks.length > 0 && (
+            <h1 className="text-xl font-bold">업무 관리 게시판</h1>
+            {items.length > 0 && (
               <div className="flex items-center gap-2 ml-4">
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
-                  전체 {tasks.length}
+                  전체 {items.length}
                 </span>
                 {inProgressCount > 0 && (
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${
@@ -245,7 +253,7 @@ export function TaskBoardPage() {
               showStylePanel={false}
             />
 
-            {viewMode !== 'calendar' && tasks.length > 0 && (
+            {viewMode !== 'calendar' && items.length > 0 && (
               <button
                 onClick={handleExportCsv}
                 className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
@@ -255,13 +263,45 @@ export function TaskBoardPage() {
               </button>
             )}
             <button
-              onClick={() => navigate('/tasks/new')}
+              onClick={handleCreateNew}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              작업 등록
+              업무 등록
             </button>
           </div>
+        </div>
+
+        {/* Type 탭 — 전체 / 작업 / 이슈 / 회의 / 교육 / 기타 */}
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <button
+            onClick={() => setTypeFilter('all')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+              typeFilter === 'all'
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            전체
+          </button>
+          {WORK_ITEM_TYPE_ORDER.map((key) => {
+            const cfg = WORK_ITEM_TYPE_CONFIG[key];
+            const isActive = typeFilter === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTypeFilter(key)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
+                  isActive
+                    ? `${cfg.cls} border-current`
+                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <cfg.Icon className="w-3.5 h-3.5" />
+                {cfg.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* 모듈 뷰 탭 */}
@@ -276,7 +316,7 @@ export function TaskBoardPage() {
           >
             전체 흐름
           </button>
-          {(Object.entries(MODULE_CONFIG) as [TaskModule, { label: string; cls: string }][]).map(([key, cfg]) => (
+          {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
             <button
               key={key}
               onClick={() => setFilterModule(filterModule === key ? '' : key)}
@@ -319,7 +359,7 @@ export function TaskBoardPage() {
               type="text"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              placeholder="작업 분류 검색"
+              placeholder="분류 검색"
               className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
             />
 
@@ -361,9 +401,9 @@ export function TaskBoardPage() {
               ))}
             </div>
           ) : (
-            <TaskKanban
-              tasks={sortedTasks}
-              onTaskClick={openTaskDetail}
+            <WorkItemKanban
+              items={sortedTasks}
+              onItemClick={openTaskDetail}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
@@ -380,7 +420,7 @@ export function TaskBoardPage() {
                 ))}
               </div>
             ) : (
-              <TaskCalendar tasks={tasks} onTaskClick={openTaskDetail} />
+              <WorkItemCalendar items={items} onItemClick={openTaskDetail} />
             )}
           </div>
         ) : isLoading ? (
@@ -389,7 +429,7 @@ export function TaskBoardPage() {
               <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
             ))}
           </div>
-        ) : tasks.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="text-center py-20">
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
             <p className="text-muted-foreground mb-4">
@@ -397,7 +437,7 @@ export function TaskBoardPage() {
             </p>
             {!hasFilters && (
               <button
-                onClick={() => navigate('/tasks/new')}
+                onClick={handleCreateNew}
                 className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
               >
                 + 첫 번째 작업 등록
@@ -409,7 +449,7 @@ export function TaskBoardPage() {
             <DoubleScrollX>
               <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
-                  {(['drag', 'status', 'priority', 'assignee', 'cluster', 'category', 'content', 'result', 'scheduledAt', 'completedAt', 'remarks', 'actions'] as const).map((k) => (
+                  {(['drag', 'status', 'priority', 'assignee', 'cluster', 'category', 'content', 'result', 'startedAt', 'closedAt', 'remarks', 'actions'] as const).map((k) => (
                     <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />
                   ))}
                 </colgroup>
@@ -424,7 +464,7 @@ export function TaskBoardPage() {
                       onResizeMouseDown={(e) => colW.beginResize('assignee', e)} onResizeDoubleClick={() => colW.autoFit('assignee')} />
                     <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
                       onResizeMouseDown={(e) => colW.beginResize('cluster', e)} onResizeDoubleClick={() => colW.autoFit('cluster')} />
-                    <SortTh label="작업 분류" col="taskCategory" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                    <SortTh label="작업 분류" col="category" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
                       onResizeMouseDown={(e) => colW.beginResize('category', e)} onResizeDoubleClick={() => colW.autoFit('category')} />
                     <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">작업 내용
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('content', e)} onDoubleClick={() => colW.autoFit('content')} />
@@ -432,10 +472,10 @@ export function TaskBoardPage() {
                     <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">작업 결과
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('result', e)} onDoubleClick={() => colW.autoFit('result')} />
                     </th>
-                    <SortTh label="예정일" col="scheduledAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('scheduledAt', e)} onResizeDoubleClick={() => colW.autoFit('scheduledAt')} />
-                    <SortTh label="완료일" col="completedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('completedAt', e)} onResizeDoubleClick={() => colW.autoFit('completedAt')} />
+                    <SortTh label="예정일" col="startedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('startedAt', e)} onResizeDoubleClick={() => colW.autoFit('startedAt')} />
+                    <SortTh label="완료일" col="closedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('closedAt', e)} onResizeDoubleClick={() => colW.autoFit('closedAt')} />
                     <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">비고
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('remarks', e)} onDoubleClick={() => colW.autoFit('remarks')} />
                     </th>
@@ -447,18 +487,18 @@ export function TaskBoardPage() {
                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
                   <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   <tbody>
-                  {sortedTasks.map((task) => (
-                    <TaskTableRow
-                      key={task.id}
-                      task={task}
+                  {sortedTasks.map((item) => (
+                    <WorkItemTableRow
+                      key={item.id}
+                      item={item}
                       clusters={clusters}
                       isDragDisabled={!!sortKey}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
-                      onAddSubTask={handleAddSubTask}
+                      onAddSubItem={handleAddSubItem}
                     />
                   ))}
-                  <AddTaskRow
+                  <AddWorkItemRow
                     clusters={clusters}
                     defaultClusterId={filterClusterId || undefined}
                     defaultAssignee={filterAssignee || undefined}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pencil, Trash2, CalendarDays, User, Server, ChevronRight, ChevronLeft, Clock, AlertTriangle } from 'lucide-react';
-import type { Task, KanbanStatus } from '@/types';
+import type { WorkItem, KanbanStatus } from '@/types';
 import { stripHtml } from '@/lib/utils';
 import {
   KANBAN_COLUMNS,
@@ -10,8 +10,8 @@ import {
   TYPE_LABEL_CONFIG,
   getNextStatus,
   getPrevStatus,
-} from './taskKanbanUtils';
-import { usePatchTaskStatus } from '@/hooks/useTasks';
+} from './workItemKanbanUtils';
+import { usePatchWorkItemStatus } from '@/hooks/useWorkItems';
 
 // ── 우선순위 설정 ──────────────────────────────────────────────────────────────
 const PRIORITY_CFG: Record<string, { dot: string; text: string; label: string }> = {
@@ -22,11 +22,11 @@ const PRIORITY_CFG: Record<string, { dot: string; text: string; label: string }>
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-function sortByPriority(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => {
+function sortByPriority(items: WorkItem[]): WorkItem[] {
+  return [...items].sort((a, b) => {
     const po = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
     if (po !== 0) return po;
-    return a.scheduledAt.localeCompare(b.scheduledAt);
+    return a.startedAt.localeCompare(b.startedAt);
   });
 }
 
@@ -91,19 +91,19 @@ function MoveMenu({ currentStatus, onMove }: MoveMenuProps) {
 
 // ── 카드 ───────────────────────────────────────────────────────────────────────
 interface TaskCardProps {
-  task: Task;
+  item: WorkItem;
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onMove: (to: KanbanStatus) => void;
 }
 
-function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
-  const pc = PRIORITY_CFG[task.priority] ?? PRIORITY_CFG.medium;
-  const prev = getPrevStatus(task.kanbanStatus);
-  const next = getNextStatus(task.kanbanStatus);
-  const moduleCfg = task.module ? MODULE_CONFIG[task.module] : null;
-  const typeCfg = task.typeLabel ? TYPE_LABEL_CONFIG[task.typeLabel] : null;
+function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
+  const pc = PRIORITY_CFG[item.priority] ?? PRIORITY_CFG.medium;
+  const prev = getPrevStatus(item.kanbanStatus);
+  const next = getNextStatus(item.kanbanStatus);
+  const moduleCfg = item.module ? MODULE_CONFIG[item.module] : null;
+  const typeCfg = item.typeLabel ? TYPE_LABEL_CONFIG[item.typeLabel] : null;
 
   return (
     <div
@@ -123,7 +123,7 @@ function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
           </span>
         )}
         <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-          {task.taskCategory}
+          {item.category}
         </span>
         <span className={`inline-flex items-center gap-1 text-[10px] ml-auto ${pc.text}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${pc.dot}`} />
@@ -133,13 +133,13 @@ function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
 
       {/* 작업 내용 */}
       <p className="text-xs text-foreground/90 line-clamp-2 leading-relaxed mb-2">
-        {stripHtml(task.taskContent)}
+        {stripHtml(item.content)}
       </p>
 
       {/* 완료 조건 (in_progress / review_test 에서만 표시) */}
-      {task.doneCondition && (task.kanbanStatus === 'in_progress' || task.kanbanStatus === 'review_test') && (
+      {item.doneCondition && (item.kanbanStatus === 'in_progress' || item.kanbanStatus === 'review_test') && (
         <p className="text-[10px] text-muted-foreground/70 line-clamp-1 mb-1.5 italic">
-          ✓ {task.doneCondition}
+          ✓ {item.doneCondition}
         </p>
       )}
 
@@ -147,28 +147,28 @@ function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
       <div className="flex flex-col gap-1 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <User className="w-3 h-3 flex-shrink-0" />
-          <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">정:{task.primaryAssignee || task.assignee}</span>
-          {task.secondaryAssignee && (
-            <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">부:{task.secondaryAssignee}</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">정:{item.primaryAssignee || item.assignee}</span>
+          {item.secondaryAssignee && (
+            <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">부:{item.secondaryAssignee}</span>
           )}
-          {task.clusterName && (
+          {item.clusterName && (
             <>
               <Server className="w-3 h-3 flex-shrink-0 ml-1" />
-              {task.clusterName}
+              {item.clusterName}
             </>
           )}
-          {task.effortHours && (
+          {item.effortHours && (
             <>
               <Clock className="w-3 h-3 flex-shrink-0 ml-1" />
-              {task.effortHours}h
+              {item.effortHours}h
             </>
           )}
         </span>
         <span className="flex items-center gap-1">
           <CalendarDays className="w-3 h-3 flex-shrink-0" />
-          {task.kanbanStatus === 'done'
-            ? `완료: ${formatDate(task.completedAt)}`
-            : `예정: ${formatDate(task.scheduledAt)}`}
+          {item.kanbanStatus === 'done'
+            ? `완료: ${formatDate(item.closedAt)}`
+            : `예정: ${formatDate(item.startedAt)}`}
         </span>
       </div>
 
@@ -194,7 +194,7 @@ function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
               <ChevronRight className="w-3 h-3" />
             </button>
           )}
-          <MoveMenu currentStatus={task.kanbanStatus} onMove={onMove} />
+          <MoveMenu currentStatus={item.kanbanStatus} onMove={onMove} />
         </div>
 
         {/* 편집/삭제 버튼 */}
@@ -220,28 +220,28 @@ function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
-interface TaskKanbanProps {
-  tasks: Task[];
-  onTaskClick: (task: Task) => void;
-  onEdit: (task: Task) => void;
-  onDelete: (task: Task) => void;
+interface WorkItemKanbanProps {
+  items: WorkItem[];
+  onItemClick: (item: WorkItem) => void;
+  onEdit: (item: WorkItem) => void;
+  onDelete: (item: WorkItem) => void;
 }
 
-export function TaskKanban({ tasks, onTaskClick, onEdit, onDelete }: TaskKanbanProps) {
-  const patchStatus = usePatchTaskStatus();
+export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkItemKanbanProps) {
+  const patchStatus = usePatchWorkItemStatus();
   const [showWipWarning, setShowWipWarning] = useState(false);
 
-  const grouped: Record<KanbanStatus, Task[]> = {
-    backlog:     sortByPriority(tasks.filter((t) => t.kanbanStatus === 'backlog')),
-    todo:        sortByPriority(tasks.filter((t) => t.kanbanStatus === 'todo')),
-    in_progress: sortByPriority(tasks.filter((t) => t.kanbanStatus === 'in_progress')),
-    review_test: sortByPriority(tasks.filter((t) => t.kanbanStatus === 'review_test')),
-    done:        sortByPriority(tasks.filter((t) => t.kanbanStatus === 'done')),
+  const grouped: Record<KanbanStatus, WorkItem[]> = {
+    backlog:     sortByPriority(items.filter((t) => t.kanbanStatus === 'backlog')),
+    todo:        sortByPriority(items.filter((t) => t.kanbanStatus === 'todo')),
+    in_progress: sortByPriority(items.filter((t) => t.kanbanStatus === 'in_progress')),
+    review_test: sortByPriority(items.filter((t) => t.kanbanStatus === 'review_test')),
+    done:        sortByPriority(items.filter((t) => t.kanbanStatus === 'done')),
   };
 
-  const handleMove = (task: Task, to: KanbanStatus) => {
+  const handleMove = (item: WorkItem, to: KanbanStatus) => {
     patchStatus.mutate(
-      { id: task.id, kanbanStatus: to },
+      { id: item.id, kanbanStatus: to },
       {
         onSuccess: (res) => {
           if (res.data.wipWarning) {
@@ -293,14 +293,14 @@ export function TaskKanban({ tasks, onTaskClick, onEdit, onDelete }: TaskKanbanP
                     <p className="text-xs text-muted-foreground/50 text-center py-4">{col.emptyText}</p>
                   </div>
                 ) : (
-                  colTasks.map((task) => (
+                  colTasks.map((item) => (
                     <TaskCard
-                      key={task.id}
-                      task={task}
-                      onClick={() => onTaskClick(task)}
-                      onEdit={() => onEdit(task)}
-                      onDelete={() => onDelete(task)}
-                      onMove={(to) => handleMove(task, to)}
+                      key={item.id}
+                      item={item}
+                      onClick={() => onItemClick(item)}
+                      onEdit={() => onEdit(item)}
+                      onDelete={() => onDelete(item)}
+                      onMove={(to) => handleMove(item, to)}
                     />
                   ))
                 )}

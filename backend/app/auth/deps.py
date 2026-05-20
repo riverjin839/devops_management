@@ -1,4 +1,6 @@
 """FastAPI dependencies for protected endpoints."""
+from typing import Callable
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -35,7 +37,24 @@ def get_current_user(
     return user
 
 
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
-    return user
+def require_role(*allowed: str) -> Callable[[User], User]:
+    """허용 role 화이트리스트를 가진 의존성 팩토리.
+
+    레거시 role 'user' 는 'viewer' 와 동의어로 취급.
+    """
+    allowed_set = set(allowed)
+
+    def _checker(user: User = Depends(get_current_user)) -> User:
+        effective_role = "viewer" if user.role == "user" else user.role
+        if effective_role not in allowed_set:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"권한이 부족합니다. 필요한 role: {', '.join(sorted(allowed_set))}",
+            )
+        return user
+
+    return _checker
+
+
+require_admin = require_role("admin")
+require_operator = require_role("admin", "operator")

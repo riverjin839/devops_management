@@ -101,8 +101,8 @@ def _run_centralized() -> int:
         svc = DeepCheckService(db)
         for cluster in db.query(Cluster).all():
             try:
-                n = asyncio.run(svc.run_for_cluster(str(cluster.id), in_cluster=False))
-                logger.info("Cluster %s: %d checks executed", cluster.name, n)
+                n, _log_id = asyncio.run(svc.run_for_cluster(str(cluster.id), in_cluster=False))
+                logger.info("Cluster %s: %d checks executed (log=%s)", cluster.name, n, _log_id)
             except Exception as e:
                 logger.exception("Cluster %s failed: %s", cluster.name, e)
                 rc = 1

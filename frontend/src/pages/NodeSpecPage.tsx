@@ -343,7 +343,7 @@ export function NodeSpecPage() {
           <DebugLogPanel pageKey="node-specs" extra={{ clusterId, total: rows.length, statusFilter, roleFilter, search }} />
 
           {/* 헤더 */}
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-2">
             <ClipboardCheck className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">노드 서버스펙 관리 대장</h1>
             <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
@@ -394,16 +394,29 @@ export function NodeSpecPage() {
             </div>
           </div>
 
-          {/* 통계 카드 */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-            {(['total', 'active', 'spare', 'maintenance', 'decommission'] as const).map((k) => (
-              <div key={k} className="bg-card border border-border rounded-xl p-3">
-                <p className="text-[11px] text-muted-foreground">
-                  {k === 'total' ? '전체' : STATUS_LABEL[k]}
-                </p>
-                <p className="text-2xl font-bold mt-0.5">{stats[k] ?? 0}</p>
-              </div>
-            ))}
+          {/* 통계 pills — 클릭하면 상태 필터로 연동 */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            {(['total', 'active', 'spare', 'maintenance', 'decommission'] as const).map((k) => {
+              const isActive = k === 'total' ? statusFilter === '' : statusFilter === k;
+              const dotCls = k === 'total' ? '' : STATUS_CLS[k];
+              return (
+                <button
+                  key={k}
+                  onClick={() => setStatusFilter(k === 'total' ? '' : k as NodeSpecStatus)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 border-primary/50 text-primary'
+                      : 'bg-card border-border hover:border-primary/40 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {k !== 'total' && (
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${dotCls.split(' ')[0]}`} />
+                  )}
+                  <span>{k === 'total' ? '전체' : STATUS_LABEL[k]}</span>
+                  <span className="font-bold tabular-nums text-foreground">{stats[k] ?? 0}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* 필터 */}

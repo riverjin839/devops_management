@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.client import ApiException
 from pydantic import BaseModel, Field
@@ -16,10 +16,12 @@ from app.database import get_db
 from app.models import Cluster, Addon
 from app.models.cluster import StatusEnum
 from app.models.daily_check import DailyCheckLog, CheckSchedule
-from app.models.issue import Issue
-from app.models.task import Task
+from app.models.work_item import WorkItem
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.services.health_checker import HealthChecker
 from app.services.config_snapshot import record_cluster_meta_snapshots
+from app.services import audit_logger
 from app.schemas import (
     ClusterCreate,
     ClusterUpdate,
@@ -212,7 +214,11 @@ class ReorderRequest(BaseModel):
 
 
 @router.post("/reorder")
-def reorder_clusters(payload: ReorderRequest, db: Session = Depends(get_db)):
+def reorder_clusters(
+    payload: ReorderRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """순서 일괄 갱신 — 받은 순서대로 seq 를 10 간격으로 재할당."""
     seen: set[UUID] = set()
     for i, cid in enumerate(payload.cluster_ids):
@@ -243,7 +249,12 @@ def get_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ClusterResponse, status_code=status.HTTP_201_CREATED)
-def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
+def create_cluster(
+    cluster_data: ClusterCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
     """클러스터 생성 (등록 전 연결 검증 포함, skip_connectivity_check=True 시 임시 등록)"""
     # 중복 이름 체크
     existing = db.query(Cluster).filter(Cluster.name == cluster_data.name).first()
@@ -360,11 +371,26 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
             pass
 
     db.refresh(cluster)
+    audit_logger.record(
+        db,
+        action="cluster.create",
+        actor=actor,
+        status="success",
+        target_type="cluster",
+        target_id=cluster.id,
+        details={"name": cluster.name},
+        request=request,
+    )
     return cluster
 
 
 @router.put("/{cluster_id}", response_model=ClusterResponse)
-def update_cluster(cluster_id: UUID, cluster_data: ClusterUpdate, db: Session = Depends(get_db)):
+def update_cluster(
+    cluster_id: UUID,
+    cluster_data: ClusterUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """클러스터 수정"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
@@ -380,11 +406,17 @@ def update_cluster(cluster_id: UUID, cluster_data: ClusterUpdate, db: Session = 
 
 
 @router.delete("/{cluster_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
+def delete_cluster(
+    cluster_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
     """클러스터 삭제"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    snapshot = {"name": cluster.name}
 
     # 저장된 kubeconfig 파일 삭제
     stored_path = _kubeconfig_store_path(cluster_id)
@@ -398,16 +430,23 @@ def delete_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     # - DailyCheckLog, CheckSchedule: cluster_id NOT NULL → 먼저 삭제
     db.query(DailyCheckLog).filter(DailyCheckLog.cluster_id == cluster_id).delete(synchronize_session=False)
     db.query(CheckSchedule).filter(CheckSchedule.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - Issue, Task: cluster_id nullable → NULL 처리 (레코드 보관)
-    db.query(Issue).filter(Issue.cluster_id == cluster_id).update(
-        {"cluster_id": None}, synchronize_session=False
-    )
-    db.query(Task).filter(Task.cluster_id == cluster_id).update(
+    # - WorkItem (issue / task 통합): cluster_id nullable → NULL 처리 (레코드 보관)
+    db.query(WorkItem).filter(WorkItem.cluster_id == cluster_id).update(
         {"cluster_id": None}, synchronize_session=False
     )
 
     db.delete(cluster)
     db.commit()
+    audit_logger.record(
+        db,
+        action="cluster.delete",
+        actor=actor,
+        status="success",
+        target_type="cluster",
+        target_id=cluster_id,
+        details=snapshot,
+        request=request,
+    )
     return None
 
 
@@ -448,6 +487,7 @@ def update_kubeconfig(
     cluster_id: UUID,
     body: KubeconfigUpdateRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """클러스터 kubeconfig 내용 저장/수정"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -469,7 +509,11 @@ def update_kubeconfig(
 
 
 @router.post("/{cluster_id}/verify")
-def verify_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
+def verify_cluster(
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """클러스터 연결 상태 상세 검증"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
@@ -679,7 +723,12 @@ def _collect_node_basics(cluster: Cluster, db: Session) -> bool:
 
 
 @router.post("/{cluster_id}/auto-update")
-def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = Depends(get_db)):
+def auto_update_cluster(
+    cluster_id: UUID,
+    dry_run: bool = False,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """kubeconfig/k8s API 만으로 얻을 수 있는 클러스터 메타데이터를 자동 수집/반영.
 
     채우는 필드: node_count, hostname (master 후보), max_pod, pod_cidr/first/last,

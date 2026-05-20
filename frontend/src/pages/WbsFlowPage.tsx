@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { tasksApi, issuesApi } from '@/services/api';
-import type { Task, Issue } from '@/types';
+import { workItemsApi } from '@/services/api';
+import type { WorkItem } from '@/types';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, Filter,
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
@@ -189,7 +189,7 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
 
 // ── summary bar ───────────────────────────────────────────────────────────────
 
-function SummaryBar({ tasks, issues }: { tasks: Task[]; issues: Issue[] }) {
+function SummaryBar({ tasks, issues }: { tasks: WorkItem[]; issues: WorkItem[] }) {
   const taskCounts = useMemo(() => {
     const c = { total: tasks.length, done: 0, in_progress: 0, todo: 0, backlog: 0 };
     for (const t of tasks) {
@@ -203,8 +203,8 @@ function SummaryBar({ tasks, issues }: { tasks: Task[]; issues: Issue[] }) {
 
   const issueCounts = useMemo(() => ({
     total: issues.length,
-    resolved: issues.filter(i => i.resolvedAt).length,
-    open: issues.filter(i => !i.resolvedAt).length,
+    resolved: issues.filter(i => i.closedAt).length,
+    open: issues.filter(i => !i.closedAt).length,
   }), [issues]);
 
   const taskProgress = taskCounts.total > 0 ? Math.round((taskCounts.done / taskCounts.total) * 100) : 0;
@@ -316,8 +316,8 @@ function PersonalGanttView({
   onItemClick,
 }: {
   assignee: string;
-  tasks: Task[];
-  issues: Issue[];
+  tasks: WorkItem[];
+  issues: WorkItem[];
   dates: Date[];
   todayStr: string;
   onItemClick: (item: DayItem) => void;
@@ -328,14 +328,14 @@ function PersonalGanttView({
   const startStr = dates.length > 0 ? fmtDate(dates[0]) : '';
   const endStr   = dates.length > 0 ? fmtDate(dates[dates.length - 1]) : '';
 
-  // task → set of active date strings (within window)
+  // item → set of active date strings (within window)
   const taskActiveDates = useMemo(() => {
     const map = new Map<string, Set<string>>();
-    for (const task of myTasks) {
-      const ts = task.scheduledAt?.slice(0, 10);
+    for (const item of myTasks) {
+      const ts = item.startedAt?.slice(0, 10);
       if (!ts) continue;
-      const te = task.completedAt?.slice(0, 10) ??
-        ((task as Task & { parentId?: string }).kanbanStatus !== 'done' ? fmtDate(new Date()) : ts);
+      const te = item.closedAt?.slice(0, 10) ??
+        ((item as WorkItem & { parentId?: string }).kanbanStatus !== 'done' ? fmtDate(new Date()) : ts);
       const loopStart = ts > startStr ? parseDate(ts) : parseDate(startStr);
       const loopEnd   = te < endStr   ? parseDate(te)  : parseDate(endStr);
       const active = new Set<string>();
@@ -344,33 +344,33 @@ function PersonalGanttView({
         active.add(fmtDate(d));
         d = addDays(d, 1);
       }
-      map.set(task.id, active);
+      map.set(item.id, active);
     }
     return map;
   }, [myTasks, startStr, endStr]);
 
-  type GanttRow = { task: Task; indent: boolean } | { issue: Issue };
+  type GanttRow = { item: WorkItem; indent: boolean };
 
   const rows: GanttRow[] = useMemo(() => {
     const result: GanttRow[] = [];
-    const parentTasks = myTasks.filter(t => !(t as Task & {parentId?: string}).parentId);
-    const childTasks  = myTasks.filter(t =>  (t as Task & {parentId?: string}).parentId);
+    const parentTasks = myTasks.filter(t => !t.parentId);
+    const childTasks  = myTasks.filter(t =>  t.parentId);
     const addedIds = new Set<string>();
 
     for (const pt of parentTasks) {
-      result.push({ task: pt, indent: false });
+      result.push({ item: pt, indent: false });
       addedIds.add(pt.id);
-      for (const ct of childTasks.filter(ct => (ct as Task & {parentId?: string}).parentId === pt.id)) {
-        result.push({ task: ct, indent: true });
+      for (const ct of childTasks.filter(ct => ct.parentId === pt.id)) {
+        result.push({ item: ct, indent: true });
         addedIds.add(ct.id);
       }
     }
     for (const ct of childTasks) {
-      if (!addedIds.has(ct.id)) result.push({ task: ct, indent: true });
+      if (!addedIds.has(ct.id)) result.push({ item: ct, indent: true });
     }
     for (const issue of myIssues) {
-      const ds = issue.occurredAt?.slice(0, 10);
-      if (ds && ds >= startStr && ds <= endStr) result.push({ issue });
+      const ds = issue.startedAt?.slice(0, 10);
+      if (ds && ds >= startStr && ds <= endStr) result.push({ item: issue, indent: false });
     }
     return result;
   }, [myTasks, myIssues, startStr, endStr]);
@@ -413,15 +413,15 @@ function PersonalGanttView({
             const bgBase = ri % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--secondary)/0.08)';
             const bgClass = ri % 2 === 0 ? 'bg-background' : 'bg-secondary/5';
 
-            if ('task' in row) {
-              const t = row.task;
+            if (row.item.type === 'task') {
+              const t = row.item;
               const active = taskActiveDates.get(t.id) ?? new Set<string>();
               const cellColor = STATUS_CELL[t.kanbanStatus] ?? STATUS_CELL.todo;
-              const item: DayItem = {
-                type: 'task', id: t.id, label: t.taskContent, sub: t.taskCategory,
+              const dayItem: DayItem = {
+                type: 'task', id: t.id, label: t.content, sub: t.category,
                 status: t.kanbanStatus, priority: t.priority, module: t.module,
-                startDate: t.scheduledAt?.slice(0, 10) ?? '',
-                endDate: t.completedAt?.slice(0, 10),
+                startDate: t.startedAt?.slice(0, 10) ?? '',
+                endDate: t.closedAt?.slice(0, 10),
               };
               return (
                 <tr key={t.id} className={bgClass}>
@@ -430,10 +430,10 @@ function PersonalGanttView({
                     <div className={`flex items-center gap-1.5 ${row.indent ? 'ml-4' : ''}`}>
                       {row.indent && <span className="text-muted-foreground/40 text-xs flex-shrink-0">└</span>}
                       <StatusIcon status={t.kanbanStatus} type="task" />
-                      <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-[11px]' : 'font-medium text-xs'}`}>{stripHtml(t.taskContent)}</span>
+                      <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-[11px]' : 'font-medium text-xs'}`}>{stripHtml(t.content)}</span>
                     </div>
                     <div className={`text-[10px] text-muted-foreground mt-0.5 truncate ${row.indent ? 'ml-9' : 'ml-4'}`}>
-                      {t.taskCategory}
+                      {t.category}
                       {t.module && <span className={`ml-1 px-1 rounded ${MODULE_COLOR[t.module] ?? 'bg-secondary text-muted-foreground'}`}>{t.module}</span>}
                     </div>
                   </td>
@@ -443,7 +443,7 @@ function PersonalGanttView({
                     const isTd = ds === todayStr;
                     return (
                       <td key={ds}
-                        onClick={() => on && onItemClick(item)}
+                        onClick={() => on && onItemClick(dayItem)}
                         className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer hover:brightness-110' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
@@ -458,22 +458,22 @@ function PersonalGanttView({
                 </tr>
               );
             } else {
-              const issue = row.issue;
-              const ds = issue.occurredAt?.slice(0, 10);
-              const item: DayItem = {
-                type: 'issue', id: issue.id, label: issue.issueContent, sub: issue.issueArea,
-                status: issue.resolvedAt ? 'resolved' : 'open',
-                startDate: ds ?? '', resolved: !!issue.resolvedAt,
+              const iss = row.item;
+              const ds = iss.startedAt?.slice(0, 10);
+              const dayItem: DayItem = {
+                type: 'issue', id: iss.id, label: iss.content, sub: iss.category,
+                status: iss.closedAt ? 'resolved' : 'open',
+                startDate: ds ?? '', resolved: !!iss.closedAt,
               };
               return (
-                <tr key={issue.id} className={bgClass}>
+                <tr key={iss.id} className={bgClass}>
                   <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
                     style={{ backgroundColor: bgBase }}>
                     <div className="flex items-center gap-1.5">
-                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${issue.resolvedAt ? 'text-green-400' : 'text-red-400'}`} />
-                      <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(issue.issueContent)}</span>
+                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-green-400' : 'text-red-400'}`} />
+                      <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(iss.content)}</span>
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5 ml-4">{issue.issueArea}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5 ml-4">{iss.category}</div>
                   </td>
                   {dates.map(d => {
                     const colDs = fmtDate(d);
@@ -481,12 +481,12 @@ function PersonalGanttView({
                     const isTd = colDs === todayStr;
                     return (
                       <td key={colDs}
-                        onClick={() => on && onItemClick(item)}
+                        onClick={() => on && onItemClick(dayItem)}
                         className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer' : ''}`}
                         style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
                         {on && (
-                          <div className={`mx-0.5 rounded border h-[22px] ${issue.resolvedAt ? 'bg-green-500/30 border-green-500/50' : 'bg-orange-500/30 border-orange-500/50'} flex items-center justify-center`}>
-                            <AlertCircle className={`w-2.5 h-2.5 ${issue.resolvedAt ? 'text-green-400' : 'text-orange-400'}`} />
+                          <div className={`mx-0.5 rounded border h-[22px] ${iss.closedAt ? 'bg-green-500/30 border-green-500/50' : 'bg-orange-500/30 border-orange-500/50'} flex items-center justify-center`}>
+                            <AlertCircle className={`w-2.5 h-2.5 ${iss.closedAt ? 'text-green-400' : 'text-orange-400'}`} />
                           </div>
                         )}
                       </td>
@@ -518,17 +518,13 @@ export function WbsFlowPage() {
   const [pageView, setPageView] = useState<'grid' | 'personal'>('personal');
   const [personalAssignee, setPersonalAssignee] = useState<string>('');
 
-  // ── data fetching ──
-  const { data: taskRes } = useQuery({
-    queryKey: ['wbs-tasks'],
-    queryFn: () => tasksApi.getAll().then(r => r.data.data),
+  // ── data fetching ── 통합 work_items 한 번에 가져와 type 으로 분할
+  const { data: allRes } = useQuery({
+    queryKey: ['wbs-work-items'],
+    queryFn: () => workItemsApi.getAll().then(r => r.data.data),
   });
-  const { data: issueRes } = useQuery({
-    queryKey: ['wbs-issues'],
-    queryFn: () => issuesApi.getAll().then(r => r.data.data),
-  });
-  const tasks: Task[] = useMemo(() => taskRes ?? [], [taskRes]);
-  const issues: Issue[] = useMemo(() => issueRes ?? [], [issueRes]);
+  const tasks: WorkItem[]  = useMemo(() => (allRes ?? []).filter(w => w.type === 'task'), [allRes]);
+  const issues: WorkItem[] = useMemo(() => (allRes ?? []).filter(w => w.type === 'issue'), [allRes]);
 
   // ── date range ──
   const dayCount = viewMode === 'week' ? 7 : viewMode === 'twoWeek' ? 14 : 30;
@@ -568,65 +564,58 @@ export function WbsFlowPage() {
       const row = ensureRow(assignee);
       if (task.module && !row.roles.includes(task.module)) row.roles.push(task.module);
 
-      const taskStartStr = task.scheduledAt?.slice(0, 10);
-      const taskEndStr = task.completedAt?.slice(0, 10);
+      const taskStartStr = task.startedAt?.slice(0, 10);
+      const taskEndStr = task.closedAt?.slice(0, 10);
       const startD = taskStartStr ? parseDate(taskStartStr) : null;
       const endD = taskEndStr ? parseDate(taskEndStr) : null;
       if (!startD) continue;
 
-      const item: DayItem = {
+      const dayItem: DayItem = {
         type: 'task',
         id: task.id,
-        label: task.taskContent,
-        sub: task.taskCategory,
+        label: task.content,
+        sub: task.category,
         status: task.kanbanStatus,
         priority: task.priority,
         module: task.module,
         startDate: taskStartStr!,
         endDate: taskEndStr,
-        isSubTask: !!(task as Task & { parentId?: string }).parentId,
-        parentId: (task as Task & { parentId?: string }).parentId,
+        isSubTask: !!task.parentId,
+        parentId: task.parentId,
       };
 
-      // Place item on all dates in its range (within view)
       const effectiveEnd = endD ?? (task.kanbanStatus !== 'done' ? new Date() : startD);
       const rangeStart = startD < parseDate(startStr) ? parseDate(startStr) : startD;
       const rangeEnd = effectiveEnd > parseDate(endStr) ? parseDate(endStr) : effectiveEnd;
 
       let cur = rangeStart;
       while (cur <= rangeEnd) {
-        addItem(assignee, fmtDate(cur), item);
+        addItem(assignee, fmtDate(cur), dayItem);
         cur = addDays(cur, 1);
-      }
-      // If item starts before view but hasn't ended yet, still show on first date
-      if (startD < parseDate(startStr) && effectiveEnd >= parseDate(startStr)) {
-        // already handled above
-      } else if (startD >= parseDate(startStr) && startD <= parseDate(endStr)) {
-        // already handled
       }
     }
 
     for (const issue of issues) {
       const assignee = issue.assignee || '미지정';
       const row = ensureRow(assignee);
-      if (issue.issueArea && !row.roles.includes(issue.issueArea)) row.roles.push(issue.issueArea);
+      if (issue.category && !row.roles.includes(issue.category)) row.roles.push(issue.category);
 
-      const issueDateStr = issue.occurredAt?.slice(0, 10);
+      const issueDateStr = issue.startedAt?.slice(0, 10);
       if (!issueDateStr) continue;
 
-      const item: DayItem = {
+      const dayItem: DayItem = {
         type: 'issue',
         id: issue.id,
-        label: issue.issueContent,
-        sub: issue.issueArea,
-        status: issue.resolvedAt ? 'resolved' : 'open',
+        label: issue.content,
+        sub: issue.category,
+        status: issue.closedAt ? 'resolved' : 'open',
         startDate: issueDateStr,
-        endDate: issue.resolvedAt ? issue.resolvedAt.slice(0, 10) : undefined,
-        resolved: !!issue.resolvedAt,
+        endDate: issue.closedAt ? issue.closedAt.slice(0, 10) : undefined,
+        resolved: !!issue.closedAt,
       };
 
       if (issueDateStr >= startStr && issueDateStr <= endStr) {
-        addItem(assignee, issueDateStr, item);
+        addItem(assignee, issueDateStr, dayItem);
       }
     }
 
@@ -870,7 +859,7 @@ export function WbsFlowPage() {
                       const items = row.items.get(ds) ?? [];
                       const isTodayCol = ds === todayStr;
                       const isWE = isWeekend(d);
-                      // Deduplicate items by id (task spans multiple days)
+                      // Deduplicate items by id (item spans multiple days)
                       const seen = new Set<string>();
                       const uniqueItems = items.filter(item => {
                         if (seen.has(item.id)) return false;

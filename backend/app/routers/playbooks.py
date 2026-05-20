@@ -2,13 +2,15 @@ from datetime import datetime
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 from kubernetes import client as k8s_client, config as k8s_config
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AnsibleInventory, AnsiblePlaybookFile, Cluster, Playbook
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.schemas.playbook import (
     PlaybookCreate,
     PlaybookUpdate,
@@ -19,6 +21,7 @@ from app.schemas.playbook import (
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.playbook_executor import run_playbook
+from app.services import audit_logger
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
@@ -190,7 +193,11 @@ def get_dashboard_playbooks(cluster_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.patch("/{playbook_id}/dashboard", response_model=PlaybookResponse)
-def toggle_dashboard(playbook_id: UUID, db: Session = Depends(get_db)):
+def toggle_dashboard(
+    playbook_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """Playbook의 Dashboard 표시 토글"""
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
@@ -233,7 +240,11 @@ def _validate_assets(payload, db: Session, current_cluster_id: UUID | None = Non
 
 
 @router.post("", response_model=PlaybookResponse, status_code=status.HTTP_201_CREATED)
-def create_playbook(payload: PlaybookCreate, db: Session = Depends(get_db)):
+def create_playbook(
+    payload: PlaybookCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """새 Playbook 등록"""
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if not cluster:
@@ -259,7 +270,12 @@ def create_playbook(payload: PlaybookCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{playbook_id}", response_model=PlaybookResponse)
-def update_playbook(playbook_id: UUID, payload: PlaybookUpdate, db: Session = Depends(get_db)):
+def update_playbook(
+    playbook_id: UUID,
+    payload: PlaybookUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """Playbook 수정"""
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
@@ -275,7 +291,11 @@ def update_playbook(playbook_id: UUID, payload: PlaybookUpdate, db: Session = De
 
 
 @router.delete("/{playbook_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_playbook(playbook_id: UUID, db: Session = Depends(get_db)):
+def delete_playbook(
+    playbook_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """Playbook 삭제"""
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
@@ -289,8 +309,10 @@ def delete_playbook(playbook_id: UUID, db: Session = Depends(get_db)):
 @router.post("/{playbook_id}/run", response_model=PlaybookRunResponse)
 def run_playbook_endpoint(
     playbook_id: UUID,
+    request: Request,
     payload: PlaybookRunRequest = PlaybookRunRequest(),
     db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
 ):
     """Playbook 실행 (동기).
 
@@ -300,6 +322,16 @@ def run_playbook_endpoint(
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
+    audit_logger.record(
+        db,
+        action="playbook.run",
+        actor=actor,
+        status="success",
+        target_type="playbook",
+        target_id=playbook.id,
+        details={"name": playbook.name, "cluster_id": str(playbook.cluster_id) if playbook.cluster_id else None},
+        request=request,
+    )
 
     # running 상태로 업데이트
     playbook.status = "running"

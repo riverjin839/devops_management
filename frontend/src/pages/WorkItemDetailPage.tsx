@@ -1,31 +1,30 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, Pencil, Trash2 } from 'lucide-react';
-import { IssueForm, IssueReadView } from '@/components/issues';
-import { useIssues, useDeleteIssue } from '@/hooks/useIssues';
+import { ArrowLeft, ListTodo, Pencil, Trash2, Plus } from 'lucide-react';
+import { WorkItemForm, WorkItemReadView } from '@/components/work-items';
+import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
 
-export function IssueDetailPage() {
+export function WorkItemDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const editMode = location.pathname.endsWith('/edit');
 
-  const { data: listData } = useIssues();
-  const issue = listData?.data.find((x) => x.id === id) ?? null;
-  const deleteIssue = useDeleteIssue();
+  const { data: listData } = useWorkItems();
+  const item = listData?.data.find((x) => x.id === id) ?? null;
+  const deleteTask = useDeleteWorkItem();
 
-  // 캐시 로드 후에도 못 찾으면 not-found.
-  if (listData && !issue) {
+  if (listData && !item) {
     return (
       <div className="min-h-screen bg-background">
         <main className="max-w-[1200px] mx-auto px-8 py-8">
           <div className="text-center py-20">
-            <ClipboardList className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">이슈를 찾을 수 없습니다.</p>
+            <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+            <p className="text-muted-foreground mb-4">작업을 찾을 수 없습니다.</p>
             <button
-              onClick={() => navigate('/issues')}
+              onClick={() => navigate('/tasks-mgmt')}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
             >
-              이슈 목록으로
+              작업 목록으로
             </button>
           </div>
         </main>
@@ -33,38 +32,43 @@ export function IssueDetailPage() {
     );
   }
 
-  if (!issue) {
-    // 첫 로드 중. 빈 화면 (간단한 스켈레톤 정도면 충분 — 캐시 채워지면 즉시 렌더).
+  if (!item) {
     return <div className="min-h-screen bg-background" />;
   }
 
   const handleDelete = () => {
-    if (!confirm(`"${issue.issueArea}" 이슈를 삭제하시겠습니까?`)) return;
-    deleteIssue.mutate(issue.id);
-    localStorage.removeItem('k8s:img:issue:' + issue.id);
-    navigate('/issues');
+    if (!confirm(`"${item.category}" 작업을 삭제하시겠습니까?`)) return;
+    deleteTask.mutate(item.id);
+    localStorage.removeItem('k8s:img:work-item:' + item.id);
+    navigate('/tasks-mgmt');
   };
 
-  const pageTitle = editMode ? '이슈 수정' : '이슈 상세';
+  const pageTitle = editMode ? '작업 수정' : '작업 상세';
 
   return (
     <div className="min-h-screen bg-background">
-      {/* sticky 헤더 — 좌측: 목록으로 / 좌측 라벨 / 우측: 수정·삭제 (read) 또는 안내 (edit) */}
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
-            onClick={() => navigate('/issues')}
+            onClick={() => navigate('/tasks-mgmt')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             title="목록으로"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <ClipboardList className="w-4 h-4 text-muted-foreground" />
+          <ListTodo className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
           {!editMode && (
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => navigate(`/issues/${issue.id}/edit`)}
+                onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                title="하위 작업 등록"
+              >
+                <Plus className="w-3.5 h-3.5" /> 하위
+              </button>
+              <button
+                onClick={() => navigate(`/tasks-mgmt/${item.id}/edit`)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
               >
                 <Pencil className="w-3.5 h-3.5" /> 수정
@@ -84,18 +88,18 @@ export function IssueDetailPage() {
         {editMode ? (
           <>
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">이슈 수정</h1>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight">작업 수정</h1>
               <p className="text-sm text-muted-foreground mt-1">필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.</p>
             </div>
-            <IssueForm
-              initial={issue}
-              onCancel={() => navigate(`/issues/${issue.id}`)}
-              onSaved={() => navigate(`/issues/${issue.id}`)}
+            <WorkItemForm
+              initial={item}
+              onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
+              onSaved={() => navigate(`/tasks-mgmt/${item.id}`)}
             />
           </>
         ) : (
           <div className="bg-card border border-border rounded-2xl p-8 mac-shadow">
-            <IssueReadView issue={issue} />
+            <WorkItemReadView item={item} />
           </div>
         )}
       </main>

@@ -62,9 +62,10 @@ class Cluster(Base):
     node_ips = Column(Text, nullable=True)                         # JSON 배열 (InternalIP 목록)
     # 사용자 정의 컬럼 값 — ClusterCustomField 의 key 에 대응
     custom_values = Column(JSONB, nullable=True)                   # {field_key: value, ...}
-    # 사용자 지정 사이드바 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
+    # 사용자 지정 사이드바 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") /
+    # emoji 1자 / 업로드 이미지 base64 data URL ("data:image/...;base64,..."). 길이 무제한.
     # null/empty 면 status 기반 기본 아이콘으로 fallback.
-    icon = Column(String(64), nullable=True)
+    icon = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -73,8 +74,7 @@ class Cluster(Base):
     addons = relationship("Addon", back_populates="cluster", cascade="all, delete-orphan")
     check_logs = relationship("CheckLog", back_populates="cluster", cascade="all, delete-orphan")
     playbooks = relationship("Playbook", back_populates="cluster", cascade="all, delete-orphan")
-    issues = relationship("Issue", back_populates="cluster", foreign_keys="Issue.cluster_id")
-    tasks = relationship("Task", back_populates="cluster", foreign_keys="Task.cluster_id")
+    work_items = relationship("WorkItem", back_populates="cluster", foreign_keys="WorkItem.cluster_id")
     infra_nodes = relationship("InfraNode", back_populates="cluster", cascade="all, delete-orphan")
 
     def __repr__(self):

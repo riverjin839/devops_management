@@ -6,6 +6,8 @@ from sqlalchemy import or_
 
 from app.database import get_db
 from app.models.command_entry import CommandEntry
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.schemas.command_entry import (
     CommandEntryCreate,
     CommandEntryUpdate,
@@ -72,7 +74,11 @@ def get_command(entry_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=CommandEntryResponse, status_code=status.HTTP_201_CREATED)
-def create_command(payload: CommandEntryCreate, db: Session = Depends(get_db)):
+def create_command(
+    payload: CommandEntryCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     entry = CommandEntry(
         id=str(uuid4()),
         **payload.model_dump(),
@@ -84,7 +90,12 @@ def create_command(payload: CommandEntryCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{entry_id}", response_model=CommandEntryResponse)
-def update_command(entry_id: str, payload: CommandEntryUpdate, db: Session = Depends(get_db)):
+def update_command(
+    entry_id: str,
+    payload: CommandEntryUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     entry = db.query(CommandEntry).filter(CommandEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Command not found")
@@ -96,7 +107,11 @@ def update_command(entry_id: str, payload: CommandEntryUpdate, db: Session = Dep
 
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_command(entry_id: str, db: Session = Depends(get_db)):
+def delete_command(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     entry = db.query(CommandEntry).filter(CommandEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Command not found")

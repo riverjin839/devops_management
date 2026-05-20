@@ -275,124 +275,89 @@ export interface MetricCard {
   updatedAt: string;
 }
 
-// Issue Board
-export interface Issue {
+// Work Item Board — 업무 통합 모델 (작업/이슈/회의/교육/기타)
+export type WorkItemType = 'task' | 'issue' | 'meeting' | 'training' | 'etc';
+export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
+export type WorkItemModule = 'k8s' | 'keycloak' | 'nexus' | 'cilium' | 'argocd' | 'jenkins' | 'backend' | 'frontend' | 'monitoring' | 'infra';
+export type WorkItemTypeLabel = 'feature' | 'bug' | 'chore' | 'docs' | 'security';
+
+export interface WorkItem {
   id: string;
+  /** 업무 유형 디스크리미네이터 (task/issue/meeting/training/etc). 생성 시 결정, 변경 불가. */
+  type: WorkItemType;
   assignee: string;
   primaryAssignee: string;
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
-  issueArea: string;
+  /** 분류/도메인 라벨. issue 의 issue_area / task 의 task_category 통합. */
+  category: string;
+  /** 본문 (rich HTML). issue 의 issue_content / task 의 task_content 통합. */
+  content: string;
+  /** 조치 내용 / 작업 결과. issue 의 action_content / task 의 result_content 통합. */
+  resolution?: string;
+  /** Issue 전용 상세 설명. task 에서는 보통 미사용. */
+  detailContent?: string;
+  /** 시작/발생/예정 일시. issue 의 occurred_at / task 의 scheduled_at 통합. */
+  startedAt: string;
+  /** 종료/해결/완료 일시. issue 의 resolved_at / task 의 completed_at 통합. */
+  closedAt?: string;
+  remarks?: string;
   /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
   service?: string;
-  issueContent: string;
-  actionContent?: string;
-  detailContent?: string;
-  occurredAt: string;   // ISO date "YYYY-MM-DD"
-  resolvedAt?: string;  // ISO date "YYYY-MM-DD"
-  remarks?: string;
   /** Confluence 문서 링크 (운영 페이지) */
   confluenceUrl?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface IssueListResponse {
-  data: Issue[];
-  total: number;
-}
-
-export interface IssueCreate {
-  assignee: string;
-  primaryAssignee: string;
-  secondaryAssignee?: string;
-  clusterId?: string;
-  clusterName?: string;
-  issueArea: string;
-  service?: string;
-  issueContent: string;
-  actionContent?: string;
-  detailContent?: string;
-  occurredAt: string;
-  resolvedAt?: string | null;
-  remarks?: string;
-  confluenceUrl?: string;
-}
-
-export interface IssueUpdate extends Partial<IssueCreate> {}
-
-// Task Board
-export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
-export type TaskModule = 'k8s' | 'keycloak' | 'nexus' | 'cilium' | 'argocd' | 'jenkins' | 'backend' | 'frontend' | 'monitoring' | 'infra';
-export type TaskTypeLabel = 'feature' | 'bug' | 'chore' | 'docs' | 'security';
-
-export interface Task {
-  id: string;
-  assignee: string;
-  primaryAssignee: string;
-  secondaryAssignee?: string;
-  clusterId?: string;
-  clusterName?: string;
-  taskCategory: string;
-  taskContent: string;
-  resultContent?: string;
-  scheduledAt: string;
-  completedAt?: string;
   priority: 'high' | 'medium' | 'low';
-  remarks?: string;
-  // 칸반 보드 필드
   kanbanStatus: KanbanStatus;
-  module?: TaskModule;
-  typeLabel?: TaskTypeLabel;
+  module?: WorkItemModule;
+  typeLabel?: WorkItemTypeLabel;
   effortHours?: number;
   doneCondition?: string;
   parentId?: string;
-  issueId?: string;       // 연결된 이슈 (optional)
-  /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
-  service?: string;
-  /** Confluence 문서 링크 (운영 페이지) */
-  confluenceUrl?: string;
-  subtasks?: Task[];
+  /** 연결된 다른 work item (예: bug 작업이 참조하는 issue) — 기존 task.issue_id 의 후속. */
+  relatedWorkItemId?: string;
+  subtasks?: WorkItem[];
   createdAt: string;
   updatedAt: string;
 }
 
-export interface TaskListResponse {
-  data: Task[];
+export interface WorkItemListResponse {
+  data: WorkItem[];
   total: number;
 }
 
-export interface TaskStatusResponse {
-  data: Task;
+export interface WorkItemStatusResponse {
+  data: WorkItem;
   wipWarning: boolean;
 }
 
-export interface TaskCreate {
+export interface WorkItemCreate {
+  type: WorkItemType;
   assignee: string;
   primaryAssignee: string;
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
-  taskCategory: string;
-  taskContent: string;
-  resultContent?: string;
-  scheduledAt: string;
-  completedAt?: string | null;
-  priority: string;
+  category: string;
+  content: string;
+  resolution?: string;
+  detailContent?: string;
+  startedAt: string;
+  closedAt?: string | null;
   remarks?: string;
+  service?: string;
+  confluenceUrl?: string;
+  priority?: string;
   kanbanStatus?: KanbanStatus;
-  module?: TaskModule;
-  typeLabel?: TaskTypeLabel;
+  module?: WorkItemModule;
+  typeLabel?: WorkItemTypeLabel;
   effortHours?: number;
   doneCondition?: string;
   parentId?: string;
-  issueId?: string;
-  service?: string;
-  confluenceUrl?: string;
+  relatedWorkItemId?: string;
 }
 
-export interface TaskUpdate extends Partial<TaskCreate> {}
+export interface WorkItemUpdate extends Partial<Omit<WorkItemCreate, 'type'>> {}
 
 export interface MetricQueryResult {
   cardId: string;
@@ -1827,4 +1792,40 @@ export interface NotificationLogEntry {
   body?: string | null;
   error?: string | null;
   sentAt: string;
+}
+
+// ── Auth & RBAC ────────────────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'operator' | 'viewer';
+
+export interface AuthUserDetail {
+  id: string;
+  username: string;
+  role: UserRole;
+  displayName?: string | null;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  actorUserId?: string | null;
+  actorUsername: string;
+  action: string;
+  targetType?: string | null;
+  targetId?: string | null;
+  status: 'success' | 'failure' | string;
+  ip?: string | null;
+  userAgent?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any> | null;
+  createdAt: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

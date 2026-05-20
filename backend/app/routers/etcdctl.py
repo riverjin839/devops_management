@@ -17,15 +17,18 @@ import time
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from kubernetes import client as k8s_client, config as k8s_config
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Cluster
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget, run_bulk
+from app.services import audit_logger
 
 router = APIRouter(tags=["etcdctl"])
 
@@ -215,7 +218,13 @@ def _build_etcdctl_command(req: EtcdCtlRequest) -> str:
 
 
 @router.post("/clusters/{cluster_id}/etcdctl/run", response_model=EtcdCtlResponse)
-async def run_etcdctl(cluster_id: UUID, payload: EtcdCtlRequest, db: Session = Depends(get_db)):
+async def run_etcdctl(
+    cluster_id: UUID,
+    payload: EtcdCtlRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
     """master 노드에 SSH 로 접속해서 etcdctl 명령 수행."""
     if not payload.password and not payload.private_key:
         raise HTTPException(
@@ -233,6 +242,16 @@ async def run_etcdctl(cluster_id: UUID, payload: EtcdCtlRequest, db: Session = D
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
     bash_cmd = _build_etcdctl_command(payload)
+    audit_logger.record(
+        db,
+        action="etcdctl.run",
+        actor=actor,
+        status="success",
+        target_type="cluster",
+        target_id=cluster_id,
+        details={"args": payload.args[:200]},
+        request=request,
+    )
     # bash -c "..." 로 한 번에 실행. source 지원을 위해 bash 강제.
     remote_cmd = f"bash -lc {shlex.quote(bash_cmd)}"
 
@@ -259,7 +278,12 @@ async def run_etcdctl(cluster_id: UUID, payload: EtcdCtlRequest, db: Session = D
 
 
 @router.post("/clusters/{cluster_id}/etcdctl/logs", response_model=EtcdLogsResponse)
-async def get_etcd_logs(cluster_id: UUID, payload: EtcdLogsRequest, db: Session = Depends(get_db)):
+async def get_etcd_logs(
+    cluster_id: UUID,
+    payload: EtcdLogsRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """master 노드에서 etcd 서비스 journalctl 로그를 가져온다."""
     if not payload.password and not payload.private_key:
         raise HTTPException(

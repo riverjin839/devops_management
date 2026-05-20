@@ -6,8 +6,7 @@ from app.routers.playbooks import router as playbooks_router
 from app.routers.agent import router as agent_router
 from app.routers.promql import router as promql_router
 from app.routers.openclaw import router as openclaw_router
-from app.routers.issues import router as issues_router
-from app.routers.tasks import router as tasks_router
+from app.routers.work_items import router as work_items_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.node_labels import router as node_labels_router
 from app.routers.node_images import router as node_images_router
@@ -37,6 +36,7 @@ from app.routers.ansible_assets import (
     inv_router as ansible_inventories_router,
 )
 from app.routers.auth import router as auth_router
+from app.routers.audit_logs import router as audit_logs_router
 from app.routers.deep_check import router as deep_check_router, ingest_router as deep_check_ingest_router
 from app.routers.deep_check_definitions import router as deep_check_definitions_router
 from app.routers.notifications import router as notifications_router
@@ -50,8 +50,7 @@ __all__ = [
     "agent_router",
     "promql_router",
     "openclaw_router",
-    "issues_router",
-    "tasks_router",
+    "work_items_router",
     "ui_settings_router",
     "node_labels_router",
     "node_images_router",
@@ -79,6 +78,7 @@ __all__ = [
     "ansible_files_router",
     "ansible_inventories_router",
     "auth_router",
+    "audit_logs_router",
     "deep_check_router",
     "deep_check_ingest_router",
     "deep_check_definitions_router",

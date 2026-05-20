@@ -291,8 +291,28 @@ The `Settings` class (`backend/app/config.py`) uses pydantic-settings and reads 
 ### Database / Migrations
 
 - Tables are created automatically at startup via `Base.metadata.create_all(bind=engine)` in the `lifespan` context manager (`main.py`).
-- Schema additions use a lightweight `_run_migrations()` function that inspects existing columns and runs `ALTER TABLE` as needed. **There is no Alembic migration workflow.** When adding new columns, add an `ALTER TABLE` check in `_run_migrations()`.
+- Schema additions use a lightweight `_run_migrations()` function that inspects existing columns and runs `ALTER TABLE` as needed. **There is no Alembic migration workflow.**
+- **모든 schema 변경은 반드시 `_safe_*` 헬퍼 (`main.py` 의 `_safe_add_column`, `_safe_exec`, `_safe_create_index`) 를 사용**:
+  - `_safe_add_column(table, col, type)` → `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` + 개별 try/except + 로깅. raw `ALTER` 금지.
+  - `_safe_exec(sql, label=)` → `DROP NOT NULL` / `SET NOT NULL` / `ALTER TYPE ... USING` / `ADD CONSTRAINT` / backfill `UPDATE` 처럼 IF NOT EXISTS 가 없는 위험 SQL 격리용.
+  - `_safe_create_index(name, table, expr)` → `CREATE INDEX IF NOT EXISTS` 단축.
+- 한 마이그레이션이 실패해도 부팅이 막히지 않도록 lifespan 단계(`create_all` / `_run_migrations` / 각 `_seed_*`) 가 try/except 로 격리되어 있다. 부팅 로그에 `migration: ensured X.Y exists` / `migration: ... skipped (사유)` 로 흔적이 남는다.
 - On first startup `_seed_default_metric_cards()` inserts 6 default PromQL cards if the `metric_cards` table is empty.
+
+### Backup / Restore (DB Schema Compatibility)
+
+JSON 기반 애플리케이션 백업이 `backend/app/services/backup_service.py` 에 있고 Settings 페이지에서 export/import 한다. 이 서비스는 **per-table fault-tolerant** 로 설계돼야 한다 — prod DB 의 한 테이블이 model 과 어긋나도 (누락된 컬럼/타입 mismatch) 전체 백업이 500 으로 죽지 않도록.
+
+**규칙** (스키마 변경 시 반드시 함께 점검):
+1. 모든 테이블 순회는 `_safe_select_rows(db, t)` 같이 per-table try/except + `db.rollback()` 패턴. 한 테이블 실패는 envelope 의 `errors` / `skipped_tables` 에 사유 기록하고 다음 테이블로 진행.
+2. `export_all` / `compute_diff` / `current_meta` 모두 위 패턴을 따른다. 새 helper 추가 시 같은 패턴 강제.
+3. Router 엔드포인트 (`backend/app/routers/backup.py`) 는 서비스 호출을 try/except 로 감싸 `HTTPException(500, detail=...)` 로 구체적 사유 노출. **빈 500 금지**.
+4. 새 컬럼/테이블을 model 에 추가하면:
+   - `_run_migrations()` 에 `_safe_add_column` 으로 보강 (구버전 DB 호환).
+   - 민감 정보면 `SENSITIVE_COLUMNS` 에 등록해 default export 에서 마스킹.
+   - 대용량 로그성이면 `LOG_TABLES` 에 등록해 `include_logs=False` 일 때 제외.
+   - Restore (`apply_import`) 의 PK 기반 upsert / replace 로직이 새 PK / FK 변경에 영향 받는지 확인.
+5. 운영자가 export 결과의 `errors` / `skipped_tables` 를 확인할 수 있도록 Settings UI 가 노출해야 함 (스키마 드리프트 조기 감지).
 
 ### Router Registration
 

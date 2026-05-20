@@ -43,10 +43,10 @@ class DeepCheckService:
         *,
         in_cluster: bool = False,
         daily_check_log_id: Optional[str | UUID] = None,
-    ) -> int:
+    ) -> tuple[int, str | None]:
         """클러스터에 활성화된 deep check 들을 실행하고 DB 에 저장.
 
-        Returns: 실행된 체크 개수.
+        Returns: (실행된 체크 개수, 연결된 daily_check_log_id 문자열 or None)
         """
         cluster = self.db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None and not in_cluster:
@@ -95,7 +95,7 @@ class DeepCheckService:
 
         if executed:
             self.db.commit()
-        return executed
+        return executed, str(log_id) if log_id else None
 
     def run_definition_once(
         self,
@@ -148,24 +148,30 @@ class DeepCheckService:
     # Ingest (in_cluster 모드 → 관리 backend 로 push)
     # ──────────────────────────────────────────────────────────────
 
-    def persist_ingest_payload(self, payload: dict[str, Any]) -> int:
+    def persist_ingest_payload(self, payload: dict[str, Any]) -> tuple[int, str | None]:
         """In-cluster super pod 가 push 한 결과를 그대로 저장.
 
-        Payload 예:
-        {
-          "cluster_id": "uuid",
-          "daily_check_log_id": "uuid|null",
-          "results": [
-            {"check_type": "...", "status": "warning", "message": "...",
-             "details": {...}, "duration_ms": 123, "definition_id": null}
-          ]
-        }
+        daily_check_log_id 가 없으면 해당 클러스터의 최신 DailyCheckLog 에 자동 연결.
+
+        Returns: (저장된 결과 수, 연결된 daily_check_log_id 문자열 or None)
         """
         from app.models import StatusEnum
 
         cluster_id = payload.get("cluster_id")
         log_id = payload.get("daily_check_log_id")
         results = payload.get("results") or []
+
+        # in-cluster 모드는 log_id 를 모르므로 최신 DailyCheckLog 에 자동 연결
+        if not log_id and cluster_id:
+            latest = (
+                self.db.query(DailyCheckLog)
+                .filter(DailyCheckLog.cluster_id == cluster_id)
+                .order_by(desc(DailyCheckLog.checked_at))
+                .first()
+            )
+            if latest is not None:
+                log_id = str(latest.id)
+                logger.info("ingest: auto-linked cluster %s → daily_check_log %s", cluster_id, log_id)
 
         saved = 0
         for r in results:
@@ -188,7 +194,7 @@ class DeepCheckService:
             saved += 1
         if saved:
             self.db.commit()
-        return saved
+        return saved, str(log_id) if log_id else None
 
     # ──────────────────────────────────────────────────────────────
     # Internals

@@ -3,18 +3,21 @@ import os
 import time
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from kubernetes import client as k8s_client, config as k8s_config
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Cluster
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.schemas.bulk_exec import (
     BulkExecRequest, BulkExecResponse, BulkExecResultItem,
     NodeListResponse, NodeSummary,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.ssh_runner import SSHTarget, run_bulk
+from app.services import audit_logger
 
 router = APIRouter(tags=["bulk-exec"])
 
@@ -98,11 +101,28 @@ def list_cluster_nodes(cluster_id: UUID, db: Session = Depends(get_db)):
 # ── Bulk Exec ────────────────────────────────────────────────────────────────
 
 @router.post("/bulk-exec/run", response_model=BulkExecResponse)
-async def bulk_exec_run(payload: BulkExecRequest):
+async def bulk_exec_run(
+    payload: BulkExecRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
     """여러 호스트에 SSH/SCP 일괄 실행.
 
     인증 정보는 요청에만 존재하고 저장되지 않는다.
     """
+    audit_logger.record(
+        db,
+        action="bulk_exec.run",
+        actor=actor,
+        status="success",
+        target_type="bulk_exec",
+        details={
+            "action": payload.action,
+            "target_count": len(payload.targets or []),
+        },
+        request=request,
+    )
     if payload.action == "ssh" and not (payload.command and payload.command.strip()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="command 는 필수입니다 (ssh 모드).")

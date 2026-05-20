@@ -10,6 +10,23 @@ from app.routers import clusters as clusters_router
 from app.schemas import ClusterCreate
 
 
+def _fake_request():
+    """create_cluster 가 require 하는 fastapi.Request mock — audit_logger 가 client.host / user-agent 만 읽음."""
+    req = MagicMock()
+    req.client = MagicMock(host="127.0.0.1")
+    req.headers = {"user-agent": "pytest"}
+    return req
+
+
+def _fake_actor():
+    """require_operator 의존성 mock — User 객체 대용. audit_logger 는 .id / .username 만 읽음."""
+    actor = MagicMock()
+    actor.id = "actor-uuid"
+    actor.username = "tester"
+    actor.role = "operator"
+    return actor
+
+
 def test_verify_cluster_connectivity_fails_when_kubeconfig_path_missing(monkeypatch):
     monkeypatch.setattr(clusters_router.os.path, "exists", lambda _: False)
 
@@ -162,7 +179,7 @@ def test_create_cluster_registers_default_addons_and_saves_kubeconfig(monkeypatc
         kubeconfig_content="apiVersion: v1\nclusters: []",
     )
 
-    cluster = clusters_router.create_cluster(payload, db=db)
+    cluster = clusters_router.create_cluster(payload, request=_fake_request(), db=db, actor=_fake_actor())
 
     assert cluster.name == "dev-cluster"
     assert cluster.kubeconfig_path == "/tmp/saved.yaml"
@@ -189,7 +206,7 @@ def test_create_cluster_rejects_duplicate_name():
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        clusters_router.create_cluster(payload, db=db)
+        clusters_router.create_cluster(payload, request=_fake_request(), db=db, actor=_fake_actor())
 
     assert exc_info.value.status_code == 400
     assert "already exists" in exc_info.value.detail

@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Task, Cluster, TaskUpdate, TaskCreate, KanbanStatus } from '@/types';
-import { useUpdateTask } from '@/hooks/useTasks';
+import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
+import { useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { ServiceChip } from '@/components/services/ServiceChip';
 import { stripHtml } from '@/lib/utils';
 
@@ -51,7 +51,7 @@ function todayDateInput(): string {
 
 function hasLocalImages(id: string): boolean {
   try {
-    const raw = localStorage.getItem('k8s:img:task:' + id);
+    const raw = localStorage.getItem('k8s:img:work-item:' + id);
     if (!raw) return false;
     const arr = JSON.parse(raw) as string[];
     return arr.length > 0;
@@ -67,11 +67,11 @@ type EditField =
   | 'primaryAssignee'
   | 'secondaryAssignee'
   | 'cluster'
-  | 'taskCategory'
-  | 'taskContent'
-  | 'resultContent'
-  | 'scheduledAt'
-  | 'completedAt'
+  | 'category'
+  | 'content'
+  | 'resolution'
+  | 'startedAt'
+  | 'closedAt'
   | 'remarks';
 
 function EditableCell({
@@ -175,30 +175,30 @@ function TextareaInline({
   );
 }
 
-interface TaskTableRowProps {
-  task: Task;
+interface WorkItemTableRowProps {
+  item: WorkItem;
   clusters: Cluster[];
   isDragDisabled: boolean;
-  onEdit: (task: Task) => void;
-  onDelete: (task: Task) => void;
-  onAddSubTask: (parent: Task) => void;
+  onEdit: (item: WorkItem) => void;
+  onDelete: (item: WorkItem) => void;
+  onAddSubItem: (parent: WorkItem) => void;
 }
 
-export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete, onAddSubTask }: TaskTableRowProps) {
+export function WorkItemTableRow({ item, clusters, isDragDisabled, onEdit, onDelete, onAddSubItem }: WorkItemTableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id, disabled: isDragDisabled });
+    useSortable({ id: item.id, disabled: isDragDisabled });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
-  const updateTask = useUpdateTask();
+  const updateTask = useUpdateWorkItem();
   const [editing, setEditing] = useState<EditField>(null);
 
-  const save = (patch: TaskUpdate) => {
-    updateTask.mutate({ id: task.id, data: patch }, { onSettled: () => setEditing(null) });
+  const save = (patch: WorkItemUpdate) => {
+    updateTask.mutate({ id: item.id, data: patch }, { onSettled: () => setEditing(null) });
   };
 
-  const ks = task.kanbanStatus ?? 'todo';
-  const pStyle = PRI_STYLES[task.priority] ?? PRI_STYLES.medium;
-  const hasImages = hasLocalImages(task.id);
+  const ks = item.kanbanStatus ?? 'todo';
+  const pStyle = PRI_STYLES[item.priority] ?? PRI_STYLES.medium;
+  const hasImages = hasLocalImages(item.id);
 
   return (
     <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
@@ -222,9 +222,9 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
             value={ks}
             onChange={(e) => {
               const next = e.target.value as KanbanStatus;
-              const patch: TaskUpdate = { kanbanStatus: next };
-              // done 으로 바꾸면 completedAt 자동 채움(아직 비어있을 때)
-              if (next === 'done' && !task.completedAt) patch.completedAt = todayDateInput();
+              const patch: WorkItemUpdate = { kanbanStatus: next };
+              // done 으로 바꾸면 closedAt 자동 채움(아직 비어있을 때)
+              if (next === 'done' && !item.closedAt) patch.closedAt = todayDateInput();
               save(patch);
             }}
             onBlur={() => setEditing(null)}
@@ -252,7 +252,7 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
         {editing === 'priority' ? (
           <select
             autoFocus
-            value={task.priority}
+            value={item.priority}
             onChange={(e) => save({ priority: e.target.value })}
             onBlur={() => setEditing(null)}
             onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
@@ -273,7 +273,7 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
         <div className="flex items-center gap-1.5 flex-wrap">
           {editing === 'primaryAssignee' ? (
             <TextInlineInput
-              initial={task.primaryAssignee || task.assignee || ''}
+              initial={item.primaryAssignee || item.assignee || ''}
               onSave={(v) => save({ primaryAssignee: v, assignee: v })}
               onCancel={() => setEditing(null)}
               placeholder="정 담당자"
@@ -285,24 +285,24 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
               className="px-2 py-0.5 text-[11px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20 transition-colors"
               title="클릭하여 수정"
             >
-              정: {task.primaryAssignee || task.assignee || '-'}
+              정: {item.primaryAssignee || item.assignee || '-'}
             </span>
           )}
           {editing === 'secondaryAssignee' ? (
             <TextInlineInput
-              initial={task.secondaryAssignee ?? ''}
+              initial={item.secondaryAssignee ?? ''}
               onSave={(v) => save({ secondaryAssignee: v || undefined })}
               onCancel={() => setEditing(null)}
               placeholder="부 담당자"
               className="text-[11px] w-32"
             />
-          ) : task.secondaryAssignee ? (
+          ) : item.secondaryAssignee ? (
             <span
               onClick={() => setEditing('secondaryAssignee')}
               className="px-2 py-0.5 text-[11px] rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20 transition-colors"
               title="클릭하여 수정"
             >
-              부: {task.secondaryAssignee}
+              부: {item.secondaryAssignee}
             </span>
           ) : (
             <button
@@ -326,7 +326,7 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
         {editing === 'cluster' ? (
           <select
             autoFocus
-            value={task.clusterId ?? ''}
+            value={item.clusterId ?? ''}
             onChange={(e) => {
               const id = e.target.value || undefined;
               const name = clusters.find((c) => c.id === id)?.name;
@@ -339,48 +339,48 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
             <option value="">—</option>
             {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-        ) : (task.clusterName || '-')}
+        ) : (item.clusterName || '-')}
       </EditableCell>
 
       {/* Category */}
       <EditableCell
-        isEditing={editing === 'taskCategory'}
-        onEnter={() => setEditing('taskCategory')}
+        isEditing={editing === 'category'}
+        onEnter={() => setEditing('category')}
       >
-        {editing === 'taskCategory' ? (
+        {editing === 'category' ? (
           <TextInlineInput
-            initial={task.taskCategory}
-            onSave={(v) => save({ taskCategory: v })}
+            initial={item.category}
+            onSave={(v) => save({ category: v })}
             onCancel={() => setEditing(null)}
             placeholder="작업 분류"
           />
         ) : (
           <div className="flex items-center gap-1 flex-wrap">
             <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-              {task.taskCategory}
+              {item.category}
             </span>
-            {task.service && <ServiceChip service={task.service} />}
+            {item.service && <ServiceChip service={item.service} />}
           </div>
         )}
       </EditableCell>
 
-      {/* Task content */}
+      {/* WorkItem content */}
       <EditableCell
-        isEditing={editing === 'taskContent'}
-        onEnter={() => setEditing('taskContent')}
+        isEditing={editing === 'content'}
+        onEnter={() => setEditing('content')}
         className="max-w-xs"
         title="클릭하여 수정 (서식 보존은 ✏ 사용)"
       >
-        {editing === 'taskContent' ? (
+        {editing === 'content' ? (
           <TextareaInline
-            initial={stripHtml(task.taskContent)}
-            onSave={(v) => save({ taskContent: v })}
+            initial={stripHtml(item.content)}
+            onSave={(v) => save({ content: v })}
             onCancel={() => setEditing(null)}
             placeholder="작업 내용"
           />
         ) : (
           <div className="flex items-start gap-1.5">
-            <p className="line-clamp-2 text-foreground/90">{stripHtml(task.taskContent)}</p>
+            <p className="line-clamp-2 text-foreground/90">{stripHtml(item.content)}</p>
             {hasImages && (
               <span title="이미지 첨부 있음"><ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" /></span>
             )}
@@ -390,67 +390,67 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
 
       {/* Result content */}
       <EditableCell
-        isEditing={editing === 'resultContent'}
-        onEnter={() => setEditing('resultContent')}
+        isEditing={editing === 'resolution'}
+        onEnter={() => setEditing('resolution')}
         className="max-w-xs"
         title="클릭하여 수정 (서식 보존은 ✏ 사용)"
       >
-        {editing === 'resultContent' ? (
+        {editing === 'resolution' ? (
           <TextareaInline
-            initial={stripHtml(task.resultContent ?? '')}
-            onSave={(v) => save({ resultContent: v || undefined })}
+            initial={stripHtml(item.resolution ?? '')}
+            onSave={(v) => save({ resolution: v || undefined })}
             onCancel={() => setEditing(null)}
             placeholder="결과 내용"
           />
         ) : (
           <p className="line-clamp-2 text-muted-foreground">
-            {stripHtml(task.resultContent) || '-'}
+            {stripHtml(item.resolution) || '-'}
           </p>
         )}
       </EditableCell>
 
       {/* Scheduled at */}
       <EditableCell
-        isEditing={editing === 'scheduledAt'}
-        onEnter={() => setEditing('scheduledAt')}
+        isEditing={editing === 'startedAt'}
+        onEnter={() => setEditing('startedAt')}
         className="text-muted-foreground whitespace-nowrap font-mono text-xs"
       >
-        {editing === 'scheduledAt' ? (
+        {editing === 'startedAt' ? (
           <input
             autoFocus
             type="date"
-            defaultValue={toDateInput(task.scheduledAt)}
+            defaultValue={toDateInput(item.startedAt)}
             onBlur={(e) => {
               const v = e.target.value;
-              if (v && v !== toDateInput(task.scheduledAt)) save({ scheduledAt: v });
+              if (v && v !== toDateInput(item.startedAt)) save({ startedAt: v });
               else setEditing(null);
             }}
             onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
             className="px-2 py-1 text-xs bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
           />
-        ) : formatDateTime(task.scheduledAt)}
+        ) : formatDateTime(item.startedAt)}
       </EditableCell>
 
       {/* Completed at */}
       <EditableCell
-        isEditing={editing === 'completedAt'}
-        onEnter={() => setEditing('completedAt')}
+        isEditing={editing === 'closedAt'}
+        onEnter={() => setEditing('closedAt')}
         className="text-muted-foreground whitespace-nowrap font-mono text-xs"
       >
-        {editing === 'completedAt' ? (
+        {editing === 'closedAt' ? (
           <input
             autoFocus
             type="date"
-            defaultValue={toDateInput(task.completedAt)}
+            defaultValue={toDateInput(item.closedAt)}
             onBlur={(e) => {
               const v = e.target.value;
-              if (v !== toDateInput(task.completedAt)) save({ completedAt: v || null });
+              if (v !== toDateInput(item.closedAt)) save({ closedAt: v || null });
               else setEditing(null);
             }}
             onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
             className="px-2 py-1 text-xs bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
           />
-        ) : formatDateTime(task.completedAt)}
+        ) : formatDateTime(item.closedAt)}
       </EditableCell>
 
       {/* Remarks */}
@@ -461,7 +461,7 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
       >
         {editing === 'remarks' ? (
           <TextInlineInput
-            initial={task.remarks ?? ''}
+            initial={item.remarks ?? ''}
             onSave={(v) => save({ remarks: v || undefined })}
             onCancel={() => setEditing(null)}
             placeholder="비고"
@@ -469,7 +469,7 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
           />
         ) : (
           <p className="line-clamp-2 text-muted-foreground text-xs">
-            {task.remarks || '-'}
+            {item.remarks || '-'}
           </p>
         )}
       </EditableCell>
@@ -477,21 +477,21 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
       <td className="px-4 py-3">
         <div className="flex items-center justify-center gap-1">
           <button
-            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+            onClick={(e) => { e.stopPropagation(); onEdit(item); }}
             className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
             title="전체 수정 (리치 텍스트 / 이미지 포함)"
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onAddSubTask(task); }}
+            onClick={(e) => { e.stopPropagation(); onAddSubItem(item); }}
             className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
             title="하위 작업 추가"
           >
             <GitBranch className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+            onClick={(e) => { e.stopPropagation(); onDelete(item); }}
             className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
             title="삭제"
           >
@@ -503,23 +503,23 @@ export function TaskTableRow({ task, clusters, isDragDisabled, onEdit, onDelete,
   );
 }
 
-/** 인라인 행 추가 — 테이블 꼬리. 필수: taskCategory + taskContent + scheduledAt + primaryAssignee. */
-interface AddTaskRowProps {
+/** 인라인 행 추가 — 테이블 꼬리. 필수: category + content + startedAt + primaryAssignee. */
+interface AddWorkItemRowProps {
   clusters: Cluster[];
   defaultClusterId?: string;
   defaultAssignee?: string;
-  onCreate: (data: TaskCreate) => void;
+  onCreate: (data: WorkItemCreate) => void;
 }
 
-export function AddTaskRow({ clusters, defaultClusterId, defaultAssignee, onCreate }: AddTaskRowProps) {
+export function AddWorkItemRow({ clusters, defaultClusterId, defaultAssignee, onCreate }: AddWorkItemRowProps) {
   const [open, setOpen] = useState(false);
   const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('todo');
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [primaryAssignee, setPrimaryAssignee] = useState(defaultAssignee ?? '');
   const [clusterId, setClusterId] = useState(defaultClusterId ?? '');
-  const [taskCategory, setTaskCategory] = useState('');
-  const [taskContent, setTaskContent] = useState('');
-  const [scheduledAt, setScheduledAt] = useState(todayDateInput());
+  const [category, setTaskCategory] = useState('');
+  const [content, setTaskContent] = useState('');
+  const [startedAt, setScheduledAt] = useState(todayDateInput());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
@@ -534,21 +534,22 @@ export function AddTaskRow({ clusters, defaultClusterId, defaultAssignee, onCrea
     setScheduledAt(todayDateInput());
   };
 
-  const canSave = !!taskCategory.trim() && !!taskContent.trim() && !!primaryAssignee.trim() && !!scheduledAt;
+  const canSave = !!category.trim() && !!content.trim() && !!primaryAssignee.trim() && !!startedAt;
 
   const submit = () => {
     if (!canSave) return;
     const name = clusters.find((c) => c.id === clusterId)?.name;
     onCreate({
+      type: 'task',
       assignee: primaryAssignee.trim(),
       primaryAssignee: primaryAssignee.trim(),
       kanbanStatus,
       priority,
       clusterId: clusterId || undefined,
       clusterName: clusterId ? name : undefined,
-      taskCategory: taskCategory.trim(),
-      taskContent: taskContent.trim(),
-      scheduledAt,
+      category: category.trim(),
+      content: content.trim(),
+      startedAt,
     });
     reset();
     setOpen(false);
@@ -603,12 +604,12 @@ export function AddTaskRow({ clusters, defaultClusterId, defaultAssignee, onCrea
         </select>
       </td>
       <td className="px-4 py-3">
-        <input type="text" value={taskCategory} onChange={(e) => setTaskCategory(e.target.value)}
+        <input type="text" value={category} onChange={(e) => setTaskCategory(e.target.value)}
           placeholder="분류 (필수)"
           className="w-full px-2 py-1 text-xs bg-background border border-border rounded" />
       </td>
       <td className="px-4 py-3" colSpan={2}>
-        <input type="text" value={taskContent} onChange={(e) => setTaskContent(e.target.value)}
+        <input type="text" value={content} onChange={(e) => setTaskContent(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && canSave) { e.preventDefault(); submit(); }
             if (e.key === 'Escape') { reset(); setOpen(false); }
@@ -617,7 +618,7 @@ export function AddTaskRow({ clusters, defaultClusterId, defaultAssignee, onCrea
           className="w-full px-2 py-1 text-xs bg-background border border-border rounded" />
       </td>
       <td className="px-4 py-3">
-        <input type="date" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)}
+        <input type="date" value={startedAt} onChange={(e) => setScheduledAt(e.target.value)}
           className="w-full px-1.5 py-1 text-xs bg-background border border-border rounded font-mono" />
       </td>
       <td className="px-4 py-3" />

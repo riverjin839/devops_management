@@ -7,16 +7,11 @@ import { serviceEntriesApi } from '@/services/api';
 import { colorBadgeClass } from '@/components/services/serviceCatalog';
 import { useServiceCatalog, useGetServiceDef } from '@/hooks/useServiceCatalog';
 
-const VIEW_MODE_KEY = 'k8s:services-catalog:viewMode';
+// localStorage 캐시는 하지 않는다 — 페이지 진입 시 항상 리스트가 기본.
+// 과거 'k8s:services-catalog:viewMode' 키에 'card' 가 저장된 사용자도 잔존 캐시를 무력화하기 위해
+// 마운트 시 한 번 삭제. 카드 보기는 우상단 토글로 일시적으로만 사용.
+const LEGACY_VIEW_MODE_KEY = 'k8s:services-catalog:viewMode';
 type ViewMode = 'table' | 'card';
-
-function readStoredViewMode(): ViewMode {
-  try {
-    return localStorage.getItem(VIEW_MODE_KEY) === 'card' ? 'card' : 'table';
-  } catch {
-    return 'table';
-  }
-}
 
 function relTime(iso?: string | null): string {
   if (!iso) return '-';
@@ -35,13 +30,14 @@ function relTime(iso?: string | null): string {
 
 export function ServicesCatalogPage() {
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
   const catalog = useServiceCatalog();
   const getServiceDef = useGetServiceDef();
 
+  // 과거에 'card' 로 저장된 사용자가 있을 수 있으므로 마운트 시 캐시를 한 번 정리한다.
   useEffect(() => {
-    try { localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch { /* ignore */ }
-  }, [viewMode]);
+    try { localStorage.removeItem(LEGACY_VIEW_MODE_KEY); } catch { /* ignore */ }
+  }, []);
 
   // 클러스터 선택 제거 — 서비스 카탈로그는 서비스 기준으로 통합 표시.
   const catalogQ = useQuery({

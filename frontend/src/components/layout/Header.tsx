@@ -1,7 +1,7 @@
 import { useLocation, Link } from 'react-router-dom';
 import { useClusterStore } from '@/stores/clusterStore';
 import { formatDateTime } from '@/lib/utils';
-import { Settings, RefreshCw, LayoutDashboard, BookOpen, ClipboardList, ListTodo } from 'lucide-react';
+import { Settings, RefreshCw, LayoutDashboard, BookOpen, ListTodo } from 'lucide-react';
 
 interface HeaderProps {
   onRunCheck?: () => void;
@@ -11,8 +11,7 @@ interface HeaderProps {
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/playbooks', label: 'Playbooks', icon: BookOpen },
-  { to: '/issues', label: '이슈 게시판', icon: ClipboardList },
-  { to: '/tasks', label: '작업 게시판', icon: ListTodo },
+  { to: '/tasks-mgmt', label: '업무 관리', icon: ListTodo },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -103,7 +103,16 @@ def ingest_results(
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     svc = DeepCheckService(db)
-    n = svc.persist_ingest_payload(payload.model_dump(mode="json"))
+    n, log_id = svc.persist_ingest_payload(payload.model_dump(mode="json"))
+
+    # AI 리뷰 + 알림 — best-effort
+    if log_id:
+        try:
+            from app.celery_app import run_review_and_notify
+            run_review_and_notify.delay(log_id)
+        except Exception:
+            logger.warning("ingest: failed to queue review for log %s", log_id)
+
     return {"status": "ok", "saved": n}
 
 
@@ -121,11 +130,20 @@ async def run_deep_check_now(
     if cluster is None:
         raise HTTPException(status_code=404, detail="Cluster not found")
     svc = DeepCheckService(db)
-    n = await svc.run_for_cluster(
+    n, log_id = await svc.run_for_cluster(
         str(cluster_id),
         in_cluster=False,
         daily_check_log_id=daily_check_log_id,
     )
+
+    # AI 리뷰 + 알림 — best-effort
+    if log_id:
+        try:
+            from app.celery_app import run_review_and_notify
+            run_review_and_notify.delay(log_id)
+        except Exception:
+            logger.warning("run_now: failed to queue review for log %s", log_id)
+
     return {"status": "ok", "checks_run": n}
 
 

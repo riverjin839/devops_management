@@ -325,22 +325,36 @@ def run_deep_check_all(self, schedule_type: str = "manual"):
     from app.models import Cluster
     from app.services.deep_check_service import DeepCheckService
 
+    import logging
+    _log = logging.getLogger(__name__)
+
     db = SessionLocal()
     try:
         svc = DeepCheckService(db)
         clusters = db.query(Cluster).all()
         results = []
         for cluster in clusters:
+            linked_log_id = None
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    n = loop.run_until_complete(svc.run_for_cluster(str(cluster.id)))
+                    n, linked_log_id = loop.run_until_complete(
+                        svc.run_for_cluster(str(cluster.id))
+                    )
                 finally:
                     loop.close()
-                results.append({"cluster": cluster.name, "checks_run": n})
+                results.append({"cluster": cluster.name, "checks_run": n, "log_id": linked_log_id})
             except Exception as e:
                 results.append({"cluster": cluster.name, "error": str(e)})
+
+            # AI 리뷰 생성 + 알림 발송 — best-effort, 이벤트 루프 닫힌 뒤 실행
+            if linked_log_id:
+                try:
+                    run_review_and_notify.delay(linked_log_id)
+                except Exception:
+                    _log.warning("Failed to queue review/notify for log %s", linked_log_id)
+
         return {
             "schedule_type": schedule_type,
             "executed_at": datetime.now().isoformat(),

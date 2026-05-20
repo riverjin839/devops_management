@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Task } from '@/types';
+import { WorkItem } from '@/types';
 
-interface TaskCalendarProps {
-  tasks: Task[];
-  onTaskClick: (task: Task) => void;
+interface WorkItemCalendarProps {
+  items: WorkItem[];
+  onItemClick: (item: WorkItem) => void;
 }
 
 const PRIORITY_BAR_COLORS: Record<string, string> = {
@@ -22,19 +22,19 @@ const PRIORITY_LABELS: Record<string, string> = {
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
 interface TaskBar {
-  task: Task;
+  item: WorkItem;
   isStart: boolean;
   isEnd: boolean;
   isMultiDay: boolean;
 }
 
 interface TooltipState {
-  task: Task;
+  item: WorkItem;
   x: number;
   y: number;
 }
 
-export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
+export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -68,12 +68,12 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
   const toDateKey = (day: number) =>
     `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-  // Build per-date task map spanning scheduledAt → completedAt
+  // Build per-date item map spanning startedAt → closedAt
   const tasksByDate: Record<string, TaskBar[]> = {};
-  for (const task of tasks) {
-    const startStr = task.scheduledAt?.slice(0, 10);
+  for (const item of items) {
+    const startStr = item.startedAt?.slice(0, 10);
     if (!startStr) continue;
-    const endStr = task.completedAt?.slice(0, 10) || startStr;
+    const endStr = item.closedAt?.slice(0, 10) || startStr;
     const isMultiDay = endStr > startStr;
 
     const curr = new Date(startStr + 'T00:00:00');
@@ -82,7 +82,7 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
       const key = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
       if (!tasksByDate[key]) tasksByDate[key] = [];
       tasksByDate[key].push({
-        task,
+        item,
         isStart: key === startStr,
         isEnd: key === endStr,
         isMultiDay,
@@ -96,10 +96,10 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
     today.getMonth() === month &&
     today.getDate() === day;
 
-  const handleBarEnter = (e: React.MouseEvent<HTMLElement>, task: Task) => {
+  const handleBarEnter = (e: React.MouseEvent<HTMLElement>, item: WorkItem) => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltip({ task, x: rect.left + rect.width / 2, y: rect.top });
+    setTooltip({ item, x: rect.left + rect.width / 2, y: rect.top });
   };
 
   const handleBarLeave = () => {
@@ -198,11 +198,11 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
                     </div>
                   </div>
 
-                  {/* Task bars */}
+                  {/* WorkItem bars */}
                   <div className="space-y-px pb-1">
-                    {dayBars.slice(0, MAX_BARS).map(({ task, isStart, isEnd, isMultiDay }) => {
-                      const color = PRIORITY_BAR_COLORS[task.priority] ?? 'bg-slate-500';
-                      const isDone = !!task.completedAt;
+                    {dayBars.slice(0, MAX_BARS).map(({ item, isStart, isEnd, isMultiDay }) => {
+                      const color = PRIORITY_BAR_COLORS[item.priority] ?? 'bg-slate-500';
+                      const isDone = !!item.closedAt;
 
                       // Rounding and margin based on position
                       const barClass = !isMultiDay || (isStart && isEnd)
@@ -215,18 +215,18 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
 
                       return (
                         <button
-                          key={task.id}
+                          key={item.id}
                           className={`w-full h-[18px] flex items-center px-1.5 text-[9px] text-white truncate cursor-pointer
                             focus:outline-none transition-opacity hover:brightness-110
                             ${color} ${barClass} ${isDone ? 'opacity-50' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}
-                          onMouseEnter={(e) => handleBarEnter(e, task)}
+                          onClick={(e) => { e.stopPropagation(); onItemClick(item); }}
+                          onMouseEnter={(e) => handleBarEnter(e, item)}
                           onMouseLeave={handleBarLeave}
-                          aria-label={task.taskCategory}
+                          aria-label={item.category}
                         >
-                          {/* Show label only on start day or single-day task */}
+                          {/* Show label only on start day or single-day item */}
                           {(isStart || !isMultiDay) && (
-                            <span className="truncate leading-none">{task.taskCategory}</span>
+                            <span className="truncate leading-none">{item.category}</span>
                           )}
                         </button>
                       );
@@ -277,40 +277,40 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
             <div className="flex items-start gap-2 mb-2 pb-2 border-b border-border/60">
               <span
                 className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5
-                  ${PRIORITY_BAR_COLORS[tooltip.task.priority] ?? 'bg-slate-500'}
-                  ${tooltip.task.completedAt ? 'opacity-40' : ''}`}
+                  ${PRIORITY_BAR_COLORS[tooltip.item.priority] ?? 'bg-slate-500'}
+                  ${tooltip.item.closedAt ? 'opacity-40' : ''}`}
               />
               <p className="text-xs font-medium leading-tight line-clamp-2 text-foreground">
-                {tooltip.task.taskContent}
+                {tooltip.item.content}
               </p>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">담당자</span>
-                <span className="text-xs font-medium text-foreground truncate">{tooltip.task.assignee}</span>
+                <span className="text-xs font-medium text-foreground truncate">{tooltip.item.assignee}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">대상 클러스터</span>
-                <span className="text-xs text-foreground truncate">{tooltip.task.clusterName || '-'}</span>
+                <span className="text-xs text-foreground truncate">{tooltip.item.clusterName || '-'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">작업 분류</span>
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 truncate">
-                  {tooltip.task.taskCategory}
+                  {tooltip.item.category}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">예정일</span>
                 <span className="text-xs text-foreground font-mono">
-                  {tooltip.task.scheduledAt.slice(0, 10)}
+                  {tooltip.item.startedAt.slice(0, 10)}
                 </span>
               </div>
-              {tooltip.task.completedAt && (
+              {tooltip.item.closedAt && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">완료일</span>
                   <span className="text-xs text-emerald-400 font-mono">
-                    {tooltip.task.completedAt.slice(0, 10)}
+                    {tooltip.item.closedAt.slice(0, 10)}
                   </span>
                 </div>
               )}
