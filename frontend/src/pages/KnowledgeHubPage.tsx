@@ -108,6 +108,7 @@ export function KnowledgeHubPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<HubKind | ''>('');
+  const [openOnly, setOpenOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | ''>('updatedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
@@ -217,9 +218,10 @@ export function KnowledgeHubPage() {
   const filtered = useMemo(() => {
     let list = items;
     if (kindFilter) list = list.filter((it) => it.kind === kindFilter);
+    if (openOnly) list = list.filter((it) => it.kind === 'item' && it.statusLabel === '미조치');
     if (trimmed) list = list.filter((it) => it.searchBlob.includes(trimmed));
     return list;
-  }, [items, kindFilter, trimmed]);
+  }, [items, kindFilter, openOnly, trimmed]);
 
   // ── 정렬 ──
   const sorted = useMemo(() => {
@@ -246,8 +248,14 @@ export function KnowledgeHubPage() {
     return map;
   }, [items]);
 
-  const hasFilters = !!kindFilter || !!trimmed;
-  const clearFilters = () => { setKindFilter(''); setSearch(''); };
+  // 미해결 이슈 카운트 (kind='item' && 미조치)
+  const openIssueCount = useMemo(
+    () => items.filter((it) => it.kind === 'item' && it.statusLabel === '미조치').length,
+    [items],
+  );
+
+  const hasFilters = !!kindFilter || openOnly || !!trimmed;
+  const clearFilters = () => { setKindFilter(''); setOpenOnly(false); setSearch(''); };
 
   return (
     <div className="min-h-screen bg-background">
@@ -314,6 +322,23 @@ export function KnowledgeHubPage() {
                 </button>
               );
             })}
+
+            {/* 미해결 이슈 빠른 필터 — kind='item' && statusLabel='미조치' 교차 필터 */}
+            {(openIssueCount > 0 || openOnly) && (
+              <button
+                onClick={() => setOpenOnly((v) => !v)}
+                title="미조치 상태인 이슈만 보기"
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                  openOnly
+                    ? 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/40 ring-1 ring-red-500/30'
+                    : 'bg-background border-border text-muted-foreground hover:border-red-500/50'
+                }`}
+              >
+                <AlertCircle className={`w-3.5 h-3.5 ${openOnly ? 'text-red-500' : 'text-red-500/70'}`} />
+                미해결 이슈
+                <span className="opacity-70">({openIssueCount})</span>
+              </button>
+            )}
 
             <div className="ml-auto relative w-full sm:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
