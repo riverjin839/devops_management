@@ -45,6 +45,9 @@ class WorkItem(Base):
     # 공통 — 기타
     remarks = Column(Text, nullable=True)
     service = Column(String(64), nullable=True, index=True)
+    # Phase B (knowledge-workitem-linkage) — service 하위 component (예: k8s→api-server).
+    # 자유 텍스트지만 frontend 의 COMPONENT_BY_SERVICE 가 추천 enum 을 제공.
+    component = Column(String(64), nullable=True, index=True)
     confluence_url = Column(Text, nullable=True)
 
     # Issue 전용 (nullable)

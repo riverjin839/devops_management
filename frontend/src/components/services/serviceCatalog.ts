@@ -45,6 +45,30 @@ export function getServiceDef(key: string): ServiceDef {
   return SERVICE_BY_KEY[key] ?? { ...SERVICE_BY_KEY.other, key, label: key };
 }
 
+// ── Phase B (knowledge-workitem-linkage) — service 하위 component 추천 enum ────
+// 자유 텍스트지만 dropdown 추천을 위해 service 별 후보 목록을 둔다. WorkItemForm 의
+// service select 옆 component select 에서 사용. "직접 입력" escape hatch 도 제공.
+export const COMPONENT_BY_SERVICE: Record<string, readonly string[]> = {
+  k8s:        ['api-server', 'scheduler', 'etcd', 'controller-manager', 'kubelet', 'kube-proxy', 'coredns'],
+  keycloak:   ['realm', 'client', 'identity-provider', 'mapper', 'theme', 'event'],
+  nexus:      ['repository', 'routing-rule', 'cleanup-policy', 'task', 'user', 'role'],
+  jenkins:    ['pipeline', 'agent', 'credential', 'plugin', 'job'],
+  argocd:     ['application', 'project', 'repo', 'sync-wave', 'notification'],
+  cilium:     ['agent', 'operator', 'hubble', 'policy', 'bgp', 'ipam'],
+  prometheus: ['server', 'alertmanager', 'exporter', 'rule', 'target'],
+  grafana:    ['dashboard', 'datasource', 'alert', 'plugin', 'org'],
+  etcd:       ['leader', 'member', 'snapshot', 'defrag', 'compaction'],
+  hubble:     ['relay', 'ui', 'flow', 'metric'],
+  ingress:    ['controller', 'rule', 'tls', 'rate-limit'],
+  storage:    ['pv', 'pvc', 'storage-class', 'snapshot'],
+  other:      [],
+};
+
+export function getComponentsForService(service: string | null | undefined): readonly string[] {
+  if (!service) return [];
+  return COMPONENT_BY_SERVICE[service] ?? [];
+}
+
 // kind 메타
 export interface KindDef {
   key: 'note' | 'guide' | 'troubleshoot' | 'history' | 'link';

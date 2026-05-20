@@ -305,6 +305,9 @@ export interface WorkItem {
   remarks?: string;
   /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
   service?: string;
+  /** Phase B — service 하위 component (예: k8s→api-server). serviceCatalog.ts 의
+   *  COMPONENT_BY_SERVICE 추천 enum + 직접 입력 escape hatch. service 없을 때 null. */
+  component?: string;
   /** Confluence 문서 링크 (운영 페이지) */
   confluenceUrl?: string;
   priority: 'high' | 'medium' | 'low';
@@ -346,6 +349,7 @@ export interface WorkItemCreate {
   closedAt?: string | null;
   remarks?: string;
   service?: string;
+  component?: string;
   confluenceUrl?: string;
   priority?: string;
   kanbanStatus?: KanbanStatus;

@@ -35,6 +35,8 @@ class WorkItemBase(BaseModel):
 
     remarks: Optional[str] = None
     service: Optional[str] = Field(None, max_length=64)
+    # Phase B — service 하위 component (예: k8s→api-server). frontend COMPONENT_BY_SERVICE 추천.
+    component: Optional[str] = Field(None, max_length=64)
     confluence_url: Optional[str] = Field(None, max_length=2048)
 
     # Issue 전용
@@ -69,6 +71,7 @@ class WorkItemUpdate(BaseModel):
     closed_at: Optional[datetime] = None
     remarks: Optional[str] = None
     service: Optional[str] = Field(None, max_length=64)
+    component: Optional[str] = Field(None, max_length=64)
     confluence_url: Optional[str] = Field(None, max_length=2048)
     detail_content: Optional[str] = None
     priority: Optional[Priority] = None
