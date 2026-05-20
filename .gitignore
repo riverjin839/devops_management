@@ -70,3 +70,4 @@ temp/
 
 # Claude Code local settings
 .claude/
+.superpowers/
