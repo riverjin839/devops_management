@@ -33,7 +33,6 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const body = (
