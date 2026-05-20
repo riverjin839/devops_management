@@ -26,12 +26,12 @@ export function WorkItemFormPage() {
         <main className="max-w-[1200px] mx-auto px-8 py-8">
           <div className="text-center py-20">
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">작업을 찾을 수 없습니다.</p>
+            <p className="text-muted-foreground mb-4">업무를 찾을 수 없습니다.</p>
             <button
               onClick={() => navigate('/tasks-mgmt')}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
             >
-              작업 목록으로
+              업무 목록으로
             </button>
           </div>
         </main>
@@ -39,7 +39,7 @@ export function WorkItemFormPage() {
     );
   }
 
-  const pageTitle = parentItem ? '하위 작업 등록' : isEdit ? '작업 수정' : '작업 등록';
+  const pageTitle = parentItem ? '하위 업무 등록' : isEdit ? '업무 수정' : '업무 등록';
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,7 +72,7 @@ export function WorkItemFormPage() {
             <h1 className="text-xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
               {parentItem
-                ? '상위 작업의 분류와 담당자가 자동으로 채워집니다.'
+                ? '상위 업무의 분류와 담당자가 자동으로 채워집니다.'
                 : isEdit
                   ? '필요한 항목을 수정한 뒤 저장 버튼을 누르세요.'
                   : '담당자/분류/일정 후 작업 내용을 작성하세요. 결과·추가 옵션은 접혀 있습니다.'}

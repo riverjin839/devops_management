@@ -19,12 +19,12 @@ export function WorkItemDetailPage() {
         <main className="max-w-[1200px] mx-auto px-8 py-8">
           <div className="text-center py-20">
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">작업을 찾을 수 없습니다.</p>
+            <p className="text-muted-foreground mb-4">업무를 찾을 수 없습니다.</p>
             <button
               onClick={() => navigate('/tasks-mgmt')}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
             >
-              작업 목록으로
+              업무 목록으로
             </button>
           </div>
         </main>
@@ -37,13 +37,13 @@ export function WorkItemDetailPage() {
   }
 
   const handleDelete = () => {
-    if (!confirm(`"${item.category}" 작업을 삭제하시겠습니까?`)) return;
+    if (!confirm(`"${item.category}" 업무를 삭제하시겠습니까?`)) return;
     deleteTask.mutate(item.id);
     localStorage.removeItem('k8s:img:work-item:' + item.id);
     navigate('/tasks-mgmt');
   };
 
-  const pageTitle = editMode ? '작업 수정' : '작업 상세';
+  const pageTitle = editMode ? '업무 수정' : '업무 상세';
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,7 +63,7 @@ export function WorkItemDetailPage() {
               <button
                 onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                title="하위 작업 등록"
+                title="하위 업무 등록"
               >
                 <Plus className="w-3.5 h-3.5" /> 하위
               </button>
@@ -88,7 +88,7 @@ export function WorkItemDetailPage() {
         {editMode ? (
           <>
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">작업 수정</h1>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight">업무 수정</h1>
               <p className="text-sm text-muted-foreground mt-1">필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.</p>
             </div>
             <WorkItemForm

@@ -75,7 +75,7 @@ interface WorkItemFormProps {
   initial?: WorkItem;
   /** 신규 등록 시 기본 type. 수정 시에는 initial.type 이 우선. */
   defaultType?: WorkItemType;
-  /** 하위 작업 등록 시 상위 작업 — 카테고리/담당자 자동 채움. */
+  /** 하위 업무 등록 시 상위 업무 — 카테고리/담당자 자동 채움. */
   parentItem?: WorkItem | null;
   onCancel: () => void;
   /** 저장 완료 후 콜백. id 는 신규 등록 시 발급된 새 id. */
@@ -470,7 +470,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
           <RichTextEditor
             value={content}
             onChange={setTaskContent}
-            placeholder={type === 'issue' ? '발생한 이슈를 상세히 기술하세요' : '수행할 작업을 상세히 기술하세요'}
+            placeholder={type === 'issue' ? '발생한 이슈를 상세히 기술하세요' : '수행할 업무를 상세히 기술하세요'}
             minHeight="340px"
             onImagePaste={handleImagePaste}
           />
@@ -605,7 +605,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
             <div className="md:col-span-2">
               <label htmlFor={f('issueLink')} className={labelClass}>
                 연결된 이슈
-                <span className="ml-1 text-[10px] text-muted-foreground/70 font-normal">(이 작업의 원인/배경)</span>
+                <span className="ml-1 text-[10px] text-muted-foreground/70 font-normal">(이 업무의 원인/배경)</span>
               </label>
               <select
                 id={f('issueLink')}

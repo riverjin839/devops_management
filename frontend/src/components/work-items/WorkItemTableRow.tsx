@@ -486,7 +486,7 @@ export function WorkItemTableRow({ item, clusters, isDragDisabled, onEdit, onDel
           <button
             onClick={(e) => { e.stopPropagation(); onAddSubItem(item); }}
             className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
-            title="하위 작업 추가"
+            title="하위 업무 추가"
           >
             <GitBranch className="w-3.5 h-3.5" />
           </button>
