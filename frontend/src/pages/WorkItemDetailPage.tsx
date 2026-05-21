@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Pencil, Trash2, Plus } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar } from '@/components/work-items';
+import { ConfirmDialog } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
 
 export function WorkItemDetailPage() {
@@ -12,6 +14,8 @@ export function WorkItemDetailPage() {
   const { data: listData } = useWorkItems();
   const item = listData?.data.find((x) => x.id === id) ?? null;
   const deleteTask = useDeleteWorkItem();
+  // G-I9: window.confirm 대신 ConfirmDialog 사용
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   if (listData && !item) {
     return (
@@ -36,8 +40,9 @@ export function WorkItemDetailPage() {
     return <div className="min-h-screen bg-background" />;
   }
 
-  const handleDelete = () => {
-    if (!confirm(`"${item.category}" 업무를 삭제하시겠습니까?`)) return;
+  const handleDelete = () => setConfirmDeleteOpen(true);
+  const doDelete = () => {
+    setConfirmDeleteOpen(false);
     deleteTask.mutate(item.id);
     localStorage.removeItem('k8s:img:work-item:' + item.id);
     navigate('/tasks-mgmt');
@@ -107,6 +112,16 @@ export function WorkItemDetailPage() {
           </div>
         )}
       </main>
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="업무 삭제"
+        description={`"${item.category}" 업무를 삭제하시겠습니까?`}
+        confirmLabel="삭제"
+        cancelLabel="취소"
+        danger
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

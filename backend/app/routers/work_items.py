@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import case
 from sqlalchemy.orm import Session
@@ -13,7 +13,8 @@ from app.database import get_db
 from app.models import Cluster
 from app.models.work_item import WorkItem
 from app.models.user import User
-from app.auth.deps import require_operator
+from app.auth.deps import require_operator, get_current_user
+from app.services import audit_logger
 from app.schemas.work_item import (
     WorkItemCreate,
     WorkItemUpdate,
@@ -26,6 +27,34 @@ from app.schemas.work_item import (
 router = APIRouter(prefix="/work-items", tags=["work-items"])
 
 WIP_LIMIT = 2
+
+
+# G-C4: Ownership 검증 헬퍼. admin 은 모두 허용, operator/viewer 는 자기 work item 만.
+# 자기 work item 정의: primary_assignee OR secondary_assignee == user.username.
+def _assert_ownership(item: WorkItem, user: User, *, op: str) -> None:
+    """admin 이 아니고 본인 work item 도 아니면 403."""
+    if user.role == "admin":
+        return
+    me = user.username
+    if item.primary_assignee == me or item.secondary_assignee == me:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "WORK_ITEM_FORBIDDEN",
+            "message": f"본인 담당이 아닌 work item 은 {op} 할 수 없습니다.",
+            "id": str(item.id),
+            "required": "admin role or self-assignee",
+        },
+    )
+
+
+def _not_found(item_id: UUID) -> HTTPException:
+    """G-I5: 일관된 404 에러 — code 포함 dict detail."""
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={"error": "WORK_ITEM_NOT_FOUND", "message": "Work item not found", "id": str(item_id)},
+    )
 
 
 def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
@@ -64,21 +93,30 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
 
 @router.get("", response_model=WorkItemListResponse)
 def list_work_items(
-    type: Optional[str] = Query(default=None, pattern="^(task|issue|meeting|training|etc)$"),
-    cluster_id: UUID | None = Query(default=None),
-    assignee: str | None = Query(default=None),
-    category: str | None = Query(default=None),
-    priority: str | None = Query(default=None),
-    kanban_status: str | None = Query(default=None),
-    module: str | None = Query(default=None),
-    started_from: date | None = Query(default=None),
-    started_to: date | None = Query(default=None),
-    closed: bool | None = Query(default=None),
+    type: Optional[str] = Query(
+        default=None, pattern="^(task|issue|meeting|training|etc)$",
+        description="Work item 유형 필터 (task/issue/meeting/training/etc)",
+    ),
+    cluster_id: UUID | None = Query(default=None, description="대상 클러스터 UUID 필터"),
+    assignee: str | None = Query(default=None, description="담당자(primary/secondary/legacy) ILIKE 부분 일치"),
+    category: str | None = Query(default=None, description="카테고리 ILIKE 부분 일치"),
+    priority: str | None = Query(default=None, description="우선순위 (high/medium/low)"),
+    kanban_status: str | None = Query(default=None, description="칸반 상태 (backlog/todo/in_progress/review_test/done)"),
+    module: str | None = Query(default=None, description="모듈 (k8s/keycloak/... 또는 frontend MODULE_CONFIG)"),
+    started_from: date | None = Query(default=None, description="started_at 시작 (포함)"),
+    started_to: date | None = Query(default=None, description="started_at 종료 (포함)"),
+    closed: bool | None = Query(default=None, description="true=closed 만, false=open 만, 미지정=전체"),
+    # G-C2: 페이지네이션 — 클라이언트가 명시적으로 limit 지정. 기본 100, 최대 500.
+    offset: int = Query(default=0, ge=0, description="페이지네이션 offset (0 부터)"),
+    limit: int = Query(default=100, ge=1, le=500, description="페이지네이션 limit (1~500, 기본 100)"),
     db: Session = Depends(get_db),
+    # G-C1: GET 도 인증 필수 — viewer 까지 허용. operator/admin 이 아닌 익명 접근 차단.
+    _: User = Depends(get_current_user),
 ):
-    """Work item 목록 — type='issue'/'task' 필터 가능, 그 외 통합 필터.
+    """Work item 목록 (페이지네이션 + 필터).
 
-    parent_id 가 있는 sub-task 는 결과에서 제외하지 않는다 (한 리스트에서 보고 싶을 수 있어 그대로 노출).
+    parent_id 가 있는 sub-task 는 결과에서 제외하지 않는다 (한 리스트에서 보고 싶을 수 있어
+    그대로 노출). 응답 `total` 은 필터 적용 후 전체 카운트, `data` 는 offset~limit 범위만.
     """
     query = db.query(WorkItem)
     query = _apply_filters(
@@ -86,8 +124,18 @@ def list_work_items(
         priority=priority, kanban_status=kanban_status, module=module,
         started_from=started_from, started_to=started_to, closed=closed,
     )
-    items = query.order_by(WorkItem.started_at.desc(), WorkItem.created_at.desc()).all()
-    return WorkItemListResponse(data=items, total=len(items))
+    # G-C2: 진짜 COUNT 쿼리 (limit 이전) + offset/limit 적용.
+    total = query.count()
+    items = (
+        query.order_by(WorkItem.started_at.desc(), WorkItem.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return WorkItemListResponse(
+        data=items, total=total, offset=offset, limit=limit,
+        has_more=(offset + len(items)) < total,
+    )
 
 
 @router.get("/export/csv")
@@ -101,16 +149,41 @@ def export_csv(
     module: str | None = Query(default=None),
     started_from: date | None = Query(default=None),
     started_to: date | None = Query(default=None),
+    # G-C3: 무인증 bulk export 차단 — operator 만 가능. limit 으로 메모리 cap.
+    limit: int = Query(default=5000, ge=1, le=10000, description="최대 export 행 수 (메모리 보호용)"),
     db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+    request: Request = None,  # noqa: B008 — fastapi DI
 ):
-    """Work item CSV 다운로드 — type 무관 통합 컬럼."""
+    """Work item CSV 다운로드 (인증 + limit). 5000행 기본, 최대 10000행.
+
+    G-C3: 이전엔 무인증 + 무제한 bulk export 가 가능했음. 이제 operator role 필수 +
+    행 수 cap. 5천행 초과 시 클라이언트는 명시적으로 limit 늘려야 함 (감사 추적).
+    """
     query = db.query(WorkItem)
     query = _apply_filters(
         query, type_=type, cluster_id=cluster_id, assignee=assignee, category=category,
         priority=priority, kanban_status=kanban_status, module=module,
         started_from=started_from, started_to=started_to, closed=None,
     )
-    items = query.order_by(WorkItem.started_at.desc(), WorkItem.created_at.desc()).all()
+    items = (
+        query.order_by(WorkItem.started_at.desc(), WorkItem.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    audit_logger.record(
+        db,
+        action="work_item.export_csv",
+        actor=actor,
+        target_type="work_item",
+        target_id=None,
+        details={"row_count": len(items), "filters": {
+            "type": type, "cluster_id": str(cluster_id) if cluster_id else None,
+            "assignee": assignee, "category": category, "priority": priority,
+            "kanban_status": kanban_status, "module": module,
+        }},
+        request=request,
+    )
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -170,7 +243,11 @@ def export_csv(
 
 
 @router.get("/today/summary")
-def get_today_summary(date: Optional[str] = None, db: Session = Depends(get_db)):
+def get_today_summary(
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD; 미지정 시 오늘(UTC)"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),  # G-C1
+):
     """오늘의 작업/이슈 요약 — task + issue 모두 대상.
 
     그룹 키: primary_assignee + secondary_assignee 모두 (한 항목이 두 사람의 그룹에
@@ -284,10 +361,14 @@ def get_today_summary(date: Optional[str] = None, db: Session = Depends(get_db))
 
 
 @router.get("/{item_id}", response_model=WorkItemResponse)
-def get_work_item(item_id: UUID, db: Session = Depends(get_db)):
+def get_work_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),  # G-C1
+):
     item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
     if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+        raise _not_found(item_id)
     return item
 
 
@@ -295,13 +376,18 @@ def get_work_item(item_id: UUID, db: Session = Depends(get_db)):
 def create_work_item(
     payload: WorkItemCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
+    request: Request = None,  # noqa: B008
 ):
     cluster_name = payload.cluster_name
     if payload.cluster_id and not cluster_name:
         cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
         if not cluster:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": "CLUSTER_NOT_FOUND", "message": "Cluster not found",
+                        "id": str(payload.cluster_id)},
+            )
         cluster_name = cluster.name
 
     primary_assignee = (payload.primary_assignee or payload.assignee).strip()
@@ -317,6 +403,15 @@ def create_work_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+    # G-C5: audit log
+    audit_logger.record(
+        db, action="work_item.create", actor=actor,
+        target_type="work_item", target_id=item.id,
+        details={"type": item.type, "category": item.category,
+                 "primary_assignee": item.primary_assignee,
+                 "cluster_id": str(item.cluster_id) if item.cluster_id else None},
+        request=request,
+    )
     return item
 
 
@@ -325,11 +420,14 @@ def update_work_item(
     item_id: UUID,
     payload: WorkItemUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
+    request: Request = None,  # noqa: B008
 ):
     item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
     if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+        raise _not_found(item_id)
+
+    _assert_ownership(item, actor, op="수정")  # G-C4
 
     update_data = payload.model_dump(exclude_unset=True)
     if "primary_assignee" in update_data:
@@ -340,7 +438,11 @@ def update_work_item(
     if "cluster_id" in update_data and update_data["cluster_id"] and "cluster_name" not in update_data:
         cluster = db.query(Cluster).filter(Cluster.id == update_data["cluster_id"]).first()
         if not cluster:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": "CLUSTER_NOT_FOUND", "message": "Cluster not found",
+                        "id": str(update_data["cluster_id"])},
+            )
         update_data["cluster_name"] = cluster.name
 
     for key, value in update_data.items():
@@ -348,6 +450,13 @@ def update_work_item(
 
     db.commit()
     db.refresh(item)
+    # G-C5: audit log — 변경된 필드만 기록 (전체 dump 는 PII 누출 위험)
+    audit_logger.record(
+        db, action="work_item.update", actor=actor,
+        target_type="work_item", target_id=item.id,
+        details={"changed_fields": sorted(update_data.keys())},
+        request=request,
+    )
     return item
 
 
@@ -356,13 +465,17 @@ def patch_status(
     item_id: UUID,
     payload: WorkItemStatusPatch,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
+    request: Request = None,  # noqa: B008
 ):
     """칸반 상태 이동 — type 무관 in_progress 총합으로 WIP 체크. done 이동 시 closed_at 자동 set."""
     item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
     if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+        raise _not_found(item_id)
 
+    _assert_ownership(item, actor, op="상태 변경")  # G-C4
+
+    prev_status = item.kanban_status
     wip_warning = False
     if payload.kanban_status == "in_progress":
         wip_count = (
@@ -379,6 +492,13 @@ def patch_status(
 
     db.commit()
     db.refresh(item)
+    # G-C5: audit log
+    audit_logger.record(
+        db, action="work_item.status_change", actor=actor,
+        target_type="work_item", target_id=item.id,
+        details={"from": prev_status, "to": payload.kanban_status, "wip_warning": wip_warning},
+        request=request,
+    )
     return WorkItemStatusResponse(data=item, wip_warning=wip_warning)
 
 
@@ -386,11 +506,30 @@ def patch_status(
 def delete_work_item(
     item_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
+    request: Request = None,  # noqa: B008
 ):
     item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
     if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
+        raise _not_found(item_id)
+
+    _assert_ownership(item, actor, op="삭제")  # G-C4
+
+    # G-C5: audit log — 삭제 직전 메타 캡처 (delete 후엔 못 읽음)
+    audit_details = {
+        "type": item.type, "category": item.category,
+        "primary_assignee": item.primary_assignee,
+        "cluster_id": str(item.cluster_id) if item.cluster_id else None,
+        "had_subtasks": bool(item.subtasks),
+    }
+    target_id_snapshot = item.id
+
     db.delete(item)
     db.commit()
+
+    audit_logger.record(
+        db, action="work_item.delete", actor=actor,
+        target_type="work_item", target_id=target_id_snapshot,
+        details=audit_details, request=request,
+    )
     return None

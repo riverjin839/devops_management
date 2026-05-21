@@ -359,22 +359,22 @@ export function TodoTodayPage() {
 
       {/* 요약 통계 */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-md p-4">
           <p className="text-xs text-muted-foreground mb-1">오늘 예정</p>
           <p className="text-2xl font-bold text-blue-400">{totalToday}</p>
           <p className="text-xs text-muted-foreground mt-0.5">건</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-md p-4">
           <p className="text-xs text-muted-foreground mb-1">진행 중</p>
           <p className="text-2xl font-bold text-amber-400">{totalInProgress}</p>
           <p className="text-xs text-muted-foreground mt-0.5">건</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-md p-4">
           <p className="text-xs text-muted-foreground mb-1">완료</p>
           <p className="text-2xl font-bold text-green-400">{doneCount}</p>
           <p className="text-xs text-muted-foreground mt-0.5">/ {totalCount}건</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-md p-4">
           <p className="text-xs text-muted-foreground mb-1">전체 진행률</p>
           <p className="text-2xl font-bold text-primary">{overallProgress}%</p>
           <div className="h-1.5 rounded-full bg-secondary mt-2 overflow-hidden">

@@ -100,8 +100,30 @@ class WorkItemResponse(WorkItemBase):
     @model_validator(mode="before")
     @classmethod
     def _drop_circular_subtask_children(cls, data):
-        # ORM 객체에서 직렬화될 때 무한 재귀를 방지하기 위해 subtask 자체의 subtasks
-        # 는 비운다. (1레벨 nested 만 노출 — 기존 TaskResponse 와 동일 정책)
+        """ORM 객체에서 직렬화될 때 무한 재귀를 방지하기 위해 subtask 자체의 subtasks
+        는 비운다. (1레벨 nested 만 노출 — 기존 TaskResponse 와 동일 정책)
+
+        G-I3 픽스: 이전 `return data` 만 하던 stub 을 실제 동작하도록 보강.
+        Pydantic v2 의 mode='before' 는 ORM 인스턴스 또는 dict 를 받음 — 둘 다 처리.
+        """
+        # ORM 인스턴스인 경우: hasattr 로 subtasks 접근 후 각 child 의 subtasks 비움
+        if hasattr(data, "subtasks"):
+            try:
+                for st in (data.subtasks or []):
+                    # 자식 ORM 객체의 subtasks 를 안전하게 빈 list 로 — relationship 자체는
+                    # lazy loaded 라 setattr 가 가능. 실패하면 silent (validator 가 직렬화
+                    # 막으면 안 되므로).
+                    try:
+                        setattr(st, "subtasks", [])
+                    except Exception:  # noqa: BLE001
+                        pass
+            except Exception:  # noqa: BLE001
+                pass
+        # dict 인 경우 (테스트/수동 호출): 같은 패턴
+        elif isinstance(data, dict) and isinstance(data.get("subtasks"), list):
+            for st in data["subtasks"]:
+                if isinstance(st, dict):
+                    st["subtasks"] = []
         return data
 
 
@@ -112,8 +134,14 @@ class WorkItemStatusResponse(BaseModel):
 
 
 class WorkItemListResponse(BaseModel):
+    """G-I6: offset/limit/has_more 필드 추가 — 클라이언트 페이지네이션 메타.
+    `total` 은 진짜 DB COUNT (G-C2 의 router 변경과 페어).
+    """
     data: list[WorkItemResponse]
     total: int
+    offset: int = 0
+    limit: int = 0
+    has_more: bool = False
 
 
 WorkItemResponse.model_rebuild()

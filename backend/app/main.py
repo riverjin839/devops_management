@@ -406,6 +406,18 @@ def _run_migrations():
         _safe_add_column("work_items", "detail_content", "TEXT")
         _safe_create_index("ix_work_items_type", "work_items", "(type)")
         _safe_create_index("ix_work_items_started_at", "work_items", "(started_at DESC)")
+        # G-I1: Enterprise audit 픽스 — 자주 필터되는 컬럼 인덱스 5개
+        # kanban 보드/멤버별/클러스터별/날짜 필터의 N+ secondary lookup 대비.
+        _safe_create_index("ix_work_items_kanban_status", "work_items", "(kanban_status)")
+        _safe_create_index("ix_work_items_primary_assignee", "work_items", "(primary_assignee)")
+        _safe_create_index("ix_work_items_cluster_id", "work_items", "(cluster_id)")
+        _safe_create_index("ix_work_items_closed_at", "work_items", "(closed_at DESC)")
+        # 칸반 보드 메인 쿼리용 복합 인덱스 — (status, recency)
+        _safe_create_index(
+            "ix_work_items_status_started",
+            "work_items",
+            "(kanban_status, started_at DESC)",
+        )
 
     # 3) issues → work_items 백필 (issues 테이블이 존재할 때만)
     existing_tables = set(inspect(engine).get_table_names())
