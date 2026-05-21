@@ -54,6 +54,11 @@ class Cluster(Base):
     bond1_mac = Column(String(50), nullable=True)
     bgp_enabled = Column(Boolean, nullable=True, default=False)   # BGP 설정 여부
     as_number = Column(String(20), nullable=True)                  # BGP AS 번호
+    # API server 호출 시 TLS 인증서 검증 여부. 기본 False = 기존 동작 유지 (자체 서명 인증서 환경).
+    # 신뢰 가능한 CA 가 있는 클러스터는 True 로 설정해 MITM 방어. K8s Python SDK 기반 체크
+    # (BaseChecker family) 는 kubeconfig 의 CA 를 자동 사용하므로 영향 없음 — 영향 범위는
+    # DailyChecker / HealthChecker 의 httpx 직접 호출만.
+    tls_verify = Column(Boolean, nullable=False, default=False, server_default="false")
     # 자동 수집되는 버전 정보
     # VARCHAR(32) 는 일부 배포판(OpenShift eks-xxxxx 해시 / RKE2 빌드 태그 /
     # cilium CI image tag) 에서 초과 → StringDataRightTruncation 발생. 128 로 확장.
