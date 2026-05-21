@@ -7,6 +7,7 @@
 | [cluster-detail-monitoring](./cluster-detail-monitoring/) | Reverse PDCA + Iterate-1 | 81% → 94% (정적), QA_SKIP (환경 미충족) | G-4 · G-8 · U-6 · U-7 · U-8 (별도 PDCA 권장) | [plan](./cluster-detail-monitoring/plan.md) · [design](./cluster-detail-monitoring/design.md) · [analysis](./cluster-detail-monitoring/analysis.md) · [report](./cluster-detail-monitoring/report.md) · [qa-report](./cluster-detail-monitoring/qa-report.md) |
 | [work-mgmt-enterprise-audit](./work-mgmt-enterprise-audit/) | Reverse PDCA + Iterate-1 (7 surface, 4-axis) | 51% → 82% (정적), QA_SKIP | CO-1~7 (assignee FK, cluster_name sync, PII, sidebar, widgets, adjacent pages, aria 전수) | [plan](./work-mgmt-enterprise-audit/plan.md) · [design](./work-mgmt-enterprise-audit/design.md) · [analysis](./work-mgmt-enterprise-audit/analysis.md) · [report](./work-mgmt-enterprise-audit/report.md) · [qa-report](./work-mgmt-enterprise-audit/qa-report.md) |
 | [lake-service-monitoring](./lake-service-monitoring/) | **Fresh PDCA** (신규 개발) — LAKE OSS 8개 monitoring | 95% (정적 + lint/tsc PASS), QA_SKIP | CO-1~6 (airflow 외 7 deep checker, troubleshoot actions, AI advisor, metrics 시계열, scheduled check, RBAC) | [plan](./lake-service-monitoring/plan.md) · [design](./lake-service-monitoring/design.md) · [report](./lake-service-monitoring/report.md) · [qa-report](./lake-service-monitoring/qa-report.md) |
+| [pod-bottleneck-analyzer](./pod-bottleneck-analyzer/) | **Fresh PDCA** — pod-to-pod 4-Probe 통합 진단 (TCP state/perf/DNS/endpoints) + PacketFlow CTA | 95% (정적 + lint/tsc PASS), QA_SKIP | CO-1~6 (iperf3, node-layer, L7 trace, node-resource, scheduled, AI advisor) | [prd](./pod-bottleneck-analyzer/prd.md) · [plan](./pod-bottleneck-analyzer/plan.md) · [design](./pod-bottleneck-analyzer/design.md) · [report](./pod-bottleneck-analyzer/report.md) · [qa-report](./pod-bottleneck-analyzer/qa-report.md) |
 
 ## Carry-over Reference (별도 PDCA 사이클로 이어짐)
 
@@ -30,3 +31,9 @@
 - **lake-metrics-timeseries** — lake CO-4: Prometheus 통합 시계열.
 - **lake-service-scheduled-check** — lake CO-5: Celery Beat 주기 점검.
 - **lake-service-rbac** — lake CO-6: viewer/operator/admin 권한 분리.
+- **pod-bottleneck-iperf3** — bottleneck CO-1: Active throughput probe (ephemeral container).
+- **pod-bottleneck-node-layer** — bottleneck CO-2: conntrack / iptables (node ssh).
+- **pod-bottleneck-l7-trace** — bottleneck CO-3: Hubble L7 metric 통합.
+- **pod-bottleneck-node-resource** — bottleneck CO-4: NIC PPS / softirq (Prometheus).
+- **pod-bottleneck-scheduled-check** — bottleneck CO-5: Celery Beat 주기 진단.
+- **pod-bottleneck-ai-advisor** — bottleneck CO-6: Ollama next-action 권고.

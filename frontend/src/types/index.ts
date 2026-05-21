@@ -1914,3 +1914,62 @@ export interface LakeServiceCheckListResponse {
   limit: number;
   hasMore: boolean;
 }
+
+// ─── Pod-to-Pod Bottleneck Analyzer (pod-bottleneck-analyzer PDCA) ──
+export type BottleneckProbeKey = 'tcp_state' | 'tcp_perf' | 'dns_latency' | 'endpoints';
+export type BottleneckStatus = 'healthy' | 'warning' | 'critical' | 'pending';
+
+export interface ProbeManualFallback {
+  command: string;
+  reason: string;
+}
+
+export interface ProbeResultOut {
+  status: BottleneckStatus;
+  message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details: Record<string, any>;
+  manualFallback?: ProbeManualFallback | null;
+  recommendation?: string | null;
+}
+
+export interface BottleneckRunInput {
+  clusterId: string;
+  namespace: string;
+  sourcePod: string;
+  destPod: string;
+  destService?: string | null;
+  probes?: BottleneckProbeKey[] | null;
+}
+
+export interface BottleneckRun {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  sourcePod: string;
+  destPod: string;
+  destService?: string | null;
+  overallStatus: BottleneckStatus;
+  // 4 Probe 결과 통합 dict. probes[probeKey] = ProbeResultOut
+  probes: Partial<Record<BottleneckProbeKey, ProbeResultOut>>;
+  triggeredByUser?: string | null;
+  durationMs?: number | null;
+  createdAt: string;
+}
+
+export interface BottleneckRunListResponse {
+  data: BottleneckRun[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface BottleneckProbeCatalogEntry {
+  probeKey: string;
+  label: string;
+  axis: string;
+  needsExec: boolean;
+  fallbackCmd?: string | null;
+  description?: string | null;
+}

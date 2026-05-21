@@ -53,6 +53,7 @@ from app.routers import (
     deep_check_definitions_router,
     notifications_router,
     lake_services_router,
+    bottleneck_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -1073,6 +1074,8 @@ app.include_router(notifications_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(audit_logs_router, prefix="/api/v1", dependencies=_auth)
 # lake-service-monitoring (신규 PDCA) — LAKE OSS 서비스 모니터링.
 app.include_router(lake_services_router, prefix="/api/v1", dependencies=_auth)
+# pod-bottleneck-analyzer (신규 PDCA) — pod-to-pod 병목 진단 (4-Probe Strategy).
+app.include_router(bottleneck_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

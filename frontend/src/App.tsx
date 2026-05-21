@@ -44,6 +44,8 @@ import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
+import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
+import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { UsersPage } from '@/pages/UsersPage';
@@ -85,6 +87,10 @@ function AppShell() {
               {/* LAKE service monitoring (lake-service-monitoring PDCA) */}
               <Route path="/lake-services" element={<LakeServicesPage />} />
               <Route path="/lake-services/:id" element={<LakeServiceDetailPage />} />
+
+              {/* Pod-to-pod bottleneck analyzer (pod-bottleneck-analyzer PDCA) */}
+              <Route path="/pod-bottleneck" element={<PodBottleneckPage />} />
+              <Route path="/pod-bottleneck/:id" element={<PodBottleneckDetailPage />} />
 
               <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
               <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
