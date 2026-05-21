@@ -42,6 +42,8 @@ import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
+import { LakeServicesPage } from '@/pages/LakeServicesPage';
+import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { UsersPage } from '@/pages/UsersPage';
@@ -80,6 +82,10 @@ function AppShell() {
               <Route path="/cluster-overview" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               {/* 업무 관리 — 정식 경로 */}
+              {/* LAKE service monitoring (lake-service-monitoring PDCA) */}
+              <Route path="/lake-services" element={<LakeServicesPage />} />
+              <Route path="/lake-services/:id" element={<LakeServiceDetailPage />} />
+
               <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
               <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
               <Route path="/tasks-mgmt/:id" element={<WorkItemDetailPage />} />
