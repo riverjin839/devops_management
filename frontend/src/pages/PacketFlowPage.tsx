@@ -1,7 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Route, Play, ArrowRight, Globe, Network, Share2, Server, Box,
-  AlertTriangle, Info, Square,
+  AlertTriangle, Info, Square, Activity,
 } from 'lucide-react';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
@@ -145,6 +146,38 @@ export function PacketFlowPage() {
     return null;
   }, [response, selectedIdx]);
 
+  // Pod-bottleneck cross-link — east-west + src 가 ns/pod 형식일 때만 활성화
+  const navigate = useNavigate();
+  const bottleneckPrefill = useMemo(() => {
+    if (direction !== 'east-west' || !clusterId) return null;
+    const podRe = /^([a-z0-9-]+)\/([a-z0-9.-]+)$/i;
+    const svcRe = /^([a-z0-9-]+)\/([a-z0-9-]+):\d+$/i;
+    const srcM = source.trim().match(podRe);
+    if (!srcM) return null;
+    const ns = srcM[1];
+    const src = srcM[2];
+    const dst = destination.trim();
+    const dstSvcM = dst.match(svcRe);
+    const dstPodM = dst.match(podRe);
+    if (!dstSvcM && !dstPodM) return null;
+    return {
+      ns, src,
+      dst: dstPodM ? dstPodM[2] : '',
+      svc: dstSvcM ? dstSvcM[2] : '',
+    };
+  }, [direction, source, destination, clusterId]);
+
+  const handleGoBottleneck = () => {
+    if (!bottleneckPrefill || !clusterId) return;
+    const p = new URLSearchParams();
+    p.set('cluster', clusterId);
+    p.set('ns', bottleneckPrefill.ns);
+    p.set('src', bottleneckPrefill.src);
+    if (bottleneckPrefill.dst) p.set('dst', bottleneckPrefill.dst);
+    if (bottleneckPrefill.svc) p.set('svc', bottleneckPrefill.svc);
+    navigate(`/pod-bottleneck?${p.toString()}`);
+  };
+
   // Hubble 탭 자동 프리필 — Phase A 의 source/destination 에서 파생
   const hubblePrefill = useMemo(() => {
     const podRe = /^[a-z0-9-]+\/[a-z0-9-]+$/i;
@@ -198,6 +231,19 @@ export function PacketFlowPage() {
                 ))}
               </div>
               <div className="flex items-center gap-1 ml-auto">
+                {/* Pod-bottleneck cross-link (pod-bottleneck-analyzer PDCA) */}
+                {bottleneckPrefill && (
+                  <button
+                    type="button"
+                    onClick={handleGoBottleneck}
+                    aria-label="이 pod-pair 의 병목 진단으로 이동"
+                    title="병목 진단 페이지로 prefill 이동"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary border border-border rounded-lg hover:bg-secondary/80"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    병목 진단
+                  </button>
+                )}
                 {runMut.isPending ? (
                   <button
                     onClick={runMut.abort}

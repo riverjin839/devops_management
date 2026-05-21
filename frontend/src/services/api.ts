@@ -1091,6 +1091,30 @@ export const lakeServicesApi = {
   runCheck: (id: string) => api.post<_LakeServiceCheck>(`/lake-services/${id}/check`),
 };
 
+// Pod-to-pod bottleneck analyzer — pod-bottleneck-analyzer PDCA
+import type {
+  BottleneckRun as _BottleneckRun,
+  BottleneckRunInput as _BottleneckRunInput,
+  BottleneckRunListResponse as _BottleneckRunListResponse,
+  BottleneckProbeCatalogEntry as _BottleneckProbeCatalogEntry,
+} from '@/types';
+
+export const podBottleneckApi = {
+  listProbes: () => api.get<_BottleneckProbeCatalogEntry[]>('/pod-bottleneck/probes'),
+  listRuns: (params?: {
+    clusterId?: string;
+    namespace?: string;
+    sourcePod?: string;
+    destPod?: string;
+    offset?: number;
+    limit?: number;
+  }) => api.get<_BottleneckRunListResponse>('/pod-bottleneck/runs', { params }),
+  getRun: (id: string) => api.get<_BottleneckRun>(`/pod-bottleneck/runs/${id}`),
+  runAnalysis: (data: _BottleneckRunInput) =>
+    api.post<_BottleneckRun>('/pod-bottleneck/run', data),
+  deleteRun: (id: string) => api.delete(`/pod-bottleneck/runs/${id}`),
+};
+
 // 서비스별 히스토리·지식관리
 export const serviceEntriesApi = {
   catalog: (clusterId?: string) =>
