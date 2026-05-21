@@ -950,6 +950,53 @@ def _seed_default_deep_check_definitions():
         db.close()
 
 
+def _seed_default_lake_service_entries():
+    """LAKE 8 OSS 서비스의 "기능 동작 특징" 가이드를 ServiceEntry kind=guide 로
+    전역 등록. service+title 매칭으로 idempotent — 운영자가 수정하거나 삭제한
+    경우는 영향 없음.
+
+    PDCA: lake-service-knowledge-seed
+    """
+    from app.models.service_entry import ServiceEntry
+    from app.data.lake_service_knowledge import LAKE_SERVICE_KNOWLEDGE_ENTRIES
+
+    entries = LAKE_SERVICE_KNOWLEDGE_ENTRIES
+
+    db = SessionLocal()
+    try:
+        # 같은 (service, title) 기존 행 조회
+        existing_keys = {
+            (row.service, row.title)
+            for row in db.query(ServiceEntry)
+            .filter(ServiceEntry.service.in_([e["service"] for e in entries]))
+            .filter(ServiceEntry.title.in_([e["title"] for e in entries]))
+            .all()
+        }
+        added = 0
+        for e in entries:
+            key = (e["service"], e["title"])
+            if key in existing_keys:
+                continue
+            db.add(ServiceEntry(
+                service=e["service"],
+                cluster_id=None,             # 전역
+                kind="guide",
+                title=e["title"],
+                content=e["content"],
+                severity=None,
+                pinned=True,                  # ServiceHub 카드 상단
+                tags=["lake", "feature", "overview"],
+                author="system",
+                meta={"seeded_by": "lake-service-knowledge-seed", "category": e["category"]},
+            ))
+            added += 1
+        if added:
+            db.commit()
+            _log.info("seeded %d lake service knowledge entries", added)
+    finally:
+        db.close()
+
+
 def _seed_initial_admin():
     """Create the bootstrap admin if no users exist yet. Idempotent."""
     db = SessionLocal()
@@ -984,6 +1031,7 @@ async def lifespan(app: FastAPI):
         ("seed_trend_sources", _seed_default_trend_sources),
         ("seed_playbooks", _seed_default_playbooks),
         ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
+        ("seed_lake_service_entries", _seed_default_lake_service_entries),
         ("seed_initial_admin", _seed_initial_admin),
     ]:
         try:
