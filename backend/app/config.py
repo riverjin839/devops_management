@@ -47,6 +47,20 @@ class Settings(BaseSettings):
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     grafana_url: str = "http://grafana.monitoring.svc:3000"
 
+    # ─── Confluence (폐쇄망) ────────────────────────────────────
+    confluence_url: str = ""             # e.g. http://confluence.company.local
+    confluence_username: str = ""
+    confluence_password: str = ""
+    confluence_pat: str = ""             # Personal Access Token (Basic Auth 대신 사용)
+    confluence_verify_ssl: bool = True   # 자체 서명 인증서면 False
+
+    # ─── Jira (폐쇄망) ──────────────────────────────────────────
+    jira_url: str = ""                   # e.g. http://jira.company.local
+    jira_username: str = ""
+    jira_password: str = ""
+    jira_pat: str = ""
+    jira_verify_ssl: bool = True
+
     # Trend Digest
     # 폐쇄망: github_api_url을 내부 GitHub Enterprise 주소로 변경
     trends_github_api_url: str = "https://api.github.com"

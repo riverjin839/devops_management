@@ -40,6 +40,7 @@ from app.routers.audit_logs import router as audit_logs_router
 from app.routers.deep_check import router as deep_check_router, ingest_router as deep_check_ingest_router
 from app.routers.deep_check_definitions import router as deep_check_definitions_router
 from app.routers.notifications import router as notifications_router
+from app.routers.confluence_jira import router as confluence_jira_router
 
 __all__ = [
     "clusters_router",
@@ -83,4 +84,5 @@ __all__ = [
     "deep_check_ingest_router",
     "deep_check_definitions_router",
     "notifications_router",
+    "confluence_jira_router",
 ]
