@@ -1060,6 +1060,37 @@ export const trendsApi = {
   deleteSource: (id: string) => api.delete(`/trends/sources/${id}`),
 };
 
+// LAKE Service Monitoring — lake-service-monitoring PDCA
+import type {
+  LakeService as _LakeService,
+  LakeServiceInput as _LakeServiceInput,
+  LakeServiceUpdate as _LakeServiceUpdate,
+  LakeServiceListResponse as _LakeServiceListResponse,
+  LakeServiceCheck as _LakeServiceCheck,
+  LakeServiceCheckListResponse as _LakeServiceCheckListResponse,
+  LakeServiceTypeInfo as _LakeServiceTypeInfo,
+} from '@/types';
+
+export const lakeServicesApi = {
+  listTypes: () => api.get<_LakeServiceTypeInfo[]>('/lake-services/types'),
+  list: (params?: {
+    clusterId?: string;
+    serviceType?: string;
+    category?: string;
+    enabled?: boolean;
+    offset?: number;
+    limit?: number;
+  }) => api.get<_LakeServiceListResponse>('/lake-services', { params }),
+  get: (id: string) => api.get<_LakeService>(`/lake-services/${id}`),
+  listChecks: (id: string, params?: { offset?: number; limit?: number }) =>
+    api.get<_LakeServiceCheckListResponse>(`/lake-services/${id}/checks`, { params }),
+  create: (data: _LakeServiceInput) => api.post<_LakeService>('/lake-services', data),
+  update: (id: string, data: _LakeServiceUpdate) =>
+    api.put<_LakeService>(`/lake-services/${id}`, data),
+  remove: (id: string) => api.delete(`/lake-services/${id}`),
+  runCheck: (id: string) => api.post<_LakeServiceCheck>(`/lake-services/${id}/check`),
+};
+
 // 서비스별 히스토리·지식관리
 export const serviceEntriesApi = {
   catalog: (clusterId?: string) =>

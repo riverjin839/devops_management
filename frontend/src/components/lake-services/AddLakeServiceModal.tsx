@@ -1,0 +1,239 @@
+import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
+import { useClusters } from '@/hooks/useCluster';
+import {
+  useLakeServiceTypes,
+  useCreateLakeService,
+} from '@/hooks/useLakeServices';
+import { ServiceTypeIcon } from './ServiceTypeIcon';
+import type { LakeServiceType } from '@/types';
+
+interface AddLakeServiceModalProps {
+  open: boolean;
+  defaultClusterId?: string;
+  onClose: () => void;
+  onCreated?: (id: string) => void;
+}
+
+export function AddLakeServiceModal({
+  open, defaultClusterId, onClose, onCreated,
+}: AddLakeServiceModalProps) {
+  const { data: clusters = [] } = useClusters();
+  const { data: types = [] } = useLakeServiceTypes();
+  const create = useCreateLakeService();
+
+  const [clusterId, setClusterId] = useState(defaultClusterId ?? '');
+  const [serviceType, setServiceType] = useState<LakeServiceType | ''>('');
+  const [name, setName] = useState('');
+  const [endpointUrl, setEndpointUrl] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [tlsVerify, setTlsVerify] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 서비스 타입 선택 시 default_path 로 endpoint suffix 힌트 (값은 미설정)
+  useEffect(() => {
+    if (!open) return;
+    setClusterId(defaultClusterId ?? '');
+    setServiceType('');
+    setName('');
+    setEndpointUrl('');
+    setNamespace('');
+    setTlsVerify(false);
+    setError(null);
+  }, [open, defaultClusterId]);
+
+  // ESC 닫기
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const selectedType = types.find((t) => t.serviceType === serviceType);
+
+  const handleSubmit = async () => {
+    setError(null);
+    if (!clusterId) {
+      setError('클러스터를 선택하세요.');
+      return;
+    }
+    if (!serviceType) {
+      setError('서비스 타입을 선택하세요.');
+      return;
+    }
+    if (!name.trim()) {
+      setError('인스턴스 이름을 입력하세요.');
+      return;
+    }
+    if (!endpointUrl.trim().match(/^https?:\/\//)) {
+      setError('endpoint URL 은 http:// 또는 https:// 로 시작해야 합니다.');
+      return;
+    }
+    try {
+      const { data } = await create.mutateAsync({
+        clusterId,
+        serviceType: serviceType as LakeServiceType,
+        name: name.trim(),
+        endpointUrl: endpointUrl.trim(),
+        namespace: namespace.trim() || null,
+        tlsVerify,
+      });
+      onCreated?.(data.id);
+      onClose();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '등록 실패';
+      setError(msg);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-label="LAKE 서비스 등록">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
+          <h2 className="text-sm font-semibold">LAKE 서비스 등록</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="p-1 rounded hover:bg-secondary text-muted-foreground"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          {/* Cluster */}
+          <label className="block">
+            <span className="text-xs font-semibold text-muted-foreground">클러스터 *</span>
+            <select
+              value={clusterId}
+              onChange={(e) => setClusterId(e.target.value)}
+              aria-label="클러스터 선택"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">— 선택 —</option>
+              {clusters.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Service Type */}
+          <label className="block">
+            <span className="text-xs font-semibold text-muted-foreground">서비스 타입 *</span>
+            <select
+              value={serviceType}
+              onChange={(e) => {
+                const v = e.target.value as LakeServiceType | '';
+                setServiceType(v);
+              }}
+              aria-label="서비스 타입 선택"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">— 선택 —</option>
+              {types.map((t) => (
+                <option key={t.serviceType} value={t.serviceType}>
+                  {t.label} ({t.category})
+                </option>
+              ))}
+            </select>
+            {selectedType && (
+              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                <ServiceTypeIcon serviceType={selectedType.serviceType} className="w-3 h-3" />
+                {selectedType.description ?? '—'} · 기본 헬스 경로:{' '}
+                <span className="font-mono">{selectedType.defaultPath}</span>
+              </p>
+            )}
+          </label>
+
+          {/* Name */}
+          <label className="block">
+            <span className="text-xs font-semibold text-muted-foreground">인스턴스 이름 *</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="예: Prod Airflow"
+              maxLength={100}
+              aria-label="인스턴스 이름"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+
+          {/* Endpoint */}
+          <label className="block">
+            <span className="text-xs font-semibold text-muted-foreground">Endpoint URL *</span>
+            <input
+              type="text"
+              value={endpointUrl}
+              onChange={(e) => setEndpointUrl(e.target.value)}
+              placeholder="https://airflow.prod.example.local"
+              aria-label="endpoint URL"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              인스턴스의 root URL. 헬스체크 경로(예: <span className="font-mono">{selectedType?.defaultPath ?? '/health'}</span>)는 자동으로 붙임.
+            </p>
+          </label>
+
+          {/* Namespace (optional) */}
+          <label className="block">
+            <span className="text-xs font-semibold text-muted-foreground">Namespace (옵션)</span>
+            <input
+              type="text"
+              value={namespace}
+              onChange={(e) => setNamespace(e.target.value)}
+              placeholder="lake-prod"
+              maxLength={100}
+              aria-label="namespace"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-mono"
+            />
+          </label>
+
+          {/* TLS verify */}
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={tlsVerify}
+              onChange={(e) => setTlsVerify(e.target.checked)}
+              aria-label="TLS 인증서 검증"
+              className="w-4 h-4"
+            />
+            <span className="text-xs">TLS 인증서 검증 (폐쇄망 자체 인증서면 끄세요 — 기본 off)</span>
+          </label>
+
+          {error && (
+            <div className="text-xs text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={create.isPending}
+            autoFocus
+            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {create.isPending ? '등록 중…' : '등록'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

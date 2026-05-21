@@ -23,6 +23,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
   '/daily-check/review': { defaultLabel: '일일 점검 리뷰',  icon: ClipboardCheck },
   '/daily-check/settings':{ defaultLabel: 'Deep Check 설정', icon: Sparkles },
+  '/lake-services':      { defaultLabel: 'LAKE 서비스',     icon: Database },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
@@ -72,7 +73,7 @@ const WORK_STANDARD_PATHS = ['/work-guides', '/commands', '/tasks-mgmt'];
 type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
   // 홈(/) 은 좌측 상단 로고 버튼이 담당하므로 그룹 paths 에서 제외.
-  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
+  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/lake-services', '/playbooks'] },
   { id: 'work',       label: '업무관리', icon: ListTodo,        paths: ['/tasks-mgmt', '/todo-today', '/work-summary', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },

@@ -29,6 +29,7 @@ from app.models.deep_check import (
     NotificationChannelType,
     NotificationLog,
 )
+from app.models.lake_service import LakeService, LakeServiceCheck
 
 __all__ = [
     "Cluster",
@@ -70,4 +71,6 @@ __all__ = [
     "NotificationChannel",
     "NotificationChannelType",
     "NotificationLog",
+    "LakeService",
+    "LakeServiceCheck",
 ]

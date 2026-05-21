@@ -1833,3 +1833,84 @@ export interface AuditLogListResponse {
   page: number;
   pageSize: number;
 }
+
+// ─── LAKE Service Monitoring (lake-service-monitoring PDCA) ──────
+export type LakeServiceType =
+  | 'airflow' | 'spark' | 'iceberg' | 'trino'
+  | 'starrocks' | 'jupyterlab' | 'superset' | 'polaris';
+export type LakeServiceCategory = 'catalog' | 'runtime' | 'analytics';
+export type LakeStatus = 'healthy' | 'warning' | 'critical' | 'pending';
+
+export interface LakeServiceTypeInfo {
+  serviceType: string;
+  label: string;
+  category: string;
+  defaultPath: string;
+  description?: string;
+}
+
+export interface LakeService {
+  id: string;
+  clusterId: string;
+  serviceType: string;
+  name: string;
+  category: string;
+  endpointUrl: string;
+  namespace?: string | null;
+  enabled: boolean;
+  tlsVerify: boolean;
+  status: LakeStatus;
+  lastCheckedAt?: string | null;
+  lastMessage?: string | null;
+  meta?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LakeServiceInput {
+  clusterId: string;
+  serviceType: LakeServiceType;
+  name: string;
+  endpointUrl: string;
+  namespace?: string | null;
+  enabled?: boolean;
+  tlsVerify?: boolean;
+  meta?: Record<string, unknown> | null;
+}
+
+export interface LakeServiceUpdate {
+  name?: string;
+  endpointUrl?: string;
+  namespace?: string | null;
+  enabled?: boolean;
+  tlsVerify?: boolean;
+  meta?: Record<string, unknown> | null;
+}
+
+export interface LakeServiceListResponse {
+  data: LakeService[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface LakeServiceCheck {
+  id: string;
+  serviceId: string;
+  status: LakeStatus;
+  responseTimeMs?: number | null;
+  message?: string | null;
+  details?: Record<string, unknown> | null;
+  triggeredBy: string;
+  triggeredByUser?: string | null;
+  checkedAt: string;
+}
+
+export interface LakeServiceCheckListResponse {
+  data: LakeServiceCheck[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
