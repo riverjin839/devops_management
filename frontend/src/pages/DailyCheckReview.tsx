@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Play, Settings } from 'lucide-react';
+import { ArrowLeft, Play, Settings, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import {
@@ -16,21 +16,16 @@ import {
   useDailyCheckTrend,
   useRunDeepCheckNow,
 } from '@/hooks/useDeepCheck';
-import api from '@/services/api';
-
-interface DailyCheckLogLite {
-  id: string;
-  clusterId: string;
-  checkedAt: string;
-  overallStatus: string;
-  scheduleType: string;
-}
+import {
+  useLatestDailyCheckLog,
+  useDailyCheckLogs,
+  useRunDailyCheckNow,
+} from '@/hooks/useDailyCheck';
 
 export function DailyCheckReviewPage() {
   const { clusterId = '' } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [latestLogId, setLatestLogId] = useState<string | null>(null);
   const { data: clusters = [] } = useClusters();
 
   // /daily-check/review (clusterId 미지정) 진입 시 첫 번째 클러스터로 자동 라우팅.
@@ -41,26 +36,14 @@ export function DailyCheckReviewPage() {
     }
   }, [clusterId, clusters, navigate]);
 
-  const dailyCheckLogId = params.get('log') || latestLogId || '';
-
-  // 최신 daily_check_log_id 자동 조회 — log 쿼리 미지정 시
-  // (간단히 axios 호출, 별도 hook 만들 정도는 아님)
-  useMemo(() => {
-    if (params.get('log') || latestLogId) return;
-    if (!clusterId) return;
-    api
-      .get<DailyCheckLogLite>(`/daily-check/results/${clusterId}/latest`)
-      .then((res) => {
-        if (res.data?.id) setLatestLogId(res.data.id);
-      })
-      .catch(() => {
-        // 점검 기록 없음 — 아무것도 안 함
-      });
-  }, [clusterId, params, latestLogId]);
+  // 최신 daily_check_log_id 자동 조회 — TanStack Query 훅으로 분리해 React 안티패턴 제거
+  const { data: latestLog } = useLatestDailyCheckLog(clusterId);
+  const dailyCheckLogId = params.get('log') || latestLog?.id || '';
 
   const { data: review, isLoading: reviewLoading } = useDeepCheckReview(dailyCheckLogId);
   const { data: trend } = useDailyCheckTrend(clusterId, 7);
-  const runNow = useRunDeepCheckNow();
+  const runDeep = useRunDeepCheckNow();
+  const runDaily = useRunDailyCheckNow();
 
   const cluster = clusters.find((c) => c.id === clusterId);
 
@@ -73,14 +56,14 @@ export function DailyCheckReviewPage() {
             selectedId={clusterId || null}
             onSelect={(id) => {
               if (id) {
-                window.location.href = `/daily-check/review/${id}`;
+                navigate(`/daily-check/review/${id}`);
               }
             }}
             iconOnly
           />
         </div>
         <div className="flex-1 min-w-0 space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Link
               to="/"
               className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
@@ -88,20 +71,34 @@ export function DailyCheckReviewPage() {
               <ArrowLeft className="w-3.5 h-3.5" />
               대시보드
             </Link>
-            <h1 className="text-lg font-semibold flex-1">
+            <h1 className="text-lg font-semibold flex-1 min-w-[200px]">
               {cluster ? `${cluster.name} — 일일 점검 리뷰` : '일일 점검 리뷰'}
             </h1>
             <button
               type="button"
               onClick={() => {
                 if (!clusterId) return;
-                runNow.mutate(clusterId);
+                runDaily.mutate(clusterId);
               }}
-              disabled={!clusterId || runNow.isPending}
+              disabled={!clusterId || runDaily.isPending}
+              title="기본 헬스 체크 (API/Components/Nodes/Pods) — 새 점검 회차를 생성합니다"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${runDaily.isPending ? 'animate-spin' : ''}`} />
+              {runDaily.isPending ? '실행 중…' : 'Daily Check 실행'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!clusterId) return;
+                runDeep.mutate(clusterId);
+              }}
+              disabled={!clusterId || runDeep.isPending}
+              title="등록된 Deep Check 정의 (cert/PVC/CNI 등) 실행 — 최신 daily 회차에 결과를 묶습니다"
               className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
             >
               <Play className="w-3.5 h-3.5" />
-              {runNow.isPending ? '실행 중…' : 'Deep Check 지금 실행'}
+              {runDeep.isPending ? '실행 중…' : 'Deep Check 실행'}
             </button>
             <Link
               to="/daily-check/settings"
@@ -115,16 +112,14 @@ export function DailyCheckReviewPage() {
           <DailyCheckLogPicker
             clusterId={clusterId}
             value={dailyCheckLogId}
-            onChange={(id) => {
-              setLatestLogId(id);
-              setParams({ log: id });
-            }}
+            onChange={(id) => setParams({ log: id })}
           />
 
           {!dailyCheckLogId && (
             <MacCard title="안내">
               <div className="text-sm text-muted-foreground italic">
-                해당 클러스터의 점검 기록이 없습니다. 대시보드의 "체크 실행" 버튼으로 점검을 먼저 수행하세요.
+                해당 클러스터의 점검 기록이 없습니다. 상단의 <strong>"Daily Check 실행"</strong> 버튼을 눌러 새 회차를 생성하세요.
+                (Dashboard 의 "체크 실행" 은 별개 파이프라인이라 여기에 결과가 나타나지 않습니다.)
               </div>
             </MacCard>
           )}
@@ -149,6 +144,23 @@ export function DailyCheckReviewPage() {
   );
 }
 
+// status 별 visual marker — native <option> 은 children 스타일링이 불가하므로 텍스트 접두사로 표현.
+// 진짜 컬러 badge 가 필요해지면 components/ui/Select 를 Radix dropdown-menu 기반으로 추가하는
+// 별도 design system 작업이 필요.
+const STATUS_MARKER: Record<string, string> = {
+  healthy: '🟢',
+  warning: '🟡',
+  critical: '🔴',
+  pending: '⚪',
+};
+
+const SCHEDULE_LABEL: Record<string, string> = {
+  morning: '아침',
+  noon: '점심',
+  evening: '저녁',
+  manual: '수동',
+};
+
 function DailyCheckLogPicker({
   clusterId,
   value,
@@ -158,34 +170,47 @@ function DailyCheckLogPicker({
   value: string;
   onChange: (id: string) => void;
 }) {
-  const [logs, setLogs] = useState<DailyCheckLogLite[] | null>(null);
+  const { data: logs = [] } = useDailyCheckLogs(clusterId, 20);
 
-  useMemo(() => {
-    if (!clusterId) return;
-    api
-      .get<DailyCheckLogLite[]>(`/daily-check/results/${clusterId}`, {
-        params: { limit: 20 },
-      })
-      .then((res) => setLogs(res.data || []))
-      .catch(() => setLogs([]));
-  }, [clusterId]);
+  if (logs.length === 0) return null;
 
-  if (!logs || logs.length === 0) return null;
+  const selected = logs.find((l) => l.id === value);
 
   return (
     <MacCard title="점검 회차 선택">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-      >
-        {logs.map((l) => (
-          <option key={l.id} value={l.id}>
-            {new Date(l.checkedAt).toLocaleString('ko-KR')} · {l.scheduleType} ·{' '}
-            {l.overallStatus}
-          </option>
-        ))}
-      </select>
+      <div className="flex items-center gap-2">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm"
+        >
+          {logs.map((l) => {
+            const marker = STATUS_MARKER[l.overallStatus] ?? '⚪';
+            const scheduleKr = SCHEDULE_LABEL[l.scheduleType] ?? l.scheduleType;
+            const dt = new Date(l.checkedAt).toLocaleString('ko-KR');
+            return (
+              <option key={l.id} value={l.id}>
+                {marker} {dt} · {scheduleKr} · {l.overallStatus}
+              </option>
+            );
+          })}
+        </select>
+        {selected && (
+          <span
+            className={`text-[11px] font-medium px-2 py-1 rounded-full ${
+              selected.overallStatus === 'critical'
+                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                : selected.overallStatus === 'warning'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-500'
+                  : selected.overallStatus === 'healthy'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-slate-500/10 text-slate-500'
+            }`}
+          >
+            {selected.overallStatus}
+          </span>
+        )}
+      </div>
     </MacCard>
   );
 }

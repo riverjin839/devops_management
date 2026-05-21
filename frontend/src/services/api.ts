@@ -1205,6 +1205,25 @@ import type {
   NotificationLogEntry,
 } from '@/types';
 
+// Daily check (DailyChecker) — Deep check 와 다른 파이프라인. 회차 picker / 최신 로그 조회 /
+// 수동 실행 공통 사용. 응답 카멜 변환은 axios 인터셉터가 처리.
+export interface DailyCheckLogLite {
+  id: string;
+  clusterId: string;
+  checkedAt: string;
+  overallStatus: string;
+  scheduleType: string;
+}
+
+export const dailyCheckApi = {
+  latestLog: (clusterId: string) =>
+    api.get<DailyCheckLogLite>(`/daily-check/results/${clusterId}/latest`),
+  listLogs: (clusterId: string, params?: { limit?: number; offset?: number }) =>
+    api.get<DailyCheckLogLite[]>(`/daily-check/results/${clusterId}`, { params }),
+  runNow: (clusterId: string) =>
+    api.post<DailyCheckLogLite>(`/daily-check/run/${clusterId}`),
+};
+
 export const deepCheckApi = {
   listResults: (clusterId: string, params?: { limit?: number; offset?: number }) =>
     api.get<DeepCheckResult[]>(`/deep-check/results/${clusterId}`, { params }),

@@ -1,26 +1,61 @@
 """
-일일 K8s 클러스터 헬스 체크 서비스
-- API 서버 상태 체크
-- 컴포넌트 상태 체크 (etcd, scheduler, controller-manager)
-- 노드 상태 체크
-- 시스템 파드 상태 체크
+일일 K8s 클러스터 헬스 체크 서비스 (v2: SDK 기반)
+- API 서버 상태 체크 (httpx — endpoint probe)
+- 컴포넌트 상태 체크 (K8s SDK — kube-scheduler / kube-controller-manager pod)
+- 노드 상태 체크 (K8s SDK)
+- 시스템 파드 상태 체크 (K8s SDK)
+
+이전 v1 은 subprocess kubectl 기반이라 backend 컨테이너에 kubectl binary 가 필수였고,
+componentstatuses 가 K8s 1.27+ 에서 제거돼 silent fail 위험이 있었음. v2 는 BaseChecker
+family 와 동일한 SDK 경로를 사용해 패턴 일관성을 확보한다.
 """
-import subprocess
-import json
+import os
 import time
 from datetime import datetime
 from typing import Optional
+
 import httpx
+from kubernetes import client, config
 from sqlalchemy.orm import Session
 
 from app.models import Cluster, DailyCheckLog, CheckScheduleType, StatusEnum
 from app.config import settings
+from app.services.kubeconfig import ensure_kubeconfig_file
 
 
 class DailyChecker:
     def __init__(self, db: Session):
         self.db = db
         self.timeout = settings.check_timeout_seconds
+        # cluster 별 K8s client 캐시 — 한 cluster 의 4번 호출 안에서만 재사용
+        self._v1: Optional[client.CoreV1Api] = None
+        self._v1_cluster_id = None
+
+    # ── K8s client (cluster 별 격리) ──────────────────────
+    def _get_k8s_client(self, cluster: Cluster) -> client.CoreV1Api:
+        """cluster 별 K8s SDK client.
+
+        다중 cluster 환경에서는 `config.load_kube_config()` 가 global 상태를
+        변경해 race 가 생긴다. `config.new_client_from_config()` 는 ApiClient
+        를 직접 반환해 process 격리. 한 cluster 의 다중 호출은 instance cache.
+        """
+        if self._v1 is not None and self._v1_cluster_id == cluster.id:
+            return self._v1
+
+        kc_path = ensure_kubeconfig_file(cluster)
+        api_client: client.ApiClient
+        if kc_path and os.path.exists(kc_path):
+            api_client = config.new_client_from_config(config_file=kc_path)
+        else:
+            try:
+                config.load_incluster_config()
+                api_client = client.ApiClient()
+            except config.ConfigException:
+                api_client = config.new_client_from_config()
+
+        self._v1 = client.CoreV1Api(api_client)
+        self._v1_cluster_id = cluster.id
+        return self._v1
 
     async def run_daily_check(
         self,
@@ -77,9 +112,18 @@ class DailyChecker:
 
         self.db.add(check_log)
 
-        # 클러스터 상태 업데이트
-        cluster.status = overall_status
-        cluster.updated_at = datetime.utcnow()
+        # G-1: DailyChecker 가 cluster.status 의 authoritative source.
+        # HealthChecker (addon-based) / DeepCheckService 는 자기 도메인 결과만 갱신.
+        # SELECT FOR UPDATE 로 동시 갱신 race 차단 (Beat 09:00 + 사용자 수동 동시 발생 등).
+        locked_cluster = (
+            self.db.query(Cluster)
+            .filter(Cluster.id == cluster.id)
+            .with_for_update()
+            .first()
+        )
+        if locked_cluster is not None:
+            locked_cluster.status = overall_status
+            locked_cluster.updated_at = datetime.utcnow()
 
         self.db.commit()
         self.db.refresh(check_log)
@@ -107,13 +151,16 @@ class DailyChecker:
 
         endpoints = ["/healthz", "/livez", "/readyz"]
 
+        # cluster.tls_verify 옵트인. 기본 False (자체 서명 인증서 환경 호환).
+        verify_tls = bool(getattr(cluster, "tls_verify", False))
+
         try:
-            async with httpx.AsyncClient(verify=False, timeout=self.timeout) as client:
+            async with httpx.AsyncClient(verify=verify_tls, timeout=self.timeout) as client_:
                 for endpoint in endpoints:
                     url = f"{cluster.api_endpoint}{endpoint}"
                     start = time.time()
                     try:
-                        response = await client.get(url)
+                        response = await client_.get(url)
                         response_time = int((time.time() - start) * 1000)
 
                         result["details"][endpoint] = {
@@ -146,129 +193,122 @@ class DailyChecker:
         return result
 
     async def _check_components(self, cluster: Cluster) -> dict:
-        """컴포넌트 상태 체크 (kubectl 사용)"""
-        components = {}
+        """Control plane 컴포넌트 체크 (SDK 기반).
+
+        K8s 1.27+ 에서 componentstatuses API 가 제거됨. 대안으로 kube-system 의
+        kube-scheduler, kube-controller-manager pod 상태로 판단. 동일 정보를
+        addon-based `ControlPlaneChecker` 도 점검하지만, daily check 가 addon
+        등록과 무관하게 control plane 기본 건강도를 확보하기 위해 자체 점검.
+        """
+        components: dict = {}
+
+        # 라벨 ↔ 표시 이름
+        targets = [
+            ("component=kube-scheduler", "scheduler"),
+            ("component=kube-controller-manager", "controller-manager"),
+        ]
 
         try:
-            # kubectl get componentstatuses -o json
-            cmd = self._build_kubectl_cmd(cluster, "get", "componentstatuses", "-o", "json")
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-            if proc.returncode == 0:
-                data = json.loads(proc.stdout)
-                for item in data.get("items", []):
-                    name = item.get("metadata", {}).get("name", "unknown")
-                    conditions = item.get("conditions", [])
-
-                    status = StatusEnum.critical
-                    message = ""
-
-                    for cond in conditions:
-                        if cond.get("type") == "Healthy":
-                            if cond.get("status") == "True":
-                                status = StatusEnum.healthy
-                            message = cond.get("message", "")
-                            break
-
+            v1 = self._get_k8s_client(cluster)
+            for label, name in targets:
+                try:
+                    pods = v1.list_namespaced_pod(
+                        namespace="kube-system",
+                        label_selector=label,
+                        timeout_seconds=self.timeout,
+                    )
+                except Exception as e:
                     components[name] = {
-                        "status": status.value,
-                        "message": message
+                        "status": StatusEnum.critical.value,
+                        "message": f"list_namespaced_pod failed: {str(e)[:120]}",
                     }
-            else:
-                components["error"] = proc.stderr
+                    continue
 
-        except subprocess.TimeoutExpired:
-            components["error"] = "Command timeout"
+                total = len(pods.items)
+                running_ready = sum(
+                    1 for p in pods.items
+                    if p.status.phase == "Running"
+                    and all(cs.ready for cs in (p.status.container_statuses or []))
+                )
+
+                if total == 0:
+                    status_val = StatusEnum.critical.value
+                    msg = f"No {name} pods found"
+                elif running_ready < total:
+                    status_val = StatusEnum.warning.value
+                    msg = f"{running_ready}/{total} ready"
+                else:
+                    status_val = StatusEnum.healthy.value
+                    msg = f"{running_ready}/{total} ready"
+
+                components[name] = {
+                    "status": status_val,
+                    "message": msg,
+                    "ready": running_ready,
+                    "total": total,
+                }
         except Exception as e:
-            components["error"] = str(e)
+            components["error"] = f"K8s SDK init failed: {str(e)[:200]}"
 
         return components
 
     async def _check_nodes(self, cluster: Cluster) -> dict:
-        """노드 상태 체크"""
-        result = {"nodes": [], "total": 0, "ready": 0}
+        """노드 상태 체크 (SDK 기반, NodeChecker 와 동일 로직)."""
+        result: dict = {"nodes": [], "total": 0, "ready": 0}
 
         try:
-            cmd = self._build_kubectl_cmd(cluster, "get", "nodes", "-o", "json")
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            v1 = self._get_k8s_client(cluster)
+            nodes = v1.list_node(timeout_seconds=self.timeout)
+            result["total"] = len(nodes.items)
 
-            if proc.returncode == 0:
-                data = json.loads(proc.stdout)
-                nodes = data.get("items", [])
-                result["total"] = len(nodes)
+            for node in nodes.items:
+                name = node.metadata.name
+                conditions = {c.type: c for c in (node.status.conditions or [])}
+                ready_cond = conditions.get("Ready")
+                node_ready = bool(ready_cond and ready_cond.status == "True")
 
-                for node in nodes:
-                    name = node.get("metadata", {}).get("name", "unknown")
-                    conditions = node.get("status", {}).get("conditions", [])
-                    capacity = node.get("status", {}).get("capacity", {})
+                if node_ready:
+                    result["ready"] += 1
 
-                    node_status = "NotReady"
-                    for cond in conditions:
-                        if cond.get("type") == "Ready":
-                            node_status = "Ready" if cond.get("status") == "True" else "NotReady"
-                            break
-
-                    if node_status == "Ready":
-                        result["ready"] += 1
-
-                    result["nodes"].append({
-                        "name": name,
-                        "status": node_status,
-                        "cpu": capacity.get("cpu", "N/A"),
-                        "memory": capacity.get("memory", "N/A"),
-                        "pods": capacity.get("pods", "N/A"),
-                    })
+                capacity = node.status.capacity or {}
+                result["nodes"].append({
+                    "name": name,
+                    "status": "Ready" if node_ready else "NotReady",
+                    "cpu": capacity.get("cpu", "N/A"),
+                    "memory": capacity.get("memory", "N/A"),
+                    "pods": capacity.get("pods", "N/A"),
+                })
 
         except Exception as e:
-            result["error"] = str(e)
+            result["error"] = str(e)[:300]
 
         return result
 
     async def _check_system_pods(self, cluster: Cluster) -> list:
-        """kube-system 파드 상태 체크"""
-        pods = []
+        """kube-system 파드 상태 체크 (SDK 기반)."""
+        pods: list = []
 
         try:
-            cmd = self._build_kubectl_cmd(
-                cluster, "get", "pods", "-n", "kube-system", "-o", "json"
+            v1 = self._get_k8s_client(cluster)
+            pod_list = v1.list_namespaced_pod(
+                namespace="kube-system",
+                timeout_seconds=self.timeout,
             )
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-            if proc.returncode == 0:
-                data = json.loads(proc.stdout)
-                for item in data.get("items", []):
-                    name = item.get("metadata", {}).get("name", "unknown")
-                    phase = item.get("status", {}).get("phase", "Unknown")
-                    restart_count = 0
-
-                    container_statuses = item.get("status", {}).get("containerStatuses", [])
-                    for cs in container_statuses:
-                        restart_count += cs.get("restartCount", 0)
-
-                    pods.append({
-                        "name": name,
-                        "namespace": "kube-system",
-                        "status": phase,
-                        "restarts": restart_count,
-                    })
+            for p in pod_list.items:
+                restart_count = sum(
+                    cs.restart_count or 0 for cs in (p.status.container_statuses or [])
+                )
+                pods.append({
+                    "name": p.metadata.name,
+                    "namespace": "kube-system",
+                    "status": p.status.phase or "Unknown",
+                    "restarts": restart_count,
+                })
 
         except Exception as e:
-            pods.append({"error": str(e)})
+            pods.append({"error": str(e)[:300]})
 
         return pods
-
-    def _build_kubectl_cmd(self, cluster: Cluster, *args) -> list:
-        """kubectl 명령어 빌드"""
-        cmd = ["kubectl"]
-
-        if cluster.kubeconfig_path:
-            cmd.extend(["--kubeconfig", cluster.kubeconfig_path])
-
-        if cluster.api_endpoint:
-            cmd.extend(["--server", cluster.api_endpoint])
-
-        cmd.extend(args)
-        return cmd
 
     def _determine_overall_status(
         self, api_result: dict, components: dict, nodes: dict
@@ -281,7 +321,8 @@ class DailyChecker:
 
         # 컴포넌트 중 critical이 있으면 전체 critical
         for comp_name, comp_data in components.items():
-            if comp_name == "error":
+            # error / _meta 같은 메타 키는 건너뜀
+            if comp_name in ("error", "_meta"):
                 continue
             if comp_data.get("status") == "critical":
                 return StatusEnum.critical
@@ -315,8 +356,15 @@ class DailyChecker:
         for name, data in components.items():
             if name == "error":
                 errors.append(f"Components check failed: {data}")
+            elif name == "_meta":
+                if data.get("deprecated") or data.get("skipped"):
+                    warnings.append(
+                        f"componentstatuses 건너뜀: {data.get('reason', 'skipped')}"
+                    )
             elif data.get("status") == "critical":
                 errors.append(f"Component {name}: {data.get('message', 'Unhealthy')}")
+            elif data.get("status") == "warning":
+                warnings.append(f"Component {name}: {data.get('message', 'degraded')}")
 
         # 노드 에러
         not_ready = nodes.get("total", 0) - nodes.get("ready", 0)

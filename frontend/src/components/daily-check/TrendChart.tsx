@@ -58,16 +58,61 @@ export function TrendChart({ trend, days = 7 }: Props) {
             </span>
           ))}
         </div>
+        {/* errors/warnings 카운트(보통 0~5)와 readyNodes(보통 3~수십+)는 스케일이 달라
+            같은 Y축에 그리면 errors 변화가 시각적으로 묻힌다 → 좌/우 dual Y-axis 로 분리. */}
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} />
+            <YAxis
+              yAxisId="left"
+              tick={{ fontSize: 10 }}
+              label={{
+                value: '이벤트 수',
+                angle: -90,
+                position: 'insideLeft',
+                style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+              }}
+              allowDecimals={false}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tick={{ fontSize: 10 }}
+              label={{
+                value: '노드 수',
+                angle: 90,
+                position: 'insideRight',
+                style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+              }}
+              allowDecimals={false}
+            />
             <Tooltip />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="errors" stroke="#ef4444" name="에러" strokeWidth={2} />
-            <Line type="monotone" dataKey="warnings" stroke="#f59e0b" name="경고" strokeWidth={2} />
-            <Line type="monotone" dataKey="readyNodes" stroke="#10b981" name="Ready 노드" strokeWidth={2} />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="errors"
+              stroke="#ef4444"
+              name="에러"
+              strokeWidth={2}
+            />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="warnings"
+              stroke="#f59e0b"
+              name="경고"
+              strokeWidth={2}
+            />
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="readyNodes"
+              stroke="#10b981"
+              name="Ready 노드"
+              strokeWidth={2}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>

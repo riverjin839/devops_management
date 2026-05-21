@@ -80,67 +80,96 @@ celery_app.conf.beat_schedule = {
 @celery_app.task(bind=True, name="app.celery_app.run_scheduled_check")
 def run_scheduled_check(self, schedule_type: str):
     """
-    스케줄된 일일 체크 실행
-    모든 활성 클러스터에 대해 체크 수행
+    스케줄된 일일 체크 디스패처. 모든 활성 클러스터에 대해
+    `run_scheduled_single_check.delay(cluster_id, schedule_type)` 으로 fanout.
+
+    이전 구조 (직렬 for-loop) 는 클러스터 N개 × 평균 30초 → 5분 task_time_limit 초과 시
+    부분 결과만 commit 되고 나머지 클러스터는 회차 누락 (Plan SC-1 위반). 디스패처는
+    DB 조회 + queue 만 하므로 즉시 종료, 실제 체크는 worker concurrency 만큼 병렬 처리.
     """
     from app.database import SessionLocal
-    from app.models import Cluster, CheckSchedule, CheckScheduleType
-    from app.services.daily_checker import DailyChecker
+    from app.models import Cluster, CheckSchedule
 
     db = SessionLocal()
+    queued: list[dict] = []
+    skipped: list[dict] = []
 
     try:
-        # 스케줄 타입 매핑
-        schedule_enum = CheckScheduleType(schedule_type)
-
-        # 해당 시간대에 체크가 활성화된 클러스터 조회
         clusters = db.query(Cluster).all()
 
-        results = []
         for cluster in clusters:
-            # 스케줄 설정 확인
             schedule = db.query(CheckSchedule).filter(
                 CheckSchedule.cluster_id == cluster.id,
-                CheckSchedule.is_active == True
+                CheckSchedule.is_active == True  # noqa: E712
             ).first()
 
-            # 스케줄이 없거나 해당 시간대가 비활성화면 스킵
+            # 스케줄이 명시적으로 비활성화돼 있으면 skip
             if schedule:
-                if schedule_type == "morning" and not schedule.morning_enabled:
-                    continue
-                elif schedule_type == "noon" and not schedule.noon_enabled:
-                    continue
-                elif schedule_type == "evening" and not schedule.evening_enabled:
+                enabled_attr = f"{schedule_type}_enabled"
+                if hasattr(schedule, enabled_attr) and not getattr(schedule, enabled_attr):
+                    skipped.append({"cluster": cluster.name, "reason": f"{schedule_type} disabled"})
                     continue
 
-            # 체크 실행
-            checker = DailyChecker(db)
+            # Fanout — 각 클러스터 체크는 별도 task 로 큐잉. worker concurrency 만큼 병렬.
             try:
-                # async 함수를 sync로 실행
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(
-                    checker.run_daily_check(str(cluster.id), schedule_enum)
-                )
-                loop.close()
-
-                results.append({
-                    "cluster": cluster.name,
-                    "status": result.overall_status.value,
-                    "checked_at": result.checked_at.isoformat()
-                })
+                run_scheduled_single_check.delay(str(cluster.id), schedule_type)
+                queued.append({"cluster": cluster.name})
             except Exception as e:
-                results.append({
-                    "cluster": cluster.name,
-                    "error": str(e)
-                })
+                # broker 자체 실패 — 어떤 클러스터도 큐잉 안 됨. 운영자가 알아채야 함.
+                import logging
+                logging.getLogger(__name__).exception(
+                    "Failed to queue daily check for cluster %s: %s", cluster.name, e
+                )
+                skipped.append({"cluster": cluster.name, "reason": f"queue error: {str(e)[:120]}"})
 
         return {
             "schedule_type": schedule_type,
             "executed_at": datetime.now().isoformat(),
-            "results": results
+            "queued": len(queued),
+            "skipped": len(skipped),
+            "queued_clusters": queued,
+            "skipped_clusters": skipped,
         }
 
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_scheduled_single_check")
+def run_scheduled_single_check(self, cluster_id: str, schedule_type: str):
+    """단일 클러스터 단일 회차 체크 — Beat 디스패처가 큐잉.
+
+    `run_single_check` (수동 트리거용) 과 분리한 이유: 수동은 항상 schedule_type=manual 이고,
+    스케줄은 morning/noon/evening 중 하나. 통계/로그 구분을 위해 별도 task name 사용.
+    """
+    from app.database import SessionLocal
+    from app.models import CheckScheduleType
+    from app.services.daily_checker import DailyChecker
+
+    db = SessionLocal()
+    try:
+        schedule_enum = CheckScheduleType(schedule_type)
+        checker = DailyChecker(db)
+        result = asyncio.run(
+            checker.run_daily_check(cluster_id, schedule_enum)
+        )
+        return {
+            "cluster_id": cluster_id,
+            "schedule_type": schedule_type,
+            "status": result.overall_status.value,
+            "checked_at": result.checked_at.isoformat(),
+        }
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Scheduled check failed for cluster %s (%s): %s",
+            cluster_id, schedule_type, e,
+        )
+        return {
+            "cluster_id": cluster_id,
+            "schedule_type": schedule_type,
+            "error": str(e)[:200],
+        }
     finally:
         db.close()
 

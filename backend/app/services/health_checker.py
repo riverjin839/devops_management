@@ -18,9 +18,11 @@ def _is_api_server_reachable(cluster: Cluster) -> bool:
     endpoint = (cluster.api_endpoint or "").strip()
     if not endpoint:
         return False
+    # cluster.tls_verify 옵트인 — 기본 False (자체 서명 인증서 환경 호환)
+    verify_tls = bool(getattr(cluster, "tls_verify", False))
     try:
         url = endpoint.rstrip("/") + "/healthz"
-        with httpx.Client(verify=False, timeout=_REACHABILITY_TIMEOUT) as client:
+        with httpx.Client(verify=verify_tls, timeout=_REACHABILITY_TIMEOUT) as client:
             resp = client.get(url)
         return resp.status_code < 500
     except Exception:
@@ -37,6 +39,12 @@ class HealthChecker:
         먼저 API server reachability 를 체크하고 안 되면 addon 체크는
         skip 하고 cluster.status = pending(미연결) 로 마킹한다.
         이렇게 해야 "연결 실패"와 "연결은 되는데 addon 문제" 가 구분됨.
+
+        ── cluster.status 갱신 정책 (G-1) ────────────────────────
+        DailyChecker 가 primary authoritative source. HealthChecker 는
+        사용자의 ad-hoc 트리거이므로 cluster.status 갱신 시 row-level lock
+        (SELECT FOR UPDATE) 으로 동시 갱신 race 차단. 같은 정책을
+        DailyChecker.run_daily_check 도 따른다.
         """
         cluster = self.db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if not cluster:
@@ -44,8 +52,15 @@ class HealthChecker:
 
         # ── Reachability 선제 체크 ────────────────────────────
         if not _is_api_server_reachable(cluster):
-            cluster.status = StatusEnum.pending
-            cluster.updated_at = datetime.utcnow()
+            locked = (
+                self.db.query(Cluster)
+                .filter(Cluster.id == cluster_id)
+                .with_for_update()
+                .first()
+            )
+            if locked is not None:
+                locked.status = StatusEnum.pending
+                locked.updated_at = datetime.utcnow()
             self.db.add(CheckLog(
                 cluster_id=cluster_id,
                 status=StatusEnum.pending,
@@ -85,9 +100,16 @@ class HealthChecker:
             elif result.status == StatusEnum.pending and overall_status == StatusEnum.healthy:
                 overall_status = StatusEnum.warning
 
-        # 클러스터 상태 업데이트
-        cluster.status = overall_status
-        cluster.updated_at = datetime.utcnow()
+        # G-1: row-level lock 으로 동시 갱신 race 차단
+        locked = (
+            self.db.query(Cluster)
+            .filter(Cluster.id == cluster_id)
+            .with_for_update()
+            .first()
+        )
+        if locked is not None:
+            locked.status = overall_status
+            locked.updated_at = datetime.utcnow()
 
         cluster_log = CheckLog(
             cluster_id=cluster_id,
@@ -123,7 +145,7 @@ class HealthChecker:
         )
         self.db.add(log)
 
-        # 클러스터 전체 상태 재계산
+        # 클러스터 전체 상태 재계산 + row-level lock (G-1 정책)
         addons = self.db.query(Addon).filter(Addon.cluster_id == cluster_id).all()
         overall_status = StatusEnum.healthy
         for a in addons:
@@ -133,8 +155,15 @@ class HealthChecker:
             if a.status == StatusEnum.warning:
                 overall_status = StatusEnum.warning
 
-        cluster.status = overall_status
-        cluster.updated_at = datetime.utcnow()
+        locked = (
+            self.db.query(Cluster)
+            .filter(Cluster.id == cluster_id)
+            .with_for_update()
+            .first()
+        )
+        if locked is not None:
+            locked.status = overall_status
+            locked.updated_at = datetime.utcnow()
         self.db.commit()
         return result
 
@@ -200,10 +229,11 @@ class HealthChecker:
         endpoint_map = {"API Server": "/healthz", "etcd": "/health", "Metrics Server": "/metrics"}
         endpoint = endpoint_map.get(addon.name, "/healthz")
         url = f"{cluster.api_endpoint}{endpoint}"
+        verify_tls = bool(getattr(cluster, "tls_verify", False))
 
         try:
             start = datetime.utcnow()
-            with httpx.Client(verify=False, timeout=10.0) as client:
+            with httpx.Client(verify=verify_tls, timeout=10.0) as client:
                 response = client.get(url)
             elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
 
