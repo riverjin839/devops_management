@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClusterSidebar, ViewModeBar, DoubleScrollX} from '@/components/common';
-import { Plus, Download, ListTodo, Search, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban } from 'lucide-react';
+import { ClusterSidebar, ViewModeBar, DoubleScrollX, ConfirmDialog } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
+import { Plus, Download, ListTodo, Search, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow } from '@/components/work-items';
@@ -100,8 +101,10 @@ export function WorkItemBoardPage() {
     startedTo: filterTo || undefined,
   };
 
-  const { data, isLoading } = useWorkItems(filters);
+  const { data, isLoading, error } = useWorkItems(filters);
   const items = data?.data ?? [];
+  // G-I9: ConfirmDialog state — window.confirm 대체
+  const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
 
   const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -142,10 +145,13 @@ export function WorkItemBoardPage() {
   const deleteTask = useDeleteWorkItem();
   const createTask = useCreateWorkItem();
 
-  const handleDelete = (item: WorkItem) => {
-    if (!confirm(`"${item.category}" 업무를 삭제하시겠습니까?`)) return;
-    deleteTask.mutate(item.id);
-    localStorage.removeItem('k8s:img:work-item:' + item.id);
+  const handleDelete = (item: WorkItem) => setConfirmDelete(item);
+  const doDelete = () => {
+    if (!confirmDelete) return;
+    const id = confirmDelete.id;
+    setConfirmDelete(null);
+    deleteTask.mutate(id);
+    localStorage.removeItem('k8s:img:work-item:' + id);
   };
 
   // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
@@ -331,27 +337,28 @@ export function WorkItemBoardPage() {
           ))}
         </div>
 
-        {/* Filter Bar */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Search className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">필터</span>
-            {hasFilters && (
+        {/* G-I8: Filter Bar — MacCard wrapper 로 디자인 시스템 일관성 확보 */}
+        <MacCard title="필터" rootClassName="mb-6" bodyPadding="p-4">
+          {hasFilters && (
+            <div className="flex justify-end mb-3">
               <button
+                type="button"
                 onClick={clearFilters}
-                className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="필터 초기화"
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3 h-3" />
                 초기화
               </button>
-            )}
-          </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <input
               type="text"
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
               placeholder="담당자 검색"
+              aria-label="담당자 필터"
               className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
             />
 
@@ -360,12 +367,14 @@ export function WorkItemBoardPage() {
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
               placeholder="분류 검색"
+              aria-label="분류 필터"
               className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
             />
 
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
+              aria-label="우선순위 필터"
               className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
             >
               <option value="">전체 우선순위</option>
@@ -378,6 +387,7 @@ export function WorkItemBoardPage() {
               type="date"
               value={filterFrom}
               onChange={(e) => setFilterFrom(e.target.value)}
+              aria-label="시작일 (이후)"
               className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
               title="예정일 시작"
             />
@@ -386,11 +396,25 @@ export function WorkItemBoardPage() {
               type="date"
               value={filterTo}
               onChange={(e) => setFilterTo(e.target.value)}
+              aria-label="시작일 (이전)"
               className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
               title="예정일 종료"
             />
           </div>
-        </div>
+        </MacCard>
+
+        {/* G-U2: error state 분기 — 이전엔 isLoading 만 있고 error 는 empty 로 흡수됐음 */}
+        {error && (
+          <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-medium">업무 목록 조회 실패</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {error instanceof Error ? error.message : 'API 호출 중 오류'} — 페이지를 새로고침하거나 잠시 후 다시 시도하세요.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Kanban view */}
         {viewMode === 'kanban' && (
@@ -514,6 +538,16 @@ export function WorkItemBoardPage() {
         </div>
       </main>
 
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="업무 삭제"
+        description={confirmDelete ? `"${confirmDelete.category}" 업무를 삭제하시겠습니까?` : ''}
+        confirmLabel="삭제"
+        cancelLabel="취소"
+        danger
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }

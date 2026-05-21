@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -63,8 +63,15 @@ class WorkItem(Base):
     parent_id = Column(UUID(as_uuid=True), ForeignKey("work_items.id", ondelete="CASCADE"), nullable=True)
     related_work_item_id = Column(UUID(as_uuid=True), ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # G-I2: server_default 추가 — DB 직접 INSERT (마이그레이션 backfill 등) 시에도 NULL 방지.
+    # `default=datetime.utcnow` 는 ORM 레벨, `server_default=func.now()` 는 DB 레벨.
+    created_at = Column(DateTime, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+    )
 
     cluster = relationship("Cluster", back_populates="work_items", foreign_keys=[cluster_id])
     subtasks = relationship(

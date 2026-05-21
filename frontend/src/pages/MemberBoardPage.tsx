@@ -53,7 +53,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-md overflow-hidden">
       {/* 헤더 */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/20">
         <div className="flex items-center gap-3">
