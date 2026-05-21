@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Cluster, LakeService, LakeServiceCheck, User
+from app.models import Cluster, LakeService, LakeServiceCheck, LakeServiceType, User
 from app.auth.deps import require_operator, get_current_user
 from app.services import audit_logger
 from app.services.lake_checkers import (
@@ -24,6 +24,7 @@ from app.services.lake_checkers import (
     SERVICE_TYPE_CATALOG,
     get_checker_class,
     get_category_for,
+    build_checker,
 )
 from app.schemas.lake_service import (
     LakeServiceCreate,
@@ -70,12 +71,23 @@ def _unknown_service_type(service_type: str) -> HTTPException:
 
 def _run_check(svc: LakeService, db: Session, *, actor: Optional[User], trigger: str) -> LakeServiceCheck:
     """단일 LakeService 헬스체크 + LakeServiceCheck 1 row 저장 + svc.status 갱신.
-    실패해도 raise 안 함 (safe_run) — LakeServiceCheck.status 로 표현."""
-    cls = get_checker_class(svc.service_type)
-    if cls is None:
-        # registry 에 없는 service_type — 등록 시 막아야 했으나 방어
+    실패해도 raise 안 함 (safe_run) — LakeServiceCheck.status 로 표현.
+
+    builtin REGISTRY hit → 기존 클래스 / miss (custom) → GenericHealthzChecker
+    (LakeServiceType DB row 의 default_path 사용).
+    """
+    # Custom type 의 default_path 를 DB 에서 lookup (builtin 은 사실 코드 catalog 와
+    # 일치하지만 통합 lookup 으로 단순화)
+    type_row = (
+        db.query(LakeServiceType)
+        .filter(LakeServiceType.service_type == svc.service_type)
+        .first()
+    )
+    if type_row is None:
+        # service_type 이 등록되지 않은 경우 — 운영자가 type 삭제했거나 stale 인스턴스
         raise _unknown_service_type(svc.service_type)
-    checker = cls(svc)
+
+    checker = build_checker(svc, type_default_path=type_row.default_path)
     outcome = checker.safe_run()
 
     row = LakeServiceCheck(
@@ -102,11 +114,31 @@ def _run_check(svc: LakeService, db: Session, *, actor: Optional[User], trigger:
 # ─── service types catalog ────────────────────────────────────────────────
 
 @router.get("/types", response_model=list[LakeServiceTypeInfo])
-def list_service_types(_: User = Depends(get_current_user)):
-    """등록 가능한 8 service_type 메타 (label/category/default_path/description)."""
+def list_service_types(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """등록 가능한 service_type 메타 — DB-driven (enabled=true 만).
+
+    이전엔 코드 catalog (SERVICE_TYPE_CATALOG) 였으나 lake-service-type-management
+    PDCA 로 DB-driven 으로 변경. AddLakeServiceModal 이 자동으로 enabled type
+    만 select 표시.
+    """
+    rows = (
+        db.query(LakeServiceType)
+        .filter(LakeServiceType.enabled == True)  # noqa: E712
+        .order_by(LakeServiceType.sort_order, LakeServiceType.service_type)
+        .all()
+    )
     return [
-        LakeServiceTypeInfo(service_type=st, **meta)
-        for st, meta in SERVICE_TYPE_CATALOG.items()
+        LakeServiceTypeInfo(
+            service_type=r.service_type,
+            label=r.label,
+            category=r.category,
+            default_path=r.default_path,
+            description=r.description,
+        )
+        for r in rows
     ]
 
 
@@ -192,13 +224,27 @@ def create_lake_service(
     actor: User = Depends(require_operator),
     request: Request = None,  # noqa: B008
 ):
-    if payload.service_type not in LAKE_CHECKER_REGISTRY:
+    # DB-driven type 검증 — builtin REGISTRY + custom 모두 허용 (단 enabled=true 만)
+    type_row = (
+        db.query(LakeServiceType)
+        .filter(LakeServiceType.service_type == payload.service_type)
+        .first()
+    )
+    if type_row is None:
         raise _unknown_service_type(payload.service_type)
+    if not type_row.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "LAKE_SERVICE_TYPE_DISABLED",
+                    "message": f"service_type '{payload.service_type}' 은 비활성화 상태 — Settings 에서 활성화 후 다시 시도",
+                    "service_type": payload.service_type},
+        )
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if not cluster:
         raise _cluster_not_found(payload.cluster_id)
 
-    category = get_category_for(payload.service_type)
+    # category: DB row 우선, fallback 코드 catalog
+    category = type_row.category or get_category_for(payload.service_type)
     data = payload.model_dump(exclude={"meta"})
     svc = LakeService(
         cluster_id=data["cluster_id"],

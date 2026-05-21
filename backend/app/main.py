@@ -54,6 +54,7 @@ from app.routers import (
     notifications_router,
     lake_services_router,
     bottleneck_router,
+    lake_service_types_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -950,6 +951,46 @@ def _seed_default_deep_check_definitions():
         db.close()
 
 
+def _seed_default_lake_service_types():
+    """LAKE 8 builtin service_type 을 DB 에 자동 등록.
+
+    service_type slug 매칭 idempotent — 이미 있으면 skip (label/category 등은
+    운영자가 수정했을 수 있어 보존). 운영자가 builtin row 를 삭제한 경우 부팅 시
+    자동 복구.
+
+    PDCA: lake-service-type-management
+    """
+    from app.models import LakeServiceType
+    from app.services.lake_checkers import SERVICE_TYPE_CATALOG
+
+    db = SessionLocal()
+    try:
+        existing_slugs = {
+            row[0] for row in db.query(LakeServiceType.service_type).all()
+        }
+        added = 0
+        for idx, (slug, meta) in enumerate(SERVICE_TYPE_CATALOG.items()):
+            if slug in existing_slugs:
+                continue
+            db.add(LakeServiceType(
+                service_type=slug,
+                label=meta["label"],
+                category=meta["category"],
+                default_path=meta["default_path"],
+                description=meta.get("description"),
+                icon=None,            # frontend ICON_MAP fallback 사용
+                is_builtin=True,
+                enabled=True,
+                sort_order=(idx + 1) * 10,  # 10, 20, ...
+            ))
+            added += 1
+        if added:
+            db.commit()
+            _log.info("seeded %d builtin lake service types", added)
+    finally:
+        db.close()
+
+
 def _seed_default_lake_service_entries():
     """LAKE 8 OSS 서비스의 "기능 동작 특징" 가이드를 ServiceEntry kind=guide 로
     전역 등록. service+title 매칭으로 idempotent — 운영자가 수정하거나 삭제한
@@ -1031,6 +1072,7 @@ async def lifespan(app: FastAPI):
         ("seed_trend_sources", _seed_default_trend_sources),
         ("seed_playbooks", _seed_default_playbooks),
         ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
+        ("seed_lake_service_types", _seed_default_lake_service_types),
         ("seed_lake_service_entries", _seed_default_lake_service_entries),
         ("seed_initial_admin", _seed_initial_admin),
     ]:
@@ -1124,6 +1166,8 @@ app.include_router(audit_logs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(lake_services_router, prefix="/api/v1", dependencies=_auth)
 # pod-bottleneck-analyzer (신규 PDCA) — pod-to-pod 병목 진단 (4-Probe Strategy).
 app.include_router(bottleneck_router, prefix="/api/v1", dependencies=_auth)
+# lake-service-type-management (신규 PDCA) — DB-driven service_type 카탈로그.
+app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

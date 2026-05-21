@@ -1091,6 +1091,27 @@ export const lakeServicesApi = {
   runCheck: (id: string) => api.post<_LakeServiceCheck>(`/lake-services/${id}/check`),
 };
 
+// LAKE service type 카탈로그 (lake-service-type-management PDCA)
+import type {
+  LakeServiceTypeRow as _LakeServiceTypeRow,
+  LakeServiceTypeInput as _LakeServiceTypeInput,
+  LakeServiceTypeUpdate as _LakeServiceTypeUpdate,
+  LakeServiceTypeListResponseRows as _LakeServiceTypeListResponseRows,
+} from '@/types';
+
+export const lakeServiceTypesApi = {
+  list: (params?: { enabled?: boolean; offset?: number; limit?: number }) =>
+    api.get<_LakeServiceTypeListResponseRows>('/lake-service-types', { params }),
+  get: (id: string) => api.get<_LakeServiceTypeRow>(`/lake-service-types/${id}`),
+  create: (data: _LakeServiceTypeInput) =>
+    api.post<_LakeServiceTypeRow>('/lake-service-types', data),
+  update: (id: string, data: _LakeServiceTypeUpdate) =>
+    api.put<_LakeServiceTypeRow>(`/lake-service-types/${id}`, data),
+  toggleEnabled: (id: string, enabled: boolean) =>
+    api.patch<_LakeServiceTypeRow>(`/lake-service-types/${id}/enabled`, { enabled }),
+  remove: (id: string) => api.delete(`/lake-service-types/${id}`),
+};
+
 // Pod-to-pod bottleneck analyzer — pod-bottleneck-analyzer PDCA
 import type {
   BottleneckRun as _BottleneckRun,

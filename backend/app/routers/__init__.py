@@ -42,6 +42,7 @@ from app.routers.deep_check_definitions import router as deep_check_definitions_
 from app.routers.notifications import router as notifications_router
 from app.routers.lake_services import router as lake_services_router
 from app.routers.bottleneck import router as bottleneck_router
+from app.routers.lake_service_types import router as lake_service_types_router
 
 __all__ = [
     "clusters_router",
@@ -87,4 +88,5 @@ __all__ = [
     "notifications_router",
     "lake_services_router",
     "bottleneck_router",
+    "lake_service_types_router",
 ]

@@ -30,6 +30,7 @@ from app.models.deep_check import (
     NotificationLog,
 )
 from app.models.lake_service import LakeService, LakeServiceCheck
+from app.models.lake_service_type import LakeServiceType
 from app.models.bottleneck_run import BottleneckRun
 
 __all__ = [
@@ -74,5 +75,6 @@ __all__ = [
     "NotificationLog",
     "LakeService",
     "LakeServiceCheck",
+    "LakeServiceType",
     "BottleneckRun",
 ]
