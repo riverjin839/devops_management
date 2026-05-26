@@ -15,6 +15,7 @@ from app.services.lake_checkers.starrocks import StarRocksChecker
 from app.services.lake_checkers.jupyterlab import JupyterHubChecker
 from app.services.lake_checkers.superset import SupersetChecker
 from app.services.lake_checkers.polaris import PolarisChecker
+from app.services.lake_checkers.generic import GenericHealthzChecker
 
 
 LAKE_CHECKER_REGISTRY: dict[str, type[LakeBaseChecker]] = {
@@ -84,8 +85,29 @@ SERVICE_TYPE_CATALOG: dict[str, dict] = {
 
 
 def get_checker_class(service_type: str) -> type[LakeBaseChecker] | None:
-    """service_type → LakeChecker 클래스. 없으면 None (router 가 400 처리)."""
+    """service_type → builtin LakeChecker 클래스. 없으면 None.
+
+    Custom type (DB-driven, REGISTRY 미등록) 는 router 가 GenericHealthzChecker
+    를 직접 instantiate 해야 함 — `build_checker(svc_type, default_path, service)`
+    를 사용.
+    """
     return LAKE_CHECKER_REGISTRY.get(service_type)
+
+
+def build_checker(service, type_default_path: str | None = None):
+    """service.service_type 에 맞는 checker 인스턴스 생성.
+
+    1. builtin (REGISTRY hit) → 기존 클래스(service) 인스턴스
+    2. custom (REGISTRY miss) → GenericHealthzChecker(service, healthz_path)
+       — healthz_path 는 type_default_path 우선, 없으면 '/health'
+
+    router 가 LakeServiceType DB row 의 default_path 를 type_default_path 로 전달.
+    """
+    cls = LAKE_CHECKER_REGISTRY.get(service.service_type)
+    if cls is not None:
+        return cls(service)
+    # Custom type — GenericHealthzChecker fallback
+    return GenericHealthzChecker(service, type_default_path or "/health")
 
 
 def get_category_for(service_type: str) -> str:
@@ -96,8 +118,10 @@ def get_category_for(service_type: str) -> str:
 __all__ = [
     "LakeBaseChecker",
     "LakeCheckResult",
+    "GenericHealthzChecker",
     "LAKE_CHECKER_REGISTRY",
     "SERVICE_TYPE_CATALOG",
     "get_checker_class",
     "get_category_for",
+    "build_checker",
 ]

@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { lakeServicesApi } from '@/services/api';
-import type { LakeServiceInput, LakeServiceUpdate } from '@/types';
+import { lakeServicesApi, lakeServiceTypesApi } from '@/services/api';
+import type {
+  LakeServiceInput, LakeServiceUpdate,
+  LakeServiceTypeInput, LakeServiceTypeUpdate,
+} from '@/types';
 
 // Query key 정책 — invalidate 시 prefix 일치만 보면 됨.
 export const lakeServiceKeys = {
@@ -94,5 +97,63 @@ export function useRunLakeServiceCheck() {
       qc.invalidateQueries({ queryKey: lakeServiceKeys.detail(id) });
       qc.invalidateQueries({ queryKey: ['lakeServiceChecks', id] });
     },
+  });
+}
+
+// ─── LAKE service type 카탈로그 CRUD (lake-service-type-management PDCA) ─
+
+export const lakeServiceTypeKeys = {
+  rows: (params?: Record<string, unknown>) => ['lakeServiceTypeRows', params ?? {}] as const,
+  row: (id: string) => ['lakeServiceTypeRow', id] as const,
+};
+
+export function useLakeServiceTypeRows(params?: {
+  enabled?: boolean;
+  offset?: number;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: lakeServiceTypeKeys.rows(params),
+    queryFn: async () => (await lakeServiceTypesApi.list(params)).data,
+  });
+}
+
+function _invalidateAllLakeTypeQueries(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['lakeServiceTypeRows'] });
+  // 카탈로그 변경 → 등록 모달의 select 도 갱신
+  qc.invalidateQueries({ queryKey: lakeServiceKeys.types() });
+}
+
+export function useCreateLakeServiceType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: LakeServiceTypeInput) => lakeServiceTypesApi.create(data),
+    onSuccess: () => _invalidateAllLakeTypeQueries(qc),
+  });
+}
+
+export function useUpdateLakeServiceType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: LakeServiceTypeUpdate }) =>
+      lakeServiceTypesApi.update(id, data),
+    onSuccess: () => _invalidateAllLakeTypeQueries(qc),
+  });
+}
+
+export function useToggleLakeServiceType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      lakeServiceTypesApi.toggleEnabled(id, enabled),
+    onSuccess: () => _invalidateAllLakeTypeQueries(qc),
+  });
+}
+
+export function useDeleteLakeServiceType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => lakeServiceTypesApi.remove(id),
+    onSuccess: () => _invalidateAllLakeTypeQueries(qc),
   });
 }

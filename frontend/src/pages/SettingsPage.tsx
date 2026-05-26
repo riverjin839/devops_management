@@ -1,8 +1,9 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen, Database } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
 import { ServiceCatalogManager } from '@/components/settings/ServiceCatalogManager';
+import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
@@ -486,7 +487,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'debug' | 'backup';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'debug' | 'backup';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
 
   // Debug 설정
@@ -501,6 +502,7 @@ export function SettingsPage() {
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'service', label: '서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
+    { id: 'lake-types', label: 'LAKE 타입', icon: <Database className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
   ];
@@ -582,6 +584,13 @@ export function SettingsPage() {
         {activeTab === 'service' && (
           <div className="mb-8">
             <ServiceCatalogManager />
+          </div>
+        )}
+
+        {/* LAKE 타입 카탈로그 — lake-service-type-management PDCA */}
+        {activeTab === 'lake-types' && (
+          <div className="mb-8">
+            <LakeServiceTypeManager />
           </div>
         )}
 

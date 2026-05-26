@@ -1849,6 +1849,51 @@ export interface LakeServiceTypeInfo {
   description?: string;
 }
 
+// lake-service-type-management PDCA — DB-driven type 카탈로그 (CRUD)
+export interface LakeServiceTypeRow {
+  id: string;
+  serviceType: string;
+  label: string;
+  category: string;
+  defaultPath: string;
+  description?: string | null;
+  icon?: string | null;
+  isBuiltin: boolean;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LakeServiceTypeInput {
+  serviceType: string;
+  label: string;
+  category?: string;
+  defaultPath?: string;
+  description?: string | null;
+  icon?: string | null;
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+export interface LakeServiceTypeUpdate {
+  label?: string;
+  category?: string;
+  defaultPath?: string;
+  description?: string | null;
+  icon?: string | null;
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+export interface LakeServiceTypeListResponseRows {
+  data: LakeServiceTypeRow[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 export interface LakeService {
   id: string;
   clusterId: string;
