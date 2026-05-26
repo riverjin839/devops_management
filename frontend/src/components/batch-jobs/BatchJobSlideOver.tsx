@@ -1,12 +1,13 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.tsx
 import { useEffect, useRef, useState } from 'react';
-import { Play, History, Trash2, X, KeyRound } from 'lucide-react';
+import { Play, History, Trash2, X, KeyRound, Pencil } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
 import { useBatchJobRuns } from '@/hooks/useBatchJobs';
 import { RunForm } from './BatchJobSlideOver.RunForm';
 import { RunHistory } from './BatchJobSlideOver.RunHistory';
 import { SavedCreds } from './BatchJobSlideOver.SavedCreds';
+import { EditForm } from './BatchJobSlideOver.EditForm';
 
 interface BatchJobSlideOverProps {
   job: BatchJob;
@@ -19,12 +20,14 @@ interface BatchJobSlideOverProps {
 export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false }: BatchJobSlideOverProps) {
   const [runFormOpen, setRunFormOpen] = useState(false);
   const [credsOpen, setCredsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const runsQ = useBatchJobRuns(job.id);
 
   // 잡이 바뀔 때마다 폼/이력 펼침 reset.
   useEffect(() => {
     setRunFormOpen(false);
     setCredsOpen(false);
+    setEditOpen(false);
   }, [job.id]);
 
   // ESC 키로 닫힘. onCloseRef 패턴으로 listener 재부착 방지.
@@ -61,6 +64,15 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         </button>
         <button
           type="button"
+          onClick={() => setEditOpen((v) => !v)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
+          aria-expanded={editOpen}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          편집
+        </button>
+        <button
+          type="button"
           onClick={() => setCredsOpen((v) => !v)}
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
           aria-expanded={credsOpen}
@@ -93,6 +105,13 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       {runFormOpen && (
         <div className="mb-4 pb-4 border-b border-border">
           <RunForm key={job.id} job={job} />
+        </div>
+      )}
+
+      {/* 잡 메타데이터 / params / cron 편집 — expandable */}
+      {editOpen && (
+        <div className="mb-4 pb-4 border-b border-border">
+          <EditForm key={job.id} job={job} />
         </div>
       )}
 
