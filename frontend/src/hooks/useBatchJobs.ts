@@ -3,6 +3,7 @@ import {
   batchJobsApi,
   type BatchJobCreate,
   type BatchJobRunRequest,
+  type BatchJobTestConnectionRequest,
   type BatchJobUpdate,
 } from '@/services/api';
 
@@ -81,5 +82,12 @@ export function useRunBatchJob() {
       qc.invalidateQueries({ queryKey: batchJobKeys.all });
       qc.invalidateQueries({ queryKey: batchJobKeys.runs(vars.id) });
     },
+  });
+}
+
+export function useTestBatchJobConnection() {
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: BatchJobTestConnectionRequest }) =>
+      batchJobsApi.testConnection(id, payload),
   });
 }

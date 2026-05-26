@@ -1,9 +1,10 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.SavedCreds.tsx
 import { useId, useState } from 'react';
-import { KeyRound, ShieldCheck, ShieldAlert, Save, Trash2 } from 'lucide-react';
-import type { BatchJob } from '@/services/api';
+import { KeyRound, ShieldCheck, ShieldAlert, Save, Trash2, Plug } from 'lucide-react';
+import type { BatchJob, BatchJobTestConnectionResponse } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
-import { useUpdateBatchJob } from '@/hooks/useBatchJobs';
+import { useUpdateBatchJob, useTestBatchJobConnection } from '@/hooks/useBatchJobs';
+import { TestConnectionResult } from './BatchJobSlideOver.RunForm';
 
 interface SavedCredsProps {
   job: BatchJob;
@@ -19,6 +20,7 @@ interface SavedCredsProps {
  */
 export function SavedCreds({ job }: SavedCredsProps) {
   const update = useUpdateBatchJob();
+  const testConn = useTestBatchJobConnection();
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
@@ -26,13 +28,16 @@ export function SavedCreds({ job }: SavedCredsProps) {
   const [privateKey, setPrivateKey] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<BatchJobTestConnectionResponse | null>(null);
 
   const hasAnyCreds = job.hasSavedPassword || job.hasSavedPrivateKey;
   const cronRequiresCreds = Boolean(job.cron) && !hasAnyCreds;
+  const credsProvided = Boolean(password || privateKey);
 
   const save = async () => {
     setError(null);
     setOkMsg(null);
+    setTestResult(null);
     if (!password && !privateKey) {
       setError('비밀번호 또는 개인키 중 하나는 입력해주세요.');
       return;
@@ -53,9 +58,38 @@ export function SavedCreds({ job }: SavedCredsProps) {
     }
   };
 
+  const runTest = async () => {
+    setError(null);
+    setOkMsg(null);
+    setTestResult(null);
+    if (!credsProvided && !hasAnyCreds) {
+      setError('테스트할 자격증명이 없습니다. 새 자격증명을 입력하거나 먼저 저장하세요.');
+      return;
+    }
+    if (!job.defaultHost) {
+      setError('잡에 default_host 가 설정되어 있지 않아 테스트할 호스트를 결정할 수 없습니다. "지금 실행" 패널에서 호스트를 지정해 테스트하세요.');
+      return;
+    }
+    try {
+      const { data } = await testConn.mutateAsync({
+        id: job.id,
+        payload: {
+          // host/port/username 은 비워서 잡 default 사용.
+          // password/privateKey 입력값이 있으면 우선, 없으면 백엔드가 저장된 것으로 fallback.
+          password: password || undefined,
+          privateKey: privateKey || undefined,
+        },
+      });
+      setTestResult(data);
+    } catch (e) {
+      setError(formatApiError(e));
+    }
+  };
+
   const clear = async (which: 'password' | 'privateKey') => {
     setError(null);
     setOkMsg(null);
+    setTestResult(null);
     try {
       await update.mutateAsync({
         id: job.id,
@@ -151,15 +185,35 @@ export function SavedCreds({ job }: SavedCredsProps) {
       {error && <div className="text-[11px] text-red-500">{error}</div>}
       {okMsg && <div className="text-[11px] text-emerald-600">{okMsg}</div>}
 
-      <button
-        type="button"
-        onClick={save}
-        disabled={update.isPending || (!password && !privateKey)}
-        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
-      >
-        <Save className="w-3.5 h-3.5" />
-        {update.isPending ? '저장 중…' : '자격증명 저장'}
-      </button>
+      <TestConnectionResult result={testResult} />
+
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={testConn.isPending || update.isPending || (!credsProvided && !hasAnyCreds)}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl disabled:opacity-60"
+          title={
+            credsProvided
+              ? '입력한 자격증명으로 연결 테스트'
+              : hasAnyCreds
+              ? '저장된 자격증명으로 연결 테스트'
+              : '테스트할 자격증명 없음'
+          }
+        >
+          <Plug className="w-3.5 h-3.5" />
+          {testConn.isPending ? '테스트 중…' : '연결 테스트'}
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={update.isPending || testConn.isPending || (!password && !privateKey)}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+        >
+          <Save className="w-3.5 h-3.5" />
+          {update.isPending ? '저장 중…' : '자격증명 저장'}
+        </button>
+      </div>
     </div>
   );
 }

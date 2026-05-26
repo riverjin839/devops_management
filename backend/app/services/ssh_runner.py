@@ -87,6 +87,59 @@ def _build_client(tgt: SSHTarget, connect_timeout: int) -> paramiko.SSHClient:
     return client
 
 
+def test_connection(tgt: SSHTarget, connect_timeout: int = 8) -> SSHResult:
+    """자격증명/연결성만 검증. 명령은 실행하지 않고 연결 직후 닫는다.
+
+    BatchJob 의 "연결 테스트" 버튼이 사용. SSHResult.status 는 _exec_ssh 와
+    같은 분류 (ok / auth_error / connect_error / timeout / error) 를 그대로 쓴다.
+    """
+    start = time.monotonic()
+    client: Optional[paramiko.SSHClient] = None
+    try:
+        client = _build_client(tgt, connect_timeout)
+        return SSHResult(
+            host=tgt.host,
+            status="ok",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            error=None,
+        )
+    except paramiko.AuthenticationException as e:
+        return SSHResult(
+            host=tgt.host, status="auth_error", exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=f"인증 실패: {str(e)[:120]}",
+        )
+    except (paramiko.SSHException, OSError, TimeoutError) as e:
+        msg = str(e).lower()
+        st = "timeout" if "timeout" in msg or "timed out" in msg else "connect_error"
+        return SSHResult(
+            host=tgt.host, status=st, exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=f"연결 실패: {str(e)[:120]}",
+        )
+    except ValueError as e:
+        return SSHResult(
+            host=tgt.host, status="auth_error", exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=str(e)[:200],
+        )
+    except Exception as e:
+        return SSHResult(
+            host=tgt.host, status="error", exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=str(e)[:200],
+        )
+    finally:
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+
 def _exec_ssh(
     tgt: SSHTarget, command: str, connect_timeout: int, exec_timeout: int,
     max_stdout_chars: int = 8000,

@@ -1,10 +1,10 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.RunForm.tsx
 import { useId, useState } from 'react';
-import { Play } from 'lucide-react';
-import type { BatchJob, BatchJobRun } from '@/services/api';
+import { Play, Plug, ShieldCheck } from 'lucide-react';
+import type { BatchJob, BatchJobRun, BatchJobTestConnectionResponse } from '@/services/api';
 import { LogViewer, MasterHostPicker } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { useRunBatchJob } from '@/hooks/useBatchJobs';
+import { useRunBatchJob, useTestBatchJobConnection } from '@/hooks/useBatchJobs';
 import { StatusPill } from './StatusPill';
 
 interface RunFormProps {
@@ -13,6 +13,7 @@ interface RunFormProps {
 
 export function RunForm({ job }: RunFormProps) {
   const run = useRunBatchJob();
+  const testConn = useTestBatchJobConnection();
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
@@ -27,12 +28,20 @@ export function RunForm({ job }: RunFormProps) {
   const [timeoutSec, setTimeoutSec] = useState(120);
   const [result, setResult] = useState<BatchJobRun | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<BatchJobTestConnectionResponse | null>(null);
+
+  const hasSavedCreds = job.hasSavedPassword || job.hasSavedPrivateKey;
+  const credsProvided = Boolean(password || privateKey);
 
   const submit = async () => {
     setError(null);
     setResult(null);
+    setTestResult(null);
     if (!host.trim()) { setError('호스트를 입력해주세요.'); return; }
-    if (!password && !privateKey) { setError('비밀번호 또는 개인키 중 하나는 필수입니다.'); return; }
+    if (!credsProvided && !hasSavedCreds) {
+      setError('비밀번호 또는 개인키를 입력하거나, 잡에 자격증명을 저장하세요.');
+      return;
+    }
     let paramOverride: Record<string, unknown> | undefined;
     if (paramOverrideJson.trim()) {
       try {
@@ -56,6 +65,31 @@ export function RunForm({ job }: RunFormProps) {
         },
       });
       setResult(data);
+    } catch (e) {
+      setError(formatApiError(e));
+    }
+  };
+
+  const runTest = async () => {
+    setError(null);
+    setTestResult(null);
+    if (!host.trim()) { setError('호스트를 입력해주세요.'); return; }
+    if (!credsProvided && !hasSavedCreds) {
+      setError('비밀번호 또는 개인키를 입력하거나, 잡에 자격증명을 저장하세요.');
+      return;
+    }
+    try {
+      const { data } = await testConn.mutateAsync({
+        id: job.id,
+        payload: {
+          host: host.trim(),
+          port,
+          username: username.trim() || 'root',
+          password: password || undefined,
+          privateKey: privateKey || undefined,
+        },
+      });
+      setTestResult(data);
     } catch (e) {
       setError(formatApiError(e));
     }
@@ -98,13 +132,23 @@ export function RunForm({ job }: RunFormProps) {
         </div>
       </div>
 
+      {hasSavedCreds && !credsProvided && (
+        <div className="inline-flex items-center gap-1.5 text-[10px] text-emerald-700 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2 py-1">
+          <ShieldCheck className="w-3 h-3" />
+          저장된 자격증명을 사용합니다 ({[job.hasSavedPassword && '비밀번호', job.hasSavedPrivateKey && '개인키'].filter(Boolean).join(' / ')})
+        </div>
+      )}
+
       <div>
-        <label htmlFor={f('pw')} className="block text-[10px] text-muted-foreground mb-1">비밀번호</label>
+        <label htmlFor={f('pw')} className="block text-[10px] text-muted-foreground mb-1">
+          비밀번호 {hasSavedCreds && '(비워두면 저장된 자격증명 사용)'}
+        </label>
         <input
           id={f('pw')}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          placeholder={hasSavedCreds ? '비워두면 저장된 자격증명 사용' : ''}
           className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-xl"
         />
       </div>
@@ -151,15 +195,28 @@ export function RunForm({ job }: RunFormProps) {
 
       {error && <div className="text-[11px] text-red-500">{error}</div>}
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={run.isPending}
-        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
-      >
-        <Play className="w-3.5 h-3.5" />
-        {run.isPending ? '실행 중…' : '실행'}
-      </button>
+      <TestConnectionResult result={testResult} />
+
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={testConn.isPending || run.isPending}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl disabled:opacity-60"
+        >
+          <Plug className="w-3.5 h-3.5" />
+          {testConn.isPending ? '테스트 중…' : '연결 테스트'}
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={run.isPending || testConn.isPending}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+        >
+          <Play className="w-3.5 h-3.5" />
+          {run.isPending ? '실행 중…' : '실행'}
+        </button>
+      </div>
 
       {result && (
         <div className="border border-border rounded-xl overflow-hidden">
@@ -192,6 +249,44 @@ export function RunForm({ job }: RunFormProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Shared test-connection result banner. Exported so SavedCreds can reuse the
+ * same visual treatment (status pill + latency + error + saved-cred indicator).
+ */
+export function TestConnectionResult({ result }: { result: BatchJobTestConnectionResponse | null }) {
+  if (!result) return null;
+  const isOk = result.status === 'ok';
+  const tone = isOk
+    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
+    : 'bg-red-500/10 border-red-500/30 text-red-600';
+  const label = (
+    {
+      ok: '연결 성공',
+      auth_error: '인증 실패',
+      connect_error: '연결 실패',
+      timeout: '타임아웃',
+      error: '오류',
+    } as Record<string, string>
+  )[result.status] ?? result.status;
+  return (
+    <div className={`border rounded-xl px-2.5 py-2 text-[11px] ${tone}`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-semibold">{label}</span>
+        <span className="font-mono text-[10px] opacity-70">
+          {result.username}@{result.host}:{result.port}
+        </span>
+        <span className="font-mono text-[10px] opacity-70">{result.latencyMs}ms</span>
+        {(result.usedSavedPassword || result.usedSavedPrivateKey) && (
+          <span className="text-[10px] opacity-70">
+            (저장된 {result.usedSavedPassword ? '비밀번호' : '개인키'} 사용)
+          </span>
+        )}
+      </div>
+      {result.error && <div className="mt-1 text-[10px] font-mono break-all">{result.error}</div>}
     </div>
   );
 }

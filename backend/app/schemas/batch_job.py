@@ -95,6 +95,31 @@ class BatchJobRunListResponse(BaseModel):
     data: list[BatchJobRunResponse]
 
 
+class BatchJobTestConnectionRequest(BaseModel):
+    """자격증명/네트워크 검증용. 명령은 실행하지 않음.
+
+    요청 자격증명이 비어있으면 잡에 저장된 자격증명으로 fallback (run 과 동일).
+    timeout 은 connect_timeout 으로만 쓰이므로 짧게 잡는다.
+    """
+    host: Optional[str] = Field(default=None, description="overrides default_host")
+    port: Optional[int] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    private_key: Optional[str] = None
+    timeout: int = Field(default=8, ge=1, le=30)
+
+
+class BatchJobTestConnectionResponse(BaseModel):
+    status: str  # ok | auth_error | connect_error | timeout | error
+    latency_ms: int
+    host: str
+    port: int
+    username: str
+    used_saved_password: bool
+    used_saved_private_key: bool
+    error: Optional[str] = None
+
+
 class BatchJobTypeDescriptor(BaseModel):
     job_type: str
     label: str
