@@ -72,7 +72,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: k8s_monitor_celery
-    command: celery -A app.tasks.celery_tasks worker --loglevel=info
+    command: celery -A app.celery_app worker --loglevel=info
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
       - REDIS_URL=redis://redis:6379/0
@@ -92,7 +92,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: k8s_monitor_celery_beat
-    command: celery -A app.tasks.celery_tasks beat --loglevel=info
+    command: celery -A app.celery_app beat --loglevel=info
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
       - REDIS_URL=redis://redis:6379/0
