@@ -1251,6 +1251,26 @@ export interface BatchJobRun {
   finishedAt?: string | null;
 }
 
+export interface BatchJobTestConnectionRequest {
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  timeout?: number;
+}
+
+export interface BatchJobTestConnectionResponse {
+  status: 'ok' | 'auth_error' | 'connect_error' | 'timeout' | 'error';
+  latencyMs: number;
+  host: string;
+  port: number;
+  username: string;
+  usedSavedPassword: boolean;
+  usedSavedPrivateKey: boolean;
+  error?: string | null;
+}
+
 export const batchJobsApi = {
   listTypes: () =>
     api.get<{ data: BatchJobTypeDescriptor[] }>('/batch-jobs/types'),
@@ -1264,6 +1284,10 @@ export const batchJobsApi = {
     api.post<BatchJobRun>(`/batch-jobs/${id}/run`, payload, { signal, timeout: 600000 }),
   listRuns: (id: string, limit = 50) =>
     api.get<{ data: BatchJobRun[] }>(`/batch-jobs/${id}/runs`, { params: { limit } }),
+  testConnection: (id: string, payload: BatchJobTestConnectionRequest) =>
+    api.post<BatchJobTestConnectionResponse>(`/batch-jobs/${id}/test-connection`, payload, {
+      timeout: 60000,
+    }),
 };
 
 // ─── Deep Check / Daily Check Review / Notifications ─────────────────

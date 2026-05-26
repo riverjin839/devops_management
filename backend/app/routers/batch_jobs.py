@@ -22,6 +22,8 @@ from app.schemas.batch_job import (
     BatchJobRunListResponse,
     BatchJobRunRequest,
     BatchJobRunResponse,
+    BatchJobTestConnectionRequest,
+    BatchJobTestConnectionResponse,
     BatchJobTypeListResponse,
     BatchJobUpdate,
 )
@@ -32,7 +34,9 @@ from app.services.batch_job_service import (
     get_job_or_404,
 )
 from app.services.batch_jobs import get_executor, list_executors
+from app.services.secret_box import decrypt as decrypt_secret
 from app.services.secret_box import encrypt as encrypt_secret
+from app.services.ssh_runner import SSHTarget, test_connection as ssh_test_connection
 
 router = APIRouter(prefix="/batch-jobs", tags=["batch-jobs"])
 
@@ -200,6 +204,85 @@ async def run_job(job_id: UUID, payload: BatchJobRunRequest, db: Session = Depen
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     return run
+
+
+@router.post("/{job_id}/test-connection", response_model=BatchJobTestConnectionResponse)
+async def test_job_connection(
+    job_id: UUID,
+    payload: BatchJobTestConnectionRequest,
+    db: Session = Depends(get_db),
+):
+    """SSH 자격증명/네트워크만 검증. 명령은 실행하지 않고 BatchJobRun 도 생성하지 않음.
+
+    요청 자격증명이 비어있고 잡에 저장된 자격증명도 없으면 422. 저장된 자격증명을
+    사용한 경우 응답의 used_saved_password / used_saved_private_key 로 표시한다 —
+    UI 가 "저장된 자격증명으로 테스트됨" 라벨을 보여줄 수 있게.
+    """
+    import asyncio
+
+    try:
+        job = get_job_or_404(db, job_id)
+    except BatchJobNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+
+    target_host = payload.host or job.default_host
+    if not target_host:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="host 가 필요합니다 (잡에 default_host 가 설정되지 않음).",
+        )
+
+    password = payload.password
+    private_key = payload.private_key
+    used_saved_password = False
+    used_saved_private_key = False
+
+    if not password and not private_key:
+        if job.encrypted_password:
+            try:
+                password = decrypt_secret(job.encrypted_password)
+                used_saved_password = True
+            except ValueError:
+                pass
+        if not password and job.encrypted_private_key:
+            try:
+                private_key = decrypt_secret(job.encrypted_private_key)
+                used_saved_private_key = True
+            except ValueError:
+                pass
+
+    if not password and not private_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 가 필요합니다 (또는 잡에 저장된 자격증명 등록).",
+        )
+
+    port = payload.port or job.default_port or 22
+    username = payload.username or job.default_username or "root"
+
+    target = SSHTarget(
+        host=target_host,
+        port=port,
+        username=username,
+        password=password,
+        private_key=private_key,
+    )
+
+    # paramiko 호출은 blocking 이므로 thread pool 에서 실행.
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, ssh_test_connection, target, payload.timeout
+    )
+
+    return BatchJobTestConnectionResponse(
+        status=result.status,
+        latency_ms=result.duration_ms,
+        host=target_host,
+        port=port,
+        username=username,
+        used_saved_password=used_saved_password,
+        used_saved_private_key=used_saved_private_key,
+        error=result.error,
+    )
 
 
 @router.get("/{job_id}/runs", response_model=BatchJobRunListResponse)
