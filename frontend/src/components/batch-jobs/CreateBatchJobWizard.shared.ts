@@ -51,3 +51,23 @@ export function isStepHostValid(state: WizardState): boolean {
 export function isStepScheduleValid(): boolean {
   return true;
 }
+
+/**
+ * Design Ref: §2.4.1 — shared invariant for Wizard + EditForm.
+ * Backend 의 _require_cron_credentials 와 의미 동일.
+ *
+ * cron 식이 비어있지 않고 자격증명도 둘 다 비어있으면 true.
+ * true 면 등록/저장 버튼을 disabled 해야 한다 — 그대로 보내면 422.
+ *
+ * EditForm 처럼 partial update 일 경우 caller 가 미리 머지한
+ * 최종 자격증명 상태(`finalHasPassword`, `finalHasPrivateKey` 의미)
+ * 를 password/key 인자로 전달해야 한다.
+ */
+export function cronRequiresCredentials(
+  cron: string | null | undefined,
+  savedPassword: string | null | undefined,
+  savedPrivateKey: string | null | undefined,
+): boolean {
+  if (!cron || !cron.trim()) return false;
+  return !savedPassword && !savedPrivateKey;
+}

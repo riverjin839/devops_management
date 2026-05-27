@@ -248,9 +248,17 @@ def run_batch_job_dispatcher(self):
     than ``last_run_at`` — that way Beat downtime (worker restart, brief
     outage) doesn't cause a flood of catch-up runs, and a normal-running
     minute fires each cron at most once.
+
+    Design Ref: §2.3.2 — tz-aware dispatcher.
+    croniter is timezone-naive, so we convert ``last_run_at`` (naive UTC
+    in DB) and ``now`` to ``settings.batch_jobs_timezone`` before passing
+    them. The DB column itself stays naive UTC — no migration.
     """
     import logging
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.config import settings
     from app.database import SessionLocal
     from app.models import BatchJob
 
@@ -262,11 +270,25 @@ def run_batch_job_dispatcher(self):
         log.warning("croniter not installed — batch job dispatcher disabled")
         return {"dispatched": 0, "reason": "croniter_missing"}
 
+    # Resolve timezone with safe fallback so a typo in BATCH_JOBS_TIMEZONE
+    # never kills the dispatcher for all jobs.
+    try:
+        tz = ZoneInfo(settings.batch_jobs_timezone)
+        tz_name = settings.batch_jobs_timezone
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        log.warning(
+            "invalid BATCH_JOBS_TIMEZONE=%r — falling back to Asia/Seoul",
+            settings.batch_jobs_timezone,
+        )
+        tz = ZoneInfo("Asia/Seoul")
+        tz_name = "Asia/Seoul"
+
     db = SessionLocal()
     dispatched: list[str] = []
     skipped_reasons: dict[str, int] = {}
     try:
-        now = datetime.utcnow()
+        now_utc = datetime.now(_tz.utc)
+        now_aware = now_utc.astimezone(tz)
         jobs = (
             db.query(BatchJob)
             .filter(BatchJob.enabled.is_(True))
@@ -282,16 +304,23 @@ def run_batch_job_dispatcher(self):
                 continue
             if not (job.encrypted_password or job.encrypted_private_key):
                 # No saved credentials → unattended run can't authenticate.
+                # Plan SC: this case is now blocked at registration (SC-2/SC-3),
+                # but legacy rows from before the fix still hit this branch.
                 skipped_reasons["no_credentials"] = skipped_reasons.get("no_credentials", 0) + 1
                 continue
 
-            anchor = job.last_run_at or (now - timedelta(days=1))
+            # last_run_at is naive UTC in DB. Re-attach UTC tzinfo, then
+            # convert to the configured zone so croniter interprets the
+            # cron expression in the operator's intended timezone.
+            raw_anchor = job.last_run_at or (now_utc - timedelta(days=1)).replace(tzinfo=None)
+            anchor_aware = raw_anchor.replace(tzinfo=_tz.utc).astimezone(tz)
+
             try:
-                next_fire = croniter(cron_expr, anchor).get_next(datetime)
+                next_fire = croniter(cron_expr, anchor_aware).get_next(datetime)
             except Exception:
                 skipped_reasons["cron_eval_error"] = skipped_reasons.get("cron_eval_error", 0) + 1
                 continue
-            if next_fire > now:
+            if next_fire > now_aware:
                 continue
 
             run_batch_job.delay(str(job.id))
@@ -302,7 +331,8 @@ def run_batch_job_dispatcher(self):
             "dispatched": len(dispatched),
             "dispatched_ids": dispatched,
             "skipped": skipped_reasons,
-            "executed_at": now.isoformat(),
+            "executed_at": now_aware.isoformat(),
+            "timezone": tz_name,
         }
     finally:
         db.close()
