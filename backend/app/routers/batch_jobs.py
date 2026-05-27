@@ -41,6 +41,33 @@ from app.services.ssh_runner import SSHTarget, test_connection as ssh_test_conne
 router = APIRouter(prefix="/batch-jobs", tags=["batch-jobs"])
 
 
+def _require_cron_credentials(
+    *,
+    cron: str | None,
+    has_password: bool,
+    has_private_key: bool,
+) -> None:
+    """Raise 422 if a cron schedule is set but no credential will be persisted.
+
+    Design Ref: §2.3.3 — shared invariant for create + update.
+    Plan SC: SC-2 (POST 422) / SC-3 (PUT 422 after merge).
+
+    Arguments reflect the *final* post-merge state — for PUT the caller
+    must merge ``payload`` with the existing DB row first.
+    """
+    if not (cron and cron.strip()):
+        return
+    if has_password or has_private_key:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=(
+            "cron 을 사용하려면 saved_password 또는 saved_private_key 중 "
+            "하나가 필요합니다. 둘 다 비우면 스케줄러가 매분 silent skip 합니다."
+        ),
+    )
+
+
 def _to_response(job: BatchJob) -> dict:
     """Serialise a BatchJob row into the response shape, hiding ciphertext
     behind boolean has_* flags."""
@@ -100,6 +127,13 @@ def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
             detail=f"Unknown job_type '{payload.job_type}'. See GET /batch-jobs/types.",
         )
 
+    # Block silent-skip case at registration (Plan SC-2).
+    _require_cron_credentials(
+        cron=payload.cron,
+        has_password=bool(payload.saved_password),
+        has_private_key=bool(payload.saved_private_key),
+    )
+
     data = payload.model_dump()
     saved_password = data.pop("saved_password", None)
     saved_private_key = data.pop("saved_private_key", None)
@@ -135,6 +169,28 @@ def update_job(job_id: UUID, payload: BatchJobUpdate, db: Session = Depends(get_
     saved_private_key = update.pop("saved_private_key", None)
     clear_password = update.pop("clear_saved_password", False)
     clear_private_key = update.pop("clear_saved_private_key", False)
+
+    # Compute the final post-merge state and enforce the invariant before
+    # mutating. ``saved_password=""`` is treated as "set to empty" → clears
+    # the cipher, matching the assignment branch below.
+    final_cron = update.get("cron", job.cron) if "cron" in update else job.cron
+    if clear_password:
+        final_has_pw = False
+    elif saved_password is not None:
+        final_has_pw = bool(saved_password)
+    else:
+        final_has_pw = bool(job.encrypted_password)
+    if clear_private_key:
+        final_has_key = False
+    elif saved_private_key is not None:
+        final_has_key = bool(saved_private_key)
+    else:
+        final_has_key = bool(job.encrypted_private_key)
+    _require_cron_credentials(
+        cron=final_cron,
+        has_password=final_has_pw,
+        has_private_key=final_has_key,
+    )
 
     for field, value in update.items():
         setattr(job, field, value)

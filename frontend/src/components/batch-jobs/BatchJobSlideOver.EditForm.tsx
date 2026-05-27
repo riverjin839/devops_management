@@ -5,6 +5,7 @@ import type { BatchJob, BatchJobUpdate } from '@/services/api';
 import { MasterHostPicker } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useBatchJobTypes, useUpdateBatchJob } from '@/hooks/useBatchJobs';
+import { cronRequiresCredentials } from './CreateBatchJobWizard.shared';
 
 interface EditFormProps {
   job: BatchJob;
@@ -255,6 +256,22 @@ export function EditForm({ job, onSaved }: EditFormProps) {
         />
       </div>
 
+      {/* Design Ref: §2.4.3 — invariant guard. EditForm 은 자격증명을 직접
+          다루지 않으므로 머지 후 상태 = DB 의 hasSavedPassword/PrivateKey. */}
+      {(() => {
+        const credsBlocking = cronRequiresCredentials(
+          cron,
+          job.hasSavedPassword ? 'present' : '',
+          job.hasSavedPrivateKey ? 'present' : '',
+        );
+        return credsBlocking ? (
+          <div className="text-[11px] text-amber-600">
+            cron 을 사용하려면 자격증명이 필요합니다. SavedCreds 패널에서 비밀번호 또는
+            개인키를 먼저 등록하거나, cron 을 비워 수동 실행 전용으로 두세요.
+          </div>
+        ) : null;
+      })()}
+
       {error && <div className="text-[11px] text-red-500">{error}</div>}
       {okMsg && <div className="text-[11px] text-emerald-600">{okMsg}</div>}
 
@@ -268,15 +285,30 @@ export function EditForm({ job, onSaved }: EditFormProps) {
           <RotateCcw className="w-3.5 h-3.5" />
           되돌리기
         </button>
-        <button
-          type="button"
-          onClick={save}
-          disabled={update.isPending}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
-        >
-          <Save className="w-3.5 h-3.5" />
-          {update.isPending ? '저장 중…' : '저장'}
-        </button>
+        {(() => {
+          // 머지 후 자격증명 상태 = DB 그대로 (EditForm 미수정).
+          const credsBlocking = cronRequiresCredentials(
+            cron,
+            job.hasSavedPassword ? 'present' : '',
+            job.hasSavedPrivateKey ? 'present' : '',
+          );
+          return (
+            <button
+              type="button"
+              onClick={save}
+              disabled={update.isPending || credsBlocking}
+              title={
+                credsBlocking
+                  ? 'cron 을 사용하려면 자격증명이 필요합니다'
+                  : undefined
+              }
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {update.isPending ? '저장 중…' : '저장'}
+            </button>
+          );
+        })()}
       </div>
     </div>
   );

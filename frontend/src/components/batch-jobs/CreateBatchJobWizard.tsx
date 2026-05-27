@@ -6,6 +6,7 @@ import { useBatchJobTypes, useCreateBatchJob } from '@/hooks/useBatchJobs';
 import { formatApiError } from '@/lib/utils';
 import {
   EMPTY_WIZARD,
+  cronRequiresCredentials,
   isStepTypeValid,
   isStepHostValid,
   isStepScheduleValid,
@@ -207,15 +208,28 @@ export function CreateBatchJobWizard({
             >
               다음
             </button>
-          ) : (
-            <button
-              onClick={submit}
-              disabled={create.isPending}
-              className="px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow disabled:opacity-60"
-            >
-              {create.isPending ? '등록 중…' : '등록'}
-            </button>
-          )}
+          ) : (() => {
+            // Design Ref: §2.4.2 — cron + creds 누락이면 등록 차단 (백엔드 422 와 동기).
+            const credsBlocking = cronRequiresCredentials(
+              state.cron,
+              state.savedPassword,
+              state.savedPrivateKey,
+            );
+            return (
+              <button
+                onClick={submit}
+                disabled={create.isPending || credsBlocking}
+                title={
+                  credsBlocking
+                    ? 'cron 을 사용하려면 비밀번호 또는 개인키 중 하나를 입력하세요'
+                    : undefined
+                }
+                className="px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow disabled:opacity-60"
+              >
+                {create.isPending ? '등록 중…' : '등록'}
+              </button>
+            );
+          })()}
         </footer>
       </div>
     </div>

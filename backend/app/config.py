@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     trends_github_token: str = ""          # optional: rate limit 향상
     trends_collect_hour: int = 7           # 매일 07:00 KST 자동 수집
 
+    # Batch Jobs
+    # Design Ref: §2.3.1 — croniter 가 cron 식을 해석할 timezone (IANA name).
+    # 변경 시 기존 등록된 cron 잡들의 다음 발화 시각이 이동한다.
+    batch_jobs_timezone: str = "Asia/Seoul"
+
     # Kubeconfig 저장 디렉토리 (content 방식으로 등록 시 사용)
     kubeconfig_store_dir: str = "/tmp/k8s-monitor/kubeconfigs"
 

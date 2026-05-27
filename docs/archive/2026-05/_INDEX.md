@@ -10,6 +10,7 @@
 | [pod-bottleneck-analyzer](./pod-bottleneck-analyzer/) | **Fresh PDCA** — pod-to-pod 4-Probe 통합 진단 (TCP state/perf/DNS/endpoints) + PacketFlow CTA | 95% (정적 + lint/tsc PASS), QA_SKIP | CO-1~6 (iperf3, node-layer, L7 trace, node-resource, scheduled, AI advisor) | [prd](./pod-bottleneck-analyzer/prd.md) · [plan](./pod-bottleneck-analyzer/plan.md) · [design](./pod-bottleneck-analyzer/design.md) · [report](./pod-bottleneck-analyzer/report.md) · [qa-report](./pod-bottleneck-analyzer/qa-report.md) |
 | [lake-service-knowledge-seed](./lake-service-knowledge-seed/) | **Mini PDCA** (data seed) — LAKE 8 OSS 기능/동작/특징 ServiceEntry 자동 등록 | 100% (idempotent seed) | bottleneck/cluster 도메인 동일 패턴 + 외부 wiki import | [plan](./lake-service-knowledge-seed/plan.md) · [report](./lake-service-knowledge-seed/report.md) |
 | [lake-service-type-management](./lake-service-type-management/) | **Full PDCA** — DB-driven LAKE 카탈로그 + Settings "LAKE 타입" 탭 + GenericHealthzChecker | 95% (정적 + lint/tsc PASS) | icon-picker / custom probe plugin / import-export | [plan](./lake-service-type-management/plan.md) · [design](./lake-service-type-management/design.md) · [report](./lake-service-type-management/report.md) · [qa-report](./lake-service-type-management/qa-report.md) |
+| [batch-jobs-cron-fix](./batch-jobs-cron-fix/) | **Full PDCA** — BatchJob dispatcher tz-aware (KST) + cron+creds invariant guard (POST/PUT 422) | **99.2%** (정적, Structural 100 / Functional 98 / Contract 100), pytest 10/10 PASS, runtime SC-4 deferred | P2 (skip-reason 가시화) / P3 (stampede 방지) / runtime L1-L3 sign-off | [plan](./batch-jobs-cron-fix/plan.md) · [design](./batch-jobs-cron-fix/design.md) · [analysis](./batch-jobs-cron-fix/analysis.md) · [report](./batch-jobs-cron-fix/report.md) |
 
 ## Carry-over Reference (별도 PDCA 사이클로 이어짐)
 
@@ -39,3 +40,6 @@
 - **pod-bottleneck-node-resource** — bottleneck CO-4: NIC PPS / softirq (Prometheus).
 - **pod-bottleneck-scheduled-check** — bottleneck CO-5: Celery Beat 주기 진단.
 - **pod-bottleneck-ai-advisor** — bottleneck CO-6: Ollama next-action 권고.
+- **batch-jobs-skip-reason-visibility** (P2) — batch-jobs-cron-fix carry: `BatchJob.last_skip_reason` + `last_dispatch_check_at` 컬럼 + Dashboard 가시화.
+- **batch-jobs-stampede-prevention** (P3) — batch-jobs-cron-fix carry: `execute_job` 시작 시 `last_run_at = started_at` 선기록.
+- **batch-jobs-runtime-signoff** — batch-jobs-cron-fix SC-4: 환경 가용 시 L1 (curl 422) / L2 (Playwright button disabled) / L3 (cron schedule history row) spot-check.
