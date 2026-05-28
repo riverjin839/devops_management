@@ -54,3 +54,34 @@ export function useRunDailyCheckNow() {
     },
   });
 }
+
+export interface DailyCheckSummaryItem {
+  cluster_id: string;
+  cluster_name: string;
+  status: 'healthy' | 'warning' | 'critical';
+  today_checks_count: number;
+  latest_check: {
+    overall_status: string;
+    total_nodes: number | null;
+    ready_nodes: number | null;
+    error_messages: string[] | null;
+    warning_messages: string[] | null;
+    checked_at: string | null;
+  } | null;
+}
+
+export function useDailyCheckSummary() {
+  return useQuery<DailyCheckSummaryItem[]>({
+    queryKey: ['dailyCheckSummary'],
+    queryFn: async () => {
+      try {
+        const { data } = await dailyCheckApi.getSummary();
+        return data;
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+}
