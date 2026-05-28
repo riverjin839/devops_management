@@ -7,13 +7,14 @@ import {
   CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home,
-  KeyRound, ShieldCheck, FileSearch, Activity,
+  KeyRound, ShieldCheck, FileSearch, Activity, Package, GitBranch,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useHomeStore } from '@/stores/homeStore';
 import { InlineEdit } from '@/components/common';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -58,31 +59,21 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/settings':           { defaultLabel: 'Settings',       icon: Settings },
 };
 
-// docs 그룹의 서브섹션. /services (통합 지식/SOP) 은 운영 기준에서 제거됨.
-// 첫 줄 `/docs` 는 지식 허브 랜딩(미리보기 + 통합 검색) 페이지.
-const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
-  { id: 'home',  label: '허브 홈',     paths: ['/docs'] },
-  { id: 'ops',   label: '운영 기준',  paths: ['/ops-notes'] },
-  { id: 'issue', label: '이슈/장애',   paths: ['/tasks-mgmt', '/incident-analysis'] },
-  { id: 'flow',  label: '흐름/설계',  paths: ['/workflow', '/wbs', '/mindmap'] },
-];
-
-// 서비스 카탈로그 섹션에 포함되는 작업 기준 경로
-const WORK_STANDARD_PATHS = ['/work-guides', '/commands', '/tasks-mgmt'];
-
 // 사이드바 레일에 표시되는 그룹들
-type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
+type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'knowledge' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
-  // 홈(/) 은 좌측 상단 로고 버튼이 담당하므로 그룹 paths 에서 제외.
-  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/lake-services', '/pod-bottleneck', '/playbooks'] },
-  { id: 'work',       label: '업무관리', icon: ListTodo,        paths: ['/tasks-mgmt', '/todo-today', '/work-summary', '/members'] },
-  { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
-  { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },
-  { id: 'docs',       label: '지식 허브', icon: BookOpen,        paths: [] },  // sections 사용
-  { id: 'system',     label: '시스템',   icon: Settings,        paths: ['/settings'] },
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'] },
+  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/node-labels', '/node-images', '/kernel-params', '/infra-topology'] },
+  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/packet-flow', '/cidr', '/links'] },
+  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'] },
+  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'] },
+  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'] },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/work-summary', '/members', '/workflow', '/wbs'] },
+  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/ops-notes', '/mindmap', '/incident-analysis', '/ontology', '/trends', '/work-guides'] },
+  { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'] },
 ];
 
-const DEFAULT_TITLE = 'DEVOPS MANAGEMENT';
+const DEFAULT_TITLE = 'PEP';
 // default(Claude paper) → 라이트 → 다크 → 시스템 → default …
 const THEME_CYCLE: Record<Theme, Theme> = { default: 'light', light: 'dark', dark: 'system', system: 'default' };
 const THEME_LABEL: Record<Theme, string> = { default: '기본', light: '라이트', dark: '다크', system: '시스템' };
@@ -236,6 +227,21 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.clear);
   const isAdmin = currentUser?.role === 'admin';
 
+  const { mode, toggle, setMode } = useHomeStore();
+
+  const handleHomeClick = () => {
+    if (location.pathname === '/') {
+      toggle();
+    } else {
+      setMode('work');
+      navigate('/');
+    }
+  };
+
+  const homeTooltip = location.pathname === '/'
+    ? (mode === 'work' ? '플랫폼 현황 보기' : '업무 현황으로 돌아가기')
+    : '홈으로 이동';
+
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
@@ -266,12 +272,8 @@ export function Sidebar() {
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
-    if (location.pathname.startsWith('/services/')) return 'docs';
+    if (location.pathname.startsWith('/services/')) return 'services';
     for (const g of GROUPS) {
-      if (g.id === 'docs') {
-        if (DOCS_SECTIONS.some((s) => s.paths.includes(location.pathname))) return 'docs';
-        continue;
-      }
       if (g.paths.includes(location.pathname)) return g.id;
     }
     return null;
@@ -318,63 +320,26 @@ export function Sidebar() {
     if (!group) return null;
     const close = () => setOpenGroup(null);
 
-    if (id === 'docs') {
+    if (id === 'services') {
       return (
-        <div className="space-y-1 pb-1">
-          <FlyoutSection title="서비스 카탈로그">
-            {servicePaths.map((p) => {
-              const entry = navMap[p];
-              if (!entry) return null;
-              return (
-                <FlyoutLink
-                  key={p}
-                  to={p}
-                  label={getLabel(p)}
-                  Icon={entry.icon}
-                  active={location.pathname === p}
-                  onSelect={close}
-                />
-              );
-            })}
-            {servicePaths.length > 0 && (
-              <div className="mx-2 my-1 border-t border-zinc-200" />
-            )}
-            <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-              작업 기준
-            </div>
-            {WORK_STANDARD_PATHS.map((p) => {
-              const entry = navMap[p];
-              if (!entry) return null;
-              return (
-                <FlyoutLink
-                  key={p}
-                  to={p}
-                  label={getLabel(p)}
-                  Icon={entry.icon}
-                  active={location.pathname === p}
-                  onSelect={close}
-                />
-              );
-            })}
-          </FlyoutSection>
-          {DOCS_SECTIONS.map((sec) => (
-            <FlyoutSection key={sec.id} title={sec.label}>
-              {sec.paths.map((p) => {
-                const entry = navMap[p];
-                if (!entry) return null;
-                return (
-                  <FlyoutLink
-                    key={p}
-                    to={p}
-                    label={getLabel(p)}
-                    Icon={entry.icon}
-                    active={location.pathname === p}
-                    onSelect={close}
-                  />
-                );
-              })}
-            </FlyoutSection>
-          ))}
+        <div className="space-y-1 pb-2">
+          {group.paths.map((p) => {
+            const entry = navMap[p];
+            if (!entry) return null;
+            return (
+              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+                active={location.pathname === p} onSelect={close} />
+            );
+          })}
+          {servicePaths.length > 0 && <div className="mx-2 my-1 border-t border-zinc-200" />}
+          {servicePaths.map((p) => {
+            const entry = navMap[p];
+            if (!entry) return null;
+            return (
+              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+                active={location.pathname === p} onSelect={close} />
+            );
+          })}
         </div>
       );
     }
@@ -386,14 +351,8 @@ export function Sidebar() {
             const entry = navMap[p];
             if (!entry) return null;
             return (
-              <FlyoutLink
-                key={p}
-                to={p}
-                label={getLabel(p)}
-                Icon={entry.icon}
-                active={location.pathname === p}
-                onSelect={close}
-              />
+              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+                active={location.pathname === p} onSelect={close} />
             );
           })}
           <button
@@ -414,14 +373,8 @@ export function Sidebar() {
           const entry = navMap[p];
           if (!entry) return null;
           return (
-            <FlyoutLink
-              key={p}
-              to={p}
-              label={getLabel(p)}
-              Icon={entry.icon}
-              active={location.pathname === p}
-              onSelect={close}
-            />
+            <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+              active={location.pathname === p} onSelect={close} />
           );
         })}
       </div>
@@ -452,16 +405,21 @@ export function Sidebar() {
       >
         {/* 로고 — 클릭 시 홈으로. 좌측 상단의 공식 홈 버튼 역할. */}
         <div className="flex items-center justify-center py-3 border-b border-border flex-shrink-0">
-          <Link
-            to="/"
-            title={`${title} — 홈`}
-            aria-label="홈으로 이동"
+          <button
+            type="button"
+            onClick={handleHomeClick}
+            title={homeTooltip}
+            aria-label={homeTooltip}
             className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-sm shadow-sm transition-transform hover:scale-105 active:scale-95 ${
-              location.pathname === '/' ? 'ring-2 ring-primary/50' : ''
+              location.pathname === '/'
+                ? mode === 'platform'
+                  ? 'ring-2 ring-sky-300/70'
+                  : 'ring-2 ring-primary/50'
+                : ''
             }`}
           >
             ☸
-          </Link>
+          </button>
         </div>
 
         {/* 그룹 아이콘 레일 */}
@@ -586,8 +544,8 @@ export function Sidebar() {
             </div>
             <nav className="flex-1 py-2 px-2 overflow-y-auto">
               {GROUPS.map((g) => {
-                const paths = g.id === 'docs'
-                  ? [...servicePaths, ...WORK_STANDARD_PATHS, ...DOCS_SECTIONS.flatMap((s) => s.paths)]
+                const paths = g.id === 'services'
+                  ? [...g.paths, ...servicePaths]
                   : g.paths;
                 if (paths.length === 0) return null;
                 return (
@@ -633,14 +591,3 @@ export function Sidebar() {
   );
 }
 
-// ── Flyout 내부 섹션 (헤더 + 자식) ─────────────────────────────────────────────
-function FlyoutSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-        {title}
-      </div>
-      <div>{children}</div>
-    </div>
-  );
-}
