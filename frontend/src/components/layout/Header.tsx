@@ -29,7 +29,10 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
           >
             ☸
           </div>
-          <span className="font-semibold text-lg">DEVOPS MANAGEMENT</span>
+          <div className="flex flex-col leading-none">
+            <span className="font-bold text-sm tracking-wide">PEP</span>
+            <span className="text-[10px] text-muted-foreground font-normal">Platform Engineering Portal</span>
+          </div>
         </div>
 
         {/* Navigation */}
