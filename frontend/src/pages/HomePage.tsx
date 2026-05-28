@@ -1,15 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Sun, ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays,
 } from 'lucide-react';
-import { ClusterSidebar } from '@/components/common';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
+import { InfraHealthBar } from '@/components/dashboard/InfraHealthBar';
+import { IncidentMiniPanel } from '@/components/dashboard/IncidentMiniPanel';
+import { DomainQuickAccess } from '@/components/dashboard/DomainQuickAccess';
 import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -63,7 +66,7 @@ function KpiPill({ label, value, hint, Icon, accent, to }: KpiPillProps) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export function HomePage() {
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+  const mode = useHomeStore((s) => s.mode);
 
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
@@ -104,7 +107,7 @@ export function HomePage() {
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col">
 
-      {/* ── Compact top strip ──────────────────────────────────────────────── */}
+      {/* ── Compact top strip — always visible ─────────────────────────────── */}
       <div className="flex-none flex items-center gap-3 px-3 lg:px-4 py-2 border-b border-border bg-background/95 backdrop-blur flex-wrap">
         {/* 인사 */}
         <div className="flex items-center gap-2 min-w-0">
@@ -151,30 +154,28 @@ export function HomePage() {
         </div>
       </div>
 
-      {/* ── Main area: sidebar + 2-panel grid ──────────────────────────────── */}
-      <div className="flex-1 min-h-0 flex px-3 py-3 gap-3">
-        {/* Cluster sidebar */}
-        <ClusterSidebar
-          clusters={clusters}
-          selectedId={selectedClusterId}
-          onSelect={setSelectedClusterId}
-          allowAll
-          allLabel="전체 현황"
-          iconOnly
-        />
+      {/* ── Mode B only — platform panels ──────────────────────────────────── */}
+      {mode === 'platform' && (
+        <div className="flex-none px-3 pt-2 flex flex-col gap-2">
+          <InfraHealthBar />
+          <IncidentMiniPanel />
+          <DomainQuickAccess />
+        </div>
+      )}
 
-        {/* 2-panel grid: 4 (member) : 6 (calendar) */}
-        <div className="flex-1 min-w-0 min-h-0 grid grid-cols-10 gap-3">
+      {/* ── Work panels — always visible, scrollable ────────────────────────── */}
+      <div className="flex-1 min-h-0 flex flex-col px-3 py-3 gap-3 overflow-auto">
+        <div className="flex-1 min-h-0 grid grid-cols-10 gap-3">
 
-          {/* ── 담당자별 진행 현황 (4/10) ────────────────────────────────── */}
+          {/* ── Platform 담당자별 진행 현황 (4/10) ──────────────────────────── */}
           <div className="col-span-10 xl:col-span-4 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
             <div className="flex-none px-4 py-2.5 border-b border-border bg-muted/40">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                DevOps 담당자별 진행 현황
+                Platform 담당자별 진행 현황
               </span>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <MemberTodayTodos selectedClusterId={selectedClusterId} />
+              <MemberTodayTodos selectedClusterId={null} />
             </div>
           </div>
 
@@ -187,7 +188,7 @@ export function HomePage() {
               <CalendarDays className="w-3.5 h-3.5 text-primary" />
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <WorkCalendar selectedClusterId={selectedClusterId} />
+              <WorkCalendar selectedClusterId={null} />
             </div>
           </div>
 
