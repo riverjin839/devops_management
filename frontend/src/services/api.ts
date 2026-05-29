@@ -1322,6 +1322,7 @@ export const dailyCheckApi = {
     api.get<DailyCheckLogLite[]>(`/daily-check/results/${clusterId}`, { params }),
   runNow: (clusterId: string) =>
     api.post<DailyCheckLogLite>(`/daily-check/run/${clusterId}`),
+  getSummary: () => api.get('/daily-check/summary'),
 };
 
 export const deepCheckApi = {

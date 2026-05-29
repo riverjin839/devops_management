@@ -6,15 +6,13 @@ This file provides essential context for AI assistants (Claude and others) worki
 
 ## Project Overview
 
-**DEVOPS MANAGEMENT** (originally "K8s Daily Monitor") is a DevOps-focused Kubernetes cluster health monitoring dashboard. It performs automated daily health checks at 09:00, 13:00, and 18:00 KST across multiple clusters and surfaces results in a React dashboard.
+**PEP (Platform Engineering Portal)** is a platform engineering tool covering:
+- K8s cluster monitoring and operations (original core)
+- Infrastructure management (servers, network, storage, GPU roadmap)
+- Team collaboration (work items, workflows, members)
+- Knowledge sharing (documentation, AI analysis, ontology)
 
-Core capabilities:
-- Multi-cluster management (add, remove, check any Kubernetes cluster)
-- Scheduled health checks via Celery Beat (API server, components, nodes, system pods)
-- Real-time PromQL metric cards queried against Prometheus
-- AI Agent chat powered by a local Ollama LLM (optional, fail-safe)
-- Ansible Playbook execution per cluster
-- Air-gapped / closed-network deployment support
+Originally "K8s Daily Monitor" (DevOps Management), redefined as Platform Engineering Portal in May 2026.
 
 ---
 

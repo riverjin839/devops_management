@@ -541,6 +541,33 @@ export function SettingsPage() {
           ))}
         </div>
 
+        {/* 홈 화면 설정 */}
+        <div className="rounded-md border border-border bg-card overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-border bg-muted/40">
+            <h3 className="text-sm font-semibold">홈 화면 설정</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">PEP 홈 페이지 표시 옵션</p>
+          </div>
+          <div className="px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm">업무 모드에서 클러스터 필터 표시</p>
+              <p className="text-[11px] text-muted-foreground">업무 현황을 특정 클러스터로 필터링</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground rounded">
+                추후 지원
+              </span>
+              <button
+                type="button"
+                disabled
+                className="relative w-9 h-5 rounded-full bg-muted border border-border opacity-50 cursor-not-allowed"
+                aria-label="추후 지원 예정"
+              >
+                <span className="absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Cluster Tab: Summary Cards */}
         {activeTab === 'cluster' && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-card border border-border rounded-xl p-4">
