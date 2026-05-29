@@ -61,16 +61,16 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 
 // 사이드바 레일에 표시되는 그룹들
 type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'knowledge' | 'system';
-const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'] },
-  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/node-labels', '/node-images', '/kernel-params', '/infra-topology'] },
-  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/packet-flow', '/cidr', '/links'] },
-  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'] },
-  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'] },
-  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'] },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/work-summary', '/members', '/workflow', '/wbs'] },
-  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/ops-notes', '/mindmap', '/incident-analysis', '/ontology', '/trends', '/work-guides'] },
-  { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'] },
+const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
+  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/node-labels', '/node-images', '/kernel-params', '/infra-topology'], modes: ['platform'] },
+  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
+  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
+  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
+  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/work-summary', '/members', '/workflow', '/wbs'], modes: ['work'] },
+  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/ops-notes', '/mindmap', '/incident-analysis', '/ontology', '/trends', '/work-guides'], modes: ['work'] },
+  { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
 ];
 
 const DEFAULT_TITLE = 'PEP';
@@ -270,6 +270,9 @@ export function Sidebar() {
 
   const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
 
+  // 현재 모드에서 보여줄 그룹만 필터링
+  const visibleGroups = useMemo(() => GROUPS.filter((g) => g.modes.includes(mode)), [mode]);
+
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
     if (location.pathname.startsWith('/services/')) return 'services';
@@ -422,10 +425,10 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* 그룹 아이콘 레일 */}
+        {/* 그룹 아이콘 레일 — 현재 모드에 맞는 그룹만 표시 */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
           <div className="flex flex-col items-center gap-1">
-            {GROUPS.map((g) => (
+            {visibleGroups.map((g) => (
               <RailIconButton
                 key={g.id}
                 label={g.label}
@@ -543,7 +546,7 @@ export function Sidebar() {
               )}
             </div>
             <nav className="flex-1 py-2 px-2 overflow-y-auto">
-              {GROUPS.map((g) => {
+              {visibleGroups.map((g) => {
                 const paths = g.id === 'services'
                   ? [...g.paths, ...servicePaths]
                   : g.paths;
