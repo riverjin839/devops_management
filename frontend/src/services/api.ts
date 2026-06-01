@@ -146,6 +146,8 @@ export const authApi = {
     api.put<AuthUser>(`/auth/users/${id}/role`, { role }),
   resetPassword: (id: string, newPassword: string) =>
     api.post<AuthUser>(`/auth/users/${id}/password`, { newPassword }),
+  patchPreferences: (payload: { editorWhiteBg: boolean }) =>
+    api.patch<AuthUser>('/auth/me/preferences', payload),
 };
 
 // ── Audit logs API ────────────────────────────────────────────────────────

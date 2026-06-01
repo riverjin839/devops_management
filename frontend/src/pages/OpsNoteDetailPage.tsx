@@ -1,11 +1,13 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Pencil, Sun, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { opsNotesApi } from '@/services/api';
+import { opsNotesApi, authApi } from '@/services/api';
 import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useMemo } from 'react';
+import { useAuthStore } from '@/stores/authStore';
+import { cn } from '@/lib/utils';
 
 export function OpsNoteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +16,22 @@ export function OpsNoteDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const editMode = location.pathname.endsWith('/edit');
+
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const editorWhiteBg = user?.editorWhiteBg ?? false;
+
+  const handleToggle = async () => {
+    if (!user) return;
+    const prev = user;
+    const next = !editorWhiteBg;
+    setUser({ ...user, editorWhiteBg: next });
+    try {
+      await authApi.patchPreferences({ editorWhiteBg: next });
+    } catch {
+      setUser(prev);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['ops-notes'],
@@ -76,22 +94,39 @@ export function OpsNoteDetailPage() {
           </button>
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
-          {!editMode && (
-            <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
+            {user && (
               <button
-                onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                onClick={handleToggle}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+                  editorWhiteBg
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-secondary',
+                )}
+                title={editorWhiteBg ? '흰 배경 끄기' : '흰 배경 켜기'}
               >
-                <Pencil className="w-3.5 h-3.5" /> 수정
+                <Sun className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">흰 배경</span>
               </button>
-              <button
-                onClick={handleDelete}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> 삭제
-              </button>
-            </div>
-          )}
+            )}
+            {!editMode && (
+              <>
+                <button
+                  onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> 수정
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> 삭제
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -102,7 +137,7 @@ export function OpsNoteDetailPage() {
               <h1 className="text-3xl font-bold text-foreground tracking-tight">Q&amp;A 수정</h1>
               <p className="text-sm text-muted-foreground mt-1">필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.</p>
             </div>
-            <div className="bg-card border border-border rounded-2xl p-8 mac-shadow">
+            <div className={cn('border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
               <OpsNoteForm
                 initial={note}
                 onCancel={() => navigate(`/ops-notes/${note.id}`)}
@@ -111,7 +146,7 @@ export function OpsNoteDetailPage() {
             </div>
           </>
         ) : (
-          <div className="bg-card border border-border rounded-2xl p-8 mac-shadow">
+          <div className={cn('border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
             <OpsNoteReadView note={note} />
           </div>
         )}

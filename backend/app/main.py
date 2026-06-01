@@ -656,9 +656,10 @@ def _run_migrations():
         _safe_add_column("batch_jobs", "encrypted_password", "TEXT")
         _safe_add_column("batch_jobs", "encrypted_private_key", "TEXT")
 
-    # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화
+    # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화 + 에디터 개인 설정
     if "users" in inspector.get_table_names():
         _safe_add_column("users", "must_change_password", "BOOLEAN NOT NULL DEFAULT FALSE")
+        _safe_add_column("users", "editor_white_bg", "BOOLEAN DEFAULT FALSE")
         # 레거시: 'user' role 을 'viewer' 로 일회성 변환. 신규 코드는 'viewer/operator/admin' 만 사용.
         _safe_exec(
             "UPDATE users SET role='viewer' WHERE role='user'",

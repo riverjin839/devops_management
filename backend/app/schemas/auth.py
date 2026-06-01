@@ -23,10 +23,15 @@ class UserOut(BaseModel):
     display_name: str | None = None
     is_active: bool
     must_change_password: bool = False
+    editor_white_bg: bool = False
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class UpdatePreferencesRequest(BaseModel):
+    editor_white_bg: bool
 
 
 class CreateUserRequest(BaseModel):

@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Pencil, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, ListTodo, Pencil, Plus, Sun, Trash2 } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar } from '@/components/work-items';
 import { ConfirmDialog } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
+import { useAuthStore } from '@/stores/authStore';
+import { authApi } from '@/services/api';
+import { cn } from '@/lib/utils';
 
 export function WorkItemDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +19,22 @@ export function WorkItemDetailPage() {
   const deleteTask = useDeleteWorkItem();
   // G-I9: window.confirm 대신 ConfirmDialog 사용
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const editorWhiteBg = user?.editorWhiteBg ?? false;
+
+  const handleToggle = async () => {
+    if (!user) return;
+    const prev = user;
+    const next = !editorWhiteBg;
+    setUser({ ...user, editorWhiteBg: next });
+    try {
+      await authApi.patchPreferences({ editorWhiteBg: next });
+    } catch {
+      setUser(prev);
+    }
+  };
 
   if (listData && !item) {
     return (
@@ -63,29 +82,46 @@ export function WorkItemDetailPage() {
           </button>
           <ListTodo className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
-          {!editMode && (
-            <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
+            {user && (
               <button
-                onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                title="하위 업무 등록"
+                onClick={handleToggle}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+                  editorWhiteBg
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-secondary',
+                )}
+                title={editorWhiteBg ? '흰 배경 끄기' : '흰 배경 켜기'}
               >
-                <Plus className="w-3.5 h-3.5" /> 하위
+                <Sun className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">흰 배경</span>
               </button>
-              <button
-                onClick={() => navigate(`/tasks-mgmt/${item.id}/edit`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-              >
-                <Pencil className="w-3.5 h-3.5" /> 수정
-              </button>
-              <button
-                onClick={handleDelete}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> 삭제
-              </button>
-            </div>
-          )}
+            )}
+            {!editMode && (
+              <>
+                <button
+                  onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                  title="하위 업무 등록"
+                >
+                  <Plus className="w-3.5 h-3.5" /> 하위
+                </button>
+                <button
+                  onClick={() => navigate(`/tasks-mgmt/${item.id}/edit`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> 수정
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> 삭제
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -96,15 +132,18 @@ export function WorkItemDetailPage() {
               <h1 className="text-3xl font-bold text-foreground tracking-tight">업무 수정</h1>
               <p className="text-sm text-muted-foreground mt-1">필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.</p>
             </div>
-            <WorkItemForm
-              initial={item}
-              onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
-              onSaved={() => navigate(`/tasks-mgmt/${item.id}`)}
-            />
+            <div className={cn('border border-border rounded-2xl p-5 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+              <WorkItemForm
+                initial={item}
+                onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
+                onSaved={() => navigate(`/tasks-mgmt/${item.id}`)}
+                embedded
+              />
+            </div>
           </>
         ) : (
           <div className="flex gap-6 items-start">
-            <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl p-8 mac-shadow">
+            <div className={cn('flex-1 min-w-0 border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
               <WorkItemReadView item={item} />
             </div>
             {/* Cross-view (Phase A) — 같은 service 의 ServiceEntry 5건 sticky sidebar */}
