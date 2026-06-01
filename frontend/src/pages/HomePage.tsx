@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Sun, ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays,
 } from 'lucide-react';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
+import { WeeklyWorkTable } from '@/components/dashboard/WeeklyWorkTable';
 import { InfraHealthBar } from '@/components/dashboard/InfraHealthBar';
 import { IncidentMiniPanel } from '@/components/dashboard/IncidentMiniPanel';
 import { DomainQuickAccess } from '@/components/dashboard/DomainQuickAccess';
@@ -14,6 +15,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
+import { cn } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function dateKey(d: Date): string {
@@ -100,6 +102,8 @@ export function HomePage() {
       })
     : '없음';
 
+  const [weeklyTab, setWeeklyTab] = useState<'week' | 'calendar'>('week');
+
   const now = new Date();
   const hello = greeting(now.getHours());
   const dateStr = fmtKoreanDate(now);
@@ -180,16 +184,39 @@ export function HomePage() {
               </div>
             </div>
 
-            {/* ── 이번 달 일정 캘린더 (6/10) ───────────────────────────────── */}
+            {/* ── 이번 주 업무 / 달력 (6/10) ───────────────────────────────── */}
             <div className="col-span-10 xl:col-span-6 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   이번 달 일정
                 </span>
                 <CalendarDays className="w-3.5 h-3.5 text-primary" />
+                <div className="ml-auto flex items-center rounded-md border border-border overflow-hidden text-[10px]">
+                  <button
+                    onClick={() => setWeeklyTab('week')}
+                    className={cn(
+                      'px-2 py-1 transition-colors',
+                      weeklyTab === 'week' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
+                    )}
+                  >
+                    주간
+                  </button>
+                  <button
+                    onClick={() => setWeeklyTab('calendar')}
+                    className={cn(
+                      'px-2 py-1 border-l border-border transition-colors',
+                      weeklyTab === 'calendar' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
+                    )}
+                  >
+                    달력
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4">
-                <WorkCalendar selectedClusterId={null} />
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {weeklyTab === 'week'
+                  ? <WeeklyWorkTable />
+                  : <div className="h-full overflow-y-auto p-4"><WorkCalendar selectedClusterId={null} /></div>
+                }
               </div>
             </div>
 
