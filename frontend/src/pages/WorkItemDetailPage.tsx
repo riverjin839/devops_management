@@ -4,8 +4,7 @@ import { ArrowLeft, ListTodo, Pencil, Plus, Sun, Trash2 } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar } from '@/components/work-items';
 import { ConfirmDialog } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
-import { useAuthStore } from '@/stores/authStore';
-import { authApi } from '@/services/api';
+import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
 import { cn } from '@/lib/utils';
 
 export function WorkItemDetailPage() {
@@ -20,21 +19,7 @@ export function WorkItemDetailPage() {
   // G-I9: window.confirm 대신 ConfirmDialog 사용
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
-  const editorWhiteBg = user?.editorWhiteBg ?? false;
-
-  const handleToggle = async () => {
-    if (!user) return;
-    const prev = user;
-    const next = !editorWhiteBg;
-    setUser({ ...user, editorWhiteBg: next });
-    try {
-      await authApi.patchPreferences({ editorWhiteBg: next });
-    } catch {
-      setUser(prev);
-    }
-  };
+  const { editorWhiteBg, toggle, isLoggedIn } = useEditorWhiteBg();
 
   if (listData && !item) {
     return (
@@ -83,9 +68,9 @@ export function WorkItemDetailPage() {
           <ListTodo className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
-            {user && (
+            {isLoggedIn && (
               <button
-                onClick={handleToggle}
+                onClick={toggle}
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
                   editorWhiteBg

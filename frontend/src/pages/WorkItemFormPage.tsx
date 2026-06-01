@@ -3,8 +3,7 @@ import { ArrowLeft, ListTodo, Sun } from 'lucide-react';
 import { WorkItemForm } from '@/components/work-items';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import type { WorkItemType } from '@/types';
-import { useAuthStore } from '@/stores/authStore';
-import { authApi } from '@/services/api';
+import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
 import { cn } from '@/lib/utils';
 
 export function WorkItemFormPage() {
@@ -18,26 +17,13 @@ export function WorkItemFormPage() {
   const defaultType: WorkItemType = VALID_TYPES.includes(queryType as WorkItemType)
     ? (queryType as WorkItemType)
     : 'task';
+  const defaultStartedAt = searchParams.get('startedAt') || undefined;
 
   const { data: listData } = useWorkItems();
   const editTask = isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
   const parentItem = parentId ? listData?.data.find((x) => x.id === parentId) ?? null : null;
 
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
-  const editorWhiteBg = user?.editorWhiteBg ?? false;
-
-  const handleToggle = async () => {
-    if (!user) return;
-    const prev = user;
-    const next = !editorWhiteBg;
-    setUser({ ...user, editorWhiteBg: next });
-    try {
-      await authApi.patchPreferences({ editorWhiteBg: next });
-    } catch {
-      setUser(prev);
-    }
-  };
+  const { editorWhiteBg, toggle, isLoggedIn } = useEditorWhiteBg();
 
   if (isEdit && listData && !editTask) {
     return (
@@ -82,9 +68,9 @@ export function WorkItemFormPage() {
               </span>
             </span>
           )}
-          {user && (
+          {isLoggedIn && (
             <button
-              onClick={handleToggle}
+              onClick={toggle}
               className={cn(
                 'ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
                 editorWhiteBg
@@ -119,6 +105,7 @@ export function WorkItemFormPage() {
             initial={editTask ?? undefined}
             defaultType={defaultType}
             parentItem={parentItem}
+            defaultStartedAt={!isEdit ? defaultStartedAt : undefined}
             onCancel={() => navigate('/tasks-mgmt')}
             onSaved={() => navigate('/tasks-mgmt')}
             embedded

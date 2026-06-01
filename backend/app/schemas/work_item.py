@@ -27,6 +27,7 @@ class WorkItemBase(BaseModel):
     cluster_name: Optional[str] = Field(None, max_length=100)
 
     # 공통 의미
+    title: Optional[str] = Field(None, max_length=200)
     category: str = Field(..., min_length=1, max_length=100)
     content: str = Field(..., min_length=1)
     resolution: Optional[str] = None
@@ -64,6 +65,7 @@ class WorkItemUpdate(BaseModel):
     secondary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
+    title: Optional[str] = Field(None, max_length=200)
     category: Optional[str] = Field(None, min_length=1, max_length=100)
     content: Optional[str] = Field(None, min_length=1)
     resolution: Optional[str] = None

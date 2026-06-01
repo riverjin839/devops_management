@@ -1,12 +1,12 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, HelpCircle, Pencil, Sun, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { opsNotesApi, authApi } from '@/services/api';
+import { opsNotesApi } from '@/services/api';
 import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useMemo } from 'react';
-import { useAuthStore } from '@/stores/authStore';
+import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
 import { cn } from '@/lib/utils';
 
 export function OpsNoteDetailPage() {
@@ -17,21 +17,7 @@ export function OpsNoteDetailPage() {
   const toast = useToast();
   const editMode = location.pathname.endsWith('/edit');
 
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
-  const editorWhiteBg = user?.editorWhiteBg ?? false;
-
-  const handleToggle = async () => {
-    if (!user) return;
-    const prev = user;
-    const next = !editorWhiteBg;
-    setUser({ ...user, editorWhiteBg: next });
-    try {
-      await authApi.patchPreferences({ editorWhiteBg: next });
-    } catch {
-      setUser(prev);
-    }
-  };
+  const { editorWhiteBg, toggle, isLoggedIn } = useEditorWhiteBg();
 
   const { data, isLoading } = useQuery({
     queryKey: ['ops-notes'],
@@ -95,9 +81,9 @@ export function OpsNoteDetailPage() {
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
-            {user && (
+            {isLoggedIn && (
               <button
-                onClick={handleToggle}
+                onClick={toggle}
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
                   editorWhiteBg

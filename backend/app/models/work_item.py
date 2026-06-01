@@ -36,6 +36,7 @@ class WorkItem(Base):
     cluster_name = Column(String(100), nullable=True)
 
     # 공통 의미 — 통일된 이름
+    title = Column(String(200), nullable=True)                  # 짧은 제목 (nullable — 구버전 호환)
     category = Column(String(100), nullable=False)             # issue_area / task_category
     content = Column(Text, nullable=False)                     # issue_content / task_content
     resolution = Column(Text, nullable=True)                   # action_content / result_content

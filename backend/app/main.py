@@ -479,6 +479,7 @@ def _run_migrations():
     # Phase B (knowledge-workitem-linkage) — service 하위 component 컬럼 추가 +
     # 기존 module 값을 service 로 1회성 backfill (idempotent).
     if "work_items" in set(inspect(engine).get_table_names()):
+        _safe_add_column("work_items", "title", "VARCHAR(200)")
         _safe_add_column("work_items", "component", "VARCHAR(64)")
         _safe_exec(
             "CREATE INDEX IF NOT EXISTS ix_work_items_component ON work_items(component)",

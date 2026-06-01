@@ -1,6 +1,9 @@
-import { useState, useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import { WorkItem } from '@/types';
+import { WorkItemForm } from './WorkItemForm';
+import { useQueryClient } from '@tanstack/react-query';
+import { workItemKeys } from '@/hooks/useWorkItems';
 
 interface WorkItemCalendarProps {
   items: WorkItem[];
@@ -38,6 +41,8 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
+  const [registerDate, setRegisterDate] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -175,14 +180,15 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
           return (
             <div
               key={cellKey}
-              className={`min-h-[90px] border-r border-b border-border ${
-                day ? 'bg-card' : 'bg-muted/5'
+              className={`group min-h-[90px] border-r border-b border-border ${
+                day ? 'bg-card hover:bg-secondary/20 cursor-pointer' : 'bg-muted/5'
               }`}
+              onClick={() => day && setRegisterDate(toDateKey(day))}
             >
               {day && (
                 <>
-                  {/* Date number */}
-                  <div className="px-1.5 pt-1.5 mb-1">
+                  {/* Date number + add button */}
+                  <div className="px-1.5 pt-1.5 mb-1 flex items-center justify-between">
                     <div
                       className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${
                         isToday(day)
@@ -196,6 +202,14 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                     >
                       {day}
                     </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setRegisterDate(toDateKey(day)); }}
+                      className="w-4 h-4 rounded flex items-center justify-center text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                      aria-label={`${toDateKey(day)} 업무 등록`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
                   </div>
 
                   {/* WorkItem bars */}
@@ -332,6 +346,73 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
           />
         </div>
       )}
+
+      {/* 날짜 클릭 업무 등록 슬라이드 오버 */}
+      {registerDate && (
+        <CalendarRegisterPanel
+          date={registerDate}
+          onClose={() => setRegisterDate(null)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: workItemKeys.all });
+            setRegisterDate(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+interface CalendarRegisterPanelProps {
+  date: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function CalendarRegisterPanel({ date, onClose, onSaved }: CalendarRegisterPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const d = new Date(date + 'T00:00:00');
+  const DAY = ['일', '월', '화', '수', '목', '금', '토'];
+  const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일 (${DAY[d.getDay()]})`;
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} aria-hidden />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-label={`${dateLabel} 업무 등록`}
+        className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[520px] bg-card border-l border-border shadow-2xl flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-border bg-muted/30 flex-shrink-0">
+          <div>
+            <p className="text-sm font-semibold">업무 등록</p>
+            <p className="text-[11px] text-muted-foreground">{dateLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">
+          <WorkItemForm
+            defaultStartedAt={`${date}T09:00`}
+            onCancel={onClose}
+            onSaved={onSaved}
+            embedded
+          />
+        </div>
+      </div>
+    </>
   );
 }
