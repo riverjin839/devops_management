@@ -12,6 +12,7 @@ from app.schemas.auth import (
     UserOut,
     CreateUserRequest,
     UpdatePasswordRequest,
+    UpdatePreferencesRequest,
     UpdateUserRoleRequest,
     SelfPasswordChangeRequest,
 )
@@ -109,6 +110,18 @@ def change_my_password(
         must_change_password=False,
         created_at=user.created_at,
     )
+
+
+@router.patch("/me/preferences", response_model=UserOut)
+def update_my_preferences(
+    payload: UpdatePreferencesRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    user.editor_white_bg = payload.editor_white_bg
+    db.commit()
+    db.refresh(user)
+    return UserOut.model_validate(user)
 
 
 # ── Admin-only user management ────────────────────────────────────────────

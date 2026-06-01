@@ -11,6 +11,7 @@ export interface AuthUser {
   displayName?: string | null;
   isActive: boolean;
   mustChangePassword: boolean;
+  editorWhiteBg: boolean;
   createdAt: string;
 }
 
@@ -28,6 +29,7 @@ function normalizeUser(raw: Partial<AuthUser> & { role?: string }): AuthUser {
     displayName: raw.displayName ?? null,
     isActive: Boolean(raw.isActive ?? true),
     mustChangePassword: Boolean(raw.mustChangePassword ?? false),
+    editorWhiteBg: Boolean(raw.editorWhiteBg ?? false),
     createdAt: String(raw.createdAt ?? ''),
   };
 }

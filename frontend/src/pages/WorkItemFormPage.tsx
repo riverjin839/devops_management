@@ -1,8 +1,11 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ListTodo } from 'lucide-react';
+import { ArrowLeft, ListTodo, Sun } from 'lucide-react';
 import { WorkItemForm } from '@/components/work-items';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import type { WorkItemType } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import { authApi } from '@/services/api';
+import { cn } from '@/lib/utils';
 
 export function WorkItemFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +22,22 @@ export function WorkItemFormPage() {
   const { data: listData } = useWorkItems();
   const editTask = isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
   const parentItem = parentId ? listData?.data.find((x) => x.id === parentId) ?? null : null;
+
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const editorWhiteBg = user?.editorWhiteBg ?? false;
+
+  const handleToggle = async () => {
+    if (!user) return;
+    const prev = user;
+    const next = !editorWhiteBg;
+    setUser({ ...user, editorWhiteBg: next });
+    try {
+      await authApi.patchPreferences({ editorWhiteBg: next });
+    } catch {
+      setUser(prev);
+    }
+  };
 
   if (isEdit && listData && !editTask) {
     return (
@@ -63,6 +82,21 @@ export function WorkItemFormPage() {
               </span>
             </span>
           )}
+          {user && (
+            <button
+              onClick={handleToggle}
+              className={cn(
+                'ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+                editorWhiteBg
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-secondary',
+              )}
+              title={editorWhiteBg ? '흰 배경 끄기' : '흰 배경 켜기'}
+            >
+              <Sun className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">흰 배경</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -80,13 +114,16 @@ export function WorkItemFormPage() {
           </div>
         </div>
 
-        <WorkItemForm
-          initial={editTask ?? undefined}
-          defaultType={defaultType}
-          parentItem={parentItem}
-          onCancel={() => navigate('/tasks-mgmt')}
-          onSaved={() => navigate('/tasks-mgmt')}
-        />
+        <div className={cn('border border-border rounded-2xl p-5 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+          <WorkItemForm
+            initial={editTask ?? undefined}
+            defaultType={defaultType}
+            parentItem={parentItem}
+            onCancel={() => navigate('/tasks-mgmt')}
+            onSaved={() => navigate('/tasks-mgmt')}
+            embedded
+          />
+        </div>
       </main>
     </div>
   );

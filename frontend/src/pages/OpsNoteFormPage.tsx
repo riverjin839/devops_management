@@ -1,11 +1,30 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, HelpCircle } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Sun } from 'lucide-react';
 import { OpsNoteForm } from '@/components/ops-notes';
+import { useAuthStore } from '@/stores/authStore';
+import { authApi } from '@/services/api';
+import { cn } from '@/lib/utils';
 
 export function OpsNoteFormPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const defaultService = searchParams.get('service') ?? 'k8s';
+
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const editorWhiteBg = user?.editorWhiteBg ?? false;
+
+  const handleToggle = async () => {
+    if (!user) return;
+    const prev = user;
+    const next = !editorWhiteBg;
+    setUser({ ...user, editorWhiteBg: next });
+    try {
+      await authApi.patchPreferences({ editorWhiteBg: next });
+    } catch {
+      setUser(prev);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -20,6 +39,21 @@ export function OpsNoteFormPage() {
           </button>
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">새 Q&amp;A</span>
+          {user && (
+            <button
+              onClick={handleToggle}
+              className={cn(
+                'ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+                editorWhiteBg
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-secondary',
+              )}
+              title={editorWhiteBg ? '흰 배경 끄기' : '흰 배경 켜기'}
+            >
+              <Sun className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">흰 배경</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -31,7 +65,7 @@ export function OpsNoteFormPage() {
           </p>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-8 mac-shadow">
+        <div className={cn('border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
           <OpsNoteForm
             defaultService={defaultService}
             onCancel={() => navigate('/ops-notes')}
