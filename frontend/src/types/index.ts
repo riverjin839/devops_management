@@ -275,6 +275,43 @@ export interface MetricCard {
   updatedAt: string;
 }
 
+// ── Projects ──────────────────────────────────────────────────────────────────
+export type ProjectStatus = 'active' | 'completed' | 'paused';
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  goal?: string;
+  color: string;
+  startDate?: string;
+  endDate?: string;
+  status: ProjectStatus;
+  totalItems: number;
+  doneItems: number;
+  achievementRate: number;
+  assignees: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectCreate {
+  name: string;
+  description?: string;
+  goal?: string;
+  color?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: ProjectStatus;
+}
+
+export interface ProjectUpdate extends Partial<ProjectCreate> {}
+
+export interface ProjectListResponse {
+  data: Project[];
+  total: number;
+}
+
 // Work Item Board — 업무 통합 모델 (작업/이슈/회의/교육/기타)
 export type WorkItemType = 'task' | 'issue' | 'meeting' | 'training' | 'etc';
 export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
@@ -290,6 +327,8 @@ export interface WorkItem {
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
+  /** 소속 프로젝트 ID (nullable). */
+  projectId?: string;
   /** 짧은 제목 (선택). 미설정 시 content 텍스트를 제목으로 표시. */
   title?: string;
   /** 분류/도메인 라벨. issue 의 issue_area / task 의 task_category 통합. */
@@ -343,6 +382,7 @@ export interface WorkItemCreate {
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
+  projectId?: string;
   title?: string;
   category: string;
   content: string;

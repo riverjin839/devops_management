@@ -711,6 +711,19 @@ export interface WorkItemFilters {
   closed?: boolean;
 }
 
+export const projectsApi = {
+  getAll: (status?: string) =>
+    api.get<import('@/types').ProjectListResponse>('/projects', { params: status ? { status } : undefined }),
+  get: (id: string) =>
+    api.get<import('@/types').Project>(`/projects/${id}`),
+  create: (data: import('@/types').ProjectCreate) =>
+    api.post<import('@/types').Project>('/projects', data),
+  update: (id: string, data: import('@/types').ProjectUpdate) =>
+    api.put<import('@/types').Project>(`/projects/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/projects/${id}`),
+};
+
 export const workItemsApi = {
   getAll: (params?: WorkItemFilters) =>
     api.get<WorkItemListResponse>('/work-items', {
