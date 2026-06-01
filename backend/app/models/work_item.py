@@ -36,6 +36,7 @@ class WorkItem(Base):
     cluster_name = Column(String(100), nullable=True)
 
     # 공통 의미 — 통일된 이름
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     title = Column(String(200), nullable=True)                  # 짧은 제목 (nullable — 구버전 호환)
     category = Column(String(100), nullable=False)             # issue_area / task_category
     content = Column(Text, nullable=False)                     # issue_content / task_content
@@ -75,6 +76,7 @@ class WorkItem(Base):
     )
 
     cluster = relationship("Cluster", back_populates="work_items", foreign_keys=[cluster_id])
+    project = relationship("Project", back_populates="work_items", foreign_keys=[project_id])
     subtasks = relationship(
         "WorkItem",
         back_populates="parent",

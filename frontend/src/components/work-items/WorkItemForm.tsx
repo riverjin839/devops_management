@@ -13,6 +13,7 @@ import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
+import { useProjects } from '@/hooks/useProjects';
 
 const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
@@ -102,6 +103,9 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
+  const [projectId, setProjectId] = useState(initial?.projectId ?? '');
+  const { data: projectsData } = useProjects();
+  const projects = projectsData?.data ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
   const [primaryAssignee, setPrimaryAssignee] = useState('');
   const [secondaryAssignee, setSecondaryAssignee] = useState('');
@@ -139,6 +143,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
     if (hydrated) return;
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
     if (isEdit && initial) {
+      setProjectId(initial.projectId ?? '');
       setTitle(initial.title ?? '');
       setType(initial.type);
       setPrimaryAssignee(initial.primaryAssignee ?? initial.assignee);
@@ -219,6 +224,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
       secondaryAssignee: secondaryAssignee.trim() || undefined,
       clusterId: clusterId || undefined,
       clusterName: selectedCluster?.name,
+      projectId: projectId || undefined,
       title: title.trim() || undefined,
       category: resolvedCategory,
       content,
@@ -522,6 +528,24 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
           />
         </div>
       </div>
+
+      {/* ── 프로젝트 ────────────────────────────────────────────────────────── */}
+      {projects.length > 0 && (
+        <div>
+          <label htmlFor={f('project')} className="block text-[11px] font-medium text-muted-foreground mb-1">프로젝트</label>
+          <select
+            id={f('project')}
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="">미분류</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* ── 제목 ──────────────────────────────────────────────────────────── */}
       <div>

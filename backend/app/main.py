@@ -22,6 +22,7 @@ from app.routers import (
     playbooks_router,
     promql_router,
     work_items_router,
+    projects_router,
     ui_settings_router,
     workflows_router,
     work_guide_router,
@@ -478,7 +479,32 @@ def _run_migrations():
 
     # Phase B (knowledge-workitem-linkage) — service 하위 component 컬럼 추가 +
     # 기존 module 값을 service 로 1회성 backfill (idempotent).
+    if "projects" not in set(inspect(engine).get_table_names()):
+        try:
+            _safe_exec(
+                """CREATE TABLE IF NOT EXISTS projects (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(200) NOT NULL,
+                    description TEXT,
+                    goal TEXT,
+                    color VARCHAR(20) NOT NULL DEFAULT 'blue',
+                    start_date DATE,
+                    end_date DATE,
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )""",
+                label="projects table",
+            )
+        except Exception as e:
+            logger.warning(f"migration: projects table skipped ({e})")
+
     if "work_items" in set(inspect(engine).get_table_names()):
+        _safe_add_column("work_items", "project_id", "UUID REFERENCES projects(id) ON DELETE SET NULL")
+        _safe_exec(
+            "CREATE INDEX IF NOT EXISTS ix_work_items_project_id ON work_items(project_id)",
+            label="work_items.project_id index",
+        )
         _safe_add_column("work_items", "title", "VARCHAR(200)")
         _safe_add_column("work_items", "component", "VARCHAR(64)")
         _safe_exec(
@@ -1133,6 +1159,7 @@ app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(openclaw_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)

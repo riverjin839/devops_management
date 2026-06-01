@@ -5,11 +5,14 @@ import type { WorkItem } from '@/types';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, Filter,
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
-  ListChecks, Activity,
+  ListChecks, Activity, Plus, FolderOpen,
 } from 'lucide-react';
 import { ViewModeBar, SidePane } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml } from '@/lib/utils';
+import { useProjects } from '@/hooks/useProjects';
+import { ProjectHeader } from '@/components/wbs/ProjectHeader';
+import { ProjectFormModal } from '@/components/wbs/ProjectFormModal';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -314,6 +317,7 @@ function PersonalGanttView({
   dates,
   todayStr,
   onItemClick,
+  showAllAssignees = false,
 }: {
   assignee: string;
   tasks: WorkItem[];
@@ -321,9 +325,10 @@ function PersonalGanttView({
   dates: Date[];
   todayStr: string;
   onItemClick: (item: DayItem) => void;
+  showAllAssignees?: boolean;
 }) {
-  const myTasks = tasks.filter(t => (t.assignee || '미지정') === assignee);
-  const myIssues = issues.filter(i => (i.assignee || '미지정') === assignee);
+  const myTasks = showAllAssignees ? tasks : tasks.filter(t => (t.assignee || '미지정') === assignee);
+  const myIssues = showAllAssignees ? issues : issues.filter(i => (i.assignee || '미지정') === assignee);
 
   const startStr = dates.length > 0 ? fmtDate(dates[0]) : '';
   const endStr   = dates.length > 0 ? fmtDate(dates[dates.length - 1]) : '';
@@ -515,16 +520,25 @@ export function WbsFlowPage() {
   const [filterAssignee, setFilterAssignee] = useState('');
   const [selectedItem, setSelectedItem] = useState<DayItem | null>(null);
   const [showOnlyActive, setShowOnlyActive] = useState(false);
-  const [pageView, setPageView] = useState<'grid' | 'personal'>('personal');
+  const [pageView, setPageView] = useState<'project' | 'grid' | 'personal'>('project');
   const [personalAssignee, setPersonalAssignee] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+
+  // ── projects ──
+  const { data: projectsData } = useProjects();
+  const projects = useMemo(() => projectsData?.data ?? [], [projectsData]);
 
   // ── data fetching ── 통합 work_items 한 번에 가져와 type 으로 분할
   const { data: allRes } = useQuery({
     queryKey: ['wbs-work-items'],
     queryFn: () => workItemsApi.getAll().then(r => r.data.data),
   });
-  const tasks: WorkItem[]  = useMemo(() => (allRes ?? []).filter(w => w.type === 'task'), [allRes]);
-  const issues: WorkItem[] = useMemo(() => (allRes ?? []).filter(w => w.type === 'issue'), [allRes]);
+  const allItems: WorkItem[] = useMemo(() => allRes ?? [], [allRes]);
+  const tasks: WorkItem[]  = useMemo(() => allItems.filter(w => w.type === 'task'), [allItems]);
+  const issues: WorkItem[] = useMemo(() => allItems.filter(w => w.type === 'issue'), [allItems]);
+
+
 
   // ── date range ──
   const dayCount = viewMode === 'week' ? 7 : viewMode === 'twoWeek' ? 14 : 30;
@@ -662,19 +676,33 @@ export function WbsFlowPage() {
               <p className="text-xs text-muted-foreground">담당자별 역할 · 날짜별 업무 현황</p>
             </div>
           </div>
-          {/* 보기 모드 토글 */}
-          <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-xs">
+          <div className="flex items-center gap-2">
+            {/* 보기 모드 토글 */}
+            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-xs">
+              <button
+                onClick={() => setPageView('project')}
+                className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'project' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                프로젝트
+              </button>
+              <button
+                onClick={() => setPageView('grid')}
+                className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                전체 그리드
+              </button>
+              <button
+                onClick={() => setPageView('personal')}
+                className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'personal' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                개인별 간트
+              </button>
+            </div>
             <button
-              onClick={() => setPageView('grid')}
-              className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setShowNewProjectModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
             >
-              전체 그리드
-            </button>
-            <button
-              onClick={() => setPageView('personal')}
-              className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'personal' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              개인별 간트
+              <Plus className="w-3.5 h-3.5" /> 프로젝트
             </button>
           </div>
         </div>
@@ -721,6 +749,20 @@ export function WbsFlowPage() {
               showStylePanel={false}
             />
 
+            {pageView === 'project' && projects.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <FolderOpen className="w-3.5 h-3.5 text-primary" />
+                <select
+                  value={selectedProjectId}
+                  onChange={e => setSelectedProjectId(e.target.value)}
+                  className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="">전체 프로젝트</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            )}
+
             {pageView === 'personal' && (
               <div className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-primary" />
@@ -766,7 +808,86 @@ export function WbsFlowPage() {
           </div>
         </MacCard>
 
+        {/* ── 프로젝트 뷰 ─────────────────────────────────────────────── */}
+        {pageView === 'project' && (
+          <div className="space-y-4">
+            {projects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
+                  <FolderOpen className="w-7 h-7 opacity-50" />
+                </div>
+                <p className="text-sm mb-3">아직 프로젝트가 없습니다.</p>
+                <button
+                  onClick={() => setShowNewProjectModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
+                >
+                  <Plus className="w-3.5 h-3.5" /> 첫 프로젝트 만들기
+                </button>
+              </div>
+            ) : (
+              (selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects).map((project) => {
+                const pTasks = allItems.filter(w => w.projectId === project.id && w.type === 'task');
+                const pIssues = allItems.filter(w => w.projectId === project.id && w.type === 'issue');
+                return (
+                  <div key={project.id} className="space-y-2">
+                    <ProjectHeader
+                      project={project}
+                      onDeleted={() => selectedProjectId === project.id && setSelectedProjectId('')}
+                    />
+                    {(pTasks.length > 0 || pIssues.length > 0) ? (
+                      <MacCard bodyPadding="p-0" className="overflow-hidden">
+                        <div className="px-4 py-2 border-b border-border bg-muted/20 flex items-center gap-2">
+                          <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-xs font-medium text-muted-foreground">간트 · {pTasks.length + pIssues.length}건</span>
+                        </div>
+                        <PersonalGanttView
+                          assignee=""
+                          tasks={pTasks}
+                          issues={pIssues}
+                          dates={dates}
+                          todayStr={todayStr}
+                          onItemClick={setSelectedItem}
+                          showAllAssignees
+                        />
+                      </MacCard>
+                    ) : (
+                      <p className="text-xs text-muted-foreground px-1 py-2">소속 업무가 없습니다.</p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+            {/* 미분류 */}
+            {!selectedProjectId && (() => {
+              const unclassified = allItems.filter(w => !w.projectId);
+              if (unclassified.length === 0) return null;
+              const uTasks = unclassified.filter(w => w.type === 'task');
+              const uIssues = unclassified.filter(w => w.type === 'issue');
+              return (
+                <div className="space-y-2">
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-secondary/10 p-4">
+                    <p className="text-sm font-semibold text-muted-foreground">미분류 ({unclassified.length}건)</p>
+                    <p className="text-xs text-muted-foreground/70 mt-0.5">프로젝트에 소속되지 않은 업무</p>
+                  </div>
+                  <MacCard bodyPadding="p-0" className="overflow-hidden">
+                    <PersonalGanttView
+                      assignee=""
+                      tasks={uTasks}
+                      issues={uIssues}
+                      dates={dates}
+                      todayStr={todayStr}
+                      onItemClick={setSelectedItem}
+                      showAllAssignees
+                    />
+                  </MacCard>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* ── Body ────────────────────────────────────────────────────── */}
+        {pageView !== 'project' && (
         <MacCard
           bodyPadding="p-0"
           className="overflow-hidden"
@@ -888,6 +1009,7 @@ export function WbsFlowPage() {
           </div>
         )}
         </MacCard>
+        )}
 
         {/* ── Legend ──────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap px-1">
@@ -903,6 +1025,9 @@ export function WbsFlowPage() {
 
       {selectedItem && (
         <DetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />
+      )}
+      {showNewProjectModal && (
+        <ProjectFormModal onClose={() => setShowNewProjectModal(false)} />
       )}
     </div>
   );
