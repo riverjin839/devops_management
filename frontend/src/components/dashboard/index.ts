@@ -13,3 +13,4 @@ export { KanbanSummaryCharts } from './KanbanSummaryCharts';
 export { YesterdayChanges } from './YesterdayChanges';
 export { WorkCalendar } from './WorkCalendar';
 export { MemberTodayTodos } from './MemberTodayTodos';
+export { WeeklyWorkTable } from './WeeklyWorkTable';
