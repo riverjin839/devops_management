@@ -290,6 +290,8 @@ export interface WorkItem {
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
+  /** 짧은 제목 (선택). 미설정 시 content 텍스트를 제목으로 표시. */
+  title?: string;
   /** 분류/도메인 라벨. issue 의 issue_area / task 의 task_category 통합. */
   category: string;
   /** 본문 (rich HTML). issue 의 issue_content / task 의 task_content 통합. */
@@ -341,6 +343,7 @@ export interface WorkItemCreate {
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
+  title?: string;
   category: string;
   content: string;
   resolution?: string;

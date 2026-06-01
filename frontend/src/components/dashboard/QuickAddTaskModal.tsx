@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, X, Loader2, AlertTriangle, Server, Users, Tag,
-  CheckCircle2, ChevronRight,
+  CalendarDays, X, Loader2, AlertTriangle, Server, Users, ExternalLink,
+  CheckCircle2,
 } from 'lucide-react';
 import { useCreateWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
@@ -28,15 +29,6 @@ const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: 
   { value: 'low',    label: '낮음', dot: 'bg-emerald-500' },
 ];
 
-const STATUS_OPTIONS: { value: KanbanStatus; label: string }[] = [
-  { value: 'backlog',     label: '백로그' },
-  { value: 'todo',        label: '할일' },
-  { value: 'in_progress', label: '진행 중' },
-  { value: 'review_test', label: '검토' },
-  { value: 'done',        label: '완료' },
-];
-
-const PRESET_CATEGORIES = ['일반 업무', '점검', '배포', '구성 변경', '회의', '기타'];
 
 function buildScheduledAtIso(date: string, time: string): string {
   // KST → UTC 보존을 위해 datetime-local 같은 의미로 처리:
@@ -63,6 +55,7 @@ export function QuickAddTaskModal({
   open, defaultDate, defaultClusterId, onClose, onCreated,
 }: QuickAddTaskModalProps) {
   const toast = useToast();
+  const navigate = useNavigate();
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
@@ -71,34 +64,31 @@ export function QuickAddTaskModal({
   const createMut = useCreateWorkItem();
 
   const [selectedType, setSelectedType] = useState<WorkItemType | null>(null);
-  const [content, setTaskContent] = useState('');
+  const [title, setTitle] = useState('');
   const [assignee, setAssignee] = useState('');
-  const [category, setTaskCategory] = useState(PRESET_CATEGORIES[0]);
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('todo');
   const [time, setTime] = useState('09:00');
   const [clusterId, setClusterId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // 모달 열릴 때마다 입력값 초기화. defaultDate / defaultClusterId 만 전파.
+  // 모달 열릴 때마다 입력값 초기화.
   useEffect(() => {
     if (!open) return;
     setSelectedType(null);
-    setTaskContent('');
-    setTaskCategory(PRESET_CATEGORIES[0]);
+    setTitle('');
+    setAssignee('');
     setPriority('medium');
     setKanbanStatus('todo');
     setTime('09:00');
     setClusterId(defaultClusterId ?? '');
     setError(null);
-    // 첫 담당자가 있으면 기본 채움 (사용자 편의)
-    setAssignee((prev) => prev || (assignees[0]?.name ?? ''));
-  }, [open, defaultClusterId, assignees]);
+  }, [open, defaultClusterId]);
 
   if (!open) return null;
 
   const canSubmit = selectedType !== null
-    && content.trim().length > 0
+    && title.trim().length > 0
     && assignee.trim().length > 0
     && !createMut.isPending;
 
@@ -108,12 +98,14 @@ export function QuickAddTaskModal({
     setError(null);
     try {
       const cluster = clusters.find((c) => c.id === clusterId);
+      const trimmedTitle = title.trim();
       await createMut.mutateAsync({
         type: selectedType,
         assignee: assignee.trim(),
         primaryAssignee: assignee.trim(),
-        category: category.trim() || '일반 업무',
-        content: content.trim(),
+        title: trimmedTitle,
+        category: '일반 업무',
+        content: trimmedTitle,
         startedAt: buildScheduledAtIso(defaultDate, time),
         priority,
         kanbanStatus,
@@ -188,14 +180,14 @@ export function QuickAddTaskModal({
 
           {/* 제목 */}
           <div>
-            <label htmlFor={f('content')} className="text-xs font-medium text-muted-foreground mb-1 block">
-              내용 *
+            <label htmlFor={f('title')} className="text-xs font-medium text-muted-foreground mb-1 block">
+              제목 *
             </label>
             <input
-              id={f('content')}
+              id={f('title')}
               type="text"
-              value={content}
-              onChange={(e) => setTaskContent(e.target.value)}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               placeholder="예) 노드 NIC 점검, master1 kubelet 재기동…"
               autoFocus
               className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -237,7 +229,7 @@ export function QuickAddTaskModal({
             </div>
           </div>
 
-          {/* 담당자 + 상태 */}
+          {/* 담당자 + 클러스터 */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor={f('assignee')} className="text-xs font-medium text-muted-foreground mb-1 block flex items-center gap-1">
@@ -248,48 +240,13 @@ export function QuickAddTaskModal({
                 list={f('assignee-list')}
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
-                placeholder="이름"
+                placeholder="이름 입력 또는 선택"
                 className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 required
               />
               <datalist id={f('assignee-list')}>
                 {assignees.map((a) => (
                   <option key={a.name} value={a.name} />
-                ))}
-              </datalist>
-            </div>
-            <div>
-              <label htmlFor={f('status')} className="text-xs font-medium text-muted-foreground mb-1 block">상태</label>
-              <select
-                id={f('status')}
-                value={kanbanStatus}
-                onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* 카테고리 + 클러스터 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor={f('cat')} className="text-xs font-medium text-muted-foreground mb-1 block flex items-center gap-1">
-                <Tag className="w-3 h-3" /> 분류
-              </label>
-              <input
-                id={f('cat')}
-                list={f('cat-list')}
-                value={category}
-                onChange={(e) => setTaskCategory(e.target.value)}
-                placeholder="예) 점검, 배포…"
-                className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-              <datalist id={f('cat-list')}>
-                {PRESET_CATEGORIES.map((c) => (
-                  <option key={c} value={c} />
                 ))}
               </datalist>
             </div>
@@ -321,10 +278,13 @@ export function QuickAddTaskModal({
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border bg-muted/30">
-          <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
-            상세 항목은 업무 관리 게시판에서 추가 편집
-            <ChevronRight className="w-3 h-3" />
-          </p>
+          <button
+            type="button"
+            onClick={() => { onClose(); navigate(`/tasks-mgmt/new?startedAt=${defaultDate}T${time}`); }}
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" /> 상세 입력
+          </button>
           <div className="flex items-center gap-2">
             <button
               type="button"

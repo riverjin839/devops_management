@@ -1,8 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, HelpCircle, Sun } from 'lucide-react';
 import { OpsNoteForm } from '@/components/ops-notes';
-import { useAuthStore } from '@/stores/authStore';
-import { authApi } from '@/services/api';
+import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
 import { cn } from '@/lib/utils';
 
 export function OpsNoteFormPage() {
@@ -10,21 +9,7 @@ export function OpsNoteFormPage() {
   const [searchParams] = useSearchParams();
   const defaultService = searchParams.get('service') ?? 'k8s';
 
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
-  const editorWhiteBg = user?.editorWhiteBg ?? false;
-
-  const handleToggle = async () => {
-    if (!user) return;
-    const prev = user;
-    const next = !editorWhiteBg;
-    setUser({ ...user, editorWhiteBg: next });
-    try {
-      await authApi.patchPreferences({ editorWhiteBg: next });
-    } catch {
-      setUser(prev);
-    }
-  };
+  const { editorWhiteBg, toggle, isLoggedIn } = useEditorWhiteBg();
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,9 +24,9 @@ export function OpsNoteFormPage() {
           </button>
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">새 Q&amp;A</span>
-          {user && (
+          {isLoggedIn && (
             <button
-              onClick={handleToggle}
+              onClick={toggle}
               className={cn(
                 'ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
                 editorWhiteBg

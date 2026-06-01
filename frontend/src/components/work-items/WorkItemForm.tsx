@@ -78,6 +78,8 @@ interface WorkItemFormProps {
   defaultType?: WorkItemType;
   /** 하위 업무 등록 시 상위 업무 — 카테고리/담당자 자동 채움. */
   parentItem?: WorkItem | null;
+  /** 신규 등록 시 초기 날짜·시간 (YYYY-MM-DDTHH:mm). URL 파라미터나 달력 날짜 클릭에서 전달. */
+  defaultStartedAt?: string;
   onCancel: () => void;
   /** 저장 완료 후 콜백. id 는 신규 등록 시 발급된 새 id. */
   onSaved: (savedId?: string) => void;
@@ -85,7 +87,7 @@ interface WorkItemFormProps {
   embedded?: boolean;
 }
 
-export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCancel, onSaved, embedded = false }: WorkItemFormProps) {
+export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaultStartedAt, onCancel, onSaved, embedded = false }: WorkItemFormProps) {
   const isEdit = !!initial;
   const [type, setType] = useState<WorkItemType>(initial?.type ?? defaultType);
   const [detailContent, setDetailContent] = useState(initial?.detailContent ?? '');
@@ -100,6 +102,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
+  const [title, setTitle] = useState(initial?.title ?? '');
   const [primaryAssignee, setPrimaryAssignee] = useState('');
   const [secondaryAssignee, setSecondaryAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
@@ -112,7 +115,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
   const [componentCustom, setComponentCustom] = useState('');
   const [content, setTaskContent] = useState('');
   const [resolution, setResultContent] = useState('');
-  const [startedAt, setScheduledAt] = useState(todayDatetimeLocal());
+  const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? todayDatetimeLocal());
   const [closedAt, setCompletedAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
@@ -136,6 +139,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
     if (hydrated) return;
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
     if (isEdit && initial) {
+      setTitle(initial.title ?? '');
       setType(initial.type);
       setPrimaryAssignee(initial.primaryAssignee ?? initial.assignee);
       setSecondaryAssignee(initial.secondaryAssignee ?? '');
@@ -215,6 +219,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
       secondaryAssignee: secondaryAssignee.trim() || undefined,
       clusterId: clusterId || undefined,
       clusterName: selectedCluster?.name,
+      title: title.trim() || undefined,
       category: resolvedCategory,
       content,
       resolution: resolution || undefined,
@@ -518,7 +523,22 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, onCanc
         </div>
       </div>
 
-      {/* ── 본문 ★ 가장 중요 — type 에 따라 라벨 변경 ──────────────────────── */}
+      {/* ── 제목 ──────────────────────────────────────────────────────────── */}
+      <div>
+        <label htmlFor={f('title')} className="block text-sm font-semibold text-foreground mb-1.5">
+          제목
+        </label>
+        <input
+          id={f('title')}
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={type === 'issue' ? '이슈 제목 (예: master1 kubelet 재기동 필요)' : '업무 제목 (예: 노드 NIC 점검)'}
+          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+
+      {/* ── 본문 — type 에 따라 라벨 변경 ──────────────────────────────── */}
       <div>
         <label htmlFor={f('content')} className="block text-sm font-semibold text-foreground mb-1.5">
           {type === 'issue' ? '이슈 내용' : '작업 내용'} <span className="text-primary">*</span>

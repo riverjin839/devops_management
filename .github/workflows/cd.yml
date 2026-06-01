@@ -142,9 +142,10 @@ jobs:
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
         working-directory: k8s/overlays/dev
         run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
           kustomize edit set image \
-            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} \
-            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${SHORT_SHA} \
+            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${SHORT_SHA}
 
       - name: Deploy to Dev Kubernetes
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
@@ -222,9 +223,10 @@ jobs:
         if: steps.check-secret.outputs.has_kubeconfig == 'true'
         working-directory: k8s/overlays/prod
         run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
           kustomize edit set image \
-            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} \
-            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+            k8s-daily-monitor/backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${SHORT_SHA} \
+            k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${SHORT_SHA}
 
       - name: Deploy to Prod Kubernetes
         if: steps.check-secret.outputs.has_kubeconfig == 'true'

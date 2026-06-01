@@ -287,8 +287,8 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                       className={`w-5 h-5 rounded-md inline-flex items-center justify-center bg-card/80 backdrop-blur-sm shadow-sm border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-all ${
                         isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
                       }`}
-                      title="이 날짜에 일정 등록"
-                      aria-label={`${key} 일정 등록`}
+                      title="이 날짜에 업무 등록"
+                      aria-label={`${key} 업무 등록`}
                       tabIndex={inMonth ? 0 : -1}
                     >
                       <Plus className="w-3 h-3" />
