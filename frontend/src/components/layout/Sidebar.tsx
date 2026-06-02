@@ -239,8 +239,14 @@ export function Sidebar() {
   };
 
   const homeTooltip = location.pathname === '/'
-    ? (mode === 'work' ? '플랫폼 현황 보기' : '업무 현황으로 돌아가기')
+    ? (mode === 'work' ? '업무 현황 (클릭 시 플랫폼 현황)' : '플랫폼 현황 (클릭 시 업무 현황)')
     : '홈으로 이동';
+
+  // 홈 버튼 아이콘 — 현재 모드를 모양으로 구분(업무=ListTodo, 플랫폼=LayoutDashboard).
+  // 홈이 아닐 땐 일반 홈 아이콘.
+  const HomeButtonIcon = location.pathname === '/'
+    ? (mode === 'platform' ? LayoutDashboard : ListTodo)
+    : Home;
 
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
@@ -413,7 +419,7 @@ export function Sidebar() {
             onClick={handleHomeClick}
             title={homeTooltip}
             aria-label={homeTooltip}
-            className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-sm shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+            className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
               location.pathname === '/'
                 ? mode === 'platform'
                   ? 'ring-2 ring-sky-300/70'
@@ -421,7 +427,7 @@ export function Sidebar() {
                 : ''
             }`}
           >
-            ☸
+            <HomeButtonIcon className="w-5 h-5" />
           </button>
         </div>
 

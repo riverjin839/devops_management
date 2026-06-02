@@ -6,6 +6,7 @@ import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } 
 import { useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { ServiceChip } from '@/components/services/ServiceChip';
 import { stripHtml } from '@/lib/utils';
+import type { WorkItemColumnKey } from './workItemColumns';
 
 const KS_DOT: Record<string, string> = {
   backlog: 'bg-slate-400', todo: 'bg-blue-400', in_progress: 'bg-amber-400',
@@ -178,13 +179,17 @@ function TextareaInline({
 interface WorkItemTableRowProps {
   item: WorkItem;
   clusters: Cluster[];
+  /** 표시할 컬럼 키 (순서대로). 행 드래그 핸들은 별도 선두 고정. */
+  columns: WorkItemColumnKey[];
+  /** projectId → 프로젝트명 매핑 (읽기전용 표시용). */
+  projectNameById: Map<string, string>;
   isDragDisabled: boolean;
   onEdit: (item: WorkItem) => void;
   onDelete: (item: WorkItem) => void;
   onAddSubItem: (parent: WorkItem) => void;
 }
 
-export function WorkItemTableRow({ item, clusters, isDragDisabled, onEdit, onDelete, onAddSubItem }: WorkItemTableRowProps) {
+export function WorkItemTableRow({ item, clusters, columns, projectNameById, isDragDisabled, onEdit, onDelete, onAddSubItem }: WorkItemTableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -200,6 +205,309 @@ export function WorkItemTableRow({ item, clusters, isDragDisabled, onEdit, onDel
   const pStyle = PRI_STYLES[item.priority] ?? PRI_STYLES.medium;
   const hasImages = hasLocalImages(item.id);
 
+  // 컬럼 키 → 셀. 순서/표시여부는 호출부(columns)가 결정한다.
+  const renderCell = (key: WorkItemColumnKey): React.ReactNode => {
+    switch (key) {
+      case 'project':
+        return (
+          <td key="project" className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+            {item.projectId
+              ? (projectNameById.get(item.projectId) ?? '-')
+              : <span className="text-muted-foreground/50">-</span>}
+          </td>
+        );
+
+      case 'status':
+        return (
+          <EditableCell key="status" isEditing={editing === 'kanbanStatus'} onEnter={() => setEditing('kanbanStatus')} title="클릭하여 상태 변경">
+            {editing === 'kanbanStatus' ? (
+              <select
+                autoFocus
+                value={ks}
+                onChange={(e) => {
+                  const next = e.target.value as KanbanStatus;
+                  const patch: WorkItemUpdate = { kanbanStatus: next };
+                  // done 으로 바꾸면 closedAt 자동 채움(아직 비어있을 때)
+                  if (next === 'done' && !item.closedAt) patch.closedAt = todayDateInput();
+                  save(patch);
+                }}
+                onBlur={() => setEditing(null)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
+                className="w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
+              >
+                {KS_OPTIONS.map((s) => <option key={s} value={s}>{KS_LABEL[s]}</option>)}
+              </select>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-slate-400'}`} />
+                <span className={`text-xs font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-slate-400'}`}>
+                  {KS_LABEL[ks] ?? ks}
+                </span>
+              </span>
+            )}
+          </EditableCell>
+        );
+
+      case 'priority':
+        return (
+          <EditableCell key="priority" isEditing={editing === 'priority'} onEnter={() => setEditing('priority')} title="클릭하여 우선순위 변경">
+            {editing === 'priority' ? (
+              <select
+                autoFocus
+                value={item.priority}
+                onChange={(e) => save({ priority: e.target.value })}
+                onBlur={() => setEditing(null)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
+                className="w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
+              >
+                {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
+              </select>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
+                <span className={`text-xs font-medium ${pStyle.text}`}>{pStyle.label}</span>
+              </span>
+            )}
+          </EditableCell>
+        );
+
+      case 'assignee':
+        return (
+          <td key="assignee" className="px-4 py-3 font-medium whitespace-nowrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {editing === 'primaryAssignee' ? (
+                <TextInlineInput
+                  initial={item.primaryAssignee || item.assignee || ''}
+                  onSave={(v) => save({ primaryAssignee: v, assignee: v })}
+                  onCancel={() => setEditing(null)}
+                  placeholder="정 담당자"
+                  className="text-[11px] w-32"
+                />
+              ) : (
+                <span
+                  onClick={() => setEditing('primaryAssignee')}
+                  className="px-2 py-0.5 text-[11px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                  title="클릭하여 수정"
+                >
+                  정: {item.primaryAssignee || item.assignee || '-'}
+                </span>
+              )}
+              {editing === 'secondaryAssignee' ? (
+                <TextInlineInput
+                  initial={item.secondaryAssignee ?? ''}
+                  onSave={(v) => save({ secondaryAssignee: v || undefined })}
+                  onCancel={() => setEditing(null)}
+                  placeholder="부 담당자"
+                  className="text-[11px] w-32"
+                />
+              ) : item.secondaryAssignee ? (
+                <span
+                  onClick={() => setEditing('secondaryAssignee')}
+                  className="px-2 py-0.5 text-[11px] rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                  title="클릭하여 수정"
+                >
+                  부: {item.secondaryAssignee}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditing('secondaryAssignee')}
+                  className="px-1.5 py-0.5 text-[10px] rounded-full border border-dashed border-border text-muted-foreground/60 hover:text-foreground hover:border-primary/40 transition-colors inline-flex items-center gap-0.5"
+                  title="부 담당자 추가"
+                >
+                  <Plus className="w-2.5 h-2.5" />부
+                </button>
+              )}
+            </div>
+          </td>
+        );
+
+      case 'cluster':
+        return (
+          <EditableCell key="cluster" isEditing={editing === 'cluster'} onEnter={() => setEditing('cluster')} className="text-muted-foreground whitespace-nowrap">
+            {editing === 'cluster' ? (
+              <select
+                autoFocus
+                value={item.clusterId ?? ''}
+                onChange={(e) => {
+                  const id = e.target.value || undefined;
+                  const name = clusters.find((c) => c.id === id)?.name;
+                  save({ clusterId: id, clusterName: id ? name : undefined });
+                }}
+                onBlur={() => setEditing(null)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
+                className="w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
+              >
+                <option value="">—</option>
+                {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            ) : (item.clusterName || '-')}
+          </EditableCell>
+        );
+
+      case 'category':
+        return (
+          <EditableCell key="category" isEditing={editing === 'category'} onEnter={() => setEditing('category')}>
+            {editing === 'category' ? (
+              <TextInlineInput
+                initial={item.category}
+                onSave={(v) => save({ category: v })}
+                onCancel={() => setEditing(null)}
+                placeholder="작업 분류"
+              />
+            ) : (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
+                  {item.category}
+                </span>
+                {item.service && <ServiceChip service={item.service} />}
+              </div>
+            )}
+          </EditableCell>
+        );
+
+      case 'title':
+        // 읽기전용 — 편집은 상세 수정(✏) 화면에서. title 미설정 레거시 항목은 내용 첫 줄로 대체.
+        return (
+          <td key="title" className="px-4 py-3 max-w-xs">
+            <p className="line-clamp-2 text-foreground/90">
+              {item.title?.trim() || stripHtml(item.content) || '-'}
+            </p>
+          </td>
+        );
+
+      case 'content':
+        return (
+          <EditableCell key="content" isEditing={editing === 'content'} onEnter={() => setEditing('content')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
+            {editing === 'content' ? (
+              <TextareaInline
+                initial={stripHtml(item.content)}
+                onSave={(v) => save({ content: v })}
+                onCancel={() => setEditing(null)}
+                placeholder="작업 내용"
+              />
+            ) : (
+              <div className="flex items-start gap-1.5">
+                <p className="line-clamp-2 text-foreground/90">{stripHtml(item.content)}</p>
+                {hasImages && (
+                  <span title="이미지 첨부 있음"><ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" /></span>
+                )}
+              </div>
+            )}
+          </EditableCell>
+        );
+
+      case 'result':
+        return (
+          <EditableCell key="result" isEditing={editing === 'resolution'} onEnter={() => setEditing('resolution')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
+            {editing === 'resolution' ? (
+              <TextareaInline
+                initial={stripHtml(item.resolution ?? '')}
+                onSave={(v) => save({ resolution: v || undefined })}
+                onCancel={() => setEditing(null)}
+                placeholder="결과 내용"
+              />
+            ) : (
+              <p className="line-clamp-2 text-muted-foreground">
+                {stripHtml(item.resolution) || '-'}
+              </p>
+            )}
+          </EditableCell>
+        );
+
+      case 'startedAt':
+        return (
+          <EditableCell key="startedAt" isEditing={editing === 'startedAt'} onEnter={() => setEditing('startedAt')} className="text-muted-foreground whitespace-nowrap font-mono text-xs">
+            {editing === 'startedAt' ? (
+              <input
+                autoFocus
+                type="date"
+                defaultValue={toDateInput(item.startedAt)}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  if (v && v !== toDateInput(item.startedAt)) save({ startedAt: v });
+                  else setEditing(null);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
+                className="px-2 py-1 text-xs bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
+              />
+            ) : formatDateTime(item.startedAt)}
+          </EditableCell>
+        );
+
+      case 'closedAt':
+        return (
+          <EditableCell key="closedAt" isEditing={editing === 'closedAt'} onEnter={() => setEditing('closedAt')} className="text-muted-foreground whitespace-nowrap font-mono text-xs">
+            {editing === 'closedAt' ? (
+              <input
+                autoFocus
+                type="date"
+                defaultValue={toDateInput(item.closedAt)}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  if (v !== toDateInput(item.closedAt)) save({ closedAt: v || null });
+                  else setEditing(null);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
+                className="px-2 py-1 text-xs bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
+              />
+            ) : formatDateTime(item.closedAt)}
+          </EditableCell>
+        );
+
+      case 'remarks':
+        return (
+          <EditableCell key="remarks" isEditing={editing === 'remarks'} onEnter={() => setEditing('remarks')} className="max-w-[120px]">
+            {editing === 'remarks' ? (
+              <TextInlineInput
+                initial={item.remarks ?? ''}
+                onSave={(v) => save({ remarks: v || undefined })}
+                onCancel={() => setEditing(null)}
+                placeholder="비고"
+                className="text-xs"
+              />
+            ) : (
+              <p className="line-clamp-2 text-muted-foreground text-xs">
+                {item.remarks || '-'}
+              </p>
+            )}
+          </EditableCell>
+        );
+
+      case 'actions':
+        return (
+          <td key="actions" className="px-4 py-3">
+            <div className="flex items-center justify-center gap-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                title="전체 수정 (리치 텍스트 / 이미지 포함)"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onAddSubItem(item); }}
+                className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
+                title="하위 업무 추가"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(item); }}
+                className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
+                title="삭제"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </td>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
       <td className="px-2 py-3 w-7">
@@ -209,309 +517,23 @@ export function WorkItemTableRow({ item, clusters, isDragDisabled, onEdit, onDel
           </button>
         )}
       </td>
-
-      {/* Kanban Status */}
-      <EditableCell
-        isEditing={editing === 'kanbanStatus'}
-        onEnter={() => setEditing('kanbanStatus')}
-        title="클릭하여 상태 변경"
-      >
-        {editing === 'kanbanStatus' ? (
-          <select
-            autoFocus
-            value={ks}
-            onChange={(e) => {
-              const next = e.target.value as KanbanStatus;
-              const patch: WorkItemUpdate = { kanbanStatus: next };
-              // done 으로 바꾸면 closedAt 자동 채움(아직 비어있을 때)
-              if (next === 'done' && !item.closedAt) patch.closedAt = todayDateInput();
-              save(patch);
-            }}
-            onBlur={() => setEditing(null)}
-            onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
-            className="w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
-          >
-            {KS_OPTIONS.map((s) => <option key={s} value={s}>{KS_LABEL[s]}</option>)}
-          </select>
-        ) : (
-          <span className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-slate-400'}`} />
-            <span className={`text-xs font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-slate-400'}`}>
-              {KS_LABEL[ks] ?? ks}
-            </span>
-          </span>
-        )}
-      </EditableCell>
-
-      {/* Priority */}
-      <EditableCell
-        isEditing={editing === 'priority'}
-        onEnter={() => setEditing('priority')}
-        title="클릭하여 우선순위 변경"
-      >
-        {editing === 'priority' ? (
-          <select
-            autoFocus
-            value={item.priority}
-            onChange={(e) => save({ priority: e.target.value })}
-            onBlur={() => setEditing(null)}
-            onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
-            className="w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
-          >
-            {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
-          </select>
-        ) : (
-          <span className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
-            <span className={`text-xs font-medium ${pStyle.text}`}>{pStyle.label}</span>
-          </span>
-        )}
-      </EditableCell>
-
-      {/* Assignees */}
-      <td className="px-4 py-3 font-medium whitespace-nowrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {editing === 'primaryAssignee' ? (
-            <TextInlineInput
-              initial={item.primaryAssignee || item.assignee || ''}
-              onSave={(v) => save({ primaryAssignee: v, assignee: v })}
-              onCancel={() => setEditing(null)}
-              placeholder="정 담당자"
-              className="text-[11px] w-32"
-            />
-          ) : (
-            <span
-              onClick={() => setEditing('primaryAssignee')}
-              className="px-2 py-0.5 text-[11px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20 transition-colors"
-              title="클릭하여 수정"
-            >
-              정: {item.primaryAssignee || item.assignee || '-'}
-            </span>
-          )}
-          {editing === 'secondaryAssignee' ? (
-            <TextInlineInput
-              initial={item.secondaryAssignee ?? ''}
-              onSave={(v) => save({ secondaryAssignee: v || undefined })}
-              onCancel={() => setEditing(null)}
-              placeholder="부 담당자"
-              className="text-[11px] w-32"
-            />
-          ) : item.secondaryAssignee ? (
-            <span
-              onClick={() => setEditing('secondaryAssignee')}
-              className="px-2 py-0.5 text-[11px] rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20 transition-colors"
-              title="클릭하여 수정"
-            >
-              부: {item.secondaryAssignee}
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setEditing('secondaryAssignee')}
-              className="px-1.5 py-0.5 text-[10px] rounded-full border border-dashed border-border text-muted-foreground/60 hover:text-foreground hover:border-primary/40 transition-colors inline-flex items-center gap-0.5"
-              title="부 담당자 추가"
-            >
-              <Plus className="w-2.5 h-2.5" />부
-            </button>
-          )}
-        </div>
-      </td>
-
-      {/* Cluster */}
-      <EditableCell
-        isEditing={editing === 'cluster'}
-        onEnter={() => setEditing('cluster')}
-        className="text-muted-foreground whitespace-nowrap"
-      >
-        {editing === 'cluster' ? (
-          <select
-            autoFocus
-            value={item.clusterId ?? ''}
-            onChange={(e) => {
-              const id = e.target.value || undefined;
-              const name = clusters.find((c) => c.id === id)?.name;
-              save({ clusterId: id, clusterName: id ? name : undefined });
-            }}
-            onBlur={() => setEditing(null)}
-            onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
-            className="w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
-          >
-            <option value="">—</option>
-            {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        ) : (item.clusterName || '-')}
-      </EditableCell>
-
-      {/* Category */}
-      <EditableCell
-        isEditing={editing === 'category'}
-        onEnter={() => setEditing('category')}
-      >
-        {editing === 'category' ? (
-          <TextInlineInput
-            initial={item.category}
-            onSave={(v) => save({ category: v })}
-            onCancel={() => setEditing(null)}
-            placeholder="작업 분류"
-          />
-        ) : (
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-              {item.category}
-            </span>
-            {item.service && <ServiceChip service={item.service} />}
-          </div>
-        )}
-      </EditableCell>
-
-      {/* WorkItem content */}
-      <EditableCell
-        isEditing={editing === 'content'}
-        onEnter={() => setEditing('content')}
-        className="max-w-xs"
-        title="클릭하여 수정 (서식 보존은 ✏ 사용)"
-      >
-        {editing === 'content' ? (
-          <TextareaInline
-            initial={stripHtml(item.content)}
-            onSave={(v) => save({ content: v })}
-            onCancel={() => setEditing(null)}
-            placeholder="작업 내용"
-          />
-        ) : (
-          <div className="flex items-start gap-1.5">
-            <p className="line-clamp-2 text-foreground/90">{stripHtml(item.content)}</p>
-            {hasImages && (
-              <span title="이미지 첨부 있음"><ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" /></span>
-            )}
-          </div>
-        )}
-      </EditableCell>
-
-      {/* Result content */}
-      <EditableCell
-        isEditing={editing === 'resolution'}
-        onEnter={() => setEditing('resolution')}
-        className="max-w-xs"
-        title="클릭하여 수정 (서식 보존은 ✏ 사용)"
-      >
-        {editing === 'resolution' ? (
-          <TextareaInline
-            initial={stripHtml(item.resolution ?? '')}
-            onSave={(v) => save({ resolution: v || undefined })}
-            onCancel={() => setEditing(null)}
-            placeholder="결과 내용"
-          />
-        ) : (
-          <p className="line-clamp-2 text-muted-foreground">
-            {stripHtml(item.resolution) || '-'}
-          </p>
-        )}
-      </EditableCell>
-
-      {/* Scheduled at */}
-      <EditableCell
-        isEditing={editing === 'startedAt'}
-        onEnter={() => setEditing('startedAt')}
-        className="text-muted-foreground whitespace-nowrap font-mono text-xs"
-      >
-        {editing === 'startedAt' ? (
-          <input
-            autoFocus
-            type="date"
-            defaultValue={toDateInput(item.startedAt)}
-            onBlur={(e) => {
-              const v = e.target.value;
-              if (v && v !== toDateInput(item.startedAt)) save({ startedAt: v });
-              else setEditing(null);
-            }}
-            onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
-            className="px-2 py-1 text-xs bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
-          />
-        ) : formatDateTime(item.startedAt)}
-      </EditableCell>
-
-      {/* Completed at */}
-      <EditableCell
-        isEditing={editing === 'closedAt'}
-        onEnter={() => setEditing('closedAt')}
-        className="text-muted-foreground whitespace-nowrap font-mono text-xs"
-      >
-        {editing === 'closedAt' ? (
-          <input
-            autoFocus
-            type="date"
-            defaultValue={toDateInput(item.closedAt)}
-            onBlur={(e) => {
-              const v = e.target.value;
-              if (v !== toDateInput(item.closedAt)) save({ closedAt: v || null });
-              else setEditing(null);
-            }}
-            onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
-            className="px-2 py-1 text-xs bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
-          />
-        ) : formatDateTime(item.closedAt)}
-      </EditableCell>
-
-      {/* Remarks */}
-      <EditableCell
-        isEditing={editing === 'remarks'}
-        onEnter={() => setEditing('remarks')}
-        className="max-w-[120px]"
-      >
-        {editing === 'remarks' ? (
-          <TextInlineInput
-            initial={item.remarks ?? ''}
-            onSave={(v) => save({ remarks: v || undefined })}
-            onCancel={() => setEditing(null)}
-            placeholder="비고"
-            className="text-xs"
-          />
-        ) : (
-          <p className="line-clamp-2 text-muted-foreground text-xs">
-            {item.remarks || '-'}
-          </p>
-        )}
-      </EditableCell>
-
-      <td className="px-4 py-3">
-        <div className="flex items-center justify-center gap-1">
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-            className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
-            title="전체 수정 (리치 텍스트 / 이미지 포함)"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onAddSubItem(item); }}
-            className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
-            title="하위 업무 추가"
-          >
-            <GitBranch className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(item); }}
-            className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
-            title="삭제"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </td>
+      {columns.map((key) => renderCell(key))}
     </tr>
   );
 }
 
-/** 인라인 행 추가 — 테이블 꼬리. 필수: category + content + startedAt + primaryAssignee. */
+/** 인라인 행 추가 — 테이블 꼬리. 필수: category + content + startedAt + primaryAssignee.
+ *  컬럼 개인화(순서/숨김)와 무관하게 동작하도록 colSpan 한 줄 폼으로 렌더한다. */
 interface AddWorkItemRowProps {
   clusters: Cluster[];
+  /** 표시 컬럼 수 + 드래그 핸들(1) — 폼을 가로로 펼칠 colSpan. */
+  colSpan: number;
   defaultClusterId?: string;
   defaultAssignee?: string;
   onCreate: (data: WorkItemCreate) => void;
 }
 
-export function AddWorkItemRow({ clusters, defaultClusterId, defaultAssignee, onCreate }: AddWorkItemRowProps) {
+export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAssignee, onCreate }: AddWorkItemRowProps) {
   const [open, setOpen] = useState(false);
   const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('todo');
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium');
@@ -558,7 +580,7 @@ export function AddWorkItemRow({ clusters, defaultClusterId, defaultAssignee, on
   if (!open) {
     return (
       <tr className="border-t border-border bg-muted/10">
-        <td colSpan={11}>
+        <td colSpan={colSpan}>
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -571,66 +593,50 @@ export function AddWorkItemRow({ clusters, defaultClusterId, defaultAssignee, on
     );
   }
 
+  // 컬럼 표시/순서와 독립적인 한 줄 폼 — 필수 입력(분류·내용·시작일·정담당)을 항상 노출.
   return (
     <tr className="border-t border-border bg-primary/[0.04]">
-      <td className="px-2 py-3 w-7" />
-      <td className="px-4 py-3">
-        <select value={kanbanStatus} onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
-          className="w-full px-1.5 py-1 text-xs bg-background border border-border rounded">
-          {KS_OPTIONS.map((s) => <option key={s} value={s}>{KS_LABEL[s]}</option>)}
-        </select>
-      </td>
-      <td className="px-4 py-3">
-        <select value={priority} onChange={(e) => setPriority(e.target.value as 'high' | 'medium' | 'low')}
-          className="w-full px-1.5 py-1 text-xs bg-background border border-border rounded">
-          {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
-        </select>
-      </td>
-      <td className="px-4 py-3">
-        <input
-          ref={inputRef}
-          type="text"
-          value={primaryAssignee}
-          onChange={(e) => setPrimaryAssignee(e.target.value)}
-          placeholder="정 담당자 (필수)"
-          className="w-32 px-2 py-1 text-xs bg-background border border-border rounded"
-        />
-      </td>
-      <td className="px-4 py-3">
-        <select value={clusterId} onChange={(e) => setClusterId(e.target.value)}
-          className="w-full px-1.5 py-1 text-xs bg-background border border-border rounded">
-          <option value="">—</option>
-          {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </td>
-      <td className="px-4 py-3">
-        <input type="text" value={category} onChange={(e) => setTaskCategory(e.target.value)}
-          placeholder="분류 (필수)"
-          className="w-full px-2 py-1 text-xs bg-background border border-border rounded" />
-      </td>
-      <td className="px-4 py-3" colSpan={2}>
-        <input type="text" value={content} onChange={(e) => setTaskContent(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && canSave) { e.preventDefault(); submit(); }
-            if (e.key === 'Escape') { reset(); setOpen(false); }
-          }}
-          placeholder="작업 내용 (필수, Enter 저장)"
-          className="w-full px-2 py-1 text-xs bg-background border border-border rounded" />
-      </td>
-      <td className="px-4 py-3">
-        <input type="date" value={startedAt} onChange={(e) => setScheduledAt(e.target.value)}
-          className="w-full px-1.5 py-1 text-xs bg-background border border-border rounded font-mono" />
-      </td>
-      <td className="px-4 py-3" />
-      <td className="px-4 py-3" />
-      <td className="px-4 py-3">
-        <div className="flex flex-col gap-1 items-center">
+      <td colSpan={colSpan} className="px-3 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={kanbanStatus} onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
+            className="px-1.5 py-1 text-xs bg-background border border-border rounded">
+            {KS_OPTIONS.map((s) => <option key={s} value={s}>{KS_LABEL[s]}</option>)}
+          </select>
+          <select value={priority} onChange={(e) => setPriority(e.target.value as 'high' | 'medium' | 'low')}
+            className="px-1.5 py-1 text-xs bg-background border border-border rounded">
+            {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
+          </select>
+          <input
+            ref={inputRef}
+            type="text"
+            value={primaryAssignee}
+            onChange={(e) => setPrimaryAssignee(e.target.value)}
+            placeholder="정 담당자 (필수)"
+            className="w-32 px-2 py-1 text-xs bg-background border border-border rounded"
+          />
+          <select value={clusterId} onChange={(e) => setClusterId(e.target.value)}
+            className="px-1.5 py-1 text-xs bg-background border border-border rounded">
+            <option value="">— 클러스터 —</option>
+            {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input type="text" value={category} onChange={(e) => setTaskCategory(e.target.value)}
+            placeholder="분류 (필수)"
+            className="w-32 px-2 py-1 text-xs bg-background border border-border rounded" />
+          <input type="text" value={content} onChange={(e) => setTaskContent(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canSave) { e.preventDefault(); submit(); }
+              if (e.key === 'Escape') { reset(); setOpen(false); }
+            }}
+            placeholder="작업 내용 (필수, Enter 저장)"
+            className="flex-1 min-w-[180px] px-2 py-1 text-xs bg-background border border-border rounded" />
+          <input type="date" value={startedAt} onChange={(e) => setScheduledAt(e.target.value)}
+            className="px-1.5 py-1 text-xs bg-background border border-border rounded font-mono" />
           <button type="button" onClick={submit} disabled={!canSave}
-            className="px-2 py-1 text-[11px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1">
+            className="px-2.5 py-1 text-[11px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1">
             <Check className="w-3 h-3" /> 저장
           </button>
           <button type="button" onClick={() => { reset(); setOpen(false); }}
-            className="px-2 py-1 text-[11px] rounded-md text-muted-foreground hover:bg-secondary inline-flex items-center gap-1">
+            className="px-2.5 py-1 text-[11px] rounded-md text-muted-foreground hover:bg-secondary inline-flex items-center gap-1">
             <X className="w-3 h-3" /> 취소
           </button>
         </div>

@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClusterSidebar, ViewModeBar, DoubleScrollX, ConfirmDialog } from '@/components/common';
-import { MacCard } from '@/components/ui/MacCard';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow } from '@/components/work-items';
+import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu } from '@/components/work-items';
+import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
+import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
+import { useProjects } from '@/hooks/useProjects';
 import { useClusterStore } from '@/stores/clusterStore';
 import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
@@ -18,48 +21,62 @@ import { WorkItem, WorkItemModule, WorkItemType } from '@/types';
 
 type ViewMode = 'table' | 'calendar' | 'kanban';
 
-type WorkItemSortKey = 'kanbanStatus' | 'priority' | 'assignee' | 'clusterName' | 'category' | 'startedAt' | 'closedAt';
-
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-function SortTh({
-  label,
-  col,
+/** 컬럼 헤더 — 드래그 핸들(순서 변경) + 정렬 토글 + 우측 리사이즈 그립. */
+function DraggableSortHeader({
+  colKey,
   sortKey,
   sortDir,
   onSort,
-  className,
-  onResizeMouseDown,
-  onResizeDoubleClick,
+  colW,
 }: {
-  label: string;
-  col: WorkItemSortKey;
+  colKey: WorkItemColumnKey;
   sortKey: WorkItemSortKey | '';
   sortDir: 'asc' | 'desc';
   onSort: (col: WorkItemSortKey) => void;
-  className?: string;
-  onResizeMouseDown?: (e: React.MouseEvent) => void;
-  onResizeDoubleClick?: () => void;
+  colW: ReturnType<typeof useColumnWidths>;
 }) {
-  const isActive = sortKey === col;
+  const meta = WORK_ITEM_COLUMNS[colKey];
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: colKey });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
+  const sortable = !!meta.sortKey;
+  const isActive = sortable && sortKey === meta.sortKey;
   return (
     <th
-      onClick={() => onSort(col)}
-      className={`relative px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap cursor-pointer select-none group hover:text-foreground transition-colors ${className ?? ''}`}
+      ref={setNodeRef}
+      style={style}
+      className="relative px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap select-none bg-muted/30 group"
     >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        {isActive ? (
-          sortDir === 'asc' ? (
-            <ChevronUp className="w-3 h-3 text-primary" />
-          ) : (
-            <ChevronDown className="w-3 h-3 text-primary" />
-          )
+      <span className={`inline-flex items-center gap-1 ${meta.headerAlign === 'center' ? 'w-full justify-center' : ''}`}>
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground -ml-1 touch-none"
+          title="드래그하여 컬럼 순서 변경"
+          aria-label="컬럼 이동"
+        >
+          <GripVertical className="w-3 h-3" />
+        </button>
+        {sortable ? (
+          <button
+            type="button"
+            onClick={() => onSort(meta.sortKey!)}
+            className="inline-flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors"
+          >
+            {meta.label}
+            {isActive ? (
+              sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-primary" /> : <ChevronDown className="w-3 h-3 text-primary" />
+            ) : (
+              <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
+            )}
+          </button>
         ) : (
-          <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
+          <span>{meta.label}</span>
         )}
       </span>
-      {onResizeMouseDown && <ResizeGrip onMouseDown={onResizeMouseDown} onDoubleClick={onResizeDoubleClick} />}
+      <ResizeGrip onMouseDown={(e) => colW.beginResize(colKey, e)} onDoubleClick={() => colW.autoFit(colKey)} />
     </th>
   );
 }
@@ -79,16 +96,28 @@ export function WorkItemBoardPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const colW = useColumnWidths('item-board-table', {
-    defaults: {
-      drag: 28, status: 100, priority: 90, assignee: 200, cluster: 140, category: 120,
-      content: 280, result: 280,
-      startedAt: 130, closedAt: 130, remarks: 160, actions: 110,
-    },
+    defaults: COLUMN_WIDTH_DEFAULTS,
     min: 60, max: 800,
   });
 
+  // 컬럼 순서 / 표시여부 개인화 (localStorage 영속).
+  const colLayout = useColumnLayout<WorkItemColumnKey>('item-board-table', {
+    defaultOrder: DEFAULT_COLUMN_ORDER,
+    defaultVisible: DEFAULT_VISIBLE_COLUMNS,
+    alwaysVisible: ALWAYS_VISIBLE_COLUMNS,
+  });
+  const visibleCols = colLayout.visibleOrder;
+  const headerSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
   const { clusters } = useClusterStore();
   useClusters();
+
+  // 프로젝트명(읽기전용 컬럼) 매핑 — projectId → name.
+  const projectsQuery = useProjects();
+  const projectNameById = useMemo(
+    () => new Map((projectsQuery.data?.data ?? []).map((p) => [p.id, p.name])),
+    [projectsQuery.data],
+  );
 
   const filters = {
     type: typeFilter === 'all' ? undefined : typeFilter,
@@ -207,7 +236,7 @@ export function WorkItemBoardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-6 flex gap-3">
+      <main className="mx-auto px-4 lg:px-6 py-4 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={filterClusterId || null}
@@ -218,7 +247,7 @@ export function WorkItemBoardPage() {
         />
         <div className="flex-1 min-w-0">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <ListTodo className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">업무 관리 게시판</h1>
@@ -278,40 +307,107 @@ export function WorkItemBoardPage() {
           </div>
         </div>
 
-        {/* Type 탭 — 전체 / 작업 / 이슈 / 회의 / 교육 / 기타 */}
-        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-          <button
-            onClick={() => setTypeFilter('all')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-              typeFilter === 'all'
-                ? 'bg-primary/10 text-primary border-primary/30'
-                : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            전체
-          </button>
-          {WORK_ITEM_TYPE_ORDER.map((key) => {
-            const cfg = WORK_ITEM_TYPE_CONFIG[key];
-            const isActive = typeFilter === key;
-            return (
+        {/* Type 탭 (좌) + 검색/컬럼 컨트롤 (우) — 필터 박스를 없애고 이 라인 패턴으로 통합 */}
+        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setTypeFilter('all')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                typeFilter === 'all'
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              전체
+            </button>
+            {WORK_ITEM_TYPE_ORDER.map((key) => {
+              const cfg = WORK_ITEM_TYPE_CONFIG[key];
+              const isActive = typeFilter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setTypeFilter(key)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
+                    isActive
+                      ? `${cfg.cls} border-current`
+                      : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <cfg.Icon className="w-3.5 h-3.5" />
+                  {cfg.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 검색 컨트롤 — 라인 패턴(rounded-lg · bg-secondary · border)으로 통일 */}
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <input
+              type="text"
+              value={filterAssignee}
+              onChange={(e) => setFilterAssignee(e.target.value)}
+              placeholder="담당자"
+              aria-label="담당자 필터"
+              className="w-24 px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+            />
+            <input
+              type="text"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              placeholder="분류"
+              aria-label="분류 필터"
+              className="w-24 px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+            />
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              aria-label="우선순위 필터"
+              className="px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+            >
+              <option value="">우선순위</option>
+              <option value="high">높음</option>
+              <option value="medium">보통</option>
+              <option value="low">낮음</option>
+            </select>
+            <input
+              type="date"
+              value={filterFrom}
+              onChange={(e) => setFilterFrom(e.target.value)}
+              aria-label="시작일 (이후)"
+              title="시작일 (이후)"
+              className="px-2 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+            />
+            <span className="text-muted-foreground text-xs">~</span>
+            <input
+              type="date"
+              value={filterTo}
+              onChange={(e) => setFilterTo(e.target.value)}
+              aria-label="시작일 (이전)"
+              title="시작일 (이전)"
+              className="px-2 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+            />
+            {hasFilters && (
               <button
-                key={key}
-                onClick={() => setTypeFilter(key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
-                  isActive
-                    ? `${cfg.cls} border-current`
-                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                }`}
+                type="button"
+                onClick={clearFilters}
+                aria-label="필터 초기화"
+                className="px-2 py-1.5 text-xs rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
               >
-                <cfg.Icon className="w-3.5 h-3.5" />
-                {cfg.label}
+                <X className="w-3 h-3" />
+                초기화
               </button>
-            );
-          })}
+            )}
+            <ColumnSettingsMenu
+              order={colLayout.order}
+              isVisible={colLayout.isVisible}
+              onToggle={colLayout.toggleVisible}
+              onReset={colLayout.reset}
+            />
+          </div>
         </div>
 
         {/* 모듈 뷰 탭 */}
-        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
           <button
             onClick={() => setFilterModule('')}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
@@ -336,72 +432,6 @@ export function WorkItemBoardPage() {
             </button>
           ))}
         </div>
-
-        {/* G-I8: Filter Bar — MacCard wrapper 로 디자인 시스템 일관성 확보 */}
-        <MacCard title="필터" rootClassName="mb-6" bodyPadding="p-4">
-          {hasFilters && (
-            <div className="flex justify-end mb-3">
-              <button
-                type="button"
-                onClick={clearFilters}
-                aria-label="필터 초기화"
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-3 h-3" />
-                초기화
-              </button>
-            </div>
-          )}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            <input
-              type="text"
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              placeholder="담당자 검색"
-              aria-label="담당자 필터"
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-            />
-
-            <input
-              type="text"
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              placeholder="분류 검색"
-              aria-label="분류 필터"
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-            />
-
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              aria-label="우선순위 필터"
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-            >
-              <option value="">전체 우선순위</option>
-              <option value="high">높음</option>
-              <option value="medium">보통</option>
-              <option value="low">낮음</option>
-            </select>
-
-            <input
-              type="date"
-              value={filterFrom}
-              onChange={(e) => setFilterFrom(e.target.value)}
-              aria-label="시작일 (이후)"
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-              title="예정일 시작"
-            />
-
-            <input
-              type="date"
-              value={filterTo}
-              onChange={(e) => setFilterTo(e.target.value)}
-              aria-label="시작일 (이전)"
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-              title="예정일 종료"
-            />
-          </div>
-        </MacCard>
 
         {/* G-U2: error state 분기 — 이전엔 isLoading 만 있고 error 는 empty 로 흡수됐음 */}
         {error && (
@@ -473,40 +503,37 @@ export function WorkItemBoardPage() {
             <DoubleScrollX>
               <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
-                  {(['drag', 'status', 'priority', 'assignee', 'cluster', 'category', 'content', 'result', 'startedAt', 'closedAt', 'remarks', 'actions'] as const).map((k) => (
+                  <col style={{ width: `${colW.getWidth('drag')}px` }} />
+                  {visibleCols.map((k) => (
                     <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />
                   ))}
                 </colgroup>
                 <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th />
-                    <SortTh label="상태" col="kanbanStatus" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('status', e)} onResizeDoubleClick={() => colW.autoFit('status')} />
-                    <SortTh label="우선순위" col="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('priority', e)} onResizeDoubleClick={() => colW.autoFit('priority')} />
-                    <SortTh label="담당자(정/부)" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('assignee', e)} onResizeDoubleClick={() => colW.autoFit('assignee')} />
-                    <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('cluster', e)} onResizeDoubleClick={() => colW.autoFit('cluster')} />
-                    <SortTh label="작업 분류" col="category" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('category', e)} onResizeDoubleClick={() => colW.autoFit('category')} />
-                    <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">작업 내용
-                      <ResizeGrip onMouseDown={(e) => colW.beginResize('content', e)} onDoubleClick={() => colW.autoFit('content')} />
-                    </th>
-                    <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">작업 결과
-                      <ResizeGrip onMouseDown={(e) => colW.beginResize('result', e)} onDoubleClick={() => colW.autoFit('result')} />
-                    </th>
-                    <SortTh label="예정일" col="startedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('startedAt', e)} onResizeDoubleClick={() => colW.autoFit('startedAt')} />
-                    <SortTh label="완료일" col="closedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
-                      onResizeMouseDown={(e) => colW.beginResize('closedAt', e)} onResizeDoubleClick={() => colW.autoFit('closedAt')} />
-                    <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">비고
-                      <ResizeGrip onMouseDown={(e) => colW.beginResize('remarks', e)} onDoubleClick={() => colW.autoFit('remarks')} />
-                    </th>
-                    <th className="relative px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업
-                      <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
-                    </th>
-                  </tr>
+                  <DndContext
+                    sensors={headerSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(e: DragEndEvent) => {
+                      if (e.over && e.active.id !== e.over.id) {
+                        colLayout.reorder(e.active.id as WorkItemColumnKey, e.over.id as WorkItemColumnKey);
+                      }
+                    }}
+                  >
+                    <SortableContext items={visibleCols} strategy={horizontalListSortingStrategy}>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th />
+                        {visibleCols.map((k) => (
+                          <DraggableSortHeader
+                            key={k}
+                            colKey={k}
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSort={handleSort}
+                            colW={colW}
+                          />
+                        ))}
+                      </tr>
+                    </SortableContext>
+                  </DndContext>
                 </thead>
                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
                   <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
@@ -516,6 +543,8 @@ export function WorkItemBoardPage() {
                       key={item.id}
                       item={item}
                       clusters={clusters}
+                      columns={visibleCols}
+                      projectNameById={projectNameById}
                       isDragDisabled={!!sortKey}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
@@ -524,6 +553,7 @@ export function WorkItemBoardPage() {
                   ))}
                   <AddWorkItemRow
                     clusters={clusters}
+                    colSpan={visibleCols.length + 1}
                     defaultClusterId={filterClusterId || undefined}
                     defaultAssignee={filterAssignee || undefined}
                     onCreate={(data) => createTask.mutate(data)}
