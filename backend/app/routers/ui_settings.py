@@ -77,6 +77,7 @@ def get_ui_settings(db: Session = Depends(get_db)):
         app_title=stored_title,
         nav_labels=value.get("nav_labels", {}),
         service_catalog=value.get("service_catalog"),
+        home_icons=value.get("home_icons"),
     )
 
 
@@ -103,6 +104,12 @@ def update_ui_settings(payload: UiSettingsUpdate, db: Session = Depends(get_db))
     elif "service_catalog" in current:
         next_value["service_catalog"] = current["service_catalog"]
 
+    # 홈 버튼 아이콘 — 프론트가 항상 work/platform 전체를 보내므로 통째로 저장.
+    if payload.home_icons is not None:
+        next_value["home_icons"] = payload.home_icons.model_dump(exclude_none=False)
+    elif "home_icons" in current:
+        next_value["home_icons"] = current["home_icons"]
+
     setting.value = next_value
     db.commit()
     db.refresh(setting)
@@ -111,6 +118,7 @@ def update_ui_settings(payload: UiSettingsUpdate, db: Session = Depends(get_db))
         app_title=next_value["app_title"],
         nav_labels=next_value["nav_labels"],
         service_catalog=next_value.get("service_catalog"),
+        home_icons=next_value.get("home_icons"),
     )
 
 

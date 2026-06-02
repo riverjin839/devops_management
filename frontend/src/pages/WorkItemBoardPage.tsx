@@ -549,6 +549,7 @@ export function WorkItemBoardPage() {
                       onEdit={handleEdit}
                       onDelete={handleDelete}
                       onAddSubItem={handleAddSubItem}
+                      onOpenDetail={openTaskDetail}
                     />
                   ))}
                   <AddWorkItemRow

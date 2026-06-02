@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen, Database } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen, Database, ListTodo } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
 import { ServiceCatalogManager } from '@/components/settings/ServiceCatalogManager';
@@ -7,6 +7,7 @@ import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeMan
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
+import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
@@ -342,6 +343,33 @@ export function SettingsPage() {
   const [iconPickerAnchor, setIconPickerAnchor] = useState<DOMRect | null>(null);
   const updateClusterMut = useUpdateCluster();
 
+  // 홈 버튼 아이콘 커스터마이즈 (업무/플랫폼 모드별).
+  const { data: uiSettings } = useUiSettings();
+  const updateUiSettings = useUpdateUiSettings();
+  const [homeIconPickerMode, setHomeIconPickerMode] = useState<null | 'work' | 'platform'>(null);
+  const [homeIconAnchor, setHomeIconAnchor] = useState<DOMRect | null>(null);
+
+  const saveHomeIcon = (target: 'work' | 'platform', next: string | null) => {
+    // work/platform 전체를 항상 함께 전송해 다른 모드 값이 초기화되지 않도록.
+    updateUiSettings.mutate({
+      homeIcons: {
+        work: target === 'work' ? next : (uiSettings?.homeIcons?.work ?? null),
+        platform: target === 'platform' ? next : (uiSettings?.homeIcons?.platform ?? null),
+      },
+    });
+  };
+
+  const renderHomeIconPreview = (target: 'work' | 'platform', iconStr?: string | null) => {
+    const resolved = resolveClusterIcon(iconStr);
+    if (resolved?.kind === 'lucide') { const IconC = resolved.Component; return <IconC className="w-5 h-5" />; }
+    if (resolved?.kind === 'image') return <img src={resolved.value} alt="" className="w-6 h-6 object-contain rounded-sm" />;
+    if (resolved?.kind === 'text') return <span className="text-base leading-none">{resolved.value}</span>;
+    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=☸)
+    return target === 'platform'
+      ? <span className="text-base leading-none">☸</span>
+      : <ListTodo className="w-5 h-5" />;
+  };
+
   // Assignee management state
   const { data: assignees = [] } = useAssignees();
   const updateAssignees = useUpdateAssignees();
@@ -566,7 +594,49 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
+
+          {/* 홈 버튼 아이콘 커스터마이즈 — 좌측 상단 홈 버튼(업무/플랫폼 모드 전환) */}
+          {([
+            { mode: 'work' as const, label: '업무 현황 홈 아이콘', hint: '좌측 상단 홈 버튼 · 업무 모드 (기본: 목록 아이콘)' },
+            { mode: 'platform' as const, label: '플랫폼 현황 홈 아이콘', hint: '좌측 상단 홈 버튼 · 플랫폼 모드 (기본: ☸ 톱니)' },
+          ]).map(({ mode, label, hint }) => (
+            <div key={mode} className="px-4 py-3 flex items-center justify-between border-t border-border">
+              <div>
+                <p className="text-sm">{label}</p>
+                <p className="text-[11px] text-muted-foreground">{hint}</p>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  setHomeIconPickerMode(mode);
+                  setHomeIconAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+                }}
+                className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-lg border border-border bg-secondary hover:bg-secondary/70 transition-colors"
+                title="클릭하여 아이콘 변경"
+              >
+                <span className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-sky-700 text-white flex items-center justify-center flex-shrink-0">
+                  {renderHomeIconPreview(mode, uiSettings?.homeIcons?.[mode])}
+                </span>
+                <span className="text-xs text-muted-foreground">변경</span>
+                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            </div>
+          ))}
         </div>
+
+        {/* 홈 아이콘 picker — 탭과 무관하게 동작 */}
+        {homeIconPickerMode && (
+          <ClusterIconPicker
+            title={homeIconPickerMode === 'work' ? '업무 현황 홈 아이콘' : '플랫폼 현황 홈 아이콘'}
+            value={uiSettings?.homeIcons?.[homeIconPickerMode] ?? null}
+            anchorRect={homeIconAnchor}
+            onChange={(next) => saveHomeIcon(homeIconPickerMode, next)}
+            onClose={() => {
+              setHomeIconPickerMode(null);
+              setHomeIconAnchor(null);
+            }}
+          />
+        )}
 
         {/* Cluster Tab: Summary Cards */}
         {activeTab === 'cluster' && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
