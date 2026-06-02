@@ -908,6 +908,12 @@ export function SettingsPage() {
             </button>
           </div>
 
+          <div className="px-6 py-3 border-b border-border bg-primary/5 text-xs text-muted-foreground leading-relaxed">
+            사번을 입력해 담당자를 등록하면 <b className="text-foreground font-medium">자동으로 로그인 계정</b>이 생성됩니다 —
+            아이디와 초기 비밀번호는 모두 <b className="text-foreground font-medium">사번</b>, 권한은 <b className="text-foreground font-medium">OPERATOR</b>입니다.
+            로그인 후 설정에서 비밀번호를 변경하세요. (사번이 없는 담당자는 계정이 생성되지 않습니다.)
+          </div>
+
           <DoubleScrollX>
             <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
               <colgroup>

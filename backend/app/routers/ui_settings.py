@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.app_setting import AppSetting
+from app.services.assignee_accounts import sync_assignee_accounts
 from app.schemas.ui_settings import (
     UiSettingsResponse,
     UiSettingsUpdate,
@@ -184,7 +185,13 @@ def update_assignees(payload: dict, db: Session = Depends(get_db)):
     setting.value = cleaned
     db.commit()
     db.refresh(setting)
-    return {"data": cleaned}
+    # 사번이 있는 담당자는 자동으로 operator 로그인 계정을 부여 (초기 비번 = 사번).
+    # 계정 생성 실패가 담당자 저장 자체를 막지 않도록 방어적으로 감싼다.
+    try:
+        accounts = sync_assignee_accounts(db, cleaned)
+    except Exception:  # noqa: BLE001
+        accounts = {"created": [], "skipped_existing": [], "skipped_no_employee_id": [], "errors": []}
+    return {"data": cleaned, "accounts": accounts}
 
 
 # ── 운영레벨 (사용자 정의) ──────────────────────────────────────────────
