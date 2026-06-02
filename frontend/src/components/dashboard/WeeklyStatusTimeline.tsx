@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
-  CheckCircle2, Clock, Circle, AlertCircle,
+  CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { stripHtml } from '@/lib/utils';
+
+// 평일(월~금)만 표시한다.
+const DAY_COUNT = 5;
 
 // ── date helpers ──────────────────────────────────────────────────────────────
 function fmtDate(d: Date): string {
@@ -16,16 +20,21 @@ function addDays(d: Date, n: number): Date {
   r.setDate(r.getDate() + n);
   return r;
 }
+/** 해당 날짜가 속한 주의 월요일 0시. */
 function startOfWeek(d: Date): Date {
   const r = new Date(d);
   r.setHours(0, 0, 0, 0);
-  r.setDate(r.getDate() - r.getDay()); // Sunday start
+  const day = r.getDay();               // 0=일 … 6=토
+  const diff = day === 0 ? -6 : 1 - day; // 월요일로 back
+  r.setDate(r.getDate() + diff);
   return r;
 }
 function weeksBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / (7 * 86400000));
 }
 const KR_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+type ViewMode = 'task' | 'assignee';
 
 // ── status visual map (macOS / Claude soft gradient bars) ───────────────────────
 const STATUS_BAR: Record<KanbanStatus, { grad: string; ring: string; label: string }> = {
@@ -46,14 +55,32 @@ function StatusGlyph({ status }: { status: KanbanStatus }) {
 // ── derived row models ──────────────────────────────────────────────────────────
 interface TaskBar {
   item: WorkItem;
-  startIdx: number;     // 0-6 within the visible week
-  endIdx: number;       // 0-6 within the visible week
+  startIdx: number;     // 0..DAY_COUNT-1 within the visible week
+  endIdx: number;       // 0..DAY_COUNT-1 within the visible week
   clippedLeft: boolean; // bar starts before this week
-  clippedRight: boolean;// bar ends after this week
+  clippedRight: boolean;// bar ends after this week (or after Fri)
 }
 interface Milestone {
   issue: WorkItem;
-  dayIdx: number;       // 0-6
+  dayIdx: number;       // 0..DAY_COUNT-1
+}
+interface AssigneeRow {
+  name: string;
+  lanes: TaskBar[][];   // greedy-packed sub-lanes so overlapping bars never collide
+}
+
+/** 겹치지 않게 막대를 sub-lane 으로 분배 (greedy interval packing). */
+function packLanes(bars: TaskBar[]): TaskBar[][] {
+  const lanes: TaskBar[][] = [];
+  const sorted = [...bars].sort((a, b) => a.startIdx - b.startIdx || a.endIdx - b.endIdx);
+  for (const bar of sorted) {
+    let placed = false;
+    for (const lane of lanes) {
+      if (lane[lane.length - 1].endIdx < bar.startIdx) { lane.push(bar); placed = true; break; }
+    }
+    if (!placed) lanes.push([bar]);
+  }
+  return lanes;
 }
 
 interface WeeklyStatusTimelineProps {
@@ -64,16 +91,22 @@ interface WeeklyStatusTimelineProps {
 }
 
 export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: WeeklyStatusTimelineProps) {
+  const navigate = useNavigate();
   const { data, isLoading: queryLoading } = useWorkItems();
   const workItems = items ?? data?.data ?? [];
   const loading = isLoading ?? queryLoading;
 
+  // 막대/마일스톤 클릭 → 상세 업무 페이지로 이동.
+  const openWorkItem = (id: string) => navigate(`/tasks-mgmt/${id}`);
+
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+  const [viewMode, setViewMode] = useState<ViewMode>('task');
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  // 월~금 5일.
+  const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekStartStr = fmtDate(weekStart);
-  const weekEndStr = fmtDate(days[6]);
+  const weekEndStr = fmtDate(days[DAY_COUNT - 1]);
   const todayStr = fmtDate(today);
 
   // cluster filter + type split (작업류 = bar, issue = milestone)
@@ -91,13 +124,13 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       const eRaw = item.closedAt?.slice(0, 10)
         ?? ((item.kanbanStatus ?? 'todo') === 'done' ? s : fmtDate(today));
       const e = eRaw < s ? s : eRaw;
-      // overlap test against [weekStartStr, weekEndStr]
+      // overlap test against [weekStartStr(월), weekEndStr(금)]
       if (e < weekStartStr || s > weekEndStr) continue;
 
       const startIdx = days.findIndex(d => fmtDate(d) >= s);
       const startClamped = startIdx === -1 ? 0 : (s <= weekStartStr ? 0 : startIdx);
-      let endClamped = 6;
-      for (let i = 6; i >= 0; i--) { if (fmtDate(days[i]) <= e) { endClamped = i; break; } }
+      let endClamped = DAY_COUNT - 1;
+      for (let i = DAY_COUNT - 1; i >= 0; i--) { if (fmtDate(days[i]) <= e) { endClamped = i; break; } }
       out.push({
         item,
         startIdx: startClamped,
@@ -112,6 +145,19 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       a.startIdx - b.startIdx || (prio[a.item.priority] ?? 1) - (prio[b.item.priority] ?? 1));
   }, [taskItems, days, weekStartStr, weekEndStr, today]);
 
+  // ── assignee swimlanes (작업자 기준 보기) ──
+  const assigneeRows: AssigneeRow[] = useMemo(() => {
+    const map = new Map<string, TaskBar[]>();
+    for (const b of taskBars) {
+      const key = b.item.primaryAssignee || b.item.assignee || '미지정';
+      const arr = map.get(key);
+      if (arr) arr.push(b); else map.set(key, [b]);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], 'ko'))
+      .map(([name, bars]) => ({ name, lanes: packLanes(bars) }));
+  }, [taskBars]);
+
   // ── milestones (issues that occurred this week) ──
   const milestones: Milestone[] = useMemo(() => {
     const out: Milestone[] = [];
@@ -125,7 +171,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   }, [issueItems, days, weekStartStr, weekEndStr]);
 
   const monthLabel = (() => {
-    const a = weekStart, b = days[6];
+    const a = weekStart, b = days[DAY_COUNT - 1];
     const fa = `${a.getMonth() + 1}월`;
     const fb = `${b.getMonth() + 1}월`;
     return fa === fb ? fa : `${fa}–${fb}`;
@@ -155,7 +201,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const goToday = () => setWeekStart(startOfWeek(new Date()));
   const isThisWeek = weekStartStr === fmtDate(startOfWeek(today));
   const rangeStart = minWeek;
-  const rangeEnd = addDays(minWeek, (totalWeeks - 1) * 7 + 6);
+  const rangeEnd = addDays(minWeek, (totalWeeks - 1) * 7 + (DAY_COUNT - 1));
   const shortDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 
   // thumb-center alignment for ticks/tooltip (thumb is 16px wide)
@@ -182,6 +228,18 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, totalWeeks, minWeek]);
 
+  // 공통: 요일 컬럼 배경 셀 (track 뒤에 깔리는 grid lines)
+  const DayCells = () => (
+    <>
+      {days.map((d) => {
+        const isTd = fmtDate(d) === todayStr;
+        return <div key={fmtDate(d)} className={`border-l border-border/40 ${isTd ? 'bg-primary/[0.04]' : ''}`} />;
+      })}
+    </>
+  );
+
+  const colsClass = 'grid-cols-5'; // 평일 5컬럼 (Tailwind 가 literal 로 인식하도록 고정)
+
   return (
     <div className="space-y-3">
       {/* ── toolbar ─────────────────────────────────────────────────────────── */}
@@ -197,9 +255,28 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             </button>
           )}
         </div>
-        <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />작업 {taskBars.length}</span>
-          <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />마일스톤 {milestones.length}</span>
+        <div className="flex items-center gap-3">
+          {/* 보기 전환: 작업 기준 ↔ 작업자 기준 */}
+          <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px]">
+            <button
+              onClick={() => setViewMode('task')}
+              aria-pressed={viewMode === 'task'}
+              className={`flex items-center gap-1 px-2 py-1 transition-colors ${
+                viewMode === 'task' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'}`}>
+              <ListTree className="w-3 h-3" /> 작업 기준
+            </button>
+            <button
+              onClick={() => setViewMode('assignee')}
+              aria-pressed={viewMode === 'assignee'}
+              className={`flex items-center gap-1 px-2 py-1 border-l border-border transition-colors ${
+                viewMode === 'assignee' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'}`}>
+              <Users className="w-3 h-3" /> 작업자 기준
+            </button>
+          </div>
+          <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />작업 {taskBars.length}</span>
+            <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />마일스톤 {milestones.length}</span>
+          </div>
         </div>
       </div>
 
@@ -231,7 +308,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               className="pointer-events-none absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-1.5 py-0.5 text-[10px] font-medium text-background opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100 peer-active:opacity-100"
               style={{ left: centerLeft(frac) }}
             >
-              {shortDate(weekStart)} ~ {shortDate(days[6])}
+              {shortDate(weekStart)} ~ {shortDate(days[DAY_COUNT - 1])}
             </div>
           </div>
 
@@ -275,18 +352,19 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
 
       {/* ── timeline grid ───────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
-        {/* header: weekday columns */}
+        {/* header: weekday columns (월~금) */}
         <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
-          <div className="px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">작업 / 마일스톤</div>
-          <div className="grid grid-cols-7">
+          <div className="px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+            {viewMode === 'assignee' ? '작업자 / 마일스톤' : '작업 / 마일스톤'}
+          </div>
+          <div className={`grid ${colsClass}`}>
             {days.map((d) => {
               const ds = fmtDate(d);
               const isTd = ds === todayStr;
-              const isWE = d.getDay() === 0 || d.getDay() === 6;
               return (
                 <div key={ds}
-                  className={`px-1 py-2 text-center border-l border-border/60 ${isTd ? 'bg-primary/10' : isWE ? 'bg-secondary/40' : ''}`}>
-                  <div className={`text-[10px] ${isTd ? 'text-primary font-bold' : isWE ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
+                  className={`px-1 py-2 text-center border-l border-border/60 ${isTd ? 'bg-primary/10' : ''}`}>
+                  <div className={`text-[10px] ${isTd ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
                     {KR_DAYS[d.getDay()]}
                   </div>
                   <div className={`text-[11px] font-semibold ${isTd ? 'text-primary' : ''}`}>
@@ -322,32 +400,29 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                 <div className="px-4 py-2.5 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600">
                   <Flag className="w-3.5 h-3.5" /> 마일스톤
                 </div>
-                <div className="relative grid grid-cols-7 min-h-[44px]">
-                  {days.map((d) => {
-                    const isWE = d.getDay() === 0 || d.getDay() === 6;
-                    const isTd = fmtDate(d) === todayStr;
-                    return <div key={fmtDate(d)} className={`border-l border-border/40 ${isTd ? 'bg-primary/[0.04]' : isWE ? 'bg-secondary/20' : ''}`} />;
-                  })}
+                <div className={`relative grid ${colsClass} min-h-[44px]`}>
+                  <DayCells />
                   {milestones.map(({ issue, dayIdx }) => {
                     const resolved = !!issue.closedAt;
                     return (
-                      <div key={issue.id}
-                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 group"
-                        style={{ left: `${(dayIdx / 7) * 100}%`, width: `${(1 / 7) * 100}%` }}
+                      <button key={issue.id} type="button"
+                        onClick={() => openWorkItem(issue.id)}
+                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 text-left rounded hover:bg-amber-500/10 transition-colors cursor-pointer"
+                        style={{ left: `${(dayIdx / DAY_COUNT) * 100}%`, width: `${(1 / DAY_COUNT) * 100}%` }}
                         title={stripHtml(issue.content)}>
                         <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-emerald-500 fill-emerald-400' : 'text-amber-500 fill-amber-400'}`} />
                         <span className={`text-[10px] font-medium truncate ${resolved ? 'text-emerald-600' : 'text-amber-700'}`}>
                           {stripHtml(issue.content)}
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               </div>
             )}
 
-            {/* task rows */}
-            {taskBars.map(({ item, startIdx, endIdx, clippedLeft, clippedRight }) => {
+            {/* ── 작업 기준: 한 작업 = 한 행 ── */}
+            {viewMode === 'task' && taskBars.map(({ item, startIdx, endIdx, clippedLeft, clippedRight }) => {
               const status = item.kanbanStatus ?? 'todo';
               const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
               const span = endIdx - startIdx + 1;
@@ -365,23 +440,70 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                     )}
                   </div>
                   {/* track */}
-                  <div className="relative grid grid-cols-7 min-h-[44px]">
-                    {days.map((d) => {
-                      const isWE = d.getDay() === 0 || d.getDay() === 6;
-                      const isTd = fmtDate(d) === todayStr;
-                      return <div key={fmtDate(d)} className={`border-l border-border/40 ${isTd ? 'bg-primary/[0.04]' : isWE ? 'bg-secondary/20' : ''}`} />;
-                    })}
+                  <div className={`relative grid ${colsClass} min-h-[44px]`}>
+                    <DayCells />
                     {/* bar */}
                     <div
                       className="absolute top-1/2 -translate-y-1/2 px-1.5 py-1"
-                      style={{ left: `${(startIdx / 7) * 100}%`, width: `${(span / 7) * 100}%` }}
+                      style={{ left: `${(startIdx / DAY_COUNT) * 100}%`, width: `${(span / DAY_COUNT) * 100}%` }}
                     >
-                      <div className={`h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden
+                      <button type="button"
+                        onClick={() => openWorkItem(item.id)}
+                        title={stripHtml(item.content)}
+                        className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-[10px] font-semibold truncate">{team || sv.label}</span>
-                      </div>
+                      </button>
                     </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* ── 작업자 기준: 한 작업자 = 한 swimlane(여러 sub-lane) ── */}
+            {viewMode === 'assignee' && assigneeRows.map(({ name, lanes }) => {
+              const LANE_H = 32; // px per sub-lane
+              const trackH = lanes.length * LANE_H + 12;
+              const total = lanes.reduce((n, l) => n + l.length, 0);
+              return (
+                <div key={name} className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] hover:bg-secondary/20 transition-colors">
+                  {/* label */}
+                  <div className="px-4 py-3 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Users className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
+                      <span className="text-xs font-semibold truncate">{name}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 pl-5">{total}건</p>
+                  </div>
+                  {/* track */}
+                  <div className={`relative grid ${colsClass}`} style={{ minHeight: trackH }}>
+                    <DayCells />
+                    {lanes.map((lane, laneIdx) =>
+                      lane.map(({ item, startIdx, endIdx, clippedLeft, clippedRight }) => {
+                        const status = item.kanbanStatus ?? 'todo';
+                        const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
+                        const span = endIdx - startIdx + 1;
+                        return (
+                          <div key={item.id}
+                            className="absolute px-1.5"
+                            style={{
+                              left: `${(startIdx / DAY_COUNT) * 100}%`,
+                              width: `${(span / DAY_COUNT) * 100}%`,
+                              top: laneIdx * LANE_H + 6,
+                            }}>
+                            <button type="button"
+                              onClick={() => openWorkItem(item.id)}
+                              title={stripHtml(item.content)}
+                              className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
+                              ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
+                              <StatusGlyph status={status} />
+                              <span className="text-[10px] font-semibold truncate">{stripHtml(item.content)}</span>
+                            </button>
+                          </div>
+                        );
+                      }),
+                    )}
                   </div>
                 </div>
               );
