@@ -14,6 +14,7 @@ import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useProjects } from '@/hooks/useProjects';
+import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
 
 const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
@@ -46,6 +47,11 @@ function loadCustomCategories(): string[] {
 
 function saveCustomCategories(cats: string[]) {
   localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(cats));
+}
+
+/** 콤마구분 담당자 문자열 ↔ 배열. 담당자(부) 복수 선택 저장 호환용. */
+function parseAssignees(s?: string | null): string[] {
+  return s ? s.split(',').map((t) => t.trim()).filter(Boolean) : [];
 }
 
 const PRIORITIES = [
@@ -96,6 +102,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
   useClusters();
   const { clusters } = useClusterStore();
   const { data: registeredAssignees = [] } = useAssignees();
+  const { editorWhiteBg } = useEditorWhiteBg();
   const serviceCatalog = useServiceCatalog();
   const createTask = useCreateWorkItem();
   const updateTask = useUpdateWorkItem();
@@ -108,7 +115,8 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
   const projects = projectsData?.data ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
   const [primaryAssignee, setPrimaryAssignee] = useState('');
-  const [secondaryAssignee, setSecondaryAssignee] = useState('');
+  const [secondaryList, setSecondaryList] = useState<string[]>([]);
+  const [secInput, setSecInput] = useState('');
   const [clusterId, setClusterId] = useState('');
   const [category, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
@@ -147,7 +155,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
       setTitle(initial.title ?? '');
       setType(initial.type);
       setPrimaryAssignee(initial.primaryAssignee ?? initial.assignee);
-      setSecondaryAssignee(initial.secondaryAssignee ?? '');
+      setSecondaryList(parseAssignees(initial.secondaryAssignee));
       setClusterId(initial.clusterId ?? '');
       const predefined = allKnownCategories.includes(initial.category);
       setTaskCategory(predefined ? initial.category : '기타');
@@ -181,7 +189,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
       setHydrated(true);
     } else if (parentItem) {
       setPrimaryAssignee(parentItem.primaryAssignee ?? parentItem.assignee);
-      setSecondaryAssignee(parentItem.secondaryAssignee ?? '');
+      setSecondaryList(parseAssignees(parentItem.secondaryAssignee));
       setTaskCategory(parentItem.category);
       setHydrated(true);
     }
@@ -208,6 +216,17 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
     setImages((prev) => [...prev, dataUrl]);
   };
 
+  // 담당자(부) 복수 선택 — chip 추가/삭제.
+  const addSecondary = (raw: string) => {
+    const name = raw.trim().replace(/,$/, '').trim();
+    if (!name) return;
+    setSecondaryList((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setSecInput('');
+  };
+  const removeSecondary = (name: string) => {
+    setSecondaryList((prev) => prev.filter((n) => n !== name));
+  };
+
   const allCategories = [...DEFAULT_TASK_CATEGORIES, ...customCategories, '기타'];
   const resolvedCategory = category === '기타' ? taskCategoryCustom.trim() : category;
   const selectedCluster = clusters.find((c) => c.id === clusterId);
@@ -221,7 +240,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
       type,
       assignee: primaryAssignee.trim(),
       primaryAssignee: primaryAssignee.trim(),
-      secondaryAssignee: secondaryAssignee.trim() || undefined,
+      secondaryAssignee: secondaryList.length ? secondaryList.join(', ') : undefined,
       clusterId: clusterId || undefined,
       clusterName: selectedCluster?.name,
       projectId: projectId || undefined,
@@ -267,12 +286,12 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
   };
 
   const inputClass =
-    'w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
-  const labelClass = 'block text-[11px] font-medium text-muted-foreground mb-1';
+    'w-full px-2 py-1 bg-background border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-primary';
+  const labelClass = 'block text-[10px] font-medium text-muted-foreground mb-0.5';
   const submitting = createTask.isPending || updateTask.isPending;
 
   const formInner = (
-    <form id="item-form" onSubmit={handleSubmit} className="space-y-3">
+    <form id="item-form" onSubmit={handleSubmit} className="space-y-2.5">
       {/* ── Type 선택 — 'issue' (이슈) vs 'task' (작업) ─────────────────────── */}
       {!isEdit && (
         <div className="flex items-center gap-1.5 bg-secondary/40 rounded-lg p-1 w-fit">
@@ -288,13 +307,13 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
                   : 'text-muted-foreground hover:text-foreground')
               }
             >
-              {t === 'task' ? '작업' : '이슈'}
+              {t === 'task' ? '업무' : '이슈'}
             </button>
           ))}
         </div>
       )}
-      {/* ── Meta strip — 담당자/클러스터/서비스/우선순위/분류 1줄 컴팩트 ─────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      {/* ── 기본 설정 — 컴팩트 단일 그리드 (담당자/클러스터/서비스/우선순위/분류/일정/프로젝트) ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-2 gap-y-2">
         <div>
           <label htmlFor={f('primary')} className={labelClass}>담당자(정) *</label>
           <input
@@ -313,17 +332,32 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
             ))}
           </datalist>
         </div>
-        <div>
-          <label htmlFor={f('secondary')} className={labelClass}>담당자(부)</label>
-          <input
-            id={f('secondary')}
-            type="text"
-            value={secondaryAssignee}
-            onChange={(e) => setSecondaryAssignee(e.target.value)}
-            placeholder="보조"
-            className={inputClass}
-            list="item-assignee-list"
-          />
+        <div className="md:col-span-2">
+          <label htmlFor={f('secondary')} className={labelClass}>
+            담당자(부) <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
+          </label>
+          <div className="w-full flex flex-wrap items-center gap-1 px-1.5 py-1 bg-background border border-border rounded-md min-h-[30px]">
+            {secondaryList.map((name) => (
+              <span key={name} className="inline-flex items-center gap-0.5 text-[11px] bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded px-1.5 py-0.5">
+                {name}
+                <button type="button" onClick={() => removeSecondary(name)} className="hover:text-red-500" aria-label={`${name} 제거`}>×</button>
+              </span>
+            ))}
+            <input
+              id={f('secondary')}
+              type="text"
+              value={secInput}
+              onChange={(e) => setSecInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSecondary(secInput); }
+                else if (e.key === 'Backspace' && !secInput && secondaryList.length) { removeSecondary(secondaryList[secondaryList.length - 1]); }
+              }}
+              onBlur={() => { if (secInput.trim()) addSecondary(secInput); }}
+              list="item-assignee-list"
+              placeholder={secondaryList.length ? '' : '이름 입력 후 Enter'}
+              className="flex-1 min-w-[64px] bg-transparent text-xs outline-none"
+            />
+          </div>
         </div>
         <div>
           <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터</label>
@@ -407,7 +441,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label htmlFor={f('category')} className="text-[11px] font-medium text-muted-foreground">작업 분류 *</label>
+            <label htmlFor={f('category')} className="text-[10px] font-medium text-muted-foreground">업무 분류 *</label>
             <button
               type="button"
               onClick={() => setShowCatManage((v) => !v)}
@@ -456,6 +490,42 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
             </select>
           )}
         </div>
+        <div>
+          <label htmlFor={f('startedAt')} className={labelClass}>업무 예정일시 *</label>
+          <DateTimePicker
+            id={f('startedAt')}
+            value={startedAt}
+            onChange={setScheduledAt}
+            placeholder="예정일 선택"
+            required
+            clearable={false}
+          />
+        </div>
+        <div>
+          <label htmlFor={f('closedAt')} className={labelClass}>업무 완료일시</label>
+          <DateTimePicker
+            id={f('closedAt')}
+            value={closedAt}
+            onChange={setCompletedAt}
+            placeholder="완료 시 입력"
+          />
+        </div>
+        {projects.length > 0 && (
+          <div>
+            <label htmlFor={f('project')} className={labelClass}>프로젝트</label>
+            <select
+              id={f('project')}
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">미분류</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* 분류 관리 패널 — 토글 */}
@@ -505,48 +575,6 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
         </div>
       )}
 
-      {/* ── 일정 — 예정/완료 2칸 컴팩트 ─────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-        <div>
-          <label htmlFor={f('startedAt')} className={labelClass}>작업 예정일시 *</label>
-          <DateTimePicker
-            id={f('startedAt')}
-            value={startedAt}
-            onChange={setScheduledAt}
-            placeholder="예정일과 시간 선택"
-            required
-            clearable={false}
-          />
-        </div>
-        <div>
-          <label htmlFor={f('closedAt')} className={labelClass}>작업 완료일시</label>
-          <DateTimePicker
-            id={f('closedAt')}
-            value={closedAt}
-            onChange={setCompletedAt}
-            placeholder="완료 시 입력"
-          />
-        </div>
-      </div>
-
-      {/* ── 프로젝트 ────────────────────────────────────────────────────────── */}
-      {projects.length > 0 && (
-        <div>
-          <label htmlFor={f('project')} className="block text-[11px] font-medium text-muted-foreground mb-1">프로젝트</label>
-          <select
-            id={f('project')}
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="">미분류</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {/* ── 제목 ──────────────────────────────────────────────────────────── */}
       <div>
         <label htmlFor={f('title')} className="block text-sm font-semibold text-foreground mb-1.5">
@@ -558,22 +586,23 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder={type === 'issue' ? '이슈 제목 (예: master1 kubelet 재기동 필요)' : '업무 제목 (예: 노드 NIC 점검)'}
-          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
 
       {/* ── 본문 — type 에 따라 라벨 변경 ──────────────────────────────── */}
       <div>
         <label htmlFor={f('content')} className="block text-sm font-semibold text-foreground mb-1.5">
-          {type === 'issue' ? '이슈 내용' : '작업 내용'} <span className="text-primary">*</span>
+          {type === 'issue' ? '이슈 내용' : '업무 내용'} <span className="text-primary">*</span>
         </label>
         <div id={f('content')}>
           <RichTextEditor
             value={content}
             onChange={setTaskContent}
             placeholder={type === 'issue' ? '발생한 이슈를 상세히 기술하세요' : '수행할 업무를 상세히 기술하세요'}
-            minHeight="340px"
+            minHeight="520px"
             onImagePaste={handleImagePaste}
+            whiteBg={editorWhiteBg}
           />
         </div>
       </div>
@@ -593,6 +622,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
               placeholder="이슈의 배경 / 재현 절차 / 관련 정보를 기술하세요"
               minHeight="160px"
               onImagePaste={handleImagePaste}
+              whiteBg={editorWhiteBg}
             />
           </div>
         </details>
@@ -602,16 +632,17 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
       <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
         <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
           <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
-          <span>{type === 'issue' ? '조치 내용' : '작업 결과'}</span>
+          <span>{type === 'issue' ? '조치 내용' : '업무 결과'}</span>
           <span className="text-[11px] text-muted-foreground/70">(클릭해서 펼치기 — 선택 입력)</span>
         </summary>
         <div className="px-3 pb-3">
           <RichTextEditor
             value={resolution}
             onChange={setResultContent}
-            placeholder={type === 'issue' ? '조치 내용을 기술하세요' : '작업 결과를 기술하세요'}
+            placeholder={type === 'issue' ? '조치 내용을 기술하세요' : '업무 결과를 기술하세요'}
             minHeight="160px"
             onImagePaste={handleImagePaste}
+            whiteBg={editorWhiteBg}
           />
         </div>
       </details>
@@ -625,11 +656,11 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
             (칸반 보드 · 모듈/유형 · 이슈 연결 · Confluence · 비고)
           </span>
         </summary>
-        <div className="px-3 pb-3 space-y-3">
+        <div className="px-3 pb-3 space-y-2">
           {/* 칸반 보드 */}
           <div>
-            <p className="text-[10px] font-semibold text-muted-foreground/80 mb-1.5 uppercase tracking-wider">칸반 보드</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <p className="text-[10px] font-semibold text-muted-foreground/80 mb-1 uppercase tracking-wider">칸반 보드</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div>
                 <label htmlFor={f('kanban')} className={labelClass}>보드 상태</label>
                 <select
@@ -687,7 +718,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
                 />
               </div>
             </div>
-            <div className="mt-2.5">
+            <div className="mt-2">
               <label htmlFor={f('doneCond')} className={labelClass}>
                 완료 조건
                 <span className="ml-1 text-[10px] text-muted-foreground/70 font-normal">(Done 이동 기준)</span>
@@ -704,7 +735,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
           </div>
 
           {/* 연결된 이슈 / Confluence / 비고 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="md:col-span-2">
               <label htmlFor={f('issueLink')} className={labelClass}>
                 연결된 이슈

@@ -8,7 +8,7 @@ export type { KanbanStatus };
 export const WORK_ITEM_TYPE_ORDER: WorkItemType[] = ['task', 'issue', 'meeting', 'training', 'etc'];
 
 export const WORK_ITEM_TYPE_CONFIG: Record<WorkItemType, { label: string; Icon: LucideIcon; cls: string }> = {
-  task:     { label: '작업', Icon: ListTodo,        cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' },
+  task:     { label: '업무', Icon: ListTodo,        cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' },
   issue:    { label: '이슈', Icon: AlertTriangle,   cls: 'bg-red-500/10 text-red-700 dark:text-red-300' },
   meeting:  { label: '회의', Icon: Users,           cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
   training: { label: '교육', Icon: GraduationCap,   cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },

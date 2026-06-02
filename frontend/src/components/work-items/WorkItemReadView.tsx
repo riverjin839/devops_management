@@ -81,14 +81,14 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
       <div className="grid grid-cols-2 gap-4">
         <Field label="담당자" value={item.assignee} />
         <Field label="대상 클러스터" value={item.clusterName} />
-        <Field label="작업 예정일" value={formatDateTime(item.startedAt)} />
-        <Field label="작업 완료일" value={formatDateTime(item.closedAt)} />
+        <Field label="업무 예정일" value={formatDateTime(item.startedAt)} />
+        <Field label="업무 완료일" value={formatDateTime(item.closedAt)} />
       </div>
 
       <div className="border-t border-border" />
 
       <div>
-        <p className="text-xs font-medium text-muted-foreground mb-1">작업 내용</p>
+        <p className="text-xs font-medium text-muted-foreground mb-1">업무 내용</p>
         <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
           <RichContent content={item.content} />
         </div>
@@ -96,7 +96,7 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
 
       {item.resolution && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">작업 결과</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">업무 결과</p>
           <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
             <RichContent content={item.resolution} />
           </div>
