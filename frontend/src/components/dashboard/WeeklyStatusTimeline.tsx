@@ -1,0 +1,407 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
+  CheckCircle2, Clock, Circle, AlertCircle,
+} from 'lucide-react';
+import type { WorkItem, KanbanStatus } from '@/types';
+import { useWorkItems } from '@/hooks/useWorkItems';
+import { stripHtml } from '@/lib/utils';
+
+// ── date helpers ──────────────────────────────────────────────────────────────
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+function startOfWeek(d: Date): Date {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  r.setDate(r.getDate() - r.getDay()); // Sunday start
+  return r;
+}
+function weeksBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / (7 * 86400000));
+}
+const KR_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+// ── status visual map (macOS / Claude soft gradient bars) ───────────────────────
+const STATUS_BAR: Record<KanbanStatus, { grad: string; ring: string; label: string }> = {
+  done:        { grad: 'from-emerald-400 to-emerald-500', ring: 'ring-emerald-500/30', label: '완료' },
+  in_progress: { grad: 'from-sky-400 to-blue-500',        ring: 'ring-blue-500/30',    label: '진행중' },
+  review_test: { grad: 'from-violet-400 to-purple-500',   ring: 'ring-purple-500/30',  label: '검토' },
+  todo:        { grad: 'from-amber-300 to-orange-400',    ring: 'ring-orange-500/30',  label: 'Todo' },
+  backlog:     { grad: 'from-slate-300 to-slate-400',     ring: 'ring-slate-500/30',   label: 'Backlog' },
+};
+
+function StatusGlyph({ status }: { status: KanbanStatus }) {
+  if (status === 'done') return <CheckCircle2 className="w-3 h-3 flex-shrink-0" />;
+  if (status === 'in_progress') return <Clock className="w-3 h-3 flex-shrink-0" />;
+  if (status === 'review_test') return <Clock className="w-3 h-3 flex-shrink-0" />;
+  return <Circle className="w-3 h-3 flex-shrink-0" />;
+}
+
+// ── derived row models ──────────────────────────────────────────────────────────
+interface TaskBar {
+  item: WorkItem;
+  startIdx: number;     // 0-6 within the visible week
+  endIdx: number;       // 0-6 within the visible week
+  clippedLeft: boolean; // bar starts before this week
+  clippedRight: boolean;// bar ends after this week
+}
+interface Milestone {
+  issue: WorkItem;
+  dayIdx: number;       // 0-6
+}
+
+interface WeeklyStatusTimelineProps {
+  /** 외부에서 work item 을 주입하면 그대로 사용, 미지정 시 useWorkItems 로 직접 조회. */
+  items?: WorkItem[];
+  isLoading?: boolean;
+  selectedClusterId?: string | null;
+}
+
+export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: WeeklyStatusTimelineProps) {
+  const { data, isLoading: queryLoading } = useWorkItems();
+  const workItems = items ?? data?.data ?? [];
+  const loading = isLoading ?? queryLoading;
+
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const weekStartStr = fmtDate(weekStart);
+  const weekEndStr = fmtDate(days[6]);
+  const todayStr = fmtDate(today);
+
+  // cluster filter + type split (작업류 = bar, issue = milestone)
+  const scoped = selectedClusterId ? workItems.filter((w) => w.clusterId === selectedClusterId) : workItems;
+  const taskItems  = useMemo(() => scoped.filter((w) => w.type !== 'issue'), [scoped]);
+  const issueItems = useMemo(() => scoped.filter((w) => w.type === 'issue'), [scoped]);
+
+  // ── task bars overlapping this week ──
+  const taskBars: TaskBar[] = useMemo(() => {
+    const out: TaskBar[] = [];
+    for (const item of taskItems) {
+      const s = item.startedAt?.slice(0, 10);
+      if (!s) continue;
+      // ongoing tasks extend to today; done/closed use closedAt (fallback start)
+      const eRaw = item.closedAt?.slice(0, 10)
+        ?? ((item.kanbanStatus ?? 'todo') === 'done' ? s : fmtDate(today));
+      const e = eRaw < s ? s : eRaw;
+      // overlap test against [weekStartStr, weekEndStr]
+      if (e < weekStartStr || s > weekEndStr) continue;
+
+      const startIdx = days.findIndex(d => fmtDate(d) >= s);
+      const startClamped = startIdx === -1 ? 0 : (s <= weekStartStr ? 0 : startIdx);
+      let endClamped = 6;
+      for (let i = 6; i >= 0; i--) { if (fmtDate(days[i]) <= e) { endClamped = i; break; } }
+      out.push({
+        item,
+        startIdx: startClamped,
+        endIdx: Math.max(startClamped, endClamped),
+        clippedLeft: s < weekStartStr,
+        clippedRight: e > weekEndStr,
+      });
+    }
+    // sort: by start day, then priority (high first)
+    const prio: Record<string, number> = { high: 0, medium: 1, low: 2 };
+    return out.sort((a, b) =>
+      a.startIdx - b.startIdx || (prio[a.item.priority] ?? 1) - (prio[b.item.priority] ?? 1));
+  }, [taskItems, days, weekStartStr, weekEndStr, today]);
+
+  // ── milestones (issues that occurred this week) ──
+  const milestones: Milestone[] = useMemo(() => {
+    const out: Milestone[] = [];
+    for (const issue of issueItems) {
+      const d = issue.startedAt?.slice(0, 10);
+      if (!d || d < weekStartStr || d > weekEndStr) continue;
+      const idx = days.findIndex(x => fmtDate(x) === d);
+      if (idx >= 0) out.push({ issue, dayIdx: idx });
+    }
+    return out;
+  }, [issueItems, days, weekStartStr, weekEndStr]);
+
+  const monthLabel = (() => {
+    const a = weekStart, b = days[6];
+    const fa = `${a.getMonth() + 1}월`;
+    const fb = `${b.getMonth() + 1}월`;
+    return fa === fb ? fa : `${fa}–${fb}`;
+  })();
+
+  // ── slider range: span from earliest to latest dated item (+1 week padding) ──
+  const { minWeek, totalWeeks } = useMemo(() => {
+    const stamps: number[] = [startOfWeek(today).getTime()];
+    const consider = (s?: string | null) => {
+      if (!s) return;
+      const d = startOfWeek(new Date(s.slice(0, 10) + 'T00:00:00'));
+      if (!Number.isNaN(d.getTime())) stamps.push(d.getTime());
+    };
+    for (const w of scoped) { consider(w.startedAt); consider(w.closedAt); }
+    const lo = addDays(new Date(Math.min(...stamps)), -7);   // 1-week padding each side
+    const hi = addDays(new Date(Math.max(...stamps)), 7);
+    return { minWeek: lo, totalWeeks: weeksBetween(lo, hi) + 1 };
+  }, [scoped, today]);
+
+  const currentIndex = Math.max(0, Math.min(totalWeeks - 1, weeksBetween(minWeek, weekStart)));
+  const setIndex = (idx: number) => {
+    const c = Math.max(0, Math.min(totalWeeks - 1, idx));
+    setWeekStart(addDays(minWeek, c * 7));
+  };
+  const goPrev = () => setIndex(currentIndex - 1);
+  const goNext = () => setIndex(currentIndex + 1);
+  const goToday = () => setWeekStart(startOfWeek(new Date()));
+  const isThisWeek = weekStartStr === fmtDate(startOfWeek(today));
+  const rangeStart = minWeek;
+  const rangeEnd = addDays(minWeek, (totalWeeks - 1) * 7 + 6);
+  const shortDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+
+  // thumb-center alignment for ticks/tooltip (thumb is 16px wide)
+  const frac = totalWeeks > 1 ? currentIndex / (totalWeeks - 1) : 0;
+  const centerLeft = (f: number) => `calc(${f} * (100% - 16px) + 8px)`;
+  const todayIdx = Math.max(0, Math.min(totalWeeks - 1, weeksBetween(minWeek, startOfWeek(today))));
+  const showTicks = totalWeeks > 1 && totalWeeks <= 24;
+
+  // ── mouse-wheel over the slider → move week by week (non-passive) ──
+  const sliderWrapRef = useRef<HTMLDivElement>(null);
+  const wheelAcc = useRef(0);
+  useEffect(() => {
+    const el = sliderWrapRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      wheelAcc.current += e.deltaY;
+      const TH = 40; // trackpad-friendly threshold
+      if (wheelAcc.current >= TH) { wheelAcc.current = 0; setIndex(currentIndex + 1); }
+      else if (wheelAcc.current <= -TH) { wheelAcc.current = 0; setIndex(currentIndex - 1); }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, totalWeeks, minWeek]);
+
+  return (
+    <div className="space-y-3">
+      {/* ── toolbar ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-sm">
+          <CalendarDays className="w-4 h-4 text-primary" />
+          <span className="font-semibold">{monthLabel}</span>
+          <span className="text-muted-foreground text-xs font-mono">{weekStartStr} ~ {weekEndStr}</span>
+          {!isThisWeek && (
+            <button onClick={goToday}
+              className="ml-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+              이번 주
+            </button>
+          )}
+        </div>
+        <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />작업 {taskBars.length}</span>
+          <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />마일스톤 {milestones.length}</span>
+        </div>
+      </div>
+
+      {/* ── week slider (◀ ━━●━━ ▶) — drag to move week by week ──────────────── */}
+      <div className="flex items-center gap-2.5 px-1">
+        <button
+          onClick={goPrev}
+          disabled={currentIndex <= 0}
+          aria-label="이전 주"
+          className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:bg-card hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div ref={sliderWrapRef} className="flex-1 flex flex-col gap-1" title="휠을 굴려 주를 넘길 수 있어요">
+          {/* slider + drag tooltip */}
+          <div className="relative pt-1 group">
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, totalWeeks - 1)}
+              step={1}
+              value={currentIndex}
+              onChange={(e) => setIndex(Number(e.target.value))}
+              aria-label="주간 슬라이더"
+              className="week-slider peer w-full h-1.5 cursor-pointer accent-primary"
+            />
+            {/* tooltip: shows currently-viewed week range above the thumb */}
+            <div
+              className="pointer-events-none absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-1.5 py-0.5 text-[10px] font-medium text-background opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100 peer-active:opacity-100"
+              style={{ left: centerLeft(frac) }}
+            >
+              {shortDate(weekStart)} ~ {shortDate(days[6])}
+            </div>
+          </div>
+
+          {/* week tick ruler */}
+          {showTicks && (
+            <div className="relative h-2">
+              {Array.from({ length: totalWeeks }, (_, i) => {
+                const f = totalWeeks > 1 ? i / (totalWeeks - 1) : 0;
+                const isTd = i === todayIdx;
+                const isCur = i === currentIndex;
+                return (
+                  <span
+                    key={i}
+                    className={`absolute top-0 -translate-x-1/2 rounded-full ${
+                      isCur ? 'bg-primary w-[3px] h-2'
+                      : isTd ? 'bg-primary/50 w-px h-2'
+                      : 'bg-border w-px h-1.5'
+                    }`}
+                    style={{ left: centerLeft(f) }}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex justify-between text-[10px] text-muted-foreground/70 font-mono">
+            <span>{shortDate(rangeStart)}</span>
+            <span className="text-primary font-semibold">{currentIndex + 1} / {totalWeeks}주</span>
+            <span>{shortDate(rangeEnd)}</span>
+          </div>
+        </div>
+
+        <button
+          onClick={goNext}
+          disabled={currentIndex >= totalWeeks - 1}
+          aria-label="다음 주"
+          className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:bg-card hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* ── timeline grid ───────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
+        {/* header: weekday columns */}
+        <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
+          <div className="px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">작업 / 마일스톤</div>
+          <div className="grid grid-cols-7">
+            {days.map((d) => {
+              const ds = fmtDate(d);
+              const isTd = ds === todayStr;
+              const isWE = d.getDay() === 0 || d.getDay() === 6;
+              return (
+                <div key={ds}
+                  className={`px-1 py-2 text-center border-l border-border/60 ${isTd ? 'bg-primary/10' : isWE ? 'bg-secondary/40' : ''}`}>
+                  <div className={`text-[10px] ${isTd ? 'text-primary font-bold' : isWE ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
+                    {KR_DAYS[d.getDay()]}
+                  </div>
+                  <div className={`text-[11px] font-semibold ${isTd ? 'text-primary' : ''}`}>
+                    {d.getMonth() + 1}/{d.getDate()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* body */}
+        {loading ? (
+          <div className="divide-y divide-border/60">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr]">
+                <div className="px-4 py-3"><div className="h-3 w-24 bg-muted/50 rounded animate-pulse" /></div>
+                <div className="px-3 py-3"><div className="h-5 bg-muted/40 rounded-lg animate-pulse" style={{ width: `${40 + i * 12}%`, marginLeft: `${i * 10}%` }} /></div>
+              </div>
+            ))}
+          </div>
+        ) : taskBars.length === 0 && milestones.length === 0 ? (
+          <div className="py-14 flex flex-col items-center justify-center text-muted-foreground">
+            <CalendarDays className="w-9 h-9 mb-2 opacity-30" />
+            <p className="text-sm">이번 주에 예정된 작업이 없습니다.</p>
+            <p className="text-[11px] mt-0.5 opacity-70">다른 주를 보려면 화살표를 사용하세요.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {/* milestone strip */}
+            {milestones.length > 0 && (
+              <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] bg-amber-500/[0.04]">
+                <div className="px-4 py-2.5 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600">
+                  <Flag className="w-3.5 h-3.5" /> 마일스톤
+                </div>
+                <div className="relative grid grid-cols-7 min-h-[44px]">
+                  {days.map((d) => {
+                    const isWE = d.getDay() === 0 || d.getDay() === 6;
+                    const isTd = fmtDate(d) === todayStr;
+                    return <div key={fmtDate(d)} className={`border-l border-border/40 ${isTd ? 'bg-primary/[0.04]' : isWE ? 'bg-secondary/20' : ''}`} />;
+                  })}
+                  {milestones.map(({ issue, dayIdx }) => {
+                    const resolved = !!issue.closedAt;
+                    return (
+                      <div key={issue.id}
+                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 group"
+                        style={{ left: `${(dayIdx / 7) * 100}%`, width: `${(1 / 7) * 100}%` }}
+                        title={stripHtml(issue.content)}>
+                        <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-emerald-500 fill-emerald-400' : 'text-amber-500 fill-amber-400'}`} />
+                        <span className={`text-[10px] font-medium truncate ${resolved ? 'text-emerald-600' : 'text-amber-700'}`}>
+                          {stripHtml(issue.content)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* task rows */}
+            {taskBars.map(({ item, startIdx, endIdx, clippedLeft, clippedRight }) => {
+              const status = item.kanbanStatus ?? 'todo';
+              const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
+              const span = endIdx - startIdx + 1;
+              const team = item.primaryAssignee || item.assignee;
+              return (
+                <div key={item.id} className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] hover:bg-secondary/20 transition-colors">
+                  {/* label */}
+                  <div className="px-4 py-2.5 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full bg-gradient-to-r ${sv.grad}`} />
+                      <span className="text-xs font-medium truncate">{stripHtml(item.content)}</span>
+                    </div>
+                    {item.category && (
+                      <p className="text-[10px] text-muted-foreground truncate mt-0.5 pl-3">{item.category}</p>
+                    )}
+                  </div>
+                  {/* track */}
+                  <div className="relative grid grid-cols-7 min-h-[44px]">
+                    {days.map((d) => {
+                      const isWE = d.getDay() === 0 || d.getDay() === 6;
+                      const isTd = fmtDate(d) === todayStr;
+                      return <div key={fmtDate(d)} className={`border-l border-border/40 ${isTd ? 'bg-primary/[0.04]' : isWE ? 'bg-secondary/20' : ''}`} />;
+                    })}
+                    {/* bar */}
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 px-1.5 py-1"
+                      style={{ left: `${(startIdx / 7) * 100}%`, width: `${(span / 7) * 100}%` }}
+                    >
+                      <div className={`h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden
+                        ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
+                        <StatusGlyph status={status} />
+                        <span className="text-[10px] font-semibold truncate">{team || sv.label}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── legend ──────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 flex-wrap text-[11px] text-muted-foreground px-1">
+        <span className="font-medium">범례</span>
+        {(Object.keys(STATUS_BAR) as KanbanStatus[]).map((k) => (
+          <span key={k} className="flex items-center gap-1">
+            <span className={`w-3 h-2.5 rounded-sm bg-gradient-to-r ${STATUS_BAR[k].grad}`} />
+            {STATUS_BAR[k].label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />미해결 이슈</span>
+        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-emerald-500" />해결 이슈</span>
+      </div>
+    </div>
+  );
+}

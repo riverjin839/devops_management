@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
-import { WeeklyWorkTable } from '@/components/dashboard/WeeklyWorkTable';
+import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimeline';
 import { InfraHealthBar } from '@/components/dashboard/InfraHealthBar';
 import { IncidentMiniPanel } from '@/components/dashboard/IncidentMiniPanel';
 import { DomainQuickAccess } from '@/components/dashboard/DomainQuickAccess';
@@ -214,7 +214,7 @@ export function HomePage() {
               </div>
               <div className="flex-1 min-h-0 overflow-hidden">
                 {weeklyTab === 'week'
-                  ? <WeeklyWorkTable />
+                  ? <div className="h-full overflow-y-auto p-3"><WeeklyStatusTimeline selectedClusterId={null} /></div>
                   : <div className="h-full overflow-y-auto p-4"><WorkCalendar selectedClusterId={null} /></div>
                 }
               </div>
