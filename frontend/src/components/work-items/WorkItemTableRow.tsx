@@ -187,9 +187,11 @@ interface WorkItemTableRowProps {
   onEdit: (item: WorkItem) => void;
   onDelete: (item: WorkItem) => void;
   onAddSubItem: (parent: WorkItem) => void;
+  /** 제목 클릭 시 상세 보기 진입. */
+  onOpenDetail: (item: WorkItem) => void;
 }
 
-export function WorkItemTableRow({ item, clusters, columns, projectNameById, isDragDisabled, onEdit, onDelete, onAddSubItem }: WorkItemTableRowProps) {
+export function WorkItemTableRow({ item, clusters, columns, projectNameById, isDragDisabled, onEdit, onDelete, onAddSubItem, onOpenDetail }: WorkItemTableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -367,12 +369,19 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, isD
         );
 
       case 'title':
-        // 읽기전용 — 편집은 상세 수정(✏) 화면에서. title 미설정 레거시 항목은 내용 첫 줄로 대체.
+        // 제목 클릭 → 상세 보기. title 미설정 레거시 항목은 내용 첫 줄로 대체.
         return (
           <td key="title" className="px-4 py-3 max-w-xs">
-            <p className="line-clamp-2 text-foreground/90">
-              {item.title?.trim() || stripHtml(item.content) || '-'}
-            </p>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
+              className="text-left w-full text-foreground/90 hover:text-primary transition-colors"
+              title="클릭하여 상세 보기"
+            >
+              <span className="line-clamp-2 hover:underline">
+                {item.title?.trim() || stripHtml(item.content) || '-'}
+              </span>
+            </button>
           </td>
         );
 

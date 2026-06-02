@@ -110,22 +110,16 @@ export function WorkItemDetailPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-8 pb-16">
+      <main className="max-w-[1400px] mx-auto px-8 pt-4 pb-16">
         {editMode ? (
-          <>
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">업무 수정</h1>
-              <p className="text-sm text-muted-foreground mt-1">필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.</p>
-            </div>
-            <div className={cn('border border-border rounded-2xl p-5 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
-              <WorkItemForm
-                initial={item}
-                onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
-                onSaved={() => navigate(`/tasks-mgmt/${item.id}`)}
-                embedded
-              />
-            </div>
-          </>
+          <div className={cn('border border-border rounded-2xl p-5 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+            <WorkItemForm
+              initial={item}
+              onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
+              onSaved={() => navigate(`/tasks-mgmt/${item.id}`)}
+              embedded
+            />
+          </div>
         ) : (
           <div className="flex gap-6 items-start">
             <div className={cn('flex-1 min-w-0 border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>

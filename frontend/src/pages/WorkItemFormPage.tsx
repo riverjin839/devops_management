@@ -87,19 +87,6 @@ export function WorkItemFormPage() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {parentItem
-                ? '상위 업무의 분류와 담당자가 자동으로 채워집니다.'
-                : isEdit
-                  ? '필요한 항목을 수정한 뒤 저장 버튼을 누르세요.'
-                  : '담당자/분류/일정 후 작업 내용을 작성하세요. 결과·추가 옵션은 접혀 있습니다.'}
-            </p>
-          </div>
-        </div>
-
         <div className={cn('border border-border rounded-2xl p-5 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
           <WorkItemForm
             initial={editTask ?? undefined}
