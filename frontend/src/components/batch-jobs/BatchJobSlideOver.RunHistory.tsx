@@ -11,7 +11,12 @@ interface RunHistoryProps {
 }
 
 function formatShortDate(iso: string): string {
-  return iso.replace('T', ' ').slice(0, 19);
+  // Backend stores UTC without 'Z'. Append 'Z' so JS Date parses as UTC,
+  // then display in browser local timezone.
+  const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z');
+  if (isNaN(d.getTime())) return iso.replace('T', ' ').slice(0, 19);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function RunDetail({ run }: { run: BatchJobRun }) {

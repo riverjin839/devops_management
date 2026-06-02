@@ -315,12 +315,21 @@ def run_batch_job_dispatcher(self):
             raw_anchor = job.last_run_at or (now_utc - timedelta(days=1)).replace(tzinfo=None)
             anchor_aware = raw_anchor.replace(tzinfo=_tz.utc).astimezone(tz)
 
+            # Use tzinfo-stripped (naive) datetimes in the same timezone for croniter.
+            # croniter.get_next(datetime) WITHOUT tz= returns a naive datetime even
+            # when given an aware start_time, causing a TypeError when compared with
+            # now_aware (aware). Stripping tzinfo from both keeps them in the same
+            # reference frame (configured timezone) while avoiding the naive/aware
+            # comparison error.
+            anchor_naive = anchor_aware.replace(tzinfo=None)
+            now_naive = now_aware.replace(tzinfo=None)
+
             try:
-                next_fire = croniter(cron_expr, anchor_aware).get_next(datetime)
+                next_fire = croniter(cron_expr, anchor_naive).get_next(datetime)
             except Exception:
                 skipped_reasons["cron_eval_error"] = skipped_reasons.get("cron_eval_error", 0) + 1
                 continue
-            if next_fire > now_aware:
+            if next_fire > now_naive:
                 continue
 
             run_batch_job.delay(str(job.id))

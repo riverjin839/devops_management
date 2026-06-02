@@ -12,7 +12,10 @@ interface BatchJobRowProps {
 
 function formatShortDate(iso: string | null | undefined): string {
   if (!iso) return '—';
-  return iso.replace('T', ' ').slice(5, 16); // MM-DD HH:mm
+  const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z');
+  if (isNaN(d.getTime())) return iso.replace('T', ' ').slice(5, 16);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function BatchJobRow({ job, cluster, selected, onClick }: BatchJobRowProps) {
