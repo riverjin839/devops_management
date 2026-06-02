@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
@@ -90,9 +91,13 @@ interface WeeklyStatusTimelineProps {
 }
 
 export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: WeeklyStatusTimelineProps) {
+  const navigate = useNavigate();
   const { data, isLoading: queryLoading } = useWorkItems();
   const workItems = items ?? data?.data ?? [];
   const loading = isLoading ?? queryLoading;
+
+  // 막대/마일스톤 클릭 → 상세 업무 페이지로 이동.
+  const openWorkItem = (id: string) => navigate(`/tasks-mgmt/${id}`);
 
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
@@ -400,15 +405,16 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   {milestones.map(({ issue, dayIdx }) => {
                     const resolved = !!issue.closedAt;
                     return (
-                      <div key={issue.id}
-                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 group"
+                      <button key={issue.id} type="button"
+                        onClick={() => openWorkItem(issue.id)}
+                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 text-left rounded hover:bg-amber-500/10 transition-colors cursor-pointer"
                         style={{ left: `${(dayIdx / DAY_COUNT) * 100}%`, width: `${(1 / DAY_COUNT) * 100}%` }}
                         title={stripHtml(issue.content)}>
                         <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-emerald-500 fill-emerald-400' : 'text-amber-500 fill-amber-400'}`} />
                         <span className={`text-[10px] font-medium truncate ${resolved ? 'text-emerald-600' : 'text-amber-700'}`}>
                           {stripHtml(issue.content)}
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -441,11 +447,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                       className="absolute top-1/2 -translate-y-1/2 px-1.5 py-1"
                       style={{ left: `${(startIdx / DAY_COUNT) * 100}%`, width: `${(span / DAY_COUNT) * 100}%` }}
                     >
-                      <div className={`h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden
+                      <button type="button"
+                        onClick={() => openWorkItem(item.id)}
+                        title={stripHtml(item.content)}
+                        className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-[10px] font-semibold truncate">{team || sv.label}</span>
-                      </div>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -482,13 +491,15 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               left: `${(startIdx / DAY_COUNT) * 100}%`,
                               width: `${(span / DAY_COUNT) * 100}%`,
                               top: laneIdx * LANE_H + 6,
-                            }}
-                            title={stripHtml(item.content)}>
-                            <div className={`h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden
+                            }}>
+                            <button type="button"
+                              onClick={() => openWorkItem(item.id)}
+                              title={stripHtml(item.content)}
+                              className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
                               <span className="text-[10px] font-semibold truncate">{stripHtml(item.content)}</span>
-                            </div>
+                            </button>
                           </div>
                         );
                       }),
