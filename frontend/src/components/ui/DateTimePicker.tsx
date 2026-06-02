@@ -1,12 +1,15 @@
 /**
- * Date + time picker (popover).
+ * Date (+ optional time) picker (popover).
  *
- * Replaces native <input type="datetime-local"> with a polished UI:
  *  - Trigger button shows the current value (or placeholder) with an icon.
- *  - Clicking opens a popover with a mini calendar (left) and time controls (right).
- *  - Time is part of the value by design — no separate toggle.
- *  - Value format: "YYYY-MM-DDTHH:mm" (matches datetime-local, drop-in replacement).
- *  - Outside click & ESC close the popover; arrow keys navigate the calendar grid.
+ *  - Popover: mini calendar (left) + time controls (right).
+ *  - **시간 포함 토글** — 켜면 시:분 선택, 끄면 날짜만. 시간 UX 는 드롭다운(시/분) +
+ *    빠른 프리셋(09:00 / 13:00 / 18:00)으로 단순화.
+ *  - Value format:
+ *      "YYYY-MM-DDTHH:mm"  (시간 포함)
+ *      "YYYY-MM-DD"        (날짜 전용 — 'T' 없음으로 인코딩)
+ *    → datetime-local drop-in. 날짜 전용도 서버 datetime 으로 자정 파싱됨.
+ *  - Outside click & ESC close; arrow keys navigate the calendar grid.
  */
 import {
   useEffect,
@@ -32,23 +35,33 @@ interface DateTimePickerProps {
 
 const KOR_DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const KOR_MONTH = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+const TIME_PRESETS: { label: string; h: number; m: number }[] = [
+  { label: '09:00', h: 9, m: 0 },
+  { label: '13:00', h: 13, m: 0 },
+  { label: '18:00', h: 18, m: 0 },
+];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-function formatValue(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function hasTime(v: string): boolean {
+  return /T\d{2}:\d{2}/.test(v);
+}
+
+function formatValue(d: Date, withTime: boolean): string {
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return withTime ? `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}` : date;
 }
 
 function parseValue(v: string): Date | null {
   if (!v) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(v);
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(v);
   if (!m) return null;
   const d = new Date(
     Number(m[1]),
     Number(m[2]) - 1,
     Number(m[3]),
-    Number(m[4]),
-    Number(m[5]),
+    Number(m[4] ?? 0),
+    Number(m[5] ?? 0),
   );
   return isNaN(d.getTime()) ? null : d;
 }
@@ -56,7 +69,8 @@ function parseValue(v: string): Date | null {
 function displayValue(v: string): string {
   const d = parseValue(v);
   if (!d) return '';
-  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const base = `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+  return hasTime(v) ? `${base} ${pad(d.getHours())}:${pad(d.getMinutes())}` : base;
 }
 
 function buildMonthGrid(year: number, month: number): Date[] {
@@ -81,7 +95,7 @@ export function DateTimePicker({
   id,
   required,
   disabled,
-  placeholder = '날짜와 시간 선택',
+  placeholder = '날짜 선택',
   clearable = true,
   className = '',
 }: DateTimePickerProps) {
@@ -96,8 +110,10 @@ export function DateTimePicker({
   const [viewMonth, setViewMonth] = useState(() => (parsed ?? new Date()).getMonth());
   const [hour, setHour] = useState(() => (parsed ?? new Date()).getHours());
   const [minute, setMinute] = useState(() => (parsed ?? new Date()).getMinutes());
+  // 시간 포함 여부 — 값에 'T' 가 있으면 포함. 빈 값/신규는 기본 포함(true).
+  const [withTime, setWithTime] = useState(() => (value ? hasTime(value) : true));
 
-  // Sync internal time/calendar state when external value changes (e.g., form reset).
+  // Sync internal state when external value changes (e.g., form reset / hydrate).
   useEffect(() => {
     if (parsed) {
       setViewYear(parsed.getFullYear());
@@ -105,7 +121,8 @@ export function DateTimePicker({
       setHour(parsed.getHours());
       setMinute(parsed.getMinutes());
     }
-  }, [parsed]);
+    if (value) setWithTime(hasTime(value));
+  }, [parsed, value]);
 
   // Outside click + ESC.
   useEffect(() => {
@@ -132,10 +149,22 @@ export function DateTimePicker({
   const grid = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
   const today = new Date();
 
+  const minuteOptions = useMemo(() => {
+    const base = Array.from({ length: 12 }, (_, i) => i * 5);
+    return base.includes(minute) ? base : [...base, minute].sort((a, b) => a - b);
+  }, [minute]);
+
+  /** 현재 선택 날짜(parsed)에 h:m 을 적용해 emit. 날짜 미선택이면 no-op. */
+  const emit = (h: number, m: number, withT: boolean) => {
+    if (!parsed) return;
+    const d = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), h, m);
+    onChange(formatValue(d, withT));
+  };
+
   const commit = (d: Date) => {
     const next = new Date(d);
     next.setHours(hour, minute, 0, 0);
-    onChange(formatValue(next));
+    onChange(formatValue(next, withTime));
   };
 
   const pickDay = (d: Date) => {
@@ -152,7 +181,13 @@ export function DateTimePicker({
     setViewMonth(now.getMonth());
     setHour(now.getHours());
     setMinute(now.getMinutes());
-    onChange(formatValue(now));
+    setWithTime(true);
+    onChange(formatValue(now, true));
+  };
+
+  const toggleWithTime = (on: boolean) => {
+    setWithTime(on);
+    emit(on ? hour : 0, on ? minute : 0, on);
   };
 
   const clear = () => {
@@ -166,17 +201,6 @@ export function DateTimePicker({
     const y = viewYear + Math.floor(m / 12);
     setViewMonth(((m % 12) + 12) % 12);
     setViewYear(y);
-  };
-
-  const stepHour = (delta: number) => {
-    const h = (hour + delta + 24) % 24;
-    setHour(h);
-    if (parsed) commit(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), h, minute));
-  };
-  const stepMinute = (delta: number) => {
-    const m = (minute + delta + 60) % 60;
-    setMinute(m);
-    if (parsed) commit(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), hour, m));
   };
 
   const onGridKeyDown = (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
@@ -197,6 +221,8 @@ export function DateTimePicker({
   };
 
   const display = displayValue(value);
+  const selectClass =
+    'h-7 px-1.5 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary tabular-nums';
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
@@ -208,11 +234,11 @@ export function DateTimePicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center gap-2 px-3 py-2 bg-background border rounded-lg text-sm text-left transition-colors ${
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 bg-background border rounded-md text-xs text-left transition-colors ${
           open ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-border'
         } focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed`}
       >
-        <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <Calendar className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         <span className={`flex-1 ${display ? '' : 'text-muted-foreground/60'}`}>
           {display || placeholder}
         </span>
@@ -227,7 +253,7 @@ export function DateTimePicker({
             }}
             className="p-0.5 text-muted-foreground hover:text-foreground rounded"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3 h-3" />
           </span>
         )}
       </button>
@@ -247,7 +273,7 @@ export function DateTimePicker({
       {open && (
         <div
           role="dialog"
-          aria-label="날짜와 시간 선택"
+          aria-label="날짜 선택"
           className="absolute z-50 mt-1.5 bg-card border border-border rounded-xl mac-shadow p-3 w-[340px] flex gap-3"
           style={{ left: 0 }}
         >
@@ -317,80 +343,60 @@ export function DateTimePicker({
           </div>
 
           {/* Time */}
-          <div className="flex-shrink-0 w-[88px] border-l border-border pl-3">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-2">
-              <Clock className="w-3 h-3" /> 시간
-            </div>
-            <div className="space-y-2">
-              <div>
-                <div className="text-[10px] text-muted-foreground mb-1">시 (0–23)</div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => stepHour(-1)}
-                    className="w-6 h-7 text-xs rounded hover:bg-secondary text-muted-foreground"
-                    aria-label="시 감소"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min={0}
-                    max={23}
-                    value={hour}
-                    onChange={(e) => {
-                      const h = Math.max(0, Math.min(23, Number(e.target.value) || 0));
-                      setHour(h);
-                      if (parsed) commit(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), h, minute));
-                    }}
-                    className="w-10 h-7 text-center text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => stepHour(1)}
-                    className="w-6 h-7 text-xs rounded hover:bg-secondary text-muted-foreground"
-                    aria-label="시 증가"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] text-muted-foreground mb-1">분 (0–59)</div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => stepMinute(-5)}
-                    className="w-6 h-7 text-xs rounded hover:bg-secondary text-muted-foreground"
-                    aria-label="분 감소 (5)"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min={0}
-                    max={59}
-                    value={minute}
-                    onChange={(e) => {
-                      const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
-                      setMinute(m);
-                      if (parsed) commit(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), hour, m));
-                    }}
-                    className="w-10 h-7 text-center text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => stepMinute(5)}
-                    className="w-6 h-7 text-xs rounded hover:bg-secondary text-muted-foreground"
-                    aria-label="분 증가 (5)"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
+          <div className="flex-shrink-0 w-[116px] border-l border-border pl-3 flex flex-col">
+            {/* 시간 포함 토글 */}
+            <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground mb-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={withTime}
+                onChange={(e) => toggleWithTime(e.target.checked)}
+                className="accent-primary"
+              />
+              <Clock className="w-3 h-3" /> 시간 포함
+            </label>
 
-            <div className="mt-3 pt-2 border-t border-border space-y-1">
+            {withTime ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1">
+                  <select
+                    aria-label="시"
+                    value={hour}
+                    onChange={(e) => { const h = Number(e.target.value); setHour(h); emit(h, minute, true); }}
+                    className={`${selectClass} flex-1`}
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>{pad(h)}시</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="분"
+                    value={minute}
+                    onChange={(e) => { const m = Number(e.target.value); setMinute(m); emit(hour, m, true); }}
+                    className={`${selectClass} flex-1`}
+                  >
+                    {minuteOptions.map((m) => (
+                      <option key={m} value={m}>{pad(m)}분</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {TIME_PRESETS.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => { setHour(p.h); setMinute(p.m); setWithTime(true); emit(p.h, p.m, true); }}
+                      className="px-1.5 py-0.5 text-[10px] rounded bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">날짜만 저장됩니다. 시간이 필요하면 위 체크박스를 켜세요.</p>
+            )}
+
+            <div className="mt-auto pt-2 border-t border-border space-y-1">
               <button
                 type="button"
                 onClick={setNow}

@@ -31,6 +31,8 @@ interface RichTextEditorProps {
   placeholder?: string;
   minHeight?: string;
   onImagePaste?: (dataUrl: string) => void;
+  /** 편집 영역 배경을 흰색으로 (기본은 테마 배경). 어두운 테마에서도 본문 글자가 보이도록 검은 글자색 적용. */
+  whiteBg?: boolean;
 }
 
 interface ToolbarButtonProps {
@@ -274,6 +276,7 @@ export function RichTextEditor({
   placeholder = '내용을 입력하세요...',
   minHeight = '120px',
   onImagePaste,
+  whiteBg = false,
 }: RichTextEditorProps) {
   const isUpdatingFromProp = useRef(false);
 
@@ -359,9 +362,9 @@ export function RichTextEditor({
   if (!editor) return null;
 
   return (
-    <div className="w-full border border-border rounded-lg overflow-hidden bg-background focus-within:ring-1 focus-within:ring-primary">
+    <div className={`w-full border border-border rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-primary ${whiteBg ? 'bg-white' : 'bg-background'}`}>
       <Toolbar editor={editor} />
-      <div onPaste={handlePaste}>
+      <div onPaste={handlePaste} className={whiteBg ? 'text-zinc-900' : ''}>
         <EditorContent editor={editor} />
       </div>
     </div>

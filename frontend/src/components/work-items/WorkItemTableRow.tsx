@@ -355,7 +355,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, isD
                 initial={item.category}
                 onSave={(v) => save({ category: v })}
                 onCancel={() => setEditing(null)}
-                placeholder="작업 분류"
+                placeholder="업무 분류"
               />
             ) : (
               <div className="flex items-center gap-1 flex-wrap">
@@ -393,7 +393,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, isD
                 initial={stripHtml(item.content)}
                 onSave={(v) => save({ content: v })}
                 onCancel={() => setEditing(null)}
-                placeholder="작업 내용"
+                placeholder="업무 내용"
               />
             ) : (
               <div className="flex items-start gap-1.5">
@@ -636,7 +636,7 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
               if (e.key === 'Enter' && canSave) { e.preventDefault(); submit(); }
               if (e.key === 'Escape') { reset(); setOpen(false); }
             }}
-            placeholder="작업 내용 (필수, Enter 저장)"
+            placeholder="업무 내용 (필수, Enter 저장)"
             className="flex-1 min-w-[180px] px-2 py-1 text-xs bg-background border border-border rounded" />
           <input type="date" value={startedAt} onChange={(e) => setScheduledAt(e.target.value)}
             className="px-1.5 py-1 text-xs bg-background border border-border rounded font-mono" />
