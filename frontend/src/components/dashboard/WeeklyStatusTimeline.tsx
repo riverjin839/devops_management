@@ -101,7 +101,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
 
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
-  const [viewMode, setViewMode] = useState<ViewMode>('task');
+  const [viewMode, setViewMode] = useState<ViewMode>('assignee');
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -256,25 +256,25 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
           )}
         </div>
         <div className="flex items-center gap-3">
-          {/* 보기 전환: 작업 기준 ↔ 작업자 기준 */}
+          {/* 보기 전환: 업무 기준 ↔ 담당자 기준 */}
           <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px]">
             <button
               onClick={() => setViewMode('task')}
               aria-pressed={viewMode === 'task'}
               className={`flex items-center gap-1 px-2 py-1 transition-colors ${
                 viewMode === 'task' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'}`}>
-              <ListTree className="w-3 h-3" /> 작업 기준
+              <ListTree className="w-3 h-3" /> 업무 기준
             </button>
             <button
               onClick={() => setViewMode('assignee')}
               aria-pressed={viewMode === 'assignee'}
               className={`flex items-center gap-1 px-2 py-1 border-l border-border transition-colors ${
                 viewMode === 'assignee' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'}`}>
-              <Users className="w-3 h-3" /> 작업자 기준
+              <Users className="w-3 h-3" /> 담당자 기준
             </button>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />작업 {taskBars.length}</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />업무 {taskBars.length}</span>
             <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />마일스톤 {milestones.length}</span>
           </div>
         </div>
@@ -355,7 +355,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         {/* header: weekday columns (월~금) */}
         <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
           <div className="px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
-            {viewMode === 'assignee' ? '작업자 / 마일스톤' : '작업 / 마일스톤'}
+            {viewMode === 'assignee' ? '담당자 / 마일스톤' : '업무 / 마일스톤'}
           </div>
           <div className={`grid ${colsClass}`}>
             {days.map((d) => {
@@ -421,7 +421,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               </div>
             )}
 
-            {/* ── 작업 기준: 한 작업 = 한 행 ── */}
+            {/* ── 업무 기준: 한 업무 = 한 행 ── */}
             {viewMode === 'task' && taskBars.map(({ item, startIdx, endIdx, clippedLeft, clippedRight }) => {
               const status = item.kanbanStatus ?? 'todo';
               const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
@@ -461,7 +461,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               );
             })}
 
-            {/* ── 작업자 기준: 한 작업자 = 한 swimlane(여러 sub-lane) ── */}
+            {/* ── 담당자 기준: 한 담당자 = 한 swimlane(여러 sub-lane) ── */}
             {viewMode === 'assignee' && assigneeRows.map(({ name, lanes }) => {
               const LANE_H = 32; // px per sub-lane
               const trackH = lanes.length * LANE_H + 12;
