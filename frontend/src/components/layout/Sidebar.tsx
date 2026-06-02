@@ -15,6 +15,7 @@ import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { InlineEdit } from '@/components/common';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -242,11 +243,27 @@ export function Sidebar() {
     ? (mode === 'work' ? '업무 현황 (클릭 시 플랫폼 현황)' : '플랫폼 현황 (클릭 시 업무 현황)')
     : '홈으로 이동';
 
-  // 홈 버튼 아이콘 — 현재 모드를 모양으로 구분(업무=ListTodo, 플랫폼=LayoutDashboard).
-  // 홈이 아닐 땐 일반 홈 아이콘.
-  const HomeButtonIcon = location.pathname === '/'
-    ? (mode === 'platform' ? LayoutDashboard : ListTodo)
-    : Home;
+  // 홈 버튼 아이콘 — 현재 모드를 모양으로 구분. 기본값은 업무=ListTodo, 플랫폼=☸(톱니).
+  // Settings(홈 화면 설정)에서 모드별 커스텀 아이콘(lucide/이모지/이미지)을 지정 가능.
+  const renderHomeButtonIcon = () => {
+    if (location.pathname !== '/') return <Home className="w-5 h-5" />;
+    const custom = mode === 'platform' ? settings?.homeIcons?.platform : settings?.homeIcons?.work;
+    const resolved = resolveClusterIcon(custom);
+    if (resolved?.kind === 'lucide') {
+      const IconC = resolved.Component;
+      return <IconC className="w-5 h-5" />;
+    }
+    if (resolved?.kind === 'image') {
+      return <img src={resolved.value} alt="" className="w-6 h-6 object-contain rounded-sm" />;
+    }
+    if (resolved?.kind === 'text') {
+      return <span className="text-base leading-none">{resolved.value}</span>;
+    }
+    // 미설정 → 기본값 (업무=ListTodo 아이콘, 플랫폼=☸ 톱니 문자)
+    return mode === 'platform'
+      ? <span className="text-base leading-none">☸</span>
+      : <ListTodo className="w-5 h-5" />;
+  };
 
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
@@ -427,7 +444,7 @@ export function Sidebar() {
                 : ''
             }`}
           >
-            <HomeButtonIcon className="w-5 h-5" />
+            {renderHomeButtonIcon()}
           </button>
         </div>
 

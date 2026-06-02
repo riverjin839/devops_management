@@ -423,6 +423,14 @@ export interface UiSettings {
   /** 통합지식 메뉴와 task/issue tag 에 노출되는 서비스 카탈로그.
    *  null/undefined 면 프론트의 SERVICE_CATALOG 기본값으로 폴백. */
   serviceCatalog?: ServiceCatalogEntry[];
+  /** 홈(좌상단) 버튼 아이콘 커스터마이즈 (모드별). 값 형식은 cluster icon 과 동일
+   *  (lucide 이름 / 이모지 / base64 data URL). null/undefined 면 기본값(업무=ListTodo, 플랫폼=☸). */
+  homeIcons?: HomeIcons;
+}
+
+export interface HomeIcons {
+  work?: string | null;
+  platform?: string | null;
 }
 
 /** Settings 의 '서비스' 탭에서 사용자 정의되는 서비스 한 항목.
