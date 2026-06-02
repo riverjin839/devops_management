@@ -1066,6 +1066,30 @@ def _seed_default_lake_service_entries():
         db.close()
 
 
+def _seed_assignee_users():
+    """이미 등록된 담당자(assignees)에 대해 operator 로그인 계정을 보강.
+
+    이 기능 도입 전에 등록된 담당자도 부팅 시 1회 계정을 부여받도록 한다. 멱등 —
+    이미 같은 사번(=username) 의 User 가 있으면 건드리지 않는다. 사번이 없는
+    담당자는 건너뛴다.
+    """
+    from app.models.app_setting import AppSetting
+    from app.routers.ui_settings import ASSIGNEES_KEY, _normalize_assignee
+    from app.services.assignee_accounts import sync_assignee_accounts
+
+    db = SessionLocal()
+    try:
+        setting = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
+        if not setting or not isinstance(setting.value, list):
+            return
+        normalized = [n for a in setting.value if (n := _normalize_assignee(a)) is not None]
+        result = sync_assignee_accounts(db, normalized)
+        if result["created"]:
+            _log.info("seeded %d assignee operator accounts", len(result["created"]))
+    finally:
+        db.close()
+
+
 def _seed_initial_admin():
     """Create the bootstrap admin if no users exist yet. Idempotent."""
     db = SessionLocal()
@@ -1103,6 +1127,7 @@ async def lifespan(app: FastAPI):
         ("seed_lake_service_types", _seed_default_lake_service_types),
         ("seed_lake_service_entries", _seed_default_lake_service_entries),
         ("seed_initial_admin", _seed_initial_admin),
+        ("seed_assignee_users", _seed_assignee_users),
     ]:
         try:
             step()
