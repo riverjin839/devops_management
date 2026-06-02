@@ -22,13 +22,6 @@ function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function greeting(hour: number): string {
-  if (hour < 6)  return '늦은 시간 수고 많으세요';
-  if (hour < 12) return '좋은 아침입니다';
-  if (hour < 18) return '오후 운영 잘 부탁드립니다';
-  return '오늘도 마무리 잘 부탁드립니다';
-}
-
 function fmtKoreanDate(d: Date): string {
   const week = ['일', '월', '화', '수', '목', '금', '토'];
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} (${week[d.getDay()]})`;
@@ -105,7 +98,6 @@ export function HomePage() {
   const [weeklyTab, setWeeklyTab] = useState<'week' | 'calendar'>('week');
 
   const now = new Date();
-  const hello = greeting(now.getHours());
   const dateStr = fmtKoreanDate(now);
 
   return (
@@ -113,12 +105,12 @@ export function HomePage() {
 
       {/* ── Compact top strip — always visible ─────────────────────────────── */}
       <div className="flex-none flex items-center gap-3 px-3 lg:px-4 py-2 border-b border-border bg-background/95 backdrop-blur flex-wrap">
-        {/* 인사 */}
+        {/* 사용자 / 날짜 */}
         <div className="flex items-center gap-2 min-w-0">
           <Sun className="w-4 h-4 text-primary flex-shrink-0" />
-          <span className="text-sm font-bold leading-none whitespace-nowrap">
-            {hello}{myName ? `, ${myName}님` : ''}
-          </span>
+          {myName && (
+            <span className="text-sm font-bold leading-none whitespace-nowrap">{myName}님</span>
+          )}
           <span className="text-[11px] text-muted-foreground tabular-nums hidden sm:inline">{dateStr}</span>
         </div>
 
