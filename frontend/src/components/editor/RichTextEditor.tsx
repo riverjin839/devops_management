@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -22,8 +22,11 @@ import {
   Code, FileCode,
   Quote, Minus, Link as LinkIcon, Image as ImageIcon,
   Table as TableIcon, AlignLeft, AlignCenter, AlignRight,
-  Highlighter, Undo, Redo, Type,
+  Highlighter, Undo, Redo, Type, LayoutTemplate, FileUp,
 } from 'lucide-react';
+import { marked } from 'marked';
+import { compressImageFile } from '@/lib/imageCompress';
+import { DOC_TEMPLATES } from './docTemplates';
 
 interface RichTextEditorProps {
   value: string;
@@ -68,7 +71,8 @@ function Divider() {
   return <div className="w-px h-5 bg-border mx-0.5 flex-shrink-0" />;
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolean }) {
+  const [tplOpen, setTplOpen] = useState(false);
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('URL을 입력하세요:', previousUrl ?? 'https://');
@@ -85,7 +89,7 @@ function Toolbar({ editor }: { editor: Editor }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border bg-muted/30">
+    <div className={`flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border ${whiteBg ? 'bg-white' : 'bg-muted/30'}`}>
       {/* Undo / Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}
@@ -266,6 +270,58 @@ function Toolbar({ editor }: { editor: Editor }) {
       >
         <Minus className="w-3.5 h-3.5" />
       </ToolbarButton>
+
+      <Divider />
+      {/* 마크다운(.md) 가져오기 — 파일을 읽어 HTML 로 변환 후 커서 위치에 삽입 */}
+      <ToolbarButton
+        onClick={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.md,.markdown,.txt,text/markdown,text/plain';
+          input.onchange = async () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            try {
+              const text = await file.text();
+              const html = await marked.parse(text, { async: true });
+              editor.chain().focus().insertContent(html).run();
+            } catch { /* 변환 실패 시 무시 */ }
+          };
+          input.click();
+        }}
+        title="마크다운(.md) 가져오기"
+      >
+        <FileUp className="w-3.5 h-3.5" />
+      </ToolbarButton>
+
+      {/* 문서 템플릿 삽입 (커서 위치에 삽입) */}
+      <div className="relative">
+        <ToolbarButton onClick={() => setTplOpen((v) => !v)} active={tplOpen} title="템플릿 삽입">
+          <LayoutTemplate className="w-3.5 h-3.5" />
+        </ToolbarButton>
+        {tplOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setTplOpen(false)} aria-hidden />
+            <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-lg border border-border bg-card shadow-lg py-1">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">실무 템플릿</div>
+              {DOC_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().insertContent(tpl.html).run();
+                    setTplOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-secondary transition-colors"
+                >
+                  <div className="text-xs font-medium">{tpl.label}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{tpl.description}</div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -344,16 +400,14 @@ export function RichTextEditor({
       imageItems.forEach((item) => {
         const file = item.getAsFile();
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target?.result as string;
-          if (!dataUrl) return;
-          // Insert inline into editor
-          editor?.chain().focus().setImage({ src: dataUrl }).run();
-          // Also notify parent for separate attachment list if needed
-          onImagePaste?.(dataUrl);
-        };
-        reader.readAsDataURL(file);
+        // base64 가 본문에 박혀 DB 가 비대해지지 않도록 다운스케일+압축 후 삽입.
+        compressImageFile(file)
+          .then((dataUrl) => {
+            if (!dataUrl) return;
+            editor?.chain().focus().setImage({ src: dataUrl }).run();
+            onImagePaste?.(dataUrl);
+          })
+          .catch(() => { /* 압축 실패 시 조용히 무시 */ });
       });
     },
     [editor, onImagePaste],
@@ -363,8 +417,8 @@ export function RichTextEditor({
 
   return (
     <div className={`w-full border border-border rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-primary ${whiteBg ? 'bg-white' : 'bg-background'}`}>
-      <Toolbar editor={editor} />
-      <div onPaste={handlePaste} className={whiteBg ? 'text-zinc-900' : ''}>
+      <Toolbar editor={editor} whiteBg={whiteBg} />
+      <div onPaste={handlePaste} className={whiteBg ? 'bg-white text-zinc-900' : ''}>
         <EditorContent editor={editor} />
       </div>
     </div>

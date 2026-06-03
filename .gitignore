@@ -65,9 +65,7 @@ tmp/
 temp/
 .tmp/
 
-# Claude Code local settings
-.claude/
-
-# Claude Code local settings
-.claude/
+# Claude Code local settings — 내용은 무시하되, 공유용 Agent Skills 는 추적(github 반영)
+.claude/*
+!.claude/skills/
 .superpowers/
