@@ -91,6 +91,8 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
   onPickBg?: (color: string | null) => void;
 }) {
   const [tplOpen, setTplOpen] = useState(false);
+  const [tblOpen, setTblOpen] = useState(false);
+  const inTable = editor.isActive('table');
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('URL을 입력하세요:', previousUrl ?? 'https://');
@@ -285,6 +287,40 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
       <ToolbarButton onClick={insertTable} title="표 삽입">
         <TableIcon className="w-3.5 h-3.5" />
       </ToolbarButton>
+      {/* 표 안에 커서가 있을 때만 — 엑셀처럼 행/열 관리 */}
+      {inTable && (
+        <div className="relative">
+          <ToolbarButton onClick={() => setTblOpen((v) => !v)} active={tblOpen} title="표 편집(행/열)">
+            <TableIcon className="w-3.5 h-3.5 text-primary" />
+          </ToolbarButton>
+          {tblOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setTblOpen(false)} aria-hidden />
+              <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1 text-xs">
+                {([
+                  ['행 위에 추가', () => editor.chain().focus().addRowBefore().run()],
+                  ['행 아래 추가', () => editor.chain().focus().addRowAfter().run()],
+                  ['행 삭제', () => editor.chain().focus().deleteRow().run()],
+                  ['열 왼쪽 추가', () => editor.chain().focus().addColumnBefore().run()],
+                  ['열 오른쪽 추가', () => editor.chain().focus().addColumnAfter().run()],
+                  ['열 삭제', () => editor.chain().focus().deleteColumn().run()],
+                  ['헤더 행 토글', () => editor.chain().focus().toggleHeaderRow().run()],
+                  ['표 삭제', () => editor.chain().focus().deleteTable().run()],
+                ] as [string, () => void][]).map(([label, fn]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); fn(); setTblOpen(false); }}
+                    className={`w-full text-left px-3 py-1.5 hover:bg-secondary transition-colors ${label === '표 삭제' ? 'text-red-500' : ''}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
       <ToolbarButton
         onClick={() => editor.chain().focus().setHorizontalRule().run()}
         title="구분선"
