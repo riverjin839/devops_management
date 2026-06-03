@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -22,8 +22,10 @@ import {
   Code, FileCode,
   Quote, Minus, Link as LinkIcon, Image as ImageIcon,
   Table as TableIcon, AlignLeft, AlignCenter, AlignRight,
-  Highlighter, Undo, Redo, Type,
+  Highlighter, Undo, Redo, Type, LayoutTemplate,
 } from 'lucide-react';
+import { compressImageFile } from '@/lib/imageCompress';
+import { DOC_TEMPLATES } from './docTemplates';
 
 interface RichTextEditorProps {
   value: string;
@@ -69,6 +71,7 @@ function Divider() {
 }
 
 function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolean }) {
+  const [tplOpen, setTplOpen] = useState(false);
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('URL을 입력하세요:', previousUrl ?? 'https://');
@@ -266,6 +269,36 @@ function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolea
       >
         <Minus className="w-3.5 h-3.5" />
       </ToolbarButton>
+
+      <Divider />
+      {/* 문서 템플릿 삽입 (커서 위치에 삽입) */}
+      <div className="relative">
+        <ToolbarButton onClick={() => setTplOpen((v) => !v)} active={tplOpen} title="템플릿 삽입">
+          <LayoutTemplate className="w-3.5 h-3.5" />
+        </ToolbarButton>
+        {tplOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setTplOpen(false)} aria-hidden />
+            <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-lg border border-border bg-card shadow-lg py-1">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">실무 템플릿</div>
+              {DOC_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().insertContent(tpl.html).run();
+                    setTplOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-secondary transition-colors"
+                >
+                  <div className="text-xs font-medium">{tpl.label}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{tpl.description}</div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -344,16 +377,14 @@ export function RichTextEditor({
       imageItems.forEach((item) => {
         const file = item.getAsFile();
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target?.result as string;
-          if (!dataUrl) return;
-          // Insert inline into editor
-          editor?.chain().focus().setImage({ src: dataUrl }).run();
-          // Also notify parent for separate attachment list if needed
-          onImagePaste?.(dataUrl);
-        };
-        reader.readAsDataURL(file);
+        // base64 가 본문에 박혀 DB 가 비대해지지 않도록 다운스케일+압축 후 삽입.
+        compressImageFile(file)
+          .then((dataUrl) => {
+            if (!dataUrl) return;
+            editor?.chain().focus().setImage({ src: dataUrl }).run();
+            onImagePaste?.(dataUrl);
+          })
+          .catch(() => { /* 압축 실패 시 조용히 무시 */ });
       });
     },
     [editor, onImagePaste],
