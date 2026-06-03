@@ -68,7 +68,7 @@ function Divider() {
   return <div className="w-px h-5 bg-border mx-0.5 flex-shrink-0" />;
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolean }) {
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('URL을 입력하세요:', previousUrl ?? 'https://');
@@ -85,7 +85,7 @@ function Toolbar({ editor }: { editor: Editor }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border bg-muted/30">
+    <div className={`flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border ${whiteBg ? 'bg-white' : 'bg-muted/30'}`}>
       {/* Undo / Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}
@@ -363,8 +363,8 @@ export function RichTextEditor({
 
   return (
     <div className={`w-full border border-border rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-primary ${whiteBg ? 'bg-white' : 'bg-background'}`}>
-      <Toolbar editor={editor} />
-      <div onPaste={handlePaste} className={whiteBg ? 'text-zinc-900' : ''}>
+      <Toolbar editor={editor} whiteBg={whiteBg} />
+      <div onPaste={handlePaste} className={whiteBg ? 'bg-white text-zinc-900' : ''}>
         <EditorContent editor={editor} />
       </div>
     </div>
