@@ -44,6 +44,7 @@ import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
+import { K8sResourcesPage } from '@/pages/K8sResourcesPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -154,6 +155,9 @@ function AppShell() {
               {/* OpenLens P0 — 파드 로그 스트리밍(읽기전용) */}
               <Route path="/k8s-logs/:clusterId" element={<K8sLogsPage />} />
               <Route path="/k8s-logs" element={<K8sLogsPage />} />
+              {/* OpenLens P1 — 읽기전용 리소스 탐색기 */}
+              <Route path="/k8s-resources/:clusterId" element={<K8sResourcesPage />} />
+              <Route path="/k8s-resources" element={<K8sResourcesPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="/settings/users" element={<UsersPage />} />
               <Route path="/settings/audit-logs" element={<AuditLogsPage />} />
