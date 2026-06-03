@@ -42,6 +42,7 @@ import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
+import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -146,6 +147,9 @@ function AppShell() {
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
+              {/* 운영 점검 통합 콘솔 — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그 */}
+              <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />
+              <Route path="/ops-checks" element={<OpsCheckConsolePage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="/settings/users" element={<UsersPage />} />
               <Route path="/settings/audit-logs" element={<AuditLogsPage />} />

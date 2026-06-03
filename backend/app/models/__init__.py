@@ -32,6 +32,7 @@ from app.models.deep_check import (
 from app.models.lake_service import LakeService, LakeServiceCheck
 from app.models.lake_service_type import LakeServiceType
 from app.models.bottleneck_run import BottleneckRun
+from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
 
 __all__ = [
     "Cluster",
@@ -77,4 +78,6 @@ __all__ = [
     "LakeServiceCheck",
     "LakeServiceType",
     "BottleneckRun",
+    "OpsCheckRun",
+    "OpsCheckRunItem",
 ]

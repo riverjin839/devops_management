@@ -2061,3 +2061,60 @@ export interface BottleneckProbeCatalogEntry {
   fallbackCmd?: string | null;
   description?: string | null;
 }
+
+// ── 운영 점검(Ops Checks) 통합 콘솔 ──────────────────────────────────────────
+/** 점검 소스 — deep_check / addon / batch_job / playbook */
+export type OpsCheckSource = 'deep_check' | 'addon' | 'batch_job' | 'playbook';
+/** 도메인 카테고리 — 콘솔 그룹핑/필터용 */
+export type OpsCheckCategory = 'os' | 'k8s' | 'storage' | 'network' | 'app';
+
+export interface OpsCheckCatalogItem {
+  source: OpsCheckSource;
+  itemRefId: string;
+  name?: string | null;
+  checkType?: string | null;
+  category: OpsCheckCategory | string;
+  requiresCredentials: boolean;
+  lastStatus?: string | null;
+  lastRunAt?: string | null;
+}
+
+export interface OpsCheckRunItem {
+  id: string;
+  source: OpsCheckSource;
+  itemRefId: string;
+  checkType?: string | null;
+  name?: string | null;
+  /** 실행 진행 상태 */
+  status: 'queued' | 'running' | 'done' | 'error';
+  /** 점검 판정 결과 */
+  resultStatus?: 'healthy' | 'warning' | 'critical' | 'pending' | null;
+  message?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any> | null;
+  durationMs: number;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface OpsCheckRun {
+  id: string;
+  clusterId: string;
+  status: 'pending' | 'running' | 'done' | 'cancelled';
+  trigger: string;
+  triggeredBy?: string | null;
+  total: number;
+  okCount: number;
+  warnCount: number;
+  critCount: number;
+  errorCount: number;
+  createdAt: string;
+  finishedAt?: string | null;
+}
+
+export interface OpsCheckRunRequestItem {
+  source: OpsCheckSource;
+  itemRefId: string;
+  checkType?: string | null;
+  name?: string | null;
+}

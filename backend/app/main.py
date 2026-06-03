@@ -56,6 +56,7 @@ from app.routers import (
     lake_services_router,
     bottleneck_router,
     lake_service_types_router,
+    ops_check_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -702,6 +703,13 @@ def _run_migrations():
     if "audit_logs" in inspector.get_table_names():
         _safe_create_index("ix_audit_logs_created_at_desc", "audit_logs", "(created_at DESC)")
 
+    # ops_check_*: 운영 점검 콘솔 — 테이블은 create_all 이 생성, 폴링/조회용 인덱스만 보강.
+    if "ops_check_runs" in inspector.get_table_names():
+        _safe_create_index("ix_ops_check_runs_cluster_created", "ops_check_runs", "(cluster_id, created_at DESC)")
+    if "ops_check_run_items" in inspector.get_table_names():
+        _safe_create_index("ix_ops_check_run_items_run", "ops_check_run_items", "(run_id)")
+        _safe_create_index("ix_ops_check_run_items_ref", "ops_check_run_items", "(source, item_ref_id)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
@@ -1197,6 +1205,8 @@ app.include_router(lake_services_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(bottleneck_router, prefix="/api/v1", dependencies=_auth)
 # lake-service-type-management (신규 PDCA) — DB-driven service_type 카탈로그.
 app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_auth)
+# ops-checks (운영 점검 통합 콘솔) — 여러 점검 소스를 골라 일괄/개별 실행.
+app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

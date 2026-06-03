@@ -1318,6 +1318,10 @@ import type {
   NotificationChannel,
   NotificationChannelInput,
   NotificationLogEntry,
+  OpsCheckCatalogItem,
+  OpsCheckRun,
+  OpsCheckRunItem,
+  OpsCheckRunRequestItem,
 } from '@/types';
 
 // Daily check (DailyChecker) — Deep check 와 다른 파이프라인. 회차 picker / 최신 로그 조회 /
@@ -1383,6 +1387,20 @@ export const notificationsApi = {
   test: (id: string) => api.post<NotificationLogEntry>(`/notifications/test/${id}`),
   log: (limit = 50) =>
     api.get<NotificationLogEntry[]>('/notifications/log', { params: { limit } }),
+};
+
+export const opsCheckApi = {
+  catalog: (clusterId: string) =>
+    api.get<OpsCheckCatalogItem[]>(`/ops-checks/catalog/${clusterId}`),
+  run: (clusterId: string, items: OpsCheckRunRequestItem[]) =>
+    api.post<OpsCheckRun>('/ops-checks/run', { clusterId, items }),
+  listRuns: (clusterId?: string, limit = 20) =>
+    api.get<OpsCheckRun[]>('/ops-checks/runs', { params: { cluster_id: clusterId, limit } }),
+  getRun: (runId: string) => api.get<OpsCheckRun>(`/ops-checks/runs/${runId}`),
+  getRunItems: (runId: string) =>
+    api.get<OpsCheckRunItem[]>(`/ops-checks/runs/${runId}/items`),
+  itemHistory: (source: string, itemRefId: string, limit = 20) =>
+    api.get<OpsCheckRunItem[]>(`/ops-checks/items/${source}/${itemRefId}/history`, { params: { limit } }),
 };
 
 export default api;

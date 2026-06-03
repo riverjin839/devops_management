@@ -41,6 +41,9 @@ class DeepCheckTypeSpec:
     param_fields: list[DeepCheckFieldSpec] = field(default_factory=list)
     default_thresholds: dict[str, Any] = field(default_factory=dict)
     default_params: dict[str, Any] = field(default_factory=dict)
+    # 운영 점검 콘솔 그룹핑용 도메인 — os | k8s | storage | network | app.
+    # 신규 checker 는 자신의 도메인을 선언만 하면 콘솔 카탈로그에 자동 분류된다.
+    category: str = "k8s"
 
 
 REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
@@ -93,6 +96,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             ],
             default_thresholds={"warning_drop_pct": 2, "critical_drop_pct": 5},
             default_params={"last_seconds": 60, "flow_limit": 1000},
+            category="network",
         ),
     ),
     "pvc_health": (
@@ -107,6 +111,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             ],
             default_thresholds={"warning_pending": 1, "critical_pending": 5},
             default_params={},
+            category="storage",
         ),
     ),
     "image_pull": (
@@ -259,6 +264,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
                 "verify_tls": False,
                 "caller_label": "management-cluster (devops_management)",
             },
+            category="network",
         ),
     ),
     "pod_to_pod": (
@@ -291,6 +297,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
                 "skip_host_network": True,
                 "namespaces": [],
             },
+            category="network",
         ),
     ),
 }
@@ -309,6 +316,7 @@ def list_check_types() -> list[dict[str, Any]]:
             "check_type": ct,
             "display_name": spec.display_name,
             "description": spec.description,
+            "category": spec.category,
             "threshold_fields": [_field_to_dict(f) for f in spec.threshold_fields],
             "param_fields": [_field_to_dict(f) for f in spec.param_fields],
             "default_thresholds": spec.default_thresholds,
