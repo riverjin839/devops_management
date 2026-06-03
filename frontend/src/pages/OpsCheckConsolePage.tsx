@@ -226,7 +226,12 @@ export function OpsCheckConsolePage() {
                           <input type="checkbox" checked={selected.has(k)} onChange={() => toggle(c)} className="accent-primary" />
                         </td>
                         <td className="px-2 py-2">
-                          <div className="font-medium truncate max-w-[280px]">{c.name || c.checkType}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium truncate max-w-[260px]">{c.name || c.checkType}</span>
+                            {c.enabled === false && (
+                              <span className="text-[9px] rounded px-1 py-0.5 bg-muted text-muted-foreground border border-border" title="비활성 — cron 미실행, 수동 실행만">비활성</span>
+                            )}
+                          </div>
                           {c.checkType && c.name && (
                             <div className="text-[10px] text-muted-foreground font-mono">{c.checkType}</div>
                           )}

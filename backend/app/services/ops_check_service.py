@@ -75,9 +75,10 @@ class OpsCheckService:
 
     def _catalog_deep_checks(self, cluster_id: str | UUID) -> list[dict[str, Any]]:
         try:
+            # enabled/disabled 모두 노출 — 비활성으로 "등록만" 된 점검도 콘솔에서
+            # 수동 실행할 수 있어야 한다(cron 은 enabled 만 돈다).
             defs = (
                 self.db.query(DeepCheckDefinition)
-                .filter(DeepCheckDefinition.enabled == True)  # noqa: E712
                 .filter(
                     (DeepCheckDefinition.cluster_id.is_(None))
                     | (DeepCheckDefinition.cluster_id == cluster_id)
@@ -108,6 +109,7 @@ class OpsCheckService:
                     "check_type": d.check_type,
                     "category": _deep_check_category(d.check_type),
                     "requires_credentials": False,
+                    "enabled": bool(d.enabled),
                     "last_status": _status_value(last.status) if last else None,
                     "last_run_at": last.checked_at.isoformat() if last and last.checked_at else None,
                 })
@@ -132,6 +134,7 @@ class OpsCheckService:
                 "check_type": a.type,
                 "category": _addon_category(a.type),
                 "requires_credentials": False,
+                "enabled": True,
                 "last_status": _status_value(a.status),
                 "last_run_at": a.last_check.isoformat() if a.last_check else None,
             } for a in addons]

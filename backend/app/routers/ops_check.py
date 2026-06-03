@@ -34,6 +34,7 @@ class CatalogItem(BaseModel):
     check_type: Optional[str] = None
     category: str
     requires_credentials: bool = False
+    enabled: bool = True
     last_status: Optional[str] = None
     last_run_at: Optional[str] = None
 

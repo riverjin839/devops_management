@@ -2075,6 +2075,8 @@ export interface OpsCheckCatalogItem {
   checkType?: string | null;
   category: OpsCheckCategory | string;
   requiresCredentials: boolean;
+  /** false = 등록만 되고 비활성(cron 미실행) — 콘솔에서 수동 실행은 가능 */
+  enabled?: boolean;
   lastStatus?: string | null;
   lastRunAt?: string | null;
 }

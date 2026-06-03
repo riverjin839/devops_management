@@ -710,6 +710,10 @@ def _run_migrations():
         _safe_create_index("ix_ops_check_run_items_run", "ops_check_run_items", "(run_id)")
         _safe_create_index("ix_ops_check_run_items_ref", "ops_check_run_items", "(source, item_ref_id)")
 
+    # os_param_changes: OS 파라미터 변경 이력 — 테이블은 create_all, 조회 인덱스 보강.
+    if "os_param_changes" in inspector.get_table_names():
+        _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
@@ -973,7 +977,7 @@ def _seed_default_deep_check_definitions():
                 check_type=ct,
                 name=spec.display_name,
                 description=spec.description,
-                enabled=True,
+                enabled=getattr(spec, "default_enabled", True),
                 schedule_cron=None,
                 thresholds=dict(spec.default_thresholds),
                 params=dict(spec.default_params),

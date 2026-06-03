@@ -50,6 +50,7 @@ LOG_TABLES: frozenset[str] = frozenset({
     "audit_logs",
     "ops_check_runs",
     "ops_check_run_items",
+    "os_param_changes",
 })
 
 # 민감 정보 포함 — 옵션으로 마스킹
