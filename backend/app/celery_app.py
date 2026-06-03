@@ -462,3 +462,24 @@ def run_single_check(self, cluster_id: str):
 
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_ops_check_batch")
+def run_ops_check_batch(self, run_id: str):
+    """운영 점검 콘솔 — 선택한 항목 묶음(OpsCheckRun)을 백그라운드 실행.
+
+    항목마다 진행 상태/결과를 즉시 커밋하므로 콘솔이 폴링으로 진행률을 본다.
+    """
+    from app.database import SessionLocal
+    from app.services.ops_check_service import OpsCheckService
+
+    db = SessionLocal()
+    try:
+        OpsCheckService(db).execute_run(run_id)
+        return {"run_id": run_id, "status": "done"}
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).exception("run_ops_check_batch failed (%s): %s", run_id, e)
+        return {"run_id": run_id, "error": str(e)[:200]}
+    finally:
+        db.close()

@@ -16,6 +16,7 @@ from app.services.deep_checkers.coredns_health_checker import CoreDnsHealthCheck
 from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
 from app.services.deep_checkers.external_to_pod_checker import ExternalToPodChecker
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
+from app.services.deep_checkers.kernel_param_drift_checker import KernelParamDriftChecker
 from app.services.deep_checkers.node_pressure_checker import NodePressureChecker
 from app.services.deep_checkers.oom_events_checker import OomEventsChecker
 from app.services.deep_checkers.pod_to_pod_checker import PodToPodChecker
@@ -41,6 +42,11 @@ class DeepCheckTypeSpec:
     param_fields: list[DeepCheckFieldSpec] = field(default_factory=list)
     default_thresholds: dict[str, Any] = field(default_factory=dict)
     default_params: dict[str, Any] = field(default_factory=dict)
+    # 운영 점검 콘솔 그룹핑용 도메인 — os | k8s | storage | network | app.
+    # 신규 checker 는 자신의 도메인을 선언만 하면 콘솔 카탈로그에 자동 분류된다.
+    category: str = "k8s"
+    # 기본 시드 시 enabled 여부 — 위험/무거운 점검은 False 로 등록만 해두고 운영자가 켠다.
+    default_enabled: bool = True
 
 
 REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
@@ -93,6 +99,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             ],
             default_thresholds={"warning_drop_pct": 2, "critical_drop_pct": 5},
             default_params={"last_seconds": 60, "flow_limit": 1000},
+            category="network",
         ),
     ),
     "pvc_health": (
@@ -107,6 +114,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             ],
             default_thresholds={"warning_pending": 1, "critical_pending": 5},
             default_params={},
+            category="storage",
         ),
     ),
     "image_pull": (
@@ -259,6 +267,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
                 "verify_tls": False,
                 "caller_label": "management-cluster (devops_management)",
             },
+            category="network",
         ),
     ),
     "pod_to_pod": (
@@ -291,6 +300,33 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
                 "skip_host_network": True,
                 "namespaces": [],
             },
+            category="network",
+        ),
+    ),
+    "kernel_param_drift": (
+        KernelParamDriftChecker,
+        DeepCheckTypeSpec(
+            check_type="kernel_param_drift",
+            display_name="OS 파라미터 변경 점검",
+            description=(
+                "노드별 sysctl/커널 파라미터가 직전 수집 대비 바뀌었는지 점검. "
+                "SSH·파드 없이 이미 수집된 ClusterConfigSnapshot(kernel_params:{host})의 "
+                "연속 스냅샷만 비교하고, 변경 내역을 OsParamChange 이력에 기록한다. "
+                "사전에 커널 파라미터 수집이 한 번 이상 필요."
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_changes", "int", "경고 (최근 변경 건수)", 1),
+                DeepCheckFieldSpec("critical_changes", "int", "심각 (최근 변경 건수)", 20),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("recent_hours", "int", "최근 변경 판정 윈도 (시간)", 24),
+                DeepCheckFieldSpec("record_history", "boolean", "변경 이력 DB 기록", True),
+                DeepCheckFieldSpec("max_report", "int", "결과에 표시할 최대 변경 수", 50),
+            ],
+            default_thresholds={"warning_changes": 1, "critical_changes": 20},
+            default_params={"recent_hours": 24, "record_history": True, "max_report": 50},
+            category="os",
+            default_enabled=False,
         ),
     ),
 }
@@ -309,6 +345,7 @@ def list_check_types() -> list[dict[str, Any]]:
             "check_type": ct,
             "display_name": spec.display_name,
             "description": spec.description,
+            "category": spec.category,
             "threshold_fields": [_field_to_dict(f) for f in spec.threshold_fields],
             "param_fields": [_field_to_dict(f) for f in spec.param_fields],
             "default_thresholds": spec.default_thresholds,
