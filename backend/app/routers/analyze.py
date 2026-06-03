@@ -16,6 +16,7 @@ from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from kubernetes import client as k8s_client, config as k8s_config
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -455,6 +456,58 @@ class IncidentContextFetchResponse(BaseModel):
     current_logs: str
     previous_logs: Optional[str] = None
     describe_output: str
+
+
+@router.get("/clusters/{cluster_id}/namespaces/{namespace}/pods/{pod_name}/logs/stream")
+def stream_pod_logs(
+    cluster_id: UUID,
+    namespace: str,
+    pod_name: str,
+    container: Optional[str] = None,
+    tail_lines: int = 200,
+    follow: bool = True,
+    previous: bool = False,
+    db: Session = Depends(get_db),
+):
+    """파드 로그 SSE 스트림 (읽기전용). follow=True 면 실시간 tail.
+
+    OpenLens 류의 follow 로그 뷰어용. 인증된 fetch 로 ``text/event-stream`` 소비.
+    멀티컨테이너 파드는 ``container`` 미지정 시 에러 → 컨테이너명을 지정한다.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    v1 = _get_core_v1(cluster)
+
+    def _gen():
+        resp = None
+        try:
+            resp = v1.read_namespaced_pod_log(
+                name=pod_name,
+                namespace=namespace,
+                container=container or None,
+                follow=follow,
+                tail_lines=max(1, min(tail_lines, 5000)),
+                previous=previous,
+                timestamps=False,
+                _preload_content=False,
+            )
+            for chunk in resp.stream(amt=None, decode_content=True):
+                text = (
+                    chunk.decode("utf-8", errors="replace")
+                    if isinstance(chunk, (bytes, bytearray))
+                    else str(chunk)
+                )
+                for line in text.splitlines():
+                    yield f"data: {line}\n\n"
+        except Exception as e:  # noqa: BLE001
+            yield f"data: [stream error] {str(e)[:200]}\n\n"
+        finally:
+            try:
+                if resp is not None:
+                    resp.release_conn()
+            except Exception:  # noqa: BLE001
+                pass
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
 @router.get(
