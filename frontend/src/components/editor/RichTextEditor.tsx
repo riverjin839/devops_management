@@ -22,11 +22,24 @@ import {
   Code, FileCode,
   Quote, Minus, Link as LinkIcon, Image as ImageIcon,
   Table as TableIcon, AlignLeft, AlignCenter, AlignRight,
-  Highlighter, Undo, Redo, Type, LayoutTemplate, FileUp,
+  Highlighter, Undo, Redo, Type, LayoutTemplate, FileUp, Palette, Eraser,
 } from 'lucide-react';
 import { marked } from 'marked';
 import { compressImageFile } from '@/lib/imageCompress';
 import { DOC_TEMPLATES } from './docTemplates';
+
+const EDITOR_BG_KEY = 'k8s:editor-bg';
+const BG_PRESETS = ['#ffffff', '#faf7f0', '#f4f4f5', '#eef2ff', '#ecfdf5', '#1f2937'];
+
+/** hex(#rrggbb) 의 상대 밝기로 어두운 배경이면 true → 밝은 글자색 사용 */
+function isDarkColor(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  // perceived luminance (0~255)
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140;
+}
 
 interface RichTextEditorProps {
   value: string;
@@ -71,7 +84,12 @@ function Divider() {
   return <div className="w-px h-5 bg-border mx-0.5 flex-shrink-0" />;
 }
 
-function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolean }) {
+function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
+  editor: Editor;
+  surfaceBg?: string | null;
+  bgColor?: string | null;
+  onPickBg?: (color: string | null) => void;
+}) {
   const [tplOpen, setTplOpen] = useState(false);
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href as string | undefined;
@@ -89,7 +107,10 @@ function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolea
   };
 
   return (
-    <div className={`flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border ${whiteBg ? 'bg-white' : 'bg-muted/30'}`}>
+    <div
+      className={`flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border ${surfaceBg ? '' : 'bg-muted/30'}`}
+      style={surfaceBg ? { backgroundColor: surfaceBg } : undefined}
+    >
       {/* Undo / Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}
@@ -322,6 +343,37 @@ function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolea
           </>
         )}
       </div>
+
+      <Divider />
+      {/* 배경색 선택 — 프리셋 + 커스텀(컬러 피커), localStorage 저장 */}
+      <div className="flex items-center gap-0.5">
+        {BG_PRESETS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            title={`배경색 ${c}`}
+            onClick={() => onPickBg?.(c)}
+            className={`w-5 h-5 rounded border ${bgColor === c ? 'ring-2 ring-primary ring-offset-1' : 'border-border'}`}
+            style={{ backgroundColor: c }}
+          />
+        ))}
+        <label
+          title="배경색 직접 선택"
+          className="relative inline-flex items-center justify-center w-7 h-7 rounded text-muted-foreground hover:bg-secondary hover:text-foreground cursor-pointer"
+        >
+          <Palette className="w-3.5 h-3.5" />
+          <input
+            type="color"
+            value={bgColor ?? '#ffffff'}
+            onChange={(e) => onPickBg?.(e.target.value)}
+            className="absolute inset-0 opacity-0 cursor-pointer"
+            aria-label="배경색 직접 선택"
+          />
+        </label>
+        <ToolbarButton onClick={() => onPickBg?.(null)} title="배경 기본(테마)로 되돌리기">
+          <Eraser className="w-3.5 h-3.5" />
+        </ToolbarButton>
+      </div>
     </div>
   );
 }
@@ -389,6 +441,18 @@ export function RichTextEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  // 에디터 배경색 — 사용자가 고른 색(localStorage). 없으면 whiteBg(흰색) → 테마 순.
+  const [bgColor, setBgColor] = useState<string | null>(() => {
+    try { return localStorage.getItem(EDITOR_BG_KEY); } catch { return null; }
+  });
+  const applyBg = useCallback((color: string | null) => {
+    setBgColor(color);
+    try {
+      if (color) localStorage.setItem(EDITOR_BG_KEY, color);
+      else localStorage.removeItem(EDITOR_BG_KEY);
+    } catch { /* ignore */ }
+  }, []);
+
   // Image paste handler
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
@@ -415,10 +479,20 @@ export function RichTextEditor({
 
   if (!editor) return null;
 
+  // 우선순위: 사용자가 고른 bgColor > whiteBg(흰색) > 테마 배경
+  const surfaceBg = bgColor || (whiteBg ? '#ffffff' : null);
+  const surfaceText = surfaceBg ? (isDarkColor(surfaceBg) ? '#f4f4f5' : '#18181b') : undefined;
+
   return (
-    <div className={`w-full border border-border rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-primary ${whiteBg ? 'bg-white' : 'bg-background'}`}>
-      <Toolbar editor={editor} whiteBg={whiteBg} />
-      <div onPaste={handlePaste} className={whiteBg ? 'bg-white text-zinc-900' : ''}>
+    <div
+      className={`w-full border border-border rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-primary ${surfaceBg ? '' : 'bg-background'}`}
+      style={surfaceBg ? { backgroundColor: surfaceBg } : undefined}
+    >
+      <Toolbar editor={editor} surfaceBg={surfaceBg} bgColor={bgColor} onPickBg={applyBg} />
+      <div
+        onPaste={handlePaste}
+        style={surfaceBg ? { backgroundColor: surfaceBg, color: surfaceText } : undefined}
+      >
         <EditorContent editor={editor} />
       </div>
     </div>
