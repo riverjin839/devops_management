@@ -22,8 +22,9 @@ import {
   Code, FileCode,
   Quote, Minus, Link as LinkIcon, Image as ImageIcon,
   Table as TableIcon, AlignLeft, AlignCenter, AlignRight,
-  Highlighter, Undo, Redo, Type, LayoutTemplate,
+  Highlighter, Undo, Redo, Type, LayoutTemplate, FileUp,
 } from 'lucide-react';
+import { marked } from 'marked';
 import { compressImageFile } from '@/lib/imageCompress';
 import { DOC_TEMPLATES } from './docTemplates';
 
@@ -271,6 +272,28 @@ function Toolbar({ editor, whiteBg = false }: { editor: Editor; whiteBg?: boolea
       </ToolbarButton>
 
       <Divider />
+      {/* 마크다운(.md) 가져오기 — 파일을 읽어 HTML 로 변환 후 커서 위치에 삽입 */}
+      <ToolbarButton
+        onClick={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.md,.markdown,.txt,text/markdown,text/plain';
+          input.onchange = async () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            try {
+              const text = await file.text();
+              const html = await marked.parse(text, { async: true });
+              editor.chain().focus().insertContent(html).run();
+            } catch { /* 변환 실패 시 무시 */ }
+          };
+          input.click();
+        }}
+        title="마크다운(.md) 가져오기"
+      >
+        <FileUp className="w-3.5 h-3.5" />
+      </ToolbarButton>
+
       {/* 문서 템플릿 삽입 (커서 위치에 삽입) */}
       <div className="relative">
         <ToolbarButton onClick={() => setTplOpen((v) => !v)} active={tplOpen} title="템플릿 삽입">
