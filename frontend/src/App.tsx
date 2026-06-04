@@ -56,6 +56,7 @@ import { AuditLogsPage } from '@/pages/AuditLogsPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
+import { WorkAlarmBell } from '@/components/layout/WorkAlarmBell';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
@@ -78,6 +79,10 @@ function AppShell() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
+      {/* 업무 알람 종 — 화면 우상단 모서리 고정 */}
+      <div className="fixed top-2 right-2 z-[55] rounded-lg bg-card/80 backdrop-blur border border-border shadow-sm">
+        <WorkAlarmBell />
+      </div>
       <div
         className="flex-1 min-w-0"
         style={{ marginLeft: NAV_WIDTH }}

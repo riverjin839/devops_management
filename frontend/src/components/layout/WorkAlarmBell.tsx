@@ -163,8 +163,9 @@ export function WorkAlarmBell() {
           role="dialog"
           aria-label="업무 알람"
           style={{
-            top: Math.max(8, Math.min(anchor.top, window.innerHeight - 8 - 440)),
-            left: anchor.right + 8,
+            // 버튼 아래로, 오른쪽 가장자리를 버튼 우측에 맞춰 연다 (우상단 배치에서도 화면 밖으로 안 나가게).
+            top: Math.max(8, Math.min(anchor.bottom + 8, window.innerHeight - 8 - 440)),
+            right: Math.max(8, window.innerWidth - anchor.right),
           }}
           className="fixed z-[60] w-80 max-h-[70vh] rounded-xl border border-border bg-card shadow-xl flex flex-col overflow-hidden"
         >

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
+  ClipboardList, CalendarCheck,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
@@ -273,6 +274,23 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               <Users className="w-3 h-3" /> 담당자 기준
             </button>
           </div>
+          {/* 단축키 — 업무 관리 / 오늘 할일 페이지로 바로 이동 */}
+          <div className="flex items-center gap-1 text-[11px]">
+            <button
+              type="button"
+              onClick={() => navigate('/tasks-mgmt')}
+              title="업무 관리로 이동"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors">
+              <ClipboardList className="w-3 h-3" /> 업무 관리
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/todo-today')}
+              title="오늘 할일로 이동"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors">
+              <CalendarCheck className="w-3 h-3" /> 오늘 할일
+            </button>
+          </div>
           <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />업무 {taskBars.length}</span>
             <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />마일스톤 {milestones.length}</span>
@@ -412,7 +430,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                         title={stripHtml(issue.content)}>
                         <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-emerald-500 fill-emerald-400' : 'text-amber-500 fill-amber-400'}`} />
                         <span className={`text-[10px] font-medium truncate ${resolved ? 'text-emerald-600' : 'text-amber-700'}`}>
-                          {stripHtml(issue.content)}
+                          {issue.title?.trim() || stripHtml(issue.content)}
                         </span>
                       </button>
                     );
@@ -433,7 +451,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   <div className="px-4 py-2.5 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full bg-gradient-to-r ${sv.grad}`} />
-                      <span className="text-xs font-medium truncate">{stripHtml(item.content)}</span>
+                      <span className="text-xs font-medium truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                     </div>
                     {item.category && (
                       <p className="text-[10px] text-muted-foreground truncate mt-0.5 pl-3">{item.category}</p>

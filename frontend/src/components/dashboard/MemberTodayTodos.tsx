@@ -135,7 +135,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           {isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
         </div>
       ) : (
-        <div className="space-y-2.5 pr-1">
+        <div className="space-y-2 pr-1">
           {groups.map((g) => {
             const all = [...g.todayTasks, ...g.inProgressTasks];
             const done = all.filter((t) => t.kanbanStatus === 'done').length;
@@ -145,35 +145,32 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             return (
               <div
                 key={g.assignee}
-                className="rounded-xl border border-border/70 bg-card/60 p-3"
+                className="rounded-xl border border-border/70 bg-card/60 p-2.5"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-[11px] font-bold text-primary flex-shrink-0">
+                {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center text-[9px] font-bold text-primary flex-shrink-0">
                     {g.assignee.slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{g.assignee}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {done}/{total}건 · {pct}%
-                    </p>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-2 text-[11px] flex-shrink-0">
+                  <span className="text-xs font-semibold truncate flex-1 min-w-0">{g.assignee}</span>
+                  <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums">{done}/{total} · {pct}%</span>
+                  <div className="hidden sm:flex items-center gap-1.5 text-[10px] flex-shrink-0">
                     {g.todayTasks.length > 0 && (
-                      <span className="inline-flex items-center gap-1 text-blue-500">
-                        <CircleDashed className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-0.5 text-blue-500">
+                        <CircleDashed className="w-2.5 h-2.5" />
                         {g.todayTasks.length}
                       </span>
                     )}
                     {g.inProgressTasks.length > 0 && (
-                      <span className="inline-flex items-center gap-1 text-amber-500">
-                        <Clock className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-0.5 text-amber-500">
+                        <Clock className="w-2.5 h-2.5" />
                         {g.inProgressTasks.length}
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="h-1 rounded-full bg-secondary overflow-hidden mb-2">
+                <div className="h-1 rounded-full bg-secondary overflow-hidden mb-1.5">
                   <div
                     className="h-full bg-primary rounded-full transition-all duration-300"
                     style={{ width: `${pct}%` }}
