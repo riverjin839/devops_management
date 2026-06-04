@@ -57,6 +57,7 @@ from app.routers import (
     bottleneck_router,
     lake_service_types_router,
     ops_check_router,
+    k8s_resources_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -1153,7 +1154,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="0.1.0",
+    version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -1236,13 +1237,15 @@ app.include_router(bottleneck_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_auth)
 # ops-checks (운영 점검 통합 콘솔) — 여러 점검 소스를 골라 일괄/개별 실행.
 app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
+# k8s-resources (OpenLens P1) — 읽기전용 리소스 탐색기 + YAML 보기.
+app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")
 def root():
     return {
         "name": settings.app_name,
-        "version": "0.1.0",
+        "version": "1.0.0",
         "status": "running"
     }
 

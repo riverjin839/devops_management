@@ -1,7 +1,7 @@
 {
   "name": "devops-management-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -47,6 +47,7 @@
     "react-force-graph-3d": "^1.25.0",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^6.21.3",
+    "react-virtuoso": "^4.18.7",
     "recharts": "^2.10.4",
     "remark-gfm": "^4.0.0",
     "tailwind-merge": "^2.2.0",

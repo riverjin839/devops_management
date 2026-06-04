@@ -2128,3 +2128,23 @@ export interface OpsCheckRunRequestItem {
   checkType?: string | null;
   name?: string | null;
 }
+
+// ── K8s 읽기전용 리소스 탐색기 (OpenLens P1) ────────────────────────────────
+export interface K8sResourceRow {
+  name: string;
+  namespace?: string | null;
+  summary: string;
+  ageSeconds?: number | null;
+}
+export interface K8sResourceListResponse {
+  kind: string;
+  count: number;
+  truncated: boolean;
+  items: K8sResourceRow[];
+}
+export interface K8sResourceYaml {
+  kind: string;
+  namespace: string;
+  name: string;
+  yaml: string;
+}

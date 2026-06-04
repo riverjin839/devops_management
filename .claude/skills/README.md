@@ -24,5 +24,6 @@
 | `backend-feature` | 새 모델/라우터/마이그레이션(FastAPI)을 추가할 때 |
 | `frontend-page` | 새 React 페이지(클러스터 선택형 포함)를 만들 때 |
 | `editor-docs` | 리치텍스트 에디터·문서 템플릿·이미지/렌더 관련 작업을 할 때 |
+| `release` | 새 버전 릴리스(마이너/패치) — SemVer 버전업·CHANGELOG·태그 절차 |
 
 > 참고: 운영 점검(Ops Checks) 콘솔 아키텍처와 점검 소스 추가는 `add-deep-checker` 에 정리.

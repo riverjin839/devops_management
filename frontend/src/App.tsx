@@ -43,6 +43,8 @@ import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
+import { K8sLogsPage } from '@/pages/K8sLogsPage';
+import { K8sResourcesPage } from '@/pages/K8sResourcesPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -150,6 +152,12 @@ function AppShell() {
               {/* 운영 점검 통합 콘솔 — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그 */}
               <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />
               <Route path="/ops-checks" element={<OpsCheckConsolePage />} />
+              {/* OpenLens P0 — 파드 로그 스트리밍(읽기전용) */}
+              <Route path="/k8s-logs/:clusterId" element={<K8sLogsPage />} />
+              <Route path="/k8s-logs" element={<K8sLogsPage />} />
+              {/* OpenLens P1 — 읽기전용 리소스 탐색기 */}
+              <Route path="/k8s-resources/:clusterId" element={<K8sResourcesPage />} />
+              <Route path="/k8s-resources" element={<K8sResourcesPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="/settings/users" element={<UsersPage />} />
               <Route path="/settings/audit-logs" element={<AuditLogsPage />} />

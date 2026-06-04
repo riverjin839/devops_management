@@ -1403,4 +1403,18 @@ export const opsCheckApi = {
     api.get<OpsCheckRunItem[]>(`/ops-checks/items/${source}/${itemRefId}/history`, { params: { limit } }),
 };
 
+export const k8sResourcesApi = {
+  kinds: (clusterId: string) =>
+    api.get<{ kinds: string[] }>(`/k8s/${clusterId}/resources/kinds`),
+  list: (clusterId: string, kind: string, namespace?: string) =>
+    api.get<import('@/types').K8sResourceListResponse>(
+      `/k8s/${clusterId}/resources/${kind}`,
+      { params: namespace ? { namespace } : undefined, timeout: 120_000 },
+    ),
+  yaml: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.get<import('@/types').K8sResourceYaml>(
+      `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/yaml`,
+    ),
+};
+
 export default api;

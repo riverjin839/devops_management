@@ -17,6 +17,7 @@ from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
 from app.services.deep_checkers.external_to_pod_checker import ExternalToPodChecker
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
 from app.services.deep_checkers.kernel_param_drift_checker import KernelParamDriftChecker
+from app.services.deep_checkers.minio_health_checker import MinioHealthChecker
 from app.services.deep_checkers.node_pressure_checker import NodePressureChecker
 from app.services.deep_checkers.oom_events_checker import OomEventsChecker
 from app.services.deep_checkers.pod_to_pod_checker import PodToPodChecker
@@ -326,6 +327,39 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             default_thresholds={"warning_changes": 1, "critical_changes": 20},
             default_params={"recent_hours": 24, "record_history": True, "max_report": 50},
             category="os",
+            default_enabled=False,
+        ),
+    ),
+    "minio_health": (
+        MinioHealthChecker,
+        DeepCheckTypeSpec(
+            check_type="minio_health",
+            display_name="MinIO 스토리지 health",
+            description=(
+                "MinIO 의 인증 불필요 health 엔드포인트(/minio/health/cluster·live)를 호출해 "
+                "쿼럼/degraded 여부 점검. params.endpoints 에 MinIO base URL 등록 필요. "
+                "drive/capacity 상세는 mc admin/Prometheus 연동(후속)."
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_failure_pct", "float", "경고 실패율 (%)", 1),
+                DeepCheckFieldSpec("critical_failure_pct", "float", "심각 실패율 (%)", 50),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("endpoints", "list", "MinIO base URL 목록", []),
+                DeepCheckFieldSpec("cluster_health_path", "string", "cluster health 경로", "/minio/health/cluster"),
+                DeepCheckFieldSpec("live_health_path", "string", "live health 경로", "/minio/health/live"),
+                DeepCheckFieldSpec("http_timeout_seconds", "int", "timeout (초)", 5),
+                DeepCheckFieldSpec("verify_tls", "boolean", "TLS 검증", False),
+            ],
+            default_thresholds={"warning_failure_pct": 1, "critical_failure_pct": 50},
+            default_params={
+                "endpoints": [],
+                "cluster_health_path": "/minio/health/cluster",
+                "live_health_path": "/minio/health/live",
+                "http_timeout_seconds": 5,
+                "verify_tls": False,
+            },
+            category="storage",
             default_enabled=False,
         ),
     ),
