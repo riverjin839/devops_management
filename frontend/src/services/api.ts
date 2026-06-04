@@ -739,6 +739,12 @@ export const workItemsApi = {
   patchStatus: (id: string, kanbanStatus: KanbanStatus) =>
     api.patch<WorkItemStatusResponse>(`/work-items/${id}/status`, { kanban_status: kanbanStatus }),
   delete: (id: string) => api.delete(`/work-items/${id}`),
+  listComments: (id: string) =>
+    api.get<import('@/types').WorkItemComment[]>(`/work-items/${id}/comments`),
+  addComment: (id: string, body: string) =>
+    api.post<import('@/types').WorkItemComment>(`/work-items/${id}/comments`, { body }),
+  deleteComment: (commentId: string) =>
+    api.delete(`/work-items/comments/${commentId}`),
   exportCsv: (params?: Omit<WorkItemFilters, 'closed'>) =>
     api.get('/work-items/export/csv', {
       params: params
@@ -1395,6 +1401,11 @@ export const notificationsApi = {
   test: (id: string) => api.post<NotificationLogEntry>(`/notifications/test/${id}`),
   log: (limit = 50) =>
     api.get<NotificationLogEntry[]>('/notifications/log', { params: { limit } }),
+  // 개인 인앱 알림 (알림 종)
+  listMy: (limit = 30) =>
+    api.get<{ data: import('@/types').UserNotification[]; unread: number }>('/notifications/my', { params: { limit } }),
+  markRead: (id: string) => api.post(`/notifications/my/${id}/read`),
+  markAllRead: () => api.post('/notifications/my/read-all'),
 };
 
 export const opsCheckApi = {

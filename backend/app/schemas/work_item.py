@@ -91,6 +91,22 @@ class WorkItemUpdate(BaseModel):
     related_work_item_id: Optional[UUID] = None
 
 
+class WorkItemCommentCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=4000)
+
+
+class WorkItemCommentResponse(BaseModel):
+    id: UUID
+    work_item_id: UUID
+    author: Optional[str] = None
+    author_name: Optional[str] = None
+    body: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class WorkItemStatusPatch(BaseModel):
     """칸반 컬럼 이동 전용 (PATCH /work-items/{id}/status)"""
     kanban_status: KanbanStatus

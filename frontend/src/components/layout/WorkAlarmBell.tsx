@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, AlertTriangle, CalendarClock, X } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, AlertTriangle, CalendarClock, MessageSquare, X } from 'lucide-react';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
+import { notificationsApi } from '@/services/api';
 import { stripHtml } from '@/lib/utils';
 import type { WorkItem } from '@/types';
 
@@ -97,6 +99,27 @@ export function WorkAlarmBell() {
 
   const total = overdue.length + dueToday.length;
 
+  // 개인 인앱 알림(댓글 등)
+  const qc = useQueryClient();
+  const { data: notifResp } = useQuery({
+    queryKey: ['myNotifications'],
+    queryFn: () => notificationsApi.listMy().then((r) => r.data),
+    refetchInterval: 60000,
+    enabled: !!user,
+  });
+  const notifications = notifResp?.data ?? [];
+  const unreadNotif = notifResp?.unread ?? 0;
+  const grandTotal = total + unreadNotif;
+
+  const openNotif = (n: { id: string; link?: string | null }) => {
+    setOpen(false);
+    if (n.link) navigate(n.link);
+    notificationsApi.markRead(n.id).then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
+  };
+  const markAllNotif = () => {
+    notificationsApi.markAllRead().then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
+  };
+
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -145,14 +168,14 @@ export function WorkAlarmBell() {
         }`}
       >
         <Bell className="w-5 h-5" />
-        {total > 0 && (
+        {grandTotal > 0 && (
           <span
             aria-hidden
             className={`absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold leading-4 text-center pointer-events-none ${
-              overdue.length > 0 ? 'bg-red-500' : 'bg-amber-500'
+              overdue.length > 0 ? 'bg-red-500' : dueToday.length > 0 ? 'bg-amber-500' : 'bg-blue-500'
             }`}
           >
-            {total > 99 ? '99+' : total}
+            {grandTotal > 99 ? '99+' : grandTotal}
           </span>
         )}
       </button>
@@ -186,12 +209,36 @@ export function WorkAlarmBell() {
           </div>
 
           <div className="overflow-y-auto flex-1">
-            {total === 0 ? (
+            {grandTotal === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 처리할 미완료 업무가 없습니다 🎉
               </div>
             ) : (
               <>
+                {notifications.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-blue-500/5 text-blue-600 text-[11px] font-semibold sticky top-0">
+                      <span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> 알림 {unreadNotif > 0 ? unreadNotif : ''}</span>
+                      {unreadNotif > 0 && (
+                        <button type="button" onClick={markAllNotif} className="text-[10px] underline hover:no-underline">모두 읽음</button>
+                      )}
+                    </div>
+                    {notifications.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => openNotif(n)}
+                        className={`w-full text-left px-3 py-2 border-b border-border/40 hover:bg-secondary/40 transition-colors ${n.isRead ? '' : 'bg-blue-500/[0.04]'}`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
+                          <span className="text-xs font-medium truncate">{n.title}</span>
+                        </div>
+                        {n.body && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.body}</p>}
+                      </button>
+                    ))}
+                  </>
+                )}
                 {overdue.length > 0 && (
                   <>
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/5 text-red-500 text-[11px] font-semibold sticky top-0">
