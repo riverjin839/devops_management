@@ -41,12 +41,16 @@ function isDarkColor(hex: string): boolean {
   return 0.299 * r + 0.587 * g + 0.114 * b < 140;
 }
 
+interface LinkOption { id: string; label: string; href: string; }
+
 interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
   minHeight?: string;
   onImagePaste?: (dataUrl: string) => void;
+  /** `[[ ]]` 백링크 — 제공 시 '[[' 입력으로 내부 링크 검색/삽입 메뉴 활성화. */
+  linkSearch?: (query: string) => LinkOption[];
 }
 
 interface ToolbarButtonProps {
@@ -453,12 +457,35 @@ function detectSlash(ed: Editor): SlashState | null {
   return { from, query, left, top };
 }
 
+/** 커서 앞 텍스트에서 백링크 트리거(`[[query`)를 감지. 없으면 null. */
+function detectLink(ed: Editor): SlashState | null {
+  const sel = ed.state.selection;
+  if (!sel.empty || ed.isActive('codeBlock')) return null;
+  const $from = sel.$from;
+  const textBefore = $from.parent.textBetween(0, $from.parentOffset, '\n', '￼');
+  const m = /\[\[([^[\]\n]*)$/.exec(textBefore);
+  if (!m) return null;
+  const query = m[1];
+  const from = sel.from - query.length - 2; // 첫 '[' 위치
+  let left = 0, top = 0;
+  try {
+    const c = ed.view.coordsAtPos(sel.from);
+    left = c.left; top = c.bottom;
+  } catch { /* ignore */ }
+  return { from, query, left, top };
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export function RichTextEditor({
   value,
   onChange,
   placeholder = '내용을 입력하세요...',
   minHeight = '120px',
   onImagePaste,
+  linkSearch,
 }: RichTextEditorProps) {
   const isUpdatingFromProp = useRef(false);
 
@@ -466,6 +493,13 @@ export function RichTextEditor({
   const [slash, setSlash] = useState<SlashState | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const slashKeyRef = useRef<((e: KeyboardEvent) => boolean) | null>(null);
+
+  // 백링크([[ ]]) 상태
+  const [link, setLink] = useState<SlashState | null>(null);
+  const [linkIndex, setLinkIndex] = useState(0);
+  const linkKeyRef = useRef<((e: KeyboardEvent) => boolean) | null>(null);
+  const linkSearchRef = useRef(linkSearch);
+  linkSearchRef.current = linkSearch;
 
   const editor = useEditor({
     extensions: [
@@ -504,9 +538,11 @@ export function RichTextEditor({
       }
       setSlash(detectSlash(ed));
       setSlashIndex(0);
+      if (linkSearchRef.current) { setLink(detectLink(ed)); setLinkIndex(0); }
     },
     onSelectionUpdate: ({ editor: ed }) => {
       setSlash(detectSlash(ed));
+      if (linkSearchRef.current) setLink(detectLink(ed));
     },
     editorProps: {
       attributes: {
@@ -514,7 +550,8 @@ export function RichTextEditor({
         style: `min-height: ${minHeight}; padding: 12px;`,
       },
       // 슬래시 메뉴 열림 상태에서 방향키/Enter/Esc 가로채기.
-      handleKeyDown: (_view, event) => (slashKeyRef.current ? slashKeyRef.current(event) : false),
+      handleKeyDown: (_view, event) =>
+        (slashKeyRef.current?.(event) ?? false) || (linkKeyRef.current?.(event) ?? false),
     },
   });
 
@@ -572,6 +609,38 @@ export function RichTextEditor({
     if (event.key === 'ArrowUp') { setSlashIndex((i) => (i - 1 + slashItems.length) % slashItems.length); return true; }
     if (event.key === 'Enter') { selectSlash(Math.min(slashIndex, slashItems.length - 1)); return true; }
     if (event.key === 'Escape') { setSlash(null); return true; }
+    return false;
+  };
+
+  // ── 백링크([[ ]]): 검색 결과/선택/키 핸들러 ──
+  const linkResults = useMemo(
+    () => (link && linkSearch ? linkSearch(link.query).slice(0, 8) : []),
+    [link, linkSearch],
+  );
+  const linkResultsRef = useRef(linkResults);
+  linkResultsRef.current = linkResults;
+  const linkRef = useRef(link);
+  linkRef.current = link;
+
+  const selectLink = useCallback((idx: number) => {
+    if (!editor) return;
+    const l = linkRef.current;
+    const opt = linkResultsRef.current[idx];
+    if (!l || !opt) return;
+    editor
+      .chain().focus()
+      .deleteRange({ from: l.from, to: editor.state.selection.from })
+      .insertContent(`<a href="${opt.href}">${escapeHtml(opt.label)}</a>&nbsp;`)
+      .run();
+    setLink(null);
+  }, [editor]);
+
+  linkKeyRef.current = (event: KeyboardEvent) => {
+    if (!link || linkResults.length === 0) return false;
+    if (event.key === 'ArrowDown') { setLinkIndex((i) => (i + 1) % linkResults.length); return true; }
+    if (event.key === 'ArrowUp') { setLinkIndex((i) => (i - 1 + linkResults.length) % linkResults.length); return true; }
+    if (event.key === 'Enter') { selectLink(Math.min(linkIndex, linkResults.length - 1)); return true; }
+    if (event.key === 'Escape') { setLink(null); return true; }
     return false;
   };
 
@@ -641,6 +710,34 @@ export function RichTextEditor({
               >
                 <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                 {it.title}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 백링크([[ ]]) 검색 메뉴 */}
+      {link && linkResults.length > 0 && (
+        <div
+          role="listbox"
+          aria-label="내부 링크"
+          className="fixed z-[60] w-64 max-h-64 overflow-y-auto rounded-lg border border-border bg-card shadow-xl py-1"
+          style={{ left: link.left, top: link.top + 4 }}
+        >
+          {linkResults.map((opt, i) => {
+            const active = i === Math.min(linkIndex, linkResults.length - 1);
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); selectLink(i); }}
+                onMouseEnter={() => setLinkIndex(i)}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left transition-colors ${
+                  active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-secondary'
+                }`}
+              >
+                <LinkIcon className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
+                <span className="truncate">{opt.label}</span>
               </button>
             );
           })}

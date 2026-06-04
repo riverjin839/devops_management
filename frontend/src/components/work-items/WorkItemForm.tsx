@@ -150,6 +150,20 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const { data: issueData } = useWorkItems();
   const items = issueData?.data ?? [];
 
+  // 백링크([[ ]]) — 에디터에서 다른 업무로 내부 링크. 이미 로드된 items 로 검색.
+  const linkSearch = (q: string) => {
+    const ql = q.trim().toLowerCase();
+    return items
+      .filter((t) => t.id !== initial?.id)
+      .map((t) => ({
+        id: t.id,
+        label: (t.title?.trim() || t.content.replace(/<[^>]*>/g, '').trim() || t.category).slice(0, 50),
+        href: `/tasks-mgmt/${t.id}`,
+      }))
+      .filter((o) => !ql || o.label.toLowerCase().includes(ql))
+      .slice(0, 8);
+  };
+
   useEffect(() => {
     if (hydrated) return;
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
@@ -615,6 +629,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             placeholder={type === 'issue' ? '발생한 이슈를 상세히 기술하세요' : '수행할 업무를 상세히 기술하세요'}
             minHeight="520px"
             onImagePaste={handleImagePaste}
+            linkSearch={linkSearch}
           />
         </div>
       </div>
@@ -634,6 +649,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               placeholder="이슈의 배경 / 재현 절차 / 관련 정보를 기술하세요"
               minHeight="160px"
               onImagePaste={handleImagePaste}
+              linkSearch={linkSearch}
             />
           </div>
         </details>
@@ -653,6 +669,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             placeholder={type === 'issue' ? '조치 내용을 기술하세요' : '업무 결과를 기술하세요'}
             minHeight="160px"
             onImagePaste={handleImagePaste}
+            linkSearch={linkSearch}
           />
         </div>
       </details>
