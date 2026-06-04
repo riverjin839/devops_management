@@ -60,10 +60,18 @@ import { WorkAlarmBell } from '@/components/layout/WorkAlarmBell';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
+import { useAuthStore } from '@/stores/authStore';
 
 function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`${to}/${id ?? ''}${suffix}`} replace />;
+}
+
+/** Settings 등 admin 전용 라우트 가드 — 비-admin 은 홈으로. (추후 role/권한 세분화 예정) */
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const role = useAuthStore((s) => s.user?.role);
+  if (role !== 'admin') return <Navigate to="/" replace />;
+  return <>{children}</>;
 }
 
 const queryClient = new QueryClient({
@@ -131,7 +139,7 @@ function AppShell() {
               <Route path="/node-specs" element={<NodeSpecPage />} />
               <Route path="/services" element={<ServicesCatalogPage />} />
               <Route path="/services/:service" element={<ServiceHubPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />
               <Route path="/work-guides/new" element={<WorkGuidePage />} />
@@ -164,8 +172,8 @@ function AppShell() {
               <Route path="/k8s-resources/:clusterId" element={<K8sResourcesPage />} />
               <Route path="/k8s-resources" element={<K8sResourcesPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
-              <Route path="/settings/users" element={<UsersPage />} />
-              <Route path="/settings/audit-logs" element={<AuditLogsPage />} />
+              <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
+              <Route path="/settings/audit-logs" element={<RequireAdmin><AuditLogsPage /></RequireAdmin>} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
