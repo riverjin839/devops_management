@@ -33,13 +33,20 @@ PEP 는 **v1.0.0 정식 오픈** 이후 **trunk 기반 + SemVer 태그**로 운�
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-6. GitHub Release 생성(태그 vX.Y.Z, 본문 = CHANGELOG 해당 섹션).
-7. CD(`cd.yml`)가 이미지 빌드/배포. 이미지 태그에 버전 반영 권장.
+6. **여기까지만 하면 끝.** 태그 push 후 나머지는 `release.yml` 이 자동 처리한다(아래 자동화).
+
+> **수동 단계는 1~5 까지.** GitHub Release 작성과 이미지 버전 태깅은 더 이상 손으로 하지 않는다.
+
+## 자동화 (`release.yml`)
+`v*` 태그가 push 되면 `.github/workflows/release.yml` 이 자동 실행한다:
+- **GHCR 이미지 빌드 + 버전 태깅**: backend/frontend 를 `:X.Y.Z`, `:X.Y`, `:latest`(정식 릴리스만; `-rc` 등 pre-release 는 `latest` 제외)로 push.
+- **GitHub Release 생성**: `CHANGELOG.md` 의 `## [X.Y.Z]` 섹션을 본문으로 자동 생성(섹션이 없으면 `--generate-notes` fallback). 이미 있으면 노트만 갱신.
+
+즉 운영자는 **버전 3곳 수정 + CHANGELOG 섹션 추가 + 태그 push** 만 하면 된다.
 
 ## 태그 규칙
 - 모든 릴리스는 **`main` 커밋**에만 태그(작업 브랜치 태그 금지).
 - 태그명 `vX.Y.Z`(접두사 `v`). pre-release 는 `vX.Y.Z-rc.1` 형식.
 
-## 자동화(권장, 후속)
-- `release-please` 또는 커밋 기반 CHANGELOG 자동화 → 버전업/CHANGELOG/태그 PR 자동 생성.
-- CI 에 태그 push 시 GitHub Release + GHCR 이미지 `:vX.Y.Z` 태깅 잡 추가.
+## 추가 자동화(선택, 후속)
+- `release-please` 등으로 버전업/CHANGELOG/태그 PR 까지 자동 생성하면 수동 단계가 더 줄어든다.

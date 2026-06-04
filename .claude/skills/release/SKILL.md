@@ -21,13 +21,15 @@ description: 새 버전을 릴리스할 때(마이너 기능 추가/패치) 사�
    - `backend/app/main.py` `root()` 응답 `"version": "..."`
 3. `CHANGELOG.md` 최상단에 새 섹션(`## [X.Y.Z] - YYYY-MM-DD`) + Added/Changed/Fixed + 하단 링크.
 4. `chore(release): vX.Y.Z` 커밋 → PR → main 병합.
-5. 병합된 main 에 annotated 태그:
+5. 병합된 main 에 annotated 태그 push — **여기까지가 수동 마지막 단계**:
    ```bash
    git checkout main && git pull
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-6. GitHub Release 생성(태그 vX.Y.Z, 본문 = CHANGELOG 섹션). CD 가 이미지 빌드/배포.
+6. (자동) 태그 push 시 `.github/workflows/release.yml` 이 **GitHub Release 생성**(본문 = CHANGELOG `## [X.Y.Z]` 섹션) + **GHCR 이미지 `:X.Y.Z`/`:X.Y`/`:latest` 태깅**을 수행한다. 손으로 Release 를 만들거나 이미지를 태깅하지 않는다.
+
+> 환경 제약: 격리된 실행 환경에서는 태그 ref push 가 막혀 있을 수 있다(403). 그 경우 5단계는 push 권한 있는 곳에서 수행하거나 GitHub UI "Draft a release from tag(Target=main)" 로 태그를 만들면 `release.yml` 이 동일하게 동작한다.
 
 ## 규칙
 - 태그는 **main 커밋에만**(작업 브랜치 금지). 접두사 `v`. pre-release `vX.Y.Z-rc.N`.
