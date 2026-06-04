@@ -20,6 +20,8 @@ import {
   HelpCircle,
   ExternalLink,
   Link2,
+  Download,
+  FileImage,
 } from 'lucide-react';
 import {
   useMindMaps, useMindMap, useCreateMindMap, useUpdateMindMap, useDeleteMindMap,
@@ -474,6 +476,15 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
 }
 
 // ── Canvas ───────────────────────────────────────────────────────────────────
+function triggerDownload(href: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 interface CanvasProps {
   mindmap: MindMap;
   onNodeSelect: (nodeId: string | null) => void;
@@ -696,6 +707,77 @@ function MindMapCanvas({
     return `M ${x1} ${y1} C ${mid} ${y1} ${mid} ${y2} ${x2} ${y2}`;
   };
 
+  const exportMindMap = useCallback(async (format: 'svg' | 'png') => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    // 선택 핸들(+/↔/✎/✕)이 캡처되지 않도록 선택 해제 후 다음 프레임에 캡처.
+    onNodeSelect(null);
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    const innerG = svg.querySelector('g') as SVGGraphicsElement | null;
+    if (!innerG) return;
+    let bbox: DOMRect;
+    try { bbox = innerG.getBBox(); } catch { return; }
+    const pad = 40;
+    const vbX = bbox.x - pad, vbY = bbox.y - pad;
+    const vbW = Math.max(1, bbox.width + pad * 2), vbH = Math.max(1, bbox.height + pad * 2);
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    const cloneBg = clone.querySelector('rect'); // 첫 rect = 100%/100% 투명 배경
+    if (cloneBg) cloneBg.remove();
+    const cg = clone.querySelector('g');
+    if (cg) cg.removeAttribute('transform'); // pan/zoom 제거 → 전체 1:1
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+    clone.setAttribute('width', String(vbW));
+    clone.setAttribute('height', String(vbH));
+    clone.removeAttribute('class');
+    clone.removeAttribute('style');
+    // 흰 배경
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', String(vbX)); bg.setAttribute('y', String(vbY));
+    bg.setAttribute('width', String(vbW)); bg.setAttribute('height', String(vbH));
+    bg.setAttribute('fill', '#ffffff');
+    clone.insertBefore(bg, clone.firstChild);
+
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${svgStr}`], { type: 'image/svg+xml;charset=utf-8' });
+    const ts = new Date().toISOString().slice(0, 10);
+
+    if (format === 'svg') {
+      const url = URL.createObjectURL(svgBlob);
+      triggerDownload(url, `mindmap-${ts}.svg`);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
+    // PNG — SVG 를 이미지로 그려 canvas 래스터화 (2x).
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(vbW * scale);
+      canvas.height = Math.ceil(vbH * scale);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const purl = URL.createObjectURL(blob);
+            triggerDownload(purl, `mindmap-${ts}.png`);
+            setTimeout(() => URL.revokeObjectURL(purl), 1000);
+          }
+        }, 'image/png');
+      }
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  }, [onNodeSelect]);
+
   return (
     <div className="relative w-full h-full">
       <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5 bg-card/90 backdrop-blur-md border border-border rounded-2xl p-1 mac-shadow">
@@ -719,6 +801,11 @@ function MindMapCanvas({
           <ToolBtn onClick={() => setConnStyle('bezier')} active={connStyle === 'bezier'} title="베지어"><Spline className="w-4 h-4" /></ToolBtn>
           <ToolBtn onClick={() => setConnStyle('straight')} active={connStyle === 'straight'} title="직선"><Minus className="w-4 h-4" /></ToolBtn>
           <ToolBtn onClick={() => setConnStyle('elbow')} active={connStyle === 'elbow'} title="꺾은선"><CornerDownRight className="w-4 h-4" /></ToolBtn>
+        </ToolGroup>
+        <ToolDivider />
+        <ToolGroup>
+          <ToolBtn onClick={() => exportMindMap('png')} title="PNG 내보내기"><Download className="w-4 h-4" /></ToolBtn>
+          <ToolBtn onClick={() => exportMindMap('svg')} title="SVG 내보내기"><FileImage className="w-4 h-4" /></ToolBtn>
         </ToolGroup>
         <span className="text-[11px] text-muted-foreground tabular-nums px-2 font-medium select-none">{Math.round(zoom * 100)}%</span>
       </div>
