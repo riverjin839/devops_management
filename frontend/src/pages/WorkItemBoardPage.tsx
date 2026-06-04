@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClusterSidebar, ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -337,7 +338,7 @@ export function WorkItemBoardPage() {
                   : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
               }`}
             >
-              전체
+              전체 유형
             </button>
             {WORK_ITEM_TYPE_ORDER.map((key) => {
               const cfg = WORK_ITEM_TYPE_CONFIG[key];
@@ -359,7 +360,7 @@ export function WorkItemBoardPage() {
             })}
           </div>
 
-          {/* 검색 컨트롤 — 라인 패턴(rounded-lg · bg-secondary · border)으로 통일 */}
+          {/* 검색 컨트롤 — 라인 패턴(rounded-lg · bg-secondary · border)으로 통일. 모듈 필터도 여기 드롭다운으로 통합(2줄→1줄) */}
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <input
               type="text"
@@ -387,6 +388,17 @@ export function WorkItemBoardPage() {
               <option value="high">높음</option>
               <option value="medium">보통</option>
               <option value="low">낮음</option>
+            </select>
+            <select
+              value={filterModule}
+              onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}
+              aria-label="모듈 필터"
+              className="px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+            >
+              <option value="">전체 모듈</option>
+              {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
+                <option key={key} value={key}>{cfg.label}</option>
+              ))}
             </select>
             <input
               type="date"
@@ -423,33 +435,6 @@ export function WorkItemBoardPage() {
               onReset={colLayout.reset}
             />
           </div>
-        </div>
-
-        {/* 모듈 뷰 탭 */}
-        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-          <button
-            onClick={() => setFilterModule('')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-              filterModule === ''
-                ? 'bg-primary/10 text-primary border-primary/30'
-                : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            전체 흐름
-          </button>
-          {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
-            <button
-              key={key}
-              onClick={() => setFilterModule(filterModule === key ? '' : key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                filterModule === key
-                  ? `${cfg.cls} border-current`
-                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {cfg.label}
-            </button>
-          ))}
         </div>
 
         {/* G-U2: error state 분기 — 이전엔 isLoading 만 있고 error 는 empty 로 흡수됐음 */}
@@ -576,7 +561,10 @@ export function WorkItemBoardPage() {
                     colSpan={visibleCols.length + 1}
                     defaultClusterId={filterClusterId || undefined}
                     defaultAssignee={filterAssignee || undefined}
-                    onCreate={(data) => createTask.mutate(data)}
+                    onCreate={(data) => createTask.mutate(data, {
+                      onSuccess: () => toast.success('업무 등록됨'),
+                      onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
+                    })}
                   />
                 </tbody>
                 </SortableContext>

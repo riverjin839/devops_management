@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pencil, Trash2, CalendarDays, User, Server, ChevronRight, ChevronLeft, Clock, AlertTriangle } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, formatApiError } from '@/lib/utils';
+import { useToast } from '@/components/common';
 import {
   KANBAN_COLUMNS,
   KANBAN_STATUS_ORDER,
@@ -229,6 +230,7 @@ interface WorkItemKanbanProps {
 
 export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkItemKanbanProps) {
   const patchStatus = usePatchWorkItemStatus();
+  const toast = useToast();
   const [showWipWarning, setShowWipWarning] = useState(false);
 
   const grouped: Record<KanbanStatus, WorkItem[]> = {
@@ -247,6 +249,9 @@ export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkIte
           if (res.data.wipWarning) {
             setShowWipWarning(true);
           }
+        },
+        onError: (err) => {
+          toast.error('상태 변경 실패', formatApiError(err, '상태를 변경할 수 없습니다.'));
         },
       }
     );

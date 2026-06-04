@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Pencil, Plus, Sun, Trash2 } from 'lucide-react';
+import { ArrowLeft, ListTodo, Pencil, Plus, Trash2 } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar } from '@/components/work-items';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
-import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
-import { cn } from '@/lib/utils';
+import { cn, formatApiError } from '@/lib/utils';
 
 export function WorkItemDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,10 +15,10 @@ export function WorkItemDetailPage() {
   const { data: listData } = useWorkItems();
   const item = listData?.data.find((x) => x.id === id) ?? null;
   const deleteTask = useDeleteWorkItem();
+  const toast = useToast();
   // G-I9: window.confirm 대신 ConfirmDialog 사용
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
-  const { editorWhiteBg, toggle, isLoggedIn } = useEditorWhiteBg();
 
   if (listData && !item) {
     return (
@@ -47,9 +46,15 @@ export function WorkItemDetailPage() {
   const handleDelete = () => setConfirmDeleteOpen(true);
   const doDelete = () => {
     setConfirmDeleteOpen(false);
-    deleteTask.mutate(item.id);
-    localStorage.removeItem('k8s:img:work-item:' + item.id);
-    navigate('/tasks-mgmt');
+    const id = item.id;
+    deleteTask.mutate(id, {
+      onSuccess: () => {
+        localStorage.removeItem('k8s:img:work-item:' + id);
+        toast.success('업무 삭제됨');
+        navigate('/tasks-mgmt');
+      },
+      onError: (err) => toast.error('삭제 실패', formatApiError(err, '삭제할 수 없습니다.')),
+    });
   };
 
   const pageTitle = editMode ? '업무 수정' : '업무 상세';
@@ -68,21 +73,6 @@ export function WorkItemDetailPage() {
           <ListTodo className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
-            {isLoggedIn && (
-              <button
-                onClick={toggle}
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
-                  editorWhiteBg
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-secondary',
-                )}
-                title={editorWhiteBg ? '흰 배경 끄기' : '흰 배경 켜기'}
-              >
-                <Sun className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">흰 배경</span>
-              </button>
-            )}
             {!editMode && (
               <>
                 <button
@@ -112,7 +102,7 @@ export function WorkItemDetailPage() {
 
       <main className="max-w-[1400px] mx-auto px-8 pt-4 pb-16">
         {editMode ? (
-          <div className={cn('border border-border rounded-2xl p-5 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+          <div className={cn('border border-border rounded-2xl p-5 mac-shadow', 'bg-card')}>
             <WorkItemForm
               initial={item}
               onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
@@ -122,7 +112,7 @@ export function WorkItemDetailPage() {
           </div>
         ) : (
           <div className="flex gap-6 items-start">
-            <div className={cn('flex-1 min-w-0 border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+            <div className={cn('flex-1 min-w-0 border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
               <WorkItemReadView item={item} />
             </div>
             {/* Cross-view (Phase A) — 같은 service 의 ServiceEntry 5건 sticky sidebar */}

@@ -16,7 +16,6 @@ import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
-import { WorkAlarmBell } from '@/components/layout/WorkAlarmBell';
 import { InlineEdit } from '@/components/common';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -298,7 +297,11 @@ export function Sidebar() {
   const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
 
   // 현재 모드에서 보여줄 그룹만 필터링
-  const visibleGroups = useMemo(() => GROUPS.filter((g) => g.modes.includes(mode)), [mode]);
+  // Settings(system 그룹)는 우선 admin 에게만 노출. (추후 role/권한 세분화 예정)
+  const visibleGroups = useMemo(
+    () => GROUPS.filter((g) => g.modes.includes(mode) && (g.id !== 'system' || isAdmin)),
+    [mode, isAdmin],
+  );
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
@@ -451,13 +454,6 @@ export function Sidebar() {
             {renderHomeButtonIcon()}
           </button>
         </div>
-
-        {/* 업무 일정 알람 — 미완료(지연/오늘 마감) 업무를 담당자에게 알림 */}
-        {currentUser && (
-          <div className="flex items-center justify-center py-2 border-b border-border flex-shrink-0">
-            <WorkAlarmBell />
-          </div>
-        )}
 
         {/* 그룹 아이콘 레일 — 현재 모드에 맞는 그룹만 표시 */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">

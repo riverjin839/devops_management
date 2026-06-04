@@ -6,7 +6,8 @@ import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
 import { RichTextEditor } from '@/components/editor';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { useAssignees } from '@/hooks/useAssignees';
-import { ConfluenceUrlInput } from '@/components/common';
+import { ConfluenceUrlInput, useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -14,7 +15,6 @@ import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useProjects } from '@/hooks/useProjects';
-import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
 
 const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
@@ -27,6 +27,7 @@ const DEFAULT_TASK_CATEGORIES = [
   'Backup / Restore',
   '업그레이드',
   '장애 대응',
+  '이슈 대응',
   '문서 작업',
   '회의참석',
   '교육 / 학습',
@@ -94,18 +95,20 @@ interface WorkItemFormProps {
   embedded?: boolean;
 }
 
-export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaultStartedAt, onCancel, onSaved, embedded = false }: WorkItemFormProps) {
+export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, onSaved, embedded = false }: WorkItemFormProps) {
   const isEdit = !!initial;
-  const [type, setType] = useState<WorkItemType>(initial?.type ?? defaultType);
+  // 업무/이슈 구분 폐지 — 신규는 항상 'task'. 기존 항목 수정 시에는 원래 type 유지(레거시 이슈 호환).
+  // '이슈 대응' 은 분류(category)로 대체한다.
+  const [type, setType] = useState<WorkItemType>(initial?.type ?? 'task');
   const [detailContent, setDetailContent] = useState(initial?.detailContent ?? '');
 
   useClusters();
   const { clusters } = useClusterStore();
   const { data: registeredAssignees = [] } = useAssignees();
-  const { editorWhiteBg } = useEditorWhiteBg();
   const serviceCatalog = useServiceCatalog();
   const createTask = useCreateWorkItem();
   const updateTask = useUpdateWorkItem();
+  const toast = useToast();
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
@@ -234,7 +237,11 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const plainTaskContent = content.replace(/<[^>]*>/g, '').trim();
-    if (!primaryAssignee.trim() || !resolvedCategory || !plainTaskContent || !startedAt) return;
+    // 필수값 누락 — 조용히 return 하지 않고 무엇이 빠졌는지 알려준다.
+    if (!primaryAssignee.trim()) { toast.error('등록 불가', '담당자(정)를 입력하세요.'); return; }
+    if (!resolvedCategory) { toast.error('등록 불가', '분류를 선택하세요.'); return; }
+    if (!plainTaskContent) { toast.error('등록 불가', '내용을 입력하세요.'); return; }
+    if (!startedAt) { toast.error('등록 불가', '예정일시를 선택하세요.'); return; }
 
     const payload: WorkItemCreate = {
       type,
@@ -271,18 +278,23 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
         : undefined,
     };
 
-    let savedId: string | undefined;
-    if (isEdit && initial) {
-      await updateTask.mutateAsync({ id: initial.id, data: payload as WorkItemUpdate });
-      saveWorkItemImages(initial.id, images);
-      savedId = initial.id;
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res: any = await createTask.mutateAsync(payload);
-      savedId = res?.data?.id ?? res?.id;
-      if (images.length > 0 && savedId) saveWorkItemImages(savedId, images);
+    try {
+      let savedId: string | undefined;
+      if (isEdit && initial) {
+        await updateTask.mutateAsync({ id: initial.id, data: payload as WorkItemUpdate });
+        saveWorkItemImages(initial.id, images);
+        savedId = initial.id;
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const res: any = await createTask.mutateAsync(payload);
+        savedId = res?.data?.id ?? res?.id;
+        if (images.length > 0 && savedId) saveWorkItemImages(savedId, images);
+      }
+      onSaved(savedId);
+    } catch (err) {
+      // 저장 실패(검증 422·권한 등)를 조용히 삼키지 않고 사유를 노출.
+      toast.error(isEdit ? '수정 실패' : '등록 실패', formatApiError(err, '저장 중 오류가 발생했습니다.'));
     }
-    onSaved(savedId);
   };
 
   const inputClass =
@@ -292,26 +304,7 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
 
   const formInner = (
     <form id="item-form" onSubmit={handleSubmit} className="space-y-2.5">
-      {/* ── Type 선택 — 'issue' (이슈) vs 'task' (작업) ─────────────────────── */}
-      {!isEdit && (
-        <div className="flex items-center gap-1.5 bg-secondary/40 rounded-lg p-1 w-fit">
-          {(['task', 'issue'] as WorkItemType[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setType(t)}
-              className={
-                'px-3 py-1 rounded-md text-xs font-medium transition-colors ' +
-                (type === t
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground')
-              }
-            >
-              {t === 'task' ? '업무' : '이슈'}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 업무/이슈 구분 폐지 — type 선택 토글 제거. '이슈 대응' 은 분류(category)로 선택한다. */}
       {/* ── 기본 설정 — 컴팩트 단일 그리드 (담당자/클러스터/서비스/우선순위/분류/일정/프로젝트) ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-2 gap-y-2">
         <div>
@@ -602,7 +595,6 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
             placeholder={type === 'issue' ? '발생한 이슈를 상세히 기술하세요' : '수행할 업무를 상세히 기술하세요'}
             minHeight="520px"
             onImagePaste={handleImagePaste}
-            whiteBg={editorWhiteBg}
           />
         </div>
       </div>
@@ -622,7 +614,6 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
               placeholder="이슈의 배경 / 재현 절차 / 관련 정보를 기술하세요"
               minHeight="160px"
               onImagePaste={handleImagePaste}
-              whiteBg={editorWhiteBg}
             />
           </div>
         </details>
@@ -642,7 +633,6 @@ export function WorkItemForm({ initial, defaultType = 'task', parentItem, defaul
             placeholder={type === 'issue' ? '조치 내용을 기술하세요' : '업무 결과를 기술하세요'}
             minHeight="160px"
             onImagePaste={handleImagePaste}
-            whiteBg={editorWhiteBg}
           />
         </div>
       </details>

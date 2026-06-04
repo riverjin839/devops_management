@@ -5,7 +5,8 @@ import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
 import { useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { ServiceChip } from '@/components/services/ServiceChip';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, formatApiError } from '@/lib/utils';
+import { useToast } from '@/components/common';
 import type { WorkItemColumnKey } from './workItemColumns';
 
 const KS_DOT: Record<string, string> = {
@@ -197,10 +198,14 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, isD
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
   const updateTask = useUpdateWorkItem();
+  const toast = useToast();
   const [editing, setEditing] = useState<EditField>(null);
 
   const save = (patch: WorkItemUpdate) => {
-    updateTask.mutate({ id: item.id, data: patch }, { onSettled: () => setEditing(null) });
+    updateTask.mutate({ id: item.id, data: patch }, {
+      onSettled: () => setEditing(null),
+      onError: (err) => toast.error('수정 실패', formatApiError(err, '수정할 수 없습니다.')),
+    });
   };
 
   const ks = item.kanbanStatus ?? 'todo';

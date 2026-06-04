@@ -1,10 +1,8 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Sun } from 'lucide-react';
+import { ArrowLeft, ListTodo } from 'lucide-react';
 import { WorkItemForm } from '@/components/work-items';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import type { WorkItemType } from '@/types';
-import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
-import { cn } from '@/lib/utils';
 
 export function WorkItemFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,7 +21,6 @@ export function WorkItemFormPage() {
   const editTask = isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
   const parentItem = parentId ? listData?.data.find((x) => x.id === parentId) ?? null : null;
 
-  const { editorWhiteBg, toggle, isLoggedIn } = useEditorWhiteBg();
 
   if (isEdit && listData && !editTask) {
     return (
@@ -68,26 +65,11 @@ export function WorkItemFormPage() {
               </span>
             </span>
           )}
-          {isLoggedIn && (
-            <button
-              onClick={toggle}
-              className={cn(
-                'ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
-                editorWhiteBg
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-secondary',
-              )}
-              title={editorWhiteBg ? '흰 배경 끄기' : '흰 배경 켜기'}
-            >
-              <Sun className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">흰 배경</span>
-            </button>
-          )}
         </div>
       </div>
 
       <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
-        <div className={cn('border border-border rounded-2xl p-5 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+        <div className="border border-border rounded-2xl p-5 mac-shadow bg-card">
           <WorkItemForm
             initial={editTask ?? undefined}
             defaultType={defaultType}

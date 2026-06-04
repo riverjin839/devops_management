@@ -1,12 +1,11 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, HelpCircle, Pencil, Sun, Trash2 } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import { OpsNoteForm, OpsNoteReadView } from '@/components/ops-notes';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useMemo } from 'react';
-import { useEditorWhiteBg } from '@/hooks/useEditorWhiteBg';
 import { cn } from '@/lib/utils';
 
 export function OpsNoteDetailPage() {
@@ -17,7 +16,6 @@ export function OpsNoteDetailPage() {
   const toast = useToast();
   const editMode = location.pathname.endsWith('/edit');
 
-  const { editorWhiteBg, toggle, isLoggedIn } = useEditorWhiteBg();
 
   const { data, isLoading } = useQuery({
     queryKey: ['ops-notes'],
@@ -81,21 +79,6 @@ export function OpsNoteDetailPage() {
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
-            {isLoggedIn && (
-              <button
-                onClick={toggle}
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
-                  editorWhiteBg
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-secondary',
-                )}
-                title={editorWhiteBg ? '흰 배경 끄기' : '흰 배경 켜기'}
-              >
-                <Sun className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">흰 배경</span>
-              </button>
-            )}
             {!editMode && (
               <>
                 <button
@@ -123,7 +106,7 @@ export function OpsNoteDetailPage() {
               <h1 className="text-3xl font-bold text-foreground tracking-tight">Q&amp;A 수정</h1>
               <p className="text-sm text-muted-foreground mt-1">필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.</p>
             </div>
-            <div className={cn('border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+            <div className={cn('border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
               <OpsNoteForm
                 initial={note}
                 onCancel={() => navigate(`/ops-notes/${note.id}`)}
@@ -132,7 +115,7 @@ export function OpsNoteDetailPage() {
             </div>
           </>
         ) : (
-          <div className={cn('border border-border rounded-2xl p-8 mac-shadow', editorWhiteBg ? 'bg-white' : 'bg-card')}>
+          <div className={cn('border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
             <OpsNoteReadView note={note} />
           </div>
         )}
