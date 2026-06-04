@@ -1,350 +1,262 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  CalendarCheck2,
-  RefreshCw,
-  ArrowRight,
-  Clock,
-  CheckCircle2,
-  CircleDashed,
-  AlertCircle,
-  Loader2,
-  Plus,
-  ExternalLink,
-  ChevronLeft,
-  ChevronRight,
+  CalendarCheck2, Clock, CheckCircle2, Circle, AlertTriangle,
+  Plus, RefreshCw, ArrowRight, LayoutGrid, List as ListIcon,
+  Server, Loader2, ChevronRight,
 } from 'lucide-react';
-import { todayWorkItemsApi, workItemsApi, TodayTaskGroup } from '@/services/api';
-import { stripHtml } from '@/lib/utils';
-import { WorkItem, KanbanStatus } from '@/types';
-import { useClusters } from '@/hooks/useCluster';
-import { ServiceChip } from '@/components/services/ServiceChip';
+import { useWorkItems, usePatchWorkItemStatus } from '@/hooks/useWorkItems';
+import { useAuthStore } from '@/stores/authStore';
+import { ViewModeBar, useToast } from '@/components/common';
+import { stripHtml, formatApiError } from '@/lib/utils';
+import type { WorkItem, KanbanStatus } from '@/types';
 
-const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
-  high:   { dot: 'bg-red-500',   label: '높음', text: 'text-red-400' },
-  medium: { dot: 'bg-blue-500',  label: '보통', text: 'text-blue-400' },
-  low:    { dot: 'bg-slate-400', label: '낮음', text: 'text-slate-400' },
+// ── helpers ─────────────────────────────────────────────────────────────────
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function dateOf(t: WorkItem): string {
+  return t.startedAt?.slice(0, 10) ?? '';
+}
+function fmtDue(t: WorkItem): string {
+  const s = t.startedAt;
+  if (!s) return '-';
+  const d = new Date(s.endsWith('Z') ? s : s + 'Z');
+  if (isNaN(d.getTime())) return s.slice(0, 16);
+  const md = `${d.getMonth() + 1}/${d.getDate()}`;
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return hm === '00:00' ? md : `${md} ${hm}`;
+}
+function clusterLabel(t: WorkItem): string | null {
+  if (t.clusterNames && t.clusterNames.length) return t.clusterNames.join(', ');
+  return t.clusterName || null;
+}
+function displayTitle(t: WorkItem): string {
+  return t.title?.trim() || stripHtml(t.content) || t.category || '(제목 없음)';
+}
+
+const PRIORITY_DOT: Record<string, string> = {
+  high: 'bg-red-500', medium: 'bg-blue-500', low: 'bg-slate-400',
+};
+const STATUS_META: Record<KanbanStatus, { label: string; cls: string }> = {
+  backlog:     { label: '백로그',     cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  todo:        { label: '할일',       cls: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
+  in_progress: { label: '진행중',     cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+  review_test: { label: '검토/테스트', cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+  done:        { label: '완료',       cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
 };
 
-const KANBAN_STYLES: Record<KanbanStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  backlog:     { label: '백로그',   color: 'text-slate-400',  icon: <CircleDashed className="w-3.5 h-3.5" /> },
-  todo:        { label: '할일',     color: 'text-blue-400',   icon: <CircleDashed className="w-3.5 h-3.5" /> },
-  in_progress: { label: '진행 중', color: 'text-amber-400',  icon: <Clock className="w-3.5 h-3.5" /> },
-  review_test: { label: '검토/테스트', color: 'text-purple-400', icon: <AlertCircle className="w-3.5 h-3.5" /> },
-  done:        { label: '완료',     color: 'text-green-400',  icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+type ViewMode = 'card' | 'list';
+type BucketTone = 'overdue' | 'today' | 'upcoming' | 'done';
+const TONE: Record<BucketTone, { ring: string; text: string; dot: string }> = {
+  overdue:  { ring: 'border-red-500/30',    text: 'text-red-500',     dot: 'bg-red-500' },
+  today:    { ring: 'border-blue-500/30',   text: 'text-blue-500',    dot: 'bg-blue-500' },
+  upcoming: { ring: 'border-border',        text: 'text-muted-foreground', dot: 'bg-muted-foreground/50' },
+  done:     { ring: 'border-emerald-500/30', text: 'text-emerald-600', dot: 'bg-emerald-500' },
 };
 
-function getTodayString(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function addDaysToStr(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${dd}`;
-}
-
-function formatDisplayDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  const days = ['일', '월', '화', '수', '목', '금', '토'];
-  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
-}
-
-function formatScheduledAt(dateStr?: string | null): string {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-interface TaskCardProps {
+// ── item renderers ────────────────────────────────────────────────────────────
+interface ItemProps {
   item: WorkItem;
-  onStatusChange: (id: string, status: KanbanStatus) => void;
-  onEdit: (item: WorkItem) => void;
-  isUpdating: boolean;
-  highlight?: 'today' | 'inprogress';
+  busy: boolean;
+  onToggleDone: (t: WorkItem) => void;
+  onOpen: (t: WorkItem) => void;
 }
 
-function TaskCard({ item, onStatusChange, onEdit, isUpdating, highlight }: TaskCardProps) {
-  const priority = PRIORITY_STYLES[item.priority] || PRIORITY_STYLES.medium;
-  const kanban = KANBAN_STYLES[item.kanbanStatus] || KANBAN_STYLES.todo;
+function CompleteBtn({ item, busy, onToggleDone }: Omit<ItemProps, 'onOpen'>) {
+  const done = item.kanbanStatus === 'done';
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={(e) => { e.stopPropagation(); onToggleDone(item); }}
+      title={done ? '완료 취소' : '완료 처리'}
+      className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-emerald-500' : 'text-muted-foreground/40 hover:text-emerald-500'}`}
+    >
+      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+    </button>
+  );
+}
 
+function ItemCard({ item, busy, onToggleDone, onOpen }: ItemProps) {
+  const cl = clusterLabel(item);
+  const done = item.kanbanStatus === 'done';
   return (
     <div
-      className={`rounded-lg border p-3.5 flex flex-col gap-2 transition-colors hover:border-border/80 ${
-        item.kanbanStatus === 'done'
-          ? 'bg-muted/20 border-border/40 opacity-60'
-          : highlight === 'inprogress'
-          ? 'bg-amber-500/5 border-amber-500/20'
-          : 'bg-card border-border'
-      }`}
+      onClick={() => onOpen(item)}
+      className="group cursor-pointer rounded-xl border border-border bg-card/60 hover:bg-card hover:border-primary/30 p-3 transition-colors"
     >
-      {/* 상단: 우선순위 + 상태 + 시간 */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priority.dot}`} />
-          <span className={`text-xs font-medium flex-shrink-0 ${priority.text}`}>{priority.label}</span>
-          {item.module && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground flex-shrink-0">
-              {item.module}
+      <div className="flex items-start gap-2">
+        <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[item.priority] ?? PRIORITY_DOT.medium}`} />
+            <span className={`text-sm font-medium truncate ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(item)}</span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-muted-foreground">
+            <span className={`px-1.5 py-0.5 rounded border ${STATUS_META[item.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
+              {STATUS_META[item.kanbanStatus]?.label ?? '할일'}
             </span>
-          )}
-          {item.service && <ServiceChip service={item.service} small />}
-          {item.clusterName && (
-            <span className="text-xs text-muted-foreground/60 truncate">{item.clusterName}</span>
-          )}
+            <span className="px-1.5 py-0.5 rounded-full bg-secondary">{item.category}</span>
+            <span className="inline-flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{fmtDue(item)}</span>
+            {cl && <span className="inline-flex items-center gap-0.5"><Server className="w-2.5 h-2.5" />{cl}</span>}
+          </div>
         </div>
-        <div className={`flex items-center gap-1 text-xs flex-shrink-0 ${kanban.color}`}>
-          {kanban.icon}
-          <span>{kanban.label}</span>
-        </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary flex-shrink-0" />
       </div>
-
-      {/* 작업 내용 */}
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-foreground leading-snug flex-1 min-w-0">
-          {stripHtml(item.content)}
-        </p>
-        <button
-          onClick={() => onEdit(item)}
-          className="text-xs text-muted-foreground hover:text-foreground flex-shrink-0 mt-0.5 transition-colors"
-          title="수정"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* 카테고리 + 예정시간 */}
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="truncate">{item.category}</span>
-        {highlight === 'today' && item.startedAt && (
-          <span className="flex-shrink-0 flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {formatScheduledAt(item.startedAt)}
-          </span>
-        )}
-      </div>
-
-      {/* 퀵 액션 버튼 */}
-      {item.kanbanStatus !== 'done' && (
-        <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
-          {item.kanbanStatus !== 'in_progress' && (
-            <button
-              onClick={() => onStatusChange(item.id, 'in_progress')}
-              disabled={isUpdating}
-              className="flex-1 text-xs py-1 px-2 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
-            >
-              진행 시작
-            </button>
-          )}
-          <button
-            onClick={() => onStatusChange(item.id, 'done')}
-            disabled={isUpdating}
-            className="flex-1 text-xs py-1 px-2 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
-          >
-            완료 처리
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
-interface AssigneeColumnProps {
-  group: TodayTaskGroup;
-  onStatusChange: (id: string, status: KanbanStatus) => void;
-  onEdit: (item: WorkItem) => void;
-  updatingId: string | null;
-}
-
-function AssigneeColumn({ group, onStatusChange, onEdit, updatingId }: AssigneeColumnProps) {
-  const totalCount = group.todayTasks.length + group.inProgressTasks.length;
-  const doneCount = [...group.todayTasks, ...group.inProgressTasks].filter(
-    (t) => t.kanbanStatus === 'done'
-  ).length;
-  const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
-
+function ItemRow({ item, busy, onToggleDone, onOpen }: ItemProps) {
+  const cl = clusterLabel(item);
+  const done = item.kanbanStatus === 'done';
   return (
-    <div className="flex flex-col gap-3 min-w-[280px] max-w-[320px] flex-shrink-0">
-      {/* 담당자 헤더 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-            {group.assignee.slice(0, 2).toUpperCase()}
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">{group.assignee}</p>
-            <p className="text-xs text-muted-foreground">
-              {doneCount}/{totalCount}건 완료
-            </p>
-          </div>
-        </div>
-        <span className="text-xs font-medium text-muted-foreground">{progress}%</span>
-      </div>
+    <div
+      onClick={() => onOpen(item)}
+      className="group cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-secondary/50 transition-colors text-sm"
+    >
+      <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[item.priority] ?? PRIORITY_DOT.medium}`} />
+      <span className={`flex-1 min-w-0 truncate ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(item)}</span>
+      <span className={`hidden sm:inline px-1.5 py-0.5 rounded border text-[10px] flex-shrink-0 ${STATUS_META[item.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
+        {STATUS_META[item.kanbanStatus]?.label ?? '할일'}
+      </span>
+      {cl && <span className="hidden md:inline text-[10px] text-muted-foreground flex-shrink-0 max-w-[140px] truncate">{cl}</span>}
+      <span className="text-[11px] text-muted-foreground font-mono flex-shrink-0 w-20 text-right">{fmtDue(item)}</span>
+    </div>
+  );
+}
 
-      {/* 진행률 바 */}
-      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-        <div
-          className="h-full rounded-full bg-primary transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      {/* 오늘 예정 */}
-      {group.todayTasks.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-blue-400">
-            <CalendarCheck2 className="w-3.5 h-3.5" />
-            <span>오늘 예정 ({group.todayTasks.length})</span>
-          </div>
-          {group.todayTasks.map((item) => (
-            <TaskCard
-              key={item.id}
-              item={item}
-              onStatusChange={onStatusChange}
-              onEdit={onEdit}
-              isUpdating={updatingId === item.id}
-              highlight="today"
-            />
-          ))}
-        </div>
-      )}
-
-      {/* 진행 중 */}
-      {group.inProgressTasks.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-amber-400">
-            <Clock className="w-3.5 h-3.5" />
-            <span>진행 중 ({group.inProgressTasks.length})</span>
-          </div>
-          {group.inProgressTasks.map((item) => (
-            <TaskCard
-              key={item.id}
-              item={item}
-              onStatusChange={onStatusChange}
-              onEdit={onEdit}
-              isUpdating={updatingId === item.id}
-              highlight="inprogress"
-            />
-          ))}
-        </div>
-      )}
-
-      {totalCount === 0 && (
-        <div className="rounded-lg border border-dashed border-border/50 py-8 text-center text-sm text-muted-foreground">
-          오늘 할 일 없음
+// ── section ─────────────────────────────────────────────────────────────────
+function Section({
+  title, tone, items, view, busyId, onToggleDone, onOpen, defaultOpen = true,
+}: {
+  title: string; tone: BucketTone; items: WorkItem[]; view: ViewMode;
+  busyId: string | null; onToggleDone: (t: WorkItem) => void; onOpen: (t: WorkItem) => void; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (items.length === 0) return null;
+  const t = TONE[tone];
+  return (
+    <div className={`rounded-2xl border ${t.ring} bg-card/40 overflow-hidden`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-secondary/30 transition-colors"
+      >
+        <span className={`w-2 h-2 rounded-full ${t.dot}`} />
+        <span className={`text-sm font-semibold ${t.text}`}>{title}</span>
+        <span className="text-xs text-muted-foreground">{items.length}</span>
+        <ChevronRight className={`w-4 h-4 text-muted-foreground ml-auto transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && (
+        <div className={view === 'card' ? 'p-3 pt-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2' : 'px-2 pb-2 divide-y divide-border/40'}>
+          {items.map((it) =>
+            view === 'card'
+              ? <ItemCard key={it.id} item={it} busy={busyId === it.id} onToggleDone={onToggleDone} onOpen={onOpen} />
+              : <ItemRow key={it.id} item={it} busy={busyId === it.id} onToggleDone={onToggleDone} onOpen={onOpen} />,
+          )}
         </div>
       )}
     </div>
   );
 }
 
+// ── page ────────────────────────────────────────────────────────────────────
 export function TodoTodayPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  useClusters();
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const toast = useToast();
+  const user = useAuthStore((s) => s.user);
+  const myName = (user?.displayName?.trim() || user?.username || '').trim();
 
-  const today = getTodayString();
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
+  const [view, setView] = useState<ViewMode>('card');
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['items', 'today', selectedDate],
-    queryFn: () => todayWorkItemsApi.getSummary(selectedDate).then((r) => r.data),
-    refetchInterval: 60000, // 1분 자동 갱신
-  });
+  const { data, isLoading, isError, refetch, isFetching } = useWorkItems(
+    myName ? { assignee: myName } : undefined,
+  );
+  const patchStatus = usePatchWorkItemStatus();
 
-  const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: KanbanStatus }) =>
-      workItemsApi.patchStatus(id, status),
-    onMutate: ({ id }) => setUpdatingId(id),
-    onSettled: () => {
-      setUpdatingId(null);
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-    },
-  });
+  // 정확히 "내" 업무만 (담당자 정/부/legacy 중 내 이름).
+  const mine = useMemo(() => {
+    const items = data?.data ?? [];
+    if (!myName) return [];
+    return items.filter((t) => {
+      const names = [t.assignee, t.primaryAssignee, ...(t.secondaryAssignee?.split(',').map((s) => s.trim()) ?? [])];
+      return names.includes(myName);
+    });
+  }, [data, myName]);
 
-  const handleStatusChange = (id: string, status: KanbanStatus) => {
-    statusMutation.mutate({ id, status });
+  const today = todayStr();
+  const buckets = useMemo(() => {
+    const open = mine.filter((t) => t.kanbanStatus !== 'done');
+    const sortByDue = (a: WorkItem, b: WorkItem) => (a.startedAt ?? '').localeCompare(b.startedAt ?? '');
+    const overdue = open.filter((t) => dateOf(t) && dateOf(t) < today).sort(sortByDue);
+    const todayList = open.filter((t) => dateOf(t) === today).sort(sortByDue);
+    const upcoming = open.filter((t) => dateOf(t) > today).sort(sortByDue);
+    const doneRecent = mine
+      .filter((t) => t.kanbanStatus === 'done')
+      .sort((a, b) => (b.closedAt ?? b.startedAt ?? '').localeCompare(a.closedAt ?? a.startedAt ?? ''))
+      .slice(0, 12);
+    const inProgress = open.filter((t) => t.kanbanStatus === 'in_progress').length;
+    return { overdue, todayList, upcoming, doneRecent, inProgress };
+  }, [mine, today]);
+
+  const onToggleDone = (t: WorkItem) => {
+    const next: KanbanStatus = t.kanbanStatus === 'done' ? 'todo' : 'done';
+    setBusyId(t.id);
+    patchStatus.mutate(
+      { id: t.id, kanbanStatus: next },
+      {
+        onSettled: () => setBusyId(null),
+        onError: (err) => toast.error('상태 변경 실패', formatApiError(err, '상태를 변경할 수 없습니다.')),
+      },
+    );
   };
+  const onOpen = (t: WorkItem) => navigate(`/tasks-mgmt/${t.id}`);
 
-  const handleEdit = (item: WorkItem) => {
-    navigate(`/tasks-mgmt/${item.id}/edit`);
-  };
-
-  const totalToday = data?.totalToday ?? 0;
-  const totalInProgress = data?.totalInProgress ?? 0;
-  const groups = data?.groups ?? [];
-
-  const allTasks = groups.flatMap((g) => [...g.todayTasks, ...g.inProgressTasks]);
-  const doneCount = allTasks.filter((t) => t.kanbanStatus === 'done').length;
-  const totalCount = allTasks.length;
-  const overallProgress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+  const stats = [
+    { label: '지연', value: buckets.overdue.length, cls: 'text-red-500' },
+    { label: '오늘', value: buckets.todayList.length, cls: 'text-blue-500' },
+    { label: '진행중', value: buckets.inProgress, cls: 'text-amber-500' },
+    { label: '예정', value: buckets.upcoming.length, cls: 'text-foreground' },
+  ];
+  const totalOpen = buckets.overdue.length + buckets.todayList.length + buckets.upcoming.length;
 
   return (
-    <div className="p-6 flex flex-col gap-6 min-h-screen">
+    <div className="p-6 flex flex-col gap-5 min-h-screen max-w-[1200px] mx-auto">
       {/* 헤더 */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <CalendarCheck2 className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold">할일</h1>
-            <div className="flex items-center gap-1 bg-secondary rounded-lg px-1 py-0.5">
-              <button
-                onClick={() => setSelectedDate(addDaysToStr(selectedDate, -1))}
-                className="p-1.5 hover:bg-card rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                title="이전 날"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm text-foreground px-2 min-w-[200px] text-center">
-                {formatDisplayDate(selectedDate)}
-                {selectedDate === today && (
-                  <span className="ml-1.5 text-xs text-primary font-medium">오늘</span>
-                )}
-              </span>
-              <button
-                onClick={() => setSelectedDate(addDaysToStr(selectedDate, 1))}
-                className="p-1.5 hover:bg-card rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                title="다음 날"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            {selectedDate !== today && (
-              <button
-                onClick={() => setSelectedDate(today)}
-                className="text-xs px-2.5 py-1 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
-              >
-                오늘로
-              </button>
-            )}
+            <h1 className="text-xl font-bold">{myName ? `${myName}님의 할일` : '나의 할일'}</h1>
           </div>
-          <p className="text-sm text-muted-foreground">
-            오늘 예정된 업무와 진행 중인 업무를 담당자별로 확인합니다.
-          </p>
+          <p className="text-sm text-muted-foreground">내가 담당한 업무를 마감 임박순으로 모아 봅니다.</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <ViewModeBar
+            modes={[
+              { id: 'card', label: '카드', icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+              { id: 'list', label: '리스트', icon: <ListIcon className="w-3.5 h-3.5" /> },
+            ]}
+            active={view}
+            onChange={(v) => setView(v as ViewMode)}
+            showStylePanel={false}
+          />
           <Link
-            to="/items"
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+            to="/tasks-mgmt"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
           >
-            업무 게시판
-            <ArrowRight className="w-3.5 h-3.5" />
+            업무 게시판 <ArrowRight className="w-3.5 h-3.5" />
           </Link>
           <button
             onClick={() => navigate('/tasks-mgmt/new')}
             className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            업무 추가
+            <Plus className="w-4 h-4" /> 업무 추가
           </button>
           <button
             onClick={() => refetch()}
@@ -359,82 +271,47 @@ export function TodoTodayPage() {
 
       {/* 요약 통계 */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-card border border-border rounded-md p-4">
-          <p className="text-xs text-muted-foreground mb-1">오늘 예정</p>
-          <p className="text-2xl font-bold text-blue-400">{totalToday}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">건</p>
-        </div>
-        <div className="bg-card border border-border rounded-md p-4">
-          <p className="text-xs text-muted-foreground mb-1">진행 중</p>
-          <p className="text-2xl font-bold text-amber-400">{totalInProgress}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">건</p>
-        </div>
-        <div className="bg-card border border-border rounded-md p-4">
-          <p className="text-xs text-muted-foreground mb-1">완료</p>
-          <p className="text-2xl font-bold text-green-400">{doneCount}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">/ {totalCount}건</p>
-        </div>
-        <div className="bg-card border border-border rounded-md p-4">
-          <p className="text-xs text-muted-foreground mb-1">전체 진행률</p>
-          <p className="text-2xl font-bold text-primary">{overallProgress}%</p>
-          <div className="h-1.5 rounded-full bg-secondary mt-2 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${overallProgress}%` }}
-            />
+        {stats.map((s) => (
+          <div key={s.label} className="bg-card border border-border rounded-xl px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-0.5">{s.label}</p>
+            <p className={`text-2xl font-bold tabular-nums ${s.cls}`}>{s.value}</p>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* 본문 */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      {!myName ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-2 text-muted-foreground">
+          <AlertTriangle className="w-8 h-8 opacity-40" />
+          <p className="text-sm">로그인 후 본인 담당 업무가 표시됩니다.</p>
         </div>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
       ) : isError ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-destructive">
-          <AlertCircle className="w-8 h-8" />
+          <AlertTriangle className="w-8 h-8" />
           <p className="text-sm">데이터를 불러오는 중 오류가 발생했습니다.</p>
-          <button
-            onClick={() => refetch()}
-            className="px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-          >
-            다시 시도
+          <button onClick={() => refetch()} className="px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg">다시 시도</button>
+        </div>
+      ) : totalOpen === 0 && buckets.doneRecent.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+          <CheckCircle2 className="w-12 h-12 opacity-30 text-emerald-500" />
+          <div className="text-center">
+            <p className="text-base font-medium">처리할 할일이 없습니다 🎉</p>
+            <p className="text-sm mt-1 opacity-70">담당으로 지정된 미완료 업무가 없습니다.</p>
+          </div>
+          <button onClick={() => navigate('/tasks-mgmt/new')} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors">
+            <Plus className="w-4 h-4" /> 업무 추가
           </button>
         </div>
-      ) : groups.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
-          <CalendarCheck2 className="w-12 h-12 opacity-30" />
-          <div className="text-center">
-            <p className="text-base font-medium">오늘 예정된 업무가 없습니다</p>
-            <p className="text-sm mt-1 opacity-70">
-              업무 게시판에서 오늘 날짜로 업무를 등록하거나, 진행 중 업무가 있으면 여기에 표시됩니다.
-            </p>
-          </div>
-          <Link
-            to="/items"
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
-          >
-            업무 게시판으로 이동
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
       ) : (
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-5 min-w-max">
-            {groups.map((group) => (
-              <AssigneeColumn
-                key={group.assignee}
-                group={group}
-                onStatusChange={handleStatusChange}
-                onEdit={handleEdit}
-                updatingId={updatingId}
-              />
-            ))}
-          </div>
+        <div className="flex flex-col gap-3">
+          <Section title="지연" tone="overdue" items={buckets.overdue} view={view} busyId={busyId} onToggleDone={onToggleDone} onOpen={onOpen} />
+          <Section title="오늘" tone="today" items={buckets.todayList} view={view} busyId={busyId} onToggleDone={onToggleDone} onOpen={onOpen} />
+          <Section title="예정" tone="upcoming" items={buckets.upcoming} view={view} busyId={busyId} onToggleDone={onToggleDone} onOpen={onOpen} />
+          <Section title="최근 완료" tone="done" items={buckets.doneRecent} view={view} busyId={busyId} onToggleDone={onToggleDone} onOpen={onOpen} defaultOpen={false} />
         </div>
       )}
-
     </div>
   );
 }
