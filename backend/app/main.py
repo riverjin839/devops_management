@@ -693,6 +693,9 @@ def _run_migrations():
     if "batch_jobs" in inspector.get_table_names():
         _safe_add_column("batch_jobs", "encrypted_password", "TEXT")
         _safe_add_column("batch_jobs", "encrypted_private_key", "TEXT")
+        # 스케줄러 판정 가시화 (왜 스케줄이 안 돌았는지)
+        _safe_add_column("batch_jobs", "last_schedule_check_at", "TIMESTAMP")
+        _safe_add_column("batch_jobs", "last_schedule_note", "VARCHAR(200)")
 
     # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화 + 에디터 개인 설정
     if "users" in inspector.get_table_names():

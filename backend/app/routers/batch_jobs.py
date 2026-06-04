@@ -85,6 +85,8 @@ def _to_response(job: BatchJob) -> dict:
         "enabled": job.enabled if job.enabled is not None else True,
         "last_status": job.last_status or "unknown",
         "last_run_at": job.last_run_at,
+        "last_schedule_check_at": job.last_schedule_check_at,
+        "last_schedule_note": job.last_schedule_note,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
         "has_saved_password": bool(job.encrypted_password),

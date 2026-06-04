@@ -1202,6 +1202,8 @@ export interface BatchJob {
   enabled: boolean;
   lastStatus: string;
   lastRunAt?: string | null;
+  lastScheduleCheckAt?: string | null;
+  lastScheduleNote?: string | null;
   createdAt: string;
   updatedAt: string;
   hasSavedPassword: boolean;

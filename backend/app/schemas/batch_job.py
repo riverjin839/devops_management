@@ -47,6 +47,8 @@ class BatchJobResponse(BatchJobBase):
     cluster_id: UUID
     last_status: str = "unknown"
     last_run_at: Optional[datetime] = None
+    last_schedule_check_at: Optional[datetime] = None
+    last_schedule_note: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     # We never return the ciphertext; just whether something is saved.

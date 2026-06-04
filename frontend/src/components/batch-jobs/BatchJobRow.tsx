@@ -63,7 +63,17 @@ export function BatchJobRow({ job, cluster, selected, onClick }: BatchJobRowProp
       </td>
       <td className="px-3 py-2 align-top">
         {job.cron ? (
-          <code className="text-[11px] text-muted-foreground font-mono">{job.cron}</code>
+          <>
+            <code className="text-[11px] text-muted-foreground font-mono">{job.cron}</code>
+            {job.lastScheduleNote && (
+              <div
+                className="text-[10px] text-muted-foreground/80 mt-0.5"
+                title={job.lastScheduleCheckAt ? `스케줄러 평가: ${formatShortDate(job.lastScheduleCheckAt)}` : undefined}
+              >
+                {job.lastScheduleNote}
+              </div>
+            )}
+          </>
         ) : (
           <span className="text-[11px] text-muted-foreground/60">—</span>
         )}
