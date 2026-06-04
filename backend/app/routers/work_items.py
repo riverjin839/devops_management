@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Cluster
 from app.models.work_item import WorkItem
+from app.models.work_item_comment import WorkItemComment
 from app.models.user import User
 from app.models.app_setting import AppSetting
 from app.auth.deps import require_operator, get_current_user
@@ -23,6 +24,8 @@ from app.schemas.work_item import (
     WorkItemListResponse,
     WorkItemStatusPatch,
     WorkItemStatusResponse,
+    WorkItemCommentCreate,
+    WorkItemCommentResponse,
 )
 
 router = APIRouter(prefix="/work-items", tags=["work-items"])
@@ -611,4 +614,65 @@ def delete_work_item(
         target_type="work_item", target_id=target_id_snapshot,
         details=audit_details, request=request,
     )
+    return None
+
+
+# ── 댓글 (협업 코멘트) ────────────────────────────────────────────────────────
+@router.get("/{item_id}/comments", response_model=list[WorkItemCommentResponse])
+def list_comments(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return (
+        db.query(WorkItemComment)
+        .filter(WorkItemComment.work_item_id == item_id)
+        .order_by(WorkItemComment.created_at.asc())
+        .all()
+    )
+
+
+@router.post("/{item_id}/comments", response_model=WorkItemCommentResponse,
+             status_code=status.HTTP_201_CREATED)
+def add_comment(
+    item_id: UUID,
+    payload: WorkItemCommentCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item:
+        raise _not_found(item_id)
+    comment = WorkItemComment(
+        work_item_id=item_id,
+        author=actor.username,
+        author_name=actor.display_name,
+        body=payload.body.strip(),
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(
+    comment_id: UUID,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    comment = db.query(WorkItemComment).filter(WorkItemComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "COMMENT_NOT_FOUND", "message": "Comment not found", "id": str(comment_id)},
+        )
+    # 작성자 본인 또는 admin 만 삭제.
+    if actor.role != "admin" and comment.author and comment.author != actor.username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "COMMENT_FORBIDDEN", "message": "본인이 작성한 댓글만 삭제할 수 있습니다."},
+        )
+    db.delete(comment)
+    db.commit()
     return None

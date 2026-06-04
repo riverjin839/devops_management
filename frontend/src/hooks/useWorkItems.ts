@@ -50,6 +50,30 @@ export function useDeleteWorkItem() {
   });
 }
 
+export function useWorkItemComments(itemId?: string) {
+  return useQuery({
+    queryKey: ['workItemComments', itemId],
+    queryFn: async () => (await workItemsApi.listComments(itemId!)).data,
+    enabled: !!itemId,
+  });
+}
+
+export function useAddWorkItemComment(itemId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => workItemsApi.addComment(itemId, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workItemComments', itemId] }),
+  });
+}
+
+export function useDeleteWorkItemComment(itemId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) => workItemsApi.deleteComment(commentId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workItemComments', itemId] }),
+  });
+}
+
 export function usePatchWorkItemStatus() {
   const queryClient = useQueryClient();
   return useMutation({

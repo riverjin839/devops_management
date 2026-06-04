@@ -739,6 +739,12 @@ export const workItemsApi = {
   patchStatus: (id: string, kanbanStatus: KanbanStatus) =>
     api.patch<WorkItemStatusResponse>(`/work-items/${id}/status`, { kanban_status: kanbanStatus }),
   delete: (id: string) => api.delete(`/work-items/${id}`),
+  listComments: (id: string) =>
+    api.get<import('@/types').WorkItemComment[]>(`/work-items/${id}/comments`),
+  addComment: (id: string, body: string) =>
+    api.post<import('@/types').WorkItemComment>(`/work-items/${id}/comments`, { body }),
+  deleteComment: (commentId: string) =>
+    api.delete(`/work-items/comments/${commentId}`),
   exportCsv: (params?: Omit<WorkItemFilters, 'closed'>) =>
     api.get('/work-items/export/csv', {
       params: params

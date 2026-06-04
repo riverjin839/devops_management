@@ -370,6 +370,15 @@ export interface WorkItem {
   updatedAt: string;
 }
 
+export interface WorkItemComment {
+  id: string;
+  workItemId: string;
+  author?: string;
+  authorName?: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface WorkItemListResponse {
   data: WorkItem[];
   total: number;
