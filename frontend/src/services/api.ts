@@ -782,6 +782,10 @@ export const uiSettingsApi = {
     api.get<{ levels: import('@/types').OperationLevelItem[] }>('/ui-settings/operation-levels'),
   updateOperationLevels: (levels: import('@/types').OperationLevelItem[]) =>
     api.put<{ levels: import('@/types').OperationLevelItem[] }>('/ui-settings/operation-levels', { levels }),
+  getFeatureAccess: () =>
+    api.get<{ data: import('@/types').FeatureAccessMap }>('/ui-settings/feature-access'),
+  updateFeatureAccess: (access: import('@/types').FeatureAccessMap) =>
+    api.put<{ data: import('@/types').FeatureAccessMap }>('/ui-settings/feature-access', { access }),
 };
 
 export const nodeLabelsApi = {

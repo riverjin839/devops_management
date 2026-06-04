@@ -710,6 +710,13 @@ export interface MindMapNodeCreate {
   extra?: Record<string, any>;
 }
 
+// 기능별 접근 제어 — { "<feature>": { roles, users } }
+export interface FeatureAccessRule {
+  roles: string[];
+  users: string[];   // username 또는 display_name
+}
+export type FeatureAccessMap = Record<string, FeatureAccessRule>;
+
 // Assignee (담당자)
 export interface Assignee {
   name: string;

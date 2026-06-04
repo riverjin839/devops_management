@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.app_setting import AppSetting
+from app.models.user import User
+from app.auth.deps import require_admin
 from app.services.assignee_accounts import sync_assignee_accounts
 from app.schemas.ui_settings import (
     UiSettingsResponse,
@@ -22,6 +24,8 @@ router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
 UI_SETTINGS_KEY = "ui_settings"
 CLUSTER_LINKS_KEY = "cluster_links"
 ASSIGNEES_KEY = "assignees"
+FEATURE_ACCESS_KEY = "feature_access"
+DEFAULT_FEATURE_ACCESS: dict = {}
 OPERATION_LEVELS_KEY = "operation_levels"
 DEFAULT_ASSIGNEES = []
 DEFAULT_OPERATION_LEVELS = {
@@ -226,6 +230,45 @@ def update_assignees(payload: dict, db: Session = Depends(get_db)):
     except Exception:  # noqa: BLE001
         accounts = {"created": [], "skipped_existing": [], "skipped_no_employee_id": [], "errors": []}
     return {"data": cleaned, "accounts": accounts}
+
+
+# ── 기능별 접근 제어 (feature access) ────────────────────────────────────
+# 형태: { "<feature>": { "roles": [..], "users": [.. (username 또는 display_name)] } }
+# 규칙(프론트/백엔드 공통): admin 은 항상 허용. 해당 feature 설정이 없거나 roles/users 가
+# 모두 비면 전체 허용(기본 open). 설정이 있으면 role ∈ roles 또는 본인 ∈ users 일 때만.
+
+def _normalize_feature_access(raw) -> dict:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    for feature, rule in raw.items():
+        if not isinstance(rule, dict):
+            continue
+        roles = rule.get("roles")
+        users = rule.get("users")
+        out[str(feature)] = {
+            "roles": [str(r) for r in roles] if isinstance(roles, list) else [],
+            "users": [str(u) for u in users] if isinstance(users, list) else [],
+        }
+    return out
+
+
+@router.get("/feature-access")
+def get_feature_access(db: Session = Depends(get_db)):
+    setting = _get_or_create(db, FEATURE_ACCESS_KEY, DEFAULT_FEATURE_ACCESS)
+    return {"data": _normalize_feature_access(setting.value)}
+
+
+@router.put("/feature-access")
+def update_feature_access(payload: dict, db: Session = Depends(get_db),
+                          _: User = Depends(require_admin)):
+    """기능별 접근 제어 저장 — admin 전용."""
+    access = _normalize_feature_access(payload.get("access", payload))
+    setting = _get_or_create(db, FEATURE_ACCESS_KEY, DEFAULT_FEATURE_ACCESS)
+    setting.value = access
+    db.commit()
+    db.refresh(setting)
+    return {"data": access}
 
 
 # ── 운영레벨 (사용자 정의) ──────────────────────────────────────────────
