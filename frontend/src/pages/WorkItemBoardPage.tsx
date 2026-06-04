@@ -12,6 +12,8 @@ import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { SavedViews, type SavedViewState } from '@/components/work-items/SavedViews';
+import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
+import { Settings2 } from 'lucide-react';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
@@ -136,6 +138,7 @@ export function WorkItemBoardPage() {
   const items = data?.data ?? [];
   // G-I9: ConfirmDialog state — window.confirm 대체
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
+  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
 
   const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -449,6 +452,14 @@ export function WorkItemBoardPage() {
               </button>
             )}
             <SavedViews current={currentView} onApply={applyView} />
+            <button
+              type="button"
+              onClick={() => setCustomFieldsOpen(true)}
+              title="업무 사용자 정의 필드 관리"
+              className="px-2.5 py-1.5 text-xs rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+            >
+              <Settings2 className="w-3.5 h-3.5" /> 필드
+            </button>
             <ColumnSettingsMenu
               order={colLayout.order}
               isVisible={colLayout.isVisible}
@@ -596,6 +607,8 @@ export function WorkItemBoardPage() {
         ))}
         </div>
       </main>
+
+      <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <ConfirmDialog
         open={confirmDelete !== null}

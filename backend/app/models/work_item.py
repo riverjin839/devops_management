@@ -38,6 +38,7 @@ class WorkItem(Base):
     # 대표(첫 번째)로 유지(기존 단일 표시/필터 호환), cluster_ids/cluster_names 가 전체 목록.
     cluster_ids = Column(JSONB, nullable=True)    # list[str(uuid)]
     cluster_names = Column(JSONB, nullable=True)  # list[str] — cluster_ids 와 1:1
+    custom_values = Column(JSONB, nullable=True)   # {field_key: value} — 사용자 정의 필드 값
 
     # 공통 의미 — 통일된 이름
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)

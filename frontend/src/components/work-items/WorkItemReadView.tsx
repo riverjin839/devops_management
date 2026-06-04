@@ -6,6 +6,7 @@ import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workIte
 import { RichContent } from '@/components/editor';
 import { CommentThread } from './CommentThread';
 import { ActivityTimeline } from './ActivityTimeline';
+import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
 
 interface WorkItemReadViewProps {
   item: WorkItem;
@@ -46,6 +47,12 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
   const moduleCfg = item.module ? MODULE_CONFIG[item.module] : null;
   const typeCfg = item.typeLabel ? TYPE_LABEL_CONFIG[item.typeLabel] : null;
   const kanbanLabel = KANBAN_STATUS_LABEL[item.kanbanStatus ?? 'todo'];
+  const { data: cfRaw } = useWorkItemCustomFields();
+  const cv = (item.customValues ?? {}) as Record<string, unknown>;
+  const filledCustomFields = sortedWorkItemFields(cfRaw).filter(
+    (f) => cv[f.key] !== undefined && cv[f.key] !== '' && cv[f.key] !== null,
+  );
+  const fmtCustom = (v: unknown) => (typeof v === 'boolean' ? (v ? '예' : '아니오') : String(v));
   // 제목 — 미설정 시 내용 앞부분으로 폴백.
   const displayTitle = item.title?.trim() || stripHtml(item.content).slice(0, 80) || '(제목 없음)';
   const period = [formatDateTime(item.startedAt), formatDateTime(item.closedAt)].filter(Boolean).join(' ~ ');
@@ -154,6 +161,17 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
           <span>수정: {item.updatedAt?.slice(0, 10)}</span>
         )}
       </div>
+
+      {filledCustomFields.length > 0 && (
+        <div className="border-t border-border pt-3">
+          <p className="text-xs font-medium text-muted-foreground mb-2">사용자 정의 필드</p>
+          <div className="grid grid-cols-2 gap-3">
+            {filledCustomFields.map((f) => (
+              <Field key={f.id} label={f.label} value={fmtCustom(cv[f.key])} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <ActivityTimeline workItemId={item.id} />
 

@@ -41,6 +41,7 @@ from app.routers import (
     mc_client_router,
     node_server_specs_router,
     cluster_custom_fields_router,
+    work_item_custom_fields_router,
     backup_router,
     service_entries_router,
     batch_jobs_router,
@@ -512,6 +513,8 @@ def _run_migrations():
         # 다중 대상 클러스터 — 같은 업무를 여러 클러스터에서 수행. cluster_id 는 대표값 유지.
         _safe_add_column("work_items", "cluster_ids", "JSONB")
         _safe_add_column("work_items", "cluster_names", "JSONB")
+        # 사용자 정의 필드 값
+        _safe_add_column("work_items", "custom_values", "JSONB")
         # 등록자(생성자) — 본인이 등록한 work item 을 (담당자가 아니어도) 수정/삭제할 수 있도록.
         _safe_add_column("work_items", "created_by", "VARCHAR(100)")
         _safe_exec(
@@ -1230,6 +1233,7 @@ app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mc_client_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(work_item_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(service_entries_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)

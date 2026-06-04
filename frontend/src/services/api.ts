@@ -274,6 +274,18 @@ export const clusterCustomFieldsApi = {
     api.delete(`/cluster-custom-fields/${id}`),
 };
 
+// Work item 커스텀 필드
+export const workItemCustomFieldsApi = {
+  list: () =>
+    api.get<{ data: import('@/types').WorkItemCustomField[] }>('/work-item-custom-fields'),
+  create: (data: import('@/types').WorkItemCustomFieldCreate) =>
+    api.post<import('@/types').WorkItemCustomField>('/work-item-custom-fields', data),
+  update: (id: string, data: import('@/types').WorkItemCustomFieldUpdate) =>
+    api.put<import('@/types').WorkItemCustomField>(`/work-item-custom-fields/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/work-item-custom-fields/${id}`),
+};
+
 // Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리
 export interface ComponentSnapshot {
   id: string;
