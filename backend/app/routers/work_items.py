@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models import Cluster
 from app.models.work_item import WorkItem
 from app.models.work_item_comment import WorkItemComment
+from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.models.app_setting import AppSetting
 from app.auth.deps import require_operator, get_current_user
@@ -683,3 +684,29 @@ def delete_comment(
     db.delete(comment)
     db.commit()
     return None
+
+
+# ── 변경 이력 (활동 로그) — audit_logs 재활용 ─────────────────────────────────
+@router.get("/{item_id}/activities")
+def list_activities(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """이 업무의 생성/수정/상태변경 이력(audit_logs)을 시간순으로 반환."""
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.target_type == "work_item", AuditLog.target_id == str(item_id))
+        .order_by(AuditLog.created_at.asc())
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "action": r.action,
+            "actor": r.actor_username,
+            "details": r.details,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
