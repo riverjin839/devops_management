@@ -397,11 +397,47 @@ def update_cluster(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
     update_data = cluster_data.model_dump(exclude_unset=True)
+
+    # 이름 변경 시: 유일성 검사 + work_item 의 비정규화 cluster_name/cluster_names 동기화.
+    old_name = cluster.name
+    new_name = update_data.get("name")
+    renaming = bool(new_name) and new_name != old_name
+    if renaming:
+        dup = (
+            db.query(Cluster)
+            .filter(Cluster.name == new_name, Cluster.id != cluster_id)
+            .first()
+        )
+        if dup:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="이미 존재하는 클러스터 이름입니다.",
+            )
+
     for key, value in update_data.items():
         setattr(cluster, key, value)
 
     db.commit()
     db.refresh(cluster)
+
+    if renaming:
+        try:
+            cid = str(cluster_id)
+            # 단일 대표 cluster_name 갱신
+            db.query(WorkItem).filter(WorkItem.cluster_id == cluster_id).update(
+                {WorkItem.cluster_name: new_name}, synchronize_session=False,
+            )
+            # 다중 cluster_names(JSONB) — 해당 id 를 포함한 행만 이름 배열 재구성
+            multi_rows = db.query(WorkItem).filter(WorkItem.cluster_ids.contains([cid])).all()
+            if multi_rows:
+                name_by = {str(c.id): c.name for c in db.query(Cluster).all()}
+                for w in multi_rows:
+                    if isinstance(w.cluster_ids, list):
+                        w.cluster_names = [name_by.get(str(x), "") for x in w.cluster_ids]
+            db.commit()
+        except Exception:  # noqa: BLE001 — 동기화 실패가 rename 자체를 되돌리지 않도록
+            db.rollback()
+
     return cluster
 
 

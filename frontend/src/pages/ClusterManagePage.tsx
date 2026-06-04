@@ -24,7 +24,8 @@ import { useOperationLevels, levelLabel } from '@/hooks/useOperationLevels';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ResizeGrip } from '@/components/common';
 import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFields';
-import { Settings2 } from 'lucide-react';
+import { Settings2, Wand2 } from 'lucide-react';
+import { StandardizeClusterNamesModal } from '@/components/cluster-manage/StandardizeClusterNamesModal';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -103,6 +104,7 @@ export function ClusterManagePage() {
   const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level' | 'manual'>('manual');
   const [groupBy, setGroupBy]             = useState<GroupByMode>('none');
   const [showFilter, setShowFilter]       = useState(false);
+  const [standardizeOpen, setStandardizeOpen] = useState(false);
   const [viewMode, setViewMode]           = useState<'table' | 'card'>('table');
   const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
 
@@ -406,6 +408,15 @@ export function ClusterManagePage() {
               showStylePanel={false}
             />
             <button
+              onClick={() => setStandardizeOpen(true)}
+              disabled={clusters.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+              title="기존 클러스터 이름을 [업무명]-[운영타입]-[속성] 표준으로 정리"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              이름 표준화
+            </button>
+            <button
               onClick={() => setCustomFieldsOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
               title="테이블에 커스텀 컬럼 추가/수정/삭제"
@@ -629,6 +640,13 @@ export function ClusterManagePage() {
           클러스터 등록 및 API/kubeconfig 설정은 <strong>Settings</strong> 페이지에서 할 수 있습니다.
         </p>
       </main>
+
+      <StandardizeClusterNamesModal
+        open={standardizeOpen}
+        clusters={clusters}
+        onClose={() => setStandardizeOpen(false)}
+        onRenamed={() => queryClient.invalidateQueries({ queryKey: ['clusters'] })}
+      />
 
       {ciliumCluster && (
         <CiliumConfigModal
