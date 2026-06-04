@@ -11,6 +11,7 @@ import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAY
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
+import { SavedViews, type SavedViewState } from '@/components/work-items/SavedViews';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
@@ -251,6 +252,25 @@ export function WorkItemBoardPage() {
 
   const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterFrom || filterTo;
 
+  // 저장된 뷰 — 현재 필터/정렬/보기 스냅샷 + 적용.
+  const currentView: SavedViewState = {
+    typeFilter, filterClusterId, filterAssignee, filterCategory, filterPriority,
+    filterModule, filterFrom, filterTo, sortKey, sortDir, viewMode,
+  };
+  const applyView = (s: SavedViewState) => {
+    setTypeFilter((s.typeFilter as WorkItemType | 'all') || 'all');
+    setFilterClusterId(s.filterClusterId || '');
+    setFilterAssignee(s.filterAssignee || '');
+    setFilterCategory(s.filterCategory || '');
+    setFilterPriority(s.filterPriority || '');
+    setFilterModule((s.filterModule as WorkItemModule | '') || '');
+    setFilterFrom(s.filterFrom || '');
+    setFilterTo(s.filterTo || '');
+    setSortKey((s.sortKey as WorkItemSortKey | '') || '');
+    setSortDir(s.sortDir === 'desc' ? 'desc' : 'asc');
+    setViewMode((s.viewMode as ViewMode) || 'table');
+  };
+
   const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
   const doneCount = items.filter((t) => t.kanbanStatus === 'done').length;
 
@@ -428,6 +448,7 @@ export function WorkItemBoardPage() {
                 초기화
               </button>
             )}
+            <SavedViews current={currentView} onApply={applyView} />
             <ColumnSettingsMenu
               order={colLayout.order}
               isVisible={colLayout.isVisible}
