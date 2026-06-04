@@ -75,7 +75,9 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
         )}
         <span className="inline-flex items-center gap-x-2 flex-wrap text-muted-foreground">
           {item.assignee && <span>👤 {item.assignee}</span>}
-          {item.clusterName && <span>· {item.clusterName}</span>}
+          {(item.clusterNames?.length ? item.clusterNames.join(', ') : item.clusterName) && (
+            <span>· {item.clusterNames?.length ? item.clusterNames.join(', ') : item.clusterName}</span>
+          )}
           {period && <span>· {period}</span>}
           {item.effortHours ? <span>· {item.effortHours}h</span> : null}
         </span>

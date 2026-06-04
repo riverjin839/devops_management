@@ -327,6 +327,9 @@ export interface WorkItem {
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
+  /** 다중 대상 클러스터 — 같은 업무를 여러 클러스터에서 수행할 때. clusterId 는 대표(첫 번째). */
+  clusterIds?: string[];
+  clusterNames?: string[];
   /** 소속 프로젝트 ID (nullable). */
   projectId?: string;
   /** 짧은 제목 (선택). 미설정 시 content 텍스트를 제목으로 표시. */
@@ -384,6 +387,7 @@ export interface WorkItemCreate {
   secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
+  clusterIds?: string[];
   projectId?: string;
   title?: string;
   category: string;

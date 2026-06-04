@@ -3,7 +3,7 @@ import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
   Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
-import { SearchableSelect } from '@/components/common';
+import { SearchableSelect, LogViewTabs } from '@/components/common';
 import {
   useAnalyzeIncident, useAnalyzerHealth,
   useAnalyzeNamespaces, useAnalyzePods, useFetchIncidentContext,
@@ -308,10 +308,11 @@ export function IncidentAnalysisPage() {
       <main className="max-w-[1500px] mx-auto px-6 py-8">
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <Zap className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">장애 로그 자동 요약</h1>
+            <h1 className="text-xl font-bold">K8s 로그 — AI 분석</h1>
+            <LogViewTabs current="analysis" />
           </div>
           {health && (
             <div className="flex items-center gap-2 text-xs">

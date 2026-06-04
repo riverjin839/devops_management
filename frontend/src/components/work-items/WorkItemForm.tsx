@@ -120,7 +120,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [primaryAssignee, setPrimaryAssignee] = useState('');
   const [secondaryList, setSecondaryList] = useState<string[]>([]);
   const [secInput, setSecInput] = useState('');
-  const [clusterId, setClusterId] = useState('');
+  const [clusterIds, setClusterIds] = useState<string[]>([]);
   const [category, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
   const [service, setService] = useState('');
@@ -159,7 +159,11 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setType(initial.type);
       setPrimaryAssignee(initial.primaryAssignee ?? initial.assignee);
       setSecondaryList(parseAssignees(initial.secondaryAssignee));
-      setClusterId(initial.clusterId ?? '');
+      setClusterIds(
+        initial.clusterIds && initial.clusterIds.length
+          ? initial.clusterIds
+          : (initial.clusterId ? [initial.clusterId] : []),
+      );
       const predefined = allKnownCategories.includes(initial.category);
       setTaskCategory(predefined ? initial.category : '기타');
       setTaskCategoryCustom(predefined ? '' : initial.category);
@@ -232,7 +236,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
   const allCategories = [...DEFAULT_TASK_CATEGORIES, ...customCategories, '기타'];
   const resolvedCategory = category === '기타' ? taskCategoryCustom.trim() : category;
-  const selectedCluster = clusters.find((c) => c.id === clusterId);
+  const primaryCluster = clusters.find((c) => c.id === clusterIds[0]);
+  const addCluster = (id: string) => setClusterIds((prev) => (id && !prev.includes(id) ? [...prev, id] : prev));
+  const removeCluster = (id: string) => setClusterIds((prev) => prev.filter((x) => x !== id));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,8 +254,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       assignee: primaryAssignee.trim(),
       primaryAssignee: primaryAssignee.trim(),
       secondaryAssignee: secondaryList.length ? secondaryList.join(', ') : undefined,
-      clusterId: clusterId || undefined,
-      clusterName: selectedCluster?.name,
+      clusterId: clusterIds[0] || undefined,
+      clusterName: primaryCluster?.name,
+      clusterIds: clusterIds.length ? clusterIds : undefined,
       projectId: projectId || undefined,
       title: title.trim() || undefined,
       category: resolvedCategory,
@@ -353,15 +360,28 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           </div>
         </div>
         <div>
-          <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터</label>
+          <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터 (다중)</label>
+          {clusterIds.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1">
+              {clusterIds.map((id) => {
+                const c = clusters.find((x) => x.id === id);
+                return (
+                  <span key={id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px] border border-primary/20">
+                    {c?.name ?? id}
+                    <button type="button" onClick={() => removeCluster(id)} className="hover:text-rose-500 leading-none" aria-label={`${c?.name ?? id} 제거`}>×</button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <select
             id={f('cluster')}
-            value={clusterId}
-            onChange={(e) => setClusterId(e.target.value)}
+            value=""
+            onChange={(e) => { addCluster(e.target.value); e.currentTarget.selectedIndex = 0; }}
             className={inputClass}
           >
-            <option value="">— 선택 안 함 —</option>
-            {clusters.map((c) => (
+            <option value="">{clusterIds.length ? '+ 클러스터 추가' : '— 선택 안 함 —'}</option>
+            {clusters.filter((c) => !clusterIds.includes(c.id)).map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
