@@ -61,6 +61,7 @@ import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
+import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 
 function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
   const { id } = useParams<{ id: string }>();
@@ -71,6 +72,15 @@ function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   const role = useAuthStore((s) => s.user?.role);
   if (role !== 'admin') return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+/** 기능별 접근 제어 가드 — feature_access 설정에 따라 허용된 사용자만. */
+function RequireFeature({ feature, children }: { feature: string; children: React.ReactNode }) {
+  const { data, isLoading } = useFeatureAccess();
+  const user = useAuthStore((s) => s.user);
+  if (isLoading) return null;
+  if (!canAccessFeature(data, feature, user)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -153,7 +163,7 @@ function AppShell() {
               <Route path="/ops-notes/:id" element={<OpsNoteDetailPage />} />
               <Route path="/ops-notes/:id/edit" element={<OpsNoteDetailPage />} />
               <Route path="/mindmap" element={<MindMapPage />} />
-              <Route path="/wbs" element={<WbsFlowPage />} />
+              <Route path="/wbs" element={<RequireFeature feature="wbs"><WbsFlowPage /></RequireFeature>} />
               <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />
               <Route path="/packet-flow" element={<PacketFlowPage />} />
               <Route path="/ontology" element={<OntologyPage />} />

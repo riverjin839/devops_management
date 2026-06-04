@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen, Database, ListTodo } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
+import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
 import { ServiceCatalogManager } from '@/components/settings/ServiceCatalogManager';
 import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
@@ -535,7 +536,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'debug' | 'backup';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
 
   // Debug 설정
@@ -551,6 +552,7 @@ export function SettingsPage() {
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'service', label: '서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
     { id: 'lake-types', label: 'LAKE 타입', icon: <Database className="w-4 h-4" />, count: 0 },
+    { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
   ];
@@ -1227,6 +1229,8 @@ export function SettingsPage() {
         )}
 
         {/* Backup / Restore 탭 */}
+        {activeTab === 'access' && <FeatureAccessManager />}
+
         {activeTab === 'backup' && <BackupRestorePanel />}
       </main>
 

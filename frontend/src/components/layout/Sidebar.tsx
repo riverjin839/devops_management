@@ -14,6 +14,7 @@ import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { InlineEdit } from '@/components/common';
@@ -230,6 +231,10 @@ export function Sidebar() {
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.clear);
   const isAdmin = currentUser?.role === 'admin';
+  // 기능별 접근 제어 — 허용되지 않은 메뉴는 숨김.
+  const { data: featureAccess } = useFeatureAccess();
+  const featureAllowed = (p: string) =>
+    p !== '/wbs' || canAccessFeature(featureAccess, 'wbs', currentUser);
 
   const { mode, toggle, setMode } = useHomeStore();
 
@@ -358,7 +363,7 @@ export function Sidebar() {
         <div className="space-y-1 pb-2">
           {group.paths.map((p) => {
             const entry = navMap[p];
-            if (!entry) return null;
+            if (!entry || !featureAllowed(p)) return null;
             return (
               <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
                 active={location.pathname === p} onSelect={close} />
@@ -367,7 +372,7 @@ export function Sidebar() {
           {servicePaths.length > 0 && <div className="mx-2 my-1 border-t border-zinc-200" />}
           {servicePaths.map((p) => {
             const entry = navMap[p];
-            if (!entry) return null;
+            if (!entry || !featureAllowed(p)) return null;
             return (
               <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
                 active={location.pathname === p} onSelect={close} />
@@ -382,7 +387,7 @@ export function Sidebar() {
         <div className="space-y-1 pb-2">
           {group.paths.map((p) => {
             const entry = navMap[p];
-            if (!entry) return null;
+            if (!entry || !featureAllowed(p)) return null;
             return (
               <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
                 active={location.pathname === p} onSelect={close} />
@@ -404,7 +409,7 @@ export function Sidebar() {
       <div className="space-y-1 pb-2">
         {group.paths.map((p) => {
           const entry = navMap[p];
-          if (!entry) return null;
+          if (!entry || !featureAllowed(p)) return null;
           return (
             <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
               active={location.pathname === p} onSelect={close} />
