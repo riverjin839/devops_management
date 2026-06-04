@@ -1,5 +1,6 @@
 import { ImagePlus, ExternalLink } from 'lucide-react';
 import { WorkItem } from '@/types';
+import { stripHtml } from '@/lib/utils';
 import { loadWorkItemImages } from '@/lib/workItemImages';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { RichContent } from '@/components/editor';
@@ -43,12 +44,15 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
   const moduleCfg = item.module ? MODULE_CONFIG[item.module] : null;
   const typeCfg = item.typeLabel ? TYPE_LABEL_CONFIG[item.typeLabel] : null;
   const kanbanLabel = KANBAN_STATUS_LABEL[item.kanbanStatus ?? 'todo'];
+  // 제목 — 미설정 시 내용 앞부분으로 폴백.
+  const displayTitle = item.title?.trim() || stripHtml(item.content).slice(0, 80) || '(제목 없음)';
+  const period = [formatDateTime(item.startedAt), formatDateTime(item.closedAt)].filter(Boolean).join(' ~ ');
 
   return (
-    <div className="space-y-5">
-      {/* 배지 줄 */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className={`flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border ${
+    <div className="space-y-4">
+      {/* 옵션 정보 — 한 줄 압축 (상태·우선순위·분류·모듈/타입 + 담당자·클러스터·기간·공수) */}
+      <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-[11px]">
+        <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded-full border ${
           isCompleted
             ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
             : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
@@ -56,42 +60,33 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
           <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
           {kanbanLabel}
         </span>
-        {moduleCfg && (
-          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${moduleCfg.cls}`}>
-            {moduleCfg.label}
-          </span>
-        )}
-        {typeCfg && (
-          <span className={`text-xs px-2 py-0.5 rounded-full ${typeCfg.cls}`}>
-            {typeCfg.label}
-          </span>
-        )}
-        <span className={`flex items-center gap-1.5 text-xs font-medium ${pStyle.text}`}>
-          <span className={`w-2 h-2 rounded-full ${pStyle.dot}`} />
+        <span className={`flex items-center gap-1 font-medium ${pStyle.text}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${pStyle.dot}`} />
           {pStyle.label}
         </span>
-        <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20">
+        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
           {item.category}
         </span>
-        {item.effortHours && (
-          <span className="text-xs text-muted-foreground">{item.effortHours}h</span>
+        {moduleCfg && (
+          <span className={`px-2 py-0.5 rounded-full border font-medium ${moduleCfg.cls}`}>{moduleCfg.label}</span>
         )}
+        {typeCfg && (
+          <span className={`px-2 py-0.5 rounded-full ${typeCfg.cls}`}>{typeCfg.label}</span>
+        )}
+        <span className="inline-flex items-center gap-x-2 flex-wrap text-muted-foreground">
+          {item.assignee && <span>👤 {item.assignee}</span>}
+          {item.clusterName && <span>· {item.clusterName}</span>}
+          {period && <span>· {period}</span>}
+          {item.effortHours ? <span>· {item.effortHours}h</span> : null}
+        </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="담당자" value={item.assignee} />
-        <Field label="대상 클러스터" value={item.clusterName} />
-        <Field label="업무 예정일" value={formatDateTime(item.startedAt)} />
-        <Field label="업무 완료일" value={formatDateTime(item.closedAt)} />
-      </div>
+      {/* 업무 제목 */}
+      <h1 className="text-xl font-bold tracking-tight leading-snug break-words">{displayTitle}</h1>
 
-      <div className="border-t border-border" />
-
-      <div>
-        <p className="text-xs font-medium text-muted-foreground mb-1">업무 내용</p>
-        <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
-          <RichContent content={item.content} />
-        </div>
+      {/* 업무 내용 */}
+      <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+        <RichContent content={item.content} />
       </div>
 
       {item.resolution && (

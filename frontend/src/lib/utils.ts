@@ -176,6 +176,10 @@ export function formatApiError(err: unknown, fallback = '요청 실패'): string
   }
 
   if (detail && typeof detail === 'object') {
+    // 우리 백엔드 커스텀 에러: detail = { error, message, ... } → 친절한 message 우선.
+    const dm = detail as { message?: unknown; error?: unknown };
+    if (typeof dm.message === 'string' && dm.message) return dm.message;
+    if (typeof dm.error === 'string' && dm.error) return dm.error;
     try { return JSON.stringify(detail); } catch { /* ignore */ }
   }
 

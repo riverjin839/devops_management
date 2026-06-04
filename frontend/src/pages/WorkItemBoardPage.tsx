@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClusterSidebar, ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -576,7 +577,10 @@ export function WorkItemBoardPage() {
                     colSpan={visibleCols.length + 1}
                     defaultClusterId={filterClusterId || undefined}
                     defaultAssignee={filterAssignee || undefined}
-                    onCreate={(data) => createTask.mutate(data)}
+                    onCreate={(data) => createTask.mutate(data, {
+                      onSuccess: () => toast.success('업무 등록됨'),
+                      onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
+                    })}
                   />
                 </tbody>
                 </SortableContext>

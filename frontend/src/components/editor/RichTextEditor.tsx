@@ -47,8 +47,6 @@ interface RichTextEditorProps {
   placeholder?: string;
   minHeight?: string;
   onImagePaste?: (dataUrl: string) => void;
-  /** 편집 영역 배경을 흰색으로 (기본은 테마 배경). 어두운 테마에서도 본문 글자가 보이도록 검은 글자색 적용. */
-  whiteBg?: boolean;
 }
 
 interface ToolbarButtonProps {
@@ -420,7 +418,6 @@ export function RichTextEditor({
   placeholder = '내용을 입력하세요...',
   minHeight = '120px',
   onImagePaste,
-  whiteBg = false,
 }: RichTextEditorProps) {
   const isUpdatingFromProp = useRef(false);
 
@@ -428,6 +425,10 @@ export function RichTextEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
+        // StarterKit v3 는 link/underline 을 기본 포함한다. 아래에서 커스텀 설정으로 다시
+        // 추가하므로 여기서는 끈다 (안 끄면 "duplicate extension names found" 경고).
+        link: false,
+        underline: false,
       }),
       Underline,
       Link.configure({
@@ -477,7 +478,7 @@ export function RichTextEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  // 에디터 배경색 — 사용자가 고른 색(localStorage). 없으면 whiteBg(흰색) → 테마 순.
+  // 에디터 배경색 — 사용자가 고른 색(localStorage). 없으면 테마 배경.
   const [bgColor, setBgColor] = useState<string | null>(() => {
     try { return localStorage.getItem(EDITOR_BG_KEY); } catch { return null; }
   });
@@ -515,8 +516,8 @@ export function RichTextEditor({
 
   if (!editor) return null;
 
-  // 우선순위: 사용자가 고른 bgColor > whiteBg(흰색) > 테마 배경
-  const surfaceBg = bgColor || (whiteBg ? '#ffffff' : null);
+  // 에디터 표면 배경 — 사용자가 고른 bgColor 가 있으면 사용, 없으면 테마 배경.
+  const surfaceBg = bgColor;
   const surfaceText = surfaceBg ? (isDarkColor(surfaceBg) ? '#f4f4f5' : '#18181b') : undefined;
 
   return (
