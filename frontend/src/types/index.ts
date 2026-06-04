@@ -361,6 +361,8 @@ export interface WorkItem {
   /** 연결된 다른 work item (예: bug 작업이 참조하는 issue) — 기존 task.issue_id 의 후속. */
   relatedWorkItemId?: string;
   subtasks?: WorkItem[];
+  /** 등록자(생성자) username — 담당자가 아니어도 본인이 등록한 항목은 수정/삭제 가능. 구버전 데이터는 null. */
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }

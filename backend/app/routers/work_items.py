@@ -30,21 +30,37 @@ WIP_LIMIT = 2
 
 
 # G-C4: Ownership 검증 헬퍼. admin 은 모두 허용, operator/viewer 는 자기 work item 만.
-# 자기 work item 정의: primary_assignee OR secondary_assignee == user.username.
+# 자기 work item 정의: 등록자(created_by) OR 담당자(primary/secondary_assignee) 본인.
+#
+# ⚠️ 식별자 매핑 주의:
+#   로그인 username 은 **사번(employeeId)** 이다 (sync_assignee_accounts: username=사번,
+#   display_name=담당자 이름). 그런데 work item 의 담당자 필드에는 담당자 **이름**이
+#   저장된다 (WorkItemForm 이 assignee.name 을 값으로 사용). 따라서 username(사번) 만으로
+#   비교하면 담당자 본인조차 영원히 불일치한다.
+#   → 사번(username) + 이름(display_name) 둘 다를 "me" 로 보고 매칭한다.
+#   created_by 는 생성 시 actor.username(사번)으로 기록되므로 username 쪽과 매칭된다.
 def _assert_ownership(item: WorkItem, user: User, *, op: str) -> None:
-    """admin 이 아니고 본인 work item 도 아니면 403."""
+    """admin 이 아니고 (등록자도 담당자 본인도 아니면) 403."""
     if user.role == "admin":
         return
-    me = user.username
-    if item.primary_assignee == me or item.secondary_assignee == me:
+    me_ids: set[str] = set()
+    if user.username:
+        me_ids.add(user.username.strip())
+    if user.display_name and user.display_name.strip():
+        me_ids.add(user.display_name.strip())
+    # 본인이 등록한 work item 은 담당자가 아니어도 수정/삭제 허용 (created_by=사번).
+    if item.created_by and item.created_by in me_ids:
+        return
+    # 담당자(이름 저장) 본인.
+    if item.primary_assignee in me_ids or (item.secondary_assignee and item.secondary_assignee in me_ids):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "error": "WORK_ITEM_FORBIDDEN",
-            "message": f"본인 담당이 아닌 work item 은 {op} 할 수 없습니다.",
+            "message": f"본인이 등록했거나 담당인 work item 만 {op} 할 수 있습니다.",
             "id": str(item.id),
-            "required": "admin role or self-assignee",
+            "required": "admin role, creator, or self-assignee",
         },
     )
 
@@ -401,6 +417,7 @@ def create_work_item(
         primary_assignee=primary_assignee,
         secondary_assignee=secondary_assignee,
         cluster_name=cluster_name,
+        created_by=actor.username,  # 등록자 기록 — 본인 삭제/수정 권한 판정에 사용
     )
     db.add(item)
     db.commit()

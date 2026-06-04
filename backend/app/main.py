@@ -509,6 +509,12 @@ def _run_migrations():
         )
         _safe_add_column("work_items", "title", "VARCHAR(200)")
         _safe_add_column("work_items", "component", "VARCHAR(64)")
+        # 등록자(생성자) — 본인이 등록한 work item 을 (담당자가 아니어도) 수정/삭제할 수 있도록.
+        _safe_add_column("work_items", "created_by", "VARCHAR(100)")
+        _safe_exec(
+            "CREATE INDEX IF NOT EXISTS ix_work_items_created_by ON work_items(created_by)",
+            label="work_items.created_by index",
+        )
         _safe_exec(
             "CREATE INDEX IF NOT EXISTS ix_work_items_component ON work_items(component)",
             label="work_items.component index",

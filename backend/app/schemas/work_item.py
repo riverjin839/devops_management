@@ -96,6 +96,7 @@ class WorkItemStatusPatch(BaseModel):
 
 class WorkItemResponse(WorkItemBase):
     id: UUID
+    created_by: Optional[str] = None   # 등록자 username (구버전 데이터는 null)
     created_at: datetime
     updated_at: datetime
     subtasks: list["WorkItemResponse"] = []

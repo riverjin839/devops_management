@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClusterSidebar, ViewModeBar, DoubleScrollX, ConfirmDialog } from '@/components/common';
+import { ClusterSidebar, ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -173,14 +173,33 @@ export function WorkItemBoardPage() {
 
   const deleteTask = useDeleteWorkItem();
   const createTask = useCreateWorkItem();
+  const toast = useToast();
 
   const handleDelete = (item: WorkItem) => setConfirmDelete(item);
   const doDelete = () => {
     if (!confirmDelete) return;
     const id = confirmDelete.id;
+    const label = confirmDelete.title?.trim() || confirmDelete.category || '업무';
     setConfirmDelete(null);
-    deleteTask.mutate(id);
-    localStorage.removeItem('k8s:img:work-item:' + id);
+    deleteTask.mutate(id, {
+      onSuccess: () => {
+        localStorage.removeItem('k8s:img:work-item:' + id);
+        toast.success('업무 삭제됨', `"${label}" 업무를 삭제했습니다.`);
+      },
+      onError: (err: unknown) => {
+        // 백엔드 detail 은 string 또는 {message,...} dict 두 형태 모두 가능.
+        const resp = (err as { response?: { data?: { detail?: unknown }; status?: number } })?.response;
+        const detail = resp?.data?.detail;
+        const msg =
+          typeof detail === 'string'
+            ? detail
+            : (detail as { message?: string })?.message
+              ?? (resp?.status === 403
+                ? '본인이 등록했거나 담당인 업무만 삭제할 수 있습니다.'
+                : '업무 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        toast.error('삭제 실패', msg);
+      },
+    });
   };
 
   // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
