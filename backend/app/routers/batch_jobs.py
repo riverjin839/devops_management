@@ -16,6 +16,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import BatchJob, BatchJobRun, Cluster
 from app.schemas.batch_job import (
+    BatchJobBulkRunItem,
+    BatchJobBulkRunRequest,
+    BatchJobBulkRunResponse,
     BatchJobCreate,
     BatchJobListResponse,
     BatchJobResponse,
@@ -149,6 +152,39 @@ def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(job)
     return _to_response(job)
+
+
+@router.post("/bulk-run", response_model=BatchJobBulkRunResponse)
+def bulk_run_jobs(payload: BatchJobBulkRunRequest, db: Session = Depends(get_db)):
+    """선택한 여러 잡(여러 클러스터)을 백그라운드로 일괄 실행.
+
+    저장된 자격증명을 사용하므로 자격증명이 없는 잡은 스킵한다(평문 비밀번호를 broker 로
+    내보내지 않기 위함 — 스케줄 실행과 동일). 각 잡은 Celery 로 비동기 큐잉되며 결과는
+    Batch Job 실행 이력에서 확인.
+    """
+    from app.celery_app import run_batch_job  # lazy import — celery 의존 분리
+
+    results: list[BatchJobBulkRunItem] = []
+    queued = 0
+    for jid in payload.job_ids:
+        job = db.query(BatchJob).filter(BatchJob.id == jid).first()
+        if job is None:
+            results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="잡을 찾을 수 없음"))
+            continue
+        if not job.enabled:
+            results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="비활성 잡"))
+            continue
+        if not (job.encrypted_password or job.encrypted_private_key):
+            results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="저장된 자격증명 없음"))
+            continue
+        try:
+            run_batch_job.delay(str(job.id))
+            queued += 1
+            results.append(BatchJobBulkRunItem(job_id=jid, queued=True))
+        except Exception as exc:  # noqa: BLE001 — 큐잉 실패도 결과로 반환
+            results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason=f"큐잉 실패: {exc}"))
+
+    return BatchJobBulkRunResponse(queued=queued, skipped=len(results) - queued, results=results)
 
 
 @router.get("/{job_id}", response_model=BatchJobResponse)

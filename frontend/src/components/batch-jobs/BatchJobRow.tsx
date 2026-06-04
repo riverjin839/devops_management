@@ -8,6 +8,10 @@ interface BatchJobRowProps {
   cluster?: Cluster; // 전체 모드에서만 전달 — 단일 모드에서는 undefined
   selected: boolean;
   onClick: () => void;
+  /** 일괄 선택 체크박스 표시 여부 */
+  checkbox?: boolean;
+  checked?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function formatShortDate(iso: string | null | undefined): string {
@@ -18,7 +22,7 @@ function formatShortDate(iso: string | null | undefined): string {
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function BatchJobRow({ job, cluster, selected, onClick }: BatchJobRowProps) {
+export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked, onToggleSelect }: BatchJobRowProps) {
   const hasMissingCreds = !!job.cron && !job.hasSavedPassword && !job.hasSavedPrivateKey;
   const showCluster = !!cluster;
 
@@ -31,6 +35,17 @@ export function BatchJobRow({ job, cluster, selected, onClick }: BatchJobRowProp
           : 'hover:bg-secondary/50 border-l-[3px] border-l-transparent'
       }`}
     >
+      {checkbox && (
+        <td className="px-3 py-2 align-top" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={!!checked}
+            onChange={() => onToggleSelect?.(job.id)}
+            aria-label={`${job.name} 선택`}
+            className="cursor-pointer"
+          />
+        </td>
+      )}
       <td className="px-3 py-2 align-top">
         <StatusPill status={job.lastStatus} />
       </td>

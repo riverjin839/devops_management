@@ -1,16 +1,17 @@
 // frontend/src/pages/BatchJobsPage.tsx
 import { useEffect, useState } from 'react';
-import { ListTree, Plus } from 'lucide-react';
+import { ListTree, Plus, Play, X } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar, ConfirmDialog } from '@/components/common';
+import { ClusterSidebar, ConfirmDialog, useToast } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useBatchJobTypes,
   useBatchJobs,
   useDeleteBatchJob,
 } from '@/hooks/useBatchJobs';
-import type { BatchJob } from '@/services/api';
+import { batchJobsApi, type BatchJob } from '@/services/api';
+import { formatApiError } from '@/lib/utils';
 import {
   BatchJobFilters,
   BatchJobSlideOver,
@@ -41,6 +42,9 @@ export function BatchJobsPage() {
   const [selectedJob, setSelectedJob] = useState<BatchJob | null>(null);
   const [wizardCtx, setWizardCtx] = useState<{ clusterId?: string; jobType?: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BatchJob | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const toast = useToast();
 
   const allJobs = allJobsQ.data ?? [];
   const types = typesQ.data ?? [];
@@ -51,6 +55,45 @@ export function BatchJobsPage() {
     : allJobs.filter((j) => j.clusterId === selectedClusterId);
 
   const visibleJobs = applyFilter(scopedJobs, statusFilter, search);
+
+  // ── 일괄 선택/실행 ──
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  const toggleAll = (ids: string[]) =>
+    setSelectedIds((prev) => {
+      const allOn = ids.length > 0 && ids.every((i) => prev.has(i));
+      const n = new Set(prev);
+      if (allOn) ids.forEach((i) => n.delete(i));
+      else ids.forEach((i) => n.add(i));
+      return n;
+    });
+  const clearSel = () => setSelectedIds(new Set());
+
+  const runBulk = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const { data } = await batchJobsApi.bulkRun(ids);
+      const reasons = [...new Set(data.results.filter((r) => !r.queued).map((r) => r.reason).filter(Boolean))];
+      if (data.queued > 0) {
+        toast.success('일괄 실행 시작', `${data.queued}건 백그라운드 실행${data.skipped ? ` · ${data.skipped}건 스킵` : ''}`);
+      }
+      if (data.skipped > 0) {
+        toast.warning(`${data.skipped}건 스킵`, reasons.join(' · ') || '저장된 자격증명 없음 등');
+      }
+      clearSel();
+      allJobsQ.refetch();
+    } catch (e) {
+      toast.error('일괄 실행 실패', formatApiError(e));
+    } finally {
+      setBulkRunning(false);
+    }
+  };
 
   // allJobs 가 바뀔 때마다 selectedJob 을 최신 데이터로 동기화.
   // 새로 만든 잡(아직 TQ 캐시에 없음)은 wizard 가 onCreated 로 전달한
@@ -170,6 +213,27 @@ export function BatchJobsPage() {
                     search={search}
                     onSearchChange={setSearch}
                   />
+                  {selectedIds.size > 0 && (
+                    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-sm">
+                      <span className="font-medium text-primary">{selectedIds.size}개 선택됨</span>
+                      <span className="text-[11px] text-muted-foreground">— 같은 잡을 여러 클러스터에서 일괄 실행 (저장된 자격증명 사용)</span>
+                      <button
+                        type="button"
+                        onClick={runBulk}
+                        disabled={bulkRunning}
+                        className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Play className="w-3.5 h-3.5" /> {bulkRunning ? '실행 중…' : `선택 ${selectedIds.size}개 실행`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearSel}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <X className="w-3 h-3" /> 해제
+                      </button>
+                    </div>
+                  )}
                   <BatchJobTable
                     jobs={visibleJobs}
                     clusters={selectedClusterId === null ? clusters : undefined}
@@ -177,6 +241,9 @@ export function BatchJobsPage() {
                     sort={sort}
                     onSortChange={setSort}
                     onSelectJob={(job) => setSelectedJob(job)}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
+                    onToggleAll={toggleAll}
                     emptyMessage={
                       scopedJobs.length === 0
                         ? selectedClusterId === null
