@@ -7,6 +7,7 @@ from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
 from app.models.work_item import WorkItem
 from app.models.work_item_comment import WorkItemComment
+from app.models.user_notification import UserNotification
 from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
@@ -50,6 +51,7 @@ __all__ = [
     "MetricCard",
     "WorkItem",
     "WorkItemComment",
+    "UserNotification",
     "AppSetting",
     "Workflow",
     "WorkflowStep",

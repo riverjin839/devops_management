@@ -16,9 +16,68 @@ from app.models import (
     NotificationChannelType,
     NotificationLog,
 )
+from app.models.user_notification import UserNotification
+from app.models.user import User
+from app.auth.deps import get_current_user
 from app.services.notifier import send_via_channel
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+# ── 개인 인앱 알림 (알림 종) ──────────────────────────────────────────────────
+def _me_ids(user: User) -> list[str]:
+    return [x.strip() for x in [user.username, user.display_name] if x and x.strip()]
+
+
+def _notif_dict(n: UserNotification) -> dict:
+    return {
+        "id": str(n.id),
+        "type": n.type,
+        "title": n.title,
+        "body": n.body,
+        "link": n.link,
+        "work_item_id": str(n.work_item_id) if n.work_item_id else None,
+        "is_read": n.is_read,
+        "created_at": n.created_at.isoformat() if n.created_at else None,
+    }
+
+
+@router.get("/my")
+def my_notifications(limit: int = 30, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    ids = _me_ids(user)
+    if not ids:
+        return {"data": [], "unread": 0}
+    base = db.query(UserNotification).filter(UserNotification.recipient.in_(ids))
+    rows = base.order_by(desc(UserNotification.created_at)).limit(min(max(limit, 1), 100)).all()
+    unread = base.filter(UserNotification.is_read.is_(False)).count()
+    return {"data": [_notif_dict(n) for n in rows], "unread": unread}
+
+
+@router.post("/my/{nid}/read")
+def mark_notification_read(nid: UUID, db: Session = Depends(get_db),
+                           user: User = Depends(get_current_user)):
+    ids = _me_ids(user)
+    n = db.query(UserNotification).filter(
+        UserNotification.id == nid, UserNotification.recipient.in_(ids),
+    ).first()
+    if not n:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    n.is_read = True
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/my/read-all")
+def mark_all_notifications_read(db: Session = Depends(get_db),
+                               user: User = Depends(get_current_user)):
+    ids = _me_ids(user)
+    if ids:
+        db.query(UserNotification).filter(
+            UserNotification.recipient.in_(ids), UserNotification.is_read.is_(False),
+        ).update({UserNotification.is_read: True}, synchronize_session=False)
+        db.commit()
+    return {"ok": True}
 
 
 class ChannelIn(BaseModel):

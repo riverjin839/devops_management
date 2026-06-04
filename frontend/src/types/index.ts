@@ -379,6 +379,17 @@ export interface WorkItemComment {
   createdAt: string;
 }
 
+export interface UserNotification {
+  id: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  link?: string | null;
+  workItemId?: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export interface WorkItemListResponse {
   data: WorkItem[];
   total: number;

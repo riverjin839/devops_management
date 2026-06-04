@@ -1401,6 +1401,11 @@ export const notificationsApi = {
   test: (id: string) => api.post<NotificationLogEntry>(`/notifications/test/${id}`),
   log: (limit = 50) =>
     api.get<NotificationLogEntry[]>('/notifications/log', { params: { limit } }),
+  // 개인 인앱 알림 (알림 종)
+  listMy: (limit = 30) =>
+    api.get<{ data: import('@/types').UserNotification[]; unread: number }>('/notifications/my', { params: { limit } }),
+  markRead: (id: string) => api.post(`/notifications/my/${id}/read`),
+  markAllRead: () => api.post('/notifications/my/read-all'),
 };
 
 export const opsCheckApi = {

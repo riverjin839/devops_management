@@ -652,6 +652,13 @@ def add_comment(
     db.add(comment)
     db.commit()
     db.refresh(comment)
+    # 담당자/등록자에게 개인 알림(알림 종) — 실패해도 댓글 자체엔 영향 없음.
+    try:
+        from app.services.user_notify import notify_work_item_comment
+        notify_work_item_comment(db, item, actor, comment)
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
     return comment
 
 
