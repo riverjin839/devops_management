@@ -156,6 +156,9 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
             <>
               <Server className="w-3 h-3 flex-shrink-0 ml-1" />
               {item.clusterName}
+              {item.clusterIds && item.clusterIds.length > 1 && (
+                <span className="text-primary">+{item.clusterIds.length - 1}</span>
+              )}
             </>
           )}
           {item.effortHours && (

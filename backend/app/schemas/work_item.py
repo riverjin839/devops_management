@@ -22,9 +22,10 @@ class WorkItemBase(BaseModel):
     primary_assignee: str = Field(..., min_length=1, max_length=100)
     secondary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
 
-    # 클러스터
+    # 클러스터 — cluster_id 는 대표(첫 번째). cluster_ids 가 다중 대상 전체.
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
+    cluster_ids: Optional[list[UUID]] = None
 
     # 프로젝트 소속 (nullable)
     project_id: Optional[UUID] = None
@@ -68,6 +69,7 @@ class WorkItemUpdate(BaseModel):
     secondary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
+    cluster_ids: Optional[list[UUID]] = None
     project_id: Optional[UUID] = None
     title: Optional[str] = Field(None, max_length=200)
     category: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -96,6 +98,7 @@ class WorkItemStatusPatch(BaseModel):
 
 class WorkItemResponse(WorkItemBase):
     id: UUID
+    cluster_names: Optional[list[str]] = None   # cluster_ids 와 1:1 표시용 이름
     created_by: Optional[str] = None   # 등록자 username (구버전 데이터는 null)
     created_at: datetime
     updated_at: datetime

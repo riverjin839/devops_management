@@ -509,6 +509,9 @@ def _run_migrations():
         )
         _safe_add_column("work_items", "title", "VARCHAR(200)")
         _safe_add_column("work_items", "component", "VARCHAR(64)")
+        # 다중 대상 클러스터 — 같은 업무를 여러 클러스터에서 수행. cluster_id 는 대표값 유지.
+        _safe_add_column("work_items", "cluster_ids", "JSONB")
+        _safe_add_column("work_items", "cluster_names", "JSONB")
         # 등록자(생성자) — 본인이 등록한 work item 을 (담당자가 아니어도) 수정/삭제할 수 있도록.
         _safe_add_column("work_items", "created_by", "VARCHAR(100)")
         _safe_exec(

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -34,6 +34,10 @@ class WorkItem(Base):
     # 공통 필드 — 클러스터
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id"), nullable=True)
     cluster_name = Column(String(100), nullable=True)
+    # 다중 대상 클러스터 — 같은 업무를 여러 클러스터에서 수행할 때. cluster_id/cluster_name 은
+    # 대표(첫 번째)로 유지(기존 단일 표시/필터 호환), cluster_ids/cluster_names 가 전체 목록.
+    cluster_ids = Column(JSONB, nullable=True)    # list[str(uuid)]
+    cluster_names = Column(JSONB, nullable=True)  # list[str] — cluster_ids 와 1:1
 
     # 공통 의미 — 통일된 이름
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)

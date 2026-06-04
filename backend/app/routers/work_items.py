@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import case
+from sqlalchemy import case, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -98,6 +98,36 @@ def _not_found(item_id: UUID) -> HTTPException:
     )
 
 
+def _resolve_clusters(db: Session, cluster_ids, cluster_id, cluster_name):
+    """다중 대상 클러스터를 정규화한다.
+
+    반환: (ids_str | None, names | None, primary_id(UUID) | None, primary_name(str) | None)
+      - cluster_ids 우선, 없으면 단일 cluster_id 를 1개짜리 목록으로.
+      - 중복 제거(순서 유지), 이름은 DB 에서 resolve(미존재 id 는 빈 이름).
+      - cluster_id/cluster_name 컬럼엔 대표(첫 번째)를 넣어 기존 단일 표시/필터와 호환.
+    """
+    candidates = list(cluster_ids) if cluster_ids else ([cluster_id] if cluster_id else [])
+    seen: set[str] = set()
+    ids = []
+    for c in candidates:
+        if c is None:
+            continue
+        s = str(c)
+        if s in seen:
+            continue
+        seen.add(s)
+        ids.append(c)
+    if not ids:
+        return None, None, None, cluster_name
+    rows = db.query(Cluster).filter(Cluster.id.in_(ids)).all()
+    name_by = {str(r.id): r.name for r in rows}
+    ids_str = [str(c) for c in ids]
+    names = [name_by.get(s, "") for s in ids_str]
+    primary_id = ids[0]
+    primary_name = names[0] or cluster_name
+    return ids_str, names, primary_id, primary_name
+
+
 def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
                    assignee: Optional[str], category: Optional[str],
                    priority: Optional[str], kanban_status: Optional[str],
@@ -106,7 +136,11 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
     if type_:
         query = query.filter(WorkItem.type == type_)
     if cluster_id:
-        query = query.filter(WorkItem.cluster_id == cluster_id)
+        # 단일 대표(cluster_id) 또는 다중 목록(cluster_ids) 어느 쪽에 속해도 매칭.
+        query = query.filter(or_(
+            WorkItem.cluster_id == cluster_id,
+            WorkItem.cluster_ids.contains([str(cluster_id)]),
+        ))
     if assignee:
         query = query.filter(
             WorkItem.primary_assignee.ilike(f"%{assignee}%")
@@ -422,26 +456,24 @@ def create_work_item(
     actor: User = Depends(require_operator),
     request: Request = None,  # noqa: B008
 ):
-    cluster_name = payload.cluster_name
-    if payload.cluster_id and not cluster_name:
-        cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
-        if not cluster:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"error": "CLUSTER_NOT_FOUND", "message": "Cluster not found",
-                        "id": str(payload.cluster_id)},
-            )
-        cluster_name = cluster.name
+    # 다중 대상 클러스터 정규화 (cluster_id/cluster_name 은 대표값 유지).
+    cluster_ids_norm, cluster_names_norm, primary_cluster_id, primary_cluster_name = _resolve_clusters(
+        db, payload.cluster_ids, payload.cluster_id, payload.cluster_name,
+    )
 
     primary_assignee = (payload.primary_assignee or payload.assignee).strip()
     secondary_assignee = payload.secondary_assignee.strip() if payload.secondary_assignee else None
-    overridden = {"cluster_name", "assignee", "primary_assignee", "secondary_assignee"}
+    overridden = {"cluster_name", "cluster_id", "cluster_ids",
+                  "assignee", "primary_assignee", "secondary_assignee"}
     item = WorkItem(
         **{k: v for k, v in payload.model_dump().items() if k not in overridden},
         assignee=primary_assignee,
         primary_assignee=primary_assignee,
         secondary_assignee=secondary_assignee,
-        cluster_name=cluster_name,
+        cluster_id=primary_cluster_id,
+        cluster_name=primary_cluster_name,
+        cluster_ids=cluster_ids_norm,
+        cluster_names=cluster_names_norm,
         created_by=actor.username,  # 등록자 기록 — 본인 삭제/수정 권한 판정에 사용
     )
     db.add(item)
@@ -479,15 +511,18 @@ def update_work_item(
     elif "assignee" in update_data:
         update_data["primary_assignee"] = update_data["assignee"]
 
-    if "cluster_id" in update_data and update_data["cluster_id"] and "cluster_name" not in update_data:
-        cluster = db.query(Cluster).filter(Cluster.id == update_data["cluster_id"]).first()
-        if not cluster:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"error": "CLUSTER_NOT_FOUND", "message": "Cluster not found",
-                        "id": str(update_data["cluster_id"])},
-            )
-        update_data["cluster_name"] = cluster.name
+    # 클러스터(단일/다중) 변경 시 대표값 + 목록을 함께 재계산.
+    if "cluster_ids" in update_data or "cluster_id" in update_data:
+        ids_str, names, primary_id, primary_name = _resolve_clusters(
+            db,
+            update_data.get("cluster_ids"),
+            update_data.get("cluster_id"),
+            update_data.get("cluster_name"),
+        )
+        update_data["cluster_id"] = primary_id
+        update_data["cluster_name"] = primary_name
+        update_data["cluster_ids"] = ids_str
+        update_data["cluster_names"] = names
 
     for key, value in update_data.items():
         setattr(item, key, value)

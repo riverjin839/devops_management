@@ -348,7 +348,11 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, isD
                 <option value="">—</option>
                 {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-            ) : (item.clusterName || '-')}
+            ) : (
+              item.clusterName
+                ? <>{item.clusterName}{item.clusterIds && item.clusterIds.length > 1 && <span className="text-primary"> +{item.clusterIds.length - 1}</span>}</>
+                : '-'
+            )}
           </EditableCell>
         );
 
