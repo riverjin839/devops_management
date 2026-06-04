@@ -74,6 +74,14 @@ export function useDeleteWorkItemComment(itemId: string) {
   });
 }
 
+export function useWorkItemActivities(itemId?: string) {
+  return useQuery({
+    queryKey: ['workItemActivities', itemId],
+    queryFn: async () => (await workItemsApi.listActivities(itemId!)).data,
+    enabled: !!itemId,
+  });
+}
+
 export function usePatchWorkItemStatus() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -5,6 +5,7 @@ import { loadWorkItemImages } from '@/lib/workItemImages';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { RichContent } from '@/components/editor';
 import { CommentThread } from './CommentThread';
+import { ActivityTimeline } from './ActivityTimeline';
 
 interface WorkItemReadViewProps {
   item: WorkItem;
@@ -153,6 +154,8 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
           <span>수정: {item.updatedAt?.slice(0, 10)}</span>
         )}
       </div>
+
+      <ActivityTimeline workItemId={item.id} />
 
       <CommentThread workItemId={item.id} />
     </div>

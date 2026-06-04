@@ -379,6 +379,15 @@ export interface WorkItemComment {
   createdAt: string;
 }
 
+export interface WorkItemActivity {
+  id: string;
+  action: string;
+  actor: string;
+  // 백엔드 details(JSONB) — 응답 인터셉터가 camelCase 로 변환(changedFields, from, to 등)
+  details?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface UserNotification {
   id: string;
   type: string;

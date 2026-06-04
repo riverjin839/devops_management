@@ -745,6 +745,8 @@ export const workItemsApi = {
     api.post<import('@/types').WorkItemComment>(`/work-items/${id}/comments`, { body }),
   deleteComment: (commentId: string) =>
     api.delete(`/work-items/comments/${commentId}`),
+  listActivities: (id: string) =>
+    api.get<import('@/types').WorkItemActivity[]>(`/work-items/${id}/activities`),
   exportCsv: (params?: Omit<WorkItemFilters, 'closed'>) =>
     api.get('/work-items/export/csv', {
       params: params
