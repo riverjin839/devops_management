@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from collections import Counter
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -178,17 +180,41 @@ def get_assignees(db: Session = Depends(get_db)):
 
 @router.put("/assignees")
 def update_assignees(payload: dict, db: Session = Depends(get_db)):
-    assignees = payload.get("assignees", [])
-    if not isinstance(assignees, list):
-        assignees = []
-    # Normalize and deduplicate by name
-    seen: set[str] = set()
-    cleaned = []
-    for raw in assignees:
-        entry = _normalize_assignee(raw)
-        if entry and entry["name"] not in seen:
-            seen.add(entry["name"])
-            cleaned.append(entry)
+    raw_list = payload.get("assignees", [])
+    if not isinstance(raw_list, list):
+        raw_list = []
+
+    cleaned = [e for raw in raw_list if (e := _normalize_assignee(raw)) is not None]
+
+    # 안전 정규화: 담당자 이름과 사번(employeeId)은 고유해야 한다.
+    #   - 이름은 work item 의 담당자 식별 키(primary/secondary_assignee)로 그대로 저장되므로
+    #     동명이인이 있으면 ownership(본인 업무 수정/삭제) 판정이 모호해진다.
+    #   - 사번은 로그인 username 으로 provisioning 되므로 중복되면 계정이 충돌한다.
+    # 중복이 있으면 저장을 막고(400) 어떤 값이 충돌하는지 알려준다.
+    name_counts = Counter(a["name"].strip().lower() for a in cleaned if a["name"].strip())
+    dup_names = sorted({
+        a["name"] for a in cleaned
+        if a["name"].strip() and name_counts[a["name"].strip().lower()] > 1
+    })
+    emp_values = [str(a.get("employeeId") or "").strip() for a in cleaned]
+    emp_counts = Counter(e for e in emp_values if e)
+    dup_emps = sorted({e for e in emp_values if e and emp_counts[e] > 1})
+    if dup_names or dup_emps:
+        parts = []
+        if dup_names:
+            parts.append(f"중복된 담당자 이름: {', '.join(dup_names)}")
+        if dup_emps:
+            parts.append(f"중복된 사번: {', '.join(dup_emps)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "ASSIGNEE_DUPLICATE",
+                "message": "담당자 이름과 사번은 고유해야 합니다. " + " / ".join(parts),
+                "duplicate_names": dup_names,
+                "duplicate_employee_ids": dup_emps,
+            },
+        )
+
     setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
     setting.value = cleaned
     db.commit()
