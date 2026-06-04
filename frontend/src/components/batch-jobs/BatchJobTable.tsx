@@ -15,6 +15,10 @@ interface BatchJobTableProps {
   onSelectJob: (job: BatchJob) => void;
   /** 빈 테이블 메시지. */
   emptyMessage?: string;
+  /** 일괄 선택 — 제공되면 체크박스 컬럼이 렌더된다. */
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: (ids: string[]) => void;
 }
 
 const STATUS_RANK: Record<string, number> = {
@@ -72,12 +76,15 @@ function SortHeader({
 
 export function BatchJobTable({
   jobs, clusters, selectedJobId, sort, onSortChange, onSelectJob, emptyMessage,
+  selectedIds, onToggleSelect, onToggleAll,
 }: BatchJobTableProps) {
   const clusterMap = clusters
     ? Object.fromEntries(clusters.map((c) => [c.id, c]))
     : null;
 
   const sorted = sortJobs(jobs, sort);
+  const selectable = !!onToggleSelect && !!selectedIds;
+  const allSelected = selectable && sorted.length > 0 && sorted.every((j) => selectedIds?.has(j.id) ?? false);
 
   if (sorted.length === 0) {
     return (
@@ -92,6 +99,17 @@ export function BatchJobTable({
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="border-b border-border">
+            {selectable && (
+              <th className="px-3 py-2 bg-secondary/40" style={{ width: '36px' }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() => onToggleAll?.(sorted.map((j) => j.id))}
+                  aria-label="전체 선택"
+                  className="cursor-pointer"
+                />
+              </th>
+            )}
             <SortHeader label="상태" sortKey="status" current={sort} onChange={onSortChange} width="100px" />
             <SortHeader label="잡" sortKey="name" current={sort} onChange={onSortChange} />
             {clusterMap && (
@@ -116,6 +134,9 @@ export function BatchJobTable({
               cluster={clusterMap ? clusterMap[job.clusterId] : undefined}
               selected={selectedJobId === job.id}
               onClick={() => onSelectJob(job)}
+              checkbox={selectable}
+              checked={selectedIds?.has(job.id) ?? false}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </tbody>

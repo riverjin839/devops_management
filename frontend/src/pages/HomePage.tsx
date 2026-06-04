@@ -9,6 +9,7 @@ import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimelin
 import { InfraHealthBar } from '@/components/dashboard/InfraHealthBar';
 import { IncidentMiniPanel } from '@/components/dashboard/IncidentMiniPanel';
 import { DomainQuickAccess } from '@/components/dashboard/DomainQuickAccess';
+import { DailyCheckReviewPanel } from '@/components/dashboard/DailyCheckReviewPanel';
 import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
@@ -154,6 +155,7 @@ export function HomePage() {
       {mode === 'platform' && (
         <div className="flex-1 min-h-0 px-3 pt-2 pb-3 flex flex-col gap-2 overflow-auto">
           <InfraHealthBar />
+          <DailyCheckReviewPanel />
           <IncidentMiniPanel />
           <DomainQuickAccess />
         </div>

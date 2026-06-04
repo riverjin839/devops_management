@@ -52,6 +52,10 @@ class BatchJob(Base):
     last_status = Column(String(20), default="unknown")  # ok / error / running / unknown
     last_run_at = Column(DateTime, nullable=True)
 
+    # 디스패처(매 분)가 이 잡을 마지막으로 평가한 시각/결과 — "왜 스케줄이 안 돌았는지" 진단용.
+    last_schedule_check_at = Column(DateTime, nullable=True)
+    last_schedule_note = Column(String(200), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

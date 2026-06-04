@@ -47,6 +47,8 @@ class BatchJobResponse(BatchJobBase):
     cluster_id: UUID
     last_status: str = "unknown"
     last_run_at: Optional[datetime] = None
+    last_schedule_check_at: Optional[datetime] = None
+    last_schedule_note: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     # We never return the ciphertext; just whether something is saved.
@@ -70,6 +72,24 @@ class BatchJobRunRequest(BaseModel):
     private_key: Optional[str] = None
     param_override: Optional[dict[str, Any]] = None
     timeout: int = Field(default=60, ge=1, le=600)
+
+
+class BatchJobBulkRunRequest(BaseModel):
+    """여러 잡(여러 클러스터)을 한 번에 백그라운드 실행. 저장된 자격증명을 사용하므로
+    평문 비밀번호를 받지 않는다(스케줄 실행과 동일 보안 모델)."""
+    job_ids: list[UUID] = Field(..., min_length=1)
+
+
+class BatchJobBulkRunItem(BaseModel):
+    job_id: UUID
+    queued: bool
+    reason: Optional[str] = None
+
+
+class BatchJobBulkRunResponse(BaseModel):
+    queued: int
+    skipped: int
+    results: list[BatchJobBulkRunItem]
 
 
 class BatchJobRunResponse(BaseModel):

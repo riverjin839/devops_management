@@ -1202,6 +1202,8 @@ export interface BatchJob {
   enabled: boolean;
   lastStatus: string;
   lastRunAt?: string | null;
+  lastScheduleCheckAt?: string | null;
+  lastScheduleNote?: string | null;
   createdAt: string;
   updatedAt: string;
   hasSavedPassword: boolean;
@@ -1299,6 +1301,10 @@ export const batchJobsApi = {
   delete: (id: string) => api.delete(`/batch-jobs/${id}`),
   run: (id: string, payload: BatchJobRunRequest, signal?: AbortSignal) =>
     api.post<BatchJobRun>(`/batch-jobs/${id}/run`, payload, { signal, timeout: 600000 }),
+  bulkRun: (jobIds: string[]) =>
+    api.post<{ queued: number; skipped: number; results: { jobId: string; queued: boolean; reason?: string | null }[] }>(
+      '/batch-jobs/bulk-run', { jobIds },
+    ),
   listRuns: (id: string, limit = 50) =>
     api.get<{ data: BatchJobRun[] }>(`/batch-jobs/${id}/runs`, { params: { limit } }),
   testConnection: (id: string, payload: BatchJobTestConnectionRequest) =>

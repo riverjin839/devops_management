@@ -289,6 +289,7 @@ def run_batch_job_dispatcher(self):
     try:
         now_utc = datetime.now(_tz.utc)
         now_aware = now_utc.astimezone(tz)
+        check_at = now_utc.replace(tzinfo=None)  # naive UTC — DB 컬럼과 동일 기준
         jobs = (
             db.query(BatchJob)
             .filter(BatchJob.enabled.is_(True))
@@ -296,44 +297,46 @@ def run_batch_job_dispatcher(self):
             .all()
         )
         for job in jobs:
+            # 매 분 평가 결과를 잡에 기록 → 운영자가 "왜 스케줄이 안 돌았는지" 확인 가능.
+            note: str | None = None
             cron_expr = (job.cron or "").strip()
             if not cron_expr:
                 continue
             if not croniter.is_valid(cron_expr):
                 skipped_reasons["invalid_cron"] = skipped_reasons.get("invalid_cron", 0) + 1
-                continue
-            if not (job.encrypted_password or job.encrypted_private_key):
+                note = "cron 표현식 오류"
+            elif not (job.encrypted_password or job.encrypted_private_key):
                 # No saved credentials → unattended run can't authenticate.
-                # Plan SC: this case is now blocked at registration (SC-2/SC-3),
-                # but legacy rows from before the fix still hit this branch.
+                # (수동 실행은 요청에 비밀번호를 실어 동작하지만, 무인 스케줄은 저장 자격증명 필요)
                 skipped_reasons["no_credentials"] = skipped_reasons.get("no_credentials", 0) + 1
-                continue
+                note = "저장된 자격증명 없음 — 무인 실행 불가 (자격증명 저장 필요)"
+            else:
+                # last_run_at is naive UTC in DB. Re-attach UTC tzinfo, then convert
+                # to the configured zone so croniter interprets cron in the operator's tz.
+                raw_anchor = job.last_run_at or (now_utc - timedelta(days=1)).replace(tzinfo=None)
+                anchor_naive = raw_anchor.replace(tzinfo=_tz.utc).astimezone(tz).replace(tzinfo=None)
+                now_naive = now_aware.replace(tzinfo=None)
+                try:
+                    next_fire = croniter(cron_expr, anchor_naive).get_next(datetime)
+                except Exception:
+                    skipped_reasons["cron_eval_error"] = skipped_reasons.get("cron_eval_error", 0) + 1
+                    note = "cron 평가 오류"
+                else:
+                    if next_fire > now_naive:
+                        note = f"대기 — 다음 실행 {next_fire:%Y-%m-%d %H:%M} ({tz_name})"
+                    else:
+                        run_batch_job.delay(str(job.id))
+                        dispatched.append(str(job.id))
+                        note = "실행 큐잉됨"
 
-            # last_run_at is naive UTC in DB. Re-attach UTC tzinfo, then
-            # convert to the configured zone so croniter interprets the
-            # cron expression in the operator's intended timezone.
-            raw_anchor = job.last_run_at or (now_utc - timedelta(days=1)).replace(tzinfo=None)
-            anchor_aware = raw_anchor.replace(tzinfo=_tz.utc).astimezone(tz)
+            job.last_schedule_check_at = check_at
+            if note is not None:
+                job.last_schedule_note = note
 
-            # Use tzinfo-stripped (naive) datetimes in the same timezone for croniter.
-            # croniter.get_next(datetime) WITHOUT tz= returns a naive datetime even
-            # when given an aware start_time, causing a TypeError when compared with
-            # now_aware (aware). Stripping tzinfo from both keeps them in the same
-            # reference frame (configured timezone) while avoiding the naive/aware
-            # comparison error.
-            anchor_naive = anchor_aware.replace(tzinfo=None)
-            now_naive = now_aware.replace(tzinfo=None)
-
-            try:
-                next_fire = croniter(cron_expr, anchor_naive).get_next(datetime)
-            except Exception:
-                skipped_reasons["cron_eval_error"] = skipped_reasons.get("cron_eval_error", 0) + 1
-                continue
-            if next_fire > now_naive:
-                continue
-
-            run_batch_job.delay(str(job.id))
-            dispatched.append(str(job.id))
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
         return {
             "checked": len(jobs),
