@@ -96,8 +96,16 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
   const [step, setStep] = useState<Step>(0);
   const [provider, setProvider] = useState<string>('on-prem');
   const [name, setName] = useState('');
+  // 표준 네이밍 — [업무명]-[운영타입]-[속성] 조합. 비표준 이름은 직접 입력 모드(manualName)로.
+  const [bizName, setBizName] = useState('');
+  const [opsType, setOpsType] = useState('');
+  const [attribute, setAttribute] = useState('');
+  const [manualName, setManualName] = useState(false);
   const [apiEndpoint, setApiEndpoint] = useState('');
   const [region, setRegion] = useState('');
+
+  const composedName = [bizName, opsType, attribute].map((s) => s.trim()).filter(Boolean).join('-');
+  const effectiveName = (manualName ? name : composedName).trim();
   const [skipConnectivity, setSkipConnectivity] = useState(false);
   const [kubeconfigContent, setKubeconfigContent] = useState('');
   const [error, setError] = useState('');
@@ -140,6 +148,10 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
     setStep(0);
     setProvider('on-prem');
     setName('');
+    setBizName('');
+    setOpsType('');
+    setAttribute('');
+    setManualName(false);
     setApiEndpoint('');
     setRegion('');
     setSkipConnectivity(false);
@@ -151,7 +163,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
   const goNext = () => {
     setError('');
     if (step === 1) {
-      if (!name.trim()) { setError('클러스터 이름은 필수입니다.'); return; }
+      if (!effectiveName) { setError(manualName ? '클러스터 이름은 필수입니다.' : '업무명·운영타입을 입력해 클러스터명을 구성하세요.'); return; }
       if (!skipConnectivity && !apiEndpoint.trim()) { setError('API Endpoint를 입력하거나 임시 등록을 선택하세요.'); return; }
     }
     setStep((s) => Math.min(s + 1, 2) as Step);
@@ -164,11 +176,11 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
 
   const handleSubmit = async () => {
     setError('');
-    if (!name.trim()) { setError('클러스터 이름은 필수입니다.'); return; }
+    if (!effectiveName) { setError('클러스터 이름은 필수입니다.'); return; }
 
     try {
       await createCluster.mutateAsync({
-        name: name.trim(),
+        name: effectiveName,
         apiEndpoint: apiEndpoint.trim(),
         region: region.trim() || undefined,
         ...(kubeconfigContent.trim() ? { kubeconfigContent: kubeconfigContent.trim() } : {}),
@@ -272,18 +284,69 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label htmlFor={nameId} className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Cluster Name *
-                  </label>
-                  <input
-                    id={nameId}
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={`e.g. ${selectedProvider.id}-prod-01`}
-                    autoFocus
-                    className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                  />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor={nameId} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Cluster Name *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setManualName((v) => !v)}
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                    >
+                      {manualName ? '구조화 입력' : '직접 입력'}
+                    </button>
+                  </div>
+
+                  {manualName ? (
+                    <input
+                      id={nameId}
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={`e.g. ${selectedProvider.id}-prod-01`}
+                      autoFocus
+                      className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                    />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          id={nameId}
+                          type="text"
+                          value={bizName}
+                          onChange={(e) => setBizName(e.target.value)}
+                          placeholder="업무명"
+                          autoFocus
+                          className="flex-1 min-w-0 px-2.5 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                        />
+                        <span className="text-muted-foreground font-mono">-</span>
+                        <select
+                          value={opsType}
+                          onChange={(e) => setOpsType(e.target.value)}
+                          className="w-28 px-2 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                        >
+                          <option value="">운영타입</option>
+                          <option value="prod">prod</option>
+                          <option value="dev">dev</option>
+                          <option value="test">test</option>
+                          <option value="stage">stage</option>
+                        </select>
+                        <span className="text-muted-foreground font-mono">-</span>
+                        <input
+                          type="text"
+                          value={attribute}
+                          onChange={(e) => setAttribute(e.target.value)}
+                          placeholder="속성"
+                          className="flex-1 min-w-0 px-2.5 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                        />
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        클러스터명:{' '}
+                        <span className="font-mono text-foreground">{composedName || '업무명-운영타입-속성'}</span>
+                        <span className="ml-2 text-muted-foreground/60">· 지역은 아래에 별도로 입력</span>
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <div className="col-span-2">
