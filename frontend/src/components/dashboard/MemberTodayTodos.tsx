@@ -145,7 +145,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             return (
               <div
                 key={g.assignee}
-                className="rounded-xl border border-border/70 bg-card/60 p-2.5"
+                className="rounded-xl border border-border/70 bg-transparent p-2.5"
               >
                 {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -196,7 +196,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                             t.kanbanStatus === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'
                           }`}
                         >
-                          {stripHtml(t.content) || t.category}
+                          {t.title?.trim() || stripHtml(t.content) || t.category}
                         </span>
                         {t.clusterName && (
                           <span className="text-[10px] text-muted-foreground/80 flex-shrink-0 hidden md:inline">
