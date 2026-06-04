@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -412,6 +412,47 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
   );
 }
 
+// ── 슬래시(/) 빠른 삽입 메뉴 ────────────────────────────────────────────────
+interface SlashItem {
+  title: string;
+  keywords: string[];
+  icon: typeof Heading1;
+  action: (e: Editor) => void;
+}
+const SLASH_ITEMS: SlashItem[] = [
+  { title: '제목 1', keywords: ['h1', 'heading', '제목'], icon: Heading1, action: (e) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+  { title: '제목 2', keywords: ['h2', '제목'], icon: Heading2, action: (e) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { title: '제목 3', keywords: ['h3', '제목'], icon: Heading3, action: (e) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+  { title: '본문', keywords: ['text', 'paragraph', '본문'], icon: Type, action: (e) => e.chain().focus().setParagraph().run() },
+  { title: '글머리 목록', keywords: ['ul', 'bullet', 'list', '목록'], icon: List, action: (e) => e.chain().focus().toggleBulletList().run() },
+  { title: '번호 목록', keywords: ['ol', 'number', 'list', '목록'], icon: ListOrdered, action: (e) => e.chain().focus().toggleOrderedList().run() },
+  { title: '체크리스트', keywords: ['todo', 'task', 'check', '체크', '할일'], icon: CheckSquare, action: (e) => e.chain().focus().toggleTaskList().run() },
+  { title: '인용구', keywords: ['quote', 'blockquote', '인용'], icon: Quote, action: (e) => e.chain().focus().toggleBlockquote().run() },
+  { title: '코드 블록', keywords: ['code', '코드'], icon: FileCode, action: (e) => e.chain().focus().toggleCodeBlock().run() },
+  { title: '구분선', keywords: ['hr', 'divider', 'rule', '구분'], icon: Minus, action: (e) => e.chain().focus().setHorizontalRule().run() },
+  { title: '표', keywords: ['table', 'grid', '표'], icon: TableIcon, action: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+];
+
+interface SlashState { from: number; query: string; left: number; top: number; }
+
+/** 커서 앞 텍스트에서 슬래시 명령(`/query`)을 감지. 없으면 null. */
+function detectSlash(ed: Editor): SlashState | null {
+  const sel = ed.state.selection;
+  if (!sel.empty || ed.isActive('codeBlock')) return null;
+  const $from = sel.$from;
+  const textBefore = $from.parent.textBetween(0, $from.parentOffset, '\n', '￼');
+  const m = /(^|\s)\/([^\s/]*)$/.exec(textBefore);
+  if (!m) return null;
+  const query = m[2];
+  const from = sel.from - query.length - 1; // '/' 위치
+  let left = 0, top = 0;
+  try {
+    const c = ed.view.coordsAtPos(sel.from);
+    left = c.left; top = c.bottom;
+  } catch { /* coordsAtPos 실패는 무시 */ }
+  return { from, query, left, top };
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -420,6 +461,11 @@ export function RichTextEditor({
   onImagePaste,
 }: RichTextEditorProps) {
   const isUpdatingFromProp = useRef(false);
+
+  // 슬래시(/) 메뉴 상태 — handleKeyDown 은 생성 시 1회 캡처되므로 ref 로 최신 핸들러를 라우팅.
+  const [slash, setSlash] = useState<SlashState | null>(null);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const slashKeyRef = useRef<((e: KeyboardEvent) => boolean) | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -456,12 +502,19 @@ export function RichTextEditor({
         const html = ed.getHTML();
         onChange(html === '<p></p>' ? '' : html);
       }
+      setSlash(detectSlash(ed));
+      setSlashIndex(0);
+    },
+    onSelectionUpdate: ({ editor: ed }) => {
+      setSlash(detectSlash(ed));
     },
     editorProps: {
       attributes: {
         class: 'focus:outline-none',
         style: `min-height: ${minHeight}; padding: 12px;`,
       },
+      // 슬래시 메뉴 열림 상태에서 방향키/Enter/Esc 가로채기.
+      handleKeyDown: (_view, event) => (slashKeyRef.current ? slashKeyRef.current(event) : false),
     },
   });
 
@@ -489,6 +542,38 @@ export function RichTextEditor({
       else localStorage.removeItem(EDITOR_BG_KEY);
     } catch { /* ignore */ }
   }, []);
+
+  // ── 슬래시 메뉴: 필터/선택/키 핸들러 ──
+  const slashItems = useMemo(() => {
+    if (!slash) return [];
+    const q = slash.query.toLowerCase();
+    if (!q) return SLASH_ITEMS;
+    return SLASH_ITEMS.filter((it) => it.title.toLowerCase().includes(q) || it.keywords.some((k) => k.includes(q)));
+  }, [slash]);
+  const slashItemsRef = useRef(slashItems);
+  slashItemsRef.current = slashItems;
+  const slashRef = useRef(slash);
+  slashRef.current = slash;
+
+  const selectSlash = useCallback((idx: number) => {
+    if (!editor) return;
+    const s = slashRef.current;
+    const item = slashItemsRef.current[idx];
+    if (!s || !item) return;
+    editor.chain().focus().deleteRange({ from: s.from, to: editor.state.selection.from }).run();
+    item.action(editor);
+    setSlash(null);
+  }, [editor]);
+
+  // 렌더마다 최신 상태를 읽는 키 핸들러로 ref 갱신.
+  slashKeyRef.current = (event: KeyboardEvent) => {
+    if (!slash || slashItems.length === 0) return false;
+    if (event.key === 'ArrowDown') { setSlashIndex((i) => (i + 1) % slashItems.length); return true; }
+    if (event.key === 'ArrowUp') { setSlashIndex((i) => (i - 1 + slashItems.length) % slashItems.length); return true; }
+    if (event.key === 'Enter') { selectSlash(Math.min(slashIndex, slashItems.length - 1)); return true; }
+    if (event.key === 'Escape') { setSlash(null); return true; }
+    return false;
+  };
 
   // Image paste handler
   const handlePaste = useCallback(
@@ -532,6 +617,35 @@ export function RichTextEditor({
       >
         <EditorContent editor={editor} />
       </div>
+
+      {/* 슬래시(/) 빠른 삽입 메뉴 */}
+      {slash && slashItems.length > 0 && (
+        <div
+          role="listbox"
+          aria-label="빠른 삽입"
+          className="fixed z-[60] w-52 max-h-64 overflow-y-auto rounded-lg border border-border bg-card shadow-xl py-1"
+          style={{ left: slash.left, top: slash.top + 4 }}
+        >
+          {slashItems.map((it, i) => {
+            const Icon = it.icon;
+            const active = i === Math.min(slashIndex, slashItems.length - 1);
+            return (
+              <button
+                key={it.title}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); selectSlash(i); }}
+                onMouseEnter={() => setSlashIndex(i)}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left transition-colors ${
+                  active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-secondary'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                {it.title}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
