@@ -498,7 +498,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
-                              <span className="text-[10px] font-semibold truncate">{stripHtml(item.content)}</span>
+                              <span className="text-[10px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                             </button>
                           </div>
                         );

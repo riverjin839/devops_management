@@ -65,6 +65,10 @@ class WorkItem(Base):
     parent_id = Column(UUID(as_uuid=True), ForeignKey("work_items.id", ondelete="CASCADE"), nullable=True)
     related_work_item_id = Column(UUID(as_uuid=True), ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True)
 
+    # 등록자(생성자) username — 생성 시 actor 로 기록. 담당자가 아니어도 본인이 만든
+    # work item 은 수정/삭제할 수 있도록 ownership 판정에 사용 (nullable: 구버전 호환).
+    created_by = Column(String(100), nullable=True, index=True)
+
     # G-I2: server_default 추가 — DB 직접 INSERT (마이그레이션 backfill 등) 시에도 NULL 방지.
     # `default=datetime.utcnow` 는 ORM 레벨, `server_default=func.now()` 는 DB 레벨.
     created_at = Column(DateTime, default=datetime.utcnow, server_default=func.now())

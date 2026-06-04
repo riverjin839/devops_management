@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models import Cluster
 from app.models.work_item import WorkItem
 from app.models.user import User
+from app.models.app_setting import AppSetting
 from app.auth.deps import require_operator, get_current_user
 from app.services import audit_logger
 from app.schemas.work_item import (
@@ -29,22 +30,62 @@ router = APIRouter(prefix="/work-items", tags=["work-items"])
 WIP_LIMIT = 2
 
 
-# G-C4: Ownership 검증 헬퍼. admin 은 모두 허용, operator/viewer 는 자기 work item 만.
-# 자기 work item 정의: primary_assignee OR secondary_assignee == user.username.
-def _assert_ownership(item: WorkItem, user: User, *, op: str) -> None:
-    """admin 이 아니고 본인 work item 도 아니면 403."""
+# G-C4: Ownership 검증.
+#
+# ⚠️ 신원 식별자 불일치 (근본 원인):
+#   로그인 username 은 담당자 자동계정의 경우 **사번(employeeId)** 이다
+#   (sync_assignee_accounts: username=사번, display_name=이름). 수동 생성 계정은 임의 username.
+#   그런데 work item 의 담당자 필드(primary/secondary_assignee)에는 담당자 **이름**이 저장된다
+#   (WorkItemForm 이 assignee.name 을 값으로 사용). 즉 신원 키가 필드마다 다르다.
+#
+# 정책(타협 없음): 소유권은 **유일키인 사번(employeeId) 기준으로 무조건 일치**시킨다.
+#   담당자 관리(assignees: [{name, employeeId,...}]) 가 사번↔이름의 1:1 매핑을 보유하므로,
+#   로그인 사용자를 이 레지스트리로 브리지해 사번·이름 양쪽 식별자로 확장한 뒤 매칭한다.
+#   (담당자 이름/사번 고유성은 update_assignees 에서 강제 → 브리지가 모호하지 않음.)
+def _resolve_owner_identities(user: User, db: Session) -> set[str]:
+    """로그인 사용자를 대표하는 모든 식별자 집합 — 사번(employeeId)·이름을 담당자 레지스트리로 브리지."""
+    ids: set[str] = set()
+    if user.username and user.username.strip():
+        ids.add(user.username.strip())
+    if user.display_name and user.display_name.strip():
+        ids.add(user.display_name.strip())
+    try:
+        setting = db.query(AppSetting).filter(AppSetting.key == "assignees").first()
+        registry = setting.value if setting and isinstance(setting.value, list) else []
+    except Exception:  # noqa: BLE001 - 레지스트리 조회 실패가 권한 판정 자체를 깨지 않도록
+        registry = []
+    # 사번 또는 이름 중 하나라도 현재 식별자에 걸리면 같은 담당자의 나머지 키도 본인으로 확장.
+    for a in registry:
+        if not isinstance(a, dict):
+            continue
+        emp = str(a.get("employeeId") or a.get("employee_id") or "").strip()
+        name = str(a.get("name") or "").strip()
+        if (emp and emp in ids) or (name and name in ids):
+            if emp:
+                ids.add(emp)
+            if name:
+                ids.add(name)
+    return ids
+
+
+def _assert_ownership(item: WorkItem, user: User, *, op: str, db: Session) -> None:
+    """admin 이 아니고 (등록자도 담당자 본인도 아니면) 403. 신원은 사번↔이름 브리지로 판정."""
     if user.role == "admin":
         return
-    me = user.username
-    if item.primary_assignee == me or item.secondary_assignee == me:
+    ids = _resolve_owner_identities(user, db)
+    # 본인이 등록한 work item 은 담당자가 아니어도 수정/삭제 허용 (created_by = actor.username).
+    if item.created_by and item.created_by in ids:
+        return
+    # 담당자(이름 저장) 본인 — 사번으로 로그인했어도 브리지된 이름으로 매칭됨.
+    if item.primary_assignee in ids or (item.secondary_assignee and item.secondary_assignee in ids):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "error": "WORK_ITEM_FORBIDDEN",
-            "message": f"본인 담당이 아닌 work item 은 {op} 할 수 없습니다.",
+            "message": f"본인이 등록했거나 담당인 work item 만 {op} 할 수 있습니다.",
             "id": str(item.id),
-            "required": "admin role or self-assignee",
+            "required": "admin role, creator, or self-assignee",
         },
     )
 
@@ -401,6 +442,7 @@ def create_work_item(
         primary_assignee=primary_assignee,
         secondary_assignee=secondary_assignee,
         cluster_name=cluster_name,
+        created_by=actor.username,  # 등록자 기록 — 본인 삭제/수정 권한 판정에 사용
     )
     db.add(item)
     db.commit()
@@ -429,7 +471,7 @@ def update_work_item(
     if not item:
         raise _not_found(item_id)
 
-    _assert_ownership(item, actor, op="수정")  # G-C4
+    _assert_ownership(item, actor, op="수정", db=db)  # G-C4
 
     update_data = payload.model_dump(exclude_unset=True)
     if "primary_assignee" in update_data:
@@ -475,7 +517,7 @@ def patch_status(
     if not item:
         raise _not_found(item_id)
 
-    _assert_ownership(item, actor, op="상태 변경")  # G-C4
+    _assert_ownership(item, actor, op="상태 변경", db=db)  # G-C4
 
     prev_status = item.kanban_status
     wip_warning = False
@@ -515,7 +557,7 @@ def delete_work_item(
     if not item:
         raise _not_found(item_id)
 
-    _assert_ownership(item, actor, op="삭제")  # G-C4
+    _assert_ownership(item, actor, op="삭제", db=db)  # G-C4
 
     # G-C5: audit log — 삭제 직전 메타 캡처 (delete 후엔 못 읽음)
     audit_details = {

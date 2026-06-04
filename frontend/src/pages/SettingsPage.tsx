@@ -373,6 +373,18 @@ export function SettingsPage() {
   // Assignee management state
   const { data: assignees = [] } = useAssignees();
   const updateAssignees = useUpdateAssignees();
+  const toast = useToast();
+
+  // 담당자 저장 실패(예: 이름/사번 중복 400) 를 사용자에게 노출.
+  const showAssigneeError = (err: unknown) => {
+    const resp = (err as { response?: { data?: { detail?: unknown } } })?.response;
+    const detail = resp?.data?.detail;
+    const msg =
+      typeof detail === 'string'
+        ? detail
+        : (detail as { message?: string })?.message ?? '담당자 저장 중 오류가 발생했습니다.';
+    toast.error('담당자 저장 실패', msg);
+  };
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Assignee>({ name: '' });
   const [showAddRow, setShowAddRow] = useState(false);
@@ -386,21 +398,30 @@ export function SettingsPage() {
   const handleSaveAssignee = (idx: number) => {
     if (!editForm.name.trim()) return;
     const updated = assignees.map((a, i) => (i === idx ? { ...editForm, name: editForm.name.trim() } : a));
-    updateAssignees.mutate(updated);
-    setEditingIdx(null);
+    updateAssignees.mutate(updated, {
+      onSuccess: () => { setEditingIdx(null); toast.success('담당자 저장됨'); },
+      onError: showAssigneeError,
+    });
   };
 
   const handleAddAssignee = () => {
     if (!addForm.name.trim()) return;
-    if (assignees.some(a => (a.name || '') === addForm.name.trim())) return;
-    updateAssignees.mutate([...assignees, { ...addForm, name: addForm.name.trim() }]);
-    setAddForm({ name: '' });
-    setShowAddRow(false);
+    // 이름은 고유해야 함 (대소문자/공백 무시). 서버에서도 사번 포함 재검증.
+    if (assignees.some(a => (a.name || '').trim().toLowerCase() === addForm.name.trim().toLowerCase())) {
+      toast.error('중복된 담당자', `"${addForm.name.trim()}" 이름이 이미 있습니다. 담당자 이름과 사번은 고유해야 합니다.`);
+      return;
+    }
+    updateAssignees.mutate([...assignees, { ...addForm, name: addForm.name.trim() }], {
+      onSuccess: () => { setAddForm({ name: '' }); setShowAddRow(false); toast.success('담당자 추가됨'); },
+      onError: showAssigneeError,
+    });
   };
 
   const handleDeleteAssignee = (idx: number) => {
-    updateAssignees.mutate(assignees.filter((_, i) => i !== idx));
-    if (editingIdx === idx) setEditingIdx(null);
+    updateAssignees.mutate(assignees.filter((_, i) => i !== idx), {
+      onSuccess: () => { if (editingIdx === idx) setEditingIdx(null); },
+      onError: showAssigneeError,
+    });
   };
 
   const startEdit = (idx: number) => {
@@ -433,7 +454,6 @@ export function SettingsPage() {
   });
 
   const deleteCluster = useDeleteCluster();
-  const toast = useToast();
 
   const handleDelete = async (cluster: Cluster) => {
     if (

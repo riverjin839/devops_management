@@ -677,7 +677,7 @@ export function CidrCalculatorPage() {
         {/* ── Body grid: Subnet divider + Compare | Apply + Quick ref ───── */}
         <div className="grid grid-cols-1 xl:grid-cols-[1.5fr,1fr] gap-5 items-start">
           {/* LEFT column */}
-          <div className="space-y-5">
+          <div className="space-y-5 min-w-0">
             {/* Subnet divider */}
             {info && (
               <MacCard title="서브넷 분할 (SUBNET DIVIDER)">
@@ -954,7 +954,7 @@ export function CidrCalculatorPage() {
           </div>
 
           {/* RIGHT column */}
-          <div className="space-y-5">
+          <div className="space-y-5 min-w-0">
             {/* Apply to cluster */}
             {info && clusters.length > 0 && (
               <MacCard title="클러스터에 적용 (APPLY)">

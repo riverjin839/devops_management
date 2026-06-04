@@ -71,17 +71,26 @@ export function DoubleScrollX({
     const update = () => {
       const sw = bottom.scrollWidth;
       const cw = bottom.clientWidth;
-      setInnerWidth(sw);
-      setScrollable(sw > cw + 1);
+      const nextScrollable = sw > cw + 1;
+      // 변경 없을 때 setState 를 건너뛰어 ResizeObserver 측정 피드백 루프를 차단.
+      setInnerWidth((prev) => (prev === sw ? prev : sw));
+      setScrollable((prev) => (prev === nextScrollable ? prev : nextScrollable));
     };
     update();
-    const ro = new ResizeObserver(update);
+    // RO 콜백 안에서 동기 레이아웃 변경을 피하려고 rAF 로 한 틱 미룬다
+    // ("ResizeObserver loop ..." 경고 및 무한 측정 방지).
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(update);
+    });
     ro.observe(bottom);
     // 행 추가/삭제 같은 자식 변화도 반영
     const mo = new MutationObserver(update);
     mo.observe(bottom, { childList: true, subtree: true, attributes: true });
     window.addEventListener('resize', update);
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       mo.disconnect();
       window.removeEventListener('resize', update);
