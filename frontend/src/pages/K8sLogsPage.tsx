@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Play, Square, Trash2, ScrollText, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
+import { LogViewTabs } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useQuery } from '@tanstack/react-query';
 import { analyzeApi } from '@/services/api';
@@ -137,10 +138,12 @@ export function K8sLogsPage() {
             <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
               <ArrowLeft className="w-3.5 h-3.5" /> 대시보드
             </Link>
-            <h1 className="text-lg font-semibold flex-1 min-w-[200px] flex items-center gap-2">
+            <h1 className="text-lg font-semibold min-w-[180px] flex items-center gap-2">
               <ScrollText className="w-4 h-4 text-primary" />
-              {cluster ? `${cluster.name} — 파드 로그` : '파드 로그'}
+              {cluster ? `${cluster.name} — 실시간 로그` : '실시간 로그'}
             </h1>
+            <div className="flex-1" />
+            <LogViewTabs current="stream" />
           </div>
 
           <MacCard title="로그 스트림" bodyPadding="p-4">
