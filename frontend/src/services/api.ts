@@ -720,6 +720,7 @@ export interface WorkItemFilters {
   startedTo?: string;
   closed?: boolean;
   allAttendees?: boolean;
+  sprintId?: string;
 }
 
 export const projectsApi = {
@@ -733,6 +734,23 @@ export const projectsApi = {
     api.put<import('@/types').Project>(`/projects/${id}`, data),
   delete: (id: string) =>
     api.delete(`/projects/${id}`),
+};
+
+export const sprintsApi = {
+  getAll: (status?: string) =>
+    api.get<import('@/types').SprintListResponse>('/sprints', { params: status ? { status } : undefined }),
+  getCurrent: () =>
+    api.get<import('@/types').Sprint | null>('/sprints/current'),
+  get: (id: string) =>
+    api.get<import('@/types').Sprint>(`/sprints/${id}`),
+  create: (data: import('@/types').SprintCreate) =>
+    api.post<import('@/types').Sprint>('/sprints', data),
+  update: (id: string, data: import('@/types').SprintUpdate) =>
+    api.put<import('@/types').Sprint>(`/sprints/${id}`, data),
+  carryOver: (id: string, to: string) =>
+    api.post<import('@/types').Sprint>(`/sprints/${id}/carry-over`, undefined, { params: { to } }),
+  delete: (id: string) =>
+    api.delete(`/sprints/${id}`),
 };
 
 export const workItemsApi = {

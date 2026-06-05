@@ -334,6 +334,40 @@ export interface ProjectListResponse {
   total: number;
 }
 
+// ── Sprint (반복/iteration) ────────────────────────────────────────────────
+export type SprintStatus = 'planning' | 'active' | 'completed';
+
+export interface Sprint {
+  id: string;
+  name: string;
+  goal?: string;
+  startDate: string;
+  endDate: string;
+  status: SprintStatus;
+  totalItems: number;
+  doneItems: number;
+  achievementRate: number;
+  totalEffortHours: number;
+  assignees: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SprintCreate {
+  name: string;
+  goal?: string;
+  startDate: string;
+  endDate: string;
+  status?: SprintStatus;
+}
+
+export interface SprintUpdate extends Partial<SprintCreate> {}
+
+export interface SprintListResponse {
+  data: Sprint[];
+  total: number;
+}
+
 // Work Item Board — 업무 통합 모델 (작업/이슈/회의/교육/기타)
 export type WorkItemType = 'task' | 'issue' | 'meeting' | 'training' | 'etc';
 export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
@@ -354,6 +388,8 @@ export interface WorkItem {
   clusterNames?: string[];
   /** 소속 프로젝트 ID (nullable). */
   projectId?: string;
+  /** 소속 스프린트 ID (nullable). */
+  sprintId?: string;
   /** 짧은 제목 (선택). 미설정 시 content 텍스트를 제목으로 표시. */
   title?: string;
   /** 분류/도메인 라벨. issue 의 issue_area / task 의 task_category 통합. */
@@ -445,6 +481,7 @@ export interface WorkItemCreate {
   clusterIds?: string[];
   customValues?: Record<string, unknown> | null;
   projectId?: string;
+  sprintId?: string | null;
   title?: string;
   category: string;
   content: string;

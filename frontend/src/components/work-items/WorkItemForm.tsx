@@ -16,6 +16,7 @@ import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useProjects } from '@/hooks/useProjects';
+import { useSprints } from '@/hooks/useSprints';
 
 const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
@@ -117,6 +118,10 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [projectId, setProjectId] = useState(initial?.projectId ?? '');
   const { data: projectsData } = useProjects();
   const projects = projectsData?.data ?? [];
+
+  const [sprintId, setSprintId] = useState(initial?.sprintId ?? '');
+  const { data: sprintsData } = useSprints();
+  const sprints = sprintsData?.data ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
   const [primaryAssignee, setPrimaryAssignee] = useState('');
   const [secondaryList, setSecondaryList] = useState<string[]>([]);
@@ -176,6 +181,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
     if (isEdit && initial) {
       setProjectId(initial.projectId ?? '');
+      setSprintId(initial.sprintId ?? '');
       setTitle(initial.title ?? '');
       setType(initial.type);
       setPrimaryAssignee(initial.primaryAssignee ?? initial.assignee);
@@ -281,6 +287,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       clusterName: primaryCluster?.name,
       clusterIds: clusterIds.length ? clusterIds : undefined,
       projectId: projectId || undefined,
+      sprintId: sprintId || null,
       title: title.trim() || undefined,
       category: resolvedCategory,
       content,
@@ -572,6 +579,24 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               <option value="">미분류</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {sprints.length > 0 && (
+          <div>
+            <label htmlFor={f('sprint')} className={labelClass}>스프린트</label>
+            <select
+              id={f('sprint')}
+              value={sprintId}
+              onChange={(e) => setSprintId(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">미배정</option>
+              {sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.status === 'active' ? ' (진행중)' : ''}
+                </option>
               ))}
             </select>
           </div>

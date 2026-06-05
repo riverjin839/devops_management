@@ -23,6 +23,7 @@ from app.routers import (
     promql_router,
     work_items_router,
     projects_router,
+    sprints_router,
     ui_settings_router,
     workflows_router,
     work_guide_router,
@@ -517,6 +518,9 @@ def _run_migrations():
         _safe_add_column("work_items", "custom_values", "JSONB")
         # 전체 참석(회의 등)
         _safe_add_column("work_items", "all_attendees", "BOOLEAN NOT NULL DEFAULT FALSE")
+        # 스프린트(반복) 소속 — sprints 테이블은 create_all 로 생성됨.
+        _safe_add_column("work_items", "sprint_id", "UUID")
+        _safe_create_index("ix_work_items_sprint_id", "work_items", "(sprint_id)")
         # 등록자(생성자) — 본인이 등록한 work item 을 (담당자가 아니어도) 수정/삭제할 수 있도록.
         _safe_add_column("work_items", "created_by", "VARCHAR(100)")
         _safe_exec(
@@ -1215,6 +1219,7 @@ app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(openclaw_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(sprints_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
