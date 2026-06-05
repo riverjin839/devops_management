@@ -13,6 +13,7 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
+import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useProjects } from '@/hooks/useProjects';
 
@@ -145,6 +146,11 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [effortHours, setEffortHours] = useState('');
   const [doneCondition, setDoneCondition] = useState('');
   const [relatedWorkItemId, setIssueId] = useState('');
+  const [customValues, setCustomValues] = useState<Record<string, unknown>>(initial?.customValues ?? {});
+  const { data: cfRaw } = useWorkItemCustomFields();
+  const customFields = sortedWorkItemFields(cfRaw);
+  const setCustomVal = (key: string, val: unknown) =>
+    setCustomValues((p) => ({ ...p, [key]: val }));
   const [hydrated, setHydrated] = useState(!isEdit && !parentItem);
 
   const { data: issueData } = useWorkItems();
@@ -196,6 +202,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setEffortHours(initial.effortHours ? String(initial.effortHours) : '');
       setDoneCondition(initial.doneCondition ?? '');
       setIssueId(initial.relatedWorkItemId ?? '');
+      setCustomValues(initial.customValues ?? {});
       setService(initial.service ?? '');
       // Phase B — initial.component 가 COMPONENT_BY_SERVICE 의 추천 옵션이면 그대로,
       // 그렇지 않으면 '__custom__' 모드로 진입 + componentCustom 채움.
@@ -289,6 +296,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       doneCondition: doneCondition.trim() || undefined,
       parentId: parentItem?.id,
       relatedWorkItemId: relatedWorkItemId || undefined,
+      customValues: customFields.length ? customValues : undefined,
       service: service.trim() || undefined,
       // Phase B — service 가 있을 때만 component 가 의미. '__custom__' 모드면 input 값을,
       // 추천 옵션 선택이면 그 값을 그대로 전송. service 가 없으면 component 강제 null.
@@ -673,6 +681,46 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           />
         </div>
       </details>
+
+      {/* ── 사용자 정의 필드 ─────────────────────────────────────────────── */}
+      {customFields.length > 0 && (
+        <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm" open>
+          <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
+            <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            <span>사용자 정의 필드</span>
+          </summary>
+          <div className="px-3 pb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {customFields.map((cf) => {
+              const v = customValues[cf.key];
+              return (
+                <div key={cf.id}>
+                  <label className={labelClass} title={cf.description ?? undefined}>{cf.label}</label>
+                  {cf.dataType === 'checkbox' ? (
+                    <label className="flex items-center gap-2 text-xs h-7">
+                      <input type="checkbox" checked={!!v}
+                        onChange={(e) => setCustomVal(cf.key, e.target.checked)} className="accent-primary" />
+                      <span className="text-muted-foreground">{v ? '예' : '아니오'}</span>
+                    </label>
+                  ) : cf.dataType === 'select' ? (
+                    <select value={v == null ? '' : String(v)}
+                      onChange={(e) => setCustomVal(cf.key, e.target.value || undefined)} className={inputClass}>
+                      <option value="">—</option>
+                      {(cf.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type={cf.dataType === 'number' ? 'number' : cf.dataType === 'date' ? 'date' : 'text'}
+                      value={v == null ? '' : String(v)}
+                      onChange={(e) => setCustomVal(cf.key, e.target.value || undefined)}
+                      className={inputClass}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      )}
 
       {/* ── 추가 옵션 — 접이식 (칸반/모듈/유형/이슈연결/Confluence/비고) ─── */}
       <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">

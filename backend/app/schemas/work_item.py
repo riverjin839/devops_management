@@ -56,6 +56,7 @@ class WorkItemBase(BaseModel):
     done_condition: Optional[str] = None
     parent_id: Optional[UUID] = None
     related_work_item_id: Optional[UUID] = None
+    custom_values: Optional[dict] = None
 
 
 class WorkItemCreate(WorkItemBase):
@@ -89,6 +90,7 @@ class WorkItemUpdate(BaseModel):
     effort_hours: Optional[int] = Field(None, ge=1, le=999)
     done_condition: Optional[str] = None
     related_work_item_id: Optional[UUID] = None
+    custom_values: Optional[dict] = None
 
 
 class WorkItemCommentCreate(BaseModel):

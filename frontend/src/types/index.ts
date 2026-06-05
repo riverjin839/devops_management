@@ -82,6 +82,28 @@ export interface ClusterCustomFieldCreate {
 
 export type ClusterCustomFieldUpdate = Partial<Omit<ClusterCustomFieldCreate, 'key'>>;
 
+export type WorkItemCustomFieldType = 'text' | 'number' | 'date' | 'checkbox' | 'select';
+export interface WorkItemCustomField {
+  id: string;
+  key: string;
+  label: string;
+  dataType: WorkItemCustomFieldType;
+  options?: string[] | null;
+  description?: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface WorkItemCustomFieldCreate {
+  key: string;
+  label: string;
+  dataType?: WorkItemCustomFieldType;
+  options?: string[];
+  description?: string;
+  sortOrder?: number;
+}
+export type WorkItemCustomFieldUpdate = Partial<Omit<WorkItemCustomFieldCreate, 'key'>>;
+
 export interface ClusterCustomValuesUpdate {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   values: Record<string, any>;
@@ -366,6 +388,8 @@ export interface WorkItem {
   subtasks?: WorkItem[];
   /** 등록자(생성자) username — 담당자가 아니어도 본인이 등록한 항목은 수정/삭제 가능. 구버전 데이터는 null. */
   createdBy?: string;
+  /** 사용자 정의 필드 값 {fieldKey: value} */
+  customValues?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -417,6 +441,7 @@ export interface WorkItemCreate {
   clusterId?: string;
   clusterName?: string;
   clusterIds?: string[];
+  customValues?: Record<string, unknown> | null;
   projectId?: string;
   title?: string;
   category: string;

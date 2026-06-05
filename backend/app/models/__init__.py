@@ -8,6 +8,7 @@ from app.models.metric_card import MetricCard
 from app.models.work_item import WorkItem
 from app.models.work_item_comment import WorkItemComment
 from app.models.user_notification import UserNotification
+from app.models.work_item_custom_field import WorkItemCustomField
 from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
@@ -52,6 +53,7 @@ __all__ = [
     "WorkItem",
     "WorkItemComment",
     "UserNotification",
+    "WorkItemCustomField",
     "AppSetting",
     "Workflow",
     "WorkflowStep",
