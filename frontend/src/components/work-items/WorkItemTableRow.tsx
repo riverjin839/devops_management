@@ -184,6 +184,8 @@ interface WorkItemTableRowProps {
   columns: WorkItemColumnKey[];
   /** projectId → 프로젝트명 매핑 (읽기전용 표시용). */
   projectNameById: Map<string, string>;
+  /** sprintId → 스프린트명 매핑 (읽기전용 표시용). */
+  sprintNameById?: Map<string, string>;
   isDragDisabled: boolean;
   onEdit: (item: WorkItem) => void;
   onDelete: (item: WorkItem) => void;
@@ -192,7 +194,7 @@ interface WorkItemTableRowProps {
   onOpenDetail: (item: WorkItem) => void;
 }
 
-export function WorkItemTableRow({ item, clusters, columns, projectNameById, isDragDisabled, onEdit, onDelete, onAddSubItem, onOpenDetail }: WorkItemTableRowProps) {
+export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, onEdit, onDelete, onAddSubItem, onOpenDetail }: WorkItemTableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -220,6 +222,15 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, isD
           <td key="project" className="px-4 py-3 text-muted-foreground whitespace-nowrap">
             {item.projectId
               ? (projectNameById.get(item.projectId) ?? '-')
+              : <span className="text-muted-foreground/50">-</span>}
+          </td>
+        );
+
+      case 'sprint':
+        return (
+          <td key="sprint" className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+            {item.sprintId
+              ? (sprintNameById?.get(item.sprintId) ?? '-')
               : <span className="text-muted-foreground/50">-</span>}
           </td>
         );

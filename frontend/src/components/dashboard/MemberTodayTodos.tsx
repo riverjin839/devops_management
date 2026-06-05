@@ -54,22 +54,25 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
         !selectedClusterId || t.clusterId === selectedClusterId;
       return {
         ...g,
+        overdueTasks: (g.overdueTasks ?? []).filter(filterByCluster),
         todayTasks: g.todayTasks.filter(filterByCluster),
         inProgressTasks: g.inProgressTasks.filter(filterByCluster),
       };
     })
-    .filter((g) => g.todayTasks.length + g.inProgressTasks.length > 0);
+    // 지연(overdue) 만 있는 담당자도 노출 — 주간 슬라이더와 일치시키기 위해 overdue 도 카운트.
+    .filter((g) => g.overdueTasks.length + g.todayTasks.length + g.inProgressTasks.length > 0);
 
   const totals = groups.reduce(
     (acc, g) => {
+      acc.overdue += g.overdueTasks.length;
       acc.today += g.todayTasks.length;
       acc.inProgress += g.inProgressTasks.length;
-      const all = [...g.todayTasks, ...g.inProgressTasks];
+      const all = [...g.overdueTasks, ...g.todayTasks, ...g.inProgressTasks];
       acc.done += all.filter((t) => t.kanbanStatus === 'done').length;
       acc.total += all.length;
       return acc;
     },
-    { today: 0, inProgress: 0, done: 0, total: 0 },
+    { overdue: 0, today: 0, inProgress: 0, done: 0, total: 0 },
   );
   const overall = totals.total > 0 ? Math.round((totals.done / totals.total) * 100) : 0;
 
@@ -113,6 +116,9 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
         </div>
 
         <div className="flex items-center gap-3 text-[11px]">
+          {totals.overdue > 0 && (
+            <span className="text-red-500 dark:text-red-400">지연 {totals.overdue}</span>
+          )}
           <span className="text-blue-500 dark:text-blue-400">예정 {totals.today}</span>
           <span className="text-amber-500 dark:text-amber-400">진행 {totals.inProgress}</span>
           <span className="text-emerald-500 dark:text-emerald-400">완료 {totals.done}</span>

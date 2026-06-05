@@ -18,6 +18,7 @@ import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/co
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useProjects } from '@/hooks/useProjects';
+import { useSprints } from '@/hooks/useSprints';
 import { useClusterStore } from '@/stores/clusterStore';
 import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
@@ -96,6 +97,7 @@ export function WorkItemBoardPage() {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [filterModule, setFilterModule] = useState<WorkItemModule | ''>('');
+  const [filterSprintId, setFilterSprintId] = useState('');
   const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -123,6 +125,14 @@ export function WorkItemBoardPage() {
     [projectsQuery.data],
   );
 
+  // 스프린트 — 필터 드롭다운 + 읽기전용 컬럼(sprintId → name) 매핑.
+  const sprintsQuery = useSprints();
+  const sprintList = useMemo(() => sprintsQuery.data?.data ?? [], [sprintsQuery.data]);
+  const sprintNameById = useMemo(
+    () => new Map(sprintList.map((s) => [s.id, s.name])),
+    [sprintList],
+  );
+
   const filters = {
     type: typeFilter === 'all' ? undefined : typeFilter,
     clusterId: filterClusterId || undefined,
@@ -130,6 +140,7 @@ export function WorkItemBoardPage() {
     category: filterCategory || undefined,
     priority: filterPriority || undefined,
     module: filterModule || undefined,
+    sprintId: filterSprintId || undefined,
     startedFrom: filterFrom || undefined,
     startedTo: filterTo || undefined,
   };
@@ -249,16 +260,17 @@ export function WorkItemBoardPage() {
     setFilterCategory('');
     setFilterPriority('');
     setFilterModule('');
+    setFilterSprintId('');
     setFilterFrom('');
     setFilterTo('');
   };
 
-  const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterFrom || filterTo;
+  const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterSprintId || filterFrom || filterTo;
 
   // 저장된 뷰 — 현재 필터/정렬/보기 스냅샷 + 적용.
   const currentView: SavedViewState = {
     typeFilter, filterClusterId, filterAssignee, filterCategory, filterPriority,
-    filterModule, filterFrom, filterTo, sortKey, sortDir, viewMode,
+    filterModule, filterSprintId, filterFrom, filterTo, sortKey, sortDir, viewMode,
   };
   const applyView = (s: SavedViewState) => {
     setTypeFilter((s.typeFilter as WorkItemType | 'all') || 'all');
@@ -267,6 +279,7 @@ export function WorkItemBoardPage() {
     setFilterCategory(s.filterCategory || '');
     setFilterPriority(s.filterPriority || '');
     setFilterModule((s.filterModule as WorkItemModule | '') || '');
+    setFilterSprintId(s.filterSprintId || '');
     setFilterFrom(s.filterFrom || '');
     setFilterTo(s.filterTo || '');
     setSortKey((s.sortKey as WorkItemSortKey | '') || '');
@@ -423,6 +436,19 @@ export function WorkItemBoardPage() {
                 <option key={key} value={key}>{cfg.label}</option>
               ))}
             </select>
+            {sprintList.length > 0 && (
+              <select
+                value={filterSprintId}
+                onChange={(e) => setFilterSprintId(e.target.value)}
+                aria-label="스프린트 필터"
+                className="px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+              >
+                <option value="">전체 스프린트</option>
+                {sprintList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}{s.status === 'active' ? ' (진행중)' : ''}</option>
+                ))}
+              </select>
+            )}
             <input
               type="date"
               value={filterFrom}
@@ -581,6 +607,7 @@ export function WorkItemBoardPage() {
                       clusters={clusters}
                       columns={visibleCols}
                       projectNameById={projectNameById}
+                      sprintNameById={sprintNameById}
                       isDragDisabled={!!sortKey}
                       onEdit={handleEdit}
                       onDelete={handleDelete}

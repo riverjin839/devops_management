@@ -37,6 +37,7 @@ from app.models.lake_service_type import LakeServiceType
 from app.models.bottleneck_run import BottleneckRun
 from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
 from app.models.os_param_change import OsParamChange
+from app.models.sprint import Sprint
 
 __all__ = [
     "Cluster",
@@ -88,4 +89,5 @@ __all__ = [
     "OpsCheckRun",
     "OpsCheckRunItem",
     "OsParamChange",
+    "Sprint",
 ]

@@ -29,6 +29,8 @@ class WorkItemBase(BaseModel):
 
     # 프로젝트 소속 (nullable)
     project_id: Optional[UUID] = None
+    # 스프린트(반복) 소속 (nullable)
+    sprint_id: Optional[UUID] = None
 
     # 공통 의미
     title: Optional[str] = Field(None, max_length=200)
@@ -73,6 +75,7 @@ class WorkItemUpdate(BaseModel):
     cluster_name: Optional[str] = Field(None, max_length=100)
     cluster_ids: Optional[list[UUID]] = None
     project_id: Optional[UUID] = None
+    sprint_id: Optional[UUID] = None
     title: Optional[str] = Field(None, max_length=200)
     category: Optional[str] = Field(None, min_length=1, max_length=100)
     content: Optional[str] = Field(None, min_length=1)

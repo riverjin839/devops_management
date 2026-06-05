@@ -4,6 +4,7 @@
 
 export type WorkItemColumnKey =
   | 'project'
+  | 'sprint'
   | 'status'
   | 'assignee'
   | 'category'
@@ -41,6 +42,7 @@ export interface WorkItemColumnMeta {
 
 export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = {
   project:   { label: '프로젝트명',    defaultWidth: 150, defaultVisible: true,  hideable: true },
+  sprint:    { label: '스프린트',      defaultWidth: 140, defaultVisible: false, hideable: true },
   status:    { label: '상태',          defaultWidth: 110, defaultVisible: true,  hideable: true, sortKey: 'kanbanStatus' },
   assignee:  { label: '담당자(정/부)', defaultWidth: 200, defaultVisible: true,  hideable: true, sortKey: 'assignee' },
   category:  { label: '업무 분류',     defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'category' },
@@ -58,7 +60,7 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
 /** 기본 컬럼 순서 (사용자 요청: 프로젝트명·상태·담당자·작업분류·제목·시작일·완료일·작업,
  *  이후 기본 숨김 컬럼). 행 드래그 핸들(`drag`)은 개인화 대상이 아니라 항상 선두 고정이므로 제외. */
 export const DEFAULT_COLUMN_ORDER: WorkItemColumnKey[] = [
-  'project', 'status', 'assignee', 'category', 'title', 'startedAt', 'closedAt', 'actions',
+  'project', 'sprint', 'status', 'assignee', 'category', 'title', 'startedAt', 'closedAt', 'actions',
   'priority', 'cluster', 'content', 'result', 'remarks',
 ];
 
