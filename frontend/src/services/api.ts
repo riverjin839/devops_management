@@ -779,6 +779,7 @@ export interface TodayTaskGroup {
   assignee: string;
   todayTasks: WorkItem[];
   inProgressTasks: WorkItem[];
+  overdueTasks?: WorkItem[];
 }
 
 export interface TodayTasksSummary {

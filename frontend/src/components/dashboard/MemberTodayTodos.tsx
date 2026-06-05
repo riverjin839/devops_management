@@ -137,7 +137,8 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
       ) : (
         <div className="space-y-2 pr-1">
           {groups.map((g) => {
-            const all = [...g.todayTasks, ...g.inProgressTasks];
+            const overdue = g.overdueTasks ?? [];
+            const all = [...overdue, ...g.todayTasks, ...g.inProgressTasks];
             const done = all.filter((t) => t.kanbanStatus === 'done').length;
             const total = all.length;
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -155,6 +156,12 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                   <span className="text-xs font-semibold truncate flex-1 min-w-0">{g.assignee}</span>
                   <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums">{done}/{total} · {pct}%</span>
                   <div className="hidden sm:flex items-center gap-1.5 text-[10px] flex-shrink-0">
+                    {overdue.length > 0 && (
+                      <span className="inline-flex items-center gap-0.5 text-red-500" title="지연">
+                        <ShieldAlert className="w-2.5 h-2.5" />
+                        {overdue.length}
+                      </span>
+                    )}
                     {g.todayTasks.length > 0 && (
                       <span className="inline-flex items-center gap-0.5 text-blue-500">
                         <CircleDashed className="w-2.5 h-2.5" />

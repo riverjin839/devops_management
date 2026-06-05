@@ -373,6 +373,17 @@ def get_today_summary(
         .all()
     )
 
+    # 지연(overdue) — 기준일 이전 예정 + 미완료 + (진행중은 위 버킷에 포함되므로 제외).
+    overdue_items = (
+        db.query(WorkItem)
+        .filter(
+            WorkItem.started_at < today_start,
+            WorkItem.kanban_status.notin_(["done", "in_progress"]),
+        )
+        .order_by(WorkItem.primary_assignee, priority_order)
+        .all()
+    )
+
     assignee_map: dict[str, dict] = {}
 
     def add_to_groups(item: WorkItem, bucket_key: str) -> None:
@@ -388,7 +399,7 @@ def get_today_summary(
             names.append("미지정")
         for name in names:
             assignee_map.setdefault(
-                name, {"assignee": name, "today_tasks": [], "in_progress_tasks": []}
+                name, {"assignee": name, "today_tasks": [], "in_progress_tasks": [], "overdue_tasks": []}
             )
             assignee_map[name][bucket_key].append(item)
 
@@ -396,6 +407,8 @@ def get_today_summary(
         add_to_groups(it, "today_tasks")
     for it in in_progress_items:
         add_to_groups(it, "in_progress_tasks")
+    for it in overdue_items:
+        add_to_groups(it, "overdue_tasks")
 
     def serialize(w: WorkItem) -> dict:
         return {
@@ -432,11 +445,13 @@ def get_today_summary(
             "assignee": g["assignee"],
             "today_tasks": [serialize(t) for t in g["today_tasks"]],
             "in_progress_tasks": [serialize(t) for t in g["in_progress_tasks"]],
+            "overdue_tasks": [serialize(t) for t in g["overdue_tasks"]],
         })
     return {
         "date": today_start.strftime("%Y-%m-%d"),
         "total_today": len(today_items),
         "total_in_progress": len(in_progress_items),
+        "total_overdue": len(overdue_items),
         "groups": result,
     }
 
