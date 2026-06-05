@@ -60,6 +60,11 @@ function SprintModal({
   const invalidRange = daysBetween(form.startDate, form.endDate) < 0;
   const canSubmit = form.name.trim().length > 0 && !invalidRange && !busy;
 
+  // 기간 프리셋 — 1~4주 빠른 설정. (종료일 포함이므로 N주 = 시작일 + 7N-1 일)
+  const durationDays = daysBetween(form.startDate, form.endDate) + 1;
+  const activeWeeks = durationDays > 0 && durationDays % 7 === 0 ? durationDays / 7 : null;
+  const setWeeks = (n: number) => setForm((f) => ({ ...f, endDate: addDaysStr(f.startDate, n * 7 - 1) }));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -88,6 +93,24 @@ function SprintModal({
               className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 resize-none"
               placeholder="이번 반복에서 이루려는 것"
             />
+          </div>
+          <div>
+            <span className="block text-xs font-medium text-muted-foreground mb-1">기간</span>
+            <div className="flex items-center gap-1.5">
+              {[1, 2, 3, 4].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setWeeks(n)}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${activeWeeks === n ? 'bg-primary/10 text-primary border-primary/30' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'}`}
+                >
+                  {n}주
+                </button>
+              ))}
+              <span className="text-[11px] text-muted-foreground ml-1">
+                {activeWeeks ? `${activeWeeks}주` : `${durationDays > 0 ? durationDays : 0}일`} · 종료일 직접 지정 가능
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -388,7 +411,7 @@ export function SprintsPage() {
             <Rocket className="w-12 h-12 opacity-30 text-primary" />
             <div className="text-center">
               <p className="text-base font-medium text-foreground">아직 스프린트가 없습니다</p>
-              <p className="text-sm mt-1 opacity-70">2주 단위 반복으로 팀의 업무를 묶어 추적해보세요.</p>
+              <p className="text-sm mt-1 opacity-70">1~4주 등 원하는 기간의 반복으로 팀의 업무를 묶어 추적해보세요.</p>
             </div>
             <button
               onClick={() => setModal({ mode: 'create' })}
