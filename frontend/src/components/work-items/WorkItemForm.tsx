@@ -147,6 +147,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [doneCondition, setDoneCondition] = useState('');
   const [relatedWorkItemId, setIssueId] = useState('');
   const [customValues, setCustomValues] = useState<Record<string, unknown>>(initial?.customValues ?? {});
+  const [allAttendees, setAllAttendees] = useState<boolean>(initial?.allAttendees ?? false);
   const { data: cfRaw } = useWorkItemCustomFields();
   const customFields = sortedWorkItemFields(cfRaw);
   const setCustomVal = (key: string, val: unknown) =>
@@ -203,6 +204,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setDoneCondition(initial.doneCondition ?? '');
       setIssueId(initial.relatedWorkItemId ?? '');
       setCustomValues(initial.customValues ?? {});
+      setAllAttendees(initial.allAttendees ?? false);
       setService(initial.service ?? '');
       // Phase B — initial.component 가 COMPONENT_BY_SERVICE 의 추천 옵션이면 그대로,
       // 그렇지 않으면 '__custom__' 모드로 진입 + componentCustom 채움.
@@ -297,6 +299,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       parentId: parentItem?.id,
       relatedWorkItemId: relatedWorkItemId || undefined,
       customValues: customFields.length ? customValues : undefined,
+      allAttendees,
       service: service.trim() || undefined,
       // Phase B — service 가 있을 때만 component 가 의미. '__custom__' 모드면 input 값을,
       // 추천 옵션 선택이면 그 값을 그대로 전송. service 가 없으면 component 강제 null.
@@ -380,6 +383,18 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               className="flex-1 min-w-[64px] bg-transparent text-xs outline-none"
             />
           </div>
+          <label className="mt-2 flex items-center gap-2 text-xs cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allAttendees}
+              onChange={(e) => setAllAttendees(e.target.checked)}
+              className="accent-primary"
+            />
+            <span className="font-medium">전체 참석</span>
+            <span className="text-muted-foreground/70">
+              회의 등 모든 구성원이 참석 — 체크 시 전원의 개인 일정(Work To Do)에 표시됩니다.
+            </span>
+          </label>
         </div>
         <div>
           <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터 (다중)</label>

@@ -390,6 +390,8 @@ export interface WorkItem {
   createdBy?: string;
   /** 사용자 정의 필드 값 {fieldKey: value} */
   customValues?: Record<string, unknown> | null;
+  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  allAttendees?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -462,6 +464,8 @@ export interface WorkItemCreate {
   doneCondition?: string;
   parentId?: string;
   relatedWorkItemId?: string;
+  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  allAttendees?: boolean;
 }
 
 export interface WorkItemUpdate extends Partial<Omit<WorkItemCreate, 'type'>> {}

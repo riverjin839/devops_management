@@ -197,17 +197,23 @@ export function TodoTodayPage() {
   const { data, isLoading, isError, refetch, isFetching } = useWorkItems(
     myName ? { assignee: myName } : undefined,
   );
+  // 전체 참석(회의 등) — 담당자가 아니어도 모두의 일정에 포함.
+  const { data: allAttendData } = useWorkItems({ allAttendees: true });
   const patchStatus = usePatchWorkItemStatus();
 
-  // 정확히 "내" 업무만 (담당자 정/부/legacy 중 내 이름).
+  // 정확히 "내" 업무만 (담당자 정/부/legacy 중 내 이름) + 전체 참석 항목.
   const mine = useMemo(() => {
-    const items = data?.data ?? [];
     if (!myName) return [];
-    return items.filter((t) => {
+    const items = data?.data ?? [];
+    const mineItems = items.filter((t) => {
       const names = [t.assignee, t.primaryAssignee, ...(t.secondaryAssignee?.split(',').map((s) => s.trim()) ?? [])];
       return names.includes(myName);
     });
-  }, [data, myName]);
+    // 전체 참석 항목 merge (id 중복 제거).
+    const seen = new Set(mineItems.map((t) => t.id));
+    const allAttend = (allAttendData?.data ?? []).filter((t) => !seen.has(t.id));
+    return [...mineItems, ...allAttend];
+  }, [data, allAttendData, myName]);
 
   const today = todayStr();
   // 일정(시간표) 뷰 — 선택한 날짜의 내 일정만, 시간순.

@@ -515,6 +515,8 @@ def _run_migrations():
         _safe_add_column("work_items", "cluster_names", "JSONB")
         # 사용자 정의 필드 값
         _safe_add_column("work_items", "custom_values", "JSONB")
+        # 전체 참석(회의 등)
+        _safe_add_column("work_items", "all_attendees", "BOOLEAN NOT NULL DEFAULT FALSE")
         # 등록자(생성자) — 본인이 등록한 work item 을 (담당자가 아니어도) 수정/삭제할 수 있도록.
         _safe_add_column("work_items", "created_by", "VARCHAR(100)")
         _safe_exec(
