@@ -136,9 +136,12 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
                    assignee: Optional[str], category: Optional[str],
                    priority: Optional[str], kanban_status: Optional[str],
                    module: Optional[str], started_from: Optional[date],
-                   started_to: Optional[date], closed: Optional[bool]):
+                   started_to: Optional[date], closed: Optional[bool],
+                   all_attendees: Optional[bool] = None):
     if type_:
         query = query.filter(WorkItem.type == type_)
+    if all_attendees is True:
+        query = query.filter(WorkItem.all_attendees.is_(True))
     if cluster_id:
         # 단일 대표(cluster_id) 또는 다중 목록(cluster_ids) 어느 쪽에 속해도 매칭.
         query = query.filter(or_(
@@ -185,6 +188,7 @@ def list_work_items(
     started_from: date | None = Query(default=None, description="started_at 시작 (포함)"),
     started_to: date | None = Query(default=None, description="started_at 종료 (포함)"),
     closed: bool | None = Query(default=None, description="true=closed 만, false=open 만, 미지정=전체"),
+    all_attendees: bool | None = Query(default=None, description="true=전체 참석 항목만"),
     # G-C2: 페이지네이션 — 클라이언트가 명시적으로 limit 지정. 기본 100, 최대 500.
     offset: int = Query(default=0, ge=0, description="페이지네이션 offset (0 부터)"),
     limit: int = Query(default=100, ge=1, le=500, description="페이지네이션 limit (1~500, 기본 100)"),
@@ -202,6 +206,7 @@ def list_work_items(
         query, type_=type, cluster_id=cluster_id, assignee=assignee, category=category,
         priority=priority, kanban_status=kanban_status, module=module,
         started_from=started_from, started_to=started_to, closed=closed,
+        all_attendees=all_attendees,
     )
     # G-C2: 진짜 COUNT 쿼리 (limit 이전) + offset/limit 적용.
     total = query.count()

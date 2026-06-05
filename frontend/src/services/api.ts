@@ -719,6 +719,7 @@ export interface WorkItemFilters {
   startedFrom?: string;
   startedTo?: string;
   closed?: boolean;
+  allAttendees?: boolean;
 }
 
 export const projectsApi = {

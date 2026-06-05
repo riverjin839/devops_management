@@ -57,6 +57,7 @@ class WorkItemBase(BaseModel):
     parent_id: Optional[UUID] = None
     related_work_item_id: Optional[UUID] = None
     custom_values: Optional[dict] = None
+    all_attendees: bool = False
 
 
 class WorkItemCreate(WorkItemBase):
@@ -91,6 +92,7 @@ class WorkItemUpdate(BaseModel):
     done_condition: Optional[str] = None
     related_work_item_id: Optional[UUID] = None
     custom_values: Optional[dict] = None
+    all_attendees: Optional[bool] = None
 
 
 class WorkItemCommentCreate(BaseModel):
