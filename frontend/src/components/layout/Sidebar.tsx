@@ -34,7 +34,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
-  '/todo-today':         { defaultLabel: '나의 할일',      icon: CalendarCheck2 },
+  '/todo-today':         { defaultLabel: 'Work To Do',     icon: CalendarCheck2 },
   '/work-summary':       { defaultLabel: '업무 현황',      icon: BarChart3 },
   '/members':            { defaultLabel: '멤버별 업무',    icon: Users },
   '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },

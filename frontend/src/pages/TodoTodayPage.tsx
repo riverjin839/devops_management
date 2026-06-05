@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarCheck2, Clock, CheckCircle2, Circle, AlertTriangle,
   Plus, RefreshCw, ArrowRight, LayoutGrid, List as ListIcon,
-  Server, Loader2, ChevronRight,
+  Server, Loader2, ChevronRight, ChevronLeft, CalendarClock, CalendarDays,
 } from 'lucide-react';
 import { useWorkItems, usePatchWorkItemStatus } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
@@ -28,6 +28,25 @@ function fmtDue(t: WorkItem): string {
   const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   return hm === '00:00' ? md : `${md} ${hm}`;
 }
+function timeLabel(t: WorkItem): string {
+  const s = t.startedAt;
+  if (!s) return '종일';
+  const d = new Date(s.endsWith('Z') ? s : s + 'Z');
+  if (isNaN(d.getTime())) return '종일';
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return hm === '00:00' ? '종일' : hm;
+}
+function addDaysStr(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function fmtDateLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return dateStr;
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
 function clusterLabel(t: WorkItem): string | null {
   if (t.clusterNames && t.clusterNames.length) return t.clusterNames.join(', ');
   return t.clusterName || null;
@@ -47,7 +66,7 @@ const STATUS_META: Record<KanbanStatus, { label: string; cls: string }> = {
   done:        { label: '완료',       cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
 };
 
-type ViewMode = 'card' | 'list';
+type ViewMode = 'schedule' | 'card' | 'list';
 type BucketTone = 'overdue' | 'today' | 'upcoming' | 'done';
 const TONE: Record<BucketTone, { ring: string; text: string; dot: string }> = {
   overdue:  { ring: 'border-red-500/30',    text: 'text-red-500',     dot: 'bg-red-500' },
@@ -171,7 +190,8 @@ export function TodoTodayPage() {
   const user = useAuthStore((s) => s.user);
   const myName = (user?.displayName?.trim() || user?.username || '').trim();
 
-  const [view, setView] = useState<ViewMode>('card');
+  const [view, setView] = useState<ViewMode>('schedule');
+  const [scheduleDate, setScheduleDate] = useState<string>(todayStr());
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch, isFetching } = useWorkItems(
@@ -190,6 +210,13 @@ export function TodoTodayPage() {
   }, [data, myName]);
 
   const today = todayStr();
+  // 일정(시간표) 뷰 — 선택한 날짜의 내 일정만, 시간순.
+  const daySchedule = useMemo(
+    () => mine
+      .filter((t) => dateOf(t) === scheduleDate)
+      .sort((a, b) => (a.startedAt ?? '').localeCompare(b.startedAt ?? '')),
+    [mine, scheduleDate],
+  );
   const buckets = useMemo(() => {
     const open = mine.filter((t) => t.kanbanStatus !== 'done');
     const sortByDue = (a: WorkItem, b: WorkItem) => (a.startedAt ?? '').localeCompare(b.startedAt ?? '');
@@ -232,13 +259,14 @@ export function TodoTodayPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <CalendarCheck2 className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold">{myName ? `${myName}님의 할일` : '나의 할일'}</h1>
+            <h1 className="text-xl font-bold">{myName ? `${myName}님의 Work To Do` : 'Work To Do'}</h1>
           </div>
-          <p className="text-sm text-muted-foreground">내가 담당한 업무를 마감 임박순으로 모아 봅니다.</p>
+          <p className="text-sm text-muted-foreground">내 일정·할일만 모아 봅니다 (다른 사람 일정은 표시되지 않습니다).</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <ViewModeBar
             modes={[
+              { id: 'schedule', label: '일정', icon: <CalendarClock className="w-3.5 h-3.5" /> },
               { id: 'card', label: '카드', icon: <LayoutGrid className="w-3.5 h-3.5" /> },
               { id: 'list', label: '리스트', icon: <ListIcon className="w-3.5 h-3.5" /> },
             ]}
@@ -292,6 +320,62 @@ export function TodoTodayPage() {
           <AlertTriangle className="w-8 h-8" />
           <p className="text-sm">데이터를 불러오는 중 오류가 발생했습니다.</p>
           <button onClick={() => refetch()} className="px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg">다시 시도</button>
+        </div>
+      ) : view === 'schedule' ? (
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
+            <CalendarDays className="w-4 h-4 text-primary flex-shrink-0" />
+            <button onClick={() => setScheduleDate((d) => addDaysStr(d, -1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="이전 날"><ChevronLeft className="w-4 h-4" /></button>
+            <span className="text-sm font-semibold min-w-[150px] text-center">
+              {fmtDateLabel(scheduleDate)}
+              {scheduleDate === today && <span className="ml-1.5 text-xs text-primary font-medium">오늘</span>}
+            </span>
+            <button onClick={() => setScheduleDate((d) => addDaysStr(d, 1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="다음 날"><ChevronRight className="w-4 h-4" /></button>
+            {scheduleDate !== today && (
+              <button onClick={() => setScheduleDate(today)} className="text-xs px-2 py-0.5 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors">오늘로</button>
+            )}
+            <span className="ml-auto text-xs text-muted-foreground">{daySchedule.length}건</span>
+          </div>
+          {daySchedule.length === 0 ? (
+            <div className="py-14 text-center text-sm text-muted-foreground">이 날짜에 예정된 일정이 없습니다.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="text-left px-3 py-2 w-16">시간</th>
+                    <th className="text-left px-3 py-2">업무</th>
+                    <th className="text-left px-3 py-2 w-20">상태</th>
+                    <th className="text-center px-2 py-2 w-12">우선</th>
+                    <th className="text-left px-3 py-2 w-32">클러스터</th>
+                    <th className="w-10" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {daySchedule.map((t) => {
+                    const done = t.kanbanStatus === 'done';
+                    const cl = clusterLabel(t);
+                    return (
+                      <tr key={t.id} onClick={() => onOpen(t)} className="cursor-pointer hover:bg-secondary/40 transition-colors">
+                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{timeLabel(t)}</td>
+                        <td className="px-3 py-2"><span className={`font-medium ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(t)}</span></td>
+                        <td className="px-3 py-2">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${STATUS_META[t.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
+                            {STATUS_META[t.kanbanStatus]?.label ?? '할일'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-center"><span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} /></td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[140px]">{cl ?? '—'}</td>
+                        <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                          <CompleteBtn item={t} busy={busyId === t.id} onToggleDone={onToggleDone} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ) : totalOpen === 0 && buckets.doneRecent.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">

@@ -286,9 +286,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             <button
               type="button"
               onClick={() => navigate('/todo-today')}
-              title="나의 할일로 이동"
+              title="Work To Do 로 이동"
               className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors">
-              <CalendarCheck className="w-3 h-3" /> 나의 할일
+              <CalendarCheck className="w-3 h-3" /> Work To Do
             </button>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
