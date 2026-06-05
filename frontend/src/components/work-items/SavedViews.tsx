@@ -9,6 +9,7 @@ export interface SavedViewState {
   filterCategory: string;
   filterPriority: string;
   filterModule: string;
+  filterSprintId?: string;
   filterFrom: string;
   filterTo: string;
   sortKey: string;
