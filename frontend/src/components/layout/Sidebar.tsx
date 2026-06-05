@@ -8,6 +8,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home,
   KeyRound, ShieldCheck, FileSearch, Activity, Package, GitBranch, ScrollText,
+  Rocket,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -35,6 +36,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
   '/todo-today':         { defaultLabel: 'Work To Do',     icon: CalendarCheck2 },
+  '/sprints':            { defaultLabel: '스프린트',        icon: Rocket },
   '/work-summary':       { defaultLabel: '업무 현황',      icon: BarChart3 },
   '/members':            { defaultLabel: '멤버별 업무',    icon: Users },
   '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },
@@ -73,7 +75,7 @@ const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ classNam
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/work-summary', '/members', '/workflow', '/wbs'], modes: ['work'] },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/work-summary', '/members', '/workflow', '/wbs'], modes: ['work'] },
   { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/ops-notes', '/mindmap', '/ontology', '/trends', '/work-guides'], modes: ['work'] },
   { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
 ];
