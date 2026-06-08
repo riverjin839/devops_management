@@ -10,7 +10,6 @@ export { MetricCardGrid } from './MetricCardGrid';
 export { AddMetricCardModal } from './AddMetricCardModal';
 export { KubeconfigEditModal } from './KubeconfigEditModal';
 export { KanbanSummaryCharts } from './KanbanSummaryCharts';
-export { YesterdayChanges } from './YesterdayChanges';
 export { WorkCalendar } from './WorkCalendar';
 export { MemberTodayTodos } from './MemberTodayTodos';
 export { WeeklyWorkTable } from './WeeklyWorkTable';

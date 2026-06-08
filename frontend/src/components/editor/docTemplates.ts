@@ -128,4 +128,92 @@ export const DOC_TEMPLATES: DocTemplate[] = [
 <tr><td><code></code></td><td></td><td></td></tr>
 </tbody></table>`.trim(),
   },
+  {
+    id: 'meeting',
+    label: '회의록',
+    description: '안건·논의·결정사항·액션아이템 — 회의 기록 표준',
+    html: `
+<h2>회의록</h2>
+<table><tbody>
+<tr><th>항목</th><th>내용</th></tr>
+<tr><td>일시</td><td></td></tr>
+<tr><td>참석자</td><td></td></tr>
+<tr><td>장소 / 링크</td><td></td></tr>
+<tr><td>작성자</td><td></td></tr>
+</tbody></table>
+<h3>안건</h3>
+<ol><li></li></ol>
+<h3>논의 내용</h3>
+<p></p>
+<h3>결정 사항</h3>
+<ul><li></li></ul>
+<h3>액션 아이템</h3>
+<ul data-type="taskList">${TASK('담당 / 기한 — 할 일')}${TASK('담당 / 기한 — 할 일')}</ul>`.trim(),
+  },
+  {
+    id: 'weekly-report',
+    label: '주간 업무 보고',
+    description: '이번 주 한 일·진행중·다음 주 계획·이슈/리스크',
+    html: `
+<h2>주간 업무 보고</h2>
+<p><strong>기간:</strong>  ·  <strong>작성자:</strong> </p>
+<h3>이번 주 한 일</h3>
+<ul data-type="taskList">${TASK('완료 항목')}${TASK('완료 항목')}</ul>
+<h3>진행 중</h3>
+<ul><li></li></ul>
+<h3>다음 주 계획</h3>
+<ul data-type="taskList">${TASK('예정 항목')}${TASK('예정 항목')}</ul>
+<h3>이슈 / 리스크 / 공유사항</h3>
+<table><tbody>
+<tr><th>구분</th><th>내용</th><th>대응 / 필요 지원</th></tr>
+<tr><td></td><td></td><td></td></tr>
+</tbody></table>`.trim(),
+  },
+  {
+    id: 'handover',
+    label: '업무 인수인계',
+    description: '진행중 업무·미해결 이슈·주의사항·연락처 — 휴가/온콜 핸드오버',
+    html: `
+<h2>업무 인수인계</h2>
+<table><tbody>
+<tr><th>항목</th><th>내용</th></tr>
+<tr><td>인계자 / 인수자</td><td></td></tr>
+<tr><td>기간 / 사유</td><td></td></tr>
+<tr><td>비상 연락</td><td></td></tr>
+</tbody></table>
+<h3>진행 중 업무</h3>
+<table><tbody>
+<tr><th>업무</th><th>현재 상태</th><th>다음 조치 / 기한</th></tr>
+<tr><td></td><td></td><td></td></tr>
+</tbody></table>
+<h3>미해결 이슈 / 주의사항</h3>
+<ul data-type="taskList">${TASK('주의 / 확인 필요 항목')}${TASK('주의 / 확인 필요 항목')}</ul>
+<h3>접근 정보 / 참고 링크</h3>
+<ul><li></li></ul>`.trim(),
+  },
+  {
+    id: 'decision',
+    label: '의사결정 기록(ADR)',
+    description: '배경·대안 비교·결정·영향 — 기술/업무 의사결정 기록',
+    html: `
+<h2>의사결정 기록 (ADR)</h2>
+<table><tbody>
+<tr><th>항목</th><th>내용</th></tr>
+<tr><td>제목</td><td></td></tr>
+<tr><td>상태</td><td>(제안 / 채택 / 폐기 / 대체됨)</td></tr>
+<tr><td>결정일 / 결정자</td><td></td></tr>
+</tbody></table>
+<h3>배경 / 문제</h3>
+<p></p>
+<h3>검토한 대안</h3>
+<table><tbody>
+<tr><th>대안</th><th>장점</th><th>단점</th></tr>
+<tr><td></td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td></tr>
+</tbody></table>
+<h3>결정</h3>
+<p></p>
+<h3>결과 / 영향</h3>
+<ul><li></li></ul>`.trim(),
+  },
 ];
