@@ -431,6 +431,7 @@ def get_today_summary(
         return {
             "id": str(w.id),
             "type": w.type,
+            "title": w.title,
             "assignee": w.assignee,
             "primary_assignee": w.primary_assignee,
             "secondary_assignee": w.secondary_assignee,
