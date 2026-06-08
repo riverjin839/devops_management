@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck,
+  ClipboardList, CalendarCheck, Plus,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
@@ -282,6 +282,13 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               title="업무 관리로 이동"
               className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors">
               <ClipboardList className="w-3 h-3" /> 업무 관리
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/tasks-mgmt/new')}
+              title="새 업무 등록"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+              <Plus className="w-3 h-3" /> 업무 등록
             </button>
             <button
               type="button"
