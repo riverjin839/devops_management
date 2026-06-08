@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
+import { useAuthStore } from '@/stores/authStore';
 import { stripHtml } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
 
@@ -60,6 +61,9 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
   });
 
   const { data: registeredAssignees = [] } = useAssignees();
+  // 로그인한 사용자를 목록 맨 위로.
+  const currentUser = useAuthStore((s) => s.user);
+  const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
 
   const apiGroups = (data?.groups ?? []).map((g) => {
     const filterByCluster = (t: { clusterId?: string }) =>
@@ -85,9 +89,13 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
   }
   const groups = orderedNames
     .map((name) => byName.get(name) ?? { assignee: name, todayTasks: [], inProgressTasks: [], overdueTasks: [] })
-    // 업무가 있는 담당자를 위로, 없는 담당자를 아래로 (안정 정렬).
+    // 정렬 우선순위: ① 로그인 사용자 → ② 업무가 있는 담당자 → ③ 등록 순서(안정 정렬).
     .map((g, i) => ({ g, i, count: (g.overdueTasks?.length ?? 0) + g.todayTasks.length + g.inProgressTasks.length }))
-    .sort((a, b) => (b.count > 0 ? 1 : 0) - (a.count > 0 ? 1 : 0) || a.i - b.i)
+    .sort((a, b) =>
+      (b.g.assignee === myName ? 1 : 0) - (a.g.assignee === myName ? 1 : 0)
+      || (b.count > 0 ? 1 : 0) - (a.count > 0 ? 1 : 0)
+      || a.i - b.i,
+    )
     .map((x) => x.g);
 
   const totals = groups.reduce(
