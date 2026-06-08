@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical } from 'lucide-react';
@@ -97,7 +97,9 @@ export function WorkItemBoardPage() {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [filterModule, setFilterModule] = useState<WorkItemModule | ''>('');
-  const [filterSprintId, setFilterSprintId] = useState('');
+  // 스프린트 페이지의 '게시판에서 보기' 딥링크(?sprint=...) 를 초기 필터로 반영.
+  const [searchParams] = useSearchParams();
+  const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') ?? '');
   const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 

@@ -399,16 +399,24 @@ export function TodoTodayPage() {
             <Rocket className="w-12 h-12 opacity-30 text-primary" />
             <div className="text-center">
               <p className="text-base font-medium text-foreground">진행 중인 스프린트가 없습니다</p>
-              <p className="text-sm mt-1 opacity-70">2주 단위로 이번 반복에 집중할 할일을 모아보세요.</p>
+              <p className="text-sm mt-1 opacity-70">이번 반복에 집중할 할일을 모아보세요. (기간은 스프린트 페이지에서 1~4주로 조절)</p>
             </div>
-            <button
-              onClick={onStartSprint}
-              disabled={createSprint.isPending}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-            >
-              {createSprint.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              2주 스프린트 시작
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onStartSprint}
+                disabled={createSprint.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+              >
+                {createSprint.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                2주 스프린트 시작
+              </button>
+              <button
+                onClick={() => navigate('/sprints')}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+              >
+                기간 직접 설정
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-3">

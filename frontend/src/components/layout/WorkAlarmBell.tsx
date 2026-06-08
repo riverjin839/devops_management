@@ -163,11 +163,11 @@ export function WorkAlarmBell() {
         onClick={togglePanel}
         aria-label={tooltip}
         title={tooltip}
-        className={`relative flex items-center justify-center w-10 h-10 rounded-md transition-colors ${
+        className={`relative flex items-center justify-center w-8 h-8 rounded-md transition-colors ${
           open ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
         }`}
       >
-        <Bell className="w-5 h-5" />
+        <Bell className="w-4 h-4" />
         {grandTotal > 0 && (
           <span
             aria-hidden

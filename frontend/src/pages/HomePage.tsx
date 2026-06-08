@@ -105,7 +105,8 @@ export function HomePage() {
     <div className="h-screen overflow-hidden bg-background flex flex-col">
 
       {/* ── Compact top strip — always visible ─────────────────────────────── */}
-      <div className="flex-none flex items-center gap-3 px-3 lg:px-4 py-2 border-b border-border bg-background/95 backdrop-blur flex-wrap">
+      {/* pr-14: 우상단 고정 알람 종(WorkAlarmBell)과 KPI pill 이 겹치지 않도록 우측 공간 확보 */}
+      <div className="flex-none flex items-center gap-3 pl-3 lg:pl-4 pr-14 py-2 border-b border-border bg-background/95 backdrop-blur flex-wrap">
         {/* 사용자 / 날짜 */}
         <div className="flex items-center gap-2 min-w-0">
           <Sun className="w-4 h-4 text-primary flex-shrink-0" />
