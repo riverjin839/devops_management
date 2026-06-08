@@ -17,6 +17,7 @@ import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkIt
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useProjects } from '@/hooks/useProjects';
 import { useSprints } from '@/hooks/useSprints';
+import { useAuthStore } from '@/stores/authStore';
 
 const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
@@ -107,6 +108,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   useClusters();
   const { clusters } = useClusterStore();
   const { data: registeredAssignees = [] } = useAssignees();
+  // 신규 등록 시 담당자(정) 기본값 = 현재 로그인 사용자 (변경 가능)
+  const currentUser = useAuthStore((s) => s.user);
+  const defaultAssignee = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
   const serviceCatalog = useServiceCatalog();
   const createTask = useCreateWorkItem();
   const updateTask = useUpdateWorkItem();
@@ -123,7 +127,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const { data: sprintsData } = useSprints();
   const sprints = sprintsData?.data ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [primaryAssignee, setPrimaryAssignee] = useState('');
+  const [primaryAssignee, setPrimaryAssignee] = useState(
+    !initial && !parentItem ? defaultAssignee : '',
+  );
   const [secondaryList, setSecondaryList] = useState<string[]>([]);
   const [secInput, setSecInput] = useState('');
   const [clusterIds, setClusterIds] = useState<string[]>([]);
