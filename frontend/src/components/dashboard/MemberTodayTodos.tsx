@@ -6,6 +6,7 @@ import {
   ShieldAlert, ChevronLeft, ChevronRight, RotateCcw,
 } from 'lucide-react';
 import { todayWorkItemsApi } from '@/services/api';
+import { useAssignees } from '@/hooks/useAssignees';
 import { stripHtml } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
 
@@ -48,19 +49,36 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
     refetchInterval: isToday ? 60000 : false,
   });
 
-  const groups = (data?.groups ?? [])
-    .map((g) => {
-      const filterByCluster = (t: { clusterId?: string }) =>
-        !selectedClusterId || t.clusterId === selectedClusterId;
-      return {
-        ...g,
-        overdueTasks: (g.overdueTasks ?? []).filter(filterByCluster),
-        todayTasks: g.todayTasks.filter(filterByCluster),
-        inProgressTasks: g.inProgressTasks.filter(filterByCluster),
-      };
-    })
-    // 지연(overdue) 만 있는 담당자도 노출 — 주간 슬라이더와 일치시키기 위해 overdue 도 카운트.
-    .filter((g) => g.overdueTasks.length + g.todayTasks.length + g.inProgressTasks.length > 0);
+  const { data: registeredAssignees = [] } = useAssignees();
+
+  const apiGroups = (data?.groups ?? []).map((g) => {
+    const filterByCluster = (t: { clusterId?: string }) =>
+      !selectedClusterId || t.clusterId === selectedClusterId;
+    return {
+      ...g,
+      overdueTasks: (g.overdueTasks ?? []).filter(filterByCluster),
+      todayTasks: g.todayTasks.filter(filterByCluster),
+      inProgressTasks: g.inProgressTasks.filter(filterByCluster),
+    };
+  });
+
+  // 해당일 등록된 업무가 없어도 등록된 모든 담당자를 노출한다.
+  // 등록된 담당자 순서를 먼저 깔고, 목록에 없는(레거시/자유입력) 담당자는 뒤에 붙인다.
+  const byName = new Map(apiGroups.map((g) => [g.assignee, g]));
+  const orderedNames: string[] = [];
+  const pushed = new Set<string>();
+  for (const a of registeredAssignees) {
+    if (a.name && !pushed.has(a.name)) { pushed.add(a.name); orderedNames.push(a.name); }
+  }
+  for (const g of apiGroups) {
+    if (g.assignee && !pushed.has(g.assignee)) { pushed.add(g.assignee); orderedNames.push(g.assignee); }
+  }
+  const groups = orderedNames
+    .map((name) => byName.get(name) ?? { assignee: name, todayTasks: [], inProgressTasks: [], overdueTasks: [] })
+    // 업무가 있는 담당자를 위로, 없는 담당자를 아래로 (안정 정렬).
+    .map((g, i) => ({ g, i, count: (g.overdueTasks?.length ?? 0) + g.todayTasks.length + g.inProgressTasks.length }))
+    .sort((a, b) => (b.count > 0 ? 1 : 0) - (a.count > 0 ? 1 : 0) || a.i - b.i)
+    .map((x) => x.g);
 
   const totals = groups.reduce(
     (acc, g) => {
