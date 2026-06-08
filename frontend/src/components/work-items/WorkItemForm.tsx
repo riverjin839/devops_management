@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Plus, Settings2, ChevronDown } from 'lucide-react';
+import { Plus, Settings2, ChevronDown, Users } from 'lucide-react';
 import { WorkItem, WorkItemCreate, WorkItemUpdate, WorkItemType, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
@@ -350,7 +350,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const formInner = (
     <form id="item-form" onSubmit={handleSubmit} className="space-y-2.5">
       {/* 업무/이슈 구분 폐지 — type 선택 토글 제거. '이슈 대응' 은 분류(category)로 선택한다. */}
-      {/* ── 기본 설정 — 컴팩트 단일 그리드 (담당자/클러스터/서비스/우선순위/분류/일정/프로젝트) ── */}
+      {/* ── 기본 설정 — 컴팩트 단일 그리드 (담당자/클러스터/서비스/우선순위/보드상태/분류/일정/프로젝트) ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-2 gap-y-2">
         <div>
           <label htmlFor={f('primary')} className={labelClass}>담당자(정) *</label>
@@ -371,9 +371,24 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           </datalist>
         </div>
         <div className="md:col-span-2">
-          <label htmlFor={f('secondary')} className={labelClass}>
-            담당자(부) <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
-          </label>
+          <div className="flex items-center justify-between mb-0.5">
+            <label htmlFor={f('secondary')} className="text-[10px] font-medium text-muted-foreground">
+              담당자(부) <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setAllAttendees((v) => !v)}
+              aria-pressed={allAttendees}
+              title="전체 참석 — 회의 등 모든 구성원이 참석. 체크 시 전원의 개인 일정(Work To Do)에 표시됩니다."
+              className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                allAttendees
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'text-muted-foreground border-border hover:text-foreground hover:bg-secondary'
+              }`}
+            >
+              <Users className="w-2.5 h-2.5" /> 전체 참석
+            </button>
+          </div>
           <div className="w-full flex flex-wrap items-center gap-1 px-1.5 py-1 bg-background border border-border rounded-md min-h-[30px]">
             {secondaryList.map((name) => (
               <span key={name} className="inline-flex items-center gap-0.5 text-[11px] bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded px-1.5 py-0.5">
@@ -396,18 +411,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               className="flex-1 min-w-[64px] bg-transparent text-xs outline-none"
             />
           </div>
-          <label className="mt-2 flex items-center gap-2 text-xs cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={allAttendees}
-              onChange={(e) => setAllAttendees(e.target.checked)}
-              className="accent-primary"
-            />
-            <span className="font-medium">전체 참석</span>
-            <span className="text-muted-foreground/70">
-              회의 등 모든 구성원이 참석 — 체크 시 전원의 개인 일정(Work To Do)에 표시됩니다.
-            </span>
-          </label>
         </div>
         <div>
           <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터 (다중)</label>
@@ -499,6 +502,19 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           >
             {PRIORITIES.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={f('kanban')} className={labelClass}>보드 상태</label>
+          <select
+            id={f('kanban')}
+            value={kanbanStatus}
+            onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
+            className={inputClass}
+          >
+            {KANBAN_STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{KANBAN_STATUS_LABEL[s]}</option>
             ))}
           </select>
         </div>
@@ -768,33 +784,20 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         </details>
       )}
 
-      {/* ── 추가 옵션 — 접이식 (칸반/모듈/유형/이슈연결/Confluence/비고) ─── */}
+      {/* ── 추가 옵션 — 접이식 (모듈/유형/이슈연결/Confluence/비고) ─── */}
       <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
         <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
           <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
           <span>추가 옵션</span>
           <span className="text-[11px] text-muted-foreground/70">
-            (칸반 보드 · 모듈/유형 · 이슈 연결 · Confluence · 비고)
+            (모듈/유형 · 이슈 연결 · Confluence · 비고)
           </span>
         </summary>
         <div className="px-3 pb-3 space-y-2">
-          {/* 칸반 보드 */}
+          {/* 모듈 / 유형 */}
           <div>
-            <p className="text-[10px] font-semibold text-muted-foreground/80 mb-1 uppercase tracking-wider">칸반 보드</p>
+            <p className="text-[10px] font-semibold text-muted-foreground/80 mb-1 uppercase tracking-wider">모듈 / 유형</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <div>
-                <label htmlFor={f('kanban')} className={labelClass}>보드 상태</label>
-                <select
-                  id={f('kanban')}
-                  value={kanbanStatus}
-                  onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
-                  className={inputClass}
-                >
-                  {KANBAN_STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>{KANBAN_STATUS_LABEL[s]}</option>
-                  ))}
-                </select>
-              </div>
               <div>
                 <label htmlFor={f('module')} className={labelClass} title="추후 deprecate 예정 — 가능하면 위 '서비스/컴포넌트' 사용">
                   모듈 <span className="text-[9px] text-muted-foreground/60">(legacy)</span>

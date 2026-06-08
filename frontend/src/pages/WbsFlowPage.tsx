@@ -35,6 +35,11 @@ function isWeekend(d: Date): boolean {
   return d.getDay() === 0 || d.getDay() === 6;
 }
 
+// 담당자 필드에 쉼표로 여러 명이 들어올 수 있다 (예: "A,B") — 한 명씩 분리한다.
+function splitAssignees(s?: string | null): string[] {
+  return s ? s.split(',').map((x) => x.trim()).filter(Boolean) : [];
+}
+
 const KANBAN_LABEL: Record<string, string> = {
   backlog: 'Backlog', todo: 'Todo', in_progress: '진행중',
   review_test: '검토', done: '완료',
@@ -327,8 +332,12 @@ function PersonalGanttView({
   onItemClick: (item: DayItem) => void;
   showAllAssignees?: boolean;
 }) {
-  const myTasks = showAllAssignees ? tasks : tasks.filter(t => (t.assignee || '미지정') === assignee);
-  const myIssues = showAllAssignees ? issues : issues.filter(i => (i.assignee || '미지정') === assignee);
+  const matchesAssignee = (raw?: string | null) => {
+    const names = splitAssignees(raw);
+    return names.length ? names.includes(assignee) : assignee === '미지정';
+  };
+  const myTasks = showAllAssignees ? tasks : tasks.filter(t => matchesAssignee(t.assignee));
+  const myIssues = showAllAssignees ? issues : issues.filter(i => matchesAssignee(i.assignee));
 
   const startStr = dates.length > 0 ? fmtDate(dates[0]) : '';
   const endStr   = dates.length > 0 ? fmtDate(dates[dates.length - 1]) : '';
@@ -574,9 +583,8 @@ export function WbsFlowPage() {
     };
 
     for (const task of tasks) {
-      const assignee = task.assignee || '미지정';
-      const row = ensureRow(assignee);
-      if (task.module && !row.roles.includes(task.module)) row.roles.push(task.module);
+      const assignees = splitAssignees(task.assignee);
+      if (assignees.length === 0) assignees.push('미지정');
 
       const taskStartStr = task.startedAt?.slice(0, 10);
       const taskEndStr = task.closedAt?.slice(0, 10);
@@ -602,17 +610,20 @@ export function WbsFlowPage() {
       const rangeStart = startD < parseDate(startStr) ? parseDate(startStr) : startD;
       const rangeEnd = effectiveEnd > parseDate(endStr) ? parseDate(endStr) : effectiveEnd;
 
-      let cur = rangeStart;
-      while (cur <= rangeEnd) {
-        addItem(assignee, fmtDate(cur), dayItem);
-        cur = addDays(cur, 1);
+      for (const assignee of assignees) {
+        const row = ensureRow(assignee);
+        if (task.module && !row.roles.includes(task.module)) row.roles.push(task.module);
+        let cur = rangeStart;
+        while (cur <= rangeEnd) {
+          addItem(assignee, fmtDate(cur), dayItem);
+          cur = addDays(cur, 1);
+        }
       }
     }
 
     for (const issue of issues) {
-      const assignee = issue.assignee || '미지정';
-      const row = ensureRow(assignee);
-      if (issue.category && !row.roles.includes(issue.category)) row.roles.push(issue.category);
+      const assignees = splitAssignees(issue.assignee);
+      if (assignees.length === 0) assignees.push('미지정');
 
       const issueDateStr = issue.startedAt?.slice(0, 10);
       if (!issueDateStr) continue;
@@ -628,8 +639,11 @@ export function WbsFlowPage() {
         resolved: !!issue.closedAt,
       };
 
-      if (issueDateStr >= startStr && issueDateStr <= endStr) {
-        addItem(assignee, issueDateStr, dayItem);
+      const inWindow = issueDateStr >= startStr && issueDateStr <= endStr;
+      for (const assignee of assignees) {
+        const row = ensureRow(assignee);
+        if (issue.category && !row.roles.includes(issue.category)) row.roles.push(issue.category);
+        if (inWindow) addItem(assignee, issueDateStr, dayItem);
       }
     }
 

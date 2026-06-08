@@ -395,15 +395,23 @@ def get_today_summary(
 
     assignee_map: dict[str, dict] = {}
 
+    def split_names(raw: str | None) -> list[str]:
+        # 담당자 필드에 쉼표로 여러 명이 들어올 수 있다 (예: primary "A,B", secondary "C, D").
+        # 한 명씩 분리해 각자의 그룹으로 집계한다.
+        if not raw:
+            return []
+        return [n.strip() for n in raw.split(",") if n.strip()]
+
     def add_to_groups(item: WorkItem, bucket_key: str) -> None:
         # primary + secondary 모두를 후보로 — 한 항목이 협업자의 그룹에도 표시되도록.
-        # 같은 사람이 primary/secondary 둘 다인 비정상 케이스는 중복 제거.
+        # 같은 사람이 primary/secondary 둘 다인(혹은 쉼표 중복) 케이스는 중복 제거.
         names: list[str] = []
-        primary = item.primary_assignee or item.assignee
-        if primary:
-            names.append(primary)
-        if item.secondary_assignee and item.secondary_assignee not in names:
-            names.append(item.secondary_assignee)
+        for n in split_names(item.primary_assignee or item.assignee):
+            if n not in names:
+                names.append(n)
+        for n in split_names(item.secondary_assignee):
+            if n not in names:
+                names.append(n)
         if not names:
             names.append("미지정")
         for name in names:
@@ -423,6 +431,7 @@ def get_today_summary(
         return {
             "id": str(w.id),
             "type": w.type,
+            "title": w.title,
             "assignee": w.assignee,
             "primary_assignee": w.primary_assignee,
             "secondary_assignee": w.secondary_assignee,

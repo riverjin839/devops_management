@@ -224,8 +224,11 @@ export function TodoTodayPage() {
   const mine = useMemo(() => {
     if (!myName) return [];
     const items = data?.data ?? [];
+    const splitNames = (s?: string | null) =>
+      s ? s.split(',').map((x) => x.trim()).filter(Boolean) : [];
     const mineItems = items.filter((t) => {
-      const names = [t.assignee, t.primaryAssignee, ...(t.secondaryAssignee?.split(',').map((s) => s.trim()) ?? [])];
+      // 담당자 필드(정/부/legacy)에 쉼표로 여러 명이 들어올 수 있으므로 모두 분리해 매칭.
+      const names = [...splitNames(t.assignee), ...splitNames(t.primaryAssignee), ...splitNames(t.secondaryAssignee)];
       return names.includes(myName);
     });
     // 전체 참석 항목 merge (id 중복 제거).

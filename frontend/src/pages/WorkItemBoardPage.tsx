@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ClusterSidebar, ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
+import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -294,16 +294,8 @@ export function WorkItemBoardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-4 flex gap-3">
-        <ClusterSidebar
-          clusters={clusters}
-          selectedId={filterClusterId || null}
-          onSelect={(id) => setFilterClusterId(id ?? '')}
-          allowAll
-          allLabel="전체 업무"
-          iconOnly
-        />
-        <div className="flex-1 min-w-0">
+      <main className="mx-auto px-4 lg:px-6 py-4">
+        <div className="min-w-0">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">

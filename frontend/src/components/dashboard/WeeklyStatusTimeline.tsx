@@ -150,9 +150,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const assigneeRows: AssigneeRow[] = useMemo(() => {
     const map = new Map<string, TaskBar[]>();
     for (const b of taskBars) {
-      const key = b.item.primaryAssignee || b.item.assignee || '미지정';
-      const arr = map.get(key);
-      if (arr) arr.push(b); else map.set(key, [b]);
+      // 담당자 필드에 쉼표로 여러 명이 들어올 수 있다 (예: "A,B") — 한 명씩 분리해 각자 레인에 배치.
+      const raw = b.item.primaryAssignee || b.item.assignee || '';
+      const names = raw.split(',').map((n) => n.trim()).filter(Boolean);
+      if (names.length === 0) names.push('미지정');
+      for (const name of names) {
+        const arr = map.get(name);
+        if (arr) arr.push(b); else map.set(name, [b]);
+      }
     }
     return Array.from(map.entries())
       .sort((a, b) => a[0].localeCompare(b[0], 'ko'))
