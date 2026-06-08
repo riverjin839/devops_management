@@ -43,6 +43,16 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
   const [viewDate, setViewDate] = useState(todayStr);
   const isToday = viewDate === todayStr;
 
+  // "+N건 더" 클릭 시 해당 담당자 카드의 전체 목록을 펼친다.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (assignee: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(assignee)) next.delete(assignee);
+      else next.add(assignee);
+      return next;
+    });
+
   const { data, isLoading } = useQuery({
     queryKey: ['items', 'today', viewDate],
     queryFn: () => todayWorkItemsApi.getSummary(viewDate).then((r) => r.data),
@@ -166,6 +176,8 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             const done = all.filter((t) => t.kanbanStatus === 'done').length;
             const total = all.length;
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            const isExpanded = expanded.has(g.assignee);
+            const visible = isExpanded ? all : all.slice(0, 4);
 
             return (
               <div
@@ -209,7 +221,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                 </div>
 
                 <ul className="space-y-1">
-                  {all.slice(0, 4).map((t) => (
+                  {visible.map((t) => (
                     <li key={`${g.assignee}:${t.id}`}>
                       <Link
                         to={`/tasks-mgmt/${t.id}`}
@@ -238,7 +250,16 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                     </li>
                   ))}
                   {all.length > 4 && (
-                    <li className="text-[10px] text-muted-foreground pl-3.5">+{all.length - 4}건 더…</li>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(g.assignee)}
+                        className="text-[10px] text-muted-foreground hover:text-primary pl-3.5 py-0.5 transition-colors"
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded ? '접기' : `+${all.length - 4}건 더…`}
+                      </button>
+                    </li>
                   )}
                 </ul>
               </div>
