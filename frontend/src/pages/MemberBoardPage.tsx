@@ -196,16 +196,20 @@ export function MemberBoardPage() {
     const tasksAll  = allItems.filter((w) => w.type === 'task');
     const issuesAll = allItems.filter((w) => w.type === 'issue');
 
+    // 담당자 필드에 쉼표로 여러 명이 들어올 수 있다 (예: "A,B") — 한 명씩 분리해 집계.
+    const splitNames = (s?: string | null) =>
+      s ? s.split(',').map((x) => x.trim()).filter(Boolean) : [];
+
     // 담당자 이름 집합 = 등록된 Assignee + 작업/이슈에 실제로 등장한 이름
     const nameSet = new Set<string>();
     for (const a of assignees) nameSet.add(a.name);
     for (const t of tasksAll) {
-      if (t.primaryAssignee) nameSet.add(t.primaryAssignee);
-      if (includeSecondary && t.secondaryAssignee) nameSet.add(t.secondaryAssignee);
+      for (const n of splitNames(t.primaryAssignee)) nameSet.add(n);
+      if (includeSecondary) for (const n of splitNames(t.secondaryAssignee)) nameSet.add(n);
     }
     for (const i of issuesAll) {
-      if (i.primaryAssignee) nameSet.add(i.primaryAssignee);
-      if (includeSecondary && i.secondaryAssignee) nameSet.add(i.secondaryAssignee);
+      for (const n of splitNames(i.primaryAssignee)) nameSet.add(n);
+      if (includeSecondary) for (const n of splitNames(i.secondaryAssignee)) nameSet.add(n);
     }
 
     const assigneeByName = new Map(assignees.map((a) => [a.name, a]));
@@ -213,10 +217,10 @@ export function MemberBoardPage() {
 
     for (const name of nameSet) {
       const memberTasks = tasksAll.filter(
-        (t) => t.primaryAssignee === name || (includeSecondary && t.secondaryAssignee === name),
+        (t) => splitNames(t.primaryAssignee).includes(name) || (includeSecondary && splitNames(t.secondaryAssignee).includes(name)),
       );
       const memberIssues = issuesAll.filter(
-        (i) => i.primaryAssignee === name || (includeSecondary && i.secondaryAssignee === name),
+        (i) => splitNames(i.primaryAssignee).includes(name) || (includeSecondary && splitNames(i.secondaryAssignee).includes(name)),
       );
       list.push({
         assignee: name,
