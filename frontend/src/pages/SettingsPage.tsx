@@ -14,6 +14,7 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, Assignee } from '@/types';
 import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
+import { useHomeStore } from '@/stores/homeStore';
 import { useToast, ResizeGrip, DoubleScrollX, ClusterIconPicker } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -332,6 +333,9 @@ function ServerStatusBadge({ status }: { status: string }) {
 // ── Main Page ───────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  // 업무 현황 스케줄 배경 (흰색/크림) — 사용자별 설정.
+  const scheduleBg = useHomeStore((s) => s.scheduleBg);
+  const setScheduleBg = useHomeStore((s) => s.setScheduleBg);
   // Cluster state
   const [showAddModal, setShowAddModal] = useState(false);
   const [editCluster, setEditCluster] = useState<Cluster | null>(null);
@@ -644,6 +648,33 @@ export function SettingsPage() {
               </button>
             </div>
           ))}
+
+          {/* 스케줄 배경 — 당일 스케줄 · 담당자별 진행현황 패널 배경 (흰색/크림) */}
+          <div className="px-4 py-3 flex items-center justify-between border-t border-border">
+            <div>
+              <p className="text-sm">스케줄 배경색</p>
+              <p className="text-[11px] text-muted-foreground">업무 현황의 당일 스케줄 · 담당자별 진행현황 패널 배경 (다크 모드 제외)</p>
+            </div>
+            <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
+              {([
+                { key: 'white' as const, label: '흰색', swatch: '#ffffff' },
+                { key: 'cream' as const, label: '크림', swatch: '#FBF7EE' },
+              ]).map(({ key, label, swatch }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setScheduleBg(key)}
+                  aria-pressed={scheduleBg === key}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 transition-colors ${key === 'cream' ? 'border-l border-border' : ''} ${
+                    scheduleBg === key ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
+                  }`}
+                >
+                  <span className="w-3 h-3 rounded-full border border-border/70" style={{ backgroundColor: swatch }} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* 홈 아이콘 picker — 탭과 무관하게 동작 */}

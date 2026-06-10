@@ -775,3 +775,24 @@ html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 .week-slider-invert::-webkit-slider-thumb { border-color: hsl(var(--foreground)); }
 .week-slider-invert::-moz-range-thumb { border-color: hsl(var(--foreground)); }
+
+/* ── 업무 현황 스케줄 배경 — 흰색(기본) / 크림(옵션) ──────────────────────────
+   업무 현황 홈의 "당일 스케줄 · 담당자별 진행현황" 패널 surface 에만 적용.
+   --card/--secondary/--muted/--border 등 표면 토큰만 subtree 에서 덮어쓴다.
+   dark 테마에는 적용하지 않아 다크 화면이 깨지지 않는다. */
+html:not(.dark) .schedule-bg-white {
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --muted: 0 0% 96%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+}
+html:not(.dark) .schedule-bg-cream {
+  --card: 38 50% 99%;
+  --popover: 38 50% 99%;
+  --secondary: 35 30% 92%;
+  --muted: 35 30% 94%;
+  --border: 32 22% 86%;
+  --input: 32 22% 86%;
+}
