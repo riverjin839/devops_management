@@ -394,6 +394,15 @@ button[aria-disabled="true"] {
   background: hsl(var(--muted-foreground) / 0.45);
 }
 
+/* 가로 칩 레일 등에서 스크롤바를 숨길 때 사용 (스크롤은 유지). */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Animation ─────────────────────────────────────────────────────────────── */
 @keyframes pulse-slow {
   0%, 100% {
@@ -754,3 +763,15 @@ html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 .week-slider:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
 .week-slider:focus-visible::-webkit-slider-thumb { outline: 2px solid hsl(var(--primary) / 0.4); outline-offset: 2px; }
+
+/* 색 반전 모드 — 어두운 strip 위에서도 track/thumb 이 또렷하게 보이도록. */
+.week-slider-invert::-webkit-slider-runnable-track {
+  background: hsl(var(--background) / 0.22);
+  border-color: hsl(var(--background) / 0.4);
+}
+.week-slider-invert::-moz-range-track {
+  background: hsl(var(--background) / 0.22);
+  border-color: hsl(var(--background) / 0.4);
+}
+.week-slider-invert::-webkit-slider-thumb { border-color: hsl(var(--foreground)); }
+.week-slider-invert::-moz-range-thumb { border-color: hsl(var(--foreground)); }

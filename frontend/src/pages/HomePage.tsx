@@ -6,6 +6,7 @@ import {
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
 import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimeline';
+import { DayScheduleBoard } from '@/components/dashboard/DayScheduleBoard';
 import { InfraHealthBar } from '@/components/dashboard/InfraHealthBar';
 import { IncidentMiniPanel } from '@/components/dashboard/IncidentMiniPanel';
 import { DomainQuickAccess } from '@/components/dashboard/DomainQuickAccess';
@@ -96,7 +97,7 @@ export function HomePage() {
       })
     : '없음';
 
-  const [weeklyTab, setWeeklyTab] = useState<'week' | 'calendar'>('week');
+  const [weeklyTab, setWeeklyTab] = useState<'week' | 'month' | 'member'>('week');
 
   const now = new Date();
   const dateStr = fmtKoreanDate(now);
@@ -167,23 +168,24 @@ export function HomePage() {
         <div className="flex-1 min-h-0 flex flex-col px-3 py-3 gap-3 overflow-auto">
           <div className="flex-1 min-h-0 grid grid-cols-10 gap-3">
 
-            {/* ── Platform 담당자별 진행 현황 (4/10) ──────────────────────────── */}
+            {/* ── 당일 시간단위 스케줄 (담당자 기준) (4/10) ─────────────────── */}
             <div className="col-span-10 xl:col-span-4 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
-              <div className="flex-none px-4 py-2.5 border-b border-border bg-muted/40">
+              <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
+                <CalendarClock className="w-3.5 h-3.5 text-primary" />
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                  Platform 담당자별 진행 현황
+                  당일 스케줄
                 </span>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4">
-                <MemberTodayTodos selectedClusterId={null} />
+              <div className="flex-1 min-h-0 p-3">
+                <DayScheduleBoard selectedClusterId={null} />
               </div>
             </div>
 
-            {/* ── 이번 주 업무 / 달력 (6/10) ───────────────────────────────── */}
+            {/* ── 담당자별 진행 현황 (주간 / 월간 / 담당자) (6/10) ──────────── */}
             <div className="col-span-10 xl:col-span-6 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                  이번 달 일정
+                  담당자별 진행 현황
                 </span>
                 <CalendarDays className="w-3.5 h-3.5 text-primary" />
                 <div className="ml-auto flex items-center rounded-md border border-border overflow-hidden text-[10px]">
@@ -197,21 +199,35 @@ export function HomePage() {
                     주간
                   </button>
                   <button
-                    onClick={() => setWeeklyTab('calendar')}
+                    onClick={() => setWeeklyTab('month')}
                     className={cn(
                       'px-2 py-1 border-l border-border transition-colors',
-                      weeklyTab === 'calendar' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
+                      weeklyTab === 'month' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
                     )}
                   >
-                    달력
+                    월간
+                  </button>
+                  <button
+                    onClick={() => setWeeklyTab('member')}
+                    className={cn(
+                      'px-2 py-1 border-l border-border transition-colors',
+                      weeklyTab === 'member' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
+                    )}
+                  >
+                    담당자
                   </button>
                 </div>
               </div>
               <div className="flex-1 min-h-0 overflow-hidden">
-                {weeklyTab === 'week'
-                  ? <div className="h-full overflow-y-auto p-3"><WeeklyStatusTimeline selectedClusterId={null} /></div>
-                  : <div className="h-full overflow-y-auto p-4"><WorkCalendar selectedClusterId={null} /></div>
-                }
+                {weeklyTab === 'week' && (
+                  <div className="h-full overflow-y-auto p-3"><WeeklyStatusTimeline selectedClusterId={null} /></div>
+                )}
+                {weeklyTab === 'month' && (
+                  <div className="h-full overflow-y-auto p-4"><WorkCalendar selectedClusterId={null} /></div>
+                )}
+                {weeklyTab === 'member' && (
+                  <div className="h-full overflow-y-auto p-4"><MemberTodayTodos selectedClusterId={null} /></div>
+                )}
               </div>
             </div>
 

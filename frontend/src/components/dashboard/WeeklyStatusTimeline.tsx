@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck, Plus,
+  ClipboardList, CalendarCheck, Plus, Contrast,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { stripHtml } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
+import { stripHtml, cn } from '@/lib/utils';
 
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
@@ -103,6 +104,24 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
+
+  // ── 슬라이더 색 반전 — 사용자별 설정(localStorage) ──
+  const currentUser = useAuthStore((s) => s.user);
+  const sliderInvertKey = `k8s:weekSliderInvert:${currentUser?.username ?? 'guest'}`;
+  const [sliderInvert, setSliderInvert] = useState<boolean>(() => {
+    try { return localStorage.getItem(sliderInvertKey) === '1'; } catch { return false; }
+  });
+  // 로그인 사용자가 바뀌면 그 사용자의 저장값으로 동기화.
+  useEffect(() => {
+    try { setSliderInvert(localStorage.getItem(sliderInvertKey) === '1'); } catch { /* noop */ }
+  }, [sliderInvertKey]);
+  const toggleSliderInvert = () => {
+    setSliderInvert((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(sliderInvertKey, next ? '1' : '0'); } catch { /* noop */ }
+      return next;
+    });
+  };
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -311,12 +330,34 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       </div>
 
       {/* ── week slider (◀ ━━●━━ ▶) — drag to move week by week ──────────────── */}
-      <div className="flex items-center gap-2.5 px-1">
+      <div className={cn(
+        'flex items-center gap-2.5 px-1 transition-colors',
+        sliderInvert && 'bg-foreground rounded-2xl py-2 px-2',
+      )}>
+        {/* 색 반전 토글 — 사용자별 설정. 작게. */}
+        <button
+          onClick={toggleSliderInvert}
+          aria-pressed={sliderInvert}
+          title={sliderInvert ? '슬라이더 색 반전 끄기' : '슬라이더 색 반전 켜기'}
+          className={cn(
+            'p-1 rounded-lg transition-colors flex-shrink-0',
+            sliderInvert
+              ? 'bg-background/15 text-background hover:bg-background/25'
+              : 'bg-secondary text-muted-foreground hover:bg-card hover:text-foreground',
+          )}>
+          <Contrast className="w-3.5 h-3.5" />
+        </button>
+
         <button
           onClick={goPrev}
           disabled={currentIndex <= 0}
           aria-label="이전 주"
-          className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:bg-card hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          className={cn(
+            'p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+            sliderInvert
+              ? 'bg-background/15 text-background hover:bg-background/25'
+              : 'bg-secondary text-muted-foreground hover:bg-card hover:text-foreground',
+          )}>
           <ChevronLeft className="w-4 h-4" />
         </button>
 
@@ -331,11 +372,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               value={currentIndex}
               onChange={(e) => setIndex(Number(e.target.value))}
               aria-label="주간 슬라이더"
-              className="week-slider peer w-full h-1.5 cursor-pointer accent-primary"
+              className={cn('week-slider peer w-full h-1.5 cursor-pointer accent-primary', sliderInvert && 'week-slider-invert')}
             />
             {/* tooltip: shows currently-viewed week range above the thumb */}
             <div
-              className="pointer-events-none absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-1.5 py-0.5 text-[10px] font-medium text-background opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100 peer-active:opacity-100"
+              className={cn(
+                'pointer-events-none absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100 peer-active:opacity-100',
+                sliderInvert ? 'bg-background text-foreground' : 'bg-foreground text-background',
+              )}
               style={{ left: centerLeft(frac) }}
             >
               {shortDate(weekStart)} ~ {shortDate(days[DAY_COUNT - 1])}
@@ -354,8 +398,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                     key={i}
                     className={`absolute top-0 -translate-x-1/2 rounded-full ${
                       isCur ? 'bg-primary w-[3px] h-2'
-                      : isTd ? 'bg-primary/50 w-px h-2'
-                      : 'bg-border w-px h-1.5'
+                      : isTd ? (sliderInvert ? 'bg-background/60 w-px h-2' : 'bg-primary/50 w-px h-2')
+                      : (sliderInvert ? 'bg-background/30 w-px h-1.5' : 'bg-border w-px h-1.5')
                     }`}
                     style={{ left: centerLeft(f) }}
                   />
@@ -364,9 +408,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             </div>
           )}
 
-          <div className="flex justify-between text-[10px] text-muted-foreground/70 font-mono">
+          <div className={cn(
+            'flex justify-between text-[10px] font-mono',
+            sliderInvert ? 'text-background/70' : 'text-muted-foreground/70',
+          )}>
             <span>{shortDate(rangeStart)}</span>
-            <span className="text-primary font-semibold">{currentIndex + 1} / {totalWeeks}주</span>
+            <span className={cn('font-semibold', sliderInvert ? 'text-background' : 'text-primary')}>{currentIndex + 1} / {totalWeeks}주</span>
             <span>{shortDate(rangeEnd)}</span>
           </div>
         </div>
@@ -375,7 +422,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
           onClick={goNext}
           disabled={currentIndex >= totalWeeks - 1}
           aria-label="다음 주"
-          className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:bg-card hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          className={cn(
+            'p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+            sliderInvert
+              ? 'bg-background/15 text-background hover:bg-background/25'
+              : 'bg-secondary text-muted-foreground hover:bg-card hover:text-foreground',
+          )}>
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

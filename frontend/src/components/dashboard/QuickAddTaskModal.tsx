@@ -16,6 +16,10 @@ interface QuickAddTaskModalProps {
   open: boolean;
   /** YYYY-MM-DD — 클릭한 달력 날짜 (필수). */
   defaultDate: string;
+  /** HH:mm — 시간단위 스케줄에서 클릭한 시각 미리 채움 (선택, 기본 09:00). */
+  defaultTime?: string;
+  /** 담당자 미리 채움 — 담당자별 스케줄에서 빈 슬롯 클릭 시 (선택). */
+  defaultAssignee?: string;
   /** 클러스터 사이드바에서 선택된 클러스터 — 미리 채움 (선택). */
   defaultClusterId?: string | null;
   onClose: () => void;
@@ -52,7 +56,7 @@ function formatDateLabel(date: string): string {
  * 모듈, effortHours 등)은 업무 관리 게시판의 정식 폼에서 추가/수정.
  */
 export function QuickAddTaskModal({
-  open, defaultDate, defaultClusterId, onClose, onCreated,
+  open, defaultDate, defaultTime, defaultAssignee, defaultClusterId, onClose, onCreated,
 }: QuickAddTaskModalProps) {
   const toast = useToast();
   const navigate = useNavigate();
@@ -77,13 +81,13 @@ export function QuickAddTaskModal({
     if (!open) return;
     setSelectedType(null);
     setTitle('');
-    setAssignee('');
+    setAssignee(defaultAssignee ?? '');
     setPriority('medium');
     setKanbanStatus('todo');
-    setTime('09:00');
+    setTime(defaultTime ?? '09:00');
     setClusterId(defaultClusterId ?? '');
     setError(null);
-  }, [open, defaultClusterId]);
+  }, [open, defaultClusterId, defaultTime, defaultAssignee]);
 
   if (!open) return null;
 
