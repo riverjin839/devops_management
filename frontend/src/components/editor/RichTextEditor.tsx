@@ -51,6 +51,8 @@ interface RichTextEditorProps {
   onImagePaste?: (dataUrl: string) => void;
   /** `[[ ]]` 백링크 — 제공 시 '[[' 입력으로 내부 링크 검색/삽입 메뉴 활성화. */
   linkSearch?: (query: string) => LinkOption[];
+  /** 사용자가 색을 고르지 않았을 때 적용할 기본 배경색(예: '#ffffff'). 미지정 시 테마 배경. */
+  defaultBg?: string | null;
 }
 
 interface ToolbarButtonProps {
@@ -486,6 +488,7 @@ export function RichTextEditor({
   minHeight = '120px',
   onImagePaste,
   linkSearch,
+  defaultBg,
 }: RichTextEditorProps) {
   const isUpdatingFromProp = useRef(false);
 
@@ -568,9 +571,9 @@ export function RichTextEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  // 에디터 배경색 — 사용자가 고른 색(localStorage). 없으면 테마 배경.
+  // 에디터 배경색 — 사용자가 고른 색(localStorage) 우선, 없으면 defaultBg(예: 흰색), 그것도 없으면 테마 배경.
   const [bgColor, setBgColor] = useState<string | null>(() => {
-    try { return localStorage.getItem(EDITOR_BG_KEY); } catch { return null; }
+    try { return localStorage.getItem(EDITOR_BG_KEY) ?? defaultBg ?? null; } catch { return defaultBg ?? null; }
   });
   const applyBg = useCallback((color: string | null) => {
     setBgColor(color);
