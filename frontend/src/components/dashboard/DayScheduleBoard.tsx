@@ -83,6 +83,7 @@ interface PlacedItem {
   item: WorkItem;
   time: string | null; // HH:mm — null 이면 시간 미지정
   hour: number;        // 시간 미지정은 -1
+  ongoing: boolean;    // 시작일 이후~완료일(또는 오늘) 사이의 "진행 중인 날"
 }
 
 /**
@@ -120,20 +121,33 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
 
   const { data: workItemsData, isLoading } = useWorkItems();
 
-  // viewDate 에 잡힌 항목 (startedAt 기준), 클러스터 + 보기범위(나만/전체) 필터 적용.
+  // viewDate 에 "걸치는" 항목 — 시작일부터 완료일(없으면 오늘)까지 매일 노출.
+  // 클러스터 + 보기범위(나만/전체) 필터 적용.
   const dayItems = useMemo<PlacedItem[]>(() => {
     const all = workItemsData?.data ?? [];
+    const todayKey = dateKey(new Date());
     const out: PlacedItem[] = [];
     for (const w of all) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
       if (meOnly && (!myName || !assigneeNames(w).includes(myName))) continue;
-      const parsed = parseLocal(w.startedAt);
-      if (!parsed || dateKey(parsed) !== viewDate) continue;
-      const timed = hasClock(w.startedAt);
+      const startD = parseLocal(w.startedAt);
+      if (!startD) continue;
+      const startKey = dateKey(startD);
+      // 완료일 있으면 그날까지, 없으면 오늘까지 진행 중으로 본다.
+      const closedD = parseLocal(w.closedAt);
+      let endKey = closedD ? dateKey(closedD) : todayKey;
+      if (endKey < startKey) endKey = startKey;
+      // viewDate 가 [startKey, endKey] 안에 들어야 노출.
+      if (viewDate < startKey || viewDate > endKey) continue;
+
+      // 시작일 당일에만 실제 시작 시각으로 배치, 그 외(중간/완료일)는 "종일" 진행 중.
+      const isStartDay = viewDate === startKey;
+      const timed = isStartDay && hasClock(w.startedAt);
       out.push({
         item: w,
-        time: timed ? hhmm(parsed) : null,
-        hour: timed ? parsed.getHours() : -1,
+        time: timed ? hhmm(startD) : null,
+        hour: timed ? startD.getHours() : -1,
+        ongoing: !isStartDay,
       });
     }
     return out;
@@ -385,6 +399,11 @@ function EventCard({ placed, onOpen }: { placed: PlacedItem; onOpen: (id: string
           <span className={cn('text-xs truncate', done ? 'text-muted-foreground line-through' : 'text-foreground font-medium')}>
             {label}
           </span>
+          {placed.ongoing && (
+            <span className="flex-none text-[9px] font-semibold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              진행 중
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted-foreground min-w-0">
           <span className="truncate">{names.join(', ')}</span>
