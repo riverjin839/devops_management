@@ -110,8 +110,9 @@ export function DateTimePicker({
   const [viewMonth, setViewMonth] = useState(() => (parsed ?? new Date()).getMonth());
   const [hour, setHour] = useState(() => (parsed ?? new Date()).getHours());
   const [minute, setMinute] = useState(() => (parsed ?? new Date()).getMinutes());
-  // 시간 포함 여부 — 값에 'T' 가 있으면 포함. 빈 값/신규는 기본 포함(true).
-  const [withTime, setWithTime] = useState(() => (value ? hasTime(value) : true));
+  // 시간 포함 여부 — 값에 'T' 가 있으면 포함. 빈 값/신규는 기본 미포함(날짜만).
+  // 시간이 필요하면 "시간 포함" 체크박스로 옵션 추가.
+  const [withTime, setWithTime] = useState(() => (value ? hasTime(value) : false));
 
   // Sync internal state when external value changes (e.g., form reset / hydrate).
   useEffect(() => {
