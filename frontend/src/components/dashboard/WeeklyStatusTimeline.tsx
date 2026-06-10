@@ -61,6 +61,7 @@ interface TaskBar {
   endIdx: number;       // 0..DAY_COUNT-1 within the visible week
   clippedLeft: boolean; // bar starts before this week
   clippedRight: boolean;// bar ends after this week (or after Fri)
+  growing: boolean;     // 완료일(closedAt) 미입력 → 오늘까지 계속 진행 중(우측이 "성장 중")
 }
 interface Milestone {
   issue: WorkItem;
@@ -137,13 +138,16 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   // ── task bars overlapping this week ──
   const taskBars: TaskBar[] = useMemo(() => {
     const out: TaskBar[] = [];
+    const todayD = fmtDate(today);
     for (const item of taskItems) {
       const s = item.startedAt?.slice(0, 10);
       if (!s) continue;
-      // ongoing tasks extend to today; done/closed use closedAt (fallback start)
-      const eRaw = item.closedAt?.slice(0, 10)
-        ?? ((item.kanbanStatus ?? 'todo') === 'done' ? s : fmtDate(today));
+      // 완료일(closedAt)이 있으면 그날까지, 없으면 상태와 무관하게 "오늘"까지 계속 자란다.
+      const closed = item.closedAt?.slice(0, 10);
+      const eRaw = closed ?? todayD;
       const e = eRaw < s ? s : eRaw;
+      // 완료일 미입력 + 시작이 오늘 이전/오늘 → 진행 중(성장 중)으로 본다.
+      const growing = !closed && s <= todayD;
       // overlap test against [weekStartStr(월), weekEndStr(금)]
       if (e < weekStartStr || s > weekEndStr) continue;
 
@@ -157,6 +161,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         endIdx: Math.max(startClamped, endClamped),
         clippedLeft: s < weekStartStr,
         clippedRight: e > weekEndStr,
+        growing,
       });
     }
     // sort: by start day, then priority (high first)
@@ -504,7 +509,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             )}
 
             {/* ── 업무 기준: 한 업무 = 한 행 ── */}
-            {viewMode === 'task' && taskBars.map(({ item, startIdx, endIdx, clippedLeft, clippedRight }) => {
+            {viewMode === 'task' && taskBars.map(({ item, startIdx, endIdx, clippedLeft, clippedRight, growing }) => {
               const status = item.kanbanStatus ?? 'todo';
               const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
               const span = endIdx - startIdx + 1;
@@ -531,11 +536,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                     >
                       <button type="button"
                         onClick={() => openWorkItem(item.id)}
-                        title={stripHtml(item.content)}
+                        title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                         className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
-                        ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
+                        ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-[10px] font-semibold truncate">{team || sv.label}</span>
+                        {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
                       </button>
                     </div>
                   </div>
@@ -562,7 +568,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   <div className={`relative grid ${colsClass}`} style={{ minHeight: trackH }}>
                     <DayCells />
                     {lanes.map((lane, laneIdx) =>
-                      lane.map(({ item, startIdx, endIdx, clippedLeft, clippedRight }) => {
+                      lane.map(({ item, startIdx, endIdx, clippedLeft, clippedRight, growing }) => {
                         const status = item.kanbanStatus ?? 'todo';
                         const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
                         const span = endIdx - startIdx + 1;
@@ -576,11 +582,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                             }}>
                             <button type="button"
                               onClick={() => openWorkItem(item.id)}
-                              title={stripHtml(item.content)}
+                              title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                               className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
-                              ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight ? 'rounded-r-none' : ''}`}>
+                              ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
                               <span className="text-[10px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
+                              {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
                             </button>
                           </div>
                         );
@@ -605,6 +612,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         ))}
         <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />미해결 이슈</span>
         <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-emerald-500" />해결 이슈</span>
+        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
       </div>
     </div>
   );
