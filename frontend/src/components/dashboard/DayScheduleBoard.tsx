@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3,
 } from 'lucide-react';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useAssignees } from '@/hooks/useAssignees';
+import { useAuthStore } from '@/stores/authStore';
 import { stripHtml, cn } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
@@ -86,9 +86,9 @@ interface PlacedItem {
 }
 
 /**
- * 좌측 메인 — 담당자 기준 당일 시간단위 스케줄.
- * 세로 시간축(working hours)에 업무/이슈/회의를 배치하고, 빈 시간대를 클릭하면
- * 해당 시각으로 바로 등록할 수 있다. 상단 칩으로 담당자 필터.
+ * 좌측 메인 — 나의 당일 시간단위 스케줄.
+ * 로그인한 사용자가 담당(primary/secondary/assignee)인 항목만 세로 시간축에 배치하고,
+ * 빈 시간대를 클릭하면 그 시각으로 바로 등록(담당자 = 나)할 수 있다.
  */
 export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const navigate = useNavigate();
@@ -96,18 +96,20 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const [viewDate, setViewDate] = useState(todayStr);
   const isToday = viewDate === todayStr;
 
-  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
   const [quickAdd, setQuickAdd] = useState<{ time: string; assignee?: string } | null>(null);
 
-  const { data: workItemsData, isLoading } = useWorkItems();
-  const { data: registeredAssignees = [] } = useAssignees();
+  const currentUser = useAuthStore((s) => s.user);
+  const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
 
-  // viewDate 에 잡힌 항목만 (startedAt 기준), 클러스터 필터 적용.
+  const { data: workItemsData, isLoading } = useWorkItems();
+
+  // viewDate 에 잡힌 "나의" 항목만 (startedAt 기준), 클러스터 필터 적용.
   const dayItems = useMemo<PlacedItem[]>(() => {
     const all = workItemsData?.data ?? [];
     const out: PlacedItem[] = [];
     for (const w of all) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
+      if (!myName || !assigneeNames(w).includes(myName)) continue;
       const parsed = parseLocal(w.startedAt);
       if (!parsed || dateKey(parsed) !== viewDate) continue;
       const timed = hasClock(w.startedAt);
@@ -118,26 +120,9 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
       });
     }
     return out;
-  }, [workItemsData, selectedClusterId, viewDate]);
+  }, [workItemsData, selectedClusterId, viewDate, myName]);
 
-  // 담당자 필터 적용본.
-  const filtered = useMemo(
-    () => (assigneeFilter ? dayItems.filter((p) => assigneeNames(p.item).includes(assigneeFilter)) : dayItems),
-    [dayItems, assigneeFilter],
-  );
-
-  // 칩에 보여줄 담당자 목록 — 등록 담당자 우선, 당일 업무가 있는 담당자도 합집합.
-  const chipAssignees = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const p of dayItems) for (const n of assigneeNames(p.item)) counts.set(n, (counts.get(n) ?? 0) + 1);
-    const ordered: string[] = [];
-    const seen = new Set<string>();
-    for (const a of registeredAssignees) {
-      if (a.name && !seen.has(a.name)) { seen.add(a.name); ordered.push(a.name); }
-    }
-    for (const [n] of counts) if (!seen.has(n)) { seen.add(n); ordered.push(n); }
-    return ordered.map((name) => ({ name, count: counts.get(name) ?? 0 }));
-  }, [dayItems, registeredAssignees]);
+  const filtered = dayItems;
 
   // 시간 미지정 / 시간대별 분리.
   const allDay = useMemo(() => filtered.filter((p) => p.hour < 0), [filtered]);
@@ -208,7 +193,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         )}
         <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{filtered.length}건</span>
         <button
-          onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(nowHour, 23)).padStart(2, '0')}:00` : '09:00', assignee: assigneeFilter ?? undefined })}
+          onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(nowHour, 23)).padStart(2, '0')}:00` : '09:00', assignee: myName || undefined })}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
           title="업무 등록"
         >
@@ -216,37 +201,15 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         </button>
       </div>
 
-      {/* ── 담당자 필터 칩 ──────────────────────────────────────────────────── */}
-      <div className="flex-none flex items-center gap-1 overflow-x-auto pb-2 mb-1 -mx-0.5 px-0.5 no-scrollbar">
-        <button
-          onClick={() => setAssigneeFilter(null)}
-          className={cn(
-            'flex-none px-2 py-1 rounded-full text-[11px] font-medium transition-colors',
-            assigneeFilter === null
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-secondary text-muted-foreground hover:text-foreground',
-          )}
-        >
-          전체
-        </button>
-        {chipAssignees.map(({ name, count }) => {
-          const active = assigneeFilter === name;
-          return (
-            <button
-              key={name}
-              onClick={() => setAssigneeFilter(active ? null : name)}
-              className={cn(
-                'flex-none inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium transition-colors',
-                active ? 'bg-primary text-primary-foreground' : `${assigneeColor(name)} hover:brightness-95`,
-              )}
-              title={`${name} · ${count}건`}
-            >
-              <span className="truncate max-w-[72px]">{name}</span>
-              {count > 0 && <span className="tabular-nums opacity-80">{count}</span>}
-            </button>
-          );
-        })}
-      </div>
+      {/* ── "나의 일정" 표시 ─────────────────────────────────────────────────── */}
+      {myName && (
+        <div className="flex-none flex items-center gap-1.5 pb-2 mb-1">
+          <span className={cn('w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold', assigneeColor(myName))}>
+            {myName.slice(0, 2).toUpperCase()}
+          </span>
+          <span className="text-[11px] font-medium text-muted-foreground">{myName}님의 일정</span>
+        </div>
+      )}
 
       {/* ── body ────────────────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
@@ -303,7 +266,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setQuickAdd({ time: `${String(h).padStart(2, '0')}:00`, assignee: assigneeFilter ?? undefined })}
+                          onClick={() => setQuickAdd({ time: `${String(h).padStart(2, '0')}:00`, assignee: myName || undefined })}
                           className="w-full h-7 rounded-lg border border-dashed border-transparent group-hover:border-border/70 flex items-center justify-center text-muted-foreground/0 group-hover:text-muted-foreground transition-all"
                           title={`${String(h).padStart(2, '0')}:00 에 업무 등록`}
                         >
@@ -318,18 +281,20 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
 
             {filtered.length === 0 && (
               <div className="rounded-xl border border-dashed border-border/60 py-10 mt-2 text-center text-sm text-muted-foreground">
-                {assigneeFilter
-                  ? `${assigneeFilter} 의 ${isToday ? '오늘' : '해당 날짜'} 일정이 없습니다.`
-                  : `${isToday ? '오늘' : '해당 날짜'} 예정된 일정이 없습니다.`}
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setQuickAdd({ time: '09:00', assignee: assigneeFilter ?? undefined })}
-                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" /> 업무 등록
-                  </button>
-                </div>
+                {!myName
+                  ? '로그인 후 나의 일정을 볼 수 있습니다.'
+                  : `${isToday ? '오늘' : '해당 날짜'} 나의 일정이 없습니다.`}
+                {myName && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setQuickAdd({ time: '09:00', assignee: myName })}
+                      className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> 업무 등록
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>

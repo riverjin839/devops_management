@@ -173,7 +173,7 @@ export function HomePage() {
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <CalendarClock className="w-3.5 h-3.5 text-primary" />
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                  당일 스케줄
+                  나의 당일 스케줄
                 </span>
               </div>
               <div className="flex-1 min-h-0 p-3">
