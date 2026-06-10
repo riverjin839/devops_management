@@ -68,10 +68,23 @@ const KANBAN_STATUS_OPTIONS: KanbanStatus[] = ['backlog', 'todo', 'in_progress',
 const MODULE_OPTIONS = Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][];
 const TYPE_OPTIONS = Object.entries(TYPE_LABEL_CONFIG) as [WorkItemTypeLabel, { label: string; cls: string }][];
 
-function todayDatetimeLocal(): string {
+/** 신규 등록 기본값 — 시간 없이 날짜만(YYYY-MM-DD). 시간은 DateTimePicker 옵션으로 추가. */
+function todayDate(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * 폼 값(YYYY-MM-DD 또는 YYYY-MM-DDTHH:mm)을 백엔드 datetime 으로 보정.
+ * - 날짜만이면 자정(T00:00:00)으로 채워 datetime 파싱 실패를 막는다.
+ * - 초가 없으면 :00 을 붙인다.
+ */
+function toApiDatetime(v?: string | null): string | null {
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T00:00:00`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return `${v}:00`;
+  return v;
 }
 
 function toDatetimeLocal(dateStr?: string | null): string {
@@ -142,7 +155,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [componentCustom, setComponentCustom] = useState('');
   const [content, setTaskContent] = useState('');
   const [resolution, setResultContent] = useState('');
-  const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? todayDatetimeLocal());
+  const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? todayDate());
   const [closedAt, setCompletedAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
@@ -299,8 +312,8 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       content,
       resolution: resolution || undefined,
       detailContent: type === 'issue' ? (detailContent || undefined) : undefined,
-      startedAt,
-      closedAt: closedAt || null,
+      startedAt: toApiDatetime(startedAt) as string,
+      closedAt: toApiDatetime(closedAt),
       priority,
       remarks: remarks.trim() || undefined,
       confluenceUrl: confluenceUrl.trim() || undefined,
@@ -361,7 +374,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             onChange={(e) => setPrimaryAssignee(e.target.value)}
             placeholder="이름"
             className={inputClass}
-            required
             list="item-assignee-list"
           />
           <datalist id="item-assignee-list">
@@ -538,7 +550,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
                 value={category}
                 onChange={(e) => setTaskCategory(e.target.value)}
                 className={`${inputClass} w-20 flex-shrink-0`}
-                required
               >
                 <option value="">—</option>
                 {allCategories.map((cat) => (
@@ -551,7 +562,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
                 onChange={(e) => setTaskCategoryCustom(e.target.value)}
                 placeholder="직접 입력"
                 className={`${inputClass} flex-1 min-w-0`}
-                required
               />
             </div>
           ) : (
@@ -560,7 +570,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               value={category}
               onChange={(e) => setTaskCategory(e.target.value)}
               className={inputClass}
-              required
             >
               <option value="">— 선택 —</option>
               {allCategories.map((cat) => (
@@ -576,7 +585,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             value={startedAt}
             onChange={setScheduledAt}
             placeholder="예정일 선택"
-            required
             clearable={false}
           />
         </div>

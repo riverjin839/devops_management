@@ -38,8 +38,10 @@ function buildScheduledAtIso(date: string, time: string): string {
   // KST → UTC 보존을 위해 datetime-local 같은 의미로 처리:
   // Date(`${date}T${time}:00`) 는 브라우저 로컬 타임존 기준이므로,
   // toISOString() 으로 UTC 직렬화하여 백엔드 DateTime 컬럼에 저장.
-  const d = new Date(`${date}T${time}:00`);
-  return d.toISOString();
+  // 시간이 비었거나 형식이 어긋나면 자정(00:00)으로 안전하게 처리해 Invalid Date 를 방지.
+  const t = /^\d{2}:\d{2}$/.test(time) ? time : '00:00';
+  const d = new Date(`${date}T${t}:00`);
+  return Number.isNaN(d.getTime()) ? `${date}T00:00:00` : d.toISOString();
 }
 
 function formatDateLabel(date: string): string {
