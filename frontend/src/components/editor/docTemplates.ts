@@ -115,6 +115,46 @@ export const DOC_TEMPLATES: DocTemplate[] = [
 <ul data-type="taskList">${TASK('')}</ul>`.trim(),
   },
   {
+    id: 'skill-checklist',
+    label: '기능별 상세 체크리스트',
+    description: '기술별 상세항목 — "설명 가능?" 자가진단 체크(역량 점검)',
+    html: `
+<h2>기능별 상세 체크리스트 (엔지니어 자가진단)</h2>
+<table><tbody>
+<tr><th>항목</th><th>내용</th></tr>
+<tr><td>파트 / 담당</td><td></td></tr>
+<tr><td>대상 기능 / 범위</td><td></td></tr>
+<tr><td>작성자</td><td></td></tr>
+<tr><td>작성일 / 갱신일</td><td></td></tr>
+</tbody></table>
+<blockquote><p><strong>체크 기준</strong> — ☑ 체크 = <strong>타인에게 설명 가능</strong> · 미체크 = 보충 필요(학습/실습 예정)</p></blockquote>
+<h3>진행 현황 (요약)</h3>
+<table><tbody>
+<tr><th>기술 분야</th><th>설명 가능 / 전체</th><th>진행률</th><th>보충 필요 항목</th></tr>
+<tr><td>Kubernetes</td><td></td><td></td><td></td></tr>
+<tr><td>네트워킹 (CNI / Cilium)</td><td></td><td></td><td></td></tr>
+<tr><td>인증 / 인가</td><td></td><td></td><td></td></tr>
+<tr><td>CI/CD · GitOps</td><td></td><td></td><td></td></tr>
+<tr><td>스토리지 · 레지스트리</td><td></td><td></td><td></td></tr>
+<tr><td>관측성</td><td></td><td></td><td></td></tr>
+</tbody></table>
+<h3>Kubernetes</h3>
+<ul data-type="taskList">${TASK('클러스터 아키텍처(control plane · etcd · kubelet) 설명')}${TASK('Pod 스케줄링 · 리소스 요청/제한')}${TASK('Service / Ingress / DNS 동작 흐름')}${TASK('롤링 업데이트 · 프로브(readiness/liveness)')}</ul>
+<h3>네트워킹 (CNI / Cilium)</h3>
+<ul data-type="taskList">${TASK('CNI 개념 · Pod 간 네트워크 흐름')}${TASK('Cilium eBPF 데이터패스 · 네트워크 정책')}${TASK('Service 로드밸런싱 · kube-proxy 대체')}</ul>
+<h3>인증 / 인가 (Keycloak / RBAC)</h3>
+<ul data-type="taskList">${TASK('OIDC / OAuth2 토큰 흐름')}${TASK('Keycloak Realm · Client · Role 매핑')}${TASK('K8s RBAC(Role / RoleBinding) 설명')}</ul>
+<h3>CI/CD · GitOps (Jenkins / ArgoCD)</h3>
+<ul data-type="taskList">${TASK('파이프라인 단계(build · test · scan · deploy)')}${TASK('GitOps 동기화 · 드리프트 감지')}${TASK('이미지 태깅 · 롤백 전략')}</ul>
+<h3>스토리지 · 레지스트리 (PV/PVC / Nexus / MinIO)</h3>
+<ul data-type="taskList">${TASK('PV / PVC / StorageClass 동작')}${TASK('레지스트리(Nexus) 운영 · 미러링')}${TASK('오브젝트 스토리지(MinIO / Ceph) 개념')}</ul>
+<h3>관측성 (Prometheus / Grafana / 로깅)</h3>
+<ul data-type="taskList">${TASK('PromQL 기본 · 주요 메트릭')}${TASK('알람 규칙 · 임계치 설계')}${TASK('로그 파이프라인 · 대시보드 구성')}</ul>
+<h3>분야 추가</h3>
+<p>필요한 기술 분야와 상세 항목을 추가하세요. (예: Linux/OS, IaC(Ansible/Helm), 보안, DB …)</p>
+<ul data-type="taskList">${TASK('')}${TASK('')}</ul>`.trim(),
+  },
+  {
     id: 'command-table',
     label: '명령어 관리(표)',
     description: '명령어 · 설명 · 비고 표 — 엑셀처럼 정리',
