@@ -78,6 +78,18 @@ class WorkItem(Base):
     # work item 은 수정/삭제할 수 있도록 ownership 판정에 사용 (nullable: 구버전 호환).
     created_by = Column(String(100), nullable=True, index=True)
 
+    # ── Jira 연동 (가져온 이슈) ──────────────────────────────────────────────
+    # jira_issue_id = Jira 내부 불변 ID (정규 dedup 키, 부분 UNIQUE). jira_issue_key 는
+    # 표시용(PROJ-123, rename 가능). watchers = 이 이슈를 가져온 PEP username 목록 →
+    # "Jira 이슈 1건 = work_item 1건" 으로 사람별 중복 없이 다인 가시성 제공.
+    jira_issue_id = Column(String(50), nullable=True)
+    jira_issue_key = Column(String(50), nullable=True, index=True)
+    jira_url = Column(Text, nullable=True)
+    jira_status = Column(String(100), nullable=True)        # 원본 Jira 상태명 (표시/transition)
+    jira_synced_at = Column(DateTime, nullable=True)        # 마지막 동기화 시각
+    jira_updated_at = Column(DateTime, nullable=True)       # Jira updated (충돌 감지)
+    jira_watchers = Column(JSONB, nullable=True)            # list[str] — 가져온 PEP username
+
     # G-I2: server_default 추가 — DB 직접 INSERT (마이그레이션 backfill 등) 시에도 NULL 방지.
     # `default=datetime.utcnow` 는 ORM 레벨, `server_default=func.now()` 는 DB 레벨.
     created_at = Column(DateTime, default=datetime.utcnow, server_default=func.now())

@@ -41,6 +41,7 @@ from app.models.sprint import Sprint
 from app.models.project import Project
 from app.models.service_topology import ServiceTopologyLink, ServiceTopologyExternalNode
 from app.models.work_item_time_block import WorkItemTimeBlock
+from app.models.user_jira_credential import UserJiraCredential
 
 __all__ = [
     "Cluster",
@@ -97,4 +98,5 @@ __all__ = [
     "ServiceTopologyLink",
     "ServiceTopologyExternalNode",
     "WorkItemTimeBlock",
+    "UserJiraCredential",
 ]

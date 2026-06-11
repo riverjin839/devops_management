@@ -87,7 +87,14 @@ def _assert_ownership(item: WorkItem, user: User, *, op: str, db: Session) -> No
     if item.created_by and item.created_by in ids:
         return
     # 담당자(이름 저장) 본인 — 사번으로 로그인했어도 브리지된 이름으로 매칭됨.
-    if item.primary_assignee in ids or (item.secondary_assignee and item.secondary_assignee in ids):
+    # primary/secondary 모두 쉼표 복수 담당자를 허용하므로 분리해서 매칭한다.
+    assignee_names = {
+        n.strip()
+        for raw in (item.primary_assignee, item.secondary_assignee)
+        for n in (raw or "").split(",")
+        if n.strip()
+    }
+    if assignee_names & ids:
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

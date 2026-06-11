@@ -801,6 +801,20 @@ export const workItemsApi = {
   deleteTimeBlock: (blockId: string) => api.delete(`/work-items/time-blocks/${blockId}`),
 };
 
+// Jira 연동 — 공통 설정(관리자) + 사용자별 PAT + 가져오기.
+export const jiraApi = {
+  getConfig: () => api.get<import('@/types').JiraConfig>('/jira/config'),
+  updateConfig: (data: Partial<import('@/types').JiraConfig>) =>
+    api.put<import('@/types').JiraConfig>('/jira/config', data),
+  getCredential: () => api.get<import('@/types').JiraCredentialStatus>('/jira/credential'),
+  saveCredential: (token: string, jiraAccount?: string) =>
+    api.put<import('@/types').JiraCredentialStatus>('/jira/credential', { token, jiraAccount }),
+  deleteCredential: () => api.delete('/jira/credential'),
+  test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
+  import: (data: import('@/types').JiraImportRequest) =>
+    api.post<import('@/types').JiraImportResult>('/jira/import', data),
+};
+
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).
 // primary_assignee 와 secondary_assignee 둘 다 그룹 키로 등록되므로 같은 아이템이
 // 두 사람의 그룹에 중복 노출될 수 있다 (협업자 가시성용).

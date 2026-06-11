@@ -428,8 +428,61 @@ export interface WorkItem {
   customValues?: Record<string, unknown> | null;
   /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
   allAttendees?: boolean;
+  /** Jira 연동 — 가져온 이슈 linkage (없으면 일반 work item). */
+  jiraIssueKey?: string | null;
+  jiraUrl?: string | null;
+  jiraStatus?: string | null;
+  jiraSyncedAt?: string | null;
+  jiraWatchers?: string[] | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Jira 연동 ──────────────────────────────────────────────────────────────────
+export interface JiraConfig {
+  baseUrl: string;
+  enabled: boolean;
+  verifyTls: boolean;
+  defaultProjectKey?: string | null;
+}
+
+export interface JiraCredentialStatus {
+  configured: boolean;
+  jiraAccount?: string | null;
+  lastVerifiedAt?: string | null;
+}
+
+export interface JiraTestResult {
+  ok: boolean;
+  detail: string;
+  displayName?: string | null;
+}
+
+export interface JiraImportRequest {
+  scope: 'me' | 'project' | 'jql';
+  projectKey?: string;
+  jql?: string;
+  dryRun?: boolean;
+}
+
+export interface JiraImportItemPreview {
+  jiraKey: string;
+  title: string;
+  kanbanStatus: string;
+  action: 'create' | 'update';
+}
+
+export interface JiraImportResult {
+  status: 'ok' | 'offline' | 'error';
+  imported: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  truncated: boolean;
+  dryRun: boolean;
+  detail: string;
+  errors: string[];
+  items: JiraImportItemPreview[];
 }
 
 export interface WorkItemComment {

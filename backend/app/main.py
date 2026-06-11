@@ -22,6 +22,7 @@ from app.routers import (
     playbooks_router,
     promql_router,
     work_items_router,
+    jira_router,
     projects_router,
     sprints_router,
     ui_settings_router,
@@ -426,6 +427,21 @@ def _run_migrations():
             "ix_work_items_status_started",
             "work_items",
             "(kanban_status, started_at DESC)",
+        )
+        # Jira 연동 — 가져온 이슈 linkage 컬럼 (구버전 DB 호환). jira_issue_id 가 정규
+        # dedup 키이며, 부분 UNIQUE 인덱스로 "Jira 이슈 1건 = work_item 1건" 보장.
+        _safe_add_column("work_items", "jira_issue_id", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_issue_key", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_url", "TEXT")
+        _safe_add_column("work_items", "jira_status", "VARCHAR(100)")
+        _safe_add_column("work_items", "jira_synced_at", "TIMESTAMP WITHOUT TIME ZONE")
+        _safe_add_column("work_items", "jira_updated_at", "TIMESTAMP WITHOUT TIME ZONE")
+        _safe_add_column("work_items", "jira_watchers", "JSONB")
+        _safe_create_index("ix_work_items_jira_issue_key", "work_items", "(jira_issue_key)")
+        _safe_exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_work_items_jira_issue_id "
+            "ON work_items (jira_issue_id) WHERE jira_issue_id IS NOT NULL",
+            label="unique index work_items.jira_issue_id",
         )
 
     # 3) issues → work_items 백필 (issues 테이블이 존재할 때만)
@@ -1219,6 +1235,7 @@ app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(openclaw_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(sprints_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)

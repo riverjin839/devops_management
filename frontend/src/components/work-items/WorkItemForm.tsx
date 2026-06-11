@@ -140,9 +140,10 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const { data: sprintsData } = useSprints();
   const sprints = sprintsData?.data ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [primaryAssignee, setPrimaryAssignee] = useState(
-    !initial && !parentItem ? defaultAssignee : '',
+  const [primaryList, setPrimaryList] = useState<string[]>(
+    !initial && !parentItem && defaultAssignee ? [defaultAssignee] : [],
   );
+  const [primInput, setPrimInput] = useState('');
   const [secondaryList, setSecondaryList] = useState<string[]>([]);
   const [secInput, setSecInput] = useState('');
   const [clusterIds, setClusterIds] = useState<string[]>([]);
@@ -203,7 +204,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setSprintId(initial.sprintId ?? '');
       setTitle(initial.title ?? '');
       setType(initial.type);
-      setPrimaryAssignee(initial.primaryAssignee ?? initial.assignee);
+      setPrimaryList(parseAssignees(initial.primaryAssignee ?? initial.assignee));
       setSecondaryList(parseAssignees(initial.secondaryAssignee));
       setClusterIds(
         initial.clusterIds && initial.clusterIds.length
@@ -243,7 +244,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       }
       setHydrated(true);
     } else if (parentItem) {
-      setPrimaryAssignee(parentItem.primaryAssignee ?? parentItem.assignee);
+      setPrimaryList(parseAssignees(parentItem.primaryAssignee ?? parentItem.assignee));
       setSecondaryList(parseAssignees(parentItem.secondaryAssignee));
       setTaskCategory(parentItem.category);
       setHydrated(true);
@@ -271,6 +272,17 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     setImages((prev) => [...prev, dataUrl]);
   };
 
+  // 담당자(정) 복수 선택 — chip 추가/삭제 (쉼표/Enter 로 구분).
+  const addPrimary = (raw: string) => {
+    const name = raw.trim().replace(/,$/, '').trim();
+    if (!name) return;
+    setPrimaryList((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setPrimInput('');
+  };
+  const removePrimary = (name: string) => {
+    setPrimaryList((prev) => prev.filter((n) => n !== name));
+  };
+
   // 담당자(부) 복수 선택 — chip 추가/삭제.
   const addSecondary = (raw: string) => {
     const name = raw.trim().replace(/,$/, '').trim();
@@ -291,17 +303,22 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const plainTaskContent = content.replace(/<[^>]*>/g, '').trim();
+    // 입력 중이던(미확정) 담당자도 제출 시 반영.
+    const primaryFinal = primInput.trim() && !primaryList.includes(primInput.trim())
+      ? [...primaryList, primInput.trim()] : primaryList;
+    const secondaryFinal = secInput.trim() && !secondaryList.includes(secInput.trim())
+      ? [...secondaryList, secInput.trim()] : secondaryList;
     // 필수값 누락 — 조용히 return 하지 않고 무엇이 빠졌는지 알려준다.
-    if (!primaryAssignee.trim()) { toast.error('등록 불가', '담당자(정)를 입력하세요.'); return; }
+    if (!primaryFinal.length) { toast.error('등록 불가', '담당자(정)를 입력하세요.'); return; }
     if (!resolvedCategory) { toast.error('등록 불가', '분류를 선택하세요.'); return; }
     if (!plainTaskContent) { toast.error('등록 불가', '내용을 입력하세요.'); return; }
     if (!startedAt) { toast.error('등록 불가', '예정일시를 선택하세요.'); return; }
 
     const payload: WorkItemCreate = {
       type,
-      assignee: primaryAssignee.trim(),
-      primaryAssignee: primaryAssignee.trim(),
-      secondaryAssignee: secondaryList.length ? secondaryList.join(', ') : undefined,
+      assignee: primaryFinal[0],
+      primaryAssignee: primaryFinal.join(', '),
+      secondaryAssignee: secondaryFinal.length ? secondaryFinal.join(', ') : undefined,
       clusterId: clusterIds[0] || undefined,
       clusterName: primaryCluster?.name,
       clusterIds: clusterIds.length ? clusterIds : undefined,
@@ -366,16 +383,31 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       {/* ── 기본 설정 — 컴팩트 단일 그리드 (담당자/클러스터/서비스/우선순위/보드상태/분류/일정/프로젝트) ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-2 gap-y-2">
         <div>
-          <label htmlFor={f('primary')} className={labelClass}>담당자(정) *</label>
-          <input
-            id={f('primary')}
-            type="text"
-            value={primaryAssignee}
-            onChange={(e) => setPrimaryAssignee(e.target.value)}
-            placeholder="이름"
-            className={inputClass}
-            list="item-assignee-list"
-          />
+          <label htmlFor={f('primary')} className={labelClass}>
+            담당자(정) * <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
+          </label>
+          <div className="w-full flex flex-wrap items-center gap-1 px-1.5 py-1 bg-background border border-border rounded-md min-h-[30px]">
+            {primaryList.map((name) => (
+              <span key={name} className="inline-flex items-center gap-0.5 text-[11px] bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded px-1.5 py-0.5">
+                {name}
+                <button type="button" onClick={() => removePrimary(name)} className="hover:text-red-500" aria-label={`${name} 제거`}>×</button>
+              </span>
+            ))}
+            <input
+              id={f('primary')}
+              type="text"
+              value={primInput}
+              onChange={(e) => setPrimInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addPrimary(primInput); }
+                else if (e.key === 'Backspace' && !primInput && primaryList.length) { removePrimary(primaryList[primaryList.length - 1]); }
+              }}
+              onBlur={() => { if (primInput.trim()) addPrimary(primInput); }}
+              list="item-assignee-list"
+              placeholder={primaryList.length ? '' : '이름 입력 후 Enter'}
+              className="flex-1 min-w-[64px] bg-transparent text-xs outline-none"
+            />
+          </div>
           <datalist id="item-assignee-list">
             {registeredAssignees.map((a) => (
               <option key={a.name} value={a.name} />
