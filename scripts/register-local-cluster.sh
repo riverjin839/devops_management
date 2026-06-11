@@ -109,11 +109,21 @@ print(json.dumps({
 PY
 )"
 
-RESP="$(curl -s -X POST "${API_URL}/api/v1/clusters" \
+# --max-time: 백엔드가 멈춰도 무한 대기하지 않고 에러를 드러낸다.
+RESP="$(curl -s --max-time 40 -w $'\n__HTTP__%{http_code}' -X POST "${API_URL}/api/v1/clusters" \
   -H "Content-Type: application/json" \
   -d "${PAYLOAD}")"
+CURL_RC=$?
+HTTP_CODE="$(printf '%s' "${RESP}" | sed -n 's/.*__HTTP__\([0-9]*\)$/\1/p')"
+RESP="$(printf '%s' "${RESP}" | sed 's/__HTTP__[0-9]*$//')"
 
-echo "      응답: ${RESP}"
+if [ "${CURL_RC}" -ne 0 ]; then
+  echo "ERROR: 등록 요청 실패 (curl rc=${CURL_RC}). 40초 내 응답 없음(타임아웃) 또는 연결 불가." >&2
+  echo "  점검: 1) 백엔드가 최신 코드로 재빌드됐는지  2) docker-compose logs -f backend 로 요청 처리 로그" >&2
+  exit 1
+fi
+
+echo "      HTTP ${HTTP_CODE} 응답: ${RESP}"
 
 CLUSTER_ID="$(echo "${RESP}" | python3 -c 'import sys,json;
 try: print(json.load(sys.stdin).get("id",""))
@@ -128,7 +138,7 @@ echo "      클러스터 ID: ${CLUSTER_ID}"
 
 # ── 즉시 헬스체크 실행 (실제 연결 검증) ────────────────────
 echo "[3/3] 헬스체크 실행 중..."
-curl -s -X POST "${API_URL}/api/v1/daily-check/run/${CLUSTER_ID}?schedule_type=manual" \
+curl -s --max-time 60 -X POST "${API_URL}/api/v1/daily-check/run/${CLUSTER_ID}?schedule_type=manual" \
   | python3 -m json.tool 2>/dev/null || echo "(헬스체크 트리거 완료 — 대시보드에서 결과 확인)"
 
 echo ""

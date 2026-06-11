@@ -163,7 +163,7 @@ export function WorkAlarmBell() {
         onClick={togglePanel}
         aria-label={tooltip}
         title={tooltip}
-        className={`relative flex items-center justify-center w-8 h-8 rounded-md transition-colors ${
+        className={`relative flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
           open ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
         }`}
       >
