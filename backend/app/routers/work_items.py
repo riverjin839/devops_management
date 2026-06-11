@@ -18,6 +18,7 @@ from app.models.user import User
 from app.models.app_setting import AppSetting
 from app.auth.deps import require_operator, get_current_user
 from app.services import audit_logger
+from app.models.work_item_time_block import WorkItemTimeBlock
 from app.schemas.work_item import (
     WorkItemCreate,
     WorkItemUpdate,
@@ -27,6 +28,11 @@ from app.schemas.work_item import (
     WorkItemStatusResponse,
     WorkItemCommentCreate,
     WorkItemCommentResponse,
+)
+from app.schemas.work_item_time_block import (
+    TimeBlockCreate,
+    TimeBlockUpdate,
+    TimeBlockResponse,
 )
 
 router = APIRouter(prefix="/work-items", tags=["work-items"])
@@ -743,3 +749,104 @@ def list_activities(
         }
         for r in rows
     ]
+
+
+# ── 날짜별 시간 블록 (time blocks) ──────────────────────────────────────────────
+# 업무의 전체 기간(started_at~closed_at) 안에서 날짜별 실제 작업 시간대를 관리한다.
+# 시각은 자정 기준 분(0..1440)으로 저장 — timezone 모호성 제거.
+
+@router.get("/time-blocks/range", response_model=list[TimeBlockResponse])
+def list_time_blocks_range(
+    start: date = Query(..., description="조회 시작일 (YYYY-MM-DD)"),
+    end: date = Query(..., description="조회 종료일 (YYYY-MM-DD, 포함)"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """기간 내 모든 업무의 시간 블록 — 당일 스케줄 보드용. 프런트가 work item 과 join."""
+    if end < start:
+        raise HTTPException(status_code=422, detail="end 가 start 보다 빠릅니다.")
+    return (
+        db.query(WorkItemTimeBlock)
+        .filter(WorkItemTimeBlock.block_date >= start, WorkItemTimeBlock.block_date <= end)
+        .order_by(WorkItemTimeBlock.block_date.asc(), WorkItemTimeBlock.start_minute.asc())
+        .all()
+    )
+
+
+@router.get("/{item_id}/time-blocks", response_model=list[TimeBlockResponse])
+def list_item_time_blocks(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    if not db.query(WorkItem).filter(WorkItem.id == item_id).first():
+        raise HTTPException(status_code=404, detail="Work item not found")
+    return (
+        db.query(WorkItemTimeBlock)
+        .filter(WorkItemTimeBlock.work_item_id == item_id)
+        .order_by(WorkItemTimeBlock.block_date.asc(), WorkItemTimeBlock.start_minute.asc())
+        .all()
+    )
+
+
+@router.post("/{item_id}/time-blocks", response_model=TimeBlockResponse, status_code=status.HTTP_201_CREATED)
+def create_time_block(
+    item_id: UUID,
+    payload: TimeBlockCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    if not db.query(WorkItem).filter(WorkItem.id == item_id).first():
+        raise HTTPException(status_code=404, detail="Work item not found")
+    block = WorkItemTimeBlock(
+        work_item_id=item_id,
+        block_date=payload.block_date,
+        start_minute=payload.start_minute,
+        end_minute=payload.end_minute,
+        note=payload.note,
+    )
+    db.add(block)
+    try:
+        db.commit(); db.refresh(block)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"시간 블록 저장 실패: {str(e)[:200]}") from e
+    return block
+
+
+@router.patch("/time-blocks/{block_id}", response_model=TimeBlockResponse)
+def update_time_block(
+    block_id: UUID,
+    payload: TimeBlockUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    block = db.query(WorkItemTimeBlock).filter(WorkItemTimeBlock.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail="Time block not found")
+    data = payload.model_dump(exclude_unset=True)
+    for field, val in data.items():
+        setattr(block, field, val)
+    # 순서 검증 (수정 후)
+    if block.end_minute <= block.start_minute:
+        raise HTTPException(status_code=422, detail="end_minute 은 start_minute 보다 커야 합니다.")
+    try:
+        db.commit(); db.refresh(block)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"시간 블록 수정 실패: {str(e)[:200]}") from e
+    return block
+
+
+@router.delete("/time-blocks/{block_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_time_block(
+    block_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    block = db.query(WorkItemTimeBlock).filter(WorkItemTimeBlock.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail="Time block not found")
+    db.delete(block)
+    db.commit()
+    return None

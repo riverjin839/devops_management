@@ -238,7 +238,7 @@ function SprintCard({
   const left = daysBetween(todayStr(), sprint.endDate);
   const meta = STATUS_META[sprint.status];
   return (
-    <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
+    <div className="bg-card border border-border rounded-2xl p-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-0.5">

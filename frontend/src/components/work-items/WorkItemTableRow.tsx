@@ -86,11 +86,11 @@ function EditableCell({
   title?: string;
 }) {
   if (isEditing) {
-    return <td className={`px-4 py-3 ${className}`}>{children}</td>;
+    return <td className={`px-4 py-1.5 ${className}`}>{children}</td>;
   }
   return (
     <td
-      className={`px-4 py-3 select-none cursor-pointer hover:bg-primary/5 transition-colors ${className}`}
+      className={`px-4 py-1.5 select-none cursor-pointer hover:bg-primary/5 transition-colors ${className}`}
       onClick={onEnter}
       title={title}
     >
@@ -219,7 +219,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
     switch (key) {
       case 'project':
         return (
-          <td key="project" className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+          <td key="project" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.projectId
               ? (projectNameById.get(item.projectId) ?? '-')
               : <span className="text-muted-foreground/50">-</span>}
@@ -228,7 +228,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
 
       case 'sprint':
         return (
-          <td key="sprint" className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+          <td key="sprint" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.sprintId
               ? (sprintNameById?.get(item.sprintId) ?? '-')
               : <span className="text-muted-foreground/50">-</span>}
@@ -291,7 +291,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
 
       case 'assignee':
         return (
-          <td key="assignee" className="px-4 py-3 font-medium whitespace-nowrap">
+          <td key="assignee" className="px-4 py-1.5 font-medium whitespace-nowrap">
             <div className="flex items-center gap-1.5 flex-wrap">
               {editing === 'primaryAssignee' ? (
                 <TextInlineInput
@@ -391,7 +391,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
       case 'title':
         // 제목 클릭 → 상세 보기. title 미설정 레거시 항목은 내용 첫 줄로 대체.
         return (
-          <td key="title" className="px-4 py-3 max-w-xs">
+          <td key="title" className="px-4 py-1.5 max-w-xs">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
@@ -505,7 +505,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
 
       case 'actions':
         return (
-          <td key="actions" className="px-4 py-3">
+          <td key="actions" className="px-4 py-1.5">
             <div className="flex items-center justify-center gap-1">
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(item); }}
@@ -539,7 +539,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
 
   return (
     <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
-      <td className="px-2 py-3 w-7">
+      <td className="px-2 py-1.5 w-7">
         {!isDragDisabled && (
           <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 rounded">
             <GripVertical className="w-4 h-4" />
@@ -613,7 +613,7 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="w-full px-3 py-2.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 transition-colors"
+            className="w-full px-3 py-1.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> 행 추가
           </button>
@@ -625,7 +625,7 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
   // 컬럼 표시/순서와 독립적인 한 줄 폼 — 필수 입력(분류·내용·시작일·정담당)을 항상 노출.
   return (
     <tr className="border-t border-border bg-primary/[0.04]">
-      <td colSpan={colSpan} className="px-3 py-3">
+      <td colSpan={colSpan} className="px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <select value={kanbanStatus} onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
             className="px-1.5 py-1 text-xs bg-background border border-border rounded">
