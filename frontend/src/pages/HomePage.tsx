@@ -64,6 +64,7 @@ function KpiPill({ label, value, hint, Icon, accent, to }: KpiPillProps) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 export function HomePage() {
   const mode = useHomeStore((s) => s.mode);
+  const scheduleBg = useHomeStore((s) => s.scheduleBg);
 
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
@@ -165,7 +166,10 @@ export function HomePage() {
 
       {/* ── Mode A: work panels — scrollable ────────────────────────────────── */}
       {mode === 'work' && (
-        <div className="flex-1 min-h-0 flex flex-col px-3 py-3 gap-3 overflow-auto">
+        <div className={cn(
+          'flex-1 min-h-0 flex flex-col px-3 py-3 gap-3 overflow-auto',
+          scheduleBg === 'cream' ? 'schedule-bg-cream' : 'schedule-bg-white',
+        )}>
           <div className="flex-1 min-h-0 grid grid-cols-10 gap-3">
 
             {/* ── 당일 시간단위 스케줄 (담당자 기준) (4/10) ─────────────────── */}

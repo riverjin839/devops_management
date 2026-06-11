@@ -682,7 +682,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
       {/* ── 제목 ──────────────────────────────────────────────────────────── */}
       <div>
-        <label htmlFor={f('title')} className="block text-sm font-semibold text-foreground mb-1.5">
+        <label htmlFor={f('title')} className="block text-xs font-semibold text-foreground mb-1">
           제목
         </label>
         <input
@@ -691,13 +691,13 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder={type === 'issue' ? '이슈 제목 (예: master1 kubelet 재기동 필요)' : '업무 제목 (예: 노드 NIC 점검)'}
-          className="w-full px-3.5 py-2.5 bg-background border border-border rounded-lg text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
 
       {/* ── 본문 — type 에 따라 라벨 변경 ──────────────────────────────── */}
       <div>
-        <label htmlFor={f('content')} className="block text-sm font-semibold text-foreground mb-1.5">
+        <label htmlFor={f('content')} className="block text-xs font-semibold text-foreground mb-1">
           {type === 'issue' ? '이슈 내용' : '업무 내용'} <span className="text-primary">*</span>
         </label>
         <div id={f('content')}>
@@ -708,6 +708,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             minHeight="520px"
             onImagePaste={handleImagePaste}
             linkSearch={linkSearch}
+            defaultBg="#ffffff"
           />
         </div>
       </div>
@@ -728,6 +729,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               minHeight="160px"
               onImagePaste={handleImagePaste}
               linkSearch={linkSearch}
+              defaultBg="#ffffff"
             />
           </div>
         </details>
@@ -748,6 +750,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             minHeight="160px"
             onImagePaste={handleImagePaste}
             linkSearch={linkSearch}
+            defaultBg="#ffffff"
           />
         </div>
       </details>
