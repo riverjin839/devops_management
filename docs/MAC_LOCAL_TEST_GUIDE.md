@@ -4,6 +4,9 @@
 > 만들고, **PEP(devops_management)** 를 docker-compose 로 기동한 뒤, 두 클러스터를 PEP 에 등록해
 > 헬스 체크까지 확인한다.
 >
+> **CNI 는 두 클러스터 모두 Cilium + Hubble** 로 구성한다 (기본 CNI인 kindnet/flannel 대신).
+> PEP 의 Cilium/Hubble 딥 트러블슈팅 기능까지 테스트하기 위함.
+>
 > Intel Mac / 운영 배포는 [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md) 를 참고. 이 문서는 **Apple Silicon + 로컬 테스트** 전용이다.
 
 ---
@@ -22,7 +25,8 @@
 │           ▼                               ▼                            │
 │   ┌───────────────┐              ┌─────────────────────┐               │
 │   │ 테스트 클러스터 A │              │  테스트 클러스터 B    │              │
-│   │   kind (3노드)  │              │  Vagrant VM + k3s    │              │
+│   │ kind (3노드)    │              │  Vagrant VM + k3s    │              │
+│   │ CNI: Cilium     │              │  CNI: Cilium         │              │
 │   │ control-plane:6443│            │  (QEMU, 포트포워딩)   │              │
 │   └───────────────┘              └─────────────────────┘               │
 └────────────────────────────────────────────────────────────────────────┘
@@ -42,6 +46,7 @@
 # Homebrew 가 없다면 먼저 설치: https://brew.sh
 brew install --cask docker          # Docker Desktop (실행 후 한 번 열어서 데몬 기동)
 brew install kind kubectl           # kind + kubectl
+brew install cilium-cli             # Cilium CLI (kind 에 Cilium 설치용)
 brew install qemu                   # Vagrant QEMU provider 용 (Apple Silicon)
 brew install --cask vagrant         # Vagrant
 vagrant plugin install vagrant-qemu # QEMU provider 플러그인
@@ -56,34 +61,41 @@ vagrant plugin install vagrant-qemu # QEMU provider 플러그인
 
 ---
 
-## 1. 테스트 클러스터 A — kind 생성
+## 1. 테스트 클러스터 A — kind + Cilium 생성
 
-PEP 의 kind 스크립트는 PEP 자체까지 kind 에 배포하지만, 여기서는 **순수 테스트 클러스터로만**
-쓰기 위해 클러스터만 만든다.
+기본 CNI(kindnet) 를 비활성화하고 Cilium + Hubble 을 설치하는 헬퍼 스크립트를 쓴다.
 
 ```bash
-# 3노드 kind 클러스터 생성 (control-plane 1 + worker 2)
-kind create cluster --name test-a --image kindest/node:v1.34.0
+# 3노드 kind 클러스터(disableDefaultCNI) + Cilium + Hubble
+bash scripts/local-cilium-kind.sh test-a
 
 # 확인
 kubectl --context kind-test-a get nodes
+cilium status --context kind-test-a
 ```
+
+스크립트가 하는 일: kindnet 끈 kind 생성 → `cilium install` → `cilium status --wait` → `cilium hubble enable --ui`.
 
 > `kind create cluster` 가 docker **`kind` 네트워크**를 자동 생성한다.
 > docker-compose 가 이 네트워크를 external 로 참조하므로, **PEP 기동(3단계) 전에 이 단계를 먼저** 해야 한다.
+>
+> ⚠️ Cilium 설치는 인터넷에서 이미지를 받아오므로 첫 실행 시 수 분 걸릴 수 있다. Docker Desktop 메모리 **8GB+** 권장.
 
 ---
 
-## 2. 테스트 클러스터 B — Vagrant + k3s 생성
+## 2. 테스트 클러스터 B — Vagrant + k3s + Cilium 생성
 
 ```bash
 cd vagrant
-vagrant up                # QEMU VM 부팅 + provision-k3s.sh 가 k3s 설치
+vagrant up                # QEMU VM 부팅 + provision-k3s.sh 가 k3s + Cilium 설치
 ```
 
 `vagrant up` 이 끝나면:
-- VM 안에 단일 노드 k3s 가 `--tls-san host.docker.internal` 로 설치됨
+- VM 안에 단일 노드 k3s 가 **flannel 비활성화 + Cilium** 로 설치됨 (`--tls-san host.docker.internal`)
 - VM 의 6443 → Mac 호스트 `127.0.0.1:6443` 으로 포워딩됨
+
+> Cilium 까지 설치하므로 provision 에 수 분 소요된다. flannel 기본 CNI 로 두고 싶으면
+> `K3S_CNI=flannel vagrant up` (또는 `Vagrantfile` 의 provision env).
 
 kubeconfig 를 Mac 으로 가져오기:
 
@@ -202,6 +214,10 @@ kind delete cluster --name test-a
 | 클러스터 B 가 `pending` 인데 A 는 정상 | backend 컨테이너에서 `host.docker.internal` 미해석 | 3단계의 `docker-compose.override.yml`(extra_hosts) 적용 후 재기동 |
 | `vagrant up` → provider 오류 | QEMU 플러그인 미설치 | `vagrant plugin install vagrant-qemu`, `brew install qemu` 확인 |
 | kind 노드가 안 뜸 | Docker 리소스 부족 | Docker Desktop 메모리 8GB+ 로 상향 |
+| 노드가 계속 `NotReady` | CNI(Cilium) 미설치/미완료 | kind: `cilium status --context kind-test-a` / k3s: `vagrant ssh -c 'sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml cilium status'`. 미완료면 `cilium status --wait` |
+| k3s 노드 `NotReady` (Cilium 인데) | k3s CNI 경로 mismatch | provision 은 `cni.binPath=/var/lib/rancher/k3s/data/current/bin` `cni.confPath=/var/lib/rancher/k3s/agent/etc/cni/net.d` 로 설치. 그래도 안 되면 VM 에서 `cilium install` 재실행 또는 `vagrant destroy -f && vagrant up` |
+| Cilium 이미지 pull 지연/실패 | 인터넷/리소스 | 첫 설치는 수 분 소요. 실패 시 `cilium status` 로 파드 상태 확인, 재시도 |
+| Hubble UI 보고 싶음 | — | kind: `cilium hubble ui --context kind-test-a` (포트포워딩) |
 
 디버그 명령:
 
@@ -216,10 +232,10 @@ cd vagrant && vagrant ssh -c 'sudo k3s kubectl get nodes'   # k3s 상태
 ## 빠른 참조 (전체 흐름 한 번에)
 
 ```bash
-# 1) 클러스터 A
-kind create cluster --name test-a --image kindest/node:v1.34.0
+# 1) 클러스터 A (kind + Cilium)
+bash scripts/local-cilium-kind.sh test-a
 
-# 2) 클러스터 B
+# 2) 클러스터 B (Vagrant k3s + Cilium)
 cd vagrant && vagrant up && vagrant ssh -c 'sudo cat /etc/rancher/k3s/k3s.yaml' > k3s-kubeconfig.yaml && cd ..
 
 # 3) PEP 기동

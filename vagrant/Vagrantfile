@@ -33,7 +33,7 @@ Vagrant.configure("2") do |config|
     qe.cpu         = "host"
     qe.net_device  = "virtio-net-pci"
     qe.smp         = "2"
-    qe.memory      = "3G"
+    qe.memory      = "4G"   # Cilium + Hubble 구동 여유분
     # 콘솔 GUI 불필요 (headless)
     qe.no_daemonize = false
   end
