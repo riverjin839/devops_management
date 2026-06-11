@@ -55,7 +55,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
   return (
     <div className="bg-card border border-border rounded-md overflow-hidden">
       {/* 헤더 */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/20">
+      <div className="flex items-center justify-between px-5 py-1.5 border-b border-border bg-muted/20">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
             {bucket.assignee.slice(0, 2)}
@@ -103,14 +103,14 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
             {bucket.tasks.length === 0 ? (
               <p className="text-xs text-muted-foreground/50 text-center py-6">할당된 작업 없음</p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="space-y-1">
                 {bucket.tasks.slice(0, 10).map((t) => {
                   const ks = KANBAN_STYLE[t.kanbanStatus] ?? KANBAN_STYLE.todo;
                   return (
                     <li
                       key={t.id}
                       onClick={() => onTaskClick(t)}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/40 cursor-pointer group"
+                      className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 cursor-pointer group"
                     >
                       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-400'}`} />
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
@@ -141,7 +141,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
             {bucket.issues.length === 0 ? (
               <p className="text-xs text-muted-foreground/50 text-center py-6">할당된 이슈 없음</p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="space-y-1">
                 {bucket.issues.slice(0, 10).map((i) => (
                   <li
                     key={i.id}

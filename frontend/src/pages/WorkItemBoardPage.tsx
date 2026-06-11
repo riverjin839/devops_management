@@ -51,7 +51,7 @@ function DraggableSortHeader({
     <th
       ref={setNodeRef}
       style={style}
-      className="relative px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap select-none bg-muted/30 group"
+      className="relative px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap select-none bg-muted/30 group"
     >
       <span className={`inline-flex items-center gap-1 ${meta.headerAlign === 'center' ? 'w-full justify-center' : ''}`}>
         <button

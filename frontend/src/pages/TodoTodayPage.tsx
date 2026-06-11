@@ -119,7 +119,7 @@ function ItemCard({ item, busy, onToggleDone, onOpen }: ItemProps) {
   return (
     <div
       onClick={() => onOpen(item)}
-      className="group cursor-pointer rounded-xl border border-border bg-card/60 hover:bg-card hover:border-primary/30 p-3 transition-colors"
+      className="group cursor-pointer rounded-xl border border-border bg-card/60 hover:bg-card hover:border-primary/30 p-2 transition-colors"
     >
       <div className="flex items-start gap-2">
         <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
@@ -149,7 +149,7 @@ function ItemRow({ item, busy, onToggleDone, onOpen }: ItemProps) {
   return (
     <div
       onClick={() => onOpen(item)}
-      className="group cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-secondary/50 transition-colors text-sm"
+      className="group cursor-pointer flex items-center gap-2 px-3 py-1 rounded-lg hover:bg-secondary/50 transition-colors text-sm"
     >
       <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[item.priority] ?? PRIORITY_DOT.medium}`} />
@@ -178,7 +178,7 @@ function Section({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-secondary/30 transition-colors"
+        className="w-full flex items-center gap-2 px-4 py-1.5 text-left hover:bg-secondary/30 transition-colors"
       >
         <span className={`w-2 h-2 rounded-full ${t.dot}`} />
         <span className={`text-sm font-semibold ${t.text}`}>{title}</span>
@@ -479,7 +479,7 @@ export function TodoTodayPage() {
                       {sprint.candidates.map((t) => {
                         const cl = clusterLabel(t);
                         return (
-                          <div key={t.id} className="group flex items-center gap-2 px-2 py-2 text-sm">
+                          <div key={t.id} className="group flex items-center gap-2 px-2 py-1 text-sm">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} />
                             <button onClick={() => onOpen(t)} className="flex-1 min-w-0 truncate text-left hover:text-primary transition-colors">{displayTitle(t)}</button>
                             {cl && <span className="hidden md:inline text-[10px] text-muted-foreground flex-shrink-0 max-w-[120px] truncate">{cl}</span>}
