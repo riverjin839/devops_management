@@ -1,0 +1,61 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+#
+# Apple Silicon(M1~M4) Mac 전용 — Vagrant 단일 노드 k3s 테스트 클러스터
+# ---------------------------------------------------------------------
+# PEP(devops_management) 가 모니터링할 "2번째 테스트 클러스터"를 VM 으로 띄운다.
+#
+# 기본 provider: QEMU (무료, brew 설치만으로 사용 가능, GUI 불필요)
+#   brew install qemu
+#   vagrant plugin install vagrant-qemu
+#
+# 대안 provider (주석 참고):
+#   - VMware Fusion 13 (개인용 무료) + vagrant-vmware-desktop
+#   - Parallels Desktop (유료) + vagrant-parallels
+#
+# k3s API 서버(6443) 를 Mac 호스트로 포워딩 → docker-compose 의 backend 컨테이너가
+# host.docker.internal:6443 으로 접속한다. provision 스크립트가 k3s 를
+# --tls-san host.docker.internal 로 설치해 TLS 인증서 SAN 을 맞춘다.
+
+Vagrant.configure("2") do |config|
+  config.vm.hostname = "pep-k3s"
+
+  # k3s API 서버를 Mac 호스트 6443 으로 포워딩
+  # (backend 컨테이너 → host.docker.internal:6443 로 도달)
+  config.vm.network "forwarded_port", guest: 6443, host: 6443, host_ip: "127.0.0.1"
+
+  # ── 기본 provider: QEMU (Apple Silicon, 무료) ──────────────────────
+  config.vm.box = "perk/ubuntu-2204-arm64"
+
+  config.vm.provider "qemu" do |qe|
+    qe.arch        = "aarch64"
+    qe.machine     = "virt,accel=hvf,highmem=on"
+    qe.cpu         = "host"
+    qe.net_device  = "virtio-net-pci"
+    qe.smp         = "2"
+    qe.memory      = "3G"
+    # 콘솔 GUI 불필요 (headless)
+    qe.no_daemonize = false
+  end
+
+  # ── 대안 1: VMware Fusion (개인용 무료) ────────────────────────────
+  # box 를 bento/ubuntu-22.04 로 바꾸고 아래 블록 주석 해제,
+  # 위 qemu 블록은 주석 처리.
+  #   config.vm.box = "bento/ubuntu-22.04"
+  #   config.vm.provider "vmware_desktop" do |v|
+  #     v.gui    = false
+  #     v.memory = 3072
+  #     v.cpus   = 2
+  #     v.vmx["ethernet0.virtualDev"] = "vmxnet3"
+  #   end
+
+  # ── 대안 2: Parallels Desktop (유료) ───────────────────────────────
+  #   config.vm.box = "bento/ubuntu-22.04"
+  #   config.vm.provider "parallels" do |prl|
+  #     prl.memory = 3072
+  #     prl.cpus   = 2
+  #   end
+
+  # k3s 설치 + tls-san 설정
+  config.vm.provision "shell", path: "provision-k3s.sh"
+end

@@ -69,3 +69,9 @@ temp/
 .claude/*
 !.claude/skills/
 .superpowers/
+
+# Vagrant (Mac 로컬 테스트 클러스터)
+vagrant/.vagrant/
+vagrant/*.yaml
+!vagrant/Vagrantfile
+*-kubeconfig.yaml
