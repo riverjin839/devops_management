@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users,
 } from 'lucide-react';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useWorkItems, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/components/common';
 import { stripHtml, cn } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
@@ -40,6 +41,11 @@ function parseLocal(iso?: string | null): Date | null {
 }
 function hhmm(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+/** 로컬 날짜(YYYY-MM-DD) + 시/분 → 백엔드 저장용 UTC ISO 문자열. */
+function buildIso(dateStr: string, h: number, min: number): string {
+  const d = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`);
+  return Number.isNaN(d.getTime()) ? `${dateStr}T00:00:00` : d.toISOString();
 }
 
 // ── status visual map (macOS / Claude soft tints) ──────────────────────────────
@@ -120,6 +126,32 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const meOnly = scope === 'me';
 
   const { data: workItemsData, isLoading } = useWorkItems();
+  const updateMut = useUpdateWorkItem();
+  const toast = useToast();
+
+  // ── 드래그로 시간 조정 ──────────────────────────────────────────────────────
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverHour, setDragOverHour] = useState<number | null>(null);
+
+  const dropToHour = (h: number) => {
+    const id = dragId;
+    setDragId(null);
+    setDragOverHour(null);
+    if (!id) return;
+    const w = (workItemsData?.data ?? []).find((x) => x.id === id);
+    if (!w) return;
+    const orig = parseLocal(w.startedAt);
+    const min = orig && hasClock(w.startedAt) ? orig.getMinutes() : 0;
+    if (orig && orig.getHours() === h && hasClock(w.startedAt) && dateKey(orig) === viewDate) return; // 변동 없음
+    const iso = buildIso(viewDate, h, min);
+    updateMut.mutate(
+      { id, data: { startedAt: iso } },
+      {
+        onSuccess: () => toast.success('시간 변경', `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')} 으로 이동`),
+        onError: () => toast.error('시간 변경 실패', '잠시 후 다시 시도해 주세요.'),
+      },
+    );
+  };
 
   // viewDate 에 "걸치는" 항목 — 시작일부터 완료일(없으면 오늘)까지 매일 노출.
   // 클러스터 + 보기범위(나만/전체) 필터 적용.
@@ -130,6 +162,8 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     for (const w of all) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
       if (meOnly && (!myName || !assigneeNames(w).includes(myName))) continue;
+      // 완료된 업무는 당일 스케줄에 표시하지 않는다.
+      if (w.kanbanStatus === 'done') continue;
       const startD = parseLocal(w.startedAt);
       if (!startD) continue;
       const startKey = dateKey(startD);
@@ -276,23 +310,12 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
           </div>
         ) : (
           <>
-            {/* 시간 미지정 (종일) */}
-            {allDay.length > 0 && (
-              <div className="mb-2 rounded-xl border border-border/60 bg-secondary/20 p-2">
-                <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-                  <Clock3 className="w-3 h-3" /> 시간 미지정 · {allDay.length}
-                </div>
-                <div className="space-y-1">
-                  {allDay.map((p) => <EventCard key={p.item.id} placed={p} onOpen={openItem} />)}
-                </div>
-              </div>
-            )}
-
             {/* 시간축 */}
             <div className="relative">
               {hours.map((h) => {
                 const items = byHour.get(h) ?? [];
                 const isNow = isToday && h === nowHour;
+                const isDropTarget = dragOverHour === h;
                 return (
                   <div key={h} className="group relative flex gap-2 min-h-[44px]">
                     {/* 시각 라벨 */}
@@ -301,8 +324,16 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
                         {String(h).padStart(2, '0')}:00
                       </span>
                     </div>
-                    {/* 레인 */}
-                    <div className="flex-1 min-w-0 border-l border-border/50 pl-2 py-1 relative">
+                    {/* 레인 — 드롭 시 해당 시각으로 startedAt 변경 */}
+                    <div
+                      className={cn(
+                        'flex-1 min-w-0 border-l border-border/50 pl-2 py-1 relative rounded-r-lg transition-colors',
+                        isDropTarget && 'bg-primary/10 ring-1 ring-primary/40',
+                      )}
+                      onDragOver={dragId ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverHour(h); } : undefined}
+                      onDragLeave={dragId ? () => setDragOverHour((cur) => (cur === h ? null : cur)) : undefined}
+                      onDrop={dragId ? (e) => { e.preventDefault(); dropToHour(h); } : undefined}
+                    >
                       {/* now 라인 */}
                       {isNow && (
                         <div
@@ -316,13 +347,25 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
 
                       {items.length > 0 ? (
                         <div className="space-y-1">
-                          {items.map((p) => <EventCard key={p.item.id} placed={p} onOpen={openItem} />)}
+                          {items.map((p) => (
+                            <EventCard
+                              key={p.item.id}
+                              placed={p}
+                              onOpen={openItem}
+                              draggable={!p.ongoing}
+                              onDragStart={() => setDragId(p.item.id)}
+                              onDragEnd={() => { setDragId(null); setDragOverHour(null); }}
+                            />
+                          ))}
                         </div>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setQuickAdd({ time: `${String(h).padStart(2, '0')}:00`, assignee: meOnly ? (myName || undefined) : undefined })}
-                          className="w-full h-7 rounded-lg border border-dashed border-transparent group-hover:border-border/70 flex items-center justify-center text-muted-foreground/0 group-hover:text-muted-foreground transition-all"
+                          className={cn(
+                            'w-full h-7 rounded-lg border border-dashed border-transparent flex items-center justify-center transition-all',
+                            isDropTarget ? 'text-primary' : 'text-muted-foreground/0 group-hover:text-muted-foreground group-hover:border-border/70',
+                          )}
                           title={`${String(h).padStart(2, '0')}:00 에 업무 등록`}
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -333,6 +376,27 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
                 );
               })}
             </div>
+
+            {/* 시간 미지정 (종일) — 시간축 아래에 표시. 카드를 위 시간대로 드래그하면 시각이 지정된다. */}
+            {allDay.length > 0 && (
+              <div className="mt-2 rounded-xl border border-border/60 bg-secondary/20 p-2">
+                <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                  <Clock3 className="w-3 h-3" /> 시간 미지정 · {allDay.length}
+                </div>
+                <div className="space-y-1">
+                  {allDay.map((p) => (
+                    <EventCard
+                      key={p.item.id}
+                      placed={p}
+                      onOpen={openItem}
+                      draggable={!p.ongoing}
+                      onDragStart={() => setDragId(p.item.id)}
+                      onDragEnd={() => { setDragId(null); setDragOverHour(null); }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {filtered.length === 0 && (
               <div className="rounded-xl border border-dashed border-border/60 py-10 mt-2 text-center text-sm text-muted-foreground">
@@ -369,7 +433,15 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
 }
 
 // ── event card ─────────────────────────────────────────────────────────────────
-function EventCard({ placed, onOpen }: { placed: PlacedItem; onOpen: (id: string) => void }) {
+function EventCard({
+  placed, onOpen, draggable = false, onDragStart, onDragEnd,
+}: {
+  placed: PlacedItem;
+  onOpen: (id: string) => void;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+}) {
   const { item, time } = placed;
   const status = item.kanbanStatus ?? 'todo';
   const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
@@ -383,9 +455,13 @@ function EventCard({ placed, onOpen }: { placed: PlacedItem; onOpen: (id: string
     <button
       type="button"
       onClick={() => onOpen(item.id)}
-      title={label}
+      title={draggable ? `${label}\n(드래그하여 시간 이동)` : label}
+      draggable={draggable}
+      onDragStart={draggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.id); onDragStart?.(); } : undefined}
+      onDragEnd={draggable ? () => onDragEnd?.() : undefined}
       className={cn(
         'w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:shadow-sm overflow-hidden',
+        draggable && 'cursor-grab active:cursor-grabbing',
         sv.tint,
       )}
     >

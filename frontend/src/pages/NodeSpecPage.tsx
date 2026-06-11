@@ -251,6 +251,22 @@ export function NodeSpecPage() {
     return c;
   }, [rows]);
 
+  // 전체 서버(클러스터) 기준 CPU(논리 코어)·메모리(GB) 총합.
+  // cpuThreads(HT 포함 논리 CPU) 우선, 없으면 sockets×cores 로 환산.
+  const totals = useMemo(() => {
+    let cpu = 0;
+    let memGb = 0;
+    rows.forEach((r) => {
+      const threads = r.cpuThreads ?? (((r.cpuSockets ?? 0) * (r.cpuCores ?? 0)) || 0);
+      cpu += threads;
+      memGb += r.memoryGb ?? 0;
+    });
+    return { cpu, memGb };
+  }, [rows]);
+  const memLabel = totals.memGb >= 1024
+    ? `${(totals.memGb / 1024).toFixed(1)} TB`
+    : `${totals.memGb.toLocaleString()} GB`;
+
   const importMut = useAbortableMutation({
     mutationFn: async (_: void, signal) => {
       if (!clusterId) throw new Error('클러스터를 먼저 선택하세요.');
@@ -394,7 +410,7 @@ export function NodeSpecPage() {
             </div>
           </div>
 
-          {/* 통계 pills — 클릭하면 상태 필터로 연동 */}
+          {/* 통계 pills + 필터 + 전체 합계 — 한 줄로 통합 (pills 클릭 시 상태 필터 연동) */}
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
             {(['total', 'active', 'spare', 'maintenance', 'decommission'] as const).map((k) => {
               const isActive = k === 'total' ? statusFilter === '' : statusFilter === k;
@@ -417,20 +433,18 @@ export function NodeSpecPage() {
                 </button>
               );
             })}
-          </div>
 
-          {/* 필터 */}
-          <div className="bg-card border border-border rounded-xl p-3 mb-3 flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            {/* 필터 (작게) — 검색 / 상태 / 역할 */}
+            <div className="relative min-w-[180px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
               <input
                 value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="hostname / serial / asset_tag / IP / vendor / model"
-                className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="hostname / serial / IP / model"
+                className="w-full pl-7 pr-2 py-1 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as NodeSpecStatus | '')}
-              className="px-2 py-1 text-sm bg-background border border-border rounded-lg">
+              className="px-1.5 py-1 text-xs bg-background border border-border rounded-lg">
               <option value="">상태 전체</option>
               <option value="active">운영중</option>
               <option value="spare">예비</option>
@@ -438,7 +452,7 @@ export function NodeSpecPage() {
               <option value="decommission">폐기</option>
             </select>
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-2 py-1 text-sm bg-background border border-border rounded-lg">
+              className="px-1.5 py-1 text-xs bg-background border border-border rounded-lg">
               <option value="">역할 전체</option>
               <option value="control-plane">control-plane</option>
               <option value="worker">worker</option>
@@ -446,6 +460,21 @@ export function NodeSpecPage() {
               <option value="storage">storage</option>
               <option value="spare">spare</option>
             </select>
+
+            {/* 전체 서버 기준 CPU·MEM 총합 — 맨 우측 */}
+            <div className="ml-auto flex items-center gap-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary border border-border tabular-nums"
+                title="전체 서버 논리 CPU(스레드) 합계">
+                <Cpu className="w-3 h-3 text-muted-foreground" />
+                <span className="font-bold text-foreground">{totals.cpu.toLocaleString()}</span>
+                <span className="text-muted-foreground">vCPU</span>
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary border border-border tabular-nums"
+                title="전체 서버 메모리 합계">
+                <HardDrive className="w-3 h-3 text-muted-foreground" />
+                <span className="font-bold text-foreground">{memLabel}</span>
+              </span>
+            </div>
           </div>
 
           {/* 선택 상태 표시 */}
