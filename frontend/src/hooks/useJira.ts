@@ -1,0 +1,69 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { jiraApi } from '@/services/api';
+import { workItemKeys } from '@/hooks/useWorkItems';
+import type { JiraConfig, JiraImportRequest } from '@/types';
+
+export const jiraKeys = {
+  config: ['jira', 'config'] as const,
+  credential: ['jira', 'credential'] as const,
+};
+
+export function useJiraConfig() {
+  return useQuery({
+    queryKey: jiraKeys.config,
+    queryFn: async () => (await jiraApi.getConfig()).data,
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useUpdateJiraConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<JiraConfig>) => jiraApi.updateConfig(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.config }),
+  });
+}
+
+export function useJiraCredential() {
+  return useQuery({
+    queryKey: jiraKeys.credential,
+    queryFn: async () => (await jiraApi.getCredential()).data,
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useSaveJiraCredential() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ token, jiraAccount }: { token: string; jiraAccount?: string }) =>
+      jiraApi.saveCredential(token, jiraAccount),
+    onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.credential }),
+  });
+}
+
+export function useDeleteJiraCredential() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => jiraApi.deleteCredential(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.credential }),
+  });
+}
+
+export function useJiraTest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => jiraApi.test(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.credential }),
+  });
+}
+
+export function useJiraImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: JiraImportRequest) => jiraApi.import(data),
+    onSuccess: (res) => {
+      // dry_run 이 아닐 때만 보드 갱신.
+      if (!res.data.dryRun) qc.invalidateQueries({ queryKey: workItemKeys.all });
+    },
+  });
+}

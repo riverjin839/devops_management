@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter, DownloadCloud } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -13,6 +13,8 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { SavedViews, type SavedViewState } from '@/components/work-items/SavedViews';
 import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
+import { JiraImportModal } from '@/components/work-items/JiraImportModal';
+import { useJiraConfig } from '@/hooks/useJira';
 import { Settings2 } from 'lucide-react';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
@@ -212,6 +214,8 @@ export function WorkItemBoardPage() {
   // G-I9: ConfirmDialog state — window.confirm 대체
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
+  const [jiraOpen, setJiraOpen] = useState(false);
+  const { data: jiraConfig } = useJiraConfig();
 
   const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -398,6 +402,16 @@ export function WorkItemBoardPage() {
               showStylePanel={false}
             />
 
+            {jiraConfig?.enabled && (
+              <button
+                onClick={() => setJiraOpen(true)}
+                className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
+                title="Jira 이슈를 work item 으로 가져오기"
+              >
+                <DownloadCloud className="w-4 h-4" />
+                Jira 가져오기
+              </button>
+            )}
             {viewMode !== 'calendar' && items.length > 0 && (
               <button
                 onClick={handleExportCsv}
@@ -663,6 +677,8 @@ export function WorkItemBoardPage() {
       </main>
 
       <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
+
+      <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
 
       <ConfirmDialog
         open={confirmDelete !== null}

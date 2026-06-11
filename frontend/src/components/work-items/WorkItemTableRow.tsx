@@ -392,16 +392,30 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
         // 제목 클릭 → 상세 보기. title 미설정 레거시 항목은 내용 첫 줄로 대체.
         return (
           <td key="title" className="px-4 py-1.5 max-w-xs">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
-              className="text-left w-full text-foreground/90 hover:text-primary transition-colors"
-              title="클릭하여 상세 보기"
-            >
-              <span className="line-clamp-2 hover:underline">
-                {item.title?.trim() || stripHtml(item.content) || '-'}
-              </span>
-            </button>
+            <div className="flex items-start gap-1.5">
+              {item.jiraIssueKey && (
+                <a
+                  href={item.jiraUrl ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
+                  className="flex-shrink-0 mt-0.5 inline-flex items-center font-mono text-[9px] font-semibold px-1 py-0.5 rounded bg-[#0052CC]/10 text-[#0052CC] dark:text-blue-300 border border-[#0052CC]/20 hover:bg-[#0052CC]/20"
+                >
+                  {item.jiraIssueKey}
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
+                className="text-left flex-1 min-w-0 text-foreground/90 hover:text-primary transition-colors"
+                title="클릭하여 상세 보기"
+              >
+                <span className="line-clamp-2 hover:underline">
+                  {item.title?.trim() || stripHtml(item.content) || '-'}
+                </span>
+              </button>
+            </div>
           </td>
         );
 

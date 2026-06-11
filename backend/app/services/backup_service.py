@@ -58,6 +58,8 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "clusters": ["kubeconfig_content", "kubeconfig_path"],
     # bcrypt 해시지만 외부 유출 시 오프라인 브루트포스 가능성이 있어 기본 마스킹.
     "users": ["hashed_password"],
+    # Jira PAT — 암호문이지만 export 기본 마스킹 (SECRET_KEY 유출 시 복호 방지).
+    "user_jira_credentials": ["token_encrypted"],
 }
 
 

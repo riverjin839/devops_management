@@ -123,6 +123,12 @@ class WorkItemResponse(WorkItemBase):
     id: UUID
     cluster_names: Optional[list[str]] = None   # cluster_ids 와 1:1 표시용 이름
     created_by: Optional[str] = None   # 등록자 username (구버전 데이터는 null)
+    # Jira 연동 (읽기 전용 — 가져오기로만 세팅)
+    jira_issue_key: Optional[str] = None
+    jira_url: Optional[str] = None
+    jira_status: Optional[str] = None
+    jira_synced_at: Optional[datetime] = None
+    jira_watchers: Optional[list[str]] = None
     created_at: datetime
     updated_at: datetime
     subtasks: list["WorkItemResponse"] = []
