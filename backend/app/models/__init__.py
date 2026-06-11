@@ -38,6 +38,7 @@ from app.models.bottleneck_run import BottleneckRun
 from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
 from app.models.os_param_change import OsParamChange
 from app.models.sprint import Sprint
+from app.models.service_topology import ServiceTopologyLink, ServiceTopologyExternalNode
 
 __all__ = [
     "Cluster",
@@ -90,4 +91,6 @@ __all__ = [
     "OpsCheckRunItem",
     "OsParamChange",
     "Sprint",
+    "ServiceTopologyLink",
+    "ServiceTopologyExternalNode",
 ]
