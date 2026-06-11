@@ -16,6 +16,8 @@ interface ConfluenceUrlInputProps {
   hint?: string;
   /** input 추가 클래스. */
   className?: string;
+  /** 한 줄(라벨+입력 가로 배치) 컴팩트 모드. true 면 hint 는 숨긴다. */
+  inline?: boolean;
 }
 
 const URL_RE = /^https?:\/\//i;
@@ -34,10 +36,47 @@ export function ConfluenceUrlInput({
   showHint = true,
   hint,
   className = '',
+  inline = false,
 }: ConfluenceUrlInputProps) {
   const trimmed = value.trim();
   const isValid = !trimmed || URL_RE.test(trimmed);
   const showOpen = isValid && trimmed.length > 0;
+
+  if (inline) {
+    return (
+      <div className="flex items-center gap-2">
+        <label htmlFor={id} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground whitespace-nowrap shrink-0">
+          <Link2 className="w-3.5 h-3.5 text-primary" />
+          {label}
+        </label>
+        <div className="relative flex-1 min-w-0">
+          <input
+            id={id}
+            type="url"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            placeholder="https://confluence.example.com/pages/..."
+            inputMode="url"
+            className={`w-full pl-3 pr-9 py-1.5 bg-background border ${
+              isValid ? 'border-border' : 'border-red-500/60'
+            } rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 ${className}`}
+          />
+          {showOpen && (
+            <a
+              href={trimmed}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="새 창에서 열기"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-secondary transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1">
