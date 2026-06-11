@@ -22,7 +22,10 @@
 #   --kubeconfig FILE    kubeconfig 파일 경로
 #   --server URL         kubeconfig server / api_endpoint 강제 지정
 #   --api-url URL        PEP backend 주소 (기본: http://localhost:8000)
+#   --user / --pass      로그인 계정 (기본: admin/admin, 환경변수 PEP_USER/PEP_PASS 도 가능)
 #   --check              연결 검증 활성화 (기본: skip — 등록 후 헬스체크로 확인)
+#
+# 참고: /api/v1/clusters 는 operator/admin 인증이 필요해 먼저 로그인해 Bearer 토큰을 붙인다.
 set -euo pipefail
 
 API_URL="http://localhost:8000"
@@ -31,6 +34,9 @@ KIND_NAME=""
 KUBECONFIG_FILE=""
 SERVER=""
 SKIP_CHECK="true"
+# /api/v1/clusters 는 operator/admin 인증 필요 → 로그인해서 Bearer 토큰을 받는다.
+PEP_USER="${PEP_USER:-admin}"
+PEP_PASS="${PEP_PASS:-admin}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +45,8 @@ while [[ $# -gt 0 ]]; do
     --kubeconfig) KUBECONFIG_FILE="$2"; shift 2 ;;
     --server)     SERVER="$2"; shift 2 ;;
     --api-url)    API_URL="$2"; shift 2 ;;
+    --user)       PEP_USER="$2"; shift 2 ;;
+    --pass)       PEP_PASS="$2"; shift 2 ;;
     --check)      SKIP_CHECK="false"; shift ;;
     *) echo "알 수 없는 옵션: $1"; exit 1 ;;
   esac
@@ -54,11 +62,11 @@ TMP_KC="$(mktemp)"
 trap 'rm -f "${TMP_KC}"' EXIT
 
 if [ -n "${KIND_NAME}" ]; then
-  echo "[1/3] kind '${KIND_NAME}' 의 internal kubeconfig 추출 중..."
+  echo "[1/4] kind '${KIND_NAME}' 의 internal kubeconfig 추출 중..."
   # --internal: server 를 https://<name>-control-plane:6443 으로 설정 (kind 네트워크 내부)
   kind get kubeconfig --name "${KIND_NAME}" --internal > "${TMP_KC}"
 elif [ -n "${KUBECONFIG_FILE}" ]; then
-  echo "[1/3] kubeconfig 파일 사용: ${KUBECONFIG_FILE}"
+  echo "[1/4] kubeconfig 파일 사용: ${KUBECONFIG_FILE}"
   cp "${KUBECONFIG_FILE}" "${TMP_KC}"
 else
   echo "ERROR: --kind 또는 --kubeconfig 중 하나는 필요합니다." >&2
@@ -93,8 +101,23 @@ PY
 fi
 echo "      api_endpoint = ${API_ENDPOINT}"
 
+# ── 로그인 → Bearer 토큰 (clusters 등록은 operator/admin 인증 필요) ──
+echo "[2/4] 로그인 중 (user=${PEP_USER})..."
+LOGIN_RESP="$(curl -s --max-time 20 -X POST "${API_URL}/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[1],"password":sys.argv[2]}))' "${PEP_USER}" "${PEP_PASS}")")"
+TOKEN="$(printf '%s' "${LOGIN_RESP}" | python3 -c 'import sys,json;
+try: print(json.load(sys.stdin).get("access_token",""))
+except Exception: print("")' 2>/dev/null || true)"
+
+if [ -z "${TOKEN}" ]; then
+  echo "ERROR: 로그인 실패 — 계정 확인 (기본 admin/admin, 또는 --user/--pass, 환경변수 PEP_USER/PEP_PASS)." >&2
+  echo "  응답: ${LOGIN_RESP}" >&2
+  exit 1
+fi
+
 # ── 등록 payload 생성 (JSON 안전 인코딩) ───────────────────
-echo "[2/3] PEP 에 클러스터 등록 중 (${API_URL})..."
+echo "[3/4] PEP 에 클러스터 등록 중 (${API_URL})..."
 PAYLOAD="$(python3 - "${TMP_KC}" "${NAME}" "${API_ENDPOINT}" "${SKIP_CHECK}" <<'PY'
 import json, sys
 kc_path, name, endpoint, skip = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
@@ -110,10 +133,14 @@ PY
 )"
 
 # --max-time: 백엔드가 멈춰도 무한 대기하지 않고 에러를 드러낸다.
+# set +e: curl 타임아웃(rc≠0) 시 set -e 로 즉시 종료되지 않고 rc 를 잡아 메시지를 띄운다.
+set +e
 RESP="$(curl -s --max-time 40 -w $'\n__HTTP__%{http_code}' -X POST "${API_URL}/api/v1/clusters" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${TOKEN}" \
   -d "${PAYLOAD}")"
 CURL_RC=$?
+set -e
 HTTP_CODE="$(printf '%s' "${RESP}" | sed -n 's/.*__HTTP__\([0-9]*\)$/\1/p')"
 RESP="$(printf '%s' "${RESP}" | sed 's/__HTTP__[0-9]*$//')"
 
@@ -137,8 +164,9 @@ fi
 echo "      클러스터 ID: ${CLUSTER_ID}"
 
 # ── 즉시 헬스체크 실행 (실제 연결 검증) ────────────────────
-echo "[3/3] 헬스체크 실행 중..."
+echo "[4/4] 헬스체크 실행 중..."
 curl -s --max-time 60 -X POST "${API_URL}/api/v1/daily-check/run/${CLUSTER_ID}?schedule_type=manual" \
+  -H "Authorization: Bearer ${TOKEN}" \
   | python3 -m json.tool 2>/dev/null || echo "(헬스체크 트리거 완료 — 대시보드에서 결과 확인)"
 
 echo ""
