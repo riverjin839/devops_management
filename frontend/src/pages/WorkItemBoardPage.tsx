@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -29,6 +29,66 @@ type ViewMode = 'table' | 'calendar' | 'kanban';
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 /** 컬럼 헤더 — 드래그 핸들(순서 변경) + 정렬 토글 + 우측 리사이즈 그립. */
+/** 업무 분류(유형) 필터 — 6개 탭을 버튼 하나 + 드롭다운으로 접어 한 줄에 들어오게. */
+function TypeFilterDropdown({
+  value, onChange,
+}: {
+  value: WorkItemType | 'all';
+  onChange: (v: WorkItemType | 'all') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = value === 'all' ? null : WORK_ITEM_TYPE_CONFIG[value];
+  const active = value !== 'all';
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
+          active ? `${current!.cls} border-current` : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        {current ? <current.Icon className="w-3.5 h-3.5" /> : <ListFilter className="w-3.5 h-3.5" />}
+        {current ? current.label : '업무 분류'}
+        <ChevronDown className="w-3 h-3 opacity-60" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-1 min-w-[140px]" role="listbox">
+            <button
+              type="button"
+              onClick={() => { onChange('all'); setOpen(false); }}
+              className={`w-full text-left px-2 py-1.5 rounded-md text-xs inline-flex items-center gap-1.5 transition-colors ${
+                value === 'all' ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'
+              }`}
+            >
+              <ListFilter className="w-3.5 h-3.5" /> 전체 유형
+            </button>
+            {WORK_ITEM_TYPE_ORDER.map((key) => {
+              const cfg = WORK_ITEM_TYPE_CONFIG[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => { onChange(key); setOpen(false); }}
+                  className={`w-full text-left px-2 py-1.5 rounded-md text-xs inline-flex items-center gap-1.5 transition-colors ${
+                    value === key ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'
+                  }`}
+                >
+                  <cfg.Icon className="w-3.5 h-3.5" /> {cfg.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function DraggableSortHeader({
   colKey,
   sortKey,
@@ -357,37 +417,10 @@ export function WorkItemBoardPage() {
           </div>
         </div>
 
-        {/* Type 탭 (좌) + 검색/컬럼 컨트롤 (우) — 필터 박스를 없애고 이 라인 패턴으로 통합 */}
-        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={() => setTypeFilter('all')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                typeFilter === 'all'
-                  ? 'bg-primary/10 text-primary border-primary/30'
-                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              전체 유형
-            </button>
-            {WORK_ITEM_TYPE_ORDER.map((key) => {
-              const cfg = WORK_ITEM_TYPE_CONFIG[key];
-              const isActive = typeFilter === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setTypeFilter(key)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
-                    isActive
-                      ? `${cfg.cls} border-current`
-                      : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <cfg.Icon className="w-3.5 h-3.5" />
-                  {cfg.label}
-                </button>
-              );
-            })}
+        {/* 업무 분류 드롭다운 (좌) + 검색/컬럼 컨트롤 (우) — 유형 탭을 버튼 하나로 접어 한 줄로 통합 */}
+        <div className="flex items-center justify-between gap-3 mb-3 flex-nowrap">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <TypeFilterDropdown value={typeFilter} onChange={setTypeFilter} />
           </div>
 
           {/* 검색 컨트롤 — 라인 패턴(rounded-lg · bg-secondary · border)으로 통일. 모듈 필터도 여기 드롭다운으로 통합(2줄→1줄) */}
