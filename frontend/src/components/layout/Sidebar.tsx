@@ -303,12 +303,15 @@ export function Sidebar() {
 
   const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
 
-  // 현재 모드에서 보여줄 그룹만 필터링
-  // Settings(system 그룹)는 우선 admin 에게만 노출. (추후 role/권한 세분화 예정)
+  // 현재 모드에서 보여줄 그룹만 필터링 (상단 레일).
+  // system(Settings) 그룹은 상단이 아니라 하단 푸터에서 admin 에게만 렌더한다.
   const visibleGroups = useMemo(
-    () => GROUPS.filter((g) => g.modes.includes(mode) && (g.id !== 'system' || isAdmin)),
-    [mode, isAdmin],
+    () => GROUPS.filter((g) => g.modes.includes(mode) && g.id !== 'system'),
+    [mode],
   );
+
+  // 하단 푸터에 둘 Settings(system) 그룹 — admin 전용.
+  const systemGroup = useMemo(() => GROUPS.find((g) => g.id === 'system') ?? null, []);
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
@@ -479,8 +482,18 @@ export function Sidebar() {
           </div>
         </nav>
 
-        {/* 푸터 — 테마 / 사용자 / 로그아웃 */}
+        {/* 푸터 — 설정(admin) / 테마 / 사용자 / 로그아웃 */}
         <div className="flex-shrink-0 border-t border-border py-2 flex flex-col items-center gap-1">
+          {isAdmin && systemGroup && (
+            <RailIconButton
+              label={systemGroup.label}
+              Icon={systemGroup.icon}
+              active={activeGroup === 'system'}
+              highlighted={openGroup === 'system'}
+              suppressTooltip={openGroup === 'system'}
+              onClick={(rect) => toggleGroup('system', rect)}
+            />
+          )}
           <RailIconButton
             label={`테마: ${THEME_LABEL[theme]}`}
             Icon={
