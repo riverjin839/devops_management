@@ -60,6 +60,7 @@ from app.routers import (
     lake_service_types_router,
     ops_check_router,
     k8s_resources_router,
+    service_topology_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -1262,6 +1263,8 @@ app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_au
 app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
 # k8s-resources (OpenLens P1) — 읽기전용 리소스 탐색기 + YAML 보기.
 app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_auth)
+# service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
+app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

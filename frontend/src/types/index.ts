@@ -1657,6 +1657,96 @@ export interface AnalyzeNamespaceItem {
   hasUnhealthy: boolean;
 }
 
+// ── Service Topology ────────────────────────────────────────────────────────
+export interface TopoNodeMetricAxis {
+  usage?: number | null;
+  request?: number | null;
+  limit?: number | null;
+}
+export interface TopoNodeMetrics {
+  cpu: TopoNodeMetricAxis;
+  mem: TopoNodeMetricAxis;
+}
+export interface TopoNode {
+  id: string;
+  kind: string;
+  name: string;
+  namespace: string;
+  status: string;        // healthy | warning | critical
+  podCount: number;
+  readyCount: number;
+  restartCount: number;
+  ghost: boolean;
+  ageSeconds?: number | null;
+  detail?: string | null;
+  nodeType?: string | null;  // external 노드용 (database|api|queue|other)
+  externalId?: string | null;  // external 노드의 DB id (삭제용)
+  metrics: TopoNodeMetrics;
+}
+export type TopoEdgeType =
+  | 'owns' | 'routes' | 'exposes' | 'uses_config' | 'uses_secret'
+  | 'mounts_pvc' | 'manual' | 'traffic';
+export interface TopoEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: TopoEdgeType | string;
+  label: string;
+  detail: string;
+  manualId?: string | null;
+}
+export interface TopologyGraphResponse {
+  clusterId: string;
+  namespace: string;
+  nodes: TopoNode[];
+  edges: TopoEdge[];
+  metricsStatus: string;  // ok | offline | unknown
+  truncated: boolean;
+  warnings: string[];
+  generatedAt: string;
+}
+export interface TopologyTrafficEdge {
+  source: string;
+  target: string;
+  flowCount: number;
+  droppedCount: number;
+  protocols: string[];
+  ports: number[];
+}
+export interface TopologyTrafficResponse {
+  clusterId: string;
+  namespace: string;
+  status: 'ok' | 'unavailable' | 'error';
+  source?: string | null;   // hubble | conntrack
+  reason?: string | null;
+  edges: TopologyTrafficEdge[];
+  generatedAt: string;
+}
+export interface ServiceTopologyLink {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  sourceKind: string;
+  sourceName: string;
+  targetKind: string;
+  targetName: string;
+  linkType: string;   // depends_on | calls | reads | writes | custom
+  label?: string | null;
+  note?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ServiceTopologyExternalNode {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  name: string;
+  nodeType: string;   // database | api | queue | other
+  note?: string | null;
+  createdAt: string;
+}
+
 export interface AnalyzeNamespacesResponse {
   clusterId: string;
   clusterName: string;

@@ -1088,6 +1088,60 @@ export const analyzeApi = {
     ),
 };
 
+// Service Topology API — 자동 그래프 + 수동 연계 + 실트래픽
+export const serviceTopologyApi = {
+  getGraph: (
+    clusterId: string,
+    namespace: string,
+    opts?: { includePods?: boolean; includeOrphans?: boolean; withMetrics?: boolean },
+  ) =>
+    api.get<import('@/types').TopologyGraphResponse>(
+      `/service-topology/${clusterId}/graph`,
+      {
+        params: {
+          namespace,
+          include_pods: opts?.includePods ?? false,
+          include_orphans: opts?.includeOrphans ?? false,
+          with_metrics: opts?.withMetrics ?? true,
+        },
+        timeout: 60_000,
+      },
+    ),
+  getTraffic: (
+    clusterId: string,
+    namespace: string,
+    opts?: { sinceSeconds?: number; limit?: number },
+  ) =>
+    api.get<import('@/types').TopologyTrafficResponse>(
+      `/service-topology/${clusterId}/traffic`,
+      {
+        params: {
+          namespace,
+          since_seconds: opts?.sinceSeconds ?? 60,
+          limit: opts?.limit ?? 2000,
+        },
+        timeout: 60_000,
+      },
+    ),
+  listLinks: (clusterId: string, namespace?: string) =>
+    api.get<import('@/types').ServiceTopologyLink[]>(
+      `/service-topology/${clusterId}/links`,
+      { params: namespace ? { namespace } : {} },
+    ),
+  createLink: (clusterId: string, data: {
+    namespace: string; sourceKind: string; sourceName: string;
+    targetKind: string; targetName: string; linkType: string;
+    label?: string | null; note?: string | null;
+  }) => api.post<import('@/types').ServiceTopologyLink>(`/service-topology/${clusterId}/links`, data),
+  updateLink: (linkId: string, data: { linkType?: string; label?: string | null; note?: string | null }) =>
+    api.patch<import('@/types').ServiceTopologyLink>(`/service-topology/links/${linkId}`, data),
+  deleteLink: (linkId: string) => api.delete(`/service-topology/links/${linkId}`),
+  createExternalNode: (clusterId: string, data: {
+    namespace: string; name: string; nodeType: string; note?: string | null;
+  }) => api.post<import('@/types').ServiceTopologyExternalNode>(`/service-topology/${clusterId}/external-nodes`, data),
+  deleteExternalNode: (nodeId: string) => api.delete(`/service-topology/external-nodes/${nodeId}`),
+};
+
 // Trend Digest API
 export const trendsApi = {
   triggerCollect: (targetDate?: string, lookbackDays?: number) =>
