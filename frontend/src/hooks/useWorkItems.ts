@@ -92,3 +92,56 @@ export function usePatchWorkItemStatus() {
     },
   });
 }
+
+// ── 날짜별 시간 블록 (time blocks) ──────────────────────────────────────────────
+export const timeBlockKeys = {
+  range: (start: string, end: string) => ['workItemTimeBlocks', 'range', start, end] as const,
+};
+
+/** 기간 내 모든 업무의 시간 블록 — 당일 스케줄 보드용. */
+export function useTimeBlocksRange(start: string, end: string, enabled = true) {
+  return useQuery({
+    queryKey: timeBlockKeys.range(start, end),
+    queryFn: async () => (await workItemsApi.listTimeBlocksRange(start, end)).data,
+    enabled,
+    staleTime: 1000 * 15,
+  });
+}
+
+function useInvalidateTimeBlocks() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ['workItemTimeBlocks'] });
+    qc.invalidateQueries({ queryKey: workItemKeys.all });
+  };
+}
+
+export function useCreateTimeBlock() {
+  const invalidate = useInvalidateTimeBlocks();
+  return useMutation({
+    mutationFn: ({ itemId, data }: {
+      itemId: string;
+      data: { blockDate: string; startMinute: number; endMinute: number; note?: string | null };
+    }) => workItemsApi.createTimeBlock(itemId, data),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateTimeBlock() {
+  const invalidate = useInvalidateTimeBlocks();
+  return useMutation({
+    mutationFn: ({ blockId, data }: {
+      blockId: string;
+      data: { blockDate?: string; startMinute?: number; endMinute?: number; note?: string | null };
+    }) => workItemsApi.updateTimeBlock(blockId, data),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteTimeBlock() {
+  const invalidate = useInvalidateTimeBlocks();
+  return useMutation({
+    mutationFn: (blockId: string) => workItemsApi.deleteTimeBlock(blockId),
+    onSuccess: invalidate,
+  });
+}

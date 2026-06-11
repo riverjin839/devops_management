@@ -39,6 +39,7 @@ from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
 from app.models.os_param_change import OsParamChange
 from app.models.sprint import Sprint
 from app.models.service_topology import ServiceTopologyLink, ServiceTopologyExternalNode
+from app.models.work_item_time_block import WorkItemTimeBlock
 
 __all__ = [
     "Cluster",
@@ -93,4 +94,5 @@ __all__ = [
     "Sprint",
     "ServiceTopologyLink",
     "ServiceTopologyExternalNode",
+    "WorkItemTimeBlock",
 ]

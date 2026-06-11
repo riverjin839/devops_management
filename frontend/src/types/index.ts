@@ -507,6 +507,18 @@ export interface WorkItemCreate {
 
 export interface WorkItemUpdate extends Partial<Omit<WorkItemCreate, 'type'>> {}
 
+/** 업무의 날짜별 시간 블록 — startedAt~closedAt 기간 안의 실제 작업 시간대. */
+export interface WorkItemTimeBlock {
+  id: string;
+  workItemId: string;
+  blockDate: string;     // YYYY-MM-DD (로컬 날짜)
+  startMinute: number;   // 자정 기준 분 (0..1439)
+  endMinute: number;     // 자정 기준 분 (> startMinute, ..1440)
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MetricQueryResult {
   cardId: string;
   status: 'ok' | 'error' | 'offline';

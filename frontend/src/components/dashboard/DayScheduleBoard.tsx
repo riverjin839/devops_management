@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users,
+  ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2,
 } from 'lucide-react';
-import { useWorkItems, useUpdateWorkItem } from '@/hooks/useWorkItems';
+import {
+  useWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
+} from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
 import { stripHtml, cn } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
-import type { WorkItem, KanbanStatus } from '@/types';
+import type { WorkItem, KanbanStatus, WorkItemTimeBlock } from '@/types';
 
 interface DayScheduleBoardProps {
   selectedClusterId: string | null;
@@ -39,25 +41,26 @@ function parseLocal(iso?: string | null): Date | null {
   const d = new Date(norm);
   return Number.isNaN(d.getTime()) ? null : d;
 }
-function hhmm(d: Date): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+function fmtMin(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
-/** 로컬 날짜(YYYY-MM-DD) + 시/분 → 백엔드 저장용 UTC ISO 문자열. */
-function buildIso(dateStr: string, h: number, min: number): string {
-  const d = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`);
-  return Number.isNaN(d.getTime()) ? `${dateStr}T00:00:00` : d.toISOString();
+function snap15(min: number): number {
+  return Math.round(min / 15) * 15;
+}
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
 }
 
-// ── status visual map (macOS / Claude soft tints) ──────────────────────────────
 const STATUS_STYLE: Record<KanbanStatus, { dot: string; bar: string; tint: string }> = {
-  backlog:     { dot: 'bg-slate-400',   bar: 'bg-slate-400',   tint: 'bg-slate-500/[0.06]' },
-  todo:        { dot: 'bg-blue-400',    bar: 'bg-blue-400',    tint: 'bg-blue-500/[0.06]' },
-  in_progress: { dot: 'bg-amber-400',   bar: 'bg-amber-400',   tint: 'bg-amber-500/[0.07]' },
-  review_test: { dot: 'bg-purple-400',  bar: 'bg-purple-400',  tint: 'bg-purple-500/[0.06]' },
-  done:        { dot: 'bg-emerald-400', bar: 'bg-emerald-400', tint: 'bg-emerald-500/[0.06]' },
+  backlog:     { dot: 'bg-slate-400',   bar: 'bg-slate-400',   tint: 'bg-slate-500/[0.10]' },
+  todo:        { dot: 'bg-blue-400',    bar: 'bg-blue-400',    tint: 'bg-blue-500/[0.12]' },
+  in_progress: { dot: 'bg-amber-400',   bar: 'bg-amber-400',   tint: 'bg-amber-500/[0.14]' },
+  review_test: { dot: 'bg-purple-400',  bar: 'bg-purple-400',  tint: 'bg-purple-500/[0.12]' },
+  done:        { dot: 'bg-emerald-400', bar: 'bg-emerald-400', tint: 'bg-emerald-500/[0.12]' },
 };
 
-// 담당자 칩/아바타용 안정적 색상 — 이름 해시 기반.
 const ASSIGNEE_PALETTE = [
   'bg-sky-500/15 text-sky-700 dark:text-sky-300',
   'bg-violet-500/15 text-violet-700 dark:text-violet-300',
@@ -72,12 +75,8 @@ function assigneeColor(name: string): string {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return ASSIGNEE_PALETTE[h % ASSIGNEE_PALETTE.length];
 }
-
-/** primary/secondary/assignee 필드를 쉼표 분리해 담당자 이름 배열로. */
 function assigneeNames(w: WorkItem): string[] {
-  const raw = [w.primaryAssignee, w.secondaryAssignee, w.assignee]
-    .filter(Boolean)
-    .join(',');
+  const raw = [w.primaryAssignee, w.secondaryAssignee, w.assignee].filter(Boolean).join(',');
   const out: string[] = [];
   for (const n of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
     if (!out.includes(n)) out.push(n);
@@ -85,33 +84,79 @@ function assigneeNames(w: WorkItem): string[] {
   return out;
 }
 
-interface PlacedItem {
+// ── grid geometry ───────────────────────────────────────────────────────────
+const HOUR_PX = 56;
+const PX_PER_MIN = HOUR_PX / 60;
+const MIN_DURATION = 15;
+const DEFAULT_DURATION = 60;
+
+/** 하루에 표시할 세션(= 시간 블록 or 시작일 암묵 세션). */
+interface Session {
+  key: string;          // block:<id> | implicit:<itemId>
   item: WorkItem;
-  time: string | null; // HH:mm — null 이면 시간 미지정
-  hour: number;        // 시간 미지정은 -1
-  ongoing: boolean;    // 시작일 이후~완료일(또는 오늘) 사이의 "진행 중인 날"
+  startMin: number;
+  endMin: number;
+  block?: WorkItemTimeBlock;  // 있으면 블록 기반, 없으면 implicit
 }
 
-/**
- * 좌측 메인 — 당일 시간단위 스케줄.
- * 기본은 로그인한 사용자 본인(primary/secondary/assignee 매칭) 일정만 표시하고,
- * 상단 "전체" 옵션으로 모든 담당자의 일정을 함께 볼 수 있다(사용자별 설정 저장).
- * 빈 시간대를 클릭하면 그 시각으로 바로 등록할 수 있다.
- */
+/** 겹치는 세션을 열(column)로 분할 — left/width 계산용. */
+function computeColumns(sessions: Session[]): Map<string, { col: number; cols: number }> {
+  const out = new Map<string, { col: number; cols: number }>();
+  const sorted = [...sessions].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  let cluster: Session[] = [];
+  let clusterEnd = -1;
+
+  const flush = () => {
+    if (!cluster.length) return;
+    const colEnd: number[] = []; // 각 열의 마지막 endMin
+    const assigned: Record<string, number> = {};
+    for (const s of cluster) {
+      let col = colEnd.findIndex((e) => e <= s.startMin);
+      if (col === -1) { col = colEnd.length; colEnd.push(s.endMin); }
+      else colEnd[col] = s.endMin;
+      assigned[s.key] = col;
+    }
+    const cols = colEnd.length;
+    for (const s of cluster) out.set(s.key, { col: assigned[s.key], cols });
+    cluster = [];
+    clusterEnd = -1;
+  };
+
+  for (const s of sorted) {
+    if (cluster.length && s.startMin >= clusterEnd) flush();
+    cluster.push(s);
+    clusterEnd = Math.max(clusterEnd, s.endMin);
+  }
+  flush();
+  return out;
+}
+
 type ScheduleScope = 'me' | 'all';
+type DragMode = 'move' | 'top' | 'bottom';
+interface DragState {
+  key: string;
+  mode: DragMode;
+  startY: number;
+  origStart: number;
+  origEnd: number;
+  curStart: number;
+  curEnd: number;
+  moved: boolean;
+}
 
 export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const navigate = useNavigate();
+  const toast = useToast();
   const todayStr = dateKey(new Date());
   const [viewDate, setViewDate] = useState(todayStr);
   const isToday = viewDate === todayStr;
 
   const [quickAdd, setQuickAdd] = useState<{ time: string; assignee?: string } | null>(null);
+  const [addMenu, setAddMenu] = useState<{ minute: number; y: number } | null>(null);
 
   const currentUser = useAuthStore((s) => s.user);
   const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
 
-  // 보기 범위 — 기본 '나만', 옵션으로 '전체'. 사용자별 localStorage 저장.
   const scopeKey = `k8s:dayScheduleScope:${currentUser?.username ?? 'guest'}`;
   const [scope, setScope] = useState<ScheduleScope>(() => {
     try { return localStorage.getItem(scopeKey) === 'all' ? 'all' : 'me'; } catch { return 'me'; }
@@ -126,112 +171,207 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const meOnly = scope === 'me';
 
   const { data: workItemsData, isLoading } = useWorkItems();
-  const updateMut = useUpdateWorkItem();
-  const toast = useToast();
+  const { data: dayBlocks = [] } = useTimeBlocksRange(viewDate, viewDate);
+  const createBlock = useCreateTimeBlock();
+  const updateBlock = useUpdateTimeBlock();
+  const deleteBlock = useDeleteTimeBlock();
 
-  // ── 드래그로 시간 조정 ──────────────────────────────────────────────────────
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOverHour, setDragOverHour] = useState<number | null>(null);
+  const allItems = useMemo(() => workItemsData?.data ?? [], [workItemsData]);
 
-  const dropToHour = (h: number) => {
-    const id = dragId;
-    setDragId(null);
-    setDragOverHour(null);
-    if (!id) return;
-    const w = (workItemsData?.data ?? []).find((x) => x.id === id);
-    if (!w) return;
-    const orig = parseLocal(w.startedAt);
-    const min = orig && hasClock(w.startedAt) ? orig.getMinutes() : 0;
-    if (orig && orig.getHours() === h && hasClock(w.startedAt) && dateKey(orig) === viewDate) return; // 변동 없음
-    const iso = buildIso(viewDate, h, min);
-    updateMut.mutate(
-      { id, data: { startedAt: iso } },
-      {
-        onSuccess: () => toast.success('시간 변경', `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')} 으로 이동`),
-        onError: () => toast.error('시간 변경 실패', '잠시 후 다시 시도해 주세요.'),
-      },
-    );
-  };
-
-  // viewDate 에 "걸치는" 항목 — 시작일부터 완료일(없으면 오늘)까지 매일 노출.
-  // 클러스터 + 보기범위(나만/전체) 필터 적용.
-  const dayItems = useMemo<PlacedItem[]>(() => {
-    const all = workItemsData?.data ?? [];
+  // 이 날에 걸치는 (필터 통과) 업무 — 미지정/세션 분류의 모집단.
+  const spanItems = useMemo<WorkItem[]>(() => {
     const todayKey = dateKey(new Date());
-    const out: PlacedItem[] = [];
-    for (const w of all) {
+    const out: WorkItem[] = [];
+    for (const w of allItems) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
       if (meOnly && (!myName || !assigneeNames(w).includes(myName))) continue;
-      // 완료된 업무는 당일 스케줄에 표시하지 않는다.
       if (w.kanbanStatus === 'done') continue;
       const startD = parseLocal(w.startedAt);
       if (!startD) continue;
       const startKey = dateKey(startD);
-      // 완료일 있으면 그날까지, 없으면 오늘까지 진행 중으로 본다.
       const closedD = parseLocal(w.closedAt);
       let endKey = closedD ? dateKey(closedD) : todayKey;
       if (endKey < startKey) endKey = startKey;
-      // viewDate 가 [startKey, endKey] 안에 들어야 노출.
-      if (viewDate < startKey || viewDate > endKey) continue;
-
-      // 시작일 당일에만 실제 시작 시각으로 배치, 그 외(중간/완료일)는 "종일" 진행 중.
-      const isStartDay = viewDate === startKey;
-      const timed = isStartDay && hasClock(w.startedAt);
-      out.push({
-        item: w,
-        time: timed ? hhmm(startD) : null,
-        hour: timed ? startD.getHours() : -1,
-        ongoing: !isStartDay,
-      });
+      const hasBlockToday = dayBlocks.some((b) => b.workItemId === w.id && b.blockDate === viewDate);
+      if (hasBlockToday || (viewDate >= startKey && viewDate <= endKey)) out.push(w);
     }
     return out;
-  }, [workItemsData, selectedClusterId, viewDate, meOnly, myName]);
+  }, [allItems, selectedClusterId, meOnly, myName, dayBlocks, viewDate]);
 
-  const filtered = dayItems;
+  const itemById = useMemo(() => {
+    const m = new Map<string, WorkItem>();
+    for (const w of spanItems) m.set(w.id, w);
+    return m;
+  }, [spanItems]);
 
-  // 시간 미지정 / 시간대별 분리.
-  const allDay = useMemo(() => filtered.filter((p) => p.hour < 0), [filtered]);
-  const timed = useMemo(() => filtered.filter((p) => p.hour >= 0), [filtered]);
+  // 세션(그리드) / 미지정(하단) 분리.
+  const { sessions, allDay } = useMemo(() => {
+    const todayKey = dateKey(new Date());
+    const ses: Session[] = [];
+    const unscheduled: WorkItem[] = [];
+    const blocksToday = dayBlocks.filter((b) => b.blockDate === viewDate && itemById.has(b.workItemId));
+    const blocksByItem = new Map<string, WorkItemTimeBlock[]>();
+    for (const b of blocksToday) {
+      const arr = blocksByItem.get(b.workItemId);
+      if (arr) arr.push(b); else blocksByItem.set(b.workItemId, [b]);
+    }
+    for (const w of spanItems) {
+      const ib = blocksByItem.get(w.id);
+      if (ib && ib.length) {
+        for (const b of ib) {
+          ses.push({ key: `block:${b.id}`, item: w, startMin: b.startMinute, endMin: b.endMinute, block: b });
+        }
+        continue;
+      }
+      const startD = parseLocal(w.startedAt);
+      if (!startD) continue;
+      const startKey = dateKey(startD);
+      if (viewDate === startKey && hasClock(w.startedAt)) {
+        const sMin = startD.getHours() * 60 + startD.getMinutes();
+        ses.push({ key: `implicit:${w.id}`, item: w, startMin: sMin, endMin: Math.min(1440, sMin + DEFAULT_DURATION) });
+      } else {
+        // 시작일이 아니거나 시각 미지정 → 진행 중/미지정 (하단)
+        const closedD = parseLocal(w.closedAt);
+        let endKey = closedD ? dateKey(closedD) : todayKey;
+        if (endKey < startKey) endKey = startKey;
+        if (viewDate >= startKey && viewDate <= endKey) unscheduled.push(w);
+      }
+    }
+    return { sessions: ses, allDay: unscheduled };
+  }, [spanItems, dayBlocks, viewDate, itemById]);
 
-  // 표시 시간 범위 — 기본 08~19, 업무가 있으면 그에 맞춰 확장.
+  // 드래그 미리보기 override (key → {startMin,endMin})
+  const [preview, setPreview] = useState<Record<string, { startMin: number; endMin: number }>>({});
+  const drag = useRef<DragState | null>(null);
+
+  const effSessions = useMemo(
+    () => sessions.map((s) => preview[s.key] ? { ...s, ...preview[s.key] } : s),
+    [sessions, preview],
+  );
+
+  // 표시 시간 범위.
   const { startHour, endHour } = useMemo(() => {
     let lo = 8;
     let hi = 19;
-    for (const p of timed) {
-      if (p.hour < lo) lo = p.hour;
-      if (p.hour > hi) hi = p.hour;
+    for (const s of effSessions) {
+      lo = Math.min(lo, Math.floor(s.startMin / 60));
+      hi = Math.max(hi, Math.ceil(s.endMin / 60));
     }
-    return { startHour: Math.max(0, lo), endHour: Math.min(23, hi) };
-  }, [timed]);
-
+    return { startHour: clamp(lo, 0, 23), endHour: clamp(hi, 1, 24) };
+  }, [effSessions]);
   const hours = useMemo(
     () => Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i),
     [startHour, endHour],
   );
-  const byHour = useMemo(() => {
-    const m = new Map<number, PlacedItem[]>();
-    for (const p of timed) {
-      const arr = m.get(p.hour);
-      if (arr) arr.push(p); else m.set(p.hour, [p]);
-    }
-    for (const arr of m.values()) arr.sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
-    return m;
-  }, [timed]);
+  const gridHeight = (endHour - startHour) * HOUR_PX;
+  const yOf = useCallback((min: number) => (min - startHour * 60) * PX_PER_MIN, [startHour]);
 
-  const nowHour = new Date().getHours();
-  const nowMin = new Date().getMinutes();
+  const columns = useMemo(() => computeColumns(effSessions), [effSessions]);
 
+  const laneRef = useRef<HTMLDivElement>(null);
   const openItem = (id: string) => navigate(`/tasks-mgmt/${id}`);
+
+  // ── 드래그 (이동 / 리사이즈) ────────────────────────────────────────────────
+  const beginDrag = (e: React.MouseEvent, s: Session, mode: DragMode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    drag.current = { key: s.key, mode, startY: e.clientY, origStart: s.startMin, origEnd: s.endMin, curStart: s.startMin, curEnd: s.endMin, moved: false };
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const d = drag.current;
+      if (!d) return;
+      const deltaMin = snap15((e.clientY - d.startY) / PX_PER_MIN);
+      if (Math.abs(e.clientY - d.startY) > 3) d.moved = true;
+      let startMin = d.origStart;
+      let endMin = d.origEnd;
+      if (d.mode === 'move') {
+        const dur = d.origEnd - d.origStart;
+        startMin = clamp(d.origStart + deltaMin, 0, 1440 - dur);
+        endMin = startMin + dur;
+      } else if (d.mode === 'top') {
+        startMin = clamp(d.origStart + deltaMin, 0, d.origEnd - MIN_DURATION);
+      } else {
+        endMin = clamp(d.origEnd + deltaMin, d.origStart + MIN_DURATION, 1440);
+      }
+      d.curStart = startMin;
+      d.curEnd = endMin;
+      setPreview((p) => ({ ...p, [d.key]: { startMin, endMin } }));
+    };
+    const onUp = () => {
+      const d = drag.current;
+      drag.current = null;
+      if (!d) return;
+      const sess = sessions.find((s) => s.key === d.key);
+      // 이동량이 거의 없으면 클릭으로 간주 → 상세 열기
+      if (!d.moved) {
+        setPreview((p) => { const n = { ...p }; delete n[d.key]; return n; });
+        if (sess) openItem(sess.item.id);
+        return;
+      }
+      if (!sess) {
+        setPreview((p) => { const n = { ...p }; delete n[d.key]; return n; });
+        return;
+      }
+      const startMin = snap15(d.curStart);
+      const endMin = Math.max(startMin + MIN_DURATION, snap15(d.curEnd));
+      const clearPv = () => setPreview((p) => { const n = { ...p }; delete n[d.key]; return n; });
+      if (sess.block) {
+        updateBlock.mutate(
+          { blockId: sess.block.id, data: { startMinute: startMin, endMinute: endMin } },
+          { onSuccess: () => { clearPv(); }, onError: (err) => { clearPv(); toast.error('시간 변경 실패', String(err)); } },
+        );
+      } else {
+        // implicit → 블록으로 승격(생성)
+        createBlock.mutate(
+          { itemId: sess.item.id, data: { blockDate: viewDate, startMinute: startMin, endMinute: endMin } },
+          { onSuccess: () => { clearPv(); }, onError: (err) => { clearPv(); toast.error('블록 생성 실패', String(err)); } },
+        );
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [sessions, viewDate, updateBlock, createBlock, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 빈 영역 클릭 → 블록 추가 메뉴(기존 업무) 또는 새 업무.
+  const onLaneClick = (e: React.MouseEvent) => {
+    if (drag.current) return;
+    if (e.target !== laneRef.current) return; // 세션 위 클릭은 무시
+    const rect = laneRef.current!.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const minute = snap15(clamp(startHour * 60 + y / PX_PER_MIN, 0, 1440 - MIN_DURATION));
+    setAddMenu({ minute, y });
+  };
+
+  const addBlockTo = (item: WorkItem, minute: number) => {
+    const endMin = Math.min(1440, minute + DEFAULT_DURATION);
+    createBlock.mutate(
+      { itemId: item.id, data: { blockDate: viewDate, startMinute: minute, endMinute: endMin } },
+      {
+        onSuccess: () => { setAddMenu(null); toast.success('시간 블록 추가', `${item.title || '업무'} · ${fmtMin(minute)}–${fmtMin(endMin)}`); },
+        onError: (err) => toast.error('블록 추가 실패', String(err)),
+      },
+    );
+  };
+
+  const removeBlock = (block: WorkItemTimeBlock) => {
+    deleteBlock.mutate(block.id, {
+      onSuccess: () => toast.success('시간 블록 삭제'),
+      onError: (err) => toast.error('삭제 실패', String(err)),
+    });
+  };
+
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const totalCount = sessions.length + allDay.length;
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* ── header: 날짜 네비 + 등록 ──────────────────────────────────────────── */}
+      {/* header */}
       <div className="flex-none flex items-center gap-1.5 mb-2">
-        <button
-          onClick={() => setViewDate((d) => addDays(d, -1))}
-          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-          title="이전 날"
-        >
+        <button onClick={() => setViewDate((d) => addDays(d, -1))}
+          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="이전 날">
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
         <div className="flex items-center gap-1.5 px-1">
@@ -240,177 +380,132 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             {isToday ? `오늘 · ${fmtLabel(viewDate)}` : fmtLabel(viewDate)}
           </span>
         </div>
-        <button
-          onClick={() => setViewDate((d) => addDays(d, 1))}
-          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-          title="다음 날"
-        >
+        <button onClick={() => setViewDate((d) => addDays(d, 1))}
+          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="다음 날">
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
         {!isToday && (
-          <button
-            onClick={() => setViewDate(todayStr)}
-            className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary transition-colors text-muted-foreground hover:text-primary"
-            title="오늘로 돌아가기"
-          >
+          <button onClick={() => setViewDate(todayStr)}
+            className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-primary" title="오늘로 돌아가기">
             <RotateCcw className="w-3 h-3" />
           </button>
         )}
-        <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{filtered.length}건</span>
+        <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{totalCount}건</span>
         <button
-          onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(nowHour, 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
-          title="업무 등록"
-        >
+          onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(new Date().getHours(), 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20"
+          title="업무 등록">
           <Plus className="w-3 h-3" /> 등록
         </button>
       </div>
 
-      {/* ── 보기 범위 옵션: 나만 / 전체 ──────────────────────────────────────── */}
+      {/* scope toggle */}
       <div className="flex-none flex items-center gap-2 pb-2 mb-1">
         <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px]">
-          <button
-            onClick={() => changeScope('me')}
-            aria-pressed={meOnly}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 transition-colors',
-              meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
-            )}
-          >
+          <button onClick={() => changeScope('me')} aria-pressed={meOnly}
+            className={cn('flex items-center gap-1 px-2 py-1', meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground')}>
             <User className="w-3 h-3" /> 나만
           </button>
-          <button
-            onClick={() => changeScope('all')}
-            aria-pressed={!meOnly}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 border-l border-border transition-colors',
-              !meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground',
-            )}
-          >
+          <button onClick={() => changeScope('all')} aria-pressed={!meOnly}
+            className={cn('flex items-center gap-1 px-2 py-1 border-l border-border', !meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground')}>
             <Users className="w-3 h-3" /> 전체
           </button>
         </div>
-        {meOnly && myName && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className={cn('w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0', assigneeColor(myName))}>
-              {myName.slice(0, 2).toUpperCase()}
-            </span>
-            <span className="text-[11px] font-medium text-muted-foreground truncate">{myName}님의 일정</span>
-          </div>
-        )}
+        <span className="text-[10px] text-muted-foreground">박스 가운데 드래그=이동 · 위/아래 끝 드래그=시간 조절</span>
       </div>
 
-      {/* ── body ────────────────────────────────────────────────────────────── */}
+      {/* body */}
       <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         {isLoading ? (
           <div className="space-y-2 pt-1">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-12 rounded-xl bg-secondary/40 animate-pulse" />
-            ))}
+            {[...Array(6)].map((_, i) => <div key={i} className="h-12 rounded-xl bg-secondary/40 animate-pulse" />)}
           </div>
         ) : (
           <>
-            {/* 시간축 */}
-            <div className="relative">
-              {hours.map((h) => {
-                const items = byHour.get(h) ?? [];
-                const isNow = isToday && h === nowHour;
-                const isDropTarget = dragOverHour === h;
-                return (
-                  <div key={h} className="group relative flex gap-2 min-h-[44px]">
-                    {/* 시각 라벨 */}
-                    <div className="flex-none w-10 pt-1.5 text-right">
-                      <span className={cn('text-[11px] tabular-nums', isNow ? 'text-primary font-semibold' : 'text-muted-foreground')}>
-                        {String(h).padStart(2, '0')}:00
-                      </span>
-                    </div>
-                    {/* 레인 — 드롭 시 해당 시각으로 startedAt 변경 */}
-                    <div
-                      className={cn(
-                        'flex-1 min-w-0 border-l border-border/50 pl-2 py-1 relative rounded-r-lg transition-colors',
-                        isDropTarget && 'bg-primary/10 ring-1 ring-primary/40',
-                      )}
-                      onDragOver={dragId ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverHour(h); } : undefined}
-                      onDragLeave={dragId ? () => setDragOverHour((cur) => (cur === h ? null : cur)) : undefined}
-                      onDrop={dragId ? (e) => { e.preventDefault(); dropToHour(h); } : undefined}
-                    >
-                      {/* now 라인 */}
-                      {isNow && (
-                        <div
-                          className="absolute left-0 right-1 flex items-center pointer-events-none z-10"
-                          style={{ top: `${4 + (nowMin / 60) * 36}px` }}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary -ml-[3px]" />
-                          <span className="flex-1 h-px bg-primary/40" />
-                        </div>
-                      )}
-
-                      {items.length > 0 ? (
-                        <div className="space-y-1">
-                          {items.map((p) => (
-                            <EventCard
-                              key={p.item.id}
-                              placed={p}
-                              onOpen={openItem}
-                              draggable={!p.ongoing}
-                              onDragStart={() => setDragId(p.item.id)}
-                              onDragEnd={() => { setDragId(null); setDragOverHour(null); }}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setQuickAdd({ time: `${String(h).padStart(2, '0')}:00`, assignee: meOnly ? (myName || undefined) : undefined })}
-                          className={cn(
-                            'w-full h-7 rounded-lg border border-dashed border-transparent flex items-center justify-center transition-all',
-                            isDropTarget ? 'text-primary' : 'text-muted-foreground/0 group-hover:text-muted-foreground group-hover:border-border/70',
-                          )}
-                          title={`${String(h).padStart(2, '0')}:00 에 업무 등록`}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
+            {/* 캘린더 그리드 */}
+            <div className="flex">
+              {/* 시간 거터 */}
+              <div className="flex-none w-10 relative" style={{ height: gridHeight }}>
+                {hours.map((h) => (
+                  <div key={h} className="absolute right-1 -translate-y-1/2 text-[10px] tabular-nums text-muted-foreground"
+                    style={{ top: yOf(h * 60) }}>
+                    {String(h).padStart(2, '0')}:00
                   </div>
-                );
-              })}
+                ))}
+              </div>
+              {/* 레인 */}
+              <div ref={laneRef} onClick={onLaneClick}
+                className="relative flex-1 border-l border-border/60 cursor-copy"
+                style={{ height: gridHeight }}>
+                {/* 시간 그리드 라인 */}
+                {hours.map((h) => (
+                  <div key={h} className="absolute left-0 right-0 border-t border-border/40 pointer-events-none"
+                    style={{ top: yOf(h * 60) }} />
+                ))}
+                {/* now 라인 */}
+                {isToday && nowMin >= startHour * 60 && nowMin <= endHour * 60 && (
+                  <div className="absolute left-0 right-0 flex items-center pointer-events-none z-20" style={{ top: yOf(nowMin) }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary -ml-[3px]" />
+                    <span className="flex-1 h-px bg-primary/40" />
+                  </div>
+                )}
+                {/* 세션 박스 */}
+                {effSessions.map((s) => {
+                  const colInfo = columns.get(s.key) ?? { col: 0, cols: 1 };
+                  const top = yOf(s.startMin);
+                  const height = Math.max(MIN_DURATION * PX_PER_MIN, yOf(s.endMin) - top);
+                  const widthPct = 100 / colInfo.cols;
+                  const leftPct = colInfo.col * widthPct;
+                  return (
+                    <SessionBox
+                      key={s.key}
+                      session={s}
+                      top={top}
+                      height={height}
+                      leftPct={leftPct}
+                      widthPct={widthPct}
+                      onMoveDown={(e) => beginDrag(e, s, 'move')}
+                      onTopDown={(e) => beginDrag(e, s, 'top')}
+                      onBottomDown={(e) => beginDrag(e, s, 'bottom')}
+                      onDelete={s.block ? () => removeBlock(s.block!) : undefined}
+                    />
+                  );
+                })}
+
+                {/* 빈 영역 추가 메뉴 */}
+                {addMenu && (
+                  <AddBlockMenu
+                    minute={addMenu.minute}
+                    y={addMenu.y}
+                    candidates={spanItems}
+                    onPickItem={(it) => addBlockTo(it, addMenu.minute)}
+                    onNewTask={() => { setQuickAdd({ time: fmtMin(addMenu.minute), assignee: meOnly ? (myName || undefined) : undefined }); setAddMenu(null); }}
+                    onClose={() => setAddMenu(null)}
+                  />
+                )}
+              </div>
             </div>
 
-            {/* 시간 미지정 (종일) — 시간축 아래에 표시. 카드를 위 시간대로 드래그하면 시각이 지정된다. */}
+            {/* 시간 미지정 (하단) */}
             {allDay.length > 0 && (
               <div className="mt-2 rounded-xl border border-border/60 bg-secondary/20 p-2">
                 <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
                   <Clock3 className="w-3 h-3" /> 시간 미지정 · {allDay.length}
                 </div>
                 <div className="space-y-1">
-                  {allDay.map((p) => (
-                    <EventCard
-                      key={p.item.id}
-                      placed={p}
-                      onOpen={openItem}
-                      draggable={!p.ongoing}
-                      onDragStart={() => setDragId(p.item.id)}
-                      onDragEnd={() => { setDragId(null); setDragOverHour(null); }}
-                    />
-                  ))}
+                  {allDay.map((w) => <UnscheduledCard key={w.id} item={w} onOpen={openItem} />)}
                 </div>
               </div>
             )}
 
-            {filtered.length === 0 && (
+            {totalCount === 0 && (
               <div className="rounded-xl border border-dashed border-border/60 py-10 mt-2 text-center text-sm text-muted-foreground">
                 {meOnly && !myName
                   ? '로그인 후 나의 일정을 볼 수 있습니다. "전체" 로 모든 일정을 볼 수 있어요.'
-                  : meOnly
-                  ? `${isToday ? '오늘' : '해당 날짜'} 나의 일정이 없습니다.`
-                  : `${isToday ? '오늘' : '해당 날짜'} 예정된 일정이 없습니다.`}
+                  : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? '나의 ' : ''}일정이 없습니다.`}
                 <div>
-                  <button
-                    type="button"
-                    onClick={() => setQuickAdd({ time: '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
-                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  >
+                  <button onClick={() => setQuickAdd({ time: '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
+                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20">
                     <Plus className="w-3 h-3" /> 업무 등록
                   </button>
                 </div>
@@ -432,64 +527,119 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   );
 }
 
-// ── event card ─────────────────────────────────────────────────────────────────
-function EventCard({
-  placed, onOpen, draggable = false, onDragStart, onDragEnd,
+// ── session box (이동 + 엣지 리사이즈) ──────────────────────────────────────────
+function SessionBox({
+  session, top, height, leftPct, widthPct, onMoveDown, onTopDown, onBottomDown, onDelete,
 }: {
-  placed: PlacedItem;
-  onOpen: (id: string) => void;
-  draggable?: boolean;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
+  session: Session;
+  top: number; height: number; leftPct: number; widthPct: number;
+  onMoveDown: (e: React.MouseEvent) => void;
+  onTopDown: (e: React.MouseEvent) => void;
+  onBottomDown: (e: React.MouseEvent) => void;
+  onDelete?: () => void;
 }) {
-  const { item, time } = placed;
+  const { item } = session;
   const status = item.kanbanStatus ?? 'todo';
   const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
   const TypeIcon = WORK_ITEM_TYPE_CONFIG[item.type]?.Icon;
   const names = assigneeNames(item);
   const primary = names[0] ?? '미지정';
   const label = item.title?.trim() || stripHtml(item.content) || item.category;
-  const done = status === 'done';
+  const compact = height < 38;
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(item.id)}
-      title={draggable ? `${label}\n(드래그하여 시간 이동)` : label}
-      draggable={draggable}
-      onDragStart={draggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.id); onDragStart?.(); } : undefined}
-      onDragEnd={draggable ? () => onDragEnd?.() : undefined}
-      className={cn(
-        'w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:shadow-sm overflow-hidden',
-        draggable && 'cursor-grab active:cursor-grabbing',
-        sv.tint,
-      )}
+    <div
+      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/40 transition-colors', sv.tint)}
+      style={{ top, height, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
     >
-      <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
-      <span className={cn('flex-none w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold', assigneeColor(primary))}>
-        {primary.slice(0, 2).toUpperCase()}
-      </span>
-      <div className="min-w-0 flex-1">
+      {/* 상단 리사이즈 핸들 */}
+      <div onMouseDown={onTopDown} className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-10 group-hover:bg-primary/20" title="시작 시각 조절" />
+      {/* 본문(이동) */}
+      <div onMouseDown={onMoveDown} className="h-full pl-1.5 pr-1 py-0.5 cursor-grab active:cursor-grabbing flex flex-col">
+        <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l', sv.bar)} />
         <div className="flex items-center gap-1 min-w-0">
-          {TypeIcon && <TypeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />}
-          <span className={cn('text-xs truncate', done ? 'text-muted-foreground line-through' : 'text-foreground font-medium')}>
-            {label}
-          </span>
-          {placed.ongoing && (
-            <span className="flex-none text-[9px] font-semibold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
-              진행 중
-            </span>
+          {TypeIcon && !compact && <TypeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />}
+          <span className="text-[11px] font-medium truncate text-foreground">{label}</span>
+          {onDelete && (
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 flex-shrink-0"
+              title="이 시간 블록 삭제">
+              <Trash2 className="w-3 h-3" />
+            </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted-foreground min-w-0">
-          <span className="truncate">{names.join(', ')}</span>
-          {item.clusterName && <span className="flex-none hidden md:inline">· {item.clusterName}</span>}
-        </div>
+        {!compact && (
+          <div className="flex items-center gap-1.5 mt-0.5 text-[9.5px] text-muted-foreground min-w-0">
+            <span className={cn('w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold flex-shrink-0', assigneeColor(primary))}>
+              {primary.slice(0, 2).toUpperCase()}
+            </span>
+            <span className="tabular-nums">{fmtMin(session.startMin)}–{fmtMin(session.endMin)}</span>
+            {item.clusterName && <span className="truncate hidden md:inline">· {item.clusterName}</span>}
+          </div>
+        )}
       </div>
-      <div className="flex-none flex items-center gap-1.5">
-        {time && <span className="text-[10px] tabular-nums text-muted-foreground">{time}</span>}
-        <span className={cn('w-1.5 h-1.5 rounded-full', sv.dot)} />
+      {/* 하단 리사이즈 핸들 */}
+      <div onMouseDown={onBottomDown} className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-10 group-hover:bg-primary/20" title="종료 시각 조절" />
+    </div>
+  );
+}
+
+// ── 미지정 카드 (하단) ──────────────────────────────────────────────────────────
+function UnscheduledCard({ item, onOpen }: { item: WorkItem; onOpen: (id: string) => void }) {
+  const status = item.kanbanStatus ?? 'todo';
+  const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
+  const names = assigneeNames(item);
+  const label = item.title?.trim() || stripHtml(item.content) || item.category;
+  return (
+    <button type="button" onClick={() => onOpen(item.id)} title={label}
+      className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint)}>
+      <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
+      <div className="min-w-0 flex-1">
+        <span className="text-xs truncate text-foreground font-medium block">{label}</span>
+        <span className="text-[10px] text-muted-foreground truncate block">{names.join(', ')}{item.clusterName ? ` · ${item.clusterName}` : ''}</span>
       </div>
+      <span className={cn('w-1.5 h-1.5 rounded-full flex-none', sv.dot)} />
     </button>
+  );
+}
+
+// ── 빈 영역 추가 메뉴 ────────────────────────────────────────────────────────────
+function AddBlockMenu({
+  minute, y, candidates, onPickItem, onNewTask, onClose,
+}: {
+  minute: number; y: number; candidates: WorkItem[];
+  onPickItem: (item: WorkItem) => void; onNewTask: () => void; onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-xl mac-shadow p-1.5"
+        style={{ top: Math.max(0, y) }}>
+        <div className="flex items-center justify-between px-1.5 py-1">
+          <span className="text-[11px] font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
+        </div>
+        {candidates.length > 0 && (
+          <>
+            <div className="px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">기존 업무에 시간 추가</div>
+            <div className="max-h-40 overflow-y-auto">
+              {candidates.map((it) => (
+                <button key={it.id} onClick={() => onPickItem(it)}
+                  className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-[11px] truncate">
+                  {it.title?.trim() || stripHtml(it.content) || it.category}
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-border/60 my-1" />
+          </>
+        )}
+        <button onClick={onNewTask}
+          className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-[11px] text-primary font-medium inline-flex items-center gap-1">
+          <Plus className="w-3 h-3" /> 새 업무 등록
+        </button>
+      </div>
+    </>
   );
 }

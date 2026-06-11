@@ -789,6 +789,16 @@ export const workItemsApi = {
         : undefined,
       responseType: 'blob',
     }),
+  // 날짜별 시간 블록 (time blocks)
+  listTimeBlocksRange: (start: string, end: string) =>
+    api.get<import('@/types').WorkItemTimeBlock[]>('/work-items/time-blocks/range', { params: { start, end } }),
+  listTimeBlocks: (itemId: string) =>
+    api.get<import('@/types').WorkItemTimeBlock[]>(`/work-items/${itemId}/time-blocks`),
+  createTimeBlock: (itemId: string, data: { blockDate: string; startMinute: number; endMinute: number; note?: string | null }) =>
+    api.post<import('@/types').WorkItemTimeBlock>(`/work-items/${itemId}/time-blocks`, data),
+  updateTimeBlock: (blockId: string, data: { blockDate?: string; startMinute?: number; endMinute?: number; note?: string | null }) =>
+    api.patch<import('@/types').WorkItemTimeBlock>(`/work-items/time-blocks/${blockId}`, data),
+  deleteTimeBlock: (blockId: string) => api.delete(`/work-items/time-blocks/${blockId}`),
 };
 
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).
