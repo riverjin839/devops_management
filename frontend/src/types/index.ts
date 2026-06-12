@@ -485,6 +485,20 @@ export interface JiraImportResult {
   items: JiraImportItemPreview[];
 }
 
+export interface JiraPushRequest {
+  comment?: string;
+  force?: boolean;
+}
+
+export interface JiraPushResult {
+  status: 'ok' | 'conflict' | 'error' | 'offline' | 'not_linked';
+  detail: string;
+  transitioned: boolean;
+  commentAdded: boolean;
+  jiraStatus?: string | null;
+  availableTransitions: string[];
+}
+
 export interface WorkItemComment {
   id: string;
   workItemId: string;

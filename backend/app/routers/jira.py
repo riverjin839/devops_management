@@ -21,7 +21,7 @@ from app.models.work_item import WorkItem
 from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services import secret_box
 from app.services import audit_logger
-from app.services.jira_service import JiraService, map_jira_issue
+from app.services.jira_service import JiraService, map_jira_issue, parse_jira_dt, KANBAN_TO_CATEGORY
 from app.schemas.jira import (
     JiraConfig,
     JiraConfigUpdate,
@@ -31,6 +31,8 @@ from app.schemas.jira import (
     JiraImportRequest,
     JiraImportResult,
     JiraImportItemPreview,
+    JiraPushRequest,
+    JiraPushResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -315,4 +317,93 @@ async def import_issues(
         dry_run=payload.dry_run,
         errors=errors,
         items=preview[:50],
+    )
+
+
+# ── 양방향 push: PEP 상태 → Jira 반영 (Phase 2) ─────────────────────────────────
+@router.post("/push/{item_id}", response_model=JiraPushResult)
+async def push_to_jira(
+    item_id: str,
+    payload: JiraPushRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    if not item.jira_issue_key:
+        return JiraPushResult(status="not_linked", detail="Jira 와 연결되지 않은 업무입니다.")
+
+    cfg = _get_config(db)
+    if not cfg.get("base_url") or not cfg.get("enabled", False):
+        return JiraPushResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정.")
+    token = _user_token(db, actor.username)
+    if not token:
+        return JiraPushResult(status="error", detail="내 PAT 가 등록되지 않았습니다 (설정 > 연동).")
+
+    key = item.jira_issue_key
+    svc = JiraService(cfg["base_url"], token, verify=bool(cfg.get("verify_tls", True)))
+
+    # 1) 현재 Jira 상태 + updated 조회 (충돌 감지)
+    got = await svc.get_issue(key, fields=["status", "updated"])
+    if got.get("status") != "ok":
+        return JiraPushResult(status=got.get("status", "error"), detail=got.get("detail", "이슈 조회 실패"))
+    jfields = (got["issue"].get("fields") or {})
+    jira_updated = parse_jira_dt(jfields.get("updated"))
+    if (not payload.force) and item.jira_updated_at and jira_updated and jira_updated > item.jira_updated_at:
+        return JiraPushResult(
+            status="conflict",
+            detail="Jira 쪽이 더 최근에 변경되었습니다. 덮어쓰려면 강제 반영을 선택하세요.",
+            jira_status=(jfields.get("status") or {}).get("name"),
+        )
+
+    # 2) 상태 transition
+    transitioned = False
+    desired_cat = KANBAN_TO_CATEGORY.get(item.kanban_status or "todo", "new")
+    current_cat = ((jfields.get("status") or {}).get("statusCategory") or {}).get("key", "")
+    if current_cat != desired_cat:
+        tr = await svc.get_transitions(key)
+        if tr.get("status") != "ok":
+            return JiraPushResult(status=tr.get("status", "error"), detail=tr.get("detail", "transition 조회 실패"))
+        match = next((t for t in tr["transitions"] if t.get("to_category") == desired_cat), None)
+        if not match:
+            names = [t.get("name", "") for t in tr["transitions"]]
+            return JiraPushResult(
+                status="error",
+                detail=f"'{item.kanban_status}' 에 해당하는 Jira transition 이 없습니다. 가용: {', '.join(names) or '없음'}",
+                available_transitions=names,
+            )
+        res = await svc.do_transition(key, match["id"])
+        if res.get("status") != "ok":
+            return JiraPushResult(status=res.get("status", "error"), detail=res.get("detail", "transition 실패"))
+        transitioned = True
+
+    # 3) 코멘트 (선택)
+    comment_added = False
+    if payload.comment and payload.comment.strip():
+        cres = await svc.add_comment(key, payload.comment.strip())
+        comment_added = cres.get("status") == "ok"
+
+    # 4) 로컬 동기화 메타 갱신 (재조회)
+    after = await svc.get_issue(key, fields=["status", "updated"])
+    now = datetime.utcnow()
+    new_status_name = None
+    if after.get("status") == "ok":
+        af = after["issue"].get("fields") or {}
+        new_status_name = (af.get("status") or {}).get("name")
+        item.jira_status = new_status_name
+        item.jira_updated_at = parse_jira_dt(af.get("updated")) or item.jira_updated_at
+    item.jira_synced_at = now
+    db.commit()
+
+    audit_logger.record(
+        db, action="work_item.jira_push", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"key": key, "transitioned": transitioned, "comment": comment_added, "force": payload.force},
+    )
+
+    detail = "Jira 반영 완료" if (transitioned or comment_added) else "이미 동기화 상태입니다."
+    return JiraPushResult(
+        status="ok", detail=detail, transitioned=transitioned,
+        comment_added=comment_added, jira_status=new_status_name or (jfields.get("status") or {}).get("name"),
     )

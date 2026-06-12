@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { jiraApi } from '@/services/api';
 import { workItemKeys } from '@/hooks/useWorkItems';
-import type { JiraConfig, JiraImportRequest } from '@/types';
+import type { JiraConfig, JiraImportRequest, JiraPushRequest } from '@/types';
 
 export const jiraKeys = {
   config: ['jira', 'config'] as const,
@@ -64,6 +64,17 @@ export function useJiraImport() {
     onSuccess: (res) => {
       // dry_run 이 아닐 때만 보드 갱신.
       if (!res.data.dryRun) qc.invalidateQueries({ queryKey: workItemKeys.all });
+    },
+  });
+}
+
+export function useJiraPush() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, data }: { itemId: string; data: JiraPushRequest }) =>
+      jiraApi.push(itemId, data),
+    onSuccess: (res) => {
+      if (res.data.status === 'ok') qc.invalidateQueries({ queryKey: workItemKeys.all });
     },
   });
 }

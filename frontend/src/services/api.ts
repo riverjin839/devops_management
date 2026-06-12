@@ -813,6 +813,8 @@ export const jiraApi = {
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   import: (data: import('@/types').JiraImportRequest) =>
     api.post<import('@/types').JiraImportResult>('/jira/import', data),
+  push: (itemId: string, data: import('@/types').JiraPushRequest) =>
+    api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
 };
 
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).

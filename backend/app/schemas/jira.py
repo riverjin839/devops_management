@@ -64,3 +64,18 @@ class JiraImportResult(BaseModel):
     detail: str = ""
     errors: list[str] = []
     items: list[JiraImportItemPreview] = []
+
+
+# ── 양방향 push (Phase 2) ──────────────────────────────────────────────────────
+class JiraPushRequest(BaseModel):
+    comment: Optional[str] = None
+    force: bool = False     # Jira 쪽이 더 최신이어도 덮어쓰기
+
+
+class JiraPushResult(BaseModel):
+    status: Literal["ok", "conflict", "error", "offline", "not_linked"]
+    detail: str = ""
+    transitioned: bool = False
+    comment_added: bool = False
+    jira_status: Optional[str] = None
+    available_transitions: list[str] = []
