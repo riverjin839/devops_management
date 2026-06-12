@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ListTodo, Pencil, Plus, Trash2, UploadCloud, Loader2 } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar } from '@/components/work-items';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
+import { useJiraPush } from '@/hooks/useJira';
 import { cn, formatApiError } from '@/lib/utils';
 
 export function WorkItemDetailPage() {
@@ -16,8 +17,10 @@ export function WorkItemDetailPage() {
   const item = listData?.data.find((x) => x.id === id) ?? null;
   const deleteTask = useDeleteWorkItem();
   const toast = useToast();
+  const pushJira = useJiraPush();
   // G-I9: window.confirm 대신 ConfirmDialog 사용
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [conflictOpen, setConflictOpen] = useState(false);
 
 
   if (listData && !item) {
@@ -57,6 +60,23 @@ export function WorkItemDetailPage() {
     });
   };
 
+  const doPush = (force: boolean) => {
+    pushJira.mutate(
+      { itemId: item.id, data: { force } },
+      {
+        onSuccess: ({ data }) => {
+          if (data.status === 'conflict') { setConflictOpen(true); return; }
+          if (data.status === 'ok') {
+            toast.success('Jira 반영', data.detail + (data.jiraStatus ? ` (현재: ${data.jiraStatus})` : ''));
+            return;
+          }
+          toast.error('Jira 반영 실패', data.detail);
+        },
+        onError: (err) => toast.error('Jira 반영 실패', formatApiError(err)),
+      },
+    );
+  };
+
   const pageTitle = editMode ? '업무 수정' : '업무 상세';
 
   return (
@@ -73,6 +93,17 @@ export function WorkItemDetailPage() {
           <ListTodo className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
+            {!editMode && item.jiraIssueKey && (
+              <button
+                onClick={() => doPush(false)}
+                disabled={pushJira.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0052CC]/10 text-[#0052CC] dark:text-blue-300 hover:bg-[#0052CC]/20 border border-[#0052CC]/20 rounded-lg transition-colors disabled:opacity-50"
+                title={`현재 상태를 Jira ${item.jiraIssueKey} 에 반영`}
+              >
+                {pushJira.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                Jira 반영
+              </button>
+            )}
             {!editMode && (
               <>
                 <button
@@ -129,6 +160,16 @@ export function WorkItemDetailPage() {
         danger
         onConfirm={doDelete}
         onCancel={() => setConfirmDeleteOpen(false)}
+      />
+      <ConfirmDialog
+        open={conflictOpen}
+        title="Jira 강제 반영"
+        description="Jira 쪽 이슈가 PEP 보다 더 최근에 변경되었습니다. PEP 의 상태로 덮어쓸까요?"
+        confirmLabel="강제 반영"
+        cancelLabel="취소"
+        danger
+        onConfirm={() => { setConflictOpen(false); doPush(true); }}
+        onCancel={() => setConflictOpen(false)}
       />
     </div>
   );

@@ -186,6 +186,103 @@ class JiraService:
     def issue_browse_url(self, key: str) -> str:
         return f"{self.base_url}/browse/{key}" if self.base_url and key else ""
 
+    # ── 양방향 push (Phase 2) ────────────────────────────────────────────────
+    async def get_issue(self, key: str, fields: Optional[list[str]] = None) -> dict:
+        """단일 이슈 조회 (충돌 감지/현재 상태 확인용)."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Jira 미설정"}
+        params = {"fields": ",".join(fields)} if fields else {}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.get(
+                    f"{self.base_url}/rest/api/2/issue/{key}", headers=self._headers(), params=params
+                )
+                if resp.status_code == 404:
+                    return {"status": "error", "detail": f"이슈 {key} 없음 (404)"}
+                if resp.status_code != 200:
+                    return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+                return {"status": "ok", "issue": resp.json()}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Jira 연결 불가"}
+        except httpx.TimeoutException:
+            return {"status": "offline", "detail": "Jira 응답 시간 초과"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Jira get_issue error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
+    async def get_transitions(self, key: str) -> dict:
+        """이슈의 가용 transition 목록. 각 항목에 to.statusCategory.key 포함."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Jira 미설정", "transitions": []}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.get(
+                    f"{self.base_url}/rest/api/2/issue/{key}/transitions", headers=self._headers()
+                )
+                if resp.status_code != 200:
+                    return {"status": "error", "detail": f"HTTP {resp.status_code}", "transitions": []}
+                out = []
+                for t in resp.json().get("transitions", []):
+                    to = t.get("to", {}) or {}
+                    out.append({
+                        "id": t.get("id"),
+                        "name": t.get("name", ""),
+                        "to_name": to.get("name", ""),
+                        "to_category": (to.get("statusCategory") or {}).get("key", ""),
+                    })
+                return {"status": "ok", "transitions": out}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Jira 연결 불가", "transitions": []}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Jira get_transitions error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200], "transitions": []}
+
+    async def do_transition(self, key: str, transition_id: str) -> dict:
+        if not self.configured:
+            return {"status": "offline", "detail": "Jira 미설정"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.post(
+                    f"{self.base_url}/rest/api/2/issue/{key}/transitions",
+                    headers=self._headers(), json={"transition": {"id": str(transition_id)}},
+                )
+                if resp.status_code in (200, 204):
+                    return {"status": "ok"}
+                detail = ""
+                try:
+                    detail = "; ".join(resp.json().get("errorMessages", [])) or str(resp.json().get("errors", ""))
+                except Exception:  # noqa: BLE001
+                    detail = resp.text[:200]
+                return {"status": "error", "detail": detail or f"HTTP {resp.status_code}"}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Jira 연결 불가"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Jira do_transition error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
+    async def add_comment(self, key: str, body: str) -> dict:
+        if not self.configured:
+            return {"status": "offline", "detail": "Jira 미설정"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.post(
+                    f"{self.base_url}/rest/api/2/issue/{key}/comment",
+                    headers=self._headers(), json={"body": body},
+                )
+                if resp.status_code in (200, 201):
+                    return {"status": "ok"}
+                return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Jira 연결 불가"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Jira add_comment error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
+
+# kanban_status → 목표 Jira statusCategory.key (커스텀 워크플로 견고).
+KANBAN_TO_CATEGORY = {"todo": "new", "in_progress": "indeterminate", "done": "done"}
+
+
 
 def map_jira_issue(issue: dict, base_url: str, *, assignee_resolver=None) -> dict:
     """단일 Jira 이슈 → work_item 필드 dict (생성/upsert 공용). 순수 함수."""
