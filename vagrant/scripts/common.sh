@@ -4,9 +4,24 @@
 set -euxo pipefail
 
 NODE_IP="${1:?node ip required}"
+ROOT_PW="${2:-}"
 K8S_MINOR="v1.29"
 
 export DEBIAN_FRONTEND=noninteractive
+
+# ── 0. root SSH 로그인 + 비번 활성화 (폐쇄망 운영과 동일하게 root+password 수집 테스트) ──
+# PEP 의 Host Facts / 대량실행 등 SSH 기능을 운영과 같은 방식(root + 비번)으로 검증하기 위함.
+# 테스트 전용 — 실제 운영 노드에서는 절대 이렇게 열지 말 것.
+if [ -n "$ROOT_PW" ]; then
+  echo "root:${ROOT_PW}" | chpasswd
+  sed -ri 's/^#?\s*PermitRootLogin.*/PermitRootLogin yes/'        /etc/ssh/sshd_config || true
+  sed -ri 's/^#?\s*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+  # cloud-init / 배포본이 sshd_config.d 로 위 설정을 덮는 경우 대비해 최우선 드롭인 추가
+  mkdir -p /etc/ssh/sshd_config.d
+  printf 'PermitRootLogin yes\nPasswordAuthentication yes\n' >/etc/ssh/sshd_config.d/99-pep-test.conf
+  systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+  echo "[common] root SSH 비번 로그인 활성화 (테스트용)"
+fi
 
 # ── 1. 스왑 비활성화 ───────────────────────────────────────────────────────────
 swapoff -a || true

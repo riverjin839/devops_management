@@ -91,6 +91,31 @@ kubectl -n minio rollout status deploy/minio
 
 worker-1 의 10GB 디스크(`/mnt/disks/minio/data`)를 로컬 PV 로 사용합니다.
 
+## 폐쇄망 동일 테스트 — Host Facts / SSH 기능
+
+kind 와 달리 이 vagrant 노드는 **SSH(root+비번)·bond·실디스크**가 있어, 폐쇄망 운영 노드와
+**동일한 방식으로** PEP 의 Host Facts 수집 / 대량실행(BulkExec) / 배치잡을 검증할 수 있습니다.
+
+- 각 노드에 **root 로그인 + 비번**(`ROOT_PASSWORD`, 기본 `rootpass`)이 활성화되어 있습니다
+  (운영의 root+비번 수집 흐름과 동일 — **테스트 전용**).
+- PEP **노드 사양 페이지 → "Host Facts 수집"**:
+  - SSH user `root`, SSH password `rootpass`(=Vagrantfile 의 `ROOT_PASSWORD`)
+  - 호스트: `192.168.56.11`, `192.168.56.12` (워커)
+  - → bond/disk/vm 필드가 채워짐
+
+### ⚠️ PEP 가 노드 SSH(22)에 닿게 하기 — 실행 위치가 중요
+
+| PEP 실행 방식 | API(6443) | SSH(22, Host Facts) | 권장 |
+|---|---|---|---|
+| **맥 네이티브** (`make dev` / uvicorn) | `192.168.56.10:6443` 직접 | `192.168.56.x:22` 직접 | ✅ SSH 기능 테스트는 이쪽 |
+| docker-compose 컨테이너 | `host.docker.internal:6443` (포워딩) | host-only 망(192.168.56.x) **직접 도달 불가** | API/모니터링만 |
+
+> 컨테이너 PEP 는 host-only 망의 22번에 닿지 못합니다(앞서 6443 을 host.docker.internal 로
+> 우회한 것과 같은 제약). **Host Facts/대량실행 같은 SSH 기반 기능은 PEP 를 맥 네이티브로
+> 띄워** `192.168.56.x` 에 바로 SSH 하게 하는 것이 가장 단순하고 운영과 유사합니다.
+> 네이티브로 띄우면 클러스터 등록도 `https://192.168.56.10:6443` + `_out/admin.conf` 를 그대로
+> 쓰면 됩니다(host.docker.internal 불필요).
+
 ## 정리
 
 ```bash

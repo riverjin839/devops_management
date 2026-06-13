@@ -31,6 +31,7 @@ CP_MEM         = 2560
 CP_CPUS        = 2
 WORKER_MEM     = 2560
 WORKER_CPUS    = 2
+ROOT_PASSWORD  = "rootpass"             # 노드 root SSH 비번 (폐쇄망 동일 흐름 테스트용 — 운영 금지)
 
 # Vagrant 네이티브 디스크 기능 (worker 추가 디스크 attach 에 사용)
 ENV['VAGRANT_EXPERIMENTAL'] = 'disks'
@@ -73,7 +74,7 @@ Vagrant.configure("2") do |config|
 
     set_provider(cp, "k8s-control-1", CP_MEM, CP_CPUS)
 
-    cp.vm.provision "shell", path: "scripts/common.sh", args: [CP_IP]
+    cp.vm.provision "shell", path: "scripts/common.sh", args: [CP_IP, ROOT_PASSWORD]
     cp.vm.provision "shell", path: "scripts/control-plane.sh", args: [CP_IP]
   end
 
@@ -91,7 +92,7 @@ Vagrant.configure("2") do |config|
 
       set_provider(w, name, WORKER_MEM, WORKER_CPUS)
 
-      w.vm.provision "shell", path: "scripts/common.sh", args: [ip]
+      w.vm.provision "shell", path: "scripts/common.sh", args: [ip, ROOT_PASSWORD]
       w.vm.provision "shell", path: "scripts/worker.sh", args: [ip]
     end
   end
