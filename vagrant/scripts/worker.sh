@@ -26,12 +26,12 @@ done
 
 if [ -n "$TARGET" ]; then
   if ! blkid "$TARGET" >/dev/null 2>&1; then
-    mkfs.ext4 -F -L minio "$TARGET"
+    mkfs.xfs -f -L minio "$TARGET"        # RHEL 기본 파일시스템
   fi
   mkdir -p "$MOUNT"
   UUID="$(blkid -s UUID -o value "$TARGET")"
   if ! grep -q "$UUID" /etc/fstab; then
-    echo "UUID=${UUID} ${MOUNT} ext4 defaults,nofail 0 2" >>/etc/fstab
+    echo "UUID=${UUID} ${MOUNT} xfs defaults,nofail 0 2" >>/etc/fstab
   fi
   mount -a
   mkdir -p "${MOUNT}/data"
@@ -47,7 +47,7 @@ if [ ! -f /etc/kubernetes/kubelet.conf ]; then
     echo "[worker] join.sh 없음 — control-plane 프로비저닝이 먼저 끝나야 함." >&2
     exit 1
   fi
-  bash "$JOIN" --cri-socket=unix:///run/containerd/containerd.sock
+  bash "$JOIN" --cri-socket=unix:///var/run/crio/crio.sock
 fi
 
 echo "[worker] done (${WORKER_IP})"

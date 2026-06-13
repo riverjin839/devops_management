@@ -1,7 +1,8 @@
-# Vagrant K8s 클러스터 (PEP 등록 + MinIO)
+# Vagrant K8s 클러스터 (PEP 등록 + MinIO) — AlmaLinux 10 / RHEL 10 호환
 
-PEP(로컬 docker-compose) 에 등록해 모니터링하고, MinIO 를 올려볼 수 있는
-kubeadm 기반 테스트 클러스터를 Vagrant 로 띄웁니다.
+PEP 에 등록해 모니터링하고, MinIO 를 올려볼 수 있는 kubeadm 기반 테스트 클러스터.
+**폐쇄망 운영(RHEL 10)과 동일하게** 검증하려고 OS 를 RHEL 1:1 리빌드인 **AlmaLinux 10**
+으로 맞췄습니다 (커널 6.12 + dnf/SELinux/firewalld/NetworkManager 동일 userland).
 
 ## 구성
 
@@ -11,18 +12,29 @@ kubeadm 기반 테스트 클러스터를 Vagrant 로 띄웁니다.
 | `k8s-worker-1`  | 192.168.56.11 | worker | **+10GB 디스크 → /mnt/disks/minio** (MinIO) |
 | `k8s-worker-2`  | 192.168.56.12 | worker | +10GB 디스크 |
 
-- K8s 1.29 / containerd / **Cilium** (Pod CIDR `10.244.0.0/16` — host-only 192.168.x 와 미충돌)
-- worker 마다 10GB 추가 디스크를 `/mnt/disks/minio` 로 자동 포맷·마운트
+- OS: **AlmaLinux 10**(RHEL 10 호환, 커널 6.12) / CRI: **CRI-O** / K8s **1.29**
+- CNI: **Cilium** (cilium-cli, ipam=kubernetes → PodCIDR `10.244.0.0/16`, host-only 망 미충돌)
+- worker 마다 10GB 추가 디스크를 **xfs** 로 `/mnt/disks/minio` 에 자동 포맷·마운트
+
+> **아키텍처 주의:** Apple Silicon 의 VMware Fusion 은 arm64 게스트만 돌리므로 이 박스는
+> **aarch64** 입니다. 폐쇄망 RHEL10 이 x86_64 라면 커널·userland 는 같아도 **CPU arch 는 다릅니다**
+> (Host Facts/체커 검증에는 대부분 무관). CRI 는 운영(containerd)과 달리 CRI-O 지만, PEP 는
+> kube-API 로 보므로 CRI 종류는 보이지 않습니다.
+>
+> **박스 가용성:** `almalinux/10` 의 aarch64 + vmware_desktop variant 가 아직 제한적일 수 있습니다.
+> 먼저 확인: `vagrant box add almalinux/10 --provider vmware_desktop` (없으면 알려주세요).
 
 ## 요구사항
 
 - **Vagrant 2.3+**
 - **Apple Silicon(M1~) — VMware Fusion (개인용 무료, 권장):**
-  1. VMware Fusion 13.5+ 설치 (개인용 무료): https://www.vmware.com/products/fusion.html
+  1. VMware Fusion 13.5+ 설치 — Broadcom 무료 계정으로 수동 다운로드
+     (https://profile.broadcom.com → support.broadcom.com 에서 "VMware Fusion" → Personal Use).
+     `brew install --cask vmware-fusion` 은 2025-06 부로 비활성화됨.
   2. Vagrant 플러그인 + 유틸리티 설치:
      ```bash
      vagrant plugin install vagrant-vmware-desktop
-     brew install --cask vagrant-vmware-utility    # 또는 공식 설치 패키지
+     brew install --cask vagrant-vmware-utility    # 유틸리티 cask 는 정상
      ```
 - **Intel Mac / Linux — VirtualBox 6.1+** (별도 플러그인 불필요)
 

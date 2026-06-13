@@ -17,7 +17,7 @@ if [ ! -f /etc/kubernetes/admin.conf ]; then
     --apiserver-advertise-address="${CP_IP}" \
     --apiserver-cert-extra-sans="${CP_IP},127.0.0.1,localhost,host.docker.internal" \
     --pod-network-cidr="${POD_CIDR}" \
-    --cri-socket=unix:///run/containerd/containerd.sock
+    --cri-socket=unix:///var/run/crio/crio.sock
 fi
 
 # ── 2. kubectl (root + vagrant) ────────────────────────────────────────────────
@@ -28,7 +28,11 @@ cp -f /etc/kubernetes/admin.conf /root/.kube/config
 chown -R vagrant:vagrant /home/vagrant/.kube
 
 # ── 3. Cilium CNI (cilium-cli, ipam=kubernetes → kubeadm PodCIDR 사용) ───────────
-ARCH="$(dpkg --print-architecture)"   # amd64 | arm64 (Apple Silicon 게스트는 arm64)
+case "$(uname -m)" in
+  x86_64)  ARCH=amd64 ;;
+  aarch64) ARCH=arm64 ;;            # Apple Silicon 게스트
+  *)       ARCH=amd64 ;;
+esac
 if ! command -v cilium >/dev/null 2>&1; then
   curl -fsSL "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${ARCH}.tar.gz" \
     -o /tmp/cilium-cli.tgz

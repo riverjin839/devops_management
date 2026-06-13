@@ -3,7 +3,8 @@
 #
 # Vagrant + kubeadm K8s 클러스터 (PEP 등록 + MinIO 용) — Apple Silicon 우선(VMware Fusion)
 #
-#  - control-plane 1대 + worker N대 (기본 2대)
+#  - OS: AlmaLinux 10 (RHEL 10 호환 — 커널 6.12, dnf/SELinux/firewalld/NetworkManager 동일)
+#  - control-plane 1대 + worker N대 (기본 2대), CRI: CRI-O (pkgs.k8s.io)
 #  - CNI: Cilium (cilium-cli, ipam=kubernetes → kubeadm PodCIDR 10.244.0.0/16, host-only 망 미충돌)
 #  - PEP(docker-compose backend) 접속 지원:
 #       * API 서버 6443 → Mac 호스트(0.0.0.0)로 포워딩
@@ -22,7 +23,7 @@
 #       vagrant-vmware-desktop 플러그인 + vagrant-vmware-utility. (README 참고)
 
 # ── 설정 (필요시 수정) ─────────────────────────────────────────────────────────
-BOX            = "bento/ubuntu-22.04"   # multi-arch/multi-provider (arm64 vmware/parallels 포함)
+BOX            = "almalinux/10"          # RHEL 10 호환. Apple Silicon 은 aarch64 변형 자동 선택.
 NUM_WORKERS    = 2
 NET_PREFIX     = "192.168.56"           # host-only 사설망 대역
 CP_IP          = "#{NET_PREFIX}.10"
