@@ -19,6 +19,9 @@ networking:
   # 클라이언트에 맞게 127.0.0.1 / host.docker.internal 로 바꿔 사용 — README 참고.)
   apiServerAddress: "0.0.0.0"
   apiServerPort: 6443
+  # 기본 CNI(kindnet)로 바로 Ready. Mac 가이드처럼 Cilium+Hubble 까지 테스트하려면
+  # 아래 줄 주석을 풀고 클러스터 생성 후 `cilium install` 한다(WIN_LOCAL_TEST_GUIDE 참고).
+  # disableDefaultCNI: true
 nodes:
   - role: control-plane
     kubeadmConfigPatches:
