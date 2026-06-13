@@ -4,7 +4,7 @@
 # Vagrant + kubeadm K8s 클러스터 (PEP 등록 + MinIO 용)
 #
 #  - control-plane 1대 + worker N대 (기본 2대)
-#  - CNI: Flannel (Pod CIDR 10.244.0.0/16 — host-only 망 192.168.56.x 와 미충돌)
+#  - CNI: Cilium (cilium-cli, ipam=kubernetes → kubeadm PodCIDR 10.244.0.0/16, host-only 망 미충돌)
 #  - PEP(docker-compose backend) 가 접속할 수 있도록:
 #       * API 서버 6443 → Mac 호스트(0.0.0.0)로 포워딩
 #       * apiserver 인증서 SAN 에 host.docker.internal 포함 (TLS 검증 정상)

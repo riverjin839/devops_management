@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Control-plane 초기화 + Flannel CNI + PEP/worker 용 산출물 생성.
+# Control-plane 초기화 + Cilium CNI + PEP/worker 용 산출물 생성.
 # 인자: $1 = control-plane host-only IP
 set -euxo pipefail
 
 CP_IP="${1:?cp ip required}"
-POD_CIDR="10.244.0.0/16"          # Flannel 기본 (host-only 192.168.x 와 미충돌)
+POD_CIDR="10.244.0.0/16"          # kubeadm 이 노드별 PodCIDR 할당 (Cilium ipam=kubernetes 가 사용)
+CILIUM_CLI_VERSION="v0.16.9"      # cilium-cli 버전 (조정 가능)
+CILIUM_VERSION="1.15.6"           # Cilium 자체 버전 (k8s 1.29 호환)
 OUT="/vagrant/_out"
 
 mkdir -p "${OUT}"
@@ -25,10 +27,19 @@ cp -f /etc/kubernetes/admin.conf /home/vagrant/.kube/config
 cp -f /etc/kubernetes/admin.conf /root/.kube/config
 chown -R vagrant:vagrant /home/vagrant/.kube
 
-# ── 3. Flannel CNI ─────────────────────────────────────────────────────────────
-if ! kubectl -n kube-flannel get ds kube-flannel-ds >/dev/null 2>&1; then
-  kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+# ── 3. Cilium CNI (cilium-cli, ipam=kubernetes → kubeadm PodCIDR 사용) ───────────
+ARCH="$(dpkg --print-architecture)"   # amd64 | arm64 (Apple Silicon 게스트는 arm64)
+if ! command -v cilium >/dev/null 2>&1; then
+  curl -fsSL "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${ARCH}.tar.gz" \
+    -o /tmp/cilium-cli.tgz
+  tar -C /usr/local/bin -xzf /tmp/cilium-cli.tgz cilium
 fi
+if ! kubectl -n kube-system get daemonset cilium >/dev/null 2>&1; then
+  # ipam.mode=kubernetes → controller-manager(=--pod-network-cidr)가 할당한 노드별
+  # PodCIDR 를 그대로 사용 → service CIDR / host-only 망과 충돌 없음.
+  cilium install --version "${CILIUM_VERSION}" --set ipam.mode=kubernetes
+fi
+cilium status --wait --wait-duration=5m || true
 
 # ── 4. worker join 명령 생성 ────────────────────────────────────────────────────
 kubeadm token create --print-join-command >"${OUT}/join.sh"
@@ -41,6 +52,7 @@ cp -f /etc/kubernetes/admin.conf "${OUT}/admin.conf"
 sed "s#server: https://${CP_IP}:6443#server: https://host.docker.internal:6443#" \
   /etc/kubernetes/admin.conf >"${OUT}/pep-kubeconfig.yaml"
 
+# worker join 후 노드가 Ready 되려면 Cilium 이 각 노드에 떠야 함 (자동).
 echo "[control-plane] 완료. 산출물:"
 echo "  - ${OUT}/pep-kubeconfig.yaml  → PEP '클러스터 추가' 에 붙여넣기"
 echo "  - ${OUT}/admin.conf           → Mac 에서 kubectl 용 (server=${CP_IP}:6443)"

@@ -11,7 +11,7 @@ kubeadm 기반 테스트 클러스터를 Vagrant 로 띄웁니다.
 | `k8s-worker-1`  | 192.168.56.11 | worker | **+10GB 디스크 → /mnt/disks/minio** (MinIO) |
 | `k8s-worker-2`  | 192.168.56.12 | worker | +10GB 디스크 |
 
-- K8s 1.29 / containerd / **Flannel** (Pod CIDR `10.244.0.0/16` — host-only 192.168.x 와 미충돌)
+- K8s 1.29 / containerd / **Cilium** (Pod CIDR `10.244.0.0/16` — host-only 192.168.x 와 미충돌)
 - worker 마다 10GB 추가 디스크를 `/mnt/disks/minio` 로 자동 포맷·마운트
 
 ## 요구사항
@@ -85,7 +85,7 @@ rm -rf _out .vagrant
 ## 트러블슈팅
 
 - **worker 가 NotReady**: `vagrant ssh k8s-worker-1 -c 'sudo journalctl -u kubelet -n50'`.
-  Flannel pod 가 떠야 Ready 가 됩니다 (`kubectl -n kube-flannel get pod`).
+  Cilium pod 가 떠야 Ready 가 됩니다 (`kubectl -n kube-system get pod -l k8s-app=cilium`).
 - **추가 디스크 미인식**: `vagrant ssh k8s-worker-1 -c 'lsblk'` 로 10G raw 디스크 확인.
   Vagrant 2.3+ 필요(`VAGRANT_EXPERIMENTAL=disks` 는 Vagrantfile 에서 자동 설정).
 - **PEP 에서 offline**: 위 `httpx` 도달 확인부터. 타임아웃이면 6443 포워딩/방화벽,
