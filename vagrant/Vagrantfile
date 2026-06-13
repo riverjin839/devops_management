@@ -75,6 +75,7 @@ Vagrant.configure("2") do |config|
     set_provider(cp, "k8s-control-1", CP_MEM, CP_CPUS)
 
     cp.vm.provision "shell", path: "scripts/common.sh", args: [CP_IP, ROOT_PASSWORD]
+    cp.vm.provision "shell", path: "scripts/bond.sh", args: [CP_IP]
     cp.vm.provision "shell", path: "scripts/control-plane.sh", args: [CP_IP]
   end
 
@@ -93,6 +94,7 @@ Vagrant.configure("2") do |config|
       set_provider(w, name, WORKER_MEM, WORKER_CPUS)
 
       w.vm.provision "shell", path: "scripts/common.sh", args: [ip, ROOT_PASSWORD]
+      w.vm.provision "shell", path: "scripts/bond.sh", args: [ip]
       w.vm.provision "shell", path: "scripts/worker.sh", args: [ip]
     end
   end

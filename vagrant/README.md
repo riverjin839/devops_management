@@ -98,6 +98,8 @@ kind 와 달리 이 vagrant 노드는 **SSH(root+비번)·bond·실디스크**�
 
 - 각 노드에 **root 로그인 + 비번**(`ROOT_PASSWORD`, 기본 `rootpass`)이 활성화되어 있습니다
   (운영의 root+비번 수집 흐름과 동일 — **테스트 전용**).
+- 각 노드에 **dummy bond0/bond1**(10.20.0.x / 10.30.0.x)이 미리 구성되어 있어 Host Facts 의
+  `bond0_ip/mac`, `bond1_ip/mac` 필드까지 운영처럼 채워집니다(k8s 트래픽과 분리, 테스트 전용).
 - PEP **노드 사양 페이지 → "Host Facts 수집"**:
   - SSH user `root`, SSH password `rootpass`(=Vagrantfile 의 `ROOT_PASSWORD`)
   - 호스트: `192.168.56.11`, `192.168.56.12` (워커)
