@@ -2425,3 +2425,65 @@ export interface K8sResourceYaml {
   name: string;
   yaml: string;
 }
+
+// ── K8s 상세 관리 (Lens 식) — 쓰기 액션 / CRD / Helm ─────────────────────────
+export interface K8sResourceCapability {
+  scalable: boolean;
+  restartable: boolean;
+  deletable: boolean;
+  editable: boolean;
+  namespaced: boolean;
+}
+export interface K8sCapabilitiesResponse {
+  capabilities: Record<string, K8sResourceCapability>;
+}
+export interface K8sWriteResult {
+  ok: boolean;
+  kind?: string;
+  namespace?: string;
+  name?: string;
+  replicas?: number;
+  restartedAt?: string;
+}
+export interface K8sDrainResult {
+  ok: boolean;
+  node: string;
+  evicted: string[];
+  skipped: { pod: string; reason: string }[];
+  errors: { pod: string; error: string }[];
+}
+export interface K8sCrdInfo {
+  name: string;
+  group: string;
+  kind: string;
+  plural: string;
+  scope: string; // Namespaced | Cluster
+  versions: string[];
+  version: string;
+  ageSeconds?: number | null;
+}
+export interface K8sCrdListResponse {
+  count: number;
+  items: K8sCrdInfo[];
+}
+export interface HelmRelease {
+  name: string;
+  namespace: string;
+  revision: string | number;
+  status: string;
+  chart: string;
+  appVersion?: string;
+  updated?: string;
+}
+export interface HelmReleaseListResponse {
+  count: number;
+  items: HelmRelease[];
+}
+export interface HelmHistoryItem {
+  revision: string | number;
+  status: string;
+  chart: string;
+  appVersion?: string;
+  updated?: string;
+  description?: string;
+}

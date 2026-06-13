@@ -46,6 +46,7 @@ import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sResourcesPage } from '@/pages/K8sResourcesPage';
+import { K8sManagePage } from '@/pages/K8sManagePage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -179,6 +180,9 @@ function AppShell() {
               {/* OpenLens P1 — 읽기전용 리소스 탐색기 */}
               <Route path="/k8s-resources/:clusterId" element={<K8sResourcesPage />} />
               <Route path="/k8s-resources" element={<K8sResourcesPage />} />
+              {/* Lens 식 K8S 상세 관리 — 리소스 탐색 + 쓰기 액션 + 터미널/이벤트/Helm/RBAC/CRD */}
+              <Route path="/k8s-manage/:clusterId" element={<K8sManagePage />} />
+              <Route path="/k8s-manage" element={<K8sManagePage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
               <Route path="/settings/audit-logs" element={<RequireAdmin><AuditLogsPage /></RequireAdmin>} />
