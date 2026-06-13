@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Worker — MinIO 용 추가 디스크 포맷/마운트 + 클러스터 join.
 # 인자: $1 = worker host-only IP
+#       $2 = 산출물 디렉터리 (join.sh 위치; 기본 /vagrant/_out, 멀티클러스터 c2 는 /vagrant/_out-c2)
 set -euxo pipefail
 
 WORKER_IP="${1:?worker ip required}"
+OUT="${2:-/vagrant/_out}"
 MOUNT="/mnt/disks/minio"
-JOIN="/vagrant/_out/join.sh"
+JOIN="${OUT}/join.sh"
 
 # ── 1. MinIO 용 추가 디스크 찾기 (파티션/FS 없는 ~10G raw 디스크, 디바이스명 비의존) ──
 # VMware(sdb)·VirtualBox(sdb)·일부 환경(nvme) 모두 대응하도록 lsblk 로 전체 디스크 순회.

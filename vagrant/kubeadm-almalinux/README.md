@@ -46,7 +46,10 @@ VirtualBox) 경로입니다. 다른 테스트 환경(빠른 k3s / Windows docker
      vagrant plugin install vagrant-vmware-desktop
      brew install --cask vagrant-vmware-utility    # 유틸리티 cask 는 정상
      ```
-- **Intel Mac / Linux — VirtualBox 6.1+** (별도 플러그인 불필요)
+- **Intel Mac / Linux / Windows — VirtualBox 6.1+** (별도 플러그인 불필요)
+  - Windows: `winget install Hashicorp.Vagrant Oracle.VirtualBox`. Docker Desktop(WSL2) 와
+    공존하려면 **VirtualBox 7.x + 최신 Windows** 필요. 전체 흐름은
+    [../../docs/WIN_LOCAL_TEST_GUIDE.md](../../docs/WIN_LOCAL_TEST_GUIDE.md) 참고.
 
 > Vagrantfile 은 `vmware_desktop` 과 `virtualbox` provider 블록을 **둘 다** 정의합니다.
 > 기동 시 `--provider` 로 사용할 것을 고르세요(아래).
@@ -67,7 +70,32 @@ cd vagrant/kubeadm-almalinux
 vagrant up --provider=virtualbox
 ```
 
-완료되면 `vagrant/_out/` 에 산출물이 생성됩니다:
+### 멀티 클러스터 (폐쇄망 동일 클러스터 2개+)
+
+폐쇄망 운영과 동일한 K8s 를 **여러 개** 띄워 PEP 멀티클러스터를 테스트한다. 같은 디렉터리에서
+`PEP_CLUSTER` 와 `VAGRANT_DOTFILE_PATH`(상태 분리)만 바꿔 독립 클러스터로 띄운다. 클러스터마다
+**서브넷 / host 포트 / VirtualBox 이름 / 산출물 디렉터리**가 자동 분리된다.
+
+| 클러스터 | host-only 서브넷 | API host 포트 | VM 이름 | 산출물 | PEP 등록 endpoint |
+|---|---|---|---|---|---|
+| `PEP_CLUSTER=1`(기본) | 192.168.56.x | 6443 | `k8s-control-1`… | `_out/` | `https://host.docker.internal:6443` |
+| `PEP_CLUSTER=2` | 192.168.57.x | 6444 | `c2-k8s-control-1`… | `_out-c2/` | `https://host.docker.internal:6444` |
+
+```bash
+# 클러스터 1 (기본)
+vagrant up --provider=virtualbox
+
+# 클러스터 2 (PowerShell)
+$env:PEP_CLUSTER=2; $env:VAGRANT_DOTFILE_PATH=".vagrant-c2"; vagrant up --provider=virtualbox
+# 클러스터 2 (bash)
+PEP_CLUSTER=2 VAGRANT_DOTFILE_PATH=.vagrant-c2 vagrant up --provider=virtualbox
+```
+
+> 클러스터 2 를 다룰 때도 매번 같은 `PEP_CLUSTER`/`VAGRANT_DOTFILE_PATH` 를 지정해야 한다
+> (`vagrant status`, `vagrant destroy` 포함). 그래야 c1 상태와 섞이지 않는다.
+> 프리셋은 개별 env(`NET_PREFIX`/`API_HOST_PORT`/`VBOX_PREFIX`/`OUT_NAME`/`NUM_WORKERS`)로 override 가능.
+
+완료되면 산출물 디렉터리(`_out/`, 멀티클러스터는 `_out-c2/` …)에 다음이 생성됩니다:
 
 | 파일 | 용도 |
 |---|---|
@@ -143,8 +171,13 @@ kind 와 달리 이 vagrant 노드는 **SSH(root+비번)·bond·실디스크**�
 ## 정리
 
 ```bash
+# 클러스터 1
 vagrant destroy -f
 rm -rf _out .vagrant
+
+# 클러스터 2 (띄웠다면 — 같은 env 를 줘야 c2 를 가리킨다)
+PEP_CLUSTER=2 VAGRANT_DOTFILE_PATH=.vagrant-c2 vagrant destroy -f
+rm -rf _out-c2 .vagrant-c2
 ```
 
 ## 트러블슈팅

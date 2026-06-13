@@ -47,9 +47,14 @@ if [ "${K3S_CNI}" = "cilium" ]; then
 
   if ! command -v cilium >/dev/null 2>&1; then
     echo "[provision] cilium CLI 설치 중..."
+    # 게스트 아키텍처 자동 감지 (Apple Silicon=arm64 / Windows·Intel VirtualBox=amd64)
+    case "$(uname -m)" in
+      aarch64|arm64) CILIUM_ARCH=arm64 ;;
+      *)             CILIUM_ARCH=amd64 ;;
+    esac
     CILIUM_CLI_VERSION="$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)"
     curl -sL --fail -o /tmp/cilium.tar.gz \
-      "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-arm64.tar.gz"
+      "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CILIUM_ARCH}.tar.gz"
     tar xzf /tmp/cilium.tar.gz -C /usr/local/bin
     rm -f /tmp/cilium.tar.gz
   fi
