@@ -381,7 +381,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     <form id="item-form" onSubmit={handleSubmit} className="space-y-2.5">
       {/* 업무/이슈 구분 폐지 — type 선택 토글 제거. '이슈 대응' 은 분류(category)로 선택한다. */}
       {/* ── 기본 설정 — 컴팩트 단일 그리드 (담당자/클러스터/서비스/우선순위/보드상태/분류/일정/프로젝트) ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-2 gap-y-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-x-2 gap-y-2">
         <div>
           <label htmlFor={f('primary')} className={labelClass}>
             담당자(정) * <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
@@ -723,7 +723,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder={type === 'issue' ? '이슈 제목 (예: master1 kubelet 재기동 필요)' : '업무 제목 (예: 노드 NIC 점검)'}
-          className="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full px-2.5 py-1.5 bg-white text-zinc-900 placeholder:text-zinc-400 border border-border rounded-md text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
 
@@ -766,6 +766,17 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           </div>
         </details>
       )}
+
+      {/* ── Confluence 링크 — 업무 결과 바로 위, 한 줄 컴팩트 ──────────────── */}
+      <div className="max-w-xl">
+        <ConfluenceUrlInput
+          id={f('confluenceUrl')}
+          value={confluenceUrl}
+          onChange={setConfluenceUrl}
+          inline
+          showHint={false}
+        />
+      </div>
 
       {/* ── 조치 / 작업 결과 — 접이식 (default closed) ────────────────────── */}
       <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
@@ -827,13 +838,13 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         </details>
       )}
 
-      {/* ── 추가 옵션 — 접이식 (모듈/유형/이슈연결/Confluence/비고) ─── */}
+      {/* ── 추가 옵션 — 접이식 (모듈/유형/이슈연결/비고) ─── */}
       <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
         <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
           <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
           <span>추가 옵션</span>
           <span className="text-[11px] text-muted-foreground/70">
-            (모듈/유형 · 이슈 연결 · Confluence · 비고)
+            (모듈/유형 · 이슈 연결 · 비고)
           </span>
         </summary>
         <div className="px-3 pb-3 space-y-2">
@@ -929,13 +940,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
                     );
                   })}
               </select>
-            </div>
-            <div className="md:col-span-2">
-              <ConfluenceUrlInput
-                id={f('confluenceUrl')}
-                value={confluenceUrl}
-                onChange={setConfluenceUrl}
-              />
             </div>
             <div className="md:col-span-2">
               <label htmlFor={f('remarks')} className={labelClass}>비고</label>

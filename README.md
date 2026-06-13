@@ -42,7 +42,8 @@ docker-compose up -d           # postgres + redis + backend + frontend + celery
 ```
 
 네이티브 개발 / 로컬 K8s(kind) 등 상세는 [docs/DEPLOY_GUIDE.md](docs/DEPLOY_GUIDE.md) 와
-`make help` 참고.
+`make help` 참고. **Mac(Apple Silicon)에서 테스트 클러스터 2대(kind+Vagrant)를 띄워 기동**하려면
+[docs/MAC_LOCAL_TEST_GUIDE.md](docs/MAC_LOCAL_TEST_GUIDE.md) 참고.
 
 ## 문서
 

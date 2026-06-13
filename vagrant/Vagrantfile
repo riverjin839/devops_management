@@ -1,102 +1,61 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 #
-# Vagrant + kubeadm K8s 클러스터 (PEP 등록 + MinIO 용) — Apple Silicon 우선(VMware Fusion)
+# Apple Silicon(M1~M4) Mac 전용 — Vagrant 단일 노드 k3s 테스트 클러스터
+# ---------------------------------------------------------------------
+# PEP(devops_management) 가 모니터링할 "2번째 테스트 클러스터"를 VM 으로 띄운다.
 #
-#  - OS: AlmaLinux 10 (RHEL 10 호환 — 커널 6.12, dnf/SELinux/firewalld/NetworkManager 동일)
-#  - control-plane 1대 + worker N대 (기본 2대), CRI: CRI-O (pkgs.k8s.io)
-#  - CNI: Cilium (cilium-cli, ipam=kubernetes → kubeadm PodCIDR 10.244.0.0/16, host-only 망 미충돌)
-#  - PEP(docker-compose backend) 접속 지원:
-#       * API 서버 6443 → Mac 호스트(0.0.0.0)로 포워딩
-#       * apiserver 인증서 SAN 에 host.docker.internal 포함 (TLS 검증 정상)
-#       * _out/pep-kubeconfig.yaml 자동 생성 (server=host.docker.internal:6443)
-#  - worker 마다 10GB 추가 디스크 → /mnt/disks/minio 로 포맷/마운트 (MinIO 스토리지)
+# 기본 provider: QEMU (무료, brew 설치만으로 사용 가능, GUI 불필요)
+#   brew install qemu
+#   vagrant plugin install vagrant-qemu
 #
-# 기동 (Apple Silicon, VMware Fusion):
-#   vagrant up --provider=vmware_desktop
-#   # 또는: export VAGRANT_DEFAULT_PROVIDER=vmware_desktop && vagrant up
+# 대안 provider (주석 참고):
+#   - VMware Fusion 13 (개인용 무료) + vagrant-vmware-desktop
+#   - Parallels Desktop (유료) + vagrant-parallels
 #
-# 기동 (Intel Mac / Linux, VirtualBox):
-#   vagrant up --provider=virtualbox
-#
-# 요구: Vagrant 2.3+. Apple Silicon → VMware Fusion 13.5+ (개인용 무료) +
-#       vagrant-vmware-desktop 플러그인 + vagrant-vmware-utility. (README 참고)
-
-# ── 설정 (필요시 수정) ─────────────────────────────────────────────────────────
-BOX            = "almalinux/10"          # RHEL 10 호환. Apple Silicon 은 aarch64 변형 자동 선택.
-NUM_WORKERS    = 2
-NET_PREFIX     = "192.168.56"           # host-only 사설망 대역
-CP_IP          = "#{NET_PREFIX}.10"
-WORKER_DISK_GB = 10                     # worker 추가 디스크 크기 (MinIO 용)
-CP_MEM         = 2560
-CP_CPUS        = 2
-WORKER_MEM     = 2560
-WORKER_CPUS    = 2
-ROOT_PASSWORD  = "rootpass"             # 노드 root SSH 비번 (폐쇄망 동일 흐름 테스트용 — 운영 금지)
-
-# Vagrant 네이티브 디스크 기능 (worker 추가 디스크 attach 에 사용)
-ENV['VAGRANT_EXPERIMENTAL'] = 'disks'
-
-# 사용 중인 provider 에 맞는 리소스 블록을 적용 (Vagrant 는 활성 provider 만 사용).
-def set_provider(node, name, mem, cpus)
-  # Apple Silicon 권장 — VMware Fusion
-  node.vm.provider "vmware_desktop" do |v|
-    v.gui = false
-    v.vmx["displayName"] = name
-    v.vmx["memsize"]     = mem.to_s
-    v.vmx["numvcpus"]    = cpus.to_s
-  end
-  # Apple Silicon 대안 — Parallels (vagrant-parallels 플러그인)
-  node.vm.provider "parallels" do |prl|
-    prl.name   = name
-    prl.memory = mem
-    prl.cpus   = cpus
-  end
-  # Intel Mac / Linux — VirtualBox
-  node.vm.provider "virtualbox" do |vb|
-    vb.name   = name
-    vb.memory = mem
-    vb.cpus   = cpus
-  end
-end
+# k3s API 서버(6443) 를 Mac 호스트로 포워딩 → docker-compose 의 backend 컨테이너가
+# host.docker.internal:6443 으로 접속한다. provision 스크립트가 k3s 를
+# --tls-san host.docker.internal 로 설치해 TLS 인증서 SAN 을 맞춘다.
 
 Vagrant.configure("2") do |config|
-  config.vm.box = BOX
-  config.vm.box_check_update = false
+  config.vm.hostname = "pep-k3s"
 
-  # ── Control-plane ──────────────────────────────────────────────────────────
-  config.vm.define "k8s-control-1", primary: true do |cp|
-    cp.vm.hostname = "k8s-control-1"
-    cp.vm.network "private_network", ip: CP_IP
+  # k3s API 서버를 Mac 호스트 6443 으로 포워딩
+  # (backend 컨테이너 → host.docker.internal:6443 로 도달)
+  config.vm.network "forwarded_port", guest: 6443, host: 6443, host_ip: "127.0.0.1"
 
-    # API 서버를 Mac 호스트로 노출 (host_ip 0.0.0.0 → host.docker.internal 도달).
-    # 주의: 6443 이 Mac 의 모든 인터페이스에 열리므로 신뢰된 로컬 환경에서만 사용.
-    cp.vm.network "forwarded_port", guest: 6443, host: 6443, host_ip: "0.0.0.0", id: "k8s-api"
+  # ── 기본 provider: QEMU (Apple Silicon, 무료) ──────────────────────
+  config.vm.box = "perk/ubuntu-2204-arm64"
 
-    set_provider(cp, "k8s-control-1", CP_MEM, CP_CPUS)
-
-    cp.vm.provision "shell", path: "scripts/common.sh", args: [CP_IP, ROOT_PASSWORD]
-    cp.vm.provision "shell", path: "scripts/bond.sh", args: [CP_IP]
-    cp.vm.provision "shell", path: "scripts/control-plane.sh", args: [CP_IP]
+  config.vm.provider "qemu" do |qe|
+    qe.arch        = "aarch64"
+    qe.machine     = "virt,accel=hvf,highmem=on"
+    qe.cpu         = "host"
+    qe.net_device  = "virtio-net-pci"
+    qe.smp         = "2"
+    qe.memory      = "4G"   # Cilium + Hubble 구동 여유분
+    # 콘솔 GUI 불필요 (headless)
+    qe.no_daemonize = false
   end
 
-  # ── Workers ────────────────────────────────────────────────────────────────
-  (1..NUM_WORKERS).each do |i|
-    name = "k8s-worker-#{i}"
-    ip   = "#{NET_PREFIX}.#{10 + i}"   # .11, .12, ...
+  # ── 대안 1: VMware Fusion (개인용 무료) ────────────────────────────
+  # box 를 bento/ubuntu-22.04 로 바꾸고 아래 블록 주석 해제,
+  # 위 qemu 블록은 주석 처리.
+  #   config.vm.box = "bento/ubuntu-22.04"
+  #   config.vm.provider "vmware_desktop" do |v|
+  #     v.gui    = false
+  #     v.memory = 3072
+  #     v.cpus   = 2
+  #     v.vmx["ethernet0.virtualDev"] = "vmxnet3"
+  #   end
 
-    config.vm.define name do |w|
-      w.vm.hostname = name
-      w.vm.network "private_network", ip: ip
+  # ── 대안 2: Parallels Desktop (유료) ───────────────────────────────
+  #   config.vm.box = "bento/ubuntu-22.04"
+  #   config.vm.provider "parallels" do |prl|
+  #     prl.memory = 3072
+  #     prl.cpus   = 2
+  #   end
 
-      # MinIO 용 추가 디스크 (worker 에만). 게스트에서 /dev/sdb(또는 nvme)로 보임.
-      w.vm.disk :disk, size: "#{WORKER_DISK_GB}GB", name: "#{name}-minio"
-
-      set_provider(w, name, WORKER_MEM, WORKER_CPUS)
-
-      w.vm.provision "shell", path: "scripts/common.sh", args: [ip, ROOT_PASSWORD]
-      w.vm.provision "shell", path: "scripts/bond.sh", args: [ip]
-      w.vm.provision "shell", path: "scripts/worker.sh", args: [ip]
-    end
-  end
+  # k3s 설치 + tls-san 설정
+  config.vm.provision "shell", path: "provision-k3s.sh"
 end

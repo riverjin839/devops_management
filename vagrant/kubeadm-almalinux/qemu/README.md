@@ -51,7 +51,7 @@ vagrant plugin install vagrant-qemu     # QEMU provider
 ## 실행
 
 ```bash
-cd vagrant/qemu
+cd vagrant/kubeadm-almalinux/qemu
 
 # 1) AlmaLinux 10 클라우드 이미지로 qemu 박스 + cloud-init seed 빌드 (최초 1회)
 bash build-almalinux-box.sh             # → pep/almalinux10-qemu 박스 + seed.iso

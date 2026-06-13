@@ -549,11 +549,13 @@ function SessionBox({
 
   return (
     <div
-      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/40 transition-colors', sv.tint)}
+      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/25 transition-colors', sv.tint)}
       style={{ top, height, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
     >
-      {/* 상단 리사이즈 핸들 */}
-      <div onMouseDown={onTopDown} className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-10 group-hover:bg-primary/20" title="시작 시각 조절" />
+      {/* 상단 리사이즈 핸들 — 히트영역은 넓게(h-2), 표시는 얇은 그립 라인만 */}
+      <div onMouseDown={onTopDown} className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-10 flex items-start justify-center" title="시작 시각 조절">
+        <span className="mt-[1px] h-0.5 w-6 rounded-full bg-primary/0 group-hover:bg-primary/45 transition-colors" />
+      </div>
       {/* 본문(이동) */}
       <div onMouseDown={onMoveDown} className="h-full pl-1.5 pr-1 py-0.5 cursor-grab active:cursor-grabbing flex flex-col">
         <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l', sv.bar)} />
@@ -580,8 +582,10 @@ function SessionBox({
           </div>
         )}
       </div>
-      {/* 하단 리사이즈 핸들 */}
-      <div onMouseDown={onBottomDown} className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-10 group-hover:bg-primary/20" title="종료 시각 조절" />
+      {/* 하단 리사이즈 핸들 — 히트영역은 넓게(h-2), 표시는 얇은 그립 라인만 */}
+      <div onMouseDown={onBottomDown} className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-10 flex items-end justify-center" title="종료 시각 조절">
+        <span className="mb-[1px] h-0.5 w-6 rounded-full bg-primary/0 group-hover:bg-primary/45 transition-colors" />
+      </div>
     </div>
   );
 }

@@ -282,17 +282,14 @@ def create_cluster(
 
     try:
         api_ep = (cluster_data.api_endpoint or '').strip()
-        if skip_check or not api_ep:
-            # 연결 검증 생략 — 실패해도 임시(pending) 상태로 등록
-            if api_ep:
-                try:
-                    _verify_cluster_connectivity(api_ep, effective_path)
-                except HTTPException as exc:
-                    connectivity_failed = True
-                    connectivity_error = exc.detail
-            else:
-                connectivity_failed = True
-                connectivity_error = "API Endpoint 미입력 — 임시(가등록) 상태"
+        if skip_check:
+            # 연결 검증을 완전히 생략 — 즉시 등록(pending). 실제 상태는 후속 헬스체크가 갱신.
+            # (검증 호출 자체가 최대 _K8S_AUTH_TIMEOUT 만큼 블로킹될 수 있어 skip 시엔 호출하지 않는다.)
+            connectivity_failed = True
+            connectivity_error = "연결 검증 생략(skip_connectivity_check) — 헬스체크로 상태 확인 예정"
+        elif not api_ep:
+            connectivity_failed = True
+            connectivity_error = "API Endpoint 미입력 — 임시(가등록) 상태"
         else:
             _verify_cluster_connectivity(api_ep, effective_path)
     finally:
