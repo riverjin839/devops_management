@@ -4,6 +4,14 @@ PEP 에 등록해 모니터링하고, MinIO 를 올려볼 수 있는 kubeadm 기
 **폐쇄망 운영(RHEL 10)과 동일하게** 검증하려고 OS 를 RHEL 1:1 리빌드인 **AlmaLinux 10**
 으로 맞췄습니다 (커널 6.12 + dnf/SELinux/firewalld/NetworkManager 동일 userland).
 
+이 디렉터리(`vagrant/`)는 **멀티노드 VM**(VMware Fusion / VirtualBox) 경로입니다. 환경별 대안:
+
+| 환경 | 경로 | 형태 | 비고 |
+|---|---|---|---|
+| Mac/Intel/Linux — VMware·VirtualBox | `vagrant/` (여기) | 멀티노드 VM | control-plane + worker N, worker 실디스크 |
+| **Mac Apple Silicon — 무료 QEMU** | [`vagrant/qemu/`](qemu/README.md) | **단일노드 VM** | Fusion 불필요. QEMU 제약상 단일노드 |
+| **Windows — Docker** | [`../windows-docker/`](../windows-docker/README.md) | kind(Docker) | 동일 패턴을 Docker/kind 로 재현 |
+
 ## 구성
 
 | 노드 | IP (host-only) | 역할 | 비고 |
