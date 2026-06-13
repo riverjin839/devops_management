@@ -44,6 +44,12 @@ def set_provider(node, name, mem, cpus)
     v.vmx["memsize"]     = mem.to_s
     v.vmx["numvcpus"]    = cpus.to_s
   end
+  # Apple Silicon 대안 — Parallels (vagrant-parallels 플러그인)
+  node.vm.provider "parallels" do |prl|
+    prl.name   = name
+    prl.memory = mem
+    prl.cpus   = cpus
+  end
   # Intel Mac / Linux — VirtualBox
   node.vm.provider "virtualbox" do |vb|
     vb.name   = name
