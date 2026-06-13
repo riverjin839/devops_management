@@ -16,17 +16,33 @@ kubeadm 기반 테스트 클러스터를 Vagrant 로 띄웁니다.
 
 ## 요구사항
 
-- Vagrant 2.3+, VirtualBox 6.1+ (Intel Mac / Linux)
-- **Apple Silicon(M1~)**: VirtualBox 미지원. `BOX` 를 ARM 박스로 바꾸고 provider 를
-  `parallels`(유료) 또는 `vmware_desktop` 으로 교체하세요. `vm.disk` 디스크 추가는
-  parallels/vmware 플러그인 버전에 따라 동작이 다를 수 있습니다.
+- **Vagrant 2.3+**
+- **Apple Silicon(M1~) — VMware Fusion (개인용 무료, 권장):**
+  1. VMware Fusion 13.5+ 설치 (개인용 무료): https://www.vmware.com/products/fusion.html
+  2. Vagrant 플러그인 + 유틸리티 설치:
+     ```bash
+     vagrant plugin install vagrant-vmware-desktop
+     brew install --cask vagrant-vmware-utility    # 또는 공식 설치 패키지
+     ```
+- **Intel Mac / Linux — VirtualBox 6.1+** (별도 플러그인 불필요)
+
+> Vagrantfile 은 `vmware_desktop` 과 `virtualbox` provider 블록을 **둘 다** 정의합니다.
+> 기동 시 `--provider` 로 사용할 것을 고르세요(아래).
 
 ## 실행
 
+**Apple Silicon (VMware Fusion):**
 ```bash
 cd vagrant
-vagrant up                 # 5~10분 (control-plane → worker 순서로 프로비저닝)
+vagrant up --provider=vmware_desktop      # 5~10분 (control-plane → worker 순)
+# 매번 입력이 번거로우면: export VAGRANT_DEFAULT_PROVIDER=vmware_desktop
 vagrant status
+```
+
+**Intel Mac / Linux (VirtualBox):**
+```bash
+cd vagrant
+vagrant up --provider=virtualbox
 ```
 
 완료되면 `vagrant/_out/` 에 산출물이 생성됩니다:

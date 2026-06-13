@@ -1,30 +1,32 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 #
-# Vagrant + kubeadm K8s 클러스터 (PEP 등록 + MinIO 용)
+# Vagrant + kubeadm K8s 클러스터 (PEP 등록 + MinIO 용) — Apple Silicon 우선(VMware Fusion)
 #
 #  - control-plane 1대 + worker N대 (기본 2대)
 #  - CNI: Cilium (cilium-cli, ipam=kubernetes → kubeadm PodCIDR 10.244.0.0/16, host-only 망 미충돌)
-#  - PEP(docker-compose backend) 가 접속할 수 있도록:
+#  - PEP(docker-compose backend) 접속 지원:
 #       * API 서버 6443 → Mac 호스트(0.0.0.0)로 포워딩
 #       * apiserver 인증서 SAN 에 host.docker.internal 포함 (TLS 검증 정상)
 #       * _out/pep-kubeconfig.yaml 자동 생성 (server=host.docker.internal:6443)
 #  - worker 마다 10GB 추가 디스크 → /mnt/disks/minio 로 포맷/마운트 (MinIO 스토리지)
 #
-# 사용법:
-#   vagrant up
-#   # 완료 후 _out/pep-kubeconfig.yaml 을 PEP "클러스터 추가" 에 붙여넣기
-#   # API Endpoint: https://host.docker.internal:6443
+# 기동 (Apple Silicon, VMware Fusion):
+#   vagrant up --provider=vmware_desktop
+#   # 또는: export VAGRANT_DEFAULT_PROVIDER=vmware_desktop && vagrant up
 #
-# 요구: Vagrant 2.3+, VirtualBox 6.1+ (Intel Mac/Linux).
-#       Apple Silicon 은 README 의 parallels/vmware 안내 참고.
+# 기동 (Intel Mac / Linux, VirtualBox):
+#   vagrant up --provider=virtualbox
+#
+# 요구: Vagrant 2.3+. Apple Silicon → VMware Fusion 13.5+ (개인용 무료) +
+#       vagrant-vmware-desktop 플러그인 + vagrant-vmware-utility. (README 참고)
 
 # ── 설정 (필요시 수정) ─────────────────────────────────────────────────────────
-BOX            = "bento/ubuntu-22.04"
+BOX            = "bento/ubuntu-22.04"   # multi-arch/multi-provider (arm64 vmware/parallels 포함)
 NUM_WORKERS    = 2
-NET_PREFIX     = "192.168.56"      # host-only 사설망 대역
+NET_PREFIX     = "192.168.56"           # host-only 사설망 대역
 CP_IP          = "#{NET_PREFIX}.10"
-WORKER_DISK_GB = 10                # worker 추가 디스크 크기 (MinIO 용)
+WORKER_DISK_GB = 10                     # worker 추가 디스크 크기 (MinIO 용)
 CP_MEM         = 2560
 CP_CPUS        = 2
 WORKER_MEM     = 2560
@@ -32,6 +34,23 @@ WORKER_CPUS    = 2
 
 # Vagrant 네이티브 디스크 기능 (worker 추가 디스크 attach 에 사용)
 ENV['VAGRANT_EXPERIMENTAL'] = 'disks'
+
+# 사용 중인 provider 에 맞는 리소스 블록을 적용 (Vagrant 는 활성 provider 만 사용).
+def set_provider(node, name, mem, cpus)
+  # Apple Silicon 권장 — VMware Fusion
+  node.vm.provider "vmware_desktop" do |v|
+    v.gui = false
+    v.vmx["displayName"] = name
+    v.vmx["memsize"]     = mem.to_s
+    v.vmx["numvcpus"]    = cpus.to_s
+  end
+  # Intel Mac / Linux — VirtualBox
+  node.vm.provider "virtualbox" do |vb|
+    vb.name   = name
+    vb.memory = mem
+    vb.cpus   = cpus
+  end
+end
 
 Vagrant.configure("2") do |config|
   config.vm.box = BOX
@@ -42,15 +61,11 @@ Vagrant.configure("2") do |config|
     cp.vm.hostname = "k8s-control-1"
     cp.vm.network "private_network", ip: CP_IP
 
-    # API 서버를 Mac 호스트로 노출 (host_ip 0.0.0.0 → host.docker.internal 도달 가능).
+    # API 서버를 Mac 호스트로 노출 (host_ip 0.0.0.0 → host.docker.internal 도달).
     # 주의: 6443 이 Mac 의 모든 인터페이스에 열리므로 신뢰된 로컬 환경에서만 사용.
     cp.vm.network "forwarded_port", guest: 6443, host: 6443, host_ip: "0.0.0.0", id: "k8s-api"
 
-    cp.vm.provider "virtualbox" do |vb|
-      vb.name   = "k8s-control-1"
-      vb.memory = CP_MEM
-      vb.cpus   = CP_CPUS
-    end
+    set_provider(cp, "k8s-control-1", CP_MEM, CP_CPUS)
 
     cp.vm.provision "shell", path: "scripts/common.sh", args: [CP_IP]
     cp.vm.provision "shell", path: "scripts/control-plane.sh", args: [CP_IP]
@@ -65,14 +80,10 @@ Vagrant.configure("2") do |config|
       w.vm.hostname = name
       w.vm.network "private_network", ip: ip
 
-      # MinIO 용 추가 디스크 (worker 에만). 게스트에서 /dev/sdb 로 보임.
+      # MinIO 용 추가 디스크 (worker 에만). 게스트에서 /dev/sdb(또는 nvme)로 보임.
       w.vm.disk :disk, size: "#{WORKER_DISK_GB}GB", name: "#{name}-minio"
 
-      w.vm.provider "virtualbox" do |vb|
-        vb.name   = name
-        vb.memory = WORKER_MEM
-        vb.cpus   = WORKER_CPUS
-      end
+      set_provider(w, name, WORKER_MEM, WORKER_CPUS)
 
       w.vm.provision "shell", path: "scripts/common.sh", args: [ip]
       w.vm.provision "shell", path: "scripts/worker.sh", args: [ip]

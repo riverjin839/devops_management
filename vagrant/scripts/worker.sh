@@ -7,13 +7,16 @@ WORKER_IP="${1:?worker ip required}"
 MOUNT="/mnt/disks/minio"
 JOIN="/vagrant/_out/join.sh"
 
-# ── 1. MinIO 용 추가 디스크 찾기 (파티션/FS 없는 ~10G raw 디스크) ───────────────────
+# ── 1. MinIO 용 추가 디스크 찾기 (파티션/FS 없는 ~10G raw 디스크, 디바이스명 비의존) ──
+# VMware(sdb)·VirtualBox(sdb)·일부 환경(nvme) 모두 대응하도록 lsblk 로 전체 디스크 순회.
 TARGET=""
-for d in /dev/sd[b-z] /dev/vd[b-z]; do
+for dev in $(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}'); do
+  d="/dev/${dev}"
   [ -b "$d" ] || continue
-  # 이미 파티션/파일시스템이 있으면 건너뜀 (OS 디스크 보호)
+  # 파티션(자식)이 있으면 OS 디스크 → 건너뜀
+  if [ "$(lsblk -n "$d" 2>/dev/null | wc -l)" -gt 1 ]; then continue; fi
+  # 파일시스템이 이미 있으면 건너뜀
   if [ -n "$(lsblk -no FSTYPE "$d" 2>/dev/null | tr -d '[:space:]')" ]; then continue; fi
-  if lsblk -no NAME "$d" 2>/dev/null | grep -q "$(basename "$d")[0-9]"; then continue; fi
   size_bytes="$(lsblk -bdno SIZE "$d" 2>/dev/null || echo 0)"
   # 9G ~ 12G 사이면 MinIO 디스크로 간주
   if [ "$size_bytes" -ge 9000000000 ] && [ "$size_bytes" -le 12884901888 ]; then
