@@ -95,6 +95,13 @@ PEP_CLUSTER=2 VAGRANT_DOTFILE_PATH=.vagrant-c2 vagrant up --provider=virtualbox
 > (`vagrant status`, `vagrant destroy` 포함). 그래야 c1 상태와 섞이지 않는다.
 > 프리셋은 개별 env(`NET_PREFIX`/`API_HOST_PORT`/`VBOX_PREFIX`/`OUT_NAME`/`NUM_WORKERS`)로 override 가능.
 
+> **코어 적은 호스트(예: 6코어)**: 워커는 기본 1 vCPU(`WORKER_CPUS`)다. CPU 포화로 VM 부팅/SSH 가
+> 느려 `Timed out while waiting for the machine to boot` 또는 `timeout during server version
+> negotiating` 가 나면, 부팅/SSH 타임아웃을 늘려 둔 기본값(`BOOT_TIMEOUT=600`,
+> `SSH_CONNECT_TIMEOUT=60`)이 받아준다. 그래도 잦으면 `WORKER_CPUS=1 CP_CPUS=2` 유지 + 호스트의
+> 무거운 앱(녹화/브라우저) 정리. 멀티클러스터(6 VM)는 6코어로 동시 구동이 버거우니 클러스터를
+> 번갈아(`vagrant halt`) 쓰거나 `NUM_WORKERS=1` 로 줄인다. 리소스 env: `CP_CPUS`/`CP_MEM`/`WORKER_CPUS`/`WORKER_MEM`/`BOOT_TIMEOUT`/`SSH_CONNECT_TIMEOUT`.
+
 완료되면 산출물 디렉터리(`_out/`, 멀티클러스터는 `_out-c2/` …)에 다음이 생성됩니다:
 
 | 파일 | 용도 |

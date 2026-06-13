@@ -53,10 +53,14 @@ OUT_NAME       = ENV['OUT_NAME'] || PRE[:out]      # 산출물 디렉터리(/vag
 OUT_PATH       = "/vagrant/#{OUT_NAME}"
 CP_IP          = "#{NET_PREFIX}.10"
 WORKER_DISK_GB = 10                     # worker 추가 디스크 크기 (MinIO 용)
-CP_MEM         = 2560
-CP_CPUS        = 2
-WORKER_MEM     = 2560
-WORKER_CPUS    = 2
+# 리소스 (env override 가능). 코어가 적은 호스트(예: 6코어)는 WORKER_CPUS=1 권장 — 호스트에 여유.
+CP_MEM         = (ENV['CP_MEM']     || '2560').to_i
+CP_CPUS        = (ENV['CP_CPUS']    || '2').to_i
+WORKER_MEM     = (ENV['WORKER_MEM'] || '2560').to_i
+WORKER_CPUS    = (ENV['WORKER_CPUS']|| '1').to_i   # 기본 1 vCPU (테스트 워커엔 충분, 저코어 호스트 안전)
+# CPU 포화 호스트에서 VM 부팅/SSH 가 느릴 때 타임아웃 (env override 가능).
+BOOT_TIMEOUT   = (ENV['BOOT_TIMEOUT']   || '600').to_i
+SSH_CONNECT_TO = (ENV['SSH_CONNECT_TIMEOUT'] || '60').to_i
 ROOT_PASSWORD  = "rootpass"             # 노드 root SSH 비번 (폐쇄망 동일 흐름 테스트용 — 운영 금지)
 
 # Vagrant 네이티브 디스크 기능 (worker 추가 디스크 attach 에 사용)
@@ -90,6 +94,11 @@ end
 Vagrant.configure("2") do |config|
   config.vm.box = BOX
   config.vm.box_check_update = false
+
+  # CPU 포화 호스트(코어 부족) 대응: 부팅/SSH 협상이 느려도 끊기지 않도록 타임아웃 여유.
+  # ("Timed out while waiting for the machine to boot" / "timeout during server version negotiating" 방지)
+  config.vm.boot_timeout     = BOOT_TIMEOUT
+  config.ssh.connect_timeout = SSH_CONNECT_TO
 
   # ── Control-plane ──────────────────────────────────────────────────────────
   config.vm.define "k8s-control-1", primary: true do |cp|
