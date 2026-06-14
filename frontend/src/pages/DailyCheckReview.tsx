@@ -9,6 +9,7 @@ import {
   DiffPanel,
   DeepCheckGrid,
   NotificationSettingsPanel,
+  ResourceTrendChecklist,
 } from '@/components/daily-check';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -114,6 +115,8 @@ export function DailyCheckReviewPage() {
             value={dailyCheckLogId}
             onChange={(id) => setParams({ log: id })}
           />
+
+          {clusterId && <ResourceTrendChecklist clusterId={clusterId} />}
 
           {!dailyCheckLogId && (
             <MacCard title="안내">

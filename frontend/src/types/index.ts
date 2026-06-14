@@ -2549,3 +2549,40 @@ export interface K8sPodRichRow {
   ageSeconds?: number | null;
 }
 export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }
+
+// ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
+export type MetricTrendDir = 'up' | 'down' | 'flat';
+export interface MetricTrendRow {
+  itemKey: string;
+  label: string;
+  resourceKind: string;
+  today: number | null;
+  yesterday: number | null;
+  d7: number | null;
+  d14: number | null;
+  d28: number | null;
+  delta: number | null;
+  trend: MetricTrendDir;
+  truncated: boolean;
+  isChecked: boolean;
+  checkedBy?: string | null;
+  checkedAt?: string | null;
+  note?: string | null;
+}
+export interface MetricTrendResponse {
+  clusterId: string;
+  date: string;
+  latestCollectedAt: string | null;
+  latestSnapshotId: string | null;
+  items: MetricTrendRow[];
+}
+export interface MetricChecklistItemT {
+  id: string;
+  clusterId: string | null;
+  itemKey: string;
+  label: string;
+  resourceKind: string;
+  enabled: boolean;
+  sortOrder: number;
+  params: Record<string, unknown>;
+}

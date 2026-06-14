@@ -42,9 +42,19 @@ from app.models.project import Project
 from app.models.service_topology import ServiceTopologyLink, ServiceTopologyExternalNode
 from app.models.work_item_time_block import WorkItemTimeBlock
 from app.models.user_jira_credential import UserJiraCredential
+from app.models.resource_count import (
+    ResourceCountSnapshot,
+    MetricChecklistItem,
+    MetricCheckState,
+    SnapshotSource,
+)
 
 __all__ = [
     "Cluster",
+    "ResourceCountSnapshot",
+    "MetricChecklistItem",
+    "MetricCheckState",
+    "SnapshotSource",
     "Addon",
     "CheckLog",
     "StatusEnum",

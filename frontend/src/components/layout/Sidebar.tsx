@@ -8,7 +8,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   KeyRound, ShieldCheck, FileSearch, Activity, Package, GitBranch, ScrollText,
-  Rocket,
+  Rocket, ShipWheel,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -22,10 +22,10 @@ import { InlineEdit } from '@/components/common';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
 // `/services` (통합 지식/SOP) 는 운영 기준 섹션에서 제거됨 — flyout 에서 보이지 않음.
-const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
+const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }>; iconColor?: string; iconSize?: string }> = {
   '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
   '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
-  '/k8s-manage':         { defaultLabel: 'K8S 상세 관리',  icon: Boxes },
+  '/k8s-manage':         { defaultLabel: 'K8S 상세 관리',  icon: ShipWheel, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
   '/ops-checks':         { defaultLabel: '운영 점검',       icon: ShieldCheck },
   '/k8s-logs':           { defaultLabel: '파드 로그',       icon: ScrollText },
   '/daily-check/review': { defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
@@ -200,13 +200,15 @@ const FLYOUT_LINK_INACTIVE = 'text-black hover:bg-zinc-100';
 const FLYOUT_LINK_ACTIVE = 'bg-primary/10 text-primary font-semibold';
 
 function FlyoutLink({
-  to, label, Icon, active, onSelect,
+  to, label, Icon, active, onSelect, iconColor, iconSize,
 }: {
   to: string;
   label: string;
   Icon: ComponentType<{ className?: string }>;
   active: boolean;
   onSelect: () => void;
+  iconColor?: string;
+  iconSize?: string;
 }) {
   return (
     <Link
@@ -214,7 +216,7 @@ function FlyoutLink({
       onClick={onSelect}
       className={`${FLYOUT_LINK_BASE} ${active ? FLYOUT_LINK_ACTIVE : FLYOUT_LINK_INACTIVE}`}
     >
-      <Icon className="w-4 h-4 flex-shrink-0" />
+      <Icon className={`${iconSize || 'w-4 h-4'} flex-shrink-0 ${iconColor || ''}`} />
       <span className="flex-1 min-w-0 break-keep">{label}</span>
       {active && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 text-primary" />}
     </Link>
@@ -370,7 +372,7 @@ export function Sidebar() {
             const entry = navMap[p];
             if (!entry || !featureAllowed(p)) return null;
             return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
                 active={location.pathname === p} onSelect={close} />
             );
           })}
@@ -379,7 +381,7 @@ export function Sidebar() {
             const entry = navMap[p];
             if (!entry || !featureAllowed(p)) return null;
             return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
                 active={location.pathname === p} onSelect={close} />
             );
           })}
@@ -394,7 +396,7 @@ export function Sidebar() {
             const entry = navMap[p];
             if (!entry || !featureAllowed(p)) return null;
             return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
                 active={location.pathname === p} onSelect={close} />
             );
           })}
@@ -416,7 +418,7 @@ export function Sidebar() {
           const entry = navMap[p];
           if (!entry || !featureAllowed(p)) return null;
           return (
-            <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon}
+            <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
               active={location.pathname === p} onSelect={close} />
           );
         })}

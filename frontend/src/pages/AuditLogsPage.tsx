@@ -28,6 +28,20 @@ const ACTIONS: string[] = [
   'bulk_exec.run',
   'etcdctl.run',
   'backup.import',
+  'k8s.scale',
+  'k8s.restart',
+  'k8s.delete',
+  'k8s.apply',
+  'k8s.cordon',
+  'k8s.drain',
+  'k8s.exec.open',
+  'k8s.exec.close',
+  'metric.snapshot.run',
+  'metric.snapshot.edit',
+  'metric.check.toggle',
+  'metric.item.create',
+  'metric.item.update',
+  'metric.item.delete',
 ];
 
 function StatusBadge({ status }: { status: string }) {

@@ -52,6 +52,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_trend_collect",
         "schedule": crontab(hour=7, minute=0),
     },
+    # 리소스 수 스냅샷 (08:00 KST) — 일일점검 리뷰 추세용. 하루 1회.
+    "daily-resource-count-snapshot": {
+        "task": "app.celery_app.collect_resource_counts",
+        "schedule": crontab(hour=8, minute=0),
+    },
     # BatchJob.cron 디스패처 — 매 분마다 등록된 잡들을 스캔하고
     # cron 표현식이 매치하는 잡을 run_batch_job 으로 큐잉.
     "batch-job-dispatcher": {
@@ -131,6 +136,32 @@ def run_scheduled_check(self, schedule_type: str):
             "skipped_clusters": skipped,
         }
 
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.collect_resource_counts")
+def collect_resource_counts(self):
+    """전 클러스터 리소스 수 스냅샷(하루 1회). 일일점검 리뷰 추세용.
+
+    클러스터 조회 + 직렬 수집(클러스터 수가 많지 않고 카운트는 가벼움). 한 클러스터
+    실패가 다음 클러스터를 막지 않도록 개별 try/except.
+    """
+    from app.database import SessionLocal
+    from app.models import Cluster, SnapshotSource
+    from app.services import resource_count_service as rcs
+
+    db = SessionLocal()
+    results: list[dict] = []
+    try:
+        for cluster in db.query(Cluster).all():
+            try:
+                snap = rcs.collect_for_cluster(db, cluster, source=SnapshotSource.auto.value)
+                results.append({"cluster": cluster.name, "snapshot_id": str(snap.id)})
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                results.append({"cluster": cluster.name, "error": str(e)[:200]})
+        return {"executed_at": datetime.now().isoformat(), "results": results}
     finally:
         db.close()
 

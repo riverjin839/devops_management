@@ -1630,4 +1630,24 @@ export const k8sStreamUrls = {
   },
 };
 
+// ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
+export const metricTrendApi = {
+  get: (clusterId: string, date?: string) =>
+    api.get<import('@/types').MetricTrendResponse>(`/metric-trend/${clusterId}`, { params: date ? { date } : undefined }),
+  snapshot: (clusterId: string) =>
+    api.post<{ ok: boolean; snapshotId: string; counts: Record<string, number>; collectedAt: string }>(
+      `/metric-trend/${clusterId}/snapshot`, {}, { timeout: 120_000 }),
+  check: (clusterId: string, itemKey: string, isChecked: boolean, date?: string, note?: string) =>
+    api.put(`/metric-trend/${clusterId}/check`, { itemKey, isChecked, date, note }),
+  editSnapshot: (snapshotId: string, counts: Record<string, number>) =>
+    api.put(`/metric-trend/snapshots/${snapshotId}`, { counts }),
+  listItems: (clusterId?: string) =>
+    api.get<{ items: import('@/types').MetricChecklistItemT[] }>(`/metric-trend/items/all`, { params: clusterId ? { cluster_id: clusterId } : undefined }),
+  createItem: (body: Partial<import('@/types').MetricChecklistItemT>) =>
+    api.post<import('@/types').MetricChecklistItemT>(`/metric-trend/items`, body),
+  updateItem: (id: string, body: Partial<import('@/types').MetricChecklistItemT>) =>
+    api.put<import('@/types').MetricChecklistItemT>(`/metric-trend/items/${id}`, body),
+  deleteItem: (id: string) => api.delete(`/metric-trend/items/${id}`),
+};
+
 export default api;
