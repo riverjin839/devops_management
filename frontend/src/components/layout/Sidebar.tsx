@@ -25,6 +25,7 @@ import { InlineEdit } from '@/components/common';
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
   '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
   '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
+  '/k8s-manage':         { defaultLabel: 'K8S 상세 관리',  icon: Boxes },
   '/ops-checks':         { defaultLabel: '운영 점검',       icon: ShieldCheck },
   '/k8s-resources':      { defaultLabel: '리소스 탐색기',   icon: Boxes },
   '/k8s-logs':           { defaultLabel: '파드 로그',       icon: ScrollText },
@@ -69,7 +70,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 // 사이드바 레일에 표시되는 그룹들
 type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'knowledge' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/ops-checks', '/k8s-resources', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/ops-checks', '/k8s-resources', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/node-labels', '/node-images', '/kernel-params', '/infra-topology'], modes: ['platform'] },
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
