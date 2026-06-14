@@ -2528,3 +2528,21 @@ export interface K8sNodesResponse {
 // 종류 가용성 (nav 동적 숨김)
 export interface KindAvailabilityInfo { available: boolean; present: boolean; count: number; truncated: boolean }
 export interface KindAvailabilityResponse { kinds: Record<string, KindAvailabilityInfo> }
+
+// Pods (rich) — Lens 식 컬럼
+export type K8sCellColor = 'green' | 'amber' | 'red' | 'gray';
+export interface K8sPodContainerCell { name: string; color: K8sCellColor; state: string; reason?: string | null }
+export interface K8sPodRichRow {
+  name: string;
+  namespace?: string | null;
+  containers: K8sPodContainerCell[];
+  ready: string;
+  restarts: number;
+  controlledBy?: string | null;
+  node?: string | null;
+  qos?: string | null;
+  phase: string;
+  statusColor: K8sCellColor;
+  ageSeconds?: number | null;
+}
+export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }

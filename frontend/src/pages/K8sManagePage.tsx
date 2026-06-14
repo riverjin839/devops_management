@@ -20,7 +20,16 @@ import { EventsStream } from '@/components/k8s/EventsStream';
 import type {
   K8sResourceRow, K8sResourceCapability, K8sCrdInfo, HelmRelease,
   K8sNodeRichRow, ResourceDetailSection, ResourceDetailKVItem,
+  K8sPodRichRow, K8sCellColor,
 } from '@/types';
+
+// 셀 색상 → Tailwind 클래스
+const CELL_BG: Record<K8sCellColor, string> = {
+  green: 'bg-green-500', amber: 'bg-amber-400', red: 'bg-red-500', gray: 'bg-zinc-400',
+};
+const STATUS_TEXT: Record<K8sCellColor, string> = {
+  green: 'text-green-600', amber: 'text-amber-600', red: 'text-red-500', gray: 'text-muted-foreground',
+};
 
 // ── Lens 식 카테고리 내비 모델 ────────────────────────────────────────────────
 type LeafMode = 'kind' | 'overview' | 'events' | 'helm' | 'crd';
@@ -322,7 +331,20 @@ export function K8sManagePage() {
               onDrain={doDrain}
             />
           )}
-          {leaf.mode === 'kind' && leaf.kind && leaf.kind !== 'nodes' && (
+          {leaf.mode === 'kind' && leaf.kind === 'pods' && (
+            <PodsPanel
+              clusterId={clusterId}
+              caps={caps.pods}
+              nsFilter={nsFilter}
+              setNsFilter={setNsFilter}
+              search={search}
+              setSearch={setSearch}
+              onOpenDetail={(row) => { setDetail({ kind: 'k8s', resourceKind: 'pods', namespace: row.namespace || '-', name: row.name, editable: !!caps.pods?.editable }); setEditing(false); }}
+              onDelete={doDelete}
+              onTerminal={(ns, name) => setTerminalPod({ namespace: ns, name })}
+            />
+          )}
+          {leaf.mode === 'kind' && leaf.kind && leaf.kind !== 'nodes' && leaf.kind !== 'pods' && (
             <ResourceTablePanel
               clusterId={clusterId}
               kind={leaf.kind}
@@ -871,6 +893,101 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
           );
         })
       )}
+    </MacCard>
+  );
+}
+
+// ── Pods 패널 (Lens 식 컬럼 + 색표현) ─────────────────────────────────────────
+interface PodsPanelProps {
+  clusterId: string;
+  caps?: K8sResourceCapability;
+  nsFilter: string;
+  setNsFilter: (v: string) => void;
+  search: string;
+  setSearch: (v: string) => void;
+  onOpenDetail: (row: K8sPodRichRow) => void;
+  onDelete: (kind: string, ns: string, name: string) => void;
+  onTerminal: (ns: string, name: string) => void;
+}
+function PodsPanel(p: PodsPanelProps) {
+  const { clusterId, nsFilter, setNsFilter, search, setSearch } = p;
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['k8s-mng-list', clusterId, 'pods', nsFilter],
+    queryFn: async () => (await k8sResourcesApi.richPods(clusterId, nsFilter.trim() || undefined)).data,
+    enabled: !!clusterId,
+  });
+  const filtered = useMemo(() => {
+    const list = data?.items ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.phase} ${r.node ?? ''} ${r.controlledBy ?? ''}`.toLowerCase().includes(q));
+  }, [data, search]);
+
+  const COLS = 'grid-cols-[1.6fr_110px_90px_56px_1fr_110px_72px_50px_110px_90px]';
+
+  return (
+    <MacCard title="Pods" bodyPadding="p-0">
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
+        <input value={nsFilter} onChange={(e) => setNsFilter(e.target.value)} placeholder="네임스페이스"
+          className="rounded-xl border border-border bg-card px-2.5 py-1 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-primary" />
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이름/노드/소유자 검색"
+            className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-xs w-52 focus:outline-none focus:ring-1 focus:ring-primary" />
+        </div>
+        <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      <div className={`grid ${COLS} gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30`}>
+        <span>이름</span><span>네임스페이스</span><span>컨테이너</span><span>재시작</span><span>Controlled By</span><span>노드</span><span>QoS</span><span className="text-right">Age</span><span>상태</span><span className="text-right pr-2">동작</span>
+      </div>
+      {isLoading ? (
+        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+      ) : isError ? (
+        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-10 text-center text-sm text-muted-foreground">표시할 파드가 없습니다.</div>
+      ) : (
+        <Virtuoso
+          style={{ height: '64vh' }}
+          data={filtered}
+          itemContent={(_i, r) => {
+            const ns = r.namespace || '-';
+            return (
+              <div className={`grid ${COLS} gap-2 px-4 py-1.5 text-xs border-b border-border/40 hover:bg-secondary/30 items-center`}>
+                <button onClick={() => p.onOpenDetail(r)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
+                <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>
+                <span className="flex items-center gap-0.5" title={r.containers.map((c) => `${c.name}: ${c.state}${c.reason ? ` (${c.reason})` : ''}`).join('\n')}>
+                  {r.containers.slice(0, 12).map((c, j) => (
+                    <span key={j} className={`w-2.5 h-2.5 rounded-sm ${CELL_BG[c.color]}`} />
+                  ))}
+                  <span className="ml-1 text-[10px] text-muted-foreground tabular-nums">{r.ready}</span>
+                </span>
+                <span className={`tabular-nums ${r.restarts > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>
+                <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '-'}</span>
+                <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '-'}</span>
+                <span className="truncate text-muted-foreground">{r.qos ?? '-'}</span>
+                <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
+                <span className={`truncate font-medium ${STATUS_TEXT[r.statusColor]}`} title={r.phase}>
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${CELL_BG[r.statusColor]}`} />{r.phase}
+                </span>
+                <div className="flex items-center justify-end gap-1">
+                  <RoleGate allow={['admin', 'operator']}>
+                    <IconBtn title="터미널" onClick={() => p.onTerminal(ns, r.name)}><Terminal className="w-3.5 h-3.5" /></IconBtn>
+                    {p.caps?.deletable && (
+                      <IconBtn title="삭제" danger onClick={() => p.onDelete('pods', ns, r.name)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+                    )}
+                  </RoleGate>
+                </div>
+              </div>
+            );
+          }}
+        />
+      )}
+      <div className="px-4 py-1.5 text-[10px] text-muted-foreground border-t border-border">
+        {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''} · 컨테이너 색칸: 초록=실행/정상, 노랑=대기/준비안됨, 빨강=오류, 회색=종료/대기
+      </div>
     </MacCard>
   );
 }

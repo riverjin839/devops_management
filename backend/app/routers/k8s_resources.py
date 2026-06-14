@@ -1111,6 +1111,105 @@ def list_nodes_rich(cluster_id: UUID, db: Session = Depends(get_db)):
     return {"count": len(rows), "items": rows, "metrics_available": bool(usage)}
 
 
+# ── Pods (rich) — Lens 식 컬럼 (Containers 색칸/Controlled By/Node/QoS/Status) ──
+class PodContainerCell(BaseModel):
+    name: str
+    color: str  # green | amber | red | gray
+    state: str
+    reason: Optional[str] = None
+
+
+class PodRichRow(BaseModel):
+    name: str
+    namespace: Optional[str] = None
+    containers: list[PodContainerCell] = []
+    ready: str = ""          # "2/3"
+    restarts: int = 0
+    controlled_by: Optional[str] = None
+    node: Optional[str] = None
+    qos: Optional[str] = None
+    phase: str = "-"
+    status_color: str = "gray"  # green | amber | red | gray
+    age_seconds: Optional[int] = None
+
+
+def _container_cell(cs) -> PodContainerCell:
+    """컨테이너 상태 → 색칸 (Lens 스타일)."""
+    name = cs.name
+    state = cs.state
+    ready = bool(cs.ready)
+    if state and state.running:
+        return PodContainerCell(name=name, color=("green" if ready else "amber"), state="running")
+    if state and state.waiting:
+        reason = state.waiting.reason or "Waiting"
+        bad = any(x in reason for x in ("CrashLoop", "Error", "ImagePull", "InvalidImageName", "CreateContainer"))
+        return PodContainerCell(name=name, color=("red" if bad else "amber"), state="waiting", reason=reason)
+    if state and state.terminated:
+        t = state.terminated
+        ok = (t.exit_code == 0)
+        return PodContainerCell(name=name, color=("gray" if ok else "red"), state="terminated", reason=t.reason)
+    return PodContainerCell(name=name, color="gray", state="unknown")
+
+
+def _pod_status_color(phase: str, cells: list[PodContainerCell]) -> str:
+    if any(c.color == "red" for c in cells):
+        return "red"
+    if phase == "Running" and all(c.color in ("green", "gray") for c in cells):
+        return "green"
+    if phase in ("Succeeded",):
+        return "green"
+    if phase in ("Pending",) or any(c.color == "amber" for c in cells):
+        return "amber"
+    if phase in ("Failed", "Unknown"):
+        return "red"
+    return "gray"
+
+
+@router.get("/{cluster_id}/pods")
+def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Session = Depends(get_db)):
+    """파드 목록 — Lens 대등 컬럼 (컨테이너 색칸/재시작/소유자/노드/QoS/상태)."""
+    cluster = _require_cluster(cluster_id, db)
+    v1 = k8s_client.CoreV1Api(_api_client(cluster))
+    try:
+        res = v1.list_namespaced_pod(namespace, limit=_LIST_LIMIT) if namespace else v1.list_pod_for_all_namespaces(limit=_LIST_LIMIT)
+    except Exception as e:  # noqa: BLE001
+        code = 504 if "timeout" in str(e).lower() else 502
+        raise HTTPException(status_code=code, detail=f"파드 조회 실패: {str(e)[:200]}")
+
+    rows: list[PodRichRow] = []
+    for p in (res.items or []):
+        st = p.status
+        cstats = (st.container_statuses or []) if st else []
+        cells = [_container_cell(cs) for cs in cstats]
+        # 컨테이너 상태가 아직 없으면 spec 기준 회색칸
+        if not cells and p.spec and p.spec.containers:
+            cells = [PodContainerCell(name=c.name, color="gray", state="pending") for c in p.spec.containers]
+        ready_n = sum(1 for cs in cstats if cs.ready)
+        total = len(p.spec.containers or []) if p.spec else len(cells)
+        restarts = sum((cs.restart_count or 0) for cs in cstats)
+        owners = p.metadata.owner_references or []
+        controlled = f"{owners[0].kind}/{owners[0].name}" if owners else None
+        phase = (st.phase if st else "-") or "-"
+        # 종료/대기 사유를 phase 에 보강 (예: CrashLoopBackOff)
+        bad_reason = next((c.reason for c in cells if c.color == "red" and c.reason), None)
+        rows.append(PodRichRow(
+            name=p.metadata.name,
+            namespace=p.metadata.namespace,
+            containers=cells,
+            ready=f"{ready_n}/{total}",
+            restarts=restarts,
+            controlled_by=controlled,
+            node=p.spec.node_name if p.spec else None,
+            qos=(st.qos_class if st else None),
+            phase=(bad_reason or phase),
+            status_color=_pod_status_color(phase, cells),
+            age_seconds=_age_seconds(p.metadata),
+        ))
+    rows.sort(key=lambda r: (r.namespace or "", r.name))
+    truncated = (res.metadata._continue is not None) if res.metadata else False
+    return {"count": len(rows), "truncated": truncated, "items": rows}
+
+
 # ── 종류 가용성 — 클러스터에 실제 존재(≥1)/지원하는 종류만 UI 노출용 ───────────
 @router.get("/{cluster_id}/kind-availability")
 def kind_availability(cluster_id: UUID, db: Session = Depends(get_db)):
