@@ -454,8 +454,18 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
     if (isNamespaced && selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
     const q = search.trim().toLowerCase();
     if (!q) return list;
-    return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary}`.toLowerCase().includes(q));
+    return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary} ${Object.values(r.cols ?? {}).join(' ')}`.toLowerCase().includes(q));
   }, [data, search, selectedNs, isNamespaced]);
+
+  const columns = data?.columns ?? [];
+  const useSummary = columns.length === 0;
+  const gridTemplate = [
+    'minmax(160px,1.6fr)',
+    isNamespaced ? '130px' : '',
+    ...(useSummary ? ['minmax(120px,1.5fr)'] : columns.map(() => 'minmax(70px,1fr)')),
+    '60px',
+    '170px',
+  ].filter(Boolean).join(' ');
 
   return (
     <MacCard title={kind} bodyPadding="p-0">
@@ -477,8 +487,12 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-[1fr_140px_1fr_60px_220px] gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30">
-        <span>이름</span><span>네임스페이스</span><span>요약</span><span className="text-right">Age</span><span className="text-right pr-2">동작</span>
+      <div className="grid gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={{ gridTemplateColumns: gridTemplate }}>
+        <span>이름</span>
+        {isNamespaced && <span>네임스페이스</span>}
+        {useSummary ? <span>요약</span> : columns.map((c) => <span key={c.key} className="truncate">{c.label}</span>)}
+        <span className="text-right">Age</span>
+        <span className="text-right pr-2">동작</span>
       </div>
 
       {isLoading ? (
@@ -493,26 +507,20 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
           data={filtered}
           itemContent={(_i, r) => {
             const ns = r.namespace || '-';
-            const cordoned = (r.summary || '').includes('SchedulingDisabled');
             return (
-              <div className="grid grid-cols-[1fr_140px_1fr_60px_220px] gap-2 px-4 py-1.5 text-xs border-b border-border/40 hover:bg-secondary/30 items-center">
+              <div className="grid gap-2 px-4 py-1.5 text-xs border-b border-border/40 hover:bg-secondary/30 items-center" style={{ gridTemplateColumns: gridTemplate }}>
                 <button onClick={() => p.onOpenDetail(r, !!caps?.editable)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
-                <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>
-                <span className="truncate text-muted-foreground">{r.summary}</span>
+                {isNamespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+                {useSummary ? (
+                  <span className="truncate text-muted-foreground">{r.summary}</span>
+                ) : (
+                  columns.map((c) => (
+                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '-'}</span>
+                  ))
+                )}
                 <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
                 <div className="flex items-center justify-end gap-1">
                   <RoleGate allow={['admin', 'operator']}>
-                    {kind === 'pods' && (
-                      <IconBtn title="터미널" onClick={() => p.onTerminal(ns, r.name)}><Terminal className="w-3.5 h-3.5" /></IconBtn>
-                    )}
-                    {kind === 'nodes' && (
-                      <>
-                        <IconBtn title={cordoned ? 'uncordon' : 'cordon'} onClick={() => p.onCordon(r.name, !cordoned)}>
-                          {cordoned ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                        </IconBtn>
-                        <IconBtn title="drain" onClick={() => p.onDrain(r.name)}><Scaling className="w-3.5 h-3.5" /></IconBtn>
-                      </>
-                    )}
                     {caps?.scalable && (
                       <IconBtn title="scale" onClick={() => p.onScale(kind, ns, r.name)}><Scaling className="w-3.5 h-3.5" /></IconBtn>
                     )}

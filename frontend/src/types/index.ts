@@ -2411,10 +2411,13 @@ export interface K8sResourceRow {
   name: string;
   namespace?: string | null;
   summary: string;
+  cols?: Record<string, string>;
   ageSeconds?: number | null;
 }
+export interface K8sColumnDef { key: string; label: string }
 export interface K8sResourceListResponse {
   kind: string;
+  columns?: K8sColumnDef[];
   count: number;
   truncated: boolean;
   items: K8sResourceRow[];

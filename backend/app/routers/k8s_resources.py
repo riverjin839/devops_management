@@ -379,15 +379,104 @@ SCALABLE_KINDS = {"deployments", "statefulsets", "replicasets", "replicationcont
 RESTARTABLE_KINDS = {"deployments", "statefulsets", "daemonsets"}
 
 
+# ── 종류별 컬럼 정의 (OpenLens 식 풍부한 테이블) ───────────────────────────────
+# {kind: {"defs": [(key,label),...], "fn": lambda o -> {key: str}}}. 정의 없으면 summary 단일 컬럼 폴백.
+def _g(o, *path, default=""):
+    cur = o
+    for p in path:
+        cur = getattr(cur, p, None)
+        if cur is None:
+            return default
+    return cur
+
+
+def _ports_str(o) -> str:
+    return ", ".join(
+        f"{p.port}{('/' + p.protocol) if p.protocol and p.protocol != 'TCP' else ''}" for p in (_g(o, "spec", "ports", default=[]) or [])
+    ) or "-"
+
+
+def _svc_external(o) -> str:
+    ing = _g(o, "status", "load_balancer", "ingress", default=[]) or []
+    ips = [(i.ip or i.hostname) for i in ing if (i.ip or i.hostname)]
+    eips = _g(o, "spec", "external_i_ps", default=[]) or []
+    return ", ".join([*ips, *eips]) or "-"
+
+
+RESOURCE_COLUMNS: dict[str, dict[str, Any]] = {
+    "deployments": {"defs": [("pods", "Pods"), ("replicas", "Replicas")],
+        "fn": lambda o: {"pods": f"{_g(o,'status','ready_replicas',default=0) or 0}/{_g(o,'spec','replicas',default=0) or 0}", "replicas": str(_g(o,'spec','replicas',default=0) or 0)}},
+    "statefulsets": {"defs": [("pods", "Pods"), ("replicas", "Replicas")],
+        "fn": lambda o: {"pods": f"{_g(o,'status','ready_replicas',default=0) or 0}/{_g(o,'spec','replicas',default=0) or 0}", "replicas": str(_g(o,'spec','replicas',default=0) or 0)}},
+    "daemonsets": {"defs": [("desired", "Desired"), ("current", "Current"), ("ready", "Ready"), ("uptodate", "Up-to-date"), ("available", "Available")],
+        "fn": lambda o: {"desired": str(_g(o,'status','desired_number_scheduled',default=0) or 0), "current": str(_g(o,'status','current_number_scheduled',default=0) or 0), "ready": str(_g(o,'status','number_ready',default=0) or 0), "uptodate": str(_g(o,'status','updated_number_scheduled',default=0) or 0), "available": str(_g(o,'status','number_available',default=0) or 0)}},
+    "replicasets": {"defs": [("desired", "Desired"), ("current", "Current"), ("ready", "Ready")],
+        "fn": lambda o: {"desired": str(_g(o,'spec','replicas',default=0) or 0), "current": str(_g(o,'status','replicas',default=0) or 0), "ready": str(_g(o,'status','ready_replicas',default=0) or 0)}},
+    "replicationcontrollers": {"defs": [("desired", "Desired"), ("current", "Current"), ("ready", "Ready")],
+        "fn": lambda o: {"desired": str(_g(o,'spec','replicas',default=0) or 0), "current": str(_g(o,'status','replicas',default=0) or 0), "ready": str(_g(o,'status','ready_replicas',default=0) or 0)}},
+    "services": {"defs": [("type", "Type"), ("clusterip", "Cluster IP"), ("ports", "Ports"), ("external", "External IP")],
+        "fn": lambda o: {"type": _g(o,'spec','type',default='-'), "clusterip": _g(o,'spec','cluster_ip',default='-'), "ports": _ports_str(o), "external": _svc_external(o)}},
+    "ingresses": {"defs": [("hosts", "Hosts"), ("class", "Class")],
+        "fn": lambda o: {"hosts": ", ".join(r.host for r in (_g(o,'spec','rules',default=[]) or []) if getattr(r,'host',None)) or "*", "class": _g(o,'spec','ingress_class_name',default='-') or '-'}},
+    "ingressclasses": {"defs": [("controller", "Controller")],
+        "fn": lambda o: {"controller": _g(o,'spec','controller',default='-')}},
+    "endpoints": {"defs": [("addresses", "Endpoints")],
+        "fn": lambda o: {"addresses": str(sum(len(s.addresses or []) for s in (o.subsets or [])))}},
+    "networkpolicies": {"defs": [("types", "Policy Types")],
+        "fn": lambda o: {"types": ", ".join(_g(o,'spec','policy_types',default=[]) or []) or "-"}},
+    "configmaps": {"defs": [("keys", "Keys")],
+        "fn": lambda o: {"keys": str(len(o.data or {}))}},
+    "secrets": {"defs": [("type", "Type"), ("keys", "Keys")],
+        "fn": lambda o: {"type": o.type or "-", "keys": str(len(o.data or {}))}},
+    "persistentvolumeclaims": {"defs": [("status", "Status"), ("size", "Size"), ("class", "Storage Class")],
+        "fn": lambda o: {"status": _g(o,'status','phase',default='-'), "size": (_g(o,'status','capacity',default={}) or {}).get('storage','-'), "class": _g(o,'spec','storage_class_name',default='-') or '-'}},
+    "persistentvolumes": {"defs": [("capacity", "Capacity"), ("class", "Storage Class"), ("status", "Status"), ("claim", "Claim")],
+        "fn": lambda o: {"capacity": (_g(o,'spec','capacity',default={}) or {}).get('storage','-'), "class": _g(o,'spec','storage_class_name',default='-') or '-', "status": _g(o,'status','phase',default='-'), "claim": (f"{_g(o,'spec','claim_ref','namespace',default='')}/{_g(o,'spec','claim_ref','name',default='')}" if _g(o,'spec','claim_ref',default=None) else '-')}},
+    "storageclasses": {"defs": [("provisioner", "Provisioner"), ("reclaim", "Reclaim"), ("default", "Default")],
+        "fn": lambda o: {"provisioner": o.provisioner or "-", "reclaim": o.reclaim_policy or "-", "default": ("Yes" if (o.metadata.annotations or {}).get('storageclass.kubernetes.io/is-default-class') == 'true' else "-")}},
+    "jobs": {"defs": [("completions", "Completions"), ("succeeded", "Succeeded"), ("failed", "Failed")],
+        "fn": lambda o: {"completions": str(_g(o,'spec','completions',default='-')), "succeeded": str(_g(o,'status','succeeded',default=0) or 0), "failed": str(_g(o,'status','failed',default=0) or 0)}},
+    "cronjobs": {"defs": [("schedule", "Schedule"), ("suspend", "Suspend"), ("active", "Active"), ("last", "Last Schedule")],
+        "fn": lambda o: {"schedule": _g(o,'spec','schedule',default='-'), "suspend": str(bool(_g(o,'spec','suspend',default=False))), "active": str(len(_g(o,'status','active',default=[]) or [])), "last": (_g(o,'status','last_schedule_time',default=None).isoformat() if _g(o,'status','last_schedule_time',default=None) else '-')}},
+    "horizontalpodautoscalers": {"defs": [("min", "Min"), ("max", "Max"), ("current", "Replicas")],
+        "fn": lambda o: {"min": str(_g(o,'spec','min_replicas',default='-')), "max": str(_g(o,'spec','max_replicas',default='-')), "current": str(_g(o,'status','current_replicas',default=0) or 0)}},
+    "poddisruptionbudgets": {"defs": [("minavail", "Min Available"), ("maxunavail", "Max Unavailable"), ("current", "Current Healthy")],
+        "fn": lambda o: {"minavail": str(_g(o,'spec','min_available',default='-')), "maxunavail": str(_g(o,'spec','max_unavailable',default='-')), "current": str(_g(o,'status','current_healthy',default=0) or 0)}},
+    "resourcequotas": {"defs": [("scopes", "Scopes"), ("hard", "Hard")],
+        "fn": lambda o: {"scopes": ", ".join(_g(o,'spec','scopes',default=[]) or []) or "-", "hard": str(len(_g(o,'spec','hard',default={}) or {}))}},
+    "limitranges": {"defs": [("limits", "Limits")],
+        "fn": lambda o: {"limits": str(len(_g(o,'spec','limits',default=[]) or []))}},
+    "priorityclasses": {"defs": [("value", "Value"), ("default", "Global Default")],
+        "fn": lambda o: {"value": str(o.value), "default": ("Yes" if o.global_default else "-")}},
+    "serviceaccounts": {"defs": [("secrets", "Secrets")],
+        "fn": lambda o: {"secrets": str(len(o.secrets or []))}},
+    "roles": {"defs": [("rules", "Rules")], "fn": lambda o: {"rules": str(len(o.rules or []))}},
+    "clusterroles": {"defs": [("rules", "Rules")], "fn": lambda o: {"rules": str(len(o.rules or []))}},
+    "rolebindings": {"defs": [("role", "Role"), ("subjects", "Subjects")],
+        "fn": lambda o: {"role": f"{o.role_ref.kind}/{o.role_ref.name}", "subjects": str(len(o.subjects or []))}},
+    "clusterrolebindings": {"defs": [("role", "Role"), ("subjects", "Subjects")],
+        "fn": lambda o: {"role": f"{o.role_ref.kind}/{o.role_ref.name}", "subjects": str(len(o.subjects or []))}},
+    "namespaces": {"defs": [("status", "Status")],
+        "fn": lambda o: {"status": _g(o,'status','phase',default='-')}},
+}
+
+
 class ResourceRow(BaseModel):
     name: str
     namespace: Optional[str] = None
     summary: str = ""
+    cols: dict[str, str] = {}
     age_seconds: Optional[int] = None
+
+
+class ColumnDef(BaseModel):
+    key: str
+    label: str
 
 
 class ResourceListResponse(BaseModel):
     kind: str
+    columns: list[ColumnDef] = []
     count: int
     truncated: bool
     items: list[ResourceRow]
@@ -423,20 +512,30 @@ def list_resources(
 
     rows: list[ResourceRow] = []
     summary_fn: Callable[[Any], str] = spec["summary"]
+    col_spec = RESOURCE_COLUMNS.get(kind)
+    col_fn = col_spec["fn"] if col_spec else None
     for o in (result.items or []):
         try:
             summ = summary_fn(o)
         except Exception:  # noqa: BLE001
             summ = ""
+        cols: dict[str, str] = {}
+        if col_fn is not None:
+            try:
+                cols = {k: ("" if v is None else str(v)) for k, v in col_fn(o).items()}
+            except Exception:  # noqa: BLE001
+                cols = {}
         rows.append(ResourceRow(
             name=o.metadata.name,
             namespace=o.metadata.namespace,
             summary=summ,
+            cols=cols,
             age_seconds=_age_seconds(o.metadata),
         ))
     truncated = (result.metadata._continue is not None) if result.metadata else False
     rows.sort(key=lambda r: (r.namespace or "", r.name))
-    return ResourceListResponse(kind=kind, count=len(rows), truncated=truncated, items=rows)
+    columns = [ColumnDef(key=k, label=lbl) for k, lbl in (col_spec["defs"] if col_spec else [])]
+    return ResourceListResponse(kind=kind, columns=columns, count=len(rows), truncated=truncated, items=rows)
 
 
 @router.get("/{cluster_id}/resources/{kind}/{namespace}/{name}/yaml")
