@@ -70,7 +70,7 @@ export function ServicesCatalogPage() {
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <BookOpen className="w-6 h-6 text-primary" />
           <h1 className="text-xl font-bold">통합지식</h1>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+          <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
             {merged.length} 서비스
           </span>
           <div className="ml-auto flex items-center gap-3">
@@ -92,7 +92,7 @@ export function ServicesCatalogPage() {
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           서비스 기준으로 운영 가이드·트러블슈팅·변경 이력·메모·리소스 링크를 통합 관리합니다.
           서비스 카탈로그는 <strong>Settings → 서비스</strong> 탭에서 추가/수정 가능합니다.
         </p>
@@ -131,11 +131,11 @@ export function ServicesCatalogPage() {
                             </div>
                             <div className="min-w-0">
                               <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{def.label}</p>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">{def.key}</span>
+                              <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">{def.key}</span>
                             </div>
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-md">
+                        <td className="px-4 py-3 text-sm text-muted-foreground max-w-md">
                           {def.description ? (
                             <p className="line-clamp-2">{def.description}</p>
                           ) : (
@@ -151,16 +151,16 @@ export function ServicesCatalogPage() {
                           {Object.keys(byKind).length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {Object.entries(byKind).map(([k, n]) => (
-                                <span key={k} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border">
+                                <span key={k} className="text-xs px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border">
                                   {k} {n}
                                 </span>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground/50">—</span>
+                            <span className="text-sm text-muted-foreground/50">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap font-mono">
+                        <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap font-mono">
                           {lastUpdated ? relTime(lastUpdated) : <span className="text-muted-foreground/50">-</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -201,18 +201,18 @@ export function ServicesCatalogPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{def.label}</p>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">
                           {def.key}
                         </span>
                       </div>
                       {def.description && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{def.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{def.description}</p>
                       )}
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                   </div>
 
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between text-sm">
                     <span className="font-bold text-foreground">
                       {total === 0 ? <span className="text-muted-foreground/60 font-normal">항목 없음</span> : `${total} 건`}
                     </span>
@@ -224,7 +224,7 @@ export function ServicesCatalogPage() {
                   {Object.keys(byKind).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {Object.entries(byKind).map(([k, n]) => (
-                        <span key={k} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border">
+                        <span key={k} className="text-xs px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border">
                           {k} {n}
                         </span>
                       ))}

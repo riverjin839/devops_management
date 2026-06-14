@@ -72,18 +72,18 @@ function NodeCard({ node, onEdit, onDelete }: NodeCardProps) {
       </div>
 
       {/* Role 배지 */}
-      <span className={`inline-flex items-center self-start px-2 py-0.5 rounded text-xs font-medium border ${meta.bg} ${meta.color}`}>
+      <span className={`inline-flex items-center self-start px-2 py-0.5 rounded text-sm font-medium border ${meta.bg} ${meta.color}`}>
         {meta.label}
       </span>
 
       {/* IP */}
       {node.ipAddress && (
-        <p className="text-xs text-muted-foreground font-mono">{node.ipAddress}</p>
+        <p className="text-sm text-muted-foreground font-mono">{node.ipAddress}</p>
       )}
 
       {/* 스펙 */}
       {(node.cpuCores || node.ramGb || node.diskGb) && (
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {node.cpuCores && (
             <span className="flex items-center gap-1">
               <Cpu className="w-3 h-3" />{node.cpuCores}c
@@ -104,21 +104,21 @@ function NodeCard({ node, onEdit, onDelete }: NodeCardProps) {
 
       {/* 스위치 */}
       {node.switchName && (
-        <p className="text-xs text-muted-foreground truncate">
+        <p className="text-sm text-muted-foreground truncate">
           <span className="opacity-60">SW: </span>{node.switchName}
         </p>
       )}
 
       {/* OS */}
       {node.osInfo && (
-        <p className="text-xs text-muted-foreground truncate" title={node.osInfo}>
+        <p className="text-sm text-muted-foreground truncate" title={node.osInfo}>
           {node.osInfo}
         </p>
       )}
 
       {/* Auto-synced 배지 */}
       {node.autoSynced && (
-        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-xs bg-sky-500/10 border border-sky-500/20 text-sky-400">
+        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-sm bg-sky-500/10 border border-sky-500/20 text-sky-400">
           <RefreshCw className="w-2.5 h-2.5" />K8s 동기화
         </span>
       )}
@@ -221,13 +221,13 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
           {!isEdit && clusterMeta && (
-            <div className="text-[11px] text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+            <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
               클러스터 관리정보 기반 자동입력: hostname / first_host / description
             </div>
           )}
           {/* 호스트명 */}
           <div>
-            <label htmlFor={f('hostname')} className="block text-xs font-medium text-muted-foreground mb-1">호스트명 *</label>
+            <label htmlFor={f('hostname')} className="block text-sm font-medium text-muted-foreground mb-1">호스트명 *</label>
             <input
               id={f('hostname')}
               value={form.hostname}
@@ -239,7 +239,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
           {/* Role */}
           <div>
-            <label htmlFor={f('role')} className="block text-xs font-medium text-muted-foreground mb-1">역할</label>
+            <label htmlFor={f('role')} className="block text-sm font-medium text-muted-foreground mb-1">역할</label>
             <div className="relative">
               <select
                 id={f('role')}
@@ -258,7 +258,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           {/* 랙 / IP */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor={f('rack')} className="block text-xs font-medium text-muted-foreground mb-1">랙 이름</label>
+              <label htmlFor={f('rack')} className="block text-sm font-medium text-muted-foreground mb-1">랙 이름</label>
               <input
                 id={f('rack')}
                 value={form.rackName ?? ''}
@@ -268,7 +268,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label htmlFor={f('ip')} className="block text-xs font-medium text-muted-foreground mb-1">관리 IP</label>
+              <label htmlFor={f('ip')} className="block text-sm font-medium text-muted-foreground mb-1">관리 IP</label>
               <input
                 id={f('ip')}
                 value={form.ipAddress ?? ''}
@@ -282,7 +282,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           {/* CPU / RAM / Disk */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label htmlFor={f('cpu')} className="block text-xs font-medium text-muted-foreground mb-1">CPU (코어)</label>
+              <label htmlFor={f('cpu')} className="block text-sm font-medium text-muted-foreground mb-1">CPU (코어)</label>
               <input
                 id={f('cpu')}
                 type="number" min={1}
@@ -293,7 +293,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label htmlFor={f('ram')} className="block text-xs font-medium text-muted-foreground mb-1">RAM (GB)</label>
+              <label htmlFor={f('ram')} className="block text-sm font-medium text-muted-foreground mb-1">RAM (GB)</label>
               <input
                 id={f('ram')}
                 type="number" min={1}
@@ -304,7 +304,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label htmlFor={f('disk')} className="block text-xs font-medium text-muted-foreground mb-1">Disk (GB)</label>
+              <label htmlFor={f('disk')} className="block text-sm font-medium text-muted-foreground mb-1">Disk (GB)</label>
               <input
                 id={f('disk')}
                 type="number" min={1}
@@ -319,7 +319,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           {/* 스위치 / OS */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor={f('switch')} className="block text-xs font-medium text-muted-foreground mb-1">연결 스위치</label>
+              <label htmlFor={f('switch')} className="block text-sm font-medium text-muted-foreground mb-1">연결 스위치</label>
               <input
                 id={f('switch')}
                 value={form.switchName ?? ''}
@@ -329,7 +329,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label htmlFor={f('os')} className="block text-xs font-medium text-muted-foreground mb-1">OS 정보</label>
+              <label htmlFor={f('os')} className="block text-sm font-medium text-muted-foreground mb-1">OS 정보</label>
               <input
                 id={f('os')}
                 value={form.osInfo ?? ''}
@@ -342,7 +342,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
           {/* 메모 */}
           <div>
-            <label htmlFor={f('notes')} className="block text-xs font-medium text-muted-foreground mb-1">메모</label>
+            <label htmlFor={f('notes')} className="block text-sm font-medium text-muted-foreground mb-1">메모</label>
             <textarea
               id={f('notes')}
               value={form.notes ?? ''}
@@ -354,7 +354,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{error}
             </div>
           )}
@@ -398,7 +398,7 @@ function DeleteConfirm({ node, onConfirm, onCancel, isPending }: DeleteConfirmPr
           </div>
           <div>
             <p className="text-sm font-semibold text-foreground">노드 삭제</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               <span className="font-medium text-foreground">{node.hostname}</span>을 삭제하시겠습니까?
             </p>
           </div>
@@ -553,7 +553,7 @@ export function InfraTopologyPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">인프라 토폴로지</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">클러스터별 물리 노드 구성 시각화</p>
+              <p className="text-sm text-muted-foreground mt-0.5">클러스터별 물리 노드 구성 시각화</p>
             </div>
           </div>
 
@@ -561,7 +561,7 @@ export function InfraTopologyPage() {
             <button
               onClick={handleSync}
               disabled={!activeClusterId || syncNodes.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncNodes.isPending ? 'animate-spin' : ''}`} />
               K8s 동기화
@@ -569,7 +569,7 @@ export function InfraTopologyPage() {
             <button
               onClick={() => { setEditTarget(null); setModalOpen(true); }}
               disabled={!activeClusterId}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               노드 추가
@@ -606,14 +606,14 @@ export function InfraTopologyPage() {
                     c.status === 'critical' ? 'bg-red-400' : 'bg-slate-400'
                   }`} />
                   {c.name}
-                  {c.region && <span className="text-xs opacity-60">({c.region})</span>}
+                  {c.region && <span className="text-sm opacity-60">({c.region})</span>}
                 </button>
               ))}
             </div>
 
             {/* 동기화 오류 */}
             {syncError && (
-              <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
+              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{syncError}
                 <button onClick={() => setSyncError('')} className="ml-auto"><X className="w-3 h-3" /></button>
               </div>
@@ -623,19 +623,19 @@ export function InfraTopologyPage() {
             {activeCluster && (
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
                 <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-card border border-border rounded-lg p-4 flex flex-col gap-1">
-                  <p className="text-xs text-muted-foreground">전체 노드</p>
+                  <p className="text-sm text-muted-foreground">전체 노드</p>
                   <p className="text-2xl font-bold text-foreground">{nodes.length}</p>
-                  <p className="text-xs text-muted-foreground">{activeCluster.name}</p>
+                  <p className="text-sm text-muted-foreground">{activeCluster.name}</p>
                 </div>
                 {ROLES.map(role => {
                   const meta = ROLE_META[role];
                   return (
                     <div key={role} className="bg-card border border-border rounded-lg p-4 flex flex-col gap-1">
-                      <p className="text-xs text-muted-foreground">{meta.label}</p>
+                      <p className="text-sm text-muted-foreground">{meta.label}</p>
                       <p className={`text-2xl font-bold ${meta.color}`}>{stats[role]}</p>
                       <div className="flex items-center gap-1">
                         <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                        <span className="text-xs text-muted-foreground">노드</span>
+                        <span className="text-sm text-muted-foreground">노드</span>
                       </div>
                     </div>
                   );
@@ -655,12 +655,12 @@ export function InfraTopologyPage() {
                     value={traceNamespace}
                     onChange={e => setTraceNamespace(e.target.value)}
                     placeholder="namespace"
-                    className="bg-background border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
                   <select
                     value={traceTargetType}
                     onChange={e => setTraceTargetType(e.target.value as TopologyTargetType)}
-                    className="bg-background border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
                     <option value="service">service</option>
                     <option value="pod">pod</option>
@@ -669,12 +669,12 @@ export function InfraTopologyPage() {
                     value={traceTargetName}
                     onChange={e => setTraceTargetName(e.target.value)}
                     placeholder={traceTargetType === 'service' ? 'service-name' : 'pod-name'}
-                    className="bg-background border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
                   <button
                     onClick={handleTrace}
                     disabled={traceLoading || !traceTargetName.trim() || !traceNamespace.trim()}
-                    className="px-3 py-2 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    className="px-3 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                   >
                     {traceLoading && <Loader2 className="w-3 h-3 animate-spin" />}
                     Trace 실행
@@ -682,7 +682,7 @@ export function InfraTopologyPage() {
                 </div>
 
                 {traceError && (
-                  <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
+                  <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
                     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{traceError}
                   </div>
                 )}
@@ -690,7 +690,7 @@ export function InfraTopologyPage() {
                 {traceResult && (
                   <div className="flex flex-col gap-2">
                     {traceBottleneck && (
-                      <div className="flex items-center gap-2 text-amber-300 text-xs bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 text-amber-300 text-sm bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
                         <Activity className="w-3.5 h-3.5" />
                         병목 의심 홉: <span className="font-semibold">{traceBottleneck.hop.name}</span>
                         <span className="opacity-80">
@@ -701,7 +701,7 @@ export function InfraTopologyPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       {traceResult.hops.map((hop, idx) => (
                         <div key={`${hop.entityId}-${idx}`} className="inline-flex items-center gap-2">
-                          <div className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs">
+                          <div className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm">
                             <span className="text-muted-foreground">{hop.entityType}</span>
                             <span className="mx-1">·</span>
                             <span className="font-medium text-foreground">{hop.name}</span>
@@ -712,7 +712,7 @@ export function InfraTopologyPage() {
                             )}
                           </div>
                           {idx < traceResult.hops.length - 1 && (
-                            <span className="text-muted-foreground text-xs">→</span>
+                            <span className="text-muted-foreground text-sm">→</span>
                           )}
                         </div>
                       ))}
@@ -733,7 +733,7 @@ export function InfraTopologyPage() {
                 <p className="text-sm">이 클러스터에 노드가 없습니다.</p>
                 <button
                   onClick={() => { setEditTarget(null); setModalOpen(true); }}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Plus className="w-3.5 h-3.5" />첫 노드 추가
                 </button>
@@ -749,8 +749,8 @@ export function InfraTopologyPage() {
                     <header className="flex items-center gap-2 px-4 py-2.5 bg-sky-500/10 border-b border-sky-500/20">
                       <Network className="w-4 h-4 text-sky-400 flex-shrink-0" />
                       <span className="text-sm font-semibold text-sky-300">{switchName}</span>
-                      <span className="text-[10px] font-mono text-sky-400/70">ToR / Leaf</span>
-                      <span className="ml-auto text-xs text-muted-foreground">
+                      <span className="text-xs font-mono text-sky-400/70">ToR / Leaf</span>
+                      <span className="ml-auto text-sm text-muted-foreground">
                         {swRacks.length}개 랙 · {nodeCount}개 노드
                       </span>
                     </header>
@@ -762,8 +762,8 @@ export function InfraTopologyPage() {
                           {/* 랙 헤더 */}
                           <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded-lg border border-border">
                             <Tag className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                            <span className="text-xs font-semibold text-foreground truncate">{rack}</span>
-                            <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">
+                            <span className="text-sm font-semibold text-foreground truncate">{rack}</span>
+                            <span className="ml-auto text-sm text-muted-foreground flex-shrink-0">
                               {rackNodes.length}
                             </span>
                           </div>

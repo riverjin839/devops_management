@@ -86,11 +86,11 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
       {/* 그룹 키 선택 */}
       <div className="flex items-center gap-2 flex-wrap">
         <Tag className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-        <span className="text-xs text-muted-foreground">그룹 기준:</span>
+        <span className="text-sm text-muted-foreground">그룹 기준:</span>
         <button
           type="button"
           onClick={() => setGroupKey('role')}
-          className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+          className={`px-2 py-1 text-xs font-medium rounded-md border transition-colors ${
             groupKey === 'role'
               ? 'bg-primary/10 text-primary border-primary/30'
               : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary'
@@ -103,7 +103,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
             key={k}
             type="button"
             onClick={() => setGroupKey(k)}
-            className={`px-2 py-1 text-[11px] font-mono rounded-md border transition-colors ${
+            className={`px-2 py-1 text-xs font-mono rounded-md border transition-colors ${
               groupKey === k
                 ? 'bg-primary/10 text-primary border-primary/30'
                 : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary'
@@ -114,7 +114,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
           </button>
         ))}
         {candidateKeys.length === 0 && (
-          <span className="text-[11px] text-muted-foreground/60">
+          <span className="text-xs text-muted-foreground/60">
             노드 라벨이 모두 같거나 노드별로 모두 달라 그룹화 가능한 라벨이 없습니다.
           </span>
         )}
@@ -128,18 +128,18 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
             <div className="px-4 py-3 bg-muted/20 border-b border-border">
               <div className="flex items-baseline justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[10px] font-mono text-muted-foreground/70 uppercase tracking-wider truncate">
+                  <span className="text-xs font-mono text-muted-foreground/70 uppercase tracking-wider truncate">
                     {groupKey}
                   </span>
                   <span className="text-sm font-semibold text-foreground font-mono truncate" title={g.value}>
                     {g.value}
                   </span>
                 </div>
-                <span className="text-[11px] text-muted-foreground tabular-nums flex-shrink-0">
+                <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
                   {g.nodes.length}개 노드
                 </span>
               </div>
-              <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+              <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <Layers className="w-3 h-3" />
                   <span className="tabular-nums font-medium text-foreground">{g.totalImages.toLocaleString()}</span>
@@ -155,7 +155,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
               {g.nodes.map((n) => (
                 <li key={n.node} className="px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-muted/10">
                   <div className="min-w-0">
-                    <p className="text-xs font-mono text-foreground truncate" title={n.node}>{n.node}</p>
+                    <p className="text-sm font-mono text-foreground truncate" title={n.node}>{n.node}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className={`text-[9.5px] px-1.5 py-0.5 rounded ${
                         n.role === 'control-plane' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
@@ -171,7 +171,7 @@ export function NodeLabelGroupView({ nodes, searchQuery }: Props) {
                     <span className="text-sm font-semibold tabular-nums text-foreground">
                       {n.imageCount.toLocaleString()}
                     </span>
-                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                    <span className="text-xs text-muted-foreground tabular-nums">
                       {formatBytes(n.totalSizeBytes)}
                     </span>
                   </div>

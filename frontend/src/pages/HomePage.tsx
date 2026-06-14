@@ -52,7 +52,7 @@ interface KpiPillProps {
 
 function KpiPill({ label, value, hint, Icon, accent, to }: KpiPillProps) {
   const body = (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border hover:border-primary/40 transition-colors text-[11px] whitespace-nowrap">
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border hover:border-primary/40 transition-colors text-xs whitespace-nowrap">
       <Icon className={`w-3 h-3 flex-shrink-0 ${accent}`} />
       <span className="text-muted-foreground">{label}</span>
       <span className="font-semibold tabular-nums">{value}</span>
@@ -115,7 +115,7 @@ export function HomePage() {
           {myName && (
             <span className="text-sm font-bold leading-none whitespace-nowrap">{myName}님</span>
           )}
-          <span className="text-[11px] text-muted-foreground tabular-nums hidden sm:inline">{dateStr}</span>
+          <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">{dateStr}</span>
         </div>
 
         {/* KPI pills */}
@@ -180,7 +180,7 @@ export function HomePage() {
             <div className="col-span-10 xl:col-span-4 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <CalendarClock className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   당일 스케줄
                 </span>
               </div>
@@ -192,11 +192,11 @@ export function HomePage() {
             {/* ── 담당자별 진행 현황 (주간 / 월간 / 담당자) (6/10) ──────────── */}
             <div className="col-span-10 xl:col-span-6 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   담당자별 진행 현황
                 </span>
                 <CalendarDays className="w-3.5 h-3.5 text-primary" />
-                <div className="ml-auto flex items-center rounded-md border border-border overflow-hidden text-[10px]">
+                <div className="ml-auto flex items-center rounded-md border border-border overflow-hidden text-xs">
                   <button
                     onClick={() => setWeeklyTab('week')}
                     className={cn(

@@ -41,7 +41,7 @@ export function LoginPage() {
           </div>
           <div>
             <h1 className="text-base font-bold leading-tight">DEVOPS MANAGEMENT</h1>
-            <p className="text-xs text-muted-foreground">로그인</p>
+            <p className="text-sm text-muted-foreground">로그인</p>
           </div>
         </div>
 

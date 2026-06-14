@@ -24,26 +24,26 @@ function RunDetail({ run }: { run: BatchJobRun }) {
     <div className="mt-2 space-y-2 bg-secondary/30 rounded-lg p-2">
       {run.executedCommand && (
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">command</p>
-          <pre className="text-[10px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">command</p>
+          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
             {run.executedCommand}
           </pre>
         </div>
       )}
       <div>
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
         <LogViewer text={run.stdout} maxHeight="max-h-[200px]" />
       </div>
       {run.stderr && (
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
           <LogViewer text={run.stderr} maxHeight="max-h-[160px]" asError />
         </div>
       )}
       {run.error && (
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">error</p>
-          <pre className="text-[10px] font-mono bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 rounded p-2 overflow-auto whitespace-pre-wrap">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">error</p>
+          <pre className="text-xs font-mono bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 rounded p-2 overflow-auto whitespace-pre-wrap">
             {run.error}
           </pre>
         </div>
@@ -56,10 +56,10 @@ export function RunHistory({ runs, isLoading }: RunHistoryProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (isLoading) {
-    return <p className="text-xs text-muted-foreground py-2">이력 로딩 중…</p>;
+    return <p className="text-sm text-muted-foreground py-2">이력 로딩 중…</p>;
   }
   if (runs.length === 0) {
-    return <p className="text-xs text-muted-foreground py-2">아직 실행 이력이 없습니다.</p>;
+    return <p className="text-sm text-muted-foreground py-2">아직 실행 이력이 없습니다.</p>;
   }
 
   const shown = runs.slice(0, 5);
@@ -75,10 +75,10 @@ export function RunHistory({ runs, isLoading }: RunHistoryProps) {
               className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-secondary/50 transition-colors text-left"
             >
               <StatusPill status={run.status} />
-              <span className="flex-1 min-w-0 text-[11px] font-mono text-muted-foreground truncate">
+              <span className="flex-1 min-w-0 text-xs font-mono text-muted-foreground truncate">
                 {formatShortDate(run.startedAt)}
               </span>
-              <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
+              <span className="text-xs font-mono text-muted-foreground tabular-nums">
                 {run.durationMs}ms
               </span>
               {open ? (
@@ -96,7 +96,7 @@ export function RunHistory({ runs, isLoading }: RunHistoryProps) {
         );
       })}
       {runs.length > 5 && (
-        <p className="text-[10px] text-muted-foreground text-center pt-1">
+        <p className="text-xs text-muted-foreground text-center pt-1">
           최근 5건만 표시 · 총 {runs.length}건
         </p>
       )}

@@ -68,7 +68,7 @@ export function InlineTextCell({
             else if (e.key === 'Escape') { setEditing(false); }
           }}
           placeholder={placeholder}
-          className={`w-full px-1.5 py-0.5 text-xs bg-background border border-primary rounded ${inputClassName}`}
+          className={`w-full px-1.5 py-0.5 text-sm bg-background border border-primary rounded ${inputClassName}`}
         />
         {saving && <Loader2 className="absolute right-1 top-1 w-3 h-3 animate-spin text-muted-foreground" />}
       </div>

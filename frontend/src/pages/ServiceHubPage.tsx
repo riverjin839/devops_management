@@ -143,13 +143,13 @@ export function ServiceHubPage() {
             <div>
               <h1 className="text-xl font-bold">{def.label}</h1>
               {def.description && (
-                <p className="text-[11px] text-muted-foreground">{def.description}</p>
+                <p className="text-xs text-muted-foreground">{def.description}</p>
               )}
             </div>
             <div className="ml-auto flex items-center gap-1.5">
               {KIND_CATALOG.map((k) => (
                 <button key={k.key} onClick={() => setCreating(k.key)}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-muted-foreground hover:text-foreground"
+                  className="flex items-center gap-1 px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-muted-foreground hover:text-foreground"
                   title={`새 ${k.label} 추가`}>
                   <Plus className="w-3 h-3" /> {k.label}
                 </button>
@@ -161,14 +161,14 @@ export function ServiceHubPage() {
           <div className="bg-card border border-border rounded-xl p-3 mb-3 flex flex-wrap items-center gap-2">
             <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
               <button onClick={() => setKindFilter('all')}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
+                className={`px-3 py-1 text-sm font-medium rounded-md ${
                   kindFilter === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
                 }`}>
                 전체 <span className="text-muted-foreground ml-1">{kindCounts.all ?? 0}</span>
               </button>
               {KIND_CATALOG.map((k) => (
                 <button key={k.key} onClick={() => setKindFilter(k.key)}
-                  className={`flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md ${
+                  className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md ${
                     kindFilter === k.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
                   }`}>
                   <k.icon className="w-3 h-3" />
@@ -183,13 +183,13 @@ export function ServiceHubPage() {
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="제목/내용 검색..."
-                  className="pl-8 pr-3 py-1 text-xs bg-background border border-border rounded-lg w-56 focus:outline-none focus:ring-1 focus:ring-primary" />
+                  className="pl-8 pr-3 py-1 text-sm bg-background border border-border rounded-lg w-56 focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
               {allTags.length > 0 && (
                 <div className="flex items-center gap-1">
                   <Filter className="w-3 h-3 text-muted-foreground" />
                   <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}
-                    className="px-2 py-1 text-xs bg-background border border-border rounded-lg">
+                    className="px-2 py-1 text-sm bg-background border border-border rounded-lg">
                     <option value="">태그 전체</option>
                     {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
@@ -223,13 +223,13 @@ export function ServiceHubPage() {
                     }`}>
                     <header className="flex items-start gap-2 mb-2">
                       {KindIcon && (
-                        <span className={`mt-0.5 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border ${colorBadgeClass(kindMeta.color)} flex-shrink-0`}>
+                        <span className={`mt-0.5 inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${colorBadgeClass(kindMeta.color)} flex-shrink-0`}>
                           <KindIcon className="w-3 h-3" />
                           {kindMeta.label}
                         </span>
                       )}
                       {e.severity && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
                           e.severity === 'critical' ? 'bg-red-500/10 text-red-500 border-red-500/30'
                           : e.severity === 'warning' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
                           : 'bg-sky-500/10 text-sky-500 border-sky-500/30'
@@ -245,13 +245,13 @@ export function ServiceHubPage() {
 
                     {e.kind === 'link' && e.url ? (
                       <a href={e.url} target="_blank" rel="noopener noreferrer"
-                        className="block text-xs font-mono text-primary hover:underline mb-2 break-all">
+                        className="block text-sm font-mono text-primary hover:underline mb-2 break-all">
                         {e.url}
                       </a>
                     ) : null}
 
                     {e.content && (
-                      <div className="text-xs text-foreground/80 line-clamp-4 mb-2">
+                      <div className="text-sm text-foreground/80 line-clamp-4 mb-2">
                         <RichContent content={e.content} />
                       </div>
                     )}
@@ -259,13 +259,13 @@ export function ServiceHubPage() {
                     <div className="flex items-center flex-wrap gap-1 mb-2">
                       {(e.tags ?? []).map((t) => (
                         <button key={t} onClick={() => setTagFilter(t)}
-                          className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border hover:bg-secondary">
+                          className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border hover:bg-secondary">
                           <Tag className="w-2.5 h-2.5" /> {t}
                         </button>
                       ))}
                     </div>
 
-                    <footer className="flex items-center gap-2 text-[10px] text-muted-foreground pt-2 border-t border-border">
+                    <footer className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-border">
                       <span>{e.author ?? '-'}</span>
                       <span>·</span>
                       <span>{new Date(e.updatedAt).toLocaleString()}</span>
@@ -300,7 +300,7 @@ export function ServiceHubPage() {
 
           {/* 로딩 indicator (refetch 중) */}
           {listQ.isFetching && !listQ.isLoading && (
-            <div className="fixed bottom-4 right-4 px-3 py-1.5 rounded-full bg-card border border-border shadow text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <div className="fixed bottom-4 right-4 px-3 py-1.5 rounded-full bg-card border border-border shadow text-xs text-muted-foreground flex items-center gap-1.5">
               <Loader2 className="w-3 h-3 animate-spin" /> 갱신 중
             </div>
           )}

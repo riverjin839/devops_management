@@ -156,14 +156,14 @@ function ClusterNodeGroup({
           {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
         <Server className="w-3.5 h-3.5 text-muted-foreground/80 flex-shrink-0" />
-        <span className="text-xs font-semibold truncate flex-1">{clusterName}</span>
-        <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+        <span className="text-sm font-semibold truncate flex-1">{clusterName}</span>
+        <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
           {selectedCount}/{total}
         </span>
         <button
           onClick={onToggleAll}
           disabled={total === 0}
-          className="text-[10px] text-primary hover:text-primary/80 disabled:opacity-40"
+          className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
         >
           {allSelected ? '해제' : '모두'}
         </button>
@@ -182,14 +182,14 @@ function ClusterNodeGroup({
             </div>
           ) : isError ? (
             <div className="px-3 py-2">
-              <p className="text-[11px] text-red-400 mb-1">노드 조회 실패: {errorMsg ?? '연결 오류'}</p>
+              <p className="text-xs text-red-400 mb-1">노드 조회 실패: {errorMsg ?? '연결 오류'}</p>
               <button
                 onClick={onRefetch}
-                className="text-[10px] text-primary hover:text-primary/80 underline"
+                className="text-xs text-primary hover:text-primary/80 underline"
               >다시 시도</button>
             </div>
           ) : total === 0 ? (
-            <p className="px-3 py-3 text-[11px] text-muted-foreground/70">노드 없음</p>
+            <p className="px-3 py-3 text-xs text-muted-foreground/70">노드 없음</p>
           ) : (
             nodes.map((n) => (
               <NodeRow
@@ -221,13 +221,13 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${node.ready ? 'bg-emerald-500' : 'bg-red-500'}`} />
         <span className="font-mono text-sm text-foreground truncate">{node.name}</span>
-        <span className="text-xs font-mono text-muted-foreground">{host}</span>
+        <span className="text-sm font-mono text-muted-foreground">{host}</span>
         {node.roles.map((r) => (
-          <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{r}</span>
+          <span key={r} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{r}</span>
         ))}
       </div>
       {node.kubeletVersion && (
-        <span className="text-[10px] font-mono text-muted-foreground">{node.kubeletVersion}</span>
+        <span className="text-xs font-mono text-muted-foreground">{node.kubeletVersion}</span>
       )}
     </label>
   );
@@ -258,23 +258,23 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
         <td className="px-3 py-2 font-mono text-sm">
           <div className="flex flex-col">
             <span>{primary}</span>
-            {subHost && <span className="text-[10px] text-muted-foreground">{subHost}</span>}
+            {subHost && <span className="text-xs text-muted-foreground">{subHost}</span>}
             {result.clusterName && (
-              <span className="text-[10px] text-muted-foreground/80">{result.clusterName}</span>
+              <span className="text-xs text-muted-foreground/80">{result.clusterName}</span>
             )}
           </div>
         </td>
         <td className="px-3 py-2">
-          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
             {meta.label}
           </span>
         </td>
-        <td className="px-3 py-2 text-xs font-mono text-muted-foreground">
+        <td className="px-3 py-2 text-sm font-mono text-muted-foreground">
           {result.exitCode === null || result.exitCode === undefined ? '-' : result.exitCode}
         </td>
-        <td className="px-3 py-2 text-xs font-mono text-muted-foreground">{result.durationMs}ms</td>
-        <td className="px-3 py-2 text-xs text-muted-foreground max-w-[320px] truncate" title={result.error ?? ''}>
+        <td className="px-3 py-2 text-sm font-mono text-muted-foreground">{result.durationMs}ms</td>
+        <td className="px-3 py-2 text-sm text-muted-foreground max-w-[320px] truncate" title={result.error ?? ''}>
           {result.error ?? (result.stdout.split('\n')[0].slice(0, 80) || '-')}
         </td>
       </tr>
@@ -283,20 +283,20 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
           <td colSpan={6} className="px-5 py-3">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
                 <LogViewer text={result.stdout} maxHeight="max-h-72"
                   filterOverride={globalFilter || undefined}
                   hideToolbar={!!globalFilter.trim()} />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
                 <LogViewer text={result.stderr} maxHeight="max-h-72" asError
                   filterOverride={globalFilter || undefined}
                   hideToolbar={!!globalFilter.trim()} />
               </div>
             </div>
             {result.error && (
-              <p className="text-xs text-red-400 mt-2">⚠ {result.error}</p>
+              <p className="text-sm text-red-400 mt-2">⚠ {result.error}</p>
             )}
           </td>
         </tr>
@@ -328,16 +328,16 @@ function SummaryResultsTable({
         </colgroup>
         <thead className="bg-muted/30 sticky top-0">
           <tr className="text-left border-b border-border">
-            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">실행 노드
+            <th className="relative px-3 py-2 text-xs font-semibold text-muted-foreground">실행 노드
               <ResizeGrip onMouseDown={(e) => colW.beginResize('node', e)} onDoubleClick={() => colW.autoFit('node')} />
             </th>
-            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">수행 결과
+            <th className="relative px-3 py-2 text-xs font-semibold text-muted-foreground">수행 결과
               <ResizeGrip onMouseDown={(e) => colW.beginResize('status', e)} onDoubleClick={() => colW.autoFit('status')} />
             </th>
-            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">exit · 소요
+            <th className="relative px-3 py-2 text-xs font-semibold text-muted-foreground">exit · 소요
               <ResizeGrip onMouseDown={(e) => colW.beginResize('exit', e)} onDoubleClick={() => colW.autoFit('exit')} />
             </th>
-            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">
+            <th className="relative px-3 py-2 text-xs font-semibold text-muted-foreground">
               결과 {globalFilter.trim() ? `(필터: "${globalFilter.length > 20 ? globalFilter.slice(0, 20) + '…' : globalFilter}")` : ''}
               <ResizeGrip onMouseDown={(e) => colW.beginResize('output', e)} onDoubleClick={() => colW.autoFit('output')} />
             </th>
@@ -367,19 +367,19 @@ function SummaryResultsTable({
                   r.status !== 'ok' ? 'bg-red-500/[0.02]' : ''
                 }`}>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <p className="font-mono text-xs font-medium">{primary}</p>
-                  {subHost && <p className="font-mono text-[10px] text-muted-foreground">{subHost}</p>}
+                  <p className="font-mono text-sm font-medium">{primary}</p>
+                  {subHost && <p className="font-mono text-xs text-muted-foreground">{subHost}</p>}
                   {r.clusterName && (
-                    <p className="text-[10px] text-muted-foreground/80">{r.clusterName}</p>
+                    <p className="text-xs text-muted-foreground/80">{r.clusterName}</p>
                   )}
                 </td>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
+                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
                     <Icon className="w-3 h-3" />
                     {meta.label}
                   </span>
                   {matchBadge !== null && (
-                    <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full border ${
+                    <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full border ${
                       matchBadge > 0
                         ? 'bg-sky-500/10 text-sky-500 border-sky-500/30'
                         : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
@@ -388,15 +388,15 @@ function SummaryResultsTable({
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 align-top whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+                <td className="px-3 py-2 align-top whitespace-nowrap font-mono text-xs text-muted-foreground">
                   {r.exitCode ?? '-'} · {r.durationMs}ms
                 </td>
                 <td className="px-3 py-2 align-top">
                   {r.error && (
-                    <p className="text-[11px] text-red-400 font-medium mb-0.5">⚠ {r.error}</p>
+                    <p className="text-xs text-red-400 font-medium mb-0.5">⚠ {r.error}</p>
                   )}
                   {preview.length > 0 ? (
-                    <div className="font-mono text-[11px] space-y-0.5">
+                    <div className="font-mono text-xs space-y-0.5">
                       {preview.map((line, i) => (
                         <p key={i} className={errLines.includes(line) ? 'text-red-400/90' : 'text-foreground/90'}
                           title={line}>
@@ -404,11 +404,11 @@ function SummaryResultsTable({
                         </p>
                       ))}
                       {moreCount > 0 && (
-                        <p className="text-[10px] text-muted-foreground/70">+{moreCount} 라인 더</p>
+                        <p className="text-xs text-muted-foreground/70">+{moreCount} 라인 더</p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-muted-foreground/60">
+                    <p className="text-xs text-muted-foreground/60">
                       {globalFilter.trim() ? '(필터 매칭 없음)' : '(출력 없음)'}
                     </p>
                   )}
@@ -637,7 +637,7 @@ export function BulkExecPage() {
             <Terminal className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">노드 일괄 실행 (SSH / SCP)</h1>
             {clusterIds.length > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
                 클러스터 {clusterIds.length} · 노드 {selected.size} / {totalNodesShown}
               </span>
             )}
@@ -660,7 +660,7 @@ export function BulkExecPage() {
               <button
                 onClick={toggleAllAcrossClusters}
                 disabled={totalNodesShown === 0}
-                className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
+                className="text-sm text-primary hover:text-primary/80 disabled:opacity-40"
               >
                 {selected.size === totalNodesShown && totalNodesShown > 0 ? '전체 해제' : '전체 선택'}
               </button>
@@ -702,7 +702,7 @@ export function BulkExecPage() {
                   <button
                     key={a}
                     onClick={() => setAction(a)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       action === a
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground/70 hover:text-foreground'
@@ -717,7 +717,7 @@ export function BulkExecPage() {
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       mode === m
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground/70 hover:text-foreground'
@@ -728,7 +728,7 @@ export function BulkExecPage() {
                 ))}
               </div>
               {mode === 'parallel' && (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground ml-2">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground ml-2">
                   동시성
                   <input
                     type="number"
@@ -736,7 +736,7 @@ export function BulkExecPage() {
                     max={50}
                     value={parallelism}
                     onChange={(e) => setParallelism(Number(e.target.value) || 1)}
-                    className="w-14 px-2 py-1 bg-background border border-border rounded text-xs"
+                    className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
                   />
                 </label>
               )}
@@ -745,7 +745,7 @@ export function BulkExecPage() {
             {/* 인증 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
+                <label htmlFor={f('user')} className="block text-sm text-muted-foreground mb-1">사용자</label>
                 <input
                   id={f('user')}
                   type="text"
@@ -755,7 +755,7 @@ export function BulkExecPage() {
                 />
               </div>
               <div>
-                <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
+                <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
                 <input
                   id={f('port')}
                   type="number"
@@ -765,13 +765,13 @@ export function BulkExecPage() {
                 />
               </div>
               <div>
-                <p className="block text-xs text-muted-foreground mb-1">인증 방식</p>
+                <p className="block text-sm text-muted-foreground mb-1">인증 방식</p>
                 <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                   {(['password', 'key'] as const).map((m) => (
                     <button
                       key={m}
                       onClick={() => setAuthMode(m)}
-                      className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
                         authMode === m
                           ? 'bg-background text-foreground shadow-sm'
                           : 'text-muted-foreground/70 hover:text-foreground'
@@ -786,7 +786,7 @@ export function BulkExecPage() {
 
             {authMode === 'password' ? (
               <div>
-                <label htmlFor={f('pw')} className="block text-xs text-muted-foreground mb-1">비밀번호</label>
+                <label htmlFor={f('pw')} className="block text-sm text-muted-foreground mb-1">비밀번호</label>
                 <input
                   id={f('pw')}
                   type="password"
@@ -798,7 +798,7 @@ export function BulkExecPage() {
               </div>
             ) : (
               <div>
-                <label htmlFor={f('pkey')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
                   <Key className="w-3 h-3" /> Private Key (PEM)
                 </label>
                 <textarea
@@ -807,16 +807,16 @@ export function BulkExecPage() {
                   onChange={(e) => setPrivateKey(e.target.value)}
                   placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."
                   rows={4}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
-                <p className="text-[10px] text-muted-foreground/70 mt-1">RSA / Ed25519 / ECDSA / DSS 지원. 비밀번호 보호된 키는 지원 안 함.</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">RSA / Ed25519 / ECDSA / DSS 지원. 비밀번호 보호된 키는 지원 안 함.</p>
               </div>
             )}
 
             {/* 명령/파일 */}
             {action === 'ssh' ? (
               <div>
-                <label htmlFor={f('cmd')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <label htmlFor={f('cmd')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
                   <Terminal className="w-3 h-3" /> 실행할 명령
                 </label>
                 <textarea
@@ -837,7 +837,7 @@ export function BulkExecPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
-                  <label htmlFor={f('scpContent')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  <label htmlFor={f('scpContent')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
                     <FileText className="w-3 h-3" /> 업로드할 내용
                   </label>
                   <textarea
@@ -846,10 +846,10 @@ export function BulkExecPage() {
                     onChange={(e) => setScpContent(e.target.value)}
                     placeholder="업로드할 파일 내용"
                     rows={4}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                   />
                   <div className="mt-1 flex items-center gap-1.5">
-                    <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer hover:text-foreground">
+                    <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                       <Upload className="w-3 h-3" /> 파일에서 불러오기
                       <input
                         type="file"
@@ -868,7 +868,7 @@ export function BulkExecPage() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor={f('scpPath')} className="block text-xs text-muted-foreground mb-1">원격 경로</label>
+                  <label htmlFor={f('scpPath')} className="block text-sm text-muted-foreground mb-1">원격 경로</label>
                   <input
                     id={f('scpPath')}
                     type="text"
@@ -882,7 +882,7 @@ export function BulkExecPage() {
             )}
 
             {/* 타임아웃 */}
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <label className="flex items-center gap-1.5">
                 connect timeout
                 <input
@@ -891,7 +891,7 @@ export function BulkExecPage() {
                   max={60}
                   value={connectTimeout}
                   onChange={(e) => setConnectTimeout(Number(e.target.value) || 8)}
-                  className="w-14 px-2 py-1 bg-background border border-border rounded text-xs"
+                  className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
                 />s
               </label>
               <label className="flex items-center gap-1.5">
@@ -902,7 +902,7 @@ export function BulkExecPage() {
                   max={600}
                   value={execTimeout}
                   onChange={(e) => setExecTimeout(Number(e.target.value) || 60)}
-                  className="w-16 px-2 py-1 bg-background border border-border rounded text-xs"
+                  className="w-16 px-2 py-1 bg-background border border-border rounded text-sm"
                 />s
               </label>
               <span className="text-border">·</span>
@@ -914,7 +914,7 @@ export function BulkExecPage() {
                   max={200}
                   value={chunkSize}
                   onChange={(e) => setChunkSize(Number(e.target.value) || 30)}
-                  className="w-14 px-2 py-1 bg-background border border-border rounded text-xs"
+                  className="w-14 px-2 py-1 bg-background border border-border rounded text-sm"
                 />개
               </label>
               <label className="flex items-center gap-1.5" title="청크 사이 휴지 시간 (ms). 베스천/게이트웨이 burst 부하 완화.">
@@ -926,14 +926,14 @@ export function BulkExecPage() {
                   step={50}
                   value={chunkPauseMs}
                   onChange={(e) => setChunkPauseMs(Number(e.target.value) || 0)}
-                  className="w-16 px-2 py-1 bg-background border border-border rounded text-xs"
+                  className="w-16 px-2 py-1 bg-background border border-border rounded text-sm"
                 />ms
               </label>
             </div>
 
             {/* 대규모 실행 예상 시간 힌트 */}
             {selected.size >= 50 && (
-              <div className="px-3 py-2 text-[11px] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 flex items-start gap-2">
+              <div className="px-3 py-2 text-xs rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 flex items-start gap-2">
                 <Clock className="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <div>
                   선택 {selected.size}개 호스트 · parallelism {parallelism} / chunk {chunkSize}개 ·
@@ -944,14 +944,14 @@ export function BulkExecPage() {
             )}
 
             {runError && (
-              <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+              <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
                 {formatApiError(runError, '실행 중 오류')}
               </div>
             )}
 
             {/* 실행 */}
             <div className="flex items-center justify-between pt-2 border-t border-border">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 인증 정보는 이 실행에만 사용되고 저장되지 않습니다.
               </p>
               {runMutation.isPending ? (
@@ -981,13 +981,13 @@ export function BulkExecPage() {
           <section className="mt-6 bg-card border border-border rounded-xl overflow-hidden">
             <header className="px-5 py-3 border-b border-border bg-muted/20 flex flex-wrap items-center gap-3">
               <h2 className="text-sm font-semibold">실행 결과</h2>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                 성공 {runResponse.okCount}
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
                 실패 {runResponse.errorCount}
               </span>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 총 {runResponse.totalDurationMs}ms · {runResponse.mode} · {runResponse.action}
               </span>
 
@@ -995,14 +995,14 @@ export function BulkExecPage() {
                 {/* 뷰 모드 토글 */}
                 <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
                   <button onClick={() => setResultView('summary')}
-                    className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded transition-all ${
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
                       resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="모든 노드 한 줄 요약">
                     <LayoutList className="w-3 h-3" /> 요약
                   </button>
                   <button onClick={() => setResultView('detail')}
-                    className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded transition-all ${
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
                       resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="호스트별 stdout/stderr 전체">
@@ -1016,7 +1016,7 @@ export function BulkExecPage() {
                     value={globalFilter}
                     onChange={(e) => setGlobalFilter(e.target.value)}
                     placeholder="모든 노드 결과 공통 필터..."
-                    className="pl-2 pr-7 py-1 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-60"
+                    className="pl-2 pr-7 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-60"
                   />
                   {globalFilter && (
                     <button
@@ -1036,7 +1036,7 @@ export function BulkExecPage() {
                         'text/csv',
                       );
                     }}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
                     title="필터 반영 CSV 내보내기">
                     <Download className="w-3 h-3" /> CSV
                   </button>
@@ -1048,7 +1048,7 @@ export function BulkExecPage() {
                         'text/plain',
                       );
                     }}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
                     title="필터 반영 텍스트 내보내기">
                     <Download className="w-3 h-3" /> TXT
                   </button>
@@ -1057,7 +1057,7 @@ export function BulkExecPage() {
                       setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
                       setTimeout(() => setCopyToast(null), 1500);
                     }}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
                     title="필터 반영 결과 클립보드 복사">
                     <FileText className="w-3 h-3" /> 복사
                   </button>
@@ -1066,7 +1066,7 @@ export function BulkExecPage() {
             </header>
 
             {copyToast && (
-              <div className="px-5 py-1.5 text-[11px] bg-primary/5 text-primary border-b border-primary/20">
+              <div className="px-5 py-1.5 text-xs bg-primary/5 text-primary border-b border-primary/20">
                 {copyToast}
               </div>
             )}
@@ -1084,19 +1084,19 @@ export function BulkExecPage() {
                   <thead>
                     <tr className="border-b border-border bg-muted/30 text-left">
                       <th></th>
-                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">호스트
+                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">호스트
                         <ResizeGrip onMouseDown={(e) => detailColW.beginResize('host', e)} onDoubleClick={() => detailColW.autoFit('host')} />
                       </th>
-                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">상태
+                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">상태
                         <ResizeGrip onMouseDown={(e) => detailColW.beginResize('status', e)} onDoubleClick={() => detailColW.autoFit('status')} />
                       </th>
-                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">exit
+                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">exit
                         <ResizeGrip onMouseDown={(e) => detailColW.beginResize('exit', e)} onDoubleClick={() => detailColW.autoFit('exit')} />
                       </th>
-                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">소요
+                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">소요
                         <ResizeGrip onMouseDown={(e) => detailColW.beginResize('dur', e)} onDoubleClick={() => detailColW.autoFit('dur')} />
                       </th>
-                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">요약
+                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">요약
                         <ResizeGrip onMouseDown={(e) => detailColW.beginResize('summary', e)} onDoubleClick={() => detailColW.autoFit('summary')} />
                       </th>
                     </tr>
@@ -1130,36 +1130,36 @@ export function BulkExecPage() {
       >
         <div className="space-y-3">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">접속 정보</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">접속 정보</p>
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
               <span className="text-foreground">(선택된 {selectedHosts.length}개 host, {clusterIds.length}개 클러스터)</span>
               <span className="text-muted-foreground">:{port}</span>
-              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-border bg-secondary">
+              <span className="ml-2 text-xs px-1.5 py-0.5 rounded border border-border bg-secondary">
                 {authMode === 'password' ? '비밀번호' : 'Private Key'}
               </span>
             </p>
           </div>
           {action === 'ssh' ? (
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">실행할 명령</p>
-              <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행할 명령</p>
+              <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
                 {command}
               </pre>
             </div>
           ) : (
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">업로드 대상</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">업로드 대상</p>
               <p className="font-mono">{scpRemotePath}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 크기: {new Blob([scpContent]).size} bytes
               </p>
             </div>
           )}
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">대상 호스트 (클러스터별)</p>
-            <div className="text-[11px] font-mono max-h-40 overflow-auto bg-background border border-border rounded p-2 space-y-1.5">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">대상 호스트 (클러스터별)</p>
+            <div className="text-xs font-mono max-h-40 overflow-auto bg-background border border-border rounded p-2 space-y-1.5">
               {Object.entries(
                 selectedHosts.reduce<Record<string, typeof selectedHosts>>((acc, t) => {
                   const k = t.clusterName || t.clusterId || '-';
@@ -1168,7 +1168,7 @@ export function BulkExecPage() {
                 }, {})
               ).map(([cname, items]) => (
                 <div key={cname}>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground/80">
                     {cname} <span className="text-muted-foreground/60">({items.length})</span>
                   </p>
                   {items.slice(0, 8).map((t) => (

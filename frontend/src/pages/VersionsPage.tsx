@@ -86,16 +86,16 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
 
   if (entries.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         수집된 sysctl 값이 없습니다. (수집이 실패했거나 값이 없는 호스트)
       </p>
     );
   }
 
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-sm">
       {(host || collectedAt) && (
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           {host && <span className="font-mono">호스트: <span className="text-foreground">{host}</span></span>}
           {collectedAt && <span>수집: {formatDateTime(collectedAt)}</span>}
           <span>총 {entries.length}개 파라미터</span>
@@ -105,18 +105,18 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder="파라미터 필터 (예: net.ipv4.ip_forward)"
-        className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md font-mono"
+        className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-md font-mono"
       />
       <div className="space-y-2">
         {orderedKeys.map((g) => (
           <details key={g} open className="rounded-md border border-border bg-muted/30">
-            <summary className="cursor-pointer px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-foreground select-none flex items-center justify-between">
+            <summary className="cursor-pointer px-3 py-1.5 text-xs uppercase tracking-wider text-muted-foreground select-none flex items-center justify-between">
               <span>{g}</span>
               <span className="font-mono text-foreground/60">{groups[g].length}</span>
             </summary>
             <div className="px-3 pb-2 pt-1 space-y-0.5 max-h-72 overflow-y-auto">
               {groups[g].map(([k, v]) => (
-                <div key={k} className="font-mono text-[11px] break-all flex gap-2">
+                <div key={k} className="font-mono text-xs break-all flex gap-2">
                   <span className="text-primary flex-shrink-0">{k}</span>
                   <span className="text-muted-foreground">=</span>
                   <span className="text-foreground/80 break-all">{String(v)}</span>
@@ -138,7 +138,7 @@ function SourceBadge({ src }: { src?: string | null }) {
   return (
     <span
       title={`출처: ${src}`}
-      className="ml-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
+      className="ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
     >
       {src}
     </span>
@@ -155,10 +155,10 @@ function SourcesNote({ sources }: { sources?: Record<string, string> | null }) {
   }
   return (
     <div className="rounded-md border border-border bg-muted/20 p-2">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">데이터 출처</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">데이터 출처</p>
       <ul className="space-y-0.5">
         {Array.from(groups.entries()).map(([src, fields]) => (
-          <li key={src} className="font-mono text-[11px] break-all">
+          <li key={src} className="font-mono text-xs break-all">
             <span className="text-primary">{src}</span>
             <span className="text-muted-foreground"> → </span>
             <span className="text-foreground/80">{fields.join(', ')}</span>
@@ -209,33 +209,33 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
   }, [envContent, envFilter]);
 
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-sm">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {host && (
-          <div><span className="text-[10px] text-muted-foreground">Host</span>
+          <div><span className="text-xs text-muted-foreground">Host</span>
             <p className="font-mono">{host}</p></div>
         )}
         {version && (
-          <div><span className="text-[10px] text-muted-foreground">version<SourceBadge src={sources?.version} /></span>
+          <div><span className="text-xs text-muted-foreground">version<SourceBadge src={sources?.version} /></span>
             <p className="font-mono">{version}</p></div>
         )}
         {activeState && (
-          <div><span className="text-[10px] text-muted-foreground">ActiveState<SourceBadge src={sources?.active_state} /></span>
+          <div><span className="text-xs text-muted-foreground">ActiveState<SourceBadge src={sources?.active_state} /></span>
             <p className={`font-mono ${activeState === 'active' ? 'text-emerald-500' : 'text-amber-500'}`}>
               {activeState}{subState ? ` / ${subState}` : ''}
             </p></div>
         )}
         {mainPid !== null && (
-          <div><span className="text-[10px] text-muted-foreground">MainPID</span>
+          <div><span className="text-xs text-muted-foreground">MainPID</span>
             <p className="font-mono">{mainPid}</p></div>
         )}
       </div>
 
       <div>
-        <p className="text-[10px] text-muted-foreground uppercase mb-1">설정 파일 경로 (출처별)</p>
+        <p className="text-xs text-muted-foreground uppercase mb-1">설정 파일 경로 (출처별)</p>
         <div className="space-y-1 rounded-md bg-muted/30 p-2">
           {pathRows.map((r) => (
-            <div key={r.label} className="font-mono text-[11px] break-all flex flex-wrap items-center gap-1">
+            <div key={r.label} className="font-mono text-xs break-all flex flex-wrap items-center gap-1">
               <span className="text-primary">{r.label}:</span>
               {r.value
                 ? <span className="text-foreground/90">{r.value}</span>
@@ -248,26 +248,26 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
 
       {execStart && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+          <p className="text-xs text-muted-foreground uppercase mb-1">
             ExecStart<SourceBadge src={sources?.exec_start} />
           </p>
-          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-32 overflow-auto">{execStart}</pre>
+          <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-32 overflow-auto">{execStart}</pre>
         </div>
       )}
 
       {psCmdline && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+          <p className="text-xs text-muted-foreground uppercase mb-1">
             ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
           </p>
-          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
+          <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
         </div>
       )}
 
       {envContent && (
         <div>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] text-muted-foreground uppercase">
+            <p className="text-xs text-muted-foreground uppercase">
               env 파일 내용 ({envFile})<SourceBadge src={sources?.env_content} />
             </p>
           </div>
@@ -275,9 +275,9 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
             value={envFilter}
             onChange={(e) => setEnvFilter(e.target.value)}
             placeholder="env 파일 라인 필터 (예: ETCD_LISTEN_CLIENT_URLS)"
-            className="w-full px-2 py-1 mb-1 text-[11px] font-mono bg-background border border-border rounded-md"
+            className="w-full px-2 py-1 mb-1 text-xs font-mono bg-background border border-border rounded-md"
           />
-          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 max-h-72 overflow-auto whitespace-pre-wrap">
+          <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 max-h-72 overflow-auto whitespace-pre-wrap">
             {filteredEnv || (envFilter ? '(필터 매칭 없음)' : '')}
           </pre>
         </div>
@@ -315,52 +315,52 @@ function KubeletConfigDetails({ data }: { data: Record<string, unknown> }) {
   }, [configContent, filter]);
 
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-sm">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        {host && <div><span className="text-[10px] text-muted-foreground">Host</span><p className="font-mono">{host}</p></div>}
+        {host && <div><span className="text-xs text-muted-foreground">Host</span><p className="font-mono">{host}</p></div>}
         {configFile && (
-          <div><span className="text-[10px] text-muted-foreground">config 파일<SourceBadge src={sources?.config_file} /></span>
+          <div><span className="text-xs text-muted-foreground">config 파일<SourceBadge src={sources?.config_file} /></span>
             <p className="font-mono break-all">{configFile}</p></div>
         )}
         {kubeconfig && (
-          <div><span className="text-[10px] text-muted-foreground">kubeconfig<SourceBadge src={sources?.kubeconfig} /></span>
+          <div><span className="text-xs text-muted-foreground">kubeconfig<SourceBadge src={sources?.kubeconfig} /></span>
             <p className="font-mono break-all">{kubeconfig}</p></div>
         )}
         {cre && (
-          <div><span className="text-[10px] text-muted-foreground">container-runtime-endpoint<SourceBadge src={sources?.container_runtime_endpoint} /></span>
+          <div><span className="text-xs text-muted-foreground">container-runtime-endpoint<SourceBadge src={sources?.container_runtime_endpoint} /></span>
             <p className="font-mono break-all">{cre}</p></div>
         )}
         {nodeIp && (
-          <div><span className="text-[10px] text-muted-foreground">node-ip<SourceBadge src={sources?.node_ip} /></span>
+          <div><span className="text-xs text-muted-foreground">node-ip<SourceBadge src={sources?.node_ip} /></span>
             <p className="font-mono">{nodeIp}</p></div>
         )}
         {cgroup && (
-          <div><span className="text-[10px] text-muted-foreground">cgroup-driver<SourceBadge src={sources?.cgroup_driver} /></span>
+          <div><span className="text-xs text-muted-foreground">cgroup-driver<SourceBadge src={sources?.cgroup_driver} /></span>
             <p className="font-mono">{cgroup}</p></div>
         )}
       </div>
 
       {psCmdline && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+          <p className="text-xs text-muted-foreground uppercase mb-1">
             ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
           </p>
-          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
+          <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
         </div>
       )}
 
       {configContent && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+          <p className="text-xs text-muted-foreground uppercase mb-1">
             config 파일 내용<SourceBadge src={sources?.config_content} />
           </p>
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="라인 필터 (예: cgroupDriver, runtimeRequestTimeout)"
-            className="w-full px-2 py-1 mb-1 text-[11px] font-mono bg-background border border-border rounded-md"
+            className="w-full px-2 py-1 mb-1 text-xs font-mono bg-background border border-border rounded-md"
           />
-          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 max-h-96 overflow-auto whitespace-pre-wrap">
+          <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 max-h-96 overflow-auto whitespace-pre-wrap">
             {filtered || (filter ? '(필터 매칭 없음)' : '')}
           </pre>
         </div>
@@ -437,10 +437,10 @@ function GenericComponentDetails({
     + (rawData ? Object.keys(rawData).filter((k) => k !== '_sources').length : 0);
 
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-sm">
       {image && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Image</p>
+          <p className="text-xs text-muted-foreground uppercase mb-0.5">Image</p>
           <p className="font-mono text-foreground break-all">{image}</p>
         </div>
       )}
@@ -450,20 +450,20 @@ function GenericComponentDetails({
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder={`이 모듈의 키/값 필터 (총 ${totalSearchable}개)`}
-          className="w-full px-2 py-1 text-[11px] font-mono bg-background border border-border rounded-md"
+          className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded-md"
         />
       )}
 
       {flags && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">
+          <p className="text-xs text-muted-foreground uppercase mb-0.5">
             Flags ({flagsEntries.length}{filter ? ` / ${Object.keys(flags).length}` : ''})
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
             {flagsEntries.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground/70">(필터 매칭 없음)</p>
+              <p className="text-xs text-muted-foreground/70">(필터 매칭 없음)</p>
             ) : flagsEntries.map(([k, v]) => (
-              <div key={k} className="font-mono text-[11px] break-all">
+              <div key={k} className="font-mono text-xs break-all">
                 <span className="text-primary">--{k}</span>
                 <span className="text-muted-foreground">=</span>
                 <span className="text-foreground/80">{String(v)}</span>
@@ -474,14 +474,14 @@ function GenericComponentDetails({
       )}
       {cmData && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">
+          <p className="text-xs text-muted-foreground uppercase mb-0.5">
             ConfigMap data ({cmEntries.length}{filter ? ` / ${Object.keys(cmData).length}` : ''})
           </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
             {cmEntries.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground/70">(필터 매칭 없음)</p>
+              <p className="text-xs text-muted-foreground/70">(필터 매칭 없음)</p>
             ) : cmEntries.map(([k, v]) => (
-              <div key={k} className="font-mono text-[11px] break-all">
+              <div key={k} className="font-mono text-xs break-all">
                 <span className="text-primary">{k}</span>:{' '}
                 <span className="text-foreground/80">{String(v)}</span>
               </div>
@@ -492,9 +492,9 @@ function GenericComponentDetails({
       {rawData && (
         <div className="space-y-0.5 rounded-md bg-muted/30 p-2">
           {rawEntries.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground/70">(필터 매칭 없음)</p>
+            <p className="text-xs text-muted-foreground/70">(필터 매칭 없음)</p>
           ) : rawEntries.map(([k, v]) => (
-            <div key={k} className="font-mono text-[11px] break-all">
+            <div key={k} className="font-mono text-xs break-all">
               <span className="text-primary">{k}</span>
               <SourceBadge src={sources?.[k]} />
               <span className="text-muted-foreground">: </span>
@@ -527,16 +527,16 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[9px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className="text-[10px] uppercase text-muted-foreground tracking-wider">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
     </div>
   );
 
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-sm">
       {str('image') && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Image</p>
+          <p className="text-xs text-muted-foreground uppercase mb-0.5">Image</p>
           <p className="font-mono text-foreground break-all">{str('image')}</p>
         </div>
       )}
@@ -551,18 +551,18 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
         {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', requestAutoCert ? 'text-emerald-500' : 'text-muted-foreground')}
       </div>
       {ecRatio && (
-        <p className="text-[11px] font-mono text-emerald-500/80 bg-emerald-500/5 border border-emerald-500/20 rounded-md px-2 py-1">
+        <p className="text-xs font-mono text-emerald-500/80 bg-emerald-500/5 border border-emerald-500/20 rounded-md px-2 py-1">
           {ecRatio} — 손실 허용 디스크: {ecParity}개
         </p>
       )}
 
       {pools.length > 0 && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-1 tracking-wider">
+          <p className="text-xs text-muted-foreground uppercase mb-1 tracking-wider">
             Pools ({pools.length})
           </p>
           <DoubleScrollX className="rounded-md border border-border">
-            <table className="w-full text-[11px]">
+            <table className="w-full text-xs">
               <thead className="bg-muted/40">
                 <tr className="text-left">
                   <th className="px-2 py-1 font-medium">name</th>
@@ -620,12 +620,12 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
 
   const stat = (label: string, value: React.ReactNode, color?: string) => (
     <div className="bg-muted/40 rounded-md px-2 py-1.5">
-      <p className="text-[9px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className="text-[10px] uppercase text-muted-foreground tracking-wider">{label}</p>
       <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
     </div>
   );
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-sm">
       <div className="grid grid-cols-3 gap-1.5">
         {stat('총 드라이브', totalDrives, 'text-emerald-500')}
         {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? 'text-emerald-500' : 'text-amber-500')}
@@ -638,11 +638,11 @@ function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
       </div>
       {nodes.length > 0 && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-1 tracking-wider">
+          <p className="text-xs text-muted-foreground uppercase mb-1 tracking-wider">
             Per-node ({nodes.length})
           </p>
           <div className="max-h-60 overflow-y-auto rounded-md border border-border">
-            <table className="w-full text-[11px]">
+            <table className="w-full text-xs">
               <thead className="bg-muted/40 sticky top-0">
                 <tr className="text-left">
                   <th className="px-2 py-1 font-medium">node</th>
@@ -706,12 +706,12 @@ function HistoryTimeline({
     }
   }, [pickedIds, snapshots, onPickDiff]);
 
-  if (isLoading) return <p className="text-xs text-muted-foreground px-4 py-3">불러오는 중…</p>;
-  if (snapshots.length === 0) return <p className="text-xs text-muted-foreground px-4 py-3">히스토리 없음</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground px-4 py-3">불러오는 중…</p>;
+  if (snapshots.length === 0) return <p className="text-sm text-muted-foreground px-4 py-3">히스토리 없음</p>;
 
   return (
     <div className="space-y-1 px-4 py-3">
-      <p className="text-[10px] text-muted-foreground mb-2">
+      <p className="text-xs text-muted-foreground mb-2">
         두 개 선택 시 diff를 자동으로 표시합니다 (선택 {pickedIds.length}/2)
       </p>
       <div className="relative pl-4 border-l-2 border-border space-y-3">
@@ -729,10 +729,10 @@ function HistoryTimeline({
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs text-foreground">
+                  <span className="font-mono text-sm text-foreground">
                     {s.version || '(version 없음)'}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {formatDateTime(s.collectedAt)}
                   </span>
                 </div>
@@ -768,7 +768,7 @@ function DiffPanel({
             <span className="text-muted-foreground">Diff: </span>
             <span className="font-mono">{from.component}</span>
           </h3>
-          <p className="text-xs text-muted-foreground font-mono">
+          <p className="text-sm text-muted-foreground font-mono">
             {formatDateTime(from.collectedAt)} → {formatDateTime(to.collectedAt)}
           </p>
         </div>
@@ -777,20 +777,20 @@ function DiffPanel({
         </button>
       </div>
       {isLoading ? (
-        <p className="text-xs text-muted-foreground">분석 중…</p>
+        <p className="text-sm text-muted-foreground">분석 중…</p>
       ) : data?.changes.length === 0 ? (
-        <p className="text-xs text-muted-foreground">변경 없음</p>
+        <p className="text-sm text-muted-foreground">변경 없음</p>
       ) : (
         <div className="space-y-1.5 max-h-80 overflow-y-auto">
           {data?.versionChanged && (
-            <div className="text-xs font-mono px-2 py-1 bg-primary/10 text-primary border border-primary/30 rounded">
+            <div className="text-sm font-mono px-2 py-1 bg-primary/10 text-primary border border-primary/30 rounded">
               version: {from.version} → {to.version}
             </div>
           )}
           {data?.changes.map((c, i) => (
-            <div key={i} className="text-xs font-mono px-2 py-1 rounded bg-muted/30 border border-border">
+            <div key={i} className="text-sm font-mono px-2 py-1 rounded bg-muted/30 border border-border">
               <p className="text-primary mb-0.5">{c.key}</p>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="text-red-400 break-all">- {String(c.from ?? '(없음)')}</div>
                 <div className="text-emerald-400 break-all">+ {String(c.to ?? '(없음)')}</div>
               </div>
@@ -940,8 +940,8 @@ export function VersionsPage() {
             <h1 className="text-xl font-bold">버전 / 설정 관리</h1>
             {clusterId && current?.components && (
               <>
-                <span className="text-xs font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+                <span className="text-sm font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
+                <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
                   {current.components.length}개 컴포넌트
                 </span>
               </>
@@ -1045,7 +1045,7 @@ export function VersionsPage() {
         {/* 선택된 클러스터 상세 */}
         {clusterId && (
           <>
-            <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground leading-relaxed">
+            <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
               kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
               동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
             </div>
@@ -1063,7 +1063,7 @@ export function VersionsPage() {
                 />
                 {nodeSearch && (
                   <>
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {visibleComponents} / {totalComponents}
                     </span>
                     <button
@@ -1120,11 +1120,11 @@ export function VersionsPage() {
                         : <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                       <Icon className="w-4 h-4 text-muted-foreground" />
                       <h2 className="text-sm font-semibold">{meta.label}</h2>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full border ${meta.cls}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${meta.cls}`}>
                         {items.length}
                       </span>
                       {groupCollapsed && groupExpandedCount > 0 && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           ({groupExpandedCount}개 상세 펼침)
                         </span>
                       )}
@@ -1142,7 +1142,7 @@ export function VersionsPage() {
                             return next;
                           });
                         }}
-                        className="text-[11px] px-2 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        className="text-xs px-2 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
                       >
                         {items.some((s) => expanded.has(s.component)) ? '모두 접기' : '모두 펼치기'}
                       </button>
@@ -1163,23 +1163,23 @@ export function VersionsPage() {
                                        : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                               <span className="font-mono text-sm text-foreground truncate">{snap.component}</span>
                               {snap.version && (
-                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/30">
+                                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/30">
                                   {snap.version}
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0 ml-2">
+                            <span className="text-xs text-muted-foreground font-mono flex-shrink-0 ml-2">
                               {formatDateTime(snap.collectedAt)}
                             </span>
                           </button>
                           {isOpen && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border border-t border-border bg-muted/10">
                               <div className="px-5 py-4">
-                                <p className="text-[10px] text-muted-foreground uppercase mb-2 tracking-wider">현재 값</p>
+                                <p className="text-xs text-muted-foreground uppercase mb-2 tracking-wider">현재 값</p>
                                 <ComponentDetails snap={snap} />
                               </div>
                               <div>
-                                <p className="text-[10px] text-muted-foreground uppercase px-4 pt-4 tracking-wider">히스토리</p>
+                                <p className="text-xs text-muted-foreground uppercase px-4 pt-4 tracking-wider">히스토리</p>
                                 <HistoryTimeline
                                   clusterId={clusterId}
                                   component={snap.component}

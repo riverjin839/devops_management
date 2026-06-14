@@ -41,7 +41,7 @@ export function EmptyState({
         {title}
       </p>
       {description && (
-        <p className={`text-muted-foreground ${compact ? 'text-xs mt-1 max-w-sm' : 'text-sm mt-1.5 max-w-md leading-relaxed'}`}>
+        <p className={`text-muted-foreground ${compact ? 'text-sm mt-1 max-w-sm' : 'text-sm mt-1.5 max-w-md leading-relaxed'}`}>
           {description}
         </p>
       )}
@@ -50,7 +50,7 @@ export function EmptyState({
           {action && (
             <button
               onClick={action.onClick}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
                 (action.variant ?? 'primary') === 'primary'
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                   : 'bg-secondary text-foreground hover:bg-secondary/80 border border-border'
@@ -62,7 +62,7 @@ export function EmptyState({
           {secondaryAction && (
             <button
               onClick={secondaryAction.onClick}
-              className="px-3.5 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
+              className="px-3.5 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
             >
               {secondaryAction.label}
             </button>

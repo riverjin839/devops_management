@@ -62,7 +62,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           </div>
           <div>
             <p className="text-sm font-semibold">{bucket.assignee}</p>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
               {bucket.info?.employeeId && (
                 <span className="flex items-center gap-0.5"><Hash className="w-2.5 h-2.5" />{bucket.info.employeeId}</span>
               )}
@@ -76,10 +76,10 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
+          <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
             작업 {bucket.tasks.length} (진행 {bucket.openTasks} / 완료 {bucket.doneTasks})
           </span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+          <span className="text-sm px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
             이슈 {bucket.issues.length} (미조치 {bucket.unresolvedIssues} / 완료 {bucket.resolvedIssues})
           </span>
           <button
@@ -98,10 +98,10 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <ListTodo className="w-4 h-4 text-primary" />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">작업</span>
+              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">작업</span>
             </div>
             {bucket.tasks.length === 0 ? (
-              <p className="text-xs text-muted-foreground/50 text-center py-6">할당된 작업 없음</p>
+              <p className="text-sm text-muted-foreground/50 text-center py-6">할당된 작업 없음</p>
             ) : (
               <ul className="space-y-1">
                 {bucket.tasks.slice(0, 10).map((t) => {
@@ -113,18 +113,18 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                       className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 cursor-pointer group"
                     >
                       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-400'}`} />
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
-                      <span className="text-xs text-foreground truncate flex-1" title={stripHtml(t.content)}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${ks.cls}`}>{ks.label}</span>
+                      <span className="text-sm text-foreground truncate flex-1" title={stripHtml(t.content)}>
                         {stripHtml(t.content) || t.category}
                       </span>
-                      <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
+                      <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
                         {formatDate(t.startedAt)}
                       </span>
                     </li>
                   );
                 })}
                 {bucket.tasks.length > 10 && (
-                  <li className="text-[10px] text-muted-foreground/70 text-center pt-1">
+                  <li className="text-xs text-muted-foreground/70 text-center pt-1">
                     + {bucket.tasks.length - 10}개 더...
                   </li>
                 )}
@@ -136,10 +136,10 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <ClipboardList className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">이슈</span>
+              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">이슈</span>
             </div>
             {bucket.issues.length === 0 ? (
-              <p className="text-xs text-muted-foreground/50 text-center py-6">할당된 이슈 없음</p>
+              <p className="text-sm text-muted-foreground/50 text-center py-6">할당된 이슈 없음</p>
             ) : (
               <ul className="space-y-1">
                 {bucket.issues.slice(0, 10).map((i) => (
@@ -149,23 +149,23 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/40 cursor-pointer"
                   >
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i.closedAt ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
                       i.closedAt
                         ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                         : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                     }`}>
                       {i.closedAt ? '완료' : '미조치'}
                     </span>
-                    <span className="text-xs text-foreground truncate flex-1" title={stripHtml(i.content)}>
+                    <span className="text-sm text-foreground truncate flex-1" title={stripHtml(i.content)}>
                       {i.category}: {stripHtml(i.content)}
                     </span>
-                    <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
+                    <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
                       {formatDate(i.startedAt)}
                     </span>
                   </li>
                 ))}
                 {bucket.issues.length > 10 && (
-                  <li className="text-[10px] text-muted-foreground/70 text-center pt-1">
+                  <li className="text-xs text-muted-foreground/70 text-center pt-1">
                     + {bucket.issues.length - 10}개 더...
                   </li>
                 )}
@@ -272,11 +272,11 @@ export function MemberBoardPage() {
           <div className="flex items-center gap-3">
             <Users className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">멤버별 업무</h1>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+            <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
               멤버 {filtered.length} / 전체 {buckets.length}
             </span>
             {totalOpen > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
                 진행중 합계 {totalOpen}
               </span>
             )}
@@ -301,7 +301,7 @@ export function MemberBoardPage() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                     filter === f
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground/70 hover:text-foreground'
@@ -311,7 +311,7 @@ export function MemberBoardPage() {
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={includeSecondary}
@@ -323,7 +323,7 @@ export function MemberBoardPage() {
             {(search || filter !== 'active') && (
               <button
                 onClick={() => { setSearch(''); setFilter('active'); }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3 h-3" />
                 초기화

@@ -81,19 +81,19 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
         </div>
 
         <div className="px-5 py-4 space-y-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">{playbookName}</span> 을 노드에서 실행합니다.
             인증 정보는 서버에 저장되지 않으며 (선택 시) 브라우저 세션 동안만 캐싱됩니다.
           </p>
 
           <div className="grid grid-cols-3 gap-2">
-            <label className="col-span-2 text-xs">
+            <label className="col-span-2 text-sm">
               <span className="block text-muted-foreground mb-1">사용자명</span>
               <input value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="root" />
             </label>
-            <label className="text-xs">
+            <label className="text-sm">
               <span className="block text-muted-foreground mb-1">포트</span>
               <input type="number" value={port}
                 onChange={(e) => setPort(e.target.value ? parseInt(e.target.value, 10) : '')}
@@ -101,7 +101,7 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
             </label>
           </div>
 
-          <div className="flex items-center gap-1 text-xs">
+          <div className="flex items-center gap-1 text-sm">
             <button type="button" onClick={() => setAuthMode('password')}
               className={`px-3 py-1 rounded-lg border ${authMode === 'password' ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground'}`}>
               비밀번호
@@ -113,35 +113,35 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
           </div>
 
           {authMode === 'password' ? (
-            <label className="block text-xs">
+            <label className="block text-sm">
               <span className="block text-muted-foreground mb-1">비밀번호</span>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="••••••••" />
             </label>
           ) : (
-            <label className="block text-xs">
+            <label className="block text-sm">
               <span className="block text-muted-foreground mb-1">SSH 개인키 (PEM)</span>
               <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} rows={4}
-                className="w-full px-2 py-1.5 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+                className="w-full px-2 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-y"
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----" />
             </label>
           )}
 
           <div className="border-t border-border pt-3 space-y-2">
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={become} onChange={(e) => setBecome(e.target.checked)} />
               <span>sudo (become) 사용</span>
             </label>
             {become && (
-              <label className="block text-xs">
+              <label className="block text-sm">
                 <span className="block text-muted-foreground mb-1">become 비밀번호 (필요 시)</span>
                 <input type="password" value={becomePass} onChange={(e) => setBecomePass(e.target.value)}
                   className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="(NOPASSWD 면 비워둠)" />
               </label>
             )}
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               <span>이 세션 동안 기억하기 (브라우저 sessionStorage)</span>
             </label>
@@ -150,11 +150,11 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onClose}
-            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
             취소
           </button>
           <button onClick={handleSubmit}
-            className="px-4 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
+            className="px-4 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
             <Play className="w-3.5 h-3.5" /> 실행
           </button>
         </div>

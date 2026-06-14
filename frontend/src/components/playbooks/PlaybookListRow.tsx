@@ -65,7 +65,7 @@ export function PlaybookListRow({
       {/* Status dot + label */}
       <div className="flex items-center gap-2 w-24 flex-shrink-0">
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot} ${isRunning ? 'animate-pulse' : ''}`} />
-        <span className={`text-xs font-medium ${cfg.text}`}>
+        <span className={`text-sm font-medium ${cfg.text}`}>
           {isRunning ? (
             <span className="inline-flex items-center gap-1">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -80,13 +80,13 @@ export function PlaybookListRow({
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-semibold truncate">{playbook.name}</span>
           {clusterName && (
-            <span className="text-[10px] text-muted-foreground/70 px-1.5 py-0.5 rounded bg-secondary/50 truncate">
+            <span className="text-xs text-muted-foreground/70 px-1.5 py-0.5 rounded bg-secondary/50 truncate">
               {clusterName}
             </span>
           )}
         </div>
         {(playbook.description || fileLabel) && (
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/80 truncate">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground/80 truncate">
             {playbook.description && <span className="truncate">{playbook.description}</span>}
             {playbook.description && <span aria-hidden>·</span>}
             <span className="font-mono truncate" title={fileLabel}>📄 {fileLabel}</span>
@@ -96,7 +96,7 @@ export function PlaybookListRow({
 
       {/* Stats (compact) */}
       {totals ? (
-        <div className="hidden md:flex items-center gap-2 text-[11px] flex-shrink-0 tabular-nums">
+        <div className="hidden md:flex items-center gap-2 text-xs flex-shrink-0 tabular-nums">
           <Stat label="OK"   value={totals.ok}          color="text-emerald-500" />
           <Stat label="Chg"  value={totals.changed}     color="text-amber-500" />
           <Stat label="Fail" value={totals.failures}    color="text-red-500" />
@@ -104,11 +104,11 @@ export function PlaybookListRow({
           <Stat label="Skip" value={totals.skipped}     color="text-slate-400" />
         </div>
       ) : (
-        <div className="hidden md:block text-[11px] text-muted-foreground/50 italic flex-shrink-0">no stats</div>
+        <div className="hidden md:block text-xs text-muted-foreground/50 italic flex-shrink-0">no stats</div>
       )}
 
       {/* Last run */}
-      <div className="hidden lg:flex items-center gap-1 text-[11px] text-muted-foreground w-28 flex-shrink-0">
+      <div className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground w-28 flex-shrink-0">
         <Clock className="w-3 h-3" />
         {formatTimeAgo(playbook.lastRunAt)}
       </div>
@@ -175,7 +175,7 @@ function Stat({ label, value, color }: { label: string; value: number; color: st
   return (
     <span className={`inline-flex items-baseline gap-0.5 ${v > 0 ? color : 'text-muted-foreground/40'}`}>
       <span className="font-bold">{v}</span>
-      <span className="text-[10px] text-muted-foreground/70">{label}</span>
+      <span className="text-xs text-muted-foreground/70">{label}</span>
     </span>
   );
 }

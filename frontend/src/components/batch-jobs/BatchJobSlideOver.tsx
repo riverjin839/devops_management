@@ -47,7 +47,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       bodyPadding="p-4"
       rootClassName={overlayMode ? '' : 'sticky top-4'}
     >
-      <div className="text-[11px] text-muted-foreground font-mono mb-3 break-all">
+      <div className="text-xs text-muted-foreground font-mono mb-3 break-all">
         {job.jobType}
       </div>
 
@@ -56,7 +56,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         <button
           type="button"
           onClick={() => setRunFormOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
           aria-expanded={runFormOpen}
         >
           <Play className="w-3.5 h-3.5" />
@@ -65,7 +65,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         <button
           type="button"
           onClick={() => setEditOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
           aria-expanded={editOpen}
         >
           <Pencil className="w-3.5 h-3.5" />
@@ -74,7 +74,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         <button
           type="button"
           onClick={() => setCredsOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
           aria-expanded={credsOpen}
         >
           <KeyRound className="w-3.5 h-3.5" />
@@ -86,7 +86,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         <button
           type="button"
           onClick={() => onDelete(job)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-secondary hover:bg-red-500/10 hover:text-red-500 border border-border rounded-xl"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-red-500/10 hover:text-red-500 border border-border rounded-xl"
         >
           <Trash2 className="w-3.5 h-3.5" />
           삭제
@@ -126,7 +126,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       <div>
         <div className="flex items-center gap-1.5 mb-2">
           <History className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">최근 실행</span>
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">최근 실행</span>
         </div>
         <RunHistory runs={runsQ.data ?? []} isLoading={runsQ.isLoading} />
       </div>

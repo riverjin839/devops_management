@@ -55,10 +55,10 @@ export function PodBottleneckDetailPage() {
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div className="font-medium">진단 결과 조회 실패</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
+            <div className="text-sm text-muted-foreground mt-0.5">
               {error instanceof Error ? error.message : '결과를 찾을 수 없습니다.'}
             </div>
-            <Link to="/pod-bottleneck" className="inline-block mt-2 text-xs underline">
+            <Link to="/pod-bottleneck" className="inline-block mt-2 text-sm underline">
               진단 목록으로
             </Link>
           </div>
@@ -78,7 +78,7 @@ export function PodBottleneckDetailPage() {
           <Link
             to="/pod-bottleneck"
             aria-label="진단 목록으로"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             목록
@@ -90,17 +90,17 @@ export function PodBottleneckDetailPage() {
               <span className="text-muted-foreground mx-2">→</span>
               {run.destPod}
               {run.destService && (
-                <span className="text-xs text-muted-foreground ml-2">(svc: {run.destService})</span>
+                <span className="text-sm text-muted-foreground ml-2">(svc: {run.destService})</span>
               )}
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               {new Date(run.createdAt).toLocaleString('ko-KR')}
               {run.triggeredByUser && ` · ${run.triggeredByUser}`}
               {run.durationMs != null && ` · ${run.durationMs}ms`}
             </p>
           </div>
           <span
-            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${status.cls}`}
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${status.cls}`}
             aria-label={`전체 상태: ${status.label}`}
           >
             {status.label}
@@ -109,7 +109,7 @@ export function PodBottleneckDetailPage() {
             type="button"
             onClick={() => setConfirmDelete(true)}
             aria-label="진단 결과 삭제"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-red-500 hover:bg-red-500/10"
           >
             <Trash2 className="w-3.5 h-3.5" />
             삭제
@@ -124,7 +124,7 @@ export function PodBottleneckDetailPage() {
             if (!result) {
               return (
                 <MacCard key={k} title={meta?.label ?? String(k)}>
-                  <p className="text-xs text-muted-foreground italic">
+                  <p className="text-sm text-muted-foreground italic">
                     이 probe 는 실행되지 않았습니다.
                   </p>
                 </MacCard>

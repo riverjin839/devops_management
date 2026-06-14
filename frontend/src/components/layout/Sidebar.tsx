@@ -145,7 +145,7 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
         <span
           role="tooltip"
           style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateY(-50%)' }}
-          className="fixed px-2 py-1 text-xs font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
+          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
         >
           {label}
         </span>,
@@ -178,7 +178,7 @@ function FlyoutShell({ title, anchorRect, children, onClose }: FlyoutProps) {
       aria-label={title}
     >
       <div className="px-3 py-1.5 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
-        <span className="text-[11px] font-semibold text-zinc-700 uppercase tracking-wider truncate">{title}</span>
+        <span className="text-xs font-semibold text-zinc-700 uppercase tracking-wider truncate">{title}</span>
         <button
           type="button"
           onClick={onClose}
@@ -583,7 +583,7 @@ export function Sidebar() {
               </button>
             </div>
             <div className="px-4 py-3 border-b border-border">
-              <p className="text-xs text-muted-foreground/70 mb-1 uppercase tracking-wider">앱 타이틀</p>
+              <p className="text-sm text-muted-foreground/70 mb-1 uppercase tracking-wider">앱 타이틀</p>
               {isEditingTitle ? (
                 <InlineEdit value={title} onSave={handleTitleSave} onCancel={() => setIsEditingTitle(false)}
                   inputClassName="text-sm font-semibold w-full px-1.5 py-0.5 bg-secondary border border-primary rounded" />
@@ -603,7 +603,7 @@ export function Sidebar() {
                 if (paths.length === 0) return null;
                 return (
                   <div key={g.id} className="mb-3">
-                    <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
+                    <p className="px-2 py-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
                     <div className="space-y-0.5">
                       {paths.map((path) => {
                         const navItem = navMap[path];
@@ -634,7 +634,7 @@ export function Sidebar() {
                 );
               })}
             </nav>
-            <div className="px-3 py-2 border-t border-border text-xs text-muted-foreground">
+            <div className="px-3 py-2 border-t border-border text-sm text-muted-foreground">
               외부 클릭으로 닫기. 이름만 수정됩니다.
             </div>
           </aside>

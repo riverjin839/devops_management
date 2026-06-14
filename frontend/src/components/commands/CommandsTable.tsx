@@ -11,7 +11,7 @@ function ImportanceBadge({ value, onClick, title }: { value: CommandImportance; 
   return (
     <span
       onClick={onClick}
-      className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${meta.badge} ${
+      className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${meta.badge} ${
         onClick ? 'cursor-pointer hover:opacity-80' : ''
       }`}
       title={title}
@@ -35,7 +35,7 @@ function CopyButton({ value }: { value: string }) {
           window.setTimeout(() => setCopied(false), 1500);
         } catch { /* ignore */ }
       }}
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md bg-secondary text-muted-foreground hover:text-foreground flex-shrink-0 self-start"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-md bg-secondary text-muted-foreground hover:text-foreground flex-shrink-0 self-start"
       title="복사"
     >
       {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
@@ -114,7 +114,7 @@ function InlineTextarea({
           mono ? 'font-mono' : ''
         }`}
       />
-      <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
         <button type="button" onClick={() => v === initial ? onCancel() : onSave(v)} className="p-0.5 text-primary hover:text-primary/80">
           <Check className="w-3.5 h-3.5" />
         </button>
@@ -163,7 +163,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
               onChange={(ev) => { onUpdate({ importance: ev.target.value as CommandImportance }); setEditing(null); }}
               onBlur={() => setEditing(null)}
               onKeyDown={(ev) => { if (ev.key === 'Escape') setEditing(null); }}
-              className="px-1 py-0.5 text-xs bg-background border border-primary/40 rounded"
+              className="px-1 py-0.5 text-sm bg-background border border-primary/40 rounded"
             >
               {IMPORTANCE_OPTIONS.map((v) => <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>)}
             </select>
@@ -172,7 +172,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
           )}
           <button
             onClick={onTogglePin}
-            className={`inline-flex items-center gap-1 text-[10px] ${e.pinned ? 'text-primary' : 'text-muted-foreground/50 hover:text-primary'}`}
+            className={`inline-flex items-center gap-1 text-xs ${e.pinned ? 'text-primary' : 'text-muted-foreground/50 hover:text-primary'}`}
             title={e.pinned ? '고정 해제' : '상단 고정'}
           >
             {e.pinned ? <Pin className="w-3 h-3" /> : <PinOff className="w-3 h-3" />}
@@ -190,14 +190,14 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
               onSave={(v) => { onUpdate({ category: v || undefined }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="kubectl / helm …"
-              className="text-[11px]"
+              className="text-xs"
               mono
             />
           ),
           e.category ? (
-            <span className="text-[11px] font-mono text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">{e.category}</span>
+            <span className="text-xs font-mono text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">{e.category}</span>
           ) : (
-            <span className="text-[11px] text-muted-foreground/40">—</span>
+            <span className="text-xs text-muted-foreground/40">—</span>
           )
         )}
       </td>
@@ -241,11 +241,11 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             () => null,
             e.description ? (
               <p className="text-[12px] text-foreground/90">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1.5">의미</span>
+                <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1.5">의미</span>
                 {e.description}
               </p>
             ) : (
-              <p className="text-[11px] text-muted-foreground/50 italic">+ 의미 추가</p>
+              <p className="text-xs text-muted-foreground/50 italic">+ 의미 추가</p>
             )
           )}
 
@@ -263,11 +263,11 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             () => null,
             e.caution ? (
               <div className={`text-[12px] rounded-md px-2 py-1.5 border ${meta.badge}`}>
-                <span className="text-[10px] uppercase tracking-wider mr-1.5">주의</span>
+                <span className="text-xs uppercase tracking-wider mr-1.5">주의</span>
                 {e.caution}
               </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground/50 italic">+ 주의사항 추가</p>
+              <p className="text-xs text-muted-foreground/50 italic">+ 주의사항 추가</p>
             )
           )}
 
@@ -283,7 +283,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             />
           ) : e.examples ? (
             <details
-              className="text-[11px] text-muted-foreground"
+              className="text-xs text-muted-foreground"
               onClick={(ev) => {
                 if ((ev.target as HTMLElement).tagName === 'PRE') {
                   ev.preventDefault();
@@ -296,7 +296,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             </details>
           ) : (
             <p
-              className="text-[11px] text-muted-foreground/50 italic cursor-pointer hover:text-primary transition-colors"
+              className="text-xs text-muted-foreground/50 italic cursor-pointer hover:text-primary transition-colors"
               onClick={() => setEditing('examples')}
             >
               + 예시 추가
@@ -310,7 +310,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
               onSave={(v) => { onUpdate({ tags: v || undefined }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="node, maintenance, drain (쉼표 구분)"
-              className="text-xs"
+              className="text-sm"
             />
           ) : cell(
             'tags',
@@ -318,11 +318,11 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             e.tags ? (
               <div className="flex flex-wrap gap-1">
                 {e.tags.split(',').map((t) => t.trim()).filter(Boolean).map((tag) => (
-                  <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">#{tag}</span>
+                  <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">#{tag}</span>
                 ))}
               </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground/50 italic">+ 태그 추가</p>
+              <p className="text-xs text-muted-foreground/50 italic">+ 태그 추가</p>
             )
           )}
 
@@ -333,7 +333,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
               onSave={(v) => { onUpdate({ confluenceUrl: v || undefined }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               placeholder="https://confluence.example.com/..."
-              className="text-xs"
+              className="text-sm"
             />
           ) : e.confluenceUrl ? (
             <div className="inline-flex items-center gap-0.5">
@@ -341,7 +341,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
                 href={e.confluenceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                 title={e.confluenceUrl}
               >
                 <ExternalLink className="w-2.5 h-2.5" /> Confluence
@@ -356,7 +356,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             </div>
           ) : (
             <p
-              className="text-[11px] text-muted-foreground/50 italic cursor-pointer hover:text-primary transition-colors"
+              className="text-xs text-muted-foreground/50 italic cursor-pointer hover:text-primary transition-colors"
               onClick={() => setEditing('confluence')}
             >
               + Confluence 링크 추가
@@ -369,14 +369,14 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
         <div className="inline-flex items-center gap-1">
           <button
             onClick={onOpenForm}
-            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-secondary hover:bg-secondary/80"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-secondary hover:bg-secondary/80"
             title="전체 폼으로 수정"
           >
             <Pencil className="w-3 h-3" /> 폼
           </button>
           <button
             onClick={onDelete}
-            className="inline-flex items-center justify-center px-1.5 py-1 text-[11px] rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+            className="inline-flex items-center justify-center px-1.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
             title="삭제"
           >
             <Trash2 className="w-3 h-3" />
@@ -428,7 +428,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="w-full px-3 py-2.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 transition-colors"
+            className="w-full px-3 py-2.5 text-sm text-muted-foreground hover:text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> 행 추가
           </button>
@@ -443,7 +443,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
         <select
           value={importance}
           onChange={(e) => setImportance(e.target.value as CommandImportance)}
-          className="px-1 py-0.5 text-xs bg-background border border-border rounded"
+          className="px-1 py-0.5 text-sm bg-background border border-border rounded"
         >
           {IMPORTANCE_OPTIONS.map((v) => <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>)}
         </select>
@@ -454,7 +454,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           placeholder="kubectl"
-          className="w-full px-2 py-1 text-[11px] font-mono bg-background border border-border rounded"
+          className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded"
         />
       </td>
       <td className="px-3 py-3 align-top">
@@ -476,7 +476,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="의미 (선택)"
-            className="w-full px-2 py-1 text-xs bg-background border border-border rounded"
+            className="w-full px-2 py-1 text-sm bg-background border border-border rounded"
           />
         </div>
       </td>
@@ -486,14 +486,14 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
             type="button"
             onClick={submit}
             disabled={!command.trim()}
-            className="px-2 py-1 text-[11px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1"
+            className="px-2 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Check className="w-3 h-3" /> 저장
           </button>
           <button
             type="button"
             onClick={() => { reset(); setOpen(false); }}
-            className="px-2 py-1 text-[11px] rounded-md text-muted-foreground hover:bg-secondary inline-flex items-center gap-1"
+            className="px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-secondary inline-flex items-center gap-1"
           >
             <X className="w-3 h-3" /> 취소
           </button>
@@ -519,7 +519,7 @@ export function CommandsTable({
     <DoubleScrollX>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-secondary/40 text-left text-[11px] text-muted-foreground">
+          <tr className="border-b border-border bg-secondary/40 text-left text-xs text-muted-foreground">
             <th className="px-3 py-2 font-medium w-24">중요도</th>
             <th className="px-3 py-2 font-medium w-24">카테고리</th>
             <th className="px-3 py-2 font-medium">명령어 / 의미 / 주의사항</th>

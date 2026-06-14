@@ -23,32 +23,32 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
     <section className="bg-card border border-border rounded-xl overflow-hidden mt-5">
       <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-muted/20">
         <div className="flex items-center gap-3">
-          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
+          <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
             {meta.label}
           </span>
-          <span className="text-xs font-mono text-muted-foreground">{result.host}</span>
+          <span className="text-sm font-mono text-muted-foreground">{result.host}</span>
           {result.exitCode !== null && result.exitCode !== undefined && (
-            <span className="text-xs font-mono text-muted-foreground">exit {result.exitCode}</span>
+            <span className="text-sm font-mono text-muted-foreground">exit {result.exitCode}</span>
           )}
-          <span className="text-xs font-mono text-muted-foreground">{result.durationMs}ms</span>
+          <span className="text-sm font-mono text-muted-foreground">{result.durationMs}ms</span>
         </div>
-        {result.error && <span className="text-xs text-red-400">⚠ {result.error}</span>}
+        {result.error && <span className="text-sm text-red-400">⚠ {result.error}</span>}
       </header>
       <div className="px-5 py-3 space-y-3">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">executed</p>
-          <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap text-foreground/80">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">executed</p>
+          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap text-foreground/80">
             {result.executedCommand || '(not provided)'}
           </pre>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
           <LogViewer text={result.stdout} maxHeight="max-h-[440px]" />
         </div>
         {result.stderr && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
             <LogViewer text={result.stderr} maxHeight="max-h-[260px]" asError />
           </div>
         )}
@@ -141,13 +141,13 @@ export function McClientPage() {
             <HardDrive className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">mc 클라이언트 콘솔</h1>
             {effectiveHost && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30 font-mono">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30 font-mono">
                 → {effectiveHost}
               </span>
             )}
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground leading-relaxed">
+          <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
             MinIO <code className="font-mono text-foreground">mc</code> 가 설치된 호스트에 SSH 로 접속해 명령 실행.
             alias 는 미리 <code className="font-mono text-foreground">mc alias set</code> 으로 구성돼 있어야 합니다 (기본값: <code className="font-mono text-foreground">local</code>). 프리셋의 <code className="font-mono text-foreground">{'{alias}'}</code> 는 아래 alias 값으로 치환됩니다.
           </div>
@@ -158,7 +158,7 @@ export function McClientPage() {
               <h2 className="text-sm font-semibold mb-1">타겟</h2>
 
               <div>
-                <label htmlFor={f('node')} className="block text-xs text-muted-foreground mb-1">호스트 (mc 설치된 노드)</label>
+                <label htmlFor={f('node')} className="block text-sm text-muted-foreground mb-1">호스트 (mc 설치된 노드)</label>
                 <select
                   id={f('node')}
                   value={selectedNodeName}
@@ -175,7 +175,7 @@ export function McClientPage() {
               </div>
 
               <div>
-                <label htmlFor={f('host')} className="block text-xs text-muted-foreground mb-1">수동 host override</label>
+                <label htmlFor={f('host')} className="block text-sm text-muted-foreground mb-1">수동 host override</label>
                 <input
                   id={f('host')}
                   type="text"
@@ -188,23 +188,23 @@ export function McClientPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
+                  <label htmlFor={f('user')} className="block text-sm text-muted-foreground mb-1">사용자</label>
                   <input id={f('user')} type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div>
-                  <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
+                  <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
                   <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
               </div>
 
               <div>
-                <p className="block text-xs text-muted-foreground mb-1">인증</p>
+                <p className="block text-sm text-muted-foreground mb-1">인증</p>
                 <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                   {(['password', 'key'] as const).map((m) => (
                     <button key={m} onClick={() => setAuthMode(m)}
-                      className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
                         authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
                       }`}>
                       {m === 'password' ? '비밀번호' : 'Private Key'}
@@ -218,10 +218,10 @@ export function McClientPage() {
                   className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
               ) : (
                 <div>
-                  <label htmlFor={f('pkey')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" /> Private Key (PEM)</label>
+                  <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" /> Private Key (PEM)</label>
                   <textarea id={f('pkey')} value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} rows={4}
                     placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                    className="w-full px-3 py-2 text-[11px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                    className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
                 </div>
               )}
             </section>
@@ -229,11 +229,11 @@ export function McClientPage() {
             {/* 우: 프리셋 + 명령 */}
             <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
               <div>
-                <p className="text-xs text-muted-foreground mb-1.5">프리셋 — 클릭해서 args 에 채워넣기</p>
+                <p className="text-sm text-muted-foreground mb-1.5">프리셋 — 클릭해서 args 에 채워넣기</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(presetsQ.data?.presets ?? []).map((p: McPreset) => (
                     <button key={p.key} onClick={() => setArgs(p.args)}
-                      className="px-2.5 py-1 text-[11px] rounded border border-border bg-secondary hover:bg-secondary/80"
+                      className="px-2.5 py-1 text-xs rounded border border-border bg-secondary hover:bg-secondary/80"
                       title={p.args}>
                       {p.label}
                     </button>
@@ -243,13 +243,13 @@ export function McClientPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label htmlFor={f('alias')} className="block text-xs text-muted-foreground mb-1">alias 이름</label>
+                  <label htmlFor={f('alias')} className="block text-sm text-muted-foreground mb-1">alias 이름</label>
                   <input id={f('alias')} type="text" value={alias} onChange={(e) => setAlias(e.target.value)}
                     placeholder="local"
                     className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div className="md:col-span-2">
-                  <label htmlFor={f('mcPath')} className="block text-xs text-muted-foreground mb-1">mc 경로</label>
+                  <label htmlFor={f('mcPath')} className="block text-sm text-muted-foreground mb-1">mc 경로</label>
                   <input id={f('mcPath')} type="text" value={mcPath} onChange={(e) => setMcPath(e.target.value)}
                     placeholder="mc"
                     className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
@@ -257,9 +257,9 @@ export function McClientPage() {
               </div>
 
               <div>
-                <label htmlFor={f('args')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <label htmlFor={f('args')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
                   <Terminal className="w-3 h-3" /> mc 인자
-                  <span className="ml-1 text-[10px] opacity-60">{'{alias}'} 는 위 alias 값으로 치환</span>
+                  <span className="ml-1 text-xs opacity-60">{'{alias}'} 는 위 alias 값으로 치환</span>
                 </label>
                 <textarea id={f('args')} value={args} onChange={(e) => setArgs(e.target.value)} rows={3}
                   className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
@@ -272,14 +272,14 @@ export function McClientPage() {
               </div>
 
               <div>
-                <label htmlFor={f('timeout')} className="block text-xs text-muted-foreground mb-1">timeout (s)</label>
+                <label htmlFor={f('timeout')} className="block text-sm text-muted-foreground mb-1">timeout (s)</label>
                 <input id={f('timeout')} type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 60)}
                   min={1} max={600}
                   className="w-32 px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
 
               {runError && (
-                <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
                   {formatApiError(runError)}
                 </div>
               )}
@@ -312,7 +312,7 @@ export function McClientPage() {
       >
         <div className="space-y-3">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">타겟</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">타겟</p>
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
@@ -321,13 +321,13 @@ export function McClientPage() {
             </p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">실행</p>
-            <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행</p>
+            <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
               {mcPath} {args.replace(/\{alias\}/g, alias)}
             </pre>
           </div>
           {isDanger && (
-            <div className="text-xs text-red-400 border border-red-500/30 bg-red-500/5 rounded p-2">
+            <div className="text-sm text-red-400 border border-red-500/30 bg-red-500/5 rounded p-2">
               ⚠ 쓰기 성격 명령(rm/mirror/admin service restart/policy set 등)이 감지되었습니다. 정말 진행하시겠습니까?
             </div>
           )}

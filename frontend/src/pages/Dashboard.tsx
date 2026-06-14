@@ -76,7 +76,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
                     {cluster.name}
                   </p>
                   {cluster.region && (
-                    <p className="text-xs text-muted-foreground truncate">{cluster.region}</p>
+                    <p className="text-sm text-muted-foreground truncate">{cluster.region}</p>
                   )}
                 </div>
               </div>
@@ -84,7 +84,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
             </div>
 
             {/* Status label */}
-            <div className={`text-xs font-medium px-2 py-1 rounded-full inline-flex items-center gap-1.5 mb-3 ${statusColor.bg} ${statusColor.text}`}>
+            <div className={`text-sm font-medium px-2 py-1 rounded-full inline-flex items-center gap-1.5 mb-3 ${statusColor.bg} ${statusColor.text}`}>
               {cluster.status === 'healthy'  && <CheckCircle className="w-3 h-3" />}
               {cluster.status === 'warning'  && <AlertTriangle className="w-3 h-3" />}
               {cluster.status === 'critical' && <XCircle className="w-3 h-3" />}
@@ -100,26 +100,26 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
 
             {/* Check counts — 미연결이면 stale 값 대신 안내 */}
             {cluster.status === 'pending' ? (
-              <p className="text-xs text-slate-400/80 italic">연결 불가로 점검 데이터 없음</p>
+              <p className="text-sm text-slate-400/80 italic">연결 불가로 점검 데이터 없음</p>
             ) : total > 0 ? (
               <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">전체 점검</span>
                   <span className="font-medium">{total}</span>
                 </div>
                 <div className="flex gap-2">
-                  <div className="flex items-center gap-1 text-xs text-emerald-400">
+                  <div className="flex items-center gap-1 text-sm text-emerald-400">
                     <CheckCircle className="w-3 h-3" />
                     <span>{healthy}</span>
                   </div>
                   {warning > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-yellow-400">
+                    <div className="flex items-center gap-1 text-sm text-yellow-400">
                       <AlertTriangle className="w-3 h-3" />
                       <span>{warning}</span>
                     </div>
                   )}
                   {critical > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-red-400">
+                    <div className="flex items-center gap-1 text-sm text-red-400">
                       <XCircle className="w-3 h-3" />
                       <span>{critical}</span>
                     </div>
@@ -133,11 +133,11 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">점검 항목 없음</p>
+              <p className="text-sm text-muted-foreground">점검 항목 없음</p>
             )}
 
             {cluster.nodeCount != null && (
-              <p className="text-xs text-muted-foreground mt-2">노드 {cluster.nodeCount}개</p>
+              <p className="text-sm text-muted-foreground mt-2">노드 {cluster.nodeCount}개</p>
             )}
           </button>
         );
@@ -254,7 +254,7 @@ export function Dashboard() {
       <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">DEVOPS MANAGEMENT</h1>
         {lastCheckTime && (
-          <p className="text-[11px] text-muted-foreground font-mono hidden sm:block">
+          <p className="text-xs text-muted-foreground font-mono hidden sm:block">
             Last: {formatDateTime(lastCheckTime)}
           </p>
         )}
@@ -262,35 +262,35 @@ export function Dashboard() {
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setShowAddCluster(true)}
-            className="px-2.5 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> Cluster
           </button>
           {clusters.length > 0 && (
             <button
               onClick={() => setShowAddAddon(true)}
-              className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-sm font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1"
             >
               <Plus className="w-3 h-3" /> Check
             </button>
           )}
           <button
             onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-            className="px-2.5 py-1 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> Metric
           </button>
           <div className="w-px h-4 bg-border mx-0.5" />
           <button
             onClick={() => handleDailyReport('md')}
-            className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
             title="Daily Report (markdown)"
           >
             <Download className="w-3 h-3" /> .md
           </button>
           <button
             onClick={() => handleDailyReport('csv')}
-            className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
             title="Daily Report (csv)"
           >
             <Download className="w-3 h-3" /> .csv
@@ -298,7 +298,7 @@ export function Dashboard() {
           {selectedClusterId && (
             <button
               onClick={() => setShowKubeconfig(true)}
-              className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+              className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
             >
               Kubeconfig
             </button>
@@ -307,7 +307,7 @@ export function Dashboard() {
           <button
             onClick={handleRunCheck}
             disabled={isChecking}
-            className="px-3 py-1 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+            className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
             {isChecking ? 'Checking...' : 'Run Check'}
@@ -356,7 +356,7 @@ export function Dashboard() {
                     <p className="text-sm font-semibold text-slate-300 mb-0.5">
                       미연결 — 클러스터에 연결할 수 없습니다
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       API 서버 또는 kubeconfig 인증이 실패했습니다. 아래 점검 카드는 마지막 성공 시점의 값으로 <b>비활성화</b> 되어 있습니다.
                       Settings → "연결 확인"을 실행하거나 kubeconfig 를 점검한 뒤 다시 시도하세요.
                     </p>
@@ -379,7 +379,7 @@ export function Dashboard() {
 
         {/* ── Prometheus Insights (우측 컬럼) ─────────────────────────────── */}
         <MacCard title="Prometheus Insights" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-3">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-3">
             <Activity className="w-4 h-4 text-primary" />
             <span>{metricCards.length} cards</span>
           </div>
@@ -399,7 +399,7 @@ export function Dashboard() {
           {/* ── Playbook Checks ──────────────────────────────────────────── */}
           {dashboardPlaybooks.length > 0 && (
             <MacCard title="Playbook Checks" bodyPadding="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-3">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm mb-3">
                 <BookOpen className="w-4 h-4 text-primary" />
                 <span>{dashboardPlaybooks.length} playbooks</span>
               </div>

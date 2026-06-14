@@ -21,7 +21,7 @@ interface ViewModeBarProps {
 function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] text-muted-foreground/70 w-9 flex-shrink-0 leading-none">{label}</span>
+      <span className="text-xs text-muted-foreground/70 w-9 flex-shrink-0 leading-none">{label}</span>
       {children}
     </div>
   );
@@ -42,7 +42,7 @@ function PillGroup({
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`px-2 py-[3px] text-[11px] font-medium rounded transition-all duration-100 leading-none ${
+          className={`px-2 py-[3px] text-xs font-medium rounded transition-all duration-100 leading-none ${
             value === o.value
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground/60 hover:text-muted-foreground'
@@ -80,7 +80,7 @@ function MiniToggle({
           }`}
         />
       </div>
-      <span className="text-[11px] text-muted-foreground/70 group-hover:text-muted-foreground transition-colors leading-none">
+      <span className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors leading-none">
         {label}
       </span>
     </button>
@@ -194,7 +194,7 @@ export function ViewModeBar({
             key={mode.id}
             onClick={() => onChange(mode.id)}
             title={mode.label}
-            className={`flex items-center gap-1.5 px-2.5 py-[5px] text-xs font-medium rounded-md transition-all duration-150 whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-2.5 py-[5px] text-sm font-medium rounded-md transition-all duration-150 whitespace-nowrap ${
               active === mode.id
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground/70 hover:text-foreground'
@@ -231,7 +231,7 @@ export function ViewModeBar({
             >
               {/* header */}
               <div className="px-3 py-2 border-b border-border/25 flex items-center justify-between">
-                <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/60">
+                <span className="text-xs font-semibold tracking-widest uppercase text-muted-foreground/60">
                   표 스타일
                 </span>
                 <div
@@ -250,7 +250,7 @@ export function ViewModeBar({
                         : 'bg-slate-400'
                     }`}
                   />
-                  <span className="text-[10px] font-mono">
+                  <span className="text-xs font-mono">
                     {style.fontSize}/{style.density[0]}
                   </span>
                 </div>
@@ -271,7 +271,7 @@ export function ViewModeBar({
                       monoFont: false,
                     });
                   }}
-                  className="w-full text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors text-center py-1"
+                  className="w-full text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors text-center py-1"
                 >
                   기본값으로 재설정
                 </button>

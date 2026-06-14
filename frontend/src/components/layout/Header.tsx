@@ -31,7 +31,7 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
           </div>
           <div className="flex flex-col leading-none">
             <span className="font-bold text-sm tracking-wide">PEP</span>
-            <span className="text-[10px] text-muted-foreground font-normal">Platform Engineering Portal</span>
+            <span className="text-xs text-muted-foreground font-normal">Platform Engineering Portal</span>
           </div>
         </div>
 

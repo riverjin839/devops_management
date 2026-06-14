@@ -106,14 +106,14 @@ function ListDisplay({ results }: { results?: Array<Record<string, unknown>> | n
         const val = item.value as number;
         const name = labels.persistentvolumeclaim || labels.namespace || labels.pod || `item-${i}`;
         return (
-          <div key={i} className="flex items-center justify-between text-xs font-mono">
+          <div key={i} className="flex items-center justify-between text-sm font-mono">
             <span className="text-muted-foreground truncate max-w-[160px]">{name}</span>
             <span className="text-status-warning">{typeof val === 'number' ? `${val.toFixed(1)}%` : String(val)}</span>
           </div>
         );
       })}
       {results.length > 5 && (
-        <span className="text-xs text-muted-foreground">+{results.length - 5} more</span>
+        <span className="text-sm text-muted-foreground">+{results.length - 5} more</span>
       )}
     </div>
   );
@@ -151,7 +151,7 @@ function StatusOverlay({
 }) {
   if (!result) {
     return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />
         Loading...
       </div>
@@ -159,15 +159,15 @@ function StatusOverlay({
   }
   if (result.status === 'offline') {
     return (
-      <div className="flex items-start gap-1.5 text-xs text-status-warning">
+      <div className="flex items-start gap-1.5 text-sm text-status-warning">
         <WifiOff className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
         <div className="space-y-0.5">
           <p className="font-medium">Prometheus offline</p>
-          {result.error && <p className="text-[11px] text-status-warning/80">{result.error}</p>}
+          {result.error && <p className="text-xs text-status-warning/80">{result.error}</p>}
           {onRefresh && (
             <button
               onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-              className="text-[11px] text-status-warning hover:underline inline-flex items-center gap-0.5"
+              className="text-xs text-status-warning hover:underline inline-flex items-center gap-0.5"
             >
               <RefreshCw className="w-2.5 h-2.5" /> 다시 시도
             </button>
@@ -179,13 +179,13 @@ function StatusOverlay({
   if (result.status === 'error') {
     const hint = errorHint(result.error);
     return (
-      <div className="flex items-start gap-1.5 text-xs text-status-critical">
+      <div className="flex items-start gap-1.5 text-sm text-status-critical">
         <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
         <div className="space-y-0.5 min-w-0 flex-1">
           <p className="font-medium break-words">{result.error || 'Query error'}</p>
-          {hint && <p className="text-[11px] text-status-critical/80">{hint}</p>}
+          {hint && <p className="text-xs text-status-critical/80">{hint}</p>}
           {promql && (
-            <code className="block text-[10px] font-mono text-muted-foreground/80 break-all max-h-12 overflow-hidden">
+            <code className="block text-xs font-mono text-muted-foreground/80 break-all max-h-12 overflow-hidden">
               {promql}
             </code>
           )}
@@ -193,7 +193,7 @@ function StatusOverlay({
             {onRefresh && (
               <button
                 onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-                className="text-[11px] text-status-critical/80 hover:text-status-critical inline-flex items-center gap-0.5"
+                className="text-xs text-status-critical/80 hover:text-status-critical inline-flex items-center gap-0.5"
               >
                 <RefreshCw className="w-2.5 h-2.5" /> 재시도
               </button>
@@ -201,7 +201,7 @@ function StatusOverlay({
             {onEdit && (
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                className="text-[11px] text-primary/80 hover:text-primary inline-flex items-center gap-0.5"
+                className="text-xs text-primary/80 hover:text-primary inline-flex items-center gap-0.5"
               >
                 <Pencil className="w-2.5 h-2.5" /> 카드 편집
               </button>
@@ -260,7 +260,7 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
               <Pencil className="w-3.5 h-3.5 text-primary" />
             </button>
           )}
-          <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-secondary text-muted-foreground uppercase tracking-wider">
+          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-secondary text-muted-foreground uppercase tracking-wider">
             {card.category}
           </span>
         </div>
@@ -293,7 +293,7 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
       </div>
 
       {/* PromQL hint */}
-      <div className="mt-3 text-[10px] text-muted-foreground/50 font-mono truncate" title={card.promql}>
+      <div className="mt-3 text-xs text-muted-foreground/50 font-mono truncate" title={card.promql}>
         {card.promql}
       </div>
     </div>

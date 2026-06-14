@@ -76,7 +76,7 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border"
         style={{ borderLeftColor: color, borderLeftWidth: 4 }}>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {ENTITY_LABEL[node.entityType] ?? node.entityType}
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.name}</p>
@@ -89,22 +89,22 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
       <div className="px-4 py-3 space-y-3 max-h-[420px] overflow-y-auto">
         {node.version && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">버전</p>
-            <p className="text-xs font-mono text-foreground">{node.version}</p>
+            <p className="text-xs text-muted-foreground uppercase font-semibold mb-0.5">버전</p>
+            <p className="text-sm font-mono text-foreground">{node.version}</p>
           </div>
         )}
         {node.__degree !== undefined && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">연결 수</p>
-            <p className="text-xs text-foreground">{node.__degree}개 관계</p>
+            <p className="text-xs text-muted-foreground uppercase font-semibold mb-0.5">연결 수</p>
+            <p className="text-sm text-foreground">{node.__degree}개 관계</p>
           </div>
         )}
         {Object.keys(node.properties).length > 0 && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">속성</p>
+            <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">속성</p>
             <div className="space-y-1">
               {Object.entries(node.properties).map(([k, v]) => (
-                <div key={k} className="flex items-start justify-between gap-2 text-xs">
+                <div key={k} className="flex items-start justify-between gap-2 text-sm">
                   <span className="text-muted-foreground flex-shrink-0">{k}</span>
                   <span className="font-mono text-foreground text-right break-all">{String(v)}</span>
                 </div>
@@ -118,7 +118,7 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
         <div className="px-4 py-3 border-t border-border">
           <button
             onClick={() => onAnalyzeImpact(node.id)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 rounded-lg text-sm font-semibold transition-colors"
           >
             <Zap className="w-3.5 h-3.5" />
             변경 영향 분석
@@ -149,23 +149,23 @@ function ImpactPanel({ result, onClose }: {
       </div>
       <div className="px-4 py-3 space-y-3 max-h-[320px] overflow-y-auto">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Blast Radius Score</p>
+          <p className="text-sm text-muted-foreground">Blast Radius Score</p>
           <p className={`text-lg font-bold ${scoreColor}`}>{(result.blastRadiusScore * 100).toFixed(0)}%</p>
         </div>
         {result.impactedEntities.length > 0 && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1.5">
+            <p className="text-xs text-muted-foreground uppercase font-semibold mb-1.5">
               영향 받는 엔티티 ({result.impactedEntities.length})
             </p>
             <div className="space-y-1">
               {result.impactedEntities.slice(0, 8).map((e) => (
-                <div key={e.id} className="flex items-center gap-2 text-xs">
+                <div key={e.id} className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: ENTITY_COLOR[e.entityType] }} />
                   <span className="text-foreground truncate">{e.name}</span>
                 </div>
               ))}
               {result.impactedEntities.length > 8 && (
-                <p className="text-[10px] text-muted-foreground">+{result.impactedEntities.length - 8}개 더...</p>
+                <p className="text-xs text-muted-foreground">+{result.impactedEntities.length - 8}개 더...</p>
               )}
             </div>
           </div>
@@ -173,10 +173,10 @@ function ImpactPanel({ result, onClose }: {
         {result.impactPaths.slice(0, 3).map((path, i) => (
           <div key={i} className="rounded-lg bg-secondary/40 px-3 py-2">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] text-muted-foreground">경로 {i + 1}</p>
-              <p className="text-[10px] font-semibold text-amber-400">{(path.score * 100).toFixed(0)}%</p>
+              <p className="text-xs text-muted-foreground">경로 {i + 1}</p>
+              <p className="text-xs font-semibold text-amber-400">{(path.score * 100).toFixed(0)}%</p>
             </div>
-            <p className="text-[11px] text-foreground font-mono">
+            <p className="text-xs text-foreground font-mono">
               {path.pathNames.join(' → ')}
             </p>
           </div>
@@ -353,7 +353,7 @@ export function OntologyPage() {
 
         {/* 통계 */}
         {graph && (
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span><b className="text-foreground">{graphData.nodes.length}</b>/{graph.entities.length} 노드</span>
             <span><b className="text-foreground">{graphData.links.length}</b> 관계</span>
           </div>
@@ -364,7 +364,7 @@ export function OntologyPage() {
         {/* 범례 토글 */}
         <button
           onClick={() => setShowLegend((v) => !v)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm border transition-colors ${
             showLegend ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-secondary border-border text-muted-foreground'
           }`}
         >
@@ -375,7 +375,7 @@ export function OntologyPage() {
         {activeTypes.size < ALL_TYPES.length && (
           <button
             onClick={() => setActiveTypes(new Set(ALL_TYPES))}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-secondary border border-border text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm bg-secondary border border-border text-muted-foreground hover:text-foreground"
           >
             <Filter className="w-3.5 h-3.5" />전체
           </button>
@@ -399,7 +399,7 @@ export function OntologyPage() {
             <button
               key={t}
               onClick={() => toggleType(t)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border flex-shrink-0 transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border flex-shrink-0 transition-all ${
                 active ? 'opacity-100' : 'opacity-35'
               }`}
               style={{
@@ -434,7 +434,7 @@ export function OntologyPage() {
             <Share2 className="w-16 h-16 mb-4" />
             <p className="text-base">이 클러스터에 온톨로지 데이터가 없습니다</p>
             <p className="text-sm mt-1">API로 엔티티와 관계를 먼저 등록하세요</p>
-            <code className="mt-3 px-3 py-1.5 bg-secondary rounded text-xs font-mono">
+            <code className="mt-3 px-3 py-1.5 bg-secondary rounded text-sm font-mono">
               POST /api/v1/ontology/entities
             </code>
           </div>
@@ -474,18 +474,18 @@ export function OntologyPage() {
         {/* 범례 패널 */}
         {showLegend && (
           <div className="absolute top-4 left-4 bg-card/90 backdrop-blur border border-border rounded-xl px-4 py-3 space-y-1.5 z-10">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">엔티티 타입</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">엔티티 타입</p>
             {ALL_TYPES.map((t) => (
               <div key={t} className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: ENTITY_COLOR[t] }} />
-                <span className="text-xs text-muted-foreground">{ENTITY_LABEL[t]}</span>
+                <span className="text-sm text-muted-foreground">{ENTITY_LABEL[t]}</span>
               </div>
             ))}
             <div className="pt-2 mt-2 border-t border-border/40 space-y-1">
-              <p className="text-[10px] text-muted-foreground">• 구체 크기 = 연결 수</p>
-              <p className="text-[10px] text-muted-foreground">• 파티클 = 관계 방향</p>
-              <p className="text-[10px] text-muted-foreground">• 링크 굵기 = 가중치</p>
-              <p className="text-[10px] text-muted-foreground">• 드래그로 노드 이동</p>
+              <p className="text-xs text-muted-foreground">• 구체 크기 = 연결 수</p>
+              <p className="text-xs text-muted-foreground">• 파티클 = 관계 방향</p>
+              <p className="text-xs text-muted-foreground">• 링크 굵기 = 가중치</p>
+              <p className="text-xs text-muted-foreground">• 드래그로 노드 이동</p>
             </div>
           </div>
         )}

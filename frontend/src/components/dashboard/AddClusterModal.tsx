@@ -209,7 +209,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             </div>
             <div>
               <h2 className="text-base font-semibold">클러스터 등록</h2>
-              <p className="text-xs text-muted-foreground">{selectedProvider.label} — {STEPS[step]}</p>
+              <p className="text-sm text-muted-foreground">{selectedProvider.label} — {STEPS[step]}</p>
             </div>
           </div>
           <button onClick={handleClose} disabled={isSubmitting}
@@ -224,14 +224,14 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             {STEPS.map((label, idx) => (
               <div key={label} className="flex items-center flex-1 last:flex-none">
                 <div className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                     idx < step ? 'bg-primary text-primary-foreground'
                     : idx === step ? 'bg-primary/20 border-2 border-primary text-primary'
                     : 'bg-secondary text-muted-foreground'
                   }`}>
                     {idx < step ? <Check className="w-3 h-3" /> : idx + 1}
                   </div>
-                  <span className={`text-xs font-medium ${idx === step ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  <span className={`text-sm font-medium ${idx === step ? 'text-foreground' : 'text-muted-foreground'}`}>
                     {label}
                   </span>
                 </div>
@@ -270,8 +270,8 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                       {p.icon}
                     </div>
                     <div>
-                      <p className={`text-xs font-semibold ${provider === p.id ? '' : 'text-foreground'}`}>{p.label}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{p.sub}</p>
+                      <p className={`text-sm font-semibold ${provider === p.id ? '' : 'text-foreground'}`}>{p.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{p.sub}</p>
                     </div>
                   </button>
                 ))}
@@ -285,13 +285,13 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor={nameId} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <label htmlFor={nameId} className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                       Cluster Name *
                     </label>
                     <button
                       type="button"
                       onClick={() => setManualName((v) => !v)}
-                      className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                      className="text-xs text-muted-foreground hover:text-foreground underline"
                     >
                       {manualName ? '구조화 입력' : '직접 입력'}
                     </button>
@@ -340,7 +340,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                           className="flex-1 min-w-0 px-2.5 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         />
                       </div>
-                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      <p className="mt-1.5 text-xs text-muted-foreground">
                         클러스터명:{' '}
                         <span className="font-mono text-foreground">{composedName || '업무명-운영타입-속성'}</span>
                         <span className="ml-2 text-muted-foreground/60">· 지역은 아래에 별도로 입력</span>
@@ -351,11 +351,11 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
 
                 <div className="col-span-2">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor={apiEndpointId} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <label htmlFor={apiEndpointId} className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                       API Endpoint {skipConnectivity ? '' : '*'}
                     </label>
                     {skipConnectivity && (
-                      <span className="text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/25 px-1.5 py-0.5 rounded-full">
+                      <span className="text-xs bg-amber-500/15 text-amber-400 border border-amber-500/25 px-1.5 py-0.5 rounded-full">
                         임시 등록 모드
                       </span>
                     )}
@@ -370,13 +370,13 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                       skipConnectivity ? 'border-amber-500/30' : 'border-border'
                     }`}
                   />
-                  <p className="mt-1 text-[11px] text-muted-foreground font-mono">
+                  <p className="mt-1 text-xs text-muted-foreground font-mono">
                     kubectl config view --minify -o jsonpath=&#39;&#123;.clusters[0].cluster.server&#125;&#39;
                   </p>
                 </div>
 
                 <div>
-                  <label htmlFor={regionId} className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label htmlFor={regionId} className="block text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Region
                   </label>
                   <input
@@ -400,7 +400,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                     }`}
                   >
                     <WifiOff className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-xs">임시 가등록</span>
+                    <span className="text-sm">임시 가등록</span>
                     {skipConnectivity && <Check className="w-3.5 h-3.5 ml-auto" />}
                   </button>
                 </div>
@@ -437,12 +437,12 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setKubeconfigContent(''); }}
-                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                        className="text-sm text-muted-foreground hover:text-destructive transition-colors"
                       >
                         제거
                       </button>
                     </div>
-                    <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/50 rounded-lg p-3 max-h-40 overflow-auto">
+                    <pre className="text-xs font-mono text-muted-foreground bg-secondary/50 rounded-lg p-3 max-h-40 overflow-auto">
                       {kubeconfigContent.slice(0, 500)}{kubeconfigContent.length > 500 ? '\n...' : ''}
                     </pre>
                   </div>
@@ -451,7 +451,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                     <Upload className="w-8 h-8 opacity-40" />
                     <div className="text-center">
                       <p className="text-sm font-medium">드래그 &amp; 드롭 또는 클릭하여 업로드</p>
-                      <p className="text-xs mt-0.5 opacity-60">.yaml, .yml, .conf 파일</p>
+                      <p className="text-sm mt-0.5 opacity-60">.yaml, .yml, .conf 파일</p>
                     </div>
                   </div>
                 )}
@@ -460,13 +460,13 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               {/* Manual paste */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor={kubeconfigId} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor={kubeconfigId} className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                     또는 직접 붙여넣기
                   </label>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Upload className="w-3 h-3" />
                     파일 선택
@@ -478,7 +478,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                   onChange={(e) => setKubeconfigContent(e.target.value)}
                   placeholder="여기에 kubeconfig YAML 내용을 붙여넣으세요 (비워두면 kubeconfig 없이 등록)"
                   rows={6}
-                  className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
+                  className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
                 />
               </div>
 

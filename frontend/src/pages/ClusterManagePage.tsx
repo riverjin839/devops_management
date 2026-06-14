@@ -386,12 +386,12 @@ export function ClusterManagePage() {
             <Server className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">클러스터 관리</h1>
             {clusters.length > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
                 {filteredClusters.length} / {clusters.length}
               </span>
             )}
             {overlapCount > 0 && (
-              <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
                 <AlertTriangle className="w-3 h-3" />
                 CIDR 겹침 {overlapCount}건
               </span>
@@ -456,7 +456,7 @@ export function ClusterManagePage() {
         {showFilter && (
           <div className="mb-5 p-4 bg-card border border-border rounded-xl flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
-              <label htmlFor={f('search')} className="block text-xs text-muted-foreground mb-1">검색</label>
+              <label htmlFor={f('search')} className="block text-sm text-muted-foreground mb-1">검색</label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
@@ -470,7 +470,7 @@ export function ClusterManagePage() {
               </div>
             </div>
             <div className="min-w-[160px]">
-              <label htmlFor={f('level')} className="block text-xs text-muted-foreground mb-1">운영레벨</label>
+              <label htmlFor={f('level')} className="block text-sm text-muted-foreground mb-1">운영레벨</label>
               <select id={f('level')} value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="">전체</option>
@@ -478,7 +478,7 @@ export function ClusterManagePage() {
               </select>
             </div>
             <div className="min-w-[140px]">
-              <label htmlFor={f('sort')} className="block text-xs text-muted-foreground mb-1">정렬</label>
+              <label htmlFor={f('sort')} className="block text-sm text-muted-foreground mb-1">정렬</label>
               <select id={f('sort')} value={sortBy} onChange={(e) => setSortBy(e.target.value as 'name' | 'status' | 'level' | 'manual')}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="manual">수동(드래그)</option>
@@ -488,7 +488,7 @@ export function ClusterManagePage() {
               </select>
             </div>
             <div className="min-w-[140px]">
-              <label htmlFor={f('group')} className="block text-xs text-muted-foreground mb-1">그룹</label>
+              <label htmlFor={f('group')} className="block text-sm text-muted-foreground mb-1">그룹</label>
               <select id={f('group')} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupByMode)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="none">그룹 없음</option>
@@ -531,27 +531,27 @@ export function ClusterManagePage() {
                     {COLUMNS.map((c) => (
                       <th key={c.key}
                         title={c.tip}
-                        className={`relative px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground ${c.center ? 'text-center' : ''}`}>
+                        className={`relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground ${c.center ? 'text-center' : ''}`}>
                         <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
                           {c.label}
-                          <span className="text-[9px] text-muted-foreground/50">ⓘ</span>
+                          <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
                         </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(c.key, e)} onDoubleClick={() => colW.autoFit(c.key)} />
                       </th>
                     ))}
                     {customFields.map((f) => (
                       <th key={f.id}
-                        className="relative px-3 py-2.5 text-left text-xs font-semibold text-primary/80 border-l border-primary/10"
+                        className="relative px-3 py-2.5 text-left text-sm font-semibold text-primary/80 border-l border-primary/10"
                         title={f.description ?? ''}>
                         <span className="truncate inline-block max-w-full align-middle">{f.label}</span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(`custom_${f.id}`, e)} onDoubleClick={() => colW.autoFit(`custom_${f.id}`)} />
                       </th>
                     ))}
-                    <th className="relative px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground"
+                    <th className="relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground"
                       title="행 단위 동작 — 새로고침(자동수집 → diff 미리보기), 수정, 삭제. (Cilium 설정은 K8s/Cilium 셀 클릭으로 이동)">
                       <span className="inline-flex items-center gap-1 cursor-help">
                         편집
-                        <span className="text-[9px] text-muted-foreground/50">ⓘ</span>
+                        <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
                       </span>
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
                     </th>
@@ -564,7 +564,7 @@ export function ClusterManagePage() {
                       rows.push(
                         <tr key={`hdr-${group.key}`} className="bg-primary/5 border-y border-primary/20">
                           <td colSpan={COLUMNS.length + customFields.length + 1}
-                            className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary">
                             {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
                             <span className="ml-2 text-muted-foreground font-normal normal-case tracking-normal">
                               {group.clusters.length}개
@@ -605,10 +605,10 @@ export function ClusterManagePage() {
                 <div key={group.key}>
                   {group.label && (
                     <div className="flex items-baseline gap-2 mb-2 px-1 border-l-2 border-primary pl-3">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                      <span className="text-xs font-bold uppercase tracking-wider text-primary">
                         {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {group.clusters.length}개
                       </span>
                     </div>
@@ -636,7 +636,7 @@ export function ClusterManagePage() {
           </DndContext>
         )}
 
-        <p className="text-xs text-muted-foreground mt-6 text-center">
+        <p className="text-sm text-muted-foreground mt-6 text-center">
           클러스터 등록 및 API/kubeconfig 설정은 <strong>Settings</strong> 페이지에서 할 수 있습니다.
         </p>
       </main>

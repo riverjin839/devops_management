@@ -38,24 +38,24 @@ export function CommentThread({ workItemId }: { workItemId: string }) {
 
   return (
     <div className="border-t border-border pt-4">
-      <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+      <p className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
         <MessageSquare className="w-3.5 h-3.5" />
         댓글 {comments.length > 0 && <span className="text-primary">{comments.length}</span>}
       </p>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> 불러오는 중…
         </div>
       ) : comments.length === 0 ? (
-        <p className="text-xs text-muted-foreground/70 py-1">아직 댓글이 없습니다.</p>
+        <p className="text-sm text-muted-foreground/70 py-1">아직 댓글이 없습니다.</p>
       ) : (
         <ul className="space-y-2 mb-3">
           {comments.map((c) => (
             <li key={c.id} className="group rounded-lg bg-secondary/30 px-3 py-2">
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-xs font-semibold">{c.authorName || c.author || '익명'}</span>
-                <span className="text-[10px] text-muted-foreground font-mono">{fmt(c.createdAt)}</span>
+                <span className="text-sm font-semibold">{c.authorName || c.author || '익명'}</span>
+                <span className="text-xs text-muted-foreground font-mono">{fmt(c.createdAt)}</span>
                 {canDelete(c.author) && (
                   <button
                     type="button"

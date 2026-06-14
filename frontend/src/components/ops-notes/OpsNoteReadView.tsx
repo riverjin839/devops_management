@@ -26,8 +26,8 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
   return (
     <div className="space-y-5">
       {/* 메타 정보 */}
-      <div className="flex items-center gap-2 flex-wrap text-xs">
-        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md text-white ${svc?.accent ?? 'bg-slate-500'}`}>
+      <div className="flex items-center gap-2 flex-wrap text-sm">
+        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-white ${svc?.accent ?? 'bg-slate-500'}`}>
           {svc?.icon} {svc?.label ?? note.service}
         </span>
         {note.pinned && (
@@ -65,7 +65,7 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
       {/* 답변 */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex-shrink-0">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-sm font-bold flex-shrink-0">
             A
           </span>
           <span className="text-sm font-semibold text-foreground">답변 / 핵심 요약</span>
@@ -90,7 +90,7 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
         </div>
       )}
 
-      <div className="text-xs text-muted-foreground border-t border-border pt-3 flex gap-6">
+      <div className="text-sm text-muted-foreground border-t border-border pt-3 flex gap-6">
         <span>등록: {note.createdAt?.slice(0, 10)}</span>
         {note.updatedAt !== note.createdAt && (
           <span>수정: {note.updatedAt?.slice(0, 10)}</span>

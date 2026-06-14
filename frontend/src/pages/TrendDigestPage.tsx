@@ -43,23 +43,23 @@ function TrendItemCard({ item }: { item: TrendItem }) {
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1.5 mb-1">
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${catCls}`}>
+            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${catCls}`}>
               {CATEGORY_LABEL[item.category] ?? item.category.toUpperCase()}
             </span>
-            <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+            <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
               {ITEM_TYPE_LABEL[item.itemType] ?? item.itemType}
             </span>
             {item.version && (
-              <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+              <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                 {item.version}
               </span>
             )}
-            <span className="text-[10px] text-muted-foreground ml-auto">
+            <span className="text-xs text-muted-foreground ml-auto">
               {new Date(item.publishedAt).toLocaleDateString('ko-KR')}
             </span>
           </div>
           <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
-          <p className="text-[11px] text-muted-foreground">{item.sourceName}</p>
+          <p className="text-xs text-muted-foreground">{item.sourceName}</p>
         </div>
       </button>
 
@@ -67,17 +67,17 @@ function TrendItemCard({ item }: { item: TrendItem }) {
         <div className="px-4 pb-4 border-t border-border bg-secondary/10">
           {item.summaryKo ? (
             <div className="mt-3">
-              <p className="text-xs font-semibold text-muted-foreground mb-1.5">AI 요약 (한국어)</p>
+              <p className="text-sm font-semibold text-muted-foreground mb-1.5">AI 요약 (한국어)</p>
               <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{item.summaryKo}</p>
             </div>
           ) : (
-            <p className="mt-3 text-xs text-muted-foreground italic">요약 준비 중...</p>
+            <p className="mt-3 text-sm text-muted-foreground italic">요약 준비 중...</p>
           )}
           <a
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
           >
             원문 보기 <ExternalLink className="w-3 h-3" />
           </a>
@@ -107,18 +107,18 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
       {/* 상태 + 종합 요약 */}
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
-          <span className={`flex items-center gap-1 text-xs font-medium ${statusInfo.cls}`}>
+          <span className={`flex items-center gap-1 text-sm font-medium ${statusInfo.cls}`}>
             {statusInfo.icon} {statusInfo.label}
           </span>
-          <span className="text-xs text-muted-foreground">· {digest.itemCount}건 수집</span>
+          <span className="text-sm text-muted-foreground">· {digest.itemCount}건 수집</span>
           {digest.errorMessage && (
-            <span className="text-xs text-red-500 truncate ml-1">{digest.errorMessage}</span>
+            <span className="text-sm text-red-500 truncate ml-1">{digest.errorMessage}</span>
           )}
         </div>
 
         {digest.overallSummaryKo ? (
           <>
-            <p className="text-xs font-semibold text-muted-foreground mb-1.5">오늘의 기술 동향 요약</p>
+            <p className="text-sm font-semibold text-muted-foreground mb-1.5">오늘의 기술 동향 요약</p>
             <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{digest.overallSummaryKo}</p>
           </>
         ) : (
@@ -131,12 +131,12 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
       {/* 필터 */}
       <div className="flex flex-wrap gap-3">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-muted-foreground">카테고리:</span>
+          <span className="text-sm text-muted-foreground">카테고리:</span>
           {categories.map((c) => (
             <button
               key={c}
               onClick={() => setSelCategory(c)}
-              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              className={`text-sm px-2.5 py-1 rounded-full border transition-colors ${
                 selCategory === c
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'border-border text-muted-foreground hover:bg-secondary'
@@ -147,12 +147,12 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
           ))}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-muted-foreground">타입:</span>
+          <span className="text-sm text-muted-foreground">타입:</span>
           {types.map((t) => (
             <button
               key={t}
               onClick={() => setSelType(t)}
-              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              className={`text-sm px-2.5 py-1 rounded-full border transition-colors ${
                 selType === t
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'border-border text-muted-foreground hover:bg-secondary'
@@ -229,7 +229,7 @@ function SourceRow({ s }: { s: TrendSource }) {
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={() => setEditing(false)}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-secondary border border-border rounded">
+            className="flex items-center gap-1 px-2 py-1 text-sm bg-secondary border border-border rounded">
             <X className="w-3 h-3" />취소
           </button>
           <button
@@ -238,7 +238,7 @@ function SourceRow({ s }: { s: TrendSource }) {
               { onSuccess: () => setEditing(false) },
             )}
             disabled={update.isPending}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50">
+            className="flex items-center gap-1 px-2 py-1 text-sm bg-primary text-primary-foreground rounded disabled:opacity-50">
             <Check className="w-3 h-3" />저장
           </button>
         </div>
@@ -252,24 +252,24 @@ function SourceRow({ s }: { s: TrendSource }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-medium">{s.name}</p>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
               {s.sourceType === 'github_release' ? 'GitHub' : 'RSS'}
             </span>
             {s.lastStatus && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusCls}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded border ${statusCls}`}>
                 {s.lastStatus === 'ok' ? `✓ 최근 +${s.lastItemCount ?? 0}` : s.lastStatus === 'empty' ? '· 수집 없음' : '✗ 실패'}
               </span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{s.url}</p>
+          <p className="text-sm text-muted-foreground font-mono truncate mt-0.5">{s.url}</p>
           {s.lastMessage && (
-            <p className={`text-[11px] mt-1 break-all ${s.lastStatus === 'error' ? 'text-red-400' : 'text-muted-foreground'}`}
+            <p className={`text-xs mt-1 break-all ${s.lastStatus === 'error' ? 'text-red-400' : 'text-muted-foreground'}`}
                title={s.lastMessage}>
               {s.lastMessage}
             </p>
           )}
           {s.lastCollectedAt && (
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+            <p className="text-xs text-muted-foreground/70 mt-0.5">
               마지막: {formatDateTimeShort(s.lastCollectedAt)}
             </p>
           )}
@@ -315,7 +315,7 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
   return (
     <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-primary">새 소스 추가</p>
+        <p className="text-sm font-semibold text-primary">새 소스 추가</p>
         <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
@@ -335,18 +335,18 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
           className="px-2 py-1.5 text-sm font-mono bg-background border border-border rounded md:col-span-2" />
       </div>
       {create.isError && (
-        <p className="text-xs text-red-400">등록 실패: {(create.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? (create.error as Error).message}</p>
+        <p className="text-sm text-red-400">등록 실패: {(create.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? (create.error as Error).message}</p>
       )}
       <div className="flex justify-end gap-2">
         <button onClick={onClose}
-          className="px-2.5 py-1 text-xs bg-secondary border border-border rounded">취소</button>
+          className="px-2.5 py-1 text-sm bg-secondary border border-border rounded">취소</button>
         <button
           onClick={() => create.mutate(
             { name, sourceType, url, category, enabled: true },
             { onSuccess: () => onClose() },
           )}
           disabled={!canSubmit || create.isPending}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50">
+          className="flex items-center gap-1 px-2.5 py-1 text-sm bg-primary text-primary-foreground rounded disabled:opacity-50">
           {create.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
           추가
         </button>
@@ -369,14 +369,14 @@ function SourcesPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
           총 {sources.length}개 · 활성 {sources.filter((s) => s.enabled).length}개
           {totalErrors > 0 && <span className="ml-2 text-red-400">⚠ 수집 실패 {totalErrors}개</span>}
         </div>
         {!adding && (
           <button
             onClick={() => setAdding(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             소스 추가
@@ -388,7 +388,7 @@ function SourcesPanel() {
 
       {Object.entries(grouped).map(([cat, srcs]) => (
         <div key={cat}>
-          <p className={`text-xs font-semibold px-2 py-1 rounded mb-2 w-fit ${CATEGORY_COLORS[cat] ?? 'bg-secondary'}`}>
+          <p className={`text-sm font-semibold px-2 py-1 rounded mb-2 w-fit ${CATEGORY_COLORS[cat] ?? 'bg-secondary'}`}>
             {CATEGORY_LABEL[cat] ?? cat.toUpperCase()}
           </p>
           <div className="space-y-1.5">
@@ -432,7 +432,7 @@ export function TrendDigestPage() {
       <aside className="w-56 flex-shrink-0 border-r border-border flex flex-col bg-card">
         <div className="px-4 py-4 border-b border-border">
           <h2 className="font-semibold text-sm">기술 동향</h2>
-          <p className="text-[11px] text-muted-foreground mt-0.5">K8s · Cilium · Linux</p>
+          <p className="text-xs text-muted-foreground mt-0.5">K8s · Cilium · Linux</p>
         </div>
 
         <div className="px-3 py-3 border-b border-border space-y-2">
@@ -441,7 +441,7 @@ export function TrendDigestPage() {
             onChange={(e) => setLookbackDays(Number(e.target.value) || 90)}
             disabled={triggerCollect.isPending}
             title="며칠 전까지의 릴리즈/블로그를 가져올지 — k8s/cilium 마이너 릴리즈 주기가 길어서 1~7일만 보면 거의 비어있다."
-            className="w-full text-xs px-2 py-1.5 bg-background border border-border rounded-lg disabled:opacity-60"
+            className="w-full text-sm px-2 py-1.5 bg-background border border-border rounded-lg disabled:opacity-60"
           >
             {LOOKBACK_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -450,7 +450,7 @@ export function TrendDigestPage() {
           <button
             onClick={handleCollect}
             disabled={triggerCollect.isPending}
-            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 text-sm font-medium px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
             {triggerCollect.isPending ? '수집 중...' : '지금 수집'}
@@ -463,7 +463,7 @@ export function TrendDigestPage() {
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             </div>
           ) : displayDigests.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center pt-6 px-3">
+            <p className="text-sm text-muted-foreground text-center pt-6 px-3">
               수집된 동향이 없습니다.<br />위 버튼을 눌러 시작하세요.
             </p>
           ) : (
@@ -479,7 +479,7 @@ export function TrendDigestPage() {
                   }`}
                 >
                   <p className="text-sm font-medium">{d.digestDate}</p>
-                  <div className={`flex items-center gap-1 text-[11px] mt-0.5 ${si.cls}`}>
+                  <div className={`flex items-center gap-1 text-xs mt-0.5 ${si.cls}`}>
                     {si.icon}
                     <span>{si.label}</span>
                     {d.status === 'done' && (
@@ -496,7 +496,7 @@ export function TrendDigestPage() {
         <div className="border-t border-border p-2">
           <button
             onClick={() => setActiveTab((t) => t === 'sources' ? 'digest' : 'sources')}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg transition-colors ${
+            className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
               activeTab === 'sources'
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:bg-secondary'
@@ -525,7 +525,7 @@ export function TrendDigestPage() {
                 <button
                   onClick={handleCollect}
                   disabled={triggerCollect.isPending}
-                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary disabled:opacity-60"
+                  className="flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary disabled:opacity-60"
                   title={`${LOOKBACK_OPTIONS.find((o) => o.value === lookbackDays)?.label ?? '최근'} 범위로 다시 수집`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />

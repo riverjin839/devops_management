@@ -268,7 +268,7 @@ export function KnowledgeHubPage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 운영 노트 · 명령어 · 작업 가이드 · 이슈 · 워크플로우를 한 대장에서.
               </p>
             </div>
@@ -283,7 +283,7 @@ export function KnowledgeHubPage() {
             {hasFilters && (
               <button
                 onClick={clearFilters}
-                className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="ml-auto flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3 h-3" /> 초기화
               </button>
@@ -293,7 +293,7 @@ export function KnowledgeHubPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setKindFilter('')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                 !kindFilter
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-background border-border text-muted-foreground hover:border-primary/50'
@@ -311,7 +311,7 @@ export function KnowledgeHubPage() {
                 <button
                   key={k}
                   onClick={() => setKindFilter(isActive ? '' : k)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                     isActive
                       ? `${meta.chip} border-transparent ring-1 ring-current/30`
                       : 'bg-background border-border text-muted-foreground hover:border-primary/50'
@@ -328,7 +328,7 @@ export function KnowledgeHubPage() {
               <button
                 onClick={() => setOpenOnly((v) => !v)}
                 title="미조치 상태인 이슈만 보기"
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                   openOnly
                     ? 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/40 ring-1 ring-red-500/30'
                     : 'bg-background border-border text-muted-foreground hover:border-red-500/50'
@@ -417,7 +417,7 @@ export function KnowledgeHubPage() {
                         className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
                       >
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-medium rounded-full border ${meta.chip}`}>
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full border ${meta.chip}`}>
                             <KindIcon className="w-3 h-3" /> {meta.label}
                           </span>
                         </td>
@@ -432,22 +432,22 @@ export function KnowledgeHubPage() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {it.category ? (
-                            <span className="line-clamp-1 text-xs text-muted-foreground">{it.category}</span>
+                            <span className="line-clamp-1 text-sm text-muted-foreground">{it.category}</span>
                           ) : (
-                            <span className="text-xs text-muted-foreground/40">—</span>
+                            <span className="text-sm text-muted-foreground/40">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {it.statusLabel && it.statusTone ? (
                             <span className="inline-flex items-center gap-1.5">
                               <span className={`w-2 h-2 rounded-full ${STATUS_DOT_TONE[it.statusTone]}`} />
-                              <span className={`text-xs font-medium ${STATUS_TEXT_TONE[it.statusTone]}`}>{it.statusLabel}</span>
+                              <span className={`text-sm font-medium ${STATUS_TEXT_TONE[it.statusTone]}`}>{it.statusLabel}</span>
                             </span>
                           ) : (
-                            <span className="text-xs text-muted-foreground/40">—</span>
+                            <span className="text-sm text-muted-foreground/40">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground tabular-nums">
                           {formatRelativeTime(it.updatedAt)}
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -459,7 +459,7 @@ export function KnowledgeHubPage() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2 border-t border-border bg-muted/20 text-[11px] text-muted-foreground tabular-nums">
+            <div className="px-4 py-2 border-t border-border bg-muted/20 text-xs text-muted-foreground tabular-nums">
               총 {sorted.length}건{hasFilters && items.length !== sorted.length ? ` · 전체 ${items.length}건 중` : ''}
             </div>
           </div>

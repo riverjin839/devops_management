@@ -67,7 +67,7 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border"
         style={{ borderLeftColor: NODE_COLOR[node.type], borderLeftWidth: 4 }}>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {node.type}
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.label}</p>
@@ -76,29 +76,29 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="px-4 py-3 space-y-3 max-h-[420px] overflow-y-auto text-xs">
+      <div className="px-4 py-3 space-y-3 max-h-[420px] overflow-y-auto text-sm">
         {node.version && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Version</p>
+            <p className="text-xs text-muted-foreground uppercase mb-0.5">Version</p>
             <p className="font-mono text-foreground">{node.version}</p>
           </div>
         )}
         {node.value && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Value</p>
+            <p className="text-xs text-muted-foreground uppercase mb-0.5">Value</p>
             <p className="font-mono text-foreground break-all">{node.value}</p>
           </div>
         )}
         {node.category && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Category</p>
+            <p className="text-xs text-muted-foreground uppercase mb-0.5">Category</p>
             <p className="font-mono text-foreground">{node.category}</p>
           </div>
         )}
         {node.collectedAt && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Collected</p>
-            <p className="font-mono text-foreground text-[11px]">{node.collectedAt}</p>
+            <p className="text-xs text-muted-foreground uppercase mb-0.5">Collected</p>
+            <p className="font-mono text-foreground text-xs">{node.collectedAt}</p>
           </div>
         )}
       </div>
@@ -203,7 +203,7 @@ export function VersionGraphPage() {
           <option value="">— 클러스터 선택 —</option>
           {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <div className="flex items-center gap-1 ml-auto text-[11px] text-muted-foreground flex-wrap">
+        <div className="flex items-center gap-1 ml-auto text-xs text-muted-foreground flex-wrap">
           {(Object.entries(NODE_COLOR) as Array<[VersionGraphNode['type'], string]>).map(([k, v]) => (
             <span key={k} className="inline-flex items-center gap-1">
               <span className="w-2 h-2 rounded-full" style={{ background: v }} />
@@ -214,7 +214,7 @@ export function VersionGraphPage() {
         <button
           onClick={collectAndRefresh}
           disabled={!selectedId}
-          className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 rounded transition-colors disabled:opacity-50"
+          className="flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 rounded transition-colors disabled:opacity-50"
         >
           <RefreshCw className="w-3 h-3" />
           재수집
@@ -236,7 +236,7 @@ export function VersionGraphPage() {
             <p>아직 수집된 스냅샷이 없습니다.</p>
             <button
               onClick={collectAndRefresh}
-              className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg"
+              className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg"
             >
               지금 수집
             </button>

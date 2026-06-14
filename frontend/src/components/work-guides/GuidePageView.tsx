@@ -28,7 +28,7 @@ function Breadcrumb({ guide, allGuides, onSelect }: { guide: WorkGuide; allGuide
   }
   if (ancestors.length === 0) return null;
   return (
-    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4 flex-wrap">
+    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-4 flex-wrap">
       {ancestors.map((a) => (
         <span key={a.id} className="flex items-center gap-1">
           <button onClick={() => onSelect(a.id)} className="hover:text-primary transition-colors truncate max-w-[140px]">
@@ -66,7 +66,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold leading-tight mb-3">{guide.title}</h1>
-            <div className="flex items-center gap-2 flex-wrap text-xs">
+            <div className="flex items-center gap-2 flex-wrap text-sm">
               {guide.category && (
                 <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                   {guide.category}
@@ -86,7 +86,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 text-[10px] font-semibold transition-colors"
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-colors"
                   title={guide.confluenceUrl}
                 >
                   <ExternalLink className="w-2.5 h-2.5" /> Confluence
@@ -108,12 +108,12 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
               <Plus className="w-4 h-4" />
             </button>
             <button onClick={onEdit}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
               title="수정">
               <Pencil className="w-3.5 h-3.5" /> 수정
             </button>
             <button onClick={onDelete}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
               title="삭제">
               <Trash2 className="w-3.5 h-3.5" /> 삭제
             </button>
@@ -123,7 +123,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
         {tagList.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-5">
             {tagList.map((t) => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded bg-secondary text-muted-foreground">#{t}</span>
+              <span key={t} className="text-sm px-2 py-0.5 rounded bg-secondary text-muted-foreground">#{t}</span>
             ))}
           </div>
         )}
@@ -145,7 +145,7 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
                     <span className="flex-1 text-sm font-medium group-hover:text-primary transition-colors truncate">
                       {child.title}
                     </span>
-                    <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${csc.cls}`}>
+                    <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border flex-shrink-0 ${csc.cls}`}>
                       {csc.icon}{csc.label}
                     </span>
                   </button>

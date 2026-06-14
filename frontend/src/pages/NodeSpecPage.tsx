@@ -33,7 +33,7 @@ const STATUS_LABEL: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_CLS[status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/30';
   return (
-    <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border ${cls}`}>
+    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${cls}`}>
       {STATUS_LABEL[status] ?? status}
     </span>
   );
@@ -362,49 +362,49 @@ export function NodeSpecPage() {
           <div className="flex items-center gap-3 mb-2">
             <ClipboardCheck className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">노드 서버스펙 관리 대장</h1>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+            <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
               {stats.total} 건
             </span>
             <div className="ml-auto flex items-center gap-1.5">
               <button onClick={() => exportCsv(rows)} disabled={rows.length === 0}
-                className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1 disabled:opacity-50">
+                className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1 disabled:opacity-50">
                 <Download className="w-3 h-3" /> CSV 내보내기
               </button>
               <button onClick={downloadCsvTemplate}
-                className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1"
+                className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1"
                 title="현재 테이블 컬럼 기준 빈 템플릿 다운로드">
                 <FileDown className="w-3 h-3" /> 템플릿
               </button>
               <button onClick={() => setCsvOpen(true)}
-                className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg flex items-center gap-1">
+                className="px-2.5 py-1 text-sm font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg flex items-center gap-1">
                 <Upload className="w-3 h-3" /> CSV 업로드
               </button>
               <button onClick={() => setPasteOpen(true)}
-                className="px-2.5 py-1 text-xs font-medium bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 border border-violet-500/30 rounded-lg flex items-center gap-1"
+                className="px-2.5 py-1 text-sm font-medium bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 border border-violet-500/30 rounded-lg flex items-center gap-1"
                 title="엑셀/구글시트에서 복사한 블록 붙여넣기">
                 <ClipboardPaste className="w-3 h-3" /> 엑셀 붙여넣기
               </button>
               {clusterId && (
                 <button onClick={() => { setSelectedHosts(clusterNodeCandidates); setHostFactsOpen(true); }}
-                  className="px-2.5 py-1 text-xs font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/30 rounded-lg flex items-center gap-1">
+                  className="px-2.5 py-1 text-sm font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/30 rounded-lg flex items-center gap-1">
                   <Terminal className="w-3 h-3" /> Host Facts 수집
                 </button>
               )}
               {clusterId && (
                 importMut.isPending ? (
                   <button onClick={importMut.abort}
-                    className="px-2.5 py-1 text-xs font-medium bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg flex items-center gap-1">
+                    className="px-2.5 py-1 text-sm font-medium bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg flex items-center gap-1">
                     <Square className="w-3 h-3 fill-current" /> 중지
                   </button>
                 ) : (
                   <button onClick={() => setConfirmImport(true)}
-                    className="px-2.5 py-1 text-xs font-medium bg-sky-500/10 hover:bg-sky-500/20 text-sky-500 border border-sky-500/30 rounded-lg flex items-center gap-1">
+                    className="px-2.5 py-1 text-sm font-medium bg-sky-500/10 hover:bg-sky-500/20 text-sky-500 border border-sky-500/30 rounded-lg flex items-center gap-1">
                     <RefreshCw className="w-3 h-3" /> 클러스터 임포트
                   </button>
                 )
               )}
               <button onClick={() => setCreating(true)}
-                className="px-3 py-1 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
+                className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
                 <Plus className="w-3.5 h-3.5" /> 신규 등록
               </button>
             </div>
@@ -419,7 +419,7 @@ export function NodeSpecPage() {
                 <button
                   key={k}
                   onClick={() => setStatusFilter(k === 'total' ? '' : k as NodeSpecStatus)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs transition-colors ${
                     isActive
                       ? 'bg-primary/10 border-primary/50 text-primary'
                       : 'bg-card border-border hover:border-primary/40 text-muted-foreground hover:text-foreground'
@@ -440,11 +440,11 @@ export function NodeSpecPage() {
               <input
                 value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder="hostname / serial / IP / model"
-                className="w-full pl-7 pr-2 py-1 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full pl-7 pr-2 py-1 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as NodeSpecStatus | '')}
-              className="px-1.5 py-1 text-xs bg-background border border-border rounded-lg">
+              className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg">
               <option value="">상태 전체</option>
               <option value="active">운영중</option>
               <option value="spare">예비</option>
@@ -452,7 +452,7 @@ export function NodeSpecPage() {
               <option value="decommission">폐기</option>
             </select>
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-1.5 py-1 text-xs bg-background border border-border rounded-lg">
+              className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg">
               <option value="">역할 전체</option>
               <option value="control-plane">control-plane</option>
               <option value="worker">worker</option>
@@ -462,7 +462,7 @@ export function NodeSpecPage() {
             </select>
 
             {/* 전체 서버 기준 CPU·MEM 총합 — 맨 우측 */}
-            <div className="ml-auto flex items-center gap-2 text-[11px]">
+            <div className="ml-auto flex items-center gap-2 text-xs">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary border border-border tabular-nums"
                 title="전체 서버 논리 CPU(스레드) 합계">
                 <Cpu className="w-3 h-3 text-muted-foreground" />
@@ -479,7 +479,7 @@ export function NodeSpecPage() {
 
           {/* 선택 상태 표시 */}
           {selection.rangeSize > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 mb-2 bg-primary/5 border border-primary/30 rounded-lg text-[11px]">
+            <div className="flex items-center gap-2 px-3 py-1.5 mb-2 bg-primary/5 border border-primary/30 rounded-lg text-xs">
               <Copy className="w-3 h-3 text-primary" />
               <span className="text-primary font-medium">{selection.rangeSize}개 셀 선택됨</span>
               <span className="text-muted-foreground">
@@ -505,15 +505,15 @@ export function NodeSpecPage() {
                     {GRID_COLS.map((k) => (
                       <th key={k}
                         title={COL_TIPS[k] ?? COL_LABELS[k]}
-                        className={`relative px-2 py-2 text-[11px] font-semibold text-muted-foreground ${k === 'ssd' || k === 'vm' ? 'text-center' : ''}`}>
+                        className={`relative px-2 py-2 text-xs font-semibold text-muted-foreground ${k === 'ssd' || k === 'vm' ? 'text-center' : ''}`}>
                         <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
                           {COL_LABELS[k]}
-                          <span className="text-[9px] text-muted-foreground/50">ⓘ</span>
+                          <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
                         </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(k, e)} onDoubleClick={() => colW.autoFit(k)} />
                       </th>
                     ))}
-                    <th className="relative px-2 py-2 text-[11px] font-semibold text-muted-foreground">
+                    <th className="relative px-2 py-2 text-xs font-semibold text-muted-foreground">
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
                     </th>
                   </tr>
@@ -534,10 +534,10 @@ export function NodeSpecPage() {
                   {rows.map((r) => (
                     <tr key={r.id} className="border-b border-border hover:bg-muted/10">
                       <GridCell row={r.id} col="hostname" selection={selection}
-                        className="px-2 py-2 font-mono text-xs text-foreground align-top">
+                        className="px-2 py-2 font-mono text-sm text-foreground align-top">
                         <p className="font-semibold">{r.hostname}</p>
                         {r.nodeName && r.nodeName !== r.hostname && (
-                          <p className="text-[10px] text-muted-foreground">k8s: {r.nodeName}</p>
+                          <p className="text-xs text-muted-foreground">k8s: {r.nodeName}</p>
                         )}
                       </GridCell>
                       <GridCell row={r.id} col="status" selection={selection}
@@ -546,11 +546,11 @@ export function NodeSpecPage() {
                       </GridCell>
                       <GridCell row={r.id} col="cluster" selection={selection}
                         className="px-2 py-2 align-top">
-                        <p className="text-xs">{r.clusterName ?? <span className="text-muted-foreground/60">미배정</span>}</p>
-                        <p className="text-[10px] text-muted-foreground">{r.role ?? '-'}</p>
+                        <p className="text-sm">{r.clusterName ?? <span className="text-muted-foreground/60">미배정</span>}</p>
+                        <p className="text-xs text-muted-foreground">{r.role ?? '-'}</p>
                       </GridCell>
                       <GridCell row={r.id} col="publicIp" selection={selection}
-                        className="px-2 py-2 align-top font-mono text-[11px]">
+                        className="px-2 py-2 align-top font-mono text-xs">
                         {r.bond0Ip ? (
                           <p className="text-foreground" title="ip addr → bond0 의 IP">
                             <InlineTextCell value={r.bond0Ip} placeholder="bond0 IP"
@@ -561,10 +561,10 @@ export function NodeSpecPage() {
                             미수집
                           </span>
                         )}
-                        {r.bond0Speed && <p className="text-[10px] text-muted-foreground">{r.bond0Speed}</p>}
+                        {r.bond0Speed && <p className="text-xs text-muted-foreground">{r.bond0Speed}</p>}
                       </GridCell>
                       <GridCell row={r.id} col="privateIp" selection={selection}
-                        className="px-2 py-2 align-top font-mono text-[11px]">
+                        className="px-2 py-2 align-top font-mono text-xs">
                         {r.bond1Ip ? (
                           <p className="text-foreground" title="ip addr → bond1 의 IP">
                             <InlineTextCell value={r.bond1Ip} placeholder="bond1 IP"
@@ -575,63 +575,63 @@ export function NodeSpecPage() {
                             미수집
                           </span>
                         )}
-                        {r.bond1Speed && <p className="text-[10px] text-muted-foreground">{r.bond1Speed}</p>}
+                        {r.bond1Speed && <p className="text-xs text-muted-foreground">{r.bond1Speed}</p>}
                       </GridCell>
                       <GridCell row={r.id} col="cpu" selection={selection}
-                        className="px-2 py-2 align-top text-xs">
+                        className="px-2 py-2 align-top text-sm">
                         <p className="font-mono">
                           <Cpu className="w-3 h-3 inline mr-0.5 text-muted-foreground" />
                           {r.cpuSockets ? `${r.cpuSockets}s · ` : ''}
                           {r.cpuCores != null ? `${r.cpuCores}c` : '?'}
                           {r.cpuThreads ? `/${r.cpuThreads}t` : ''}
                         </p>
-                        <p className="text-muted-foreground text-[10px] truncate max-w-[180px]" title={r.cpuModel ?? ''}>
+                        <p className="text-muted-foreground text-xs truncate max-w-[180px]" title={r.cpuModel ?? ''}>
                           {r.cpuModel ?? '-'}
                         </p>
                       </GridCell>
                       <GridCell row={r.id} col="ram" selection={selection}
-                        className="px-2 py-2 align-top text-xs">
+                        className="px-2 py-2 align-top text-sm">
                         <p className="font-mono">
                           {r.memoryGb ? `${r.memoryGb}GB` : '-'}
                         </p>
                         {r.memoryModules && (
-                          <p className="text-[10px] text-muted-foreground truncate max-w-[160px]" title={r.memoryModules}>
+                          <p className="text-xs text-muted-foreground truncate max-w-[160px]" title={r.memoryModules}>
                             {r.memoryModules}
                           </p>
                         )}
                       </GridCell>
                       <GridCell row={r.id} col="disk" selection={selection}
-                        className="px-2 py-2 align-top text-xs">
+                        className="px-2 py-2 align-top text-sm">
                         <p className="font-mono">
                           <HardDrive className="w-3 h-3 inline mr-0.5 text-muted-foreground" />
                           {r.diskTotalGb ? `총 ${r.diskTotalGb}GB` : '-'}
                           {r.diskCount ? ` ×${r.diskCount}` : ''}
                         </p>
-                        <p className="text-[10px] text-muted-foreground" title="OS 디스크 제외한 사용 가능 디스크 합계 (lsblk 자동수집 또는 수기)">
+                        <p className="text-xs text-muted-foreground" title="OS 디스크 제외한 사용 가능 디스크 합계 (lsblk 자동수집 또는 수기)">
                           OS 제외 {r.nonOsDiskGb != null ? `${r.nonOsDiskGb}GB` : '-'}
                         </p>
                         {r.diskType && (
-                          <p className="text-[10px] font-mono text-cyan-500/80 truncate max-w-[180px]" title={r.diskType}>
+                          <p className="text-xs font-mono text-cyan-500/80 truncate max-w-[180px]" title={r.diskType}>
                             {r.diskType}
                           </p>
                         )}
                       </GridCell>
                       <GridCell row={r.id} col="os" selection={selection}
-                        className="px-2 py-2 align-top text-xs font-mono max-w-[160px]">
+                        className="px-2 py-2 align-top text-sm font-mono max-w-[160px]">
                         <p className="truncate font-semibold" title={r.osImage ?? ''}>
                           {shortOs(r.osImage ?? '') || (
                             <InlineTextCell value="" placeholder="OS" onSave={(v) => saveField(r.id, { osImage: v })} />
                           )}
                         </p>
                         {r.kernelVersion && (
-                          <p className="text-[10px] text-muted-foreground truncate" title={r.kernelVersion}>
+                          <p className="text-xs text-muted-foreground truncate" title={r.kernelVersion}>
                             {r.kernelVersion}
                           </p>
                         )}
                       </GridCell>
                       <GridCell row={r.id} col="ssd" selection={selection}
                         className="px-2 py-2 align-top text-center">
-                        <div className="flex flex-col items-center gap-0.5 text-xs font-mono">
+                        <div className="flex flex-col items-center gap-0.5 text-sm font-mono">
                           <button
                             type="button"
                             title="SSD 여부 (클릭 순환)"
@@ -648,7 +648,7 @@ export function NodeSpecPage() {
                             {r.isSsd === true ? 'O' : r.isSsd === false ? 'X' : '·'}
                           </button>
                           {r.diskType && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-full" title={r.diskType}>
+                            <span className="text-xs text-muted-foreground truncate max-w-full" title={r.diskType}>
                               {r.diskType}
                             </span>
                           )}
@@ -663,7 +663,7 @@ export function NodeSpecPage() {
                             const next = r.isVm === true ? false : r.isVm === false ? null : true;
                             saveField(r.id, { isVm: next });
                           }}
-                          className={`px-1 rounded text-xs font-mono hover:bg-primary/10 ${
+                          className={`px-1 rounded text-sm font-mono hover:bg-primary/10 ${
                             r.isVm === true ? 'text-sky-500 font-bold'
                             : r.isVm === false ? 'text-muted-foreground/50'
                             : 'text-muted-foreground/30'
@@ -673,14 +673,14 @@ export function NodeSpecPage() {
                         </button>
                       </GridCell>
                       <GridCell row={r.id} col="currentUsage" selection={selection}
-                        className="px-2 py-2 align-top text-xs max-w-[160px]">
+                        className="px-2 py-2 align-top text-sm max-w-[160px]">
                         <p className="font-medium truncate" title={r.currentUsage ?? ''}>
                           <InlineTextCell value={r.currentUsage ?? ''} placeholder="NEW K8S MASTER"
                             onSave={(v) => saveField(r.id, { currentUsage: v })} />
                         </p>
                       </GridCell>
                       <GridCell row={r.id} col="location" selection={selection}
-                        className="px-2 py-2 align-top text-xs">
+                        className="px-2 py-2 align-top text-sm">
                         {(r.datacenter || r.rack || r.rackUnit) ? (
                           <p className="font-mono text-foreground">
                             <MapPin className="w-3 h-3 inline mr-0.5 text-muted-foreground" />
@@ -707,7 +707,7 @@ export function NodeSpecPage() {
             </DoubleScrollX>
           </div>
 
-          <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1">
+          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
             <Server className="w-3 h-3" />
             "클러스터 임포트" 는 kubeconfig 로 hostname / IP / CPU / RAM / OS / kernel 등을 자동 채웁니다.
             벤더/시리얼/랙/자산태그 등은 수기로 입력하세요.
@@ -737,7 +737,7 @@ export function NodeSpecPage() {
         onCancel={() => setConfirmImport(false)}
         onConfirm={() => { setConfirmImport(false); importMut.mutate(); }}
       >
-        <div className="space-y-1 font-mono text-[11px] text-muted-foreground">
+        <div className="space-y-1 font-mono text-xs text-muted-foreground">
           <div>cluster: {clusters.find((c) => c.id === clusterId)?.name ?? clusterId}</div>
           <div>upsert : true · 보존 필드: vendor, model, serial, asset_tag, rack, ...</div>
         </div>
@@ -780,15 +780,15 @@ export function NodeSpecPage() {
               <input value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="SSH user (root)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />
               <input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)} placeholder="SSH password (선택)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />
             </div>
-            <textarea value={sshPrivateKey} onChange={(e) => setSshPrivateKey(e.target.value)} placeholder="Private Key (선택, PEM)" className="mt-3 w-full h-24 px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg" />
+            <textarea value={sshPrivateKey} onChange={(e) => setSshPrivateKey(e.target.value)} placeholder="Private Key (선택, PEM)" className="mt-3 w-full h-24 px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg" />
             <div className="mt-3 border border-border rounded-lg p-2 bg-background/60">
-              <p className="text-xs text-muted-foreground mb-2">노드 일괄 실행 기준 노드 선택 (자동 로딩)</p>
+              <p className="text-sm text-muted-foreground mb-2">노드 일괄 실행 기준 노드 선택 (자동 로딩)</p>
               {clusterNodeCandidates.length === 0 ? (
-                <p className="text-xs text-muted-foreground">선택한 클러스터의 노드 정보가 없습니다.</p>
+                <p className="text-sm text-muted-foreground">선택한 클러스터의 노드 정보가 없습니다.</p>
               ) : (
                 <div className="max-h-28 overflow-auto grid grid-cols-2 gap-1.5">
                   {clusterNodeCandidates.map((h) => (
-                    <label key={h} className="text-xs flex items-center gap-1.5">
+                    <label key={h} className="text-sm flex items-center gap-1.5">
                       <input
                         type="checkbox"
                         checked={selectedHosts.includes(h)}

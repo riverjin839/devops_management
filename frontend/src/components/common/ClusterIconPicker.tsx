@@ -184,8 +184,8 @@ export function ClusterIconPicker({
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{title ?? '아이콘 선택'}</p>
-            {clusterName && <p className="text-xs font-semibold truncate">{clusterName}</p>}
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">{title ?? '아이콘 선택'}</p>
+            {clusterName && <p className="text-sm font-semibold truncate">{clusterName}</p>}
           </div>
           <button
             onClick={onClose}
@@ -207,7 +207,7 @@ export function ClusterIconPicker({
           </TabButton>
           <button
             onClick={handleReset}
-            className="ml-auto px-3 py-1.5 text-[11px] inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+            className="ml-auto px-3 py-1.5 text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
             title="status 기반 기본 아이콘으로 되돌리기"
           >
             <RotateCcw className="w-3 h-3" />
@@ -221,11 +221,11 @@ export function ClusterIconPicker({
             CLUSTER_ICON_GROUPS.map((group) => (
               <section key={group.key}>
                 <header className="flex items-baseline gap-2 px-1 mb-1.5">
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {group.label}
                   </h3>
                   {group.hint && (
-                    <p className="text-[10px] text-muted-foreground/70 truncate">{group.hint}</p>
+                    <p className="text-xs text-muted-foreground/70 truncate">{group.hint}</p>
                   )}
                 </header>
                 <div className="grid grid-cols-7 gap-1">
@@ -265,7 +265,7 @@ export function ClusterIconPicker({
                 <button
                   onClick={handleEmojiSubmit}
                   disabled={!emojiInput.trim()}
-                  className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40"
+                  className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40"
                 >
                   적용
                 </button>
@@ -273,11 +273,11 @@ export function ClusterIconPicker({
               {CLUSTER_EMOJI_GROUPS.map((group) => (
                 <section key={group.key}>
                   <header className="flex items-baseline gap-2 px-1 mb-1.5">
-                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.label}
                     </h3>
                     {group.hint && (
-                      <p className="text-[10px] text-muted-foreground/70 truncate">{group.hint}</p>
+                      <p className="text-xs text-muted-foreground/70 truncate">{group.hint}</p>
                     )}
                   </header>
                   <div className="grid grid-cols-10 gap-1">
@@ -305,7 +305,7 @@ export function ClusterIconPicker({
           )}
           {tab === 'upload' && (
             <div className="space-y-3 px-1">
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 이미지 파일을 업로드하면 64×64 정사각형으로 자동 크롭/축소돼 저장됩니다.
                 보통 PNG (투명 보존) 로 저장되며, 너무 크면 JPEG 로 변환됩니다.
               </p>
@@ -314,8 +314,8 @@ export function ClusterIconPicker({
                 <div className="rounded-lg border border-border bg-muted/20 p-2 flex items-center gap-2">
                   <img src={currentImage} alt="현재 아이콘" className="w-10 h-10 rounded-md object-cover border border-border" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-medium">현재 업로드된 이미지</p>
-                    <p className="text-[10px] text-muted-foreground truncate">
+                    <p className="text-xs font-medium">현재 업로드된 이미지</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       {Math.round(currentImage.length * 0.75 / 1024)} KB (base64)
                     </p>
                   </div>
@@ -326,7 +326,7 @@ export function ClusterIconPicker({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
               >
                 <Upload className="w-3.5 h-3.5" />
                 {uploading ? '처리 중…' : '이미지 선택'}
@@ -340,10 +340,10 @@ export function ClusterIconPicker({
               />
 
               {uploadError && (
-                <p className="text-[11px] text-red-500">{uploadError}</p>
+                <p className="text-xs text-red-500">{uploadError}</p>
               )}
 
-              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+              <p className="text-xs text-muted-foreground/70 leading-relaxed">
                 • 권장 사이즈: 정사각형 (예: 256×256)<br />
                 • 최대 5MB · 자동 64×64 축소<br />
                 • 저장 후 사이드바/카드/카탈로그 어디든 표시됩니다
@@ -353,7 +353,7 @@ export function ClusterIconPicker({
         </div>
 
         {/* Footer hint */}
-        <div className="px-3 py-1.5 border-t border-border text-[10px] text-muted-foreground/70">
+        <div className="px-3 py-1.5 border-t border-border text-xs text-muted-foreground/70">
           ESC · 외부 클릭으로 닫기
         </div>
       </div>
@@ -366,7 +366,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+      className={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
         active
           ? 'text-primary border-primary'
           : 'text-muted-foreground border-transparent hover:text-foreground'

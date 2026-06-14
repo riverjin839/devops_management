@@ -89,7 +89,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
   const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div>
-      <label className="block text-[11px] text-muted-foreground mb-1">{label}</label>
+      <label className="block text-xs text-muted-foreground mb-1">{label}</label>
       {children}
     </div>
   );
@@ -114,7 +114,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* 기본 */}
           <section>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">기본 정보</h3>
+            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">기본 정보</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Field label="hostname *">
                 <input value={form.hostname ?? ''} onChange={set('hostname')} className={monoCls} />
@@ -144,7 +144,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 네트워크 */}
           <section>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">네트워크</h3>
+            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">네트워크</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Field label="public IP (bond0)">
                 <input value={form.bond0Ip ?? ''} onChange={set('bond0Ip')} className={monoCls}
@@ -172,7 +172,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 하드웨어 */}
           <section>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">하드웨어</h3>
+            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">하드웨어</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="md:col-span-2">
                 <Field label="CPU 모델">
@@ -244,7 +244,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 위치 */}
           <section>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">위치</h3>
+            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">위치</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Field label="데이터센터">
                 <input value={form.datacenter ?? ''} onChange={set('datacenter')} className={inputCls} placeholder="DC1" />
@@ -263,7 +263,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 소프트웨어 */}
           <section>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">소프트웨어 (자동 수집 대상)</h3>
+            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">소프트웨어 (자동 수집 대상)</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="md:col-span-2">
                 <Field label="OS Image">
@@ -286,7 +286,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
           {/* 운영 정보 — 자산/계약 항목(자산태그·구매일·보증·담당자·구입목적) 은 사용자 요청으로 제거. */}
           <section>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">운영</h3>
+            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-2">운영</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
                 <Field label="현재 용도">
@@ -306,7 +306,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
           </section>
 
           {error && (
-            <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+            <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
               {error}
             </div>
           )}
@@ -314,11 +314,11 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onClose} disabled={saving}
-            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
             취소
           </button>
           <button onClick={submit} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             {mode === 'create' ? '등록' : '저장'}
           </button>

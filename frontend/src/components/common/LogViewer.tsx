@@ -328,7 +328,7 @@ export function LogViewer({
 
   if (isEmpty) {
     return (
-      <div className={`rounded-md border border-border bg-background p-3 text-xs text-muted-foreground ${className}`}>
+      <div className={`rounded-md border border-border bg-background p-3 text-sm text-muted-foreground ${className}`}>
         (empty)
       </div>
     );
@@ -338,7 +338,7 @@ export function LogViewer({
     <div className={`rounded-md border border-border bg-background overflow-hidden ${className}`}>
       {/* 툴바 */}
       {!hideToolbar && (
-      <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border bg-muted/30 text-[10px]">
+      <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border bg-muted/30 text-xs">
         <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase tracking-wider">
           {formatLabel}
         </span>
@@ -356,7 +356,7 @@ export function LogViewer({
                 value={localFilter}
                 onChange={(e) => setLocalFilter(e.target.value)}
                 placeholder="필터..."
-                className="pl-6 pr-2 py-0.5 text-[11px] bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary w-32"
+                className="pl-6 pr-2 py-0.5 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary w-32"
               />
             </div>
           )}
@@ -377,7 +377,7 @@ export function LogViewer({
           {collapsible && (
             <button
               onClick={() => setCollapsed((v) => !v)}
-              className="px-1.5 py-0.5 text-[10px] rounded border border-border bg-secondary hover:bg-secondary/80"
+              className="px-1.5 py-0.5 text-xs rounded border border-border bg-secondary hover:bg-secondary/80"
             >
               {collapsed ? '펼치기' : '접기'}
             </button>
@@ -389,7 +389,7 @@ export function LogViewer({
       {/* 본문 */}
       {!collapsed && (
         <pre
-          className={`text-[11px] font-mono leading-relaxed px-3 py-2 overflow-auto ${maxHeight} ${
+          className={`text-xs font-mono leading-relaxed px-3 py-2 overflow-auto ${maxHeight} ${
             wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
           } ${asError ? 'text-red-400/90' : 'text-foreground/90'}`}
         >

@@ -109,7 +109,7 @@ function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked 
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-medium truncate">{cluster.name}</span>
           {(cluster.region || cluster.operationLevel) && (
-            <span className="block text-[11px] text-muted-foreground truncate">
+            <span className="block text-xs text-muted-foreground truncate">
               {cluster.region}{cluster.region && cluster.operationLevel ? ' · ' : ''}{cluster.operationLevel}
             </span>
           )}
@@ -188,7 +188,7 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
         <span
           role="tooltip"
           style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateY(-50%)' }}
-          className="fixed px-2 py-1 text-xs font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
+          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
         >
           {label}
         </span>,
@@ -253,7 +253,7 @@ function ClusterSidebarIconRail({
           />
         )}
         {clusters.length === 0 ? (
-          <p className="px-1 py-3 text-[10px] text-muted-foreground/70 text-center">없음</p>
+          <p className="px-1 py-3 text-xs text-muted-foreground/70 text-center">없음</p>
         ) : (
           clusters.map((c) => {
             const subtitle = [c.region, c.operationLevel].filter(Boolean).join(' · ');
@@ -359,7 +359,7 @@ export function ClusterSidebar({
       className="flex-shrink-0 bg-card border border-border rounded-xl p-2 h-fit sticky top-4 relative"
     >
       <div className="flex items-center justify-between px-2 py-1.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {title}
           <span className="ml-1 text-muted-foreground/70">
             {multiSelect ? `(${selectedSet?.size ?? 0}/${totalN})` : `(${totalN})`}
@@ -368,7 +368,7 @@ export function ClusterSidebar({
         {multiSelect && !sortMode && totalN > 0 && (
           <button
             onClick={toggleAllMulti}
-            className="text-[10px] text-primary hover:text-primary/80"
+            className="text-xs text-primary hover:text-primary/80"
           >
             {(selectedSet?.size ?? 0) === totalN ? '전체 해제' : '전체 선택'}
           </button>
@@ -376,7 +376,7 @@ export function ClusterSidebar({
         {onReorder && (
           <button
             onClick={() => setSortMode((v) => !v)}
-            className={`p-1 rounded text-[10px] inline-flex items-center gap-1 ${
+            className={`p-1 rounded text-xs inline-flex items-center gap-1 ${
               sortMode ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
             }`}
             title={sortMode ? '정렬 모드 종료' : '드래그로 순서 변경'}
@@ -399,14 +399,14 @@ export function ClusterSidebar({
           <LayoutGrid className={`w-3.5 h-3.5 flex-shrink-0 ${selectedId === null ? 'text-primary' : 'text-muted-foreground/70'}`} />
           <span className="flex-1 min-w-0 text-sm font-medium truncate">{allLabel}</span>
           {totalN > 0 && (
-            <span className="text-[11px] text-muted-foreground/70 flex-shrink-0">{totalN}</span>
+            <span className="text-xs text-muted-foreground/70 flex-shrink-0">{totalN}</span>
           )}
         </button>
       )}
 
       <div className="space-y-0.5">
         {clusters.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground/70">등록된 클러스터 없음</p>
+          <p className="px-2 py-3 text-sm text-muted-foreground/70">등록된 클러스터 없음</p>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={clusters.map((c) => c.id)} strategy={verticalListSortingStrategy}>

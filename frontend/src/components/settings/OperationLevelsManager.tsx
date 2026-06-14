@@ -45,7 +45,7 @@ function EmojiPicker({
         title={isAuto ? `자동(${fallback}) — 클릭하여 변경` : `${shown} — 클릭하여 변경`}
       >
         <span className="text-base leading-none">{shown}</span>
-        {isAuto && <span className="text-[9px] text-muted-foreground/70">auto</span>}
+        {isAuto && <span className="text-[10px] text-muted-foreground/70">auto</span>}
         <ChevronDown className="w-3 h-3 text-muted-foreground" />
       </button>
       {open && (
@@ -68,7 +68,7 @@ function EmojiPicker({
           <button
             type="button"
             onClick={() => { onChange(undefined); setOpen(false); }}
-            className="mt-2 w-full px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary rounded"
+            className="mt-2 w-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary rounded"
           >
             자동 (운영레벨 기반 추론)
           </button>
@@ -163,7 +163,7 @@ export function OperationLevelsManager() {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold">운영레벨 관리</h2>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
             클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
             "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지에 즉시 반영됩니다. <strong>value</strong> 는 저장된
             식별자(라벨이 비어 있으면 자동 생성), <strong>label</strong> 은 화면 표시 이름,
@@ -175,7 +175,7 @@ export function OperationLevelsManager() {
       <div className="border border-border rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/30 text-left">
-            <tr className="text-[10px] text-muted-foreground uppercase">
+            <tr className="text-xs text-muted-foreground uppercase">
               <th className="px-2 py-1.5 w-8"></th>
               <th className="px-2 py-1.5">표시 라벨</th>
               <th className="px-2 py-1.5">value (식별자)</th>
@@ -187,7 +187,7 @@ export function OperationLevelsManager() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="text-center py-6 text-xs text-muted-foreground">
+              <tr><td colSpan={7} className="text-center py-6 text-sm text-muted-foreground">
                 <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 로딩...
               </td></tr>
             )}
@@ -196,9 +196,9 @@ export function OperationLevelsManager() {
                 <td className="px-1 py-1 text-muted-foreground/60 text-center">
                   <div className="flex flex-col">
                     <button onClick={() => move(idx, -1)} disabled={idx === 0}
-                      className="hover:text-foreground disabled:opacity-30 text-[10px] leading-none">▲</button>
+                      className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
                     <button onClick={() => move(idx, 1)} disabled={idx === draft.length - 1}
-                      className="hover:text-foreground disabled:opacity-30 text-[10px] leading-none">▼</button>
+                      className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
                   </div>
                 </td>
                 <td className="px-2 py-1">
@@ -211,18 +211,18 @@ export function OperationLevelsManager() {
                       }
                     }}
                     placeholder="운영 (Production)"
-                    className="w-full px-2 py-1 text-xs bg-background border border-border rounded" />
+                    className="w-full px-2 py-1 text-sm bg-background border border-border rounded" />
                 </td>
                 <td className="px-2 py-1">
                   <input value={l.value}
                     onChange={(e) => { setValueTouched((s) => new Set(s).add(idx)); update(idx, { value: e.target.value }); }}
                     placeholder="production"
-                    className="w-full px-2 py-1 text-[11px] font-mono bg-background border border-border rounded" />
+                    className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded" />
                 </td>
                 <td className="px-2 py-1">
                   <select value={l.color}
                     onChange={(e) => update(idx, { color: e.target.value })}
-                    className="w-full px-1 py-1 text-xs bg-background border border-border rounded">
+                    className="w-full px-1 py-1 text-sm bg-background border border-border rounded">
                     {COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </td>
@@ -234,7 +234,7 @@ export function OperationLevelsManager() {
                   />
                 </td>
                 <td className="px-2 py-1">
-                  <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${levelBadgeClass(l.color)}`}>
+                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${levelBadgeClass(l.color)}`}>
                     <span className="text-sm leading-none">
                       {l.icon || levelIcon([{ value: l.value || 'auto', label: l.label, color: l.color }], l.value || 'auto')}
                     </span>
@@ -250,7 +250,7 @@ export function OperationLevelsManager() {
               </tr>
             ))}
             {!isLoading && draft.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-6 text-xs text-muted-foreground">
+              <tr><td colSpan={7} className="text-center py-6 text-sm text-muted-foreground">
                 운영레벨이 비어있습니다. "항목 추가" 로 시작하세요.
               </td></tr>
             )}
@@ -260,19 +260,19 @@ export function OperationLevelsManager() {
 
       <div className="flex items-center justify-between gap-2">
         <button onClick={add}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg">
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg">
           <Plus className="w-3 h-3" /> 항목 추가
         </button>
         <div className="flex items-center gap-2">
           {dirty && (
             <button onClick={handleReset}
-              className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+              className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
               되돌리기
             </button>
           )}
           <button onClick={handleSave}
             disabled={!dirty || updateMut.isPending}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
             {updateMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             저장
           </button>

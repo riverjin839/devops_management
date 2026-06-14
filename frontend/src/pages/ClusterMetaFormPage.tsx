@@ -105,7 +105,7 @@ export function ClusterMetaFormPage() {
   }
 
   const ic = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
-  const lc = 'block text-xs font-medium text-muted-foreground mb-1';
+  const lc = 'block text-sm font-medium text-muted-foreground mb-1';
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -163,7 +163,7 @@ export function ClusterMetaFormPage() {
           <Server className="w-6 h-6 text-primary" />
           <div>
             <h1 className="text-xl font-bold">클러스터 정보 수정</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">{cluster?.name}</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{cluster?.name}</p>
           </div>
         </div>
 
@@ -221,7 +221,7 @@ export function ClusterMetaFormPage() {
             {tab === 'node' && (
               <>
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">노드 스펙</p>
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">노드 스펙</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor={f('nodeCount')} className={lc}>노드 수</label>
@@ -237,10 +237,10 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">NIC 정보 (ifconfig)</p>
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">NIC 정보 (ifconfig)</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
-                      <p className="text-xs font-semibold text-primary">bond0</p>
+                      <p className="text-sm font-semibold text-primary">bond0</p>
                       <div>
                         <label htmlFor={f('bond0Ip')} className={lc}>IP 주소</label>
                         <input id={f('bond0Ip')} type="text" value={bond0Ip} onChange={(e) => setBond0Ip(e.target.value)}
@@ -253,7 +253,7 @@ export function ClusterMetaFormPage() {
                       </div>
                     </div>
                     <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
-                      <p className="text-xs font-semibold text-primary">bond1</p>
+                      <p className="text-sm font-semibold text-primary">bond1</p>
                       <div>
                         <label htmlFor={f('bond1Ip')} className={lc}>IP 주소</label>
                         <input id={f('bond1Ip')} type="text" value={bond1Ip} onChange={(e) => setBond1Ip(e.target.value)}
@@ -269,7 +269,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">BGP 설정</p>
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">BGP 설정</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-3 px-3 py-2.5 bg-background border border-border rounded-lg">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -303,7 +303,7 @@ export function ClusterMetaFormPage() {
               <div className="space-y-5">
                 <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 space-y-4">
                   <div>
-                    <p className="text-xs font-semibold text-sky-600 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
+                    <p className="text-sm font-semibold text-sky-600 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
                     <p className="text-[10.5px] text-muted-foreground mt-0.5">
                       자동수집(kubectl) nodeIps &gt; 수동 IP 리스트(정규식) &gt; fallback CIDR 순으로 표시됩니다.
                     </p>
@@ -312,7 +312,7 @@ export function ClusterMetaFormPage() {
                   <div>
                     <label htmlFor={f('internalIps')} className={lc}>
                       IP 리스트 (정규식)
-                      <span className="ml-1.5 text-[10px] text-muted-foreground/70 font-normal normal-case">
+                      <span className="ml-1.5 text-xs text-muted-foreground/70 font-normal normal-case">
                         한 줄에 한 그룹, 마지막 옥텟은 <code className="font-mono">[5-7,10]</code> 형태로 압축
                       </span>
                     </label>
@@ -323,14 +323,14 @@ export function ClusterMetaFormPage() {
                       placeholder={`10.0.1.[5-7,10]\n10.0.2.[1-3]`}
                       rows={3}
                       spellCheck={false}
-                      className={`${ic} resize-none font-mono text-xs`}
+                      className={`${ic} resize-none font-mono text-sm`}
                     />
                   </div>
 
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                       Fallback CIDR
-                      <span className="ml-1.5 text-[10px] text-muted-foreground/70 font-normal normal-case">
+                      <span className="ml-1.5 text-xs text-muted-foreground/70 font-normal normal-case">
                         — IP 리스트가 비었을 때 표시 + CIDR Calculator 의 겹침 검사에 사용
                       </span>
                     </p>
@@ -346,7 +346,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
-                  <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
+                  <p className="text-sm font-semibold text-emerald-400 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('podCidr')} className={lc}>Pod CIDR</label>
                       <input id={f('podCidr')} type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} placeholder="10.244.0.0/16" className={ic} /></div>
@@ -358,7 +358,7 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
-                  <p className="text-xs font-semibold text-violet-400 uppercase tracking-wider mb-3">Service CIDR 대역</p>
+                  <p className="text-sm font-semibold text-violet-400 uppercase tracking-wider mb-3">Service CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('svcCidr')} className={lc}>Service CIDR</label>
                       <input id={f('svcCidr')} type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} placeholder="10.96.0.0/12" className={ic} /></div>
@@ -377,7 +377,7 @@ export function ClusterMetaFormPage() {
                   <label htmlFor={f('cilium')} className={lc}>주요 Cilium 설정</label>
                   <textarea id={f('cilium')} value={ciliumConfig} onChange={(e) => setCilium(e.target.value)}
                     placeholder={`tunnel: vxlan\nkubeProxyReplacement: strict\nipv4NativeRoutingCIDR: 10.0.0.0/8`}
-                    rows={6} className={`${ic} resize-none font-mono text-xs`} />
+                    rows={6} className={`${ic} resize-none font-mono text-sm`} />
                 </div>
                 <div>
                   <label htmlFor={f('desc')} className={lc}>정보 / 설명</label>

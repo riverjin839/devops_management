@@ -45,7 +45,7 @@ export function ConfluenceUrlInput({
   if (inline) {
     return (
       <div className="flex items-center gap-2">
-        <label htmlFor={id} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground whitespace-nowrap shrink-0">
+        <label htmlFor={id} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">
           <Link2 className="w-3.5 h-3.5 text-primary" />
           {label}
         </label>
@@ -80,7 +80,7 @@ export function ConfluenceUrlInput({
 
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <label htmlFor={id} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
         <Link2 className="w-3.5 h-3.5 text-primary" />
         {label}
       </label>
@@ -110,7 +110,7 @@ export function ConfluenceUrlInput({
         )}
       </div>
       {showHint && (
-        <p className={`text-[11px] ${isValid ? 'text-muted-foreground' : 'text-red-500'}`}>
+        <p className={`text-xs ${isValid ? 'text-muted-foreground' : 'text-red-500'}`}>
           {isValid
             ? (hint ?? '관련 Confluence 문서가 있다면 URL 을 붙여넣으세요. (선택)')
             : 'http:// 또는 https:// 로 시작해야 합니다.'}

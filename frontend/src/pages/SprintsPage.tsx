@@ -74,7 +74,7 @@ function SprintModal({
         </div>
         <div className="p-5 space-y-3">
           <div>
-            <label htmlFor="sprint-name" className="block text-xs font-medium text-muted-foreground mb-1">이름</label>
+            <label htmlFor="sprint-name" className="block text-sm font-medium text-muted-foreground mb-1">이름</label>
             <input
               id="sprint-name"
               value={form.name}
@@ -84,7 +84,7 @@ function SprintModal({
             />
           </div>
           <div>
-            <label htmlFor="sprint-goal" className="block text-xs font-medium text-muted-foreground mb-1">목표 (선택)</label>
+            <label htmlFor="sprint-goal" className="block text-sm font-medium text-muted-foreground mb-1">목표 (선택)</label>
             <textarea
               id="sprint-goal"
               value={form.goal}
@@ -95,26 +95,26 @@ function SprintModal({
             />
           </div>
           <div>
-            <span className="block text-xs font-medium text-muted-foreground mb-1">기간</span>
+            <span className="block text-sm font-medium text-muted-foreground mb-1">기간</span>
             <div className="flex items-center gap-1.5">
               {[1, 2, 3, 4].map((n) => (
                 <button
                   key={n}
                   type="button"
                   onClick={() => setWeeks(n)}
-                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${activeWeeks === n ? 'bg-primary/10 text-primary border-primary/30' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'}`}
+                  className={`px-2.5 py-1 text-sm rounded-lg border transition-colors ${activeWeeks === n ? 'bg-primary/10 text-primary border-primary/30' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'}`}
                 >
                   {n}주
                 </button>
               ))}
-              <span className="text-[11px] text-muted-foreground ml-1">
+              <span className="text-xs text-muted-foreground ml-1">
                 {activeWeeks ? `${activeWeeks}주` : `${durationDays > 0 ? durationDays : 0}일`} · 종료일 직접 지정 가능
               </span>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="sprint-start" className="block text-xs font-medium text-muted-foreground mb-1">시작일</label>
+              <label htmlFor="sprint-start" className="block text-sm font-medium text-muted-foreground mb-1">시작일</label>
               <input
                 id="sprint-start"
                 type="date"
@@ -124,7 +124,7 @@ function SprintModal({
               />
             </div>
             <div>
-              <label htmlFor="sprint-end" className="block text-xs font-medium text-muted-foreground mb-1">종료일</label>
+              <label htmlFor="sprint-end" className="block text-sm font-medium text-muted-foreground mb-1">종료일</label>
               <input
                 id="sprint-end"
                 type="date"
@@ -134,14 +134,14 @@ function SprintModal({
               />
             </div>
           </div>
-          {invalidRange && <p className="text-xs text-red-500">종료일은 시작일 이후여야 합니다.</p>}
+          {invalidRange && <p className="text-sm text-red-500">종료일은 시작일 이후여야 합니다.</p>}
           <div className="flex items-center gap-2">
             {(['planning', 'active', 'completed'] as SprintStatus[]).map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, status: s }))}
-                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${form.status === s ? STATUS_META[s].cls : 'bg-secondary border-border text-muted-foreground hover:text-foreground'}`}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${form.status === s ? STATUS_META[s].cls : 'bg-secondary border-border text-muted-foreground hover:text-foreground'}`}
               >
                 {STATUS_META[s].label}
               </button>
@@ -186,14 +186,14 @@ function CarryOverModal({
         <div className="p-5 space-y-3">
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">{source.name}</span> 의 미완료 항목
-            <span className="mx-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 text-xs font-semibold">{remaining}건</span>
+            <span className="mx-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 text-sm font-semibold">{remaining}건</span>
             을 다른 스프린트로 옮깁니다.
           </p>
           {targets.length === 0 ? (
             <p className="text-sm text-red-500">이월할 대상 스프린트가 없습니다. 먼저 새 스프린트를 만들어 주세요.</p>
           ) : (
             <div>
-              <label htmlFor="carryover-target" className="block text-xs font-medium text-muted-foreground mb-1">이월 대상</label>
+              <label htmlFor="carryover-target" className="block text-sm font-medium text-muted-foreground mb-1">이월 대상</label>
               <select
                 id="carryover-target"
                 value={toId}
@@ -242,10 +242,10 @@ function SprintCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.cls}`}>{meta.label}</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded border ${meta.cls}`}>{meta.label}</span>
             <h3 className="font-bold truncate">{sprint.name}</h3>
           </div>
-          <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
+          <p className="text-sm text-muted-foreground inline-flex items-center gap-1">
             <CalendarDays className="w-3 h-3" />{fmtDate(sprint.startDate)} ~ {fmtDate(sprint.endDate)}
             {sprint.status !== 'completed' && (
               left < 0 ? <span className="ml-1 text-red-500 font-medium">종료일 경과</span>
@@ -261,13 +261,13 @@ function SprintCard({
       </div>
 
       {sprint.goal && (
-        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+        <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
           <Target className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-primary/70" />{sprint.goal}
         </p>
       )}
 
       <div>
-        <div className="flex items-center justify-between text-xs mb-1">
+        <div className="flex items-center justify-between text-sm mb-1">
           <span className="text-muted-foreground">진행률</span>
           <span className="font-semibold text-primary">{pct}%</span>
         </div>
@@ -276,7 +276,7 @@ function SprintCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
         <span className="text-emerald-600">완료 {sprint.doneItems}</span>
         <span>전체 {sprint.totalItems}</span>
         {remaining > 0 && <span className="text-amber-600">미완료 {remaining}</span>}
@@ -285,17 +285,17 @@ function SprintCard({
       </div>
 
       <div className="flex items-center gap-2 pt-1 border-t border-border/60">
-        <button onClick={() => onOpenBoard(sprint)} className="text-xs px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => onOpenBoard(sprint)} className="text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors">
           게시판에서 보기
         </button>
         {sprint.status !== 'completed' && (
           <>
             {remaining > 0 && (
-              <button onClick={() => onCarryOver(sprint)} className="text-xs px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+              <button onClick={() => onCarryOver(sprint)} className="text-sm px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
                 <ArrowRightLeft className="w-3 h-3" />이월
               </button>
             )}
-            <button onClick={() => onComplete(sprint)} className="ml-auto text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors inline-flex items-center gap-1">
+            <button onClick={() => onComplete(sprint)} className="ml-auto text-sm px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors inline-flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />종료
             </button>
           </>
@@ -368,7 +368,7 @@ export function SprintsPage() {
   const renderGroup = (title: string, list: Sprint[]) =>
     list.length > 0 && (
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground px-1">{title} <span className="text-xs">{list.length}</span></h2>
+        <h2 className="text-sm font-semibold text-muted-foreground px-1">{title} <span className="text-sm">{list.length}</span></h2>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {list.map((s) => (
             <SprintCard

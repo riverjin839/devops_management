@@ -169,14 +169,14 @@ export function BatchJobsPage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold leading-tight">Batch Jobs</h1>
-              <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+              <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={openCreateFromHeader}
             disabled={!canCreate}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow flex items-center gap-1.5 disabled:opacity-50"
             title={
               clusters.length === 0
                 ? '먼저 클러스터를 등록하세요'
@@ -195,7 +195,7 @@ export function BatchJobsPage() {
           <div className="flex-1 min-w-0 space-y-4">
             <MacCard title="배치 잡" bodyPadding="p-4">
               {allJobsQ.isLoading ? (
-                <p className="text-xs text-muted-foreground py-6 text-center">로딩 중…</p>
+                <p className="text-sm text-muted-foreground py-6 text-center">로딩 중…</p>
               ) : clusters.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">
                   등록된 클러스터가 없습니다. /cluster-manage 에서 추가하세요.
@@ -216,19 +216,19 @@ export function BatchJobsPage() {
                   {selectedIds.size > 0 && (
                     <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-sm">
                       <span className="font-medium text-primary">{selectedIds.size}개 선택됨</span>
-                      <span className="text-[11px] text-muted-foreground">— 같은 잡을 여러 클러스터에서 일괄 실행 (저장된 자격증명 사용)</span>
+                      <span className="text-xs text-muted-foreground">— 같은 잡을 여러 클러스터에서 일괄 실행 (저장된 자격증명 사용)</span>
                       <button
                         type="button"
                         onClick={runBulk}
                         disabled={bulkRunning}
-                        className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                        className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
                       >
                         <Play className="w-3.5 h-3.5" /> {bulkRunning ? '실행 중…' : `선택 ${selectedIds.size}개 실행`}
                       </button>
                       <button
                         type="button"
                         onClick={clearSel}
-                        className="inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-sm rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <X className="w-3 h-3" /> 해제
                       </button>

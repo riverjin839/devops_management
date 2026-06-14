@@ -59,7 +59,7 @@ function NewPlaybookFileForm({ onCreated, onCancel }: { onCreated: (id: string) 
   return (
     <div className="border border-primary/30 rounded-lg p-3 space-y-2 bg-primary/5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-primary">새 Playbook 파일 등록</p>
+        <p className="text-sm font-semibold text-primary">새 Playbook 파일 등록</p>
         <button onClick={onCancel} className="p-1 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
       </div>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 (예: check_ntp)" className={inputCls} />
@@ -69,15 +69,15 @@ function NewPlaybookFileForm({ onCreated, onCancel }: { onCreated: (id: string) 
         onChange={(e) => setContent(e.target.value)}
         rows={10}
         spellCheck={false}
-        className={`${inputCls} font-mono text-xs resize-y`}
+        className={`${inputCls} font-mono text-sm resize-y`}
       />
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-1 text-xs bg-secondary border border-border rounded">취소</button>
+        <button onClick={onCancel} className="px-3 py-1 text-sm bg-secondary border border-border rounded">취소</button>
         <button
           onClick={submit}
           disabled={create.isPending}
-          className="flex items-center gap-1 px-3 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50"
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-primary text-primary-foreground rounded disabled:opacity-50"
         >
           {create.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
           등록
@@ -115,7 +115,7 @@ function NewInventoryForm({
   return (
     <div className="border border-primary/30 rounded-lg p-3 space-y-2 bg-primary/5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-primary">새 Inventory 등록</p>
+        <p className="text-sm font-semibold text-primary">새 Inventory 등록</p>
         <button onClick={onCancel} className="p-1 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
       </div>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 (예: prod-masters)" className={inputCls} />
@@ -125,19 +125,19 @@ function NewInventoryForm({
         onChange={(e) => setContent(e.target.value)}
         rows={8}
         spellCheck={false}
-        className={`${inputCls} font-mono text-xs resize-y`}
+        className={`${inputCls} font-mono text-sm resize-y`}
       />
-      <label className="flex items-center gap-2 text-xs text-foreground/80">
+      <label className="flex items-center gap-2 text-sm text-foreground/80">
         <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
         이 클러스터의 기본 inventory 로 설정 (기존 default 는 해제됨)
       </label>
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-1 text-xs bg-secondary border border-border rounded">취소</button>
+        <button onClick={onCancel} className="px-3 py-1 text-sm bg-secondary border border-border rounded">취소</button>
         <button
           onClick={submit}
           disabled={create.isPending}
-          className="flex items-center gap-1 px-3 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50"
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-primary text-primary-foreground rounded disabled:opacity-50"
         >
           {create.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
           등록
@@ -186,23 +186,23 @@ function EditPlaybookFileForm({
   return (
     <div className="border border-amber-500/40 rounded-lg p-3 space-y-2 bg-amber-500/5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-amber-500">Playbook 파일 편집</p>
+        <p className="text-sm font-semibold text-amber-500">Playbook 파일 편집</p>
         <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
       </div>
       <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
       <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="설명" className={inputCls} />
       <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={10}
-        spellCheck={false} className={`${inputCls} font-mono text-xs resize-y`} />
-      {error && <p className="text-xs text-red-500">{error}</p>}
+        spellCheck={false} className={`${inputCls} font-mono text-sm resize-y`} />
+      {error && <p className="text-sm text-red-500">{error}</p>}
       <div className="flex justify-between gap-2">
         <button onClick={handleDelete}
-          className="flex items-center gap-1 px-3 py-1 text-xs bg-red-500/10 text-red-500 border border-red-500/30 rounded">
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded">
           <Trash2 className="w-3 h-3" /> 삭제
         </button>
         <div className="flex gap-2">
-          <button onClick={onClose} className="px-3 py-1 text-xs bg-secondary border border-border rounded">취소</button>
+          <button onClick={onClose} className="px-3 py-1 text-sm bg-secondary border border-border rounded">취소</button>
           <button onClick={submit} disabled={update.isPending}
-            className="flex items-center gap-1 px-3 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50">
+            className="flex items-center gap-1 px-3 py-1 text-sm bg-primary text-primary-foreground rounded disabled:opacity-50">
             {update.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} 저장
           </button>
         </div>
@@ -250,27 +250,27 @@ function EditInventoryForm({
   return (
     <div className="border border-amber-500/40 rounded-lg p-3 space-y-2 bg-amber-500/5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-amber-500">Inventory 편집</p>
+        <p className="text-sm font-semibold text-amber-500">Inventory 편집</p>
         <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
       </div>
       <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
       <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="설명" className={inputCls} />
       <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8}
-        spellCheck={false} className={`${inputCls} font-mono text-xs resize-y`} />
-      <label className="flex items-center gap-2 text-xs text-foreground/80">
+        spellCheck={false} className={`${inputCls} font-mono text-sm resize-y`} />
+      <label className="flex items-center gap-2 text-sm text-foreground/80">
         <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
         기본 inventory
       </label>
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
       <div className="flex justify-between gap-2">
         <button onClick={handleDelete}
-          className="flex items-center gap-1 px-3 py-1 text-xs bg-red-500/10 text-red-500 border border-red-500/30 rounded">
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-red-500/10 text-red-500 border border-red-500/30 rounded">
           <Trash2 className="w-3 h-3" /> 삭제
         </button>
         <div className="flex gap-2">
-          <button onClick={onClose} className="px-3 py-1 text-xs bg-secondary border border-border rounded">취소</button>
+          <button onClick={onClose} className="px-3 py-1 text-sm bg-secondary border border-border rounded">취소</button>
           <button onClick={submit} disabled={update.isPending}
-            className="flex items-center gap-1 px-3 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50">
+            className="flex items-center gap-1 px-3 py-1 text-sm bg-primary text-primary-foreground rounded disabled:opacity-50">
             {update.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} 저장
           </button>
         </div>
@@ -421,7 +421,7 @@ export function AddPlaybookModal({
 
           {/* 모드 토글 */}
           <div className="flex items-center justify-between rounded-lg bg-secondary/40 px-3 py-2">
-            <p className="text-xs text-foreground/80">
+            <p className="text-sm text-foreground/80">
               {advanced
                 ? '고급: 호스트 경로 직접 지정'
                 : '기본: DB 에 저장된 Playbook/Inventory 사용 (공용)'}
@@ -429,7 +429,7 @@ export function AddPlaybookModal({
             <button
               type="button"
               onClick={() => setAdvanced((v) => !v)}
-              className="text-[11px] text-primary hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               {advanced ? 'DB 관리 모드로' : '고급 (path) 모드로'}
             </button>
@@ -466,7 +466,7 @@ export function AddPlaybookModal({
                   )}
                   <button
                     type="button" onClick={() => { setShowNewFile(true); setEditFileId(null); }}
-                    className="flex items-center gap-1 px-3 py-2 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg"
+                    className="flex items-center gap-1 px-3 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg"
                   >
                     <Plus className="w-3.5 h-3.5" /> 새 파일
                   </button>
@@ -519,12 +519,12 @@ export function AddPlaybookModal({
                     type="button"
                     onClick={() => { setShowNewInv(true); setEditInvId(null); }}
                     disabled={!clusterId}
-                    className="flex items-center gap-1 px-3 py-2 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
+                    className="flex items-center gap-1 px-3 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
                   >
                     <Plus className="w-3.5 h-3.5" /> 새 inventory
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   한 클러스터에 여러 inventory 를 등록할 수 있습니다(예: prod / dr / 일부 노드만).
                 </p>
                 {showNewInv && clusterId && (
@@ -557,7 +557,7 @@ export function AddPlaybookModal({
                   className={`${inputCls} font-mono`}
                   required={advanced}
                 />
-                <p className="text-xs text-muted-foreground mt-1">실행 호스트(master#1) 상의 절대 경로</p>
+                <p className="text-sm text-muted-foreground mt-1">실행 호스트(master#1) 상의 절대 경로</p>
               </div>
               <div>
                 <label htmlFor={inventoryPathId} className="block text-sm font-medium mb-1">Inventory Path (optional)</label>

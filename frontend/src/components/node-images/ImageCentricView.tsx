@@ -101,7 +101,7 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="px-4 py-2 bg-muted/10 border-b border-border flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           전체 <span className="font-semibold text-foreground tabular-nums">{rows.length}</span>개 고유 이미지
           <span className="mx-1.5 text-muted-foreground/40">·</span>
           {totalNodes}개 노드 기준
@@ -134,10 +134,10 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
                         <div className="text-foreground">{r.primary}</div>
                         {r.aliases.length > 1 && (
                           <details className="mt-0.5">
-                            <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
+                            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                               +{r.aliases.length - 1} alias
                             </summary>
-                            <ul className="mt-1 ml-1 space-y-0.5 text-[11px] text-muted-foreground">
+                            <ul className="mt-1 ml-1 space-y-0.5 text-xs text-muted-foreground">
                               {r.aliases.filter((a) => a !== r.primary).map((a) => (
                                 <li key={a} className="break-all">{a}</li>
                               ))}
@@ -146,11 +146,11 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
                         )}
                         {r.nodes.length > 0 && (
                           <details className="mt-1">
-                            <summary className="text-[10px] text-muted-foreground/80 cursor-pointer hover:text-foreground inline-flex items-center gap-1">
+                            <summary className="text-xs text-muted-foreground/80 cursor-pointer hover:text-foreground inline-flex items-center gap-1">
                               <Server className="w-2.5 h-2.5" />
                               {r.nodes.length}개 노드
                             </summary>
-                            <ul className="mt-1 ml-1 space-y-0.5 text-[11px] text-muted-foreground font-mono">
+                            <ul className="mt-1 ml-1 space-y-0.5 text-xs text-muted-foreground font-mono">
                               {r.nodes.map((n) => <li key={n} className="break-all">{n}</li>)}
                             </ul>
                           </details>
@@ -160,7 +160,7 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
                   </td>
                   <td className="px-4 py-3 align-top">
                     <div className="flex items-center justify-end gap-2">
-                      <span className="text-xs tabular-nums text-muted-foreground">
+                      <span className="text-sm tabular-nums text-muted-foreground">
                         {r.nodes.length}/{totalNodes}
                       </span>
                       <div className="w-16 h-1.5 rounded-full bg-secondary overflow-hidden">

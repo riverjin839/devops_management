@@ -34,7 +34,7 @@ function ConfidenceBar({ value }: { value: number }) {
       <div className="flex-1 bg-secondary rounded-full h-1.5">
         <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-muted-foreground w-8 text-right">{pct}%</span>
+      <span className="text-sm text-muted-foreground w-8 text-right">{pct}%</span>
     </div>
   );
 }
@@ -51,32 +51,32 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
           <span className={`text-sm font-bold ${st.text} uppercase tracking-wide`}>{result.severity}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${st.badge}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${st.badge}`}>
             {BACKEND_LABEL[result.analyzedBy] ?? result.analyzedBy}
           </span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {new Date(result.analyzedAt).toLocaleTimeString('ko-KR')}
           </span>
         </div>
       </div>
 
       <div className="rounded-lg bg-background/60 border border-border px-4 py-3">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">근본 원인</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">근본 원인</p>
         <p className="text-sm text-foreground">{result.rootCause}</p>
       </div>
 
       <div>
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">신뢰도</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">신뢰도</p>
         <ConfidenceBar value={result.confidence} />
       </div>
 
       {result.suggestedActions.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">조치 방안</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">조치 방안</p>
           <ol className="space-y-1.5">
             {result.suggestedActions.map((action, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${st.badge} border`}>
+                <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${st.badge} border`}>
                   {i + 1}
                 </span>
                 {action}
@@ -88,10 +88,10 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
 
       {result.relatedRunbooks && result.relatedRunbooks.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">관련 런북</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">관련 런북</p>
           <div className="flex flex-wrap gap-1.5">
             {result.relatedRunbooks.map((rb) => (
-              <span key={rb} className="text-[11px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">
+              <span key={rb} className="text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">
                 {rb}
               </span>
             ))}
@@ -104,7 +104,7 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
 
 function EventRow({ event, index }: { event: KubeEvent; index: number }) {
   return (
-    <div className={`grid grid-cols-[80px_70px_60px_1fr] gap-2 py-1.5 px-3 text-xs ${index % 2 === 0 ? 'bg-secondary/20' : ''}`}>
+    <div className={`grid grid-cols-[80px_70px_60px_1fr] gap-2 py-1.5 px-3 text-sm ${index % 2 === 0 ? 'bg-secondary/20' : ''}`}>
       <span className={`font-medium truncate ${event.type === 'Warning' ? 'text-amber-400' : 'text-muted-foreground'}`}>{event.type ?? 'Normal'}</span>
       <span className="font-mono text-muted-foreground truncate">{event.reason}</span>
       <span className="text-muted-foreground text-center">x{event.count}</span>
@@ -186,7 +186,7 @@ export function IncidentAnalysisPage() {
   const [autofilledFor, setAutofilledFor] = useState<string>('');
 
   const ic = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
-  const lc = 'block text-xs font-medium text-muted-foreground mb-1';
+  const lc = 'block text-sm font-medium text-muted-foreground mb-1';
 
   const parseEventsFromText = (): KubeEvent[] => {
     if (!rawEvents.trim()) return [];
@@ -315,7 +315,7 @@ export function IncidentAnalysisPage() {
             <LogViewTabs current="analysis" />
           </div>
           {health && (
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-2 text-sm">
               {health.available
                 ? <CheckCircle className="w-4 h-4 text-emerald-400" />
                 : <AlertTriangle className="w-4 h-4 text-amber-400" />}
@@ -330,10 +330,10 @@ export function IncidentAnalysisPage() {
         {/* ── 드릴다운 선택 (Cluster → Namespace → Pod) ── */}
         <div className="bg-card border border-border rounded-xl p-5 mb-5 space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               대상 선택
             </p>
-            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer"
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
               title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능). ns 가 이미 선택돼 있으면 그 ns 만 스캔.">
               <input
                 type="checkbox"
@@ -358,7 +358,7 @@ export function IncidentAnalysisPage() {
                     value={nsPattern}
                     onChange={(e) => setNsPattern(e.target.value)}
                     placeholder="kube-*,monitoring,argocd"
-                    className={`${ic} font-mono text-xs`}
+                    className={`${ic} font-mono text-sm`}
                   />
                 </div>
                 <div>
@@ -370,11 +370,11 @@ export function IncidentAnalysisPage() {
                     value={podPattern}
                     onChange={(e) => setPodPattern(e.target.value)}
                     placeholder="*nginx*,*api*"
-                    className={`${ic} font-mono text-xs`}
+                    className={`${ic} font-mono text-sm`}
                   />
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 💡 콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
                 Namespace 를 선택하면 이 입력은 사라지고 그 ns 만 스캔합니다.
               </p>
@@ -408,7 +408,7 @@ export function IncidentAnalysisPage() {
                 Namespace
                 {nsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
                 {nsQ.data && (
-                  <span className="ml-1 text-[10px] opacity-60">
+                  <span className="ml-1 text-xs opacity-60">
                     ({nsQ.data.namespaces.length})
                   </span>
                 )}
@@ -428,7 +428,7 @@ export function IncidentAnalysisPage() {
                 emptyText="namespace 없음"
               />
               {nsQ.isError && (
-                <p className="text-[11px] text-red-400 mt-1">
+                <p className="text-xs text-red-400 mt-1">
                   {formatApiError(nsQ.error)}
                 </p>
               )}
@@ -441,7 +441,7 @@ export function IncidentAnalysisPage() {
                 Pod
                 {podsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
                 {podsQ.data && (
-                  <span className="ml-1 text-[10px] opacity-60">
+                  <span className="ml-1 text-xs opacity-60">
                     ({podsQ.data.pods.length})
                   </span>
                 )}
@@ -456,10 +456,10 @@ export function IncidentAnalysisPage() {
                 disabled={!namespace || podsQ.isLoading}
                 loading={podsQ.isLoading}
                 emptyText="pod 없음"
-                className="font-mono text-xs"
+                className="font-mono text-sm"
               />
               {podsQ.isError && (
-                <p className="text-[11px] text-red-400 mt-1">
+                <p className="text-xs text-red-400 mt-1">
                   {formatApiError(podsQ.error)}
                 </p>
               )}
@@ -469,11 +469,11 @@ export function IncidentAnalysisPage() {
           {/* 선택된 Pod 요약 + 자동 채우기 버튼 */}
           {selectedPod && (
             <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-border">
-              <div className="text-xs space-y-0.5">
+              <div className="text-sm space-y-0.5">
                 <p className="font-mono text-foreground">
                   {namespace}/<span className="text-primary">{selectedPod.name}</span>
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {selectedPod.phase} · ready {selectedPod.ready} · restart {selectedPod.restartCount}
                   {selectedPod.node && ` · node ${selectedPod.node}`}
                   {selectedPod.issueReason && (
@@ -485,7 +485,7 @@ export function IncidentAnalysisPage() {
                 onClick={handleAutofill}
                 disabled={!canAutofill || fetchCtx.isPending}
                 title="kubectl logs / events / describe 를 자동으로 가져와 아래 입력란을 채웁니다."
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
               >
                 {fetchCtx.isPending
                   ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />수집 중...</>
@@ -495,18 +495,18 @@ export function IncidentAnalysisPage() {
           )}
 
           {fetchCtx.isError && (
-            <p className="text-[11px] text-red-400">
+            <p className="text-xs text-red-400">
               자동 수집 실패: {formatApiError(fetchCtx.error)}
             </p>
           )}
           {autofilledFor && !autofillStale && fetchCtx.isSuccess && (
-            <p className="text-[11px] text-emerald-500 flex items-center gap-1">
+            <p className="text-xs text-emerald-500 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
               자동 수집 완료 — events {events.length}건, logs {currentLogs.length} 자.
             </p>
           )}
           {autofillStale && (
-            <p className="text-[11px] text-amber-500 flex items-center gap-1">
+            <p className="text-xs text-amber-500 flex items-center gap-1">
               <RefreshCw className="w-3 h-3" />
               선택이 변경되었습니다. 다시 자동 채우기를 누르세요.
             </p>
@@ -517,18 +517,18 @@ export function IncidentAnalysisPage() {
         {/* 전폭으로 펼쳐 textarea 폭이 "대상 선택" 패널과 동일. 결과 패널은 아래로. */}
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               이벤트 ({events.length}건)
             </p>
             {events.length > 0 ? (
               <div className="rounded-lg border border-border overflow-hidden">
-                <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <span>Type</span><span>Reason</span><span className="text-center">Count</span><span>Message</span>
                 </div>
                 {events.slice(0, 20).map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">
+              <p className="text-sm text-muted-foreground italic">
                 자동 채우기를 누르거나, 아래에 직접 붙여넣으세요.
               </p>
             )}
@@ -540,14 +540,14 @@ export function IncidentAnalysisPage() {
                 onChange={(e) => { setRawEvents(e.target.value); setStructuredEvents([]); }}
                 placeholder={'Warning  BackOff  3  Back-off restarting failed container'}
                 rows={3}
-                className={`${ic} font-mono text-xs resize-none`}
+                className={`${ic} font-mono text-sm resize-none`}
               />
             </div>
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">로그 / Describe</p>
+              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">로그 / Describe</p>
 
               {/* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */}
               <div className="flex items-center gap-2 flex-wrap">
@@ -558,7 +558,7 @@ export function IncidentAnalysisPage() {
                     value={logFilter}
                     onChange={(e) => setLogFilter(e.target.value)}
                     placeholder="로그 라인 필터 (예: ERROR, OOMKilled)"
-                    className="pl-7 pr-7 py-1.5 text-[11px] font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-72"
+                    className="pl-7 pr-7 py-1.5 text-xs font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-72"
                   />
                   {logFilter && (
                     <button
@@ -572,7 +572,7 @@ export function IncidentAnalysisPage() {
                 </div>
 
                 {/* 폴링 간격 */}
-                <label className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                <label className="flex items-center gap-1 text-xs text-muted-foreground"
                   title="실시간 로그 갱신 간격 (초)">
                   매
                   <input
@@ -581,7 +581,7 @@ export function IncidentAnalysisPage() {
                     max={300}
                     value={streamIntervalSec}
                     onChange={(e) => setStreamIntervalSec(Number(e.target.value) || 5)}
-                    className="w-12 px-1 py-0.5 text-[11px] font-mono bg-background border border-border rounded text-center"
+                    className="w-12 px-1 py-0.5 text-xs font-mono bg-background border border-border rounded text-center"
                   />초
                 </label>
 
@@ -589,7 +589,7 @@ export function IncidentAnalysisPage() {
                 {streaming ? (
                   <button
                     onClick={() => setStreaming(false)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md"
                     title="실시간 갱신 중지"
                   >
                     <Square className="w-3 h-3 fill-current" />
@@ -600,7 +600,7 @@ export function IncidentAnalysisPage() {
                     onClick={() => setStreaming(true)}
                     disabled={!canAutofill}
                     title="N초마다 fetch-context 를 다시 호출해 로그/이벤트/describe 를 갱신"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-md disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-md disabled:opacity-50"
                   >
                     <Play className="w-3 h-3" />
                     실시간 시작
@@ -610,7 +610,7 @@ export function IncidentAnalysisPage() {
             </div>
 
             {streaming && (
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="relative flex w-2 h-2">
                   <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />
                   <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
@@ -638,9 +638,9 @@ export function IncidentAnalysisPage() {
                 onFocus={() => { editingRef.current = true; }}
                 onBlur={() => { editingRef.current = false; }}
                 placeholder="자동 채우기를 누르거나 직접 붙여넣으세요..."
-                rows={12} className={`${ic} font-mono text-xs resize-y`} />
+                rows={12} className={`${ic} font-mono text-sm resize-y`} />
               {logFilter && curFiltered.lines.length > 0 && (
-                <pre className="mt-1 text-[11px] font-mono bg-muted/30 border border-border rounded-md p-2 max-h-64 overflow-auto whitespace-pre-wrap">
+                <pre className="mt-1 text-xs font-mono bg-muted/30 border border-border rounded-md p-2 max-h-64 overflow-auto whitespace-pre-wrap">
                   {curFiltered.lines.join('\n')}
                 </pre>
               )}
@@ -658,9 +658,9 @@ export function IncidentAnalysisPage() {
                 onFocus={() => { editingRef.current = true; }}
                 onBlur={() => { editingRef.current = false; }}
                 placeholder="kubectl logs --previous 출력 (재시작이 있을 때만)"
-                rows={8} className={`${ic} font-mono text-xs resize-y`} />
+                rows={8} className={`${ic} font-mono text-sm resize-y`} />
               {logFilter && prevFiltered.lines.length > 0 && (
-                <pre className="mt-1 text-[11px] font-mono bg-muted/30 border border-border rounded-md p-2 max-h-48 overflow-auto whitespace-pre-wrap">
+                <pre className="mt-1 text-xs font-mono bg-muted/30 border border-border rounded-md p-2 max-h-48 overflow-auto whitespace-pre-wrap">
                   {prevFiltered.lines.join('\n')}
                 </pre>
               )}
@@ -671,7 +671,7 @@ export function IncidentAnalysisPage() {
                 onFocus={() => { editingRef.current = true; }}
                 onBlur={() => { editingRef.current = false; }}
                 placeholder="kubectl describe pod 출력을 붙여넣으세요..."
-                rows={10} className={`${ic} font-mono text-xs resize-y`} />
+                rows={10} className={`${ic} font-mono text-sm resize-y`} />
             </div>
           </div>
 

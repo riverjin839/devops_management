@@ -38,7 +38,7 @@ export function CommandFormPage() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <Terminal className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">{editMode ? '명령어 수정' : '새 명령어'}</span>
+          <span className="text-sm text-muted-foreground">{editMode ? '명령어 수정' : '새 명령어'}</span>
         </div>
       </div>
 
@@ -132,7 +132,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label htmlFor={f('cat')} className="block text-xs text-muted-foreground mb-1">카테고리</label>
+          <label htmlFor={f('cat')} className="block text-sm text-muted-foreground mb-1">카테고리</label>
           <input
             id={f('cat')}
             value={category}
@@ -142,7 +142,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
           />
         </div>
         <div>
-          <label htmlFor={f('imp')} className="block text-xs text-muted-foreground mb-1">중요도</label>
+          <label htmlFor={f('imp')} className="block text-sm text-muted-foreground mb-1">중요도</label>
           <select
             id={f('imp')}
             value={importance}
@@ -155,7 +155,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
           </select>
         </div>
         <div className="flex items-end">
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
             상단 고정
           </label>
@@ -163,7 +163,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
       </div>
 
       <div>
-        <label htmlFor={f('cmd')} className="block text-xs text-muted-foreground mb-1">명령어 *</label>
+        <label htmlFor={f('cmd')} className="block text-sm text-muted-foreground mb-1">명령어 *</label>
         <textarea
           id={f('cmd')}
           value={command}
@@ -175,7 +175,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
       </div>
 
       <div>
-        <label htmlFor={f('desc')} className="block text-xs text-muted-foreground mb-1">의미</label>
+        <label htmlFor={f('desc')} className="block text-sm text-muted-foreground mb-1">의미</label>
         <textarea
           id={f('desc')}
           value={description}
@@ -187,7 +187,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
       </div>
 
       <div>
-        <label htmlFor={f('caution')} className="block text-xs text-muted-foreground mb-1">주의사항</label>
+        <label htmlFor={f('caution')} className="block text-sm text-muted-foreground mb-1">주의사항</label>
         <textarea
           id={f('caution')}
           value={caution}
@@ -199,19 +199,19 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
       </div>
 
       <div>
-        <label htmlFor={f('ex')} className="block text-xs text-muted-foreground mb-1">예시 (선택)</label>
+        <label htmlFor={f('ex')} className="block text-sm text-muted-foreground mb-1">예시 (선택)</label>
         <textarea
           id={f('ex')}
           value={examples}
           onChange={(e) => setExamples(e.target.value)}
           rows={3}
           placeholder="kubectl drain worker-3 --ignore-daemonsets --delete-emptydir-data"
-          className="w-full px-3 py-2 text-xs bg-background border border-border rounded-xl font-mono"
+          className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
         />
       </div>
 
       <div>
-        <label htmlFor={f('tags')} className="block text-xs text-muted-foreground mb-1">태그 (쉼표 구분)</label>
+        <label htmlFor={f('tags')} className="block text-sm text-muted-foreground mb-1">태그 (쉼표 구분)</label>
         <input
           id={f('tags')}
           value={tags}
@@ -227,13 +227,13 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
         onChange={setConfluenceUrl}
       />
 
-      {error && <div className="text-xs text-red-500">{error}</div>}
+      {error && <div className="text-sm text-red-500">{error}</div>}
 
       <div className="flex justify-end gap-2 pt-2 border-t border-border">
         <button
           type="button"
           onClick={onCancel}
-          className="px-3 py-1.5 text-xs rounded-xl bg-secondary text-secondary-foreground"
+          className="px-3 py-1.5 text-sm rounded-xl bg-secondary text-secondary-foreground"
         >
           취소
         </button>
@@ -241,7 +241,7 @@ function CommandForm({ initial, onCancel, onSaved }: CommandFormProps) {
           type="button"
           onClick={submit}
           disabled={pending}
-          className="px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground disabled:opacity-60"
+          className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground disabled:opacity-60"
         >
           {pending ? '저장 중…' : (initial ? '수정' : '등록')}
         </button>

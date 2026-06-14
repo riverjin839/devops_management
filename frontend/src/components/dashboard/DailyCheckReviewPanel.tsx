@@ -47,11 +47,11 @@ export function DailyCheckReviewPanel() {
     <div className="rounded-md border border-border bg-card overflow-hidden flex flex-col">
       <div className="flex-none flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/40">
         <ClipboardCheck className="w-4 h-4 text-primary flex-shrink-0" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
           일일 점검 리뷰
         </span>
         {/* 상태 요약 */}
-        <div className="flex items-center gap-2 text-[11px] ml-1">
+        <div className="flex items-center gap-2 text-xs ml-1">
           {counts.critical > 0 && <span className="text-red-600">위험 {counts.critical}</span>}
           {counts.warning > 0 && <span className="text-amber-600">주의 {counts.warning}</span>}
           <span className="text-emerald-600">정상 {counts.healthy}</span>
@@ -68,7 +68,7 @@ export function DailyCheckReviewPanel() {
           />
           <Link
             to="/daily-check/review"
-            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
             전체 리뷰 <ArrowRight className="w-3 h-3" />
           </Link>
@@ -97,15 +97,15 @@ export function DailyCheckReviewPanel() {
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
                 <span className="font-medium truncate flex-1 min-w-0">{it.cluster_name}</span>
                 {it.latest_check && (
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground">
                     <Server className="w-3 h-3" />
                     {it.latest_check.ready_nodes ?? '–'}/{it.latest_check.total_nodes ?? '–'}
                   </span>
                 )}
-                {err > 0 && <span className="text-[11px] text-red-600 inline-flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" />{err}</span>}
-                {warn > 0 && <span className="text-[11px] text-amber-600">⚠{warn}</span>}
+                {err > 0 && <span className="text-xs text-red-600 inline-flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" />{err}</span>}
+                {warn > 0 && <span className="text-xs text-amber-600">⚠{warn}</span>}
                 {err === 0 && warn === 0 && it.latest_check && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
-                <span className="text-[11px] text-muted-foreground font-mono w-24 text-right flex-shrink-0">
+                <span className="text-xs text-muted-foreground font-mono w-24 text-right flex-shrink-0">
                   {fmtTime(it.latest_check?.checked_at)}
                 </span>
               </Link>
@@ -126,9 +126,9 @@ export function DailyCheckReviewPanel() {
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
                   <span className="font-semibold text-sm truncate flex-1 min-w-0">{it.cluster_name}</span>
-                  <span className={`text-[10px] font-medium ${meta.text}`}>{meta.label}</span>
+                  <span className={`text-xs font-medium ${meta.text}`}>{meta.label}</span>
                 </div>
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-0.5">
                     <Server className="w-3 h-3" />
                     {it.latest_check?.ready_nodes ?? '–'}/{it.latest_check?.total_nodes ?? '–'} 노드
@@ -136,7 +136,7 @@ export function DailyCheckReviewPanel() {
                   {err > 0 && <span className="text-red-600">오류 {err}</span>}
                   {warn > 0 && <span className="text-amber-600">경고 {warn}</span>}
                 </div>
-                <div className="text-[10px] text-muted-foreground/80 font-mono mt-1">{fmtTime(it.latest_check?.checked_at)}</div>
+                <div className="text-xs text-muted-foreground/80 font-mono mt-1">{fmtTime(it.latest_check?.checked_at)}</div>
               </Link>
             );
           })}
