@@ -1,6 +1,7 @@
 import { CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import type { DeepCheckResult, Status } from '@/types';
+import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
+import type { DeepCheckResult, DeepCheckExecStep, Status } from '@/types';
 
 interface Props {
   results: DeepCheckResult[];
@@ -49,6 +50,9 @@ export function DeepCheckGrid({ results }: Props) {
                 <span>{new Date(r.checkedAt).toLocaleTimeString('ko-KR')}</span>
                 <span>{r.durationMs}ms</span>
               </div>
+              {Array.isArray(r.details?._steps) && r.details!._steps.length > 0 && (
+                <ExecutionStepsTimeline steps={r.details!._steps as DeepCheckExecStep[]} />
+              )}
               {r.details && Object.keys(r.details).length > 0 && (
                 <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground">상세</summary>

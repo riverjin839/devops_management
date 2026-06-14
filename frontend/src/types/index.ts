@@ -2025,6 +2025,19 @@ export interface DeepCheckResult {
   checkedAt: string;
 }
 
+// Deep check 실행 단계(로그 + 2D 애니메이션)
+export interface DeepCheckExecStep {
+  id: string;
+  label: string;
+  status: 'running' | 'success' | 'failed' | 'skipped';
+  detail?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metrics?: Record<string, any>;
+  startedMs?: number;
+  durationMs?: number;
+}
+export interface DeepCheckStepPlanItem { id: string; label: string }
+
 export interface DeepCheckTestResult {
   definitionId: string;
   checkType: DeepCheckType;
@@ -2034,6 +2047,8 @@ export interface DeepCheckTestResult {
   details?: Record<string, any> | null;
   durationMs: number;
   persistedResultId?: string;
+  steps?: DeepCheckExecStep[];
+  stepPlan?: DeepCheckStepPlanItem[];
 }
 
 export interface DiffSummary {

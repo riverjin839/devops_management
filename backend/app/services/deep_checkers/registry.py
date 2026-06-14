@@ -396,3 +396,52 @@ def _field_to_dict(f: DeepCheckFieldSpec) -> dict[str, Any]:
         "default": f.default,
         "help": f.help,
     }
+
+
+# ── 메커니즘(단계 plan) — 각 check_type 이 내부적으로 무슨 일을 하는지 문서화 ──────
+# 계측되지 않은 체커도 이 plan 으로 "어떻게 동작하는지"를 UI 에 항상 보여줄 수 있다.
+# 계측된 체커는 실시간 step(id 일치) 상태가 plan 위에 덧칠된다.
+STEP_PLANS: dict[str, list[tuple[str, str]]] = {
+    "cert_expiry": [
+        ("locate_pod", "컨트롤플레인 파드 탐색"),
+        ("exec_kubeadm", "kubeadm certs check-expiration 실행"),
+        ("parse", "인증서 잔여일 파싱"),
+        ("verdict", "최소 잔여일 임계 비교"),
+    ],
+    "etcd_defrag": [
+        ("locate_pod", "etcd 파드 탐색"),
+        ("exec_status", "etcdctl endpoint status 실행"),
+        ("exec_alarm", "etcdctl alarm list 실행"),
+        ("parse", "db size 파싱 · 단편화율 계산"),
+        ("verdict", "단편화/알람 임계 비교"),
+    ],
+    "pvc_health": [
+        ("list_pvc", "PVC 전체 조회"),
+        ("list_pv", "PV 전체 조회"),
+        ("filter", "Pending/Lost PVC · orphan PV 필터"),
+        ("verdict", "임계 비교"),
+    ],
+    "pod_to_pod": [
+        ("list_pods", "워크로드 파드 조회"),
+        ("sample", "프로브 대상 샘플링"),
+        ("probe_pod", "임시 프로브 파드 생성"),
+        ("probe", "대상 파드 nc 프로브"),
+        ("parse", "성공/실패 집계"),
+        ("verdict", "실패율 임계 비교"),
+    ],
+    "image_pull": [("list_pods", "파드 조회"), ("scan", "ImagePullBackOff/ErrImagePull 스캔"), ("verdict", "임계 비교")],
+    "node_pressure": [("list_nodes", "노드 조회"), ("scan", "Memory/Disk/PID Pressure 컨디션 스캔"), ("verdict", "임계 비교")],
+    "oom_events": [("list_events", "이벤트 조회"), ("scan", "OOMKilled 집계"), ("verdict", "임계 비교")],
+    "stuck_terminating": [("list_pods", "파드 조회"), ("scan", "Terminating 지연 스캔"), ("verdict", "임계 비교")],
+    "coredns_health": [("locate", "CoreDNS 파드 탐색"), ("probe", "DNS 질의 프로브"), ("verdict", "응답 임계 비교")],
+    "audit_rbac": [("list_rbac", "RBAC 조회"), ("scan", "과도 권한/위험 바인딩 스캔"), ("verdict", "판정")],
+    "cni_flow": [("locate", "CNI 파드 탐색"), ("probe", "flow/연결 점검"), ("verdict", "판정")],
+    "external_to_pod": [("resolve", "외부→파드 경로 해석"), ("probe", "도달성 프로브"), ("verdict", "판정")],
+    "kernel_param_drift": [("collect", "노드 sysctl 수집"), ("compare", "기준값 대비 드리프트"), ("verdict", "판정")],
+    "minio_health": [("connect", "MinIO 연결"), ("probe", "health/버킷 점검"), ("verdict", "판정")],
+}
+
+
+def get_step_plan(check_type: str) -> list[dict[str, str]]:
+    """check_type 의 단계 plan(메커니즘). 미정의면 빈 리스트."""
+    return [{"id": sid, "label": lbl} for sid, lbl in STEP_PLANS.get(check_type, [])]

@@ -11,8 +11,9 @@ import os
 import subprocess
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
+from typing import Any, Iterator, Optional
 
 from kubernetes import client, config
 
@@ -50,11 +51,24 @@ class DeepCheckContext:
 
 
 @dataclass
+class ExecutionStep:
+    """단일 실행 단계 — 로그 + 2D 애니메이션용."""
+    id: str
+    label: str
+    status: str = "running"  # running | success | failed | skipped
+    detail: str = ""
+    metrics: dict[str, Any] = field(default_factory=dict)
+    started_ms: int = 0      # 체크 시작 기준 상대 시각
+    duration_ms: int = 0
+
+
+@dataclass
 class DeepCheckOutcome:
     status: StatusEnum
     message: str
     details: dict[str, Any] = field(default_factory=dict)
     duration_ms: int = 0
+    steps: list[dict[str, Any]] = field(default_factory=list)  # 실시간 실행 단계(직렬화 dict)
 
 
 class DeepCheckerBase(ABC):
@@ -96,6 +110,34 @@ class DeepCheckerBase(ABC):
         cmd.extend(args)
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
+    # ── 단계 트레이스 (로그 + 애니메이션) ──────────────────────────
+    @contextmanager
+    def _step(self, step_id: str, label: str) -> Iterator["ExecutionStep"]:
+        """체커가 핵심 동작을 감싸는 컨텍스트매니저. 진입 시 running 기록,
+        정상 종료 success, 예외 시 failed 로 표시 후 re-raise. detail/metrics 는 안에서 채운다.
+        """
+        if not hasattr(self, "_steps"):
+            self._steps = []
+            self._run_start = time.time()
+        rec = ExecutionStep(id=step_id, label=label, status="running",
+                            started_ms=int((time.time() - self._run_start) * 1000))
+        self._steps.append(rec)
+        t0 = time.time()
+        try:
+            yield rec
+            if rec.status == "running":
+                rec.status = "success"
+        except Exception as e:  # noqa: BLE001
+            rec.status = "failed"
+            if not rec.detail:
+                rec.detail = str(e)[:200]
+            raise
+        finally:
+            rec.duration_ms = int((time.time() - t0) * 1000)
+
+    def _collected_steps(self) -> list[dict[str, Any]]:
+        return [asdict(s) for s in getattr(self, "_steps", [])]
+
     # ── 실행 ────────────────────────────────────────────────────
     @abstractmethod
     def run(self, ctx: DeepCheckContext) -> DeepCheckOutcome:
@@ -103,9 +145,13 @@ class DeepCheckerBase(ABC):
 
     def safe_run(self, ctx: DeepCheckContext) -> DeepCheckOutcome:
         start = time.time()
+        self._steps = []
+        self._run_start = start
         try:
             outcome = self.run(ctx)
             outcome.duration_ms = int((time.time() - start) * 1000)
+            if not outcome.steps:
+                outcome.steps = self._collected_steps()
             return outcome
         except FileNotFoundError as e:
             return DeepCheckOutcome(
@@ -113,6 +159,7 @@ class DeepCheckerBase(ABC):
                 message=f"{self.display_name}: 필수 파일 없음 — {str(e)[:120]}",
                 details={"error": str(e)[:500]},
                 duration_ms=int((time.time() - start) * 1000),
+                steps=self._collected_steps(),
             )
         except Exception as e:
             msg = str(e).lower()
@@ -127,4 +174,5 @@ class DeepCheckerBase(ABC):
                 message=f"{self.display_name} 실패: {str(e)[:200]}",
                 details={"error": str(e)[:1000]},
                 duration_ms=int((time.time() - start) * 1000),
+                steps=self._collected_steps(),
             )
