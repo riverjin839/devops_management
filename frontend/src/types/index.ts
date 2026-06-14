@@ -2487,3 +2487,44 @@ export interface HelmHistoryItem {
   updated?: string;
   description?: string;
 }
+
+// 구조화 상세(요약 탭) — 백엔드가 생성
+export interface ResourceDetailKVItem { k: string; v: string }
+export interface ResourceDetailSection {
+  title: string;
+  type: 'kv' | 'list' | 'text';
+  items?: ResourceDetailKVItem[] | string[];
+  text?: string;
+}
+// K8sResourceYaml 응답에 sections 가 함께 옴(선택)
+export interface K8sResourceDetail {
+  kind: string;
+  namespace: string;
+  name: string;
+  yaml: string;
+  sections?: ResourceDetailSection[];
+}
+
+// Nodes (rich)
+export interface K8sNodeRichRow {
+  name: string;
+  roles: string[];
+  version?: string | null;
+  taints: number;
+  conditions: string[];
+  cpuCapacity?: string | null;
+  memCapacity?: string | null;
+  cpuUsage?: string | null;
+  memUsage?: string | null;
+  unschedulable: boolean;
+  ageSeconds?: number | null;
+}
+export interface K8sNodesResponse {
+  count: number;
+  items: K8sNodeRichRow[];
+  metricsAvailable: boolean;
+}
+
+// 종류 가용성 (nav 동적 숨김)
+export interface KindAvailabilityInfo { available: boolean; present: boolean; count: number; truncated: boolean }
+export interface KindAvailabilityResponse { kinds: Record<string, KindAvailabilityInfo> }
