@@ -1545,12 +1545,16 @@ export const k8sResourcesApi = {
       { params: namespace ? { namespace } : undefined, timeout: 120_000 },
     ),
   yaml: (clusterId: string, kind: string, namespace: string, name: string) =>
-    api.get<import('@/types').K8sResourceYaml>(
+    api.get<import('@/types').K8sResourceDetail>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/yaml`,
     ),
   // ── 쓰기 액션 (require_operator + 감사 로그) ───────────────────────────────
   capabilities: (clusterId: string) =>
     api.get<import('@/types').K8sCapabilitiesResponse>(`/k8s/${clusterId}/resources-capabilities`),
+  kindAvailability: (clusterId: string) =>
+    api.get<import('@/types').KindAvailabilityResponse>(`/k8s/${clusterId}/kind-availability`, { timeout: 60_000 }),
+  richNodes: (clusterId: string) =>
+    api.get<import('@/types').K8sNodesResponse>(`/k8s/${clusterId}/nodes`, { timeout: 60_000 }),
   scale: (clusterId: string, kind: string, namespace: string, name: string, replicas: number) =>
     api.post<import('@/types').K8sWriteResult>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/scale`,

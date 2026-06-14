@@ -261,10 +261,121 @@ KIND_MAP: dict[str, dict[str, Any]] = {
         "read": lambda a, ns, n: a.read_cluster_role_binding(n),
         "summary": lambda o: f"→ {o.role_ref.kind}/{o.role_ref.name} · {len(o.subjects or [])} subj",
     },
+    # ── OpenLens 파리티 추가 종류 ────────────────────────────────────────────
+    # Workloads
+    "replicasets": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.AppsV1Api(c),
+        "list_all": lambda a: a.list_replica_set_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_replica_set(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_replica_set(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_replica_set(n, ns),
+        "scale": lambda a, ns, n, body: a.patch_namespaced_replica_set_scale(n, ns, body),
+        "summary": _dep_summary,
+    },
+    "replicationcontrollers": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_replication_controller_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_replication_controller(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_replication_controller(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_replication_controller(n, ns),
+        "scale": lambda a, ns, n, body: a.patch_namespaced_replication_controller_scale(n, ns, body),
+        "summary": _dep_summary,
+    },
+    # Config
+    "resourcequotas": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_resource_quota_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_resource_quota(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_resource_quota(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_resource_quota(n, ns),
+        "summary": lambda o: f"{len((o.spec.hard or {})) if o.spec else 0} hard limits",
+    },
+    "limitranges": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_limit_range_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_limit_range(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_limit_range(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_limit_range(n, ns),
+        "summary": lambda o: f"{len((o.spec.limits or [])) if o.spec else 0} limits",
+    },
+    "horizontalpodautoscalers": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.AutoscalingV1Api(c),
+        "list_all": lambda a: a.list_horizontal_pod_autoscaler_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_horizontal_pod_autoscaler(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_horizontal_pod_autoscaler(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_horizontal_pod_autoscaler(n, ns),
+        "summary": lambda o: f"{(o.status.current_replicas if o.status else 0)} → min {o.spec.min_replicas}/max {o.spec.max_replicas}",
+    },
+    "poddisruptionbudgets": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.PolicyV1Api(c),
+        "list_all": lambda a: a.list_pod_disruption_budget_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_pod_disruption_budget(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_pod_disruption_budget(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_pod_disruption_budget(n, ns),
+        "summary": lambda o: f"min {getattr(o.spec, 'min_available', None)} / maxUnavail {getattr(o.spec, 'max_unavailable', None)}",
+    },
+    "priorityclasses": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.SchedulingV1Api(c),
+        "list_all": lambda a: a.list_priority_class(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_priority_class(n),
+        "delete": lambda a, ns, n: a.delete_priority_class(n),
+        "summary": lambda o: f"value {o.value}{' · global-default' if o.global_default else ''}",
+    },
+    # Network
+    "endpoints": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_endpoints_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_endpoints(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_endpoints(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_endpoints(n, ns),
+        "summary": lambda o: f"{sum(len(s.addresses or []) for s in (o.subsets or []))} addresses",
+    },
+    "networkpolicies": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.NetworkingV1Api(c),
+        "list_all": lambda a: a.list_network_policy_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_network_policy(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_network_policy(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_network_policy(n, ns),
+        "summary": lambda o: f"types {', '.join(o.spec.policy_types or []) if o.spec else '-'}",
+    },
+    "ingressclasses": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.NetworkingV1Api(c),
+        "list_all": lambda a: a.list_ingress_class(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_ingress_class(n),
+        "delete": lambda a, ns, n: a.delete_ingress_class(n),
+        "summary": lambda o: f"controller {o.spec.controller if o.spec else '-'}",
+    },
+    # Storage
+    "persistentvolumes": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_persistent_volume(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_persistent_volume(n),
+        "delete": lambda a, ns, n: a.delete_persistent_volume(n),
+        "summary": lambda o: f"{(o.status.phase if o.status else '-')} · {(o.spec.capacity or {}).get('storage','') if o.spec else ''} · {o.spec.storage_class_name if o.spec else ''}".strip(),
+    },
+    "storageclasses": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.StorageV1Api(c),
+        "list_all": lambda a: a.list_storage_class(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_storage_class(n),
+        "delete": lambda a, ns, n: a.delete_storage_class(n),
+        "summary": lambda o: f"{o.provisioner}{' · default' if (o.metadata.annotations or {}).get('storageclass.kubernetes.io/is-default-class') == 'true' else ''}",
+    },
 }
 
 # 쓰기 동작 권한 매트릭스 (UI 노출용 메타). 실제 가드는 엔드포인트 require_operator + kubeconfig RBAC.
-SCALABLE_KINDS = {"deployments", "statefulsets"}
+SCALABLE_KINDS = {"deployments", "statefulsets", "replicasets", "replicationcontrollers"}
 RESTARTABLE_KINDS = {"deployments", "statefulsets", "daemonsets"}
 
 
@@ -360,7 +471,116 @@ def get_resource_yaml(
     except Exception:  # noqa: BLE001
         pass
     text = yaml.safe_dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    return {"kind": kind, "namespace": namespace, "name": name, "yaml": text}
+    sections = _build_detail_sections(kind, data)
+    return {"kind": kind, "namespace": namespace, "name": name, "yaml": text, "sections": sections}
+
+
+# ── 구조화 상세(sections) — Lens 식 "요약" 탭용 ─────────────────────────────────
+# 프론트에 YAML 파서가 없으므로 백엔드가 읽기 쉬운 섹션을 만들어 내려준다.
+# 섹션 형식: {"title", "type": "kv"|"list"|"text", "items"|"text"}
+def _kv(items: list[tuple[str, Any]]) -> dict[str, Any]:
+    return {"type": "kv", "items": [{"k": str(k), "v": "" if v is None else str(v)} for k, v in items if v not in (None, "")]}
+
+
+def _build_detail_sections(kind: str, data: dict) -> list[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return []
+    sections: list[dict[str, Any]] = []
+    meta = data.get("metadata", {}) or {}
+    spec = data.get("spec", {}) or {}
+    status = data.get("status", {}) or {}
+
+    # 공통 메타데이터
+    meta_kv = _kv([
+        ("name", meta.get("name")),
+        ("namespace", meta.get("namespace")),
+        ("created", meta.get("creationTimestamp")),
+        ("uid", meta.get("uid")),
+    ])
+    if meta_kv["items"]:
+        sections.append({"title": "Metadata", **meta_kv})
+    if isinstance(meta.get("labels"), dict) and meta["labels"]:
+        sections.append({"title": "Labels", **_kv(list(meta["labels"].items()))})
+    if isinstance(meta.get("annotations"), dict) and meta["annotations"]:
+        # 너무 긴 annotation(last-applied 등)은 잘라서 노이즈 감소
+        ann = {k: (v[:300] + "…" if isinstance(v, str) and len(v) > 300 else v) for k, v in meta["annotations"].items()}
+        sections.append({"title": "Annotations", **_kv(list(ann.items()))})
+
+    if kind == "configmaps":
+        d = data.get("data") or {}
+        if d:
+            sections.append({"title": f"Data ({len(d)} keys)", "type": "kv",
+                             "items": [{"k": k, "v": v if isinstance(v, str) else str(v)} for k, v in d.items()]})
+        bd = data.get("binaryData") or {}
+        if bd:
+            sections.append({"title": f"BinaryData ({len(bd)} keys)", **_kv([(k, "<binary>") for k in bd])})
+    elif kind == "secrets":
+        d = data.get("data") or {}
+        sections.append({"title": f"Data ({len(d)} keys)", "type": "kv",
+                         "items": [{"k": k, "v": "***REDACTED***"} for k in d.keys()]})
+        sections.insert(0, {"title": "Type", "type": "text", "text": str(data.get("type", "-"))})
+    elif kind == "pods":
+        sections.append({"title": "Status", **_kv([
+            ("phase", status.get("phase")), ("podIP", status.get("podIP")),
+            ("hostIP", status.get("hostIP")), ("node", spec.get("nodeName")),
+            ("qosClass", status.get("qosClass")),
+        ])})
+        conts = spec.get("containers") or []
+        cstat = {c.get("name"): c for c in (status.get("containerStatuses") or [])}
+        rows = []
+        for c in conts:
+            st = cstat.get(c.get("name"), {})
+            state = next(iter((st.get("state") or {}).keys()), "-")
+            rows.append({"k": c.get("name", "?"), "v": f"{c.get('image','')} · {state} · restarts {st.get('restartCount', 0)} · ready {st.get('ready', False)}"})
+        if rows:
+            sections.append({"title": f"Containers ({len(rows)})", "type": "kv", "items": rows})
+    elif kind == "services":
+        ports = spec.get("ports") or []
+        sections.append({"title": "Spec", **_kv([
+            ("type", spec.get("type")), ("clusterIP", spec.get("clusterIP")),
+            ("sessionAffinity", spec.get("sessionAffinity")),
+        ])})
+        if ports:
+            sections.append({"title": "Ports", "type": "list",
+                             "items": [f"{p.get('name','') } {p.get('port')}→{p.get('targetPort')}/{p.get('protocol','TCP')}".strip() for p in ports]})
+        if isinstance(spec.get("selector"), dict) and spec["selector"]:
+            sections.append({"title": "Selector", **_kv(list(spec["selector"].items()))})
+    elif kind == "persistentvolumes":
+        sections.append({"title": "Spec", **_kv([
+            ("capacity", (spec.get("capacity") or {}).get("storage")),
+            ("storageClass", spec.get("storageClassName")),
+            ("accessModes", ", ".join(spec.get("accessModes") or [])),
+            ("reclaimPolicy", spec.get("persistentVolumeReclaimPolicy")),
+            ("phase", status.get("phase")),
+            ("claim", f"{(spec.get('claimRef') or {}).get('namespace','')}/{(spec.get('claimRef') or {}).get('name','')}" if spec.get("claimRef") else None),
+        ])})
+    elif kind in ("deployments", "statefulsets", "daemonsets", "replicasets", "replicationcontrollers"):
+        sections.append({"title": "Status", **_kv([
+            ("replicas", spec.get("replicas")),
+            ("ready", status.get("readyReplicas") or status.get("numberReady")),
+            ("updated", status.get("updatedReplicas") or status.get("updatedNumberScheduled")),
+            ("available", status.get("availableReplicas") or status.get("numberAvailable")),
+            ("strategy", (spec.get("strategy") or spec.get("updateStrategy") or {}).get("type")),
+        ])})
+        tmpl = ((spec.get("template") or {}).get("spec") or {})
+        imgs = [c.get("image") for c in (tmpl.get("containers") or []) if c.get("image")]
+        if imgs:
+            sections.append({"title": "Images", "type": "list", "items": imgs})
+    elif kind == "nodes":
+        ni = status.get("nodeInfo", {}) or {}
+        sections.append({"title": "Info", **_kv([
+            ("kubeletVersion", ni.get("kubeletVersion")), ("os", ni.get("osImage")),
+            ("kernel", ni.get("kernelVersion")), ("runtime", ni.get("containerRuntimeVersion")),
+            ("unschedulable", spec.get("unschedulable")),
+        ])})
+        cap = status.get("capacity", {}) or {}
+        if cap:
+            sections.append({"title": "Capacity", **_kv([("cpu", cap.get("cpu")), ("memory", cap.get("memory")), ("pods", cap.get("pods"))])})
+        conds = [f"{c.get('type')}={c.get('status')}" for c in (status.get("conditions") or [])]
+        if conds:
+            sections.append({"title": "Conditions", "type": "list", "items": conds})
+
+    return sections
 
 
 # ── 쓰기 동작 (require_operator + 감사 로그) ─────────────────────────────────────
@@ -590,6 +810,15 @@ _REPLACE_METHODS = {
     "jobs": "replace_namespaced_job",
     "cronjobs": "replace_namespaced_cron_job",
     "pods": "replace_namespaced_pod",
+    "replicasets": "replace_namespaced_replica_set",
+    "replicationcontrollers": "replace_namespaced_replication_controller",
+    "resourcequotas": "replace_namespaced_resource_quota",
+    "limitranges": "replace_namespaced_limit_range",
+    "horizontalpodautoscalers": "replace_namespaced_horizontal_pod_autoscaler",
+    "poddisruptionbudgets": "replace_namespaced_pod_disruption_budget",
+    "networkpolicies": "replace_namespaced_network_policy",
+    "persistentvolumes": "replace_persistent_volume",
+    "storageclasses": "replace_storage_class",
 }
 
 
@@ -800,3 +1029,118 @@ def resource_capabilities(cluster_id: UUID):
             "namespaced": bool(spec.get("namespaced", True)),
         }
     return {"capabilities": caps}
+
+
+# ── Nodes (rich) — Lens 식 컬럼 (Roles/Version/Taints/CPU/Memory/Conditions) ────
+_MASTER_ROLE_KEYS = ("node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master")
+
+
+class NodeRichRow(BaseModel):
+    name: str
+    roles: list[str]
+    version: Optional[str] = None
+    taints: int = 0
+    conditions: list[str] = []
+    cpu_capacity: Optional[str] = None
+    mem_capacity: Optional[str] = None
+    cpu_usage: Optional[str] = None
+    mem_usage: Optional[str] = None
+    unschedulable: bool = False
+    age_seconds: Optional[int] = None
+
+
+@router.get("/{cluster_id}/nodes")
+def list_nodes_rich(cluster_id: UUID, db: Session = Depends(get_db)):
+    """노드 목록 — Lens 대등 컬럼. usage 는 metrics-server 가용 시 best-effort."""
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+    v1 = k8s_client.CoreV1Api(client)
+    try:
+        nodes = v1.list_node(limit=_LIST_LIMIT)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"노드 조회 실패: {str(e)[:200]}")
+
+    # usage (metrics-server) — 없으면 생략
+    usage: dict[str, dict] = {}
+    try:
+        co = k8s_client.CustomObjectsApi(client)
+        m = co.list_cluster_custom_object("metrics.k8s.io", "v1beta1", "nodes")
+        for it in (m.get("items") or []):
+            usage[it.get("metadata", {}).get("name", "")] = it.get("usage", {}) or {}
+    except Exception:  # noqa: BLE001
+        usage = {}
+
+    rows: list[NodeRichRow] = []
+    for n in (nodes.items or []):
+        labels = n.metadata.labels or {}
+        roles: list[str] = []
+        if any(k in labels for k in _MASTER_ROLE_KEYS):
+            roles.append("control-plane")
+        for k in labels:
+            if k.startswith("node-role.kubernetes.io/") and k not in _MASTER_ROLE_KEYS:
+                r = k.split("/", 1)[1]
+                if r and r not in roles:
+                    roles.append(r)
+        if not roles:
+            roles.append("worker")
+
+        conds: list[str] = []
+        for c in (n.status.conditions or []) if n.status else []:
+            if c.type == "Ready":
+                conds.insert(0, "Ready" if c.status == "True" else "NotReady")
+            elif c.status == "True" and c.type.endswith("Pressure"):
+                conds.append(c.type)
+
+        cap = (n.status.capacity or {}) if n.status else {}
+        u = usage.get(n.metadata.name, {})
+        ni = n.status.node_info if (n.status and n.status.node_info) else None
+        rows.append(NodeRichRow(
+            name=n.metadata.name,
+            roles=sorted(set(roles)),
+            version=getattr(ni, "kubelet_version", None),
+            taints=len(n.spec.taints or []) if n.spec else 0,
+            conditions=conds or ["?"],
+            cpu_capacity=cap.get("cpu"),
+            mem_capacity=cap.get("memory"),
+            cpu_usage=u.get("cpu"),
+            mem_usage=u.get("memory"),
+            unschedulable=bool(n.spec.unschedulable) if n.spec else False,
+            age_seconds=_age_seconds(n.metadata),
+        ))
+    rows.sort(key=lambda r: r.name)
+    return {"count": len(rows), "items": rows, "metrics_available": bool(usage)}
+
+
+# ── 종류 가용성 — 클러스터에 실제 존재(≥1)/지원하는 종류만 UI 노출용 ───────────
+@router.get("/{cluster_id}/kind-availability")
+def kind_availability(cluster_id: UUID, db: Session = Depends(get_db)):
+    """각 KIND 별 available(API 지원) / present(≥1개 존재) 를 병렬 프로브.
+
+    프론트는 present=False(또는 available=False) 종류를 nav 에서 숨겨 클러스터에
+    실제 있는 것만 보여준다. 프로브 실패 시(전체 에러) 프론트는 전체 노출로 폴백.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+
+    def _probe(kind: str) -> tuple[str, dict]:
+        spec = KIND_MAP[kind]
+        try:
+            api = spec["api"](client)
+            res = spec["list_all"](api)
+            items = res.items or []
+            more = bool(res.metadata._continue) if getattr(res, "metadata", None) else False
+            return kind, {"available": True, "present": (len(items) > 0) or more, "count": len(items), "truncated": more}
+        except ApiException as e:
+            # 404/NotFound = 해당 API 미지원 → unavailable
+            avail = e.status not in (404,)
+            return kind, {"available": avail, "present": False, "count": 0, "truncated": False}
+        except Exception:  # noqa: BLE001
+            return kind, {"available": True, "present": False, "count": 0, "truncated": False}
+
+    out: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for kind, info in ex.map(_probe, list(KIND_MAP.keys())):
+            out[kind] = info
+    return {"kinds": out}

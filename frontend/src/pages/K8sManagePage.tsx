@@ -6,6 +6,7 @@ import {
   FileCode, Pencil, Save, X, Search, RefreshCw, Ban, CheckCircle2, AlertTriangle,
 } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
+import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
@@ -18,6 +19,7 @@ import { PodTerminal } from '@/components/k8s/PodTerminal';
 import { EventsStream } from '@/components/k8s/EventsStream';
 import type {
   K8sResourceRow, K8sResourceCapability, K8sCrdInfo, HelmRelease,
+  K8sNodeRichRow, ResourceDetailSection, ResourceDetailKVItem,
 } from '@/types';
 
 // ── Lens 식 카테고리 내비 모델 ────────────────────────────────────────────────
@@ -32,8 +34,10 @@ const NAV: NavCat[] = [
     id: 'workloads', label: 'Workloads', icon: Boxes, leaves: [
       { id: 'pods', label: 'Pods', mode: 'kind', kind: 'pods' },
       { id: 'deployments', label: 'Deployments', mode: 'kind', kind: 'deployments' },
-      { id: 'statefulsets', label: 'StatefulSets', mode: 'kind', kind: 'statefulsets' },
       { id: 'daemonsets', label: 'DaemonSets', mode: 'kind', kind: 'daemonsets' },
+      { id: 'statefulsets', label: 'StatefulSets', mode: 'kind', kind: 'statefulsets' },
+      { id: 'replicasets', label: 'ReplicaSets', mode: 'kind', kind: 'replicasets' },
+      { id: 'replicationcontrollers', label: 'Replication Controllers', mode: 'kind', kind: 'replicationcontrollers' },
       { id: 'jobs', label: 'Jobs', mode: 'kind', kind: 'jobs' },
       { id: 'cronjobs', label: 'CronJobs', mode: 'kind', kind: 'cronjobs' },
     ],
@@ -42,15 +46,29 @@ const NAV: NavCat[] = [
     id: 'config', label: 'Config', icon: SettingsIcon, leaves: [
       { id: 'configmaps', label: 'ConfigMaps', mode: 'kind', kind: 'configmaps' },
       { id: 'secrets', label: 'Secrets', mode: 'kind', kind: 'secrets' },
+      { id: 'resourcequotas', label: 'Resource Quotas', mode: 'kind', kind: 'resourcequotas' },
+      { id: 'limitranges', label: 'Limit Ranges', mode: 'kind', kind: 'limitranges' },
+      { id: 'horizontalpodautoscalers', label: 'HPA', mode: 'kind', kind: 'horizontalpodautoscalers' },
+      { id: 'poddisruptionbudgets', label: 'Pod Disruption Budgets', mode: 'kind', kind: 'poddisruptionbudgets' },
+      { id: 'priorityclasses', label: 'Priority Classes', mode: 'kind', kind: 'priorityclasses' },
     ],
   },
   {
     id: 'network', label: 'Network', icon: Network, leaves: [
       { id: 'services', label: 'Services', mode: 'kind', kind: 'services' },
+      { id: 'endpoints', label: 'Endpoints', mode: 'kind', kind: 'endpoints' },
       { id: 'ingresses', label: 'Ingresses', mode: 'kind', kind: 'ingresses' },
+      { id: 'ingressclasses', label: 'Ingress Classes', mode: 'kind', kind: 'ingressclasses' },
+      { id: 'networkpolicies', label: 'Network Policies', mode: 'kind', kind: 'networkpolicies' },
     ],
   },
-  { id: 'storage', label: 'Storage', icon: Database, leaves: [{ id: 'pvc', label: 'PersistentVolumeClaims', mode: 'kind', kind: 'persistentvolumeclaims' }] },
+  {
+    id: 'storage', label: 'Storage', icon: Database, leaves: [
+      { id: 'pvc', label: 'Persistent Volume Claims', mode: 'kind', kind: 'persistentvolumeclaims' },
+      { id: 'persistentvolumes', label: 'Persistent Volumes', mode: 'kind', kind: 'persistentvolumes' },
+      { id: 'storageclasses', label: 'Storage Classes', mode: 'kind', kind: 'storageclasses' },
+    ],
+  },
   { id: 'namespaces', label: 'Namespaces', icon: Layers, leaves: [{ id: 'namespaces', label: 'Namespaces', mode: 'kind', kind: 'namespaces' }] },
   { id: 'events', label: 'Events', icon: ScrollText, leaves: [{ id: 'events', label: 'Events', mode: 'events' }] },
   { id: 'helm', label: 'Helm', icon: Package, leaves: [{ id: 'helm', label: 'Releases', mode: 'helm' }] },
@@ -122,6 +140,24 @@ export function K8sManagePage() {
     staleTime: 5 * 60_000,
   });
   const caps: Record<string, K8sResourceCapability> = capsData?.capabilities ?? {};
+
+  // 종류 가용성 — 클러스터에 실제 존재하는 종류만 nav 노출 (없으면 전체 노출 폴백)
+  const { data: availData } = useQuery({
+    queryKey: ['k8s-avail', clusterId],
+    queryFn: async () => (await k8sResourcesApi.kindAvailability(clusterId)).data,
+    enabled: !!clusterId,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const avail = availData?.kinds;
+  const isLeafVisible = (lf: NavLeaf): boolean => {
+    if (lf.mode !== 'kind' || !lf.kind) return true;       // overview/events/helm/crd 항상 노출
+    if (!avail) return true;                                // 미로딩/에러 → 전체 노출 폴백
+    return avail[lf.kind]?.present ?? false;                // 존재하는 종류만
+  };
+  const visibleCats = NAV
+    .map((cat) => ({ ...cat, leaves: cat.leaves.filter(isLeafVisible) }))
+    .filter((cat) => cat.leaves.length > 0);
 
   const flash = (kind: 'ok' | 'err', text: string) => {
     setActionMsg({ kind, text });
@@ -206,7 +242,7 @@ export function K8sManagePage() {
         <div className="sticky top-4 self-start w-52 flex-shrink-0">
           <MacCard title="K8S 상세 관리" bodyPadding="p-2">
             <nav className="space-y-2">
-              {NAV.map((cat) => {
+              {visibleCats.map((cat) => {
                 const Icon = cat.icon;
                 const single = cat.leaves.length === 1;
                 if (single) {
@@ -231,13 +267,18 @@ export function K8sManagePage() {
                     <div className="space-y-0.5">
                       {cat.leaves.map((lf) => {
                         const active = activeLeaf === lf.id;
+                        const cnt = lf.kind ? avail?.[lf.kind]?.count : undefined;
+                        const more = lf.kind ? avail?.[lf.kind]?.truncated : false;
                         return (
                           <button
                             key={lf.id}
                             onClick={() => { setActiveLeaf(lf.id); setSelectedCrd(null); }}
-                            className={`w-full text-left pl-7 pr-2 py-1 rounded-lg text-xs ${active ? 'bg-primary/15 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary/60'}`}
+                            className={`w-full flex items-center gap-1 pl-7 pr-2 py-1 rounded-lg text-xs ${active ? 'bg-primary/15 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary/60'}`}
                           >
-                            {lf.label}
+                            <span className="flex-1 text-left truncate">{lf.label}</span>
+                            {cnt != null && (
+                              <span className="text-[9px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
+                            )}
                           </button>
                         );
                       })}
@@ -273,7 +314,15 @@ export function K8sManagePage() {
             </div>
           )}
 
-          {leaf.mode === 'kind' && leaf.kind && (
+          {leaf.mode === 'kind' && leaf.kind === 'nodes' && (
+            <NodesPanel
+              clusterId={clusterId}
+              onOpenDetail={(name) => { setDetail({ kind: 'k8s', resourceKind: 'nodes', namespace: '-', name, editable: false }); setEditing(false); }}
+              onCordon={doCordon}
+              onDrain={doDrain}
+            />
+          )}
+          {leaf.mode === 'kind' && leaf.kind && leaf.kind !== 'nodes' && (
             <ResourceTablePanel
               clusterId={clusterId}
               kind={leaf.kind}
@@ -650,6 +699,9 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
     },
   });
   const yamlText = yamlQuery.data?.yaml ?? '';
+  const sections = (yamlQuery.data as { sections?: ResourceDetailSection[] } | undefined)?.sections;
+  const hasSections = !!(sections && sections.length);
+  const [tab, setTab] = useState<'summary' | 'yaml'>('summary');
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex justify-end" onClick={onClose}>
@@ -680,21 +732,145 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
         </div>
         <div className="p-4">
           {yamlQuery.isLoading ? (
-            <div className="text-sm text-muted-foreground">YAML 불러오는 중…</div>
+            <div className="text-sm text-muted-foreground">불러오는 중…</div>
           ) : yamlQuery.isError ? (
             <div className="text-sm text-red-500">조회 실패: {errMsg(yamlQuery.error)}</div>
-          ) : editing ? (
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              spellCheck={false}
-              className="w-full h-[80vh] font-mono text-xs rounded-xl border border-border bg-background p-3 focus:outline-none focus:ring-1 focus:ring-primary"
-            />
           ) : (
-            <LogViewer text={yamlText} maxHeight="max-h-[82vh]" />
+            <Tabs.Root value={editing || !hasSections ? 'yaml' : tab} onValueChange={(v) => setTab(v as 'summary' | 'yaml')}>
+              <Tabs.List className="flex gap-1 mb-3 border-b border-border">
+                {hasSections && (
+                  <Tabs.Trigger value="summary" disabled={editing}
+                    className="px-3 py-1.5 text-xs font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground disabled:opacity-40">
+                    요약
+                  </Tabs.Trigger>
+                )}
+                <Tabs.Trigger value="yaml"
+                  className="px-3 py-1.5 text-xs font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground">
+                  YAML
+                </Tabs.Trigger>
+              </Tabs.List>
+              {hasSections && (
+                <Tabs.Content value="summary">
+                  <SectionsView sections={sections!} />
+                </Tabs.Content>
+              )}
+              <Tabs.Content value="yaml">
+                {editing ? (
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    spellCheck={false}
+                    className="w-full h-[78vh] font-mono text-xs rounded-xl border border-border bg-background p-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                ) : (
+                  <LogViewer text={yamlText} maxHeight="max-h-[80vh]" />
+                )}
+              </Tabs.Content>
+            </Tabs.Root>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+// ── 구조화 상세(요약) 렌더 ────────────────────────────────────────────────────
+function SectionsView({ sections }: { sections: ResourceDetailSection[] }) {
+  return (
+    <div className="space-y-4 max-h-[80vh] overflow-auto pr-1">
+      {sections.map((s, i) => (
+        <div key={i} className="rounded-xl border border-border overflow-hidden">
+          <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40 border-b border-border">
+            {s.title}
+          </div>
+          <div className="p-3 text-xs">
+            {s.type === 'text' && <span className="text-muted-foreground">{s.text}</span>}
+            {s.type === 'list' && (
+              <ul className="space-y-1">
+                {(s.items as string[] | undefined)?.map((it, j) => (
+                  <li key={j} className="font-mono break-all text-muted-foreground">• {it}</li>
+                ))}
+              </ul>
+            )}
+            {s.type === 'kv' && (
+              <div className="space-y-1.5">
+                {(s.items as ResourceDetailKVItem[] | undefined)?.map((it, j) => (
+                  <div key={j} className="grid grid-cols-[160px_1fr] gap-2">
+                    <span className="font-medium text-muted-foreground truncate" title={it.k}>{it.k}</span>
+                    <pre className="font-mono whitespace-pre-wrap break-all text-foreground/90 m-0">{it.v}</pre>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Nodes 패널 (Lens 식 컬럼) ─────────────────────────────────────────────────
+interface NodesPanelProps {
+  clusterId: string;
+  onOpenDetail: (name: string) => void;
+  onCordon: (name: string, unschedulable: boolean) => void;
+  onDrain: (name: string) => void;
+}
+function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelProps) {
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['k8s-mng-nodes', clusterId],
+    queryFn: async () => (await k8sResourcesApi.richNodes(clusterId)).data,
+    enabled: !!clusterId,
+  });
+  const rows: K8sNodeRichRow[] = data?.items ?? [];
+
+  return (
+    <MacCard title="Nodes" bodyPadding="p-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+        <span className="text-xs text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
+        <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      <div className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30">
+        <span>이름</span><span>Roles</span><span>Version</span><span>Taints</span><span>CPU</span><span>Memory</span><span className="text-right">Age</span><span className="text-right pr-2">동작</span>
+      </div>
+      {isLoading ? (
+        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+      ) : isError ? (
+        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+      ) : rows.length === 0 ? (
+        <div className="p-10 text-center text-sm text-muted-foreground">노드가 없습니다.</div>
+      ) : (
+        rows.map((n) => {
+          const ready = n.conditions.includes('Ready');
+          const warn = n.conditions.filter((c) => c !== 'Ready');
+          return (
+            <div key={n.name} className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-xs border-b border-border/40 hover:bg-secondary/30 items-center">
+              <button onClick={() => onOpenDetail(n.name)} className="truncate font-medium text-left hover:text-primary flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${ready ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="truncate">{n.name}</span>
+                {n.unschedulable && <span className="text-[9px] rounded px-1 bg-amber-500/15 text-amber-600">cordoned</span>}
+              </button>
+              <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>
+              <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>
+              <span className="text-muted-foreground tabular-nums">{n.taints}</span>
+              <span className="truncate text-muted-foreground">{n.cpuUsage ? `${n.cpuUsage} / ` : ''}{n.cpuCapacity ?? '-'}</span>
+              <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>
+              <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>
+              <div className="flex items-center justify-end gap-1">
+                {warn.length > 0 && <span className="text-[9px] text-amber-600 mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
+                <RoleGate allow={['admin', 'operator']}>
+                  <IconBtn title={n.unschedulable ? 'uncordon' : 'cordon'} onClick={() => onCordon(n.name, !n.unschedulable)}>
+                    {n.unschedulable ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                  </IconBtn>
+                  <IconBtn title="drain" onClick={() => onDrain(n.name)}><Scaling className="w-3.5 h-3.5" /></IconBtn>
+                </RoleGate>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </MacCard>
   );
 }
