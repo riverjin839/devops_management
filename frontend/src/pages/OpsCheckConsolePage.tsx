@@ -134,7 +134,7 @@ export function OpsCheckConsolePage() {
         <div className="flex-1 min-w-0 space-y-4">
           {/* header */}
           <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
+            <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
               <ArrowLeft className="w-3.5 h-3.5" /> 대시보드
             </Link>
             <h1 className="text-lg font-semibold flex-1 min-w-[200px]">
@@ -142,10 +142,10 @@ export function OpsCheckConsolePage() {
             </h1>
             {clusterId && (
               <>
-                <Link to={`/daily-check/review/${clusterId}`} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
+                <Link to={`/daily-check/review/${clusterId}`} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
                   <ClipboardCheck className="w-3.5 h-3.5" /> 결과 리뷰
                 </Link>
-                <Link to="/daily-check/settings" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
+                <Link to="/daily-check/settings" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
                   <Settings className="w-3.5 h-3.5" /> 점검 항목 관리
                 </Link>
               </>
@@ -158,16 +158,16 @@ export function OpsCheckConsolePage() {
             <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-border">
               <button
                 onClick={() => setCategory('all')}
-                className={`rounded-full px-3 py-1 text-xs font-medium border ${category === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-secondary/60'}`}>
-                전체 <span className="text-[10px] font-mono opacity-60">{catalog.length}</span>
+                className={`rounded-full px-3 py-1 text-sm font-medium border ${category === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-secondary/60'}`}>
+                전체 <span className="text-xs font-mono opacity-60">{catalog.length}</span>
               </button>
               {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCategory(cat)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium border ${category === cat ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-secondary/60'}`}>
+                  className={`rounded-full px-3 py-1 text-sm font-medium border ${category === cat ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-secondary/60'}`}>
                   {CATEGORY_LABEL[cat] ?? cat}
-                  <span className="ml-1 text-[10px] font-mono opacity-60">
+                  <span className="ml-1 text-xs font-mono opacity-60">
                     {catalog.filter((c) => String(c.category) === cat).length}
                   </span>
                 </button>
@@ -178,22 +178,22 @@ export function OpsCheckConsolePage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="이름/타입 검색"
-                  className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-xs w-44 focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-44 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
             </div>
 
             {/* bulk action bar */}
             <div className="flex items-center gap-3 px-4 py-2 bg-secondary/30 border-b border-border">
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer">
                 <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} className="accent-primary" />
                 전체 선택
               </label>
-              <span className="text-xs text-muted-foreground">선택 {selected.size}개</span>
+              <span className="text-sm text-muted-foreground">선택 {selected.size}개</span>
               <button
                 onClick={runSelected}
                 disabled={selected.size === 0 || startRun.isPending}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90">
+                className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90">
                 {startRun.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                 선택 {selected.size}개 실행
               </button>
@@ -207,7 +207,7 @@ export function OpsCheckConsolePage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-[11px] text-muted-foreground border-b border-border">
+                  <tr className="text-xs text-muted-foreground border-b border-border">
                     <th className="w-9 px-3 py-2"></th>
                     <th className="text-left px-2 py-2 font-medium">이름</th>
                     <th className="text-left px-2 py-2 font-medium w-24">분류</th>
@@ -229,16 +229,16 @@ export function OpsCheckConsolePage() {
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium truncate max-w-[260px]">{c.name || c.checkType}</span>
                             {c.enabled === false && (
-                              <span className="text-[9px] rounded px-1 py-0.5 bg-muted text-muted-foreground border border-border" title="비활성 — cron 미실행, 수동 실행만">비활성</span>
+                              <span className="text-[10px] rounded px-1 py-0.5 bg-muted text-muted-foreground border border-border" title="비활성 — cron 미실행, 수동 실행만">비활성</span>
                             )}
                           </div>
                           {c.checkType && c.name && (
-                            <div className="text-[10px] text-muted-foreground font-mono">{c.checkType}</div>
+                            <div className="text-xs text-muted-foreground font-mono">{c.checkType}</div>
                           )}
                         </td>
-                        <td className="px-2 py-2 text-xs text-muted-foreground">{CATEGORY_LABEL[String(c.category)] ?? c.category}</td>
+                        <td className="px-2 py-2 text-sm text-muted-foreground">{CATEGORY_LABEL[String(c.category)] ?? c.category}</td>
                         <td className="px-2 py-2">
-                          <span className="text-[10px] rounded-full border border-border px-2 py-0.5 text-muted-foreground">
+                          <span className="text-xs rounded-full border border-border px-2 py-0.5 text-muted-foreground">
                             {SOURCE_LABEL[c.source] ?? c.source}
                           </span>
                         </td>
@@ -249,7 +249,7 @@ export function OpsCheckConsolePage() {
                             ) : live.status === 'error' ? (
                               <StatusBadge variant="critical" label="실패" />
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 {live.status === 'running' ? '실행중' : '대기'}
                               </span>
@@ -257,10 +257,10 @@ export function OpsCheckConsolePage() {
                           ) : c.lastStatus ? (
                             <span className="inline-flex items-center gap-1">
                               <StatusDot variant={statusToVariant(c.lastStatus)} />
-                              <span className="text-[11px] text-muted-foreground">{c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : ''}</span>
+                              <span className="text-xs text-muted-foreground">{c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : ''}</span>
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60">
                               <Circle className="w-3 h-3" /> 미실행
                             </span>
                           )}
@@ -269,13 +269,13 @@ export function OpsCheckConsolePage() {
                           <button
                             onClick={() => runOne(c)}
                             disabled={startRun.isPending}
-                            className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-secondary disabled:opacity-40">
+                            className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs hover:bg-secondary disabled:opacity-40">
                             <Play className="w-3 h-3" /> 실행
                           </button>
                           {live && (live.status === 'done' || live.status === 'error') && (
                             <button
                               onClick={() => setDetail(live)}
-                              className="ml-1 inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-secondary">
+                              className="ml-1 inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs hover:bg-secondary">
                               상세
                             </button>
                           )}
@@ -294,7 +294,7 @@ export function OpsCheckConsolePage() {
               <div className="flex items-center gap-3 mb-3 text-sm">
                 {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                 <span className="font-medium">{isRunning ? '실행 중…' : '완료'}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   총 {run.total} · 정상 {run.okCount} · 경고 {run.warnCount} · 위험 {run.critCount} · 실패 {run.errorCount}
                 </span>
                 <button onClick={() => setActiveRunId(null)} className="ml-auto text-muted-foreground hover:text-foreground" aria-label="닫기">
@@ -307,18 +307,18 @@ export function OpsCheckConsolePage() {
                     key={it.id}
                     onClick={() => (it.status === 'done' || it.status === 'error') && setDetail(it)}
                     className="w-full flex items-center gap-3 py-2 text-left hover:bg-secondary/20 px-1">
-                    <span className="w-32 text-xs truncate">{it.name || it.checkType}</span>
+                    <span className="w-32 text-sm truncate">{it.name || it.checkType}</span>
                     {it.status === 'done' ? (
                       <StatusBadge variant={statusToVariant(it.resultStatus)} />
                     ) : it.status === 'error' ? (
                       <StatusBadge variant="critical" label="실패" />
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <Loader2 className="w-3 h-3 animate-spin" /> {it.status === 'running' ? '실행중' : '대기'}
                       </span>
                     )}
-                    <span className="flex-1 text-xs text-muted-foreground truncate">{it.message}</span>
-                    {it.durationMs > 0 && <span className="text-[10px] text-muted-foreground/70 font-mono">{it.durationMs}ms</span>}
+                    <span className="flex-1 text-sm text-muted-foreground truncate">{it.message}</span>
+                    {it.durationMs > 0 && <span className="text-xs text-muted-foreground/70 font-mono">{it.durationMs}ms</span>}
                   </button>
                 ))}
               </div>
@@ -336,7 +336,7 @@ export function OpsCheckConsolePage() {
                 ? <StatusBadge variant={statusToVariant(detail.resultStatus)} />
                 : <StatusBadge variant="critical" label="실패" />}
               <h2 className="font-semibold text-sm truncate">{detail.name || detail.checkType}</h2>
-              <span className="text-[10px] text-muted-foreground font-mono ml-1">{detail.durationMs}ms</span>
+              <span className="text-xs text-muted-foreground font-mono ml-1">{detail.durationMs}ms</span>
               <button onClick={() => setDetail(null)} className="ml-auto text-muted-foreground hover:text-foreground" aria-label="닫기">
                 <X className="w-4 h-4" />
               </button>
@@ -344,7 +344,7 @@ export function OpsCheckConsolePage() {
             <div className="p-5 space-y-3">
               {detail.message && <p className="text-sm">{detail.message}</p>}
               <div>
-                <div className="text-[11px] font-semibold text-muted-foreground mb-1 flex items-center gap-1">
+                <div className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" /> 상세 로그
                 </div>
                 <LogViewer text={detail.details ? JSON.stringify(detail.details, null, 2) : '(상세 없음)'} maxHeight="max-h-[55vh]" />

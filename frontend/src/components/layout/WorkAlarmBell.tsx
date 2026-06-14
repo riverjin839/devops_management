@@ -51,16 +51,16 @@ function AlarmRow({ item, today, onOpen }: { item: WorkItem; today: string; onOp
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-sm text-foreground/90 line-clamp-1 flex-1 min-w-0">{itemLabel(item)}</span>
         {overdueDays > 0 ? (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 whitespace-nowrap flex-shrink-0">
+          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 whitespace-nowrap flex-shrink-0">
             {overdueDays}일 지연
           </span>
         ) : (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 whitespace-nowrap flex-shrink-0">
+          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 whitespace-nowrap flex-shrink-0">
             오늘
           </span>
         )}
       </div>
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary truncate max-w-[120px]">{item.category}</span>
         {due && <span className="tabular-nums">{due}</span>}
       </div>
@@ -171,7 +171,7 @@ export function WorkAlarmBell() {
         {grandTotal > 0 && (
           <span
             aria-hidden
-            className={`absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] font-bold leading-4 text-center pointer-events-none ${
+            className={`absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full text-white text-xs font-bold leading-4 text-center pointer-events-none ${
               overdue.length > 0 ? 'bg-red-500' : dueToday.length > 0 ? 'bg-amber-500' : 'bg-blue-500'
             }`}
           >
@@ -196,7 +196,7 @@ export function WorkAlarmBell() {
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-primary" />
               <span className="text-sm font-semibold">업무 알람</span>
-              {total > 0 && <span className="text-xs text-muted-foreground">{total}건</span>}
+              {total > 0 && <span className="text-sm text-muted-foreground">{total}건</span>}
             </div>
             <button
               type="button"
@@ -217,10 +217,10 @@ export function WorkAlarmBell() {
               <>
                 {notifications.length > 0 && (
                   <>
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-blue-500/5 text-blue-600 text-[11px] font-semibold sticky top-0">
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-blue-500/5 text-blue-600 text-xs font-semibold sticky top-0">
                       <span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> 알림 {unreadNotif > 0 ? unreadNotif : ''}</span>
                       {unreadNotif > 0 && (
-                        <button type="button" onClick={markAllNotif} className="text-[10px] underline hover:no-underline">모두 읽음</button>
+                        <button type="button" onClick={markAllNotif} className="text-xs underline hover:no-underline">모두 읽음</button>
                       )}
                     </div>
                     {notifications.map((n) => (
@@ -232,16 +232,16 @@ export function WorkAlarmBell() {
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
                           {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
-                          <span className="text-xs font-medium truncate">{n.title}</span>
+                          <span className="text-sm font-medium truncate">{n.title}</span>
                         </div>
-                        {n.body && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.body}</p>}
+                        {n.body && <p className="text-xs text-muted-foreground truncate mt-0.5">{n.body}</p>}
                       </button>
                     ))}
                   </>
                 )}
                 {overdue.length > 0 && (
                   <>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/5 text-red-500 text-[11px] font-semibold sticky top-0">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/5 text-red-500 text-xs font-semibold sticky top-0">
                       <AlertTriangle className="w-3.5 h-3.5" /> 지연 {overdue.length}
                     </div>
                     {overdue.map((it) => <AlarmRow key={it.id} item={it} today={today} onOpen={openItem} />)}
@@ -249,7 +249,7 @@ export function WorkAlarmBell() {
                 )}
                 {dueToday.length > 0 && (
                   <>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/5 text-amber-600 text-[11px] font-semibold sticky top-0">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/5 text-amber-600 text-xs font-semibold sticky top-0">
                       <CalendarClock className="w-3.5 h-3.5" /> 오늘 마감 {dueToday.length}
                     </div>
                     {dueToday.map((it) => <AlarmRow key={it.id} item={it} today={today} onOpen={openItem} />)}
@@ -263,7 +263,7 @@ export function WorkAlarmBell() {
             <button
               type="button"
               onClick={() => { setOpen(false); navigate('/tasks-mgmt'); }}
-              className="flex-shrink-0 border-t border-border px-3 py-2 text-xs text-primary hover:bg-primary/5 transition-colors text-left"
+              className="flex-shrink-0 border-t border-border px-3 py-2 text-sm text-primary hover:bg-primary/5 transition-colors text-left"
             >
               전체 업무 보기 →
             </button>

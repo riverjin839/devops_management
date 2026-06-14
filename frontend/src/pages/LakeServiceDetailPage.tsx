@@ -111,10 +111,10 @@ export function LakeServiceDetailPage() {
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-medium">LAKE 서비스 조회 실패</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
+              <div className="text-sm text-muted-foreground mt-0.5">
                 {error instanceof Error ? error.message : '서비스를 찾을 수 없습니다.'}
               </div>
-              <Link to="/lake-services" className="inline-block mt-2 text-xs underline">
+              <Link to="/lake-services" className="inline-block mt-2 text-sm underline">
                 목록으로
               </Link>
             </div>
@@ -132,7 +132,7 @@ export function LakeServiceDetailPage() {
           <Link
             to="/lake-services"
             aria-label="LAKE 서비스 목록으로"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             목록
@@ -142,7 +142,7 @@ export function LakeServiceDetailPage() {
           </div>
           <div className="flex-1 min-w-[180px]">
             <h1 className="text-lg font-semibold">{svc.name}</h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {typeInfo?.label ?? svc.serviceType} · {svc.category} · {svc.endpointUrl}
             </p>
           </div>
@@ -152,7 +152,7 @@ export function LakeServiceDetailPage() {
             onClick={() => runCheck.mutate(id)}
             disabled={runCheck.isPending}
             aria-label="지금 점검"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5" />
             {runCheck.isPending ? '실행 중…' : '지금 점검'}
@@ -161,7 +161,7 @@ export function LakeServiceDetailPage() {
             type="button"
             onClick={() => setConfirmDelete(true)}
             aria-label="서비스 삭제"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-red-500 hover:bg-red-500/10"
           >
             <Trash2 className="w-3.5 h-3.5" />
             삭제
@@ -180,14 +180,14 @@ export function LakeServiceDetailPage() {
               </span>
             </div>
             {svc.lastMessage && (
-              <p className="text-xs text-muted-foreground italic">{svc.lastMessage}</p>
+              <p className="text-sm text-muted-foreground italic">{svc.lastMessage}</p>
             )}
             {checksData?.data?.[0]?.details && (
               <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
                   최근 점검 details (JSON)
                 </summary>
-                <pre className="mt-2 rounded bg-muted p-2 text-[11px] overflow-x-auto max-h-64">
+                <pre className="mt-2 rounded bg-muted p-2 text-xs overflow-x-auto max-h-64">
                   {JSON.stringify(checksData.data[0].details, null, 2)}
                 </pre>
               </details>
@@ -198,7 +198,7 @@ export function LakeServiceDetailPage() {
         {/* Troubleshoot guides */}
         <MacCard title="트러블슈팅 가이드">
           {guides.length === 0 ? (
-            <div className="text-xs text-muted-foreground italic">
+            <div className="text-sm text-muted-foreground italic">
               <BookOpen className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
               <code className="font-mono">service={svc.serviceType}</code> 슬러그로 등록된 가이드가 없습니다.{' '}
               <Link
@@ -220,7 +220,7 @@ export function LakeServiceDetailPage() {
         {/* History timeline (LakeServiceCheck + ServiceEntry kind=history) */}
         <MacCard title="히스토리 timeline">
           {timeline.length === 0 ? (
-            <div className="text-xs text-muted-foreground italic">
+            <div className="text-sm text-muted-foreground italic">
               <History className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
               아직 점검 기록이 없습니다. 상단 "지금 점검" 버튼으로 첫 회차를 생성하세요.
             </div>
@@ -229,13 +229,13 @@ export function LakeServiceDetailPage() {
               {timeline.slice(0, 50).map((t) => (
                 <li
                   key={`${t.source}-${t.id}`}
-                  className="flex items-start gap-2 text-xs border-b border-border/40 py-1.5 last:border-b-0"
+                  className="flex items-start gap-2 text-sm border-b border-border/40 py-1.5 last:border-b-0"
                 >
-                  <span className="text-[10px] font-mono text-muted-foreground w-32 flex-shrink-0">
+                  <span className="text-xs font-mono text-muted-foreground w-32 flex-shrink-0">
                     {new Date(t.at).toLocaleString('ko-KR')}
                   </span>
                   <span
-                    className={`flex-shrink-0 inline-flex items-center text-[10px] rounded px-1.5 py-0.5 ${
+                    className={`flex-shrink-0 inline-flex items-center text-xs rounded px-1.5 py-0.5 ${
                       t.source === 'check'
                         ? 'bg-primary/10 text-primary'
                         : 'bg-amber-500/10 text-amber-500'
@@ -278,13 +278,13 @@ function GuideItem({ entry }: { entry: ServiceEntry }) {
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-secondary/40"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary/40"
       >
         <BookOpen className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
         <span className="flex-1 min-w-0">
           <span className="font-medium truncate">{entry.title}</span>
           {entry.severity && (
-            <span className="ml-2 text-[10px] text-muted-foreground">
+            <span className="ml-2 text-xs text-muted-foreground">
               · {entry.severity}
             </span>
           )}

@@ -81,12 +81,12 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       {/* 헤더 */}
       <header className="flex items-center justify-between gap-2 pl-4 pr-2 pt-3">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md text-white ${svc?.accent ?? 'bg-slate-500'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-md text-white ${svc?.accent ?? 'bg-slate-500'}`}>
             {SvcIcon && <SvcIcon className="w-3 h-3" />}
             {svc?.label ?? note.service}
           </span>
           {note.pinned && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-primary/15 text-primary">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-md bg-primary/15 text-primary">
               <Pin className="w-2.5 h-2.5" /> 고정
             </span>
           )}
@@ -122,7 +122,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       {/* 질문 */}
       <div className="px-4 pt-2 pb-2">
         <div className="flex items-start gap-1.5">
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-primary text-primary-foreground text-[11px] font-bold flex-shrink-0 mt-0.5">
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-primary text-primary-foreground text-xs font-bold flex-shrink-0 mt-0.5">
             Q
           </span>
           <h3 className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">
@@ -138,7 +138,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
             <button
               key={t}
               onClick={(e) => { stop(e); setTab(t); }}
-              className={`text-[11px] px-2 py-0.5 rounded-md transition-colors ${
+              className={`text-xs px-2 py-0.5 rounded-md transition-colors ${
                 activeTab === t
                   ? 'bg-foreground/10 text-foreground font-semibold'
                   : 'text-muted-foreground hover:bg-secondary'
@@ -154,7 +154,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       <div className="px-4 pb-3 flex-1 min-h-0">
         <div className="flex items-start gap-1.5">
           <span
-            className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-bold flex-shrink-0 mt-0.5 ${
+            className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-xs font-bold flex-shrink-0 mt-0.5 ${
               activeTab === 'answer'
                 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                 : 'bg-slate-500/15 text-slate-500 dark:text-slate-300'
@@ -162,7 +162,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
           >
             {activeTab === 'answer' ? 'A' : 'H'}
           </span>
-          <div className="text-xs leading-relaxed text-muted-foreground line-clamp-6 flex-1 min-w-0">
+          <div className="text-sm leading-relaxed text-muted-foreground line-clamp-6 flex-1 min-w-0">
             {activeTab === 'answer'
               ? hasAnswer
                 ? <RichContent content={note.content!} />
@@ -175,7 +175,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       </div>
 
       {/* 푸터 */}
-      <footer className="flex items-center justify-between gap-2 px-4 py-2 border-t border-border/60 bg-background/40 text-[11px] text-muted-foreground">
+      <footer className="flex items-center justify-between gap-2 px-4 py-2 border-t border-border/60 bg-background/40 text-xs text-muted-foreground">
         <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
           {note.author ? (
             <span className="inline-flex items-center gap-1">
@@ -190,7 +190,7 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
               target="_blank"
               rel="noopener noreferrer"
               onClick={stop}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[10px] font-semibold"
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-semibold"
               title={note.confluenceUrl}
             >
               <ExternalLink className="w-2.5 h-2.5" /> Confluence
@@ -342,7 +342,7 @@ export function OpsNotesPage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold leading-tight">DevOps Q&amp;A</h1>
-              <p className="text-xs text-muted-foreground">운영 중 만난 질문과 해결책을 한 곳에서.</p>
+              <p className="text-sm text-muted-foreground">운영 중 만난 질문과 해결책을 한 곳에서.</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -377,7 +377,7 @@ export function OpsNotesPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setFilterService('')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                 !filterService
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-background border-border text-muted-foreground hover:border-primary/50'
@@ -394,7 +394,7 @@ export function OpsNotesPage() {
                 <button
                   key={s.value}
                   onClick={() => setFilterService(isActive ? '' : s.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                     isActive
                       ? `${s.soft} border-transparent ring-1 ${s.ring}`
                       : 'bg-background border-border text-muted-foreground hover:border-primary/50'
@@ -575,10 +575,10 @@ function StatCell({ label, value, hint, icon, accent }: StatCellProps) {
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-lg font-bold leading-tight">
           {value}
-          {hint && <span className="ml-1 text-xs font-medium text-muted-foreground">{hint}</span>}
+          {hint && <span className="ml-1 text-sm font-medium text-muted-foreground">{hint}</span>}
         </p>
       </div>
     </div>

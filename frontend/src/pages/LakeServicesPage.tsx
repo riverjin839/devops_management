@@ -84,7 +84,7 @@ export function LakeServicesPage() {
             </div>
             <div className="flex-1 min-w-[180px]">
               <h1 className="text-lg font-semibold">LAKE 서비스</h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 K8s 위의 LAKE 도메인 OSS (airflow / spark / iceberg / trino / starrocks / jupyterlab / superset / polaris) monitoring
               </p>
             </div>
@@ -92,7 +92,7 @@ export function LakeServicesPage() {
               type="button"
               onClick={() => setAddOpen(true)}
               aria-label="LAKE 서비스 등록"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-semibold hover:opacity-90"
             >
               <Plus className="w-3.5 h-3.5" />
               서비스 등록
@@ -124,7 +124,7 @@ export function LakeServicesPage() {
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium">LAKE 서비스 조회 실패</div>
-                <div className="text-xs text-muted-foreground mt-0.5">
+                <div className="text-sm text-muted-foreground mt-0.5">
                   {error instanceof Error ? error.message : 'API 호출 중 오류'} — 페이지를 새로고침하거나 잠시 후 다시 시도하세요.
                 </div>
               </div>
@@ -145,7 +145,7 @@ export function LakeServicesPage() {
             <div className="text-center py-16 text-muted-foreground text-sm">
               <Database className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
               <p className="mb-2">등록된 LAKE 서비스가 없습니다.</p>
-              <p className="text-xs text-muted-foreground/70">
+              <p className="text-sm text-muted-foreground/70">
                 상단의 <strong>"서비스 등록"</strong> 버튼으로 인스턴스를 추가하세요.
               </p>
             </div>
@@ -192,13 +192,13 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-colors
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium border transition-colors
         ${active
           ? 'bg-primary text-primary-foreground border-primary'
           : 'bg-card text-muted-foreground border-border hover:text-foreground hover:bg-secondary/60'}`}
     >
       {label}
-      <span className={`text-[10px] font-mono ${active ? 'opacity-80' : 'opacity-60'}`}>
+      <span className={`text-xs font-mono ${active ? 'opacity-80' : 'opacity-60'}`}>
         {count}
       </span>
     </button>

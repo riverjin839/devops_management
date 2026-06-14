@@ -15,7 +15,7 @@ function Md({ text }: { text: string }) {
                     [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5
                     [&_pre]:rounded-lg [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:overflow-x-auto
                     [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_h1]:font-semibold
-                    [&_table]:text-xs [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1
+                    [&_table]:text-sm [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1
                     [&_th]:border [&_td]:border [&_th]:border-border [&_td]:border-border">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
     </div>
@@ -55,7 +55,7 @@ export function AiSummaryCard({ review }: Props) {
     <MacCard title="AI 자동 리뷰">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Sparkles className="w-4 h-4 text-primary" />
             <span>
               {review.aiGeneratedAt
@@ -79,7 +79,7 @@ export function AiSummaryCard({ review }: Props) {
             type="button"
             onClick={handleRegenerate}
             disabled={regenerating}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`}
@@ -100,7 +100,7 @@ export function AiSummaryCard({ review }: Props) {
 
         {review.aiRemediation && (
           <div className="rounded-xl bg-muted/50 p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               조치 권고
             </div>
             <div className="text-sm">

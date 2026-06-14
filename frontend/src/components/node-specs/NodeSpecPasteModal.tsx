@@ -153,14 +153,14 @@ function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
   const keys = Object.keys(d.changes);
   return (
     <tr className="border-b border-border align-top">
-      <td className="px-2 py-1.5 text-[11px] text-muted-foreground">{d.rowIndex + 1}</td>
+      <td className="px-2 py-1.5 text-xs text-muted-foreground">{d.rowIndex + 1}</td>
       <td className="px-2 py-1.5">
-        <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full border ${ACTION_CLS[d.action] ?? ''}`}>
+        <span className={`inline-block text-xs px-1.5 py-0.5 rounded-full border ${ACTION_CLS[d.action] ?? ''}`}>
           {ACTION_LABEL[d.action] ?? d.action}
         </span>
       </td>
-      <td className="px-2 py-1.5 font-mono text-xs">{d.hostname}</td>
-      <td className="px-2 py-1.5 text-[11px]">
+      <td className="px-2 py-1.5 font-mono text-sm">{d.hostname}</td>
+      <td className="px-2 py-1.5 text-xs">
         {d.action === 'error' ? (
           <span className="text-red-500">{d.error ?? '-'}</span>
         ) : keys.length === 0 ? (
@@ -170,7 +170,7 @@ function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
             <summary className="cursor-pointer text-muted-foreground">
               {keys.length}개 필드 {d.action === 'insert' ? '신규' : '변경'}
             </summary>
-            <table className="mt-1 text-[10px] font-mono w-full">
+            <table className="mt-1 text-xs font-mono w-full">
               <tbody>
                 {keys.map((k) => (
                   <tr key={k} className="border-t border-border/40">
@@ -282,7 +282,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
-          <div className="px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 text-[11px] text-foreground/80 flex items-start gap-2">
+          <div className="px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-foreground/80 flex items-start gap-2">
             <Info className="w-3 h-3 mt-0.5 flex-shrink-0 text-primary" />
             <div>
               엑셀 / 구글 시트에서 블록을 <strong>Ctrl+C</strong> 한 뒤 아래 상자에 <strong>Ctrl+V</strong> 붙여넣으세요.
@@ -297,11 +297,11 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
             onPaste={() => setPreview(null)}
             placeholder={"여기에 붙여넣기 (Ctrl+V)\n\n예시:\nhostname\tos\tdisk_total_gb\tssd\tvm\tcurrent_usage\nsrv-m01\tRHEL9\t18\tO\tX\tNEW K8S MASTER"}
             rows={8}
-            className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
           />
 
           {interpretation && (
-            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="px-2 py-0.5 rounded-full bg-secondary text-foreground/80 border border-border">
                 구분자: {interpretation.delim === '\t' ? 'TAB (엑셀)' : 'CSV ,'}
               </span>
@@ -318,7 +318,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
           )}
 
           {interpretation && interpretation.warnings.length > 0 && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-500">
+            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-500">
               <p className="font-medium mb-0.5 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" /> 경고 {interpretation.warnings.length}건
               </p>
@@ -332,7 +332,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
           {interpretation && interpretation.rows.length > 0 && !preview && (
             <div className="flex justify-end">
               <button onClick={handlePreview} disabled={previewLoading}
-                className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
                 {previewLoading && <Loader2 className="w-3 h-3 animate-spin" />}
                 미리보기 (diff 확인)
               </button>
@@ -341,7 +341,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
 
           {preview && (
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
                   신규 {preview.insertCount}
                 </span>
@@ -360,7 +360,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
               <div className="border border-border rounded-xl overflow-hidden max-h-[320px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 sticky top-0">
-                    <tr className="text-left text-[10px] text-muted-foreground uppercase">
+                    <tr className="text-left text-xs text-muted-foreground uppercase">
                       <th className="px-2 py-1.5">#</th>
                       <th className="px-2 py-1.5">동작</th>
                       <th className="px-2 py-1.5">hostname</th>
@@ -376,7 +376,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
           )}
 
           {msg && (
-            <div className={`px-3 py-2 rounded-lg text-xs border ${
+            <div className={`px-3 py-2 rounded-lg text-sm border ${
               msg.startsWith('✓')
                 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
                 : 'bg-destructive/10 text-destructive border-destructive/30'
@@ -388,12 +388,12 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onClose} disabled={applying}
-            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
             닫기
           </button>
           <button onClick={handleApply}
             disabled={!preview || preview.insertCount + preview.updateCount === 0 || applying}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
             {applying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
             {preview ? `적용 (${preview.insertCount + preview.updateCount}건)` : '적용'}
           </button>

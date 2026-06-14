@@ -36,13 +36,13 @@ export function RelatedServiceEntriesSidebar({ service }: RelatedServiceEntriesS
           </div>
           <Link
             to={`/services/${service}`}
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
           >
             전체 보기 <ArrowRight className="w-3 h-3" />
           </Link>
         </header>
 
-        <div className="mb-3 text-[11px] text-muted-foreground">
+        <div className="mb-3 text-xs text-muted-foreground">
           서비스 <span className="font-medium text-foreground">{def.label}</span> 의 카탈로그에서 발췌.
         </div>
 
@@ -65,12 +65,12 @@ export function RelatedServiceEntriesSidebar({ service }: RelatedServiceEntriesS
                   >
                     <div className="flex items-center gap-1.5 mb-1">
                       {KindIcon && (
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full border ${colorBadgeClass(kindMeta.color)}`}>
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full border ${colorBadgeClass(kindMeta.color)}`}>
                           <KindIcon className="w-3 h-3" /> {kindMeta.label}
                         </span>
                       )}
                       {e.severity && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full border ${
                           e.severity === 'critical' ? 'bg-red-500/10 text-red-500 border-red-500/30'
                           : e.severity === 'warning' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
                           : 'bg-sky-500/10 text-sky-500 border-sky-500/30'
@@ -78,7 +78,7 @@ export function RelatedServiceEntriesSidebar({ service }: RelatedServiceEntriesS
                       )}
                     </div>
                     <p className="text-sm font-medium text-foreground line-clamp-2 leading-snug">{e.title}</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+                    <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                       {formatRelativeTime(e.updatedAt)}
                     </p>
                   </Link>

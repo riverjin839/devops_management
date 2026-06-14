@@ -34,7 +34,7 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor={f('cluster')} className="block text-xs text-muted-foreground mb-1">클러스터</label>
+        <label htmlFor={f('cluster')} className="block text-sm text-muted-foreground mb-1">클러스터</label>
         <select
           id={f('cluster')}
           value={state.clusterId}
@@ -52,7 +52,7 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
       </div>
 
       <div>
-        <label htmlFor={f('job-type')} className="block text-xs text-muted-foreground mb-1">잡 타입</label>
+        <label htmlFor={f('job-type')} className="block text-sm text-muted-foreground mb-1">잡 타입</label>
         <select
           id={f('job-type')}
           value={state.jobType}
@@ -67,13 +67,13 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
           ))}
         </select>
         {selectedType?.description && (
-          <p className="mt-1 text-[11px] text-muted-foreground">{selectedType.description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{selectedType.description}</p>
         )}
       </div>
 
       <div className="grid grid-cols-1 gap-3">
         <div>
-          <label htmlFor={f('name')} className="block text-xs text-muted-foreground mb-1">이름</label>
+          <label htmlFor={f('name')} className="block text-sm text-muted-foreground mb-1">이름</label>
           <input
             id={f('name')}
             value={state.name}
@@ -83,7 +83,7 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
           />
         </div>
         <div>
-          <label htmlFor={f('description')} className="block text-xs text-muted-foreground mb-1">설명 (선택)</label>
+          <label htmlFor={f('description')} className="block text-sm text-muted-foreground mb-1">설명 (선택)</label>
           <input
             id={f('description')}
             value={state.description}

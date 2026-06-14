@@ -32,7 +32,7 @@ export function StepHost({ types, state, onChange }: StepHostProps) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
+          <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
           <input
             id={f('port')}
             type="number"
@@ -42,7 +42,7 @@ export function StepHost({ types, state, onChange }: StepHostProps) {
           />
         </div>
         <div>
-          <label htmlFor={f('username')} className="block text-xs text-muted-foreground mb-1">기본 사용자</label>
+          <label htmlFor={f('username')} className="block text-sm text-muted-foreground mb-1">기본 사용자</label>
           <input
             id={f('username')}
             value={state.defaultUsername}
@@ -53,16 +53,16 @@ export function StepHost({ types, state, onChange }: StepHostProps) {
       </div>
 
       <div>
-        <label htmlFor={f('params')} className="block text-xs text-muted-foreground mb-1">params (JSON)</label>
+        <label htmlFor={f('params')} className="block text-sm text-muted-foreground mb-1">params (JSON)</label>
         <textarea
           id={f('params')}
           value={state.paramsJson}
           onChange={(e) => onChange({ paramsJson: e.target.value })}
           rows={6}
-          className="w-full px-3 py-2 text-xs bg-background border border-border rounded-xl font-mono"
+          className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
         />
         {selectedType && Object.keys(selectedType.paramSchema).length > 0 && (
-          <details className="mt-2 text-[11px] text-muted-foreground">
+          <details className="mt-2 text-xs text-muted-foreground">
             <summary className="cursor-pointer">사용 가능한 파라미터</summary>
             <ul className="mt-1 space-y-1 pl-3">
               {Object.entries(selectedType.paramSchema).map(([k, v]) => (

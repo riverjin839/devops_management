@@ -86,7 +86,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
             <Terminal className="w-5 h-5 text-primary flex-shrink-0" />
             <div className="min-w-0">
               <h2 className="text-sm font-semibold truncate">{playbook.name}</h2>
-              <p className="text-[11px] text-muted-foreground truncate">
+              <p className="text-xs text-muted-foreground truncate">
                 실행 결과 상세
                 {playbook.lastRunAt && ` · ${new Date(playbook.lastRunAt).toLocaleString('ko-KR')}`}
                 {durationMs != null && ` · ${(durationMs / 1000).toFixed(2)}s`}
@@ -127,7 +127,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
             <section>
               <SectionTitle title="호스트별 결과" />
               <DoubleScrollX className="rounded-lg border border-border">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="px-3 py-1.5 text-left font-medium">Host</th>
@@ -186,18 +186,18 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
               <button
                 onClick={handleCopyRaw}
                 disabled={!rawOutput}
-                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-border hover:bg-secondary disabled:opacity-40"
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-secondary disabled:opacity-40"
               >
                 {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                 {copied ? '복사됨' : '복사'}
               </button>
             </div>
             {rawOutput ? (
-              <pre className="text-[11px] font-mono bg-zinc-950 text-zinc-100 rounded-lg p-3 overflow-x-auto max-h-[40vh] whitespace-pre-wrap break-words">
+              <pre className="text-xs font-mono bg-zinc-950 text-zinc-100 rounded-lg p-3 overflow-x-auto max-h-[40vh] whitespace-pre-wrap break-words">
                 {rawOutput}
               </pre>
             ) : (
-              <p className="text-xs text-muted-foreground italic px-3 py-2 bg-secondary/30 rounded">raw output 없음 — 실행 기록이 없거나 너무 짧아 저장되지 않음</p>
+              <p className="text-sm text-muted-foreground italic px-3 py-2 bg-secondary/30 rounded">raw output 없음 — 실행 기록이 없거나 너무 짧아 저장되지 않음</p>
             )}
           </section>
         </div>
@@ -222,7 +222,7 @@ function SectionTitle({
   return (
     <div className={`flex items-center gap-1.5 ${inline ? '' : 'mb-2'}`}>
       {Icon && <Icon className={`w-4 h-4 ${toneClass}`} />}
-      <h3 className={`text-xs font-semibold uppercase tracking-wider ${toneClass}`}>{title}</h3>
+      <h3 className={`text-sm font-semibold uppercase tracking-wider ${toneClass}`}>{title}</h3>
     </div>
   );
 }
@@ -241,7 +241,7 @@ function SummaryCell({
     : 'text-foreground';
   return (
     <div className="bg-secondary/50 border border-border rounded-lg px-3 py-2">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
       <p className={`text-lg font-bold tabular-nums ${cls}`}>{value}</p>
     </div>
   );
@@ -252,19 +252,19 @@ function FailedTaskCard({ task, variant }: { task: FailedTask; variant: 'failed'
   return (
     <div className={`border rounded-lg p-3 ${borderClass}`}>
       <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-xs font-semibold">{task.task ?? '(unnamed task)'}</span>
+        <span className="text-sm font-semibold">{task.task ?? '(unnamed task)'}</span>
         {task.host && (
-          <span className="text-[11px] font-mono text-muted-foreground">@ {task.host}</span>
+          <span className="text-xs font-mono text-muted-foreground">@ {task.host}</span>
         )}
         {task.rc != null && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">rc={task.rc}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">rc={task.rc}</span>
         )}
       </div>
       {task.msg && (
-        <pre className="text-[11px] font-mono whitespace-pre-wrap break-words text-foreground/80">{task.msg}</pre>
+        <pre className="text-xs font-mono whitespace-pre-wrap break-words text-foreground/80">{task.msg}</pre>
       )}
       {task.stderr && (
-        <pre className="text-[11px] font-mono whitespace-pre-wrap break-words text-muted-foreground mt-1 pt-1 border-t border-border/50">stderr: {task.stderr}</pre>
+        <pre className="text-xs font-mono whitespace-pre-wrap break-words text-muted-foreground mt-1 pt-1 border-t border-border/50">stderr: {task.stderr}</pre>
       )}
     </div>
   );

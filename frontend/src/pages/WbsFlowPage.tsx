@@ -122,24 +122,24 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
     >
       <div className="flex items-center gap-1 min-w-0">
         <StatusIcon status={isIssue ? (item.resolved ? 'resolved' : 'open') : item.status} type={item.type} />
-        <span className="text-[11px] font-medium truncate leading-tight">{item.label}</span>
+        <span className="text-xs font-medium truncate leading-tight">{item.label}</span>
       </div>
       {item.sub && (
-        <p className="text-[10px] text-muted-foreground truncate mt-0.5 leading-tight pl-4">{item.sub}</p>
+        <p className="text-xs text-muted-foreground truncate mt-0.5 leading-tight pl-4">{item.sub}</p>
       )}
       <div className="flex items-center gap-1 mt-0.5 pl-4 flex-wrap">
         {item.module && (
-          <span className={`text-[9px] px-1 rounded-md ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
+          <span className={`text-[10px] px-1 rounded-md ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
             {item.module}
           </span>
         )}
         {item.priority && (
-          <span className={`text-[9px] px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
+          <span className={`text-[10px] px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
             {item.priority}
           </span>
         )}
         {isIssue && (
-          <span className={`text-[9px] px-1 rounded-md ${item.resolved ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
+          <span className={`text-[10px] px-1 rounded-md ${item.resolved ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
@@ -154,16 +154,16 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
   const isIssue = item.type === 'issue';
   const title = (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
-      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-sky-500/15 text-sky-600 dark:text-sky-300'}`}>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-sky-500/15 text-sky-600 dark:text-sky-300'}`}>
         {isIssue ? '이슈' : '작업'}
       </span>
       {item.module && (
-        <span className={`text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
+        <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
           {item.module}
         </span>
       )}
       {item.priority && (
-        <span className={`text-[11px] px-2 py-0.5 rounded-full border flex-shrink-0 ${PRIORITY_COLOR[item.priority] ?? ''}`}>
+        <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${PRIORITY_COLOR[item.priority] ?? ''}`}>
           {item.priority}
         </span>
       )}
@@ -173,19 +173,19 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
     <SidePane open onClose={onClose} title={title} bodyClassName="px-5 py-4" width="55%">
       <h3 className="text-base font-semibold leading-snug mb-1">{stripHtml(item.label)}</h3>
       {item.sub && <p className="text-sm text-muted-foreground mb-4">{item.sub}</p>}
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div className="rounded-lg bg-secondary/40 px-3 py-2">
-          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">시작일</dt>
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">시작일</dt>
           <dd className="font-medium tabular-nums">{item.startDate || '-'}</dd>
         </div>
         {item.endDate && (
           <div className="rounded-lg bg-secondary/40 px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">완료일</dt>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">완료일</dt>
             <dd className="font-medium tabular-nums">{item.endDate}</dd>
           </div>
         )}
         <div className="rounded-lg bg-secondary/40 px-3 py-2">
-          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">상태</dt>
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">상태</dt>
           <dd className="font-medium">
             {isIssue ? (item.resolved ? '해결' : '미해결') : (KANBAN_LABEL[item.status] ?? item.status)}
           </dd>
@@ -277,7 +277,7 @@ function SummaryStat({ icon, label, value, accent = 'text-foreground', breakdown
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-muted-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
           <p className={`text-lg font-bold leading-tight ${accent}`}>{value}</p>
         </div>
       </div>
@@ -300,7 +300,7 @@ const CHIP_COLOR: Record<string, string> = {
 
 function Chip({ color, children }: { color: keyof typeof CHIP_COLOR | string; children: React.ReactNode }) {
   return (
-    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${CHIP_COLOR[color] ?? CHIP_COLOR.slate}`}>
+    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${CHIP_COLOR[color] ?? CHIP_COLOR.slate}`}>
       {children}
     </span>
   );
@@ -402,11 +402,11 @@ function PersonalGanttView({
 
   return (
     <div className="flex-1 overflow-auto">
-      <table className="border-collapse min-w-full text-xs">
+      <table className="border-collapse min-w-full text-sm">
         <thead className="sticky top-0 z-20 bg-card">
           <tr>
             <th className="sticky left-0 z-30 bg-card border-b border-r border-border px-3 py-2 text-left min-w-[240px]">
-              <span className="text-xs font-semibold text-muted-foreground">작업 / 이슈</span>
+              <span className="text-sm font-semibold text-muted-foreground">작업 / 이슈</span>
             </th>
             {dates.map(d => {
               const ds = fmtDate(d);
@@ -415,8 +415,8 @@ function PersonalGanttView({
               return (
                 <th key={ds} className={`border-b border-r border-border px-1 py-2 text-center font-medium ${isTd ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground/50 bg-secondary/30' : 'text-muted-foreground'}`}
                   style={{ minWidth: COL_W, width: COL_W }}>
-                  <div className="text-[11px] font-semibold">{dayLabel(d)}</div>
-                  {isTd && <div className="text-[9px] text-primary font-bold">TODAY</div>}
+                  <div className="text-xs font-semibold">{dayLabel(d)}</div>
+                  {isTd && <div className="text-[10px] text-primary font-bold">TODAY</div>}
                 </th>
               );
             })}
@@ -442,11 +442,11 @@ function PersonalGanttView({
                   <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
                     style={{ backgroundColor: bgBase }}>
                     <div className={`flex items-center gap-1.5 ${row.indent ? 'ml-4' : ''}`}>
-                      {row.indent && <span className="text-muted-foreground/40 text-xs flex-shrink-0">└</span>}
+                      {row.indent && <span className="text-muted-foreground/40 text-sm flex-shrink-0">└</span>}
                       <StatusIcon status={t.kanbanStatus} type="task" />
-                      <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-[11px]' : 'font-medium text-xs'}`}>{stripHtml(t.content)}</span>
+                      <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-xs' : 'font-medium text-sm'}`}>{stripHtml(t.content)}</span>
                     </div>
-                    <div className={`text-[10px] text-muted-foreground mt-0.5 truncate ${row.indent ? 'ml-9' : 'ml-4'}`}>
+                    <div className={`text-xs text-muted-foreground mt-0.5 truncate ${row.indent ? 'ml-9' : 'ml-4'}`}>
                       {t.category}
                       {t.module && <span className={`ml-1 px-1 rounded ${MODULE_COLOR[t.module] ?? 'bg-secondary text-muted-foreground'}`}>{t.module}</span>}
                     </div>
@@ -487,7 +487,7 @@ function PersonalGanttView({
                       <AlertCircle className={`w-3 h-3 flex-shrink-0 ${iss.closedAt ? 'text-green-400' : 'text-red-400'}`} />
                       <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(iss.content)}</span>
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5 ml-4">{iss.category}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5 ml-4">{iss.category}</div>
                   </td>
                   {dates.map(d => {
                     const colDs = fmtDate(d);
@@ -687,12 +687,12 @@ export function WbsFlowPage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold leading-tight">WBS 작업 흐름</h1>
-              <p className="text-xs text-muted-foreground">담당자별 역할 · 날짜별 업무 현황</p>
+              <p className="text-sm text-muted-foreground">담당자별 역할 · 날짜별 업무 현황</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {/* 보기 모드 토글 */}
-            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-xs">
+            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-sm">
               <button
                 onClick={() => setPageView('project')}
                 className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'project' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
@@ -714,7 +714,7 @@ export function WbsFlowPage() {
             </div>
             <button
               onClick={() => setShowNewProjectModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
             >
               <Plus className="w-3.5 h-3.5" /> 프로젝트
             </button>
@@ -738,7 +738,7 @@ export function WbsFlowPage() {
               </button>
               <button
                 onClick={moveToday}
-                className="px-3 py-1 text-xs font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
+                className="px-3 py-1 text-sm font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
               >
                 <Calendar className="w-3.5 h-3.5 text-primary" />
                 {startStr} <span className="text-muted-foreground">~</span> {endStr}
@@ -769,7 +769,7 @@ export function WbsFlowPage() {
                 <select
                   value={selectedProjectId}
                   onChange={e => setSelectedProjectId(e.target.value)}
-                  className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">전체 프로젝트</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -783,7 +783,7 @@ export function WbsFlowPage() {
                 <select
                   value={personalAssignee}
                   onChange={e => setPersonalAssignee(e.target.value)}
-                  className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">담당자 선택…</option>
                   {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
@@ -796,14 +796,14 @@ export function WbsFlowPage() {
               <select
                 value={filterAssignee}
                 onChange={e => setFilterAssignee(e.target.value)}
-                className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
                 <option value="">전체 담당자</option>
                 {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
 
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
+            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
               <input
                 type="checkbox"
                 checked={showOnlyActive}
@@ -813,7 +813,7 @@ export function WbsFlowPage() {
               진행중만
             </label>
 
-            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
               <Users className="w-3.5 h-3.5" />
               <span className="tabular-nums">{filteredRows.length}명</span>
               <span>·</span>
@@ -833,7 +833,7 @@ export function WbsFlowPage() {
                 <p className="text-sm mb-3">아직 프로젝트가 없습니다.</p>
                 <button
                   onClick={() => setShowNewProjectModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
                 >
                   <Plus className="w-3.5 h-3.5" /> 첫 프로젝트 만들기
                 </button>
@@ -852,7 +852,7 @@ export function WbsFlowPage() {
                       <MacCard bodyPadding="p-0" className="overflow-hidden">
                         <div className="px-4 py-2 border-b border-border bg-muted/20 flex items-center gap-2">
                           <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="text-xs font-medium text-muted-foreground">간트 · {pTasks.length + pIssues.length}건</span>
+                          <span className="text-sm font-medium text-muted-foreground">간트 · {pTasks.length + pIssues.length}건</span>
                         </div>
                         <PersonalGanttView
                           assignee=""
@@ -865,7 +865,7 @@ export function WbsFlowPage() {
                         />
                       </MacCard>
                     ) : (
-                      <p className="text-xs text-muted-foreground px-1 py-2">소속 업무가 없습니다.</p>
+                      <p className="text-sm text-muted-foreground px-1 py-2">소속 업무가 없습니다.</p>
                     )}
                   </div>
                 );
@@ -881,7 +881,7 @@ export function WbsFlowPage() {
                 <div className="space-y-2">
                   <div className="rounded-2xl border border-dashed border-border/60 bg-secondary/10 p-4">
                     <p className="text-sm font-semibold text-muted-foreground">미분류 ({unclassified.length}건)</p>
-                    <p className="text-xs text-muted-foreground/70 mt-0.5">프로젝트에 소속되지 않은 업무</p>
+                    <p className="text-sm text-muted-foreground/70 mt-0.5">프로젝트에 소속되지 않은 업무</p>
                   </div>
                   <MacCard bodyPadding="p-0" className="overflow-hidden">
                     <PersonalGanttView
@@ -937,12 +937,12 @@ export function WbsFlowPage() {
                 <p className="text-sm">이 기간에 해당하는 작업/이슈가 없습니다.</p>
               </div>
             ) : (
-              <table className="border-collapse min-w-full text-xs">
+              <table className="border-collapse min-w-full text-sm">
             <thead className="sticky top-0 z-20 bg-card">
               <tr>
                 {/* Assignee header */}
                 <th className="sticky left-0 z-30 bg-card border-b border-r border-border px-3 py-2 text-left w-40 min-w-[160px]">
-                  <span className="text-xs font-semibold text-muted-foreground">담당자 / 역할</span>
+                  <span className="text-sm font-semibold text-muted-foreground">담당자 / 역할</span>
                 </th>
                 {dates.map(d => {
                   const ds = fmtDate(d);
@@ -954,11 +954,11 @@ export function WbsFlowPage() {
                         ${isTodayCol ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground/50 bg-secondary/30' : 'text-muted-foreground'}`}
                       style={{ minWidth: COL_W, width: COL_W }}>
                       <div className="leading-tight">
-                        <div className={`text-[11px] font-semibold ${isTodayCol ? 'text-primary' : ''}`}>
+                        <div className={`text-xs font-semibold ${isTodayCol ? 'text-primary' : ''}`}>
                           {dayLabel(d)}
                         </div>
                         {isTodayCol && (
-                          <div className="text-[9px] text-primary font-bold">TODAY</div>
+                          <div className="text-[10px] text-primary font-bold">TODAY</div>
                         )}
                       </div>
                     </th>
@@ -975,19 +975,19 @@ export function WbsFlowPage() {
                     {/* Assignee cell */}
                     <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-2 align-top"
                       style={{ backgroundColor: rowIdx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--secondary)/0.1)' }}>
-                      <div className="font-semibold text-foreground text-xs mb-0.5">{row.assignee}</div>
+                      <div className="font-semibold text-foreground text-sm mb-0.5">{row.assignee}</div>
                       <div className="flex flex-wrap gap-1">
                         {row.roles.slice(0, 4).map(role => (
                           <span key={role}
-                            className={`text-[9px] px-1.5 py-0.5 rounded-full ${MODULE_COLOR[role] ?? 'bg-secondary text-muted-foreground'}`}>
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${MODULE_COLOR[role] ?? 'bg-secondary text-muted-foreground'}`}>
                             {role}
                           </span>
                         ))}
                         {row.roles.length > 4 && (
-                          <span className="text-[9px] text-muted-foreground">+{row.roles.length - 4}</span>
+                          <span className="text-[10px] text-muted-foreground">+{row.roles.length - 4}</span>
                         )}
                       </div>
-                      <div className="mt-1 text-[9px] text-muted-foreground/60">{totalItemsInRow}건</div>
+                      <div className="mt-1 text-[10px] text-muted-foreground/60">{totalItemsInRow}건</div>
                     </td>
                     {dates.map(d => {
                       const ds = fmtDate(d);
@@ -1026,14 +1026,14 @@ export function WbsFlowPage() {
         )}
 
         {/* ── Legend ──────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap px-1">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap px-1">
           <span className="font-medium">범례:</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-sky-500/30 inline-block" /> 작업</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500/30 inline-block" /> 이슈</span>
           <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> 완료/해결</span>
           <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-sky-500" /> 진행중</span>
           <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-red-500" /> 미해결</span>
-          <span className="ml-auto text-[10px]">클릭 시 상세 정보</span>
+          <span className="ml-auto text-xs">클릭 시 상세 정보</span>
         </div>
       </main>
 

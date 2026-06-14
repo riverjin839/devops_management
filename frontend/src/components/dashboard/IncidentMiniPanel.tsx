@@ -31,17 +31,17 @@ export function IncidentMiniPanel() {
         ) : (
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         )}
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           인시던트 현황
         </span>
         {criticalCount > 0 && (
-          <span className="flex items-center gap-1 text-[11px] text-red-600 dark:text-red-400 ml-2">
+          <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 ml-2">
             <XCircle className="w-3 h-3" />
             위험 {criticalCount}
           </span>
         )}
         {warningCount > 0 && (
-          <span className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 ml-1">
+          <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 ml-1">
             <AlertTriangle className="w-3 h-3" />
             경고 {warningCount}
           </span>
@@ -49,7 +49,7 @@ export function IncidentMiniPanel() {
         <Link
           to="/daily-check/review"
           onClick={(e) => e.stopPropagation()}
-          className="ml-auto flex items-center gap-1 text-[11px] text-primary hover:underline"
+          className="ml-auto flex items-center gap-1 text-xs text-primary hover:underline"
         >
           전체보기
           <ExternalLink className="w-3 h-3" />
@@ -72,7 +72,7 @@ export function IncidentMiniPanel() {
               <div className="min-w-0">
                 <span className="text-[12px] font-medium truncate block">{item.cluster_name}</span>
                 {item.latest_check?.error_messages?.[0] && (
-                  <span className="text-[11px] text-muted-foreground truncate block">
+                  <span className="text-xs text-muted-foreground truncate block">
                     {item.latest_check.error_messages[0]}
                   </span>
                 )}

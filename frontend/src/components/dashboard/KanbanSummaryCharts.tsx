@@ -27,7 +27,7 @@ interface TooltipPayload {
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayload[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg">
+    <div className="bg-card border border-border rounded-lg px-3 py-2 text-sm shadow-lg">
       <p className="font-semibold mb-1">{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.fill }}>{p.name}: {p.value}건</p>
@@ -88,12 +88,12 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold">작업 상태 분포</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               전체 {totalTasks}건
               {selectedClusterId && ' (선택 클러스터)'}
             </p>
           </div>
-          <div className="flex items-center gap-3 text-[11px]">
+          <div className="flex items-center gap-3 text-xs">
             {taskData.map((d) => (
               <span key={d.name} className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full" style={{ background: TASK_COLORS[d.name] }} />
@@ -107,7 +107,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
         {isLoading ? (
           <ChartSkeleton />
         ) : totalTasks === 0 ? (
-          <div className="h-32 flex items-center justify-center text-xs text-muted-foreground/50">
+          <div className="h-32 flex items-center justify-center text-sm text-muted-foreground/50">
             데이터 없음
           </div>
         ) : (
@@ -131,12 +131,12 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold">이슈 상태 분포</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               전체 {totalIssues}건
               {selectedClusterId && ' (선택 클러스터)'}
             </p>
           </div>
-          <div className="flex items-center gap-3 text-[11px]">
+          <div className="flex items-center gap-3 text-xs">
             {issueData.map((d) => (
               <span key={d.name} className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full" style={{ background: ISSUE_COLORS[d.name] }} />
@@ -150,7 +150,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
         {isLoading ? (
           <ChartSkeleton />
         ) : totalIssues === 0 ? (
-          <div className="h-32 flex items-center justify-center text-xs text-muted-foreground/50">
+          <div className="h-32 flex items-center justify-center text-sm text-muted-foreground/50">
             데이터 없음
           </div>
         ) : (

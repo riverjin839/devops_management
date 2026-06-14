@@ -90,13 +90,13 @@ export function MasterHostPicker({
   return (
     <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
       <div className="flex items-center justify-between">
-        <label className="text-xs text-muted-foreground flex items-center gap-1">
+        <label className="text-sm text-muted-foreground flex items-center gap-1">
           <ServerCog className="w-3 h-3" />
           {label}
         </label>
         {mastersQ.isLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
         {mastersQ.isError && (
-          <span className="text-[10px] text-amber-500" title={(mastersQ.error as Error).message}>
+          <span className="text-xs text-amber-500" title={(mastersQ.error as Error).message}>
             후보 조회 실패 — 직접 입력
           </span>
         )}
@@ -131,7 +131,7 @@ export function MasterHostPicker({
       />
 
       {effectiveHost && (
-        <p className="text-[11px] text-muted-foreground font-mono">
+        <p className="text-xs text-muted-foreground font-mono">
           → {effectiveHost}
         </p>
       )}

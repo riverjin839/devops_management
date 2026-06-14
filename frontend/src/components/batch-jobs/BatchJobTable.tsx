@@ -58,7 +58,7 @@ function SortHeader({
   const Icon = !active ? ArrowUpDown : current.dir === 'asc' ? ArrowUp : ArrowDown;
   return (
     <th
-      className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40"
+      className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40"
       style={width ? { width } : undefined}
       aria-sort={active ? (current.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
@@ -113,14 +113,14 @@ export function BatchJobTable({
             <SortHeader label="상태" sortKey="status" current={sort} onChange={onSortChange} width="100px" />
             <SortHeader label="잡" sortKey="name" current={sort} onChange={onSortChange} />
             {clusterMap && (
-              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
                 클러스터
               </th>
             )}
-            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '120px' }}>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '120px' }}>
               타입
             </th>
-            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
               cron
             </th>
             <SortHeader label="최근 실행" sortKey="lastRunAt" current={sort} onChange={onSortChange} width="120px" />

@@ -111,19 +111,19 @@ function OpsNoteRow({
             onBlur={() => setEditing(null)}
             onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
             onClick={(e) => e.stopPropagation()}
-            className="px-2 py-1 text-xs bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
+            className="px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
           >
             {services.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         ) : svc ? (
           <span
-            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md text-white cursor-pointer ${svc.accent}`}
+            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-white cursor-pointer ${svc.accent}`}
             title="클릭하여 서비스 변경"
           >
             <svc.Icon className="w-3 h-3" />{svc.label}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground cursor-pointer">{note.service}</span>
+          <span className="text-sm text-muted-foreground cursor-pointer">{note.service}</span>
         )}
       </td>
       {/* Title — click-to-edit */}
@@ -148,20 +148,20 @@ function OpsNoteRow({
         )}
       </td>
       <td className="px-4 py-3 max-w-md cursor-pointer" onClick={() => onOpen(note)} title="클릭하여 상세 보기">
-        <p className="text-xs text-muted-foreground line-clamp-2">
+        <p className="text-sm text-muted-foreground line-clamp-2">
           {answerText
             ? answerText
             : <span className="italic opacity-60">답변 없음</span>}
         </p>
         {hasBack && (
-          <span className="inline-block mt-0.5 text-[10px] px-1.5 py-0 rounded bg-slate-500/10 text-slate-500">
+          <span className="inline-block mt-0.5 text-xs px-1.5 py-0 rounded bg-slate-500/10 text-slate-500">
             히스토리 있음
           </span>
         )}
       </td>
       {/* Author — click-to-edit */}
       <td
-        className="px-4 py-3 text-xs text-muted-foreground truncate"
+        className="px-4 py-3 text-sm text-muted-foreground truncate"
         onClick={(e) => { if (editing !== 'author') { e.stopPropagation(); setEditing('author'); } }}
       >
         {editing === 'author' ? (
@@ -170,7 +170,7 @@ function OpsNoteRow({
             onSave={(v) => save({ author: v || undefined })}
             onCancel={() => setEditing(null)}
             placeholder="작성자"
-            className="text-xs"
+            className="text-sm"
           />
         ) : note.author ? (
           <span className="cursor-pointer hover:text-foreground transition-colors">{note.author}</span>
@@ -179,7 +179,7 @@ function OpsNoteRow({
         )}
       </td>
       <td
-        className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap font-mono cursor-pointer"
+        className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap font-mono cursor-pointer"
         onClick={() => onOpen(note)}
       >
         {formatRelativeTime(note.updatedAt)}

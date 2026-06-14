@@ -68,7 +68,7 @@ export function NodeLabelEditorModal({ node, isOpen, onClose, onApply }: Props) 
           </div>
         </div>
 
-        <div className="mb-4 text-xs">
+        <div className="mb-4 text-sm">
           <p className="font-medium mb-1">Preview</p>
           {Object.entries(pendingAdd).map(([k, v]) => <div key={k} className="text-green-400 font-mono">+ {k}={v}</div>)}
           {Object.keys(removeSet).filter((k)=>removeSet[k]).map((k) => <div key={k} className="text-red-400 font-mono">- {k}</div>)}

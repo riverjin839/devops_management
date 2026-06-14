@@ -43,10 +43,10 @@ export function IpGroupRow({
   if (!hasContent) {
     return (
       <div className="rounded-lg border border-dashed border-border/40 px-3 py-2.5">
-        <p className={`text-[10px] font-semibold uppercase tracking-wider mb-0.5 ${ACCENT[accent].label}`}>
+        <p className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${ACCENT[accent].label}`}>
           {label}
         </p>
-        <p className="text-xs text-muted-foreground/60">{emptyMessage}</p>
+        <p className="text-sm text-muted-foreground/60">{emptyMessage}</p>
       </div>
     );
   }
@@ -59,17 +59,17 @@ export function IpGroupRow({
   return (
     <div className={`rounded-lg border px-3 py-2.5 ${surface}`}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className={`text-[10px] font-semibold uppercase tracking-wider ${labelCls}`}>
+        <p className={`text-xs font-semibold uppercase tracking-wider ${labelCls}`}>
           {label}
         </p>
         <div className="flex items-center gap-2">
           {totalIps > 0 && (
-            <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+            <span className="text-xs text-muted-foreground font-mono tabular-nums">
               {totalIps}개
             </span>
           )}
           {overlapColor && (
-            <span className={`flex items-center gap-1 text-[10px] font-medium ${overlapColor.text}`}>
+            <span className={`flex items-center gap-1 text-xs font-medium ${overlapColor.text}`}>
               <AlertTriangle className="w-3 h-3" />겹침
             </span>
           )}
@@ -81,7 +81,7 @@ export function IpGroupRow({
           {groups.map((g, i) => (
             <p
               key={i}
-              className="text-xs font-mono text-foreground tabular-nums"
+              className="text-sm font-mono text-foreground tabular-nums"
               title="/24 단위로 묶고 마지막 옥텟의 연속 구간을 압축한 표기 (grep -E / shell brace expansion 호환)"
             >
               {g}
@@ -98,7 +98,7 @@ export function IpGroupRow({
           {calcCidr && (
             <Link
               to={`/cidr?cidr=${encodeURIComponent(calcCidr)}`}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
               title={`CIDR Calculator 에서 ${calcCidr} 분석`}
             >
               <ArrowUpRight className="w-2.5 h-2.5" />Calc
@@ -123,7 +123,7 @@ function CopyChip({ value }: { value: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary rounded transition-colors"
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary rounded transition-colors"
       title="줄바꿈으로 구분해 복사"
     >
       {copied ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}

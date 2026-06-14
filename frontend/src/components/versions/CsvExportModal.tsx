@@ -86,7 +86,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
           </div>
           <div className="flex-1">
             <h2 className="text-sm font-semibold">CSV 내보내기</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               현재 스냅샷을 CSV 한 파일로 다운로드. 한글 호환 UTF-8 BOM 포함.
             </p>
           </div>
@@ -99,7 +99,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
         <div className="px-5 py-4 space-y-4">
           {/* 디테일 레벨 */}
           <fieldset>
-            <legend className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2 block">
+            <legend className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
               디테일 레벨
             </legend>
             <div className="space-y-1.5">
@@ -114,8 +114,8 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
                     onChange={() => setDetail(d)} className="mt-0.5"
                     aria-label={DETAIL_META[d].label} />
                   <div className="flex-1">
-                    <p className="text-xs font-semibold">{DETAIL_META[d].label}</p>
-                    <p className="text-[11px] text-muted-foreground">{DETAIL_META[d].description}</p>
+                    <p className="text-sm font-semibold">{DETAIL_META[d].label}</p>
+                    <p className="text-xs text-muted-foreground">{DETAIL_META[d].description}</p>
                   </div>
                 </label>
               ))}
@@ -125,12 +125,12 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
           {/* 카테고리 필터 */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              <label className="text-xs uppercase tracking-wider text-muted-foreground">
                 카테고리 필터 ({allCatsPicked ? '전체' : `${pickedCategories.size}개`})
               </label>
               {!allCatsPicked && (
                 <button onClick={() => setPickedCategories(new Set())}
-                  className="text-[10px] text-primary hover:underline">전체로</button>
+                  className="text-xs text-primary hover:underline">전체로</button>
               )}
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -138,7 +138,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
                 const on = pickedCategories.has(cat);
                 return (
                   <button key={cat} onClick={() => toggleCat(cat)}
-                    className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
+                    className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
                       on
                         ? 'bg-primary/10 text-primary border-primary/40'
                         : 'bg-secondary text-muted-foreground border-border hover:text-foreground'
@@ -150,7 +150,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
             </div>
           </div>
 
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             예상 행수: <strong className="font-mono text-foreground">{filteredCount}</strong> 개 · 파일명{' '}
             <code className="font-mono text-foreground/80">versions-{clusterName}-…csv</code>
           </p>
@@ -158,18 +158,18 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onClose} disabled={exportMut.isPending}
-            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
             취소
           </button>
           {exportMut.isPending ? (
             <button onClick={exportMut.abort}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-red-500 text-primary-foreground rounded-lg">
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg">
               <Loader2 className="w-3 h-3 animate-spin" /> 중지
             </button>
           ) : (
             <button onClick={() => exportMut.mutate()}
               disabled={filteredCount === 0}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
               <Download className="w-3 h-3" /> 다운로드
             </button>
           )}

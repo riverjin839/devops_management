@@ -137,7 +137,7 @@ export function CreateBatchJobWizard({
       >
         <header className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-semibold">새 배치 잡 등록</h3>
-          <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">
             닫기
           </button>
         </header>
@@ -155,7 +155,7 @@ export function CreateBatchJobWizard({
                   aria-current={active ? 'step' : undefined}
                 >
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold ${
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
                       active ? 'bg-primary text-primary-foreground' :
                       done ? 'bg-emerald-500 text-white' :
                       'bg-secondary text-muted-foreground'
@@ -164,7 +164,7 @@ export function CreateBatchJobWizard({
                   >
                     {idx + 1}
                   </div>
-                  <span className={`text-xs ${active ? 'text-foreground font-medium' : 'text-muted-foreground'} truncate`}>
+                  <span className={`text-sm ${active ? 'text-foreground font-medium' : 'text-muted-foreground'} truncate`}>
                     {label}
                   </span>
                   {idx < STEP_LABELS.length - 1 && <div className="flex-1 h-px bg-border" />}
@@ -187,24 +187,24 @@ export function CreateBatchJobWizard({
           {step === 1 && <StepHost types={types} state={state} onChange={update} />}
           {step === 2 && <StepSchedule state={state} onChange={update} />}
 
-          {error && <div role="alert" className="mt-3 text-xs text-red-500">{error}</div>}
+          {error && <div role="alert" className="mt-3 text-sm text-red-500">{error}</div>}
         </div>
 
         <footer className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
           <button
             onClick={goBack}
             disabled={step === 0}
-            className="px-3 py-1.5 text-xs rounded-xl bg-secondary text-secondary-foreground disabled:opacity-40 hover:bg-secondary/80"
+            className="px-3 py-1.5 text-sm rounded-xl bg-secondary text-secondary-foreground disabled:opacity-40 hover:bg-secondary/80"
           >
             이전
           </button>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             {step + 1} / {STEP_LABELS.length}
           </div>
           {step < 2 ? (
             <button
               onClick={goNext}
-              className="px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow"
+              className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow"
             >
               다음
             </button>
@@ -224,7 +224,7 @@ export function CreateBatchJobWizard({
                     ? 'cron 을 사용하려면 비밀번호 또는 개인키 중 하나를 입력하세요'
                     : undefined
                 }
-                className="px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow disabled:opacity-60"
+                className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow disabled:opacity-60"
               >
                 {create.isPending ? '등록 중…' : '등록'}
               </button>

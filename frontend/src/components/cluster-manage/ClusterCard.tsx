@@ -77,15 +77,15 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               <h3 className="text-sm font-bold truncate">{cluster.name}</h3>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
               {cluster.operationLevel && (
-                <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}>
+                <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}>
                   <span>{levelIcon(opsLevels, cluster.operationLevel)}</span>
                   <span>{levelLabel(opsLevels, cluster.operationLevel)}</span>
                 </span>
               )}
               {cluster.region && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
                   {cluster.region}
                 </span>
               )}
@@ -120,7 +120,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             </button>
           </div>
         </div>
-        <p className="text-[10px] font-mono text-muted-foreground/60 mt-1.5 truncate" title={cluster.apiEndpoint}>
+        <p className="text-xs font-mono text-muted-foreground/60 mt-1.5 truncate" title={cluster.apiEndpoint}>
           {cluster.apiEndpoint}
         </p>
       </div>
@@ -128,14 +128,14 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
       {/* 탭 스위처 */}
       <div className="flex border-b border-border/50">
         <button onClick={() => setTab('node')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
             tab === 'node' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
           }`}>
           <Cpu className="w-3 h-3" />노드 스펙
           {hasNodeData && tab !== 'node' && <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />}
         </button>
         <button onClick={() => setTab('network')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
             tab === 'network' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
           }`}>
           <Network className="w-3 h-3" />N/W CIDR
@@ -150,23 +150,23 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-secondary/50 rounded-lg px-3 py-2 text-center">
-                <p className="text-[10px] text-muted-foreground mb-0.5">노드 수</p>
+                <p className="text-xs text-muted-foreground mb-0.5">노드 수</p>
                 <p className="text-lg font-bold text-foreground">{cluster.nodeCount ?? <span className="text-muted-foreground text-sm">-</span>}</p>
               </div>
               <div className="bg-secondary/50 rounded-lg px-3 py-2 text-center">
-                <p className="text-[10px] text-muted-foreground mb-0.5">Max Pod</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Max Pod</p>
                 <p className="text-lg font-bold text-foreground">{cluster.maxPod ?? <span className="text-muted-foreground text-sm">-</span>}</p>
               </div>
             </div>
             {cluster.hostname && (
               <div className="px-3 py-2 bg-secondary/30 rounded-lg">
-                <p className="text-[10px] text-muted-foreground mb-0.5">호스트명</p>
-                <p className="text-xs font-mono text-foreground truncate">{cluster.hostname}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">호스트명</p>
+                <p className="text-sm font-mono text-foreground truncate">{cluster.hostname}</p>
               </div>
             )}
             {hasBondData ? (
               <div className="space-y-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">NIC</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">NIC</p>
                 <div className="grid grid-cols-2 gap-2">
                   <NicCompact
                     label="bond0"
@@ -188,7 +188,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               </div>
             ) : (
               !cluster.nodeCount && !cluster.maxPod && !cluster.hostname && (
-                <p className="text-xs text-muted-foreground/50 text-center py-2">노드 스펙 정보 없음 — 수정 버튼으로 입력하세요</p>
+                <p className="text-sm text-muted-foreground/50 text-center py-2">노드 스펙 정보 없음 — 수정 버튼으로 입력하세요</p>
               )
             )}
           </div>
@@ -210,8 +210,8 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               overlapColor={cluster.svcCidr ? overlapColor : null} />
             {cluster.ciliumConfig && (
               <div className="mt-1 pt-2 border-t border-border/40">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cilium 설정</p>
-                <pre className="text-[10px] font-mono text-muted-foreground bg-muted/20 rounded p-2 whitespace-pre-wrap max-h-20 overflow-y-auto">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cilium 설정</p>
+                <pre className="text-xs font-mono text-muted-foreground bg-muted/20 rounded p-2 whitespace-pre-wrap max-h-20 overflow-y-auto">
                   {cluster.ciliumConfig}
                 </pre>
               </div>
@@ -222,7 +222,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
 
       {cluster.description && (
         <div className="px-4 pb-3 pt-1 border-t border-border/30 mt-auto">
-          <p className="text-[10px] text-muted-foreground/70 line-clamp-2">{cluster.description}</p>
+          <p className="text-xs text-muted-foreground/70 line-clamp-2">{cluster.description}</p>
         </div>
       )}
     </div>
@@ -251,18 +251,18 @@ function NicCompact({
   return (
     <div className="border border-border rounded-lg px-2.5 py-2 bg-muted/10">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-bold text-primary">{label}</p>
+        <p className="text-xs font-bold text-primary">{label}</p>
         {ipCount > 0 && (
-          <span className="text-[9px] font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
+          <span className="text-[10px] font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
         )}
       </div>
       {/* IP — 그룹 표기 우선, 없으면 master 단일 값 fallback */}
       {hasGroups ? (
         <div className="mb-1">
-          <p className="text-[9px] text-muted-foreground uppercase">IP</p>
+          <p className="text-[10px] text-muted-foreground uppercase">IP</p>
           <div className="space-y-0.5">
             {groups.map((g, i) => (
-              <p key={i} className="text-[11px] font-mono text-foreground tabular-nums"
+              <p key={i} className="text-xs font-mono text-foreground tabular-nums"
                 title="/24 단위로 묶어 마지막 옥텟의 연속 구간을 압축한 표기">
                 {g}
               </p>
@@ -271,24 +271,24 @@ function NicCompact({
         </div>
       ) : fallbackIp ? (
         <div className="mb-1">
-          <p className="text-[9px] text-muted-foreground uppercase">IP (master)</p>
-          <p className="text-[11px] font-mono text-foreground">{fallbackIp}</p>
+          <p className="text-[10px] text-muted-foreground uppercase">IP (master)</p>
+          <p className="text-xs font-mono text-foreground">{fallbackIp}</p>
         </div>
       ) : null}
       {/* MAC — 모든 노드 MAC 나열 (보통 5개 이하). fallback 은 master 단일 */}
       {hasMacs ? (
         <div>
-          <p className="text-[9px] text-muted-foreground uppercase">MAC ({macs.length})</p>
+          <p className="text-[10px] text-muted-foreground uppercase">MAC ({macs.length})</p>
           <div className="space-y-0.5">
             {macs.map((m) => (
-              <p key={m} className="text-[10px] font-mono text-foreground/90">{m}</p>
+              <p key={m} className="text-xs font-mono text-foreground/90">{m}</p>
             ))}
           </div>
         </div>
       ) : fallbackMac ? (
         <div>
-          <p className="text-[9px] text-muted-foreground uppercase">MAC (master)</p>
-          <p className="text-[11px] font-mono text-foreground">{fallbackMac}</p>
+          <p className="text-[10px] text-muted-foreground uppercase">MAC (master)</p>
+          <p className="text-xs font-mono text-foreground">{fallbackMac}</p>
         </div>
       ) : null}
     </div>

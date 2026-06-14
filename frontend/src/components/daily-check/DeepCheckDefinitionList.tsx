@@ -74,22 +74,22 @@ export function DeepCheckDefinitionList({ definitions, onEdit }: Props) {
                 {!d.clusterId && (
                   <span
                     title="글로벌 (모든 클러스터)"
-                    className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted rounded px-1.5 py-0.5"
+                    className="inline-flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground bg-muted rounded px-1.5 py-0.5"
                   >
                     <Globe2 className="w-3 h-3" />
                     글로벌
                   </span>
                 )}
-                <span className="text-[10px] font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+                <span className="text-xs font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5">
                   {d.checkType}
                 </span>
               </div>
               {d.description && (
-                <div className="text-xs text-muted-foreground truncate mt-0.5">
+                <div className="text-sm text-muted-foreground truncate mt-0.5">
                   {d.description}
                 </div>
               )}
-              <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                 {d.scheduleCron && (
                   <span className="font-mono">cron: {d.scheduleCron}</span>
                 )}

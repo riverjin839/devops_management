@@ -123,7 +123,7 @@ export function ServiceEntryEditModal({
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label htmlFor={kindId} className="text-[11px] text-muted-foreground mb-1 block">종류</label>
+              <label htmlFor={kindId} className="text-xs text-muted-foreground mb-1 block">종류</label>
               <select id={kindId} value={form.kind ?? 'note'}
                 onChange={(e) => update('kind', e.target.value as ServiceEntryKind)}
                 className={inputCls}>
@@ -131,7 +131,7 @@ export function ServiceEntryEditModal({
               </select>
             </div>
             <div>
-              <label htmlFor={clusterScopeId} className="text-[11px] text-muted-foreground mb-1 block">클러스터 범위</label>
+              <label htmlFor={clusterScopeId} className="text-xs text-muted-foreground mb-1 block">클러스터 범위</label>
               <select id={clusterScopeId} value={form.clusterId ?? ''}
                 onChange={(e) => update('clusterId', e.target.value || null)}
                 className={inputCls}>
@@ -140,7 +140,7 @@ export function ServiceEntryEditModal({
               </select>
             </div>
             <div className="flex items-end">
-              <label className="flex items-center gap-1.5 text-xs">
+              <label className="flex items-center gap-1.5 text-sm">
                 <input type="checkbox" checked={!!form.pinned}
                   onChange={(e) => update('pinned', e.target.checked)} />
                 상단 고정
@@ -149,7 +149,7 @@ export function ServiceEntryEditModal({
           </div>
 
           <div>
-            <label htmlFor={titleId} className="text-[11px] text-muted-foreground mb-1 block">제목 *</label>
+            <label htmlFor={titleId} className="text-xs text-muted-foreground mb-1 block">제목 *</label>
             <input id={titleId} value={form.title ?? ''} onChange={(e) => update('title', e.target.value)}
               placeholder="예: Keycloak realm migration 절차"
               className={inputCls} />
@@ -159,14 +159,14 @@ export function ServiceEntryEditModal({
           {(form.kind === 'troubleshoot' || form.kind === 'history') && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label htmlFor={severityId} className="text-[11px] text-muted-foreground mb-1 block">심각도</label>
+                <label htmlFor={severityId} className="text-xs text-muted-foreground mb-1 block">심각도</label>
                 <select id={severityId} value={form.severity ?? ''} onChange={(e) => update('severity', e.target.value)}
                   className={inputCls}>
                   {SEVERITIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
               <div>
-                <label htmlFor={occurredAtId} className="text-[11px] text-muted-foreground mb-1 block">
+                <label htmlFor={occurredAtId} className="text-xs text-muted-foreground mb-1 block">
                   {form.kind === 'history' ? '발생/적용 일시' : '관찰 일시'}
                 </label>
                 <input id={occurredAtId} type="datetime-local"
@@ -179,7 +179,7 @@ export function ServiceEntryEditModal({
 
           {form.kind === 'link' && (
             <div>
-              <label htmlFor={urlId} className="text-[11px] text-muted-foreground mb-1 block">URL *</label>
+              <label htmlFor={urlId} className="text-xs text-muted-foreground mb-1 block">URL *</label>
               <input id={urlId} value={form.url ?? ''} onChange={(e) => update('url', e.target.value)}
                 placeholder="https://..."
                 className={`${inputCls} font-mono`} />
@@ -187,14 +187,14 @@ export function ServiceEntryEditModal({
           )}
 
           <div>
-            <label htmlFor={tagsId} className="text-[11px] text-muted-foreground mb-1 block">태그 (쉼표 구분)</label>
+            <label htmlFor={tagsId} className="text-xs text-muted-foreground mb-1 block">태그 (쉼표 구분)</label>
             <input id={tagsId} value={tagsText} onChange={(e) => setTagsText(e.target.value)}
               placeholder="upgrade, 1.30, hotfix"
               className={`${inputCls} font-mono`} />
           </div>
 
           <div>
-            <label htmlFor={contentId} className="text-[11px] text-muted-foreground mb-1 block">
+            <label htmlFor={contentId} className="text-xs text-muted-foreground mb-1 block">
               {form.kind === 'link' ? '메모/설명 (선택)' : '내용'}
             </label>
             <div id={contentId}>
@@ -213,7 +213,7 @@ export function ServiceEntryEditModal({
           </div>
 
           <div>
-            <label htmlFor={authorId} className="text-[11px] text-muted-foreground mb-1 block">작성자</label>
+            <label htmlFor={authorId} className="text-xs text-muted-foreground mb-1 block">작성자</label>
             <input id={authorId} value={form.author ?? ''} onChange={(e) => update('author', e.target.value)}
               placeholder="이름 또는 팀"
               className={inputCls} />
@@ -222,11 +222,11 @@ export function ServiceEntryEditModal({
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button onClick={onClose} disabled={saving}
-            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
             취소
           </button>
           <button onClick={submit} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             {mode === 'create' ? '등록' : '저장'}
           </button>

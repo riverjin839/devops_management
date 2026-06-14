@@ -191,12 +191,12 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               </button>
               <button
                 onClick={goToday}
-                className="ml-0.5 px-2.5 py-1 rounded-lg text-[11px] font-medium hover:bg-card text-muted-foreground hover:text-foreground transition-colors"
+                className="ml-0.5 px-2.5 py-1 rounded-lg text-xs font-medium hover:bg-card text-muted-foreground hover:text-foreground transition-colors"
               >
                 오늘
               </button>
             </div>
-            <div className="flex items-center gap-2 text-[11px]">
+            <div className="flex items-center gap-2 text-xs">
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-300">
                 <Clock className="w-3 h-3" /> 예정 {monthTotals.scheduled}
               </span>
@@ -210,7 +210,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
           </div>
 
           {/* Week-day header */}
-          <div className="grid grid-cols-7 gap-1 px-1 text-[11px] text-muted-foreground select-none">
+          <div className="grid grid-cols-7 gap-1 px-1 text-xs text-muted-foreground select-none">
             {WEEKDAYS.map((w, i) => (
               <div
                 key={w}
@@ -327,7 +327,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
           </div>
 
           {/* Legend */}
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 px-1 flex-wrap gap-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 px-1 flex-wrap gap-2">
             <div className="flex items-center gap-1.5">
               <span>적음</span>
               <span className={`w-3 h-3 rounded ${intensityClass(0)}`} />
@@ -439,13 +439,13 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/30">
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight truncate">{label}</p>
-            <p className="text-[11px] text-muted-foreground tabular-nums">총 {total}건</p>
+            <p className="text-xs text-muted-foreground tabular-nums">총 {total}건</p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               type="button"
               onClick={onQuickAdd}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
               title={`${label} 에 일정 등록`}
             >
               <CalendarPlus className="w-3.5 h-3.5" />
@@ -511,7 +511,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
             />
           )}
           {total === 0 && (
-            <div className="flex flex-col items-center justify-center text-center text-xs text-muted-foreground py-8 gap-2">
+            <div className="flex flex-col items-center justify-center text-center text-sm text-muted-foreground py-8 gap-2">
               <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center">
                 <CalendarPlus className="w-5 h-5 opacity-50" />
               </div>
@@ -519,7 +519,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               <button
                 type="button"
                 onClick={onQuickAdd}
-                className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               >
                 <Plus className="w-3 h-3" /> 업무 등록
               </button>
@@ -531,7 +531,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
           <Link
             to="/todo-today"
             onClick={onClose}
-            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
             오늘 할일 상세 <ArrowRight className="w-3 h-3" />
           </Link>
@@ -561,7 +561,7 @@ const CHIP_COLOR: Record<DayChipProps['color'], string> = {
 function DayChip({ color, count, label }: DayChipProps) {
   return (
     <div
-      className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md border truncate ${CHIP_COLOR[color]}`}
+      className={`flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-md border truncate ${CHIP_COLOR[color]}`}
     >
       {count > 1 && <span className="font-bold tabular-nums">{count}</span>}
       <span className="truncate">{label}</span>
@@ -581,7 +581,7 @@ interface DayListProps {
 function DayList({ icon, title, count, items, onItemClick }: DayListProps) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+      <div className="flex items-center gap-1.5 mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
         {icon}
         <span>{title}</span>
         <span className="text-foreground tabular-nums">{count}</span>
@@ -592,21 +592,21 @@ function DayList({ icon, title, count, items, onItemClick }: DayListProps) {
             <Link
               to={`/tasks-mgmt/${it.id}`}
               onClick={onItemClick}
-              className="block text-xs px-2 py-1.5 rounded-lg bg-secondary/40 hover:bg-secondary/70 hover:ring-1 hover:ring-primary/30 transition-colors"
+              className="block text-sm px-2 py-1.5 rounded-lg bg-secondary/40 hover:bg-secondary/70 hover:ring-1 hover:ring-primary/30 transition-colors"
               title="상세 보기"
             >
               <div className="flex items-start gap-1.5 min-w-0">
                 {it.leadingIcon && <span className="flex-shrink-0 mt-0.5">{it.leadingIcon}</span>}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-foreground">{it.primary}</p>
-                  <p className="truncate text-[10px] text-muted-foreground">{it.meta}</p>
+                  <p className="truncate text-xs text-muted-foreground">{it.meta}</p>
                 </div>
               </div>
             </Link>
           </li>
         ))}
         {items.length > 6 && (
-          <li className="text-[10px] text-muted-foreground px-2">+{items.length - 6}건 더…</li>
+          <li className="text-xs text-muted-foreground px-2">+{items.length - 6}건 더…</li>
         )}
       </ul>
     </div>

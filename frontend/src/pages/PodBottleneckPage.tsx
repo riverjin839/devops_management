@@ -104,7 +104,7 @@ export function PodBottleneckPage() {
             </div>
             <div className="flex-1 min-w-[180px]">
               <h1 className="text-lg font-semibold">Pod 병목 진단</h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 두 pod 사이 L4 TCP / L7 DNS / K8s endpoints 4축 통합 진단
               </p>
             </div>
@@ -136,12 +136,12 @@ export function PodBottleneckPage() {
               </div>
             </div>
             {submitError && (
-              <div className="mt-3 text-xs text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
+              <div className="mt-3 text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
                 {submitError}
               </div>
             )}
             {!selectedClusterId && (
-              <p className="mt-3 text-xs text-muted-foreground">좌측 사이드바에서 클러스터를 먼저 선택하세요.</p>
+              <p className="mt-3 text-sm text-muted-foreground">좌측 사이드바에서 클러스터를 먼저 선택하세요.</p>
             )}
           </MacCard>
 
@@ -152,7 +152,7 @@ export function PodBottleneckPage() {
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <div>
                   <div className="font-medium">진단 history 조회 실패</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     {runsError instanceof Error ? runsError.message : 'API 오류'}
                   </div>
                 </div>
@@ -196,7 +196,7 @@ function FormField({
 }) {
   return (
     <label className={`block ${className ?? ''}`}>
-      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <span className="text-sm font-semibold text-muted-foreground">{label}</span>
       <input
         type="text"
         value={value}
@@ -218,19 +218,19 @@ function RunRow({ run, onClick }: { run: BottleneckRun; onClick: () => void }) {
         aria-label={`${run.sourcePod}→${run.destPod} 진단 결과 상세`}
         className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/40 border-l-2 ${STATUS_COLOR[run.overallStatus]}`}
       >
-        <span className={`text-xs font-semibold ${STATUS_TEXT[run.overallStatus]} w-12`}>
+        <span className={`text-sm font-semibold ${STATUS_TEXT[run.overallStatus]} w-12`}>
           {STATUS_KR[run.overallStatus]}
         </span>
-        <span className="font-mono text-xs flex-1 truncate">
+        <span className="font-mono text-sm flex-1 truncate">
           <span className="text-muted-foreground">{run.namespace}/</span>
           {run.sourcePod}
           <span className="text-muted-foreground mx-1">→</span>
           {run.destPod}
         </span>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {new Date(run.createdAt).toLocaleString('ko-KR')}
         </span>
-        <span className="text-[10px] font-mono text-muted-foreground">
+        <span className="text-xs font-mono text-muted-foreground">
           {run.durationMs}ms
         </span>
       </button>

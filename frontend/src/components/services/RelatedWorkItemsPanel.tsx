@@ -33,14 +33,14 @@ export function RelatedWorkItemsPanel({ service }: RelatedWorkItemsPanelProps) {
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Inbox className="w-4 h-4 text-primary" />
           <span>관련 업무</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground tabular-nums">
+          <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground tabular-nums">
             {matched.length}
           </span>
         </div>
         {matched.length > 5 && (
           <Link
             to="/tasks-mgmt"
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
           >
             전체 보기 <ArrowRight className="w-3 h-3" />
           </Link>
@@ -54,7 +54,7 @@ export function RelatedWorkItemsPanel({ service }: RelatedWorkItemsPanelProps) {
           ))}
         </div>
       ) : top5.length === 0 ? (
-        <p className="px-2 py-3 text-xs text-muted-foreground italic">
+        <p className="px-2 py-3 text-sm text-muted-foreground italic">
           이 서비스에 등록된 업무가 없습니다.
         </p>
       ) : (
@@ -69,11 +69,11 @@ export function RelatedWorkItemsPanel({ service }: RelatedWorkItemsPanelProps) {
                   to={`/tasks-mgmt/${w.id}`}
                   className="flex items-center gap-2 px-2 py-2 hover:bg-secondary rounded transition-colors min-w-0"
                 >
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${typeCfg.cls} flex-shrink-0`}>
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded ${typeCfg.cls} flex-shrink-0`}>
                     <TypeIcon className="w-3 h-3" /> {typeCfg.label}
                   </span>
                   <span className="flex-1 min-w-0 truncate text-sm text-foreground">{title}</span>
-                  <span className="flex-shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                  <span className="flex-shrink-0 text-xs text-muted-foreground tabular-nums">
                     {formatRelativeTime(w.updatedAt)}
                   </span>
                 </Link>

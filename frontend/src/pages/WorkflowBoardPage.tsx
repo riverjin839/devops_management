@@ -462,7 +462,7 @@ export function WorkflowBoardPage() {
               value={newWfConfluence}
               onChange={(e) => setNewWfConfluence(e.target.value)}
               placeholder="Confluence URL (선택)"
-              className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded focus:outline-none focus:border-primary"
+              className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded focus:outline-none focus:border-primary"
             />
             <div className="flex gap-2">
               <button
@@ -471,13 +471,13 @@ export function WorkflowBoardPage() {
                   confluenceUrl: newWfConfluence.trim() || undefined,
                 })}
                 disabled={!newWfTitle.trim()}
-                className="flex-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                className="flex-1 px-2 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
               >
                 생성
               </button>
               <button
                 onClick={() => { setShowCreateWf(false); setNewWfTitle(''); setNewWfConfluence(''); }}
-                className="flex-1 px-2 py-1 text-xs bg-secondary text-foreground rounded hover:bg-secondary/80"
+                className="flex-1 px-2 py-1 text-sm bg-secondary text-foreground rounded hover:bg-secondary/80"
               >
                 취소
               </button>
@@ -487,7 +487,7 @@ export function WorkflowBoardPage() {
 
         <div className="flex-1 overflow-y-auto py-2">
           {workflows.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center mt-10 px-4 leading-relaxed">
+            <p className="text-sm text-muted-foreground text-center mt-10 px-4 leading-relaxed">
               워크플로우가 없습니다.
               <br />
               <button onClick={() => setShowCreateWf(true)} className="mt-2 text-primary hover:underline">
@@ -537,7 +537,7 @@ export function WorkflowBoardPage() {
                       />
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium truncate ${isSelected ? 'text-primary' : ''}`}>{wf.title}</p>
-                        <p className="text-xs text-muted-foreground">{total}단계 · {doneCount}/{total} 완료</p>
+                        <p className="text-sm text-muted-foreground">{total}단계 · {doneCount}/{total} 완료</p>
                         {total > 0 && (
                           <div className="mt-1 h-1 bg-secondary rounded-full overflow-hidden">
                             <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${(doneCount / total) * 100}%` }} />
@@ -640,7 +640,7 @@ export function WorkflowBoardPage() {
                         if (e.key === 'Escape') setEditingHeaderConfluence(false);
                       }}
                       placeholder="Confluence URL"
-                      className="text-[11px] bg-background border border-primary rounded px-2 py-0.5 focus:outline-none w-64"
+                      className="text-xs bg-background border border-primary rounded px-2 py-0.5 focus:outline-none w-64"
                       autoFocus
                     />
                     <button
@@ -665,7 +665,7 @@ export function WorkflowBoardPage() {
                       href={selectedWf.confluenceUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                       title={selectedWf.confluenceUrl}
                     >
                       <ExternalLink className="w-3 h-3" /> Confluence
@@ -681,7 +681,7 @@ export function WorkflowBoardPage() {
                 ) : (
                   <button
                     onClick={() => { setHeaderConfluenceDraft(''); setEditingHeaderConfluence(true); }}
-                    className="text-[11px] px-1.5 py-0.5 rounded-full border border-dashed border-border text-muted-foreground/70 hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center gap-1"
+                    className="text-xs px-1.5 py-0.5 rounded-full border border-dashed border-border text-muted-foreground/70 hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center gap-1"
                   >
                     <Link2 className="w-3 h-3" /> Confluence
                   </button>
@@ -703,7 +703,7 @@ export function WorkflowBoardPage() {
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                  <div className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                     <span className="text-muted-foreground">{selectedWf.steps.length}단계</span>
                     {(STEP_STATUS_KEYS as WorkflowStepStatus[]).filter((st) => statusCounts[st] > 0).map((st) => (
                       <span key={st} className={`px-1.5 py-0.5 rounded ${STEP_STATUS[st].cls}`}>
@@ -714,7 +714,7 @@ export function WorkflowBoardPage() {
                   </div>
                 </div>
                 {pendingEdge && (
-                  <span className="text-xs px-2.5 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full animate-pulse">
+                  <span className="text-sm px-2.5 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full animate-pulse">
                     연결할 대상 포트에 드롭하세요 · Esc 취소
                   </span>
                 )}
@@ -728,7 +728,7 @@ export function WorkflowBoardPage() {
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={() => setZoom(1)}
-                    className="px-2 py-1.5 text-xs hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors min-w-[42px]">
+                    className="px-2 py-1.5 text-sm hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors min-w-[42px]">
                     {Math.round(zoom * 100)}%
                   </button>
                   <button onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + 0.1).toFixed(2)))}
@@ -741,13 +741,13 @@ export function WorkflowBoardPage() {
                   </button>
                 </div>
                 <button onClick={handleAutoLayout}
-                  className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border bg-background hover:bg-secondary text-foreground flex items-center gap-1.5 transition-colors">
+                  className="px-2.5 py-1.5 text-sm font-medium rounded-lg border border-border bg-background hover:bg-secondary text-foreground flex items-center gap-1.5 transition-colors">
                   <LayoutGrid className="w-3.5 h-3.5" />
                   자동 배치
                 </button>
                 <button
                   onClick={() => addStep.mutate({ wfId: selectedWf.id, count: selectedWf.steps.length })}
-                  className="px-2.5 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   단계 추가
@@ -915,7 +915,7 @@ export function WorkflowBoardPage() {
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => { setTypeMenuStep(typeMenuStep === step.id ? null : step.id); setStatusMenuStep(null); }}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${typeCfg.header} hover:brightness-110`}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-sm font-medium ${typeCfg.header} hover:brightness-110`}
                               >
                                 <span className={`w-1.5 h-1.5 rounded-full ${typeCfg.dot} flex-shrink-0`} />
                                 {typeCfg.icon}
@@ -926,7 +926,7 @@ export function WorkflowBoardPage() {
                                   {STEP_TYPE_KEYS.map((t) => (
                                     <button key={t}
                                       onClick={() => { if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { stepType: t } }); setTypeMenuStep(null); }}
-                                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary transition-colors ${step.stepType === t ? 'text-primary' : 'text-foreground'}`}
+                                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary transition-colors ${step.stepType === t ? 'text-primary' : 'text-foreground'}`}
                                     >
                                       <span className={`w-1.5 h-1.5 rounded-full ${STEP_TYPE[t].dot}`} />
                                       {STEP_TYPE[t].icon}
@@ -941,7 +941,7 @@ export function WorkflowBoardPage() {
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => { setStatusMenuStep(statusMenuStep === step.id ? null : step.id); setTypeMenuStep(null); }}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${statusCfg.cls}`}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-sm font-medium ${statusCfg.cls}`}
                               >
                                 {statusCfg.label}
                               </button>
@@ -950,9 +950,9 @@ export function WorkflowBoardPage() {
                                   {STEP_STATUS_KEYS.map((st) => (
                                     <button key={st}
                                       onClick={() => { if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { status: st } }); setStatusMenuStep(null); }}
-                                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary transition-colors ${stepStatus === st ? 'font-semibold' : ''}`}
+                                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary transition-colors ${stepStatus === st ? 'font-semibold' : ''}`}
                                     >
-                                      <span className={`px-1.5 py-0.5 rounded text-xs ${STEP_STATUS[st].cls}`}>{STEP_STATUS[st].label}</span>
+                                      <span className={`px-1.5 py-0.5 rounded text-sm ${STEP_STATUS[st].cls}`}>{STEP_STATUS[st].label}</span>
                                       {stepStatus === st && <Check className="w-3 h-3 ml-auto text-primary" />}
                                     </button>
                                   ))}
@@ -961,7 +961,7 @@ export function WorkflowBoardPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1" data-no-drag>
-                            <span className="text-xs text-muted-foreground/60 font-mono">#{selectedWf.steps.indexOf(step) + 1}</span>
+                            <span className="text-sm text-muted-foreground/60 font-mono">#{selectedWf.steps.indexOf(step) + 1}</span>
                             <button
                               onClick={(e) => { e.stopPropagation(); if (confirm('이 단계를 삭제할까요?')) deleteStep.mutate({ wfId: selectedWf.id, stepId: step.id }); }}
                               className="p-0.5 rounded text-muted-foreground/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -1009,14 +1009,14 @@ export function WorkflowBoardPage() {
                                 onKeyDown={(e) => { if (e.key === 'Escape') setEditingStep(null); }}
                                 placeholder="상세 내용 입력..."
                                 rows={2}
-                                className="w-full text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary resize-none"
+                                className="w-full text-sm bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary resize-none"
                               />
                               {/* 연계 항목 선택 — 타입 선택 시 해당 카테고리의 실제 항목 목록을 드롭다운으로 노출 */}
                               <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
                                 <select
                                   value={stepRefType}
                                   onChange={(e) => { setStepRefType(e.target.value); setStepRefId(''); }}
-                                  className="w-full text-[11px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary text-muted-foreground"
+                                  className="w-full text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary text-muted-foreground"
                                 >
                                   <option value="">— 연계 항목 없음 —</option>
                                   {Object.entries(REFERENCE_TYPE_LABELS).map(([k, v]) => (
@@ -1033,24 +1033,24 @@ export function WorkflowBoardPage() {
                               </div>
                               <div className="flex gap-1 mt-1.5">
                                 <button onClick={(e) => { e.stopPropagation(); saveEditStep(); }}
-                                  className="flex-1 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors">
+                                  className="flex-1 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors">
                                   저장
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setEditingStep(null); }}
-                                  className="px-2 py-1 text-xs bg-secondary rounded hover:bg-secondary/80 transition-colors">
+                                  className="px-2 py-1 text-sm bg-secondary rounded hover:bg-secondary/80 transition-colors">
                                   <X className="w-3 h-3" />
                                 </button>
                               </div>
                             </div>
                           ) : step.description ? (
                             <p
-                              className="text-xs text-muted-foreground leading-relaxed line-clamp-2 cursor-text hover:text-foreground/80"
+                              className="text-sm text-muted-foreground leading-relaxed line-clamp-2 cursor-text hover:text-foreground/80"
                               onClick={(e) => { e.stopPropagation(); startEditStep(step); }}
                             >
                               {step.description}
                             </p>
                           ) : (
-                            <p className="text-xs text-muted-foreground/30 italic cursor-text"
+                            <p className="text-sm text-muted-foreground/30 italic cursor-text"
                               onClick={(e) => { e.stopPropagation(); startEditStep(step); }}>
                               내용 입력...
                             </p>
@@ -1059,7 +1059,7 @@ export function WorkflowBoardPage() {
                           {!isEditing && step.referenceType && (
                             <div className="mt-1.5 pt-1.5 border-t border-border/50 flex items-center gap-1">
                               <Link2 className="w-2.5 h-2.5 text-primary/60 flex-shrink-0" />
-                              <span className="text-[10px] text-primary/70 font-medium">
+                              <span className="text-xs text-primary/70 font-medium">
                                 {REFERENCE_TYPE_LABELS[step.referenceType] ?? step.referenceType}
                               </span>
                             </div>
@@ -1092,7 +1092,7 @@ export function WorkflowBoardPage() {
               </div>
             </div>
 
-            <div className="absolute bottom-4 right-4 text-xs text-muted-foreground/40 pointer-events-none">
+            <div className="absolute bottom-4 right-4 text-sm text-muted-foreground/40 pointer-events-none">
               Ctrl + 스크롤로 줌 · 우측 포트 드래그로 연결
             </div>
           </>
@@ -1145,7 +1145,7 @@ function ReferenceSelect({ type, value, onChange }: ReferenceSelectProps) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full text-[11px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary"
+      className="w-full text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary"
     >
       <option value="">— 항목 선택 —</option>
       {options.map((o) => (

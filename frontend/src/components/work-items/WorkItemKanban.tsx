@@ -65,7 +65,7 @@ function MoveMenu({ currentStatus, onMove }: MoveMenuProps) {
     <div className="relative">
       <button
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors text-[10px] font-medium px-1.5"
+        className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors text-xs font-medium px-1.5"
         title="다른 컬럼으로 이동"
       >
         이동
@@ -78,7 +78,7 @@ function MoveMenu({ currentStatus, onMove }: MoveMenuProps) {
               <button
                 key={s}
                 onClick={(e) => { e.stopPropagation(); setOpen(false); onMove(s); }}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-secondary transition-colors text-foreground/80 hover:text-foreground"
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-secondary transition-colors text-foreground/80 hover:text-foreground"
               >
                 {KANBAN_STATUS_LABEL[s]}
               </button>
@@ -114,38 +114,38 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
       {/* 배지 행 */}
       <div className="flex items-center gap-1 mb-2 flex-wrap">
         {moduleCfg && (
-          <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${moduleCfg.cls}`}>
+          <span className={`inline-flex items-center text-xs px-1.5 py-0.5 rounded-full border font-medium ${moduleCfg.cls}`}>
             {moduleCfg.label}
           </span>
         )}
         {typeCfg && (
-          <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full ${typeCfg.cls}`}>
+          <span className={`inline-flex items-center text-xs px-1.5 py-0.5 rounded-full ${typeCfg.cls}`}>
             {typeCfg.label}
           </span>
         )}
-        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+        <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
           {item.category}
         </span>
-        <span className={`inline-flex items-center gap-1 text-[10px] ml-auto ${pc.text}`}>
+        <span className={`inline-flex items-center gap-1 text-xs ml-auto ${pc.text}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${pc.dot}`} />
           {pc.label}
         </span>
       </div>
 
       {/* 작업 내용 */}
-      <p className="text-xs text-foreground/90 line-clamp-2 leading-relaxed mb-2">
+      <p className="text-sm text-foreground/90 line-clamp-2 leading-relaxed mb-2">
         {stripHtml(item.content)}
       </p>
 
       {/* 완료 조건 (in_progress / review_test 에서만 표시) */}
       {item.doneCondition && (item.kanbanStatus === 'in_progress' || item.kanbanStatus === 'review_test') && (
-        <p className="text-[10px] text-muted-foreground/70 line-clamp-1 mb-1.5 italic">
+        <p className="text-xs text-muted-foreground/70 line-clamp-1 mb-1.5 italic">
           ✓ {item.doneCondition}
         </p>
       )}
 
       {/* 메타 */}
-      <div className="flex flex-col gap-1 text-[10px] text-muted-foreground">
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <User className="w-3 h-3 flex-shrink-0" />
           <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">정:{item.primaryAssignee || item.assignee}</span>
@@ -278,7 +278,7 @@ export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkIte
                 <span className={`w-2.5 h-2.5 rounded-full ${col.dotCls}`} />
                 <span className="text-sm font-semibold">{col.label}</span>
                 {isWipCol && col.wipLimit !== undefined && (
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ml-auto ${
+                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ml-auto ${
                     wipOver
                       ? 'bg-red-500/20 text-red-400 border border-red-500/40'
                       : 'bg-background/60 text-muted-foreground'
@@ -288,7 +288,7 @@ export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkIte
                   </span>
                 )}
                 {!isWipCol && (
-                  <span className="ml-auto text-xs text-muted-foreground bg-background/60 px-1.5 py-0.5 rounded-full">
+                  <span className="ml-auto text-sm text-muted-foreground bg-background/60 px-1.5 py-0.5 rounded-full">
                     {colTasks.length}
                   </span>
                 )}
@@ -298,7 +298,7 @@ export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkIte
               <div className="flex-1 bg-muted/10 border border-t-0 border-border rounded-b-lg p-2 flex flex-col gap-2 min-h-[200px]">
                 {colTasks.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center">
-                    <p className="text-xs text-muted-foreground/50 text-center py-4">{col.emptyText}</p>
+                    <p className="text-sm text-muted-foreground/50 text-center py-4">{col.emptyText}</p>
                   </div>
                 ) : (
                   colTasks.map((item) => (

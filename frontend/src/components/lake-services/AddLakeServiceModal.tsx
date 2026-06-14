@@ -110,7 +110,7 @@ export function AddLakeServiceModal({
         <div className="px-5 py-4 space-y-3">
           {/* Cluster */}
           <label className="block">
-            <span className="text-xs font-semibold text-muted-foreground">클러스터 *</span>
+            <span className="text-sm font-semibold text-muted-foreground">클러스터 *</span>
             <select
               value={clusterId}
               onChange={(e) => setClusterId(e.target.value)}
@@ -126,7 +126,7 @@ export function AddLakeServiceModal({
 
           {/* Service Type */}
           <label className="block">
-            <span className="text-xs font-semibold text-muted-foreground">서비스 타입 *</span>
+            <span className="text-sm font-semibold text-muted-foreground">서비스 타입 *</span>
             <select
               value={serviceType}
               onChange={(e) => {
@@ -144,7 +144,7 @@ export function AddLakeServiceModal({
               ))}
             </select>
             {selectedType && (
-              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                 <ServiceTypeIcon serviceType={selectedType.serviceType} className="w-3 h-3" />
                 {selectedType.description ?? '—'} · 기본 헬스 경로:{' '}
                 <span className="font-mono">{selectedType.defaultPath}</span>
@@ -154,7 +154,7 @@ export function AddLakeServiceModal({
 
           {/* Name */}
           <label className="block">
-            <span className="text-xs font-semibold text-muted-foreground">인스턴스 이름 *</span>
+            <span className="text-sm font-semibold text-muted-foreground">인스턴스 이름 *</span>
             <input
               type="text"
               value={name}
@@ -168,7 +168,7 @@ export function AddLakeServiceModal({
 
           {/* Endpoint */}
           <label className="block">
-            <span className="text-xs font-semibold text-muted-foreground">Endpoint URL *</span>
+            <span className="text-sm font-semibold text-muted-foreground">Endpoint URL *</span>
             <input
               type="text"
               value={endpointUrl}
@@ -177,14 +177,14 @@ export function AddLakeServiceModal({
               aria-label="endpoint URL"
               className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-mono"
             />
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               인스턴스의 root URL. 헬스체크 경로(예: <span className="font-mono">{selectedType?.defaultPath ?? '/health'}</span>)는 자동으로 붙임.
             </p>
           </label>
 
           {/* Namespace (optional) */}
           <label className="block">
-            <span className="text-xs font-semibold text-muted-foreground">Namespace (옵션)</span>
+            <span className="text-sm font-semibold text-muted-foreground">Namespace (옵션)</span>
             <input
               type="text"
               value={namespace}
@@ -205,11 +205,11 @@ export function AddLakeServiceModal({
               aria-label="TLS 인증서 검증"
               className="w-4 h-4"
             />
-            <span className="text-xs">TLS 인증서 검증 (폐쇄망 자체 인증서면 끄세요 — 기본 off)</span>
+            <span className="text-sm">TLS 인증서 검증 (폐쇄망 자체 인증서면 끄세요 — 기본 off)</span>
           </label>
 
           {error && (
-            <div className="text-xs text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
+            <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
               {error}
             </div>
           )}
@@ -219,7 +219,7 @@ export function AddLakeServiceModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
           >
             취소
           </button>
@@ -228,7 +228,7 @@ export function AddLakeServiceModal({
             onClick={handleSubmit}
             disabled={create.isPending}
             autoFocus
-            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            className="px-4 py-1.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             {create.isPending ? '등록 중…' : '등록'}
           </button>

@@ -97,7 +97,7 @@ function RowGroup({
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           )}
         </td>
-        <td className="px-4 py-3 align-middle font-mono text-xs">{node.node}</td>
+        <td className="px-4 py-3 align-middle font-mono text-sm">{node.node}</td>
         <td className="px-4 py-3 align-middle">
           <RoleBadge role={node.role} />
         </td>
@@ -125,12 +125,12 @@ function RowGroup({
 function ImageList({ images }: { images: NodeImagesInfo['images'] }) {
   if (images.length === 0) {
     return (
-      <div className="px-12 py-4 text-xs text-muted-foreground">검색 조건에 맞는 이미지가 없습니다.</div>
+      <div className="px-12 py-4 text-sm text-muted-foreground">검색 조건에 맞는 이미지가 없습니다.</div>
     );
   }
   return (
     <div className="px-12 py-3">
-      <table className="w-full text-xs">
+      <table className="w-full text-sm">
         <thead>
           <tr className="text-muted-foreground">
             <th className="text-left py-1.5 font-medium">Image</th>
@@ -147,10 +147,10 @@ function ImageList({ images }: { images: NodeImagesInfo['images'] }) {
                     <div className="text-foreground">{pickPrimaryName(img.names)}</div>
                     {img.names.length > 1 && (
                       <details className="mt-0.5">
-                        <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
+                        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                           +{img.names.length - 1} alias
                         </summary>
-                        <ul className="mt-1 ml-1 space-y-0.5 text-[11px] text-muted-foreground">
+                        <ul className="mt-1 ml-1 space-y-0.5 text-xs text-muted-foreground">
                           {img.names
                             .filter((n) => n !== pickPrimaryName(img.names))
                             .map((n) => (
@@ -177,7 +177,7 @@ function RoleBadge({ role }: { role: string }) {
   const isControl = role === 'control-plane';
   return (
     <span
-      className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${
+      className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${
         isControl
           ? 'bg-primary/10 text-primary'
           : 'bg-secondary text-foreground'
@@ -196,7 +196,7 @@ function StatusBadge({ status }: { status: string }) {
       ? 'bg-red-500/15 text-red-600 dark:text-red-400'
       : 'bg-muted text-muted-foreground';
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${cls}`}>
+    <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${cls}`}>
       {status}
     </span>
   );

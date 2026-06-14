@@ -32,7 +32,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
           <div>
             <h3 className="text-base font-semibold">Cilium 설정 — {cluster.name}</h3>
             {data && (
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 소스: {data.source === 'live' ? '🟢 kubectl 실시간' : data.source === 'stored' ? '🟡 저장된 설정' : '⚪ 없음'}
                 {data.error && <span className="text-amber-400 ml-2">⚠ {data.error}</span>}
               </p>
@@ -54,7 +54,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
               className="w-full pl-8 pr-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-          {search && <p className="text-xs text-muted-foreground mt-1">{filteredLines.length}줄 매치</p>}
+          {search && <p className="text-sm text-muted-foreground mt-1">{filteredLines.length}줄 매치</p>}
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
@@ -68,7 +68,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
           ) : !rawText ? (
             <p className="text-sm text-muted-foreground py-4 text-center">Cilium 설정 정보가 없습니다.</p>
           ) : displayText ? (
-            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap leading-relaxed">
+            <pre className="text-sm font-mono text-foreground whitespace-pre-wrap leading-relaxed">
               {search.trim()
                 ? filteredLines.map((line: string, i: number) => {
                     const idx = line.toLowerCase().indexOf(search.toLowerCase());

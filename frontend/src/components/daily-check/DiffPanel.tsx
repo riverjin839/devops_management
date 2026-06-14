@@ -31,7 +31,7 @@ export function DiffPanel({ diff }: Props) {
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">전체 상태</span>
             <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="font-mono text-xs rounded bg-muted px-2 py-0.5">
+            <span className="font-mono text-sm rounded bg-muted px-2 py-0.5">
               {diff.previousStatus} → {diff.currentStatus}
             </span>
           </div>
@@ -48,12 +48,12 @@ export function DiffPanel({ diff }: Props) {
         {sections.map((s) =>
           s.items && s.items.length > 0 ? (
             <div key={s.label}>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                 {s.label}
               </div>
               <ul className="space-y-1">
                 {s.items.map((it, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs">
+                  <li key={i} className="flex items-start gap-1.5 text-sm">
                     {s.positive ? (
                       <Minus className="w-3 h-3 mt-0.5 flex-shrink-0 text-emerald-500" />
                     ) : (

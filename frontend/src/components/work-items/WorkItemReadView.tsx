@@ -30,7 +30,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
     <div>
-      <p className="text-xs font-medium text-muted-foreground mb-1">{label}</p>
+      <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
       <p className="text-sm whitespace-pre-wrap break-words">{value}</p>
     </div>
   );
@@ -60,7 +60,7 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
   return (
     <div className="space-y-4">
       {/* 옵션 정보 — 한 줄 압축 (상태·우선순위·분류·모듈/타입 + 담당자·클러스터·기간·공수) */}
-      <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-[11px]">
+      <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-xs">
         <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded-full border ${
           isCompleted
             ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
@@ -107,7 +107,7 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
 
       {item.resolution && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">업무 결과</p>
+          <p className="text-sm font-medium text-muted-foreground mb-1">업무 결과</p>
           <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
             <RichContent content={item.resolution} />
           </div>
@@ -116,7 +116,7 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
 
       {item.doneCondition && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">완료 조건</p>
+          <p className="text-sm font-medium text-muted-foreground mb-1">완료 조건</p>
           <p className="text-sm text-foreground/80 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
             ✓ {item.doneCondition}
           </p>
@@ -127,12 +127,12 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
 
       {item.confluenceUrl && (
         <div className="space-y-1">
-          <p className="text-[11px] text-muted-foreground">Confluence 링크</p>
+          <p className="text-xs text-muted-foreground">Confluence 링크</p>
           <a
             href={item.confluenceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline break-all"
+            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline break-all"
           >
             <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="truncate max-w-md">{item.confluenceUrl}</span>
@@ -142,7 +142,7 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
 
       {images.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+          <p className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">
             <ImagePlus className="w-3.5 h-3.5" />
             첨부 이미지 ({images.length}개)
           </p>
@@ -160,7 +160,7 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
         </div>
       )}
 
-      <div className="text-xs text-muted-foreground border-t border-border pt-3 flex gap-6">
+      <div className="text-sm text-muted-foreground border-t border-border pt-3 flex gap-6">
         <span>등록: {item.createdAt?.slice(0, 10)}</span>
         {item.updatedAt !== item.createdAt && (
           <span>수정: {item.updatedAt?.slice(0, 10)}</span>
@@ -169,7 +169,7 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
 
       {filledCustomFields.length > 0 && (
         <div className="border-t border-border pt-3">
-          <p className="text-xs font-medium text-muted-foreground mb-2">사용자 정의 필드</p>
+          <p className="text-sm font-medium text-muted-foreground mb-2">사용자 정의 필드</p>
           <div className="grid grid-cols-2 gap-3">
             {filledCustomFields.map((f) => (
               <Field key={f.id} label={f.label} value={fmtCustom(cv[f.key])} />

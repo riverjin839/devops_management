@@ -20,8 +20,8 @@ export function ServiceChip({ service, linked = true, className = '', small = fa
   const Icon = def.icon;
   const cls = colorBadgeClass(def.color);
   const sizeCls = small
-    ? 'px-1.5 py-0 text-[10px] gap-0.5'
-    : 'px-2 py-0.5 text-[11px] gap-1';
+    ? 'px-1.5 py-0 text-xs gap-0.5'
+    : 'px-2 py-0.5 text-xs gap-1';
 
   const content = (
     <>

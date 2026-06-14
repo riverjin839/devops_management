@@ -30,7 +30,7 @@ export function ColumnSettingsMenu({ order, isVisible, onToggle, onReset }: Colu
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
+        className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
           open
             ? 'bg-primary/10 text-primary border-primary/30'
             : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
@@ -43,7 +43,7 @@ export function ColumnSettingsMenu({ order, isVisible, onToggle, onReset }: Colu
 
       {open && (
         <div className="absolute right-0 mt-1.5 z-30 w-52 rounded-xl border border-border bg-card shadow-lg p-1.5">
-          <div className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground">표시할 컬럼</div>
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">표시할 컬럼</div>
           <div className="max-h-72 overflow-y-auto">
             {order.map((k) => {
               const meta = WORK_ITEM_COLUMNS[k];
@@ -54,7 +54,7 @@ export function ColumnSettingsMenu({ order, isVisible, onToggle, onReset }: Colu
                   type="button"
                   disabled={!meta.hideable}
                   onClick={() => onToggle(k)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left"
                 >
                   <span
                     className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
@@ -64,7 +64,7 @@ export function ColumnSettingsMenu({ order, isVisible, onToggle, onReset }: Colu
                     {checked && <Check className="w-3 h-3" />}
                   </span>
                   <span className="flex-1 text-foreground">{meta.label}</span>
-                  {!meta.hideable && <span className="text-[10px] text-muted-foreground">고정</span>}
+                  {!meta.hideable && <span className="text-xs text-muted-foreground">고정</span>}
                 </button>
               );
             })}
@@ -73,7 +73,7 @@ export function ColumnSettingsMenu({ order, isVisible, onToggle, onReset }: Colu
             <button
               type="button"
               onClick={() => { onReset(); setOpen(false); }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               기본값으로 복원

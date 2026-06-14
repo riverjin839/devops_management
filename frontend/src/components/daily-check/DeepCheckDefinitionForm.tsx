@@ -171,7 +171,7 @@ export function DeepCheckDefinitionForm({
       )}
 
       {testResult && (
-        <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs space-y-1">
+        <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm space-y-1">
           <div className="font-semibold">Test 결과: {testResult.status}</div>
           <div className="text-muted-foreground break-words">{testResult.message}</div>
           {testResult.details && (
@@ -188,7 +188,7 @@ export function DeepCheckDefinitionForm({
             type="button"
             onClick={handleTest}
             disabled={testMut.isPending}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5" />
             Test now
@@ -198,7 +198,7 @@ export function DeepCheckDefinitionForm({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
           >
             <X className="w-3.5 h-3.5" />
             취소
@@ -208,7 +208,7 @@ export function DeepCheckDefinitionForm({
           type="button"
           onClick={handleSubmit}
           disabled={!checkType || saving}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:opacity-90 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >
           <Save className="w-3.5 h-3.5" />
           저장
@@ -221,7 +221,7 @@ export function DeepCheckDefinitionForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       {children}
@@ -245,7 +245,7 @@ function FieldGroup({
   if (fields.length === 0) return null;
   return (
     <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -261,7 +261,7 @@ function FieldGroup({
               }
               className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
             />
-            {f.help && <div className="text-[11px] text-muted-foreground">{f.help}</div>}
+            {f.help && <div className="text-xs text-muted-foreground">{f.help}</div>}
           </Field>
         ))}
       </div>

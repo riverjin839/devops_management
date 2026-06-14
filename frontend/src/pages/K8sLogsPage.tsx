@@ -135,7 +135,7 @@ export function K8sLogsPage() {
 
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
+            <Link to="/" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
               <ArrowLeft className="w-3.5 h-3.5" /> 대시보드
             </Link>
             <h1 className="text-lg font-semibold min-w-[180px] flex items-center gap-2">
@@ -149,12 +149,12 @@ export function K8sLogsPage() {
           <MacCard title="로그 스트림" bodyPadding="p-4">
             {/* 선택 컨트롤 */}
             <div className="flex items-end gap-2 flex-wrap mb-3">
-              <label className="flex flex-col gap-1 text-xs">
+              <label className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">네임스페이스</span>
                 <select
                   value={namespace}
                   onChange={(e) => { setNamespace(e.target.value); setPod(''); }}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs min-w-[160px]"
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-sm min-w-[160px]"
                 >
                   <option value="">선택…</option>
                   {namespaces.map((n) => (
@@ -162,13 +162,13 @@ export function K8sLogsPage() {
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs">
+              <label className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">파드</span>
                 <select
                   value={pod}
                   onChange={(e) => setPod(e.target.value)}
                   disabled={!namespace}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs min-w-[220px] disabled:opacity-50"
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-sm min-w-[220px] disabled:opacity-50"
                 >
                   <option value="">선택…</option>
                   {pods.map((p) => (
@@ -176,16 +176,16 @@ export function K8sLogsPage() {
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs">
+              <label className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">컨테이너(선택)</span>
                 <input
                   value={container}
                   onChange={(e) => setContainer(e.target.value)}
                   placeholder="멀티컨테이너 시 지정"
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs w-40"
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-sm w-40"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs">
+              <label className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">tail</span>
                 <input
                   type="number"
@@ -193,22 +193,22 @@ export function K8sLogsPage() {
                   min={1}
                   max={5000}
                   onChange={(e) => setTail(Number(e.target.value) || 200)}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs w-20"
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-sm w-20"
                 />
               </label>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer pb-1.5">
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer pb-1.5">
                 <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="accent-primary" />
                 follow
               </label>
               {streaming ? (
-                <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/90 text-white px-3 py-1.5 text-xs font-medium hover:bg-red-500">
+                <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/90 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500">
                   <Square className="w-3.5 h-3.5" /> 중지
                 </button>
               ) : (
                 <button
                   onClick={start}
                   disabled={!pod}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90"
                 >
                   <Play className="w-3.5 h-3.5" /> 스트림 시작
                 </button>
@@ -216,14 +216,14 @@ export function K8sLogsPage() {
               <button
                 onClick={() => setLines([])}
                 title="화면 지우기"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-border px-2 py-1.5 text-xs hover:bg-secondary"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border px-2 py-1.5 text-sm hover:bg-secondary"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {err && (
-              <div className="mb-2 text-xs text-red-500 flex items-center gap-1.5">
+              <div className="mb-2 text-sm text-red-500 flex items-center gap-1.5">
                 <RefreshCw className="w-3 h-3" /> {err}
               </div>
             )}
@@ -231,12 +231,12 @@ export function K8sLogsPage() {
             {/* 로그 출력 — 다크 모노 박스, 최근 5000줄 */}
             <pre
               ref={scrollRef}
-              className="h-[60vh] overflow-auto rounded-xl bg-zinc-950 text-zinc-100 text-[11px] leading-relaxed font-mono p-3 whitespace-pre-wrap break-all"
+              className="h-[60vh] overflow-auto rounded-xl bg-zinc-950 text-zinc-100 text-xs leading-relaxed font-mono p-3 whitespace-pre-wrap break-all"
             >
               {text || (streaming ? '스트리밍 대기 중…' : '네임스페이스·파드를 선택하고 "스트림 시작"을 누르세요.')}
               {streaming && <span className="inline-block w-2 h-3 bg-zinc-400 animate-pulse align-middle ml-0.5" />}
             </pre>
-            <p className="mt-1 text-[10px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               {lines.length}줄 (최대 {MAX_LINES}) · 읽기전용 · follow 중지는 "중지" 버튼
             </p>
           </MacCard>

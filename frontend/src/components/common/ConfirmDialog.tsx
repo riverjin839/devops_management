@@ -46,7 +46,7 @@ export function ConfirmDialog({
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold">{title}</h2>
-            {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+            {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
           </div>
           <button
             onClick={onCancel}
@@ -55,18 +55,18 @@ export function ConfirmDialog({
             <X className="w-4 h-4" />
           </button>
         </div>
-        {children && <div className="px-5 py-4 text-xs">{children}</div>}
+        {children && <div className="px-5 py-4 text-sm">{children}</div>}
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button
             onClick={onCancel}
-            className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             autoFocus
-            className={`px-4 py-1.5 text-xs font-semibold rounded-lg text-primary-foreground ${
+            className={`px-4 py-1.5 text-sm font-semibold rounded-lg text-primary-foreground ${
               danger
                 ? 'bg-red-500 hover:bg-red-600'
                 : 'bg-primary hover:bg-primary/90'

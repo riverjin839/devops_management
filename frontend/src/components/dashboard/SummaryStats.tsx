@@ -19,7 +19,7 @@ function StatCard({ title, value, icon, colorClass, bgClass }: StatCardProps) {
     <MacCard bodyPadding="p-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
             {title}
           </p>
           <p className={`text-4xl font-bold font-mono leading-none ${colorClass}`}>{value}</p>

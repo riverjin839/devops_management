@@ -98,20 +98,20 @@ export function JiraIntegrationPanel() {
         <div className="flex items-center gap-2 mb-1">
           <Globe className="w-4 h-4 text-primary" />
           <h3 className="font-semibold">Jira 공통 설정</h3>
-          {!isAdmin && <span className="text-[11px] text-muted-foreground">(관리자만 수정 가능)</span>}
+          {!isAdmin && <span className="text-xs text-muted-foreground">(관리자만 수정 가능)</span>}
         </div>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           폐쇄망 내부 Jira(Server/Data Center) 의 Base URL 을 설정합니다. 가져오기는 백엔드에서 실행되므로
           백엔드 서버가 이 도메인에 접근 가능해야 합니다.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="md:col-span-2">
-            <span className="block text-xs font-medium text-muted-foreground mb-1">Base URL</span>
+            <span className="block text-sm font-medium text-muted-foreground mb-1">Base URL</span>
             <input className={inputCls} placeholder="https://jira.internal.example.com" value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)} disabled={!isAdmin} />
           </div>
           <div>
-            <span className="block text-xs font-medium text-muted-foreground mb-1">기본 프로젝트 키 (선택)</span>
+            <span className="block text-sm font-medium text-muted-foreground mb-1">기본 프로젝트 키 (선택)</span>
             <input className={inputCls} placeholder="PROJ" value={defaultProject}
               onChange={(e) => setDefaultProject(e.target.value)} disabled={!isAdmin} />
           </div>
@@ -143,22 +143,22 @@ export function JiraIntegrationPanel() {
           <KeyRound className="w-4 h-4 text-primary" />
           <h3 className="font-semibold">내 Jira 인증 (Personal Access Token)</h3>
         </div>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           본인 Jira 계정의 PAT 를 등록하면 <b>본인 권한</b>으로 이슈를 가져옵니다. 토큰은 암호화되어 저장되며
           화면에 다시 표시되지 않습니다.
         </p>
 
         <div className="flex items-center gap-2 mb-3">
-          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+          <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
             cred?.configured
               ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
               : 'bg-secondary text-muted-foreground border-border'
           }`}>
             {cred?.configured ? '등록됨' : '미등록'}
           </span>
-          {cred?.jiraAccount && <span className="text-xs text-muted-foreground">계정: {cred.jiraAccount}</span>}
+          {cred?.jiraAccount && <span className="text-sm text-muted-foreground">계정: {cred.jiraAccount}</span>}
           {cred?.lastVerifiedAt && (
-            <span className="text-xs text-muted-foreground">마지막 검증: {new Date(cred.lastVerifiedAt).toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">마지막 검증: {new Date(cred.lastVerifiedAt).toLocaleString()}</span>
           )}
         </div>
 
@@ -187,7 +187,7 @@ export function JiraIntegrationPanel() {
         </div>
 
         {testResult && (
-          <div className={`text-xs mt-3 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 ${
+          <div className={`text-sm mt-3 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 ${
             testResult.ok ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
           }`}>
             {testResult.ok ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}

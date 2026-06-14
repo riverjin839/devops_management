@@ -17,10 +17,20 @@ import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
 import { PodTerminal } from '@/components/k8s/PodTerminal';
 import { EventsStream } from '@/components/k8s/EventsStream';
+import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
 import type {
   K8sResourceRow, K8sResourceCapability, K8sCrdInfo, HelmRelease,
   K8sNodeRichRow, ResourceDetailSection, ResourceDetailKVItem,
+  K8sPodRichRow, K8sCellColor,
 } from '@/types';
+
+// 셀 색상 → Tailwind 클래스
+const CELL_BG: Record<K8sCellColor, string> = {
+  green: 'bg-green-500', amber: 'bg-amber-400', red: 'bg-red-500', gray: 'bg-zinc-400',
+};
+const STATUS_TEXT: Record<K8sCellColor, string> = {
+  green: 'text-green-600', amber: 'text-amber-600', red: 'text-red-500', gray: 'text-muted-foreground',
+};
 
 // ── Lens 식 카테고리 내비 모델 ────────────────────────────────────────────────
 type LeafMode = 'kind' | 'overview' | 'events' | 'helm' | 'crd';
@@ -121,7 +131,7 @@ export function K8sManagePage() {
   const cluster = clusters.find((c) => c.id === clusterId);
 
   const [activeLeaf, setActiveLeaf] = useState('pods');
-  const [nsFilter, setNsFilter] = useState('');
+  const [selectedNs, setSelectedNs] = useState<Set<string>>(new Set()); // 비어있으면 전체
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<DetailTarget | null>(null);
   const [editing, setEditing] = useState(false);
@@ -252,7 +262,7 @@ export function K8sManagePage() {
                     <button
                       key={cat.id}
                       onClick={() => { setActiveLeaf(lf.id); setSelectedCrd(null); }}
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary/60'}`}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-medium ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary/60'}`}
                     >
                       <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                       <span className="truncate">{cat.label}</span>
@@ -261,7 +271,7 @@ export function K8sManagePage() {
                 }
                 return (
                   <div key={cat.id}>
-                    <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
                       <Icon className="w-3 h-3" /> {cat.label}
                     </div>
                     <div className="space-y-0.5">
@@ -273,11 +283,11 @@ export function K8sManagePage() {
                           <button
                             key={lf.id}
                             onClick={() => { setActiveLeaf(lf.id); setSelectedCrd(null); }}
-                            className={`w-full flex items-center gap-1 pl-7 pr-2 py-1 rounded-lg text-xs ${active ? 'bg-primary/15 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary/60'}`}
+                            className={`w-full flex items-center gap-1 pl-7 pr-2 py-1 rounded-lg text-sm ${active ? 'bg-primary/15 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary/60'}`}
                           >
                             <span className="flex-1 text-left truncate">{lf.label}</span>
                             {cnt != null && (
-                              <span className="text-[9px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
+                              <span className="text-[10px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
                             )}
                           </button>
                         );
@@ -293,7 +303,7 @@ export function K8sManagePage() {
         {/* 본문 */}
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <Link to="/cluster-overview" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted">
+            <Link to="/cluster-overview" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted">
               <ArrowLeft className="w-3.5 h-3.5" /> 클러스터 현황
             </Link>
             <h1 className="text-lg font-semibold flex items-center gap-2">
@@ -301,14 +311,14 @@ export function K8sManagePage() {
               {cluster ? cluster.name : '클러스터'} — {leaf.label}
             </h1>
             <RoleGate allow={['admin', 'operator']} fallback={
-              <span className="text-[10px] rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
+              <span className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
             }>
-              <span className="text-[10px] rounded px-1.5 py-0.5 bg-green-500/15 text-green-600">쓰기 가능 (operator)</span>
+              <span className="text-xs rounded px-1.5 py-0.5 bg-green-500/15 text-green-600">쓰기 가능 (operator)</span>
             </RoleGate>
           </div>
 
           {actionMsg && (
-            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${actionMsg.kind === 'ok' ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-600'}`}>
+            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${actionMsg.kind === 'ok' ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-600'}`}>
               {actionMsg.kind === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
               {actionMsg.text}
             </div>
@@ -322,13 +332,26 @@ export function K8sManagePage() {
               onDrain={doDrain}
             />
           )}
-          {leaf.mode === 'kind' && leaf.kind && leaf.kind !== 'nodes' && (
+          {leaf.mode === 'kind' && leaf.kind === 'pods' && (
+            <PodsPanel
+              clusterId={clusterId}
+              caps={caps.pods}
+              selectedNs={selectedNs}
+              setSelectedNs={setSelectedNs}
+              search={search}
+              setSearch={setSearch}
+              onOpenDetail={(row) => { setDetail({ kind: 'k8s', resourceKind: 'pods', namespace: row.namespace || '-', name: row.name, editable: !!caps.pods?.editable }); setEditing(false); }}
+              onDelete={doDelete}
+              onTerminal={(ns, name) => setTerminalPod({ namespace: ns, name })}
+            />
+          )}
+          {leaf.mode === 'kind' && leaf.kind && leaf.kind !== 'nodes' && leaf.kind !== 'pods' && (
             <ResourceTablePanel
               clusterId={clusterId}
               kind={leaf.kind}
               caps={caps[leaf.kind]}
-              nsFilter={nsFilter}
-              setNsFilter={setNsFilter}
+              selectedNs={selectedNs}
+              setSelectedNs={setSelectedNs}
               search={search}
               setSearch={setSearch}
               onOpenDetail={(row, editable) => {
@@ -347,15 +370,7 @@ export function K8sManagePage() {
           {leaf.mode === 'overview' && <OverviewPanel clusterId={clusterId} />}
           {leaf.mode === 'events' && (
             <MacCard title="이벤트 (실시간)">
-              <div className="mb-3">
-                <input
-                  value={nsFilter}
-                  onChange={(e) => setNsFilter(e.target.value)}
-                  placeholder="네임스페이스 필터 (비우면 전체)"
-                  className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs w-64 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <EventsStream clusterId={clusterId} namespace={nsFilter.trim() || undefined} />
+              <EventsStream clusterId={clusterId} selectedNs={selectedNs} onSelectedNsChange={setSelectedNs} />
             </MacCard>
           )}
           {leaf.mode === 'helm' && (
@@ -408,8 +423,8 @@ interface ResourceTablePanelProps {
   clusterId: string;
   kind: string;
   caps?: K8sResourceCapability;
-  nsFilter: string;
-  setNsFilter: (v: string) => void;
+  selectedNs: Set<string>;
+  setSelectedNs: (s: Set<string>) => void;
   search: string;
   setSearch: (v: string) => void;
   onOpenDetail: (row: K8sResourceRow, editable: boolean) => void;
@@ -422,32 +437,41 @@ interface ResourceTablePanelProps {
 }
 
 function ResourceTablePanel(p: ResourceTablePanelProps) {
-  const { clusterId, kind, caps, nsFilter, setNsFilter, search, setSearch } = p;
+  const { clusterId, kind, caps, selectedNs, setSelectedNs, search, setSearch } = p;
   const isNamespaced = caps?.namespaced ?? true;
+  // 단일 선택이면 서버에서 정확히 필터, 다중/전체면 전체 조회 후 클라이언트 필터
+  const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
+  const serverNs = isNamespaced && nsArr.length === 1 ? nsArr[0] : undefined;
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['k8s-mng-list', clusterId, kind, nsFilter],
-    queryFn: async () => (await k8sResourcesApi.list(clusterId, kind, isNamespaced ? (nsFilter.trim() || undefined) : undefined)).data,
+    queryKey: ['k8s-mng-list', clusterId, kind, serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
+    queryFn: async () => (await k8sResourcesApi.list(clusterId, kind, serverNs)).data,
     enabled: !!clusterId,
   });
 
   const filtered = useMemo(() => {
-    const list = data?.items ?? [];
+    let list = data?.items ?? [];
+    if (isNamespaced && selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
     const q = search.trim().toLowerCase();
     if (!q) return list;
-    return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary}`.toLowerCase().includes(q));
-  }, [data, search]);
+    return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary} ${Object.values(r.cols ?? {}).join(' ')}`.toLowerCase().includes(q));
+  }, [data, search, selectedNs, isNamespaced]);
+
+  const columns = data?.columns ?? [];
+  const useSummary = columns.length === 0;
+  const gridTemplate = [
+    'minmax(160px,1.6fr)',
+    isNamespaced ? '130px' : '',
+    ...(useSummary ? ['minmax(120px,1.5fr)'] : columns.map(() => 'minmax(70px,1fr)')),
+    '60px',
+    '170px',
+  ].filter(Boolean).join(' ');
 
   return (
     <MacCard title={kind} bodyPadding="p-0">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
         {isNamespaced && (
-          <input
-            value={nsFilter}
-            onChange={(e) => setNsFilter(e.target.value)}
-            placeholder="네임스페이스"
-            className="rounded-xl border border-border bg-card px-2.5 py-1 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         )}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -455,7 +479,7 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="이름/요약 검색"
-            className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-xs w-48 focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
         <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
@@ -463,8 +487,12 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-[1fr_140px_1fr_60px_220px] gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30">
-        <span>이름</span><span>네임스페이스</span><span>요약</span><span className="text-right">Age</span><span className="text-right pr-2">동작</span>
+      <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={{ gridTemplateColumns: gridTemplate }}>
+        <span>이름</span>
+        {isNamespaced && <span>네임스페이스</span>}
+        {useSummary ? <span>요약</span> : columns.map((c) => <span key={c.key} className="truncate">{c.label}</span>)}
+        <span className="text-right">Age</span>
+        <span className="text-right pr-2">동작</span>
       </div>
 
       {isLoading ? (
@@ -479,26 +507,20 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
           data={filtered}
           itemContent={(_i, r) => {
             const ns = r.namespace || '-';
-            const cordoned = (r.summary || '').includes('SchedulingDisabled');
             return (
-              <div className="grid grid-cols-[1fr_140px_1fr_60px_220px] gap-2 px-4 py-1.5 text-xs border-b border-border/40 hover:bg-secondary/30 items-center">
+              <div className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={{ gridTemplateColumns: gridTemplate }}>
                 <button onClick={() => p.onOpenDetail(r, !!caps?.editable)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
-                <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>
-                <span className="truncate text-muted-foreground">{r.summary}</span>
+                {isNamespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+                {useSummary ? (
+                  <span className="truncate text-muted-foreground">{r.summary}</span>
+                ) : (
+                  columns.map((c) => (
+                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '-'}</span>
+                  ))
+                )}
                 <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
                 <div className="flex items-center justify-end gap-1">
                   <RoleGate allow={['admin', 'operator']}>
-                    {kind === 'pods' && (
-                      <IconBtn title="터미널" onClick={() => p.onTerminal(ns, r.name)}><Terminal className="w-3.5 h-3.5" /></IconBtn>
-                    )}
-                    {kind === 'nodes' && (
-                      <>
-                        <IconBtn title={cordoned ? 'uncordon' : 'cordon'} onClick={() => p.onCordon(r.name, !cordoned)}>
-                          {cordoned ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                        </IconBtn>
-                        <IconBtn title="drain" onClick={() => p.onDrain(r.name)}><Scaling className="w-3.5 h-3.5" /></IconBtn>
-                      </>
-                    )}
                     {caps?.scalable && (
                       <IconBtn title="scale" onClick={() => p.onScale(kind, ns, r.name)}><Scaling className="w-3.5 h-3.5" /></IconBtn>
                     )}
@@ -518,7 +540,7 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
           }}
         />
       )}
-      <div className="px-4 py-1.5 text-[10px] text-muted-foreground border-t border-border">
+      <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
         {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''} · 이름 클릭 시 상세/YAML
       </div>
     </MacCard>
@@ -555,7 +577,7 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
   const Stat = ({ label, value, sub }: { label: string; value: string | number; sub?: string }) => (
     <MacCard title={label}>
       <div className="text-3xl font-bold tabular-nums">{value}</div>
-      {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
+      {sub && <div className="text-sm text-muted-foreground mt-1">{sub}</div>}
     </MacCard>
   );
 
@@ -578,7 +600,7 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
   });
   return (
     <MacCard title="Helm Releases" bodyPadding="p-0">
-      <div className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30">
+      <div className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
         <span>이름</span><span>네임스페이스</span><span>rev</span><span>차트</span><span className="text-right pr-2">values</span>
       </div>
       {isLoading ? (
@@ -589,7 +611,7 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
         <div className="p-10 text-center text-sm text-muted-foreground">Helm 릴리스가 없습니다.</div>
       ) : (
         data!.items.map((r) => (
-          <div key={`${r.namespace}/${r.name}`} className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-xs border-b border-border/40 items-center">
+          <div key={`${r.namespace}/${r.name}`} className="grid grid-cols-[1fr_140px_70px_1fr_90px] gap-2 px-4 py-1.5 text-sm border-b border-border/40 items-center">
             <span className="truncate font-medium">{r.name}</span>
             <span className="truncate text-muted-foreground">{r.namespace}</span>
             <span className="text-muted-foreground">{r.revision}</span>
@@ -628,7 +650,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
     return (
       <MacCard title={`${selectedCrd.kind} (${selectedCrd.group})`} bodyPadding="p-0">
         <div className="px-4 py-2 border-b border-border">
-          <button onClick={() => setSelectedCrd(null)} className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
+          <button onClick={() => setSelectedCrd(null)} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
             <ArrowLeft className="w-3.5 h-3.5" /> CRD 목록
           </button>
         </div>
@@ -641,7 +663,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
         ) : (
           objects.data!.items.map((r) => (
             <button key={`${r.namespace}/${r.name}`} onClick={() => onOpenObject(selectedCrd, r)}
-              className="w-full grid grid-cols-[1fr_160px_1fr] gap-2 px-4 py-1.5 text-xs text-left border-b border-border/40 hover:bg-secondary/30">
+              className="w-full grid grid-cols-[1fr_160px_1fr] gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30">
               <span className="truncate font-medium">{r.name}</span>
               <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>
               <span className="truncate text-muted-foreground">{r.summary}</span>
@@ -654,7 +676,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
 
   return (
     <MacCard title="Custom Resource Definitions" bodyPadding="p-0">
-      <div className="grid grid-cols-[1fr_1fr_90px] gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30">
+      <div className="grid grid-cols-[1fr_1fr_90px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
         <span>Kind</span><span>Group</span><span>Scope</span>
       </div>
       {crds.isLoading ? (
@@ -666,7 +688,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
       ) : (
         crds.data!.items.map((c) => (
           <button key={c.name} onClick={() => setSelectedCrd(c)}
-            className="w-full grid grid-cols-[1fr_1fr_90px] gap-2 px-4 py-1.5 text-xs text-left border-b border-border/40 hover:bg-secondary/30">
+            className="w-full grid grid-cols-[1fr_1fr_90px] gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30">
             <span className="truncate font-medium">{c.kind}</span>
             <span className="truncate text-muted-foreground">{c.group}</span>
             <span className="text-muted-foreground">{c.scope}</span>
@@ -713,17 +735,17 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
           </span>
           {detail.editable && detail.kind === 'k8s' && !editing && (
             <RoleGate allow={['admin', 'operator']}>
-              <button onClick={() => onStartEdit(yamlText)} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-secondary">
+              <button onClick={() => onStartEdit(yamlText)} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs hover:bg-secondary">
                 <Pencil className="w-3 h-3" /> 편집
               </button>
             </RoleGate>
           )}
           {editing && (
             <div className="ml-auto flex items-center gap-1.5">
-              <button onClick={onApply} className="inline-flex items-center gap-1 rounded-lg bg-primary text-primary-foreground px-2.5 py-1 text-[11px]">
+              <button onClick={onApply} className="inline-flex items-center gap-1 rounded-lg bg-primary text-primary-foreground px-2.5 py-1 text-xs">
                 <Save className="w-3 h-3" /> 적용
               </button>
-              <button onClick={onCancelEdit} className="rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-secondary">취소</button>
+              <button onClick={onCancelEdit} className="rounded-lg border border-border px-2 py-1 text-xs hover:bg-secondary">취소</button>
             </div>
           )}
           <button onClick={onClose} className={`${editing || (detail.editable && detail.kind === 'k8s') ? '' : 'ml-auto'} text-muted-foreground hover:text-foreground`} aria-label="닫기">
@@ -740,12 +762,12 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
               <Tabs.List className="flex gap-1 mb-3 border-b border-border">
                 {hasSections && (
                   <Tabs.Trigger value="summary" disabled={editing}
-                    className="px-3 py-1.5 text-xs font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground disabled:opacity-40">
+                    className="px-3 py-1.5 text-sm font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground disabled:opacity-40">
                     요약
                   </Tabs.Trigger>
                 )}
                 <Tabs.Trigger value="yaml"
-                  className="px-3 py-1.5 text-xs font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground">
+                  className="px-3 py-1.5 text-sm font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground">
                   YAML
                 </Tabs.Trigger>
               </Tabs.List>
@@ -760,7 +782,7 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     spellCheck={false}
-                    className="w-full h-[78vh] font-mono text-xs rounded-xl border border-border bg-background p-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full h-[78vh] font-mono text-sm rounded-xl border border-border bg-background p-3 focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 ) : (
                   <LogViewer text={yamlText} maxHeight="max-h-[80vh]" />
@@ -780,10 +802,10 @@ function SectionsView({ sections }: { sections: ResourceDetailSection[] }) {
     <div className="space-y-4 max-h-[80vh] overflow-auto pr-1">
       {sections.map((s, i) => (
         <div key={i} className="rounded-xl border border-border overflow-hidden">
-          <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40 border-b border-border">
+          <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40 border-b border-border">
             {s.title}
           </div>
-          <div className="p-3 text-xs">
+          <div className="p-3 text-sm">
             {s.type === 'text' && <span className="text-muted-foreground">{s.text}</span>}
             {s.type === 'list' && (
               <ul className="space-y-1">
@@ -827,12 +849,12 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
   return (
     <MacCard title="Nodes" bodyPadding="p-0">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <span className="text-xs text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
+        <span className="text-sm text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
         <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
           <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      <div className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-[10px] font-semibold text-muted-foreground border-b border-border bg-secondary/30">
+      <div className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
         <span>이름</span><span>Roles</span><span>Version</span><span>Taints</span><span>CPU</span><span>Memory</span><span className="text-right">Age</span><span className="text-right pr-2">동작</span>
       </div>
       {isLoading ? (
@@ -846,11 +868,11 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
           const ready = n.conditions.includes('Ready');
           const warn = n.conditions.filter((c) => c !== 'Ready');
           return (
-            <div key={n.name} className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-xs border-b border-border/40 hover:bg-secondary/30 items-center">
+            <div key={n.name} className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center">
               <button onClick={() => onOpenDetail(n.name)} className="truncate font-medium text-left hover:text-primary flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${ready ? 'bg-green-500' : 'bg-red-500'}`} />
                 <span className="truncate">{n.name}</span>
-                {n.unschedulable && <span className="text-[9px] rounded px-1 bg-amber-500/15 text-amber-600">cordoned</span>}
+                {n.unschedulable && <span className="text-[10px] rounded px-1 bg-amber-500/15 text-amber-600">cordoned</span>}
               </button>
               <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>
               <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>
@@ -859,7 +881,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
               <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>
               <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>
               <div className="flex items-center justify-end gap-1">
-                {warn.length > 0 && <span className="text-[9px] text-amber-600 mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
+                {warn.length > 0 && <span className="text-[10px] text-amber-600 mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
                 <RoleGate allow={['admin', 'operator']}>
                   <IconBtn title={n.unschedulable ? 'uncordon' : 'cordon'} onClick={() => onCordon(n.name, !n.unschedulable)}>
                     {n.unschedulable ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
@@ -871,6 +893,103 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
           );
         })
       )}
+    </MacCard>
+  );
+}
+
+// ── Pods 패널 (Lens 식 컬럼 + 색표현) ─────────────────────────────────────────
+interface PodsPanelProps {
+  clusterId: string;
+  caps?: K8sResourceCapability;
+  selectedNs: Set<string>;
+  setSelectedNs: (s: Set<string>) => void;
+  search: string;
+  setSearch: (v: string) => void;
+  onOpenDetail: (row: K8sPodRichRow) => void;
+  onDelete: (kind: string, ns: string, name: string) => void;
+  onTerminal: (ns: string, name: string) => void;
+}
+function PodsPanel(p: PodsPanelProps) {
+  const { clusterId, selectedNs, setSelectedNs, search, setSearch } = p;
+  const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
+  const serverNs = nsArr.length === 1 ? nsArr[0] : undefined;
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['k8s-mng-list', clusterId, 'pods', serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
+    queryFn: async () => (await k8sResourcesApi.richPods(clusterId, serverNs)).data,
+    enabled: !!clusterId,
+  });
+  const filtered = useMemo(() => {
+    let list = data?.items ?? [];
+    if (selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.phase} ${r.node ?? ''} ${r.controlledBy ?? ''}`.toLowerCase().includes(q));
+  }, [data, search, selectedNs]);
+
+  const COLS = 'grid-cols-[1.6fr_110px_90px_56px_1fr_110px_72px_50px_110px_90px]';
+
+  return (
+    <MacCard title="Pods" bodyPadding="p-0">
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
+        <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이름/노드/소유자 검색"
+            className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-primary" />
+        </div>
+        <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      <div className={`grid ${COLS} gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30`}>
+        <span>이름</span><span>네임스페이스</span><span>컨테이너</span><span>재시작</span><span>Controlled By</span><span>노드</span><span>QoS</span><span className="text-right">Age</span><span>상태</span><span className="text-right pr-2">동작</span>
+      </div>
+      {isLoading ? (
+        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+      ) : isError ? (
+        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-10 text-center text-sm text-muted-foreground">표시할 파드가 없습니다.</div>
+      ) : (
+        <Virtuoso
+          style={{ height: '64vh' }}
+          data={filtered}
+          itemContent={(_i, r) => {
+            const ns = r.namespace || '-';
+            return (
+              <div className={`grid ${COLS} gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center`}>
+                <button onClick={() => p.onOpenDetail(r)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
+                <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>
+                <span className="flex items-center gap-0.5" title={r.containers.map((c) => `${c.name}: ${c.state}${c.reason ? ` (${c.reason})` : ''}`).join('\n')}>
+                  {r.containers.slice(0, 12).map((c, j) => (
+                    <span key={j} className={`w-2.5 h-2.5 rounded-sm ${CELL_BG[c.color]}`} />
+                  ))}
+                  <span className="ml-1 text-xs text-muted-foreground tabular-nums">{r.ready}</span>
+                </span>
+                <span className={`tabular-nums ${r.restarts > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>
+                <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '-'}</span>
+                <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '-'}</span>
+                <span className="truncate text-muted-foreground">{r.qos ?? '-'}</span>
+                <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
+                <span className={`truncate font-medium ${STATUS_TEXT[r.statusColor]}`} title={r.phase}>
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${CELL_BG[r.statusColor]}`} />{r.phase}
+                </span>
+                <div className="flex items-center justify-end gap-1">
+                  <RoleGate allow={['admin', 'operator']}>
+                    <IconBtn title="터미널" onClick={() => p.onTerminal(ns, r.name)}><Terminal className="w-3.5 h-3.5" /></IconBtn>
+                    {p.caps?.deletable && (
+                      <IconBtn title="삭제" danger onClick={() => p.onDelete('pods', ns, r.name)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+                    )}
+                  </RoleGate>
+                </div>
+              </div>
+            );
+          }}
+        />
+      )}
+      <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
+        {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''} · 컨테이너 색칸: 초록=실행/정상, 노랑=대기/준비안됨, 빨강=오류, 회색=종료/대기
+      </div>
     </MacCard>
   );
 }

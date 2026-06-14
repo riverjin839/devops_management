@@ -529,6 +529,13 @@ def stream_cluster_events(
     def _evt_payload(ev_type: str, obj) -> str:
         io = getattr(obj, "involved_object", None)
         ts = getattr(obj, "last_timestamp", None) or getattr(obj, "event_time", None)
+        first = getattr(obj, "first_timestamp", None)
+        src = getattr(obj, "source", None)
+        source = None
+        if src is not None:
+            source = getattr(src, "component", None) or getattr(src, "host", None)
+        if not source:
+            source = getattr(obj, "reporting_component", None) or None
         payload = {
             "watchType": ev_type,
             "type": getattr(obj, "type", None),  # Normal | Warning
@@ -537,7 +544,9 @@ def stream_cluster_events(
             "namespace": getattr(obj.metadata, "namespace", None) if obj.metadata else None,
             "involvedKind": getattr(io, "kind", None) if io else None,
             "involvedName": getattr(io, "name", None) if io else None,
+            "source": source,
             "count": getattr(obj, "count", None),
+            "firstTimestamp": first.isoformat() if first else None,
             "lastTimestamp": ts.isoformat() if ts else None,
         }
         return json.dumps(payload, ensure_ascii=False)

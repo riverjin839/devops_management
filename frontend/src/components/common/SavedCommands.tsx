@@ -75,7 +75,7 @@ export function SavedCommands({
   return (
     <div className={className}>
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-xs text-muted-foreground flex items-center gap-1">
+        <p className="text-sm text-muted-foreground flex items-center gap-1">
           <Star className="w-3 h-3" />
           저장된 명령 <span className="opacity-60">({items.length})</span>
         </p>
@@ -83,7 +83,7 @@ export function SavedCommands({
           <button
             onClick={() => setAdding(true)}
             disabled={!canSave || !currentValue.trim()}
-            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
             title={!currentValue.trim() ? '먼저 명령을 입력하세요' : '현재 입력된 명령 저장'}
           >
             <Save className="w-3 h-3" />
@@ -103,7 +103,7 @@ export function SavedCommands({
               if (e.key === 'Escape') { setAdding(false); setNameInput(''); }
             }}
             placeholder="저장할 이름 (예: 'pod crashloop 체크')"
-            className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+            className="flex-1 px-2 py-1 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <button onClick={add} disabled={!nameInput.trim()}
             className="p-1 rounded bg-primary text-primary-foreground disabled:opacity-40">
@@ -117,7 +117,7 @@ export function SavedCommands({
       )}
 
       {items.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground/70 italic py-1">
+        <p className="text-xs text-muted-foreground/70 italic py-1">
           저장된 명령이 없습니다. 자주 쓰는 명령을 저장하면 다음에 클릭 한 번으로 불러올 수 있어요.
         </p>
       ) : (
@@ -127,7 +127,7 @@ export function SavedCommands({
               <button
                 onClick={() => onPick(it.value)}
                 title={it.value}
-                className="px-2 py-1 text-[11px] font-medium hover:bg-secondary max-w-[240px] truncate"
+                className="px-2 py-1 text-xs font-medium hover:bg-secondary max-w-[240px] truncate"
               >
                 {it.name}
               </button>

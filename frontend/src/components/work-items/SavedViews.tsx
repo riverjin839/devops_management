@@ -81,7 +81,7 @@ export function SavedViews({ current, onApply }: SavedViewsProps) {
         onChange={(e) => apply(e.target.value)}
         aria-label="저장된 뷰"
         title="저장된 뷰 적용"
-        className="px-2.5 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 max-w-[140px]"
+        className="px-2.5 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 max-w-[140px]"
       >
         <option value="">저장된 뷰</option>
         {views.map((v) => (

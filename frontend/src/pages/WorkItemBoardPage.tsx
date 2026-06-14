@@ -48,7 +48,7 @@ function TypeFilterDropdown({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
+        className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
           active ? `${current!.cls} border-current` : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
         }`}
       >
@@ -63,7 +63,7 @@ function TypeFilterDropdown({
             <button
               type="button"
               onClick={() => { onChange('all'); setOpen(false); }}
-              className={`w-full text-left px-2 py-1.5 rounded-md text-xs inline-flex items-center gap-1.5 transition-colors ${
+              className={`w-full text-left px-2 py-1.5 rounded-md text-sm inline-flex items-center gap-1.5 transition-colors ${
                 value === 'all' ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'
               }`}
             >
@@ -76,7 +76,7 @@ function TypeFilterDropdown({
                   key={key}
                   type="button"
                   onClick={() => { onChange(key); setOpen(false); }}
-                  className={`w-full text-left px-2 py-1.5 rounded-md text-xs inline-flex items-center gap-1.5 transition-colors ${
+                  className={`w-full text-left px-2 py-1.5 rounded-md text-sm inline-flex items-center gap-1.5 transition-colors ${
                     value === key ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'
                   }`}
                 >
@@ -367,11 +367,11 @@ export function WorkItemBoardPage() {
             <h1 className="text-xl font-bold">업무 관리 게시판</h1>
             {items.length > 0 && (
               <div className="flex items-center gap-2 ml-4">
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+                <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
                   전체 {items.length}
                 </span>
                 {inProgressCount > 0 && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                  <span className={`text-sm px-2 py-0.5 rounded-full border ${
                     inProgressCount >= 2
                       ? 'bg-red-500/15 text-red-400 border-red-500/30'
                       : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
@@ -381,7 +381,7 @@ export function WorkItemBoardPage() {
                   </span>
                 )}
                 {doneCount > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                     Done {doneCount}
                   </span>
                 )}
@@ -445,7 +445,7 @@ export function WorkItemBoardPage() {
               onChange={(e) => setFilterAssignee(e.target.value)}
               placeholder="담당자"
               aria-label="담당자 필터"
-              className="w-24 px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+              className="w-24 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             />
             <input
               type="text"
@@ -453,13 +453,13 @@ export function WorkItemBoardPage() {
               onChange={(e) => setFilterCategory(e.target.value)}
               placeholder="분류"
               aria-label="분류 필터"
-              className="w-24 px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+              className="w-24 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             />
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
               aria-label="우선순위 필터"
-              className="px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+              className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             >
               <option value="">우선순위</option>
               <option value="high">높음</option>
@@ -470,7 +470,7 @@ export function WorkItemBoardPage() {
               value={filterModule}
               onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}
               aria-label="모듈 필터"
-              className="px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+              className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             >
               <option value="">전체 모듈</option>
               {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
@@ -482,7 +482,7 @@ export function WorkItemBoardPage() {
                 value={filterSprintId}
                 onChange={(e) => setFilterSprintId(e.target.value)}
                 aria-label="스프린트 필터"
-                className="px-3 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+                className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
               >
                 <option value="">전체 스프린트</option>
                 {sprintList.map((s) => (
@@ -496,23 +496,23 @@ export function WorkItemBoardPage() {
               onChange={(e) => setFilterFrom(e.target.value)}
               aria-label="시작일 (이후)"
               title="시작일 (이후)"
-              className="px-2 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+              className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
             />
-            <span className="text-muted-foreground text-xs">~</span>
+            <span className="text-muted-foreground text-sm">~</span>
             <input
               type="date"
               value={filterTo}
               onChange={(e) => setFilterTo(e.target.value)}
               aria-label="시작일 (이전)"
               title="시작일 (이전)"
-              className="px-2 py-1.5 text-xs bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+              className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
             />
             {hasFilters && (
               <button
                 type="button"
                 onClick={clearFilters}
                 aria-label="필터 초기화"
-                className="px-2 py-1.5 text-xs rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                className="px-2 py-1.5 text-sm rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
               >
                 <X className="w-3 h-3" />
                 초기화
@@ -523,7 +523,7 @@ export function WorkItemBoardPage() {
               type="button"
               onClick={() => setCustomFieldsOpen(true)}
               title="업무 사용자 정의 필드 관리"
-              className="px-2.5 py-1.5 text-xs rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+              className="px-2.5 py-1.5 text-sm rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
             >
               <Settings2 className="w-3.5 h-3.5" /> 필드
             </button>
@@ -542,7 +542,7 @@ export function WorkItemBoardPage() {
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-medium">업무 목록 조회 실패</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
+              <div className="text-sm text-muted-foreground mt-0.5">
                 {error instanceof Error ? error.message : 'API 호출 중 오류'} — 페이지를 새로고침하거나 잠시 후 다시 시도하세요.
               </div>
             </div>

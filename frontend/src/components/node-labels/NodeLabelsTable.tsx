@@ -59,9 +59,9 @@ function NodeView({
             const labelEntries = Object.entries(node.labels);
             return (
               <tr key={node.name} className="border-t border-border align-top hover:bg-muted/10 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs font-medium">{node.name}</td>
+                <td className="px-4 py-3 font-mono text-sm font-medium">{node.name}</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                  <span className={`px-2 py-0.5 text-sm rounded-full font-medium ${
                     node.role === 'control-plane'
                       ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                       : 'bg-secondary text-muted-foreground border border-border'
@@ -70,7 +70,7 @@ function NodeView({
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                  <span className={`px-2 py-0.5 text-sm rounded-full font-medium ${
                     node.status === 'ready'
                       ? 'bg-green-500/10 text-green-400 border border-green-500/20'
                       : 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -89,7 +89,7 @@ function NodeView({
                       return (
                         <span
                           key={k}
-                          className={`px-2 py-0.5 text-xs rounded border font-mono ${
+                          className={`px-2 py-0.5 text-sm rounded border font-mono ${
                             isHighlighted
                               ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
                               : 'bg-secondary border-border text-muted-foreground'
@@ -100,7 +100,7 @@ function NodeView({
                       );
                     })}
                     {labelEntries.length > 15 && (
-                      <span className="px-2 py-0.5 text-xs text-muted-foreground">
+                      <span className="px-2 py-0.5 text-sm text-muted-foreground">
                         +{labelEntries.length - 15} more
                       </span>
                     )}
@@ -109,7 +109,7 @@ function NodeView({
                 <td className="px-4 py-3">
                   <button
                     onClick={() => onEdit(node)}
-                    className="px-2 py-1 rounded bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1 text-xs hover:bg-primary/20 transition-colors"
+                    className="px-2 py-1 rounded bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1 text-sm hover:bg-primary/20 transition-colors"
                   >
                     <Pencil className="w-3 h-3" /> Edit
                   </button>
@@ -204,10 +204,10 @@ function LabelView({
               entry.key.includes('kubernetes.io') || entry.key.includes('k8s.io');
             return (
               <tr key={entry.tag} className="border-t border-border align-middle hover:bg-muted/10 transition-colors">
-                <td className="px-4 py-3 text-xs text-muted-foreground">{idx + 1}</td>
+                <td className="px-4 py-3 text-sm text-muted-foreground">{idx + 1}</td>
                 <td className="px-4 py-3">
                   <span
-                    className={`px-2 py-0.5 text-xs rounded border font-mono ${
+                    className={`px-2 py-0.5 text-sm rounded border font-mono ${
                       isHighlighted
                         ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
                         : isSystem
@@ -219,7 +219,7 @@ function LabelView({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground font-medium">
+                  <span className="px-2 py-0.5 text-sm rounded-full bg-secondary text-muted-foreground font-medium">
                     {entry.nodes.length}
                   </span>
                 </td>
@@ -228,7 +228,7 @@ function LabelView({
                     {entry.nodes.map((nodeName) => (
                       <span
                         key={nodeName}
-                        className={`px-2 py-0.5 text-xs rounded border font-mono ${
+                        className={`px-2 py-0.5 text-sm rounded border font-mono ${
                           searchQuery && nodeName.toLowerCase().includes(searchQuery.toLowerCase())
                             ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
                             : 'bg-secondary border-border text-foreground'

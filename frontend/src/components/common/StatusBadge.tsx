@@ -53,8 +53,8 @@ function StatusBadgeBase({
   const Icon = iconOverride ?? meta.icon;
   const displayLabel = label ?? meta.defaultLabel;
   const sizeCls = size === 'md'
-    ? 'text-xs px-2 py-0.5'
-    : 'text-[11px] px-1.5 py-0.5';
+    ? 'text-sm px-2 py-0.5'
+    : 'text-xs px-1.5 py-0.5';
   const iconCls = size === 'md' ? 'w-3.5 h-3.5' : 'w-3 h-3';
 
   return (

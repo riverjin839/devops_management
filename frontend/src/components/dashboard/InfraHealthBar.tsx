@@ -20,13 +20,13 @@ export function InfraHealthBar() {
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-card/80 border-b border-border flex-wrap">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mr-1">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1">
         인프라 현황
       </span>
 
       <Link
         to="/cluster-overview"
-        className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-border hover:border-primary/40 transition-colors text-[11px]"
+        className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-border hover:border-primary/40 transition-colors text-xs"
       >
         <Server className="w-3 h-3 text-muted-foreground" />
         <span className="text-muted-foreground">클러스터</span>
@@ -34,7 +34,7 @@ export function InfraHealthBar() {
       </Link>
 
       {healthy > 0 && (
-        <span className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400">
+        <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
           <CheckCircle2 className="w-3 h-3" />
           <span className="tabular-nums">{healthy}</span>
           <span className="text-muted-foreground">정상</span>
@@ -43,7 +43,7 @@ export function InfraHealthBar() {
       {warning > 0 && (
         <Link
           to="/cluster-overview"
-          className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 hover:underline"
+          className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline"
         >
           <AlertTriangle className="w-3 h-3" />
           <span className="tabular-nums">{warning}</span>
@@ -53,7 +53,7 @@ export function InfraHealthBar() {
       {critical > 0 && (
         <Link
           to="/cluster-overview"
-          className="flex items-center gap-1 text-[11px] text-red-600 dark:text-red-400 hover:underline"
+          className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 hover:underline"
         >
           <XCircle className="w-3 h-3" />
           <span className="tabular-nums">{critical}</span>
@@ -64,7 +64,7 @@ export function InfraHealthBar() {
       {totalNodes > 0 && (
         <Link
           to="/node-specs"
-          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-border hover:border-primary/40 transition-colors text-[11px] ml-1"
+          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-border hover:border-primary/40 transition-colors text-xs ml-1"
         >
           <Cpu className="w-3 h-3 text-muted-foreground" />
           <span className="text-muted-foreground">노드</span>

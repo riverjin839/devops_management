@@ -18,7 +18,7 @@ export function ProbeAxisBadge({ axis }: ProbeAxisBadgeProps) {
   const Icon = meta.icon;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${meta.cls}`}
       aria-label={`Axis: ${meta.label}`}
     >
       <Icon className="w-3 h-3" />

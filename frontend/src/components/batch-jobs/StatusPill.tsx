@@ -18,7 +18,7 @@ const STATUS_META: Record<string, StatusMeta> = {
 
 interface StatusPillProps {
   status: string;
-  /** 기본 사이즈 mini(text-[11px]) — 표 / 슬라이드오버용. */
+  /** 기본 사이즈 mini(text-xs) — 표 / 슬라이드오버용. */
   size?: 'mini' | 'sm';
   className?: string;
 }
@@ -26,7 +26,7 @@ interface StatusPillProps {
 export function StatusPill({ status, size = 'mini', className = '' }: StatusPillProps) {
   const meta = STATUS_META[status] ?? STATUS_META.unknown;
   const { Icon } = meta;
-  const sizeCls = size === 'mini' ? 'text-[11px] px-2 py-0.5' : 'text-xs px-2.5 py-1';
+  const sizeCls = size === 'mini' ? 'text-xs px-2 py-0.5' : 'text-sm px-2.5 py-1';
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border font-medium ${sizeCls} ${meta.cls} ${className}`}>
       <Icon className="w-3 h-3" />

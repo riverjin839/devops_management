@@ -77,19 +77,19 @@ export function OpsNoteDetailPage() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">{pageTitle}</span>
+          <span className="text-sm text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
             {!editMode && (
               <>
                 <button
                   onClick={() => navigate(`/ops-notes/${note.id}/edit`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
                 >
                   <Pencil className="w-3.5 h-3.5" /> 수정
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>

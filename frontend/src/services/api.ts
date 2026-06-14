@@ -1555,6 +1555,8 @@ export const k8sResourcesApi = {
     api.get<import('@/types').KindAvailabilityResponse>(`/k8s/${clusterId}/kind-availability`, { timeout: 60_000 }),
   richNodes: (clusterId: string) =>
     api.get<import('@/types').K8sNodesResponse>(`/k8s/${clusterId}/nodes`, { timeout: 60_000 }),
+  richPods: (clusterId: string, namespace?: string) =>
+    api.get<import('@/types').K8sPodsResponse>(`/k8s/${clusterId}/pods`, { params: namespace ? { namespace } : undefined, timeout: 120_000 }),
   scale: (clusterId: string, kind: string, namespace: string, name: string, replicas: number) =>
     api.post<import('@/types').K8sWriteResult>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/scale`,
@@ -1626,6 +1628,26 @@ export const k8sStreamUrls = {
     if (token) p.set('token', token);
     return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/exec?${p.toString()}`;
   },
+};
+
+// ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
+export const metricTrendApi = {
+  get: (clusterId: string, date?: string) =>
+    api.get<import('@/types').MetricTrendResponse>(`/metric-trend/${clusterId}`, { params: date ? { date } : undefined }),
+  snapshot: (clusterId: string) =>
+    api.post<{ ok: boolean; snapshotId: string; counts: Record<string, number>; collectedAt: string }>(
+      `/metric-trend/${clusterId}/snapshot`, {}, { timeout: 120_000 }),
+  check: (clusterId: string, itemKey: string, isChecked: boolean, date?: string, note?: string) =>
+    api.put(`/metric-trend/${clusterId}/check`, { itemKey, isChecked, date, note }),
+  editSnapshot: (snapshotId: string, counts: Record<string, number>) =>
+    api.put(`/metric-trend/snapshots/${snapshotId}`, { counts }),
+  listItems: (clusterId?: string) =>
+    api.get<{ items: import('@/types').MetricChecklistItemT[] }>(`/metric-trend/items/all`, { params: clusterId ? { cluster_id: clusterId } : undefined }),
+  createItem: (body: Partial<import('@/types').MetricChecklistItemT>) =>
+    api.post<import('@/types').MetricChecklistItemT>(`/metric-trend/items`, body),
+  updateItem: (id: string, body: Partial<import('@/types').MetricChecklistItemT>) =>
+    api.put<import('@/types').MetricChecklistItemT>(`/metric-trend/items/${id}`, body),
+  deleteItem: (id: string) => api.delete(`/metric-trend/items/${id}`),
 };
 
 export default api;

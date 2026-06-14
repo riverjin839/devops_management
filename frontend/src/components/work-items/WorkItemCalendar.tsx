@@ -138,7 +138,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
           {!isCurrentMonth && (
             <button
               onClick={goToToday}
-              className="text-xs px-2 py-0.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+              className="text-sm px-2 py-0.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
             >
               오늘
             </button>
@@ -159,7 +159,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
         {DAY_NAMES.map((name, i) => (
           <div
             key={name}
-            className={`text-center text-xs font-medium py-2 border-r border-b border-border ${
+            className={`text-center text-sm font-medium py-2 border-r border-b border-border ${
               i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-muted-foreground'
             }`}
           >
@@ -190,7 +190,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                   {/* Date number + add button */}
                   <div className="px-1.5 pt-1.5 mb-1 flex items-center justify-between">
                     <div
-                      className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${
+                      className={`text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full ${
                         isToday(day)
                           ? 'bg-primary text-primary-foreground font-bold'
                           : colIdx === 0
@@ -230,7 +230,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                       return (
                         <button
                           key={item.id}
-                          className={`w-full h-[18px] flex items-center px-1.5 text-[9px] text-white truncate cursor-pointer
+                          className={`w-full h-[18px] flex items-center px-1.5 text-[10px] text-white truncate cursor-pointer
                             focus:outline-none transition-opacity hover:brightness-110
                             ${color} ${barClass} ${isDone ? 'opacity-50' : ''}`}
                           onClick={(e) => { e.stopPropagation(); onItemClick(item); }}
@@ -246,7 +246,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                       );
                     })}
                     {dayBars.length > MAX_BARS && (
-                      <p className="text-[9px] text-muted-foreground pl-2">
+                      <p className="text-[10px] text-muted-foreground pl-2">
                         +{dayBars.length - MAX_BARS}개
                       </p>
                     )}
@@ -260,20 +260,20 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
 
       {/* Legend */}
       <div className="flex items-center gap-4 mt-3 px-1 flex-wrap">
-        <span className="text-xs text-muted-foreground">우선순위:</span>
+        <span className="text-sm text-muted-foreground">우선순위:</span>
         {(['high', 'medium', 'low'] as const).map((p) => (
-          <span key={p} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span key={p} className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <span className={`w-2 h-2 rounded-full ${PRIORITY_BAR_COLORS[p]}`} />
             {PRIORITY_LABELS[p]}
           </span>
         ))}
-        <span className="text-xs text-muted-foreground ml-1">|</span>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground ml-1">|</span>
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <span className="w-2 h-2 rounded-full bg-slate-500 opacity-50" />
           완료된 작업
         </span>
-        <span className="text-xs text-muted-foreground ml-1">|</span>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground ml-1">|</span>
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <span className="inline-block w-8 h-2 bg-blue-500 rounded-full" />
           기간 표시 (예정일 → 완료일)
         </span>
@@ -294,43 +294,43 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                   ${PRIORITY_BAR_COLORS[tooltip.item.priority] ?? 'bg-slate-500'}
                   ${tooltip.item.closedAt ? 'opacity-40' : ''}`}
               />
-              <p className="text-xs font-medium leading-tight line-clamp-2 text-foreground">
+              <p className="text-sm font-medium leading-tight line-clamp-2 text-foreground">
                 {tooltip.item.content}
               </p>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">담당자</span>
-                <span className="text-xs font-medium text-foreground truncate">{tooltip.item.assignee}</span>
+                <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">담당자</span>
+                <span className="text-sm font-medium text-foreground truncate">{tooltip.item.assignee}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">대상 클러스터</span>
-                <span className="text-xs text-foreground truncate">{tooltip.item.clusterName || '-'}</span>
+                <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">대상 클러스터</span>
+                <span className="text-sm text-foreground truncate">{tooltip.item.clusterName || '-'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">작업 분류</span>
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 truncate">
+                <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">작업 분류</span>
+                <span className="text-sm px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 truncate">
                   {tooltip.item.category}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">예정일</span>
-                <span className="text-xs text-foreground font-mono">
+                <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">예정일</span>
+                <span className="text-sm text-foreground font-mono">
                   {tooltip.item.startedAt.slice(0, 10)}
                 </span>
               </div>
               {tooltip.item.closedAt && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-[68px] flex-shrink-0">완료일</span>
-                  <span className="text-xs text-emerald-400 font-mono">
+                  <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">완료일</span>
+                  <span className="text-sm text-emerald-400 font-mono">
                     {tooltip.item.closedAt.slice(0, 10)}
                   </span>
                 </div>
               )}
             </div>
 
-            <p className="text-[10px] text-muted-foreground/50 mt-2 pt-1.5 border-t border-border/40">
+            <p className="text-xs text-muted-foreground/50 mt-2 pt-1.5 border-t border-border/40">
               클릭하여 상세보기
             </p>
           </div>
@@ -393,7 +393,7 @@ function CalendarRegisterPanel({ date, onClose, onSaved }: CalendarRegisterPanel
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-border bg-muted/30 flex-shrink-0">
           <div>
             <p className="text-sm font-semibold">업무 등록</p>
-            <p className="text-[11px] text-muted-foreground">{dateLabel}</p>
+            <p className="text-xs text-muted-foreground">{dateLabel}</p>
           </div>
           <button
             type="button"

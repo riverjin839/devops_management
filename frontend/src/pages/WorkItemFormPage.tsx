@@ -55,9 +55,9 @@ export function WorkItemFormPage() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <ListTodo className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">{pageTitle}</span>
+          <span className="text-sm text-muted-foreground">{pageTitle}</span>
           {parentItem && (
-            <span className="ml-2 text-xs text-muted-foreground/80 truncate max-w-[400px]">
+            <span className="ml-2 text-sm text-muted-foreground/80 truncate max-w-[400px]">
               ↳ 상위:&nbsp;
               <span className="text-foreground/80">
                 {parentItem.content.replace(/<[^>]*>/g, '').slice(0, 60)}

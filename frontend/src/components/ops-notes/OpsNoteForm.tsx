@@ -101,7 +101,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
                 key={s.value}
                 type="button"
                 onClick={() => setService(s.value)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full border transition-colors ${
                   service === s.value
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background border-border text-muted-foreground hover:border-primary/50'
@@ -178,7 +178,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
         <div>
           <label htmlFor={f('back')} className={labelCls}>
             <History className="inline-block w-3.5 h-3.5 mr-1 -mt-0.5 text-muted-foreground" />
-            상세 / 히스토리 <span className="text-muted-foreground font-normal text-xs">(선택)</span>
+            상세 / 히스토리 <span className="text-muted-foreground font-normal text-sm">(선택)</span>
           </label>
           <div id={f('back')}>
             <RichTextEditor

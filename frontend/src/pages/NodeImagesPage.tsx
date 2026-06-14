@@ -111,7 +111,7 @@ export function NodeImagesPage() {
                     type="button"
                     onClick={() => setView(t.id)}
                     title={t.tip}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -141,7 +141,7 @@ export function NodeImagesPage() {
                     {extractErrorMessage(nodesErrorDetail)}
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
                 </p>
               </div>
@@ -165,10 +165,10 @@ function SummaryTile({ label, value, unit, tip }: { label: string; value: string
       className="bg-card border border-border rounded-lg px-3 py-2.5"
       title={tip}
     >
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground/80">{label}</p>
       <p className="mt-0.5 flex items-baseline gap-1">
         <span className="text-lg font-bold tabular-nums text-foreground">{value}</span>
-        {unit && <span className="text-[11px] text-muted-foreground">{unit}</span>}
+        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
       </p>
     </div>
   );

@@ -108,14 +108,14 @@ function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
   const changeKeys = Object.keys(d.changes);
   return (
     <tr className="border-b border-border align-top">
-      <td className="px-2 py-1.5 text-[11px] text-muted-foreground">{d.rowIndex + 1}</td>
+      <td className="px-2 py-1.5 text-xs text-muted-foreground">{d.rowIndex + 1}</td>
       <td className="px-2 py-1.5">
-        <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full border ${ACTION_CLS[d.action] ?? ''}`}>
+        <span className={`inline-block text-xs px-1.5 py-0.5 rounded-full border ${ACTION_CLS[d.action] ?? ''}`}>
           {ACTION_LABEL[d.action] ?? d.action}
         </span>
       </td>
-      <td className="px-2 py-1.5 font-mono text-xs">{d.hostname}</td>
-      <td className="px-2 py-1.5 text-[11px]">
+      <td className="px-2 py-1.5 font-mono text-sm">{d.hostname}</td>
+      <td className="px-2 py-1.5 text-xs">
         {d.action === 'error' ? (
           <span className="text-red-500">{d.error ?? '-'}</span>
         ) : changeKeys.length === 0 ? (
@@ -125,7 +125,7 @@ function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
             <summary className="cursor-pointer text-muted-foreground">
               {changeKeys.length}개 필드 {d.action === 'insert' ? '신규' : '변경'}
             </summary>
-            <table className="mt-1 text-[10px] font-mono w-full">
+            <table className="mt-1 text-xs font-mono w-full">
               <tbody>
                 {changeKeys.map((k) => (
                   <tr key={k} className="border-t border-border/40">
@@ -246,7 +246,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* 파일 선택 */}
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg cursor-pointer">
+            <label className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg cursor-pointer">
               <Upload className="w-3.5 h-3.5" />
               파일 선택
               <input type="file" accept=".csv,text/csv" className="hidden"
@@ -257,13 +257,13 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
               />
             </label>
             {fileName && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {fileName} · {parsedRows.length} 행 {parseErrors.length ? `· 경고 ${parseErrors.length}` : ''}
               </span>
             )}
             {fileName && (
               <button onClick={reset}
-                className="ml-auto text-[11px] text-muted-foreground hover:text-foreground">
+                className="ml-auto text-xs text-muted-foreground hover:text-foreground">
                 초기화
               </button>
             )}
@@ -271,7 +271,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
 
           {/* 파싱 에러/경고 */}
           {parseErrors.length > 0 && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-500">
+            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-500">
               <p className="font-medium mb-0.5 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" /> 파싱 경고 {parseErrors.length}건
               </p>
@@ -285,18 +285,18 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
           {/* 옵션 + 미리보기 버튼 */}
           {parsedRows.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-muted/20 rounded-lg border border-border">
-              <label className="flex items-center gap-1.5 text-[11px] text-foreground/80">
+              <label className="flex items-center gap-1.5 text-xs text-foreground/80">
                 <input type="checkbox" checked={ignoreEmptyOnUpdate}
                   onChange={(e) => setIgnoreEmptyOnUpdate(e.target.checked)} />
                 빈 값은 기존 값 보존
               </label>
-              <label className="flex items-center gap-1.5 text-[11px] text-foreground/80">
+              <label className="flex items-center gap-1.5 text-xs text-foreground/80">
                 <input type="checkbox" checked={matchClusterScope}
                   onChange={(e) => setMatchClusterScope(e.target.checked)} />
                 cluster_id 까지 매칭
               </label>
               <button onClick={handlePreview} disabled={previewLoading}
-                className="ml-auto flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
+                className="ml-auto flex items-center gap-1.5 px-3 py-1 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
                 {previewLoading && <Loader2 className="w-3 h-3 animate-spin" />}
                 미리보기 (diff 확인)
               </button>
@@ -306,7 +306,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
           {/* 미리보기 결과 */}
           {preview && (
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
                   신규 {preview.insertCount}
                 </span>
@@ -324,7 +324,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
                 <div className="ml-auto flex items-center gap-1">
                   {(['all', 'insert', 'update', 'skip', 'error'] as const).map((f) => (
                     <button key={f} onClick={() => setFilter(f)}
-                      className={`px-2 py-0.5 text-[10px] rounded-md border ${
+                      className={`px-2 py-0.5 text-xs rounded-md border ${
                         filter === f ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card border-border text-muted-foreground hover:text-foreground'
                       }`}>
                       {f === 'all' ? '전체' : ACTION_LABEL[f]}
@@ -336,7 +336,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
               <div className="border border-border rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 sticky top-0">
-                    <tr className="text-left text-[10px] text-muted-foreground uppercase">
+                    <tr className="text-left text-xs text-muted-foreground uppercase">
                       <th className="px-2 py-1.5">#</th>
                       <th className="px-2 py-1.5">동작</th>
                       <th className="px-2 py-1.5">hostname</th>
@@ -346,7 +346,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
                   <tbody>
                     {diffs.map((d) => <DiffRow key={d.rowIndex} d={d} />)}
                     {diffs.length === 0 && (
-                      <tr><td colSpan={4} className="text-center py-4 text-xs text-muted-foreground">표시할 행 없음</td></tr>
+                      <tr><td colSpan={4} className="text-center py-4 text-sm text-muted-foreground">표시할 행 없음</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -355,27 +355,27 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
           )}
 
           {parsedRows.length === 0 && !fileName && (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground space-y-2">
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground space-y-2">
               <FileSpreadsheet className="w-8 h-8 mx-auto text-muted-foreground/40" />
               <p>CSV 파일을 업로드하세요. 첫 행은 헤더, <strong>hostname</strong> 컬럼은 필수입니다.</p>
               <details className="text-left max-w-xl mx-auto">
-                <summary className="cursor-pointer text-[11px] text-primary hover:underline">
+                <summary className="cursor-pointer text-xs text-primary hover:underline">
                   지원 헤더 전체 ({NODE_SPEC_COLUMNS.length}개) 보기 — 테이블 컬럼과 동일
                 </summary>
-                <div className="mt-2 text-[10px] font-mono grid grid-cols-3 gap-x-2 gap-y-0.5">
+                <div className="mt-2 text-xs font-mono grid grid-cols-3 gap-x-2 gap-y-0.5">
                   {NODE_SPEC_COLUMNS.map((c) => (
                     <span key={c.field} className="truncate" title={`${c.label} (${c.type})`}>
                       {c.csvKey}
                     </span>
                   ))}
                 </div>
-                <p className="mt-2 text-[10px]">한글 라벨("호스트명", "제조사" 등) 도 인식됩니다. 업로드 전 내보내기 CSV 를 템플릿으로 사용하세요.</p>
+                <p className="mt-2 text-xs">한글 라벨("호스트명", "제조사" 등) 도 인식됩니다. 업로드 전 내보내기 CSV 를 템플릿으로 사용하세요.</p>
               </details>
             </div>
           )}
 
           {resultMsg && (
-            <div className={`px-3 py-2 rounded-lg text-xs border ${
+            <div className={`px-3 py-2 rounded-lg text-sm border ${
               resultMsg.startsWith('✓')
                 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
                 : 'bg-destructive/10 text-destructive border-destructive/30'
@@ -386,18 +386,18 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
         </div>
 
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border bg-muted/10">
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Info className="w-3 h-3" />
             적용은 미리보기로 diff 를 확인한 후에만 가능합니다.
           </p>
           <div className="flex gap-2">
             <button onClick={onClose} disabled={applying}
-              className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+              className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
               닫기
             </button>
             <button onClick={handleApply}
               disabled={!preview || preview.insertCount + preview.updateCount === 0 || applying}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
               {applying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
               {preview ? `적용 (${preview.insertCount + preview.updateCount}건)` : '적용'}
             </button>

@@ -63,13 +63,13 @@ export function BatchJobFilters({ jobs, active, onChange, search, onSearchChange
             type="button"
             onClick={() => onChange(chip.key)}
             aria-pressed={isActive}
-            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
+            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm font-medium transition-colors ${
               isActive ? chip.activeCls : chip.baseCls
             }`}
           >
             <span>{chip.label}</span>
             <span
-              className={`px-1.5 rounded-full text-[10px] ${
+              className={`px-1.5 rounded-full text-xs ${
                 isActive ? 'bg-white/25 text-white' : 'bg-foreground/10 text-foreground/70'
               }`}
             >
@@ -85,7 +85,7 @@ export function BatchJobFilters({ jobs, active, onChange, search, onSearchChange
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="이름 / cron / 호스트 / 타입 검색"
-          className="pl-8 pr-3 py-1.5 text-xs bg-background border border-border rounded-xl w-64 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-xl w-64 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
     </div>

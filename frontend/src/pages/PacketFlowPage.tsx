@@ -49,7 +49,7 @@ function HopBreadcrumb({
           <div key={i} className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => onSelect(i)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-colors ${
                 active ? 'bg-primary/10 text-primary border-primary/40' : `bg-card ${verdictCls} hover:bg-muted/30`
               }`}
               title={h.name}
@@ -214,7 +214,7 @@ export function PacketFlowPage() {
           <div className="flex items-center gap-3 mb-5">
             <Route className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">패킷 흐름 분석</h1>
-            <p className="text-xs text-muted-foreground">외부 → Ingress → Service → Pod / Pod ↔ Pod</p>
+            <p className="text-sm text-muted-foreground">외부 → Ingress → Service → Pod / Pod ↔ Pod</p>
           </div>
 
           {/* Target 구성 바 */}
@@ -223,7 +223,7 @@ export function PacketFlowPage() {
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                 {(['north-south', 'east-west'] as PacketDirection[]).map((d) => (
                   <button key={d} onClick={() => setDirection(d)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       direction === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
                     }`}>
                     {d === 'north-south' ? '외부 → Pod (N-S)' : 'Pod ↔ Pod (E-W)'}
@@ -238,7 +238,7 @@ export function PacketFlowPage() {
                     onClick={handleGoBottleneck}
                     aria-label="이 pod-pair 의 병목 진단으로 이동"
                     title="병목 진단 페이지로 prefill 이동"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary border border-border rounded-lg hover:bg-secondary/80"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary border border-border rounded-lg hover:bg-secondary/80"
                   >
                     <Activity className="w-3.5 h-3.5" />
                     병목 진단
@@ -267,7 +267,7 @@ export function PacketFlowPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">
+                <label className="text-xs text-muted-foreground mb-1 block">
                   {direction === 'north-south' ? 'Source (외부)' : 'Source Pod'}
                 </label>
                 <input
@@ -277,7 +277,7 @@ export function PacketFlowPage() {
                 />
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">
+                <label className="text-xs text-muted-foreground mb-1 block">
                   Destination {direction === 'north-south' ? '(Ingress-host / ns/service / ns/pod)' : '(ns/pod 또는 ns/service:port)'}
                 </label>
                 <input
@@ -289,7 +289,7 @@ export function PacketFlowPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label htmlFor={f('protocol')} className="text-[11px] text-muted-foreground mb-1 block">Protocol</label>
+                <label htmlFor={f('protocol')} className="text-xs text-muted-foreground mb-1 block">Protocol</label>
                 <select id={f('protocol')} value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)}
                   className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
                   <option value="http">http</option>
@@ -299,7 +299,7 @@ export function PacketFlowPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor={f('port')} className="text-[11px] text-muted-foreground mb-1 block">Port (선택)</label>
+                <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">Port (선택)</label>
                 <input
                   id={f('port')}
                   type="number" value={port} onChange={(e) => setPort(e.target.value)}
@@ -309,7 +309,7 @@ export function PacketFlowPage() {
               </div>
               {direction === 'north-south' && (
                 <div>
-                  <label htmlFor={f('path')} className="text-[11px] text-muted-foreground mb-1 block">Path</label>
+                  <label htmlFor={f('path')} className="text-xs text-muted-foreground mb-1 block">Path</label>
                   <input
                     id={f('path')}
                     type="text" value={path} onChange={(e) => setPath(e.target.value)}
@@ -321,7 +321,7 @@ export function PacketFlowPage() {
             </div>
 
             {runError && (
-              <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+              <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
                 {formatApiError(runError)}
               </div>
             )}
@@ -378,7 +378,7 @@ export function PacketFlowPage() {
                       />
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     노드 클릭 → 해당 홉의 적용 정책(CNP/KNP), Cilium Identity, 관련 리소스 확인.
                   </p>
                 </>

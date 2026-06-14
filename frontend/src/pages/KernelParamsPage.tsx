@@ -133,11 +133,11 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${node.ready ? 'bg-emerald-500' : 'bg-red-500'}`} />
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-mono text-foreground truncate">{node.name}</span>
-        <span className="block text-xs font-mono text-muted-foreground">{host}</span>
+        <span className="block text-sm font-mono text-muted-foreground">{host}</span>
       </span>
       <span className="flex gap-1 flex-shrink-0">
         {node.roles.map((r) => (
-          <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{r}</span>
+          <span key={r} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{r}</span>
         ))}
       </span>
     </label>
@@ -167,40 +167,40 @@ function ResultCard({
       >
         {open ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
         <span className="font-mono text-sm text-foreground flex-shrink-0">{result.host}</span>
-        <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${meta.cls}`}>
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${meta.cls}`}>
           <Icon className="w-3 h-3" />
           {meta.label}
         </span>
         {inlinePreview && !open && (
-          <span className="text-[11px] text-red-400/90 font-mono truncate min-w-0">
+          <span className="text-xs text-red-400/90 font-mono truncate min-w-0">
             {inlinePreview}
           </span>
         )}
-        <span className="ml-auto text-xs font-mono text-muted-foreground flex-shrink-0">
+        <span className="ml-auto text-sm font-mono text-muted-foreground flex-shrink-0">
           {result.exitCode !== null && result.exitCode !== undefined ? `exit ${result.exitCode} · ` : ''}
           {result.durationMs}ms · {result.stdout.length}B
         </span>
       </button>
       {open && (
         <div className="px-4 pb-4 space-y-2">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">command</p>
-          <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all max-h-24">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">command</p>
+          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all max-h-24">
             {command}
           </pre>
           {result.error && (
-            <p className="text-xs text-red-400 font-mono break-all">⚠ {result.error}</p>
+            <p className="text-sm text-red-400 font-mono break-all">⚠ {result.error}</p>
           )}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">stdout</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">stdout</p>
           {result.stdout.trim() ? (
             <LogViewer text={result.stdout} maxHeight="max-h-96" filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
           ) : (
-            <p className="text-[11px] text-muted-foreground italic px-2 py-1.5 bg-background border border-border rounded">
+            <p className="text-xs text-muted-foreground italic px-2 py-1.5 bg-background border border-border rounded">
               (no output — 명령은 실행됐지만 stdout 이 비어있음. stderr 또는 exit code 를 확인하세요.)
             </p>
           )}
           {result.stderr && (
             <>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">stderr</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">stderr</p>
               <LogViewer text={result.stderr} maxHeight="max-h-40" asError filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
             </>
           )}
@@ -311,13 +311,13 @@ export function KernelParamsPage() {
             <Cpu className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">OS / 커널 파라미터 조회</h1>
             {nodesQ.data?.nodes && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
                 선택 {selected.size} / {nodesQ.data.nodes.length}
               </span>
             )}
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground leading-relaxed">
+          <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
             노드에 SSH 로 접속해 sysctl / limits / 모듈 / 디스크 등의 상태를 조회합니다.
             수정은 하지 않으며(읽기 전용), 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
           </div>
@@ -330,7 +330,7 @@ export function KernelParamsPage() {
                 <button
                   onClick={toggleAll}
                   disabled={!nodesQ.data?.nodes?.length}
-                  className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
+                  className="text-sm text-primary hover:text-primary/80 disabled:opacity-40"
                 >
                   {selected.size === (nodesQ.data?.nodes?.length ?? 0) ? '전체 해제' : '전체 선택'}
                 </button>
@@ -350,7 +350,7 @@ export function KernelParamsPage() {
             <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
               {/* 프리셋 */}
               <div>
-                <p className="text-xs text-muted-foreground mb-2">프리셋</p>
+                <p className="text-sm text-muted-foreground mb-2">프리셋</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {PRESETS.map((p) => {
                     const active = presetKey === p.key;
@@ -365,8 +365,8 @@ export function KernelParamsPage() {
                         }`}
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate">{p.label}</p>
-                          <p className="text-[11px] text-muted-foreground line-clamp-2">{p.description}</p>
+                          <p className="text-sm font-semibold truncate">{p.label}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>
                         </div>
                       </button>
                     );
@@ -380,14 +380,14 @@ export function KernelParamsPage() {
                     }`}
                   >
                     <Terminal className="w-3.5 h-3.5" />
-                    <span className="text-xs font-semibold">직접 입력</span>
+                    <span className="text-sm font-semibold">직접 입력</span>
                   </button>
                 </div>
               </div>
 
               {useCustom && (
                 <div>
-                  <label htmlFor={f('cmd')} className="text-xs text-muted-foreground mb-1 block">명령 (읽기 전용 권장)</label>
+                  <label htmlFor={f('cmd')} className="text-sm text-muted-foreground mb-1 block">명령 (읽기 전용 권장)</label>
                   <textarea
                     id={f('cmd')}
                     value={customCmd}
@@ -408,21 +408,21 @@ export function KernelParamsPage() {
               {/* 인증 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
+                  <label htmlFor={f('user')} className="block text-sm text-muted-foreground mb-1">사용자</label>
                   <input id={f('user')} type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div>
-                  <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
+                  <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
                   <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div>
-                  <p className="block text-xs text-muted-foreground mb-1">인증</p>
+                  <p className="block text-sm text-muted-foreground mb-1">인증</p>
                   <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                     {(['password', 'key'] as const).map((m) => (
                       <button key={m} onClick={() => setAuthMode(m)}
-                        className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-all ${
                           authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
                         }`}>
                         {m === 'password' ? '비밀번호' : 'Private Key'}
@@ -438,16 +438,16 @@ export function KernelParamsPage() {
               ) : (
                 <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
                   placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
-                  className="w-full px-3 py-2 text-[11px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                  className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
               )}
 
               {/* 모드 */}
               <div className="flex items-center gap-2">
-                <p className="text-xs text-muted-foreground">실행 모드:</p>
+                <p className="text-sm text-muted-foreground">실행 모드:</p>
                 <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                   {(['parallel', 'sequential'] as const).map((m) => (
                     <button key={m} onClick={() => setMode(m)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                         mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
                       }`}>
                       {m === 'parallel' ? '병렬' : '순차'}
@@ -458,14 +458,14 @@ export function KernelParamsPage() {
 
               {/* 미리보기 */}
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">실행될 명령</p>
-                <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all max-h-24">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행될 명령</p>
+                <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all max-h-24">
                   {commandToRun || '(선택된 프리셋 없음)'}
                 </pre>
               </div>
 
               {runError && (
-                <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
                   {formatApiError(runError)}
                 </div>
               )}
@@ -498,21 +498,21 @@ export function KernelParamsPage() {
             <section ref={resultsRef} className="mt-6 space-y-3 scroll-mt-6">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold">결과 — {runResponse.total}개 노드</h2>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                   정상 {runResponse.okCount}
                 </span>
                 {runResponse.errorCount > 0 && (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
                     실패 {runResponse.errorCount}
                   </span>
                 )}
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {runResponse.totalDurationMs}ms · {runResponse.mode}
                 </span>
                 {/* 전체 펼침/접힘 토글 — 키 변경으로 카드 defaultOpen 다시 적용 */}
                 <button
                   onClick={() => setAllOpen((v) => !v)}
-                  className="text-[11px] px-2 py-1 rounded-md border border-border bg-card hover:bg-secondary"
+                  className="text-xs px-2 py-1 rounded-md border border-border bg-card hover:bg-secondary"
                 >
                   {allOpen ? '전체 접기' : '전체 펼치기'}
                 </button>
@@ -523,7 +523,7 @@ export function KernelParamsPage() {
                       value={globalFilter}
                       onChange={(e) => setGlobalFilter(e.target.value)}
                       placeholder="모든 노드 결과 공통 필터..."
-                      className="pl-2 pr-7 py-1 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-64"
+                      className="pl-2 pr-7 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-64"
                     />
                     {globalFilter && (
                       <button
@@ -537,7 +537,7 @@ export function KernelParamsPage() {
                 </div>
               </div>
               {runResponse.results.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic px-3 py-2 bg-card border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground italic px-3 py-2 bg-card border border-border rounded-lg">
                   (노드 결과가 비어있음 — targets 가 비어있었는지 확인하세요.)
                 </p>
               ) : (
@@ -567,18 +567,18 @@ export function KernelParamsPage() {
       >
         <div className="space-y-2">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">프리셋</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">프리셋</p>
             <p className="text-sm font-semibold">{preset?.label ?? '직접 입력'}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">실행 명령</p>
-            <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행 명령</p>
+            <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
               {commandToRun}
             </pre>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">대상 ({selected.size})</p>
-            <div className="text-[11px] font-mono max-h-20 overflow-auto bg-background border border-border rounded p-2">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">대상 ({selected.size})</p>
+            <div className="text-xs font-mono max-h-20 overflow-auto bg-background border border-border rounded p-2">
               {selectedHosts.slice(0, 8).map((t) => <div key={t.name}>{t.name}</div>)}
               {selectedHosts.length > 8 && <div className="text-muted-foreground">+ {selectedHosts.length - 8}개 더…</div>}
             </div>

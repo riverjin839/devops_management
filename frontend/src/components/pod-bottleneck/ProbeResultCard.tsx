@@ -32,38 +32,38 @@ export function ProbeResultCard({ probeKey, label, axis, result }: ProbeResultCa
             <span className={`text-sm font-semibold ${meta.cls}`}>{meta.label}</span>
             <ProbeAxisBadge axis={axis} />
           </div>
-          <span className="text-[10px] font-mono text-muted-foreground">{probeKey}</span>
+          <span className="text-xs font-mono text-muted-foreground">{probeKey}</span>
         </div>
 
         <p className="text-sm">{result.message}</p>
 
         {result.recommendation && (
-          <div className="text-xs rounded-md border border-border bg-muted/30 px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mr-1.5">권고</span>
+          <div className="text-sm rounded-md border border-border bg-muted/30 px-3 py-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1.5">권고</span>
             {result.recommendation}
           </div>
         )}
 
         {result.manualFallback && (
-          <div className="text-xs rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
+          <div className="text-sm rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                 Manual command 안내
               </span>
               <button
                 type="button"
                 onClick={() => navigator.clipboard?.writeText(result.manualFallback!.command)}
                 aria-label="명령 복사"
-                className="inline-flex items-center gap-1 text-[10px] hover:text-foreground text-muted-foreground"
+                className="inline-flex items-center gap-1 text-xs hover:text-foreground text-muted-foreground"
               >
                 <Copy className="w-3 h-3" />
                 복사
               </button>
             </div>
-            <pre className="font-mono text-[11px] bg-card border border-border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+            <pre className="font-mono text-xs bg-card border border-border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
               {result.manualFallback.command}
             </pre>
-            <p className="text-[10px] text-muted-foreground italic">이유: {result.manualFallback.reason}</p>
+            <p className="text-xs text-muted-foreground italic">이유: {result.manualFallback.reason}</p>
           </div>
         )}
 
@@ -72,14 +72,14 @@ export function ProbeResultCard({ probeKey, label, axis, result }: ProbeResultCa
             type="button"
             onClick={() => setExpanded((v) => !v)}
             aria-expanded={expanded}
-            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+            className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
           >
             <ChevronRight className={`w-3 h-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
             raw details (JSON)
           </button>
         )}
         {expanded && (
-          <pre className="text-[10px] font-mono bg-muted rounded p-2 overflow-x-auto max-h-64">
+          <pre className="text-xs font-mono bg-muted rounded p-2 overflow-x-auto max-h-64">
             {JSON.stringify(result.details, null, 2)}
           </pre>
         )}

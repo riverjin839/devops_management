@@ -17,7 +17,7 @@ interface HealthBadgeProps {
 export function HealthBadge({ status, size = 'sm', showIcon = true }: HealthBadgeProps) {
   const meta = STATUS_MAP[status] ?? STATUS_MAP.pending;
   const Icon = meta.icon;
-  const sizeCls = size === 'sm' ? 'text-[11px] px-2 py-0.5' : 'text-xs px-2.5 py-1';
+  const sizeCls = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-2.5 py-1';
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border ${meta.cls} ${sizeCls} font-medium`}

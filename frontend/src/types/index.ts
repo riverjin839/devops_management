@@ -2411,10 +2411,13 @@ export interface K8sResourceRow {
   name: string;
   namespace?: string | null;
   summary: string;
+  cols?: Record<string, string>;
   ageSeconds?: number | null;
 }
+export interface K8sColumnDef { key: string; label: string }
 export interface K8sResourceListResponse {
   kind: string;
+  columns?: K8sColumnDef[];
   count: number;
   truncated: boolean;
   items: K8sResourceRow[];
@@ -2528,3 +2531,58 @@ export interface K8sNodesResponse {
 // 종류 가용성 (nav 동적 숨김)
 export interface KindAvailabilityInfo { available: boolean; present: boolean; count: number; truncated: boolean }
 export interface KindAvailabilityResponse { kinds: Record<string, KindAvailabilityInfo> }
+
+// Pods (rich) — Lens 식 컬럼
+export type K8sCellColor = 'green' | 'amber' | 'red' | 'gray';
+export interface K8sPodContainerCell { name: string; color: K8sCellColor; state: string; reason?: string | null }
+export interface K8sPodRichRow {
+  name: string;
+  namespace?: string | null;
+  containers: K8sPodContainerCell[];
+  ready: string;
+  restarts: number;
+  controlledBy?: string | null;
+  node?: string | null;
+  qos?: string | null;
+  phase: string;
+  statusColor: K8sCellColor;
+  ageSeconds?: number | null;
+}
+export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }
+
+// ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
+export type MetricTrendDir = 'up' | 'down' | 'flat';
+export interface MetricTrendRow {
+  itemKey: string;
+  label: string;
+  resourceKind: string;
+  today: number | null;
+  yesterday: number | null;
+  d7: number | null;
+  d14: number | null;
+  d28: number | null;
+  delta: number | null;
+  trend: MetricTrendDir;
+  truncated: boolean;
+  isChecked: boolean;
+  checkedBy?: string | null;
+  checkedAt?: string | null;
+  note?: string | null;
+}
+export interface MetricTrendResponse {
+  clusterId: string;
+  date: string;
+  latestCollectedAt: string | null;
+  latestSnapshotId: string | null;
+  items: MetricTrendRow[];
+}
+export interface MetricChecklistItemT {
+  id: string;
+  clusterId: string | null;
+  itemKey: string;
+  label: string;
+  resourceKind: string;
+  enabled: boolean;
+  sortOrder: number;
+  params: Record<string, unknown>;
+}

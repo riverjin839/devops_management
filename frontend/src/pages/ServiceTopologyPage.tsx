@@ -161,7 +161,7 @@ export function ServiceTopologyPage() {
           <div className="flex items-center gap-3 mb-2">
             <Workflow className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">서비스 토폴로지</h1>
-            <span className="text-xs text-muted-foreground">pod 통신 · 자원 연계 · 사용량/한계 가시화</span>
+            <span className="text-sm text-muted-foreground">pod 통신 · 자원 연계 · 사용량/한계 가시화</span>
           </div>
 
           {/* 툴바 */}
@@ -171,7 +171,7 @@ export function ServiceTopologyPage() {
               <div className="flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-muted-foreground" />
                 <select value={namespace} onChange={(e) => { setNamespace(e.target.value); setSelectedId(null); }}
-                  className="px-2 py-1 text-xs bg-background border border-border rounded-lg min-w-[140px]"
+                  className="px-2 py-1 text-sm bg-background border border-border rounded-lg min-w-[140px]"
                   disabled={nsQuery.isLoading}>
                   {nsQuery.isLoading && <option>불러오는 중…</option>}
                   {namespaces.map((ns) => <option key={ns} value={ns}>{ns}</option>)}
@@ -180,12 +180,12 @@ export function ServiceTopologyPage() {
               </div>
 
               <button onClick={() => graphQuery.refetch()}
-                className="px-2 py-1 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
+                className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
                 <RefreshCw className={`w-3 h-3 ${graphQuery.isFetching ? 'animate-spin' : ''}`} /> 새로고침
               </button>
 
               {/* 2D / 3D */}
-              <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
+              <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
                 <ToggleSeg active={view === '2d'} onClick={() => setView('2d')} icon={<Grid3x3 className="w-3 h-3" />} label="2D" />
                 <ToggleSeg active={view === '3d'} onClick={() => setView('3d')} icon={<Boxes className="w-3 h-3" />} label="3D" border />
               </div>
@@ -197,11 +197,11 @@ export function ServiceTopologyPage() {
 
               <div className="ml-auto flex items-center gap-2">
                 <button onClick={() => setExtOpen(true)}
-                  className="px-2 py-1 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
+                  className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
                   <Server className="w-3 h-3" /> 외부 노드
                 </button>
                 <button onClick={() => { setEditMode((v) => !v); setLinkSourceId(null); }}
-                  className={`px-2.5 py-1 text-xs rounded-lg inline-flex items-center gap-1 border ${
+                  className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border ${
                     editMode ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400' : 'bg-secondary border-border hover:bg-secondary/80'
                   }`}>
                   {editMode ? <Pencil className="w-3 h-3" /> : <Eye className="w-3 h-3" />} 링크 편집
@@ -210,7 +210,7 @@ export function ServiceTopologyPage() {
             </div>
 
             {/* 상태/경고 라인 */}
-            <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
               {graph?.metricsStatus === 'offline' && (
                 <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <Info className="w-3 h-3" /> Prometheus 오프라인 — usage 미표시(requests/limits 만)
@@ -337,7 +337,7 @@ function PillToggle({ on, onClick, icon, label, loading }: {
 }) {
   return (
     <button onClick={onClick}
-      className={`px-2.5 py-1 text-xs rounded-lg inline-flex items-center gap-1 border transition-colors ${
+      className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border transition-colors ${
         on ? 'bg-primary/10 border-primary/40 text-primary' : 'bg-secondary border-border text-muted-foreground hover:bg-secondary/80'
       }`}>
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : icon} {label}
@@ -354,7 +354,7 @@ function Legend() {
     <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-xl px-3 py-2 z-10 max-w-[60%]">
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {items.map((it) => (
-          <span key={it.type} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span key={it.type} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <EdgeSwatch type={it.type} /> {EDGE_TYPE_LABEL[it.type]}
           </span>
         ))}

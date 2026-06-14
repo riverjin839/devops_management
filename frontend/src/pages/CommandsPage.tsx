@@ -61,9 +61,9 @@ export function CommandsPage() {
           <h1 className="text-xl font-semibold flex items-center gap-2">
             <Terminal className="w-5 h-5" /> 주요 명령어 / 파라미터 모음
           </h1>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             자주 쓰는 CLI 한 줄을 의미·주의사항·중요도와 함께 기록. 파괴적 명령은
-            <span className="ml-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border bg-red-500/15 text-red-600 border-red-500/30">
+            <span className="ml-1 inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border bg-red-500/15 text-red-600 border-red-500/30">
               <AlertTriangle className="w-3 h-3" /> 치명
             </span>
             으로 분류해 시각적으로 구분합니다.
@@ -71,7 +71,7 @@ export function CommandsPage() {
         </div>
         <button
           onClick={() => navigate('/commands/new')}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90"
         >
           <Plus className="w-3.5 h-3.5" /> 새 명령어
         </button>
@@ -92,7 +92,7 @@ export function CommandsPage() {
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-2 py-1.5 text-xs bg-background border border-border rounded-xl"
+            className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
           >
             <option value="">모든 카테고리</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -100,14 +100,14 @@ export function CommandsPage() {
           <select
             value={filterImportance}
             onChange={(e) => setFilterImportance(e.target.value as CommandImportance | '')}
-            className="px-2 py-1.5 text-xs bg-background border border-border rounded-xl"
+            className="px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
           >
             <option value="">모든 중요도</option>
             {IMPORTANCE_OPTIONS.map((v) => (
               <option key={v} value={v}>{IMPORTANCE_META[v].label}</option>
             ))}
           </select>
-          <span className="text-[11px] text-muted-foreground tabular-nums ml-auto">
+          <span className="text-xs text-muted-foreground tabular-nums ml-auto">
             {entries.length}건
           </span>
         </div>
@@ -116,7 +116,7 @@ export function CommandsPage() {
       {/* 리스트 */}
       <MacCard bodyPadding="p-0">
         {isLoading ? (
-          <p className="text-xs text-muted-foreground p-5">로딩 중…</p>
+          <p className="text-sm text-muted-foreground p-5">로딩 중…</p>
         ) : (
           <CommandsTable
             entries={entries}
