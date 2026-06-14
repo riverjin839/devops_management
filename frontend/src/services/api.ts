@@ -1648,6 +1648,10 @@ export const metricTrendApi = {
   updateItem: (id: string, body: Partial<import('@/types').MetricChecklistItemT>) =>
     api.put<import('@/types').MetricChecklistItemT>(`/metric-trend/items/${id}`, body),
   deleteItem: (id: string) => api.delete(`/metric-trend/items/${id}`),
+  getSchedule: () =>
+    api.get<{ enabled: boolean; cron: string; lastRunAt: string | null; nextRun: string | null }>(`/metric-trend/schedule`),
+  setSchedule: (enabled: boolean, cron: string) =>
+    api.put<{ enabled: boolean; cron: string; nextRun: string | null }>(`/metric-trend/schedule`, { enabled, cron }),
 };
 
 export default api;

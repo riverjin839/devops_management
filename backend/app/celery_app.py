@@ -52,10 +52,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_trend_collect",
         "schedule": crontab(hour=7, minute=0),
     },
-    # 리소스 수 스냅샷 (08:00 KST) — 일일점검 리뷰 추세용. 하루 1회.
-    "daily-resource-count-snapshot": {
-        "task": "app.celery_app.collect_resource_counts",
-        "schedule": crontab(hour=8, minute=0),
+    # 리소스 수 스냅샷 — 주기는 운영자가 설정(AppSetting cron). 매분 디스패처가 cron 매치 시 수집.
+    "resource-count-snapshot-dispatcher": {
+        "task": "app.celery_app.dispatch_resource_count_snapshot",
+        "schedule": crontab(minute="*"),
     },
     # BatchJob.cron 디스패처 — 매 분마다 등록된 잡들을 스캔하고
     # cron 표현식이 매치하는 잡을 run_batch_job 으로 큐잉.
@@ -162,6 +162,67 @@ def collect_resource_counts(self):
                 db.rollback()
                 results.append({"cluster": cluster.name, "error": str(e)[:200]})
         return {"executed_at": datetime.now().isoformat(), "results": results}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.dispatch_resource_count_snapshot")
+def dispatch_resource_count_snapshot(self):
+    """운영자 설정 cron 에 맞춰 리소스 수 스냅샷을 트리거(매분 평가).
+
+    배치잡 디스패처와 동일하게 croniter + tz + last_run 앵커로 cron 틱당 최대 1회 발사.
+    """
+    import logging
+    from datetime import datetime, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.services import resource_count_service as rcs
+
+    log = logging.getLogger(__name__)
+    try:
+        from croniter import croniter
+    except ImportError:
+        return {"dispatched": False, "reason": "croniter_missing"}
+
+    try:
+        tz = ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        tz = ZoneInfo("Asia/Seoul")
+
+    db = SessionLocal()
+    try:
+        sch = rcs.get_schedule(db)
+        if not sch.get("enabled"):
+            return {"dispatched": False, "reason": "disabled"}
+        cron_expr = (sch.get("cron") or "").strip()
+        if not croniter.is_valid(cron_expr):
+            return {"dispatched": False, "reason": "invalid_cron"}
+
+        now_aware = datetime.now(_tz.utc).astimezone(tz)
+        now_naive = now_aware.replace(tzinfo=None)
+        last = sch.get("last_run_at")
+        if last:
+            try:
+                anchor = datetime.fromisoformat(last).astimezone(tz).replace(tzinfo=None)
+            except Exception:  # noqa: BLE001
+                anchor = now_naive - timedelta(days=1)
+        else:
+            anchor = now_naive - timedelta(days=1)
+
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            return {"dispatched": False, "reason": "cron_eval_error"}
+
+        if next_fire > now_naive:
+            return {"dispatched": False, "reason": "not_due", "next_fire": next_fire.isoformat()}
+
+        # due → 수집 트리거 + last_run 갱신(현재 UTC iso)
+        collect_resource_counts.delay()
+        rcs.set_schedule(db, sch["enabled"], cron_expr, last_run_at=datetime.now(_tz.utc).isoformat())
+        return {"dispatched": True, "fired_at": now_aware.isoformat()}
     finally:
         db.close()
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Camera, Settings2, Plus, Trash2, ArrowUp, ArrowDown, Minus, Check } from 'lucide-react';
+import { RefreshCw, Camera, Settings2, Plus, Trash2, ArrowUp, ArrowDown, Minus, Check, Clock } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
@@ -32,6 +32,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showItems, setShowItems] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['metric-trend', clusterId],
@@ -81,6 +82,10 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-secondary/60">
             <Settings2 className="w-3.5 h-3.5" /> 항목 관리
           </button>
+          <button onClick={() => setShowSchedule(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-secondary/60">
+            <Clock className="w-3.5 h-3.5" /> 주기 설정
+          </button>
         </RoleGate>
         <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
           <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
@@ -129,7 +134,82 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
       </div>
 
       {showItems && <ItemsModal clusterId={clusterId} onClose={() => { setShowItems(false); reload(); }} />}
+      {showSchedule && <ScheduleModal onClose={() => setShowSchedule(false)} />}
     </MacCard>
+  );
+}
+
+// ── 동작 주기 설정 모달 (admin) ──────────────────────────────────────────────
+function ScheduleModal({ onClose }: { onClose: () => void }) {
+  const [enabled, setEnabled] = useState(true);
+  const [mode, setMode] = useState<'daily' | 'interval' | 'cron'>('daily');
+  const [time, setTime] = useState('08:00');
+  const [everyH, setEveryH] = useState(6);
+  const [cron, setCron] = useState('0 8 * * *');
+  const [nextRun, setNextRun] = useState<string | null>(null);
+  const [err, setErr] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useQuery({
+    queryKey: ['metric-schedule'],
+    queryFn: async () => {
+      const d = (await metricTrendApi.getSchedule()).data;
+      setEnabled(d.enabled); setCron(d.cron); setNextRun(d.nextRun);
+      return d;
+    },
+  });
+
+  const buildCron = (): string => {
+    if (mode === 'daily') { const [h, m] = time.split(':'); return `${Number(m)} ${Number(h)} * * *`; }
+    if (mode === 'interval') return `0 */${Math.max(1, Math.min(23, everyH))} * * *`;
+    return cron.trim();
+  };
+
+  const save = async () => {
+    setErr(''); setSaved(false);
+    const c = buildCron();
+    try {
+      const r = (await metricTrendApi.setSchedule(enabled, c)).data;
+      setCron(c); setNextRun(r.nextRun); setSaved(true);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card w-full max-w-md rounded-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-3 border-b border-border font-semibold text-sm">자동 스냅샷 동작 주기</div>
+        <div className="p-4 space-y-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="w-4 h-4 accent-primary" />
+            자동 수집 사용
+          </label>
+          <div className="flex gap-1 rounded-xl border border-border overflow-hidden w-fit">
+            {(['daily', 'interval', 'cron'] as const).map((m) => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`px-3 py-1.5 text-sm ${mode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-secondary/60'}`}>
+                {m === 'daily' ? '매일 시각' : m === 'interval' ? 'N시간마다' : 'cron 직접'}
+              </button>
+            ))}
+          </div>
+          {mode === 'daily' && (
+            <label className="block">매일 <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="ml-2 rounded-lg border border-border bg-background px-2 py-1" /></label>
+          )}
+          {mode === 'interval' && (
+            <label className="block">매 <input type="number" min={1} max={23} value={everyH} onChange={(e) => setEveryH(Number(e.target.value))} className="mx-2 w-16 rounded-lg border border-border bg-background px-2 py-1" /> 시간마다</label>
+          )}
+          {mode === 'cron' && (
+            <label className="block">cron <input value={cron} onChange={(e) => setCron(e.target.value)} placeholder="0 8 * * *" className="ml-2 w-48 rounded-lg border border-border bg-background px-2 py-1 font-mono" /></label>
+          )}
+          <div className="text-xs text-muted-foreground">생성 cron: <span className="font-mono">{buildCron()}</span>{nextRun && <> · 다음 실행: {new Date(nextRun).toLocaleString()}</>}</div>
+          {err && <div className="text-sm text-red-500">{err}</div>}
+          {saved && <div className="text-sm text-green-600">저장됨</div>}
+        </div>
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm hover:bg-secondary">닫기</button>
+          <button onClick={save} className="rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm">저장</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
