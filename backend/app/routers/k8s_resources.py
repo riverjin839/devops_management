@@ -261,10 +261,121 @@ KIND_MAP: dict[str, dict[str, Any]] = {
         "read": lambda a, ns, n: a.read_cluster_role_binding(n),
         "summary": lambda o: f"→ {o.role_ref.kind}/{o.role_ref.name} · {len(o.subjects or [])} subj",
     },
+    # ── OpenLens 파리티 추가 종류 ────────────────────────────────────────────
+    # Workloads
+    "replicasets": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.AppsV1Api(c),
+        "list_all": lambda a: a.list_replica_set_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_replica_set(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_replica_set(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_replica_set(n, ns),
+        "scale": lambda a, ns, n, body: a.patch_namespaced_replica_set_scale(n, ns, body),
+        "summary": _dep_summary,
+    },
+    "replicationcontrollers": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_replication_controller_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_replication_controller(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_replication_controller(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_replication_controller(n, ns),
+        "scale": lambda a, ns, n, body: a.patch_namespaced_replication_controller_scale(n, ns, body),
+        "summary": _dep_summary,
+    },
+    # Config
+    "resourcequotas": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_resource_quota_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_resource_quota(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_resource_quota(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_resource_quota(n, ns),
+        "summary": lambda o: f"{len((o.spec.hard or {})) if o.spec else 0} hard limits",
+    },
+    "limitranges": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_limit_range_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_limit_range(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_limit_range(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_limit_range(n, ns),
+        "summary": lambda o: f"{len((o.spec.limits or [])) if o.spec else 0} limits",
+    },
+    "horizontalpodautoscalers": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.AutoscalingV1Api(c),
+        "list_all": lambda a: a.list_horizontal_pod_autoscaler_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_horizontal_pod_autoscaler(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_horizontal_pod_autoscaler(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_horizontal_pod_autoscaler(n, ns),
+        "summary": lambda o: f"{(o.status.current_replicas if o.status else 0)} → min {o.spec.min_replicas}/max {o.spec.max_replicas}",
+    },
+    "poddisruptionbudgets": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.PolicyV1Api(c),
+        "list_all": lambda a: a.list_pod_disruption_budget_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_pod_disruption_budget(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_pod_disruption_budget(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_pod_disruption_budget(n, ns),
+        "summary": lambda o: f"min {getattr(o.spec, 'min_available', None)} / maxUnavail {getattr(o.spec, 'max_unavailable', None)}",
+    },
+    "priorityclasses": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.SchedulingV1Api(c),
+        "list_all": lambda a: a.list_priority_class(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_priority_class(n),
+        "delete": lambda a, ns, n: a.delete_priority_class(n),
+        "summary": lambda o: f"value {o.value}{' · global-default' if o.global_default else ''}",
+    },
+    # Network
+    "endpoints": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_endpoints_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_endpoints(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_endpoints(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_endpoints(n, ns),
+        "summary": lambda o: f"{sum(len(s.addresses or []) for s in (o.subsets or []))} addresses",
+    },
+    "networkpolicies": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.NetworkingV1Api(c),
+        "list_all": lambda a: a.list_network_policy_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_network_policy(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_network_policy(n, ns),
+        "delete": lambda a, ns, n: a.delete_namespaced_network_policy(n, ns),
+        "summary": lambda o: f"types {', '.join(o.spec.policy_types or []) if o.spec else '-'}",
+    },
+    "ingressclasses": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.NetworkingV1Api(c),
+        "list_all": lambda a: a.list_ingress_class(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_ingress_class(n),
+        "delete": lambda a, ns, n: a.delete_ingress_class(n),
+        "summary": lambda o: f"controller {o.spec.controller if o.spec else '-'}",
+    },
+    # Storage
+    "persistentvolumes": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.CoreV1Api(c),
+        "list_all": lambda a: a.list_persistent_volume(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_persistent_volume(n),
+        "delete": lambda a, ns, n: a.delete_persistent_volume(n),
+        "summary": lambda o: f"{(o.status.phase if o.status else '-')} · {(o.spec.capacity or {}).get('storage','') if o.spec else ''} · {o.spec.storage_class_name if o.spec else ''}".strip(),
+    },
+    "storageclasses": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.StorageV1Api(c),
+        "list_all": lambda a: a.list_storage_class(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_storage_class(n),
+        "delete": lambda a, ns, n: a.delete_storage_class(n),
+        "summary": lambda o: f"{o.provisioner}{' · default' if (o.metadata.annotations or {}).get('storageclass.kubernetes.io/is-default-class') == 'true' else ''}",
+    },
 }
 
 # 쓰기 동작 권한 매트릭스 (UI 노출용 메타). 실제 가드는 엔드포인트 require_operator + kubeconfig RBAC.
-SCALABLE_KINDS = {"deployments", "statefulsets"}
+SCALABLE_KINDS = {"deployments", "statefulsets", "replicasets", "replicationcontrollers"}
 RESTARTABLE_KINDS = {"deployments", "statefulsets", "daemonsets"}
 
 
@@ -434,7 +545,16 @@ def _build_detail_sections(kind: str, data: dict) -> list[dict[str, Any]]:
                              "items": [f"{p.get('name','') } {p.get('port')}→{p.get('targetPort')}/{p.get('protocol','TCP')}".strip() for p in ports]})
         if isinstance(spec.get("selector"), dict) and spec["selector"]:
             sections.append({"title": "Selector", **_kv(list(spec["selector"].items()))})
-    elif kind in ("deployments", "statefulsets", "daemonsets"):
+    elif kind == "persistentvolumes":
+        sections.append({"title": "Spec", **_kv([
+            ("capacity", (spec.get("capacity") or {}).get("storage")),
+            ("storageClass", spec.get("storageClassName")),
+            ("accessModes", ", ".join(spec.get("accessModes") or [])),
+            ("reclaimPolicy", spec.get("persistentVolumeReclaimPolicy")),
+            ("phase", status.get("phase")),
+            ("claim", f"{(spec.get('claimRef') or {}).get('namespace','')}/{(spec.get('claimRef') or {}).get('name','')}" if spec.get("claimRef") else None),
+        ])})
+    elif kind in ("deployments", "statefulsets", "daemonsets", "replicasets", "replicationcontrollers"):
         sections.append({"title": "Status", **_kv([
             ("replicas", spec.get("replicas")),
             ("ready", status.get("readyReplicas") or status.get("numberReady")),
@@ -690,6 +810,15 @@ _REPLACE_METHODS = {
     "jobs": "replace_namespaced_job",
     "cronjobs": "replace_namespaced_cron_job",
     "pods": "replace_namespaced_pod",
+    "replicasets": "replace_namespaced_replica_set",
+    "replicationcontrollers": "replace_namespaced_replication_controller",
+    "resourcequotas": "replace_namespaced_resource_quota",
+    "limitranges": "replace_namespaced_limit_range",
+    "horizontalpodautoscalers": "replace_namespaced_horizontal_pod_autoscaler",
+    "poddisruptionbudgets": "replace_namespaced_pod_disruption_budget",
+    "networkpolicies": "replace_namespaced_network_policy",
+    "persistentvolumes": "replace_persistent_volume",
+    "storageclasses": "replace_storage_class",
 }
 
 

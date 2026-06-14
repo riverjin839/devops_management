@@ -34,8 +34,10 @@ const NAV: NavCat[] = [
     id: 'workloads', label: 'Workloads', icon: Boxes, leaves: [
       { id: 'pods', label: 'Pods', mode: 'kind', kind: 'pods' },
       { id: 'deployments', label: 'Deployments', mode: 'kind', kind: 'deployments' },
-      { id: 'statefulsets', label: 'StatefulSets', mode: 'kind', kind: 'statefulsets' },
       { id: 'daemonsets', label: 'DaemonSets', mode: 'kind', kind: 'daemonsets' },
+      { id: 'statefulsets', label: 'StatefulSets', mode: 'kind', kind: 'statefulsets' },
+      { id: 'replicasets', label: 'ReplicaSets', mode: 'kind', kind: 'replicasets' },
+      { id: 'replicationcontrollers', label: 'Replication Controllers', mode: 'kind', kind: 'replicationcontrollers' },
       { id: 'jobs', label: 'Jobs', mode: 'kind', kind: 'jobs' },
       { id: 'cronjobs', label: 'CronJobs', mode: 'kind', kind: 'cronjobs' },
     ],
@@ -44,15 +46,29 @@ const NAV: NavCat[] = [
     id: 'config', label: 'Config', icon: SettingsIcon, leaves: [
       { id: 'configmaps', label: 'ConfigMaps', mode: 'kind', kind: 'configmaps' },
       { id: 'secrets', label: 'Secrets', mode: 'kind', kind: 'secrets' },
+      { id: 'resourcequotas', label: 'Resource Quotas', mode: 'kind', kind: 'resourcequotas' },
+      { id: 'limitranges', label: 'Limit Ranges', mode: 'kind', kind: 'limitranges' },
+      { id: 'horizontalpodautoscalers', label: 'HPA', mode: 'kind', kind: 'horizontalpodautoscalers' },
+      { id: 'poddisruptionbudgets', label: 'Pod Disruption Budgets', mode: 'kind', kind: 'poddisruptionbudgets' },
+      { id: 'priorityclasses', label: 'Priority Classes', mode: 'kind', kind: 'priorityclasses' },
     ],
   },
   {
     id: 'network', label: 'Network', icon: Network, leaves: [
       { id: 'services', label: 'Services', mode: 'kind', kind: 'services' },
+      { id: 'endpoints', label: 'Endpoints', mode: 'kind', kind: 'endpoints' },
       { id: 'ingresses', label: 'Ingresses', mode: 'kind', kind: 'ingresses' },
+      { id: 'ingressclasses', label: 'Ingress Classes', mode: 'kind', kind: 'ingressclasses' },
+      { id: 'networkpolicies', label: 'Network Policies', mode: 'kind', kind: 'networkpolicies' },
     ],
   },
-  { id: 'storage', label: 'Storage', icon: Database, leaves: [{ id: 'pvc', label: 'PersistentVolumeClaims', mode: 'kind', kind: 'persistentvolumeclaims' }] },
+  {
+    id: 'storage', label: 'Storage', icon: Database, leaves: [
+      { id: 'pvc', label: 'Persistent Volume Claims', mode: 'kind', kind: 'persistentvolumeclaims' },
+      { id: 'persistentvolumes', label: 'Persistent Volumes', mode: 'kind', kind: 'persistentvolumes' },
+      { id: 'storageclasses', label: 'Storage Classes', mode: 'kind', kind: 'storageclasses' },
+    ],
+  },
   { id: 'namespaces', label: 'Namespaces', icon: Layers, leaves: [{ id: 'namespaces', label: 'Namespaces', mode: 'kind', kind: 'namespaces' }] },
   { id: 'events', label: 'Events', icon: ScrollText, leaves: [{ id: 'events', label: 'Events', mode: 'events' }] },
   { id: 'helm', label: 'Helm', icon: Package, leaves: [{ id: 'helm', label: 'Releases', mode: 'helm' }] },
