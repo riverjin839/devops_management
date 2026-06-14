@@ -71,7 +71,7 @@ export function PodTerminal({ clusterId, namespace, pod, container, onClose }: P
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-700 bg-zinc-800">
           <Terminal className="w-4 h-4 text-green-400" />
           <span className="text-sm font-medium truncate">{namespace}/{pod}{container ? ` · ${container}` : ''}</span>
-          <span className={`text-[11px] ${statusColor}`}>● {status}</span>
+          <span className={`text-xs ${statusColor}`}>● {status}</span>
           <button onClick={connect} title="재연결" className="ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
             <RotateCw className="w-3.5 h-3.5" />
           </button>
@@ -81,7 +81,7 @@ export function PodTerminal({ clusterId, namespace, pod, container, onClose }: P
         </div>
         <pre
           ref={outRef}
-          className="flex-1 overflow-auto px-4 py-3 text-xs font-mono whitespace-pre-wrap break-all leading-relaxed"
+          className="flex-1 overflow-auto px-4 py-3 text-sm font-mono whitespace-pre-wrap break-all leading-relaxed"
         >
           {output || '연결 중…'}
         </pre>

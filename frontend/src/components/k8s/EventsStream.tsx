@@ -113,11 +113,11 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
         {streaming ? (
-          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/10 text-red-600 border border-red-500/30 px-3 py-1.5 text-xs font-medium">
+          <button onClick={stop} className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/10 text-red-600 border border-red-500/30 px-3 py-1.5 text-sm font-medium">
             <Square className="w-3.5 h-3.5" /> 중지
           </button>
         ) : (
-          <button onClick={start} className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium">
+          <button onClick={start} className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium">
             <Play className="w-3.5 h-3.5" /> 재시작
           </button>
         )}
@@ -127,7 +127,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
         <div className="inline-flex rounded-xl border border-border overflow-hidden">
           {(['all', 'Normal', 'Warning'] as const).map((t) => (
             <button key={t} onClick={() => setTypeFilter(t)}
-              className={`px-2.5 py-1.5 text-xs font-medium ${typeFilter === t ? (t === 'Warning' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary text-primary-foreground') : 'bg-card text-muted-foreground hover:bg-secondary/60'}`}>
+              className={`px-2.5 py-1.5 text-sm font-medium ${typeFilter === t ? (t === 'Warning' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary text-primary-foreground') : 'bg-card text-muted-foreground hover:bg-secondary/60'}`}>
               {t === 'all' ? '전체' : t}
             </button>
           ))}
@@ -136,15 +136,15 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이벤트 검색"
-            className="rounded-xl border border-border bg-card pl-7 pr-2 py-1.5 text-xs w-44 focus:outline-none focus:ring-1 focus:ring-primary" />
+            className="rounded-xl border border-border bg-card pl-7 pr-2 py-1.5 text-sm w-44 focus:outline-none focus:ring-1 focus:ring-primary" />
         </div>
 
-        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} / {events.length}건</span>
-        {err && <span className="text-xs text-red-500">· {err}</span>}
+        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} / {events.length}건</span>
+        {err && <span className="text-sm text-red-500">· {err}</span>}
       </div>
 
       <div className="rounded-xl border border-border overflow-hidden">
-        <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-[10px] font-semibold text-muted-foreground bg-secondary/30 border-b border-border`}>
+        <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-xs font-semibold text-muted-foreground bg-secondary/30 border-b border-border`}>
           <span>유형</span><span>네임스페이스</span><span>Reason</span><span>메시지</span><span>대상</span><span>Source</span><span className="text-right">횟수</span><span className="text-right">Last Seen</span>
         </div>
         <div className="max-h-[60vh] overflow-auto">
@@ -154,7 +154,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
             </div>
           ) : (
             filtered.map((e, i) => (
-              <div key={i} className={`grid ${COLS} gap-2 px-3 py-1.5 text-xs border-b border-border/40 items-center`}>
+              <div key={i} className={`grid ${COLS} gap-2 px-3 py-1.5 text-sm border-b border-border/40 items-center`}>
                 <span className={e.type === 'Warning' ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>{e.type ?? '-'}</span>
                 <span className="truncate text-muted-foreground">{e.namespace ?? '-'}</span>
                 <span className="truncate font-medium" title={e.reason ?? ''}>{e.reason ?? '-'}</span>
