@@ -17,6 +17,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
 import { PodTerminal } from '@/components/k8s/PodTerminal';
 import { EventsStream } from '@/components/k8s/EventsStream';
+import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
 import type {
   K8sResourceRow, K8sResourceCapability, K8sCrdInfo, HelmRelease,
   K8sNodeRichRow, ResourceDetailSection, ResourceDetailKVItem,
@@ -130,7 +131,7 @@ export function K8sManagePage() {
   const cluster = clusters.find((c) => c.id === clusterId);
 
   const [activeLeaf, setActiveLeaf] = useState('pods');
-  const [nsFilter, setNsFilter] = useState('');
+  const [selectedNs, setSelectedNs] = useState<Set<string>>(new Set()); // 비어있으면 전체
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<DetailTarget | null>(null);
   const [editing, setEditing] = useState(false);
@@ -335,8 +336,8 @@ export function K8sManagePage() {
             <PodsPanel
               clusterId={clusterId}
               caps={caps.pods}
-              nsFilter={nsFilter}
-              setNsFilter={setNsFilter}
+              selectedNs={selectedNs}
+              setSelectedNs={setSelectedNs}
               search={search}
               setSearch={setSearch}
               onOpenDetail={(row) => { setDetail({ kind: 'k8s', resourceKind: 'pods', namespace: row.namespace || '-', name: row.name, editable: !!caps.pods?.editable }); setEditing(false); }}
@@ -349,8 +350,8 @@ export function K8sManagePage() {
               clusterId={clusterId}
               kind={leaf.kind}
               caps={caps[leaf.kind]}
-              nsFilter={nsFilter}
-              setNsFilter={setNsFilter}
+              selectedNs={selectedNs}
+              setSelectedNs={setSelectedNs}
               search={search}
               setSearch={setSearch}
               onOpenDetail={(row, editable) => {
@@ -369,15 +370,7 @@ export function K8sManagePage() {
           {leaf.mode === 'overview' && <OverviewPanel clusterId={clusterId} />}
           {leaf.mode === 'events' && (
             <MacCard title="이벤트 (실시간)">
-              <div className="mb-3">
-                <input
-                  value={nsFilter}
-                  onChange={(e) => setNsFilter(e.target.value)}
-                  placeholder="네임스페이스 필터 (비우면 전체)"
-                  className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs w-64 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <EventsStream clusterId={clusterId} namespace={nsFilter.trim() || undefined} />
+              <EventsStream clusterId={clusterId} selectedNs={selectedNs} onSelectedNsChange={setSelectedNs} />
             </MacCard>
           )}
           {leaf.mode === 'helm' && (
@@ -430,8 +423,8 @@ interface ResourceTablePanelProps {
   clusterId: string;
   kind: string;
   caps?: K8sResourceCapability;
-  nsFilter: string;
-  setNsFilter: (v: string) => void;
+  selectedNs: Set<string>;
+  setSelectedNs: (s: Set<string>) => void;
   search: string;
   setSearch: (v: string) => void;
   onOpenDetail: (row: K8sResourceRow, editable: boolean) => void;
@@ -444,32 +437,31 @@ interface ResourceTablePanelProps {
 }
 
 function ResourceTablePanel(p: ResourceTablePanelProps) {
-  const { clusterId, kind, caps, nsFilter, setNsFilter, search, setSearch } = p;
+  const { clusterId, kind, caps, selectedNs, setSelectedNs, search, setSearch } = p;
   const isNamespaced = caps?.namespaced ?? true;
+  // 단일 선택이면 서버에서 정확히 필터, 다중/전체면 전체 조회 후 클라이언트 필터
+  const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
+  const serverNs = isNamespaced && nsArr.length === 1 ? nsArr[0] : undefined;
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['k8s-mng-list', clusterId, kind, nsFilter],
-    queryFn: async () => (await k8sResourcesApi.list(clusterId, kind, isNamespaced ? (nsFilter.trim() || undefined) : undefined)).data,
+    queryKey: ['k8s-mng-list', clusterId, kind, serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
+    queryFn: async () => (await k8sResourcesApi.list(clusterId, kind, serverNs)).data,
     enabled: !!clusterId,
   });
 
   const filtered = useMemo(() => {
-    const list = data?.items ?? [];
+    let list = data?.items ?? [];
+    if (isNamespaced && selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary}`.toLowerCase().includes(q));
-  }, [data, search]);
+  }, [data, search, selectedNs, isNamespaced]);
 
   return (
     <MacCard title={kind} bodyPadding="p-0">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
         {isNamespaced && (
-          <input
-            value={nsFilter}
-            onChange={(e) => setNsFilter(e.target.value)}
-            placeholder="네임스페이스"
-            className="rounded-xl border border-border bg-card px-2.5 py-1 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         )}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -901,8 +893,8 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
 interface PodsPanelProps {
   clusterId: string;
   caps?: K8sResourceCapability;
-  nsFilter: string;
-  setNsFilter: (v: string) => void;
+  selectedNs: Set<string>;
+  setSelectedNs: (s: Set<string>) => void;
   search: string;
   setSearch: (v: string) => void;
   onOpenDetail: (row: K8sPodRichRow) => void;
@@ -910,26 +902,28 @@ interface PodsPanelProps {
   onTerminal: (ns: string, name: string) => void;
 }
 function PodsPanel(p: PodsPanelProps) {
-  const { clusterId, nsFilter, setNsFilter, search, setSearch } = p;
+  const { clusterId, selectedNs, setSelectedNs, search, setSearch } = p;
+  const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
+  const serverNs = nsArr.length === 1 ? nsArr[0] : undefined;
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['k8s-mng-list', clusterId, 'pods', nsFilter],
-    queryFn: async () => (await k8sResourcesApi.richPods(clusterId, nsFilter.trim() || undefined)).data,
+    queryKey: ['k8s-mng-list', clusterId, 'pods', serverNs ?? (nsArr.length > 1 ? 'multi' : 'all')],
+    queryFn: async () => (await k8sResourcesApi.richPods(clusterId, serverNs)).data,
     enabled: !!clusterId,
   });
   const filtered = useMemo(() => {
-    const list = data?.items ?? [];
+    let list = data?.items ?? [];
+    if (selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.phase} ${r.node ?? ''} ${r.controlledBy ?? ''}`.toLowerCase().includes(q));
-  }, [data, search]);
+  }, [data, search, selectedNs]);
 
   const COLS = 'grid-cols-[1.6fr_110px_90px_56px_1fr_110px_72px_50px_110px_90px]';
 
   return (
     <MacCard title="Pods" bodyPadding="p-0">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
-        <input value={nsFilter} onChange={(e) => setNsFilter(e.target.value)} placeholder="네임스페이스"
-          className="rounded-xl border border-border bg-card px-2.5 py-1 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-primary" />
+        <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이름/노드/소유자 검색"
