@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { marked } from 'marked';
 import { compressImageFile } from '@/lib/imageCompress';
-import { DOC_TEMPLATES, type DocTemplate } from './docTemplates';
+import { DOC_TEMPLATES, normalizeTemplateHtml, type DocTemplate } from './docTemplates';
 
 const EDITOR_BG_KEY = 'k8s:editor-bg';
 const BG_PRESETS = ['#ffffff', '#faf7f0', '#f4f4f5', '#eef2ff', '#ecfdf5', '#1f2937'];
@@ -348,7 +348,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
             try {
               const text = await file.text();
               const html = await marked.parse(text, { async: true });
-              editor.chain().focus().insertContent(html).run();
+              editor.chain().focus().insertContent(normalizeTemplateHtml(html)).run();
             } catch { /* 변환 실패 시 무시 */ }
           };
           input.click();
@@ -373,7 +373,8 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
                   key={tpl.id}
                   type="button"
                   onClick={() => {
-                    editor.chain().focus().insertContent(tpl.html).run();
+                    // 빈 표 셀(<td></td>)은 tableCell 스키마 위반 → 삽입 전 빈 문단으로 보정.
+                    editor.chain().focus().insertContent(normalizeTemplateHtml(tpl.html)).run();
                     setTplOpen(false);
                   }}
                   className="w-full text-left px-3 py-1.5 hover:bg-secondary transition-colors"
