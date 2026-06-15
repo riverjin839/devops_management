@@ -31,7 +31,7 @@ export function LakeServiceCard({
             <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
               {service.name}
             </p>
-            <p className="text-[11px] text-muted-foreground truncate">
+            <p className="text-xs text-muted-foreground truncate">
               {typeLabel ?? service.serviceType} · {service.category}
             </p>
           </div>
@@ -40,17 +40,17 @@ export function LakeServiceCard({
       </div>
 
       {/* Endpoint + meta */}
-      <p className="text-[11px] text-muted-foreground font-mono truncate mb-2" title={service.endpointUrl}>
+      <p className="text-xs text-muted-foreground font-mono truncate mb-2" title={service.endpointUrl}>
         {service.endpointUrl}
       </p>
       {service.namespace && (
-        <p className="text-[10px] text-muted-foreground/80 mb-2">
+        <p className="text-xs text-muted-foreground/80 mb-2">
           namespace: <span className="font-mono">{service.namespace}</span>
         </p>
       )}
 
       {/* Last check + action */}
-      <div className="flex items-center justify-between text-[11px] mt-3">
+      <div className="flex items-center justify-between text-xs mt-3">
         <span className="text-muted-foreground">
           {service.lastCheckedAt
             ? `마지막 점검: ${new Date(service.lastCheckedAt).toLocaleString('ko-KR')}`
@@ -82,7 +82,7 @@ export function LakeServiceCard({
       </div>
 
       {service.lastMessage && (
-        <p className="mt-2 text-[10px] text-muted-foreground/70 italic truncate">
+        <p className="mt-2 text-xs text-muted-foreground/70 italic truncate">
           {service.lastMessage}
         </p>
       )}

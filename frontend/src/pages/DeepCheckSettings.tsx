@@ -53,7 +53,7 @@ export function DeepCheckSettingsPage() {
           <div className="flex items-center gap-3">
             <Link
               to="/"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               대시보드
@@ -65,7 +65,7 @@ export function DeepCheckSettingsPage() {
                 setEditing(null);
                 setAdding((v) => !v);
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium hover:opacity-90"
             >
               <Plus className="w-3.5 h-3.5" />
               {adding ? '닫기' : '정의 추가'}

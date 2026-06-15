@@ -19,7 +19,7 @@ const DOMAINS = [
 export function DomainQuickAccess() {
   return (
     <div className="rounded-md border border-border bg-card p-3">
-      <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+      <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
         플랫폼 도메인
       </span>
       <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5">
@@ -30,7 +30,7 @@ export function DomainQuickAccess() {
             className="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-muted/60 transition-colors group"
           >
             <Icon className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-            <span className="text-[10px] text-muted-foreground group-hover:text-foreground leading-none text-center">
+            <span className="text-xs text-muted-foreground group-hover:text-foreground leading-none text-center">
               {label}
             </span>
           </Link>

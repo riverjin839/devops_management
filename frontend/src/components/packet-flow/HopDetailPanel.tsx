@@ -22,11 +22,11 @@ function PolicyItem({ p }: { p: HopPolicy }) {
   return (
     <div className="border border-border rounded p-2 bg-muted/20">
       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${kindColor}`}>{p.kind}</span>
-        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{p.direction}</span>
-        <span className="text-xs font-mono text-foreground truncate" title={p.name}>{p.name}</span>
+        <span className={`text-xs px-1.5 py-0.5 rounded border ${kindColor}`}>{p.kind}</span>
+        <span className="text-xs text-muted-foreground uppercase tracking-wider">{p.direction}</span>
+        <span className="text-sm font-mono text-foreground truncate" title={p.name}>{p.name}</span>
       </div>
-      <p className="text-[11px] font-mono text-muted-foreground break-all">{p.summary}</p>
+      <p className="text-xs font-mono text-muted-foreground break-all">{p.summary}</p>
     </div>
   );
 }
@@ -39,17 +39,17 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
     <div className="absolute top-3 right-3 w-96 max-h-[calc(100%-1.5rem)] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col z-10">
       <header className="flex items-start gap-2 px-4 py-3 border-b border-border bg-muted/20">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
             홉 {index + 1} / {totalHops} · {hop.entityType}
           </p>
           <p className="text-sm font-semibold truncate" title={hop.name}>{hop.name}</p>
           {hop.interface && (
-            <p className="text-[11px] font-mono text-muted-foreground truncate mt-0.5" title={hop.interface}>
+            <p className="text-xs font-mono text-muted-foreground truncate mt-0.5" title={hop.interface}>
               {hop.interface}
             </p>
           )}
         </div>
-        <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
           <Icon className="w-3 h-3" />
           {meta.label}
         </span>
@@ -58,10 +58,10 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-xs">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-sm">
         {/* 메트릭 */}
         {(hop.latencyMs != null || hop.errorCount != null) && (
-          <div className="flex gap-3 text-[11px] text-muted-foreground">
+          <div className="flex gap-3 text-xs text-muted-foreground">
             {hop.latencyMs != null && <span>⏱ {hop.latencyMs}ms</span>}
             {hop.errorCount != null && <span className={hop.errorCount > 0 ? 'text-amber-400' : ''}>
               ⚠ errors: {hop.errorCount}
@@ -72,10 +72,10 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* notes */}
         {hop.notes.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Notes</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Notes</p>
             <ul className="space-y-0.5">
               {hop.notes.map((n, i) => (
-                <li key={i} className="text-xs text-foreground">• {n}</li>
+                <li key={i} className="text-sm text-foreground">• {n}</li>
               ))}
             </ul>
           </div>
@@ -84,7 +84,7 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* policies */}
         {hop.policies.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
               <ShieldAlert className="w-3 h-3" /> 적용 정책 ({hop.policies.length})
             </p>
             <div className="space-y-1.5">
@@ -96,10 +96,10 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* identity */}
         {hop.identity && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
               <Tag className="w-3 h-3" /> Cilium Identity
             </p>
-            <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap">
+            <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap">
               {JSON.stringify(hop.identity, null, 2)}
             </pre>
           </div>
@@ -108,12 +108,12 @@ export function HopDetailPanel({ hop, index, totalHops, onClose }: Props) {
         {/* refs */}
         {hop.refs.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
               <LinkIcon className="w-3 h-3" /> 연관 리소스
             </p>
             <ul className="space-y-0.5">
               {hop.refs.map((r, i) => (
-                <li key={i} className="font-mono text-[11px]">
+                <li key={i} className="font-mono text-xs">
                   <span className="text-muted-foreground">{r.kind}:</span> <span className="text-foreground">{r.name}</span>
                 </li>
               ))}

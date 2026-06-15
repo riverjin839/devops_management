@@ -40,7 +40,7 @@ export function TrendChart({ trend, days = 7 }: Props) {
   return (
     <MacCard title={`최근 ${days}일 추이`}>
       <div className="space-y-3">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {Object.entries(trend.totals || {}).map(([k, v]) => (
             <span
               key={k}

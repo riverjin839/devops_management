@@ -244,22 +244,22 @@ export function PlaybooksPage() {
               <h1 className="text-xl font-bold">Ansible Playbooks</h1>
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                     {statusCounts.healthy} OK
                   </span>
                   {statusCounts.warning > 0 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <span className="text-sm px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
                       {statusCounts.warning} Changed
                     </span>
                   )}
                   {statusCounts.critical > 0 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+                    <span className="text-sm px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
                       {statusCounts.critical} Failed
                     </span>
                   )}
                 </div>
               )}
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {selectedClusterIds.length === 0
                   ? `· 전체 (${clusters.length}개 클러스터)`
                   : `· ${selectedClusterIds.length}개 클러스터 선택됨`}
@@ -271,7 +271,7 @@ export function PlaybooksPage() {
               <div className="inline-flex items-center bg-background border border-border rounded-lg p-0.5">
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`px-2 py-1.5 text-xs rounded inline-flex items-center gap-1 transition-colors ${
+                  className={`px-2 py-1.5 text-sm rounded inline-flex items-center gap-1 transition-colors ${
                     viewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   title="리스트 보기"
@@ -283,7 +283,7 @@ export function PlaybooksPage() {
                 </button>
                 <button
                   onClick={() => setViewMode('card')}
-                  className={`px-2 py-1.5 text-xs rounded inline-flex items-center gap-1 transition-colors ${
+                  className={`px-2 py-1.5 text-sm rounded inline-flex items-center gap-1 transition-colors ${
                     viewMode === 'card' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   title="카드 보기"
@@ -301,7 +301,7 @@ export function PlaybooksPage() {
                 <select
                   value={sortKey}
                   onChange={(e) => setSortKey(e.target.value as PlaybookSortKey)}
-                  className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg"
+                  className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg"
                 >
                   <option value="name">이름순</option>
                   <option value="status">상태순</option>
@@ -309,7 +309,7 @@ export function PlaybooksPage() {
                 </select>
                 <button
                   onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-                  className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
+                  className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
                   title={sortDir === 'asc' ? '오름차순' : '내림차순'}
                 >
                   {sortDir === 'asc' ? '↑' : '↓'}

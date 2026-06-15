@@ -16,8 +16,8 @@ const statusLabels: Record<Status, string> = {
 
 export function StatusBadge({ status, size = 'md', showLabel = true }: StatusBadgeProps) {
   const sizeClasses = {
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-2.5 py-1 text-xs',
+    sm: 'px-2 py-0.5 text-sm',
+    md: 'px-2.5 py-1 text-sm',
     lg: 'px-3 py-1.5 text-sm',
   };
 

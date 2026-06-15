@@ -46,7 +46,7 @@ export function MacCard({
             <span className="w-[13px] h-[13px] rounded-full" style={{ background: 'var(--mac-green)' }} />
           </div>
           {title && (
-            <span className="flex-1 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground select-none pr-8">
+            <span className="flex-1 text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground select-none pr-8">
               {title}
             </span>
           )}
@@ -62,7 +62,7 @@ export function MacCard({
     <div className={`bg-card rounded-md border border-border overflow-hidden ${rootClassName}`}>
       {title && (
         <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
             {title}
           </span>
         </div>

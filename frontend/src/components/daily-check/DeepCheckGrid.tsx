@@ -1,6 +1,7 @@
 import { CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import type { DeepCheckResult, Status } from '@/types';
+import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
+import type { DeepCheckResult, DeepCheckExecStep, Status } from '@/types';
 
 interface Props {
   results: DeepCheckResult[];
@@ -40,19 +41,22 @@ export function DeepCheckGrid({ results }: Props) {
                 <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${meta.color}`} />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-sm truncate">{r.checkType}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5 break-words">
+                  <div className="text-sm text-muted-foreground mt-0.5 break-words">
                     {r.message}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{new Date(r.checkedAt).toLocaleTimeString('ko-KR')}</span>
                 <span>{r.durationMs}ms</span>
               </div>
+              {Array.isArray(r.details?._steps) && r.details!._steps.length > 0 && (
+                <ExecutionStepsTimeline steps={r.details!._steps as DeepCheckExecStep[]} />
+              )}
               {r.details && Object.keys(r.details).length > 0 && (
-                <details className="text-[11px] text-muted-foreground">
+                <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground">상세</summary>
-                  <pre className="mt-1.5 rounded bg-muted p-2 overflow-x-auto text-[10px] max-h-48">
+                  <pre className="mt-1.5 rounded bg-muted p-2 overflow-x-auto text-xs max-h-48">
                     {JSON.stringify(r.details, null, 2)}
                   </pre>
                 </details>

@@ -73,7 +73,7 @@ function ToolbarButton({ onClick, active, title, children, disabled }: ToolbarBu
       }}
       title={title}
       disabled={disabled}
-      className={`p-1.5 rounded transition-colors text-xs flex items-center justify-center ${
+      className={`p-1.5 rounded transition-colors text-sm flex items-center justify-center ${
         active
           ? 'bg-primary/20 text-primary'
           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -300,7 +300,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
           {tblOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setTblOpen(false)} aria-hidden />
-              <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1 text-xs">
+              <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1 text-sm">
                 {([
                   ['행 위에 추가', () => editor.chain().focus().addRowBefore().run()],
                   ['행 아래 추가', () => editor.chain().focus().addRowAfter().run()],
@@ -364,7 +364,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
           <>
             <div className="fixed inset-0 z-40" onClick={() => setTplOpen(false)} aria-hidden />
             <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-lg border border-border bg-card shadow-lg py-1">
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">실무 템플릿</div>
+              <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">실무 템플릿</div>
               {DOC_TEMPLATES.map((tpl) => (
                 <button
                   key={tpl.id}
@@ -375,8 +375,8 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
                   }}
                   className="w-full text-left px-3 py-1.5 hover:bg-secondary transition-colors"
                 >
-                  <div className="text-xs font-medium">{tpl.label}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{tpl.description}</div>
+                  <div className="text-sm font-medium">{tpl.label}</div>
+                  <div className="text-xs text-muted-foreground truncate">{tpl.description}</div>
                 </button>
               ))}
             </div>

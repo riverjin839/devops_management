@@ -161,7 +161,7 @@ export function SearchableSelect<T>({
           className="absolute z-30 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-border bg-card shadow-lg py-1"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-xs text-muted-foreground italic">
+            <li className="px-3 py-2 text-sm text-muted-foreground italic">
               {options.length === 0 ? emptyText : '검색 결과 없음'}
             </li>
           ) : (

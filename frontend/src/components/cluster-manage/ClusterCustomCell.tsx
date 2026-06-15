@@ -53,7 +53,7 @@ export function ClusterCustomCell({ cluster, field }: Props) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={save}
-          className="w-full px-1 py-0.5 text-xs bg-background border border-primary rounded"
+          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded"
         >
           <option value="">(없음)</option>
           {(field.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
@@ -72,7 +72,7 @@ export function ClusterCustomCell({ cluster, field }: Props) {
             if (e.key === 'Escape') setEditing(false);
           }}
           onBlur={save}
-          className="w-full px-1 py-0.5 text-xs bg-background border border-primary rounded"
+          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded"
         />
       </div>
     );
@@ -107,7 +107,7 @@ export function ClusterCustomCell({ cluster, field }: Props) {
   return (
     <span
       onDoubleClick={() => setEditing(true)}
-      className="cursor-text hover:bg-primary/5 rounded px-0.5 text-xs block min-h-[1.2em]"
+      className="cursor-text hover:bg-primary/5 rounded px-0.5 text-sm block min-h-[1.2em]"
       title={`더블클릭으로 편집 — ${field.label}`}
     >
       {text ?? <span className="text-muted-foreground/40">-</span>}

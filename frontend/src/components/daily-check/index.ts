@@ -5,3 +5,5 @@ export { DeepCheckGrid } from './DeepCheckGrid';
 export { DeepCheckDefinitionForm } from './DeepCheckDefinitionForm';
 export { DeepCheckDefinitionList } from './DeepCheckDefinitionList';
 export { NotificationSettingsPanel } from './NotificationSettingsPanel';
+export { ResourceTrendChecklist } from './ResourceTrendChecklist';
+export { ExecutionStepsTimeline } from './ExecutionStepsTimeline';

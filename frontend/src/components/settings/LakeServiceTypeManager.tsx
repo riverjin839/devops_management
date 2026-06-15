@@ -45,7 +45,7 @@ export function LakeServiceTypeManager() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold">LAKE 서비스 타입</h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             8 builtin (airflow/spark/...) 은 비활성화만 가능, 커스텀 타입은 자유 추가/삭제
           </p>
         </div>
@@ -53,7 +53,7 @@ export function LakeServiceTypeManager() {
           type="button"
           onClick={() => setAdding(true)}
           aria-label="커스텀 타입 추가"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-semibold hover:opacity-90"
         >
           <Plus className="w-3.5 h-3.5" />
           커스텀 추가
@@ -66,14 +66,14 @@ export function LakeServiceTypeManager() {
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div className="font-medium">LAKE 타입 조회 실패</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
+            <div className="text-sm text-muted-foreground mt-0.5">
               {error instanceof Error ? error.message : 'API 오류'}
             </div>
           </div>
         </div>
       )}
       {errorMsg && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400">
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <div className="flex-1">{errorMsg}</div>
           <button type="button" onClick={() => setErrorMsg(null)} aria-label="알림 닫기">
@@ -93,7 +93,7 @@ export function LakeServiceTypeManager() {
       {!isLoading && rows.length > 0 && (
         <div className="bg-card border border-border rounded-md overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground bg-muted/40">
+            <thead className="text-sm text-muted-foreground bg-muted/40">
               <tr>
                 <th className="px-3 py-2 text-left font-medium">아이콘</th>
                 <th className="px-3 py-2 text-left font-medium">slug</th>
@@ -108,22 +108,22 @@ export function LakeServiceTypeManager() {
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((r) => (
-                <tr key={r.id} className="text-xs hover:bg-secondary/40">
+                <tr key={r.id} className="text-sm hover:bg-secondary/40">
                   <td className="px-3 py-2">
                     <ServiceTypeIcon serviceType={r.serviceType} className="w-4 h-4" />
                   </td>
                   <td className="px-3 py-2 font-mono">{r.serviceType}</td>
                   <td className="px-3 py-2 font-medium">{r.label}</td>
                   <td className="px-3 py-2 text-muted-foreground">{r.category}</td>
-                  <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">{r.defaultPath}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.defaultPath}</td>
                   <td className="px-3 py-2 text-center">
                     {r.isBuiltin ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 bg-primary/10 text-primary border border-primary/30">
+                      <span className="inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5 bg-primary/10 text-primary border border-primary/30">
                         <Lock className="w-2.5 h-2.5" />
                         builtin
                       </span>
                     ) : (
-                      <span className="text-[10px] rounded-full px-2 py-0.5 bg-secondary text-muted-foreground border border-border">
+                      <span className="text-xs rounded-full px-2 py-0.5 bg-secondary text-muted-foreground border border-border">
                         custom
                       </span>
                     )}
@@ -290,7 +290,7 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
           <h2 className="text-sm font-semibold">
             {mode === 'create' ? '커스텀 LAKE 타입 추가' : `LAKE 타입 편집 — ${row?.serviceType}`}
-            {isBuiltin && <span className="ml-2 text-[10px] text-primary">builtin (일부 readonly)</span>}
+            {isBuiltin && <span className="ml-2 text-xs text-primary">builtin (일부 readonly)</span>}
           </h2>
           <button type="button" onClick={onClose} aria-label="닫기"
                   className="p-1 rounded hover:bg-secondary text-muted-foreground">
@@ -308,7 +308,7 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
               disabled={isEdit}
               className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-mono disabled:opacity-50"
             />
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               영문 소문자/숫자/하이픈 1-32자. 등록 후 변경 불가
             </p>
           </Field>
@@ -353,7 +353,7 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
               disabled={isBuiltin}
               className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-mono disabled:opacity-50"
             />
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               custom 타입의 GenericHealthzChecker 가 GET probe 할 경로 (예: /health, /healthz, /api/v1/status)
             </p>
           </Field>
@@ -384,11 +384,11 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
               aria-label="enabled"
               className="w-4 h-4"
             />
-            <span className="text-xs">활성화 (LakeServicesPage 등록 모달에 표시)</span>
+            <span className="text-sm">활성화 (LakeServicesPage 등록 모달에 표시)</span>
           </label>
 
           {localError && (
-            <div className="text-xs text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
+            <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
               {localError}
             </div>
           )}
@@ -396,12 +396,12 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border bg-muted/10">
           <button type="button" onClick={onClose}
-                  className="px-4 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+                  className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
             취소
           </button>
           <button
             type="button" onClick={handleSubmit} disabled={pending} autoFocus
-            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="px-4 py-1.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {pending && <Loader2 className="w-3 h-3 animate-spin" />}
             {mode === 'create' ? '추가' : '저장'}
@@ -415,7 +415,7 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
 function Field({ label, children, disabled }: { label: string; children: React.ReactNode; disabled?: boolean }) {
   return (
     <label className={`block ${disabled ? 'opacity-70' : ''}`}>
-      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <span className="text-sm font-semibold text-muted-foreground">{label}</span>
       {children}
     </label>
   );

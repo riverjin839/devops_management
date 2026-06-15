@@ -277,17 +277,17 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         <div className="flex items-center gap-2 text-sm">
           <CalendarDays className="w-4 h-4 text-primary" />
           <span className="font-semibold">{monthLabel}</span>
-          <span className="text-muted-foreground text-xs font-mono">{weekStartStr} ~ {weekEndStr}</span>
+          <span className="text-muted-foreground text-sm font-mono">{weekStartStr} ~ {weekEndStr}</span>
           {!isThisWeek && (
             <button onClick={goToday}
-              className="ml-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+              className="ml-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
               이번 주
             </button>
           )}
         </div>
         <div className="flex items-center gap-3">
           {/* 보기 전환: 업무 기준 ↔ 담당자 기준 */}
-          <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px]">
+          <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
             <button
               onClick={() => setViewMode('task')}
               aria-pressed={viewMode === 'task'}
@@ -304,7 +304,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             </button>
           </div>
           {/* 단축키 — 업무 관리 / 오늘 할일 페이지로 바로 이동 */}
-          <div className="flex items-center gap-1 text-[11px]">
+          <div className="flex items-center gap-1 text-xs">
             <button
               type="button"
               onClick={() => navigate('/tasks-mgmt')}
@@ -327,7 +327,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               <CalendarCheck className="w-3 h-3" /> Work To Do
             </button>
           </div>
-          <div className="hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
+          <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />업무 {taskBars.length}</span>
             <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />마일스톤 {milestones.length}</span>
           </div>
@@ -382,7 +382,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             {/* tooltip: shows currently-viewed week range above the thumb */}
             <div
               className={cn(
-                'pointer-events-none absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100 peer-active:opacity-100',
+                'pointer-events-none absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-medium opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100 peer-active:opacity-100',
                 sliderInvert ? 'bg-background text-foreground' : 'bg-foreground text-background',
               )}
               style={{ left: centerLeft(frac) }}
@@ -414,7 +414,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
           )}
 
           <div className={cn(
-            'flex justify-between text-[10px] font-mono',
+            'flex justify-between text-xs font-mono',
             sliderInvert ? 'text-background/70' : 'text-muted-foreground/70',
           )}>
             <span>{shortDate(rangeStart)}</span>
@@ -441,7 +441,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
         {/* header: weekday columns (월~금) */}
         <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
-          <div className="px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+          <div className="px-4 py-2.5 text-xs font-semibold text-muted-foreground">
             {viewMode === 'assignee' ? '담당자 / 마일스톤' : '업무 / 마일스톤'}
           </div>
           <div className={`grid ${colsClass}`}>
@@ -451,10 +451,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               return (
                 <div key={ds}
                   className={`px-1 py-2 text-center border-l border-border/60 ${isTd ? 'bg-primary/10' : ''}`}>
-                  <div className={`text-[10px] ${isTd ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+                  <div className={`text-xs ${isTd ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
                     {KR_DAYS[d.getDay()]}
                   </div>
-                  <div className={`text-[11px] font-semibold ${isTd ? 'text-primary' : ''}`}>
+                  <div className={`text-xs font-semibold ${isTd ? 'text-primary' : ''}`}>
                     {d.getMonth() + 1}/{d.getDate()}
                   </div>
                 </div>
@@ -477,14 +477,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
           <div className="py-14 flex flex-col items-center justify-center text-muted-foreground">
             <CalendarDays className="w-9 h-9 mb-2 opacity-30" />
             <p className="text-sm">이번 주에 예정된 작업이 없습니다.</p>
-            <p className="text-[11px] mt-0.5 opacity-70">다른 주를 보려면 화살표를 사용하세요.</p>
+            <p className="text-xs mt-0.5 opacity-70">다른 주를 보려면 화살표를 사용하세요.</p>
           </div>
         ) : (
           <div className="divide-y divide-border/60">
             {/* milestone strip */}
             {milestones.length > 0 && (
               <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] bg-amber-500/[0.04]">
-                <div className="px-4 py-2.5 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600">
+                <div className="px-4 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-amber-600">
                   <Flag className="w-3.5 h-3.5" /> 마일스톤
                 </div>
                 <div className={`relative grid ${colsClass} min-h-[44px]`}>
@@ -498,7 +498,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                         style={{ left: `${(dayIdx / DAY_COUNT) * 100}%`, width: `${(1 / DAY_COUNT) * 100}%` }}
                         title={stripHtml(issue.content)}>
                         <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-emerald-500 fill-emerald-400' : 'text-amber-500 fill-amber-400'}`} />
-                        <span className={`text-[10px] font-medium truncate ${resolved ? 'text-emerald-600' : 'text-amber-700'}`}>
+                        <span className={`text-xs font-medium truncate ${resolved ? 'text-emerald-600' : 'text-amber-700'}`}>
                           {issue.title?.trim() || stripHtml(issue.content)}
                         </span>
                       </button>
@@ -520,10 +520,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   <div className="px-4 py-2.5 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full bg-gradient-to-r ${sv.grad}`} />
-                      <span className="text-xs font-medium truncate">{item.title?.trim() || stripHtml(item.content)}</span>
+                      <span className="text-sm font-medium truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                     </div>
                     {item.category && (
-                      <p className="text-[10px] text-muted-foreground truncate mt-0.5 pl-3">{item.category}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5 pl-3">{item.category}</p>
                     )}
                   </div>
                   {/* track */}
@@ -540,7 +540,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                         className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
-                        <span className="text-[10px] font-semibold truncate">{team || sv.label}</span>
+                        <span className="text-xs font-semibold truncate">{team || sv.label}</span>
                         {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
                       </button>
                     </div>
@@ -560,9 +560,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   <div className="px-4 py-3 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Users className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
-                      <span className="text-xs font-semibold truncate">{name}</span>
+                      <span className="text-sm font-semibold truncate">{name}</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 pl-5">{total}건</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 pl-5">{total}건</p>
                   </div>
                   {/* track */}
                   <div className={`relative grid ${colsClass}`} style={{ minHeight: trackH }}>
@@ -586,7 +586,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
-                              <span className="text-[10px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
+                              <span className="text-xs font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                               {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
                             </button>
                           </div>
@@ -602,7 +602,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       </div>
 
       {/* ── legend ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap text-[11px] text-muted-foreground px-1">
+      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground px-1">
         <span className="font-medium">범례</span>
         {(Object.keys(STATUS_BAR) as KanbanStatus[]).map((k) => (
           <span key={k} className="flex items-center gap-1">

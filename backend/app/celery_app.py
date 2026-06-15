@@ -52,6 +52,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_trend_collect",
         "schedule": crontab(hour=7, minute=0),
     },
+    # 리소스 수 스냅샷 — 주기는 운영자가 설정(AppSetting cron). 매분 디스패처가 cron 매치 시 수집.
+    "resource-count-snapshot-dispatcher": {
+        "task": "app.celery_app.dispatch_resource_count_snapshot",
+        "schedule": crontab(minute="*"),
+    },
     # BatchJob.cron 디스패처 — 매 분마다 등록된 잡들을 스캔하고
     # cron 표현식이 매치하는 잡을 run_batch_job 으로 큐잉.
     "batch-job-dispatcher": {
@@ -131,6 +136,120 @@ def run_scheduled_check(self, schedule_type: str):
             "skipped_clusters": skipped,
         }
 
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.collect_resource_counts")
+def collect_resource_counts(self):
+    """전 클러스터 리소스 수 스냅샷(하루 1회). 일일점검 리뷰 추세용.
+
+    클러스터 조회 + 직렬 수집(클러스터 수가 많지 않고 카운트는 가벼움). 한 클러스터
+    실패가 다음 클러스터를 막지 않도록 개별 try/except.
+    """
+    from app.database import SessionLocal
+    from app.models import Cluster, SnapshotSource
+    from app.services import resource_count_service as rcs
+
+    db = SessionLocal()
+    results: list[dict] = []
+    try:
+        for cluster in db.query(Cluster).all():
+            try:
+                snap = rcs.collect_for_cluster(db, cluster, source=SnapshotSource.auto.value)
+                results.append({"cluster": cluster.name, "snapshot_id": str(snap.id)})
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                results.append({"cluster": cluster.name, "error": str(e)[:200]})
+        return {"executed_at": datetime.now().isoformat(), "results": results}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.collect_resource_counts_one")
+def collect_resource_counts_one(self, cluster_id: str, user_id: str | None = None):
+    """단일 클러스터 리소스 수 스냅샷 — 수동 "지금 스냅샷"(비동기) 용.
+
+    동기 요청에서 돌리면 big k8s 에서 게이트웨이 타임아웃(504) → 큐잉해서 worker 가 처리.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster, SnapshotSource
+    from app.services import resource_count_service as rcs
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        snap = rcs.collect_for_cluster(db, cluster, source=SnapshotSource.manual.value, user_id=user_id)
+        return {"cluster": cluster.name, "snapshot_id": str(snap.id), "counts": snap.counts}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("manual snapshot failed cluster=%s: %s", cluster_id, e)
+        return {"error": str(e)[:200], "cluster_id": cluster_id}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.dispatch_resource_count_snapshot")
+def dispatch_resource_count_snapshot(self):
+    """운영자 설정 cron 에 맞춰 리소스 수 스냅샷을 트리거(매분 평가).
+
+    배치잡 디스패처와 동일하게 croniter + tz + last_run 앵커로 cron 틱당 최대 1회 발사.
+    """
+    import logging
+    from datetime import datetime, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.services import resource_count_service as rcs
+
+    log = logging.getLogger(__name__)
+    try:
+        from croniter import croniter
+    except ImportError:
+        return {"dispatched": False, "reason": "croniter_missing"}
+
+    try:
+        tz = ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        tz = ZoneInfo("Asia/Seoul")
+
+    db = SessionLocal()
+    try:
+        sch = rcs.get_schedule(db)
+        if not sch.get("enabled"):
+            return {"dispatched": False, "reason": "disabled"}
+        cron_expr = (sch.get("cron") or "").strip()
+        if not croniter.is_valid(cron_expr):
+            return {"dispatched": False, "reason": "invalid_cron"}
+
+        now_aware = datetime.now(_tz.utc).astimezone(tz)
+        now_naive = now_aware.replace(tzinfo=None)
+        last = sch.get("last_run_at")
+        if last:
+            try:
+                anchor = datetime.fromisoformat(last).astimezone(tz).replace(tzinfo=None)
+            except Exception:  # noqa: BLE001
+                anchor = now_naive - timedelta(days=1)
+        else:
+            anchor = now_naive - timedelta(days=1)
+
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            return {"dispatched": False, "reason": "cron_eval_error"}
+
+        if next_fire > now_naive:
+            return {"dispatched": False, "reason": "not_due", "next_fire": next_fire.isoformat()}
+
+        # due → 수집 트리거 + last_run 갱신(현재 UTC iso)
+        collect_resource_counts.delay()
+        rcs.set_schedule(db, sch["enabled"], cron_expr, last_run_at=datetime.now(_tz.utc).isoformat())
+        return {"dispatched": True, "fired_at": now_aware.isoformat()}
     finally:
         db.close()
 

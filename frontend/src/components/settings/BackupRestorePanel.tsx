@@ -129,31 +129,31 @@ export function BackupRestorePanel() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div>
-            <p className="text-[11px] text-muted-foreground">전체 테이블</p>
+            <p className="text-xs text-muted-foreground">전체 테이블</p>
             <p className="text-xl font-bold">{metaQ.data?.tables.length ?? 0}</p>
           </div>
           <div>
-            <p className="text-[11px] text-muted-foreground">총 Row</p>
+            <p className="text-xs text-muted-foreground">총 Row</p>
             <p className="text-xl font-bold">{totalRows.toLocaleString()}</p>
           </div>
           <div>
-            <p className="text-[11px] text-muted-foreground">사용자 데이터 row</p>
+            <p className="text-xs text-muted-foreground">사용자 데이터 row</p>
             <p className="text-xl font-bold text-emerald-500">{(totalRows - logTableRows).toLocaleString()}</p>
           </div>
           <div>
-            <p className="text-[11px] text-muted-foreground">로그성 row</p>
+            <p className="text-xs text-muted-foreground">로그성 row</p>
             <p className="text-xl font-bold text-amber-500">{logTableRows.toLocaleString()}</p>
           </div>
         </div>
 
-        <details className="text-xs">
+        <details className="text-sm">
           <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
             테이블별 row 수 보기
           </summary>
           <div className="mt-2 max-h-60 overflow-y-auto border border-border rounded-lg">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <thead className="bg-muted/30 sticky top-0">
-                <tr className="text-left text-[10px] text-muted-foreground uppercase">
+                <tr className="text-left text-xs text-muted-foreground uppercase">
                   <th className="px-2 py-1">테이블</th>
                   <th className="px-2 py-1 text-right">Rows</th>
                   <th className="px-2 py-1">유형</th>
@@ -166,9 +166,9 @@ export function BackupRestorePanel() {
                     <td className="px-2 py-1 text-right font-mono">{t.rows.toLocaleString()}</td>
                     <td className="px-2 py-1">
                       {t.isLog ? (
-                        <span className="text-[10px] text-amber-500">log</span>
+                        <span className="text-xs text-amber-500">log</span>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground">data</span>
+                        <span className="text-xs text-muted-foreground">data</span>
                       )}
                     </td>
                   </tr>
@@ -185,17 +185,17 @@ export function BackupRestorePanel() {
           <Download className="w-5 h-5 text-emerald-500" />
           <h2 className="font-semibold">백업 (Export)</h2>
         </header>
-        <p className="text-xs text-muted-foreground mb-3">
+        <p className="text-sm text-muted-foreground mb-3">
           현재 모든 테이블을 JSON 한 파일로 내보냅니다. 별도 PostgreSQL 백업 없이도 앱 레벨 복구 가능.
         </p>
 
         <div className="space-y-2 mb-4">
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={exportIncludeLogs}
               onChange={(e) => setExportIncludeLogs(e.target.checked)} />
             <span>로그성 테이블 포함 <span className="text-muted-foreground">(check_logs / daily_check_logs / cluster_config_snapshots / trend_* / ontology_events 등 — 파일 크기 증가, 대부분 재생성 가능)</span></span>
           </label>
-          <label className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={exportIncludeSensitive}
               onChange={(e) => setExportIncludeSensitive(e.target.checked)} />
             <span>민감 필드 포함 <span className="text-amber-500">(kubeconfig 내용 등 — 파일 유출 시 보안 위험)</span></span>
@@ -216,7 +216,7 @@ export function BackupRestorePanel() {
           <h2 className="font-semibold">복구 (Import)</h2>
         </header>
 
-        <div className="px-3 py-2 mb-3 rounded-lg bg-sky-500/5 border border-sky-500/20 text-[11px] text-foreground/80 flex items-start gap-2">
+        <div className="px-3 py-2 mb-3 rounded-lg bg-sky-500/5 border border-sky-500/20 text-xs text-foreground/80 flex items-start gap-2">
           <Info className="w-3 h-3 mt-0.5 flex-shrink-0 text-sky-500" />
           <div>
             <strong>병합(merge)</strong>: PK 기준 upsert — 백업에 없는 기존 row 는 유지. 안전한 기본값.<br/>
@@ -227,7 +227,7 @@ export function BackupRestorePanel() {
         <div className="space-y-3">
           {/* 파일 + 옵션 */}
           <div className="flex items-center gap-2 flex-wrap">
-            <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg cursor-pointer">
+            <label className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg cursor-pointer">
               <Upload className="w-3.5 h-3.5" />
               백업 파일 선택
               <input type="file" accept=".json,application/json" className="hidden"
@@ -237,13 +237,13 @@ export function BackupRestorePanel() {
                 }} />
             </label>
             {file && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {file.name} · {formatBytes(file.size)}
               </span>
             )}
             {file && (
               <button onClick={resetImport}
-                className="ml-auto text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+                className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
                 <RotateCcw className="w-3 h-3" /> 초기화
               </button>
             )}
@@ -253,14 +253,14 @@ export function BackupRestorePanel() {
             <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
               {(['merge', 'replace'] as Mode[]).map((m) => (
                 <button key={m} onClick={() => { setMode(m); setPreview(null); }}
-                  className={`px-3 py-1 text-xs font-medium rounded-md ${
+                  className={`px-3 py-1 text-sm font-medium rounded-md ${
                     mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
                   }`}>
                   {m === 'merge' ? '병합 (merge)' : '덮어쓰기 (replace)'}
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-1.5 text-xs">
+            <label className="flex items-center gap-1.5 text-sm">
               <input type="checkbox" checked={includeLogs}
                 onChange={(e) => { setIncludeLogs(e.target.checked); setPreview(null); }} />
               로그성 테이블 포함
@@ -268,7 +268,7 @@ export function BackupRestorePanel() {
 
             <button onClick={handlePreview}
               disabled={!file || previewing}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-50">
+              className="ml-auto flex items-center gap-1.5 px-3 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-50">
               {previewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Info className="w-3 h-3" />}
               미리보기 (diff)
             </button>
@@ -277,7 +277,7 @@ export function BackupRestorePanel() {
           {/* diff preview */}
           {preview && (
             <div className="border border-border rounded-xl overflow-hidden">
-              <div className="px-3 py-2 bg-muted/30 border-b border-border flex items-center gap-2 text-xs">
+              <div className="px-3 py-2 bg-muted/30 border-b border-border flex items-center gap-2 text-sm">
                 <span className="font-semibold">
                   {preview.diff.version ? `백업 버전 ${preview.diff.version}` : '버전 미상'}
                 </span>
@@ -287,23 +287,23 @@ export function BackupRestorePanel() {
                   </span>
                 )}
                 <span className="ml-auto flex gap-2">
-                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-[10px]">
+                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-xs">
                     신규 합계 {preview.diff.tables.reduce((s, t) => s + t.insertCount, 0)}
                   </span>
-                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30 text-[10px]">
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30 text-xs">
                     업데이트 합계 {preview.diff.tables.reduce((s, t) => s + t.updateCount, 0)}
                   </span>
                   {mode === 'replace' && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/30 text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/30 text-xs">
                       삭제 예정 {preview.diff.tables.reduce((s, t) => s + t.deleteCandidates, 0)}
                     </span>
                   )}
                 </span>
               </div>
               <div className="max-h-64 overflow-y-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <thead className="bg-muted/30 sticky top-0">
-                    <tr className="text-[10px] text-muted-foreground uppercase text-left">
+                    <tr className="text-xs text-muted-foreground uppercase text-left">
                       <th className="px-2 py-1">테이블</th>
                       <th className="px-2 py-1 text-right">현재</th>
                       <th className="px-2 py-1 text-right">백업</th>
@@ -332,7 +332,7 @@ export function BackupRestorePanel() {
           )}
 
           {resultMsg && (
-            <div className={`px-3 py-2 rounded-lg text-xs border ${
+            <div className={`px-3 py-2 rounded-lg text-sm border ${
               resultMsg.startsWith('✓')
                 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
                 : 'bg-destructive/10 text-destructive border-destructive/30'
@@ -345,7 +345,7 @@ export function BackupRestorePanel() {
           <div className="flex items-center justify-end pt-2 border-t border-border">
             <button onClick={handleApply}
               disabled={!file || !preview || applying}
-              className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg text-primary-foreground disabled:opacity-50 ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg text-primary-foreground disabled:opacity-50 ${
                 mode === 'replace' ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/90'
               }`}>
               {applying
@@ -366,7 +366,7 @@ export function BackupRestorePanel() {
         onCancel={() => setConfirmReplace(false)}
         onConfirm={doApply}
       >
-        <div className="text-xs space-y-1">
+        <div className="text-sm space-y-1">
           <p className="flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-red-500" /> 현재 DB 의 사용자 데이터 {totalRows.toLocaleString()} row 중 백업에 없는 row 는 모두 사라집니다.</p>
           <p>· 파일: <span className="font-mono">{file?.name}</span></p>
           <p>· 모드: <span className="font-mono text-red-500">replace</span> (병합 아님)</p>
@@ -374,7 +374,7 @@ export function BackupRestorePanel() {
       </ConfirmDialog>
 
       {/* ── 도움말 ──────────────────────────────────────────────────────── */}
-      <section className="bg-card border border-border rounded-xl p-5 text-xs text-muted-foreground space-y-1.5">
+      <section className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground space-y-1.5">
         <p className="flex items-center gap-2 text-foreground font-medium">
           <Database className="w-4 h-4" /> 사용 팁
         </p>

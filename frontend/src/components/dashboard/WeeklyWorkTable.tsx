@@ -79,7 +79,7 @@ export function WeeklyWorkTable() {
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
-        <span className="text-[11px] font-medium tabular-nums text-muted-foreground">{rangeLabel}</span>
+        <span className="text-xs font-medium tabular-nums text-muted-foreground">{rangeLabel}</span>
         <div className="flex items-center gap-1">
           {weekOffset !== 0 && (
             <button
@@ -102,7 +102,7 @@ export function WeeklyWorkTable() {
 
       {/* 표 */}
       <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-[11px] border-collapse">
+        <table className="w-full text-xs border-collapse">
           <thead className="sticky top-0 z-10">
             <tr className="bg-muted/30 border-b border-border">
               <th className="w-20 px-2 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">날짜</th>
@@ -123,7 +123,7 @@ export function WeeklyWorkTable() {
                     <td className="px-2 py-1.5 font-medium text-muted-foreground whitespace-nowrap">
                       {day.label}
                     </td>
-                    <td colSpan={4} className="px-2 py-1.5 text-muted-foreground/40 italic text-[10px]">
+                    <td colSpan={4} className="px-2 py-1.5 text-muted-foreground/40 italic text-xs">
                       업무 없음
                     </td>
                   </tr>

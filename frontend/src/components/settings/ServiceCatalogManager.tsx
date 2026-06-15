@@ -113,7 +113,7 @@ export function ServiceCatalogManager() {
     setSlugTouched(new Set());
   };
 
-  const inputCls = 'w-full px-2 py-1 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary';
+  const inputCls = 'w-full px-2 py-1 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary';
 
   const usedSlugs = useMemo(() => {
     const m = new Map<string, number>();
@@ -122,7 +122,7 @@ export function ServiceCatalogManager() {
   }, [draft]);
 
   if (isLoading) {
-    return <div className="bg-card border border-border rounded-xl p-4 text-xs text-muted-foreground">로딩 중…</div>;
+    return <div className="bg-card border border-border rounded-xl p-4 text-sm text-muted-foreground">로딩 중…</div>;
   }
 
   return (
@@ -131,17 +131,17 @@ export function ServiceCatalogManager() {
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-semibold">서비스 카탈로그</h3>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             통합지식 사이드바·task/issue 의 service tag 에 사용됨
           </span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleReset} disabled={!dirty}
-            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
+            className="px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg disabled:opacity-40">
             되돌리기
           </button>
           <button onClick={handleSave} disabled={!dirty || updateMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
             {updateMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
             저장
           </button>
@@ -173,23 +173,23 @@ export function ServiceCatalogManager() {
                 </button>
               </div>
               <label className="col-span-3 block">
-                <span className="block text-[10px] text-muted-foreground mb-0.5">라벨</span>
+                <span className="block text-xs text-muted-foreground mb-0.5">라벨</span>
                 <input value={s.label} onChange={(e) => {
                   update(idx, { label: e.target.value, slug: slugTouched.has(idx) ? s.slug : deriveSlug(e.target.value) });
                 }}
                   placeholder="Kubernetes" className={inputCls} />
               </label>
               <label className="col-span-2 block">
-                <span className="block text-[10px] text-muted-foreground mb-0.5">slug</span>
+                <span className="block text-xs text-muted-foreground mb-0.5">slug</span>
                 <input value={s.slug} onChange={(e) => {
                   setSlugTouched((t) => new Set(t).add(idx));
                   update(idx, { slug: e.target.value });
                 }}
                   placeholder="k8s" className={`${inputCls} font-mono`} />
-                {slugConflict && <p className="text-[10px] text-red-500 mt-0.5">중복</p>}
+                {slugConflict && <p className="text-xs text-red-500 mt-0.5">중복</p>}
               </label>
               <div className="col-span-2 block">
-                <span className="block text-[10px] text-muted-foreground mb-0.5">아이콘</span>
+                <span className="block text-xs text-muted-foreground mb-0.5">아이콘</span>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -200,7 +200,7 @@ export function ServiceCatalogManager() {
                   title="아이콘 변경"
                 >
                   <Pencil className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <span className="truncate text-[11px] font-mono">
+                  <span className="truncate text-xs font-mono">
                     {s.icon
                       ? s.icon.startsWith('data:image/')
                         ? '(업로드 이미지)'
@@ -212,7 +212,7 @@ export function ServiceCatalogManager() {
                 </button>
               </div>
               <label className="col-span-2 block">
-                <span className="block text-[10px] text-muted-foreground mb-0.5">색상</span>
+                <span className="block text-xs text-muted-foreground mb-0.5">색상</span>
                 <select value={s.color || 'slate'} onChange={(e) => update(idx, { color: e.target.value })}
                   className={inputCls}>
                   {COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -235,13 +235,13 @@ export function ServiceCatalogManager() {
               <div className="col-span-12 -mt-1">
                 <input value={s.description ?? ''} onChange={(e) => update(idx, { description: e.target.value })}
                   placeholder="짧은 설명 (드롭다운 툴팁용)"
-                  className={`${inputCls} text-[11px] text-muted-foreground`} />
+                  className={`${inputCls} text-xs text-muted-foreground`} />
               </div>
             </div>
           );
         })}
         <button onClick={add}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-primary/5 border border-dashed border-border hover:border-primary/40 rounded-lg">
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-primary/5 border border-dashed border-border hover:border-primary/40 rounded-lg">
           <Plus className="w-3.5 h-3.5" /> 서비스 추가
         </button>
       </div>

@@ -2025,6 +2025,19 @@ export interface DeepCheckResult {
   checkedAt: string;
 }
 
+// Deep check 실행 단계(로그 + 2D 애니메이션)
+export interface DeepCheckExecStep {
+  id: string;
+  label: string;
+  status: 'running' | 'success' | 'failed' | 'skipped';
+  detail?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metrics?: Record<string, any>;
+  startedMs?: number;
+  durationMs?: number;
+}
+export interface DeepCheckStepPlanItem { id: string; label: string }
+
 export interface DeepCheckTestResult {
   definitionId: string;
   checkType: DeepCheckType;
@@ -2034,6 +2047,8 @@ export interface DeepCheckTestResult {
   details?: Record<string, any> | null;
   durationMs: number;
   persistedResultId?: string;
+  steps?: DeepCheckExecStep[];
+  stepPlan?: DeepCheckStepPlanItem[];
 }
 
 export interface DiffSummary {
@@ -2411,10 +2426,13 @@ export interface K8sResourceRow {
   name: string;
   namespace?: string | null;
   summary: string;
+  cols?: Record<string, string>;
   ageSeconds?: number | null;
 }
+export interface K8sColumnDef { key: string; label: string }
 export interface K8sResourceListResponse {
   kind: string;
+  columns?: K8sColumnDef[];
   count: number;
   truncated: boolean;
   items: K8sResourceRow[];
@@ -2424,4 +2442,162 @@ export interface K8sResourceYaml {
   namespace: string;
   name: string;
   yaml: string;
+}
+
+// ── K8s 상세 관리 (Lens 식) — 쓰기 액션 / CRD / Helm ─────────────────────────
+export interface K8sResourceCapability {
+  scalable: boolean;
+  restartable: boolean;
+  deletable: boolean;
+  editable: boolean;
+  namespaced: boolean;
+}
+export interface K8sCapabilitiesResponse {
+  capabilities: Record<string, K8sResourceCapability>;
+}
+export interface K8sWriteResult {
+  ok: boolean;
+  kind?: string;
+  namespace?: string;
+  name?: string;
+  replicas?: number;
+  restartedAt?: string;
+}
+export interface K8sDrainResult {
+  ok: boolean;
+  node: string;
+  evicted: string[];
+  skipped: { pod: string; reason: string }[];
+  errors: { pod: string; error: string }[];
+}
+export interface K8sCrdInfo {
+  name: string;
+  group: string;
+  kind: string;
+  plural: string;
+  scope: string; // Namespaced | Cluster
+  versions: string[];
+  version: string;
+  ageSeconds?: number | null;
+}
+export interface K8sCrdListResponse {
+  count: number;
+  items: K8sCrdInfo[];
+}
+export interface HelmRelease {
+  name: string;
+  namespace: string;
+  revision: string | number;
+  status: string;
+  chart: string;
+  appVersion?: string;
+  updated?: string;
+}
+export interface HelmReleaseListResponse {
+  count: number;
+  items: HelmRelease[];
+}
+export interface HelmHistoryItem {
+  revision: string | number;
+  status: string;
+  chart: string;
+  appVersion?: string;
+  updated?: string;
+  description?: string;
+}
+
+// 구조화 상세(요약 탭) — 백엔드가 생성
+export interface ResourceDetailKVItem { k: string; v: string }
+export interface ResourceDetailSection {
+  title: string;
+  type: 'kv' | 'list' | 'text';
+  items?: ResourceDetailKVItem[] | string[];
+  text?: string;
+}
+// K8sResourceYaml 응답에 sections 가 함께 옴(선택)
+export interface K8sResourceDetail {
+  kind: string;
+  namespace: string;
+  name: string;
+  yaml: string;
+  sections?: ResourceDetailSection[];
+}
+
+// Nodes (rich)
+export interface K8sNodeRichRow {
+  name: string;
+  roles: string[];
+  version?: string | null;
+  taints: number;
+  conditions: string[];
+  cpuCapacity?: string | null;
+  memCapacity?: string | null;
+  cpuUsage?: string | null;
+  memUsage?: string | null;
+  unschedulable: boolean;
+  ageSeconds?: number | null;
+}
+export interface K8sNodesResponse {
+  count: number;
+  items: K8sNodeRichRow[];
+  metricsAvailable: boolean;
+}
+
+// 종류 가용성 (nav 동적 숨김)
+export interface KindAvailabilityInfo { available: boolean; present: boolean; count: number | null; truncated: boolean }
+export interface KindAvailabilityResponse { kinds: Record<string, KindAvailabilityInfo> }
+
+// Pods (rich) — Lens 식 컬럼
+export type K8sCellColor = 'green' | 'amber' | 'red' | 'gray';
+export interface K8sPodContainerCell { name: string; color: K8sCellColor; state: string; reason?: string | null }
+export interface K8sPodRichRow {
+  name: string;
+  namespace?: string | null;
+  containers: K8sPodContainerCell[];
+  ready: string;
+  restarts: number;
+  controlledBy?: string | null;
+  node?: string | null;
+  qos?: string | null;
+  phase: string;
+  statusColor: K8sCellColor;
+  ageSeconds?: number | null;
+}
+export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }
+
+// ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
+export type MetricTrendDir = 'up' | 'down' | 'flat';
+export interface MetricTrendRow {
+  itemKey: string;
+  label: string;
+  resourceKind: string;
+  today: number | null;
+  yesterday: number | null;
+  d7: number | null;
+  d14: number | null;
+  d28: number | null;
+  delta: number | null;
+  trend: MetricTrendDir;
+  truncated: boolean;
+  isChecked: boolean;
+  checkedBy?: string | null;
+  checkedAt?: string | null;
+  note?: string | null;
+}
+export interface MetricTrendResponse {
+  clusterId: string;
+  date: string;
+  latestCollectedAt: string | null;
+  latestSnapshotId: string | null;
+  items: MetricTrendRow[];
+}
+export interface MetricChecklistItemT {
+  id: string;
+  clusterId: string | null;
+  itemKey: string;
+  label: string;
+  resourceKind: string;
+  enabled: boolean;
+  sortOrder: number;
+  params: Record<string, unknown>;
 }

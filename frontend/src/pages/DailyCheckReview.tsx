@@ -9,6 +9,7 @@ import {
   DiffPanel,
   DeepCheckGrid,
   NotificationSettingsPanel,
+  ResourceTrendChecklist,
 } from '@/components/daily-check';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -66,7 +67,7 @@ export function DailyCheckReviewPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Link
               to="/"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               대시보드
@@ -82,7 +83,7 @@ export function DailyCheckReviewPage() {
               }}
               disabled={!clusterId || runDaily.isPending}
               title="기본 헬스 체크 (API/Components/Nodes/Pods) — 새 점검 회차를 생성합니다"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${runDaily.isPending ? 'animate-spin' : ''}`} />
               {runDaily.isPending ? '실행 중…' : 'Daily Check 실행'}
@@ -95,14 +96,14 @@ export function DailyCheckReviewPage() {
               }}
               disabled={!clusterId || runDeep.isPending}
               title="등록된 Deep Check 정의 (cert/PVC/CNI 등) 실행 — 최신 daily 회차에 결과를 묶습니다"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
             >
               <Play className="w-3.5 h-3.5" />
               {runDeep.isPending ? '실행 중…' : 'Deep Check 실행'}
             </button>
             <Link
               to="/daily-check/settings"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
             >
               <Settings className="w-3.5 h-3.5" />
               체크 정의
@@ -114,6 +115,8 @@ export function DailyCheckReviewPage() {
             value={dailyCheckLogId}
             onChange={(id) => setParams({ log: id })}
           />
+
+          {clusterId && <ResourceTrendChecklist clusterId={clusterId} />}
 
           {!dailyCheckLogId && (
             <MacCard title="안내">
@@ -197,7 +200,7 @@ function DailyCheckLogPicker({
         </select>
         {selected && (
           <span
-            className={`text-[11px] font-medium px-2 py-1 rounded-full ${
+            className={`text-xs font-medium px-2 py-1 rounded-full ${
               selected.overallStatus === 'critical'
                 ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                 : selected.overallStatus === 'warning'

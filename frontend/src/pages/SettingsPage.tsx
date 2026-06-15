@@ -112,7 +112,7 @@ function EditClusterModal({
           <div>
             <label htmlFor={f('kubeconfig')} className="block text-sm font-medium text-muted-foreground mb-1.5">
               Kubeconfig 파일 경로
-              <span className="ml-1 text-xs text-muted-foreground/60">(내용 변경은 Kubeconfig 버튼 이용)</span>
+              <span className="ml-1 text-sm text-muted-foreground/60">(내용 변경은 Kubeconfig 버튼 이용)</span>
             </label>
             <input
               id={f('kubeconfig')}
@@ -283,7 +283,7 @@ function ManagementServerModal({
               <input id={f('osInfo')} type="text" value={form.osInfo} onChange={(e) => set('osInfo', e.target.value)} disabled={saving} className={inputClass} placeholder="Ubuntu 22.04" />
             </div>
             <div className="col-span-2">
-              <label htmlFor={f('tags')} className="block text-sm font-medium text-muted-foreground mb-1.5">태그 <span className="text-xs opacity-60">(쉼표 구분)</span></label>
+              <label htmlFor={f('tags')} className="block text-sm font-medium text-muted-foreground mb-1.5">태그 <span className="text-sm opacity-60">(쉼표 구분)</span></label>
               <input id={f('tags')} type="text" value={form.tags} onChange={(e) => set('tags', e.target.value)} disabled={saving} className={inputClass} placeholder="prod,infra,network" />
             </div>
             <div className="col-span-2">
@@ -315,17 +315,17 @@ function ManagementServerModal({
 
 function ServerStatusBadge({ status }: { status: string }) {
   if (status === 'online') return (
-    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
       <Wifi className="w-3 h-3" /> online
     </span>
   );
   if (status === 'offline') return (
-    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
       <WifiOff className="w-3 h-3" /> offline
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground border border-border">
+    <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground border border-border">
       <HelpCircle className="w-3 h-3" /> unknown
     </span>
   );
@@ -588,7 +588,7 @@ export function SettingsPage() {
             >
               {tab.icon}
               {tab.label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              <span className={`text-sm px-1.5 py-0.5 rounded-full ${
                 activeTab === tab.id ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
               }`}>
                 {tab.count}
@@ -601,15 +601,15 @@ export function SettingsPage() {
         <div className="rounded-md border border-border bg-card overflow-hidden mb-6">
           <div className="px-4 py-3 border-b border-border bg-muted/40">
             <h3 className="text-sm font-semibold">홈 화면 설정</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5">PEP 홈 페이지 표시 옵션</p>
+            <p className="text-xs text-muted-foreground mt-0.5">PEP 홈 페이지 표시 옵션</p>
           </div>
           <div className="px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-sm">업무 모드에서 클러스터 필터 표시</p>
-              <p className="text-[11px] text-muted-foreground">업무 현황을 특정 클러스터로 필터링</p>
+              <p className="text-xs text-muted-foreground">업무 현황을 특정 클러스터로 필터링</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground rounded">
+              <span className="px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded">
                 추후 지원
               </span>
               <button
@@ -631,7 +631,7 @@ export function SettingsPage() {
             <div key={mode} className="px-4 py-3 flex items-center justify-between border-t border-border">
               <div>
                 <p className="text-sm">{label}</p>
-                <p className="text-[11px] text-muted-foreground">{hint}</p>
+                <p className="text-xs text-muted-foreground">{hint}</p>
               </div>
               <button
                 type="button"
@@ -645,7 +645,7 @@ export function SettingsPage() {
                 <span className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-sky-700 text-white flex items-center justify-center flex-shrink-0">
                   {renderHomeIconPreview(mode, uiSettings?.homeIcons?.[mode])}
                 </span>
-                <span className="text-xs text-muted-foreground">변경</span>
+                <span className="text-sm text-muted-foreground">변경</span>
                 <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
               </button>
             </div>
@@ -655,9 +655,9 @@ export function SettingsPage() {
           <div className="px-4 py-3 flex items-center justify-between border-t border-border">
             <div>
               <p className="text-sm">스케줄 배경색</p>
-              <p className="text-[11px] text-muted-foreground">업무 현황의 당일 스케줄 · 담당자별 진행현황 패널 배경 (다크 모드 제외)</p>
+              <p className="text-xs text-muted-foreground">업무 현황의 당일 스케줄 · 담당자별 진행현황 패널 배경 (다크 모드 제외)</p>
             </div>
-            <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
+            <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
               {([
                 { key: 'white' as const, label: '흰색', swatch: '#ffffff' },
                 { key: 'cream' as const, label: '크림', swatch: '#FBF7EE' },
@@ -807,7 +807,7 @@ export function SettingsPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium">{cluster.name}</span>
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full border ${
+                        className={`text-sm px-2 py-0.5 rounded-full border ${
                           cluster.status === 'healthy'
                             ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                             : cluster.status === 'warning'
@@ -829,17 +829,17 @@ export function SettingsPage() {
                     <div className="text-sm text-muted-foreground flex items-center gap-4">
                       <span className="font-mono">{cluster.apiEndpoint}</span>
                       {cluster.kubeconfigPath && (
-                        <span className="text-xs">kubeconfig: {cluster.kubeconfigPath}</span>
+                        <span className="text-sm">kubeconfig: {cluster.kubeconfigPath}</span>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div className="text-sm text-muted-foreground mt-1">
                       등록일: {formatDateTime(cluster.createdAt)}
                       {cluster.updatedAt !== cluster.createdAt && (
                         <span className="ml-4">수정일: {formatDateTime(cluster.updatedAt)}</span>
                       )}
                     </div>
                     {verifyResults[cluster.id] && (
-                      <div className={`text-xs mt-1 px-2 py-1 rounded ${
+                      <div className={`text-sm mt-1 px-2 py-1 rounded ${
                         verifyResults[cluster.id].ok
                           ? 'bg-emerald-500/10 text-emerald-400'
                           : 'bg-red-500/10 text-red-400'
@@ -918,7 +918,7 @@ export function SettingsPage() {
             <div className="flex items-center gap-2">
               <MonitorDot className="w-4 h-4 text-primary" />
               <h2 className="font-semibold">관리서버</h2>
-              <span className="text-xs text-muted-foreground ml-1">Jump Host / Bastion / 관리 서버</span>
+              <span className="text-sm text-muted-foreground ml-1">Jump Host / Bastion / 관리 서버</span>
             </div>
             <button
               onClick={() => { setEditServer(null); setShowServerModal(true); }}
@@ -951,34 +951,34 @@ export function SettingsPage() {
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-medium">{server.name}</span>
                       <ServerStatusBadge status={server.status} />
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                      <span className="text-sm px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                         {serverTypeLabelMap[server.serverType] ?? server.serverType}
                       </span>
                       {server.region && (
-                        <span className="text-xs text-muted-foreground">{server.region}</span>
+                        <span className="text-sm text-muted-foreground">{server.region}</span>
                       )}
                     </div>
                     <div className="text-sm text-muted-foreground font-mono">
                       {server.host}:{server.port}
-                      {server.username && <span className="text-xs ml-3 font-sans">user: {server.username}</span>}
-                      {server.osInfo && <span className="text-xs ml-3 font-sans">{server.osInfo}</span>}
+                      {server.username && <span className="text-sm ml-3 font-sans">user: {server.username}</span>}
+                      {server.osInfo && <span className="text-sm ml-3 font-sans">{server.osInfo}</span>}
                     </div>
                     {server.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5">{server.description}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5">{server.description}</p>
                     )}
                     {server.tags && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {server.tags.split(',').map((t) => t.trim()).filter(Boolean).map((tag) => (
-                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground border border-border">{tag}</span>
+                          <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground border border-border">{tag}</span>
                         ))}
                       </div>
                     )}
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div className="text-sm text-muted-foreground mt-1">
                       등록일: {formatDateTime(server.createdAt)}
                       {server.lastChecked && <span className="ml-4">마지막 확인: {formatDateTime(server.lastChecked)}</span>}
                     </div>
                     {pingResults[server.id] && (
-                      <div className={`text-xs mt-1 px-2 py-1 rounded ${
+                      <div className={`text-sm mt-1 px-2 py-1 rounded ${
                         pingResults[server.id].ok ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
                       }`}>
                         {pingResults[server.id].ok ? '✓ 연결 확인됨' : '✗ 연결 실패'} — {pingResults[server.id].detail}
@@ -1022,7 +1022,7 @@ export function SettingsPage() {
             <div className="flex items-center gap-2">
               <UserCheck className="w-4 h-4 text-primary" />
               <h2 className="font-semibold">담당자 관리</h2>
-              <span className="text-xs text-muted-foreground ml-1">작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정</span>
+              <span className="text-sm text-muted-foreground ml-1">작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정</span>
             </div>
             <button
               onClick={() => { setShowAddRow(true); setEditingIdx(null); setAddForm({ name: '' }); }}
@@ -1033,7 +1033,7 @@ export function SettingsPage() {
             </button>
           </div>
 
-          <div className="px-6 py-3 border-b border-border bg-primary/5 text-xs text-muted-foreground leading-relaxed">
+          <div className="px-6 py-3 border-b border-border bg-primary/5 text-sm text-muted-foreground leading-relaxed">
             사번을 입력해 담당자를 등록하면 <b className="text-foreground font-medium">자동으로 로그인 계정</b>이 생성됩니다 —
             아이디와 초기 비밀번호는 모두 <b className="text-foreground font-medium">사번</b>, 권한은 <b className="text-foreground font-medium">OPERATOR</b>입니다.
             로그인 후 설정에서 비밀번호를 변경하세요. (사번이 없는 담당자는 계정이 생성되지 않습니다.)
@@ -1047,7 +1047,7 @@ export function SettingsPage() {
                 ))}
               </colgroup>
               <thead>
-                <tr className="bg-secondary/40 border-b border-border text-xs text-muted-foreground">
+                <tr className="bg-secondary/40 border-b border-border text-sm text-muted-foreground">
                   <th className="relative text-left px-4 py-3 font-medium">사번
                     <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('empId', e)} onDoubleClick={() => assigneeColW.autoFit('empId')} />
                   </th>
@@ -1082,7 +1082,7 @@ export function SettingsPage() {
                       onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAssignee(idx); if (e.key === 'Escape') setEditingIdx(null); }}
                       placeholder={placeholder}
                       required={required}
-                      className="w-full px-2 py-1 bg-background border border-primary/40 rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full px-2 py-1 bg-background border border-primary/40 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                       autoFocus={field === 'name'}
                     />
                   );
@@ -1094,13 +1094,13 @@ export function SettingsPage() {
                     >
                       <td className="px-4 py-2.5">
                         {isEditing ? cellInput('employeeId', 'EMP001') : (
-                          <span className="text-muted-foreground font-mono text-xs">{a.employeeId || '—'}</span>
+                          <span className="text-muted-foreground font-mono text-sm">{a.employeeId || '—'}</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5">
                         {isEditing ? cellInput('name', '이름', true) : (
                           <div className="flex items-center gap-2">
-                            <span className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            <span className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
                               {(a.name || '?').charAt(0).toUpperCase()}
                             </span>
                             <span className="font-medium">{a.name || '(이름없음)'}</span>
@@ -1114,20 +1114,20 @@ export function SettingsPage() {
                       </td>
                       <td className="px-4 py-2.5">
                         {isEditing ? cellInput('ip', '10.0.0.1') : (
-                          <span className="font-mono text-xs text-muted-foreground">{a.ip || '—'}</span>
+                          <span className="font-mono text-sm text-muted-foreground">{a.ip || '—'}</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5">
                         {isEditing ? cellInput('primaryRole', 'Backend Engineer') : (
                           a.primaryRole
-                            ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">{a.primaryRole}</span>
+                            ? <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">{a.primaryRole}</span>
                             : <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5">
                         {isEditing ? cellInput('secondaryRole', 'DevOps') : (
                           a.secondaryRole
-                            ? <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">{a.secondaryRole}</span>
+                            ? <span className="text-sm px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">{a.secondaryRole}</span>
                             : <span className="text-muted-foreground">—</span>
                         )}
                       </td>
@@ -1168,7 +1168,7 @@ export function SettingsPage() {
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAddAssignee(); if (e.key === 'Escape') setShowAddRow(false); }}
                           placeholder={field === 'employeeId' ? 'EMP001' : field === 'name' ? '이름 *' : field === 'email' ? 'user@co.kr' : field === 'ip' ? '10.0.0.1' : field === 'primaryRole' ? '정 담당역할' : '부담당 역할'}
                           autoFocus={field === 'name'}
-                          className="w-full px-2 py-1 bg-background border border-emerald-500/40 rounded text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          className="w-full px-2 py-1 bg-background border border-emerald-500/40 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         />
                       </td>
                     ))}
@@ -1208,7 +1208,7 @@ export function SettingsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="font-semibold text-base">Debug 모드</h2>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                   각 대시보드의 상세 실행 로그를 표시합니다. "전역"을 켜면 모든 API 호출
                   (요청/응답/에러)이 debug 패널에 기록되며, 개별 페이지 토글을 켜면 해당
                   페이지에 로그 패널이 나타납니다. 현재 {debugEventsCount}개 이벤트가
@@ -1230,12 +1230,12 @@ export function SettingsPage() {
                         <p className="text-sm font-medium truncate">
                           {p.label}
                           {p.key === 'global' && (
-                            <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">
+                            <span className="ml-1.5 text-xs text-muted-foreground font-normal">
                               (axios interceptor)
                             </span>
                           )}
                         </p>
-                        <p className="text-[11px] text-muted-foreground font-mono">{p.key}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{p.key}</p>
                       </div>
                       <input
                         type="checkbox"
@@ -1250,7 +1250,7 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="border-t border-border pt-4 text-xs text-muted-foreground space-y-1">
+            <div className="border-t border-border pt-4 text-sm text-muted-foreground space-y-1">
               <p className="font-medium text-foreground">팁</p>
               <ul className="list-disc pl-4 space-y-0.5">
                 <li>"전역" 만 켜도 브라우저 콘솔에 모든 API 호출이 기록됩니다.</li>

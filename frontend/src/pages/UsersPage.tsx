@@ -29,7 +29,7 @@ function RoleBadge({ role }: { role: string }) {
       ? 'bg-amber-500/15 text-amber-700 border-amber-500/30'
       : 'bg-slate-500/15 text-slate-600 border-slate-500/30';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium border rounded-md ${cls}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 text-sm font-medium border rounded-md ${cls}`}>
       {role}
     </span>
   );
@@ -185,7 +185,7 @@ function ResetPasswordModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 mac-shadow">
         <h3 className="text-base font-bold mb-2">{user.username} 비밀번호 재설정</h3>
-        <p className="text-xs text-muted-foreground mb-3">
+        <p className="text-sm text-muted-foreground mb-3">
           새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.
         </p>
         <input
@@ -307,7 +307,7 @@ export function UsersPage() {
               const isSelf = me?.id === u.id;
               return (
                 <tr key={u.id} className="border-b border-border last:border-0">
-                  <td className="py-2 pr-3 font-medium">{u.username}{isSelf && <span className="ml-1 text-xs text-muted-foreground">(나)</span>}</td>
+                  <td className="py-2 pr-3 font-medium">{u.username}{isSelf && <span className="ml-1 text-sm text-muted-foreground">(나)</span>}</td>
                   <td className="py-2 pr-3 text-muted-foreground">{u.displayName || '-'}</td>
                   <td className="py-2 pr-3">
                     {isSelf ? (
@@ -317,7 +317,7 @@ export function UsersPage() {
                         value={u.role}
                         onChange={(e) => updateRole.mutate({ id: u.id, role: e.target.value as UserRoleApi })}
                         disabled={updateRole.isPending}
-                        className="px-2 py-1 bg-background border border-border rounded-md text-xs"
+                        className="px-2 py-1 bg-background border border-border rounded-md text-sm"
                       >
                         {ROLES.map((r) => (
                           <option key={r.value} value={r.value}>{r.label}</option>
@@ -325,7 +325,7 @@ export function UsersPage() {
                       </select>
                     )}
                   </td>
-                  <td className="py-2 pr-3 text-xs text-muted-foreground">
+                  <td className="py-2 pr-3 text-sm text-muted-foreground">
                     {u.createdAt ? new Date(u.createdAt).toLocaleString() : '-'}
                   </td>
                   <td className="py-2 pr-3 text-right">
@@ -333,7 +333,7 @@ export function UsersPage() {
                       <button
                         type="button"
                         onClick={() => setResetTarget(u)}
-                        className="px-2 py-1 text-xs bg-secondary border border-border rounded-md hover:bg-muted inline-flex items-center gap-1"
+                        className="px-2 py-1 text-sm bg-secondary border border-border rounded-md hover:bg-muted inline-flex items-center gap-1"
                         title="비밀번호 재설정"
                       >
                         <KeyRound className="w-3 h-3" /> 비번
@@ -342,7 +342,7 @@ export function UsersPage() {
                         type="button"
                         onClick={() => setDeleteTarget(u)}
                         disabled={isSelf}
-                        className="px-2 py-1 text-xs bg-secondary border border-border rounded-md hover:bg-destructive/10 hover:text-destructive disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                        className="px-2 py-1 text-sm bg-secondary border border-border rounded-md hover:bg-destructive/10 hover:text-destructive disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
                         title={isSelf ? '자기 자신은 삭제할 수 없습니다' : '사용자 삭제'}
                       >
                         <Trash2 className="w-3 h-3" /> 삭제

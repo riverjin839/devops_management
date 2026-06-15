@@ -128,7 +128,7 @@ function ItemCard({ item, busy, onToggleDone, onOpen }: ItemProps) {
             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[item.priority] ?? PRIORITY_DOT.medium}`} />
             <span className={`text-sm font-medium truncate ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(item)}</span>
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
             <span className={`px-1.5 py-0.5 rounded border ${STATUS_META[item.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
               {STATUS_META[item.kanbanStatus]?.label ?? '할일'}
             </span>
@@ -154,11 +154,11 @@ function ItemRow({ item, busy, onToggleDone, onOpen }: ItemProps) {
       <CompleteBtn item={item} busy={busy} onToggleDone={onToggleDone} />
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[item.priority] ?? PRIORITY_DOT.medium}`} />
       <span className={`flex-1 min-w-0 truncate ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(item)}</span>
-      <span className={`hidden sm:inline px-1.5 py-0.5 rounded border text-[10px] flex-shrink-0 ${STATUS_META[item.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
+      <span className={`hidden sm:inline px-1.5 py-0.5 rounded border text-xs flex-shrink-0 ${STATUS_META[item.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
         {STATUS_META[item.kanbanStatus]?.label ?? '할일'}
       </span>
-      {cl && <span className="hidden md:inline text-[10px] text-muted-foreground flex-shrink-0 max-w-[140px] truncate">{cl}</span>}
-      <span className="text-[11px] text-muted-foreground font-mono flex-shrink-0 w-20 text-right">{fmtDue(item)}</span>
+      {cl && <span className="hidden md:inline text-xs text-muted-foreground flex-shrink-0 max-w-[140px] truncate">{cl}</span>}
+      <span className="text-xs text-muted-foreground font-mono flex-shrink-0 w-20 text-right">{fmtDue(item)}</span>
     </div>
   );
 }
@@ -182,7 +182,7 @@ function Section({
       >
         <span className={`w-2 h-2 rounded-full ${t.dot}`} />
         <span className={`text-sm font-semibold ${t.text}`}>{title}</span>
-        <span className="text-xs text-muted-foreground">{items.length}</span>
+        <span className="text-sm text-muted-foreground">{items.length}</span>
         <ChevronRight className={`w-4 h-4 text-muted-foreground ml-auto transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && (
@@ -373,7 +373,7 @@ export function TodoTodayPage() {
       <div className="grid grid-cols-4 gap-3">
         {stats.map((s) => (
           <div key={s.label} className="bg-card border border-border rounded-xl px-4 py-3">
-            <p className="text-xs text-muted-foreground mb-0.5">{s.label}</p>
+            <p className="text-sm text-muted-foreground mb-0.5">{s.label}</p>
             <p className={`text-2xl font-bold tabular-nums ${s.cls}`}>{s.value}</p>
           </div>
         ))}
@@ -427,7 +427,7 @@ export function TodoTodayPage() {
                   <Rocket className="w-5 h-5 text-primary flex-shrink-0" />
                   <div className="min-w-0">
                     <h2 className="text-base font-bold truncate">{currentSprint.name}</h2>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       {fmtRange(currentSprint.startDate, currentSprint.endDate)}
                       {(() => {
                         const left = daysBetween(today, currentSprint.endDate);
@@ -438,7 +438,7 @@ export function TodoTodayPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-3 text-sm">
                   <span className="text-emerald-600">완료 {sprint.doneCount}</span>
                   <span className="text-muted-foreground">전체 {sprint.total}</span>
                   {sprint.effort > 0 && <span className="text-muted-foreground">{sprint.effort}h</span>}
@@ -446,7 +446,7 @@ export function TodoTodayPage() {
                 </div>
               </div>
               {currentSprint.goal && (
-                <p className="flex items-start gap-1.5 text-xs text-muted-foreground mb-3">
+                <p className="flex items-start gap-1.5 text-sm text-muted-foreground mb-3">
                   <Target className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-primary/70" />{currentSprint.goal}
                 </p>
               )}
@@ -472,8 +472,8 @@ export function TodoTodayPage() {
                     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/60">
                       <Plus className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm font-semibold text-muted-foreground">스프린트에 추가</span>
-                      <span className="text-xs text-muted-foreground">{sprint.candidates.length}</span>
-                      <span className="ml-auto text-[11px] text-muted-foreground/70">미배정 · 미완료 내 할일</span>
+                      <span className="text-sm text-muted-foreground">{sprint.candidates.length}</span>
+                      <span className="ml-auto text-xs text-muted-foreground/70">미배정 · 미완료 내 할일</span>
                     </div>
                     <div className="px-2 py-1 divide-y divide-border/40">
                       {sprint.candidates.map((t) => {
@@ -482,12 +482,12 @@ export function TodoTodayPage() {
                           <div key={t.id} className="group flex items-center gap-2 px-2 py-1 text-sm">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} />
                             <button onClick={() => onOpen(t)} className="flex-1 min-w-0 truncate text-left hover:text-primary transition-colors">{displayTitle(t)}</button>
-                            {cl && <span className="hidden md:inline text-[10px] text-muted-foreground flex-shrink-0 max-w-[120px] truncate">{cl}</span>}
-                            <span className="text-[11px] text-muted-foreground font-mono flex-shrink-0 w-16 text-right">{fmtDue(t)}</span>
+                            {cl && <span className="hidden md:inline text-xs text-muted-foreground flex-shrink-0 max-w-[120px] truncate">{cl}</span>}
+                            <span className="text-xs text-muted-foreground font-mono flex-shrink-0 w-16 text-right">{fmtDue(t)}</span>
                             <button
                               onClick={() => onAddToSprint(t, currentSprint.id)}
                               disabled={busyId === t.id}
-                              className="flex-shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                              className="flex-shrink-0 flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
                             >
                               {busyId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}추가
                             </button>
@@ -508,13 +508,13 @@ export function TodoTodayPage() {
             <button onClick={() => setScheduleDate((d) => addDaysStr(d, -1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="이전 날"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-semibold min-w-[150px] text-center">
               {fmtDateLabel(scheduleDate)}
-              {scheduleDate === today && <span className="ml-1.5 text-xs text-primary font-medium">오늘</span>}
+              {scheduleDate === today && <span className="ml-1.5 text-sm text-primary font-medium">오늘</span>}
             </span>
             <button onClick={() => setScheduleDate((d) => addDaysStr(d, 1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="다음 날"><ChevronRight className="w-4 h-4" /></button>
             {scheduleDate !== today && (
-              <button onClick={() => setScheduleDate(today)} className="text-xs px-2 py-0.5 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors">오늘로</button>
+              <button onClick={() => setScheduleDate(today)} className="text-sm px-2 py-0.5 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors">오늘로</button>
             )}
-            <span className="ml-auto text-xs text-muted-foreground">{daySchedule.length}건</span>
+            <span className="ml-auto text-sm text-muted-foreground">{daySchedule.length}건</span>
           </div>
           {daySchedule.length === 0 ? (
             <div className="py-14 text-center text-sm text-muted-foreground">이 날짜에 예정된 일정이 없습니다.</div>
@@ -522,7 +522,7 @@ export function TodoTodayPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-muted/40 border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="bg-muted/40 border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="text-left px-3 py-2 w-16">시간</th>
                     <th className="text-left px-3 py-2">업무</th>
                     <th className="text-left px-3 py-2 w-20">상태</th>
@@ -537,15 +537,15 @@ export function TodoTodayPage() {
                     const cl = clusterLabel(t);
                     return (
                       <tr key={t.id} onClick={() => onOpen(t)} className="cursor-pointer hover:bg-secondary/40 transition-colors">
-                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{timeLabel(t)}</td>
+                        <td className="px-3 py-2 font-mono text-sm text-muted-foreground whitespace-nowrap">{timeLabel(t)}</td>
                         <td className="px-3 py-2"><span className={`font-medium ${done ? 'line-through text-muted-foreground' : ''}`}>{displayTitle(t)}</span></td>
                         <td className="px-3 py-2">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${STATUS_META[t.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
+                          <span className={`text-xs px-1.5 py-0.5 rounded border ${STATUS_META[t.kanbanStatus]?.cls ?? STATUS_META.todo.cls}`}>
                             {STATUS_META[t.kanbanStatus]?.label ?? '할일'}
                           </span>
                         </td>
                         <td className="px-2 py-2 text-center"><span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} /></td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[140px]">{cl ?? '—'}</td>
+                        <td className="px-3 py-2 text-sm text-muted-foreground truncate max-w-[140px]">{cl ?? '—'}</td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <CompleteBtn item={t} busy={busyId === t.id} onToggleDone={onToggleDone} />
                         </td>

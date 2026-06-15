@@ -58,7 +58,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
     del.mutate(id, { onError: (e) => toast.error('삭제 실패', formatApiError(e)) });
   };
 
-  const inputCls = 'px-2.5 py-1.5 bg-secondary border border-border rounded-md text-xs focus:outline-none focus:border-primary/50';
+  const inputCls = 'px-2.5 py-1.5 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:border-primary/50';
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -78,10 +78,10 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
             fields.map((f) => (
               <div key={f.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
                 <span className="font-medium">{f.label}</span>
-                <span className="text-[11px] text-muted-foreground font-mono">{f.key}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{TYPE_LABEL[f.dataType] ?? f.dataType}</span>
+                <span className="text-xs text-muted-foreground font-mono">{f.key}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{TYPE_LABEL[f.dataType] ?? f.dataType}</span>
                 {f.dataType === 'select' && f.options?.length ? (
-                  <span className="text-[10px] text-muted-foreground truncate">{f.options.join(', ')}</span>
+                  <span className="text-xs text-muted-foreground truncate">{f.options.join(', ')}</span>
                 ) : null}
                 <button onClick={() => remove(f.id, f.label)} className="ml-auto p-1 rounded hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500" title="삭제">
                   <Trash2 className="w-3.5 h-3.5" />
@@ -92,7 +92,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
         </div>
 
         <div className="border-t border-border p-4 space-y-2">
-          <p className="text-[11px] font-medium text-muted-foreground">새 필드 추가</p>
+          <p className="text-xs font-medium text-muted-foreground">새 필드 추가</p>
           <div className="flex items-center gap-1.5 flex-wrap">
             <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="키(영문, 예: severity)" className={`${inputCls} w-36`} />
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="이름(예: 심각도)" className={`${inputCls} w-32`} />
@@ -103,7 +103,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
               <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} placeholder="옵션,쉼표,구분" className={`${inputCls} flex-1 min-w-[120px]`} />
             )}
             <button onClick={add} disabled={create.isPending}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md disabled:opacity-50">
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md disabled:opacity-50">
               <Plus className="w-3.5 h-3.5" /> 추가
             </button>
           </div>

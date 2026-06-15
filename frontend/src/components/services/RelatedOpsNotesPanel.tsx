@@ -26,14 +26,14 @@ export function RelatedOpsNotesPanel({ service }: RelatedOpsNotesPanelProps) {
         <div className="flex items-center gap-2 text-sm font-semibold">
           <StickyNote className="w-4 h-4 text-amber-500" />
           <span>관련 운영 노트</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground tabular-nums">
+          <span className="text-xs px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground tabular-nums">
             {all.length}
           </span>
         </div>
         {all.length > 5 && (
           <Link
             to="/ops-notes"
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
           >
             전체 보기 <ArrowRight className="w-3 h-3" />
           </Link>
@@ -47,7 +47,7 @@ export function RelatedOpsNotesPanel({ service }: RelatedOpsNotesPanelProps) {
           ))}
         </div>
       ) : top5.length === 0 ? (
-        <p className="px-2 py-3 text-xs text-muted-foreground italic">
+        <p className="px-2 py-3 text-sm text-muted-foreground italic">
           이 서비스에 등록된 운영 노트가 없습니다.
         </p>
       ) : (
@@ -64,7 +64,7 @@ export function RelatedOpsNotesPanel({ service }: RelatedOpsNotesPanelProps) {
                   <StickyNote className="w-3.5 h-3.5 text-amber-500/70 flex-shrink-0" />
                 )}
                 <span className="flex-1 min-w-0 truncate text-sm text-foreground">{n.title}</span>
-                <span className="flex-shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                <span className="flex-shrink-0 text-xs text-muted-foreground tabular-nums">
                   {formatRelativeTime(n.updatedAt)}
                 </span>
               </Link>

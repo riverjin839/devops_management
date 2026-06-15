@@ -94,7 +94,7 @@ export function KubeconfigEditModal({
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-semibold">Kubeconfig 관리</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{clusterName}</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{clusterName}</p>
           </div>
           <button
             onClick={onClose}
@@ -126,13 +126,13 @@ export function KubeconfigEditModal({
               onChange={(e) => setEditContent(e.target.value)}
               placeholder="kubeconfig YAML 내용을 붙여넣으세요..."
               rows={10}
-              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
+              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
             />
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
               >
                 <Upload className="w-3.5 h-3.5" />
                 파일에서 불러오기
@@ -172,11 +172,11 @@ export function KubeconfigEditModal({
           /* Edit mode */
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">kubeconfig YAML 편집</span>
+              <span className="text-sm text-muted-foreground">kubeconfig YAML 편집</span>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
               >
                 <Upload className="w-3.5 h-3.5" />
                 파일에서 불러오기
@@ -193,7 +193,7 @@ export function KubeconfigEditModal({
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               rows={14}
-              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
+              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
             />
             {saveError && (
               <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
@@ -226,19 +226,19 @@ export function KubeconfigEditModal({
           /* View mode */
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Eye className="w-3.5 h-3.5" />
                 <span>경로: {kubeconfig?.path}</span>
               </div>
               <button
                 onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-lg transition-colors"
               >
                 <EyeOff className="w-3.5 h-3.5" />
                 수정
               </button>
             </div>
-            <pre className="w-full px-3 py-3 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground overflow-auto max-h-80 whitespace-pre-wrap break-all">
+            <pre className="w-full px-3 py-3 bg-secondary border border-border rounded-lg text-sm font-mono text-foreground overflow-auto max-h-80 whitespace-pre-wrap break-all">
               {kubeconfig?.content}
             </pre>
             {saveSuccess && (

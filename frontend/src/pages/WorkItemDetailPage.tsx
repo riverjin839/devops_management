@@ -91,13 +91,13 @@ export function WorkItemDetailPage() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <ListTodo className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">{pageTitle}</span>
+          <span className="text-sm text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
             {!editMode && item.jiraIssueKey && (
               <button
                 onClick={() => doPush(false)}
                 disabled={pushJira.isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0052CC]/10 text-[#0052CC] dark:text-blue-300 hover:bg-[#0052CC]/20 border border-[#0052CC]/20 rounded-lg transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-[#0052CC]/10 text-[#0052CC] dark:text-blue-300 hover:bg-[#0052CC]/20 border border-[#0052CC]/20 rounded-lg transition-colors disabled:opacity-50"
                 title={`현재 상태를 Jira ${item.jiraIssueKey} 에 반영`}
               >
                 {pushJira.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
@@ -108,20 +108,20 @@ export function WorkItemDetailPage() {
               <>
                 <button
                   onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
                   title="하위 업무 등록"
                 >
                   <Plus className="w-3.5 h-3.5" /> 하위
                 </button>
                 <button
                   onClick={() => navigate(`/tasks-mgmt/${item.id}/edit`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
                 >
                   <Pencil className="w-3.5 h-3.5" /> 수정
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/10 border border-border rounded-lg transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>

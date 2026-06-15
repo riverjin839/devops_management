@@ -32,7 +32,7 @@ export function NotificationSettingsPanel() {
           <button
             type="button"
             onClick={() => setAdding((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
           >
             <Plus className="w-3.5 h-3.5" />
             {adding ? '닫기' : '채널 추가'}
@@ -117,11 +117,11 @@ function ChannelRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-sm font-medium">
           <span className="truncate">{channel.name}</span>
-          <span className="text-[10px] font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+          <span className="text-xs font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5">
             {channel.channelType}
           </span>
         </div>
-        <div className="text-[11px] text-muted-foreground">
+        <div className="text-xs text-muted-foreground">
           최소 심각도: {channel.minSeverity}
           {channel.clusterId ? ` · 클러스터 한정` : ' · 전체 클러스터'}
         </div>
@@ -200,9 +200,9 @@ function ChannelForm({
         }}
         placeholder={placeholderByType[channelType]}
         rows={4}
-        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-xs font-mono resize-y"
+        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono resize-y"
       />
-      {error && <div className="text-xs text-red-500">{error}</div>}
+      {error && <div className="text-sm text-red-500">{error}</div>}
       <div className="flex justify-end">
         <button
           type="button"
@@ -229,7 +229,7 @@ function ChannelForm({
             setName('');
             setConfigText('{}');
           }}
-          className="rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:opacity-90"
+          className="rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium hover:opacity-90"
         >
           채널 추가
         </button>

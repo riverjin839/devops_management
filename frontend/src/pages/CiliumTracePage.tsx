@@ -192,13 +192,13 @@ export function CiliumTracePage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold leading-tight">Cilium BPF Trace</h1>
-              <p className="text-xs text-muted-foreground">BPF 맵 인스펙터 · cilium monitor · Hubble flow</p>
+              <p className="text-sm text-muted-foreground">BPF 맵 인스펙터 · cilium monitor · Hubble flow</p>
             </div>
           </div>
           <button
             onClick={() => refetchStatus()}
             disabled={statusLoading || !cid}
-            className="px-3 py-1.5 text-xs font-semibold bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm font-semibold bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${statusLoading ? 'animate-spin' : ''}`} />
             상태 새로고침
@@ -218,7 +218,7 @@ export function CiliumTracePage() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors ${
+              className={`px-3.5 py-1.5 text-sm font-medium rounded-lg flex items-center gap-1.5 transition-colors ${
                 tab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -262,7 +262,7 @@ function StatusStrip({ status, loading, agentCount }: StatusStripProps) {
         <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold">상태 점검 중 문제가 발생했습니다.</p>
-          <p className="text-xs text-muted-foreground">{status.error}</p>
+          <p className="text-sm text-muted-foreground">{status.error}</p>
         </div>
       </div>
     );
@@ -310,9 +310,9 @@ function StatusCell({ icon, label, value, accent = 'text-foreground', hint }: St
     <div className="rounded-2xl border border-border bg-card px-4 py-3 flex items-center gap-3">
       <div className={`w-9 h-9 rounded-xl bg-secondary flex items-center justify-center ${accent}`}>{icon}</div>
       <div className="min-w-0">
-        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
         <p className={`text-base font-bold leading-tight ${accent}`}>{value}</p>
-        {hint && <p className="text-[10px] text-muted-foreground truncate">{hint}</p>}
+        {hint && <p className="text-xs text-muted-foreground truncate">{hint}</p>}
       </div>
     </div>
   );
@@ -372,7 +372,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value as BpfKind)}
-              className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               {BPF_KINDS.map((k) => (
                 <option key={k.id} value={k.id}>{k.label}</option>
@@ -384,7 +384,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
             <select
               value={podName}
               onChange={(e) => setPodName(e.target.value)}
-              className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[260px]"
+              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[260px]"
             >
               <option value="">자동 (첫 번째 ready agent)</option>
               {agents.map((a) => (
@@ -399,13 +399,13 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               value={endpointId}
               onChange={(e) => setEndpointId(e.target.value)}
               placeholder="endpoint ID"
-              className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 w-32"
+              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 w-32"
             />
           )}
           <button
             onClick={run}
             disabled={loading || (kind === 'policy' && !endpointId)}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
           >
             <Play className="w-3.5 h-3.5" />
             {loading ? '조회 중…' : '조회'}
@@ -413,12 +413,12 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           {data?.raw && (
             <button
               onClick={downloadRaw}
-              className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" /> 내보내기
             </button>
           )}
-          <span className="ml-auto text-[11px] text-muted-foreground">
+          <span className="ml-auto text-xs text-muted-foreground">
             {BPF_KINDS.find((k) => k.id === kind)?.desc}
           </span>
         </div>
@@ -431,14 +431,14 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
         className="overflow-hidden"
       >
         {error && (
-          <div className="px-4 py-3 border-b border-border bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+          <div className="px-4 py-3 border-b border-border bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="break-all">{error}</span>
           </div>
         )}
         {!data && !loading && (
           <div className="text-center py-16 text-sm text-muted-foreground">
-            대상 BPF 맵을 선택하고 <kbd className="mx-1 px-1.5 py-0.5 rounded bg-secondary border border-border text-[10px]">조회</kbd> 를 누르세요.
+            대상 BPF 맵을 선택하고 <kbd className="mx-1 px-1.5 py-0.5 rounded bg-secondary border border-border text-xs">조회</kbd> 를 누르세요.
           </div>
         )}
         {loading && (
@@ -450,7 +450,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           <BpfJsonTable rows={data.parsed} />
         )}
         {data && (!data.isJson || !Array.isArray(data.parsed)) && data.raw && (
-          <pre className="text-[11px] leading-snug font-mono px-4 py-3 overflow-auto max-h-[60vh] whitespace-pre-wrap break-all bg-background">
+          <pre className="text-xs leading-snug font-mono px-4 py-3 overflow-auto max-h-[60vh] whitespace-pre-wrap break-all bg-background">
             {data.raw}
           </pre>
         )}
@@ -470,11 +470,11 @@ function BpfJsonTable({ rows }: { rows: Record<string, unknown>[] }) {
   }
   return (
     <div className="overflow-auto max-h-[60vh]">
-      <table className="text-xs w-full border-collapse">
+      <table className="text-sm w-full border-collapse">
         <thead className="sticky top-0 bg-card">
           <tr>
             {cols.map((c) => (
-              <th key={c} className="text-left px-3 py-2 border-b border-border font-semibold uppercase tracking-wide text-[10px] text-muted-foreground whitespace-nowrap">
+              <th key={c} className="text-left px-3 py-2 border-b border-border font-semibold uppercase tracking-wide text-xs text-muted-foreground whitespace-nowrap">
                 {c}
               </th>
             ))}
@@ -485,7 +485,7 @@ function BpfJsonTable({ rows }: { rows: Record<string, unknown>[] }) {
             <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-secondary/15'}>
               {cols.map((c) => (
                 <td key={c} className="px-3 py-1.5 border-b border-border/40 align-top max-w-[320px]">
-                  <span className="block truncate font-mono text-[11px]" title={String(r[c] ?? '')}>
+                  <span className="block truncate font-mono text-xs" title={String(r[c] ?? '')}>
                     {formatCell(r[c])}
                   </span>
                 </td>
@@ -607,7 +607,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
               value={podName}
               onChange={(e) => setPodName(e.target.value)}
               disabled={running}
-              className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 min-w-[260px] focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 min-w-[260px] focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
             >
               {agents.map((a) => (
                 <option key={a.podName} value={a.podName} disabled={!a.ready}>
@@ -622,19 +622,19 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
             onChange={(e) => setRelatedTo(e.target.value)}
             disabled={running}
             placeholder="related-to (endpoint id)"
-            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 w-44 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 w-44 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
           />
           {!running ? (
             <button
               onClick={start}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
             >
               <Play className="w-3.5 h-3.5" /> 시작
             </button>
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -642,7 +642,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           <button
             onClick={() => setPaused((p) => !p)}
             disabled={!running}
-            className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
             {paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
             {paused ? '재개' : '일시정지'}
@@ -650,18 +650,18 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           <button
             onClick={clear}
             disabled={events.length === 0}
-            className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
-          <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             <span className={running ? 'text-emerald-500' : ''}>●</span> {events.length}건
           </span>
         </div>
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
@@ -677,7 +677,7 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="텍스트로 필터링…"
-            className="flex-1 text-xs bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="flex-1 text-sm bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>
         <EventList events={filtered} />
@@ -731,7 +731,7 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
-        className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 flex items-center gap-1.5 max-w-[260px]"
+        className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 flex items-center gap-1.5 max-w-[260px]"
       >
         <Filter className="w-3.5 h-3.5 text-muted-foreground" />
         <span className="truncate">{label}</span>
@@ -744,7 +744,7 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
           className="fixed z-50 w-56 bg-card border border-border rounded-xl mac-shadow p-2 space-y-1"
         >
           {MONITOR_TYPES.map((t) => (
-            <label key={t} className="flex items-center gap-2 text-xs px-2 py-1 rounded hover:bg-secondary cursor-pointer">
+            <label key={t} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-secondary cursor-pointer">
               <input
                 type="checkbox"
                 className="accent-primary"
@@ -780,7 +780,7 @@ function EventList({ events }: { events: MonitorEvent[] }) {
     );
   }
   return (
-    <div ref={ref} className="overflow-auto max-h-[60vh] font-mono text-[11px] leading-snug bg-background">
+    <div ref={ref} className="overflow-auto max-h-[60vh] font-mono text-xs leading-snug bg-background">
       {events.map((e, i) => (
         <div
           key={i}
@@ -984,7 +984,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
         <div className="text-center space-y-2">
           <AlertTriangle className="w-10 h-10 mx-auto text-amber-500" />
           <p className="text-sm font-semibold">Hubble Relay 가 설치되어 있지 않습니다.</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             <code className="px-1 py-0.5 rounded bg-secondary">cilium hubble enable --ui</code> 또는 helm 으로 hubble-relay 를 배포해 주세요.
           </p>
         </div>
@@ -1002,7 +1002,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             disabled={running}
             placeholder="from-namespace"
             list="hubble-ns-list"
-            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
           />
           <input
             value={filters.fromPod}
@@ -1010,7 +1010,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             disabled={running}
             placeholder="from-pod (ns/name)"
             list="hubble-from-pod-list"
-            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
           />
           <input
             value={filters.protocol}
@@ -1018,7 +1018,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             disabled={running}
             placeholder="protocol (tcp/udp/http/dns)"
             list="hubble-protocol-list"
-            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
           />
           <input
             value={filters.toNamespace}
@@ -1026,7 +1026,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             disabled={running}
             placeholder="to-namespace"
             list="hubble-ns-list"
-            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
           />
           <input
             value={filters.toPod}
@@ -1034,7 +1034,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             disabled={running}
             placeholder="to-pod (ns/name)"
             list="hubble-to-pod-list"
-            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
           />
           <input
             value={filters.verdict}
@@ -1042,7 +1042,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
             disabled={running}
             placeholder="verdict (FORWARDED/DROPPED)"
             list="hubble-verdict-list"
-            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
           />
         </div>
 
@@ -1066,14 +1066,14 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           {!running ? (
             <button
               onClick={start}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
             >
               <Play className="w-3.5 h-3.5" /> 스트림 시작
             </button>
           ) : (
             <button
               onClick={stop}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" /> 중단
             </button>
@@ -1081,7 +1081,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           <button
             onClick={() => setPaused((p) => !p)}
             disabled={!running}
-            className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
             {paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
             {paused ? '재개' : '일시정지'}
@@ -1089,11 +1089,11 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           <button
             onClick={clear}
             disabled={events.length === 0}
-            className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" /> 비우기
           </button>
-          <div className="ml-auto flex items-center gap-3 text-[11px] text-muted-foreground">
+          <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1 text-emerald-500">
               <CheckCircle2 className="w-3 h-3" /> {verdictCounts.FORWARDED}
             </span>
@@ -1106,7 +1106,7 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
       </MacCard>
 
       {err && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
@@ -1146,7 +1146,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
         const dstLabel = `${(dst?.namespace as string) ?? '?'}/${(dst?.pod_name as string) ?? '?'}`;
         const dropReason = flow.drop_reason_desc ?? flow.drop_reason;
         return (
-          <div key={i} className="px-3 py-1.5 hover:bg-secondary/30 text-[11px] font-mono">
+          <div key={i} className="px-3 py-1.5 hover:bg-secondary/30 text-xs font-mono">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-muted-foreground/70 tabular-nums">{new Date(e.ts).toLocaleTimeString()}</span>
               <span className={`font-bold ${verdictClr}`}>{verdict || '?'}</span>

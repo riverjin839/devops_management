@@ -63,7 +63,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
     }
   };
 
-  const inputCls = 'min-w-0 px-2 py-1.5 bg-secondary border border-border rounded-md text-xs focus:outline-none focus:border-primary/50';
+  const inputCls = 'min-w-0 px-2 py-1.5 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:border-primary/50';
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -74,7 +74,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
           <Wand2 className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-semibold">클러스터 이름 표준화</h2>
-          <span className="text-[11px] text-muted-foreground">현재 이름을 [업무명]-[운영타입]-[속성] 으로 정리</span>
+          <span className="text-xs text-muted-foreground">현재 이름을 [업무명]-[운영타입]-[속성] 으로 정리</span>
           <button onClick={onClose} className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
@@ -91,7 +91,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
             const done = doneIds.has(c.id);
             return (
               <div key={c.id} className="rounded-lg border border-border p-3">
-                <div className="flex items-center gap-2 mb-2 text-xs">
+                <div className="flex items-center gap-2 mb-2 text-sm">
                   <span className="font-mono text-muted-foreground truncate">{c.name}</span>
                   {changed && (
                     <>
@@ -124,7 +124,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
                     type="button"
                     onClick={() => apply(c)}
                     disabled={!changed || busyId === c.id}
-                    className="flex-shrink-0 px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                    className="flex-shrink-0 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
                   >
                     {busyId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '변경'}
                   </button>
@@ -135,8 +135,8 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
         </div>
 
         <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">이름 변경 시 연결된 업무의 표시 이름도 자동 동기화됩니다.</p>
-          <button onClick={onClose} className="px-3 py-1.5 text-xs rounded-lg border border-border bg-secondary hover:bg-secondary/80 transition-colors">
+          <p className="text-xs text-muted-foreground">이름 변경 시 연결된 업무의 표시 이름도 자동 동기화됩니다.</p>
+          <button onClick={onClose} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-secondary hover:bg-secondary/80 transition-colors">
             닫기
           </button>
         </div>

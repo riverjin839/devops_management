@@ -46,7 +46,7 @@ export function ActivityTimeline({ workItemId }: { workItemId: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
         <History className="w-3.5 h-3.5" />
         변경 이력 <span className="text-primary">{activities.length}</span>
@@ -58,7 +58,7 @@ export function ActivityTimeline({ workItemId }: { workItemId: string }) {
           {ordered.map((a) => {
             const { icon: Icon, text } = describe(a);
             return (
-              <li key={a.id} className="flex items-start gap-2 text-xs">
+              <li key={a.id} className="flex items-start gap-2 text-sm">
                 <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <span className="text-foreground">{text}</span>

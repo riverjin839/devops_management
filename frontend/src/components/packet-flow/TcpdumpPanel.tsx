@@ -37,7 +37,7 @@ function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_CLS[status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/30';
   const Icon = status === 'ok' ? CheckCircle2 : XCircle;
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border ${cls}`}>
+    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${cls}`}>
       <Icon className="w-3 h-3" />
       {status}
     </span>
@@ -57,33 +57,33 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
       <table className="w-full text-sm">
         <thead className="bg-muted/30 text-left sticky top-0">
           <tr>
-            <th className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">Time</th>
-            <th className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">Proto</th>
-            <th className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">Source</th>
-            <th className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">Destination</th>
-            <th className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">Flags</th>
-            <th className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">Len</th>
-            <th className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">Summary</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Time</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Proto</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Source</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Destination</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Flags</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Len</th>
+            <th className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Summary</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-b border-border hover:bg-muted/20">
-              <td className="px-2 py-1 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+              <td className="px-2 py-1 font-mono text-xs text-muted-foreground whitespace-nowrap">
                 {r.timestamp.split(' ')[1] ?? r.timestamp}
               </td>
-              <td className="px-2 py-1 text-[11px]">
+              <td className="px-2 py-1 text-xs">
                 {r.proto ? (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-foreground/80 font-mono">
                     {r.proto}
                   </span>
                 ) : '-'}
               </td>
-              <td className="px-2 py-1 font-mono text-xs text-foreground">{r.src ?? '-'}</td>
-              <td className="px-2 py-1 font-mono text-xs text-foreground">{r.dst ?? '-'}</td>
-              <td className="px-2 py-1 font-mono text-[11px] text-muted-foreground">{r.flags ?? '-'}</td>
-              <td className="px-2 py-1 font-mono text-[11px] text-muted-foreground">{r.length ?? '-'}</td>
-              <td className="px-2 py-1 text-[11px] text-foreground/80 max-w-[520px]">
+              <td className="px-2 py-1 font-mono text-sm text-foreground">{r.src ?? '-'}</td>
+              <td className="px-2 py-1 font-mono text-sm text-foreground">{r.dst ?? '-'}</td>
+              <td className="px-2 py-1 font-mono text-xs text-muted-foreground">{r.flags ?? '-'}</td>
+              <td className="px-2 py-1 font-mono text-xs text-muted-foreground">{r.length ?? '-'}</td>
+              <td className="px-2 py-1 text-xs text-foreground/80 max-w-[520px]">
                 <div className="truncate" title={r.summary}>{r.summary}</div>
               </td>
             </tr>
@@ -194,7 +194,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
         {/* SSH 자격증명 + 노드 선택 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label htmlFor={f('node')} className="text-[11px] text-muted-foreground mb-1 block flex items-center gap-1">
+            <label htmlFor={f('node')} className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
               <Server className="w-3 h-3" /> 대상 노드
             </label>
             <div className="flex gap-2">
@@ -214,18 +214,18 @@ export function TcpdumpPanel({ clusterId }: Props) {
               </button>
             </div>
             {host && (
-              <p className="text-[11px] text-muted-foreground mt-1 font-mono">SSH → {username}@{host}:{port}</p>
+              <p className="text-xs text-muted-foreground mt-1 font-mono">SSH → {username}@{host}:{port}</p>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label htmlFor={f('user')} className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
+              <label htmlFor={f('user')} className="text-xs text-muted-foreground mb-1 block">SSH User</label>
               <input id={f('user')} value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label htmlFor={f('port')} className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
+              <label htmlFor={f('port')} className="text-xs text-muted-foreground mb-1 block">SSH Port</label>
               <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
@@ -238,14 +238,14 @@ export function TcpdumpPanel({ clusterId }: Props) {
             <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
               {(['password', 'key'] as const).map((m) => (
                 <button key={m} onClick={() => setAuthMode(m)}
-                  className={`px-2 py-0.5 text-[11px] font-medium rounded-md ${
+                  className={`px-2 py-0.5 text-xs font-medium rounded-md ${
                     authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
                   }`}>
                   {m === 'password' ? '비밀번호' : '개인키'}
                 </button>
               ))}
             </div>
-            <span className="text-[10px] text-muted-foreground">자격증명은 요청에만 사용되고 저장되지 않습니다.</span>
+            <span className="text-xs text-muted-foreground">자격증명은 요청에만 사용되고 저장되지 않습니다.</span>
           </div>
           {authMode === 'password' ? (
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
@@ -255,14 +255,14 @@ export function TcpdumpPanel({ clusterId }: Props) {
             <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
               placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
               rows={3}
-              className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded-lg" />
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
           )}
         </div>
 
         {/* 인터페이스 + 캡처 옵션 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <label htmlFor={f('iface')} className="text-[11px] text-muted-foreground mb-1 block">Interface</label>
+            <label htmlFor={f('iface')} className="text-xs text-muted-foreground mb-1 block">Interface</label>
             <div className="flex gap-1">
               {ifaceOptions.length > 0 ? (
                 <select id={f('iface')} value={iface} onChange={(e) => setIface(e.target.value)}
@@ -283,19 +283,19 @@ export function TcpdumpPanel({ clusterId }: Props) {
             </div>
           </div>
           <div>
-            <label htmlFor={f('duration')} className="text-[11px] text-muted-foreground mb-1 block">Duration (s)</label>
+            <label htmlFor={f('duration')} className="text-xs text-muted-foreground mb-1 block">Duration (s)</label>
             <input id={f('duration')} type="number" value={duration} min={1} max={120}
               onChange={(e) => setDuration(Number(e.target.value) || 10)}
               className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
           </div>
           <div>
-            <label htmlFor={f('count')} className="text-[11px] text-muted-foreground mb-1 block">Packet count</label>
+            <label htmlFor={f('count')} className="text-xs text-muted-foreground mb-1 block">Packet count</label>
             <input id={f('count')} type="number" value={count} min={1} max={5000}
               onChange={(e) => setCount(Number(e.target.value) || 200)}
               className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
           </div>
           <div className="flex items-end">
-            <label className="flex items-center gap-1.5 text-xs text-foreground/80">
+            <label className="flex items-center gap-1.5 text-sm text-foreground/80">
               <input type="checkbox" checked={useSudo} onChange={(e) => setUseSudo(e.target.checked)} />
               sudo 사용
             </label>
@@ -304,11 +304,11 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
         {/* BPF */}
         <div>
-          <p className="text-[11px] text-muted-foreground mb-1 block">BPF 필터 프리셋</p>
+          <p className="text-xs text-muted-foreground mb-1 block">BPF 필터 프리셋</p>
           <div className="flex flex-wrap gap-1 mb-1">
             {BPF_PRESETS.map((p) => (
               <button key={p.id} onClick={() => setPreset(p.id)}
-                className={`px-2 py-0.5 text-[11px] rounded-md border transition-colors ${
+                className={`px-2 py-0.5 text-xs rounded-md border transition-colors ${
                   preset === p.id ? 'bg-primary/10 text-primary border-primary/40' : 'bg-card border-border text-muted-foreground hover:text-foreground'
                 }`}>
                 {p.label}
@@ -322,7 +322,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
         <div className="flex items-center justify-end gap-2">
           {runError && (
-            <div className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+            <div className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
               {runError.response?.data?.detail ?? runError.message}
             </div>
           )}
@@ -352,14 +352,14 @@ export function TcpdumpPanel({ clusterId }: Props) {
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30">
             <StatusBadge status={result.status} />
-            <span className="text-xs font-mono">{result.host}</span>
-            <span className="text-xs text-muted-foreground">· {result.packets.length} packets · {result.durationMs}ms</span>
+            <span className="text-sm font-mono">{result.host}</span>
+            <span className="text-sm text-muted-foreground">· {result.packets.length} packets · {result.durationMs}ms</span>
             {result.exitCode != null && (
-              <span className="text-[10px] text-muted-foreground font-mono">exit {result.exitCode}</span>
+              <span className="text-xs text-muted-foreground font-mono">exit {result.exitCode}</span>
             )}
             <div className="ml-auto flex items-center gap-1">
               <button onClick={downloadRaw} disabled={!result.raw}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-secondary hover:bg-secondary/80 disabled:opacity-50">
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-secondary hover:bg-secondary/80 disabled:opacity-50">
                 <Download className="w-3 h-3" /> raw
               </button>
             </div>
@@ -368,11 +368,11 @@ export function TcpdumpPanel({ clusterId }: Props) {
           {result.error && (
             <div className="px-3 py-2 flex items-start gap-2 bg-red-500/5 border-b border-border">
               <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-red-400">{result.error}</p>
+              <p className="text-sm text-red-400">{result.error}</p>
             </div>
           )}
 
-          <div className="px-3 py-2 text-[11px] text-muted-foreground font-mono border-b border-border flex items-center gap-1">
+          <div className="px-3 py-2 text-xs text-muted-foreground font-mono border-b border-border flex items-center gap-1">
             <Terminal className="w-3 h-3" />
             <span className="truncate" title={result.executed}>{result.executed}</span>
           </div>
@@ -383,7 +383,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
           {result.stderr && (
             <div className="border-t border-border p-2 bg-muted/20">
-              <p className="text-[10px] text-muted-foreground mb-1">stderr</p>
+              <p className="text-xs text-muted-foreground mb-1">stderr</p>
               <LogViewer text={result.stderr} maxHeight="max-h-40" asError hideToolbar />
             </div>
           )}
@@ -395,7 +395,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
           <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
           대상 노드/자격증명을 입력하고 "캡처 실행"을 눌러 원격에서 tcpdump 를 수행하세요.
           <br />
-          <span className="text-[11px]">실행 전 확인 모달이 표시됩니다.</span>
+          <span className="text-xs">실행 전 확인 모달이 표시됩니다.</span>
         </div>
       )}
 
@@ -407,7 +407,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => { setConfirmOpen(false); runMut.mutate(); }}
       >
-        <div className="space-y-1 font-mono text-[11px] text-muted-foreground">
+        <div className="space-y-1 font-mono text-xs text-muted-foreground">
           <div>host    : {host} ({username}@{port})</div>
           <div>iface   : {iface}</div>
           <div>filter  : {bpf || '(none)'}</div>

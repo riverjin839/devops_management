@@ -67,7 +67,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
   };
 
   const inputCls = 'w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
-  const labelCls = 'block text-xs font-medium text-muted-foreground mb-1';
+  const labelCls = 'block text-sm font-medium text-muted-foreground mb-1';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -140,17 +140,17 @@ export function ProjectFormModal({ initial, onClose }: Props) {
           </div>
 
           {error && (
-            <p className="text-xs text-destructive bg-destructive/10 rounded-xl px-3 py-2">{error}</p>
+            <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-3 py-2">{error}</p>
           )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-muted/30">
           <button type="button" onClick={onClose} disabled={isPending}
-            className="px-3.5 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl disabled:opacity-50">
+            className="px-3.5 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl disabled:opacity-50">
             취소
           </button>
           <button type="submit" disabled={!name.trim() || isPending}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl disabled:opacity-50 inline-flex items-center gap-1.5 mac-shadow">
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl disabled:opacity-50 inline-flex items-center gap-1.5 mac-shadow">
             {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
             {isEdit ? '저장' : '만들기'}
           </button>

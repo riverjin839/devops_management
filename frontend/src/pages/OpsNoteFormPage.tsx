@@ -21,7 +21,7 @@ export function OpsNoteFormPage() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">새 Q&amp;A</span>
+          <span className="text-sm text-muted-foreground">새 Q&amp;A</span>
         </div>
       </div>
 

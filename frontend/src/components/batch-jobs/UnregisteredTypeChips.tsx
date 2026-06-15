@@ -19,7 +19,7 @@ export function UnregisteredTypeChips({ clusterJobs, allTypes, onPick }: Unregis
 
   return (
     <div className="pt-3 border-t border-dashed border-border">
-      <div className="text-[10px] text-muted-foreground mb-2 uppercase tracking-wider">
+      <div className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">
         미등록 잡 타입
       </div>
       <div className="flex flex-wrap gap-2">
@@ -29,11 +29,11 @@ export function UnregisteredTypeChips({ clusterJobs, allTypes, onPick }: Unregis
             type="button"
             onClick={() => onPick(t.jobType)}
             title={t.description}
-            className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-dashed border-border bg-card hover:bg-secondary hover:border-primary/40 text-xs text-muted-foreground hover:text-primary transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-dashed border-border bg-card hover:bg-secondary hover:border-primary/40 text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             <Plus className="w-3 h-3" />
             {t.label}
-            <span className="text-[10px] opacity-60 font-mono">{t.jobType}</span>
+            <span className="text-xs opacity-60 font-mono">{t.jobType}</span>
           </button>
         ))}
       </div>

@@ -373,8 +373,8 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   };
 
   const inputClass =
-    'w-full px-2 py-1 bg-background border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-primary';
-  const labelClass = 'block text-[10px] font-medium text-muted-foreground mb-0.5';
+    'w-full px-2 py-1 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+  const labelClass = 'block text-xs font-medium text-muted-foreground mb-0.5';
   const submitting = createTask.isPending || updateTask.isPending;
 
   const formInner = (
@@ -388,7 +388,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           </label>
           <div className="w-full flex flex-wrap items-center gap-1 px-1.5 py-1 bg-background border border-border rounded-md min-h-[30px]">
             {primaryList.map((name) => (
-              <span key={name} className="inline-flex items-center gap-0.5 text-[11px] bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded px-1.5 py-0.5">
+              <span key={name} className="inline-flex items-center gap-0.5 text-xs bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded px-1.5 py-0.5">
                 {name}
                 <button type="button" onClick={() => removePrimary(name)} className="hover:text-red-500" aria-label={`${name} 제거`}>×</button>
               </span>
@@ -405,7 +405,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               onBlur={() => { if (primInput.trim()) addPrimary(primInput); }}
               list="item-assignee-list"
               placeholder={primaryList.length ? '' : '이름 입력 후 Enter'}
-              className="flex-1 min-w-[64px] bg-transparent text-xs outline-none"
+              className="flex-1 min-w-[64px] bg-transparent text-sm outline-none"
             />
           </div>
           <datalist id="item-assignee-list">
@@ -416,7 +416,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         </div>
         <div className="md:col-span-2">
           <div className="flex items-center justify-between mb-0.5">
-            <label htmlFor={f('secondary')} className="text-[10px] font-medium text-muted-foreground">
+            <label htmlFor={f('secondary')} className="text-xs font-medium text-muted-foreground">
               담당자(부) <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
             </label>
             <button
@@ -424,7 +424,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               onClick={() => setAllAttendees((v) => !v)}
               aria-pressed={allAttendees}
               title="전체 참석 — 회의 등 모든 구성원이 참석. 체크 시 전원의 개인 일정(Work To Do)에 표시됩니다."
-              className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+              className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border transition-colors ${
                 allAttendees
                   ? 'bg-primary/10 text-primary border-primary/30'
                   : 'text-muted-foreground border-border hover:text-foreground hover:bg-secondary'
@@ -435,7 +435,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           </div>
           <div className="w-full flex flex-wrap items-center gap-1 px-1.5 py-1 bg-background border border-border rounded-md min-h-[30px]">
             {secondaryList.map((name) => (
-              <span key={name} className="inline-flex items-center gap-0.5 text-[11px] bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded px-1.5 py-0.5">
+              <span key={name} className="inline-flex items-center gap-0.5 text-xs bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded px-1.5 py-0.5">
                 {name}
                 <button type="button" onClick={() => removeSecondary(name)} className="hover:text-red-500" aria-label={`${name} 제거`}>×</button>
               </span>
@@ -452,7 +452,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               onBlur={() => { if (secInput.trim()) addSecondary(secInput); }}
               list="item-assignee-list"
               placeholder={secondaryList.length ? '' : '이름 입력 후 Enter'}
-              className="flex-1 min-w-[64px] bg-transparent text-xs outline-none"
+              className="flex-1 min-w-[64px] bg-transparent text-sm outline-none"
             />
           </div>
         </div>
@@ -463,7 +463,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               {clusterIds.map((id) => {
                 const c = clusters.find((x) => x.id === id);
                 return (
-                  <span key={id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px] border border-primary/20">
+                  <span key={id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs border border-primary/20">
                     {c?.name ?? id}
                     <button type="button" onClick={() => removeCluster(id)} className="hover:text-rose-500 leading-none" aria-label={`${c?.name ?? id} 제거`}>×</button>
                   </span>
@@ -564,11 +564,11 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label htmlFor={f('category')} className="text-[10px] font-medium text-muted-foreground">업무 분류 *</label>
+            <label htmlFor={f('category')} className="text-xs font-medium text-muted-foreground">업무 분류 *</label>
             <button
               type="button"
               onClick={() => setShowCatManage((v) => !v)}
-              className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               title="분류 관리"
             >
               <Settings2 className="w-2.5 h-2.5" />
@@ -670,9 +670,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         <div className="p-2.5 bg-muted/20 border border-border rounded-lg space-y-2">
           {customCategories.length > 0 && (
             <div className="flex items-center flex-wrap gap-1.5">
-              <span className="text-[10px] text-muted-foreground font-medium mr-1">사용자 분류:</span>
+              <span className="text-xs text-muted-foreground font-medium mr-1">사용자 분류:</span>
               {customCategories.map((cat) => (
-                <span key={cat} className="inline-flex items-center gap-0.5 text-[10px] bg-card border border-border rounded px-1.5 py-0.5">
+                <span key={cat} className="inline-flex items-center gap-0.5 text-xs bg-card border border-border rounded px-1.5 py-0.5">
                   {cat}
                   <button
                     type="button"
@@ -698,12 +698,12 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
                 }
               }}
               placeholder="새 분류명"
-              className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+              className="flex-1 px-2 py-1 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <button
               type="button"
               onClick={addCustomCategory}
-              className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
+              className="flex items-center gap-0.5 px-2 py-1 text-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
             >
               <Plus className="w-3 h-3" />
               추가
@@ -714,7 +714,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
       {/* ── 제목 ──────────────────────────────────────────────────────────── */}
       <div>
-        <label htmlFor={f('title')} className="block text-xs font-semibold text-foreground mb-1">
+        <label htmlFor={f('title')} className="block text-sm font-semibold text-foreground mb-1">
           제목
         </label>
         <input
@@ -729,7 +729,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
       {/* ── 본문 — type 에 따라 라벨 변경 ──────────────────────────────── */}
       <div>
-        <label htmlFor={f('content')} className="block text-xs font-semibold text-foreground mb-1">
+        <label htmlFor={f('content')} className="block text-sm font-semibold text-foreground mb-1">
           {type === 'issue' ? '이슈 내용' : '업무 내용'} <span className="text-primary">*</span>
         </label>
         <div id={f('content')}>
@@ -751,7 +751,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
           <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
             <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
             <span>이슈 상세</span>
-            <span className="text-[11px] text-muted-foreground/70">(추가 배경 · 재현 절차 등 — 선택 입력)</span>
+            <span className="text-xs text-muted-foreground/70">(추가 배경 · 재현 절차 등 — 선택 입력)</span>
           </summary>
           <div className="px-3 pb-3">
             <RichTextEditor
@@ -783,7 +783,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
           <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
           <span>{type === 'issue' ? '조치 내용' : '업무 결과'}</span>
-          <span className="text-[11px] text-muted-foreground/70">(클릭해서 펼치기 — 선택 입력)</span>
+          <span className="text-xs text-muted-foreground/70">(클릭해서 펼치기 — 선택 입력)</span>
         </summary>
         <div className="px-3 pb-3">
           <RichTextEditor
@@ -812,7 +812,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
                 <div key={cf.id}>
                   <label className={labelClass} title={cf.description ?? undefined}>{cf.label}</label>
                   {cf.dataType === 'checkbox' ? (
-                    <label className="flex items-center gap-2 text-xs h-7">
+                    <label className="flex items-center gap-2 text-sm h-7">
                       <input type="checkbox" checked={!!v}
                         onChange={(e) => setCustomVal(cf.key, e.target.checked)} className="accent-primary" />
                       <span className="text-muted-foreground">{v ? '예' : '아니오'}</span>
@@ -843,18 +843,18 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
           <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
           <span>추가 옵션</span>
-          <span className="text-[11px] text-muted-foreground/70">
+          <span className="text-xs text-muted-foreground/70">
             (모듈/유형 · 이슈 연결 · 비고)
           </span>
         </summary>
         <div className="px-3 pb-3 space-y-2">
           {/* 모듈 / 유형 */}
           <div>
-            <p className="text-[10px] font-semibold text-muted-foreground/80 mb-1 uppercase tracking-wider">모듈 / 유형</p>
+            <p className="text-xs font-semibold text-muted-foreground/80 mb-1 uppercase tracking-wider">모듈 / 유형</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div>
                 <label htmlFor={f('module')} className={labelClass} title="추후 deprecate 예정 — 가능하면 위 '서비스/컴포넌트' 사용">
-                  모듈 <span className="text-[9px] text-muted-foreground/60">(legacy)</span>
+                  모듈 <span className="text-[10px] text-muted-foreground/60">(legacy)</span>
                 </label>
                 <select
                   id={f('module')}
@@ -899,7 +899,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             <div className="mt-2">
               <label htmlFor={f('doneCond')} className={labelClass}>
                 완료 조건
-                <span className="ml-1 text-[10px] text-muted-foreground/70 font-normal">(Done 이동 기준)</span>
+                <span className="ml-1 text-xs text-muted-foreground/70 font-normal">(Done 이동 기준)</span>
               </label>
               <input
                 id={f('doneCond')}
@@ -917,7 +917,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             <div className="md:col-span-2">
               <label htmlFor={f('issueLink')} className={labelClass}>
                 연결된 이슈
-                <span className="ml-1 text-[10px] text-muted-foreground/70 font-normal">(이 업무의 원인/배경)</span>
+                <span className="ml-1 text-xs text-muted-foreground/70 font-normal">(이 업무의 원인/배경)</span>
               </label>
               <select
                 id={f('issueLink')}

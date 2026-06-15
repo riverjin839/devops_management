@@ -381,17 +381,17 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label htmlFor={f('label')} className="block text-xs font-medium text-muted-foreground mb-1">노드 이름 *</label>
+            <label htmlFor={f('label')} className="block text-sm font-medium text-muted-foreground mb-1">노드 이름 *</label>
             <input id={f('label')} type="text" value={label} onChange={(e) => setLabel(e.target.value)}
               placeholder="노드 이름을 입력하세요" className={inputClass} autoFocus required />
           </div>
           <div>
-            <label htmlFor={f('note')} className="block text-xs font-medium text-muted-foreground mb-1">메모 (선택)</label>
+            <label htmlFor={f('note')} className="block text-sm font-medium text-muted-foreground mb-1">메모 (선택)</label>
             <textarea id={f('note')} value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="부연 설명이나 메모" rows={3} className={`${inputClass} resize-none`} />
           </div>
           <div>
-            <p className="block text-xs font-medium text-muted-foreground mb-1">색상</p>
+            <p className="block text-sm font-medium text-muted-foreground mb-1">색상</p>
             <div className="grid grid-cols-5 gap-2">
               {NODE_COLORS.map((c) => (
                 <button
@@ -407,21 +407,21 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
               ))}
             </div>
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Custom</span>
+              <span className="text-sm text-muted-foreground">Custom</span>
               <input type="color" value={color || '#6366f1'} onChange={(e) => setColor(e.target.value)} className="w-10 h-6 bg-transparent" />
-              <button type="button" onClick={() => setColor('')} className="text-xs px-2 py-1 border border-border rounded-md hover:bg-secondary">기본</button>
+              <button type="button" onClick={() => setColor('')} className="text-sm px-2 py-1 border border-border rounded-md hover:bg-secondary">기본</button>
             </div>
           </div>
 
           <div>
-            <p className="block text-xs font-medium text-muted-foreground mb-1">모양</p>
+            <p className="block text-sm font-medium text-muted-foreground mb-1">모양</p>
             <div className="grid grid-cols-4 gap-2">
               {NODE_SHAPES.map((s) => (
                 <button
                   key={s.value}
                   type="button"
                   onClick={() => setShape(s.value)}
-                  className={`p-2 border rounded-lg flex flex-col items-center gap-1 text-[10px] ${shape === s.value ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary/70'}`}
+                  className={`p-2 border rounded-lg flex flex-col items-center gap-1 text-xs ${shape === s.value ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary/70'}`}
                 >
                   <svg width="42" height="24" viewBox="0 0 42 24">
                     <g transform="translate(1,1)">
@@ -436,22 +436,22 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="block text-xs font-medium text-muted-foreground mb-1">테두리</p>
+              <p className="block text-sm font-medium text-muted-foreground mb-1">테두리</p>
               <div className="flex gap-1">
                 {(['solid', 'dashed', 'dotted'] as NodeBorderStyle[]).map((b) => (
                   <button key={b} type="button" onClick={() => setBorderStyle(b)}
-                    className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${borderStyle === b ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary'}`}>
+                    className={`flex-1 px-2 py-1.5 text-sm rounded-md border ${borderStyle === b ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary'}`}>
                     {b}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <p className="block text-xs font-medium text-muted-foreground mb-1">크기</p>
+              <p className="block text-sm font-medium text-muted-foreground mb-1">크기</p>
               <div className="flex gap-1">
                 {(['sm', 'md', 'lg'] as NodeSize[]).map((s) => (
                   <button key={s} type="button" onClick={() => setSize(s)}
-                    className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${size === s ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary'}`}>
+                    className={`flex-1 px-2 py-1.5 text-sm rounded-md border ${size === s ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary'}`}>
                     {s.toUpperCase()}
                   </button>
                 ))}
@@ -461,11 +461,11 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose}
-              className="px-3.5 py-2 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors">
+              className="px-3.5 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors">
               취소
             </button>
             <button type="submit"
-              className="px-3.5 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 transition-colors">
+              className="px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 transition-colors">
               <Check className="w-3.5 h-3.5" /> 저장
             </button>
           </div>
@@ -807,7 +807,7 @@ function MindMapCanvas({
           <ToolBtn onClick={() => exportMindMap('png')} title="PNG 내보내기"><Download className="w-4 h-4" /></ToolBtn>
           <ToolBtn onClick={() => exportMindMap('svg')} title="SVG 내보내기"><FileImage className="w-4 h-4" /></ToolBtn>
         </ToolGroup>
-        <span className="text-[11px] text-muted-foreground tabular-nums px-2 font-medium select-none">{Math.round(zoom * 100)}%</span>
+        <span className="text-xs text-muted-foreground tabular-nums px-2 font-medium select-none">{Math.round(zoom * 100)}%</span>
       </div>
 
       <svg
@@ -958,13 +958,13 @@ function MindMapCanvas({
       </div>
 
       {(showShortcuts || hoverShortcut) && (
-        <div className="absolute bottom-14 right-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl p-4 text-xs mac-shadow w-72 z-20">
+        <div className="absolute bottom-14 right-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl p-4 text-sm mac-shadow w-72 z-20">
           <div className="flex items-center justify-between mb-3">
             <p className="font-semibold flex items-center gap-1.5">
               <HelpCircle className="w-3.5 h-3.5 text-primary" />
               키보드 단축키
             </p>
-            <span className="text-[10px] text-muted-foreground">? 키 토글</span>
+            <span className="text-xs text-muted-foreground">? 키 토글</span>
           </div>
           <ul className="space-y-1.5">
             {[
@@ -979,10 +979,10 @@ function MindMapCanvas({
               ['Ctrl + 0', '화면 맞춤'],
             ].map(([k, v]) => (
               <li key={k} className="flex items-center justify-between gap-3 text-muted-foreground">
-                <kbd className="px-1.5 py-0.5 rounded-md bg-secondary border border-border text-[10px] font-mono text-foreground">
+                <kbd className="px-1.5 py-0.5 rounded-md bg-secondary border border-border text-xs font-mono text-foreground">
                   {k}
                 </kbd>
-                <span className="text-[11px]">{v}</span>
+                <span className="text-xs">{v}</span>
               </li>
             ))}
           </ul>
@@ -996,7 +996,7 @@ function MindMapCanvas({
           <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl px-4 py-3 max-w-sm mac-shadow">
             <div className="flex items-center gap-1.5 mb-1">
               <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{node.label}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{node.label}</p>
             </div>
             <p className="text-sm whitespace-pre-wrap text-foreground/90 leading-relaxed">{node.note}</p>
           </div>
@@ -1139,7 +1139,7 @@ export function MindMapPage() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold leading-tight truncate">마인드맵</p>
-              <p className="text-[10px] text-muted-foreground tabular-nums">전체 {maps.length}개</p>
+              <p className="text-xs text-muted-foreground tabular-nums">전체 {maps.length}개</p>
             </div>
           </div>
           <button
@@ -1159,7 +1159,7 @@ export function MindMapPage() {
               value={editingMapTitle}
               onChange={(e) => setEditingMapTitle(e.target.value)}
               placeholder="제목을 입력하고 Enter"
-              className="w-full px-2.5 py-1.5 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
               autoFocus
             />
             <input
@@ -1167,11 +1167,11 @@ export function MindMapPage() {
               value={editingMapConfluence}
               onChange={(e) => setEditingMapConfluence(e.target.value)}
               placeholder="Confluence URL (선택)"
-              className="w-full px-2.5 py-1.5 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="w-full px-2.5 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
             <div className="flex gap-1.5">
-              <button type="submit" className="flex-1 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors">생성</button>
-              <button type="button" onClick={() => { setShowCreateMap(false); setEditingMapConfluence(''); }} className="flex-1 py-1.5 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">취소</button>
+              <button type="submit" className="flex-1 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors">생성</button>
+              <button type="button" onClick={() => { setShowCreateMap(false); setEditingMapConfluence(''); }} className="flex-1 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">취소</button>
             </div>
           </form>
         )}
@@ -1188,10 +1188,10 @@ export function MindMapPage() {
               <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-secondary flex items-center justify-center">
                 <MapIcon className="w-6 h-6 text-muted-foreground/50" />
               </div>
-              <p className="text-xs text-muted-foreground mb-3">마인드맵이 없습니다.</p>
+              <p className="text-sm text-muted-foreground mb-3">마인드맵이 없습니다.</p>
               <button
                 onClick={() => setShowCreateMap(true)}
-                className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" /> 새로 만들기
               </button>
@@ -1211,7 +1211,7 @@ export function MindMapPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <p className={`text-xs truncate ${isActive ? 'font-semibold' : 'font-medium'}`}>{m.title}</p>
+                      <p className={`text-sm truncate ${isActive ? 'font-semibold' : 'font-medium'}`}>{m.title}</p>
                       {m.confluenceUrl && (
                         <a
                           href={m.confluenceUrl}
@@ -1225,7 +1225,7 @@ export function MindMapPage() {
                         </a>
                       )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground tabular-nums">{m.nodeCount}개 노드</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">{m.nodeCount}개 노드</p>
                   </div>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
@@ -1269,16 +1269,16 @@ export function MindMapPage() {
         <div className="px-6 py-3 border-b border-border flex items-center gap-3 bg-card">
           {currentMap ? (
             <>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">마인드맵</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">마인드맵</span>
               <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
               <span className="text-sm font-semibold">{currentMap.title}</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground tabular-nums">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground tabular-nums">
                 {currentMap.nodes.length} 노드
               </span>
               <div className="flex-1" />
               <button
                 onClick={handleAddRootNode}
-                className="px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
+                className="px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
               >
                 <Plus className="w-3.5 h-3.5" /> 루트 노드
               </button>
@@ -1304,7 +1304,7 @@ export function MindMapPage() {
                     <MapIcon className="w-7 h-7 text-primary" />
                   </div>
                   <p className="text-sm font-semibold mb-1">노드가 없습니다</p>
-                  <p className="text-xs text-muted-foreground mb-4">루트 노드부터 시작해 자식 노드를 자유롭게 추가하세요.</p>
+                  <p className="text-sm text-muted-foreground mb-4">루트 노드부터 시작해 자식 노드를 자유롭게 추가하세요.</p>
                   <button
                     onClick={handleAddRootNode}
                     className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors inline-flex items-center gap-1.5"

@@ -63,14 +63,14 @@ export function ProjectHeader({ project, onDeleted }: Props) {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-bold text-foreground leading-tight">{project.name}</h3>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge}`}>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge}`}>
                   {project.status === 'active' ? '진행중' : project.status === 'completed' ? '완료' : '중단'}
                 </span>
               </div>
               {project.goal && (
                 <div className="flex items-start gap-1.5 mt-1">
                   <Target className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground line-clamp-2">{project.goal}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{project.goal}</p>
                 </div>
               )}
             </div>
@@ -90,7 +90,7 @@ export function ProjectHeader({ project, onDeleted }: Props) {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-3 flex-wrap text-xs text-muted-foreground">
+        <div className="flex items-center gap-4 mt-3 flex-wrap text-sm text-muted-foreground">
           {dateRange && (
             <span className="flex items-center gap-1">
               <CalendarDays className="w-3 h-3" />{dateRange}
@@ -107,7 +107,7 @@ export function ProjectHeader({ project, onDeleted }: Props) {
 
         {/* 달성률 바 */}
         <div className="mt-3">
-          <div className="flex items-center justify-between text-xs mb-1">
+          <div className="flex items-center justify-between text-sm mb-1">
             <span className="text-muted-foreground">달성률</span>
             <span className="font-semibold tabular-nums">
               {project.achievementRate}% ({project.doneItems}/{project.totalItems})

@@ -1545,9 +1545,113 @@ export const k8sResourcesApi = {
       { params: namespace ? { namespace } : undefined, timeout: 120_000 },
     ),
   yaml: (clusterId: string, kind: string, namespace: string, name: string) =>
-    api.get<import('@/types').K8sResourceYaml>(
+    api.get<import('@/types').K8sResourceDetail>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/yaml`,
     ),
+  // ── 쓰기 액션 (require_operator + 감사 로그) ───────────────────────────────
+  capabilities: (clusterId: string) =>
+    api.get<import('@/types').K8sCapabilitiesResponse>(`/k8s/${clusterId}/resources-capabilities`),
+  kindAvailability: (clusterId: string) =>
+    api.get<import('@/types').KindAvailabilityResponse>(`/k8s/${clusterId}/kind-availability`, { timeout: 60_000 }),
+  richNodes: (clusterId: string) =>
+    api.get<import('@/types').K8sNodesResponse>(`/k8s/${clusterId}/nodes`, { timeout: 60_000 }),
+  richPods: (clusterId: string, namespace?: string) =>
+    api.get<import('@/types').K8sPodsResponse>(`/k8s/${clusterId}/pods`, { params: namespace ? { namespace } : undefined, timeout: 120_000 }),
+  scale: (clusterId: string, kind: string, namespace: string, name: string, replicas: number) =>
+    api.post<import('@/types').K8sWriteResult>(
+      `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/scale`,
+      { replicas },
+    ),
+  restart: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.post<import('@/types').K8sWriteResult>(
+      `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/restart`,
+    ),
+  remove: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.delete<import('@/types').K8sWriteResult>(
+      `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}`,
+    ),
+  apply: (clusterId: string, kind: string, namespace: string, name: string, yaml: string) =>
+    api.put<import('@/types').K8sWriteResult>(
+      `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/yaml`,
+      { yaml },
+    ),
+  cordon: (clusterId: string, name: string, unschedulable: boolean) =>
+    api.post<import('@/types').K8sWriteResult>(
+      `/k8s/${clusterId}/nodes/${name}/cordon`,
+      { unschedulable },
+    ),
+  drain: (clusterId: string, name: string) =>
+    api.post<import('@/types').K8sDrainResult>(`/k8s/${clusterId}/nodes/${name}/drain`, {}, { timeout: 120_000 }),
+  // ── CRD (Custom Resources) ────────────────────────────────────────────────
+  crds: (clusterId: string) =>
+    api.get<import('@/types').K8sCrdListResponse>(`/k8s/${clusterId}/crds`),
+  crdObjects: (clusterId: string, group: string, version: string, plural: string, namespace?: string) =>
+    api.get<import('@/types').K8sResourceListResponse>(
+      `/k8s/${clusterId}/crds/${group}/${version}/${plural}`,
+      { params: namespace ? { namespace } : undefined, timeout: 60_000 },
+    ),
+  crdObjectYaml: (clusterId: string, group: string, version: string, plural: string, namespace: string, name: string) =>
+    api.get<import('@/types').K8sResourceYaml>(
+      `/k8s/${clusterId}/crds/${group}/${version}/${plural}/${namespace || '-'}/${name}/yaml`,
+    ),
+};
+
+// ── Helm 릴리스 뷰어 (읽기 전용) ─────────────────────────────────────────────
+export const k8sHelmApi = {
+  releases: (clusterId: string, namespace?: string) =>
+    api.get<import('@/types').HelmReleaseListResponse>(
+      `/k8s/${clusterId}/helm/releases`,
+      { params: namespace ? { namespace } : undefined, timeout: 60_000 },
+    ),
+  history: (clusterId: string, namespace: string, name: string) =>
+    api.get<{ count: number; items: import('@/types').HelmHistoryItem[] }>(
+      `/k8s/${clusterId}/helm/releases/${namespace}/${name}/history`,
+    ),
+  values: (clusterId: string, namespace: string, name: string) =>
+    api.get<{ name: string; namespace: string; yaml: string }>(
+      `/k8s/${clusterId}/helm/releases/${namespace}/${name}/values`,
+    ),
+};
+
+// ── 스트리밍 URL 헬퍼 (인증 fetch / WebSocket 에서 사용) ──────────────────────
+export const k8sStreamUrls = {
+  /** 클러스터 이벤트 SSE — Authorization 헤더 fetch 로 소비. */
+  events: (clusterId: string, namespace?: string) => {
+    const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+    return `/api/v1/analyze/clusters/${clusterId}/events/stream${qs}`;
+  },
+  /** Pod exec WebSocket — 토큰은 query param 으로 전달(WS 는 헤더 불가). */
+  exec: (clusterId: string, namespace: string, pod: string, container: string | undefined, token: string | null, command = '/bin/sh') => {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const p = new URLSearchParams({ namespace, pod, command });
+    if (container) p.set('container', container);
+    if (token) p.set('token', token);
+    return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/exec?${p.toString()}`;
+  },
+};
+
+// ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
+export const metricTrendApi = {
+  get: (clusterId: string, date?: string) =>
+    api.get<import('@/types').MetricTrendResponse>(`/metric-trend/${clusterId}`, { params: date ? { date } : undefined }),
+  snapshot: (clusterId: string) =>
+    api.post<{ ok: boolean; queued: boolean; taskId: string }>(
+      `/metric-trend/${clusterId}/snapshot`, {}, { timeout: 30_000 }),
+  check: (clusterId: string, itemKey: string, isChecked: boolean, date?: string, note?: string) =>
+    api.put(`/metric-trend/${clusterId}/check`, { itemKey, isChecked, date, note }),
+  editSnapshot: (snapshotId: string, counts: Record<string, number>) =>
+    api.put(`/metric-trend/snapshots/${snapshotId}`, { counts }),
+  listItems: (clusterId?: string) =>
+    api.get<{ items: import('@/types').MetricChecklistItemT[] }>(`/metric-trend/items/all`, { params: clusterId ? { cluster_id: clusterId } : undefined }),
+  createItem: (body: Partial<import('@/types').MetricChecklistItemT>) =>
+    api.post<import('@/types').MetricChecklistItemT>(`/metric-trend/items`, body),
+  updateItem: (id: string, body: Partial<import('@/types').MetricChecklistItemT>) =>
+    api.put<import('@/types').MetricChecklistItemT>(`/metric-trend/items/${id}`, body),
+  deleteItem: (id: string) => api.delete(`/metric-trend/items/${id}`),
+  getSchedule: () =>
+    api.get<{ enabled: boolean; cron: string; lastRunAt: string | null; nextRun: string | null }>(`/metric-trend/schedule`),
+  setSchedule: (enabled: boolean, cron: string) =>
+    api.put<{ enabled: boolean; cron: string; nextRun: string | null }>(`/metric-trend/schedule`, { enabled, cron }),
 };
 
 export default api;

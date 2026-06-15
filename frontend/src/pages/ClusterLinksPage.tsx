@@ -89,11 +89,11 @@ function LinkForm({ initial, onSave, onCancel }: LinkFormProps) {
       <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="설명 (선택)" className={cls} />
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onCancel}
-          className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1">
+          className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1">
           <X className="w-3.5 h-3.5" /> 취소
         </button>
         <button type="submit"
-          className="px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1">
+          className="px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1">
           <Check className="w-3.5 h-3.5" /> 저장
         </button>
       </div>
@@ -114,8 +114,8 @@ function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () =>
           {link.label}
           <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
         </a>
-        {link.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{link.description}</p>}
-        <p className="text-[11px] text-muted-foreground/60 font-mono truncate mt-1">{link.url}</p>
+        {link.description && <p className="text-sm text-muted-foreground mt-0.5 truncate">{link.description}</p>}
+        <p className="text-xs text-muted-foreground/60 font-mono truncate mt-1">{link.url}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground" title="편집"><Pencil className="w-3.5 h-3.5" /></button>
@@ -329,8 +329,8 @@ export function ClusterLinksPage() {
     cells.push(
       <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-emerald-500/10 sticky top-0 z-10`}>
         <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-        <span className="font-semibold text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">공통 링크</span>
-        <span className="ml-auto text-[10px] text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
+        <span className="font-semibold text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">공통 링크</span>
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
         <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
           className="ml-1 p-0.5 rounded text-emerald-600/60 dark:text-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/15 transition-colors flex-shrink-0" title="공통 링크 추가">
           <Plus className="w-3 h-3" />
@@ -343,8 +343,8 @@ export function ClusterLinksPage() {
         <div key={`h-${g.clusterId}`}
           className={`relative flex items-center gap-1.5 border-b ${borderCls} px-3 py-2 ${hdrBg} sticky top-0 z-10${idx < groups.length - 1 ? ` border-r ${borderCls}` : ''}`}>
           <span className="text-sm leading-none text-primary">☸</span>
-          <span className={`font-semibold text-[11px] uppercase tracking-wider truncate ${hdrText}`}>{g.clusterName}</span>
-          <span className="ml-auto text-[10px] text-muted-foreground tabular-nums flex-shrink-0">({g.links.length})</span>
+          <span className={`font-semibold text-xs uppercase tracking-wider truncate ${hdrText}`}>{g.clusterName}</span>
+          <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({g.links.length})</span>
           <button onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommon(null); }}
             className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted`} title="링크 추가">
             <Plus className="w-3 h-3" />
@@ -358,14 +358,14 @@ export function ClusterLinksPage() {
     if (maxRows === 0) {
       cells.push(
         <div key="empty-common" className={`${cellBase} text-center`} style={{ minHeight: rowMinH }}>
-          <span className="text-xs text-muted-foreground/40">—</span>
+          <span className="text-sm text-muted-foreground/40">—</span>
         </div>,
       );
       groups.forEach((g, idx) => cells.push(
         <div key={`empty-${g.clusterId}`}
           className={`${cellBase} text-center${idx < groups.length - 1 ? ` border-r ${borderCls}` : ''}`}
           style={{ minHeight: rowMinH }}>
-          <span className="text-xs text-muted-foreground/40">—</span>
+          <span className="text-sm text-muted-foreground/40">—</span>
         </div>,
       ));
     } else {
@@ -452,11 +452,11 @@ export function ClusterLinksPage() {
             <div className="space-y-1.5">
               {orphanGroups.map(g => (
                 <div key={g.clusterId} className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground/70 w-28 truncate">{g.clusterName}</span>
+                  <span className="text-sm text-muted-foreground/70 w-28 truncate">{g.clusterName}</span>
                   <div className="flex flex-wrap gap-2">
                     {g.links.map(l => (
                       <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5 transition-colors">
+                        className="text-sm text-muted-foreground hover:text-primary flex items-center gap-0.5 transition-colors">
                         {l.label}<ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     ))}
@@ -480,16 +480,16 @@ export function ClusterLinksPage() {
           </span>
         )}
         <span className="text-sm leading-none text-primary">☸</span>
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none truncate">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none truncate">
           {g.clusterName}
         </span>
         {isOrphan && (
-          <span className="text-[10px] text-muted-foreground/70 px-1.5 py-0.5 rounded bg-muted">삭제됨</span>
+          <span className="text-xs text-muted-foreground/70 px-1.5 py-0.5 rounded bg-muted">삭제됨</span>
         )}
-        <span className="ml-auto text-[11px] text-muted-foreground/70 tabular-nums">{g.links.length}</span>
+        <span className="ml-auto text-xs text-muted-foreground/70 tabular-nums">{g.links.length}</span>
         {!isOrphan && (
           <button onClick={() => { setAddingTo(g.clusterId); setEditingLink(null); }}
-            className="ml-2 px-2 py-1 text-[11px] font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-md transition-colors flex items-center gap-1"
+            className="ml-2 px-2 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-md transition-colors flex items-center gap-1"
             title="링크 추가">
             <Plus className="w-3 h-3" /> 추가
           </button>
@@ -549,7 +549,7 @@ export function ClusterLinksPage() {
               </span>
               <div className="min-w-0">
                 <h1 className="text-lg font-semibold leading-tight truncate">클러스터 주요 링크</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-sm text-muted-foreground mt-0.5">
                   운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요.
                 </p>
               </div>
@@ -598,12 +598,12 @@ export function ClusterLinksPage() {
             <MacCard bodyPadding="p-0">
               <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
                 <Globe aria-hidden="true" className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   공통 서비스 링크
                 </span>
-                <span className="text-[11px] text-muted-foreground/70 tabular-nums">({filteredCommonLinks.length})</span>
+                <span className="text-xs text-muted-foreground/70 tabular-nums">({filteredCommonLinks.length})</span>
                 <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
-                  className="ml-auto px-2 py-1 text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 rounded-md transition-colors flex items-center gap-1">
+                  className="ml-auto px-2 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 rounded-md transition-colors flex items-center gap-1">
                   <Plus className="w-3 h-3" /> 추가
                 </button>
               </div>
@@ -666,7 +666,7 @@ export function ClusterLinksPage() {
 function StatTile({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
   return (
     <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className={`text-lg font-semibold tabular-nums leading-tight ${accent ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
         {value}
       </p>

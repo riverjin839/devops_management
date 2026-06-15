@@ -42,10 +42,10 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-sm truncate">{playbook.name}</h3>
           {playbook.description && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{playbook.description}</p>
+            <p className="text-sm text-muted-foreground mt-0.5 truncate">{playbook.description}</p>
           )}
         </div>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${config.bg} ${config.color}`}>
+        <span className={`text-sm font-medium px-2 py-0.5 rounded-full border ${config.bg} ${config.color}`}>
           {isRunning ? (
             <span className="flex items-center gap-1">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -56,7 +56,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
       </div>
 
       {/* Playbook 출처 — DB 파일명 우선, 없으면 path */}
-      <div className="text-xs text-muted-foreground font-mono bg-background/50 rounded px-2 py-1 mb-3 space-y-0.5">
+      <div className="text-sm text-muted-foreground font-mono bg-background/50 rounded px-2 py-1 mb-3 space-y-0.5">
         {playbook.playbookFileName ? (
           <div className="truncate">
             <span className="text-foreground/80">📄 {playbook.playbookFileName}</span>
@@ -84,12 +84,12 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
 
       {/* Message */}
       {result?.message && (
-        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{String(result.message)}</p>
+        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{String(result.message)}</p>
       )}
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-border/50">
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
           <Clock className="w-3 h-3" />
           {formatTimeAgo(playbook.lastRunAt)}
           {result?.durationMs != null && (
@@ -150,7 +150,7 @@ function StatBadge({ label, value, color }: { label: string; value: number; colo
       <div className={`text-sm font-bold ${value > 0 ? color : 'text-muted-foreground/50'}`}>
         {value}
       </div>
-      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }

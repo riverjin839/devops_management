@@ -223,7 +223,7 @@ export function DateTimePicker({
 
   const display = displayValue(value);
   const selectClass =
-    'h-7 px-1.5 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary tabular-nums';
+    'h-7 px-1.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary tabular-nums';
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
@@ -235,7 +235,7 @@ export function DateTimePicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center gap-2 px-2.5 py-1.5 bg-background border rounded-md text-xs text-left transition-colors ${
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 bg-background border rounded-md text-sm text-left transition-colors ${
           open ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-border'
         } focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed`}
       >
@@ -284,7 +284,7 @@ export function DateTimePicker({
               <button
                 type="button"
                 onClick={() => stepMonth(-1)}
-                className="px-2 py-1 text-xs rounded hover:bg-secondary text-muted-foreground"
+                className="px-2 py-1 text-sm rounded hover:bg-secondary text-muted-foreground"
                 aria-label="이전 달"
               >
                 ‹
@@ -295,7 +295,7 @@ export function DateTimePicker({
               <button
                 type="button"
                 onClick={() => stepMonth(1)}
-                className="px-2 py-1 text-xs rounded hover:bg-secondary text-muted-foreground"
+                className="px-2 py-1 text-sm rounded hover:bg-secondary text-muted-foreground"
                 aria-label="다음 달"
               >
                 ›
@@ -305,7 +305,7 @@ export function DateTimePicker({
               {KOR_DOW.map((d, i) => (
                 <div
                   key={d}
-                  className={`text-center text-[10px] font-medium ${
+                  className={`text-center text-xs font-medium ${
                     i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-muted-foreground'
                   }`}
                 >
@@ -326,7 +326,7 @@ export function DateTimePicker({
                     data-day-cell
                     onClick={() => pickDay(d)}
                     onKeyDown={(e) => onGridKeyDown(e, i)}
-                    className={`text-xs h-7 rounded transition-colors ${
+                    className={`text-sm h-7 rounded transition-colors ${
                       isSelected
                         ? 'bg-primary text-primary-foreground font-semibold'
                         : isToday
@@ -346,7 +346,7 @@ export function DateTimePicker({
           {/* Time */}
           <div className="flex-shrink-0 w-[116px] border-l border-border pl-3 flex flex-col">
             {/* 시간 포함 토글 */}
-            <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground mb-2 cursor-pointer select-none">
+            <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={withTime}
@@ -386,7 +386,7 @@ export function DateTimePicker({
                       key={p.label}
                       type="button"
                       onClick={() => { setHour(p.h); setMinute(p.m); setWithTime(true); emit(p.h, p.m, true); }}
-                      className="px-1.5 py-0.5 text-[10px] rounded bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+                      className="px-1.5 py-0.5 text-xs rounded bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
                     >
                       {p.label}
                     </button>
@@ -394,14 +394,14 @@ export function DateTimePicker({
                 </div>
               </div>
             ) : (
-              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">날짜만 저장됩니다. 시간이 필요하면 위 체크박스를 켜세요.</p>
+              <p className="text-xs text-muted-foreground/70 leading-relaxed">날짜만 저장됩니다. 시간이 필요하면 위 체크박스를 켜세요.</p>
             )}
 
             <div className="mt-auto pt-2 border-t border-border space-y-1">
               <button
                 type="button"
                 onClick={setNow}
-                className="w-full px-2 py-1 text-[11px] rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium"
+                className="w-full px-2 py-1 text-xs rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium"
               >
                 지금
               </button>
@@ -409,7 +409,7 @@ export function DateTimePicker({
                 <button
                   type="button"
                   onClick={clear}
-                  className="w-full px-2 py-1 text-[11px] rounded hover:bg-secondary text-muted-foreground"
+                  className="w-full px-2 py-1 text-xs rounded hover:bg-secondary text-muted-foreground"
                 >
                   지우기
                 </button>
@@ -420,7 +420,7 @@ export function DateTimePicker({
                   setOpen(false);
                   triggerRef.current?.focus();
                 }}
-                className="w-full px-2 py-1 text-[11px] rounded bg-secondary hover:bg-secondary/80 font-medium"
+                className="w-full px-2 py-1 text-xs rounded bg-secondary hover:bg-secondary/80 font-medium"
               >
                 확인
               </button>

@@ -129,7 +129,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
 
           <div className="flex items-center gap-1.5 px-2">
             <CalendarCheck2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-            <span className="text-xs font-semibold tabular-nums">
+            <span className="text-sm font-semibold tabular-nums">
               {isToday ? `오늘 · ${fmtLabel(viewDate)}` : fmtLabel(viewDate)}
             </span>
           </div>
@@ -153,7 +153,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-3 text-[11px]">
+        <div className="flex items-center gap-3 text-xs">
           {totals.overdue > 0 && (
             <span className="text-red-500 dark:text-red-400">지연 {totals.overdue}</span>
           )}
@@ -164,7 +164,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
         </div>
       </div>
 
-      <div className="text-[11px] text-muted-foreground">
+      <div className="text-xs text-muted-foreground">
         멤버별 진행 현황 (task + issue, primary/secondary 담당)
       </div>
 
@@ -196,12 +196,12 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
               >
                 {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center text-[9px] font-bold text-primary flex-shrink-0">
+                  <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center text-[10px] font-bold text-primary flex-shrink-0">
                     {g.assignee.slice(0, 2).toUpperCase()}
                   </div>
-                  <span className="text-xs font-semibold truncate flex-1 min-w-0">{g.assignee}</span>
-                  <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums">{done}/{total} · {pct}%</span>
-                  <div className="hidden sm:flex items-center gap-1.5 text-[10px] flex-shrink-0">
+                  <span className="text-sm font-semibold truncate flex-1 min-w-0">{g.assignee}</span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0 tabular-nums">{done}/{total} · {pct}%</span>
+                  <div className="hidden sm:flex items-center gap-1.5 text-xs flex-shrink-0">
                     {overdue.length > 0 && (
                       <span className="inline-flex items-center gap-0.5 text-red-500" title="지연">
                         <ShieldAlert className="w-2.5 h-2.5" />
@@ -238,7 +238,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                       <li key={`${g.assignee}:${t.id}`}>
                         <Link
                           to={`/tasks-mgmt/${t.id}`}
-                          className="flex items-center gap-2 text-xs min-w-0 py-1 border-b border-dashed border-amber-200/70 last:border-b-0 hover:bg-amber-100/50 dark:border-border/40 dark:hover:bg-secondary/40 transition-colors"
+                          className="flex items-center gap-2 text-sm min-w-0 py-1 border-b border-dashed border-amber-200/70 last:border-b-0 hover:bg-amber-100/50 dark:border-border/40 dark:hover:bg-secondary/40 transition-colors"
                           title="상세 보기"
                         >
                           {isDone ? (
@@ -257,7 +257,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                             {t.title?.trim() || stripHtml(t.content) || t.category}
                           </span>
                           {t.clusterName && (
-                            <span className="text-[10px] text-muted-foreground/80 flex-shrink-0 hidden md:inline">
+                            <span className="text-xs text-muted-foreground/80 flex-shrink-0 hidden md:inline">
                               {t.clusterName}
                             </span>
                           )}
@@ -270,7 +270,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                       <button
                         type="button"
                         onClick={() => toggleExpand(g.assignee)}
-                        className="text-[10px] text-muted-foreground hover:text-primary py-1 transition-colors"
+                        className="text-xs text-muted-foreground hover:text-primary py-1 transition-colors"
                         aria-expanded={isExpanded}
                       >
                         {isExpanded ? '접기' : `+${all.length - 4}건 더…`}
@@ -287,7 +287,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
       <div className="flex items-center justify-end">
         <Link
           to="/todo-today"
-          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
         >
           담당자별 상세 보기 <ArrowRight className="w-3 h-3" />
         </Link>

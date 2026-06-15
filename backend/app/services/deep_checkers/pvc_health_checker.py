@@ -23,35 +23,44 @@ class PvcHealthChecker(DeepCheckerBase):
         critical_pending = int(ctx.thresholds.get("critical_pending", 5))
 
         v1 = self._v1(ctx)
-        pvcs = v1.list_persistent_volume_claim_for_all_namespaces(timeout_seconds=15)
-        pvs = v1.list_persistent_volume(timeout_seconds=15)
+        with self._step("list_pvc", "PVC 전체 조회") as st:
+            pvcs = v1.list_persistent_volume_claim_for_all_namespaces(timeout_seconds=15)
+            st.detail = f"{len(pvcs.items)}개"
+            st.metrics = {"count": len(pvcs.items)}
+        with self._step("list_pv", "PV 전체 조회") as st:
+            pvs = v1.list_persistent_volume(timeout_seconds=15)
+            st.detail = f"{len(pvs.items)}개"
+            st.metrics = {"count": len(pvs.items)}
 
-        pending = [p for p in pvcs.items if (p.status and p.status.phase == "Pending")]
-        lost = [p for p in pvcs.items if (p.status and p.status.phase == "Lost")]
-        bound_pvc_names = {
-            f"{p.metadata.namespace}/{p.metadata.name}"
-            for p in pvcs.items
-            if p.status and p.status.phase == "Bound"
-        }
-
-        orphans = []
-        for pv in pvs.items:
-            phase = pv.status.phase if pv.status else None
-            if phase in ("Released", "Failed"):
-                claim = pv.spec.claim_ref if pv.spec else None
-                if claim is None:
-                    orphans.append(pv.metadata.name)
-                else:
-                    key = f"{claim.namespace}/{claim.name}"
-                    if key not in bound_pvc_names:
+        with self._step("filter", "Pending/Lost PVC · orphan PV 필터") as st:
+            pending = [p for p in pvcs.items if (p.status and p.status.phase == "Pending")]
+            lost = [p for p in pvcs.items if (p.status and p.status.phase == "Lost")]
+            bound_pvc_names = {
+                f"{p.metadata.namespace}/{p.metadata.name}"
+                for p in pvcs.items
+                if p.status and p.status.phase == "Bound"
+            }
+            orphans = []
+            for pv in pvs.items:
+                phase = pv.status.phase if pv.status else None
+                if phase in ("Released", "Failed"):
+                    claim = pv.spec.claim_ref if pv.spec else None
+                    if claim is None:
                         orphans.append(pv.metadata.name)
+                    else:
+                        key = f"{claim.namespace}/{claim.name}"
+                        if key not in bound_pvc_names:
+                            orphans.append(pv.metadata.name)
+            st.detail = f"Pending {len(pending)} · Lost {len(lost)} · orphan {len(orphans)}"
 
-        pending_count = len(pending) + len(lost)
-        status = StatusEnum.healthy
-        if pending_count >= critical_pending or len(lost) > 0:
-            status = StatusEnum.critical
-        elif pending_count >= warning_pending or len(orphans) > 0:
-            status = StatusEnum.warning
+        with self._step("verdict", "임계 비교") as st:
+            pending_count = len(pending) + len(lost)
+            status = StatusEnum.healthy
+            if pending_count >= critical_pending or len(lost) > 0:
+                status = StatusEnum.critical
+            elif pending_count >= warning_pending or len(orphans) > 0:
+                status = StatusEnum.warning
+            st.detail = status.value
 
         return DeepCheckOutcome(
             status=status,

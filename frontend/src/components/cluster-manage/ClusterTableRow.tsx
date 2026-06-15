@@ -116,11 +116,11 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           <span className="font-medium text-sm text-foreground">{cluster.name}</span>
         </div>
         {cluster.hostname && (
-          <p className="text-[10px] font-mono text-muted-foreground mt-0.5 ml-4">{cluster.hostname}</p>
+          <p className="text-xs font-mono text-muted-foreground mt-0.5 ml-4">{cluster.hostname}</p>
         )}
       </td>
       <td className="px-3 py-2.5">
-        <span className={`text-[11px] px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
       </td>
 
       {/* 지역 — 인라인 편집 */}
@@ -151,25 +151,25 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             value={cluster.operationLevel ?? ''}
             onChange={(e) => quickUpdate({ operationLevel: e.target.value || undefined })}
             onBlur={() => setEditingField(null)}
-            className="text-xs bg-background border border-border rounded px-1.5 py-0.5"
+            className="text-sm bg-background border border-border rounded px-1.5 py-0.5"
           >
             <option value="">—</option>
             {(opsLevels ?? []).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         ) : cluster.operationLevel ? (
-          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${lv}`}>
             {levelLabel(opsLevels, cluster.operationLevel)}
           </span>
-        ) : <span className="text-muted-foreground/60 text-xs">-</span>}
+        ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
 
       <td className="px-3 py-2.5">
         {cluster.bgpEnabled ? (
           <div>
-            <span className="text-[11px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">BGP</span>
-            {cluster.asNumber && <p className="text-[10px] font-mono text-muted-foreground mt-0.5">AS{cluster.asNumber}</p>}
+            <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">BGP</span>
+            {cluster.asNumber && <p className="text-xs font-mono text-muted-foreground mt-0.5">AS{cluster.asNumber}</p>}
           </div>
-        ) : <span className="text-muted-foreground/60 text-xs">-</span>}
+        ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </td>
 
       {/* INTERNAL_IP — kubectl InternalIP 들을 정규식/Glob 형식으로 묶어 표시 */}
@@ -183,7 +183,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             onSave={(v) => quickUpdate({ cidr: v || undefined })}
             onCancel={() => setEditingField(null)}
             placeholder="192.168.0.0/24 (fallback)"
-            inputClassName="text-xs font-mono"
+            inputClassName="text-sm font-mono"
           />
         ) : (() => {
           const manualGroups = (cluster.internalIps ?? '')
@@ -193,34 +193,34 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           const hasAuto = ipBuckets.internal.groups.length > 0;
           const hasManual = manualGroups.length > 0;
           const hasContent = hasAuto || hasManual || Boolean(cluster.cidr);
-          if (!hasContent) return <span className="text-muted-foreground/60 text-xs">-</span>;
+          if (!hasContent) return <span className="text-muted-foreground/60 text-sm">-</span>;
           return (
           <div>
             {hasAuto ? (
               <div title="kubectl get nodes -o wide 의 InternalIP 들을 /24 단위로 묶은 표기 (마지막 옥텟 연속 구간 압축)">
                 {ipBuckets.internal.groups.map((g, i) => (
-                  <p key={i} className="text-xs font-mono text-foreground tabular-nums">{g}</p>
+                  <p key={i} className="text-sm font-mono text-foreground tabular-nums">{g}</p>
                 ))}
-                <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                <p className="text-xs text-muted-foreground/80 mt-0.5">
                   {ipBuckets.internal.ips.length}개 노드
                 </p>
               </div>
             ) : hasManual ? (
               <div title="수동 입력된 IP 리스트 (정규식)">
                 {manualGroups.map((g, i) => (
-                  <p key={i} className="text-xs font-mono text-foreground tabular-nums">{g}</p>
+                  <p key={i} className="text-sm font-mono text-foreground tabular-nums">{g}</p>
                 ))}
-                <p className="text-[10px] text-muted-foreground/80 mt-0.5">수동 입력 (정규식)</p>
+                <p className="text-xs text-muted-foreground/80 mt-0.5">수동 입력 (정규식)</p>
               </div>
             ) : (
-              <p className="text-xs font-mono text-muted-foreground" title="nodeIps / internalIps 미입력 — fallback CIDR">
-                <span className="text-muted-foreground/60 text-[10px] mr-1">fallback</span>
+              <p className="text-sm font-mono text-muted-foreground" title="nodeIps / internalIps 미입력 — fallback CIDR">
+                <span className="text-muted-foreground/60 text-xs mr-1">fallback</span>
                 <span className="text-foreground">{cluster.cidr}</span>
               </p>
             )}
             <div className="flex items-center gap-1 mt-1">
               {overlapGroupIdx !== undefined && (
-                <span className="text-[10px] text-amber-600 inline-flex items-center gap-0.5">
+                <span className="text-xs text-amber-600 inline-flex items-center gap-0.5">
                   <AlertTriangle className="w-2.5 h-2.5" />겹침
                 </span>
               )}
@@ -228,7 +228,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                 <Link
                   to={`/cidr?cidr=${encodeURIComponent(cluster.cidr)}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-[10px] text-muted-foreground hover:text-primary inline-flex items-center gap-0.5 ml-auto px-1 py-0.5 rounded hover:bg-primary/10 transition-colors"
+                  className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-0.5 ml-auto px-1 py-0.5 rounded hover:bg-primary/10 transition-colors"
                   title={`CIDR Calculator 에서 ${cluster.cidr} 분석`}
                 >
                   <ArrowUpRight className="w-2.5 h-2.5" />Calc
@@ -245,11 +245,11 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {ipBuckets.bond0.groups.length > 0 ? (
           <div>
             {ipBuckets.bond0.groups.map((g, i) => (
-              <p key={i} className="text-xs font-mono text-cyan-700 tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
+              <p key={i} className="text-sm font-mono text-cyan-700 tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
             ))}
-            <p className="text-[10px] text-muted-foreground/80 mt-0.5">{ipBuckets.bond0.ips.length}개 IP</p>
+            <p className="text-xs text-muted-foreground/80 mt-0.5">{ipBuckets.bond0.ips.length}개 IP</p>
           </div>
-        ) : <span className="text-muted-foreground/50 text-xs" title="NIC 수집(SSH) 후 채워짐">-</span>}
+        ) : <span className="text-muted-foreground/50 text-sm" title="NIC 수집(SSH) 후 채워짐">-</span>}
       </td>
 
       {/* bond1 */}
@@ -257,11 +257,11 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {ipBuckets.bond1.groups.length > 0 ? (
           <div>
             {ipBuckets.bond1.groups.map((g, i) => (
-              <p key={i} className="text-xs font-mono text-amber-700 tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
+              <p key={i} className="text-sm font-mono text-amber-700 tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
             ))}
-            <p className="text-[10px] text-muted-foreground/80 mt-0.5">{ipBuckets.bond1.ips.length}개 IP</p>
+            <p className="text-xs text-muted-foreground/80 mt-0.5">{ipBuckets.bond1.ips.length}개 IP</p>
           </div>
-        ) : <span className="text-muted-foreground/50 text-xs" title="NIC 수집(SSH) 후 채워짐">-</span>}
+        ) : <span className="text-muted-foreground/50 text-sm" title="NIC 수집(SSH) 후 채워짐">-</span>}
       </td>
 
       {/* Pod CIDR */}
@@ -275,16 +275,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             onSave={(v) => quickUpdate({ podCidr: v || undefined })}
             onCancel={() => setEditingField(null)}
             placeholder="10.244.0.0/16"
-            inputClassName="text-xs font-mono"
+            inputClassName="text-sm font-mono"
           />
         ) : cluster.podCidr ? (
           <div>
-            <p className="text-xs font-mono text-foreground">{cluster.podCidr}</p>
+            <p className="text-sm font-mono text-foreground">{cluster.podCidr}</p>
             {(cluster.podFirstHost || cluster.podLastHost) && (
-              <p className="text-[10px] font-mono text-muted-foreground">{cluster.podFirstHost} ~ {cluster.podLastHost}</p>
+              <p className="text-xs font-mono text-muted-foreground">{cluster.podFirstHost} ~ {cluster.podLastHost}</p>
             )}
           </div>
-        ) : <span className="text-muted-foreground/60 text-xs">-</span>}
+        ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
 
       {/* Service CIDR */}
@@ -298,32 +298,32 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             onSave={(v) => quickUpdate({ svcCidr: v || undefined })}
             onCancel={() => setEditingField(null)}
             placeholder="10.96.0.0/12"
-            inputClassName="text-xs font-mono"
+            inputClassName="text-sm font-mono"
           />
         ) : cluster.svcCidr ? (
           <div>
-            <p className="text-xs font-mono text-foreground">{cluster.svcCidr}</p>
+            <p className="text-sm font-mono text-foreground">{cluster.svcCidr}</p>
             {(cluster.svcFirstHost || cluster.svcLastHost) && (
-              <p className="text-[10px] font-mono text-muted-foreground">{cluster.svcFirstHost} ~ {cluster.svcLastHost}</p>
+              <p className="text-xs font-mono text-muted-foreground">{cluster.svcFirstHost} ~ {cluster.svcLastHost}</p>
             )}
           </div>
-        ) : <span className="text-muted-foreground/60 text-xs">-</span>}
+        ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
 
       <td className="px-3 py-2.5 text-sm text-center">
         {cluster.maxPod
           ? <span className="font-mono text-foreground">{cluster.maxPod}</span>
-          : <span className="text-muted-foreground/60 text-xs">-</span>}
+          : <span className="text-muted-foreground/60 text-sm">-</span>}
       </td>
       {/* K8s / Cilium 버전 */}
       <td className="px-3 py-2.5">
         <div className="flex flex-col gap-1">
           {cluster.k8sVersion ? (
-            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20 w-fit">
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20 w-fit">
               k8s {cluster.k8sVersion}
             </span>
           ) : (
-            <span className="text-[10px] text-muted-foreground/60 italic">k8s 미수집</span>
+            <span className="text-xs text-muted-foreground/60 italic">k8s 미수집</span>
           )}
           <button
             type="button"
@@ -331,7 +331,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             title={cluster.ciliumVersion
               ? `Cilium ${cluster.ciliumVersion} — 클릭 시 설정 보기`
               : 'Cilium 버전 미수집 — 클릭 시 cilium-config ConfigMap 으로 조회/설정'}
-            className={`text-[11px] font-mono px-1.5 py-0.5 rounded-full border w-fit transition-colors ${
+            className={`text-xs font-mono px-1.5 py-0.5 rounded-full border w-fit transition-colors ${
               cluster.ciliumVersion
                 ? 'bg-cyan-500/10 text-cyan-500 border-cyan-500/30 hover:bg-cyan-500/20'
                 : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80 hover:text-foreground'
@@ -348,7 +348,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           if (!cluster.nodeIps) {
             const isCollecting = collectingNodeIpsId === cluster.id;
             return (
-              <div className="flex items-center gap-2 text-[11px]">
+              <div className="flex items-center gap-2 text-xs">
                 {cluster.nodeCount
                   ? <span className="text-muted-foreground">노드 {cluster.nodeCount}개</span>
                   : <span className="text-muted-foreground/60">-</span>}
@@ -386,7 +386,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
               s + (n.interfaces ?? []).reduce((s2, ifc) =>
                 s2 + (ifc.scopes ?? []).filter((sc) => sc === 'public').length, 0), 0);
             return (
-              <div className="text-[11px] font-mono space-y-0.5">
+              <div className="text-xs font-mono space-y-0.5">
                 {shown.map((n) => {
                   const ifaces = n.interfaces ?? [];
                   if (ifaces.length > 0) {
@@ -395,20 +395,20 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                         title={`${n.name}${n.externalIp ? ` · ext: ${n.externalIp}` : ''}`}>
                         <div className={`flex items-center gap-1 ${n.master ? 'text-foreground' : 'text-foreground/80'}`}>
                           {n.master && <span className="inline-block w-1 h-1 rounded-full bg-primary align-middle" />}
-                          <span className="text-[10px] text-muted-foreground/80 truncate max-w-[120px]">{n.name}</span>
+                          <span className="text-xs text-muted-foreground/80 truncate max-w-[120px]">{n.name}</span>
                         </div>
                         {ifaces.map((ifc) => {
                           const scopes = ifc.scopes ?? [];
                           const ips = ifc.ips ?? [];
                           return (
                             <div key={`${n.name}-${ifc.name}`} className="flex items-center gap-1 flex-wrap pl-2">
-                              <span className="text-[9px] text-muted-foreground/70">{ifc.name}</span>
+                              <span className="text-[10px] text-muted-foreground/70">{ifc.name}</span>
                               {ips.map((ip, i) => {
                                 const sc = scopes[i] ?? 'unknown';
                                 const isPub = sc === 'public';
                                 return (
                                   <span key={ip}
-                                    className={`text-[10px] px-1 rounded ${
+                                    className={`text-xs px-1 rounded ${
                                       isPub
                                         ? 'bg-amber-500/10 text-amber-500'
                                         : 'bg-sky-500/10 text-sky-500'
@@ -446,17 +446,17 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                 {rest > 0 && <p className="text-muted-foreground/70">+{rest} more</p>}
                 <div className="flex items-center gap-2 pt-0.5">
                   {multiCount > 0 && (
-                    <span className="text-[10px] text-primary/70" title="노드당 IP 여러 개 (bond0/bond1 등)">
+                    <span className="text-xs text-primary/70" title="노드당 IP 여러 개 (bond0/bond1 등)">
                       다중 IP {multiCount}대
                     </span>
                   )}
                   {pubCount > 0 && (
-                    <span className="text-[10px] text-amber-500/80" title="public IP 보유 NIC 수">
+                    <span className="text-xs text-amber-500/80" title="public IP 보유 NIC 수">
                       public {pubCount}건
                     </span>
                   )}
                   {!hasIfaces && (
-                    <span className="text-[10px] text-muted-foreground/60" title="NIC 상세 미수집 — 'NIC 수집' 실행 시 채워집니다.">
+                    <span className="text-xs text-muted-foreground/60" title="NIC 상세 미수집 — 'NIC 수집' 실행 시 채워집니다.">
                       NIC 미수집
                     </span>
                   )}
@@ -464,7 +464,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
               </div>
             );
           } catch {
-            return <p className="text-[10px] font-mono text-muted-foreground truncate">{cluster.nodeIps}</p>;
+            return <p className="text-xs font-mono text-muted-foreground truncate">{cluster.nodeIps}</p>;
           }
         })()}
       </td>

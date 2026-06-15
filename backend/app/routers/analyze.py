@@ -9,6 +9,7 @@ selected cluster instead of forcing the user to paste pod info manually.
 """
 
 import fnmatch
+import json
 import logging
 import os
 from datetime import datetime
@@ -17,7 +18,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_watch
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -504,6 +505,69 @@ def stream_pod_logs(
             try:
                 if resp is not None:
                     resp.release_conn()
+            except Exception:  # noqa: BLE001
+                pass
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
+
+
+@router.get("/clusters/{cluster_id}/events/stream")
+def stream_cluster_events(
+    cluster_id: UUID,
+    namespace: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """클러스터 이벤트 SSE 스트림 (읽기전용, Lens 의 Events 탭).
+
+    초기 스냅샷을 보낸 뒤 watch 로 신규 이벤트를 실시간 push 한다. 각 라인은
+    JSON 1건. 멀티유저 안정성을 위해 ``timeout_seconds`` 로 watch 수명을 제한하고,
+    클라이언트가 끊으면 generator 가 정리된다.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    v1 = _get_core_v1(cluster)
+
+    def _evt_payload(ev_type: str, obj) -> str:
+        io = getattr(obj, "involved_object", None)
+        ts = getattr(obj, "last_timestamp", None) or getattr(obj, "event_time", None)
+        first = getattr(obj, "first_timestamp", None)
+        src = getattr(obj, "source", None)
+        source = None
+        if src is not None:
+            source = getattr(src, "component", None) or getattr(src, "host", None)
+        if not source:
+            source = getattr(obj, "reporting_component", None) or None
+        payload = {
+            "watchType": ev_type,
+            "type": getattr(obj, "type", None),  # Normal | Warning
+            "reason": getattr(obj, "reason", None),
+            "message": (getattr(obj, "message", None) or "")[:500],
+            "namespace": getattr(obj.metadata, "namespace", None) if obj.metadata else None,
+            "involvedKind": getattr(io, "kind", None) if io else None,
+            "involvedName": getattr(io, "name", None) if io else None,
+            "source": source,
+            "count": getattr(obj, "count", None),
+            "firstTimestamp": first.isoformat() if first else None,
+            "lastTimestamp": ts.isoformat() if ts else None,
+        }
+        return json.dumps(payload, ensure_ascii=False)
+
+    def _gen():
+        w = k8s_watch.Watch()
+        try:
+            if namespace:
+                stream = w.stream(v1.list_namespaced_event, namespace, timeout_seconds=600)
+            else:
+                stream = w.stream(v1.list_event_for_all_namespaces, timeout_seconds=600)
+            for ev in stream:
+                try:
+                    yield f"data: {_evt_payload(ev.get('type', '?'), ev['object'])}\n\n"
+                except Exception:  # noqa: BLE001
+                    continue
+        except Exception as e:  # noqa: BLE001
+            yield f"data: {json.dumps({'error': str(e)[:200]})}\n\n"
+        finally:
+            try:
+                w.stop()
             except Exception:  # noqa: BLE001
                 pass
 

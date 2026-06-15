@@ -135,7 +135,7 @@ export function AgentChat() {
                 <span className="w-2 h-2 rounded-full bg-green-500" title="Online" />
               )}
               {isOnline === false && (
-                <span className="flex items-center gap-1 text-xs text-orange-400">
+                <span className="flex items-center gap-1 text-sm text-orange-400">
                   <WifiOff className="w-3 h-3" /> Offline
                 </span>
               )}
@@ -154,7 +154,7 @@ export function AgentChat() {
               <div className="text-center text-muted-foreground text-sm py-12">
                 <Bot className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p>Ask me about your Kubernetes clusters.</p>
-                <p className="text-xs mt-1 opacity-70">
+                <p className="text-sm mt-1 opacity-70">
                   e.g. &quot;Why is my pod CrashLooping?&quot;
                 </p>
               </div>

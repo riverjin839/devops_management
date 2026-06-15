@@ -376,7 +376,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         </button>
         <div className="flex items-center gap-1.5 px-1">
           <CalendarClock className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-          <span className="text-xs font-semibold tabular-nums">
+          <span className="text-sm font-semibold tabular-nums">
             {isToday ? `오늘 · ${fmtLabel(viewDate)}` : fmtLabel(viewDate)}
           </span>
         </div>
@@ -390,10 +390,10 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             <RotateCcw className="w-3 h-3" />
           </button>
         )}
-        <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{totalCount}건</span>
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">{totalCount}건</span>
         <button
           onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(new Date().getHours(), 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20"
           title="업무 등록">
           <Plus className="w-3 h-3" /> 등록
         </button>
@@ -401,7 +401,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
 
       {/* scope toggle */}
       <div className="flex-none flex items-center gap-2 pb-2 mb-1">
-        <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px]">
+        <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
           <button onClick={() => changeScope('me')} aria-pressed={meOnly}
             className={cn('flex items-center gap-1 px-2 py-1', meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground')}>
             <User className="w-3 h-3" /> 나만
@@ -411,7 +411,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             <Users className="w-3 h-3" /> 전체
           </button>
         </div>
-        <span className="text-[10px] text-muted-foreground">박스 가운데 드래그=이동 · 위/아래 끝 드래그=시간 조절</span>
+        <span className="text-xs text-muted-foreground">박스 가운데 드래그=이동 · 위/아래 끝 드래그=시간 조절</span>
       </div>
 
       {/* body */}
@@ -427,7 +427,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
               {/* 시간 거터 */}
               <div className="flex-none w-10 relative" style={{ height: gridHeight }}>
                 {hours.map((h) => (
-                  <div key={h} className="absolute right-1 -translate-y-1/2 text-[10px] tabular-nums text-muted-foreground"
+                  <div key={h} className="absolute right-1 -translate-y-1/2 text-xs tabular-nums text-muted-foreground"
                     style={{ top: yOf(h * 60) }}>
                     {String(h).padStart(2, '0')}:00
                   </div>
@@ -489,7 +489,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             {/* 시간 미지정 (하단) */}
             {allDay.length > 0 && (
               <div className="mt-2 rounded-xl border border-border/60 bg-secondary/20 p-2">
-                <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
                   <Clock3 className="w-3 h-3" /> 시간 미지정 · {allDay.length}
                 </div>
                 <div className="space-y-1">
@@ -505,7 +505,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
                   : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? '나의 ' : ''}일정이 없습니다.`}
                 <div>
                   <button onClick={() => setQuickAdd({ time: '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
-                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20">
+                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-primary/10 text-primary hover:bg-primary/20">
                     <Plus className="w-3 h-3" /> 업무 등록
                   </button>
                 </div>
@@ -561,7 +561,7 @@ function SessionBox({
         <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l', sv.bar)} />
         <div className="flex items-center gap-1 min-w-0">
           {TypeIcon && !compact && <TypeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />}
-          <span className="text-[11px] font-medium truncate text-foreground">{label}</span>
+          <span className="text-xs font-medium truncate text-foreground">{label}</span>
           {onDelete && (
             <button
               onMouseDown={(e) => e.stopPropagation()}
@@ -601,8 +601,8 @@ function UnscheduledCard({ item, onOpen }: { item: WorkItem; onOpen: (id: string
       className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint)}>
       <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
       <div className="min-w-0 flex-1">
-        <span className="text-xs truncate text-foreground font-medium block">{label}</span>
-        <span className="text-[10px] text-muted-foreground truncate block">{names.join(', ')}{item.clusterName ? ` · ${item.clusterName}` : ''}</span>
+        <span className="text-sm truncate text-foreground font-medium block">{label}</span>
+        <span className="text-xs text-muted-foreground truncate block">{names.join(', ')}{item.clusterName ? ` · ${item.clusterName}` : ''}</span>
       </div>
       <span className={cn('w-1.5 h-1.5 rounded-full flex-none', sv.dot)} />
     </button>
@@ -622,16 +622,16 @@ function AddBlockMenu({
       <div className="absolute left-2 right-2 z-40 bg-card border border-border rounded-xl mac-shadow p-1.5"
         style={{ top: Math.max(0, y) }}>
         <div className="flex items-center justify-between px-1.5 py-1">
-          <span className="text-[11px] font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
+          <span className="text-xs font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
         </div>
         {candidates.length > 0 && (
           <>
-            <div className="px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">기존 업무에 시간 추가</div>
+            <div className="px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">기존 업무에 시간 추가</div>
             <div className="max-h-40 overflow-y-auto">
               {candidates.map((it) => (
                 <button key={it.id} onClick={() => onPickItem(it)}
-                  className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-[11px] truncate">
+                  className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-xs truncate">
                   {it.title?.trim() || stripHtml(it.content) || it.category}
                 </button>
               ))}
@@ -640,7 +640,7 @@ function AddBlockMenu({
           </>
         )}
         <button onClick={onNewTask}
-          className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-[11px] text-primary font-medium inline-flex items-center gap-1">
+          className="w-full text-left px-1.5 py-1 rounded-lg hover:bg-secondary text-xs text-primary font-medium inline-flex items-center gap-1">
           <Plus className="w-3 h-3" /> 새 업무 등록
         </button>
       </div>

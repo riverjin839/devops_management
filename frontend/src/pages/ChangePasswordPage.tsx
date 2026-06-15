@@ -70,7 +70,7 @@ export function ChangePasswordPage() {
           </div>
           <div>
             <h1 className="text-base font-bold leading-tight">비밀번호 변경</h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {`${user?.username ?? ''} 계정의 비밀번호를 변경합니다.`}
             </p>
           </div>

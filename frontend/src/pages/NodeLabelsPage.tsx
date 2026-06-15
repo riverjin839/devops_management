@@ -76,7 +76,7 @@ export function NodeLabelsPage() {
           <div className="flex items-center gap-1 bg-secondary rounded-lg p-1">
             <button
               onClick={() => setViewMode('node')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 viewMode === 'node'
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -87,7 +87,7 @@ export function NodeLabelsPage() {
             </button>
             <button
               onClick={() => setViewMode('label')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 viewMode === 'label'
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -100,7 +100,7 @@ export function NodeLabelsPage() {
 
           {/* Node / match count */}
           {!isLoading && nodes.length > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {nodes.length}개 노드
             </span>
           )}
@@ -125,7 +125,7 @@ export function NodeLabelsPage() {
                   {extractErrorMessage(nodesErrorDetail)}
                 </p>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
               </p>
             </div>

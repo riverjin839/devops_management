@@ -16,7 +16,7 @@ export function LogViewTabs({ current }: { current: 'analysis' | 'stream' }) {
       type="button"
       onClick={() => navigate(to)}
       aria-pressed={current === id}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
         current === id
           ? 'bg-primary text-primary-foreground border-primary'
           : 'bg-secondary border-border text-muted-foreground hover:text-foreground'

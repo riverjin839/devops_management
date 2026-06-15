@@ -168,7 +168,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
             <div className="space-y-5">
               {ADDON_TEMPLATES.map((group) => (
                 <div key={group.label}>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                     {group.label}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
@@ -181,7 +181,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
                         <span className="text-2xl">{tpl.icon}</span>
                         <div>
                           <div className="text-sm font-medium">{tpl.name}</div>
-                          <div className="text-xs text-muted-foreground">{tpl.description}</div>
+                          <div className="text-sm text-muted-foreground">{tpl.description}</div>
                         </div>
                       </button>
                     ))}
@@ -196,7 +196,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
                 <span className="text-2xl">{(currentTemplate || editingAddon)?.icon}</span>
                 <div>
                   <div className="text-sm font-medium">{(currentTemplate || editingAddon)?.name}</div>
-                  <div className="text-xs text-muted-foreground">{(currentTemplate || editingAddon)?.description}</div>
+                  <div className="text-sm text-muted-foreground">{(currentTemplate || editingAddon)?.description}</div>
                 </div>
               </div>
 

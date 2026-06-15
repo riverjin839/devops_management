@@ -35,21 +35,21 @@ function EtcdDetails({ details }: { details: Details }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       {details.isLeader !== undefined && (
-        <span className="text-xs text-muted-foreground font-mono">
+        <span className="text-sm text-muted-foreground font-mono">
           {details.isLeader ? '👑 Leader' : '📋 Follower'}
         </span>
       )}
       {details.version && (
-        <span className="text-xs text-muted-foreground font-mono">v{details.version}</span>
+        <span className="text-sm text-muted-foreground font-mono">v{details.version}</span>
       )}
       {details.dbSizeMb !== undefined && (
-        <span className="text-xs text-muted-foreground font-mono">DB: {details.dbSizeMb}MB</span>
+        <span className="text-sm text-muted-foreground font-mono">DB: {details.dbSizeMb}MB</span>
       )}
       {details.memberCount !== undefined && (
-        <span className="text-xs text-muted-foreground font-mono">Members: {details.memberCount}</span>
+        <span className="text-sm text-muted-foreground font-mono">Members: {details.memberCount}</span>
       )}
       {details.raftTerm !== undefined && (
-        <span className="text-xs text-muted-foreground font-mono">Term: {details.raftTerm}</span>
+        <span className="text-sm text-muted-foreground font-mono">Term: {details.raftTerm}</span>
       )}
     </div>
   );
@@ -125,7 +125,7 @@ function NodeDetails({ details }: { details: Details }) {
           {ready}/{total} Ready
         </span>
         {issues.length > 0 && (
-          <span className="text-xs text-red-400 font-mono">⚠ {issues.length} pressure</span>
+          <span className="text-sm text-red-400 font-mono">⚠ {issues.length} pressure</span>
         )}
       </div>
       <div className="w-full bg-secondary rounded-full h-1.5">
@@ -136,14 +136,14 @@ function NodeDetails({ details }: { details: Details }) {
       </div>
       {pattern && (
         <div
-          className="text-[11px] font-mono text-muted-foreground break-all"
+          className="text-xs font-mono text-muted-foreground break-all"
           title={allNodes.join('\n')}
         >
           {pattern}
         </div>
       )}
       {notReadyPattern && (
-        <div className="text-[11px] font-mono text-red-400/80 break-all" title={notReadyNodes.join('\n')}>
+        <div className="text-xs font-mono text-red-400/80 break-all" title={notReadyNodes.join('\n')}>
           NotReady: {notReadyPattern}
         </div>
       )}
@@ -158,7 +158,7 @@ function ControlPlaneDetails({ details }: { details: Details }) {
   return (
     <div className="space-y-1.5">
       {components.map((comp) => (
-        <div key={comp.name} className="flex items-center justify-between text-xs font-mono">
+        <div key={comp.name} className="flex items-center justify-between text-sm font-mono">
           <span className="text-muted-foreground flex items-center gap-1.5">
             <span className={`inline-block w-2 h-2 rounded-full ${
               comp.status === 'healthy' ? 'bg-green-500' : comp.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
@@ -173,7 +173,7 @@ function ControlPlaneDetails({ details }: { details: Details }) {
         </div>
       ))}
       {apiLatency > 0 && (
-        <div className="text-xs text-muted-foreground font-mono pt-1 border-t border-border/50">
+        <div className="text-sm text-muted-foreground font-mono pt-1 border-t border-border/50">
           API Latency: {apiLatency}ms
         </div>
       )}
@@ -198,7 +198,7 @@ function SystemPodDetails({ details }: { details: Details }) {
         <span className="text-sm font-semibold font-mono">
           {readyPods}/{denominator} Ready
         </span>
-        <span className="text-xs text-muted-foreground font-mono">{displayPct}%</span>
+        <span className="text-sm text-muted-foreground font-mono">{displayPct}%</span>
       </div>
       <div className="w-full bg-secondary rounded-full h-1.5">
         <div
@@ -224,7 +224,7 @@ function NexusDetails({ details }: { details: Details }) {
           {writable ? 'Writable' : 'Read-Only'}
         </span>
       </div>
-      <div className="text-xs text-muted-foreground font-mono">
+      <div className="text-sm text-muted-foreground font-mono">
         System: {systemStatus}
       </div>
     </div>
@@ -242,7 +242,7 @@ function JenkinsDetails({ details }: { details: Details }) {
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-xs font-mono">
+      <div className="flex items-center justify-between text-sm font-mono">
         <span className="text-muted-foreground flex items-center gap-1.5">
           <span className={`inline-block w-2 h-2 rounded-full ${
             mode === 'NORMAL' && !quietingDown ? 'bg-green-500' : quietingDown ? 'bg-yellow-500' : 'bg-red-500'
@@ -251,11 +251,11 @@ function JenkinsDetails({ details }: { details: Details }) {
         </span>
         <span className={modeColor}>{quietingDown ? 'Quieting Down' : mode}</span>
       </div>
-      <div className="flex items-center justify-between text-xs font-mono">
+      <div className="flex items-center justify-between text-sm font-mono">
         <span className="text-muted-foreground">Executors</span>
         <span className="text-muted-foreground">{numExecutors}</span>
       </div>
-      <div className="flex items-center justify-between text-xs font-mono">
+      <div className="flex items-center justify-between text-sm font-mono">
         <span className="text-muted-foreground">Queue</span>
         <span className={queueItems > 20 ? 'text-yellow-400' : 'text-muted-foreground'}>{queueItems}</span>
       </div>
@@ -280,12 +280,12 @@ function ArgoCDDetails({ details }: { details: Details }) {
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-3 text-xs font-mono">
+      <div className="flex items-center gap-3 text-sm font-mono">
         <span className="text-muted-foreground">Apps: <strong className="text-foreground">{totalApps}</strong></span>
         <span className="text-green-400">Synced: {synced}</span>
         {outOfSync > 0 && <span className="text-yellow-400">OutOfSync: {outOfSync}</span>}
       </div>
-      <div className="flex items-center gap-3 text-xs font-mono">
+      <div className="flex items-center gap-3 text-sm font-mono">
         <span className="text-green-400">Healthy: {healthy}</span>
         {degraded > 0 && <span className="text-red-400">Degraded: {degraded}</span>}
         {progressing > 0 && <span className="text-blue-400">Progressing: {progressing}</span>}
@@ -293,7 +293,7 @@ function ArgoCDDetails({ details }: { details: Details }) {
       {problemApps.length > 0 && (
         <div className="pt-1 border-t border-border/50 space-y-0.5">
           {problemApps.slice(0, 3).map((app) => (
-            <div key={app.name} className="flex items-center justify-between text-xs font-mono">
+            <div key={app.name} className="flex items-center justify-between text-sm font-mono">
               <span className="text-muted-foreground truncate max-w-[120px]">{app.name}</span>
               <span className={app.health === 'Degraded' ? 'text-red-400' : 'text-yellow-400'}>
                 {app.sync}/{app.health}
@@ -327,13 +327,13 @@ function KeycloakDetails({ details }: { details: Details }) {
       </div>
       {checks.length > 0 ? (
         checks.map((chk) => (
-          <div key={chk.name} className="flex items-center justify-between text-xs font-mono">
+          <div key={chk.name} className="flex items-center justify-between text-sm font-mono">
             <span className="text-muted-foreground">{chk.name}</span>
             <span className={chk.status === 'UP' ? 'text-green-400' : 'text-red-400'}>{chk.status}</span>
           </div>
         ))
       ) : (
-        <div className="text-xs text-muted-foreground font-mono">
+        <div className="text-sm text-muted-foreground font-mono">
           Status: {overallStatus} / DB: {dbStatus}
         </div>
       )}
@@ -371,7 +371,7 @@ function AddonDetails({ addon }: { addon: Addon }) {
       return (
         <>
           {Object.entries(addon.details).slice(0, 2).map(([key, value]) => (
-            <span key={key} className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+            <span key={key} className="text-sm text-muted-foreground font-mono flex items-center gap-1.5">
               {key}: {String(value)}
             </span>
           ))}
@@ -448,11 +448,11 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
         <AddonDetails addon={addon} />
         <div className="flex items-center gap-4">
           {addon.responseTime !== undefined && addon.responseTime > 0 && (
-            <span className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+            <span className="text-sm text-muted-foreground font-mono flex items-center gap-1.5">
               ⏱ {addon.responseTime}ms
             </span>
           )}
-          <span className="text-xs text-muted-foreground font-mono ml-auto">
+          <span className="text-sm text-muted-foreground font-mono ml-auto">
             {formatRelativeTime(addon.lastCheck)}
           </span>
         </div>

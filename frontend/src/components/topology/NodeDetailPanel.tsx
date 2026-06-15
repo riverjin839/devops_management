@@ -21,12 +21,12 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
   return (
     <div className="absolute top-3 right-3 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto bg-card/95 backdrop-blur border border-border rounded-2xl mac-shadow z-20">
       <div className="flex items-start gap-2 px-4 pt-3.5 pb-2 border-b border-border">
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded mt-0.5" style={{ background: `${kindAccent(node.kind)}22`, color: kindAccent(node.kind) }}>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5" style={{ background: `${kindAccent(node.kind)}22`, color: kindAccent(node.kind) }}>
           {KIND_ABBR[node.kind] ?? node.kind}
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight break-all">{node.name}</p>
-          <p className="text-[11px] text-muted-foreground">{node.namespace}{node.ghost ? ' · (없음)' : ''}</p>
+          <p className="text-xs text-muted-foreground">{node.namespace}{node.ghost ? ' · (없음)' : ''}</p>
         </div>
         <button onClick={onClose} className="p-1 rounded-lg text-muted-foreground hover:bg-secondary" aria-label="닫기">
           <X className="w-4 h-4" />
@@ -35,7 +35,7 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
 
       <div className="px-4 py-3 space-y-3">
         {/* 상태 */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-sm">
           <span className="w-2 h-2 rounded-full" style={{ background: statusColor(node.status) }} />
           <span className="font-medium capitalize">{node.status}</span>
           {node.podCount > 0 && (
@@ -46,7 +46,7 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
           )}
         </div>
 
-        {node.detail && <p className="text-[11px] text-muted-foreground break-all">{node.detail}</p>}
+        {node.detail && <p className="text-xs text-muted-foreground break-all">{node.detail}</p>}
 
         {/* 메트릭 */}
         {(node.kind !== 'ConfigMap' && node.kind !== 'Secret' && node.kind !== 'External') && (
@@ -61,14 +61,14 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
         {/* external 삭제 */}
         {node.kind === 'External' && onDeleteExternal && (
           <button onClick={() => onDeleteExternal(node)}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10">
+            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10">
             <Trash2 className="w-3 h-3" /> 외부 노드 삭제
           </button>
         )}
 
         {/* 연결된 엣지 */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
             연결 · {related.length}
           </p>
           <div className="space-y-1">
@@ -76,10 +76,10 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
               const out = e.source === node.id;
               const other = out ? e.target : e.source;
               return (
-                <div key={e.id} className="flex items-center gap-1.5 text-[11px] rounded-lg bg-secondary/40 px-2 py-1">
+                <div key={e.id} className="flex items-center gap-1.5 text-xs rounded-lg bg-secondary/40 px-2 py-1">
                   <span className="text-muted-foreground">{out ? '→' : '←'}</span>
                   <span className="flex-1 min-w-0 truncate" title={nodeName(other)}>{nodeName(other)}</span>
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-card text-muted-foreground flex-shrink-0">
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-card text-muted-foreground flex-shrink-0">
                     {EDGE_TYPE_LABEL[e.type] ?? e.type}
                   </span>
                   {e.type === 'manual' && e.manualId && onDeleteLink && (
@@ -90,7 +90,7 @@ export function NodeDetailPanel({ node, edges, nodeName, onClose, onDeleteLink, 
                 </div>
               );
             })}
-            {related.length === 0 && <p className="text-[11px] text-muted-foreground">연결 없음</p>}
+            {related.length === 0 && <p className="text-xs text-muted-foreground">연결 없음</p>}
           </div>
         </div>
       </div>
@@ -105,7 +105,7 @@ function MetricBar({ icon, label, ratio, usage, req, lim }: {
   const color = ratio == null ? '#94a3b8' : ratio > 0.9 ? '#ef4444' : ratio > 0.7 ? '#f59e0b' : '#10b981';
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-[11px] mb-0.5">
+      <div className="flex items-center gap-1.5 text-xs mb-0.5">
         <span className="text-muted-foreground">{icon}</span>
         <span className="font-medium">{label}</span>
         <span className="ml-auto tabular-nums text-muted-foreground">

@@ -61,6 +61,9 @@ from app.routers import (
     lake_service_types_router,
     ops_check_router,
     k8s_resources_router,
+    k8s_helm_router,
+    k8s_exec_router,
+    metric_trend_router,
     service_topology_router,
 )
 from app.auth.deps import get_current_user
@@ -1030,6 +1033,37 @@ def _seed_default_deep_check_definitions():
         db.close()
 
 
+def _seed_default_metric_checklist_items():
+    """리소스 수 추세 체크리스트 기본 항목(글로벌) 시드 — item_key 매칭 idempotent.
+
+    운영자가 글로벌 항목을 삭제하면 다음 부팅 시 복구. 클러스터별 정의는 영향 없음.
+    """
+    from app.models.resource_count import MetricChecklistItem
+    from app.services.resource_count_service import DEFAULT_ITEMS
+
+    db = SessionLocal()
+    try:
+        existing = {
+            row[0]
+            for row in db.query(MetricChecklistItem.item_key)
+            .filter(MetricChecklistItem.cluster_id.is_(None))
+            .all()
+        }
+        added = 0
+        for i, (key, label, kind) in enumerate(DEFAULT_ITEMS):
+            if key in existing:
+                continue
+            db.add(MetricChecklistItem(
+                cluster_id=None, item_key=key, label=label, resource_kind=kind,
+                enabled=True, sort_order=i * 10, params={},
+            ))
+            added += 1
+        if added:
+            db.commit()
+    finally:
+        db.close()
+
+
 def _seed_default_lake_service_types():
     """LAKE 8 builtin service_type 을 DB 에 자동 등록.
 
@@ -1175,6 +1209,7 @@ async def lifespan(app: FastAPI):
         ("seed_trend_sources", _seed_default_trend_sources),
         ("seed_playbooks", _seed_default_playbooks),
         ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
+        ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
         ("seed_lake_service_types", _seed_default_lake_service_types),
         ("seed_lake_service_entries", _seed_default_lake_service_entries),
         ("seed_initial_admin", _seed_initial_admin),
@@ -1278,8 +1313,14 @@ app.include_router(bottleneck_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_auth)
 # ops-checks (운영 점검 통합 콘솔) — 여러 점검 소스를 골라 일괄/개별 실행.
 app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
-# k8s-resources (OpenLens P1) — 읽기전용 리소스 탐색기 + YAML 보기.
+# k8s-resources (Lens 식 상세 관리) — 리소스 탐색 + 쓰기 액션(require_operator) + RBAC/CRD.
 app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_auth)
+# helm 릴리스 뷰어(읽기 전용).
+app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
+# pod exec 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
+app.include_router(k8s_exec_router, prefix="/api/v1")
+# metric-trend — 일일점검 리뷰: 리소스 수 추세 체크리스트(자동/수동 스냅샷 + 체크 + 항목 CRUD).
+app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
 
