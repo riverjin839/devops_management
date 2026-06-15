@@ -35,7 +35,8 @@ class ResourceCountSnapshot(Base):
     source = Column(String(20), nullable=False, default=SnapshotSource.auto.value)
     counts = Column(JSONB, nullable=False, default=dict)        # {kind: count}
     truncated = Column(JSONB, nullable=False, default=dict)      # {kind: bool} — 상한 초과 추정치 표시
-    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # users.id 가 String(36) 이므로 FK 타입을 맞춘다 (UUID 로 두면 DatatypeMismatch).
+    created_by_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     cluster = relationship("Cluster", backref="resource_count_snapshots")
 
@@ -74,7 +75,7 @@ class MetricCheckState(Base):
     check_date = Column(Date, nullable=False)
     item_key = Column(String(80), nullable=False)
     is_checked = Column(Boolean, default=False, nullable=False)
-    checked_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    checked_by_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     checked_by_username = Column(String(150), nullable=True)
     checked_at = Column(DateTime, nullable=True)
     note = Column(Text, nullable=True)
