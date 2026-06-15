@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Play, Save, X } from 'lucide-react';
+import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { useCheckTypes, useTestDefinition } from '@/hooks/useDeepCheckDefinitions';
 import type {
   DeepCheckDefinition,
@@ -171,14 +172,20 @@ export function DeepCheckDefinitionForm({
       )}
 
       {testResult && (
-        <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm space-y-1">
-          <div className="font-semibold">Test 결과: {testResult.status}</div>
-          <div className="text-muted-foreground break-words">{testResult.message}</div>
-          {testResult.details && (
-            <pre className="mt-1 rounded bg-muted p-2 overflow-x-auto max-h-48">
-              {JSON.stringify(testResult.details, null, 2)}
-            </pre>
-          )}
+        <div className="space-y-2">
+          <ExecutionStepsTimeline stepPlan={testResult.stepPlan} steps={testResult.steps} />
+          <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm space-y-1">
+            <div className="font-semibold">Test 결과: {testResult.status}</div>
+            <div className="text-muted-foreground break-words">{testResult.message}</div>
+            {testResult.details && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs text-muted-foreground">상세(JSON)</summary>
+                <pre className="mt-1 rounded bg-muted p-2 overflow-x-auto max-h-48">
+                  {JSON.stringify(testResult.details, null, 2)}
+                </pre>
+              </details>
+            )}
+          </div>
         </div>
       )}
 

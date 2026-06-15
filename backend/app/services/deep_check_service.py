@@ -79,6 +79,10 @@ class DeepCheckService:
         executed = 0
         for d in defs:
             outcome = await asyncio.to_thread(self._run_one, d, cluster, in_cluster)
+            _details = dict(outcome.details or {})
+            _steps = getattr(outcome, "steps", []) or []
+            if _steps:
+                _details["_steps"] = _steps
             row = DeepCheckResult(
                 cluster_id=cluster.id if cluster else d.cluster_id,
                 daily_check_log_id=log_id,
@@ -86,7 +90,7 @@ class DeepCheckService:
                 check_type=d.check_type,
                 status=outcome.status,
                 message=outcome.message,
-                details=outcome.details,
+                details=_details,
                 duration_ms=outcome.duration_ms,
                 checked_at=datetime.utcnow(),
             )
@@ -118,13 +122,21 @@ class DeepCheckService:
             cluster = self.db.query(Cluster).filter(Cluster.id == d.cluster_id).first()
 
         outcome = self._run_one(d, cluster, in_cluster)
+        from app.services.deep_checkers.registry import get_step_plan
+        steps = getattr(outcome, "steps", []) or []
+        # 실행 단계 로그를 details 에도 보존(영속화/조회 일관) — 스키마 변경 없음.
+        details = dict(outcome.details or {})
+        if steps:
+            details["_steps"] = steps
         result = {
             "definition_id": str(d.id),
             "check_type": d.check_type,
             "status": outcome.status.value,
             "message": outcome.message,
-            "details": outcome.details,
+            "details": details,
             "duration_ms": outcome.duration_ms,
+            "steps": steps,
+            "step_plan": get_step_plan(d.check_type),
         }
 
         if persist and cluster is not None:
@@ -135,7 +147,7 @@ class DeepCheckService:
                 check_type=d.check_type,
                 status=outcome.status,
                 message=outcome.message,
-                details=outcome.details,
+                details=details,
                 duration_ms=outcome.duration_ms,
                 checked_at=datetime.utcnow(),
             )

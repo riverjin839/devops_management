@@ -42,6 +42,7 @@ const ACTIONS: string[] = [
   'metric.item.create',
   'metric.item.update',
   'metric.item.delete',
+  'metric.schedule.update',
 ];
 
 function StatusBadge({ status }: { status: string }) {

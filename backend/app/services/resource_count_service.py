@@ -71,6 +71,35 @@ DEFAULT_ITEMS: list[tuple[str, str, str]] = [
 
 _OFFSETS = {"today": 0, "yesterday": 1, "d7": 7, "d14": 14, "d28": 28}
 
+# ── 스냅샷 동작 주기 설정 (AppSetting 저장) ─────────────────────────────────────
+SCHEDULE_KEY = "metric_snapshot.schedule"
+DEFAULT_CRON = "0 8 * * *"  # 매일 08:00
+
+
+def get_schedule(db: Session) -> dict[str, Any]:
+    from app.models.app_setting import AppSetting
+    row = db.query(AppSetting).filter(AppSetting.key == SCHEDULE_KEY).first()
+    val = (row.value if row and isinstance(row.value, dict) else None) or {}
+    return {
+        "enabled": bool(val.get("enabled", True)),
+        "cron": val.get("cron") or DEFAULT_CRON,
+        "last_run_at": val.get("last_run_at"),
+    }
+
+
+def set_schedule(db: Session, enabled: bool, cron: str, last_run_at: Optional[str] = "__keep__") -> dict[str, Any]:
+    from app.models.app_setting import AppSetting
+    row = db.query(AppSetting).filter(AppSetting.key == SCHEDULE_KEY).first()
+    prev = (row.value if row and isinstance(row.value, dict) else {}) or {}
+    val = {"enabled": bool(enabled), "cron": cron,
+           "last_run_at": prev.get("last_run_at") if last_run_at == "__keep__" else last_run_at}
+    if row:
+        row.value = val
+    else:
+        db.add(AppSetting(key=SCHEDULE_KEY, value=val))
+    db.commit()
+    return val
+
 
 def _client(cluster: Cluster):
     kc = ensure_kubeconfig_file(cluster)

@@ -8,7 +8,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   KeyRound, ShieldCheck, FileSearch, Activity, Package, GitBranch, ScrollText,
-  Rocket, ShipWheel,
+  Rocket, ShipWheel, ServerCog,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -271,9 +271,9 @@ export function Sidebar() {
     if (resolved?.kind === 'text') {
       return <span className="text-base leading-none">{resolved.value}</span>;
     }
-    // 미설정 → 기본값 (업무=ListTodo 아이콘, 플랫폼=☸ 톱니 문자)
+    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=ServerCog — 플랫폼 관리 직관 + 업무와 모양/색 구분)
     return mode === 'platform'
-      ? <span className="text-base leading-none">☸</span>
+      ? <ServerCog className="w-5 h-5" />
       : <ListTodo className="w-5 h-5" />;
   };
 
@@ -455,10 +455,12 @@ export function Sidebar() {
             onClick={handleHomeClick}
             title={homeTooltip}
             aria-label={homeTooltip}
-            className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+            className={`w-9 h-9 bg-gradient-to-br rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+              mode === 'platform' ? 'from-amber-500 to-orange-600' : 'from-primary to-sky-700'
+            } ${
               location.pathname === '/'
                 ? mode === 'platform'
-                  ? 'ring-2 ring-sky-300/70'
+                  ? 'ring-2 ring-amber-300/70'
                   : 'ring-2 ring-primary/50'
                 : ''
             }`}

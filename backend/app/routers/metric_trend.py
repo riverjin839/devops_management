@@ -42,6 +42,46 @@ def _parse_date(s: Optional[str]) -> date:
         raise HTTPException(status_code=422, detail="date 는 YYYY-MM-DD 형식이어야 합니다.")
 
 
+# ── 동작 주기 설정 (/{cluster_id} 보다 먼저 등록 — 경로 충돌 방지) ─────────────────
+def _next_run(cron: str) -> Optional[str]:
+    try:
+        from croniter import croniter
+        if not croniter.is_valid(cron):
+            return None
+        return croniter(cron, datetime.now()).get_next(datetime).isoformat()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+@router.get("/schedule")
+def get_schedule(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    sch = rcs.get_schedule(db)
+    return {**sch, "next_run": _next_run(sch["cron"]) if sch.get("enabled") else None}
+
+
+class ScheduleBody(BaseModel):
+    enabled: bool = True
+    cron: str = rcs.DEFAULT_CRON
+
+
+@router.put("/schedule")
+def put_schedule(payload: ScheduleBody, request: Request, db: Session = Depends(get_db),
+                 actor: User = Depends(require_admin)):
+    cron = (payload.cron or "").strip()
+    try:
+        from croniter import croniter
+        valid = croniter.is_valid(cron)
+    except Exception:  # noqa: BLE001
+        valid = bool(cron)
+    if not valid:
+        raise HTTPException(status_code=422, detail=f"유효하지 않은 cron 표현식: {cron}")
+    val = rcs.set_schedule(db, payload.enabled, cron)
+    audit_logger.record(db, action="metric.schedule.update", actor=actor, status="success",
+                        target_type="metric_schedule", target_id="global",
+                        details={"enabled": payload.enabled, "cron": cron}, request=request)
+    return {**val, "next_run": _next_run(cron) if payload.enabled else None}
+
+
 # ── 조회 ──────────────────────────────────────────────────────────────────────
 @router.get("/{cluster_id}")
 def get_trend(cluster_id: UUID, date: Optional[str] = None, db: Session = Depends(get_db)):
