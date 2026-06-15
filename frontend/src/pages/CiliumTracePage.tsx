@@ -21,7 +21,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, SearchableSelect } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -50,6 +50,11 @@ interface CiliumAgentsResponse {
   clusterId: string;
   agents: CiliumAgent[];
   error?: string | null;
+}
+
+/** SearchableSelect 옵션 라벨 — podName + node 로 호스트 번호 검색이 되게. */
+function agentLabel(a: CiliumAgent): string {
+  return `${a.podName}${a.nodeName ? ` · ${a.nodeName}` : ''}${a.ready ? '' : ' (NotReady)'}`;
 }
 type BpfKind =
   | 'endpoint' | 'lb' | 'nat' | 'ct' | 'tunnel'
@@ -444,18 +449,18 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           </div>
           <div className="flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5 text-muted-foreground" />
-            <select
+            <SearchableSelect
               value={podName}
-              onChange={(e) => setPodName(e.target.value)}
-              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[260px]"
-            >
-              <option value="">자동 (첫 번째 ready agent)</option>
-              {agents.map((a) => (
-                <option key={a.podName} value={a.podName} disabled={!a.ready}>
-                  {a.podName} {a.nodeName ? `· ${a.nodeName}` : ''} {a.ready ? '' : '(NotReady)'}
-                </option>
-              ))}
-            </select>
+              onChange={setPodName}
+              options={agents}
+              getKey={(a) => a.podName}
+              getLabel={agentLabel}
+              placeholder="agent pod 검색 (호스트 번호 등)"
+              emptyText="agent 없음"
+              clearable={false}
+              menuPortal
+              className="w-[280px]"
+            />
           </div>
           {kind === 'policy' && (
             <input
@@ -722,18 +727,19 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5 text-muted-foreground" />
-            <select
+            <SearchableSelect
               value={podName}
-              onChange={(e) => setPodName(e.target.value)}
+              onChange={setPodName}
+              options={agents}
+              getKey={(a) => a.podName}
+              getLabel={agentLabel}
+              placeholder="agent pod 검색 (호스트 번호 등)"
+              emptyText="agent 없음"
+              clearable={false}
               disabled={running}
-              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 min-w-[260px] focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-            >
-              {agents.map((a) => (
-                <option key={a.podName} value={a.podName} disabled={!a.ready}>
-                  {a.podName} {a.nodeName ? `· ${a.nodeName}` : ''} {a.ready ? '' : '(NotReady)'}
-                </option>
-              ))}
-            </select>
+              menuPortal
+              className="w-[280px]"
+            />
           </div>
           <TypeFilter types={types} setTypes={setTypes} disabled={running} />
           <input
