@@ -2544,7 +2544,7 @@ export interface K8sNodesResponse {
 }
 
 // 종류 가용성 (nav 동적 숨김)
-export interface KindAvailabilityInfo { available: boolean; present: boolean; count: number; truncated: boolean }
+export interface KindAvailabilityInfo { available: boolean; present: boolean; count: number | null; truncated: boolean }
 export interface KindAvailabilityResponse { kinds: Record<string, KindAvailabilityInfo> }
 
 // Pods (rich) — Lens 식 컬럼

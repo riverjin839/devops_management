@@ -1317,7 +1317,13 @@ def kind_availability(cluster_id: UUID, db: Session = Depends(get_db)):
     프론트는 present=False(또는 available=False) 종류를 nav 에서 숨겨 클러스터에
     실제 있는 것만 보여준다. 프로브 실패 시(전체 에러) 프론트는 전체 노출로 폴백.
     """
+    import time as _t
     from concurrent.futures import ThreadPoolExecutor
+    from app.services.resource_count_service import COUNT_METHODS
+
+    _PROBE_LIMIT = 1000
+    _PROBE_TIMEOUT = 15   # 페이지당 apiserver 타임아웃(초)
+    _BUDGET = 25          # 전체 응답 예산(초) — 게이트웨이 타임아웃 전에 부분 결과라도 반환
 
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
@@ -1325,20 +1331,31 @@ def kind_availability(cluster_id: UUID, db: Session = Depends(get_db)):
     def _probe(kind: str) -> tuple[str, dict]:
         spec = KIND_MAP[kind]
         try:
-            api = spec["api"](client)
-            res = spec["list_all"](api)
+            cm = COUNT_METHODS.get(kind)
+            if cm:  # 타임아웃 지정 가능 경로(무거운 kind 대부분 포함)
+                api_attr, method_name = cm
+                res = getattr(getattr(k8s_client, api_attr)(client), method_name)(
+                    limit=_PROBE_LIMIT, _request_timeout=_PROBE_TIMEOUT)
+            else:   # 그 외(RBAC 등 가벼움) — 기존 경로
+                res = spec["list_all"](spec["api"](client))
             items = res.items or []
             more = bool(res.metadata._continue) if getattr(res, "metadata", None) else False
             return kind, {"available": True, "present": (len(items) > 0) or more, "count": len(items), "truncated": more}
         except ApiException as e:
-            # 404/NotFound = 해당 API 미지원 → unavailable
             avail = e.status not in (404,)
             return kind, {"available": avail, "present": False, "count": 0, "truncated": False}
         except Exception:  # noqa: BLE001
-            return kind, {"available": True, "present": False, "count": 0, "truncated": False}
+            # 타임아웃/일시오류 → 알 수 없음: nav 엔 표시(present=True)하되 배지 숨김(count=None)
+            return kind, {"available": True, "present": True, "count": None, "truncated": False}
 
     out: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        for kind, info in ex.map(_probe, list(KIND_MAP.keys())):
-            out[kind] = info
+    deadline = _t.time() + _BUDGET
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        futs = {ex.submit(_probe, k): k for k in KIND_MAP}
+        for fut, k in futs.items():
+            try:
+                kind, info = fut.result(timeout=max(0.1, deadline - _t.time()))
+                out[kind] = info
+            except Exception:  # noqa: BLE001
+                out[k] = {"available": True, "present": True, "count": None, "truncated": False}
     return {"kinds": out}
