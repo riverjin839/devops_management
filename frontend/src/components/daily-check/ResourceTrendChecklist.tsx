@@ -45,8 +45,12 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
 
   const doSnapshot = async () => {
     setBusy(true);
-    try { await metricTrendApi.snapshot(clusterId); flash(true, '스냅샷 수집 완료'); reload(); }
-    catch (e) { flash(false, errMsg(e)); }
+    try {
+      await metricTrendApi.snapshot(clusterId);
+      flash(true, '백그라운드 수집을 시작했습니다 — 대규모 클러스터는 수십 초 걸릴 수 있고 완료되면 자동 갱신됩니다.');
+      // 비동기(Celery) 수집 — 완료 시점을 알 수 없어 몇 차례 자동 새로고침으로 폴링.
+      [8000, 20000, 40000, 70000].forEach((d) => window.setTimeout(reload, d));
+    } catch (e) { flash(false, errMsg(e)); }
     finally { setBusy(false); }
   };
   const toggleCheck = async (row: MetricTrendRow) => {

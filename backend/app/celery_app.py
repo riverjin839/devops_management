@@ -166,6 +166,33 @@ def collect_resource_counts(self):
         db.close()
 
 
+@celery_app.task(bind=True, name="app.celery_app.collect_resource_counts_one")
+def collect_resource_counts_one(self, cluster_id: str, user_id: str | None = None):
+    """단일 클러스터 리소스 수 스냅샷 — 수동 "지금 스냅샷"(비동기) 용.
+
+    동기 요청에서 돌리면 big k8s 에서 게이트웨이 타임아웃(504) → 큐잉해서 worker 가 처리.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster, SnapshotSource
+    from app.services import resource_count_service as rcs
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        snap = rcs.collect_for_cluster(db, cluster, source=SnapshotSource.manual.value, user_id=user_id)
+        return {"cluster": cluster.name, "snapshot_id": str(snap.id), "counts": snap.counts}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("manual snapshot failed cluster=%s: %s", cluster_id, e)
+        return {"error": str(e)[:200], "cluster_id": cluster_id}
+    finally:
+        db.close()
+
+
 @celery_app.task(bind=True, name="app.celery_app.dispatch_resource_count_snapshot")
 def dispatch_resource_count_snapshot(self):
     """운영자 설정 cron 에 맞춰 리소스 수 스냅샷을 트리거(매분 평가).

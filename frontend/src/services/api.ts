@@ -1635,8 +1635,8 @@ export const metricTrendApi = {
   get: (clusterId: string, date?: string) =>
     api.get<import('@/types').MetricTrendResponse>(`/metric-trend/${clusterId}`, { params: date ? { date } : undefined }),
   snapshot: (clusterId: string) =>
-    api.post<{ ok: boolean; snapshotId: string; counts: Record<string, number>; collectedAt: string }>(
-      `/metric-trend/${clusterId}/snapshot`, {}, { timeout: 120_000 }),
+    api.post<{ ok: boolean; queued: boolean; taskId: string }>(
+      `/metric-trend/${clusterId}/snapshot`, {}, { timeout: 30_000 }),
   check: (clusterId: string, itemKey: string, isChecked: boolean, date?: string, note?: string) =>
     api.put(`/metric-trend/${clusterId}/check`, { itemKey, isChecked, date, note }),
   editSnapshot: (snapshotId: string, counts: Record<string, number>) =>

@@ -98,17 +98,19 @@ def run_snapshot(
     actor: User = Depends(require_operator),
 ):
     cluster = _require_cluster(cluster_id, db)
+    # 동기 수집은 big k8s 에서 게이트웨이 타임아웃(504) → Celery 로 큐잉하고 즉시 반환.
     try:
-        snap = rcs.collect_for_cluster(db, cluster, source=SnapshotSource.manual.value, user_id=actor.id)
+        from app.celery_app import collect_resource_counts_one
+        task = collect_resource_counts_one.delay(str(cluster_id), str(actor.id))
     except Exception as e:  # noqa: BLE001
         audit_logger.record(db, action="metric.snapshot.run", actor=actor, status="failure",
                             target_type="cluster", target_id=str(cluster_id),
-                            details={"error": str(e)[:200]}, request=request)
-        raise HTTPException(status_code=502, detail=f"스냅샷 수집 실패: {str(e)[:200]}")
+                            details={"error": f"enqueue failed: {str(e)[:200]}"}, request=request)
+        raise HTTPException(status_code=503, detail=f"수집 작업 큐잉 실패(Celery/Redis 확인): {str(e)[:200]}")
     audit_logger.record(db, action="metric.snapshot.run", actor=actor, status="success",
                         target_type="cluster", target_id=str(cluster_id),
-                        details={"cluster": cluster.name, "counts": snap.counts}, request=request)
-    return {"ok": True, "snapshot_id": str(snap.id), "counts": snap.counts, "collected_at": snap.collected_at.isoformat()}
+                        details={"cluster": cluster.name, "queued": True, "task_id": str(task.id)}, request=request)
+    return {"ok": True, "queued": True, "task_id": str(task.id)}
 
 
 # ── 체크 토글 (operator) ────────────────────────────────────────────────────────

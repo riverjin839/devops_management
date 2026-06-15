@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 from uuid import UUID
@@ -24,8 +25,9 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 
 logger = logging.getLogger(__name__)
 
-_PAGE = 500
-_MAX_PAGES = 40  # 안전 상한 (≈ 20k objects)
+_PAGE = 1000           # 페이지 크기(서버 list limit)
+_MAX_PAGES = 500       # 안전 상한 (≈ 50만) — 사실상 실제 카운트
+_REQ_TIMEOUT = 60      # 페이지당 apiserver 요청 타임아웃(초)
 
 # kind → (api_class_attr, list_all_method, namespaced). KIND_MAP 과 일치.
 COUNT_METHODS: dict[str, tuple[str, str]] = {
@@ -119,7 +121,11 @@ def _count_kind(api_client, kind: str) -> tuple[int, bool]:
     cont: Optional[str] = None
     total = 0
     for _ in range(_MAX_PAGES):
-        resp = method(limit=_PAGE, _continue=cont) if cont else method(limit=_PAGE, _request_timeout=30)
+        resp = (
+            method(limit=_PAGE, _continue=cont, _request_timeout=_REQ_TIMEOUT)
+            if cont else
+            method(limit=_PAGE, _request_timeout=_REQ_TIMEOUT)
+        )
         total += len(resp.items or [])
         cont = resp.metadata._continue if resp.metadata else None
         if not cont:
@@ -135,14 +141,20 @@ def collect_for_cluster(db: Session, cluster: Cluster, source: str = SnapshotSou
     api_client = _client(cluster)
     counts: dict[str, int] = {}
     truncated: dict[str, bool] = {}
+    t0 = time.time()
+    logger.info("[snapshot] start cluster=%s name=%s source=%s kinds=%d",
+                cluster.id, cluster.name, source, len(kinds))
     for kind in kinds:
+        ks = time.time()
         try:
             c, tr = _count_kind(api_client, kind)
             counts[kind] = c
             if tr:
                 truncated[kind] = True
+            logger.info("[snapshot] cluster=%s kind=%s count=%d truncated=%s %dms",
+                        cluster.id, kind, c, tr, int((time.time() - ks) * 1000))
         except Exception as e:  # noqa: BLE001
-            logger.warning("count %s failed for cluster %s: %s", kind, cluster.id, str(e)[:200])
+            logger.warning("[snapshot] count %s failed for cluster %s: %s", kind, cluster.id, str(e)[:200])
     snap = ResourceCountSnapshot(
         cluster_id=cluster.id,
         snapshot_date=date.today(),
@@ -155,6 +167,8 @@ def collect_for_cluster(db: Session, cluster: Cluster, source: str = SnapshotSou
     db.add(snap)
     db.commit()
     db.refresh(snap)
+    logger.info("[snapshot] done cluster=%s name=%s total=%dms counts=%s",
+                cluster.id, cluster.name, int((time.time() - t0) * 1000), counts)
     return snap
 
 
