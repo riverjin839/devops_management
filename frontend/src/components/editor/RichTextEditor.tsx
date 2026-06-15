@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { marked } from 'marked';
 import { compressImageFile } from '@/lib/imageCompress';
-import { DOC_TEMPLATES } from './docTemplates';
+import { DOC_TEMPLATES, type DocTemplate } from './docTemplates';
 
 const EDITOR_BG_KEY = 'k8s:editor-bg';
 const BG_PRESETS = ['#ffffff', '#faf7f0', '#f4f4f5', '#eef2ff', '#ecfdf5', '#1f2937'];
@@ -53,6 +53,8 @@ interface RichTextEditorProps {
   linkSearch?: (query: string) => LinkOption[];
   /** 사용자가 색을 고르지 않았을 때 적용할 기본 배경색(예: '#ffffff'). 미지정 시 테마 배경. */
   defaultBg?: string | null;
+  /** 기본 실무 템플릿 외에 추가로 노출할 동적 템플릿(예: 등록된 담당자로 만든 업무 분담표). 메뉴 상단에 표시. */
+  extraTemplates?: DocTemplate[];
 }
 
 interface ToolbarButtonProps {
@@ -88,11 +90,12 @@ function Divider() {
   return <div className="w-px h-5 bg-border mx-0.5 flex-shrink-0" />;
 }
 
-function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
+function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
   editor: Editor;
   surfaceBg?: string | null;
   bgColor?: string | null;
   onPickBg?: (color: string | null) => void;
+  extraTemplates?: DocTemplate[];
 }) {
   const [tplOpen, setTplOpen] = useState(false);
   const [tblOpen, setTblOpen] = useState(false);
@@ -365,7 +368,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg }: {
             <div className="fixed inset-0 z-40" onClick={() => setTplOpen(false)} aria-hidden />
             <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-lg border border-border bg-card shadow-lg py-1">
               <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">실무 템플릿</div>
-              {DOC_TEMPLATES.map((tpl) => (
+              {[...(extraTemplates ?? []), ...DOC_TEMPLATES].map((tpl) => (
                 <button
                   key={tpl.id}
                   type="button"
@@ -489,6 +492,7 @@ export function RichTextEditor({
   onImagePaste,
   linkSearch,
   defaultBg,
+  extraTemplates,
 }: RichTextEditorProps) {
   const isUpdatingFromProp = useRef(false);
 
@@ -524,7 +528,7 @@ export function RichTextEditor({
       Placeholder.configure({ placeholder }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Table.configure({ resizable: false }),
+      Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCell,
@@ -682,7 +686,7 @@ export function RichTextEditor({
       className={`w-full border border-border rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-primary ${surfaceBg ? '' : 'bg-background'}`}
       style={surfaceBg ? { backgroundColor: surfaceBg } : undefined}
     >
-      <Toolbar editor={editor} surfaceBg={surfaceBg} bgColor={bgColor} onPickBg={applyBg} />
+      <Toolbar editor={editor} surfaceBg={surfaceBg} bgColor={bgColor} onPickBg={applyBg} extraTemplates={extraTemplates} />
       <div
         onPaste={handlePaste}
         style={surfaceBg ? { backgroundColor: surfaceBg, color: surfaceText } : undefined}

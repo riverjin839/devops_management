@@ -12,10 +12,10 @@ const ALLOWED_TAGS = [
   'p', 'br', 'hr', 'b', 'strong', 'i', 'em', 'u', 's', 'code', 'pre',
   'a', 'img', 'ul', 'ol', 'li', 'blockquote',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td', 'colgroup', 'col',
   'div', 'span',
 ];
-const ALLOWED_ATTR = ['href', 'title', 'alt', 'src', 'target', 'rel', 'class', 'style', 'data-checked'];
+const ALLOWED_ATTR = ['href', 'title', 'alt', 'src', 'target', 'rel', 'class', 'style', 'data-checked', 'colwidth', 'colspan', 'rowspan'];
 
 /**
  * Renders HTML content produced by RichTextEditor — DOMPurify sanitized.

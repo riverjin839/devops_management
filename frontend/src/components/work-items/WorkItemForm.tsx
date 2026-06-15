@@ -1,9 +1,9 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Plus, Settings2, ChevronDown, Users } from 'lucide-react';
 import { WorkItem, WorkItemCreate, WorkItemUpdate, WorkItemType, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
-import { RichTextEditor } from '@/components/editor';
+import { RichTextEditor, assigneeWorkTableTemplate } from '@/components/editor';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { useAssignees } from '@/hooks/useAssignees';
 import { ConfluenceUrlInput, useToast } from '@/components/common';
@@ -181,6 +181,13 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
   const { data: issueData } = useWorkItems();
   const items = issueData?.data ?? [];
+
+  // 업무 내용 에디터 "실무 템플릿" 메뉴에 노출할 동적 템플릿 — Settings 등록 담당자로 만든
+  // "파트 데일리 회의록" 분담표(담당자 열 자동 입력).
+  const worktableTemplates = useMemo(
+    () => [assigneeWorkTableTemplate(registeredAssignees.map((a) => a.name))],
+    [registeredAssignees],
+  );
 
   // 백링크([[ ]]) — 에디터에서 다른 업무로 내부 링크. 이미 로드된 items 로 검색.
   const linkSearch = (q: string) => {
@@ -741,6 +748,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             onImagePaste={handleImagePaste}
             linkSearch={linkSearch}
             defaultBg="#ffffff"
+            extraTemplates={worktableTemplates}
           />
         </div>
       </div>
