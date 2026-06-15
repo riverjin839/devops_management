@@ -43,6 +43,7 @@ const ACTIONS: string[] = [
   'metric.item.update',
   'metric.item.delete',
   'metric.schedule.update',
+  'cilium.exec',
 ];
 
 function StatusBadge({ status }: { status: string }) {
