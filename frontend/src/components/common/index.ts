@@ -22,4 +22,6 @@ export { ConfluenceUrlInput } from './ConfluenceUrlInput';
 export { SidePane } from './SidePane';
 export { DoubleScrollX } from './DoubleScrollX';
 export { SearchableSelect } from './SearchableSelect';
+export { NamespaceSingleSelect } from './NamespaceSingleSelect';
+export { PodSingleSelect } from './PodSingleSelect';
 export { LogViewTabs } from './LogViewTabs';
