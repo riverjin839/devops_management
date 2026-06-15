@@ -26,21 +26,28 @@ function escapeHtml(s: string): string {
 }
 
 /**
+ * 표 셀 보정 — 빈 `<td></td>` / `<th></th>` 는 ProseMirror tableCell 스키마(block+)를 위반해
+ * insertContent 시 `RangeError: invalid content for node tableCell` 가 나고 삽입 자체가 실패한다.
+ * 빈 셀에 빈 문단(`<p></p>`)을 넣어 유효한 블록 콘텐츠를 보장한다. (모든 템플릿 삽입 직전에 호출)
+ */
+export function normalizeTemplateHtml(html: string): string {
+  return html.replace(/<(td|th)([^>]*)>(\s*)<\/\1>/g, '<$1$2><p></p></$1>');
+}
+
+/**
  * 파트 데일리 회의록 분담표 HTML 생성 — Settings 에 등록된 담당자를 표의 '담당자' 열에 한 명씩 자동 채운다.
- * 컬럼: 담당자 | 업무 내용 | 업무 환경 | 완료 예정일 | Confluence 링크 | 기타.
+ * 컬럼: 담당자 | 업무 내용 | 업무 환경 | 완료 예정일 | Jira 링크 | Confluence 링크 | 기타.
  * 담당자마다 여러 업무를 적으려면 표 편집(행 아래 추가) 또는 마지막 셀에서 Tab 으로 행을 늘린다.
  * 컬럼 폭은 에디터에서 경계를 드래그해 조절할 수 있다(표 컬럼 리사이즈).
  */
 export function buildAssigneeWorkTable(assigneeNames: string[]): string {
-  const headers = ['담당자', '업무 내용', '업무 환경', '완료 예정일', 'Confluence 링크', '기타'];
+  const headers = ['담당자', '업무 내용', '업무 환경', '완료 예정일', 'Jira 링크', 'Confluence 링크', '기타'];
   const headRow = `<tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>`;
   const names = assigneeNames.map((n) => n.trim()).filter(Boolean);
   const rows = names.length ? names : [''];
+  const emptyCells = headers.slice(1).map(() => '<td><p></p></td>').join('');
   const bodyRows = rows
-    .map(
-      (name) =>
-        `<tr><td>${escapeHtml(name)}</td><td></td><td></td><td></td><td></td><td></td></tr>`,
-    )
+    .map((name) => `<tr><td><p>${escapeHtml(name)}</p></td>${emptyCells}</tr>`)
     .join('');
   return `<h2>파트 데일리 회의록</h2>\n<table><tbody>${headRow}${bodyRows}</tbody></table>`;
 }
@@ -50,7 +57,7 @@ export function assigneeWorkTableTemplate(assigneeNames: string[]): DocTemplate 
   return {
     id: 'assignee-worktable',
     label: '파트 데일리 회의록',
-    description: 'Settings 담당자 자동 입력 — 담당자·업무 내용·환경·완료 예정일·Confluence 링크·기타',
+    description: 'Settings 담당자 자동 입력 — 담당자·업무 내용·환경·완료 예정일·Jira·Confluence·기타',
     html: buildAssigneeWorkTable(assigneeNames),
   };
 }
