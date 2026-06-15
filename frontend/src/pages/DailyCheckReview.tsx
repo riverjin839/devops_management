@@ -49,8 +49,8 @@ export function DailyCheckReviewPage() {
   const cluster = clusters.find((c) => c.id === clusterId);
 
   return (
-    <div className="min-h-screen bg-background p-5">
-      <div className="flex gap-4 max-w-[1600px] mx-auto">
+    <div className="min-h-screen bg-background p-3">
+      <div className="flex gap-3 max-w-[1600px] mx-auto">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
