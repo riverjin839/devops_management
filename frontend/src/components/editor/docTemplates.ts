@@ -17,6 +17,44 @@ export interface DocTemplate {
 const TASK = (text: string) =>
   `<li data-type="taskItem" data-checked="false">${text}</li>`;
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * 파트 데일리 회의록 분담표 HTML 생성 — Settings 에 등록된 담당자를 표의 '담당자' 열에 한 명씩 자동 채운다.
+ * 컬럼: 담당자 | 업무 내용 | 업무 환경 | 완료 예정일 | Confluence 링크 | 기타.
+ * 담당자마다 여러 업무를 적으려면 표 편집(행 아래 추가) 또는 마지막 셀에서 Tab 으로 행을 늘린다.
+ * 컬럼 폭은 에디터에서 경계를 드래그해 조절할 수 있다(표 컬럼 리사이즈).
+ */
+export function buildAssigneeWorkTable(assigneeNames: string[]): string {
+  const headers = ['담당자', '업무 내용', '업무 환경', '완료 예정일', 'Confluence 링크', '기타'];
+  const headRow = `<tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>`;
+  const names = assigneeNames.map((n) => n.trim()).filter(Boolean);
+  const rows = names.length ? names : [''];
+  const bodyRows = rows
+    .map(
+      (name) =>
+        `<tr><td>${escapeHtml(name)}</td><td></td><td></td><td></td><td></td><td></td></tr>`,
+    )
+    .join('');
+  return `<h2>파트 데일리 회의록</h2>\n<table><tbody>${headRow}${bodyRows}</tbody></table>`;
+}
+
+/** 위 분담표를 템플릿 메뉴 항목(DocTemplate)으로 포장. 등록된 담당자 목록에 따라 동적으로 만든다. */
+export function assigneeWorkTableTemplate(assigneeNames: string[]): DocTemplate {
+  return {
+    id: 'assignee-worktable',
+    label: '파트 데일리 회의록',
+    description: 'Settings 담당자 자동 입력 — 담당자·업무 내용·환경·완료 예정일·Confluence 링크·기타',
+    html: buildAssigneeWorkTable(assigneeNames),
+  };
+}
+
 export const DOC_TEMPLATES: DocTemplate[] = [
   {
     id: 'work-plan',
