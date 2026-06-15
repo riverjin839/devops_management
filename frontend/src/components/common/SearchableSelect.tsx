@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Loader2, Search, X } from 'lucide-react';
 
 interface SearchableSelectProps<T> {
@@ -14,6 +15,12 @@ interface SearchableSelectProps<T> {
   clearable?: boolean;
   className?: string;
   id?: string;
+  /**
+   * 드롭다운을 document.body 로 portal 렌더(fixed 포지셔닝)한다.
+   * 부모가 `overflow-hidden`(예: 짧은 MacCard 툴바)이라 inline absolute 드롭다운이
+   * 잘리는 경우 켠다. 기본 false — 기존 소비처 동작 유지.
+   */
+  menuPortal?: boolean;
 }
 
 /** 단일 선택 검색 가능 콤보박스.
@@ -37,11 +44,13 @@ export function SearchableSelect<T>({
   clearable = true,
   className = '',
   id,
+  menuPortal = false,
 }: SearchableSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
   const [composing, setComposing] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -62,18 +71,37 @@ export function SearchableSelect<T>({
     if (open) setHighlight(0);
   }, [open, query]);
 
-  // click outside → 닫기
+  // click outside → 닫기 (portal 리스트도 "내부"로 취급)
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery('');
-      }
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t)) return;
+      if (listRef.current?.contains(t)) return;
+      setOpen(false);
+      setQuery('');
     };
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [open]);
+
+  // portal 모드: 열릴 때 input 위치를 측정해 fixed 앵커링(스크롤/리사이즈 추적)
+  useEffect(() => {
+    if (!open || !menuPortal) { setMenuPos(null); return; }
+    const update = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setMenuPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open, menuPortal]);
 
   // highlight 변경 시 항목이 보이게 스크롤
   useEffect(() => {
@@ -154,40 +182,44 @@ export function SearchableSelect<T>({
         </div>
       </div>
 
-      {open && !disabled && (
-        <ul
-          ref={listRef}
-          role="listbox"
-          className="absolute z-30 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-border bg-card shadow-lg py-1"
-        >
-          {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-muted-foreground italic">
-              {options.length === 0 ? emptyText : '검색 결과 없음'}
-            </li>
-          ) : (
-            filtered.map((opt, i) => {
-              const key = getKey(opt);
-              const isSelected = key === value;
-              const isHighlighted = i === highlight;
-              return (
-                <li
-                  key={key}
-                  role="option"
-                  aria-selected={isSelected}
-                  onMouseDown={(e) => { e.preventDefault(); select(opt); }}
-                  onMouseEnter={() => setHighlight(i)}
-                  className={`px-3 py-1.5 text-sm cursor-pointer truncate
-                    ${isHighlighted ? 'bg-primary/10 text-foreground' : 'text-foreground'}
-                    ${isSelected ? 'font-medium' : ''}
-                  `}
-                >
-                  {getLabel(opt)}
-                </li>
-              );
-            })
-          )}
-        </ul>
-      )}
+      {open && !disabled && (() => {
+        const list = (
+          <ul
+            ref={listRef}
+            role="listbox"
+            style={menuPortal && menuPos ? { position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width } : undefined}
+            className={`${menuPortal ? 'z-50' : 'absolute z-30 mt-1 w-full'} max-h-72 overflow-auto rounded-lg border border-border bg-card shadow-lg py-1`}
+          >
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-muted-foreground italic">
+                {options.length === 0 ? emptyText : '검색 결과 없음'}
+              </li>
+            ) : (
+              filtered.map((opt, i) => {
+                const key = getKey(opt);
+                const isSelected = key === value;
+                const isHighlighted = i === highlight;
+                return (
+                  <li
+                    key={key}
+                    role="option"
+                    aria-selected={isSelected}
+                    onMouseDown={(e) => { e.preventDefault(); select(opt); }}
+                    onMouseEnter={() => setHighlight(i)}
+                    className={`px-3 py-1.5 text-sm cursor-pointer truncate
+                      ${isHighlighted ? 'bg-primary/10 text-foreground' : 'text-foreground'}
+                      ${isSelected ? 'font-medium' : ''}
+                    `}
+                  >
+                    {getLabel(opt)}
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        );
+        return menuPortal ? (menuPos ? createPortal(list, document.body) : null) : list;
+      })()}
     </div>
   );
 }
