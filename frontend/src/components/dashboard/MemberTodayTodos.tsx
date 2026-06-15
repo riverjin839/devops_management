@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, CalendarCheck2, CheckCircle2, Clock, CircleDashed,
+  ArrowRight, CalendarCheck2, Clock, CircleDashed,
   ShieldAlert, ChevronLeft, ChevronRight, RotateCcw,
+  Square, CheckSquare,
 } from 'lucide-react';
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
@@ -15,12 +16,13 @@ interface MemberTodayTodosProps {
   selectedClusterId: string | null;
 }
 
-const STATUS_DOT: Record<KanbanStatus, string> = {
-  backlog: 'bg-slate-400',
-  todo: 'bg-blue-400',
-  in_progress: 'bg-amber-400',
-  review_test: 'bg-purple-400',
-  done: 'bg-green-400',
+// 노트(메모지) 느낌의 체크박스 불릿 색상 — 상태를 색으로 유지.
+const STATUS_TEXT: Record<KanbanStatus, string> = {
+  backlog: 'text-slate-400',
+  todo: 'text-blue-400',
+  in_progress: 'text-amber-500',
+  review_test: 'text-purple-400',
+  done: 'text-emerald-500',
 };
 
 function dateKey(d: Date): string {
@@ -228,41 +230,47 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                   />
                 </div>
 
-                <ul className="space-y-1">
-                  {visible.map((t) => (
-                    <li key={`${g.assignee}:${t.id}`}>
-                      <Link
-                        to={`/tasks-mgmt/${t.id}`}
-                        className="flex items-center gap-2 text-xs min-w-0 px-1 py-0.5 -mx-1 rounded hover:bg-secondary/50 transition-colors"
-                        title="상세 보기"
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[t.kanbanStatus]}`} />
-                        {t.type === 'issue' ? (
-                          <ShieldAlert className="w-3 h-3 text-amber-500 flex-shrink-0" />
-                        ) : t.kanbanStatus === 'done' ? (
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                        ) : null}
-                        <span
-                          className={`truncate flex-1 ${
-                            t.kanbanStatus === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'
-                          }`}
+                {/* 업무리스트 — 노트(메모지) 느낌: 크림 배경 + 좌측 마진선 + 점선 줄 + 체크박스 */}
+                <ul className="relative space-y-0 rounded-lg border border-amber-100 bg-amber-50/60 pl-6 pr-2 py-1 dark:border-border/50 dark:bg-secondary/20 before:absolute before:left-3.5 before:top-1.5 before:bottom-1.5 before:w-px before:bg-red-300/60 dark:before:bg-border">
+                  {visible.map((t) => {
+                    const isDone = t.kanbanStatus === 'done';
+                    return (
+                      <li key={`${g.assignee}:${t.id}`}>
+                        <Link
+                          to={`/tasks-mgmt/${t.id}`}
+                          className="flex items-center gap-2 text-xs min-w-0 py-1 border-b border-dashed border-amber-200/70 last:border-b-0 hover:bg-amber-100/50 dark:border-border/40 dark:hover:bg-secondary/40 transition-colors"
+                          title="상세 보기"
                         >
-                          {t.title?.trim() || stripHtml(t.content) || t.category}
-                        </span>
-                        {t.clusterName && (
-                          <span className="text-[10px] text-muted-foreground/80 flex-shrink-0 hidden md:inline">
-                            {t.clusterName}
+                          {isDone ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                          ) : (
+                            <Square className={`w-3.5 h-3.5 flex-shrink-0 ${STATUS_TEXT[t.kanbanStatus]}`} />
+                          )}
+                          {t.type === 'issue' && (
+                            <ShieldAlert className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                          )}
+                          <span
+                            className={`truncate flex-1 ${
+                              isDone ? 'text-muted-foreground line-through' : 'text-foreground'
+                            }`}
+                          >
+                            {t.title?.trim() || stripHtml(t.content) || t.category}
                           </span>
-                        )}
-                      </Link>
-                    </li>
-                  ))}
+                          {t.clusterName && (
+                            <span className="text-[10px] text-muted-foreground/80 flex-shrink-0 hidden md:inline">
+                              {t.clusterName}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
                   {all.length > 4 && (
                     <li>
                       <button
                         type="button"
                         onClick={() => toggleExpand(g.assignee)}
-                        className="text-[10px] text-muted-foreground hover:text-primary pl-3.5 py-0.5 transition-colors"
+                        className="text-[10px] text-muted-foreground hover:text-primary py-1 transition-colors"
                         aria-expanded={isExpanded}
                       >
                         {isExpanded ? '접기' : `+${all.length - 4}건 더…`}
