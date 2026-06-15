@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck, Plus, Contrast,
+  ClipboardList, CalendarCheck, Plus,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useAuthStore } from '@/stores/authStore';
-import { stripHtml, cn } from '@/lib/utils';
+import { stripHtml } from '@/lib/utils';
 
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
@@ -105,24 +104,6 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
-
-  // ── 슬라이더 색 반전 — 사용자별 설정(localStorage) ──
-  const currentUser = useAuthStore((s) => s.user);
-  const sliderInvertKey = `k8s:weekSliderInvert:${currentUser?.username ?? 'guest'}`;
-  const [sliderInvert, setSliderInvert] = useState<boolean>(() => {
-    try { return localStorage.getItem(sliderInvertKey) === '1'; } catch { return false; }
-  });
-  // 로그인 사용자가 바뀌면 그 사용자의 저장값으로 동기화.
-  useEffect(() => {
-    try { setSliderInvert(localStorage.getItem(sliderInvertKey) === '1'); } catch { /* noop */ }
-  }, [sliderInvertKey]);
-  const toggleSliderInvert = () => {
-    setSliderInvert((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(sliderInvertKey, next ? '1' : '0'); } catch { /* noop */ }
-      return next;
-    });
-  };
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -230,33 +211,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const goNext = () => setIndex(currentIndex + 1);
   const goToday = () => setWeekStart(startOfWeek(new Date()));
   const isThisWeek = weekStartStr === fmtDate(startOfWeek(today));
-  const rangeStart = minWeek;
-  const rangeEnd = addDays(minWeek, (totalWeeks - 1) * 7 + (DAY_COUNT - 1));
-  const shortDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-
-  // thumb-center alignment for ticks/tooltip (thumb is 16px wide)
-  const frac = totalWeeks > 1 ? currentIndex / (totalWeeks - 1) : 0;
-  const centerLeft = (f: number) => `calc(${f} * (100% - 16px) + 8px)`;
-  const todayIdx = Math.max(0, Math.min(totalWeeks - 1, weeksBetween(minWeek, startOfWeek(today))));
-  const showTicks = totalWeeks > 1 && totalWeeks <= 24;
-
-  // ── mouse-wheel over the slider → move week by week (non-passive) ──
-  const sliderWrapRef = useRef<HTMLDivElement>(null);
-  const wheelAcc = useRef(0);
-  useEffect(() => {
-    const el = sliderWrapRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      wheelAcc.current += e.deltaY;
-      const TH = 40; // trackpad-friendly threshold
-      if (wheelAcc.current >= TH) { wheelAcc.current = 0; setIndex(currentIndex + 1); }
-      else if (wheelAcc.current <= -TH) { wheelAcc.current = 0; setIndex(currentIndex - 1); }
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex, totalWeeks, minWeek]);
+  const canPrev = currentIndex > 0;
+  const canNext = currentIndex < totalWeeks - 1;
 
   // 공통: 요일 컬럼 배경 셀 (track 뒤에 깔리는 grid lines)
   const DayCells = () => (
@@ -334,115 +290,23 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         </div>
       </div>
 
-      {/* ── week slider (◀ ━━●━━ ▶) — drag to move week by week ──────────────── */}
-      <div className={cn(
-        'flex items-center gap-2.5 px-1 transition-colors',
-        sliderInvert && 'bg-foreground rounded-2xl py-2 px-2',
-      )}>
-        {/* 색 반전 토글 — 사용자별 설정. 작게. */}
-        <button
-          onClick={toggleSliderInvert}
-          aria-pressed={sliderInvert}
-          title={sliderInvert ? '슬라이더 색 반전 끄기' : '슬라이더 색 반전 켜기'}
-          className={cn(
-            'p-1 rounded-lg transition-colors flex-shrink-0',
-            sliderInvert
-              ? 'bg-background/15 text-background hover:bg-background/25'
-              : 'bg-secondary text-muted-foreground hover:bg-card hover:text-foreground',
-          )}>
-          <Contrast className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={goPrev}
-          disabled={currentIndex <= 0}
-          aria-label="이전 주"
-          className={cn(
-            'p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
-            sliderInvert
-              ? 'bg-background/15 text-background hover:bg-background/25'
-              : 'bg-secondary text-muted-foreground hover:bg-card hover:text-foreground',
-          )}>
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-
-        <div ref={sliderWrapRef} className="flex-1 flex flex-col gap-1" title="휠을 굴려 주를 넘길 수 있어요">
-          {/* slider + drag tooltip */}
-          <div className="relative pt-1 group">
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, totalWeeks - 1)}
-              step={1}
-              value={currentIndex}
-              onChange={(e) => setIndex(Number(e.target.value))}
-              aria-label="주간 슬라이더"
-              className={cn('week-slider peer w-full h-1.5 cursor-pointer accent-primary', sliderInvert && 'week-slider-invert')}
-            />
-            {/* tooltip: shows currently-viewed week range above the thumb */}
-            <div
-              className={cn(
-                'pointer-events-none absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-medium opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100 peer-active:opacity-100',
-                sliderInvert ? 'bg-background text-foreground' : 'bg-foreground text-background',
-              )}
-              style={{ left: centerLeft(frac) }}
-            >
-              {shortDate(weekStart)} ~ {shortDate(days[DAY_COUNT - 1])}
-            </div>
-          </div>
-
-          {/* week tick ruler */}
-          {showTicks && (
-            <div className="relative h-2">
-              {Array.from({ length: totalWeeks }, (_, i) => {
-                const f = totalWeeks > 1 ? i / (totalWeeks - 1) : 0;
-                const isTd = i === todayIdx;
-                const isCur = i === currentIndex;
-                return (
-                  <span
-                    key={i}
-                    className={`absolute top-0 -translate-x-1/2 rounded-full ${
-                      isCur ? 'bg-primary w-[3px] h-2'
-                      : isTd ? (sliderInvert ? 'bg-background/60 w-px h-2' : 'bg-primary/50 w-px h-2')
-                      : (sliderInvert ? 'bg-background/30 w-px h-1.5' : 'bg-border w-px h-1.5')
-                    }`}
-                    style={{ left: centerLeft(f) }}
-                  />
-                );
-              })}
-            </div>
-          )}
-
-          <div className={cn(
-            'flex justify-between text-xs font-mono',
-            sliderInvert ? 'text-background/70' : 'text-muted-foreground/70',
-          )}>
-            <span>{shortDate(rangeStart)}</span>
-            <span className={cn('font-semibold', sliderInvert ? 'text-background' : 'text-primary')}>{currentIndex + 1} / {totalWeeks}주</span>
-            <span>{shortDate(rangeEnd)}</span>
-          </div>
-        </div>
-
-        <button
-          onClick={goNext}
-          disabled={currentIndex >= totalWeeks - 1}
-          aria-label="다음 주"
-          className={cn(
-            'p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
-            sliderInvert
-              ? 'bg-background/15 text-background hover:bg-background/25'
-              : 'bg-secondary text-muted-foreground hover:bg-card hover:text-foreground',
-          )}>
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
 
       {/* ── timeline grid ───────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
-        {/* header: weekday columns (월~금) */}
-        <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
-          <div className="px-4 py-2.5 text-xs font-semibold text-muted-foreground">
-            {viewMode === 'assignee' ? '담당자 / 마일스톤' : '업무 / 마일스톤'}
+        {/* header: weekday columns (월~금) — 주 이동은 양끝 화살표(월 옆 ◀ / 금 옆 ▶)로 한다 */}
+        <div className="relative grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
+          <div className="px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center justify-between gap-1">
+            <span className="truncate">{viewMode === 'assignee' ? '담당자 / 마일스톤' : '업무 / 마일스톤'}</span>
+            {/* ◀ 이전 주 — 월 바로 옆 */}
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={!canPrev}
+              aria-label="이전 주"
+              title="이전 주"
+              className="p-1 rounded-md bg-secondary text-muted-foreground hover:bg-card hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
           </div>
           <div className={`grid ${colsClass}`}>
             {days.map((d) => {
@@ -461,6 +325,16 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               );
             })}
           </div>
+          {/* ▶ 다음 주 — 금 바로 옆(오른쪽 끝) */}
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={!canNext}
+            aria-label="다음 주"
+            title="다음 주"
+            className="absolute right-1 top-1/2 -translate-y-1/2 z-[1] p-1 rounded-md bg-card/90 backdrop-blur-sm text-muted-foreground border border-border shadow-sm hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
 
         {/* body */}
