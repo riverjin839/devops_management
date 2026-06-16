@@ -2613,6 +2613,7 @@ export interface AllocNodesResponse { count: number; items: AllocNodeRow[]; metr
 
 export interface AllocSummary {
   nodeCount: number;
+  namespaceCount: number;
   podCount: number;
   cpuAllocM: number;
   memAllocB: number;
@@ -2646,6 +2647,7 @@ export interface AllocNamespacesResponse {
   items: AllocNamespaceRow[];
   summary: AllocSummary;
   metricsAvailable: boolean;
+  podUsageSkipped: boolean;
 }
 
 export interface AllocWorkloadRow {
