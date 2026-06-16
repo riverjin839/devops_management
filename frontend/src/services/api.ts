@@ -709,6 +709,8 @@ export const promqlApi = {
 
 // Cluster Items — 현황 관리 대시보드의 '아이템' 카드 (클러스터별)
 export const clusterItemsApi = {
+  types: () =>
+    api.get<{ data: import('@/types').ClusterItemType[] }>('/cluster-item-types'),
   list: (clusterId: string) =>
     api.get<{ data: ClusterItem[] }>(`/clusters/${clusterId}/items`),
   create: (clusterId: string, data: Partial<ClusterItem>) =>
@@ -717,7 +719,8 @@ export const clusterItemsApi = {
     api.put<ClusterItem>(`/cluster-items/${itemId}`, data),
   remove: (itemId: string) => api.delete(`/cluster-items/${itemId}`),
   run: (itemId: string) =>
-    api.post<ClusterItem>(`/cluster-items/${itemId}/run`, undefined, { timeout: 60000 }),
+    // AI(LLM) 아이템은 응답이 길 수 있어 넉넉히 잡는다.
+    api.post<ClusterItem>(`/cluster-items/${itemId}/run`, undefined, { timeout: 130000 }),
 };
 
 // Work Items API — 이슈와 작업 통합. type 필터로 둘을 구분.

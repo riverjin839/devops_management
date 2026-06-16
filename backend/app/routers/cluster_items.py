@@ -78,12 +78,15 @@ class ClusterItemResponse(BaseModel):
     sort_order: int
     enabled: bool
     current_value: Optional[float] = None
+    current_text: Optional[str] = None
     result_detail: Optional[dict] = None
+    result_status: Optional[str] = None
     last_status: Optional[str] = None
     last_error: Optional[str] = None
     last_checked_at: Optional[datetime] = None
     last_source: Optional[str] = None
     previous_value: Optional[float] = None
+    previous_text: Optional[str] = None
     last_changed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
@@ -112,6 +115,12 @@ def _get_item_or_404(db: Session, item_id: UUID) -> ClusterItem:
 
 
 # ── Routes ─────────────────────────────────────────────────
+@router.get("/cluster-item-types")
+def list_cluster_item_types():
+    """'아이템 추가' 선택지 — 지원하는 아이템 타입 메타데이터."""
+    return {"data": cis.list_item_types()}
+
+
 @router.get("/clusters/{cluster_id}/items", response_model=ClusterItemListResponse)
 def list_cluster_items(cluster_id: UUID, db: Session = Depends(get_db)):
     cluster = _get_cluster_or_404(db, cluster_id)
@@ -132,6 +141,8 @@ def list_cluster_items(cluster_id: UUID, db: Session = Depends(get_db)):
 @router.post("/clusters/{cluster_id}/items", response_model=ClusterItemResponse, status_code=201)
 def create_cluster_item(cluster_id: UUID, body: ClusterItemCreate, db: Session = Depends(get_db)):
     _get_cluster_or_404(db, cluster_id)
+    if body.item_type not in cis.ITEM_TYPES:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 아이템 타입: {body.item_type}")
     item = ClusterItem(cluster_id=cluster_id, is_builtin=False, **body.model_dump())
     db.add(item)
     db.commit()

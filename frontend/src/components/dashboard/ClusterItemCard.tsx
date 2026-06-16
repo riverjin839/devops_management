@@ -23,6 +23,35 @@ interface ClusterItemCardProps {
 const SIZE_LABEL: Record<ClusterItemCardSize, string> = { sm: 'S', md: 'M', lg: 'L' };
 const SIZE_ORDER: ClusterItemCardSize[] = ['sm', 'md', 'lg'];
 
+// 도메인 상태(result_status) → 색상 dot.
+const STATUS_DOT: Record<string, string> = {
+  healthy: 'bg-status-healthy',
+  warning: 'bg-status-warning',
+  critical: 'bg-status-critical',
+  info: 'bg-muted-foreground/50',
+};
+
+// 아이템 타입별 보조 정보 한 줄.
+function detailLine(item: ClusterItem): string | null {
+  const d = item.resultDetail || {};
+  switch (item.itemType) {
+    case 'node_count':
+      return d.ready != null ? `Ready ${d.ready}/${d.total ?? '-'}` : null;
+    case 'workload_count':
+      return d.namespaces != null
+        ? `네임스페이스 ${d.namespaces}${d.pending ? ` · 대기 ${d.pending}` : ''}${d.failed ? ` · 실패 ${d.failed}` : ''}`
+        : null;
+    case 'k8s_version':
+      return d.skew ? '⚠ 노드 버전 불일치 (skew)' : '노드 버전 일치';
+    case 'cert_expiry':
+      return d.not_after ? `만료 ${new Date(d.not_after).toLocaleDateString('ko-KR')}` : null;
+    case 'ai_cluster_summary':
+      return d.model ? `모델 ${d.model}` : null;
+    default:
+      return null;
+  }
+}
+
 // 결과 수집 방식 배지 (수동/자동/AI)
 function SourceBadge({ mode }: { mode: ClusterItem['sourceMode'] }) {
   const map = {
@@ -47,10 +76,16 @@ function formatValue(value: number | null | undefined, unit?: string | null): st
 
 export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onResize }: ClusterItemCardProps) {
   const hasError = item.lastStatus === 'error';
+  const isAi = item.itemType === 'ai_cluster_summary';
   const nextSize = (): ClusterItemCardSize => {
     const idx = SIZE_ORDER.indexOf(item.cardSize);
     return SIZE_ORDER[(idx + 1) % SIZE_ORDER.length];
   };
+
+  // 수치/문자 통합 표시값 + 직전값.
+  const valueText = item.currentText ?? (item.currentValue != null ? formatValue(item.currentValue, item.unit) : null);
+  const prevText = item.previousText ?? (item.previousValue != null ? formatValue(item.previousValue, item.unit) : null);
+  const sub = detailLine(item);
 
   return (
     <div className="h-full bg-card border border-border rounded-xl p-4 hover:border-muted-foreground/30 transition-all relative group flex flex-col">
@@ -61,7 +96,12 @@ export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onRe
             {item.icon || '🖥️'}
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold truncate">{item.title}</h3>
+            <h3 className="text-sm font-semibold truncate flex items-center gap-1.5">
+              {!hasError && item.resultStatus && (
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[item.resultStatus] ?? STATUS_DOT.info}`} />
+              )}
+              <span className="truncate">{item.title}</span>
+            </h3>
             <div className="flex items-center gap-1 mt-0.5">
               <SourceBadge mode={item.sourceMode} />
               {item.isBuiltin && (
@@ -125,25 +165,39 @@ export function ClusterItemCard({ item, isRunning, onRun, onEdit, onDelete, onRe
             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
             <span className="break-words">{item.lastError || '수집 실패'}</span>
           </div>
+        ) : valueText == null ? (
+          <span className="text-sm text-muted-foreground/60">미수집 — 실행해 주세요</span>
+        ) : isAi ? (
+          // AI 요약 — 여러 줄 텍스트
+          <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap line-clamp-5">
+            {valueText}
+          </p>
+        ) : item.currentText != null ? (
+          // 문자형(버전 등)
+          <span className="text-2xl font-bold font-mono text-foreground break-all">{valueText}</span>
         ) : (
+          // 수치형
           <div className="flex items-baseline gap-1.5">
-            <span className="text-4xl font-bold font-mono text-foreground">
-              {formatValue(item.currentValue, item.unit)}
-            </span>
+            <span className="text-4xl font-bold font-mono text-foreground">{valueText}</span>
           </div>
+        )}
+        {!hasError && sub && (
+          <p className="text-xs text-muted-foreground mt-1.5">{sub}</p>
         )}
       </div>
 
       {/* Footer — 마지막 변경일자 + 그 당시 값 */}
       <div className="pt-2 border-t border-border space-y-0.5">
         {item.lastChangedAt ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground truncate" title={`${prevText ?? ''} → ${valueText ?? ''}`}>
             마지막 변경 <span className="font-medium text-foreground/80">{formatDateTime(item.lastChangedAt)}</span>
-            {' · '}
-            {item.previousValue != null && (
-              <span className="text-muted-foreground/70">{formatValue(item.previousValue, item.unit)} → </span>
+            {!isAi && (
+              <>
+                {' · '}
+                {prevText != null && <span className="text-muted-foreground/70">{prevText} → </span>}
+                <span className="font-medium text-foreground/80">{valueText}</span>
+              </>
             )}
-            <span className="font-medium text-foreground/80">{formatValue(item.currentValue, item.unit)}</span>
           </p>
         ) : (
           <p className="text-xs text-muted-foreground/60">변경 이력 없음</p>

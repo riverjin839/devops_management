@@ -61,13 +61,16 @@ class ClusterItem(Base):
     enabled = Column(Boolean, nullable=False, default=True)
 
     # ── 수집 결과 + 변경 추적 ──────────────────────────────
-    current_value = Column(Float, nullable=True)        # 현재 값 (노드 수)
-    result_detail = Column(JSONB, nullable=True)        # 부가 정보 (ready, not_ready 노드 등)
-    last_status = Column(String(20), nullable=True)     # ok | error | pending
+    current_value = Column(Float, nullable=True)        # 현재 값 (수치형: 노드 수, 만료일수 등)
+    current_text = Column(Text, nullable=True)          # 현재 값 (문자형: 버전, AI 요약 등)
+    result_detail = Column(JSONB, nullable=True)        # 부가 정보 (ready, namespaces, nodeVersions 등)
+    result_status = Column(String(20), nullable=True)   # 도메인 상태: healthy | warning | critical | info
+    last_status = Column(String(20), nullable=True)     # 수집 성공여부: ok | error | pending
     last_error = Column(Text, nullable=True)
     last_checked_at = Column(DateTime, nullable=True)   # 마지막 수집 시각
     last_source = Column(String(20), nullable=True)     # manual | auto | ai (마지막 수집 방식)
-    previous_value = Column(Float, nullable=True)       # 직전(변경 전) 값
+    previous_value = Column(Float, nullable=True)       # 직전(변경 전) 수치값
+    previous_text = Column(Text, nullable=True)         # 직전(변경 전) 문자값
     last_changed_at = Column(DateTime, nullable=True)   # 마지막으로 값이 바뀐 시각
 
     created_at = Column(DateTime, default=datetime.utcnow)

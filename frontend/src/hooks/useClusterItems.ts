@@ -5,7 +5,19 @@ import { ClusterItem } from '@/types';
 export const clusterItemKeys = {
   all: ['clusterItems'] as const,
   list: (clusterId: string) => ['clusterItems', clusterId] as const,
+  types: ['clusterItemTypes'] as const,
 };
+
+export function useClusterItemTypes() {
+  return useQuery({
+    queryKey: clusterItemKeys.types,
+    queryFn: async () => {
+      const { data } = await clusterItemsApi.types();
+      return data?.data ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 export function useClusterItems(clusterId: string) {
   return useQuery({

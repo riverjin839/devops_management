@@ -620,16 +620,33 @@ export interface ClusterItem {
   sortOrder: number;
   enabled: boolean;
   currentValue?: number | null;
+  currentText?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   resultDetail?: Record<string, any> | null;
+  resultStatus?: 'healthy' | 'warning' | 'critical' | 'info' | null;
   lastStatus?: 'ok' | 'error' | 'pending' | null;
   lastError?: string | null;
   lastCheckedAt?: string | null;
   lastSource?: ClusterItemSource | null;
   previousValue?: number | null;
+  previousText?: string | null;
   lastChangedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// '아이템 추가' 선택지 메타데이터 (GET /cluster-item-types)
+export interface ClusterItemType {
+  itemType: string;
+  label: string;
+  icon: string;
+  unit: string;
+  description: string;
+  valueKind: 'number' | 'text';
+  defaultSource: ClusterItemSource;
+  defaultScheduleHour: number;
+  builtin: boolean;
+  supportedSources: ClusterItemSource[];
 }
 
 export interface UiSettings {

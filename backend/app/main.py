@@ -759,6 +759,13 @@ def _run_migrations():
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
 
+    # cluster_items: 현황 아이템 — 문자형/도메인상태 컬럼은 구버전 DB 호환을 위해 보강.
+    if "cluster_items" in inspector.get_table_names():
+        _safe_add_column("cluster_items", "current_text", "TEXT")
+        _safe_add_column("cluster_items", "previous_text", "TEXT")
+        _safe_add_column("cluster_items", "result_status", "VARCHAR(20)")
+        _safe_create_index("ix_cluster_items_cluster", "cluster_items", "(cluster_id)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
