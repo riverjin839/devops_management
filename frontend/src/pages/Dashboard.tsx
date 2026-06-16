@@ -10,6 +10,8 @@ import {
   AddMetricCardModal,
   KubeconfigEditModal,
   KanbanSummaryCharts,
+  ClusterItemsGrid,
+  ClusterItemModal,
 } from '@/components/dashboard';
 import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
@@ -20,9 +22,10 @@ import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
+import { useClusterItems, useRunClusterItem, useUpdateClusterItem, useDeleteClusterItem } from '@/hooks/useClusterItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { healthApi } from '@/services/api';
-import { Addon, Cluster, MetricCard, Playbook } from '@/types';
+import { Addon, Cluster, ClusterItem, ClusterItemCardSize, MetricCard, Playbook } from '@/types';
 
 // ── Cluster Overview Grid (shown when All tab is selected) ─────────────────────
 interface ClusterOverviewGridProps {
@@ -157,6 +160,9 @@ export function Dashboard() {
   const [credsTarget, setCredsTarget] = useState<Playbook | null>(null);
   const [showKubeconfig, setShowKubeconfig] = useState(false);
   const [editingMetricCard, setEditingMetricCard] = useState<MetricCard | null>(null);
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<ClusterItem | null>(null);
+  const [runningItemIds, setRunningItemIds] = useState<Set<string>>(new Set());
   const { clusters, summary, addons, isChecking, lastCheckTime } = useClusterStore();
 
   // Queries
@@ -185,6 +191,29 @@ export function Dashboard() {
   const { data: metricCards = [], isLoading: metricsLoading } = useMetricCards();
   const { data: metricResults = [] } = useMetricResults();
   const deleteMetricCard = useDeleteMetricCard();
+
+  // Cluster Items (현황 아이템) — 단일 클러스터 선택 시 표시.
+  const { data: clusterItems = [], isLoading: itemsLoading } = useClusterItems(activeClusterId);
+  const runClusterItem = useRunClusterItem(activeClusterId);
+  const updateClusterItem = useUpdateClusterItem(activeClusterId);
+  const deleteClusterItem = useDeleteClusterItem(activeClusterId);
+
+  const handleRunItem = (item: ClusterItem) => {
+    setRunningItemIds((prev) => new Set(prev).add(item.id));
+    runClusterItem.mutate(item.id, {
+      onSettled: () => {
+        setRunningItemIds((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      },
+    });
+  };
+
+  const handleResizeItem = (item: ClusterItem, size: ClusterItemCardSize) => {
+    updateClusterItem.mutate({ id: item.id, data: { cardSize: size } });
+  };
 
   // Kanban summary data — 통합 work items 한 번에 가져와 type 으로 분할
   const { data: workItemsData, isLoading: workItemsLoading } = useWorkItems();
@@ -334,6 +363,27 @@ export function Dashboard() {
           isLoading={summaryLoading}
         />
 
+        {/* ── 현황 아이템 (클러스터에 붙는 단위 카드) ─────────────────────── */}
+        {selectedClusterId && (
+          <MacCard
+            title={`현황 아이템 — ${selectedCluster?.name ?? ''}`}
+            bodyPadding="p-4"
+            className="overflow-hidden"
+            rootClassName="min-w-0"
+          >
+            <ClusterItemsGrid
+              items={clusterItems}
+              isLoading={itemsLoading}
+              runningIds={runningItemIds}
+              onAdd={() => { setEditingItem(null); setShowItemModal(true); }}
+              onRun={handleRunItem}
+              onEdit={(item) => { setEditingItem(item); setShowItemModal(true); }}
+              onDelete={(item) => { if (confirm(`아이템 "${item.title}" 을(를) 삭제할까요?`)) deleteClusterItem.mutate(item.id); }}
+              onResize={handleResizeItem}
+            />
+          </MacCard>
+        )}
+
         {/*
           레이아웃 규칙
             · "전체 현황" / 단일 클러스터 모두 동일하게 stack 으로 배치.
@@ -472,6 +522,16 @@ export function Dashboard() {
         }}
         editingCard={editingMetricCard}
       />
+
+      {/* Cluster Item Modal */}
+      {activeClusterId && (
+        <ClusterItemModal
+          isOpen={showItemModal}
+          onClose={() => { setShowItemModal(false); setEditingItem(null); }}
+          clusterId={activeClusterId}
+          editingItem={editingItem}
+        />
+      )}
 
       {/* Kubeconfig Edit Modal */}
       {selectedClusterId && (
