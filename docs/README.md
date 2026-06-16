@@ -9,6 +9,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md) — 3단계 배포(kind / 폐쇄망 / 프로덕션)
 - [ADMIN_MANUAL.md](ADMIN_MANUAL.md) — 관리자 매뉴얼
 - [PROJECT_FLOW_GUIDE.md](PROJECT_FLOW_GUIDE.md) — 요청/작업 흐름
+- [SERVICE_TOPOLOGY_GUIDE.md](SERVICE_TOPOLOGY_GUIDE.md) — 서비스 토폴로지(서비스 디스커버리) 사용 가이드
 - [PROJECT_PLAN.md](PROJECT_PLAN.md) — 프로젝트 계획
 
 ## 릴리스 / 프로세스
