@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -705,6 +705,19 @@ export const promqlApi = {
     api.post<MetricQueryResult>('/promql/query/test', { promql }),
   health: () =>
     api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
+};
+
+// Cluster Items — 현황 관리 대시보드의 '아이템' 카드 (클러스터별)
+export const clusterItemsApi = {
+  list: (clusterId: string) =>
+    api.get<{ data: ClusterItem[] }>(`/clusters/${clusterId}/items`),
+  create: (clusterId: string, data: Partial<ClusterItem>) =>
+    api.post<ClusterItem>(`/clusters/${clusterId}/items`, data),
+  update: (itemId: string, data: Partial<ClusterItem>) =>
+    api.put<ClusterItem>(`/cluster-items/${itemId}`, data),
+  remove: (itemId: string) => api.delete(`/cluster-items/${itemId}`),
+  run: (itemId: string) =>
+    api.post<ClusterItem>(`/cluster-items/${itemId}/run`, undefined, { timeout: 60000 }),
 };
 
 // Work Items API — 이슈와 작업 통합. type 필터로 둘을 구분.

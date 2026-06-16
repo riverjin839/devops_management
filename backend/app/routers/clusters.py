@@ -357,6 +357,13 @@ def create_cluster(
 
     db.commit()
 
+    # 기본 아이템(K8s 노드 수 등) 자동 생성 — 실패해도 클러스터 등록은 성공.
+    try:
+        from app.services import cluster_item_service as cis
+        cis.ensure_builtin_items(db, cluster)
+    except Exception:
+        db.rollback()
+
     # pending 상태가 아닌 경우에만 초기 점검 + 노드 IP 자동 수집 수행
     if not connectivity_failed:
         HealthChecker(db).run_check(cluster.id)

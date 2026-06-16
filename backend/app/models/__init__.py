@@ -21,6 +21,7 @@ from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEv
 from app.models.config_snapshot import ClusterConfigSnapshot
 from app.models.node_server_spec import NodeServerSpec
 from app.models.cluster_custom_field import ClusterCustomField
+from app.models.cluster_item import ClusterItem
 from app.models.service_entry import ServiceEntry
 from app.models.batch_job import BatchJob, BatchJobRun
 from app.models.command_entry import CommandEntry
@@ -86,6 +87,7 @@ __all__ = [
     "ClusterConfigSnapshot",
     "NodeServerSpec",
     "ClusterCustomField",
+    "ClusterItem",
     "ServiceEntry",
     "BatchJob",
     "BatchJobRun",

@@ -55,6 +55,7 @@ from app.routers.k8s_helm import router as k8s_helm_router
 from app.routers.k8s_exec import router as k8s_exec_router
 from app.routers.metric_trend import router as metric_trend_router
 from app.routers.service_topology import router as service_topology_router
+from app.routers.cluster_items import router as cluster_items_router
 
 __all__ = [
     "ops_check_router",
@@ -110,4 +111,5 @@ __all__ = [
     "lake_services_router",
     "bottleneck_router",
     "lake_service_types_router",
+    "cluster_items_router",
 ]

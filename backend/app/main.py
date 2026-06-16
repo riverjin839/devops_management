@@ -67,6 +67,7 @@ from app.routers import (
     k8s_exec_router,
     metric_trend_router,
     service_topology_router,
+    cluster_items_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -842,6 +843,26 @@ def _seed_default_metric_cards():
         db.close()
 
 
+def _seed_cluster_items():
+    """모든 클러스터에 기본(builtin) 아이템(K8s 노드 수 등)을 보장한다.
+
+    신규 클러스터는 생성 시점에 보장되지만, 구버전 데이터/누락 보정을 위해
+    부팅 시에도 한 번 점검한다. (idempotent — 이미 있으면 skip)
+    """
+    from app.models import Cluster
+    from app.services import cluster_item_service as cis
+
+    db = SessionLocal()
+    try:
+        for cluster in db.query(Cluster).all():
+            try:
+                cis.ensure_builtin_items(db, cluster)
+            except Exception:  # noqa: BLE001
+                db.rollback()
+    finally:
+        db.close()
+
+
 def _seed_default_trend_sources():
     """기본 트렌드 수집 소스 등록 (최초 1회)"""
     from app.models.trend import TrendSource
@@ -1208,6 +1229,7 @@ async def lifespan(app: FastAPI):
     for step_name, step in [
         ("migrations", _run_migrations),
         ("seed_metric_cards", _seed_default_metric_cards),
+        ("seed_cluster_items", _seed_cluster_items),
         ("seed_trend_sources", _seed_default_trend_sources),
         ("seed_playbooks", _seed_default_playbooks),
         ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
@@ -1328,6 +1350,7 @@ app.include_router(k8s_exec_router, prefix="/api/v1")
 app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

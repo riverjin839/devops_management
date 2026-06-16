@@ -598,6 +598,40 @@ export interface MetricQueryResult {
   error?: string | null;
 }
 
+// ── Cluster Items (현황 관리 대시보드 '아이템' 카드) ─────────────────────
+export type ClusterItemSource = 'manual' | 'auto' | 'ai';
+export type ClusterItemCardSize = 'sm' | 'md' | 'lg';
+
+export interface ClusterItem {
+  id: string;
+  clusterId: string;
+  itemType: string;            // 'node_count' | (확장)
+  title: string;
+  icon?: string | null;
+  description?: string | null;
+  tier: 'basic' | 'advanced';
+  isBuiltin: boolean;
+  sourceMode: ClusterItemSource;
+  autoEnabled: boolean;
+  scheduleHour: number;
+  scheduleMinute: number;
+  cardSize: ClusterItemCardSize;
+  unit?: string | null;
+  sortOrder: number;
+  enabled: boolean;
+  currentValue?: number | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resultDetail?: Record<string, any> | null;
+  lastStatus?: 'ok' | 'error' | 'pending' | null;
+  lastError?: string | null;
+  lastCheckedAt?: string | null;
+  lastSource?: ClusterItemSource | null;
+  previousValue?: number | null;
+  lastChangedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UiSettings {
   appTitle: string;
   navLabels: Record<string, string>;

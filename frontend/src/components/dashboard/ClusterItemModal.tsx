@@ -1,0 +1,272 @@
+import { useEffect, useId, useState } from 'react';
+import { X, Hand, Clock3, Sparkles } from 'lucide-react';
+import { ClusterItem, ClusterItemCardSize, ClusterItemSource } from '@/types';
+import { useCreateClusterItem, useUpdateClusterItem } from '@/hooks/useClusterItems';
+
+interface ClusterItemModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  clusterId: string;
+  editingItem?: ClusterItem | null;
+}
+
+const SOURCE_OPTIONS: { value: ClusterItemSource; label: string; icon: typeof Hand; hint: string; disabled?: boolean }[] = [
+  { value: 'manual', label: '수동', icon: Hand, hint: '수작업으로 직접 실행' },
+  { value: 'auto', label: '자동(배치)', icon: Clock3, hint: '스케줄에 맞춰 자동 수집' },
+  { value: 'ai', label: 'AI', icon: Sparkles, hint: '추후 도입 예정', disabled: true },
+];
+
+const SIZE_OPTIONS: { value: ClusterItemCardSize; label: string }[] = [
+  { value: 'sm', label: 'Small' },
+  { value: 'md', label: 'Medium' },
+  { value: 'lg', label: 'Large' },
+];
+
+export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: ClusterItemModalProps) {
+  const [title, setTitle] = useState('');
+  const [icon, setIcon] = useState('🖥️');
+  const [description, setDescription] = useState('');
+  const [unit, setUnit] = useState('');
+  const [sourceMode, setSourceMode] = useState<ClusterItemSource>('auto');
+  const [autoEnabled, setAutoEnabled] = useState(true);
+  const [scheduleHour, setScheduleHour] = useState(1);
+  const [scheduleMinute, setScheduleMinute] = useState(0);
+  const [cardSize, setCardSize] = useState<ClusterItemCardSize>('md');
+
+  const titleId = useId();
+  const iconId = useId();
+  const descId = useId();
+  const unitId = useId();
+
+  const createItem = useCreateClusterItem(clusterId);
+  const updateItem = useUpdateClusterItem(clusterId);
+
+  const isEdit = !!editingItem;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (editingItem) {
+      setTitle(editingItem.title);
+      setIcon(editingItem.icon || '🖥️');
+      setDescription(editingItem.description || '');
+      setUnit(editingItem.unit || '');
+      setSourceMode(editingItem.sourceMode);
+      setAutoEnabled(editingItem.autoEnabled);
+      setScheduleHour(editingItem.scheduleHour);
+      setScheduleMinute(editingItem.scheduleMinute);
+      setCardSize(editingItem.cardSize);
+    } else {
+      setTitle('');
+      setIcon('🖥️');
+      setDescription('');
+      setUnit('');
+      setSourceMode('auto');
+      setAutoEnabled(true);
+      setScheduleHour(1);
+      setScheduleMinute(0);
+      setCardSize('md');
+    }
+  }, [isOpen, editingItem]);
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    const payload: Partial<ClusterItem> = {
+      title: title.trim(),
+      icon,
+      description: description.trim() || undefined,
+      unit: unit.trim(),
+      sourceMode,
+      autoEnabled,
+      scheduleHour,
+      scheduleMinute,
+      cardSize,
+    };
+    if (editingItem) {
+      updateItem.mutate({ id: editingItem.id, data: payload });
+    } else {
+      createItem.mutate({ ...payload, itemType: 'node_count', tier: 'basic' });
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
+          <h2 className="text-lg font-semibold">{isEdit ? '아이템 편집' : '아이템 추가'}</h2>
+          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          {isEdit && editingItem?.isBuiltin && (
+            <p className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+              기본 아이템입니다. 제목·아이콘·스케줄·크기 등은 편집할 수 있지만 삭제는 불가합니다.
+            </p>
+          )}
+
+          {/* Title + Icon */}
+          <div className="grid grid-cols-[1fr_72px] gap-3">
+            <div>
+              <label htmlFor={titleId} className="block text-sm font-medium mb-1">
+                제목 <span className="text-red-400">*</span>
+              </label>
+              <input
+                id={titleId}
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="예: K8s 노드 수"
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div>
+              <label htmlFor={iconId} className="block text-sm font-medium mb-1">아이콘</label>
+              <input
+                id={iconId}
+                type="text"
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label htmlFor={descId} className="block text-sm font-medium mb-1">설명</label>
+            <input
+              id={descId}
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="이 아이템이 무엇을 보여주는지"
+              className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+
+          {/* Source mode */}
+          <div>
+            <p className="block text-sm font-medium mb-1.5">결과 수집 방식</p>
+            <div className="grid grid-cols-3 gap-2">
+              {SOURCE_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                const active = sourceMode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={opt.disabled}
+                    onClick={() => setSourceMode(opt.value)}
+                    title={opt.hint}
+                    className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                      active ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Schedule (auto only) */}
+          {sourceMode === 'auto' && (
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={autoEnabled}
+                  onChange={(e) => setAutoEnabled(e.target.checked)}
+                  className="rounded"
+                />
+                자동 점검 활성화
+              </label>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">매일</span>
+                <select
+                  value={scheduleHour}
+                  onChange={(e) => setScheduleHour(Number(e.target.value))}
+                  disabled={!autoEnabled}
+                  className="px-2 py-1.5 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-40"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <span className="text-muted-foreground">시</span>
+                <select
+                  value={scheduleMinute}
+                  onChange={(e) => setScheduleMinute(Number(e.target.value))}
+                  disabled={!autoEnabled}
+                  className="px-2 py-1.5 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-40"
+                >
+                  {[0, 10, 15, 20, 30, 40, 45, 50].map((m) => (
+                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <span className="text-muted-foreground">분 (KST)</span>
+              </div>
+              <p className="text-xs text-muted-foreground/70">분 단위는 표시용이며 실제 자동 수집은 매시 정각에 시 기준으로 실행됩니다.</p>
+            </div>
+          )}
+
+          {/* Card size + Unit */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="block text-sm font-medium mb-1.5">카드 크기</p>
+              <div className="flex gap-1.5">
+                {SIZE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setCardSize(opt.value)}
+                    className={`flex-1 px-2 py-1.5 rounded-lg border text-sm transition-colors ${
+                      cardSize === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label htmlFor={unitId} className="block text-sm font-medium mb-1.5">단위</label>
+              <input
+                id={unitId}
+                type="text"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                placeholder="예: 대"
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+            >
+              취소
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!title.trim()}
+              className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-40"
+            >
+              {isEdit ? '저장' : '추가'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
