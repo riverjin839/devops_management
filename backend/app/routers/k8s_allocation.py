@@ -22,6 +22,7 @@ MEM=bytes(int). `k8s_resources` 공용 헬퍼(`_api_client`/`_require_cluster`) 
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from decimal import Decimal
@@ -50,16 +51,28 @@ _MASTER_ROLE_KEYS = (
     "node-role.kubernetes.io/control-plane",
 )
 
-# K8s API 호출 서버측 타임아웃(connect, read) 초 — 느린 apiserver/metrics 가 프록시
-# 타임아웃(502)을 유발하지 않도록 빨리 실패시킨다.
-_API_TIMEOUT = (3.05, 30)
-_METRICS_TIMEOUT = (3.05, 12)  # metrics-server 는 더 짧게 — 느리면 usage 생략(best-effort)
+def _envf(name: str, default: float) -> float:
+    """환경변수에서 float 읽기(잘못된 값/미설정 시 default). 운영자가 게이트웨이 타임아웃에
+    맞춰 코드 변경 없이 예산/타임아웃을 조정할 수 있게 한다."""
+    try:
+        v = os.getenv(name)
+        return float(v) if v not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
+
+
+# K8s API 호출 서버측 타임아웃(connect, read) 초 — 한 페이지의 read 가 게이트웨이 타임아웃을
+# 넘지 않도록 짧게. read 타임아웃은 페이지 사이 예산 체크보다 우선하므로 게이트웨이보다 작아야 함.
+_API_READ_TIMEOUT = _envf("K8S_ALLOC_API_READ_TIMEOUT", 12.0)
+_API_TIMEOUT = (3.05, _API_READ_TIMEOUT)
+_METRICS_TIMEOUT = (3.05, _envf("K8S_ALLOC_METRICS_TIMEOUT", 8.0))  # 느리면 usage 생략(best-effort)
 _PAGE_LIMIT = 1000             # 페이지네이션 페이지 크기(round-trip 수 ↓)
 # cluster-wide pod usage(metrics) 는 활성 Pod 가 이 수 이하일 때만 시도(대규모 클러스터 보호).
 _POD_USAGE_MAX = 6000
-# 전체 스냅샷(전량 페이지네이션 포함) 총 벽시계 예산(초). ingress/proxy 타임아웃(보통 30~60s)
-# 보다 짧게 잡아, 초대형 클러스터에서도 502(프록시 타임아웃) 대신 partial 결과로 반드시 응답한다.
-_SNAPSHOT_BUDGET = 22.0
+# 전체 스냅샷(전량 페이지네이션 포함) 총 벽시계 예산(초). ingress/proxy 타임아웃보다 충분히
+# 짧게 잡아(기본 18s), 초대형 클러스터에서도 502 대신 partial 결과로 반드시 응답한다.
+# 게이트웨이 타임아웃이 더 짧으면 env K8S_ALLOC_SNAPSHOT_BUDGET 로 낮춘다.
+_SNAPSHOT_BUDGET = _envf("K8S_ALLOC_SNAPSHOT_BUDGET", 18.0)
 
 # 비싼 집계 스냅샷에 대한 짧은 TTL 캐시(클러스터/네임스페이스 키별 격리).
 _CACHE_TTL = 20.0
@@ -77,18 +90,17 @@ def _cached(key: str, producer: Callable[[], Any]) -> Any:
     return val
 
 
-def _list_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
+def _iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
               hard_cap: int = 200_000, deadline: Optional[float] = None,
-              report: Optional[list] = None) -> list:
-    """`_continue` 페이지네이션으로 전량 수집. 각 페이지에 서버측 타임아웃 적용.
+              report: Optional[list] = None):
+    """`_continue` 페이지네이션을 **페이지 단위로 스트리밍**(yield)한다.
 
-    deadline(monotonic 시각) 지정 시 페이지 사이에서 예산을 초과하면 **수집을 중단**하고
-    지금까지 모은 항목만 반환한다(초대형 클러스터에서 프록시 502 대신 partial 응답).
-    중단/상한 도달 시 report(있으면)에 True 를 append 해 호출자가 partial 여부를 안다.
+    전량을 메모리에 모으지 않으므로(한 번에 한 페이지만 유지) 수만 Pod 클러스터에서도
+    OOM(→ 워커 강제종료 → 502)을 피한다. deadline(monotonic) 지정 시 페이지 사이에서
+    예산 초과하면 중단하고, 상한/예산 초과 시 report(있으면)에 True 를 append 한다.
     """
-    items: list = []
+    seen = 0
     cont: Optional[str] = None
-    truncated = False
     while True:
         kw: dict[str, Any] = {"limit": _PAGE_LIMIT, "_request_timeout": _API_TIMEOUT}
         if field_selector:
@@ -96,16 +108,24 @@ def _list_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = No
         if cont:
             kw["_continue"] = cont
         resp = list_fn(**kw)
-        items.extend(resp.items or [])
+        for it in (resp.items or []):
+            yield it
+            seen += 1
         cont = getattr(resp.metadata, "_continue", None) if resp.metadata else None
         if not cont:
             break
-        if len(items) >= hard_cap or (deadline is not None and time.monotonic() >= deadline):
-            truncated = True
+        if seen >= hard_cap or (deadline is not None and time.monotonic() >= deadline):
+            if report is not None:
+                report.append(True)
             break
-    if truncated and report is not None:
-        report.append(True)
-    return items
+
+
+def _list_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
+              hard_cap: int = 200_000, deadline: Optional[float] = None,
+              report: Optional[list] = None) -> list:
+    """`_iter_all` 을 전량 리스트로 수집(소형 컬렉션: 노드/네임스페이스/RS 용)."""
+    return list(_iter_all(list_fn, field_selector=field_selector, hard_cap=hard_cap,
+                          deadline=deadline, report=report))
 
 
 def _strip_hash(rs_name: str) -> str:
@@ -400,9 +420,6 @@ def _build_overview(cluster, cid: str) -> dict:
     nodes = _list_all(lambda **kw: core.list_node(**kw), deadline=deadline)
     node_usage = _node_usage(client)
     ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), deadline=deadline))
-    pods = _list_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
-                     field_selector=_ACTIVE_FIELD_SELECTOR,
-                     deadline=deadline, report=partial_flag)
 
     # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
     node_base: dict[str, dict] = {}
@@ -420,9 +437,15 @@ def _build_overview(cluster, cid: str) -> dict:
     per_node: dict[str, dict] = {}
     per_ns: dict[str, dict] = {}
     summary = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0, "pods": 0, "norq": 0}
-    pod_loc: dict[tuple[str, str], tuple[str, Optional[str]]] = {}  # (ns,pod)->(ns,node)
+    # (ns,pod)->(ns,node). cluster-wide usage 병합용. 활성 Pod 가 _POD_USAGE_MAX 초과하면
+    # usage 를 어차피 생략하므로 맵을 버려 메모리를 아낀다.
+    pod_loc: dict[tuple[str, str], tuple[str, Optional[str]]] = {}
+    loc_dropped = False
 
-    for p in pods:
+    # Pod 를 **페이지 단위로 스트리밍**하며 즉시 집계(전량 메모리 적재 금지 → OOM/502 방지).
+    for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
+                       field_selector=_ACTIVE_FIELD_SELECTOR,
+                       deadline=deadline, report=partial_flag):
         if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
             continue
         ns = p.metadata.namespace
@@ -455,12 +478,17 @@ def _build_overview(cluster, cid: str) -> dict:
         if no_req:
             summary["norq"] += 1
 
-        pod_loc[(ns, p.metadata.name)] = (ns, node)
+        if not loc_dropped:
+            if summary["pods"] > _POD_USAGE_MAX:
+                pod_loc.clear()
+                loc_dropped = True
+            else:
+                pod_loc[(ns, p.metadata.name)] = (ns, node)
 
     partial = bool(partial_flag)
     # cluster-wide pod usage — 대규모/예산초과(partial) 클러스터에서는 생략(드릴다운에서 확인).
     metrics_available = False
-    pod_usage_skipped = partial or len(pods) > _POD_USAGE_MAX
+    pod_usage_skipped = partial or loc_dropped or summary["pods"] > _POD_USAGE_MAX
     if not pod_usage_skipped:
         pu = _pod_usage(client)
         if pu:
