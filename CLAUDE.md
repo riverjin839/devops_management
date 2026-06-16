@@ -16,6 +16,19 @@ Originally "K8s Daily Monitor" (DevOps Management), redefined as Platform Engine
 
 ---
 
+## 참고 프로젝트 (Reference Projects)
+
+PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 때 **벤치마킹/응용 기준**으로 삼는 오픈소스 Notion 계열 프로젝트. 관련 요청(에디터 아키텍처, 블록/문서 모델, 협업/동기화, 지식베이스 UX 등)이 오면 이 두 레포를 참고 기준으로 활용한다.
+
+| 프로젝트 | Git URL | 비고 |
+|---|---|---|
+| **AppFlowy** | `https://github.com/AppFlowy-IO/AppFlowy.git` | Flutter(Dart) + Rust core, grid/board/calendar DB, AppFlowy-Cloud |
+| **AFFiNE** | `https://github.com/toeverything/AFFiNE.git` | TypeScript/React, 자체 BlockSuite 블록 에디터, Yjs(CRDT) 로컬-퍼스트 |
+
+- 이 두 레포는 기본 세션 스코프(`riverjin839/devops_management`)에 없으므로, 코드 레벨 분석이 필요하면 세션에 추가하거나 웹에서 직접 가져와 분석한다.
+
+---
+
 ## Tech Stack
 
 ### Backend (`backend/`)
