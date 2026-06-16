@@ -46,6 +46,7 @@ import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
+import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -179,6 +180,9 @@ function AppShell() {
               {/* Lens 식 K8S 상세 관리 — 리소스 탐색 + 쓰기 액션 + 터미널/이벤트/Helm/RBAC/CRD */}
               <Route path="/k8s-manage/:clusterId" element={<K8sManagePage />} />
               <Route path="/k8s-manage" element={<K8sManagePage />} />
+              {/* K8S 자원 관리 — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화 */}
+              <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
+              <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
               <Route path="/settings/audit-logs" element={<RequireAdmin><AuditLogsPage /></RequireAdmin>} />

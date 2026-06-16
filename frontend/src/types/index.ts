@@ -2580,6 +2580,114 @@ export interface K8sPodRichRow {
 }
 export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }
 
+// ── K8s 자원 관리 (allocation: request vs 사용량 slack) ───────────────────────
+// CPU 는 millicores(int), MEM 은 bytes(int). *Display 는 사람이 읽는 문자열.
+export interface AllocNodeRow {
+  name: string;
+  roles: string[];
+  unschedulable: boolean;
+  podCount: number;
+  cpuAllocM: number;
+  memAllocB: number;
+  cpuCapacityM: number;
+  memCapacityB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuSlackM: number;
+  memSlackB: number;
+  cpuAllocDisplay: string;
+  memAllocDisplay: string;
+  cpuUsageDisplay: string | null;
+  memUsageDisplay: string | null;
+  cpuReqDisplay: string;
+  memReqDisplay: string;
+  cpuLimDisplay: string;
+  memLimDisplay: string;
+}
+export interface AllocNodesResponse { count: number; items: AllocNodeRow[]; metricsAvailable: boolean }
+
+export interface AllocSummary {
+  nodeCount: number;
+  podCount: number;
+  cpuAllocM: number;
+  memAllocB: number;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  noRequestPods: number;
+}
+
+export interface AllocNamespaceRow {
+  namespace: string;
+  podCount: number;
+  workloadCount: number;
+  noRequestPods: number;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  cpuReqDisplay: string;
+  memReqDisplay: string;
+  cpuUsageDisplay: string | null;
+  memUsageDisplay: string | null;
+}
+export interface AllocNamespacesResponse {
+  count: number;
+  items: AllocNamespaceRow[];
+  summary: AllocSummary;
+  metricsAvailable: boolean;
+}
+
+export interface AllocWorkloadRow {
+  namespace: string;
+  kind: string;
+  name: string;
+  podCount: number;
+  noRequestPods: number;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+}
+export interface AllocWorkloadsResponse { count: number; items: AllocWorkloadRow[]; metricsAvailable: boolean }
+
+export interface AllocContainerCell {
+  name: string;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  hasRequests: boolean;
+}
+export interface AllocPodRow {
+  name: string;
+  namespace: string;
+  node: string | null;
+  qos: string | null;
+  phase: string;
+  containers: AllocContainerCell[];
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+}
+export interface AllocPodsResponse { count: number; items: AllocPodRow[]; metricsAvailable: boolean }
+
 // ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
 export type MetricTrendDir = 'up' | 'down' | 'flat';
 export interface MetricTrendRow {
