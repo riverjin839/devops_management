@@ -2,15 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
-  LayoutDashboard, BookOpen, ListTodo, Sparkles, Settings, Server,
-  Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
-  CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
-  Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
-  KeyRound, ShieldCheck, FileSearch, Activity, Package, GitBranch, ScrollText,
-  Rocket, ShipWheel, ServerCog, Gauge,
+  ListTodo, Sparkles,
+  Moon, Sun, Monitor, X, LogOut, User, ChevronRight, Home,
+  KeyRound, ShieldCheck, FileSearch, ServerCog,
 } from 'lucide-react';
-import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
+import { useUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
@@ -18,70 +14,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
-import { InlineEdit } from '@/components/common';
+import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
-// ── Nav registry ──────────────────────────────────────────────────────────────
-// `/services` (통합 지식/SOP) 는 운영 기준 섹션에서 제거됨 — flyout 에서 보이지 않음.
-const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }>; iconColor?: string; iconSize?: string }> = {
-  '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
-  '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
-  '/k8s-manage':         { defaultLabel: 'K8S 상세 관리',  icon: ShipWheel, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
-  '/k8s-allocation':     { defaultLabel: 'K8S 자원 관리',  icon: Gauge, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
-  '/ops-checks':         { defaultLabel: '운영 점검',       icon: ShieldCheck },
-  '/k8s-logs':           { defaultLabel: '파드 로그',       icon: ScrollText },
-  '/daily-check/review': { defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
-  '/daily-check/settings':{ defaultLabel: '점검 항목 관리',  icon: Sparkles },
-  '/lake-services':      { defaultLabel: 'LAKE 서비스',     icon: Database },
-  '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
-  '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
-  '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
-  '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
-  '/todo-today':         { defaultLabel: 'Work To Do',     icon: CalendarCheck2 },
-  '/sprints':            { defaultLabel: '스프린트',        icon: Rocket },
-  '/members':            { defaultLabel: '멤버별 업무',    icon: Users },
-  '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },
-  '/versions':           { defaultLabel: '버전 / 설정',     icon: GitCommit },
-  '/bulk-exec':          { defaultLabel: '노드 일괄 실행', icon: Terminal },
-  '/etcdctl':            { defaultLabel: 'etcdctl 콘솔',   icon: Database },
-  '/batch-jobs':         { defaultLabel: 'Batch Jobs',     icon: ListTree },
-  '/mc':                 { defaultLabel: 'mc 클라이언트',  icon: HardDrive },
-  '/kernel-params':      { defaultLabel: '커널 파라미터',  icon: Cpu },
-  '/infra-topology':     { defaultLabel: '인프라 토폴로지', icon: Network },
-  '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
-  '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
-  '/node-labels':        { defaultLabel: '노드 라벨',      icon: Tags },
-  '/node-images':        { defaultLabel: '노드 이미지',    icon: Boxes },
-  '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
-  '/incident-analysis':  { defaultLabel: 'K8s 로그 (분석·실시간)', icon: Zap },
-  '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
-  '/cilium-trace':       { defaultLabel: 'Cilium BPF Trace', icon: Waves },
-  '/service-topology':   { defaultLabel: '서비스 토폴로지', icon: Workflow },
-  '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
-  '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
-  '/work-guides':        { defaultLabel: '표준 작업 가이드', icon: BookMarked },
-  '/commands':           { defaultLabel: '주요 명령어',     icon: TerminalSquare },
-  '/ops-notes':          { defaultLabel: '운영 노트보드',   icon: Layers },
-  '/wbs':                { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
-  '/mindmap':            { defaultLabel: '마인드맵',       icon: Map },
-  '/workflow':           { defaultLabel: '워크플로우',     icon: GitFork },
-  '/settings':           { defaultLabel: 'Settings',       icon: Settings },
-};
-
-// 사이드바 레일에 표시되는 그룹들
-type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'knowledge' | 'system';
-const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/ops-checks', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
-  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/node-labels', '/node-images', '/kernel-params', '/infra-topology'], modes: ['platform'] },
-  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
-  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
-  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
-  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs'], modes: ['work'] },
-  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/ops-notes', '/mindmap', '/ontology', '/trends', '/work-guides'], modes: ['work'] },
-  { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
-];
-
-const DEFAULT_TITLE = 'PEP';
+// 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
+// Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
 // default(Claude paper) → 라이트 → 다크 → 시스템 → default …
 const THEME_CYCLE: Record<Theme, Theme> = { default: 'light', light: 'dark', dark: 'system', system: 'default' };
 const THEME_LABEL: Record<Theme, string> = { default: '기본', light: '라이트', dark: '다크', system: '시스템' };
@@ -231,7 +167,6 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: settings } = useUiSettings();
-  const updateSettings = useUpdateUiSettings();
 
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.clear);
@@ -281,11 +216,7 @@ export function Sidebar() {
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editingNavPath, setEditingNavPath] = useState<string | null>(null);
 
-  const title = settings?.appTitle || DEFAULT_TITLE;
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
   const services = useServiceCatalog();
 
@@ -335,27 +266,13 @@ export function Sidebar() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpenGroup(null);
-        setEditMode(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const handleTitleSave = (val: string) => {
-    updateSettings.mutate({ appTitle: val || DEFAULT_TITLE, navLabels });
-    setIsEditingTitle(false);
-  };
-
-  const handleNavSave = (path: string, val: string) => {
-    const updated = { ...navLabels, [path]: val };
-    if (!val) delete updated[path];
-    updateSettings.mutate({ appTitle: title, navLabels: updated });
-    setEditingNavPath(null);
-  };
-
   const toggleGroup = (id: GroupId, rect?: DOMRect) => {
-    setEditMode(false);
     setOpenGroup((cur) => (cur === id ? null : id));
     if (rect) setOpenAnchor(rect);
   };
@@ -401,14 +318,6 @@ export function Sidebar() {
                 active={location.pathname === p} onSelect={close} />
             );
           })}
-          <button
-            type="button"
-            onClick={() => { close(); setEditMode(true); }}
-            className={`${FLYOUT_LINK_BASE} ${FLYOUT_LINK_INACTIVE} w-[calc(100%-12px)]`}
-          >
-            <Pencil className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1 text-left">메뉴 이름 편집</span>
-          </button>
         </div>
       );
     }
@@ -567,84 +476,6 @@ export function Sidebar() {
         </>
       )}
 
-      {/* 메뉴 이름 편집 오버레이 — 시스템 flyout 안의 버튼으로 진입 */}
-      {editMode && (
-        <>
-          <div
-            className="fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px]"
-            onClick={() => setEditMode(false)}
-            aria-hidden
-          />
-          <aside
-            style={{ left: NAV_WIDTH, width: 288 }}
-            className="fixed top-0 h-full bg-card border-r border-border shadow-2xl flex flex-col z-40"
-          >
-            <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-              <span className="text-sm font-semibold flex-1">메뉴 편집</span>
-              <button onClick={() => setEditMode(false)}
-                className="p-1 rounded hover:bg-secondary text-muted-foreground"
-                title="닫기">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="px-4 py-3 border-b border-border">
-              <p className="text-sm text-muted-foreground/70 mb-1 uppercase tracking-wider">앱 타이틀</p>
-              {isEditingTitle ? (
-                <InlineEdit value={title} onSave={handleTitleSave} onCancel={() => setIsEditingTitle(false)}
-                  inputClassName="text-sm font-semibold w-full px-1.5 py-0.5 bg-secondary border border-primary rounded" />
-              ) : (
-                <button onClick={() => setIsEditingTitle(true)}
-                  className="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-secondary text-left">
-                  <span className="font-semibold text-sm truncate">{title}</span>
-                  <Pencil className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                </button>
-              )}
-            </div>
-            <nav className="flex-1 py-2 px-2 overflow-y-auto">
-              {visibleGroups.map((g) => {
-                const paths = g.id === 'services'
-                  ? [...g.paths, ...servicePaths]
-                  : g.paths;
-                if (paths.length === 0) return null;
-                return (
-                  <div key={g.id} className="mb-3">
-                    <p className="px-2 py-1 text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
-                    <div className="space-y-0.5">
-                      {paths.map((path) => {
-                        const navItem = navMap[path];
-                        if (!navItem) return null;
-                        const { icon: Icon } = navItem;
-                        const itemLabel = getLabel(path);
-                        const isEditing = editingNavPath === path;
-                        if (isEditing) {
-                          return (
-                            <div key={path} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-secondary/50 border border-primary/30">
-                              <Icon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-                              <InlineEdit value={itemLabel} onSave={(v) => handleNavSave(path, v)} onCancel={() => setEditingNavPath(null)}
-                                className="flex-1 min-w-0" inputClassName="text-sm" />
-                            </div>
-                          );
-                        }
-                        return (
-                          <button key={path} onClick={() => setEditingNavPath(path)}
-                            className="group w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-secondary text-left text-sm">
-                            <Icon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-                            <span className="flex-1 min-w-0 truncate">{itemLabel}</span>
-                            <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </nav>
-            <div className="px-3 py-2 border-t border-border text-sm text-muted-foreground">
-              외부 클릭으로 닫기. 이름만 수정됩니다.
-            </div>
-          </aside>
-        </>
-      )}
     </>
   );
 }

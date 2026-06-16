@@ -25,3 +25,4 @@ export { SearchableSelect } from './SearchableSelect';
 export { NamespaceSingleSelect } from './NamespaceSingleSelect';
 export { PodSingleSelect } from './PodSingleSelect';
 export { LogViewTabs } from './LogViewTabs';
+export { ReactionBar } from './ReactionBar';

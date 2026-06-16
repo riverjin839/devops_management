@@ -57,8 +57,7 @@ import { UsersPage } from '@/pages/UsersPage';
 import { AuditLogsPage } from '@/pages/AuditLogsPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
-import { Sidebar } from '@/components/layout';
-import { NAV_WIDTH } from '@/stores/sidebarStore';
+import { Sidebar, PageStyleProvider } from '@/components/layout';
 import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
@@ -99,10 +98,8 @@ function AppShell() {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       {/* 업무 알람 종은 더 이상 전역 고정하지 않는다 — HomePage(업무 현황) 상단 스트립 우측에 배치. */}
-      <div
-        className="flex-1 min-w-0"
-        style={{ marginLeft: NAV_WIDTH }}
-      >
+      {/* PageStyleProvider — 본문 래퍼. 라우트별 "화면 UI 설정"(폰트/크기/색/배경) 적용. */}
+      <PageStyleProvider>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/cluster-overview" element={<Dashboard />} />
@@ -192,7 +189,7 @@ function AppShell() {
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-      </div>
+      </PageStyleProvider>
     </div>
   );
 }
