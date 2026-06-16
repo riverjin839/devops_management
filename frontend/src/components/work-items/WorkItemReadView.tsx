@@ -140,6 +140,21 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
         </div>
       )}
 
+      {item.jiraUrl && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Jira 링크</p>
+          <a
+            href={item.jiraUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline break-all"
+          >
+            <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate max-w-md">{item.jiraUrl}</span>
+          </a>
+        </div>
+      )}
+
       {images.length > 0 && (
         <div>
           <p className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">

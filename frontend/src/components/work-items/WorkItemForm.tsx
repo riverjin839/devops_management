@@ -161,6 +161,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
   const [confluenceUrl, setConfluenceUrl] = useState('');
+  const [jiraUrl, setJiraUrl] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
   const [showCatManage, setShowCatManage] = useState(false);
@@ -229,6 +230,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setPriority(initial.priority);
       setRemarks(initial.remarks ?? '');
       setConfluenceUrl(initial.confluenceUrl ?? '');
+      setJiraUrl(initial.jiraUrl ?? '');
       setImages(loadWorkItemImages(initial.id));
       setKanbanStatus(initial.kanbanStatus ?? 'todo');
       setModule((initial.module ?? '') as WorkItemModule | '');
@@ -341,6 +343,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       priority,
       remarks: remarks.trim() || undefined,
       confluenceUrl: confluenceUrl.trim() || undefined,
+      jiraUrl: jiraUrl.trim() || undefined,
       kanbanStatus,
       module: module || undefined,
       typeLabel: typeLabel || undefined,
@@ -775,14 +778,23 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         </details>
       )}
 
-      {/* ── Confluence 링크 — 업무 결과 바로 위, 한 줄 컴팩트 ──────────────── */}
-      <div className="max-w-xl">
+      {/* ── Confluence / Jira 링크 — 업무 결과 바로 위, 한 줄 컴팩트 ──────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl">
         <ConfluenceUrlInput
           id={f('confluenceUrl')}
           value={confluenceUrl}
           onChange={setConfluenceUrl}
           inline
           showHint={false}
+        />
+        <ConfluenceUrlInput
+          id={f('jiraUrl')}
+          label="Jira 링크"
+          value={jiraUrl}
+          onChange={setJiraUrl}
+          inline
+          showHint={false}
+          placeholder="https://jira.example.com/browse/..."
         />
       </div>
 
