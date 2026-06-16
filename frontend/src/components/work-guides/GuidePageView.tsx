@@ -3,6 +3,7 @@ import {
   ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
+import { ReactionBar } from '@/components/common';
 import type { WorkGuide } from '@/types';
 
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
@@ -130,6 +131,12 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
 
         <div className="min-h-[120px]">
           <RichContent content={guide.content ?? ''} />
+        </div>
+
+        {/* 공감(이모지 리액션) */}
+        <div className="mt-6 pt-4 border-t border-border flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">공감</span>
+          <ReactionBar targetType="work_guide" targetId={guide.id} />
         </div>
 
         {childPages.length > 0 && (

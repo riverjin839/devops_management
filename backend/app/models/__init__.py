@@ -13,6 +13,7 @@ from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
 from app.models.ops_note import OpsNote
+from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
 from app.models.infra_node import InfraNode
 from app.models.topology_audit_log import TopologyAuditLog
@@ -109,4 +110,5 @@ __all__ = [
     "ServiceTopologyExternalNode",
     "WorkItemTimeBlock",
     "UserJiraCredential",
+    "Reaction",
 ]

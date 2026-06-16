@@ -1654,4 +1654,18 @@ export const metricTrendApi = {
     api.put<{ enabled: boolean; cron: string; nextRun: string | null }>(`/metric-trend/schedule`, { enabled, cron }),
 };
 
+// ── Reactions API (이모지 공감 — ops_note / work_item_comment / work_guide 공통) ──
+export const reactionsApi = {
+  get: (targetType: string, targetId: string) =>
+    api.get<import('@/types').ReactionSummary>('/reactions', {
+      params: { target_type: targetType, target_id: targetId },
+    }),
+  toggle: (targetType: string, targetId: string, emoji: string) =>
+    api.post<import('@/types').ReactionSummary>('/reactions/toggle', { targetType, targetId, emoji }),
+  batch: (targetType: string, targetIds: string[]) =>
+    api.get<Record<string, import('@/types').ReactionSummary>>('/reactions/batch', {
+      params: { target_type: targetType, target_ids: targetIds.join(',') },
+    }),
+};
+
 export default api;
