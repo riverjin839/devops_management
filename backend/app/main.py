@@ -29,6 +29,7 @@ from app.routers import (
     workflows_router,
     work_guide_router,
     ops_note_router,
+    reactions_router,
     mindmap_router,
     management_server_router,
     infra_nodes_router,
@@ -1279,6 +1280,7 @@ app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(infra_nodes_router, prefix="/api/v1", dependencies=_auth)

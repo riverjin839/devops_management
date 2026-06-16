@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { MessageSquare, Send, Trash2, Loader2 } from 'lucide-react';
 import { useWorkItemComments, useAddWorkItemComment, useDeleteWorkItemComment } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
-import { useToast } from '@/components/common';
+import { useToast, ReactionBar } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 function fmt(t: string): string {
@@ -68,6 +68,7 @@ export function CommentThread({ workItemId }: { workItemId: string }) {
                 )}
               </div>
               <p className="text-sm whitespace-pre-wrap break-words">{c.body}</p>
+              <ReactionBar targetType="work_item_comment" targetId={c.id} className="mt-1.5" />
             </li>
           ))}
         </ul>

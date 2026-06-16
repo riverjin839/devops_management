@@ -2601,3 +2601,23 @@ export interface MetricChecklistItemT {
   sortOrder: number;
   params: Record<string, unknown>;
 }
+
+// ── 이모지 공감(리액션) — ops_note / work_item_comment / work_guide 공통 ──────────
+export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide';
+
+// 백엔드 REACTION_EMOJIS 와 동일 순서로 유지.
+export const REACTION_EMOJIS = ['👍', '❤️', '🎉', '✅', '👀', '🙏', '🔥', '😄'] as const;
+
+export interface ReactionGroup {
+  emoji: string;
+  count: number;
+  reacted: boolean;   // 현재 사용자가 눌렀는지
+  users: string[];    // 누른 사람 표시이름(툴팁용)
+}
+
+export interface ReactionSummary {
+  targetType: ReactionTargetType;
+  targetId: string;
+  total: number;
+  groups: ReactionGroup[];
+}
