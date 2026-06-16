@@ -1596,6 +1596,30 @@ export const k8sResourcesApi = {
     ),
 };
 
+// ── K8s 자원 관리 (allocation: request vs 사용량 slack) ──────────────────────
+export const k8sAllocationApi = {
+  nodes: (clusterId: string) =>
+    api.get<import('@/types').AllocNodesResponse>(
+      `/k8s/${clusterId}/allocation/nodes`,
+      { timeout: 120_000 },
+    ),
+  namespaces: (clusterId: string) =>
+    api.get<import('@/types').AllocNamespacesResponse>(
+      `/k8s/${clusterId}/allocation/namespaces`,
+      { timeout: 120_000 },
+    ),
+  workloads: (clusterId: string, namespace: string) =>
+    api.get<import('@/types').AllocWorkloadsResponse>(
+      `/k8s/${clusterId}/allocation/namespaces/${namespace}/workloads`,
+      { timeout: 120_000 },
+    ),
+  pods: (clusterId: string, namespace: string, kind: string, name: string) =>
+    api.get<import('@/types').AllocPodsResponse>(
+      `/k8s/${clusterId}/allocation/namespaces/${namespace}/workloads/${kind}/${name}/pods`,
+      { timeout: 120_000 },
+    ),
+};
+
 // ── Helm 릴리스 뷰어 (읽기 전용) ─────────────────────────────────────────────
 export const k8sHelmApi = {
   releases: (clusterId: string, namespace?: string) =>

@@ -49,6 +49,7 @@ from app.routers.projects import router as projects_router
 from app.routers.sprint import router as sprints_router
 from app.routers.ops_check import router as ops_check_router
 from app.routers.k8s_resources import router as k8s_resources_router
+from app.routers.k8s_allocation import router as k8s_allocation_router
 from app.routers.k8s_helm import router as k8s_helm_router
 from app.routers.k8s_exec import router as k8s_exec_router
 from app.routers.metric_trend import router as metric_trend_router
@@ -57,6 +58,7 @@ from app.routers.service_topology import router as service_topology_router
 __all__ = [
     "ops_check_router",
     "k8s_resources_router",
+    "k8s_allocation_router",
     "service_topology_router",
     "projects_router",
     "sprints_router",
