@@ -73,6 +73,24 @@ class BpfInspectResponse(BaseModel):
     executed: Optional[str] = None
 
 
+class CiliumExecRequest(BaseModel):
+    pod_name: Optional[str] = Field(default=None, description="대상 cilium agent pod. 비우면 첫 ready agent.")
+    namespace: str = Field(default="kube-system")
+    command_args: str = Field(..., description="cilium-dbg 뒤 인자 (예: 'ipam status', 'bpf endpoint list').")
+    timeout: int = Field(default=30, ge=5, le=120)
+
+
+class CiliumExecResponse(BaseModel):
+    cluster_id: UUID
+    pod_name: str = ""
+    command_args: str = ""
+    raw: str = ""
+    exit_code: Optional[int] = None
+    error: Optional[str] = None
+    executed: Optional[str] = None
+    duration_ms: int = 0
+
+
 # ── Cilium monitor stream (SSE) ─────────────────────────────────────────────
 
 class MonitorStreamParams(BaseModel):

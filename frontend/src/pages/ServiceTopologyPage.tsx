@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { analyzeApi } from '@/services/api';
-import { ClusterSidebar, DebugLogPanel, useToast } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, NamespaceSingleSelect, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   TopologyCanvas, Topology3D, NodeDetailPanel, ManualLinkDialog, AddExternalNodeDialog,
@@ -170,13 +170,14 @@ export function ServiceTopologyPage() {
               {/* namespace */}
               <div className="flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-muted-foreground" />
-                <select value={namespace} onChange={(e) => { setNamespace(e.target.value); setSelectedId(null); }}
-                  className="px-2 py-1 text-sm bg-background border border-border rounded-lg min-w-[140px]"
-                  disabled={nsQuery.isLoading}>
-                  {nsQuery.isLoading && <option>불러오는 중…</option>}
-                  {namespaces.map((ns) => <option key={ns} value={ns}>{ns}</option>)}
-                  {!nsQuery.isLoading && namespaces.length === 0 && <option value="default">default</option>}
-                </select>
+                <div className="min-w-[180px]">
+                  <NamespaceSingleSelect
+                    clusterId={clusterId}
+                    value={namespace}
+                    onChange={(ns) => { setNamespace(ns); setSelectedId(null); }}
+                    clearable={false}
+                  />
+                </div>
               </div>
 
               <button onClick={() => graphQuery.refetch()}

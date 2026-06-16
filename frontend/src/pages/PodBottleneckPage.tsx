@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, Play, AlertCircle, ListTree } from 'lucide-react';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -113,12 +113,22 @@ export function PodBottleneckPage() {
           {/* 진단 폼 */}
           <MacCard title="진단 폼">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <FormField label="Namespace *" value={namespace} onChange={setNamespace}
-                         placeholder="workbench" aria-label="namespace" />
-              <FormField label="Source Pod *" value={sourcePod} onChange={setSourcePod}
-                         placeholder="frontend-7f...-xyz" aria-label="source pod" mono />
-              <FormField label="Dest Pod *" value={destPod} onChange={setDestPod}
-                         placeholder="backend-5d...-abc" aria-label="dest pod" mono />
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-muted-foreground">Namespace *</span>
+                <NamespaceSingleSelect
+                  clusterId={selectedClusterId ?? ''}
+                  value={namespace}
+                  onChange={(ns) => { setNamespace(ns); setSourcePod(''); setDestPod(''); }}
+                />
+              </div>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-muted-foreground">Source Pod *</span>
+                <PodSingleSelect clusterId={selectedClusterId ?? ''} namespace={namespace} value={sourcePod} onChange={setSourcePod} />
+              </div>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-muted-foreground">Dest Pod *</span>
+                <PodSingleSelect clusterId={selectedClusterId ?? ''} namespace={namespace} value={destPod} onChange={setDestPod} />
+              </div>
               <FormField label="Dest Service (옵션 — endpoints probe)" value={destService}
                          onChange={setDestService} placeholder="backend"
                          aria-label="dest service" mono className="md:col-span-2" />

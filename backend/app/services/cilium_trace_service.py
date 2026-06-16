@@ -269,6 +269,67 @@ def bpf_inspect(
     }
 
 
+def exec_cilium_command(
+    kubeconfig_path: str,
+    *,
+    pod_name: Optional[str] = None,
+    namespace: str = "kube-system",
+    command_args: str = "",
+    timeout: int = 30,
+) -> dict:
+    """선택 pod 에서 임의 ``cilium-dbg <args>`` 실행(ad-hoc).
+
+    shell=False + ``cilium-dbg`` 고정 prefix → 임의 바이너리 실행 불가(주입 방지). JSON 파싱 없이 raw 반환.
+    """
+    raw_args = (command_args or "").strip()
+    if not raw_args:
+        return {"raw": "", "error": "명령이 비어 있습니다.", "exit_code": None,
+                "executed": None, "pod_name": pod_name or "", "duration_ms": 0}
+    try:
+        parts = shlex.split(raw_args)
+    except ValueError as e:
+        return {"raw": "", "error": f"명령 파싱 오류: {e}", "exit_code": None,
+                "executed": None, "pod_name": pod_name or "", "duration_ms": 0}
+    if parts and parts[0] in ("cilium-dbg", "cilium"):
+        parts = parts[1:]  # 사용자가 prefix 를 붙였으면 제거(우리가 고정 추가)
+    if not parts:
+        return {"raw": "", "error": "cilium-dbg 뒤에 실행할 하위 명령이 필요합니다 (예: ipam status).",
+                "exit_code": None, "executed": None, "pod_name": pod_name or "", "duration_ms": 0}
+
+    target_pod = pod_name
+    if not target_pod:
+        agents, err = list_agents(kubeconfig_path, namespace=namespace)
+        if err:
+            return {"raw": "", "error": err, "exit_code": None, "executed": None, "pod_name": "", "duration_ms": 0}
+        ready = next((a for a in agents if a.ready), None)
+        if not ready:
+            return {"raw": "", "error": "Ready 상태인 cilium agent pod 가 없습니다.",
+                    "exit_code": None, "executed": None, "pod_name": "", "duration_ms": 0}
+        target_pod = ready.pod_name
+
+    cmd = _kubectl_base(kubeconfig_path) + [
+        "-n", namespace, "exec", target_pod, "--", "cilium-dbg", *parts,
+    ]
+    t0 = time.time()
+    proc = _run(cmd, timeout=timeout)
+    dur = int((time.time() - t0) * 1000)
+    executed = " ".join(shlex.quote(a) for a in cmd)
+    if not proc:
+        return {"raw": "", "error": "kubectl exec 실행 실패", "exit_code": None,
+                "executed": executed, "pod_name": target_pod, "duration_ms": dur}
+    out = proc.stdout or ""
+    if proc.returncode != 0 and proc.stderr:
+        out = (out + ("\n" if out else "") + "[stderr] " + proc.stderr).strip()
+    return {
+        "raw": out,
+        "exit_code": proc.returncode,
+        "error": (proc.stderr or "").strip()[:400] if proc.returncode != 0 else None,
+        "executed": executed,
+        "pod_name": target_pod,
+        "duration_ms": dur,
+    }
+
+
 def _run(cmd: list[str], timeout: int) -> Optional[subprocess.CompletedProcess]:
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)

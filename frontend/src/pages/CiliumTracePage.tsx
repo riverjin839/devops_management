@@ -12,6 +12,7 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Save,
   Server,
   Trash2,
   Waves,
@@ -20,10 +21,12 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, SearchableSelect } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
+import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
 import api from '@/services/api';
+import { useCommands, useCreateCommand } from '@/hooks/useCommands';
 import { useAnalyzeNamespaces, useAnalyzePods } from '@/hooks/useIncidentAnalysis';
 
 // ── Types (kept inline; this is the only consumer) ──────────────────────────
@@ -47,6 +50,11 @@ interface CiliumAgentsResponse {
   clusterId: string;
   agents: CiliumAgent[];
   error?: string | null;
+}
+
+/** SearchableSelect 옵션 라벨 — podName + node 로 호스트 번호 검색이 되게. */
+function agentLabel(a: CiliumAgent): string {
+  return `${a.podName}${a.nodeName ? ` · ${a.nodeName}` : ''}${a.ready ? '' : ' (NotReady)'}`;
 }
 type BpfKind =
   | 'endpoint' | 'lb' | 'nat' | 'ct' | 'tunnel'
@@ -90,7 +98,25 @@ const ciliumApi = {
       namespace: body.namespace ?? 'kube-system',
       endpoint_id: body.endpointId,
     }).then((r) => r.data),
+  execCommand: (clusterId: string, body: { podName?: string; namespace?: string; commandArgs: string; timeout?: number }) =>
+    api.post<CiliumExecResponse>(`/cilium/${clusterId}/exec-command`, {
+      pod_name: body.podName,
+      namespace: body.namespace ?? 'kube-system',
+      command_args: body.commandArgs,
+      timeout: body.timeout ?? 30,
+    }).then((r) => r.data),
 };
+
+interface CiliumExecResponse {
+  clusterId: string;
+  podName: string;
+  commandArgs: string;
+  raw: string;
+  exitCode: number | null;
+  error: string | null;
+  executed: string | null;
+  durationMs: number;
+}
 
 // ── SSE stream helper (fetch-based, supports Authorization header) ──────────
 interface SseStreamHandle {
@@ -329,6 +355,48 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ad-hoc 직접 명령 + 프리셋
+  const [adhoc, setAdhoc] = useState('');
+  const [adhocOut, setAdhocOut] = useState<string | null>(null);
+  const [adhocErr, setAdhocErr] = useState<string | null>(null);
+  const [adhocBusy, setAdhocBusy] = useState(false);
+  const { data: presetsResp } = useCommands({ category: 'cilium' });
+  const createCmd = useCreateCommand();
+  const presets = presetsResp?.data ?? [];
+
+  const runAdhoc = useCallback(async () => {
+    if (!clusterId || !adhoc.trim()) return;
+    setAdhocBusy(true); setAdhocErr(null); setAdhocOut(null);
+    try {
+      const res = await ciliumApi.execCommand(clusterId, { commandArgs: adhoc.trim(), podName: podName || undefined });
+      setAdhocOut(res.raw || '(출력 없음)');
+      if (res.error) setAdhocErr(res.error);
+    } catch (e) {
+      setAdhocErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAdhocBusy(false);
+    }
+  }, [clusterId, adhoc, podName]);
+
+  const savePreset = useCallback(async () => {
+    const cmd = adhoc.trim();
+    if (!cmd) return;
+    const desc = window.prompt('프리셋 설명(라벨)을 입력하세요', cmd);
+    if (desc == null) return;
+    try {
+      await createCmd.mutateAsync({
+        category: 'cilium',
+        command: cmd.startsWith('cilium-dbg') ? cmd : `cilium-dbg ${cmd}`,
+        description: desc || cmd,
+        importance: 'medium',
+        tags: 'cilium,bpf',
+      });
+      window.alert('프리셋으로 저장했습니다.');
+    } catch (e) {
+      window.alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [adhoc, createCmd]);
+
   useEffect(() => {
     if (!podName && readyAgents.length > 0) setPodName(readyAgents[0].podName);
   }, [readyAgents, podName]);
@@ -381,18 +449,18 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           </div>
           <div className="flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5 text-muted-foreground" />
-            <select
+            <SearchableSelect
               value={podName}
-              onChange={(e) => setPodName(e.target.value)}
-              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[260px]"
-            >
-              <option value="">자동 (첫 번째 ready agent)</option>
-              {agents.map((a) => (
-                <option key={a.podName} value={a.podName} disabled={!a.ready}>
-                  {a.podName} {a.nodeName ? `· ${a.nodeName}` : ''} {a.ready ? '' : '(NotReady)'}
-                </option>
-              ))}
-            </select>
+              onChange={setPodName}
+              options={agents}
+              getKey={(a) => a.podName}
+              getLabel={agentLabel}
+              placeholder="agent pod 검색 (호스트 번호 등)"
+              emptyText="agent 없음"
+              clearable={false}
+              menuPortal
+              className="w-[280px]"
+            />
           </div>
           {kind === 'policy' && (
             <input
@@ -423,6 +491,62 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           </span>
         </div>
       </MacCard>
+
+      {/* 직접 명령(ad-hoc) — 목록에 없는 cilium-dbg 명령 실행 + 프리셋 저장 */}
+      <RoleGate allow={['admin', 'operator']}>
+        <MacCard title="직접 명령 (cilium-dbg)" bodyPadding="p-3">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {presets.length > 0 && (
+                <select
+                  value=""
+                  onChange={(e) => { if (e.target.value) setAdhoc(e.target.value); }}
+                  className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 max-w-[280px]"
+                >
+                  <option value="">저장된 프리셋…</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={(p.command || '').replace(/^cilium-dbg\s+/, '')}>
+                      {p.description || p.command}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <span className="text-sm font-mono text-muted-foreground">cilium-dbg</span>
+              <input
+                value={adhoc}
+                onChange={(e) => setAdhoc(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') runAdhoc(); }}
+                placeholder="예: ipam status  ·  bpf endpoint list  ·  status --verbose"
+                className="flex-1 min-w-[220px] text-sm font-mono bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+              <button
+                onClick={runAdhoc}
+                disabled={adhocBusy || !adhoc.trim()}
+                className="px-3.5 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+              >
+                <Play className="w-3.5 h-3.5" />{adhocBusy ? '실행 중…' : '실행'}
+              </button>
+              <button
+                onClick={savePreset}
+                disabled={!adhoc.trim()}
+                className="px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl flex items-center gap-1.5 disabled:opacity-50"
+                title="현재 명령을 프리셋으로 저장(주요 명령어 · category=cilium)"
+              >
+                <Save className="w-3.5 h-3.5" /> 프리셋 저장
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              선택한 agent pod 에서 <code>cilium-dbg &lt;입력&gt;</code> 실행(operator). 임의 바이너리 불가, 실행은 감사 로그에 기록됩니다.
+            </p>
+            {adhocErr && (
+              <div className="px-3 py-2 rounded-lg bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300 break-all">{adhocErr}</div>
+            )}
+            {adhocOut != null && (
+              <pre className="rounded-xl border border-border bg-background p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-[40vh] overflow-auto">{adhocOut}</pre>
+            )}
+          </div>
+        </MacCard>
+      </RoleGate>
 
       {/* Result */}
       <MacCard
@@ -603,18 +727,19 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5 text-muted-foreground" />
-            <select
+            <SearchableSelect
               value={podName}
-              onChange={(e) => setPodName(e.target.value)}
+              onChange={setPodName}
+              options={agents}
+              getKey={(a) => a.podName}
+              getLabel={agentLabel}
+              placeholder="agent pod 검색 (호스트 번호 등)"
+              emptyText="agent 없음"
+              clearable={false}
               disabled={running}
-              className="text-sm bg-background border border-border rounded-xl px-2.5 py-1.5 min-w-[260px] focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-            >
-              {agents.map((a) => (
-                <option key={a.podName} value={a.podName} disabled={!a.ready}>
-                  {a.podName} {a.nodeName ? `· ${a.nodeName}` : ''} {a.ready ? '' : '(NotReady)'}
-                </option>
-              ))}
-            </select>
+              menuPortal
+              className="w-[280px]"
+            />
           </div>
           <TypeFilter types={types} setTypes={setTypes} disabled={running} />
           <input

@@ -4,10 +4,8 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Play, Square, Trash2, ScrollText, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { LogViewTabs } from '@/components/common';
+import { LogViewTabs, NamespaceSingleSelect, PodSingleSelect } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
-import { useQuery } from '@tanstack/react-query';
-import { analyzeApi } from '@/services/api';
 import { getAuthToken } from '@/stores/authStore';
 
 const MAX_LINES = 5000; // 브라우저 보호 — 최근 N줄만 유지
@@ -65,20 +63,6 @@ export function K8sLogsPage() {
   const [err, setErr] = useState('');
   const handleRef = useRef<SseHandle | null>(null);
   const scrollRef = useRef<HTMLPreElement | null>(null);
-
-  const { data: nsData } = useQuery({
-    queryKey: ['k8slogs-ns', clusterId],
-    queryFn: async () => (await analyzeApi.listNamespaces(clusterId)).data,
-    enabled: !!clusterId,
-  });
-  const { data: podData } = useQuery({
-    queryKey: ['k8slogs-pods', clusterId, namespace],
-    queryFn: async () => (await analyzeApi.listPods(clusterId, namespace)).data,
-    enabled: !!clusterId && !!namespace,
-  });
-
-  const namespaces = nsData?.namespaces ?? [];
-  const pods = podData?.pods ?? [];
 
   const stop = useCallback(() => {
     handleRef.current?.abort();
@@ -149,33 +133,27 @@ export function K8sLogsPage() {
           <MacCard title="로그 스트림" bodyPadding="p-4">
             {/* 선택 컨트롤 */}
             <div className="flex items-end gap-2 flex-wrap mb-3">
-              <label className="flex flex-col gap-1 text-sm">
+              <div className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">네임스페이스</span>
-                <select
-                  value={namespace}
-                  onChange={(e) => { setNamespace(e.target.value); setPod(''); }}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-sm min-w-[160px]"
-                >
-                  <option value="">선택…</option>
-                  {namespaces.map((n) => (
-                    <option key={n.name} value={n.name}>{n.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
+                <div className="min-w-[200px]">
+                  <NamespaceSingleSelect
+                    clusterId={clusterId}
+                    value={namespace}
+                    onChange={(ns) => { setNamespace(ns); setPod(''); }}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">파드</span>
-                <select
-                  value={pod}
-                  onChange={(e) => setPod(e.target.value)}
-                  disabled={!namespace}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-sm min-w-[220px] disabled:opacity-50"
-                >
-                  <option value="">선택…</option>
-                  {pods.map((p) => (
-                    <option key={p.name} value={p.name}>{p.name}{p.hasIssue ? ' ⚠' : ''}</option>
-                  ))}
-                </select>
-              </label>
+                <div className="min-w-[240px]">
+                  <PodSingleSelect
+                    clusterId={clusterId}
+                    namespace={namespace}
+                    value={pod}
+                    onChange={setPod}
+                  />
+                </div>
+              </div>
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">컨테이너(선택)</span>
                 <input
