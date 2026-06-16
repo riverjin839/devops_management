@@ -560,6 +560,7 @@ export interface WorkItemCreate {
   service?: string;
   component?: string;
   confluenceUrl?: string;
+  jiraUrl?: string;
   priority?: string;
   kanbanStatus?: KanbanStatus;
   module?: WorkItemModule;

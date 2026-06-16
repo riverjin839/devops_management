@@ -45,6 +45,7 @@ class WorkItemBase(BaseModel):
     # Phase B — service 하위 component (예: k8s→api-server). frontend COMPONENT_BY_SERVICE 추천.
     component: Optional[str] = Field(None, max_length=64)
     confluence_url: Optional[str] = Field(None, max_length=2048)
+    jira_url: Optional[str] = Field(None, max_length=2048)
 
     # Issue 전용
     detail_content: Optional[str] = None
@@ -86,6 +87,7 @@ class WorkItemUpdate(BaseModel):
     service: Optional[str] = Field(None, max_length=64)
     component: Optional[str] = Field(None, max_length=64)
     confluence_url: Optional[str] = Field(None, max_length=2048)
+    jira_url: Optional[str] = Field(None, max_length=2048)
     detail_content: Optional[str] = None
     priority: Optional[Priority] = None
     kanban_status: Optional[KanbanStatus] = None
@@ -123,9 +125,9 @@ class WorkItemResponse(WorkItemBase):
     id: UUID
     cluster_names: Optional[list[str]] = None   # cluster_ids 와 1:1 표시용 이름
     created_by: Optional[str] = None   # 등록자 username (구버전 데이터는 null)
-    # Jira 연동 (읽기 전용 — 가져오기로만 세팅)
+    # Jira 연동 — jira_url 은 WorkItemBase 에 있어 수동 입력/가져오기 모두 가능.
+    # 나머지(issue_key/status/synced_at/watchers)는 가져오기로만 세팅되는 읽기 전용.
     jira_issue_key: Optional[str] = None
-    jira_url: Optional[str] = None
     jira_status: Optional[str] = None
     jira_synced_at: Optional[datetime] = None
     jira_watchers: Optional[list[str]] = None
