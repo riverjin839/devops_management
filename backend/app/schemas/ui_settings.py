@@ -30,11 +30,27 @@ class HomeIcons(BaseModel):
     platform: str | None = None
 
 
+class PageStyle(BaseModel):
+    """페이지(라우트)별 화면 스타일 오버라이드. 모든 필드 optional —
+    설정된 것만 적용되고 나머지는 전체 기본(__default__) → 테마 순으로 폴백.
+
+    - font_family: CSS font-family 값 (예: 'Georgia, serif'). 빈/None = 미지정.
+    - font_scale: 본문 영역 확대 배율 (0.8 ~ 1.5). 1 또는 None = 미지정.
+    - text_color / bg_color: hex (#RRGGBB). None = 미지정.
+    키 '__default__' 는 전 페이지 공통 기본값, 그 외는 라우트 경로('/path').
+    """
+    font_family: str | None = Field(default=None, max_length=255)
+    font_scale: float | None = Field(default=None, ge=0.5, le=2.0)
+    text_color: str | None = Field(default=None, max_length=32)
+    bg_color: str | None = Field(default=None, max_length=32)
+
+
 class UiSettingsResponse(BaseModel):
     app_title: str = "DEVOPS MANAGEMENT"
     nav_labels: dict[str, str] = Field(default_factory=dict)
     service_catalog: list[ServiceCatalogItem] | None = None
     home_icons: HomeIcons | None = None
+    page_styles: dict[str, PageStyle] | None = None
 
 
 class UiSettingsUpdate(BaseModel):
@@ -42,6 +58,7 @@ class UiSettingsUpdate(BaseModel):
     nav_labels: dict[str, str] | None = None
     service_catalog: list[ServiceCatalogItem] | None = None
     home_icons: HomeIcons | None = None
+    page_styles: dict[str, PageStyle] | None = None
 
 
 class ClusterLinkItem(BaseModel):

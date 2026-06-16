@@ -606,6 +606,21 @@ export interface UiSettings {
   /** 홈(좌상단) 버튼 아이콘 커스터마이즈 (모드별). 값 형식은 cluster icon 과 동일
    *  (lucide 이름 / 이모지 / base64 data URL). null/undefined 면 기본값(업무=ListTodo, 플랫폼=☸). */
   homeIcons?: HomeIcons;
+  /** 페이지(라우트)별 화면 스타일 오버라이드. 키 '__default__' 는 전 페이지 공통 기본값,
+   *  그 외는 라우트 경로('/path'). 설정된 필드만 적용되고 나머지는 default→테마 폴백. */
+  pageStyles?: Record<string, PageStyle>;
+}
+
+/** 페이지별 화면 스타일 오버라이드 — 모든 필드 optional. */
+export interface PageStyle {
+  /** CSS font-family 값 (예: 'Georgia, serif'). 미지정이면 테마 기본 폰트. */
+  fontFamily?: string;
+  /** 본문 영역 확대 배율 (0.8~1.5). 1/미지정이면 기본 크기. */
+  fontScale?: number;
+  /** 글자색 hex (#RRGGBB). */
+  textColor?: string;
+  /** 배경색 hex (#RRGGBB). */
+  bgColor?: string;
 }
 
 export interface HomeIcons {
