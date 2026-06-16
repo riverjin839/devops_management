@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck, Plus,
+  ClipboardList, CalendarCheck, Plus, Contrast,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { stripHtml } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
+import { stripHtml, cn } from '@/lib/utils';
 
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
@@ -104,6 +105,23 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
+
+  // ── 타임라인 색 반전 — 사용자별 설정(localStorage) ──
+  const currentUser = useAuthStore((s) => s.user);
+  const invertKey = `k8s:weekTimelineInvert:${currentUser?.username ?? 'guest'}`;
+  const [invert, setInvert] = useState<boolean>(() => {
+    try { return localStorage.getItem(invertKey) === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { setInvert(localStorage.getItem(invertKey) === '1'); } catch { /* noop */ }
+  }, [invertKey]);
+  const toggleInvert = () => {
+    setInvert((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(invertKey, next ? '1' : '0'); } catch { /* noop */ }
+      return next;
+    });
+  };
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -259,6 +277,20 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               <Users className="w-3 h-3" /> 담당자 기준
             </button>
           </div>
+          {/* 색 반전 토글 — 타임라인 카드 배경/글씨 색을 반전(사용자별 저장) */}
+          <button
+            type="button"
+            onClick={toggleInvert}
+            aria-pressed={invert}
+            title={invert ? '색 반전 끄기' : '색 반전 켜기'}
+            className={cn(
+              'flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors',
+              invert
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80',
+            )}>
+            <Contrast className="w-3 h-3" /> 색 반전
+          </button>
           {/* 단축키 — 업무 관리 / 오늘 할일 페이지로 바로 이동 */}
           <div className="flex items-center gap-1 text-xs">
             <button
@@ -292,7 +324,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
 
 
       {/* ── timeline grid ───────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
+      <div className={cn('rounded-2xl border border-border bg-card overflow-hidden mac-shadow', invert && 'timeline-color-invert')}>
         {/* header: weekday columns (월~금) — 주 이동은 양끝 화살표(월 옆 ◀ / 금 옆 ▶)로 한다 */}
         <div className="relative grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
           <div className="px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center justify-between gap-1">

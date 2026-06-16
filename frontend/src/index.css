@@ -764,17 +764,13 @@ html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .week-slider:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
 .week-slider:focus-visible::-webkit-slider-thumb { outline: 2px solid hsl(var(--primary) / 0.4); outline-offset: 2px; }
 
-/* 색 반전 모드 — 어두운 strip 위에서도 track/thumb 이 또렷하게 보이도록. */
-.week-slider-invert::-webkit-slider-runnable-track {
-  background: hsl(var(--background) / 0.22);
-  border-color: hsl(var(--background) / 0.4);
+/* ── 주간 타임라인 색 반전(색반전 토글) ──────────────────────────────────────────
+   업무 현황 홈 "담당자별 진행 현황" 타임라인 카드에만 적용. 현재 테마(라이트/다크)
+   기준으로 명도를 반전하고 hue-rotate 로 색상은 보존 → 배경/글씨가 또렷하게 반전된다.
+   (사용자별 토글, localStorage 저장.) */
+.timeline-color-invert {
+  filter: invert(1) hue-rotate(180deg);
 }
-.week-slider-invert::-moz-range-track {
-  background: hsl(var(--background) / 0.22);
-  border-color: hsl(var(--background) / 0.4);
-}
-.week-slider-invert::-webkit-slider-thumb { border-color: hsl(var(--foreground)); }
-.week-slider-invert::-moz-range-thumb { border-color: hsl(var(--foreground)); }
 
 /* ── 업무 현황 스케줄 배경 — 흰색(기본) / 크림(옵션) ──────────────────────────
    업무 현황 홈의 "당일 스케줄 · 담당자별 진행현황" 패널 surface 에만 적용.
