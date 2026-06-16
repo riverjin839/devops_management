@@ -200,6 +200,11 @@ function SummarySection({ clusterId }: { clusterId: string }) {
             <AlertTriangle className="w-3 h-3" /> request 미설정 파드 {fmtN(s.noRequestPods)}개
           </span>
         )}
+        {data.partial && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700 border border-amber-300">
+            <AlertTriangle className="w-3 h-3" /> 부분 집계 — 초대형 클러스터로 시간 예산 내 일부만 수집됨(드릴다운은 정확)
+          </span>
+        )}
         {data.podUsageSkipped && (
           <span className="text-xs text-muted-foreground">· 대규모 클러스터 — cluster 사용량 집계 생략(드릴다운에서 NS 단위 확인)</span>
         )}
