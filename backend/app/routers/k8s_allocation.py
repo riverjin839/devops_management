@@ -54,9 +54,12 @@ _MASTER_ROLE_KEYS = (
 # 타임아웃(502)을 유발하지 않도록 빨리 실패시킨다.
 _API_TIMEOUT = (3.05, 30)
 _METRICS_TIMEOUT = (3.05, 12)  # metrics-server 는 더 짧게 — 느리면 usage 생략(best-effort)
-_PAGE_LIMIT = 500              # 페이지네이션 페이지 크기
+_PAGE_LIMIT = 1000             # 페이지네이션 페이지 크기(round-trip 수 ↓)
 # cluster-wide pod usage(metrics) 는 활성 Pod 가 이 수 이하일 때만 시도(대규모 클러스터 보호).
 _POD_USAGE_MAX = 6000
+# 전체 스냅샷(전량 페이지네이션 포함) 총 벽시계 예산(초). ingress/proxy 타임아웃(보통 30~60s)
+# 보다 짧게 잡아, 초대형 클러스터에서도 502(프록시 타임아웃) 대신 partial 결과로 반드시 응답한다.
+_SNAPSHOT_BUDGET = 22.0
 
 # 비싼 집계 스냅샷에 대한 짧은 TTL 캐시(클러스터/네임스페이스 키별 격리).
 _CACHE_TTL = 20.0
@@ -75,10 +78,17 @@ def _cached(key: str, producer: Callable[[], Any]) -> Any:
 
 
 def _list_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
-              hard_cap: int = 200_000) -> list:
-    """`_continue` 페이지네이션으로 전량 수집. 각 페이지에 서버측 타임아웃 적용."""
+              hard_cap: int = 200_000, deadline: Optional[float] = None,
+              report: Optional[list] = None) -> list:
+    """`_continue` 페이지네이션으로 전량 수집. 각 페이지에 서버측 타임아웃 적용.
+
+    deadline(monotonic 시각) 지정 시 페이지 사이에서 예산을 초과하면 **수집을 중단**하고
+    지금까지 모은 항목만 반환한다(초대형 클러스터에서 프록시 502 대신 partial 응답).
+    중단/상한 도달 시 report(있으면)에 True 를 append 해 호출자가 partial 여부를 안다.
+    """
     items: list = []
     cont: Optional[str] = None
+    truncated = False
     while True:
         kw: dict[str, Any] = {"limit": _PAGE_LIMIT, "_request_timeout": _API_TIMEOUT}
         if field_selector:
@@ -88,8 +98,13 @@ def _list_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = No
         resp = list_fn(**kw)
         items.extend(resp.items or [])
         cont = getattr(resp.metadata, "_continue", None) if resp.metadata else None
-        if not cont or len(items) >= hard_cap:
+        if not cont:
             break
+        if len(items) >= hard_cap or (deadline is not None and time.monotonic() >= deadline):
+            truncated = True
+            break
+    if truncated and report is not None:
+        report.append(True)
     return items
 
 
@@ -378,11 +393,16 @@ def _build_overview(cluster, cid: str) -> dict:
     client = _api_client(cluster)
     core = k8s_client.CoreV1Api(client)
 
-    nodes = _list_all(lambda **kw: core.list_node(**kw))
+    # 전체 스냅샷 벽시계 예산 — 초과 시 Pod 전량 페이지네이션을 중단하고 partial 응답.
+    deadline = time.monotonic() + _SNAPSHOT_BUDGET
+    partial_flag: list = []
+
+    nodes = _list_all(lambda **kw: core.list_node(**kw), deadline=deadline)
     node_usage = _node_usage(client)
-    ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw)))
+    ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), deadline=deadline))
     pods = _list_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
-                     field_selector=_ACTIVE_FIELD_SELECTOR)
+                     field_selector=_ACTIVE_FIELD_SELECTOR,
+                     deadline=deadline, report=partial_flag)
 
     # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
     node_base: dict[str, dict] = {}
@@ -437,9 +457,10 @@ def _build_overview(cluster, cid: str) -> dict:
 
         pod_loc[(ns, p.metadata.name)] = (ns, node)
 
-    # cluster-wide pod usage — 대규모 클러스터에서는 생략(드릴다운에서 확인).
+    partial = bool(partial_flag)
+    # cluster-wide pod usage — 대규모/예산초과(partial) 클러스터에서는 생략(드릴다운에서 확인).
     metrics_available = False
-    pod_usage_skipped = len(pods) > _POD_USAGE_MAX
+    pod_usage_skipped = partial or len(pods) > _POD_USAGE_MAX
     if not pod_usage_skipped:
         pu = _pod_usage(client)
         if pu:
@@ -480,6 +501,7 @@ def _build_overview(cluster, cid: str) -> dict:
         },
         "metrics_available": metrics_available,
         "pod_usage_skipped": pod_usage_skipped,
+        "partial": partial,
     }
 
 
@@ -523,7 +545,8 @@ def allocation_nodes(cluster_id: UUID, db: Session = Depends(get_db)):
             cpu_lim_display=_fmt_cpu(ag["lc"]), mem_lim_display=_fmt_mem(ag["lm"]),
         ))
     rows.sort(key=lambda r: r.name)
-    return {"count": len(rows), "items": rows, "metrics_available": bool(node_usage)}
+    return {"count": len(rows), "items": rows, "metrics_available": bool(node_usage),
+            "partial": ov.get("partial", False)}
 
 
 @router.get("/{cluster_id}/allocation/namespaces")
@@ -553,6 +576,7 @@ def allocation_namespaces(cluster_id: UUID, db: Session = Depends(get_db)):
         "summary": AllocSummary(**ov["summary"]),
         "metrics_available": ov["metrics_available"],
         "pod_usage_skipped": ov["pod_usage_skipped"],
+        "partial": ov.get("partial", False),
     }
 
 

@@ -2609,7 +2609,7 @@ export interface AllocNodeRow {
   cpuLimDisplay: string;
   memLimDisplay: string;
 }
-export interface AllocNodesResponse { count: number; items: AllocNodeRow[]; metricsAvailable: boolean }
+export interface AllocNodesResponse { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
 
 export interface AllocSummary {
   nodeCount: number;
@@ -2648,6 +2648,7 @@ export interface AllocNamespacesResponse {
   summary: AllocSummary;
   metricsAvailable: boolean;
   podUsageSkipped: boolean;
+  partial?: boolean;
 }
 
 export interface AllocWorkloadRow {
