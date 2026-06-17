@@ -12,7 +12,7 @@ from app.models.work_item_custom_field import WorkItemCustomField
 from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
-from app.models.knowledge_page import KnowledgePage, KnowledgePageVersion
+from app.models.knowledge_page import KnowledgePage, KnowledgePageVersion, KnowledgePresence
 from app.models.ops_note import OpsNote
 from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
@@ -79,6 +79,7 @@ __all__ = [
     "WorkGuide",
     "KnowledgePage",
     "KnowledgePageVersion",
+    "KnowledgePresence",
     "OpsNote",
     "ManagementServer",
     "InfraNode",

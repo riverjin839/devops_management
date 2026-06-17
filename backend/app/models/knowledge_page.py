@@ -32,6 +32,8 @@ class KnowledgePage(Base):
     sort_order = Column(Integer, default=0)
     confluence_url = Column(Text, nullable=True)
     jira_url = Column(Text, nullable=True)
+    # 비파괴 가져오기 출처 — 예: "ops_note:{id}" / "work_guide:{id}" / "service_entry:{id}". 중복 방지용.
+    source_ref = Column(String(128), nullable=True, index=True)
     # 로드맵/일정(고도화) — P4 에서 활용. 미리 컬럼만 둔다.
     start_at = Column(DateTime, nullable=True)
     due_at = Column(DateTime, nullable=True)
@@ -62,3 +64,18 @@ class KnowledgePageVersion(Base):
 
     def __repr__(self) -> str:
         return f"<KnowledgePageVersion(page={self.page_id}, v={self.version_no})>"
+
+
+class KnowledgePresence(Base):
+    """경량 '편집 중' 표시 — 페이지를 열고 있는 사용자의 하트비트(last_seen).
+
+    실시간 CRDT 협업 대신, 폴링 기반으로 누가 같은 문서를 보고 있는지만 표시한다.
+    """
+
+    __tablename__ = "knowledge_presence"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    page_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    username = Column(String(64), nullable=False)
+    display_name = Column(String(128), nullable=True)
+    last_seen = Column(DateTime, default=datetime.utcnow, index=True)

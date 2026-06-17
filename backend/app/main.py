@@ -681,6 +681,11 @@ def _run_migrations():
         _safe_add_column("work_guides", "parent_id", "UUID")
         _safe_add_column("work_guides", "sort_order", "INTEGER NOT NULL DEFAULT 0")
 
+    # knowledge_pages: 비파괴 가져오기 출처 컬럼 (구버전 DB 호환). 테이블 자체는 create_all 이 생성.
+    if "knowledge_pages" in inspector.get_table_names():
+        _safe_add_column("knowledge_pages", "source_ref", "VARCHAR(128)")
+        _safe_create_index("ix_knowledge_pages_source_ref", "knowledge_pages", "(source_ref)")
+
     # confluence_url 컬럼 — 모든 작성형 엔티티 (tasks/issues/ops_notes/work_guides/
     # command_entries/workflows/mindmaps)에 공통으로 Confluence 문서 링크를 저장.
     # work_items 는 통합 후 명칭. tasks/issues 는 마이그레이션 이전 환경 호환.
