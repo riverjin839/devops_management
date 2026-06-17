@@ -2859,7 +2859,7 @@ export interface MetricChecklistItemT {
 }
 
 // ── 이모지 공감(리액션) — ops_note / work_item_comment / work_guide 공통 ──────────
-export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide';
+export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item';
 
 // 백엔드 REACTION_EMOJIS 와 동일 순서로 유지.
 export const REACTION_EMOJIS = ['👍', '❤️', '🎉', '✅', '👀', '🙏', '🔥', '😄'] as const;

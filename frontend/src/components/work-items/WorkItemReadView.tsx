@@ -4,6 +4,7 @@ import { stripHtml } from '@/lib/utils';
 import { loadWorkItemImages } from '@/lib/workItemImages';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { RichContent } from '@/components/editor';
+import { ReactionBar } from '@/components/common';
 import { CommentThread } from './CommentThread';
 import { ActivityTimeline } from './ActivityTimeline';
 import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
@@ -103,6 +104,12 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
       {/* 업무 내용 */}
       <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
         <RichContent content={item.content} />
+      </div>
+
+      {/* 공감(이모지 리액션) — 업무 글 본문 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">공감</span>
+        <ReactionBar targetType="work_item" targetId={item.id} />
       </div>
 
       {item.resolution && (
