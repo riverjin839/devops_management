@@ -832,6 +832,84 @@ export interface WorkGuideListResponse {
   data: WorkGuide[];
 }
 
+// ── Knowledge Base (서비스별 문서/노트 트리 + 버전 히스토리 + 공유) ──────────────
+export type KnowledgeKind = 'folder' | 'doc' | 'board' | 'roadmap';
+export type KnowledgeCategory = 'enhancement' | 'operation' | 'learning' | 'build' | string;
+export type KnowledgeVisibility = 'part' | 'private';
+
+export interface KnowledgePage {
+  id: string;
+  service?: string | null;       // SERVICE_CATALOG slug. null=공통
+  parentId?: string | null;
+  kind: KnowledgeKind;
+  category?: KnowledgeCategory | null;
+  title: string;
+  icon?: string | null;
+  content?: string | null;       // TipTap HTML
+  summary?: string | null;
+  tags?: string[] | null;
+  status: string;                // draft / active / archived
+  visibility: KnowledgeVisibility;
+  pinned: boolean;
+  sortOrder: number;
+  confluenceUrl?: string | null;
+  jiraUrl?: string | null;
+  startAt?: string | null;
+  dueAt?: string | null;
+  sprintId?: string | null;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 트리 응답 — children 중첩. */
+export interface KnowledgePageNode extends KnowledgePage {
+  children: KnowledgePageNode[];
+}
+
+export interface KnowledgePageCreate {
+  service?: string | null;
+  parentId?: string | null;
+  kind?: KnowledgeKind;
+  category?: KnowledgeCategory | null;
+  title: string;
+  icon?: string | null;
+  content?: string | null;
+  summary?: string | null;
+  tags?: string[] | null;
+  status?: string;
+  visibility?: KnowledgeVisibility;
+  pinned?: boolean;
+  sortOrder?: number;
+  confluenceUrl?: string | null;
+  jiraUrl?: string | null;
+}
+
+export interface KnowledgePageUpdate extends Partial<KnowledgePageCreate> {}
+
+export interface KnowledgePageVersion {
+  id: string;
+  pageId: string;
+  versionNo: number;
+  kind: 'auto' | 'milestone';
+  label?: string | null;
+  title?: string | null;
+  author?: string | null;
+  createdAt: string;
+  content?: string | null;   // detail 응답에만 포함
+}
+
+export interface KnowledgeTreeResponse {
+  data: KnowledgePageNode[];
+}
+export interface KnowledgePageListResponse {
+  data: KnowledgePage[];
+}
+export interface KnowledgeVersionListResponse {
+  data: KnowledgePageVersion[];
+}
+
 export interface ClusterLink {
   id: string;
   label: string;

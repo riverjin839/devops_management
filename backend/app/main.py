@@ -28,6 +28,7 @@ from app.routers import (
     ui_settings_router,
     workflows_router,
     work_guide_router,
+    knowledge_router,
     ops_note_router,
     reactions_router,
     mindmap_router,
@@ -1309,6 +1310,7 @@ app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(knowledge_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)

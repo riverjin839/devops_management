@@ -927,6 +927,36 @@ export const workGuidesApi = {
   delete: (id: string) => api.delete(`/work-guides/${id}`),
 };
 
+// Knowledge Base API (서비스별 문서/노트 트리 + 버전 히스토리 + 공유)
+export const knowledgeApi = {
+  tree: (service?: string) =>
+    api.get<import('@/types').KnowledgeTreeResponse>('/knowledge/pages/tree', {
+      params: service ? { service } : undefined,
+    }),
+  list: (params?: { service?: string; category?: string; kind?: string; q?: string }) =>
+    api.get<import('@/types').KnowledgePageListResponse>('/knowledge/pages', {
+      params: params
+        ? Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''))
+        : undefined,
+    }),
+  get: (id: string) => api.get<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`),
+  create: (data: import('@/types').KnowledgePageCreate) =>
+    api.post<import('@/types').KnowledgePage>('/knowledge/pages', data),
+  update: (id: string, data: import('@/types').KnowledgePageUpdate) =>
+    api.put<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`, data),
+  move: (id: string, data: { parentId?: string | null; sortOrder: number }) =>
+    api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/move`, data),
+  remove: (id: string) => api.delete(`/knowledge/pages/${id}`),
+  versions: (id: string) =>
+    api.get<import('@/types').KnowledgeVersionListResponse>(`/knowledge/pages/${id}/versions`),
+  getVersion: (versionId: string) =>
+    api.get<import('@/types').KnowledgePageVersion>(`/knowledge/versions/${versionId}`),
+  saveMilestone: (id: string, label: string) =>
+    api.post<import('@/types').KnowledgePageVersion>(`/knowledge/pages/${id}/versions`, { label }),
+  restore: (id: string, versionId: string) =>
+    api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/restore/${versionId}`),
+};
+
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
 export const commandsApi = {
   list: (params?: { category?: string; importance?: string; q?: string }) =>

@@ -24,6 +24,7 @@ import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
+import { KnowledgeBasePage } from '@/pages/KnowledgeBasePage';
 import { CommandsPage } from '@/pages/CommandsPage';
 import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -184,6 +185,8 @@ function AppShell() {
               <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
               <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
+              <Route path="/knowledge" element={<KnowledgeBasePage />} />
+              <Route path="/knowledge/:id" element={<KnowledgeBasePage />} />
               <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
               <Route path="/settings/audit-logs" element={<RequireAdmin><AuditLogsPage /></RequireAdmin>} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
