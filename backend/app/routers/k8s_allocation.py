@@ -36,6 +36,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.routers.k8s_resources import _api_client, _require_cluster
+from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.snapshot_jobs import Progress, SnapshotManager
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -414,22 +416,29 @@ class PodAllocRow(BaseModel):
 
 
 # ── 공유 스냅샷 (노드 + 네임스페이스 집계) ──────────────────────────────────────────
-def _build_overview(cluster, cid: str) -> dict:
+def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> dict:
     """단일 Pod 순회로 노드/네임스페이스 집계를 모두 계산. 결과는 작은 숫자 dict 만 캐시.
 
     반환: {node_base, per_node, node_usage, per_ns, summary, ns_total,
            metrics_available, pod_usage_skipped}
+
+    백그라운드 스냅샷 매니저에서 호출되므로 게이트웨이 타임아웃과 무관 — **전수 집계를
+    끝까지 수행**해 무결성을 보장한다. progress 가 주어지면 Pod 처리량을 보고한다.
     """
     client = _api_client(cluster)
     core = k8s_client.CoreV1Api(client)
 
-    # 전체 스냅샷 벽시계 예산 — 초과 시 Pod 전량 페이지네이션을 중단하고 partial 응답.
-    deadline = time.monotonic() + _SNAPSHOT_BUDGET
+    # 백그라운드 실행이므로 시간 예산으로 자르지 않는다(무결성). 폭주 방지용 hard_cap 만 유지.
+    deadline = None
     partial_flag: list = []
 
     nodes = _list_all(lambda **kw: core.list_node(**kw), deadline=deadline)
+    if progress is not None:
+        progress.phase = "nodes"
     node_usage = _node_usage(client)
     ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), deadline=deadline))
+    if progress is not None:
+        progress.phase = "pods"
 
     # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
     node_base: dict[str, dict] = {}
@@ -456,6 +465,8 @@ def _build_overview(cluster, cid: str) -> dict:
     for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
                        field_selector=_ACTIVE_FIELD_SELECTOR,
                        deadline=deadline, report=partial_flag):
+        if progress is not None:
+            progress.processed += 1
         if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
             continue
         ns = p.metadata.namespace
@@ -543,22 +554,47 @@ def _build_overview(cluster, cid: str) -> dict:
     }
 
 
-def _overview(cluster_id: UUID, db: Session) -> dict:
+# 비싼 overview 집계는 백그라운드 스냅샷 매니저로 수행(요청 스레드 비블로킹 → 502 방지).
+_overview_mgr = SnapshotManager(ttl=_CACHE_TTL)
+
+
+def _overview_view(cluster_id: UUID, db: Session) -> dict:
+    """매니저 뷰 반환: {status, progress, processed, total, data(overview|None), stale, error}."""
     cluster = _require_cluster(cluster_id, db)
     cid = str(cluster_id)
+    # kubeconfig 파일을 요청 스레드에서 미리 구체화(백그라운드 스레드의 detached 인스턴스 접근 회피).
     try:
-        return _cached(f"{cid}:overview", lambda: _build_overview(cluster, cid))
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"자원 집계 실패: {str(e)[:200]}") from e
+        ensure_kubeconfig_file(cluster)
+    except Exception:  # noqa: BLE001
+        pass
+    return _overview_mgr.get(
+        f"{cid}:overview",
+        lambda prog: _build_overview(cluster, cid, prog),
+    )
 
 
 # ── 엔드포인트 ───────────────────────────────────────────────────────────────────
+def _alloc_meta(view: dict) -> dict:
+    """집계 진행 상태 메타(프론트 진행률 표시·폴링 제어용)."""
+    return {
+        "status": view["status"],         # computing | ready | error
+        "progress": view["progress"],     # 0..1 또는 null(불확정)
+        "processed": view["processed"],
+        "total": view["total"],
+        "stale": view["stale"],
+    }
+
+
 @router.get("/{cluster_id}/allocation/nodes")
 def allocation_nodes(cluster_id: UUID, db: Session = Depends(get_db)):
     """노드별 allocatable/capacity vs usage vs request/limit + slack. (요구 1·2)"""
-    ov = _overview(cluster_id, db)
+    view = _overview_view(cluster_id, db)
+    ov = view["data"]
+    if ov is None:
+        if view["status"] == "error":
+            raise HTTPException(status_code=502, detail=f"자원 집계 실패: {view['error']}")
+        return {"count": 0, "items": [], "metrics_available": False,
+                "partial": False, **_alloc_meta(view)}
     node_base = ov["node_base"]
     per_node = ov["per_node"]
     node_usage = ov["node_usage"]
@@ -584,13 +620,20 @@ def allocation_nodes(cluster_id: UUID, db: Session = Depends(get_db)):
         ))
     rows.sort(key=lambda r: r.name)
     return {"count": len(rows), "items": rows, "metrics_available": bool(node_usage),
-            "partial": ov.get("partial", False)}
+            "partial": ov.get("partial", False), **_alloc_meta(view)}
 
 
 @router.get("/{cluster_id}/allocation/namespaces")
 def allocation_namespaces(cluster_id: UUID, db: Session = Depends(get_db)):
     """네임스페이스별 request/limit/usage 총합 + 클러스터 summary. (요구 3)"""
-    ov = _overview(cluster_id, db)
+    view = _overview_view(cluster_id, db)
+    ov = view["data"]
+    if ov is None:
+        if view["status"] == "error":
+            raise HTTPException(status_code=502, detail=f"자원 집계 실패: {view['error']}")
+        return {"count": 0, "items": [], "summary": AllocSummary().model_dump(),
+                "metrics_available": False, "pod_usage_skipped": False,
+                "partial": False, **_alloc_meta(view)}
     per_ns = ov["per_ns"]
 
     rows: list[NamespaceAllocRow] = []
@@ -615,6 +658,7 @@ def allocation_namespaces(cluster_id: UUID, db: Session = Depends(get_db)):
         "metrics_available": ov["metrics_available"],
         "pod_usage_skipped": ov["pod_usage_skipped"],
         "partial": ov.get("partial", False),
+        **_alloc_meta(view),
     }
 
 
