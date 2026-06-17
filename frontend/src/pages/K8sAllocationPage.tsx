@@ -376,18 +376,27 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
     if (reqCpuM <= 0 && reqMemB <= 0) return null;
     const nodes = (data?.items ?? []).filter((n) => !n.unschedulable);
     let total = 0;
-    const per: { name: string; fit: number }[] = [];
+    const per: { name: string; fit: number; limit: 'cpu' | 'mem' | 'pods' }[] = [];
     for (const n of nodes) {
       const freeCpu = Math.max(0, n.cpuAllocM - n.cpuReqM);
       const freeMem = Math.max(0, n.memAllocB - n.memReqB);
+      // max-pods(allocatable pods) 제약 — 0이면 미상 → 비제약
+      const podsFree = n.podsAllocatable > 0 ? Math.max(0, n.podsAllocatable - n.podCount) : Infinity;
       const byCpu = reqCpuM > 0 ? Math.floor(freeCpu / reqCpuM) : Infinity;
       const byMem = reqMemB > 0 ? Math.floor(freeMem / reqMemB) : Infinity;
-      const fit = Math.min(byCpu, byMem);
-      if (Number.isFinite(fit) && fit > 0) { total += fit; per.push({ name: n.name, fit }); }
+      const fit = Math.min(byCpu, byMem, podsFree);
+      if (Number.isFinite(fit) && fit > 0) {
+        // 어떤 축이 한도를 정했는지(동률이면 pods>cpu>mem 순으로 표기)
+        const limit: 'cpu' | 'mem' | 'pods' = podsFree === fit ? 'pods' : byCpu === fit ? 'cpu' : 'mem';
+        total += fit;
+        per.push({ name: n.name, fit, limit });
+      }
     }
     per.sort((a, b) => b.fit - a.fit);
-    return { total, top: per.slice(0, 3), nodeCount: nodes.length };
+    return { total, per, nodeCount: nodes.length };
   }, [data, cpu, mem]);
+
+  const LIMIT_LABEL: Record<'cpu' | 'mem' | 'pods', string> = { cpu: 'CPU', mem: 'MEM', pods: 'max-pods' };
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm border-t border-border pt-2">
@@ -406,10 +415,31 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
       </label>
       {result ? (
         <>
-          <span className="font-semibold tabular-nums text-sky-600">≈ {fmtN(result.total)}개</span>
+          {/* 결과 + 마우스오버 시 배치 가능 노드 박스 */}
+          <span className="relative group cursor-help">
+            <span className="font-semibold tabular-nums text-sky-600 underline decoration-dotted">≈ {fmtN(result.total)}개</span>
+            {result.per.length > 0 && (
+              <div data-export-ignore
+                className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 w-72 max-h-72 overflow-auto
+                  rounded-lg border border-border bg-card shadow-lg p-2 text-xs">
+                <div className="text-muted-foreground mb-1">배치 가능 노드 (alloc−req · max-pods 기준)</div>
+                {result.per.slice(0, 30).map((p) => (
+                  <div key={p.name} className="flex items-center justify-between gap-2 py-0.5">
+                    <span className="font-mono truncate" title={p.name}>{p.name}</span>
+                    <span className="shrink-0 tabular-nums">
+                      <b className="text-sky-600">{p.fit}</b>
+                      <span className="ml-1 text-muted-foreground">제약:{LIMIT_LABEL[p.limit]}</span>
+                    </span>
+                  </div>
+                ))}
+                {result.per.length > 30 && (
+                  <div className="text-muted-foreground pt-1">+{result.per.length - 30}개 노드 더…</div>
+                )}
+              </div>
+            )}
+          </span>
           <span className="text-xs text-muted-foreground">
-            ({result.nodeCount} schedulable 노드 · alloc−req 기준
-            {result.top.length ? ` · 상위 ${result.top.map((t) => `${t.name}:${t.fit}`).join(', ')}` : ''})
+            (schedulable 노드 {result.per.length}/{result.nodeCount} · CPU/MEM/max-pods 반영 · 마우스오버로 노드별 보기)
           </span>
         </>
       ) : (
