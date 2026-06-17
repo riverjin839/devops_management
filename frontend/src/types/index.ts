@@ -2949,6 +2949,21 @@ export interface CorootDeepLink {
   detail?: string;
 }
 
+// 서비스별 trace 드릴다운 — application 목록 + 항목.
+export interface CorootApplication {
+  id: string;                 // coroot 'ns:Kind:name'
+  name: string;
+  namespace: string | null;
+  kind: string | null;
+  status: string | null;      // ok / warning / critical 등 (소문자)
+}
+
+export interface CorootApplicationsResponse {
+  status: 'ok' | 'error' | 'offline';
+  applications: CorootApplication[];
+  error: string | null;
+}
+
 // ── mc client presets (personal custom + admin shared) ──────────────────────
 export interface McPresetItem {
   key: string;

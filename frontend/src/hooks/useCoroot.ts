@@ -32,3 +32,14 @@ export function useCorootDeepLink(clusterId: string | null) {
     refetchOnWindowFocus: false,
   });
 }
+
+/** 서비스별 trace 드릴다운 — 클러스터 project 의 application 목록. */
+export function useCorootApplications(clusterId: string | null) {
+  return useQuery({
+    queryKey: ['coroot', 'applications', clusterId],
+    queryFn: async () => (await corootApi.getApplications(clusterId!)).data,
+    enabled: !!clusterId,
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: false,
+  });
+}

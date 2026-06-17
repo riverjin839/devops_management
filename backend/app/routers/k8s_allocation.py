@@ -450,16 +450,21 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
     core = k8s_client.CoreV1Api(client)
 
     # 백그라운드 실행이므로 시간 예산으로 자르지 않는다(무결성). 폭주 방지용 hard_cap 만 유지.
+    # t0/t_* 는 단계별 소요시간 계측(아래 logger) 용도로만 사용한다.
+    t0 = time.monotonic()
     deadline = None
     partial_flag: list = []
 
     nodes = _list_all(lambda **kw: core.list_node(**kw), deadline=deadline)
     if progress is not None:
         progress.phase = "nodes"
+    t_nodes = time.monotonic()
     node_usage = _node_usage(client)
+    t_nodeusage = time.monotonic()
     ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), deadline=deadline))
     if progress is not None:
         progress.phase = "pods"
+    t_ns = time.monotonic()
 
     # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
     node_base: dict[str, dict] = {}
@@ -528,6 +533,7 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
                 pod_loc[(ns, p.metadata.name)] = (ns, node)
 
     partial = bool(partial_flag)
+    t_pods = time.monotonic()
     # cluster-wide pod usage — 대규모/예산초과(partial) 클러스터에서는 생략(드릴다운에서 확인).
     metrics_available = False
     pod_usage_skipped = partial or loc_dropped or summary["pods"] > _POD_USAGE_MAX
@@ -547,6 +553,20 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
                     per_node[node]["uc"] += cpu; per_node[node]["um"] += mem
                     per_node[node]["has_usage"] = True
                 summary["uc"] += cpu; summary["um"] += mem
+
+    t_podusage = time.monotonic()
+
+    # 단계별 소요시간 계측 — 실제 병목(노드/네임스페이스 list · node metrics · Pod 전수 순회 ·
+    # pod metrics)이 어디인지 데이터로 확인하기 위함. 느림 원인 진단용.
+    def _ms(a: float, b: float) -> int:
+        return int((b - a) * 1000)
+    logger.info(
+        "alloc overview cid=%s pods=%d nodes=%d ns=%d partial=%s page_limit=%d | "
+        "total=%dms nodes_list=%dms node_metrics=%dms ns_list=%dms pod_scan=%dms pod_metrics=%dms",
+        cid, summary["pods"], len(node_base), ns_total, partial, _PAGE_LIMIT,
+        _ms(t0, t_podusage), _ms(t0, t_nodes), _ms(t_nodes, t_nodeusage),
+        _ms(t_nodeusage, t_ns), _ms(t_ns, t_pods), _ms(t_pods, t_podusage),
+    )
 
     cpu_alloc = sum(nb["cpu_alloc"] for nb in node_base.values())
     mem_alloc = sum(nb["mem_alloc"] for nb in node_base.values())

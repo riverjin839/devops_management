@@ -735,6 +735,12 @@ export const corootApi = {
     api.get<import('@/types').CorootSummary>(`/coroot/${clusterId}/summary`, { timeout: 15000 }),
   getDeepLink: (clusterId: string) =>
     api.get<import('@/types').CorootDeepLink>(`/coroot/${clusterId}/deeplink`),
+  getApplications: (clusterId: string) =>
+    api.get<import('@/types').CorootApplicationsResponse>(`/coroot/${clusterId}/applications`, { timeout: 15000 }),
+  getApplicationDeepLink: (clusterId: string, appId: string, view = 'Tracing') =>
+    api.get<import('@/types').CorootDeepLink>(`/coroot/${clusterId}/application/deeplink`, {
+      params: { app_id: appId, view },
+    }),
 };
 
 // Cluster Items — 현황 관리 대시보드의 '아이템' 카드 (클러스터별)
