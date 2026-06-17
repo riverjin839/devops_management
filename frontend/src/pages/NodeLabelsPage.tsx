@@ -13,21 +13,26 @@ function extractErrorMessage(error: unknown): string {
 export function NodeLabelsPage() {
   const { data: clusters = [], isLoading: clustersLoading } = useClusters();
 
-  // null = 전체 클러스터 취합(기본). 특정 클러스터 선택 시 해당 cluster.id.
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+  // undefined = 아직 미선택(→ 첫 클러스터로 폴백, 기본은 "클러스터별" 단일 뷰).
+  // null = 사용자가 명시적으로 "전체 클러스터" 선택. string = 특정 cluster.id.
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null | undefined>(undefined);
   const [selectedNode, setSelectedNode] = useState<NodeRow | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'node' | 'label'>('node');
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  // 취합 대상 클러스터 — 전체면 모든 클러스터, 아니면 선택된 하나. (useQueries 안정화를 위해 memo)
+  // 실제 선택 — 미선택(undefined)이면 첫 클러스터로 폴백(기본 단일 뷰). null 이면 전체.
+  const effectiveSelection: string | null =
+    selectedClusterId === undefined ? (clusters[0]?.id ?? null) : selectedClusterId;
+
+  // 취합 대상 클러스터 — 전체(null)면 모든 클러스터, 아니면 선택된 하나. (useQueries 안정화를 위해 memo)
   const targetClusters = useMemo(
     () =>
-      (selectedClusterId ? clusters.filter((c) => c.id === selectedClusterId) : clusters).map((c) => ({
+      (effectiveSelection ? clusters.filter((c) => c.id === effectiveSelection) : clusters).map((c) => ({
         id: c.id,
         name: c.name,
       })),
-    [clusters, selectedClusterId],
+    [clusters, effectiveSelection],
   );
 
   const { nodes, isLoading: nodesLoading, isFetching, isError, errors, refetch } = useClustersNodes(
@@ -39,9 +44,9 @@ export function NodeLabelsPage() {
   const showCluster = targetClusters.length > 1;
 
   const headerLabel = useMemo(() => {
-    if (selectedClusterId) return clusters.find((c) => c.id === selectedClusterId)?.name || '-';
+    if (effectiveSelection) return clusters.find((c) => c.id === effectiveSelection)?.name || '-';
     return `전체 클러스터 (${clusters.length})`;
-  }, [clusters, selectedClusterId]);
+  }, [clusters, effectiveSelection]);
 
   const isLoading = clustersLoading || nodesLoading;
 
@@ -50,7 +55,7 @@ export function NodeLabelsPage() {
       <main className="mx-auto px-3 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
-          selectedId={selectedClusterId}
+          selectedId={effectiveSelection}
           onSelect={(id) => setSelectedClusterId(id)}
           allowAll
           allLabel="전체 클러스터"
