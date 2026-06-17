@@ -3,7 +3,7 @@ import { Boxes, Search, AlertTriangle, LayoutList, LayoutGrid, Layers } from 'lu
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
 import { NodeImagesTable, NodeLabelGroupView, ImageCentricView } from '@/components/node-images';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, SnapshotProgressCard } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
@@ -27,11 +27,14 @@ export function NodeImagesPage() {
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
   const {
-    data: nodes = [],
+    data: result,
     isLoading: nodesLoading,
     isError: nodesError,
     error: nodesErrorDetail,
   } = useNodeImageList(activeClusterId);
+  const nodes = useMemo(() => result?.nodes ?? [], [result]);
+  // 백그라운드 집계 중이고 아직 보여줄 데이터가 없으면 진행률 화면을 띄운다.
+  const computing = result?.status === 'computing' && nodes.length === 0;
 
   const activeClusterName = useMemo(
     () => clusters.find((c) => c.id === activeClusterId)?.name || '-',
@@ -127,6 +130,14 @@ export function NodeImagesPage() {
             <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
               {clustersLoading ? 'Loading clusters...' : 'Loading node images...'}
             </div>
+          ) : computing ? (
+            <SnapshotProgressCard
+              processed={result?.processed ?? 0}
+              total={result?.total ?? null}
+              progress={result?.progress ?? null}
+              label="노드 이미지 수집 중"
+              unit="노드"
+            />
           ) : !activeClusterId ? (
             <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
               클러스터를 선택하세요.

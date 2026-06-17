@@ -69,6 +69,7 @@ from app.routers import (
     metric_trend_router,
     service_topology_router,
     cluster_items_router,
+    coroot_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -151,6 +152,49 @@ def _safe_create_index(name: str, table: str, expr: str) -> None:
     )
 
 
+def _constraint_exists(name: str) -> bool:
+    """pg_constraint 에 해당 이름의 제약이 이미 있는지."""
+    from sqlalchemy import text as _text
+    try:
+        with engine.begin() as conn:
+            row = conn.execute(
+                _text("SELECT 1 FROM pg_constraint WHERE conname = :n LIMIT 1"),
+                {"n": name},
+            ).first()
+        return row is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _safe_add_constraint(
+    table: str,
+    name: str,
+    definition: str,
+    *,
+    requires_tables: tuple[str, ...] = (),
+    label: str = "",
+) -> None:
+    """ADD CONSTRAINT 멱등 헬퍼 — ADD CONSTRAINT 는 IF NOT EXISTS 가 없어 매 부팅마다
+    '이미 있음' / '참조 테이블 없음' 으로 warning 이 쌓인다. 이를 막기 위해:
+
+    - 대상 테이블이 없으면 no-op.
+    - 참조(requires_tables) 중 없는 테이블이 있으면 info 로 1줄 남기고 skip (warning 아님).
+    - 같은 이름의 제약이 이미 있으면 조용히 skip.
+    - 그 외에만 실제 ALTER TABLE ADD CONSTRAINT 실행.
+    """
+    lbl = label or name
+    tables = set(inspect(engine).get_table_names())
+    if table not in tables:
+        return
+    missing = [t for t in requires_tables if t not in tables]
+    if missing:
+        _log.info("migration: %s skipped (참조 테이블 없음: %s)", lbl, ", ".join(missing))
+        return
+    if _constraint_exists(name):
+        return  # 이미 있음 — 조용히 통과 (재부팅 시 warning 누적 방지)
+    _safe_exec(f"ALTER TABLE {table} ADD CONSTRAINT {name} {definition}", label=lbl)
+
+
 def _run_migrations():
     """기존 테이블에 누락된 컬럼 추가 (경량 마이그레이션)"""
     inspector = inspect(engine)
@@ -162,14 +206,16 @@ def _run_migrations():
         # 신규 FK 컬럼 — 컬럼만 먼저, REFERENCES 는 별도 ADD CONSTRAINT 로 분리 (대상 테이블 부재 위험 격리).
         _safe_add_column("playbooks", "playbook_file_id", "UUID")
         _safe_add_column("playbooks", "inventory_id", "UUID")
-        _safe_exec(
-            "ALTER TABLE playbooks ADD CONSTRAINT playbooks_playbook_file_id_fkey "
+        _safe_add_constraint(
+            "playbooks", "playbooks_playbook_file_id_fkey",
             "FOREIGN KEY (playbook_file_id) REFERENCES ansible_playbook_files(id)",
+            requires_tables=("ansible_playbook_files",),
             label="playbooks.playbook_file_id FK",
         )
-        _safe_exec(
-            "ALTER TABLE playbooks ADD CONSTRAINT playbooks_inventory_id_fkey "
+        _safe_add_constraint(
+            "playbooks", "playbooks_inventory_id_fkey",
             "FOREIGN KEY (inventory_id) REFERENCES ansible_inventories(id)",
+            requires_tables=("ansible_inventories",),
             label="playbooks.inventory_id FK",
         )
         # 기존 NOT NULL 제약 완화 — 데이터에 NULL 있을 수 있어 위험. 실패해도 부팅 진행.
@@ -211,6 +257,10 @@ def _run_migrations():
             ("icon", "VARCHAR(64)"),
             # G-9: TLS 검증 옵트인. 기본 false = 기존 verify=False 동작 유지.
             ("tls_verify", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            # coroot APM 연동 — per-cluster project 매핑 + URL 오버라이드 + 토글.
+            ("coroot_project", "VARCHAR(100)"),
+            ("coroot_url", "VARCHAR(512)"),
+            ("coroot_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ]
         for col_name, col_type in new_cluster_cols:
             _safe_add_column("clusters", col_name, col_type)
@@ -329,14 +379,16 @@ def _run_migrations():
         # Sub-task / issue link FK 컬럼 — 컬럼만 먼저, FK constraint 는 별도.
         _safe_add_column("tasks", "parent_id", "UUID")
         _safe_add_column("tasks", "issue_id", "UUID")
-        _safe_exec(
-            "ALTER TABLE tasks ADD CONSTRAINT tasks_parent_id_fkey "
+        _safe_add_constraint(
+            "tasks", "tasks_parent_id_fkey",
             "FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE",
+            requires_tables=("tasks",),
             label="tasks.parent_id FK",
         )
-        _safe_exec(
-            "ALTER TABLE tasks ADD CONSTRAINT tasks_issue_id_fkey "
+        _safe_add_constraint(
+            "tasks", "tasks_issue_id_fkey",
             "FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE SET NULL",
+            requires_tables=("issues",),
             label="tasks.issue_id FK",
         )
     # issues: Date → DateTime + primary/secondary assignee
@@ -486,9 +538,10 @@ def _run_migrations():
             "ALTER TABLE work_items DROP CONSTRAINT IF EXISTS work_items_related_id_fkey",
             label="drop legacy work_items_related_id_fkey",
         )
-        _safe_exec(
-            "ALTER TABLE work_items ADD CONSTRAINT work_items_related_work_item_id_fkey "
+        _safe_add_constraint(
+            "work_items", "work_items_related_work_item_id_fkey",
             "FOREIGN KEY (related_work_item_id) REFERENCES work_items(id) ON DELETE SET NULL",
+            requires_tables=("work_items",),
             label="add work_items.related_work_item_id FK→work_items",
         )
         # 백필이 끝났으면 issues 테이블 DROP
@@ -704,9 +757,10 @@ def _run_migrations():
         ]:
             _safe_add_column("check_logs", col_name, col_type)
         # FK constraint 별도 추가 (이미 있거나 addons 부재 모두 silently skip)
-        _safe_exec(
-            "ALTER TABLE check_logs ADD CONSTRAINT check_logs_addon_id_fkey "
+        _safe_add_constraint(
+            "check_logs", "check_logs_addon_id_fkey",
             "FOREIGN KEY (addon_id) REFERENCES addons(id)",
+            requires_tables=("addons",),
             label="check_logs.addon_id FK",
         )
         _safe_exec(
@@ -1365,6 +1419,8 @@ app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
+# coroot — 애플리케이션 APM 계층 (별도 배포된 coroot 연동: 헬스/요약/딥링크).
+app.include_router(coroot_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

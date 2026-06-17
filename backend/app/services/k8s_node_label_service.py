@@ -21,13 +21,19 @@ class NodeLabelService:
         if self._v1 is not None:
             return self._v1
 
+        # 중요: 클러스터별로 격리된 Configuration/ApiClient 를 만든다.
+        # config.load_kube_config()/load_incluster_config() 를 인자 없이 호출하면
+        # 전역(default) Configuration 을 덮어쓰는데, 여러 클러스터 요청이 동시에 들어오면
+        # 서로의 전역 설정을 클로버링해서 "A 클러스터를 조회했는데 B 클러스터 노드가 돌아오는"
+        # 현상(노드 수가 11↔364 로 튐)이 발생한다. client_configuration 로 격리해 이를 막는다.
+        cfg = client.Configuration()
         kubeconfig = self.cluster.kubeconfig_path
         if kubeconfig and os.path.exists(kubeconfig):
-            config.load_kube_config(config_file=kubeconfig)
+            config.load_kube_config(config_file=kubeconfig, client_configuration=cfg)
         else:
             # kubeconfig 없거나 파일 미존재 → in-cluster 서비스 어카운트 시도
             try:
-                config.load_incluster_config()
+                config.load_incluster_config(client_configuration=cfg)
             except config.ConfigException:
                 if kubeconfig:
                     detail = f"kubeconfig 파일을 찾을 수 없습니다: '{kubeconfig}'"
@@ -38,7 +44,7 @@ class NodeLabelService:
                     "클러스터 설정에서 kubeconfig를 등록하세요."
                 )
 
-        self._v1 = client.CoreV1Api()
+        self._v1 = client.CoreV1Api(api_client=client.ApiClient(configuration=cfg))
         return self._v1
 
     @staticmethod
