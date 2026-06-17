@@ -1134,6 +1134,38 @@ export interface InfraNodeListResponse {
   total: number;
 }
 
+/** 노드 추가 검증(node_health) — 노드별 체크리스트 1건. (백엔드 details.nodes[i], camelCase) */
+export interface NodeHealthEntry {
+  node: string;
+  ready: boolean;
+  pressure: string[];
+  taints: string[];
+  allocatableOk: boolean;
+  allocatable: { cpu?: string | null; memory?: string | null };
+  networking: {
+    cni: boolean;
+    cniFamily: string | null;
+    kubeProxy: boolean;
+    present: string[];
+    missing: string[];
+  };
+  ok: boolean;
+}
+
+/** 노드 추가 검증 결과 (per-node 검증 / sync 직후 자동검증 공용). */
+export interface NodeVerifyResult {
+  hostname: string;
+  status: 'healthy' | 'warning' | 'critical' | 'pending' | 'error';
+  message: string;
+  ok: boolean;
+  nodeId?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details: { nodes?: NodeHealthEntry[]; found?: boolean; scope?: string } & Record<string, any>;
+  steps?: DeepCheckExecStep[];
+  stepPlan?: DeepCheckStepPlanItem[];
+  durationMs?: number;
+}
+
 export interface InfraSyncResult {
   success: boolean;
   created: number;
@@ -1143,6 +1175,8 @@ export interface InfraSyncResult {
   partialFailure: boolean;
   errors: string[];
   total: number;
+  verifications?: NodeVerifyResult[];
+  verifiedTruncated?: boolean;
 }
 
 

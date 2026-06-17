@@ -16,10 +16,15 @@ from app.schemas.infra_node import (
     InfraNodeUpdate,
     InfraNodeResponse,
     InfraNodeListResponse,
+    NodeVerifyResult,
     SyncResult,
 )
+from app.services.deep_check_service import DeepCheckService
 
 router = APIRouter(prefix="/infra-nodes", tags=["infra-nodes"])
+
+# sync 직후 자동검증할 신규 노드 최대 수 (지연 상한).
+_SYNC_VERIFY_MAX = 25
 
 _KUBECTL_TIMEOUT = 30
 _SYNC_RETRY_MAX = 2
@@ -207,6 +212,60 @@ def delete_infra_node(node_id: UUID, _=Depends(_require_scope(SCOPE_FORCE_FIX)),
     return None
 
 
+def _verify_node_health(
+    db: Session, cluster: Cluster, hostname: str, node_id: UUID | None = None
+) -> NodeVerifyResult:
+    """node_health deep check 를 단일 노드에 대해 실행하고 NodeVerifyResult 로 매핑.
+
+    fail-safe: 어떤 오류도 500 으로 새지 않고 status='error' 결과로 반환한다.
+    """
+    try:
+        res = DeepCheckService(db).run_node_health_once(cluster, node_name=hostname)
+        nodes = (res.get("details") or {}).get("nodes") or []
+        ok = bool(nodes[0]["ok"]) if nodes else False
+        return NodeVerifyResult(
+            hostname=hostname,
+            status=res.get("status", "pending"),
+            message=res.get("message", ""),
+            ok=ok,
+            node_id=node_id,
+            details=res.get("details") or {},
+            steps=res.get("steps") or [],
+            step_plan=res.get("step_plan") or [],
+            duration_ms=int(res.get("duration_ms") or 0),
+        )
+    except Exception as e:  # noqa: BLE001
+        return NodeVerifyResult(
+            hostname=hostname, status="error", ok=False, node_id=node_id,
+            message=f"검증 실패: {str(e)[:200]}",
+        )
+
+
+@router.post("/{node_id}/verify", response_model=NodeVerifyResult)
+def verify_infra_node(node_id: UUID, _=Depends(_require_scope(SCOPE_SYNC)), db: Session = Depends(get_db)):
+    """노드 추가 검증 — 해당 노드의 Ready/Pressure/Taint/Allocatable/CNI·kube-proxy 를 점검."""
+    node = db.query(InfraNode).filter(InfraNode.id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="InfraNode not found")
+    cluster = db.query(Cluster).filter(Cluster.id == node.cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    result = _verify_node_health(db, cluster, node.hostname, node_id=node.id)
+    _audit(
+        db,
+        node.cluster_id,
+        entity_type="node",
+        entity_id=str(node.id),
+        action="verify",
+        scope=SCOPE_SYNC,
+        status_text=result.status,
+        after_data={"status": result.status, "ok": result.ok, "message": result.message},
+    )
+    db.commit()
+    return result
+
+
 @router.post("/sync/{cluster_id}", response_model=SyncResult)
 def sync_infra_nodes_from_k8s(cluster_id: UUID, _=Depends(_require_scope(SCOPE_SYNC)), db: Session = Depends(get_db)):
     """kubectl get nodes 를 통해 클러스터 노드 정보를 자동 수집하고 upsert"""
@@ -276,6 +335,7 @@ def sync_infra_nodes_from_k8s(cluster_id: UUID, _=Depends(_require_scope(SCOPE_S
     created_count = 0
     updated_count = 0
     errors: list[str] = []
+    created_hostnames: list[str] = []
 
     for item in k8s_data.get("items", []):
         try:
@@ -361,6 +421,7 @@ def sync_infra_nodes_from_k8s(cluster_id: UUID, _=Depends(_require_scope(SCOPE_S
                 )
                 db.add(new_node)
                 created_count += 1
+                created_hostnames.append(hostname)
         except Exception as e:
             errors.append(f"{item.get('metadata', {}).get('name', 'unknown')}: {str(e)[:120]}")
 
@@ -383,6 +444,19 @@ def sync_infra_nodes_from_k8s(cluster_id: UUID, _=Depends(_require_scope(SCOPE_S
         },
     )
     db.commit()
+
+    # 신규 노드 자동 검증 (best-effort — 실패해도 sync 결과/semantics 불변)
+    verifications: list[NodeVerifyResult] = []
+    verified_truncated = False
+    try:
+        targets = created_hostnames[:_SYNC_VERIFY_MAX]
+        verified_truncated = len(created_hostnames) > _SYNC_VERIFY_MAX
+        for h in targets:
+            verifications.append(_verify_node_health(db, cluster, h))
+    except Exception:  # noqa: BLE001
+        verifications = []
+        verified_truncated = False
+
     return SyncResult(
         success=not partial_failure,
         created=created_count,
@@ -392,4 +466,6 @@ def sync_infra_nodes_from_k8s(cluster_id: UUID, _=Depends(_require_scope(SCOPE_S
         partial_failure=partial_failure,
         errors=errors[:20],
         total=created_count + updated_count + failed_count,
+        verifications=verifications,
+        verified_truncated=verified_truncated,
     )

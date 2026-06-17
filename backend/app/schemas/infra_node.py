@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
-from typing import Optional
+from typing import Any, Optional
 
 
 class InfraNodeBase(BaseModel):
@@ -52,6 +52,19 @@ class InfraNodeListResponse(BaseModel):
     total: int
 
 
+class NodeVerifyResult(BaseModel):
+    """노드 추가 검증(node_health) 결과 — per-node 검증 / sync 직후 자동검증 공용."""
+    hostname: str
+    status: str                       # healthy | warning | critical | pending | error
+    message: str = ""
+    ok: bool = False
+    node_id: Optional[UUID] = None
+    details: dict[str, Any] = {}
+    steps: list[dict[str, Any]] = []
+    step_plan: list[dict[str, Any]] = []
+    duration_ms: int = 0
+
+
 class SyncResult(BaseModel):
     success: bool
     created: int
@@ -61,3 +74,5 @@ class SyncResult(BaseModel):
     partial_failure: bool
     errors: list[str] = []
     total: int
+    verifications: list[NodeVerifyResult] = []
+    verified_truncated: bool = False

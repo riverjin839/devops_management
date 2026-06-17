@@ -1054,6 +1054,8 @@ export const infraNodesApi = {
   delete: (id: string) => api.delete(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.force_fix' } }),
   sync: (clusterId: string) =>
     api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
+  verify: (id: string) =>
+    api.post<import('@/types').NodeVerifyResult>(`/infra-nodes/${id}/verify`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
 };
 
 // Node Server Spec (자산 관리 대장)
