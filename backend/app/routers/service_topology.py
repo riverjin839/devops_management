@@ -29,10 +29,14 @@ from app.services import service_topology_service as svc
 from app.services.cilium_trace_service import detect_status
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.prometheus_service import prometheus_service
+from app.services.snapshot_jobs import SnapshotManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/service-topology", tags=["service-topology"])
+
+# 클러스터 전체 토폴로지 집계는 무거우므로 백그라운드 스냅샷으로 수행(요청 비블로킹 → 502 회피).
+_cluster_topo_mgr = SnapshotManager(ttl=20.0)
 
 
 # ── schemas ──────────────────────────────────────────────────────────────────
@@ -83,6 +87,25 @@ class TopologyGraphResponse(BaseModel):
     truncated: bool = False
     warnings: list[str] = Field(default_factory=list)
     generated_at: datetime
+
+
+class ClusterTopologyResponse(BaseModel):
+    cluster_id: UUID
+    mode: str = "summary"                 # summary | detail
+    nodes: list[TopoNode]
+    edges: list[TopoEdge]
+    metrics_status: str = "unknown"
+    truncated: bool = False
+    summary_recommended: bool = False
+    namespace_count: int = 0
+    warnings: list[str] = Field(default_factory=list)
+    generated_at: datetime
+    # 스냅샷 진행 메타(프론트 폴링/진행률)
+    status: str = "ready"                 # computing | ready | error
+    progress: Optional[float] = None
+    processed: int = 0
+    total: Optional[int] = None
+    stale: bool = False
 
 
 class TrafficEdgeOut(BaseModel):
@@ -316,6 +339,108 @@ async def get_graph(
         cluster_id=cluster_id, namespace=namespace, nodes=nodes, edges=edges,
         metrics_status=metrics_status, truncated=data["truncated"], warnings=warnings,
         generated_at=datetime.utcnow(),
+    )
+
+
+# ── cluster-wide graph (전 네임스페이스) ──────────────────────────────────────
+def _cluster_meta(view: dict) -> dict:
+    return {
+        "status": view["status"], "progress": view["progress"],
+        "processed": view["processed"], "total": view["total"], "stale": view["stale"],
+    }
+
+
+@router.get("/{cluster_id}/cluster-graph", response_model=ClusterTopologyResponse)
+def get_cluster_graph(
+    cluster_id: UUID,
+    mode: str = Query("summary", pattern="^(summary|detail)$"),
+    include_pods: bool = False,
+    with_metrics: bool = False,   # cluster scope 기본 OFF(대규모)
+    db: Session = Depends(get_db),
+):
+    """전 네임스페이스 서비스 아키텍처. SnapshotManager 백그라운드 + 진행률 폴링."""
+    cluster = _require_cluster(cluster_id, db)
+    # 백그라운드 스레드의 detached 인스턴스 접근 회피 — 요청 스레드에서 kubeconfig 구체화.
+    try:
+        ensure_kubeconfig_file(cluster)
+    except Exception:  # noqa: BLE001
+        pass
+
+    key = f"{cluster_id}:cluster-topo:{mode}:{int(include_pods)}"
+    view = _cluster_topo_mgr.get(
+        key,
+        lambda prog: svc.collect_cluster_topology(
+            cluster, include_pods=include_pods, mode=mode, progress=prog,
+        ),
+    )
+    data = view["data"]
+    if data is None:
+        if view["status"] == "error":
+            raise HTTPException(status_code=502, detail=f"클러스터 토폴로지 수집 실패: {view['error']}")
+        # 집계 중 — 빈 그래프 + 진행 메타(프론트가 진행률 카드 표시 후 폴링)
+        return ClusterTopologyResponse(
+            cluster_id=cluster_id, mode=mode, nodes=[], edges=[], generated_at=datetime.utcnow(),
+            **_cluster_meta(view),
+        )
+
+    nodes = list(data["nodes"])
+    edges = list(data["edges"])
+    warnings = list(data["warnings"])
+    is_summary = data["mode"] == "summary"
+
+    # 외부 노드/수동 링크 read-only 병합 (클러스터 전체). summary 면 양끝을 Namespace 노드로 collapse.
+    node_ids = {n["id"] for n in nodes}
+
+    def _collapse(nid: str, kind: str, ns: str) -> str:
+        return svc.node_id("Namespace", ns, ns) if is_summary else nid
+
+    try:
+        ext_nodes = (db.query(ServiceTopologyExternalNode)
+                     .filter(ServiceTopologyExternalNode.cluster_id == cluster_id).all())
+    except Exception as e:  # noqa: BLE001
+        db.rollback(); ext_nodes = []; warnings.append(f"외부 노드 조회 실패: {str(e)[:120]}")
+    if not is_summary:
+        for en in ext_nodes:
+            eid = _ext_node_id(en.name, en.namespace)
+            if eid not in node_ids:
+                nodes.append({
+                    "id": eid, "kind": "External", "name": en.name, "namespace": en.namespace,
+                    "status": "healthy", "ghost": False, "node_type": en.node_type,
+                    "external_id": str(en.id), "detail": en.note or "", "metrics": {"cpu": {}, "mem": {}},
+                })
+                node_ids.add(eid)
+
+    try:
+        links = (db.query(ServiceTopologyLink)
+                 .filter(ServiceTopologyLink.cluster_id == cluster_id).all())
+    except Exception as e:  # noqa: BLE001
+        db.rollback(); links = []; warnings.append(f"수동 링크 조회 실패: {str(e)[:120]}")
+    for ln in links:
+        s_raw = (_ext_node_id(ln.source_name, ln.namespace) if ln.source_kind == "External"
+                 else svc.node_id(ln.source_kind, ln.namespace, ln.source_name))
+        t_raw = (_ext_node_id(ln.target_name, ln.namespace) if ln.target_kind == "External"
+                 else svc.node_id(ln.target_kind, ln.namespace, ln.target_name))
+        s_id = _collapse(s_raw, ln.source_kind, ln.namespace)
+        t_id = _collapse(t_raw, ln.target_kind, ln.namespace)
+        if s_id == t_id:
+            continue  # summary 에서 동일 NS 내 링크는 self-loop → skip
+        # 양끝이 그래프에 있을 때만(요약은 Namespace 노드, 상세는 실제 노드) 엣지 추가
+        if s_id in node_ids and t_id in node_ids:
+            edges.append({
+                "id": f"manual:{ln.id}", "source": s_id, "target": t_id, "type": "manual",
+                "label": ln.label or ln.link_type, "detail": ln.note or "", "manual_id": str(ln.id),
+            })
+
+    if with_metrics and not is_summary and data["namespace_count"] <= 20:
+        warnings.append("클러스터 상세 — usage 는 네임스페이스별 보기에서 확인 권장")
+    elif with_metrics:
+        warnings.append("클러스터 범위 — usage 생략(네임스페이스별 보기에서 확인)")
+
+    return ClusterTopologyResponse(
+        cluster_id=cluster_id, mode=data["mode"], nodes=nodes, edges=edges,
+        metrics_status="unknown", truncated=data["truncated"],
+        summary_recommended=data["summary_recommended"], namespace_count=data["namespace_count"],
+        warnings=warnings, generated_at=datetime.utcnow(), **_cluster_meta(view),
     )
 
 

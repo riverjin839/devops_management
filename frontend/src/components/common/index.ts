@@ -26,4 +26,4 @@ export { NamespaceSingleSelect } from './NamespaceSingleSelect';
 export { PodSingleSelect } from './PodSingleSelect';
 export { LogViewTabs } from './LogViewTabs';
 export { ReactionBar } from './ReactionBar';
-export { SnapshotProgressCard } from './SnapshotProgress';
+export { SnapshotProgressCard, SnapshotProgressBar } from './SnapshotProgress';

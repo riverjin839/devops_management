@@ -1,10 +1,10 @@
 import { useMemo, useRef } from 'react';
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject, type LinkObject } from 'react-force-graph-3d';
-import type { TopologyGraphResponse, TopologyTrafficEdge } from '@/types';
+import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import { kindAccent, edgeStyle, KIND_ABBR } from './topologyShared';
 
 interface Props {
-  graph: TopologyGraphResponse;
+  graph: { nodes: TopoNode[]; edges: TopoEdge[] };
   trafficEdges?: TopologyTrafficEdge[];
   showTraffic: boolean;
   width: number;

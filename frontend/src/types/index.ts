@@ -1975,6 +1975,19 @@ export interface TopologyGraphResponse {
   warnings: string[];
   generatedAt: string;
 }
+/** 전 네임스페이스 클러스터 토폴로지(요약/상세) + 백그라운드 진행 메타. */
+export interface ClusterTopologyResponse extends AllocSnapshotMeta {
+  clusterId: string;
+  mode: 'summary' | 'detail';
+  nodes: TopoNode[];          // 요약은 kind="Namespace"
+  edges: TopoEdge[];
+  metricsStatus: string;
+  truncated: boolean;
+  summaryRecommended: boolean;
+  namespaceCount: number;
+  warnings: string[];
+  generatedAt: string;
+}
 export interface TopologyTrafficEdge {
   source: string;
   target: string;
@@ -2791,8 +2804,11 @@ export interface AllocSnapshotMeta {
   processed?: number;
   total?: number | null;
   stale?: boolean;
+  partial?: boolean;          // 부분(누적) 결과 여부
 }
 export interface AllocNodesResponse extends AllocSnapshotMeta { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
+/** 단일 노드 즉시 재계산(개별 REFRESH) 응답. */
+export interface AllocNodeRefreshResponse { item: AllocNodeRow; metricsAvailable: boolean }
 
 export interface AllocSummary {
   nodeCount: number;

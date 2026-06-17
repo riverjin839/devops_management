@@ -1216,6 +1216,21 @@ export const analyzeApi = {
 
 // Service Topology API — 자동 그래프 + 수동 연계 + 실트래픽
 export const serviceTopologyApi = {
+  getClusterGraph: (
+    clusterId: string,
+    opts?: { mode?: 'summary' | 'detail'; includePods?: boolean; withMetrics?: boolean },
+  ) =>
+    api.get<import('@/types').ClusterTopologyResponse>(
+      `/service-topology/${clusterId}/cluster-graph`,
+      {
+        params: {
+          mode: opts?.mode ?? 'summary',
+          include_pods: opts?.includePods ?? false,
+          with_metrics: opts?.withMetrics ?? false,
+        },
+        timeout: 120_000,
+      },
+    ),
   getGraph: (
     clusterId: string,
     namespace: string,
@@ -1702,6 +1717,11 @@ export const k8sAllocationApi = {
     api.get<import('@/types').AllocNodesResponse>(
       `/k8s/${clusterId}/allocation/nodes`,
       { timeout: 120_000 },
+    ),
+  node: (clusterId: string, node: string) =>
+    api.get<import('@/types').AllocNodeRefreshResponse>(
+      `/k8s/${clusterId}/allocation/nodes/${encodeURIComponent(node)}`,
+      { timeout: 30_000 },
     ),
   namespaces: (clusterId: string) =>
     api.get<import('@/types').AllocNamespacesResponse>(

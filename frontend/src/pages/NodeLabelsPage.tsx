@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Tags, Search, LayoutList, Tag, AlertTriangle, RefreshCw, Pause, Play } from 'lucide-react';
+import { Tags, Search, LayoutList, Tag, AlertTriangle, FileSpreadsheet, RefreshCw, Pause, Play } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useClustersNodes, usePatchNodeLabels, NodeRow } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
+import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
 import { ClusterSidebar } from '@/components/common';
+import { buildCsv, downloadCsv } from '@/lib/csv';
 import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
@@ -50,6 +52,29 @@ export function NodeLabelsPage() {
 
   const isLoading = clustersLoading || nodesLoading;
 
+  // 현재 뷰/검색 결과를 CSV(엑셀)로 추출 — 화면에 보이는 행과 동일.
+  const handleExportCsv = () => {
+    const safeCluster = (headerLabel || 'cluster').replace(/[^\w.-]+/g, '-');
+    const today = new Date().toISOString().slice(0, 10);
+    let headers: string[];
+    let rows: (string | number)[][];
+    if (viewMode === 'label') {
+      headers = ['Label', 'Key', 'Value', 'NodeCount', 'Nodes'];
+      rows = filterLabelEntries(buildLabelEntries(nodes), searchQuery).map((e) => [
+        e.tag, e.key, e.value, e.nodes.length,
+        e.nodes.map((n) => (showCluster ? `${n.clusterName}/${n.name}` : n.name)).join('; '),
+      ]);
+    } else {
+      headers = ['Node', 'Role', 'Status', 'Labels'];
+      rows = nodes.filter((n) => matchesSearch(n, searchQuery)).map((n) => [
+        n.name, n.role, n.status,
+        Object.entries(n.labels).map(([k, v]) => (v ? `${k}=${v}` : k)).join('; '),
+      ]);
+    }
+    if (rows.length === 0) return;
+    downloadCsv(`node-labels-${safeCluster}-${viewMode}-${today}.csv`, buildCsv(headers, rows));
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto px-3 py-3 flex gap-3">
@@ -66,7 +91,7 @@ export function NodeLabelsPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Tags className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-semibold">Node Labels</h1>
+            <h1 className="text-xl font-semibold">K8S 노드 라벨</h1>
             <span className="text-sm text-muted-foreground">
               — <span className="font-medium text-foreground">{headerLabel}</span>
             </span>
@@ -120,8 +145,18 @@ export function NodeLabelsPage() {
             </span>
           )}
 
-          {/* 새로고침 제어 — 수동 새로고침 + 자동 on/off */}
+          {/* 우측 컨트롤 — CSV 내보내기 + 새로고침(수동/자동) */}
           <div className="ml-auto flex items-center gap-1.5">
+            {/* CSV(엑셀) 내보내기 — 현재 뷰/검색 결과 */}
+            <button
+              onClick={handleExportCsv}
+              disabled={isLoading || nodes.length === 0}
+              title="현재 화면 결과를 CSV(엑셀)로 추출"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              CSV 내보내기
+            </button>
             <button
               onClick={() => refetch()}
               disabled={isFetching}
