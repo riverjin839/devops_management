@@ -1833,6 +1833,19 @@ export interface TopologyGraphResponse {
   warnings: string[];
   generatedAt: string;
 }
+/** 전 네임스페이스 클러스터 토폴로지(요약/상세) + 백그라운드 진행 메타. */
+export interface ClusterTopologyResponse extends AllocSnapshotMeta {
+  clusterId: string;
+  mode: 'summary' | 'detail';
+  nodes: TopoNode[];          // 요약은 kind="Namespace"
+  edges: TopoEdge[];
+  metricsStatus: string;
+  truncated: boolean;
+  summaryRecommended: boolean;
+  namespaceCount: number;
+  warnings: string[];
+  generatedAt: string;
+}
 export interface TopologyTrafficEdge {
   source: string;
   target: string;
