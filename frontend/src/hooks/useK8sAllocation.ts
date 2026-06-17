@@ -1,38 +1,60 @@
+import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 
 import { k8sAllocationApi } from '@/services/api';
-import type { AllocNodeRow, AllocNodesResponse } from '@/types';
+import type { AllocNodeRow, AllocNodesResponse, AllocNamespaceRow, AllocNamespacesResponse } from '@/types';
 
-// 집계 중(status==='computing')이면 1.5s 폴링; 아니면 autoMs(자동갱신 간격) 또는 멈춤.
-function refetchIntervalFor(autoMs: number | false) {
-  return (query: { state: { data?: { status?: string } } }) =>
-    query.state.data?.status === 'computing' ? 1500 : (autoMs || false);
-}
+// 집계 중(status==='computing')에만 1.5s 폴링(누적 진행 표시). 그 외엔 멈춤 —
+// 완료된 결과는 그대로 유지하고, 재집계는 명시적 새로고침/주기 갱신(force)으로만.
+const pollWhileComputing = (query: { state: { data?: { status?: string } } }) =>
+  query.state.data?.status === 'computing' ? 1500 : false;
 
-/** 노드별 allocatable vs request vs 사용량(slack). autoMs: 자동갱신 간격(ms) 또는 false. */
-export function useAllocNodes(clusterId: string, autoMs: number | false = false) {
+// 자동 재페치(포커스/마운트/주기) 끔 → 백엔드 재집계가 멋대로 0부터 시작되는 일 방지.
+// 데이터는 클라이언트 캐시로 유지(멀티워커 환경에서도 리셋 안 됨).
+const HOLD_OPTS = {
+  staleTime: Infinity,
+  refetchOnWindowFocus: false,
+  refetchOnMount: false,
+  refetchOnReconnect: false,
+  placeholderData: keepPreviousData,
+  refetchInterval: pollWhileComputing,
+  retry: 1,
+};
+
+/** 노드별 allocatable vs request vs 사용량(slack). */
+export function useAllocNodes(clusterId: string) {
   return useQuery({
     queryKey: ['alloc-nodes', clusterId],
     queryFn: async () => (await k8sAllocationApi.nodes(clusterId)).data,
     enabled: !!clusterId,
-    staleTime: 30_000,
-    retry: 1,
-    placeholderData: keepPreviousData,  // refetch/클러스터 변경 시 이전 데이터 유지(화면 안 사라짐)
-    refetchInterval: refetchIntervalFor(autoMs),
+    ...HOLD_OPTS,
   });
 }
 
 /** 네임스페이스별 request/limit/usage 총합 + 클러스터 summary. */
-export function useAllocNamespaces(clusterId: string, autoMs: number | false = false) {
+export function useAllocNamespaces(clusterId: string) {
   return useQuery({
     queryKey: ['alloc-namespaces', clusterId],
     queryFn: async () => (await k8sAllocationApi.namespaces(clusterId)).data,
     enabled: !!clusterId,
-    staleTime: 30_000,
-    retry: 1,
-    placeholderData: keepPreviousData,
-    refetchInterval: refetchIntervalFor(autoMs),
+    ...HOLD_OPTS,
   });
+}
+
+/** 명시적 새로고침/주기 갱신 — refresh=1 로 강제 재집계 시작 후, computing 폴링이 누적 완성. */
+export function useForceAllocRefresh(clusterId: string) {
+  const qc = useQueryClient();
+  return useCallback(async () => {
+    if (!clusterId) return;
+    try {
+      const [n, ns] = await Promise.all([
+        k8sAllocationApi.nodes(clusterId, true),
+        k8sAllocationApi.namespaces(clusterId, true),
+      ]);
+      qc.setQueryData(['alloc-nodes', clusterId], n.data);
+      qc.setQueryData(['alloc-namespaces', clusterId], ns.data);
+    } catch { /* best-effort */ }
+  }, [qc, clusterId]);
 }
 
 /** 단일 노드 즉시 재계산(개별 REFRESH) → alloc-nodes 캐시의 해당 행만 patch. */
@@ -45,6 +67,21 @@ export function useRefreshAllocNode(clusterId: string) {
       qc.setQueryData<AllocNodesResponse>(['alloc-nodes', clusterId], (prev) => {
         if (!prev) return prev;
         return { ...prev, items: prev.items.map((r) => (r.name === row.name ? row : r)) };
+      });
+    },
+  });
+}
+
+/** 단일 네임스페이스 즉시 재계산 → alloc-namespaces 캐시의 해당 행만 patch. */
+export function useRefreshAllocNamespace(clusterId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (namespace: string) => (await k8sAllocationApi.namespace(clusterId, namespace)).data,
+    onSuccess: (res) => {
+      const row = res.item as AllocNamespaceRow;
+      qc.setQueryData<AllocNamespacesResponse>(['alloc-namespaces', clusterId], (prev) => {
+        if (!prev) return prev;
+        return { ...prev, items: prev.items.map((r) => (r.namespace === row.namespace ? row : r)) };
       });
     },
   });

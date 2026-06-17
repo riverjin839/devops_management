@@ -57,7 +57,7 @@ class SnapshotManager:
         self._lock = threading.Lock()
 
     def get(self, key: str, builder: Callable[[Progress], Any],
-            initial_wait: float = 2.0) -> dict:
+            initial_wait: float = 2.0, force: bool = False) -> dict:
         """현재 스냅샷 뷰를 반환. 신선한 캐시가 없으면 백그라운드 계산을 1개 기동한다.
 
         소규모 클러스터 효율: 보여줄 직전 데이터가 없을 때만, 새 계산을 최대 `initial_wait`
@@ -70,12 +70,12 @@ class SnapshotManager:
         new: Optional[_Job] = None
         with self._lock:
             job = self._jobs.get(key)
-            # 신선한 완료 결과 → 그대로 반환
-            if (job and job.status == "ready" and job.finished_at is not None
-                    and (now - job.finished_at) < self._ttl):
-                return self._view(job)
-            # 이미 계산 중 → 진행 상황(또는 stale 데이터) 반환
+            # 이미 계산 중 → 진행 상황(또는 stale 데이터) 반환 (force 라도 재시작 안 함 — 폭주 방지)
             if job and job.status == "computing":
+                return self._view(job)
+            # 신선한 완료 결과 → 그대로 반환 (force 면 무시하고 재계산)
+            if (not force and job and job.status == "ready" and job.finished_at is not None
+                    and (now - job.finished_at) < self._ttl):
                 return self._view(job)
             # 새 계산 시작(직전 결과/추정 total 은 보존해 stale 제공 + 진행률 분모로 사용)
             new = _Job(key=key)

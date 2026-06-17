@@ -14,7 +14,8 @@ import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
-  useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods, useRefreshAllocNode,
+  useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods,
+  useRefreshAllocNode, useRefreshAllocNamespace, useForceAllocRefresh,
 } from '@/hooks/useK8sAllocation';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNodeRow, AllocNamespaceRow, AllocWorkloadRow } from '@/types';
@@ -183,13 +184,12 @@ export function K8sAllocationPage() {
   const [view, setView] = useState<ViewMode>('visual');
   const [autoMs, setAutoMs] = useState<number | false>(false);
 
-  // 페이지 레벨 observer — 폴링(자동갱신/computing) 구동 + 진행률 바 + 수동 새로고침.
-  // (하위 뷰들과 동일 queryKey 라 캐시 공유)
-  const nsQ = useAllocNamespaces(clusterId, autoMs);
-  const nodesQ = useAllocNodes(clusterId, autoMs);
+  // 페이지 레벨 observer — computing 진행 표시 + 새로고침. (하위 뷰들과 동일 queryKey 라 캐시 공유)
+  const nsQ = useAllocNamespaces(clusterId);
+  const nodesQ = useAllocNodes(clusterId);
+  const forceRefresh = useForceAllocRefresh(clusterId);
   const computing = nsQ.data?.status === 'computing' || nodesQ.data?.status === 'computing';
   const progSrc = nsQ.data?.status === 'computing' ? nsQ.data : nodesQ.data;
-  const refreshAll = () => { nsQ.refetch(); nodesQ.refetch(); };
   const isFetching = nsQ.isFetching || nodesQ.isFetching;
   const clusterName = clusters.find((c) => c.id === clusterId)?.name;
 
@@ -198,6 +198,13 @@ export function K8sAllocationPage() {
       navigate(`/k8s-allocation/${clusters[0].id}`, { replace: true });
     }
   }, [clusterId, clusters, navigate]);
+
+  // 자동 갱신: 켜져 있으면(autoMs) 주기마다 강제 재집계. OFF 면 완료 결과를 그대로 유지(0부터 재집계 없음).
+  useEffect(() => {
+    if (!autoMs || !clusterId) return;
+    const id = setInterval(() => { void forceRefresh(); }, autoMs);
+    return () => clearInterval(id);
+  }, [autoMs, clusterId, forceRefresh]);
 
   return (
     <div className="min-h-screen bg-background p-3">
@@ -223,7 +230,7 @@ export function K8sAllocationPage() {
 
             {clusterId && (
               <div className="ml-auto flex items-center gap-2">
-                <button onClick={refreshAll}
+                <button onClick={() => void forceRefresh()}
                   className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card">
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
                 </button>
@@ -663,6 +670,7 @@ const NS_ACCESSORS: Record<string, (r: AllocNamespaceRow) => number | string | n
 };
 function NamespacesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNamespaces(clusterId);
+  const refreshNs = useRefreshAllocNamespace(clusterId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortState>({ key: 'cpuReqM', dir: 'desc' });
   const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'namespace'));
@@ -733,7 +741,16 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
                   <tr className="border-t border-border hover:bg-muted/10 cursor-pointer" onClick={() => toggle(ns.namespace)}>
                     <td className="px-2 py-2 text-muted-foreground">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
                     <td className="px-2 py-2 font-medium">
-                      {ns.namespace}
+                      <span className="inline-flex items-center gap-1.5">
+                        {ns.namespace}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); refreshNs.mutate(ns.namespace); }}
+                          title="이 네임스페이스만 새로고침"
+                          className="text-muted-foreground hover:text-primary shrink-0"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${refreshNs.isPending && refreshNs.variables === ns.namespace ? 'animate-spin' : ''}`} />
+                        </button>
+                      </span>
                       {ns.noRequestPods > 0 && <span className="ml-2 text-xs text-amber-600">· req미설정 {ns.noRequestPods}</span>}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums">{ns.podCount}</td>
