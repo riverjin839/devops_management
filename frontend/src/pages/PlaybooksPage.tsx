@@ -222,7 +222,7 @@ export function PlaybooksPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-6 flex gap-3">
+      <main className="mx-auto px-3 py-3 flex gap-3">
         {/* 좌측 클러스터 사이드바 — 다중 선택. 빈 배열 = 전체. */}
         <ClusterSidebar
           clusters={clusters}

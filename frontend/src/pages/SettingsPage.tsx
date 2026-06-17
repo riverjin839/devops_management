@@ -1,11 +1,13 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen, Database, ListTodo } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen, Database, ListTodo, Palette } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
 import { ServiceCatalogManager } from '@/components/settings/ServiceCatalogManager';
 import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
+import { NavMenuManager } from '@/components/settings/NavMenuManager';
+import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
@@ -541,7 +543,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup' | 'jira';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
 
   // Debug 설정
@@ -557,6 +559,7 @@ export function SettingsPage() {
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'service', label: '서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
     { id: 'lake-types', label: 'LAKE 타입', icon: <Database className="w-4 h-4" />, count: 0 },
+    { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
     { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'jira', label: '연동 (Jira)', icon: <Globe className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
@@ -597,8 +600,11 @@ export function SettingsPage() {
           ))}
         </div>
 
+        {/* ── 화면 UI 설정 탭 ── */}
+        {activeTab === 'screen-ui' && (
+        <div className="space-y-6 mb-6">
         {/* 홈 화면 설정 */}
-        <div className="rounded-md border border-border bg-card overflow-hidden mb-6">
+        <div className="rounded-md border border-border bg-card overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/40">
             <h3 className="text-sm font-semibold">홈 화면 설정</h3>
             <p className="text-xs text-muted-foreground mt-0.5">PEP 홈 페이지 표시 옵션</p>
@@ -678,6 +684,14 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
+
+          {/* 메뉴 이름 편집 (사이드바에서 이동) */}
+          <NavMenuManager />
+
+          {/* 페이지별 화면 스타일 — 폰트/크기/글자색/배경색 */}
+          <PageStyleManager />
+        </div>
+        )}
 
         {/* 홈 아이콘 picker — 탭과 무관하게 동작 */}
         {homeIconPickerMode && (

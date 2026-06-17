@@ -84,6 +84,7 @@ def get_ui_settings(db: Session = Depends(get_db)):
         nav_labels=value.get("nav_labels", {}),
         service_catalog=value.get("service_catalog"),
         home_icons=value.get("home_icons"),
+        page_styles=value.get("page_styles"),
     )
 
 
@@ -116,6 +117,18 @@ def update_ui_settings(payload: UiSettingsUpdate, db: Session = Depends(get_db))
     elif "home_icons" in current:
         next_value["home_icons"] = current["home_icons"]
 
+    # 페이지별 화면 스타일 — 프론트가 전체 map 을 통째로 보낸다. 빈 오버라이드는
+    # 제거해서 깔끔하게 유지(미지정 필드는 exclude_none).
+    if payload.page_styles is not None:
+        cleaned_styles: dict[str, dict] = {}
+        for key, ps in payload.page_styles.items():
+            dumped = ps.model_dump(exclude_none=True)
+            if dumped:  # 아무 필드도 없으면 저장하지 않음
+                cleaned_styles[key] = dumped
+        next_value["page_styles"] = cleaned_styles
+    elif "page_styles" in current:
+        next_value["page_styles"] = current["page_styles"]
+
     setting.value = next_value
     db.commit()
     db.refresh(setting)
@@ -125,6 +138,7 @@ def update_ui_settings(payload: UiSettingsUpdate, db: Session = Depends(get_db))
         nav_labels=next_value["nav_labels"],
         service_catalog=next_value.get("service_catalog"),
         home_icons=next_value.get("home_icons"),
+        page_styles=next_value.get("page_styles"),
     )
 
 

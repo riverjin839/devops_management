@@ -14,6 +14,7 @@ from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
 from app.models.knowledge_page import KnowledgePage, KnowledgePageVersion
 from app.models.ops_note import OpsNote
+from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
 from app.models.infra_node import InfraNode
 from app.models.topology_audit_log import TopologyAuditLog
@@ -21,6 +22,7 @@ from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEv
 from app.models.config_snapshot import ClusterConfigSnapshot
 from app.models.node_server_spec import NodeServerSpec
 from app.models.cluster_custom_field import ClusterCustomField
+from app.models.cluster_item import ClusterItem
 from app.models.service_entry import ServiceEntry
 from app.models.batch_job import BatchJob, BatchJobRun
 from app.models.command_entry import CommandEntry
@@ -88,6 +90,7 @@ __all__ = [
     "ClusterConfigSnapshot",
     "NodeServerSpec",
     "ClusterCustomField",
+    "ClusterItem",
     "ServiceEntry",
     "BatchJob",
     "BatchJobRun",
@@ -112,4 +115,5 @@ __all__ = [
     "ServiceTopologyExternalNode",
     "WorkItemTimeBlock",
     "UserJiraCredential",
+    "Reaction",
 ]

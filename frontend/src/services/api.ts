@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -705,6 +705,22 @@ export const promqlApi = {
     api.post<MetricQueryResult>('/promql/query/test', { promql }),
   health: () =>
     api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
+};
+
+// Cluster Items — 현황 관리 대시보드의 '아이템' 카드 (클러스터별)
+export const clusterItemsApi = {
+  types: () =>
+    api.get<{ data: import('@/types').ClusterItemType[] }>('/cluster-item-types'),
+  list: (clusterId: string) =>
+    api.get<{ data: ClusterItem[] }>(`/clusters/${clusterId}/items`),
+  create: (clusterId: string, data: Partial<ClusterItem>) =>
+    api.post<ClusterItem>(`/clusters/${clusterId}/items`, data),
+  update: (itemId: string, data: Partial<ClusterItem>) =>
+    api.put<ClusterItem>(`/cluster-items/${itemId}`, data),
+  remove: (itemId: string) => api.delete(`/cluster-items/${itemId}`),
+  run: (itemId: string) =>
+    // AI(LLM) 아이템은 응답이 길 수 있어 넉넉히 잡는다.
+    api.post<ClusterItem>(`/cluster-items/${itemId}/run`, undefined, { timeout: 130000 }),
 };
 
 // Work Items API — 이슈와 작업 통합. type 필터로 둘을 구분.
@@ -1626,6 +1642,30 @@ export const k8sResourcesApi = {
     ),
 };
 
+// ── K8s 자원 관리 (allocation: request vs 사용량 slack) ──────────────────────
+export const k8sAllocationApi = {
+  nodes: (clusterId: string) =>
+    api.get<import('@/types').AllocNodesResponse>(
+      `/k8s/${clusterId}/allocation/nodes`,
+      { timeout: 120_000 },
+    ),
+  namespaces: (clusterId: string) =>
+    api.get<import('@/types').AllocNamespacesResponse>(
+      `/k8s/${clusterId}/allocation/namespaces`,
+      { timeout: 120_000 },
+    ),
+  workloads: (clusterId: string, namespace: string) =>
+    api.get<import('@/types').AllocWorkloadsResponse>(
+      `/k8s/${clusterId}/allocation/namespaces/${namespace}/workloads`,
+      { timeout: 120_000 },
+    ),
+  pods: (clusterId: string, namespace: string, kind: string, name: string) =>
+    api.get<import('@/types').AllocPodsResponse>(
+      `/k8s/${clusterId}/allocation/namespaces/${namespace}/workloads/${kind}/${name}/pods`,
+      { timeout: 120_000 },
+    ),
+};
+
 // ── Helm 릴리스 뷰어 (읽기 전용) ─────────────────────────────────────────────
 export const k8sHelmApi = {
   releases: (clusterId: string, namespace?: string) =>
@@ -1682,6 +1722,20 @@ export const metricTrendApi = {
     api.get<{ enabled: boolean; cron: string; lastRunAt: string | null; nextRun: string | null }>(`/metric-trend/schedule`),
   setSchedule: (enabled: boolean, cron: string) =>
     api.put<{ enabled: boolean; cron: string; nextRun: string | null }>(`/metric-trend/schedule`, { enabled, cron }),
+};
+
+// ── Reactions API (이모지 공감 — ops_note / work_item_comment / work_guide 공통) ──
+export const reactionsApi = {
+  get: (targetType: string, targetId: string) =>
+    api.get<import('@/types').ReactionSummary>('/reactions', {
+      params: { target_type: targetType, target_id: targetId },
+    }),
+  toggle: (targetType: string, targetId: string, emoji: string) =>
+    api.post<import('@/types').ReactionSummary>('/reactions/toggle', { targetType, targetId, emoji }),
+  batch: (targetType: string, targetIds: string[]) =>
+    api.get<Record<string, import('@/types').ReactionSummary>>('/reactions/batch', {
+      params: { target_type: targetType, target_ids: targetIds.join(',') },
+    }),
 };
 
 export default api;

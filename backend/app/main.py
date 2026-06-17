@@ -30,6 +30,7 @@ from app.routers import (
     work_guide_router,
     knowledge_router,
     ops_note_router,
+    reactions_router,
     mindmap_router,
     management_server_router,
     infra_nodes_router,
@@ -62,10 +63,12 @@ from app.routers import (
     lake_service_types_router,
     ops_check_router,
     k8s_resources_router,
+    k8s_allocation_router,
     k8s_helm_router,
     k8s_exec_router,
     metric_trend_router,
     service_topology_router,
+    cluster_items_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -757,6 +760,13 @@ def _run_migrations():
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
 
+    # cluster_items: 현황 아이템 — 문자형/도메인상태 컬럼은 구버전 DB 호환을 위해 보강.
+    if "cluster_items" in inspector.get_table_names():
+        _safe_add_column("cluster_items", "current_text", "TEXT")
+        _safe_add_column("cluster_items", "previous_text", "TEXT")
+        _safe_add_column("cluster_items", "result_status", "VARCHAR(20)")
+        _safe_create_index("ix_cluster_items_cluster", "cluster_items", "(cluster_id)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
@@ -837,6 +847,26 @@ def _seed_default_metric_cards():
 
         db.add_all(defaults)
         db.commit()
+    finally:
+        db.close()
+
+
+def _seed_cluster_items():
+    """모든 클러스터에 기본(builtin) 아이템(K8s 노드 수 등)을 보장한다.
+
+    신규 클러스터는 생성 시점에 보장되지만, 구버전 데이터/누락 보정을 위해
+    부팅 시에도 한 번 점검한다. (idempotent — 이미 있으면 skip)
+    """
+    from app.models import Cluster
+    from app.services import cluster_item_service as cis
+
+    db = SessionLocal()
+    try:
+        for cluster in db.query(Cluster).all():
+            try:
+                cis.ensure_builtin_items(db, cluster)
+            except Exception:  # noqa: BLE001
+                db.rollback()
     finally:
         db.close()
 
@@ -1207,6 +1237,7 @@ async def lifespan(app: FastAPI):
     for step_name, step in [
         ("migrations", _run_migrations),
         ("seed_metric_cards", _seed_default_metric_cards),
+        ("seed_cluster_items", _seed_cluster_items),
         ("seed_trend_sources", _seed_default_trend_sources),
         ("seed_playbooks", _seed_default_playbooks),
         ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
@@ -1281,6 +1312,7 @@ app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(knowledge_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(infra_nodes_router, prefix="/api/v1", dependencies=_auth)
@@ -1317,6 +1349,8 @@ app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_au
 app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
 # k8s-resources (Lens 식 상세 관리) — 리소스 탐색 + 쓰기 액션(require_operator) + RBAC/CRD.
 app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_auth)
+# k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
+app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_auth)
 # helm 릴리스 뷰어(읽기 전용).
 app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
 # pod exec 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
@@ -1325,6 +1359,7 @@ app.include_router(k8s_exec_router, prefix="/api/v1")
 app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

@@ -598,6 +598,57 @@ export interface MetricQueryResult {
   error?: string | null;
 }
 
+// ── Cluster Items (현황 관리 대시보드 '아이템' 카드) ─────────────────────
+export type ClusterItemSource = 'manual' | 'auto' | 'ai';
+export type ClusterItemCardSize = 'sm' | 'md' | 'lg';
+
+export interface ClusterItem {
+  id: string;
+  clusterId: string;
+  itemType: string;            // 'node_count' | (확장)
+  title: string;
+  icon?: string | null;
+  description?: string | null;
+  tier: 'basic' | 'advanced';
+  isBuiltin: boolean;
+  sourceMode: ClusterItemSource;
+  autoEnabled: boolean;
+  scheduleHour: number;
+  scheduleMinute: number;
+  cardSize: ClusterItemCardSize;
+  unit?: string | null;
+  sortOrder: number;
+  enabled: boolean;
+  currentValue?: number | null;
+  currentText?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resultDetail?: Record<string, any> | null;
+  resultStatus?: 'healthy' | 'warning' | 'critical' | 'info' | null;
+  lastStatus?: 'ok' | 'error' | 'pending' | null;
+  lastError?: string | null;
+  lastCheckedAt?: string | null;
+  lastSource?: ClusterItemSource | null;
+  previousValue?: number | null;
+  previousText?: string | null;
+  lastChangedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// '아이템 추가' 선택지 메타데이터 (GET /cluster-item-types)
+export interface ClusterItemType {
+  itemType: string;
+  label: string;
+  icon: string;
+  unit: string;
+  description: string;
+  valueKind: 'number' | 'text';
+  defaultSource: ClusterItemSource;
+  defaultScheduleHour: number;
+  builtin: boolean;
+  supportedSources: ClusterItemSource[];
+}
+
 export interface UiSettings {
   appTitle: string;
   navLabels: Record<string, string>;
@@ -607,6 +658,21 @@ export interface UiSettings {
   /** 홈(좌상단) 버튼 아이콘 커스터마이즈 (모드별). 값 형식은 cluster icon 과 동일
    *  (lucide 이름 / 이모지 / base64 data URL). null/undefined 면 기본값(업무=ListTodo, 플랫폼=☸). */
   homeIcons?: HomeIcons;
+  /** 페이지(라우트)별 화면 스타일 오버라이드. 키 '__default__' 는 전 페이지 공통 기본값,
+   *  그 외는 라우트 경로('/path'). 설정된 필드만 적용되고 나머지는 default→테마 폴백. */
+  pageStyles?: Record<string, PageStyle>;
+}
+
+/** 페이지별 화면 스타일 오버라이드 — 모든 필드 optional. */
+export interface PageStyle {
+  /** CSS font-family 값 (예: 'Georgia, serif'). 미지정이면 테마 기본 폰트. */
+  fontFamily?: string;
+  /** 본문 영역 확대 배율 (0.8~1.5). 1/미지정이면 기본 크기. */
+  fontScale?: number;
+  /** 글자색 hex (#RRGGBB). */
+  textColor?: string;
+  /** 배경색 hex (#RRGGBB). */
+  bgColor?: string;
 }
 
 export interface HomeIcons {
@@ -2644,6 +2710,117 @@ export interface K8sPodRichRow {
 }
 export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }
 
+// ── K8s 자원 관리 (allocation: request vs 사용량 slack) ───────────────────────
+// CPU 는 millicores(int), MEM 은 bytes(int). *Display 는 사람이 읽는 문자열.
+export interface AllocNodeRow {
+  name: string;
+  roles: string[];
+  unschedulable: boolean;
+  podCount: number;
+  cpuAllocM: number;
+  memAllocB: number;
+  cpuCapacityM: number;
+  memCapacityB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuSlackM: number;
+  memSlackB: number;
+  cpuAllocDisplay: string;
+  memAllocDisplay: string;
+  cpuUsageDisplay: string | null;
+  memUsageDisplay: string | null;
+  cpuReqDisplay: string;
+  memReqDisplay: string;
+  cpuLimDisplay: string;
+  memLimDisplay: string;
+}
+export interface AllocNodesResponse { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
+
+export interface AllocSummary {
+  nodeCount: number;
+  namespaceCount: number;
+  podCount: number;
+  cpuAllocM: number;
+  memAllocB: number;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  noRequestPods: number;
+}
+
+export interface AllocNamespaceRow {
+  namespace: string;
+  podCount: number;
+  workloadCount: number;
+  noRequestPods: number;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  cpuReqDisplay: string;
+  memReqDisplay: string;
+  cpuUsageDisplay: string | null;
+  memUsageDisplay: string | null;
+}
+export interface AllocNamespacesResponse {
+  count: number;
+  items: AllocNamespaceRow[];
+  summary: AllocSummary;
+  metricsAvailable: boolean;
+  podUsageSkipped: boolean;
+  partial?: boolean;
+}
+
+export interface AllocWorkloadRow {
+  namespace: string;
+  kind: string;
+  name: string;
+  podCount: number;
+  noRequestPods: number;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+}
+export interface AllocWorkloadsResponse { count: number; items: AllocWorkloadRow[]; metricsAvailable: boolean }
+
+export interface AllocContainerCell {
+  name: string;
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+  hasRequests: boolean;
+}
+export interface AllocPodRow {
+  name: string;
+  namespace: string;
+  node: string | null;
+  qos: string | null;
+  phase: string;
+  containers: AllocContainerCell[];
+  cpuReqM: number;
+  memReqB: number;
+  cpuLimM: number;
+  memLimB: number;
+  cpuUsageM: number | null;
+  memUsageB: number | null;
+}
+export interface AllocPodsResponse { count: number; items: AllocPodRow[]; metricsAvailable: boolean }
+
 // ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
 export type MetricTrendDir = 'up' | 'down' | 'flat';
 export interface MetricTrendRow {
@@ -2679,4 +2856,24 @@ export interface MetricChecklistItemT {
   enabled: boolean;
   sortOrder: number;
   params: Record<string, unknown>;
+}
+
+// ── 이모지 공감(리액션) — ops_note / work_item_comment / work_guide 공통 ──────────
+export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide';
+
+// 백엔드 REACTION_EMOJIS 와 동일 순서로 유지.
+export const REACTION_EMOJIS = ['👍', '❤️', '🎉', '✅', '👀', '🙏', '🔥', '😄'] as const;
+
+export interface ReactionGroup {
+  emoji: string;
+  count: number;
+  reacted: boolean;   // 현재 사용자가 눌렀는지
+  users: string[];    // 누른 사람 표시이름(툴팁용)
+}
+
+export interface ReactionSummary {
+  targetType: ReactionTargetType;
+  targetId: string;
+  total: number;
+  groups: ReactionGroup[];
 }

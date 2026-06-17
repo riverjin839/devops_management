@@ -17,20 +17,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import Cluster
+from app.models.user import User
 from app.schemas.cilium_trace import (
     BpfInspectRequest,
     BpfInspectResponse,
     CiliumAgent,
     CiliumAgentsResponse,
+    CiliumExecRequest,
+    CiliumExecResponse,
     CiliumStatusResponse,
 )
+from app.services import audit_logger
 from app.services.cilium_trace_service import (
     HubbleStreamOptions,
     MonitorOptions,
     bpf_inspect,
     detect_status,
+    exec_cilium_command,
     hubble_stream,
     list_agents,
     monitor_stream,
@@ -107,6 +113,37 @@ def cilium_bpf_inspect(
         kind=payload.kind,
         **result,
     )
+
+
+# ── Ad-hoc cilium-dbg 실행 (operator + 감사) ─────────────────────────────────
+@router.post("/{cluster_id}/exec-command", response_model=CiliumExecResponse)
+def cilium_exec_command(
+    cluster_id: UUID,
+    payload: CiliumExecRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """선택 pod 에서 임의 ``cilium-dbg <command_args>`` 실행. 목록에 없는 명령용."""
+    _, kc = _get_cluster_kubeconfig(cluster_id, db)
+    result = exec_cilium_command(
+        kc,
+        pod_name=payload.pod_name,
+        namespace=payload.namespace,
+        command_args=payload.command_args,
+        timeout=payload.timeout,
+    )
+    audit_logger.record(
+        db, action="cilium.exec", actor=actor,
+        status="success" if not result.get("error") else "failure",
+        target_type="cluster", target_id=str(cluster_id),
+        details={"pod": result.get("pod_name"), "command": payload.command_args[:160],
+                 "exit_code": result.get("exit_code")},
+        request=request,
+    )
+    return CiliumExecResponse(cluster_id=cluster_id, command_args=payload.command_args, **{
+        k: v for k, v in result.items() if k in {"raw", "exit_code", "error", "executed", "pod_name", "duration_ms"}
+    })
 
 
 # ── SSE: cilium monitor stream ───────────────────────────────────────────────

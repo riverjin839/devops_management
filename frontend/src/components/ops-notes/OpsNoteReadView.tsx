@@ -1,5 +1,6 @@
 import { Pin, History, ExternalLink } from 'lucide-react';
 import { RichContent } from '@/components/editor';
+import { ReactionBar } from '@/components/common';
 import type { OpsNote } from '@/types';
 import { formatRelativeTime } from '@/lib/utils';
 
@@ -90,7 +91,13 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
         </div>
       )}
 
-      <div className="text-sm text-muted-foreground border-t border-border pt-3 flex gap-6">
+      {/* 공감(이모지 리액션) */}
+      <div className="border-t border-border pt-3 flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">공감</span>
+        <ReactionBar targetType="ops_note" targetId={note.id} />
+      </div>
+
+      <div className="text-sm text-muted-foreground flex gap-6">
         <span>등록: {note.createdAt?.slice(0, 10)}</span>
         {note.updatedAt !== note.createdAt && (
           <span>수정: {note.updatedAt?.slice(0, 10)}</span>

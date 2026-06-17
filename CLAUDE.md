@@ -514,7 +514,12 @@ min-h-screen bg-background
 ```
 
 **레이아웃 규칙:**
-- 부모는 `flex gap-3` (또는 `gap-4`) 가로 레이아웃을 잡고, 사이드바 옆에 `<div className="flex-1 min-w-0">` 으로 본문을 감싼다.
+- **간격 표준 (모든 per-cluster 페이지 동일)**: 컨테이너 행은 `px-3 py-3 flex gap-3` 으로 잡는다.
+  - 메인 사이드바 ↔ 클러스터 사이드바 = `px-3`(12px), 클러스터 사이드바 ↔ 본문 = `gap-3`(12px) → **좌우 간격을 12px 로 대칭/일관**되게 유지한다.
+  - 외곽 wrapper 가 따로 padding 을 줄 때(예: `min-h-screen bg-background p-3`)는 그 padding 이 좌측 간격이 되므로 `p-3`(12px) 로 맞추고 내부 행은 `flex gap-3` 만 쓴다. (이중 padding 금지)
+  - ❌ `px-6`/`py-6`/`gap-4`/`gap-5` 처럼 더 넓거나 페이지마다 다른 값 금지 — 불규칙·과넓은 틈의 원인.
+  - `max-w-[...]` (와이드 화면 가독성) 는 유지 가능하나 `px-3` 은 항상 둬서 최소 간격을 보장한다.
+- 사이드바 옆 본문은 `<div className="flex-1 min-w-0">` 으로 감싼다.
 - 사이드바는 `sticky top-4` 로 고정되어 스크롤해도 따라온다.
 - `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
 

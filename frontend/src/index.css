@@ -787,17 +787,25 @@ html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .week-slider:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
 .week-slider:focus-visible::-webkit-slider-thumb { outline: 2px solid hsl(var(--primary) / 0.4); outline-offset: 2px; }
 
-/* 색 반전 모드 — 어두운 strip 위에서도 track/thumb 이 또렷하게 보이도록. */
-.week-slider-invert::-webkit-slider-runnable-track {
-  background: hsl(var(--background) / 0.22);
-  border-color: hsl(var(--background) / 0.4);
+/* ── 주간 타임라인 색 반전(색반전 토글) ──────────────────────────────────────────
+   업무 현황 홈 "담당자별 진행 현황" 타임라인 카드에만 적용. 스냅 슬라이더 시절의
+   "배경 어둡게 + 글씨 흰색" 반전 느낌 — 표면/텍스트 토큰만 카드 subtree 에서 덮어써서
+   bg-card / text-* / border / bg-secondary 등 token 기반 유틸이 한꺼번에 어두운 팔레트로
+   전환된다. 상태 막대(gradient)·primary 액센트는 literal 색이라 그대로 또렷하게 유지.
+   (사용자별 토글, localStorage 저장.) */
+.timeline-color-invert {
+  --card: 220 17% 12%;
+  --card-foreground: 0 0% 100%;
+  --background: 220 17% 12%;
+  --foreground: 0 0% 100%;
+  --secondary: 220 14% 22%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 220 14% 22%;
+  --muted-foreground: 220 9% 78%;
+  --border: 220 14% 30%;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
 }
-.week-slider-invert::-moz-range-track {
-  background: hsl(var(--background) / 0.22);
-  border-color: hsl(var(--background) / 0.4);
-}
-.week-slider-invert::-webkit-slider-thumb { border-color: hsl(var(--foreground)); }
-.week-slider-invert::-moz-range-thumb { border-color: hsl(var(--foreground)); }
 
 /* ── 업무 현황 스케줄 배경 — 흰색(기본) / 크림(옵션) ──────────────────────────
    업무 현황 홈의 "당일 스케줄 · 담당자별 진행현황" 패널 surface 에만 적용.

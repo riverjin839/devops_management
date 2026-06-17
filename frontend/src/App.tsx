@@ -47,6 +47,7 @@ import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
+import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -57,8 +58,7 @@ import { UsersPage } from '@/pages/UsersPage';
 import { AuditLogsPage } from '@/pages/AuditLogsPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
-import { Sidebar } from '@/components/layout';
-import { NAV_WIDTH } from '@/stores/sidebarStore';
+import { Sidebar, PageStyleProvider } from '@/components/layout';
 import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
@@ -99,10 +99,8 @@ function AppShell() {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       {/* 업무 알람 종은 더 이상 전역 고정하지 않는다 — HomePage(업무 현황) 상단 스트립 우측에 배치. */}
-      <div
-        className="flex-1 min-w-0"
-        style={{ marginLeft: NAV_WIDTH }}
-      >
+      {/* PageStyleProvider — 본문 래퍼. 라우트별 "화면 UI 설정"(폰트/크기/색/배경) 적용. */}
+      <PageStyleProvider>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/cluster-overview" element={<Dashboard />} />
@@ -183,6 +181,9 @@ function AppShell() {
               {/* Lens 식 K8S 상세 관리 — 리소스 탐색 + 쓰기 액션 + 터미널/이벤트/Helm/RBAC/CRD */}
               <Route path="/k8s-manage/:clusterId" element={<K8sManagePage />} />
               <Route path="/k8s-manage" element={<K8sManagePage />} />
+              {/* K8S 자원 관리 — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화 */}
+              <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
+              <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="/knowledge" element={<KnowledgeBasePage />} />
               <Route path="/knowledge/:id" element={<KnowledgeBasePage />} />
@@ -191,7 +192,7 @@ function AppShell() {
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-      </div>
+      </PageStyleProvider>
     </div>
   );
 }
