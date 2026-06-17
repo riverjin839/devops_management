@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Gauge, ChevronRight, ChevronDown, RefreshCw, AlertTriangle,
-  Cpu, MemoryStick, Server, Layers, TrendingDown, BarChart3,
+  Cpu, MemoryStick, Server, Layers, TrendingDown, BarChart3, PackageOpen,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend,
@@ -174,6 +174,9 @@ function SummarySection({ clusterId }: { clusterId: string }) {
   const useEff = s.cpuUsageM == null ? null : ratio(s.cpuUsageM, s.cpuReqM);
   const cpuWasteM = s.cpuUsageM == null ? null : Math.max(0, s.cpuReqM - s.cpuUsageM);
   const memWasteB = s.memUsageB == null ? null : Math.max(0, s.memReqB - s.memUsageB);
+  // 전체 기준 할당 가용(여유) = allocatable − request → 추가로 스케줄 가능한 자원량.
+  const cpuAvailM = Math.max(0, s.cpuAllocM - s.cpuReqM);
+  const memAvailB = Math.max(0, s.memAllocB - s.memReqB);
 
   return (
     <MacCard title="클러스터 요약" bodyPadding="p-3">
@@ -188,6 +191,14 @@ function SummarySection({ clusterId }: { clusterId: string }) {
         <Stat label="CPU 사용효율" value={useEff == null ? '—' : pctText(s.cpuUsageM ?? 0, s.cpuReqM)}
           sub={s.cpuUsageM == null ? '드릴다운에서 확인' : `use ${fmtCores(s.cpuUsageM)}`}
           warn={useEff != null && useEff < 0.3} />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm border-t border-border pt-2">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <PackageOpen className="w-4 h-4 text-emerald-500" /> 할당 가용(여유 = alloc − req):
+        </span>
+        <span className="font-semibold tabular-nums text-emerald-600">CPU {fmtCores(cpuAvailM)} 코어</span>
+        <span className="font-semibold tabular-nums text-emerald-600">MEM {fmtGi(memAvailB)}</span>
+        <span className="text-xs text-muted-foreground">· 추가 스케줄 가능한 자원 (request 미반영분)</span>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm border-t border-border pt-2">
         <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -384,8 +395,8 @@ function NodesView({ clusterId }: { clusterId: string }) {
               <th className="px-3 py-2 font-medium">Node</th>
               <th className="px-3 py-2 font-medium">CPU (alloc 대비)</th>
               <th className="px-3 py-2 font-medium">MEM (alloc 대비)</th>
-              <th className="px-3 py-2 font-medium text-right">CPU slack</th>
-              <th className="px-3 py-2 font-medium text-right">MEM slack</th>
+              <th className="px-3 py-2 font-medium text-right" title="할당 가용(slack=alloc−req) / 할당가능(allocatable)">CPU 가용 / 할당</th>
+              <th className="px-3 py-2 font-medium text-right" title="할당 가용(slack=alloc−req) / 할당가능(allocatable)">MEM 가용 / 할당</th>
               <th className="px-3 py-2 font-medium text-right">Pods</th>
             </tr>
           </thead>
@@ -406,8 +417,14 @@ function NodesView({ clusterId }: { clusterId: string }) {
                   <MeterBar alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB}
                     reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-emerald-600 font-medium">{fmtCores(n.cpuSlackM)}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-emerald-600 font-medium">{fmtGi(n.memSlackB)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  <div className="text-emerald-600 font-medium">{fmtCores(n.cpuSlackM)}</div>
+                  <div className="text-xs text-muted-foreground">/ {fmtCores(n.cpuAllocM)}</div>
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  <div className="text-emerald-600 font-medium">{fmtGi(n.memSlackB)}</div>
+                  <div className="text-xs text-muted-foreground">/ {fmtGi(n.memAllocB)}</div>
+                </td>
                 <td className="px-3 py-2 text-right tabular-nums">{n.podCount}</td>
               </tr>
             ))}

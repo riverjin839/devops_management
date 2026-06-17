@@ -107,7 +107,17 @@ def _iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = No
             kw["field_selector"] = field_selector
         if cont:
             kw["_continue"] = cont
-        resp = list_fn(**kw)
+        try:
+            resp = list_fn(**kw)
+        except Exception:  # noqa: BLE001
+            # 첫 페이지 실패면 진짜 오류 → 호출자가 처리하도록 전파.
+            # 이후 페이지 실패(예: continue 토큰 만료 410 Gone — 대규모 전수 순회 중
+            # etcd compaction)는 graceful: 지금까지 모은 것으로 partial 처리.
+            if seen == 0:
+                raise
+            if report is not None:
+                report.append(True)
+            break
         for it in (resp.items or []):
             yield it
             seen += 1
