@@ -27,6 +27,8 @@ class Progress:
     processed: int = 0
     total: Optional[int] = None
     phase: str = ""
+    # 빌더가 주기적으로 publish 하는 중간(부분) 결과 — 누적 표시용. ready 전에도 노출된다.
+    partial: Any = None
 
     @property
     def ratio(self) -> Optional[float]:
@@ -114,8 +116,22 @@ class SnapshotManager:
             job.finished_at = time.monotonic()
 
     def _view(self, job: _Job) -> dict:
-        data = job.result if job.status == "ready" else job.last_result
-        stale = job.status != "ready" and data is not None
+        # computing 중에는 빌더가 publish 한 부분결과(progress.partial)를 우선 노출하고,
+        # 없으면 직전 성공 결과(stale)를 보여준다. ready 면 최종 결과.
+        if job.status == "ready":
+            data = job.result
+            is_partial = False
+            stale = False
+        else:
+            partial = job.progress.partial
+            if partial is not None:
+                data = partial
+                is_partial = True
+                stale = False
+            else:
+                data = job.last_result
+                is_partial = False
+                stale = data is not None
         return {
             "status": job.status,
             "progress": job.progress.ratio,
@@ -123,6 +139,7 @@ class SnapshotManager:
             "total": job.progress.total,
             "phase": job.progress.phase,
             "data": data,
+            "partial": is_partial,
             "stale": stale,
             "error": job.error,
         }

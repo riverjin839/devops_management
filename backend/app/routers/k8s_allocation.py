@@ -64,7 +64,9 @@ def _envf(name: str, default: float) -> float:
 
 
 # K8s API 호출 서버측 타임아웃 / 페이지네이션 헬퍼는 공용 모듈로 분리.
-from app.services.k8s_paging import iter_all as _iter_all, list_all as _list_all  # noqa: E402
+from app.services.k8s_paging import (  # noqa: E402
+    iter_all as _iter_all, list_all as _list_all, API_TIMEOUT as _API_TIMEOUT,
+)
 _METRICS_TIMEOUT = (3.05, _envf("K8S_ALLOC_METRICS_TIMEOUT", 8.0))  # 느리면 usage 생략(best-effort)
 # cluster-wide pod usage(metrics) 는 활성 Pod 가 이 수 이하일 때만 시도(대규모 클러스터 보호).
 _POD_USAGE_MAX = 6000
@@ -365,6 +367,49 @@ class PodAllocRow(BaseModel):
 
 
 # ── 공유 스냅샷 (노드 + 네임스페이스 집계) ──────────────────────────────────────────
+# 부분 결과 publish 주기(초) — 너무 잦으면 직렬화 부하, 너무 길면 누적 체감 저하.
+_PARTIAL_PUBLISH_INTERVAL = 1.0
+
+
+def _assemble_overview(node_base, per_node, per_ns, node_usage, summary, ns_total, *,
+                       metrics_available: bool, pod_usage_skipped: bool, partial: bool) -> dict:
+    """누적/최종 결과를 직렬화 가능한 안정 스냅샷으로 조립(**accumulator 비파괴**).
+
+    per_node/per_ns 는 복사본을 만들어 반환하므로, 빌더가 계속 집계해도 이미 publish 된
+    부분 결과가 변형되지 않는다(요청 스레드 직렬화 중 RuntimeError 방지). node_base/node_usage
+    는 pod 루프 이후 변형되지 않으므로 참조 공유해도 안전하다.
+    """
+    cpu_alloc = sum(nb["cpu_alloc"] for nb in node_base.values())
+    mem_alloc = sum(nb["mem_alloc"] for nb in node_base.values())
+    out_node = {k: dict(v) for k, v in per_node.items()}
+    out_ns = {
+        ns: {
+            "rc": s["rc"], "rm": s["rm"], "lc": s["lc"], "lm": s["lm"],
+            "uc": s["uc"], "um": s["um"], "pods": s["pods"], "norq": s["norq"],
+            "has_usage": s["has_usage"], "workload_count": len(s["owners"]),
+        }
+        for ns, s in per_ns.items()
+    }
+    return {
+        "node_base": node_base,
+        "per_node": out_node,
+        "node_usage": node_usage,
+        "per_ns": out_ns,
+        "summary": {
+            "node_count": len(node_base), "namespace_count": ns_total, "pod_count": summary["pods"],
+            "cpu_alloc_m": cpu_alloc, "mem_alloc_b": mem_alloc,
+            "cpu_req_m": summary["rc"], "mem_req_b": summary["rm"],
+            "cpu_lim_m": summary["lc"], "mem_lim_b": summary["lm"],
+            "cpu_usage_m": (summary["uc"] if metrics_available else None),
+            "mem_usage_b": (summary["um"] if metrics_available else None),
+            "no_request_pods": summary["norq"],
+        },
+        "metrics_available": metrics_available,
+        "pod_usage_skipped": pod_usage_skipped,
+        "partial": partial,
+    }
+
+
 def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> dict:
     """단일 Pod 순회로 노드/네임스페이스 집계를 모두 계산. 결과는 작은 숫자 dict 만 캐시.
 
@@ -405,12 +450,10 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
     per_node: dict[str, dict] = {}
     per_ns: dict[str, dict] = {}
     summary = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0, "pods": 0, "norq": 0}
-    # (ns,pod)->(ns,node). cluster-wide usage 병합용. 활성 Pod 가 _POD_USAGE_MAX 초과하면
-    # usage 를 어차피 생략하므로 맵을 버려 메모리를 아낀다.
-    pod_loc: dict[tuple[str, str], tuple[str, Optional[str]]] = {}
-    loc_dropped = False
 
     # Pod 를 **페이지 단위로 스트리밍**하며 즉시 집계(전량 메모리 적재 금지 → OOM/502 방지).
+    # 약 1초마다 부분 결과를 progress.partial 로 publish → 프론트가 누적 표시.
+    last_pub = time.monotonic()
     for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
                        field_selector=_ACTIVE_FIELD_SELECTOR,
                        deadline=deadline, report=partial_flag):
@@ -435,10 +478,9 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
         if no_req:
             s["norq"] += 1
 
-        # per-node
+        # per-node (request/limit 합산. usage 는 노드 metrics(node_usage) 사용)
         if node and node in node_base:
-            ag = per_node.setdefault(node, {"rc": 0, "rm": 0, "lc": 0, "lm": 0,
-                                            "uc": 0, "um": 0, "pods": 0, "has_usage": False})
+            ag = per_node.setdefault(node, {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0})
             ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm
             ag["pods"] += 1
 
@@ -448,59 +490,31 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
         if no_req:
             summary["norq"] += 1
 
-        if not loc_dropped:
-            if summary["pods"] > _POD_USAGE_MAX:
-                pod_loc.clear()
-                loc_dropped = True
-            else:
-                pod_loc[(ns, p.metadata.name)] = (ns, node)
+        # 부분 결과 publish(usage 미반영=pending). accumulator 비파괴 복사로 안전.
+        if progress is not None:
+            now = time.monotonic()
+            if now - last_pub >= _PARTIAL_PUBLISH_INTERVAL:
+                progress.partial = _assemble_overview(
+                    node_base, per_node, per_ns, node_usage, summary, ns_total,
+                    metrics_available=False, pod_usage_skipped=True, partial=bool(partial_flag),
+                )
+                last_pub = now
 
     partial = bool(partial_flag)
-    # cluster-wide pod usage — 대규모/예산초과(partial) 클러스터에서는 생략(드릴다운에서 확인).
-    metrics_available = False
-    pod_usage_skipped = partial or loc_dropped or summary["pods"] > _POD_USAGE_MAX
-    if not pod_usage_skipped:
-        pu = _pod_usage(client)
-        if pu:
-            metrics_available = True
-            for (ns, pod), u in pu.items():
-                loc = pod_loc.get((ns, pod))
-                if not loc:
-                    continue
-                _, node = loc
-                cpu, mem = u["cpu"], u["mem"]
-                if ns in per_ns:
-                    per_ns[ns]["uc"] += cpu; per_ns[ns]["um"] += mem; per_ns[ns]["has_usage"] = True
-                if node and node in per_node:
-                    per_node[node]["uc"] += cpu; per_node[node]["um"] += mem
-                    per_node[node]["has_usage"] = True
-                summary["uc"] += cpu; summary["um"] += mem
+    # cluster-wide pod usage — namespace 단위로 합산(대규모에서도 NS 랭킹 실사용 표시). best-effort.
+    pu = _pod_usage(client)
+    metrics_available = bool(pu)
+    if pu:
+        for (ns, _pod), u in pu.items():
+            cpu, mem = u["cpu"], u["mem"]
+            if ns in per_ns:
+                per_ns[ns]["uc"] += cpu; per_ns[ns]["um"] += mem; per_ns[ns]["has_usage"] = True
+            summary["uc"] += cpu; summary["um"] += mem
 
-    cpu_alloc = sum(nb["cpu_alloc"] for nb in node_base.values())
-    mem_alloc = sum(nb["mem_alloc"] for nb in node_base.values())
-
-    # owners set → count (직렬화 불가한 set 제거)
-    for s in per_ns.values():
-        s["workload_count"] = len(s.pop("owners"))
-
-    return {
-        "node_base": node_base,
-        "per_node": per_node,
-        "node_usage": node_usage,
-        "per_ns": per_ns,
-        "summary": {
-            "node_count": len(node_base), "namespace_count": ns_total, "pod_count": summary["pods"],
-            "cpu_alloc_m": cpu_alloc, "mem_alloc_b": mem_alloc,
-            "cpu_req_m": summary["rc"], "mem_req_b": summary["rm"],
-            "cpu_lim_m": summary["lc"], "mem_lim_b": summary["lm"],
-            "cpu_usage_m": (summary["uc"] if metrics_available else None),
-            "mem_usage_b": (summary["um"] if metrics_available else None),
-            "no_request_pods": summary["norq"],
-        },
-        "metrics_available": metrics_available,
-        "pod_usage_skipped": pod_usage_skipped,
-        "partial": partial,
-    }
+    return _assemble_overview(
+        node_base, per_node, per_ns, node_usage, summary, ns_total,
+        metrics_available=metrics_available, pod_usage_skipped=(not metrics_available), partial=partial,
+    )
 
 
 # 비싼 overview 집계는 백그라운드 스냅샷 매니저로 수행(요청 스레드 비블로킹 → 502 방지).
@@ -531,7 +545,27 @@ def _alloc_meta(view: dict) -> dict:
         "processed": view["processed"],
         "total": view["total"],
         "stale": view["stale"],
+        "partial": view.get("partial", False),  # 부분(누적) 결과 여부
     }
+
+
+def _node_row(name: str, nb: dict, ag: dict, u) -> NodeAllocRow:
+    """node_base 항목(nb) + per_node 집계(ag) + 노드 usage 튜플(u)로 NodeAllocRow 조립."""
+    cpu_alloc, mem_alloc = nb["cpu_alloc"], nb["mem_alloc"]
+    return NodeAllocRow(
+        name=name, roles=nb["roles"], unschedulable=nb["unschedulable"],
+        pod_count=ag.get("pods", 0),
+        cpu_alloc_m=cpu_alloc, mem_alloc_b=mem_alloc,
+        cpu_capacity_m=nb["cpu_cap"], mem_capacity_b=nb["mem_cap"],
+        cpu_usage_m=(u[0] if u else None), mem_usage_b=(u[1] if u else None),
+        cpu_req_m=ag["rc"], mem_req_b=ag["rm"], cpu_lim_m=ag["lc"], mem_lim_b=ag["lm"],
+        cpu_slack_m=cpu_alloc - ag["rc"], mem_slack_b=mem_alloc - ag["rm"],
+        cpu_alloc_display=_fmt_cpu(cpu_alloc), mem_alloc_display=_fmt_mem(mem_alloc),
+        cpu_usage_display=(_fmt_cpu(u[0]) if u else None),
+        mem_usage_display=(_fmt_mem(u[1]) if u else None),
+        cpu_req_display=_fmt_cpu(ag["rc"]), mem_req_display=_fmt_mem(ag["rm"]),
+        cpu_lim_display=_fmt_cpu(ag["lc"]), mem_lim_display=_fmt_mem(ag["lm"]),
+    )
 
 
 @router.get("/{cluster_id}/allocation/nodes")
@@ -548,28 +582,46 @@ def allocation_nodes(cluster_id: UUID, db: Session = Depends(get_db)):
     per_node = ov["per_node"]
     node_usage = ov["node_usage"]
 
-    rows: list[NodeAllocRow] = []
-    for name, nb in node_base.items():
-        ag = per_node.get(name, {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0})
-        cpu_alloc, mem_alloc = nb["cpu_alloc"], nb["mem_alloc"]
-        u = node_usage.get(name)
-        rows.append(NodeAllocRow(
-            name=name, roles=nb["roles"], unschedulable=nb["unschedulable"],
-            pod_count=ag["pods"],
-            cpu_alloc_m=cpu_alloc, mem_alloc_b=mem_alloc,
-            cpu_capacity_m=nb["cpu_cap"], mem_capacity_b=nb["mem_cap"],
-            cpu_usage_m=(u[0] if u else None), mem_usage_b=(u[1] if u else None),
-            cpu_req_m=ag["rc"], mem_req_b=ag["rm"], cpu_lim_m=ag["lc"], mem_lim_b=ag["lm"],
-            cpu_slack_m=cpu_alloc - ag["rc"], mem_slack_b=mem_alloc - ag["rm"],
-            cpu_alloc_display=_fmt_cpu(cpu_alloc), mem_alloc_display=_fmt_mem(mem_alloc),
-            cpu_usage_display=(_fmt_cpu(u[0]) if u else None),
-            mem_usage_display=(_fmt_mem(u[1]) if u else None),
-            cpu_req_display=_fmt_cpu(ag["rc"]), mem_req_display=_fmt_mem(ag["rm"]),
-            cpu_lim_display=_fmt_cpu(ag["lc"]), mem_lim_display=_fmt_mem(ag["lm"]),
-        ))
+    empty_ag = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0}
+    rows = [_node_row(name, nb, per_node.get(name, empty_ag), node_usage.get(name))
+            for name, nb in node_base.items()]
     rows.sort(key=lambda r: r.name)
     return {"count": len(rows), "items": rows, "metrics_available": bool(node_usage),
             "partial": ov.get("partial", False), **_alloc_meta(view)}
+
+
+@router.get("/{cluster_id}/allocation/nodes/{node}")
+def allocation_node_refresh(cluster_id: UUID, node: str, db: Session = Depends(get_db)):
+    """단일 노드만 즉시 재계산(개별 REFRESH). 스냅샷 미경유 — 그 노드의 활성 파드만 조회. (요구 3)"""
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+    core = k8s_client.CoreV1Api(client)
+    try:
+        n = core.read_node(node, _request_timeout=_API_TIMEOUT)
+    except Exception as e:  # noqa: BLE001
+        msg = str(e).lower()
+        code = 404 if "not found" in msg or '"code":404' in msg or "(404)" in msg else 502
+        raise HTTPException(status_code=code, detail=f"노드 조회 실패: {node}") from e
+
+    labels = n.metadata.labels or {}
+    alloc = (n.status.allocatable or {}) if n.status else {}
+    cap = (n.status.capacity or {}) if n.status else {}
+    nb = {
+        "roles": _node_roles(labels),
+        "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
+        "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
+        "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
+    }
+    fs = f"spec.nodeName={node},{_ACTIVE_FIELD_SELECTOR}"
+    pods = _list_all(lambda **kw: core.list_pod_for_all_namespaces(**kw), field_selector=fs)
+    ag = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0}
+    for p in pods:
+        if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+            continue
+        rc, rm, lc, lm = _sum_resources(p.spec.containers if p.spec else [])
+        ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm; ag["pods"] += 1
+    u = _node_usage(client).get(node)
+    return {"item": _node_row(node, nb, ag, u), "metrics_available": bool(u)}
 
 
 @router.get("/{cluster_id}/allocation/namespaces")

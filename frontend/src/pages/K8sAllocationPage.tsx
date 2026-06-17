@@ -10,12 +10,21 @@ import {
 } from 'recharts';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState, Skeleton, SnapshotProgressCard } from '@/components/common';
+import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
-  useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods,
+  useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods, useRefreshAllocNode,
 } from '@/hooks/useK8sAllocation';
 import type { AllocNodeRow, AllocNamespaceRow, AllocWorkloadRow } from '@/types';
+
+// 자동갱신 간격 옵션 (ms). false = 끔.
+const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
+  { label: '자동갱신 끔', ms: false },
+  { label: '15초', ms: 15_000 },
+  { label: '30초', ms: 30_000 },
+  { label: '1분', ms: 60_000 },
+  { label: '5분', ms: 300_000 },
+];
 
 // ── 포맷/계산 헬퍼 ───────────────────────────────────────────────────────────
 const ratio = (part: number, whole: number) => (whole > 0 ? part / whole : 0);
@@ -102,6 +111,16 @@ export function K8sAllocationPage() {
   const navigate = useNavigate();
   const { data: clusters = [] } = useClusters();
   const [view, setView] = useState<ViewMode>('visual');
+  const [autoMs, setAutoMs] = useState<number | false>(false);
+
+  // 페이지 레벨 observer — 폴링(자동갱신/computing) 구동 + 진행률 바 + 수동 새로고침.
+  // (하위 뷰들과 동일 queryKey 라 캐시 공유)
+  const nsQ = useAllocNamespaces(clusterId, autoMs);
+  const nodesQ = useAllocNodes(clusterId, autoMs);
+  const computing = nsQ.data?.status === 'computing' || nodesQ.data?.status === 'computing';
+  const progSrc = nsQ.data?.status === 'computing' ? nsQ.data : nodesQ.data;
+  const refreshAll = () => { nsQ.refetch(); nodesQ.refetch(); };
+  const isFetching = nsQ.isFetching || nodesQ.isFetching;
 
   useEffect(() => {
     if (!clusterId && clusters.length > 0) {
@@ -130,7 +149,36 @@ export function K8sAllocationPage() {
               <Gauge className="w-5 h-5 text-orange-500" /> K8S 자원 관리
             </h1>
             <span className="text-sm text-muted-foreground">노드 여유 대비 request·사용량(slack) 진단</span>
+
+            {clusterId && (
+              <div className="ml-auto flex items-center gap-2">
+                <button onClick={refreshAll}
+                  className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card">
+                  <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+                </button>
+                <select
+                  value={autoMs === false ? 'off' : String(autoMs)}
+                  onChange={(e) => setAutoMs(e.target.value === 'off' ? false : Number(e.target.value))}
+                  className="text-sm px-2 py-1 rounded-lg border border-border bg-card text-foreground"
+                  title="자동 갱신 간격"
+                >
+                  {AUTO_OPTIONS.map((o) => (
+                    <option key={o.label} value={o.ms === false ? 'off' : String(o.ms)}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
+
+          {/* 누적 집계 진행률 — 데이터(부분결과)는 그대로 두고 별도 바로 표시 */}
+          {clusterId && computing && (
+            <SnapshotProgressBar
+              processed={progSrc?.processed ?? 0}
+              total={progSrc?.total ?? null}
+              progress={progSrc?.progress ?? null}
+              label="자원 누적 집계 중"
+            />
+          )}
 
           {!clusterId ? (
             <MacCard><EmptyState title="클러스터를 선택하세요" description="좌측에서 클러스터를 고르면 자원 현황이 표시됩니다." /></MacCard>
@@ -200,6 +248,9 @@ function SummarySection({ clusterId }: { clusterId: string }) {
           sub={s.cpuUsageM == null ? '드릴다운에서 확인' : `use ${fmtCores(s.cpuUsageM)}`}
           warn={useEff != null && useEff < 0.3} />
       </div>
+
+      {/* Pod 스케줄 가능 수 계산기 (MEM 할당효율 아래) */}
+      <PodScheduleCalc clusterId={clusterId} />
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm border-t border-border pt-2">
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <PackageOpen className="w-4 h-4 text-emerald-500" /> 할당 가용(여유 = alloc − req):
@@ -220,15 +271,71 @@ function SummarySection({ clusterId }: { clusterId: string }) {
           </span>
         )}
         {data.partial && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700 border border-amber-300">
-            <AlertTriangle className="w-3 h-3" /> 부분 집계 — 초대형 클러스터로 시간 예산 내 일부만 수집됨(드릴다운은 정확)
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-sky-100 text-sky-700 border border-sky-300">
+            <RefreshCw className="w-3 h-3 animate-spin" /> 누적 집계 중 — 부분 결과(완료 시 확정)
           </span>
         )}
         {data.podUsageSkipped && (
-          <span className="text-xs text-muted-foreground">· 대규모 클러스터 — cluster 사용량 집계 생략(드릴다운에서 NS 단위 확인)</span>
+          <span className="text-xs text-muted-foreground">· 메트릭 서버 미가용 — 사용량(use) 미표시</span>
         )}
       </div>
     </MacCard>
+  );
+}
+
+// ── Pod 스케줄 가능 수 계산기 ──────────────────────────────────────────────────
+// "CPU x코어 / MEM yGi 인 Pod 를 현재 여유(allocatable−request)로 몇 개 스케줄 가능한가"
+function PodScheduleCalc({ clusterId }: { clusterId: string }) {
+  const { data } = useAllocNodes(clusterId);
+  const [cpu, setCpu] = useState('0.5');   // 코어
+  const [mem, setMem] = useState('1');     // Gi
+
+  const result = useMemo(() => {
+    const reqCpuM = Math.round((parseFloat(cpu) || 0) * 1000);
+    const reqMemB = Math.round((parseFloat(mem) || 0) * 1024 ** 3);
+    if (reqCpuM <= 0 && reqMemB <= 0) return null;
+    const nodes = (data?.items ?? []).filter((n) => !n.unschedulable);
+    let total = 0;
+    const per: { name: string; fit: number }[] = [];
+    for (const n of nodes) {
+      const freeCpu = Math.max(0, n.cpuAllocM - n.cpuReqM);
+      const freeMem = Math.max(0, n.memAllocB - n.memReqB);
+      const byCpu = reqCpuM > 0 ? Math.floor(freeCpu / reqCpuM) : Infinity;
+      const byMem = reqMemB > 0 ? Math.floor(freeMem / reqMemB) : Infinity;
+      const fit = Math.min(byCpu, byMem);
+      if (Number.isFinite(fit) && fit > 0) { total += fit; per.push({ name: n.name, fit }); }
+    }
+    per.sort((a, b) => b.fit - a.fit);
+    return { total, top: per.slice(0, 3), nodeCount: nodes.length };
+  }, [data, cpu, mem]);
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm border-t border-border pt-2">
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <Cpu className="w-4 h-4 text-sky-500" /> Pod 스케줄 가능 수:
+      </span>
+      <label className="flex items-center gap-1 text-xs text-muted-foreground">
+        CPU
+        <input type="number" min="0" step="0.1" value={cpu} onChange={(e) => setCpu(e.target.value)}
+          className="w-16 px-1.5 py-0.5 rounded border border-border bg-card text-foreground tabular-nums" /> 코어
+      </label>
+      <label className="flex items-center gap-1 text-xs text-muted-foreground">
+        MEM
+        <input type="number" min="0" step="0.5" value={mem} onChange={(e) => setMem(e.target.value)}
+          className="w-16 px-1.5 py-0.5 rounded border border-border bg-card text-foreground tabular-nums" /> Gi
+      </label>
+      {result ? (
+        <>
+          <span className="font-semibold tabular-nums text-sky-600">≈ {fmtN(result.total)}개</span>
+          <span className="text-xs text-muted-foreground">
+            ({result.nodeCount} schedulable 노드 · alloc−req 기준
+            {result.top.length ? ` · 상위 ${result.top.map((t) => `${t.name}:${t.fit}`).join(', ')}` : ''})
+          </span>
+        </>
+      ) : (
+        <span className="text-xs text-muted-foreground">CPU/MEM 요청량을 입력하세요.</span>
+      )}
+    </div>
   );
 }
 
@@ -369,6 +476,7 @@ function VisualView({ clusterId }: { clusterId: string }) {
 type NodeSort = 'name' | 'cpuSlack' | 'memSlack';
 function NodesView({ clusterId }: { clusterId: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNodes(clusterId);
+  const refreshNode = useRefreshAllocNode(clusterId);
   const [sort, setSort] = useState<NodeSort>('cpuSlack');
 
   const rows = useMemo(() => {
@@ -423,7 +531,16 @@ function NodesView({ clusterId }: { clusterId: string }) {
             {rows.map((n: AllocNodeRow) => (
               <tr key={n.name} className="border-t border-border align-middle hover:bg-muted/10">
                 <td className="px-3 py-2">
-                  <div className="font-medium">{n.name}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{n.name}</span>
+                    <button
+                      onClick={() => refreshNode.mutate(n.name)}
+                      title="이 노드만 새로고침"
+                      className="text-muted-foreground hover:text-primary shrink-0"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {n.roles.join(', ')}{n.unschedulable && <span className="text-amber-600"> · cordoned</span>}
                   </div>

@@ -1,5 +1,36 @@
 import { Loader2 } from 'lucide-react';
 
+interface SnapshotProgressBarProps {
+  processed: number;
+  total: number | null;
+  progress: number | null;   // 0..1 또는 null(불확정)
+  label?: string;
+}
+
+/**
+ * 누적 표시 중 화면 상단에 두는 **얇은 진행률 바**. 데이터(부분결과)는 그대로 보이고
+ * 이 바만 별도로 진행률을 나타낸다(데이터를 가리지 않음).
+ */
+export function SnapshotProgressBar({ processed, total, progress, label }: SnapshotProgressBarProps) {
+  const pct = progress != null ? Math.min(100, Math.round(progress * 100)) : null;
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-3 py-1.5">
+      <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+      <span className="text-xs text-muted-foreground whitespace-nowrap">
+        {label ?? '집계 중'}{pct != null ? ` · ${pct}%` : ''} · {processed.toLocaleString()}
+        {total != null ? ` / ${total.toLocaleString()}` : ''}
+      </span>
+      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden min-w-[80px]">
+        {pct != null ? (
+          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+        ) : (
+          <div className="h-full w-1/3 bg-primary/70 animate-pulse" />
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface SnapshotProgressCardProps {
   /** 지금까지 처리한 개수 */
   processed: number;

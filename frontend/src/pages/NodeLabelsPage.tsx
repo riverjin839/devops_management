@@ -73,7 +73,7 @@ export function NodeLabelsPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Tags className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-semibold">Node Labels</h1>
+            <h1 className="text-xl font-semibold">K8S 노드 라벨</h1>
             {activeClusterName !== '-' && (
               <span className="text-sm text-muted-foreground">
                 — <span className="font-medium text-foreground">{activeClusterName}</span>

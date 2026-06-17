@@ -1620,6 +1620,11 @@ export const k8sAllocationApi = {
       `/k8s/${clusterId}/allocation/nodes`,
       { timeout: 120_000 },
     ),
+  node: (clusterId: string, node: string) =>
+    api.get<import('@/types').AllocNodeRefreshResponse>(
+      `/k8s/${clusterId}/allocation/nodes/${encodeURIComponent(node)}`,
+      { timeout: 30_000 },
+    ),
   namespaces: (clusterId: string) =>
     api.get<import('@/types').AllocNamespacesResponse>(
       `/k8s/${clusterId}/allocation/namespaces`,

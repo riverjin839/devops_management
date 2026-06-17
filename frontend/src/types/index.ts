@@ -2662,8 +2662,11 @@ export interface AllocSnapshotMeta {
   processed?: number;
   total?: number | null;
   stale?: boolean;
+  partial?: boolean;          // 부분(누적) 결과 여부
 }
 export interface AllocNodesResponse extends AllocSnapshotMeta { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
+/** 단일 노드 즉시 재계산(개별 REFRESH) 응답. */
+export interface AllocNodeRefreshResponse { item: AllocNodeRow; metricsAvailable: boolean }
 
 export interface AllocSummary {
   nodeCount: number;
