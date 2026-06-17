@@ -50,6 +50,10 @@ export interface Cluster {
   // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
   // null/empty 면 status 기반 기본 아이콘으로 fallback.
   icon?: string | null;
+  // coroot APM 연동 — project 매핑 / URL 오버라이드 / 토글.
+  corootProject?: string | null;
+  corootUrl?: string | null;
+  corootEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +138,9 @@ export interface ClusterManageUpdate {
   bgpEnabled?: boolean;
   asNumber?: string;
   icon?: string | null;
+  corootProject?: string | null;
+  corootUrl?: string | null;
+  corootEnabled?: boolean;
 }
 
 // Addon
@@ -2884,4 +2891,21 @@ export interface ReactionSummary {
   targetId: string;
   total: number;
   groups: ReactionGroup[];
+}
+
+// ── Coroot APM (애플리케이션 옵저버빌리티 — 별도 배포된 coroot 연동) ──────────
+// 백엔드 응답(snake_case)은 api 인터셉터가 camelCase 로 변환한다.
+export interface CorootSummary {
+  status: 'ok' | 'error' | 'offline';
+  serviceCount: number | null;
+  healthy: number | null;
+  alerting: number | null;
+  error: string | null;
+  raw: unknown | null;
+}
+
+export interface CorootDeepLink {
+  url: string | null;
+  status: 'ok' | 'offline';
+  detail?: string;
 }
