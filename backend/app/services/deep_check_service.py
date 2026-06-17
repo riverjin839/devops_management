@@ -156,6 +156,95 @@ class DeepCheckService:
             result["persisted_result_id"] = str(row.id)
         return result
 
+    def run_check_type_once(
+        self,
+        check_type: str,
+        *,
+        cluster: Cluster | None = None,
+        params: dict[str, Any] | None = None,
+        thresholds: dict[str, Any] | None = None,
+        in_cluster: bool = False,
+        persist: bool = False,
+    ) -> dict[str, Any]:
+        """저장된 정의 없이 check_type 을 ad-hoc 으로 1회 실행 (런타임 params 주입 가능).
+
+        ``run_definition_once`` 는 저장된 정의의 params 만 쓰므로 per-node(node_name) 같은
+        런타임 인자를 넘길 수 없다. 이 메서드는 registry 의 default_thresholds/default_params 위에
+        호출자 인자를 덮어써 실행한다. (예: 노드별 '검증' 버튼 / sync 직후 자동검증)
+        """
+        from app.models import StatusEnum
+        from app.services.deep_checkers.registry import REGISTRY, get_step_plan
+
+        cls = get_checker_class(check_type)
+        entry = REGISTRY.get(check_type)
+        if cls is None or entry is None:
+            return {
+                "check_type": check_type,
+                "status": StatusEnum.pending.value,
+                "message": f"알 수 없는 check_type: {check_type}",
+                "details": {"check_type": check_type},
+                "duration_ms": 0,
+                "steps": [],
+                "step_plan": [],
+            }
+        spec = entry[1]
+        eff_thresholds = {**(spec.default_thresholds or {}), **(thresholds or {})}
+        eff_params = {**(spec.default_params or {}), **(params or {})}
+
+        ctx = DeepCheckContext(
+            cluster=cluster,
+            thresholds=eff_thresholds,
+            params=eff_params,
+            in_cluster=in_cluster,
+        )
+        outcome = cls().safe_run(ctx)
+        steps = getattr(outcome, "steps", []) or []
+        details = dict(outcome.details or {})
+        if steps:
+            details["_steps"] = steps
+        result = {
+            "check_type": check_type,
+            "status": outcome.status.value,
+            "message": outcome.message,
+            "details": details,
+            "duration_ms": outcome.duration_ms,
+            "steps": steps,
+            "step_plan": get_step_plan(check_type),
+        }
+        if persist and cluster is not None:
+            row = DeepCheckResult(
+                cluster_id=cluster.id,
+                daily_check_log_id=None,
+                definition_id=None,
+                check_type=check_type,
+                status=outcome.status,
+                message=outcome.message,
+                details=details,
+                duration_ms=outcome.duration_ms,
+                checked_at=datetime.utcnow(),
+            )
+            self.db.add(row)
+            self.db.commit()
+            result["persisted_result_id"] = str(row.id)
+        return result
+
+    def run_node_health_once(
+        self,
+        cluster: Cluster | None,
+        *,
+        node_name: str,
+        in_cluster: bool = False,
+        persist: bool = False,
+    ) -> dict[str, Any]:
+        """단일 노드 health 검증 (노드별 '검증' 버튼 / sync 직후 자동검증)."""
+        return self.run_check_type_once(
+            "node_health",
+            cluster=cluster,
+            params={"node_name": node_name},
+            in_cluster=in_cluster,
+            persist=persist,
+        )
+
     # ──────────────────────────────────────────────────────────────
     # Ingest (in_cluster 모드 → 관리 backend 로 push)
     # ──────────────────────────────────────────────────────────────
