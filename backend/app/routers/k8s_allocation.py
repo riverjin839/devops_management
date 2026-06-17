@@ -68,7 +68,8 @@ def _envf(name: str, default: float) -> float:
 _API_READ_TIMEOUT = _envf("K8S_ALLOC_API_READ_TIMEOUT", 12.0)
 _API_TIMEOUT = (3.05, _API_READ_TIMEOUT)
 _METRICS_TIMEOUT = (3.05, _envf("K8S_ALLOC_METRICS_TIMEOUT", 8.0))  # 느리면 usage 생략(best-effort)
-_PAGE_LIMIT = 1000             # 페이지네이션 페이지 크기(round-trip 수 ↓)
+_PAGE_LIMIT = int(_envf("K8S_ALLOC_PAGE_LIMIT", 500))  # 페이지 크기. 작을수록 한 페이지 read 가 빨라
+                                                       # 느린/대형 apiserver 에서 타임아웃·502 위험 ↓ (env 조정 가능).
 # cluster-wide pod usage(metrics) 는 활성 Pod 가 이 수 이하일 때만 시도(대규모 클러스터 보호).
 _POD_USAGE_MAX = 6000
 # 전체 스냅샷(전량 페이지네이션 포함) 총 벽시계 예산(초). ingress/proxy 타임아웃보다 충분히
@@ -92,6 +93,23 @@ def _cached(key: str, producer: Callable[[], Any]) -> Any:
     return val
 
 
+def _is_timeout_error(e: Exception) -> bool:
+    """게이트웨이/네트워크 타임아웃·일시적 서버오류성 예외인지. 이런 류는 첫 페이지에서
+    터지더라도 502 로 전파해 재시도 루프를 만들기보다 partial(빈) 결과로 처리하는 게 낫다.
+    반면 401/403/404 같은 설정/인증 오류는 그대로 전파해 명확히 노출한다."""
+    try:
+        import urllib3
+        if isinstance(e, (urllib3.exceptions.TimeoutError, urllib3.exceptions.MaxRetryError)):
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    status = getattr(e, "status", None)
+    if status in (408, 429, 500, 502, 503, 504):
+        return True
+    msg = str(e).lower()
+    return "timed out" in msg or "timeout" in msg or "max retries" in msg
+
+
 def _iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
               hard_cap: int = 200_000, deadline: Optional[float] = None,
               report: Optional[list] = None):
@@ -111,11 +129,14 @@ def _iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = No
             kw["_continue"] = cont
         try:
             resp = list_fn(**kw)
-        except Exception:  # noqa: BLE001
-            # 첫 페이지 실패면 진짜 오류 → 호출자가 처리하도록 전파.
-            # 이후 페이지 실패(예: continue 토큰 만료 410 Gone — 대규모 전수 순회 중
-            # etcd compaction)는 graceful: 지금까지 모은 것으로 partial 처리.
-            if seen == 0:
+        except Exception as e:  # noqa: BLE001
+            # 첫 페이지 실패 처리:
+            #  - 타임아웃/일시적 서버오류성: 502 로 전파하면 프런트가 재시도 → 집계가 0↔N
+            #    으로 반복 재시작(+캐시 미적용으로 매번 무거운 스캔)되므로, partial(빈) 결과로
+            #    graceful 처리해 200 으로 반드시 응답하고 결과를 캐시되게 한다.
+            #  - 그 외(401/403/404 등 설정·인증 오류)는 그대로 전파해 명확히 노출.
+            # 이후 페이지 실패(예: continue 토큰 만료 410 Gone)는 항상 graceful partial.
+            if seen == 0 and not _is_timeout_error(e):
                 raise
             if report is not None:
                 report.append(True)
