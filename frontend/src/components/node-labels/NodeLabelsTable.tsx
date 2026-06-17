@@ -1,22 +1,13 @@
 import { useMemo } from 'react';
 import { Pencil } from 'lucide-react';
 import { NodeInfo } from '@/hooks/useNodeLabels';
+import { matchesSearch, buildLabelEntries, filterLabelEntries, type LabelEntry } from './nodeLabelsShared';
 
 interface Props {
   nodes: NodeInfo[];
   onEdit: (node: NodeInfo) => void;
   searchQuery: string;
   viewMode: 'node' | 'label';
-}
-
-// ── 검색 필터 ─────────────────────────────────────────────
-function matchesSearch(node: NodeInfo, query: string): boolean {
-  if (!query.trim()) return true;
-  const q = query.toLowerCase();
-  if (node.name.toLowerCase().includes(q)) return true;
-  return Object.entries(node.labels).some(
-    ([k, v]) => k.toLowerCase().includes(q) || v.toLowerCase().includes(q),
-  );
 }
 
 // ── 노드 기준 뷰 ──────────────────────────────────────────
@@ -124,13 +115,6 @@ function NodeView({
 }
 
 // ── 레이블 기준 뷰 ────────────────────────────────────────
-interface LabelEntry {
-  key: string;
-  value: string;
-  tag: string;
-  nodes: string[];
-}
-
 function LabelView({
   nodes,
   searchQuery,
@@ -138,44 +122,8 @@ function LabelView({
   nodes: NodeInfo[];
   searchQuery: string;
 }) {
-  const labelMap = useMemo<LabelEntry[]>(() => {
-    const map = new Map<string, { nodes: string[]; value: string }>();
-    for (const node of nodes) {
-      for (const [k, v] of Object.entries(node.labels)) {
-        const tag = v ? `${k}=${v}` : k;
-        const entry = map.get(tag);
-        if (entry) {
-          entry.nodes.push(node.name);
-        } else {
-          map.set(tag, { nodes: [node.name], value: v });
-        }
-      }
-    }
-    return Array.from(map.entries())
-      .map(([tag, { nodes: ns, value }]) => ({
-        key: tag.split('=')[0],
-        value,
-        tag,
-        nodes: ns,
-      }))
-      .sort((a, b) => {
-        // system labels last, then sort by key
-        const aSystem = a.key.includes('kubernetes.io') || a.key.includes('k8s.io');
-        const bSystem = b.key.includes('kubernetes.io') || b.key.includes('k8s.io');
-        if (aSystem !== bSystem) return aSystem ? 1 : -1;
-        return a.tag.localeCompare(b.tag);
-      });
-  }, [nodes]);
-
-  const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return labelMap;
-    const q = searchQuery.toLowerCase();
-    return labelMap.filter(
-      (entry) =>
-        entry.tag.toLowerCase().includes(q) ||
-        entry.nodes.some((n) => n.toLowerCase().includes(q)),
-    );
-  }, [labelMap, searchQuery]);
+  const labelMap = useMemo<LabelEntry[]>(() => buildLabelEntries(nodes), [nodes]);
+  const filtered = useMemo(() => filterLabelEntries(labelMap, searchQuery), [labelMap, searchQuery]);
 
   if (filtered.length === 0) {
     return (

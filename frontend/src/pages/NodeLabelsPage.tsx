@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Tags, Search, LayoutList, Tag, AlertTriangle } from 'lucide-react';
+import { Tags, Search, LayoutList, Tag, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeList, usePatchNodeLabels, NodeInfo } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
+import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
 import { ClusterSidebar } from '@/components/common';
+import { buildCsv, downloadCsv } from '@/lib/csv';
 import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
@@ -34,6 +36,28 @@ export function NodeLabelsPage() {
   );
 
   const isLoading = clustersLoading || nodesLoading;
+
+  // 현재 뷰/검색 결과를 CSV(엑셀)로 추출 — 화면에 보이는 행과 동일.
+  const handleExportCsv = () => {
+    const safeCluster = (activeClusterName || 'cluster').replace(/[^\w.-]+/g, '-');
+    const today = new Date().toISOString().slice(0, 10);
+    let headers: string[];
+    let rows: (string | number)[][];
+    if (viewMode === 'label') {
+      headers = ['Label', 'Key', 'Value', 'NodeCount', 'Nodes'];
+      rows = filterLabelEntries(buildLabelEntries(nodes), searchQuery).map((e) => [
+        e.tag, e.key, e.value, e.nodes.length, e.nodes.join('; '),
+      ]);
+    } else {
+      headers = ['Node', 'Role', 'Status', 'Labels'];
+      rows = nodes.filter((n) => matchesSearch(n, searchQuery)).map((n) => [
+        n.name, n.role, n.status,
+        Object.entries(n.labels).map(([k, v]) => (v ? `${k}=${v}` : k)).join('; '),
+      ]);
+    }
+    if (rows.length === 0) return;
+    downloadCsv(`node-labels-${safeCluster}-${viewMode}-${today}.csv`, buildCsv(headers, rows));
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,6 +128,17 @@ export function NodeLabelsPage() {
               {nodes.length}개 노드
             </span>
           )}
+
+          {/* CSV(엑셀) 내보내기 — 현재 뷰/검색 결과 */}
+          <button
+            onClick={handleExportCsv}
+            disabled={isLoading || nodes.length === 0}
+            title="현재 화면 결과를 CSV(엑셀)로 추출"
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            CSV 내보내기
+          </button>
         </div>
 
         {/* Table */}
