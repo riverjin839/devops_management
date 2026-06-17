@@ -5,7 +5,11 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
-import { mcApi, bulkExecApi, type McPreset, type EtcdCtlRunResponse, type NodeSummary } from '@/services/api';
+import { McPresetManager } from '@/components/mc/McPresetManager';
+import { mcApi, bulkExecApi, type EtcdCtlRunResponse, type NodeSummary } from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
+import { useTerminalEnvStore } from '@/stores/terminalEnvStore';
+import { envForOperationLevel } from '@/lib/terminalThemes';
 import { formatApiError } from '@/lib/utils';
 
 const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -70,11 +74,14 @@ export function McClientPage() {
     queryFn: () => bulkExecApi.nodeList(clusterId).then((r) => r.data),
     enabled: !!clusterId,
   });
-  const presetsQ = useQuery({
-    queryKey: ['mc', 'presets', clusterId],
-    queryFn: () => mcApi.presets(clusterId).then((r) => r.data),
-    enabled: !!clusterId,
-  });
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+
+  // 선택한 클러스터의 운영등급에 따라 터미널 Appearance 활성 프로파일(개발/운영)을 결정.
+  const setCurrentEnv = useTerminalEnvStore((s) => s.setCurrentEnv);
+  useEffect(() => {
+    const c = clusters.find((x) => x.id === clusterId);
+    setCurrentEnv(clusterId ? envForOperationLevel(c?.operationLevel) : null);
+  }, [clusterId, clusters, setCurrentEnv]);
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
@@ -228,18 +235,7 @@ export function McClientPage() {
 
             {/* 우: 프리셋 + 명령 */}
             <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1.5">프리셋 — 클릭해서 args 에 채워넣기</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(presetsQ.data?.presets ?? []).map((p: McPreset) => (
-                    <button key={p.key} onClick={() => setArgs(p.args)}
-                      className="px-2.5 py-1 text-xs rounded border border-border bg-secondary hover:bg-secondary/80"
-                      title={p.args}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <McPresetManager clusterId={clusterId} isAdmin={isAdmin} onPick={setArgs} />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>

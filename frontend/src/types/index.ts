@@ -2963,3 +2963,64 @@ export interface CorootApplicationsResponse {
   applications: CorootApplication[];
   error: string | null;
 }
+
+// ── mc client presets (personal custom + admin shared) ──────────────────────
+export interface McPresetItem {
+  key: string;
+  label: string;
+  args: string;
+}
+
+export type McPresetSource = 'builtin' | 'shared' | 'personal';
+
+export interface McEffectivePreset extends McPresetItem {
+  source: McPresetSource;
+  customized: boolean;
+}
+
+export interface McPersonalPresets {
+  custom: McPresetItem[];
+  overrides: Record<string, McPresetItem>;
+  hidden: string[];
+}
+
+// ── terminal / log Appearance ───────────────────────────────────────────────
+export interface TerminalPalette {
+  bg: string;
+  fg: string;
+  red: string;
+  green: string;
+  amber: string;
+  sky: string;
+  purple: string;
+  cyan: string;
+  muted: string;
+}
+
+export interface TerminalTemplate {
+  id: string;
+  name: string;
+  group: string;
+  palette: TerminalPalette;
+}
+
+export interface TerminalProfile {
+  templateId: string;
+  fontSize: number;
+  fontFamily: string;
+  colors: Partial<TerminalPalette>;
+}
+
+export type TerminalMode = 'auto' | 'dev' | 'ops';
+export type TerminalEnv = 'dev' | 'ops';
+
+export interface TerminalAppearance {
+  mode: TerminalMode;
+  profiles: Record<TerminalEnv, TerminalProfile>;
+  customTemplates: TerminalTemplate[];
+}
+
+export interface TerminalAppearanceResponse {
+  appearance: TerminalAppearance;
+  shared: TerminalTemplate[];
+}
