@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar } from '@/components/common';
+import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar, ExportMenu } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods,
@@ -192,6 +192,7 @@ export function K8sAllocationPage() {
   const progSrc = nsQ.data?.status === 'computing' ? nsQ.data : nodesQ.data;
   const isFetching = nsQ.isFetching || nodesQ.isFetching;
   const clusterName = clusters.find((c) => c.id === clusterId)?.name;
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!clusterId && clusters.length > 0) {
@@ -218,7 +219,7 @@ export function K8sAllocationPage() {
           />
         </div>
 
-        <div className="flex-1 min-w-0 space-y-2">
+        <div ref={contentRef} className="flex-1 min-w-0 space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <Link to="/cluster-overview" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
               <ArrowLeft className="w-4 h-4" /> 클러스터 현황
@@ -229,7 +230,8 @@ export function K8sAllocationPage() {
             <span className="text-sm text-muted-foreground">노드 여유 대비 request·사용량(slack) 진단</span>
 
             {clusterId && (
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2" data-export-ignore>
+                <ExportMenu targetRef={contentRef} filenameBase={`k8s-alloc-${csvCluster(clusterName)}`} />
                 <button onClick={() => void forceRefresh()}
                   className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card">
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
