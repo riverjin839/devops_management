@@ -13,6 +13,7 @@ from app.routers.node_labels import router as node_labels_router
 from app.routers.node_images import router as node_images_router
 from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
+from app.routers.knowledge import router as knowledge_router
 from app.routers.ops_note import router as ops_note_router
 from app.routers.mindmap import router as mindmap_router
 from app.routers.management_servers import router as management_server_router
@@ -75,6 +76,7 @@ __all__ = [
     "node_images_router",
     "workflows_router",
     "work_guide_router",
+    "knowledge_router",
     "ops_note_router",
     "mindmap_router",
     "management_server_router",
