@@ -14,8 +14,8 @@ function matchesSearch(node: NodeInfo, query: string): boolean {
   if (!query.trim()) return true;
   const q = query.toLowerCase();
   if (node.name.toLowerCase().includes(q)) return true;
-  return Object.entries(node.labels).some(
-    ([k, v]) => k.toLowerCase().includes(q) || v.toLowerCase().includes(q),
+  return Object.entries(node.labels ?? {}).some(
+    ([k, v]) => k.toLowerCase().includes(q) || (v ?? '').toLowerCase().includes(q),
   );
 }
 
@@ -56,7 +56,8 @@ function NodeView({
         </thead>
         <tbody>
           {filtered.map((node) => {
-            const labelEntries = Object.entries(node.labels);
+            // 원칙: 모든 라벨을 누락 없이 표시한다 (자르거나 "+N more" 로 숨기지 않음).
+            const labelEntries = Object.entries(node.labels ?? {});
             return (
               <tr key={node.name} className="border-t border-border align-top hover:bg-muted/10 transition-colors">
                 <td className="px-4 py-3 font-mono text-sm font-medium">{node.name}</td>
@@ -80,12 +81,15 @@ function NodeView({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1 max-w-3xl">
-                    {labelEntries.slice(0, 15).map(([k, v]) => {
+                    {labelEntries.length === 0 && (
+                      <span className="text-sm text-muted-foreground/60">(라벨 없음)</span>
+                    )}
+                    {labelEntries.map(([k, v]) => {
                       const tag = v ? `${k}=${v}` : k;
                       const isHighlighted =
                         searchQuery &&
                         (k.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          v.toLowerCase().includes(searchQuery.toLowerCase()));
+                          (v ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
                       return (
                         <span
                           key={k}
@@ -99,11 +103,6 @@ function NodeView({
                         </span>
                       );
                     })}
-                    {labelEntries.length > 15 && (
-                      <span className="px-2 py-0.5 text-sm text-muted-foreground">
-                        +{labelEntries.length - 15} more
-                      </span>
-                    )}
                   </div>
                 </td>
                 <td className="px-4 py-3">
@@ -141,7 +140,8 @@ function LabelView({
   const labelMap = useMemo<LabelEntry[]>(() => {
     const map = new Map<string, { nodes: string[]; value: string }>();
     for (const node of nodes) {
-      for (const [k, v] of Object.entries(node.labels)) {
+      // 원칙: 모든 노드의 모든 라벨을 누락 없이 집계.
+      for (const [k, v] of Object.entries(node.labels ?? {})) {
         const tag = v ? `${k}=${v}` : k;
         const entry = map.get(tag);
         if (entry) {
