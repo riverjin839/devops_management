@@ -113,6 +113,40 @@ class CorootService:
             logger.exception("Unexpected coroot error: %s", exc)
             return self._offline(str(exc)[:200])
 
+    async def get_applications(self, project: str) -> dict:
+        """
+        Fetch the per-service application list for drill-down.
+
+        Returns (always status-tagged, never raises):
+            status         : "ok" | "error" | "offline"
+            applications   : list[{id, name, namespace, kind, status}]
+            error          : str | None
+        """
+        if not self.configured:
+            return self._apps_offline("coroot_url 이 설정되지 않았습니다.")
+        if not project:
+            return self._apps_offline("이 클러스터에 coroot project 가 매핑되지 않았습니다.")
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers()) as client:
+                resp = await client.get(
+                    f"{self.base_url}/api/project/{project}/overview/applications",
+                )
+                resp.raise_for_status()
+                return {"status": "ok", "applications": self._parse_applications(resp.json()), "error": None}
+        except httpx.ConnectError:
+            logger.warning("coroot connect error — unreachable at %s", self.base_url)
+            return self._apps_offline("coroot 에 접속할 수 없습니다.")
+        except httpx.TimeoutException:
+            logger.warning("coroot applications timed out after %ss", self.timeout)
+            return self._apps_offline("coroot 요청이 시간 초과되었습니다.")
+        except httpx.HTTPStatusError as exc:
+            code = exc.response.status_code
+            logger.warning("coroot returned HTTP %s for project %s applications", code, project)
+            return {"status": "error", "applications": [], "error": f"HTTP {code}"}
+        except Exception as exc:  # noqa: BLE001 — fail-safe by design
+            logger.exception("Unexpected coroot applications error: %s", exc)
+            return self._apps_offline(str(exc)[:200])
+
     def deeplink(self, project: str, path: str = "") -> Optional[str]:
         """
         Build a browser deep-link into the coroot UI for a project.
@@ -125,9 +159,73 @@ class CorootService:
         suffix = path if path.startswith("/") or not path else f"/{path}"
         return f"{self.base_url}/p/{project}{suffix}"
 
+    def app_deeplink(self, project: str, app_id: str, view: str = "Tracing") -> Optional[str]:
+        """
+        Build a deep-link into a specific application's report in the coroot UI.
+
+        view 예: "Tracing"(분산 trace), "Logs", "Profiling", "Instances".
+        app_id 는 coroot 의 'namespace:Kind:name' 형식(콜론 포함)을 그대로 둔다.
+        """
+        if not self.configured or not project or not app_id:
+            return None
+        return f"{self.base_url}/p/{project}/app/{app_id}/{view}"
+
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _apps_offline(message: str) -> dict:
+        return {"status": "offline", "applications": [], "error": message}
+
+    @staticmethod
+    def _parse_applications(data) -> list:
+        """
+        Defensive parse of coroot overview/applications into a flat service list.
+
+        coroot 버전에 따라 최상위가 list 이거나 {"applications": [...]} 형태,
+        항목 id 는 'ns:Kind:name' 문자열이거나 분리 필드일 수 있다. 모든 경우를 보수적으로 처리.
+        """
+        apps = None
+        if isinstance(data, dict):
+            for key in ("applications", "apps", "rows", "data"):
+                if isinstance(data.get(key), list):
+                    apps = data[key]
+                    break
+        elif isinstance(data, list):
+            apps = data
+        if not apps:
+            return []
+
+        out = []
+        for app in apps:
+            if not isinstance(app, dict):
+                continue
+            app_id = str(app.get("id") or app.get("application_id") or "").strip()
+            namespace = app.get("namespace")
+            kind = app.get("kind")
+            name = app.get("name")
+            # id 가 'ns:Kind:name' 형식이면 분해해 빈 필드를 보강
+            if app_id and ":" in app_id:
+                parts = app_id.split(":")
+                if len(parts) == 3:
+                    namespace = namespace or parts[0]
+                    kind = kind or parts[1]
+                    name = name or parts[2]
+            if not name:
+                name = app_id or "(unknown)"
+            if not app_id:
+                # id 가 없으면 표시용으로 합성 (딥링크엔 부적합할 수 있음)
+                app_id = ":".join([str(namespace or ""), str(kind or ""), str(name or "")]).strip(":")
+            status = str(app.get("status") or app.get("health") or app.get("severity") or "").lower() or None
+            out.append({
+                "id": app_id,
+                "name": name,
+                "namespace": namespace,
+                "kind": kind,
+                "status": status,
+            })
+        return out
 
     @staticmethod
     def _offline(message: str) -> dict:
