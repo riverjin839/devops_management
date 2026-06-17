@@ -7,6 +7,7 @@ import {
 import { MacCard } from '@/components/ui/MacCard';
 import { RichTextEditor, RichContent } from '@/components/editor';
 import { KnowledgeRoadmap } from '@/components/knowledge/KnowledgeRoadmap';
+import { KnowledgeBoard } from '@/components/knowledge/KnowledgeBoard';
 import { useToast } from '@/components/common';
 import { useAuthStore } from '@/stores/authStore';
 import { useSprints } from '@/hooks/useSprints';
@@ -451,7 +452,13 @@ export function KnowledgeBasePage() {
                   </div>
                 )}
 
-                {isOwner || page.visibility !== 'private' ? (
+                {page.kind === 'board' ? (
+                  <KnowledgeBoard
+                    items={flat.filter((n) => (n.parentId ?? null) === page.id)}
+                    onOpen={select}
+                    onStatusChange={(id, st) => updatePage.mutate({ id, data: { status: st } })}
+                  />
+                ) : isOwner || page.visibility !== 'private' ? (
                   <RichTextEditor value={draftContent} onChange={setDraftContent}
                     placeholder="문서 내용을 작성하세요 — '/' 또는 툴바 템플릿, '[[' 로 문서 링크"
                     minHeight="440px" defaultBg="#ffffff" linkSearch={linkSearch} />
