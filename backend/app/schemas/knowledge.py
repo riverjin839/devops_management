@@ -83,6 +83,12 @@ class KnowledgePageMove(BaseModel):
     sort_order: int = 0
 
 
+class KnowledgeReorder(BaseModel):
+    """같은 부모 아래 형제 노드 정렬 — ordered_ids 순서대로 sort_order 재부여."""
+    parent_id: Optional[UUID] = None
+    ordered_ids: List[UUID] = []
+
+
 class MilestoneCreate(BaseModel):
     label: str = Field(..., min_length=1, max_length=200)
 

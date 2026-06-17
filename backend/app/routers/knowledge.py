@@ -17,6 +17,7 @@ from app.schemas.knowledge import (
     KnowledgePageNode,
     KnowledgeTreeResponse,
     KnowledgePageMove,
+    KnowledgeReorder,
     MilestoneCreate,
     KnowledgeVersionResponse,
     KnowledgeVersionDetail,
@@ -117,6 +118,47 @@ def page_tree(
 
     # 루트 = parent_id 가 None 인 노드 (서비스 필터가 있으면 그 서비스의 루트들)
     return KnowledgeTreeResponse(data=build(None))
+
+
+@router.get("/roadmap", response_model=KnowledgePageListResponse)
+def roadmap(
+    service: Optional[str] = None,
+    category: Optional[str] = "enhancement",
+    actor: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """일정(start_at/due_at) 또는 스프린트가 지정된 항목 — 고도화 로드맵 타임라인용.
+
+    기본 category=enhancement(고도화). category 가 빈 문자열이면 분류 무관 전체.
+    """
+    query = db.query(KnowledgePage)
+    if service:
+        query = query.filter(KnowledgePage.service == service)
+    if category:
+        query = query.filter(KnowledgePage.category == category)
+    rows = [
+        p for p in query.all()
+        if _can_view(p, actor) and (p.start_at or p.due_at or p.sprint_id)
+    ]
+    rows.sort(key=lambda p: (p.start_at or p.due_at or p.created_at))
+    return KnowledgePageListResponse(data=rows)
+
+
+@router.post("/reorder", status_code=status.HTTP_204_NO_CONTENT)
+def reorder(
+    payload: KnowledgeReorder,
+    actor: User = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
+    """형제 노드 정렬 — ordered_ids 순서대로 sort_order/parent_id 재부여."""
+    for idx, pid in enumerate(payload.ordered_ids):
+        page = db.query(KnowledgePage).filter(KnowledgePage.id == pid).first()
+        if not page:
+            continue
+        page.parent_id = payload.parent_id
+        page.sort_order = idx
+        page.updated_by = actor.username
+    db.commit()
 
 
 @router.get("/pages/{page_id}", response_model=KnowledgePageResponse)
@@ -308,3 +350,26 @@ def restore_version(
     db.commit()
     db.refresh(page)
     return page
+
+
+# ── 백링크 (이 문서를 참조하는 곳) ──────────────────────────────────────────
+
+@router.get("/pages/{page_id}/backlinks", response_model=KnowledgePageListResponse)
+def backlinks(
+    page_id: UUID,
+    actor: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """본문에 `/knowledge/{page_id}` 내부 링크([[ ]])를 가진 페이지 목록 — linked references."""
+    page = db.query(KnowledgePage).filter(KnowledgePage.id == page_id).first()
+    if not page:
+        raise _not_found()
+    if not _can_view(page, actor):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="비공개 문서입니다.")
+    needle = f"/knowledge/{page_id}"
+    rows = db.query(KnowledgePage).filter(
+        KnowledgePage.id != page_id,
+        KnowledgePage.content.ilike(f"%{needle}%"),
+    ).all()
+    visible = [p for p in rows if _can_view(p, actor)]
+    return KnowledgePageListResponse(data=visible)
