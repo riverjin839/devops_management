@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState, Skeleton } from '@/components/common';
+import { EmptyState, Skeleton, SnapshotProgressCard } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods,
@@ -169,6 +169,14 @@ export function K8sAllocationPage() {
 function SummarySection({ clusterId }: { clusterId: string }) {
   const { data, isLoading } = useAllocNamespaces(clusterId);
   if (isLoading) return <MacCard title="클러스터 요약" bodyPadding="p-3"><Skeleton className="h-16 w-full" /></MacCard>;
+  if (data?.status === 'computing' && !data.items?.length) {
+    return (
+      <MacCard title="클러스터 요약" bodyPadding="p-3">
+        <SnapshotProgressCard processed={data.processed ?? 0} total={data.total ?? null}
+          progress={data.progress ?? null} label="자원 집계 중" unit="Pod" />
+      </MacCard>
+    );
+  }
   if (!data) return null;
   const s = data.summary;
   const useEff = s.cpuUsageM == null ? null : ratio(s.cpuUsageM, s.cpuReqM);
@@ -286,6 +294,9 @@ function VisualView({ clusterId }: { clusterId: string }) {
       <MacCard title="노드 자원 게이지 (alloc 대비 request·사용량)" bodyPadding="p-3">
         {nodesQ.isLoading ? (
           <Skeleton className="h-28 w-full" />
+        ) : nodesQ.data?.status === 'computing' && !nodesQ.data?.items.length ? (
+          <SnapshotProgressCard processed={nodesQ.data.processed ?? 0} total={nodesQ.data.total ?? null}
+            progress={nodesQ.data.progress ?? null} label="자원 집계 중" unit="Pod" />
         ) : !nodesQ.data?.items.length ? (
           <EmptyState title="노드 없음" description="표시할 노드가 없습니다." />
         ) : (
@@ -370,6 +381,14 @@ function NodesView({ clusterId }: { clusterId: string }) {
 
   if (isLoading) return <MacCard title="노드별 자원" bodyPadding="p-3"><Skeleton className="h-40 w-full" /></MacCard>;
   if (isError) return <MacCard title="노드별 자원" bodyPadding="p-3"><EmptyState title="조회 실패" description={(error as Error)?.message ?? '노드 자원을 불러오지 못했습니다.'} /></MacCard>;
+  if (data?.status === 'computing' && !rows.length) {
+    return (
+      <MacCard title="노드별 자원" bodyPadding="p-3">
+        <SnapshotProgressCard processed={data.processed ?? 0} total={data.total ?? null}
+          progress={data.progress ?? null} label="자원 집계 중" unit="Pod" />
+      </MacCard>
+    );
+  }
   if (!rows.length) return <MacCard title="노드별 자원" bodyPadding="p-3"><EmptyState title="노드 없음" description="표시할 노드가 없습니다." /></MacCard>;
 
   return (
@@ -449,6 +468,14 @@ function NamespacesView({ clusterId }: { clusterId: string }) {
   if (isLoading) return <MacCard title="네임스페이스별 자원" bodyPadding="p-3"><Skeleton className="h-40 w-full" /></MacCard>;
   if (isError) return <MacCard title="네임스페이스별 자원" bodyPadding="p-3"><EmptyState title="조회 실패" description={(error as Error)?.message ?? '불러오지 못했습니다.'} /></MacCard>;
   const rows = data?.items ?? [];
+  if (data?.status === 'computing' && !rows.length) {
+    return (
+      <MacCard title="네임스페이스별 자원" bodyPadding="p-3">
+        <SnapshotProgressCard processed={data.processed ?? 0} total={data.total ?? null}
+          progress={data.progress ?? null} label="자원 집계 중" unit="Pod" />
+      </MacCard>
+    );
+  }
   if (!rows.length) return <MacCard title="네임스페이스별 자원" bodyPadding="p-3"><EmptyState title="데이터 없음" description="표시할 네임스페이스가 없습니다." /></MacCard>;
 
   return (

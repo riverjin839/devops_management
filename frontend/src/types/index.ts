@@ -2738,7 +2738,15 @@ export interface AllocNodeRow {
   cpuLimDisplay: string;
   memLimDisplay: string;
 }
-export interface AllocNodesResponse { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
+/** 백그라운드 전수 집계 진행 메타 — 큰 클러스터에서 폴링/진행률 표시용. */
+export interface AllocSnapshotMeta {
+  status?: 'computing' | 'ready' | 'error';
+  progress?: number | null;   // 0..1, null = 불확정
+  processed?: number;
+  total?: number | null;
+  stale?: boolean;
+}
+export interface AllocNodesResponse extends AllocSnapshotMeta { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
 
 export interface AllocSummary {
   nodeCount: number;
@@ -2771,7 +2779,7 @@ export interface AllocNamespaceRow {
   cpuUsageDisplay: string | null;
   memUsageDisplay: string | null;
 }
-export interface AllocNamespacesResponse {
+export interface AllocNamespacesResponse extends AllocSnapshotMeta {
   count: number;
   items: AllocNamespaceRow[];
   summary: AllocSummary;

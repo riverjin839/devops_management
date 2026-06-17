@@ -20,18 +20,40 @@ export interface NodeImagesInfo {
   images: NodeImageEntry[];
 }
 
+/** 백그라운드 스냅샷 진행 상태 — 자원관리/노드이미지 공용 envelope. */
+export interface SnapshotMeta {
+  status: 'computing' | 'ready' | 'error';
+  progress: number | null;   // 0..1, null = 불확정(스피너)
+  processed: number;
+  total: number | null;
+  stale: boolean;
+}
+
+export interface NodeImagesResult extends SnapshotMeta {
+  nodes: NodeImagesInfo[];
+}
+
 export const nodeImageKeys = {
   list: (clusterId: string) => ['node-images', clusterId] as const,
 };
 
 export function useNodeImageList(clusterId: string) {
-  return useQuery({
+  return useQuery<NodeImagesResult>({
     queryKey: nodeImageKeys.list(clusterId),
     queryFn: async () => {
       const { data } = await nodeImagesApi.getNodeImages(clusterId);
-      return data.data as NodeImagesInfo[];
+      return {
+        nodes: (data.data ?? []) as NodeImagesInfo[],
+        status: data.status ?? 'ready',
+        progress: data.progress ?? null,
+        processed: data.processed ?? 0,
+        total: data.total ?? null,
+        stale: data.stale ?? false,
+      };
     },
     enabled: !!clusterId,
-    refetchInterval: 60000,
+    // 집계 중이면 1.5s 마다 폴링, 완료되면 60s 주기 자동 새로고침.
+    refetchInterval: (query) =>
+      query.state.data?.status === 'computing' ? 1500 : 60000,
   });
 }
