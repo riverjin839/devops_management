@@ -707,6 +707,16 @@ export const promqlApi = {
     api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
 };
 
+// Coroot — 애플리케이션 APM (별도 배포된 coroot 연동: 헬스/요약/딥링크)
+export const corootApi = {
+  health: () =>
+    api.get<{ status: string; detail?: string }>('/coroot/health', { timeout: 6000 }),
+  getSummary: (clusterId: string) =>
+    api.get<import('@/types').CorootSummary>(`/coroot/${clusterId}/summary`, { timeout: 15000 }),
+  getDeepLink: (clusterId: string) =>
+    api.get<import('@/types').CorootDeepLink>(`/coroot/${clusterId}/deeplink`),
+};
+
 // Cluster Items — 현황 관리 대시보드의 '아이템' 카드 (클러스터별)
 export const clusterItemsApi = {
   types: () =>
@@ -942,8 +952,14 @@ export const knowledgeApi = {
   get: (id: string) => api.get<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`),
   create: (data: import('@/types').KnowledgePageCreate) =>
     api.post<import('@/types').KnowledgePage>('/knowledge/pages', data),
-  update: (id: string, data: import('@/types').KnowledgePageUpdate) =>
-    api.put<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`, data),
+  update: (id: string, data: import('@/types').KnowledgePageUpdate, expectedUpdatedAt?: string) =>
+    api.put<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`, data, {
+      params: expectedUpdatedAt ? { expected_updated_at: expectedUpdatedAt } : undefined,
+    }),
+  heartbeat: (id: string) =>
+    api.post<import('@/types').KnowledgePresenceResponse>(`/knowledge/pages/${id}/heartbeat`),
+  importExisting: (source: 'all' | 'ops_notes' | 'work_guides' | 'service_entries' = 'all') =>
+    api.post<import('@/types').KnowledgeImportResult>('/knowledge/import', undefined, { params: { source } }),
   move: (id: string, data: { parentId?: string | null; sortOrder: number }) =>
     api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/move`, data),
   remove: (id: string) => api.delete(`/knowledge/pages/${id}`),
@@ -1044,6 +1060,8 @@ export const infraNodesApi = {
   delete: (id: string) => api.delete(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.force_fix' } }),
   sync: (clusterId: string) =>
     api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
+  verify: (id: string) =>
+    api.post<import('@/types').NodeVerifyResult>(`/infra-nodes/${id}/verify`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
 };
 
 // Node Server Spec (자산 관리 대장)

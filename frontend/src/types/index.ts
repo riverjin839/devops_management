@@ -50,6 +50,10 @@ export interface Cluster {
   // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
   // null/empty 면 status 기반 기본 아이콘으로 fallback.
   icon?: string | null;
+  // coroot APM 연동 — project 매핑 / URL 오버라이드 / 토글.
+  corootProject?: string | null;
+  corootUrl?: string | null;
+  corootEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +138,9 @@ export interface ClusterManageUpdate {
   bgpEnabled?: boolean;
   asNumber?: string;
   icon?: string | null;
+  corootProject?: string | null;
+  corootUrl?: string | null;
+  corootEnabled?: boolean;
 }
 
 // Addon
@@ -857,6 +864,7 @@ export interface KnowledgePage {
   startAt?: string | null;
   dueAt?: string | null;
   sprintId?: string | null;
+  sourceRef?: string | null;
   createdBy?: string | null;
   updatedBy?: string | null;
   createdAt: string;
@@ -867,6 +875,10 @@ export interface KnowledgePage {
 export interface KnowledgePageNode extends KnowledgePage {
   children: KnowledgePageNode[];
 }
+
+export interface KnowledgePresenceUser { username: string; displayName?: string | null; }
+export interface KnowledgePresenceResponse { editors: KnowledgePresenceUser[]; }
+export interface KnowledgeImportResult { imported: number; skipped: number; detail: Record<string, unknown>; }
 
 export interface KnowledgePageCreate {
   service?: string | null;
@@ -1127,6 +1139,38 @@ export interface InfraNodeListResponse {
   total: number;
 }
 
+/** 노드 추가 검증(node_health) — 노드별 체크리스트 1건. (백엔드 details.nodes[i], camelCase) */
+export interface NodeHealthEntry {
+  node: string;
+  ready: boolean;
+  pressure: string[];
+  taints: string[];
+  allocatableOk: boolean;
+  allocatable: { cpu?: string | null; memory?: string | null };
+  networking: {
+    cni: boolean;
+    cniFamily: string | null;
+    kubeProxy: boolean;
+    present: string[];
+    missing: string[];
+  };
+  ok: boolean;
+}
+
+/** 노드 추가 검증 결과 (per-node 검증 / sync 직후 자동검증 공용). */
+export interface NodeVerifyResult {
+  hostname: string;
+  status: 'healthy' | 'warning' | 'critical' | 'pending' | 'error';
+  message: string;
+  ok: boolean;
+  nodeId?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details: { nodes?: NodeHealthEntry[]; found?: boolean; scope?: string } & Record<string, any>;
+  steps?: DeepCheckExecStep[];
+  stepPlan?: DeepCheckStepPlanItem[];
+  durationMs?: number;
+}
+
 export interface InfraSyncResult {
   success: boolean;
   created: number;
@@ -1136,6 +1180,8 @@ export interface InfraSyncResult {
   partialFailure: boolean;
   errors: string[];
   total: number;
+  verifications?: NodeVerifyResult[];
+  verifiedTruncated?: boolean;
 }
 
 
@@ -2738,7 +2784,15 @@ export interface AllocNodeRow {
   cpuLimDisplay: string;
   memLimDisplay: string;
 }
-export interface AllocNodesResponse { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
+/** 백그라운드 전수 집계 진행 메타 — 큰 클러스터에서 폴링/진행률 표시용. */
+export interface AllocSnapshotMeta {
+  status?: 'computing' | 'ready' | 'error';
+  progress?: number | null;   // 0..1, null = 불확정
+  processed?: number;
+  total?: number | null;
+  stale?: boolean;
+}
+export interface AllocNodesResponse extends AllocSnapshotMeta { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
 
 export interface AllocSummary {
   nodeCount: number;
@@ -2771,7 +2825,7 @@ export interface AllocNamespaceRow {
   cpuUsageDisplay: string | null;
   memUsageDisplay: string | null;
 }
-export interface AllocNamespacesResponse {
+export interface AllocNamespacesResponse extends AllocSnapshotMeta {
   count: number;
   items: AllocNamespaceRow[];
   summary: AllocSummary;
@@ -2876,4 +2930,21 @@ export interface ReactionSummary {
   targetId: string;
   total: number;
   groups: ReactionGroup[];
+}
+
+// ── Coroot APM (애플리케이션 옵저버빌리티 — 별도 배포된 coroot 연동) ──────────
+// 백엔드 응답(snake_case)은 api 인터셉터가 camelCase 로 변환한다.
+export interface CorootSummary {
+  status: 'ok' | 'error' | 'offline';
+  serviceCount: number | null;
+  healthy: number | null;
+  alerting: number | null;
+  error: string | null;
+  raw: unknown | null;
+}
+
+export interface CorootDeepLink {
+  url: string | null;
+  status: 'ok' | 'offline';
+  detail?: string;
 }

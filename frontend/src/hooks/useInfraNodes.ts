@@ -42,3 +42,10 @@ export function useSyncInfraNodes() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['infra-nodes'] }),
   });
 }
+
+// 노드 추가 검증 — 결과는 ephemeral(캐시 무효화 불필요).
+export function useVerifyInfraNode() {
+  return useMutation({
+    mutationFn: (id: string) => infraNodesApi.verify(id).then(r => r.data),
+  });
+}

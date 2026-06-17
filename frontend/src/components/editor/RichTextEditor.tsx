@@ -23,10 +23,12 @@ import {
   Quote, Minus, Link as LinkIcon, Image as ImageIcon,
   Table as TableIcon, AlignLeft, AlignCenter, AlignRight,
   Highlighter, Undo, Redo, Type, LayoutTemplate, FileUp, Palette, Eraser,
+  Info, ChevronRightSquare,
 } from 'lucide-react';
 import { marked } from 'marked';
 import { compressImageFile } from '@/lib/imageCompress';
 import { DOC_TEMPLATES, normalizeTemplateHtml, type DocTemplate } from './docTemplates';
+import { Callout, ToggleBlock } from './blocks';
 
 const EDITOR_BG_KEY = 'k8s:editor-bg';
 const BG_PRESETS = ['#ffffff', '#faf7f0', '#f4f4f5', '#eef2ff', '#ecfdf5', '#1f2937'];
@@ -441,6 +443,10 @@ const SLASH_ITEMS: SlashItem[] = [
   { title: '코드 블록', keywords: ['code', '코드'], icon: FileCode, action: (e) => e.chain().focus().toggleCodeBlock().run() },
   { title: '구분선', keywords: ['hr', 'divider', 'rule', '구분'], icon: Minus, action: (e) => e.chain().focus().setHorizontalRule().run() },
   { title: '표', keywords: ['table', 'grid', '표'], icon: TableIcon, action: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  { title: '콜아웃', keywords: ['callout', 'note', '강조', '콜아웃', '박스'], icon: Info, action: (e) => (e.chain().focus() as any).toggleCallout('info').run() },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  { title: '토글', keywords: ['toggle', 'details', '접기', '토글', '펼치기'], icon: ChevronRightSquare, action: (e) => (e.chain().focus() as any).insertToggle('토글').run() },
 ];
 
 interface SlashState { from: number; query: string; left: number; top: number; }
@@ -537,6 +543,8 @@ export function RichTextEditor({
       Highlight.configure({ multicolor: false }),
       TextStyle,
       Color,
+      Callout,
+      ToggleBlock,
     ],
     content: value || '',
     onUpdate: ({ editor: ed }) => {

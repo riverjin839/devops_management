@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight, ChevronDown, FileText, Folder, FolderTree, Plus, Trash2,
   History, Save, Lock, Users, RotateCcw, Eye, X, Map as MapIcon, KanbanSquare, Link2,
+  DownloadCloud,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { RichTextEditor, RichContent } from '@/components/editor';
 import { KnowledgeRoadmap } from '@/components/knowledge/KnowledgeRoadmap';
+import { KnowledgeBoard } from '@/components/knowledge/KnowledgeBoard';
 import { useToast } from '@/components/common';
 import { useAuthStore } from '@/stores/authStore';
 import { useSprints } from '@/hooks/useSprints';
@@ -16,9 +19,9 @@ import { formatApiError } from '@/lib/utils';
 import {
   useKnowledgeTree, useKnowledgePage, usePageVersions, useRoadmap,
   useCreatePage, useUpdatePage, useDeletePage, useSaveMilestone, useRestoreVersion,
-  useReorder, usePageBacklinks,
+  useReorder, usePageBacklinks, useImportExisting,
 } from '@/hooks/useKnowledge';
-import type { KnowledgePageNode, KnowledgeKind, KnowledgeVisibility } from '@/types';
+import type { KnowledgePageNode, KnowledgeKind, KnowledgeVisibility, KnowledgePresenceUser } from '@/types';
 
 const SERVICES = [{ key: '__common__', label: '공통' }, ...SERVICE_CATALOG.map((s) => ({ key: s.key, label: s.label }))];
 
@@ -152,6 +155,8 @@ export function KnowledgeBasePage() {
   const saveMilestone = useSaveMilestone();
   const restoreVersion = useRestoreVersion();
   const reorder = useReorder();
+  const importMut = useImportExisting();
+  const qc = useQueryClient();
 
   const { data: page } = useKnowledgePage(selectedId);
   const { data: versions = [] } = usePageVersions(selectedId);
@@ -163,11 +168,24 @@ export function KnowledgeBasePage() {
   const [draftContent, setDraftContent] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<{ no: number; content: string } | null>(null);
+  const [editors, setEditors] = useState<KnowledgePresenceUser[]>([]);
 
   useEffect(() => {
     if (page) { setDraftTitle(page.title); setDraftContent(page.content ?? ''); }
   }, [page]);
   useEffect(() => { if (routeId) setSelectedId(routeId); }, [routeId]);
+
+  // 경량 협업 — 열려 있는 동안 15초마다 하트비트, 같은 문서를 보는 다른 사용자 표시.
+  useEffect(() => {
+    if (!selectedId) { setEditors([]); return; }
+    let active = true;
+    const beat = () => knowledgeApi.heartbeat(selectedId)
+      .then((r) => { if (active) setEditors(r.data.editors ?? []); })
+      .catch(() => { /* presence 실패는 조용히 무시 */ });
+    beat();
+    const t = setInterval(beat, 15_000);
+    return () => { active = false; clearInterval(t); };
+  }, [selectedId]);
 
   const flat = useMemo(() => flatten(tree), [tree]);
   const breadcrumb = useMemo(() => {
@@ -251,9 +269,26 @@ export function KnowledgeBasePage() {
   const save = async () => {
     if (!page) return;
     try {
-      await updatePage.mutateAsync({ id: page.id, data: { title: draftTitle.trim() || page.title, content: draftContent } });
+      await updatePage.mutateAsync({ id: page.id, data: { title: draftTitle.trim() || page.title, content: draftContent }, expectedUpdatedAt: page.updatedAt });
       toast.success('저장됨', '문서가 저장되었습니다.');
-    } catch (e) { toast.error('저장 실패', formatApiError(e, '저장 중 오류')); }
+    } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const stsCode = (e as any)?.response?.status;
+      if (stsCode === 409) {
+        toast.error('저장 충돌', formatApiError(e, '다른 사용자가 먼저 수정했습니다. 최신 내용을 불러옵니다.'));
+        qc.invalidateQueries({ queryKey: ['knowledge', 'page', page.id] });
+      } else {
+        toast.error('저장 실패', formatApiError(e, '저장 중 오류'));
+      }
+    }
+  };
+
+  const onImport = async () => {
+    if (!window.confirm('기존 운영노트 · 작업가이드 · 서비스엔트리를 지식베이스로 가져올까요?\n(원본은 그대로 두고 복사 — 이미 가져온 항목은 건너뜁니다)')) return;
+    try {
+      const r = await importMut.mutateAsync('all');
+      toast.success('가져오기 완료', `추가 ${r.imported}건 · 건너뜀 ${r.skipped}건`);
+    } catch (e) { toast.error('가져오기 실패', formatApiError(e, '오류')); }
   };
 
   const patchMeta = async (data: Record<string, unknown>) => {
@@ -305,6 +340,13 @@ export function KnowledgeBasePage() {
             ))}
           </div>
           <div className="flex-1" />
+          {currentUser?.role === 'admin' && (
+            <button type="button" onClick={onImport} disabled={importMut.isPending}
+              title="기존 운영노트/작업가이드/서비스엔트리를 지식베이스로 비파괴 복사"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-sm border border-border bg-card hover:bg-secondary disabled:opacity-60">
+              <DownloadCloud className="w-3.5 h-3.5" /> {importMut.isPending ? '가져오는 중…' : '기존 자산 가져오기'}
+            </button>
+          )}
           <div className="flex items-center gap-1 bg-card border border-border rounded-xl p-0.5">
             <button type="button" onClick={() => setView('tree')}
               className={`px-2.5 py-1 rounded-lg text-sm ${view === 'tree' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'}`}>문서</button>
@@ -385,6 +427,11 @@ export function KnowledgeBasePage() {
                   </button>
                   {page.category && <span className="text-xs px-1.5 py-0.5 rounded bg-secondary">{CATEGORY_LABEL[page.category] ?? page.category}</span>}
                   <span className="text-xs text-muted-foreground">소유자: {ownerLabel}</span>
+                  {editors.length > 0 && (
+                    <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30" title="같은 문서를 보고 있는 사용자">
+                      <Eye className="w-3 h-3" /> 편집 중: {editors.map((e) => e.displayName || e.username).join(', ')}
+                    </span>
+                  )}
                   <div className="flex-1" />
                   <button type="button" onClick={() => setShowHistory((v) => !v)}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border hover:bg-secondary text-sm">
@@ -451,7 +498,13 @@ export function KnowledgeBasePage() {
                   </div>
                 )}
 
-                {isOwner || page.visibility !== 'private' ? (
+                {page.kind === 'board' ? (
+                  <KnowledgeBoard
+                    items={flat.filter((n) => (n.parentId ?? null) === page.id)}
+                    onOpen={select}
+                    onStatusChange={(id, st) => updatePage.mutate({ id, data: { status: st } })}
+                  />
+                ) : isOwner || page.visibility !== 'private' ? (
                   <RichTextEditor value={draftContent} onChange={setDraftContent}
                     placeholder="문서 내용을 작성하세요 — '/' 또는 툴바 템플릿, '[[' 로 문서 링크"
                     minHeight="440px" defaultBg="#ffffff" linkSearch={linkSearch} />

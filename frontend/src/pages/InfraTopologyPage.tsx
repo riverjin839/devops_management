@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
-  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, GitBranch, Activity,
+  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, GitBranch, Activity, ShieldCheck,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -10,12 +10,15 @@ import {
   useUpdateInfraNode,
   useDeleteInfraNode,
   useSyncInfraNodes,
+  useVerifyInfraNode,
 } from '@/hooks/useInfraNodes';
+import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
 import { topologyTraceApi } from '@/services/api';
 import type {
   InfraNode,
   InfraNodeCreate,
   InfraNodeRole,
+  NodeVerifyResult,
   TopologyTargetType,
   TopologyTraceResponse,
 } from '@/types';
@@ -41,9 +44,10 @@ interface NodeCardProps {
   node: InfraNode;
   onEdit: (n: InfraNode) => void;
   onDelete: (n: InfraNode) => void;
+  onVerify: (n: InfraNode) => void;
 }
 
-function NodeCard({ node, onEdit, onDelete }: NodeCardProps) {
+function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
   const meta = ROLE_META[node.role];
   return (
     <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-2 hover:border-primary/40 transition-colors group">
@@ -56,6 +60,13 @@ function NodeCard({ node, onEdit, onDelete }: NodeCardProps) {
           </span>
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          <button
+            onClick={() => onVerify(node)}
+            title="노드 추가 검증"
+            className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-500 transition-colors"
+          >
+            <ShieldCheck className="w-3 h-3" />
+          </button>
           <button
             onClick={() => onEdit(node)}
             className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -431,6 +442,9 @@ export function InfraTopologyPage() {
   const [editTarget, setEditTarget] = useState<InfraNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InfraNode | null>(null);
   const [syncError, setSyncError] = useState('');
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<NodeVerifyResult | null>(null);
+  const [syncSummary, setSyncSummary] = useState<NodeVerifyResult[] | null>(null);
   const [traceNamespace, setTraceNamespace] = useState('default');
   const [traceTargetType, setTraceTargetType] = useState<TopologyTargetType>('service');
   const [traceTargetName, setTraceTargetName] = useState('');
@@ -448,6 +462,21 @@ export function InfraTopologyPage() {
 
   const deleteNode = useDeleteInfraNode();
   const syncNodes = useSyncInfraNodes();
+  const verifyNode = useVerifyInfraNode();
+
+  async function handleVerify(n: InfraNode) {
+    setVerifyResult(null);
+    setVerifyOpen(true);
+    try {
+      const res = await verifyNode.mutateAsync(n.id);
+      setVerifyResult(res);
+    } catch (e) {
+      setVerifyResult({
+        hostname: n.hostname, status: 'error', ok: false,
+        message: extractError(e), details: {},
+      });
+    }
+  }
 
   // 스위치 → 랙 → 노드 계층형 그룹핑 (네트워크 레벨부터)
   const switches = useMemo(() => {
@@ -504,8 +533,11 @@ export function InfraTopologyPage() {
   async function handleSync() {
     if (!activeClusterId) return;
     setSyncError('');
+    setSyncSummary(null);
     try {
-      await syncNodes.mutateAsync(activeClusterId);
+      const res = await syncNodes.mutateAsync(activeClusterId);
+      // 신규 노드 자동 검증 결과(있으면) 요약 배너로 노출
+      setSyncSummary(res.verifications && res.verifications.length ? res.verifications : null);
     } catch (e) {
       setSyncError(extractError(e));
     }
@@ -616,6 +648,27 @@ export function InfraTopologyPage() {
               <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{syncError}
                 <button onClick={() => setSyncError('')} className="ml-auto"><X className="w-3 h-3" /></button>
+              </div>
+            )}
+
+            {/* sync 직후 신규 노드 검증 요약 */}
+            {syncSummary && (
+              <div className="flex items-center gap-2 text-sm bg-card border border-border rounded-lg px-3 py-2 mb-4">
+                <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
+                <span>
+                  신규 노드 {syncSummary.length}개 검증 — 정상 {syncSummary.filter(v => v.ok).length},{' '}
+                  이상 {syncSummary.filter(v => !v.ok).length}
+                </span>
+                {syncSummary.filter(v => !v.ok).map(v => (
+                  <button
+                    key={v.hostname}
+                    onClick={() => { setVerifyResult(v); setVerifyOpen(true); }}
+                    className="px-1.5 py-0.5 rounded text-xs bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20"
+                  >
+                    {v.hostname}
+                  </button>
+                ))}
+                <button onClick={() => setSyncSummary(null)} className="ml-auto text-muted-foreground"><X className="w-3 h-3" /></button>
               </div>
             )}
 
@@ -775,6 +828,7 @@ export function InfraTopologyPage() {
                                 node={node}
                                 onEdit={n => { setEditTarget(n); setModalOpen(true); }}
                                 onDelete={n => setDeleteTarget(n)}
+                                onVerify={handleVerify}
                               />
                             ))}
                           </div>
@@ -806,6 +860,15 @@ export function InfraTopologyPage() {
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
           isPending={deleteNode.isPending}
+        />
+      )}
+
+      {/* 노드 추가 검증 */}
+      {verifyOpen && (
+        <NodeVerifyModal
+          result={verifyResult}
+          loading={verifyNode.isPending && !verifyResult}
+          onClose={() => { setVerifyOpen(false); setVerifyResult(null); }}
         />
       )}
     </div>

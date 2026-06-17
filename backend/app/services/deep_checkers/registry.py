@@ -18,6 +18,7 @@ from app.services.deep_checkers.external_to_pod_checker import ExternalToPodChec
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
 from app.services.deep_checkers.kernel_param_drift_checker import KernelParamDriftChecker
 from app.services.deep_checkers.minio_health_checker import MinioHealthChecker
+from app.services.deep_checkers.node_health_checker import NodeHealthChecker
 from app.services.deep_checkers.node_pressure_checker import NodePressureChecker
 from app.services.deep_checkers.oom_events_checker import OomEventsChecker
 from app.services.deep_checkers.pod_to_pod_checker import PodToPodChecker
@@ -363,6 +364,40 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             default_enabled=False,
         ),
     ),
+    "node_health": (
+        NodeHealthChecker,
+        DeepCheckTypeSpec(
+            check_type="node_health",
+            display_name="노드 추가 검증 (기본+네트워킹)",
+            description="신규/조인 노드의 Ready·Pressure·Taint·Allocatable 과 CNI/kube-proxy 데몬셋을 "
+                        "READ-ONLY 로 검증. node_name 비우면 전체 노드.",
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_count", "int", "이상 노드 경고 (개)", 1,
+                                   help="이상 노드 수가 이 값 이상이면 warning"),
+                DeepCheckFieldSpec("critical_count", "int", "이상 노드 심각 (개)", 1,
+                                   help="이상 노드 수가 이 값 이상이면 critical (NotReady 는 항상 critical)"),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("node_name", "string", "대상 노드(비우면 전체)", "",
+                                   help="특정 노드만 검증할 때 노드명"),
+                DeepCheckFieldSpec("require_cni", "boolean", "CNI 데몬셋 필수", True),
+                DeepCheckFieldSpec("require_kube_proxy", "boolean", "kube-proxy 필수", True),
+                DeepCheckFieldSpec("system_namespace", "string", "시스템 네임스페이스", "kube-system"),
+                DeepCheckFieldSpec("cni_label_selectors", "list", "CNI label 셀렉터",
+                                   ["k8s-app=cilium", "k8s-app=calico-node", "app=flannel"]),
+            ],
+            default_thresholds={"warning_count": 1, "critical_count": 1},
+            default_params={
+                "node_name": "",
+                "require_cni": True,
+                "require_kube_proxy": True,
+                "system_namespace": "kube-system",
+                "cni_label_selectors": ["k8s-app=cilium", "k8s-app=calico-node", "app=flannel"],
+            },
+            category="k8s",
+            default_enabled=True,
+        ),
+    ),
 }
 
 
@@ -431,6 +466,12 @@ STEP_PLANS: dict[str, list[tuple[str, str]]] = {
     ],
     "image_pull": [("list_pods", "파드 조회"), ("scan", "ImagePullBackOff/ErrImagePull 스캔"), ("verdict", "임계 비교")],
     "node_pressure": [("list_nodes", "노드 조회"), ("scan", "Memory/Disk/PID Pressure 컨디션 스캔"), ("verdict", "임계 비교")],
+    "node_health": [
+        ("list_nodes", "노드 조회"),
+        ("list_system_pods", "kube-system 파드 조회"),
+        ("evaluate", "Ready/Pressure/Taint/Allocatable/네트워킹 평가"),
+        ("verdict", "임계 비교"),
+    ],
     "oom_events": [("list_events", "이벤트 조회"), ("scan", "OOMKilled 집계"), ("verdict", "임계 비교")],
     "stuck_terminating": [("list_pods", "파드 조회"), ("scan", "Terminating 지연 스캔"), ("verdict", "임계 비교")],
     "coredns_health": [("locate", "CoreDNS 파드 탐색"), ("probe", "DNS 질의 프로브"), ("verdict", "응답 임계 비교")],
