@@ -50,6 +50,10 @@ export interface Cluster {
   // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
   // null/empty 면 status 기반 기본 아이콘으로 fallback.
   icon?: string | null;
+  // coroot APM 연동 — project 매핑 / URL 오버라이드 / 토글.
+  corootProject?: string | null;
+  corootUrl?: string | null;
+  corootEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +138,9 @@ export interface ClusterManageUpdate {
   bgpEnabled?: boolean;
   asNumber?: string;
   icon?: string | null;
+  corootProject?: string | null;
+  corootUrl?: string | null;
+  corootEnabled?: boolean;
 }
 
 // Addon
@@ -560,6 +567,7 @@ export interface WorkItemCreate {
   service?: string;
   component?: string;
   confluenceUrl?: string;
+  jiraUrl?: string;
   priority?: string;
   kanbanStatus?: KanbanStatus;
   module?: WorkItemModule;
@@ -595,6 +603,57 @@ export interface MetricQueryResult {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results?: Array<Record<string, any>> | null;
   error?: string | null;
+}
+
+// ── Cluster Items (현황 관리 대시보드 '아이템' 카드) ─────────────────────
+export type ClusterItemSource = 'manual' | 'auto' | 'ai';
+export type ClusterItemCardSize = 'sm' | 'md' | 'lg';
+
+export interface ClusterItem {
+  id: string;
+  clusterId: string;
+  itemType: string;            // 'node_count' | (확장)
+  title: string;
+  icon?: string | null;
+  description?: string | null;
+  tier: 'basic' | 'advanced';
+  isBuiltin: boolean;
+  sourceMode: ClusterItemSource;
+  autoEnabled: boolean;
+  scheduleHour: number;
+  scheduleMinute: number;
+  cardSize: ClusterItemCardSize;
+  unit?: string | null;
+  sortOrder: number;
+  enabled: boolean;
+  currentValue?: number | null;
+  currentText?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resultDetail?: Record<string, any> | null;
+  resultStatus?: 'healthy' | 'warning' | 'critical' | 'info' | null;
+  lastStatus?: 'ok' | 'error' | 'pending' | null;
+  lastError?: string | null;
+  lastCheckedAt?: string | null;
+  lastSource?: ClusterItemSource | null;
+  previousValue?: number | null;
+  previousText?: string | null;
+  lastChangedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// '아이템 추가' 선택지 메타데이터 (GET /cluster-item-types)
+export interface ClusterItemType {
+  itemType: string;
+  label: string;
+  icon: string;
+  unit: string;
+  description: string;
+  valueKind: 'number' | 'text';
+  defaultSource: ClusterItemSource;
+  defaultScheduleHour: number;
+  builtin: boolean;
+  supportedSources: ClusterItemSource[];
 }
 
 export interface UiSettings {
@@ -778,6 +837,89 @@ export interface WorkGuideUpdate extends Partial<WorkGuideCreate> {}
 
 export interface WorkGuideListResponse {
   data: WorkGuide[];
+}
+
+// ── Knowledge Base (서비스별 문서/노트 트리 + 버전 히스토리 + 공유) ──────────────
+export type KnowledgeKind = 'folder' | 'doc' | 'board' | 'roadmap';
+export type KnowledgeCategory = 'enhancement' | 'operation' | 'learning' | 'build' | string;
+export type KnowledgeVisibility = 'part' | 'private';
+
+export interface KnowledgePage {
+  id: string;
+  service?: string | null;       // SERVICE_CATALOG slug. null=공통
+  parentId?: string | null;
+  kind: KnowledgeKind;
+  category?: KnowledgeCategory | null;
+  title: string;
+  icon?: string | null;
+  content?: string | null;       // TipTap HTML
+  summary?: string | null;
+  tags?: string[] | null;
+  status: string;                // draft / active / archived
+  visibility: KnowledgeVisibility;
+  pinned: boolean;
+  sortOrder: number;
+  confluenceUrl?: string | null;
+  jiraUrl?: string | null;
+  startAt?: string | null;
+  dueAt?: string | null;
+  sprintId?: string | null;
+  sourceRef?: string | null;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 트리 응답 — children 중첩. */
+export interface KnowledgePageNode extends KnowledgePage {
+  children: KnowledgePageNode[];
+}
+
+export interface KnowledgePresenceUser { username: string; displayName?: string | null; }
+export interface KnowledgePresenceResponse { editors: KnowledgePresenceUser[]; }
+export interface KnowledgeImportResult { imported: number; skipped: number; detail: Record<string, unknown>; }
+
+export interface KnowledgePageCreate {
+  service?: string | null;
+  parentId?: string | null;
+  kind?: KnowledgeKind;
+  category?: KnowledgeCategory | null;
+  title: string;
+  icon?: string | null;
+  content?: string | null;
+  summary?: string | null;
+  tags?: string[] | null;
+  status?: string;
+  visibility?: KnowledgeVisibility;
+  pinned?: boolean;
+  sortOrder?: number;
+  confluenceUrl?: string | null;
+  jiraUrl?: string | null;
+}
+
+export interface KnowledgePageUpdate extends Partial<KnowledgePageCreate> {}
+
+export interface KnowledgePageVersion {
+  id: string;
+  pageId: string;
+  versionNo: number;
+  kind: 'auto' | 'milestone';
+  label?: string | null;
+  title?: string | null;
+  author?: string | null;
+  createdAt: string;
+  content?: string | null;   // detail 응답에만 포함
+}
+
+export interface KnowledgeTreeResponse {
+  data: KnowledgePageNode[];
+}
+export interface KnowledgePageListResponse {
+  data: KnowledgePage[];
+}
+export interface KnowledgeVersionListResponse {
+  data: KnowledgePageVersion[];
 }
 
 export interface ClusterLink {
@@ -2787,7 +2929,7 @@ export interface MetricChecklistItemT {
 }
 
 // ── 이모지 공감(리액션) — ops_note / work_item_comment / work_guide 공통 ──────────
-export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide';
+export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item';
 
 // 백엔드 REACTION_EMOJIS 와 동일 순서로 유지.
 export const REACTION_EMOJIS = ['👍', '❤️', '🎉', '✅', '👀', '🙏', '🔥', '😄'] as const;
@@ -2804,4 +2946,97 @@ export interface ReactionSummary {
   targetId: string;
   total: number;
   groups: ReactionGroup[];
+}
+
+// ── Coroot APM (애플리케이션 옵저버빌리티 — 별도 배포된 coroot 연동) ──────────
+// 백엔드 응답(snake_case)은 api 인터셉터가 camelCase 로 변환한다.
+export interface CorootSummary {
+  status: 'ok' | 'error' | 'offline';
+  serviceCount: number | null;
+  healthy: number | null;
+  alerting: number | null;
+  error: string | null;
+  raw: unknown | null;
+}
+
+export interface CorootDeepLink {
+  url: string | null;
+  status: 'ok' | 'offline';
+  detail?: string;
+}
+
+// 서비스별 trace 드릴다운 — application 목록 + 항목.
+export interface CorootApplication {
+  id: string;                 // coroot 'ns:Kind:name'
+  name: string;
+  namespace: string | null;
+  kind: string | null;
+  status: string | null;      // ok / warning / critical 등 (소문자)
+}
+
+export interface CorootApplicationsResponse {
+  status: 'ok' | 'error' | 'offline';
+  applications: CorootApplication[];
+  error: string | null;
+}
+
+// ── mc client presets (personal custom + admin shared) ──────────────────────
+export interface McPresetItem {
+  key: string;
+  label: string;
+  args: string;
+}
+
+export type McPresetSource = 'builtin' | 'shared' | 'personal';
+
+export interface McEffectivePreset extends McPresetItem {
+  source: McPresetSource;
+  customized: boolean;
+}
+
+export interface McPersonalPresets {
+  custom: McPresetItem[];
+  overrides: Record<string, McPresetItem>;
+  hidden: string[];
+}
+
+// ── terminal / log Appearance ───────────────────────────────────────────────
+export interface TerminalPalette {
+  bg: string;
+  fg: string;
+  red: string;
+  green: string;
+  amber: string;
+  sky: string;
+  purple: string;
+  cyan: string;
+  muted: string;
+}
+
+export interface TerminalTemplate {
+  id: string;
+  name: string;
+  group: string;
+  palette: TerminalPalette;
+}
+
+export interface TerminalProfile {
+  templateId: string;
+  fontSize: number;
+  fontFamily: string;
+  colors: Partial<TerminalPalette>;
+}
+
+export type TerminalMode = 'auto' | 'dev' | 'ops';
+export type TerminalEnv = 'dev' | 'ops';
+
+export interface TerminalAppearance {
+  mode: TerminalMode;
+  profiles: Record<TerminalEnv, TerminalProfile>;
+  customTemplates: TerminalTemplate[];
+}
+
+export interface TerminalAppearanceResponse {
+  appearance: TerminalAppearance;
+  shared: TerminalTemplate[];
 }

@@ -12,6 +12,7 @@ from app.models.work_item_custom_field import WorkItemCustomField
 from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
+from app.models.knowledge_page import KnowledgePage, KnowledgePageVersion, KnowledgePresence
 from app.models.ops_note import OpsNote
 from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
@@ -21,10 +22,12 @@ from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEv
 from app.models.config_snapshot import ClusterConfigSnapshot
 from app.models.node_server_spec import NodeServerSpec
 from app.models.cluster_custom_field import ClusterCustomField
+from app.models.cluster_item import ClusterItem
 from app.models.service_entry import ServiceEntry
 from app.models.batch_job import BatchJob, BatchJobRun
 from app.models.command_entry import CommandEntry
 from app.models.user import User
+from app.models.user_setting import UserSetting
 from app.models.audit_log import AuditLog
 from app.models.deep_check import (
     DeepCheckDefinition,
@@ -75,6 +78,9 @@ __all__ = [
     "WorkflowStep",
     "WorkflowEdge",
     "WorkGuide",
+    "KnowledgePage",
+    "KnowledgePageVersion",
+    "KnowledgePresence",
     "OpsNote",
     "ManagementServer",
     "InfraNode",
@@ -86,11 +92,13 @@ __all__ = [
     "ClusterConfigSnapshot",
     "NodeServerSpec",
     "ClusterCustomField",
+    "ClusterItem",
     "ServiceEntry",
     "BatchJob",
     "BatchJobRun",
     "CommandEntry",
     "User",
+    "UserSetting",
     "AuditLog",
     "DeepCheckDefinition",
     "DeepCheckResult",

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
+import { useToast } from '@/components/common';
 import type { WorkItem, Assignee } from '@/types';
 
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
@@ -30,6 +31,53 @@ function formatDate(s?: string | null): string {
 
 function stripHtml(s: string): string {
   return s.replace(/<[^>]*>/g, '').trim();
+}
+
+// ── 기간(주) 범위 헬퍼 ────────────────────────────────────────────────────────
+type Period = 'all' | 'thisWeek' | 'lastWeek';
+
+/** 해당 날짜가 속한 주의 월요일 0시. */
+function startOfWeekMon(d: Date): Date {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  const day = r.getDay();                 // 0=일 … 6=토
+  r.setDate(r.getDate() + (day === 0 ? -6 : 1 - day));
+  return r;
+}
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+/** period → [start, end) (ms). 'all' 이면 null. */
+function weekRange(period: Period): { start: number; end: number } | null {
+  if (period === 'all') return null;
+  const thisMon = startOfWeekMon(new Date());
+  if (period === 'thisWeek') return { start: thisMon.getTime(), end: addDays(thisMon, 7).getTime() };
+  return { start: addDays(thisMon, -7).getTime(), end: thisMon.getTime() };
+}
+
+/** 업무가 해당 주에 "진행 또는 완료"되었는지 — [시작, 완료(또는 오늘)] 구간이 주와 겹치면 true.
+ *  시작일이 없으면(미착수) 제외. */
+function activeInRange(item: WorkItem, range: { start: number; end: number }): boolean {
+  const s = item.startedAt?.slice(0, 10);
+  if (!s) return false;
+  const startedMs = Date.parse(s);
+  if (Number.isNaN(startedMs)) return false;
+  const closed = item.closedAt?.slice(0, 10);
+  const endMs = closed ? Date.parse(closed) : Date.now();
+  return startedMs < range.end && endMs >= range.start;
+}
+
+const PERIOD_LABEL: Record<Period, string> = { all: '전체 기간', thisWeek: '이번 주', lastWeek: '지난 주' };
+
+function fmtRange(range: { start: number; end: number } | null): string {
+  if (!range) return '';
+  const a = new Date(range.start);
+  const b = new Date(range.end - 86400000); // 마지막 포함일
+  const f = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${f(a)} ~ ${f(b)}`;
 }
 
 interface MemberBucket {
@@ -178,6 +226,34 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
   );
 }
 
+// ── 텍스트 일괄 복사 ──────────────────────────────────────────────────────────
+
+/** 현재 필터된 멤버 버킷들을 사람이 읽기 좋은 plain text 로 직렬화. */
+function buildCopyText(buckets: MemberBucket[], periodLabel: string, rangeLabel: string): string {
+  const lines: string[] = [];
+  lines.push(`[멤버별 업무] ${periodLabel}${rangeLabel ? ` (${rangeLabel})` : ''}`);
+  lines.push('');
+  for (const b of buckets) {
+    lines.push(`■ ${b.assignee} — 작업 ${b.tasks.length} (진행 ${b.openTasks} / 완료 ${b.doneTasks}) · 이슈 ${b.issues.length} (미조치 ${b.unresolvedIssues} / 완료 ${b.resolvedIssues})`);
+    if (b.tasks.length) {
+      lines.push('  [작업]');
+      for (const t of b.tasks) {
+        const ks = KANBAN_STYLE[t.kanbanStatus]?.label ?? t.kanbanStatus;
+        const period = `${formatDate(t.startedAt)}${t.closedAt ? ` ~ ${formatDate(t.closedAt)}` : ''}`;
+        lines.push(`   - ${ks} | ${stripHtml(t.content) || t.category || '(제목 없음)'} (${period})`);
+      }
+    }
+    if (b.issues.length) {
+      lines.push('  [이슈]');
+      for (const i of b.issues) {
+        lines.push(`   - ${i.closedAt ? '완료' : '미조치'} | ${i.category ? `${i.category}: ` : ''}${stripHtml(i.content)} (${formatDate(i.startedAt)})`);
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n').trim();
+}
+
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 type MemberFilter = 'all' | 'active' | 'withOpen';
@@ -186,10 +262,14 @@ export function MemberBoardPage() {
   const navigate = useNavigate();
   const { data: assignees = [] } = useAssignees();
   const { data: workItemsData } = useWorkItems();
+  const toast = useToast();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<MemberFilter>('active');
+  const [period, setPeriod] = useState<Period>('all');
   const [includeSecondary, setIncludeSecondary] = useState(false);
+
+  const range = useMemo(() => weekRange(period), [period]);
 
   const buckets = useMemo<MemberBucket[]>(() => {
     const allItems = workItemsData?.data ?? [];
@@ -216,12 +296,17 @@ export function MemberBoardPage() {
     const list: MemberBucket[] = [];
 
     for (const name of nameSet) {
-      const memberTasks = tasksAll.filter(
+      let memberTasks = tasksAll.filter(
         (t) => splitNames(t.primaryAssignee).includes(name) || (includeSecondary && splitNames(t.secondaryAssignee).includes(name)),
       );
-      const memberIssues = issuesAll.filter(
+      let memberIssues = issuesAll.filter(
         (i) => splitNames(i.primaryAssignee).includes(name) || (includeSecondary && splitNames(i.secondaryAssignee).includes(name)),
       );
+      // 기간 필터 — 선택한 주에 진행/완료된 건만.
+      if (range) {
+        memberTasks = memberTasks.filter((t) => activeInRange(t, range));
+        memberIssues = memberIssues.filter((i) => activeInRange(i, range));
+      }
       list.push({
         assignee: name,
         info: assigneeByName.get(name),
@@ -241,7 +326,7 @@ export function MemberBoardPage() {
     );
 
     return list;
-  }, [assignees, workItemsData, includeSecondary]);
+  }, [assignees, workItemsData, includeSecondary, range]);
 
   const filtered = useMemo(() => {
     let list = buckets;
@@ -263,6 +348,18 @@ export function MemberBoardPage() {
   }, [buckets, search, filter]);
 
   const totalOpen = buckets.reduce((acc, b) => acc + b.openTasks + b.unresolvedIssues, 0);
+
+  const handleCopy = async () => {
+    if (filtered.length === 0) { toast.info('복사할 내용이 없습니다.'); return; }
+    const text = buildCopyText(filtered, PERIOD_LABEL[period], fmtRange(range));
+    const itemCount = filtered.reduce((n, b) => n + b.tasks.length + b.issues.length, 0);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('클립보드에 복사됨', `멤버 ${filtered.length}명 · ${itemCount}건`);
+    } catch {
+      toast.error('복사 실패', '브라우저 클립보드 권한을 확인하세요.');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -311,6 +408,32 @@ export function MemberBoardPage() {
                 </button>
               ))}
             </div>
+            {/* 기간 필터 — 그 주에 진행/완료된 업무만 */}
+            <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+              {(['all', 'thisWeek', 'lastWeek'] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    period === p
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground/70 hover:text-foreground'
+                  }`}
+                >
+                  {PERIOD_LABEL[p]}
+                </button>
+              ))}
+            </div>
+            {range && (
+              <span className="text-xs font-mono text-muted-foreground">{fmtRange(range)}</span>
+            )}
+            <button
+              onClick={handleCopy}
+              title="현재 목록을 텍스트로 클립보드에 복사"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+            >
+              <Copy className="w-3.5 h-3.5" /> 텍스트 복사
+            </button>
             <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -320,9 +443,9 @@ export function MemberBoardPage() {
               />
               부 담당자도 포함
             </label>
-            {(search || filter !== 'active') && (
+            {(search || filter !== 'active' || period !== 'all') && (
               <button
-                onClick={() => { setSearch(''); setFilter('active'); }}
+                onClick={() => { setSearch(''); setFilter('active'); setPeriod('all'); }}
                 className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3 h-3" />

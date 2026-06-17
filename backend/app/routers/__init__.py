@@ -13,6 +13,7 @@ from app.routers.node_labels import router as node_labels_router
 from app.routers.node_images import router as node_images_router
 from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
+from app.routers.knowledge import router as knowledge_router
 from app.routers.ops_note import router as ops_note_router
 from app.routers.reactions import router as reactions_router
 from app.routers.mindmap import router as mindmap_router
@@ -55,6 +56,9 @@ from app.routers.k8s_helm import router as k8s_helm_router
 from app.routers.k8s_exec import router as k8s_exec_router
 from app.routers.metric_trend import router as metric_trend_router
 from app.routers.service_topology import router as service_topology_router
+from app.routers.cluster_items import router as cluster_items_router
+from app.routers.coroot import router as coroot_router
+from app.routers.terminal_appearance import router as terminal_appearance_router
 
 __all__ = [
     "ops_check_router",
@@ -78,6 +82,7 @@ __all__ = [
     "node_images_router",
     "workflows_router",
     "work_guide_router",
+    "knowledge_router",
     "ops_note_router",
     "reactions_router",
     "mindmap_router",
@@ -110,4 +115,7 @@ __all__ = [
     "lake_services_router",
     "bottleneck_router",
     "lake_service_types_router",
+    "cluster_items_router",
+    "coroot_router",
+    "terminal_appearance_router",
 ]

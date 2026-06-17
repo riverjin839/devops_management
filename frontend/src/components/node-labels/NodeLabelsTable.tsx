@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
 import { Pencil } from 'lucide-react';
-import { NodeInfo } from '@/hooks/useNodeLabels';
+import { NodeRow } from '@/hooks/useNodeLabels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries, type LabelEntry } from './nodeLabelsShared';
 
 interface Props {
-  nodes: NodeInfo[];
-  onEdit: (node: NodeInfo) => void;
+  nodes: NodeRow[];
+  onEdit: (node: NodeRow) => void;
   searchQuery: string;
   viewMode: 'node' | 'label';
+  /** 여러 클러스터 취합 시 클러스터 컬럼/태그를 노출. */
+  showCluster?: boolean;
 }
 
 // ── 노드 기준 뷰 ──────────────────────────────────────────
@@ -15,10 +17,12 @@ function NodeView({
   nodes,
   onEdit,
   searchQuery,
+  showCluster,
 }: {
-  nodes: NodeInfo[];
-  onEdit: (node: NodeInfo) => void;
+  nodes: NodeRow[];
+  onEdit: (node: NodeRow) => void;
   searchQuery: string;
+  showCluster: boolean;
 }) {
   const filtered = useMemo(
     () => nodes.filter((n) => matchesSearch(n, searchQuery)),
@@ -38,6 +42,7 @@ function NodeView({
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>
+            {showCluster && <th className="text-left px-4 py-3 font-medium text-muted-foreground w-40">Cluster</th>}
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48">Node</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-32">Role</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Status</th>
@@ -47,9 +52,13 @@ function NodeView({
         </thead>
         <tbody>
           {filtered.map((node) => {
-            const labelEntries = Object.entries(node.labels);
+            // 원칙: 모든 라벨을 누락 없이 표시한다 (자르거나 "+N more" 로 숨기지 않음).
+            const labelEntries = Object.entries(node.labels ?? {});
             return (
-              <tr key={node.name} className="border-t border-border align-top hover:bg-muted/10 transition-colors">
+              <tr key={`${node.clusterId}/${node.name}`} className="border-t border-border align-top hover:bg-muted/10 transition-colors">
+                {showCluster && (
+                  <td className="px-4 py-3 text-sm text-muted-foreground font-medium truncate">{node.clusterName}</td>
+                )}
                 <td className="px-4 py-3 font-mono text-sm font-medium">{node.name}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 text-sm rounded-full font-medium ${
@@ -71,12 +80,15 @@ function NodeView({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1 max-w-3xl">
-                    {labelEntries.slice(0, 15).map(([k, v]) => {
+                    {labelEntries.length === 0 && (
+                      <span className="text-sm text-muted-foreground/60">(라벨 없음)</span>
+                    )}
+                    {labelEntries.map(([k, v]) => {
                       const tag = v ? `${k}=${v}` : k;
                       const isHighlighted =
                         searchQuery &&
                         (k.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          v.toLowerCase().includes(searchQuery.toLowerCase()));
+                          (v ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
                       return (
                         <span
                           key={k}
@@ -90,11 +102,6 @@ function NodeView({
                         </span>
                       );
                     })}
-                    {labelEntries.length > 15 && (
-                      <span className="px-2 py-0.5 text-sm text-muted-foreground">
-                        +{labelEntries.length - 15} more
-                      </span>
-                    )}
                   </div>
                 </td>
                 <td className="px-4 py-3">
@@ -118,9 +125,11 @@ function NodeView({
 function LabelView({
   nodes,
   searchQuery,
+  showCluster,
 }: {
-  nodes: NodeInfo[];
+  nodes: NodeRow[];
   searchQuery: string;
+  showCluster: boolean;
 }) {
   const labelMap = useMemo<LabelEntry[]>(() => buildLabelEntries(nodes), [nodes]);
   const filtered = useMemo(() => filterLabelEntries(labelMap, searchQuery), [labelMap, searchQuery]);
@@ -173,18 +182,24 @@ function LabelView({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {entry.nodes.map((nodeName) => (
-                      <span
-                        key={nodeName}
-                        className={`px-2 py-0.5 text-sm rounded border font-mono ${
-                          searchQuery && nodeName.toLowerCase().includes(searchQuery.toLowerCase())
-                            ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
-                            : 'bg-secondary border-border text-foreground'
-                        }`}
-                      >
-                        {nodeName}
-                      </span>
-                    ))}
+                    {entry.nodes.map((ref) => {
+                      const display = showCluster ? `${ref.clusterName}/${ref.name}` : ref.name;
+                      const hit = searchQuery &&
+                        (ref.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          ref.clusterName.toLowerCase().includes(searchQuery.toLowerCase()));
+                      return (
+                        <span
+                          key={`${ref.clusterId}/${ref.name}`}
+                          className={`px-2 py-0.5 text-sm rounded border font-mono ${
+                            hit
+                              ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300'
+                              : 'bg-secondary border-border text-foreground'
+                          }`}
+                        >
+                          {display}
+                        </span>
+                      );
+                    })}
                   </div>
                 </td>
               </tr>
@@ -197,9 +212,9 @@ function LabelView({
 }
 
 // ── Main export ───────────────────────────────────────────
-export function NodeLabelsTable({ nodes, onEdit, searchQuery, viewMode }: Props) {
+export function NodeLabelsTable({ nodes, onEdit, searchQuery, viewMode, showCluster = false }: Props) {
   if (viewMode === 'label') {
-    return <LabelView nodes={nodes} searchQuery={searchQuery} />;
+    return <LabelView nodes={nodes} searchQuery={searchQuery} showCluster={showCluster} />;
   }
-  return <NodeView nodes={nodes} onEdit={onEdit} searchQuery={searchQuery} />;
+  return <NodeView nodes={nodes} onEdit={onEdit} searchQuery={searchQuery} showCluster={showCluster} />;
 }

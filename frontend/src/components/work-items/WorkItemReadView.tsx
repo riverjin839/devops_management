@@ -4,6 +4,7 @@ import { stripHtml } from '@/lib/utils';
 import { loadWorkItemImages } from '@/lib/workItemImages';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { RichContent } from '@/components/editor';
+import { ReactionBar } from '@/components/common';
 import { CommentThread } from './CommentThread';
 import { ActivityTimeline } from './ActivityTimeline';
 import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
@@ -105,6 +106,12 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
         <RichContent content={item.content} />
       </div>
 
+      {/* 공감(이모지 리액션) — 업무 글 본문 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">공감</span>
+        <ReactionBar targetType="work_item" targetId={item.id} />
+      </div>
+
       {item.resolution && (
         <div>
           <p className="text-sm font-medium text-muted-foreground mb-1">업무 결과</p>
@@ -136,6 +143,21 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
           >
             <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="truncate max-w-md">{item.confluenceUrl}</span>
+          </a>
+        </div>
+      )}
+
+      {item.jiraUrl && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Jira 링크</p>
+          <a
+            href={item.jiraUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline break-all"
+          >
+            <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate max-w-md">{item.jiraUrl}</span>
           </a>
         </div>
       )}

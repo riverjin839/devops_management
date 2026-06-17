@@ -72,6 +72,12 @@ class Cluster(Base):
     # null/empty 면 status 기반 기본 아이콘으로 fallback.
     icon = Column(Text, nullable=True)
 
+    # coroot APM 연동 — 별도 배포된 coroot 의 project 매핑/URL 오버라이드/토글.
+    # base URL 은 전역 settings.coroot_url, project 는 클러스터마다 다름.
+    coroot_project = Column(String(100), nullable=True)        # 이 클러스터에 대응하는 coroot project
+    coroot_url = Column(String(512), nullable=True)            # 선택 — 전역 URL 오버라이드
+    coroot_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -81,6 +87,7 @@ class Cluster(Base):
     playbooks = relationship("Playbook", back_populates="cluster", cascade="all, delete-orphan")
     work_items = relationship("WorkItem", back_populates="cluster", foreign_keys="WorkItem.cluster_id")
     infra_nodes = relationship("InfraNode", back_populates="cluster", cascade="all, delete-orphan")
+    items = relationship("ClusterItem", back_populates="cluster", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Cluster(name={self.name}, status={self.status})>"

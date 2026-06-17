@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -581,9 +581,29 @@ export interface McRunRequest {
 
 export const mcApi = {
   presets: (clusterId: string) =>
-    api.get<{ presets: McPreset[] }>(`/clusters/${clusterId}/mc/presets`),
+    api.get<{ presets: import('@/types').McEffectivePreset[] }>(`/clusters/${clusterId}/mc/presets`),
   run: (clusterId: string, payload: McRunRequest, signal?: AbortSignal) =>
     api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/mc/run`, payload, { signal }),
+  getPersonalPresets: () =>
+    api.get<import('@/types').McPersonalPresets>('/mc/presets/personal'),
+  savePersonalPresets: (payload: import('@/types').McPersonalPresets) =>
+    api.put<import('@/types').McPersonalPresets>('/mc/presets/personal', payload),
+  getSharedPresets: () =>
+    api.get<{ presets: McPreset[] }>('/mc/presets/shared'),
+  saveSharedPresets: (presets: McPreset[]) =>
+    api.put<{ presets: McPreset[] }>('/mc/presets/shared', { presets }),
+};
+
+// ── Terminal / log Appearance API ───────────────────────────────────────────
+export const terminalAppearanceApi = {
+  get: () =>
+    api.get<import('@/types').TerminalAppearanceResponse>('/terminal-appearance'),
+  save: (appearance: import('@/types').TerminalAppearance) =>
+    api.put<import('@/types').TerminalAppearanceResponse>('/terminal-appearance', { appearance }),
+  getShared: () =>
+    api.get<{ templates: import('@/types').TerminalTemplate[] }>('/terminal-appearance/shared'),
+  saveShared: (templates: import('@/types').TerminalTemplate[]) =>
+    api.put<{ templates: import('@/types').TerminalTemplate[] }>('/terminal-appearance/shared', { templates }),
 };
 
 export const etcdctlApi = {
@@ -705,6 +725,38 @@ export const promqlApi = {
     api.post<MetricQueryResult>('/promql/query/test', { promql }),
   health: () =>
     api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
+};
+
+// Coroot — 애플리케이션 APM (별도 배포된 coroot 연동: 헬스/요약/딥링크)
+export const corootApi = {
+  health: () =>
+    api.get<{ status: string; detail?: string }>('/coroot/health', { timeout: 6000 }),
+  getSummary: (clusterId: string) =>
+    api.get<import('@/types').CorootSummary>(`/coroot/${clusterId}/summary`, { timeout: 15000 }),
+  getDeepLink: (clusterId: string) =>
+    api.get<import('@/types').CorootDeepLink>(`/coroot/${clusterId}/deeplink`),
+  getApplications: (clusterId: string) =>
+    api.get<import('@/types').CorootApplicationsResponse>(`/coroot/${clusterId}/applications`, { timeout: 15000 }),
+  getApplicationDeepLink: (clusterId: string, appId: string, view = 'Tracing') =>
+    api.get<import('@/types').CorootDeepLink>(`/coroot/${clusterId}/application/deeplink`, {
+      params: { app_id: appId, view },
+    }),
+};
+
+// Cluster Items — 현황 관리 대시보드의 '아이템' 카드 (클러스터별)
+export const clusterItemsApi = {
+  types: () =>
+    api.get<{ data: import('@/types').ClusterItemType[] }>('/cluster-item-types'),
+  list: (clusterId: string) =>
+    api.get<{ data: ClusterItem[] }>(`/clusters/${clusterId}/items`),
+  create: (clusterId: string, data: Partial<ClusterItem>) =>
+    api.post<ClusterItem>(`/clusters/${clusterId}/items`, data),
+  update: (itemId: string, data: Partial<ClusterItem>) =>
+    api.put<ClusterItem>(`/cluster-items/${itemId}`, data),
+  remove: (itemId: string) => api.delete(`/cluster-items/${itemId}`),
+  run: (itemId: string) =>
+    // AI(LLM) 아이템은 응답이 길 수 있어 넉넉히 잡는다.
+    api.post<ClusterItem>(`/cluster-items/${itemId}/run`, undefined, { timeout: 130000 }),
 };
 
 // Work Items API — 이슈와 작업 통합. type 필터로 둘을 구분.
@@ -909,6 +961,52 @@ export const workGuidesApi = {
   create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
   update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
   delete: (id: string) => api.delete(`/work-guides/${id}`),
+};
+
+// Knowledge Base API (서비스별 문서/노트 트리 + 버전 히스토리 + 공유)
+export const knowledgeApi = {
+  tree: (service?: string) =>
+    api.get<import('@/types').KnowledgeTreeResponse>('/knowledge/pages/tree', {
+      params: service ? { service } : undefined,
+    }),
+  list: (params?: { service?: string; category?: string; kind?: string; q?: string }) =>
+    api.get<import('@/types').KnowledgePageListResponse>('/knowledge/pages', {
+      params: params
+        ? Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''))
+        : undefined,
+    }),
+  get: (id: string) => api.get<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`),
+  create: (data: import('@/types').KnowledgePageCreate) =>
+    api.post<import('@/types').KnowledgePage>('/knowledge/pages', data),
+  update: (id: string, data: import('@/types').KnowledgePageUpdate, expectedUpdatedAt?: string) =>
+    api.put<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`, data, {
+      params: expectedUpdatedAt ? { expected_updated_at: expectedUpdatedAt } : undefined,
+    }),
+  heartbeat: (id: string) =>
+    api.post<import('@/types').KnowledgePresenceResponse>(`/knowledge/pages/${id}/heartbeat`),
+  importExisting: (source: 'all' | 'ops_notes' | 'work_guides' | 'service_entries' = 'all') =>
+    api.post<import('@/types').KnowledgeImportResult>('/knowledge/import', undefined, { params: { source } }),
+  move: (id: string, data: { parentId?: string | null; sortOrder: number }) =>
+    api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/move`, data),
+  remove: (id: string) => api.delete(`/knowledge/pages/${id}`),
+  versions: (id: string) =>
+    api.get<import('@/types').KnowledgeVersionListResponse>(`/knowledge/pages/${id}/versions`),
+  getVersion: (versionId: string) =>
+    api.get<import('@/types').KnowledgePageVersion>(`/knowledge/versions/${versionId}`),
+  saveMilestone: (id: string, label: string) =>
+    api.post<import('@/types').KnowledgePageVersion>(`/knowledge/pages/${id}/versions`, { label }),
+  restore: (id: string, versionId: string) =>
+    api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/restore/${versionId}`),
+  roadmap: (params?: { service?: string; category?: string }) =>
+    api.get<import('@/types').KnowledgePageListResponse>('/knowledge/roadmap', {
+      params: params
+        ? Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined))
+        : undefined,
+    }),
+  reorder: (parentId: string | null, orderedIds: string[]) =>
+    api.post('/knowledge/reorder', { parentId, orderedIds }),
+  backlinks: (id: string) =>
+    api.get<import('@/types').KnowledgePageListResponse>(`/knowledge/pages/${id}/backlinks`),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)

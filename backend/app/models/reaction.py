@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
 
 # 공감(리액션) 대상 타입 — 작성자(담당자)가 남긴 "글" 성격의 surface 들.
-REACTION_TARGET_TYPES = ("ops_note", "work_item_comment", "work_guide")
+REACTION_TARGET_TYPES = ("ops_note", "work_item_comment", "work_guide", "work_item")
 
 # 허용 이모지 (Slack/GitHub 스타일 고정 팔레트). 프런트(ReactionBar)와 동일하게 유지.
 REACTION_EMOJIS = ("👍", "❤️", "🎉", "✅", "👀", "🙏", "🔥", "😄")

@@ -24,6 +24,7 @@ import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
+import { KnowledgeBasePage } from '@/pages/KnowledgeBasePage';
 import { CommandsPage } from '@/pages/CommandsPage';
 import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -41,6 +42,7 @@ import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
+import { CorootApmPage } from '@/pages/CorootApmPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
@@ -165,6 +167,7 @@ function AppShell() {
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
+              <Route path="/coroot" element={<CorootApmPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
@@ -184,6 +187,8 @@ function AppShell() {
               <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
               <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
+              <Route path="/knowledge" element={<KnowledgeBasePage />} />
+              <Route path="/knowledge/:id" element={<KnowledgeBasePage />} />
               <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
               <Route path="/settings/audit-logs" element={<RequireAdmin><AuditLogsPage /></RequireAdmin>} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />

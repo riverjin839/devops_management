@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     grafana_url: str = "http://grafana.monitoring.svc:3000"
 
+    # Coroot (application APM / observability) — 별도 배포 서비스.
+    # 비어있으면 기능 전체가 offline 으로 우아하게 비활성화된다 (Prometheus/Ollama 와 동일 패턴).
+    # per-cluster 매핑(coroot_project)은 clusters 테이블에 저장하고, base URL 은 전역으로 둔다.
+    coroot_url: str = ""
+    coroot_api_key: str = ""        # 선택 — coroot API 키 인증 사용 시
+    coroot_timeout: int = 10
+
     # Trend Digest
     # 폐쇄망: github_api_url을 내부 GitHub Enterprise 주소로 변경
     trends_github_api_url: str = "https://api.github.com"

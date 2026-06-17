@@ -13,9 +13,9 @@ const ALLOWED_TAGS = [
   'a', 'img', 'ul', 'ol', 'li', 'blockquote',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'table', 'thead', 'tbody', 'tr', 'th', 'td', 'colgroup', 'col',
-  'div', 'span',
+  'div', 'span', 'details', 'summary',
 ];
-const ALLOWED_ATTR = ['href', 'title', 'alt', 'src', 'target', 'rel', 'class', 'style', 'data-checked', 'colwidth', 'colspan', 'rowspan'];
+const ALLOWED_ATTR = ['href', 'title', 'alt', 'src', 'target', 'rel', 'class', 'style', 'data-checked', 'colwidth', 'colspan', 'rowspan', 'data-callout', 'open'];
 
 /**
  * Renders HTML content produced by RichTextEditor — DOMPurify sanitized.

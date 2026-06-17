@@ -63,6 +63,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_batch_job_dispatcher",
         "schedule": crontab(minute="*"),
     },
+    # 클러스터 아이템(현황 카드) 자동 수집 디스패처 — 매시 정각, 스케줄 시(KST) 일치 아이템 수집.
+    # 기본 'K8s 노드 수' 아이템은 schedule_hour=1 (새벽 1시) 로 매일 1회 수집된다.
+    "cluster-item-dispatcher": {
+        "task": "app.celery_app.run_cluster_item_dispatcher",
+        "schedule": crontab(minute=0),
+    },
     # Deep check — daily check 15분 뒤. Super Pod (centralized) 모드용.
     "daily-deep-check-morning": {
         "task": "app.celery_app.run_deep_check_all",
@@ -582,6 +588,40 @@ def run_single_check(self, cluster_id: str):
             "checked_at": result.checked_at.isoformat()
         }
 
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_cluster_item_dispatcher")
+def run_cluster_item_dispatcher(self):
+    """현황 카드(ClusterItem) 자동 수집 디스패처 — 매시 정각 실행(Beat).
+
+    현재 시(KST)와 아이템의 schedule_hour 가 일치하고 auto_enabled 인
+    아이템을 수집한다. 기본 'K8s 노드 수' 는 schedule_hour=1 → 매일 새벽 1시.
+    """
+    from datetime import datetime, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.database import SessionLocal
+    from app.services import cluster_item_service as cis
+
+    try:
+        tz = ZoneInfo("Asia/Seoul")
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        tz = None
+    now_hour = (
+        datetime.now(_tz.utc).astimezone(tz).hour if tz else datetime.utcnow().hour
+    )
+
+    db = SessionLocal()
+    try:
+        results = cis.run_due_auto_items(db, now_hour)
+        return {
+            "executed_at": datetime.now().isoformat(),
+            "hour_kst": now_hour,
+            "fired": len(results),
+            "results": results,
+        }
     finally:
         db.close()
 

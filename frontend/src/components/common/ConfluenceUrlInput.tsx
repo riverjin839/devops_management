@@ -18,6 +18,8 @@ interface ConfluenceUrlInputProps {
   className?: string;
   /** 한 줄(라벨+입력 가로 배치) 컴팩트 모드. true 면 hint 는 숨긴다. */
   inline?: boolean;
+  /** placeholder 오버라이드 — Confluence 외 다른 링크(예: Jira)로 재사용 시 사용. */
+  placeholder?: string;
 }
 
 const URL_RE = /^https?:\/\//i;
@@ -37,6 +39,7 @@ export function ConfluenceUrlInput({
   hint,
   className = '',
   inline = false,
+  placeholder = 'https://confluence.example.com/pages/...',
 }: ConfluenceUrlInputProps) {
   const trimmed = value.trim();
   const isValid = !trimmed || URL_RE.test(trimmed);
@@ -56,7 +59,7 @@ export function ConfluenceUrlInput({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            placeholder="https://confluence.example.com/pages/..."
+            placeholder={placeholder}
             inputMode="url"
             className={`w-full pl-3 pr-9 py-1.5 bg-background border ${
               isValid ? 'border-border' : 'border-red-500/60'
@@ -91,7 +94,7 @@ export function ConfluenceUrlInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          placeholder="https://confluence.example.com/pages/..."
+          placeholder={placeholder}
           inputMode="url"
           className={`w-full pl-3 pr-9 py-2 bg-background border ${
             isValid ? 'border-border' : 'border-red-500/60'
