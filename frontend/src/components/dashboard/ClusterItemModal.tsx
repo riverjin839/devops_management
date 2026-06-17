@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { X, Hand, Clock3, Sparkles } from 'lucide-react';
 import { ClusterItem, ClusterItemCardSize, ClusterItemSource } from '@/types';
-import { useCreateClusterItem, useUpdateClusterItem } from '@/hooks/useClusterItems';
+import { useCreateClusterItem, useUpdateClusterItem, useClusterItemTypes } from '@/hooks/useClusterItems';
 
 interface ClusterItemModalProps {
   isOpen: boolean;
@@ -10,10 +10,10 @@ interface ClusterItemModalProps {
   editingItem?: ClusterItem | null;
 }
 
-const SOURCE_OPTIONS: { value: ClusterItemSource; label: string; icon: typeof Hand; hint: string; disabled?: boolean }[] = [
+const SOURCE_OPTIONS: { value: ClusterItemSource; label: string; icon: typeof Hand; hint: string }[] = [
   { value: 'manual', label: '수동', icon: Hand, hint: '수작업으로 직접 실행' },
   { value: 'auto', label: '자동(배치)', icon: Clock3, hint: '스케줄에 맞춰 자동 수집' },
-  { value: 'ai', label: 'AI', icon: Sparkles, hint: '추후 도입 예정', disabled: true },
+  { value: 'ai', label: 'AI', icon: Sparkles, hint: 'Ollama LLM 으로 수집 (폐쇄망)' },
 ];
 
 const SIZE_OPTIONS: { value: ClusterItemCardSize; label: string }[] = [
@@ -23,6 +23,7 @@ const SIZE_OPTIONS: { value: ClusterItemCardSize; label: string }[] = [
 ];
 
 export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: ClusterItemModalProps) {
+  const [itemType, setItemType] = useState('node_count');
   const [title, setTitle] = useState('');
   const [icon, setIcon] = useState('🖥️');
   const [description, setDescription] = useState('');
@@ -33,6 +34,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
   const [scheduleMinute, setScheduleMinute] = useState(0);
   const [cardSize, setCardSize] = useState<ClusterItemCardSize>('md');
 
+  const typeId = useId();
   const titleId = useId();
   const iconId = useId();
   const descId = useId();
@@ -40,12 +42,14 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
 
   const createItem = useCreateClusterItem(clusterId);
   const updateItem = useUpdateClusterItem(clusterId);
+  const { data: itemTypes = [] } = useClusterItemTypes();
 
   const isEdit = !!editingItem;
 
   useEffect(() => {
     if (!isOpen) return;
     if (editingItem) {
+      setItemType(editingItem.itemType);
       setTitle(editingItem.title);
       setIcon(editingItem.icon || '🖥️');
       setDescription(editingItem.description || '');
@@ -56,6 +60,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
       setScheduleMinute(editingItem.scheduleMinute);
       setCardSize(editingItem.cardSize);
     } else {
+      setItemType('node_count');
       setTitle('');
       setIcon('🖥️');
       setDescription('');
@@ -69,6 +74,19 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
   }, [isOpen, editingItem]);
 
   if (!isOpen) return null;
+
+  // 생성 모드에서 아이템 타입 선택 시 기본값 prefill.
+  const handleTypeSelect = (type: string) => {
+    setItemType(type);
+    const spec = itemTypes.find((t) => t.itemType === type);
+    if (!spec) return;
+    setTitle((prev) => (prev.trim() ? prev : spec.label));
+    setIcon(spec.icon || '🖥️');
+    setUnit(spec.unit || '');
+    setSourceMode(spec.defaultSource);
+    setScheduleHour(spec.defaultScheduleHour);
+    setDescription(spec.description || '');
+  };
 
   const handleSave = () => {
     if (!title.trim()) return;
@@ -86,7 +104,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
     if (editingItem) {
       updateItem.mutate({ id: editingItem.id, data: payload });
     } else {
-      createItem.mutate({ ...payload, itemType: 'node_count', tier: 'basic' });
+      createItem.mutate({ ...payload, itemType, tier: itemType === 'node_count' ? 'basic' : 'advanced' });
     }
     onClose();
   };
@@ -109,6 +127,32 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
             <p className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
               기본 아이템입니다. 제목·아이콘·스케줄·크기 등은 편집할 수 있지만 삭제는 불가합니다.
             </p>
+          )}
+
+          {/* Item type picker — 생성 모드에서만 (타입은 생성 후 변경 불가) */}
+          {!isEdit && (
+            <div>
+              <label htmlFor={typeId} className="block text-sm font-medium mb-1">
+                아이템 종류 <span className="text-red-400">*</span>
+              </label>
+              <select
+                id={typeId}
+                value={itemType}
+                onChange={(e) => handleTypeSelect(e.target.value)}
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                {itemTypes.map((t) => (
+                  <option key={t.itemType} value={t.itemType}>
+                    {t.icon} {t.label}
+                  </option>
+                ))}
+              </select>
+              {itemTypes.find((t) => t.itemType === itemType)?.description && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {itemTypes.find((t) => t.itemType === itemType)?.description}
+                </p>
+              )}
+            </div>
           )}
 
           {/* Title + Icon */}
@@ -162,10 +206,9 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
                   <button
                     key={opt.value}
                     type="button"
-                    disabled={opt.disabled}
                     onClick={() => setSourceMode(opt.value)}
                     title={opt.hint}
-                    className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-sm transition-colors ${
                       active ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'
                     }`}
                   >
