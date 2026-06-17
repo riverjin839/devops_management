@@ -95,3 +95,28 @@ export function useRestoreVersion() {
     },
   });
 }
+
+export function useRoadmap(service?: string, category = 'enhancement') {
+  return useQuery<KnowledgePage[]>({
+    queryKey: ['knowledge', 'roadmap', service ?? 'all', category],
+    queryFn: () => knowledgeApi.roadmap({ service, category }).then((r) => r.data.data ?? []),
+    staleTime: 30_000,
+  });
+}
+
+export function useReorder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ parentId, orderedIds }: { parentId: string | null; orderedIds: string[] }) =>
+      knowledgeApi.reorder(parentId, orderedIds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['knowledge', 'tree'] }),
+  });
+}
+
+export function usePageBacklinks(id?: string) {
+  return useQuery<KnowledgePage[]>({
+    queryKey: ['knowledge', 'backlinks', id ?? ''],
+    queryFn: () => knowledgeApi.backlinks(id as string).then((r) => r.data.data ?? []),
+    enabled: !!id,
+  });
+}

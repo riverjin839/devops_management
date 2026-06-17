@@ -2,22 +2,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronRight, ChevronDown, FileText, Folder, FolderTree, Plus, Trash2,
-  History, Save, Lock, Users, RotateCcw, Eye, X, Map as MapIcon, KanbanSquare,
+  History, Save, Lock, Users, RotateCcw, Eye, X, Map as MapIcon, KanbanSquare, Link2,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { RichTextEditor, RichContent } from '@/components/editor';
+import { KnowledgeRoadmap } from '@/components/knowledge/KnowledgeRoadmap';
 import { useToast } from '@/components/common';
 import { useAuthStore } from '@/stores/authStore';
+import { useSprints } from '@/hooks/useSprints';
 import { SERVICE_CATALOG } from '@/components/services/serviceCatalog';
 import { knowledgeApi } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import {
-  useKnowledgeTree, useKnowledgePage, usePageVersions,
+  useKnowledgeTree, useKnowledgePage, usePageVersions, useRoadmap,
   useCreatePage, useUpdatePage, useDeletePage, useSaveMilestone, useRestoreVersion,
+  useReorder, usePageBacklinks,
 } from '@/hooks/useKnowledge';
 import type { KnowledgePageNode, KnowledgeKind, KnowledgeVisibility } from '@/types';
 
-// 서비스 탭: 카탈로그 12종 + '공통'(service=null)
 const SERVICES = [{ key: '__common__', label: '공통' }, ...SERVICE_CATALOG.map((s) => ({ key: s.key, label: s.label }))];
 
 const CATEGORY_OPTIONS: { value: string; label: string }[] = [
@@ -30,7 +32,6 @@ const CATEGORY_OPTIONS: { value: string; label: string }[] = [
 const CATEGORY_LABEL: Record<string, string> = {
   enhancement: '고도화', operation: '운영업무', learning: '기술학습', build: '구축',
 };
-
 const KIND_OPTIONS: { value: KnowledgeKind; label: string }[] = [
   { value: 'doc', label: '문서' },
   { value: 'folder', label: '폴더' },
@@ -45,7 +46,6 @@ function kindIcon(kind: KnowledgeKind) {
   return FileText;
 }
 
-/** 트리를 평면화 + 부모 경로 계산용. */
 function flatten(nodes: KnowledgePageNode[], acc: KnowledgePageNode[] = []): KnowledgePageNode[] {
   for (const n of nodes) {
     acc.push(n);
@@ -53,6 +53,8 @@ function flatten(nodes: KnowledgePageNode[], acc: KnowledgePageNode[] = []): Kno
   }
   return acc;
 }
+
+type DropPos = 'before' | 'after' | 'inside';
 
 interface TreeRowProps {
   node: KnowledgePageNode;
@@ -63,21 +65,46 @@ interface TreeRowProps {
   onSelect: (id: string) => void;
   onAddChild: (parent: KnowledgePageNode) => void;
   onDelete: (node: KnowledgePageNode) => void;
+  onDropNode: (dragId: string, target: KnowledgePageNode, pos: DropPos) => void;
 }
 
-function TreeRow({ node, depth, selectedId, expanded, onToggle, onSelect, onAddChild, onDelete }: TreeRowProps) {
+function TreeRow(props: TreeRowProps) {
+  const { node, depth, selectedId, expanded, onToggle, onSelect, onAddChild, onDelete, onDropNode } = props;
+  const [hint, setHint] = useState<DropPos | null>(null);
   const hasChildren = !!node.children?.length;
   const isOpen = expanded.has(node.id);
   const Icon = kindIcon(node.kind);
+
+  const posFromEvent = (e: React.DragEvent): DropPos => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const y = e.clientY - r.top;
+    if (y < r.height * 0.3) return 'before';
+    if (y > r.height * 0.7) return 'after';
+    return 'inside';
+  };
+
   return (
     <div>
       <div
-        className={`group flex items-center gap-1 pr-1 py-1 rounded-lg cursor-pointer text-sm ${
+        draggable
+        onDragStart={(e) => { e.dataTransfer.setData('text/plain', node.id); e.dataTransfer.effectAllowed = 'move'; }}
+        onDragOver={(e) => { e.preventDefault(); setHint(posFromEvent(e)); }}
+        onDragLeave={() => setHint(null)}
+        onDrop={(e) => {
+          e.preventDefault();
+          const dragId = e.dataTransfer.getData('text/plain');
+          const pos = posFromEvent(e);
+          setHint(null);
+          if (dragId && dragId !== node.id) onDropNode(dragId, node, pos);
+        }}
+        className={`group relative flex items-center gap-1 pr-1 py-1 rounded-lg cursor-pointer text-sm ${
           selectedId === node.id ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'
-        }`}
+        } ${hint === 'inside' ? 'ring-1 ring-primary/50' : ''}`}
         style={{ paddingLeft: depth * 14 + 4 }}
         onClick={() => onSelect(node.id)}
       >
+        {hint === 'before' && <span className="absolute left-0 right-0 top-0 h-0.5 bg-primary" />}
+        {hint === 'after' && <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-primary" />}
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); if (hasChildren) onToggle(node.id); }}
@@ -88,27 +115,17 @@ function TreeRow({ node, depth, selectedId, expanded, onToggle, onSelect, onAddC
         {node.icon ? <span className="w-4 text-center shrink-0">{node.icon}</span> : <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
         <span className="truncate flex-1">{node.title}</span>
         {node.visibility === 'private' && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
-        <button
-          type="button"
-          title="하위 추가"
-          onClick={(e) => { e.stopPropagation(); onAddChild(node); }}
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background text-muted-foreground hover:text-primary"
-        >
+        <button type="button" title="하위 추가" onClick={(e) => { e.stopPropagation(); onAddChild(node); }}
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background text-muted-foreground hover:text-primary">
           <Plus className="w-3.5 h-3.5" />
         </button>
-        <button
-          type="button"
-          title="삭제"
-          onClick={(e) => { e.stopPropagation(); onDelete(node); }}
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background text-muted-foreground hover:text-rose-500"
-        >
+        <button type="button" title="삭제" onClick={(e) => { e.stopPropagation(); onDelete(node); }}
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background text-muted-foreground hover:text-rose-500">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
       {hasChildren && isOpen && node.children.map((c) => (
-        <TreeRow key={c.id} node={c} depth={depth + 1} selectedId={selectedId}
-          expanded={expanded} onToggle={onToggle} onSelect={onSelect}
-          onAddChild={onAddChild} onDelete={onDelete} />
+        <TreeRow key={c.id} {...props} node={c} depth={depth + 1} />
       ))}
     </div>
   );
@@ -122,7 +139,10 @@ export function KnowledgeBasePage() {
 
   const [service, setService] = useState<string>('__common__');
   const serviceParam = service === '__common__' ? undefined : service;
+  const [view, setView] = useState<'tree' | 'roadmap'>('tree');
+
   const { data: tree = [], isLoading } = useKnowledgeTree(serviceParam);
+  const { data: roadmapItems = [] } = useRoadmap(serviceParam);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | undefined>(routeId);
 
@@ -131,24 +151,22 @@ export function KnowledgeBasePage() {
   const deletePage = useDeletePage();
   const saveMilestone = useSaveMilestone();
   const restoreVersion = useRestoreVersion();
+  const reorder = useReorder();
 
   const { data: page } = useKnowledgePage(selectedId);
   const { data: versions = [] } = usePageVersions(selectedId);
+  const { data: backlinks = [] } = usePageBacklinks(selectedId);
+  const { data: sprintsData } = useSprints();
+  const sprints = sprintsData?.data ?? [];
 
-  // 편집 로컬 상태
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<{ no: number; content: string } | null>(null);
 
   useEffect(() => {
-    if (page) {
-      setDraftTitle(page.title);
-      setDraftContent(page.content ?? '');
-    }
+    if (page) { setDraftTitle(page.title); setDraftContent(page.content ?? ''); }
   }, [page]);
-
-  // routeId 동기화
   useEffect(() => { if (routeId) setSelectedId(routeId); }, [routeId]);
 
   const flat = useMemo(() => flatten(tree), [tree]);
@@ -157,16 +175,19 @@ export function KnowledgeBasePage() {
     const byId = new Map(flat.map((n) => [n.id, n]));
     const chain: KnowledgePageNode[] = [];
     let cur = byId.get(page.id);
-    while (cur) {
-      chain.unshift(cur);
-      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-    }
+    while (cur) { chain.unshift(cur); cur = cur.parentId ? byId.get(cur.parentId) : undefined; }
     return chain;
   }, [page, flat]);
 
-  const select = (pid: string) => {
-    setSelectedId(pid);
-    navigate(`/knowledge/${pid}`);
+  const select = (pid: string) => { setSelectedId(pid); setView('tree'); navigate(`/knowledge/${pid}`); };
+
+  // 에디터 내부 링크([[ ]]) — 같은 서비스 문서로 연결.
+  const linkSearch = (q: string) => {
+    const ql = q.trim().toLowerCase();
+    return flat
+      .filter((n) => n.id !== page?.id && (!ql || n.title.toLowerCase().includes(ql)))
+      .slice(0, 8)
+      .map((n) => ({ id: n.id, label: n.title, href: `/knowledge/${n.id}` }));
   };
 
   const nextRootOrder = () => (tree.length ? Math.max(...tree.map((n) => n.sortOrder)) + 1 : 0);
@@ -175,10 +196,7 @@ export function KnowledgeBasePage() {
     const title = window.prompt('새 문서 제목');
     if (!title?.trim()) return;
     try {
-      const created = await createPage.mutateAsync({
-        service: serviceParam ?? null, parentId: null, kind: 'doc',
-        title: title.trim(), sortOrder: nextRootOrder(),
-      });
+      const created = await createPage.mutateAsync({ service: serviceParam ?? null, parentId: null, kind: 'doc', title: title.trim(), sortOrder: nextRootOrder() });
       select(created.id);
     } catch (e) { toast.error('생성 실패', formatApiError(e, '문서 생성 중 오류')); }
   };
@@ -188,10 +206,7 @@ export function KnowledgeBasePage() {
     if (!title?.trim()) return;
     const order = parent.children?.length ? Math.max(...parent.children.map((c) => c.sortOrder)) + 1 : 0;
     try {
-      const created = await createPage.mutateAsync({
-        service: serviceParam ?? null, parentId: parent.id, kind: 'doc',
-        category: parent.category ?? null, title: title.trim(), sortOrder: order,
-      });
+      const created = await createPage.mutateAsync({ service: serviceParam ?? null, parentId: parent.id, kind: 'doc', category: parent.category ?? null, title: title.trim(), sortOrder: order });
       setExpanded((s) => new Set(s).add(parent.id));
       select(created.id);
     } catch (e) { toast.error('생성 실패', formatApiError(e, '문서 생성 중 오류')); }
@@ -206,9 +221,32 @@ export function KnowledgeBasePage() {
     } catch (e) { toast.error('삭제 실패', formatApiError(e, '삭제 중 오류')); }
   };
 
-  const toggle = (pid: string) => setExpanded((s) => {
-    const n = new Set(s); n.has(pid) ? n.delete(pid) : n.add(pid); return n;
-  });
+  // 드래그 정렬/이동
+  const onDropNode = async (dragId: string, target: KnowledgePageNode, pos: DropPos) => {
+    const byId = new Map(flat.map((n) => [n.id, n]));
+    const drag = byId.get(dragId);
+    if (!drag) return;
+    // 자기 자손으로 이동 금지
+    let p: KnowledgePageNode | undefined = target;
+    while (p) { if (p.id === dragId) return; p = p.parentId ? byId.get(p.parentId) : undefined; }
+    try {
+      if (pos === 'inside') {
+        const order = (target.children?.length ?? 0);
+        await knowledgeApi.move(dragId, { parentId: target.id, sortOrder: order });
+        setExpanded((s) => new Set(s).add(target.id));
+      } else {
+        const parentId = target.parentId ?? null;
+        const siblings = flat.filter((n) => (n.parentId ?? null) === parentId && n.id !== dragId);
+        const idx = siblings.findIndex((n) => n.id === target.id);
+        const insertAt = pos === 'before' ? idx : idx + 1;
+        const ordered = [...siblings.map((n) => n.id)];
+        ordered.splice(insertAt, 0, dragId);
+        await reorder.mutateAsync({ parentId, orderedIds: ordered });
+      }
+    } catch (e) { toast.error('이동 실패', formatApiError(e, '문서 이동 중 오류')); }
+  };
+
+  const toggle = (pid: string) => setExpanded((s) => { const n = new Set(s); n.has(pid) ? n.delete(pid) : n.add(pid); return n; });
 
   const save = async () => {
     if (!page) return;
@@ -218,7 +256,7 @@ export function KnowledgeBasePage() {
     } catch (e) { toast.error('저장 실패', formatApiError(e, '저장 중 오류')); }
   };
 
-  const patchMeta = async (data: { category?: string | null; kind?: KnowledgeKind; visibility?: KnowledgeVisibility }) => {
+  const patchMeta = async (data: Record<string, unknown>) => {
     if (!page) return;
     try { await updatePage.mutateAsync({ id: page.id, data }); }
     catch (e) { toast.error('변경 실패', formatApiError(e, '변경 중 오류')); }
@@ -245,39 +283,49 @@ export function KnowledgeBasePage() {
 
   const ownerLabel = page?.createdBy || '—';
   const isOwner = !!page && (!page.createdBy || page.createdBy === currentUser?.username);
+  const showSchedule = !!page && (page.category === 'enhancement' || page.kind === 'roadmap');
+  const dateVal = (v?: string | null) => (v ? v.slice(0, 10) : '');
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-[1600px] mx-auto p-4 space-y-3">
-        {/* 서비스 탭 */}
+        {/* 서비스 탭 + 뷰 토글 */}
         <div className="flex items-center gap-2 flex-wrap">
           <FolderTree className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-semibold mr-2">지식베이스</h1>
           <div className="flex items-center gap-1 flex-wrap">
             {SERVICES.map((s) => (
-              <button
-                key={s.key}
-                type="button"
+              <button key={s.key} type="button"
                 onClick={() => { setService(s.key); setSelectedId(undefined); }}
                 className={`px-2.5 py-1 rounded-xl text-sm border transition-colors ${
                   service === s.key ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:bg-secondary'
-                }`}
-              >
+                }`}>
                 {s.label}
               </button>
             ))}
           </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1 bg-card border border-border rounded-xl p-0.5">
+            <button type="button" onClick={() => setView('tree')}
+              className={`px-2.5 py-1 rounded-lg text-sm ${view === 'tree' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'}`}>문서</button>
+            <button type="button" onClick={() => setView('roadmap')}
+              className={`px-2.5 py-1 rounded-lg text-sm flex items-center gap-1 ${view === 'roadmap' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'}`}>
+              <MapIcon className="w-3.5 h-3.5" /> 고도화 로드맵
+            </button>
+          </div>
         </div>
 
+        {view === 'roadmap' ? (
+          <MacCard title={`${SERVICES.find((s) => s.key === service)?.label} · 고도화 로드맵`}>
+            <KnowledgeRoadmap items={roadmapItems} onOpen={select} />
+          </MacCard>
+        ) : (
         <div className="flex gap-3 items-start">
           {/* 좌: 트리 */}
           <div className="w-72 shrink-0 sticky top-4">
             <MacCard title={`${SERVICES.find((s) => s.key === service)?.label} 문서`} bodyPadding="p-2">
-              <button
-                type="button"
-                onClick={addRoot}
-                className="w-full mb-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl text-sm bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-              >
+              <button type="button" onClick={addRoot}
+                className="w-full mb-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl text-sm bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20">
                 <Plus className="w-3.5 h-3.5" /> 새 문서
               </button>
               {isLoading ? (
@@ -289,10 +337,11 @@ export function KnowledgeBasePage() {
                   {tree.map((n) => (
                     <TreeRow key={n.id} node={n} depth={0} selectedId={selectedId}
                       expanded={expanded} onToggle={toggle} onSelect={select}
-                      onAddChild={addChild} onDelete={removeNode} />
+                      onAddChild={addChild} onDelete={removeNode} onDropNode={onDropNode} />
                   ))}
                 </div>
               )}
+              <p className="text-[11px] text-muted-foreground px-2 pt-2">드래그로 정렬·이동 (가운데=하위로)</p>
             </MacCard>
           </div>
 
@@ -300,13 +349,10 @@ export function KnowledgeBasePage() {
           <div className="flex-1 min-w-0">
             {!page ? (
               <MacCard title="문서">
-                <p className="text-sm text-muted-foreground py-16 text-center">
-                  좌측에서 문서를 선택하거나 '새 문서'를 만들어 주세요.
-                </p>
+                <p className="text-sm text-muted-foreground py-16 text-center">좌측에서 문서를 선택하거나 '새 문서'를 만들어 주세요.</p>
               </MacCard>
             ) : (
               <MacCard title="문서">
-                {/* breadcrumb */}
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2 flex-wrap">
                   <span>{SERVICES.find((s) => s.key === service)?.label}</span>
                   {breadcrumb.map((b) => (
@@ -317,71 +363,69 @@ export function KnowledgeBasePage() {
                   ))}
                 </div>
 
-                {/* 제목 */}
-                <input
-                  value={draftTitle}
-                  onChange={(e) => setDraftTitle(e.target.value)}
+                <input value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)}
                   className="w-full text-xl font-semibold bg-transparent border-0 border-b border-transparent focus:border-border outline-none mb-2 px-0"
-                  placeholder="문서 제목"
-                />
+                  placeholder="문서 제목" />
 
-                {/* 메타 행 */}
                 <div className="flex items-center gap-2 flex-wrap mb-3 text-sm">
-                  <select
-                    value={page.category ?? ''}
-                    onChange={(e) => patchMeta({ category: e.target.value || null })}
-                    className="px-2 py-1 bg-background border border-border rounded-lg text-sm"
-                  >
+                  <select value={page.category ?? ''} onChange={(e) => patchMeta({ category: e.target.value || null })}
+                    className="px-2 py-1 bg-background border border-border rounded-lg text-sm">
                     {CATEGORY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
-                  <select
-                    value={page.kind}
-                    onChange={(e) => patchMeta({ kind: e.target.value as KnowledgeKind })}
-                    className="px-2 py-1 bg-background border border-border rounded-lg text-sm"
-                  >
+                  <select value={page.kind} onChange={(e) => patchMeta({ kind: e.target.value as KnowledgeKind })}
+                    className="px-2 py-1 bg-background border border-border rounded-lg text-sm">
                     {KIND_OPTIONS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => patchMeta({ visibility: page.visibility === 'private' ? 'part' : 'private' })}
+                  <button type="button"
+                    onClick={() => patchMeta({ visibility: (page.visibility === 'private' ? 'part' : 'private') as KnowledgeVisibility })}
                     className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-sm ${
-                      page.visibility === 'private'
-                        ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-                        : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
-                    }`}
-                  >
+                      page.visibility === 'private' ? 'bg-amber-500/10 text-amber-600 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                    }`}>
                     {page.visibility === 'private' ? <><Lock className="w-3.5 h-3.5" /> 비공개</> : <><Users className="w-3.5 h-3.5" /> 파트 공유</>}
                   </button>
-                  <span className="text-xs text-muted-foreground">소유자: {ownerLabel}</span>
                   {page.category && <span className="text-xs px-1.5 py-0.5 rounded bg-secondary">{CATEGORY_LABEL[page.category] ?? page.category}</span>}
+                  <span className="text-xs text-muted-foreground">소유자: {ownerLabel}</span>
                   <div className="flex-1" />
-                  <button
-                    type="button"
-                    onClick={() => setShowHistory((v) => !v)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border hover:bg-secondary text-sm"
-                  >
+                  <button type="button" onClick={() => setShowHistory((v) => !v)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border hover:bg-secondary text-sm">
                     <History className="w-3.5 h-3.5" /> 히스토리 ({versions.length})
                   </button>
-                  <button
-                    type="button"
-                    onClick={save}
-                    disabled={updatePage.isPending}
-                    className="flex items-center gap-1 px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm disabled:opacity-60"
-                  >
+                  <button type="button" onClick={save} disabled={updatePage.isPending}
+                    className="flex items-center gap-1 px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm disabled:opacity-60">
                     <Save className="w-3.5 h-3.5" /> 저장
                   </button>
                 </div>
 
-                {/* 히스토리 패널 */}
+                {/* 고도화 일정/스프린트 — 로드맵 연동 */}
+                {showSchedule && (
+                  <div className="flex items-center gap-3 flex-wrap mb-3 text-sm bg-muted/20 border border-border rounded-xl px-3 py-2">
+                    <span className="text-xs font-medium text-muted-foreground">고도화 일정</span>
+                    <label className="flex items-center gap-1">시작
+                      <input type="date" value={dateVal(page.startAt)}
+                        onChange={(e) => patchMeta({ startAt: e.target.value ? `${e.target.value}T00:00:00` : null })}
+                        className="px-2 py-0.5 bg-background border border-border rounded-lg" />
+                    </label>
+                    <label className="flex items-center gap-1">완료예정
+                      <input type="date" value={dateVal(page.dueAt)}
+                        onChange={(e) => patchMeta({ dueAt: e.target.value ? `${e.target.value}T00:00:00` : null })}
+                        className="px-2 py-0.5 bg-background border border-border rounded-lg" />
+                    </label>
+                    <label className="flex items-center gap-1">스프린트
+                      <select value={page.sprintId ?? ''} onChange={(e) => patchMeta({ sprintId: e.target.value || null })}
+                        className="px-2 py-0.5 bg-background border border-border rounded-lg">
+                        <option value="">미배정</option>
+                        {sprints.map((s) => <option key={s.id} value={s.id}>{s.name}{s.status === 'active' ? ' (진행중)' : ''}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                )}
+
                 {showHistory && (
                   <div className="mb-3 border border-border rounded-xl p-3 bg-muted/20">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm font-medium">버전 히스토리</p>
-                      <button
-                        type="button"
-                        onClick={onSaveMilestone}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-card border border-border hover:bg-secondary text-xs"
-                      >
+                      <button type="button" onClick={onSaveMilestone}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-card border border-border hover:bg-secondary text-xs">
                         <Plus className="w-3 h-3" /> 버전 저장(마일스톤)
                       </button>
                     </div>
@@ -407,25 +451,37 @@ export function KnowledgeBasePage() {
                   </div>
                 )}
 
-                {/* 본문 에디터 */}
                 {isOwner || page.visibility !== 'private' ? (
-                  <RichTextEditor
-                    value={draftContent}
-                    onChange={setDraftContent}
-                    placeholder="문서 내용을 작성하세요 — '/' 또는 툴바 템플릿 사용"
-                    minHeight="480px"
-                    defaultBg="#ffffff"
-                  />
+                  <RichTextEditor value={draftContent} onChange={setDraftContent}
+                    placeholder="문서 내용을 작성하세요 — '/' 또는 툴바 템플릿, '[[' 로 문서 링크"
+                    minHeight="440px" defaultBg="#ffffff" linkSearch={linkSearch} />
                 ) : (
                   <RichContent content={page.content ?? ''} />
+                )}
+
+                {/* 백링크 — 이 문서를 참조하는 곳 */}
+                {backlinks.length > 0 && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <Link2 className="w-3.5 h-3.5" /> 이 문서를 참조하는 곳 ({backlinks.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {backlinks.map((b) => (
+                        <button key={b.id} onClick={() => select(b.id)}
+                          className="text-xs px-2 py-0.5 rounded-lg border border-border hover:bg-secondary text-primary">
+                          {b.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </MacCard>
             )}
           </div>
         </div>
+        )}
       </div>
 
-      {/* 버전 미리보기 모달 */}
       {previewVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPreviewVersion(null)}>
           <div className="bg-card border border-border rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -433,9 +489,7 @@ export function KnowledgeBasePage() {
               <p className="text-sm font-medium">버전 v{previewVersion.no} 미리보기</p>
               <button onClick={() => setPreviewVersion(null)} className="p-1 rounded hover:bg-secondary"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-4 overflow-y-auto">
-              <RichContent content={previewVersion.content} />
-            </div>
+            <div className="p-4 overflow-y-auto"><RichContent content={previewVersion.content} /></div>
           </div>
         </div>
       )}

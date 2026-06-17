@@ -955,6 +955,16 @@ export const knowledgeApi = {
     api.post<import('@/types').KnowledgePageVersion>(`/knowledge/pages/${id}/versions`, { label }),
   restore: (id: string, versionId: string) =>
     api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/restore/${versionId}`),
+  roadmap: (params?: { service?: string; category?: string }) =>
+    api.get<import('@/types').KnowledgePageListResponse>('/knowledge/roadmap', {
+      params: params
+        ? Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined))
+        : undefined,
+    }),
+  reorder: (parentId: string | null, orderedIds: string[]) =>
+    api.post('/knowledge/reorder', { parentId, orderedIds }),
+  backlinks: (id: string) =>
+    api.get<import('@/types').KnowledgePageListResponse>(`/knowledge/pages/${id}/backlinks`),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
