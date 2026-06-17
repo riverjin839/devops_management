@@ -41,6 +41,7 @@ import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
+import { CorootApmPage } from '@/pages/CorootApmPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
@@ -165,6 +166,7 @@ function AppShell() {
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
+              <Route path="/coroot" element={<CorootApmPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
