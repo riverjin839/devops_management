@@ -942,8 +942,14 @@ export const knowledgeApi = {
   get: (id: string) => api.get<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`),
   create: (data: import('@/types').KnowledgePageCreate) =>
     api.post<import('@/types').KnowledgePage>('/knowledge/pages', data),
-  update: (id: string, data: import('@/types').KnowledgePageUpdate) =>
-    api.put<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`, data),
+  update: (id: string, data: import('@/types').KnowledgePageUpdate, expectedUpdatedAt?: string) =>
+    api.put<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`, data, {
+      params: expectedUpdatedAt ? { expected_updated_at: expectedUpdatedAt } : undefined,
+    }),
+  heartbeat: (id: string) =>
+    api.post<import('@/types').KnowledgePresenceResponse>(`/knowledge/pages/${id}/heartbeat`),
+  importExisting: (source: 'all' | 'ops_notes' | 'work_guides' | 'service_entries' = 'all') =>
+    api.post<import('@/types').KnowledgeImportResult>('/knowledge/import', undefined, { params: { source } }),
   move: (id: string, data: { parentId?: string | null; sortOrder: number }) =>
     api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/move`, data),
   remove: (id: string) => api.delete(`/knowledge/pages/${id}`),

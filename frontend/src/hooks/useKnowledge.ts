@@ -47,8 +47,8 @@ export function useCreatePage() {
 export function useUpdatePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: KnowledgePageUpdate }) =>
-      knowledgeApi.update(id, data).then((r) => r.data),
+    mutationFn: ({ id, data, expectedUpdatedAt }: { id: string; data: KnowledgePageUpdate; expectedUpdatedAt?: string }) =>
+      knowledgeApi.update(id, data, expectedUpdatedAt).then((r) => r.data),
     onSuccess: (page) => {
       qc.invalidateQueries({ queryKey: ['knowledge', 'tree'] });
       qc.invalidateQueries({ queryKey: PAGE_KEY(page.id) });
@@ -118,5 +118,14 @@ export function usePageBacklinks(id?: string) {
     queryKey: ['knowledge', 'backlinks', id ?? ''],
     queryFn: () => knowledgeApi.backlinks(id as string).then((r) => r.data.data ?? []),
     enabled: !!id,
+  });
+}
+
+export function useImportExisting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (source: 'all' | 'ops_notes' | 'work_guides' | 'service_entries') =>
+      knowledgeApi.importExisting(source).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['knowledge', 'tree'] }),
   });
 }

@@ -857,6 +857,7 @@ export interface KnowledgePage {
   startAt?: string | null;
   dueAt?: string | null;
   sprintId?: string | null;
+  sourceRef?: string | null;
   createdBy?: string | null;
   updatedBy?: string | null;
   createdAt: string;
@@ -867,6 +868,10 @@ export interface KnowledgePage {
 export interface KnowledgePageNode extends KnowledgePage {
   children: KnowledgePageNode[];
 }
+
+export interface KnowledgePresenceUser { username: string; displayName?: string | null; }
+export interface KnowledgePresenceResponse { editors: KnowledgePresenceUser[]; }
+export interface KnowledgeImportResult { imported: number; skipped: number; detail: Record<string, unknown>; }
 
 export interface KnowledgePageCreate {
   service?: string | null;

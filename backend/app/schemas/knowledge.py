@@ -53,6 +53,7 @@ class KnowledgePageUpdate(BaseModel):
 
 class KnowledgePageResponse(KnowledgePageBase):
     id: UUID
+    source_ref: Optional[str] = None
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
     created_at: datetime
@@ -60,6 +61,21 @@ class KnowledgePageResponse(KnowledgePageBase):
 
     class Config:
         from_attributes = True
+
+
+class PresenceUser(BaseModel):
+    username: str
+    display_name: Optional[str] = None
+
+
+class PresenceResponse(BaseModel):
+    editors: List[PresenceUser] = []
+
+
+class ImportResult(BaseModel):
+    imported: int = 0
+    skipped: int = 0
+    detail: dict = {}
 
 
 class KnowledgePageNode(KnowledgePageResponse):

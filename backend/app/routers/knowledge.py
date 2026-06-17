@@ -1,14 +1,15 @@
 from uuid import UUID
 from typing import Optional, List
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.knowledge_page import KnowledgePage, KnowledgePageVersion
+from app.models.knowledge_page import KnowledgePage, KnowledgePageVersion, KnowledgePresence
 from app.models.user import User
-from app.auth.deps import require_operator, get_current_user
+from app.auth.deps import require_operator, require_admin, get_current_user
 from app.schemas.knowledge import (
     KnowledgePageCreate,
     KnowledgePageUpdate,
@@ -22,6 +23,9 @@ from app.schemas.knowledge import (
     KnowledgeVersionResponse,
     KnowledgeVersionDetail,
     KnowledgeVersionListResponse,
+    PresenceResponse,
+    PresenceUser,
+    ImportResult,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -201,6 +205,7 @@ def create_page(
 def update_page(
     page_id: UUID,
     payload: KnowledgePageUpdate,
+    expected_updated_at: Optional[datetime] = None,
     actor: User = Depends(require_operator),
     db: Session = Depends(get_db),
 ):
@@ -209,6 +214,15 @@ def update_page(
         raise _not_found()
     if not _can_view(page, actor):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="비공개 문서입니다.")
+    # 저장 충돌 감지 — 클라이언트가 마지막으로 본 updated_at 과 서버 현재값이 다르면 409.
+    if expected_updated_at is not None and page.updated_at is not None:
+        cur = page.updated_at.replace(tzinfo=None)
+        exp = expected_updated_at.replace(tzinfo=None)
+        if abs((cur - exp).total_seconds()) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"다른 사용자가 먼저 수정했습니다 (수정자: {page.updated_by or '알 수 없음'}). 새로고침 후 다시 저장하세요.",
+            )
 
     data = payload.model_dump(exclude_unset=True)
     # 본문이 실제로 바뀌면, 변경 전 상태를 자동 스냅샷으로 보존.
@@ -373,3 +387,153 @@ def backlinks(
     ).all()
     visible = [p for p in rows if _can_view(p, actor)]
     return KnowledgePageListResponse(data=visible)
+
+
+# ── 경량 협업: '편집 중' 표시 (폴링) ─────────────────────────────────────────
+
+PRESENCE_TTL = 30  # seconds
+
+
+@router.post("/pages/{page_id}/heartbeat", response_model=PresenceResponse)
+def heartbeat(
+    page_id: UUID,
+    actor: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    now = datetime.utcnow()
+    row = db.query(KnowledgePresence).filter(
+        KnowledgePresence.page_id == page_id,
+        KnowledgePresence.username == actor.username,
+    ).first()
+    if row:
+        row.last_seen = now
+        row.display_name = actor.display_name
+    else:
+        db.add(KnowledgePresence(
+            page_id=page_id, username=actor.username,
+            display_name=actor.display_name, last_seen=now,
+        ))
+    db.commit()
+    cutoff = now - timedelta(seconds=PRESENCE_TTL)
+    others = db.query(KnowledgePresence).filter(
+        KnowledgePresence.page_id == page_id,
+        KnowledgePresence.last_seen >= cutoff,
+        KnowledgePresence.username != actor.username,
+    ).all()
+    return PresenceResponse(editors=[
+        PresenceUser(username=o.username, display_name=o.display_name) for o in others
+    ])
+
+
+# ── 비파괴 가져오기: 기존 자산 → 지식베이스 복사 (원본 유지, 중복 방지) ────────
+
+def _exists(db: Session, ref: str) -> bool:
+    return db.query(KnowledgePage.id).filter(KnowledgePage.source_ref == ref).first() is not None
+
+
+def _import_ops_notes(db: Session, actor: User) -> tuple[int, int]:
+    from app.models.ops_note import OpsNote
+    imported = skipped = 0
+    for o in db.query(OpsNote).all():
+        ref = f"ops_note:{o.id}"
+        if _exists(db, ref):
+            skipped += 1
+            continue
+        content = o.content or ""
+        if o.back_content:
+            content += f"<hr><p><strong>히스토리/비고</strong></p>{o.back_content}"
+        db.add(KnowledgePage(
+            service=o.service, parent_id=None, kind="doc", category="operation",
+            title=o.title, content=content, status="active", visibility="part",
+            pinned=bool(o.pinned), confluence_url=o.confluence_url,
+            created_by=o.author or actor.username, updated_by=actor.username, source_ref=ref,
+        ))
+        imported += 1
+    db.commit()
+    return imported, skipped
+
+
+def _import_service_entries(db: Session, actor: User) -> tuple[int, int]:
+    from app.models.service_entry import ServiceEntry
+    imported = skipped = 0
+    for e in db.query(ServiceEntry).all():
+        ref = f"service_entry:{e.id}"
+        if _exists(db, ref):
+            skipped += 1
+            continue
+        db.add(KnowledgePage(
+            service=e.service, parent_id=None, kind="doc", category=None,
+            title=e.title or "(제목 없음)", content=e.content or e.url or "",
+            tags=e.tags if isinstance(e.tags, list) else None,
+            status="active", visibility="part", pinned=bool(e.pinned),
+            created_by=e.author or actor.username, updated_by=actor.username, source_ref=ref,
+        ))
+        imported += 1
+    db.commit()
+    return imported, skipped
+
+
+def _import_work_guides(db: Session, actor: User) -> tuple[int, int]:
+    from app.models.work_guide import WorkGuide
+    imported = skipped = 0
+    guides = db.query(WorkGuide).all()
+    # 1차: 노드 생성(부모 미설정)
+    for g in guides:
+        ref = f"work_guide:{g.id}"
+        if _exists(db, ref):
+            skipped += 1
+            continue
+        tags = [t.strip() for t in (g.tags or "").split(",") if t.strip()] or None
+        db.add(KnowledgePage(
+            service=None, parent_id=None, kind="doc", category=g.category,
+            title=g.title, content=g.content, tags=tags,
+            status=g.status or "active", visibility="part",
+            sort_order=g.sort_order or 0, confluence_url=g.confluence_url,
+            created_by=g.author or actor.username, updated_by=actor.username, source_ref=ref,
+        ))
+        imported += 1
+    db.commit()
+    # 2차: 부모 관계 재매핑 (source_ref 로 새 id 조회)
+    by_ref = {p.source_ref: p for p in db.query(KnowledgePage).filter(
+        KnowledgePage.source_ref.ilike("work_guide:%")
+    ).all()}
+    for g in guides:
+        if not g.parent_id:
+            continue
+        child = by_ref.get(f"work_guide:{g.id}")
+        parent = by_ref.get(f"work_guide:{g.parent_id}")
+        if child and parent and child.parent_id is None:
+            child.parent_id = parent.id
+    db.commit()
+    return imported, skipped
+
+
+@router.post("/import", response_model=ImportResult)
+def import_existing(
+    source: str = "all",
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """기존 운영노트/작업가이드/서비스엔트리를 지식베이스로 복사(비파괴·중복 방지). 관리자 전용."""
+    detail: dict = {}
+    total_imported = total_skipped = 0
+    jobs = {
+        "ops_notes": _import_ops_notes,
+        "service_entries": _import_service_entries,
+        "work_guides": _import_work_guides,
+    }
+    targets = jobs.keys() if source == "all" else [source]
+    for key in targets:
+        fn = jobs.get(key)
+        if not fn:
+            continue
+        try:
+            imp, skp = fn(db, actor)
+        except Exception as e:  # noqa: BLE001 — 한 소스 실패가 전체를 막지 않도록
+            db.rollback()
+            detail[key] = f"error: {e}"
+            continue
+        detail[key] = {"imported": imp, "skipped": skp}
+        total_imported += imp
+        total_skipped += skp
+    return ImportResult(imported=total_imported, skipped=total_skipped, detail=detail)
