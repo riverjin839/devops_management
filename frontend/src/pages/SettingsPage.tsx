@@ -8,6 +8,7 @@ import { ServiceCatalogManager } from '@/components/settings/ServiceCatalogManag
 import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
 import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
+import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
@@ -690,6 +691,9 @@ export function SettingsPage() {
 
           {/* 페이지별 화면 스타일 — 폰트/크기/글자색/배경색 */}
           <PageStyleManager />
+
+          {/* 터미널/로그 화면 색상 — mc 등 모든 로그 출력 화면 Appearance */}
+          <TerminalAppearanceSettings />
         </div>
         )}
 

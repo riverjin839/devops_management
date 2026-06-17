@@ -581,9 +581,29 @@ export interface McRunRequest {
 
 export const mcApi = {
   presets: (clusterId: string) =>
-    api.get<{ presets: McPreset[] }>(`/clusters/${clusterId}/mc/presets`),
+    api.get<{ presets: import('@/types').McEffectivePreset[] }>(`/clusters/${clusterId}/mc/presets`),
   run: (clusterId: string, payload: McRunRequest, signal?: AbortSignal) =>
     api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/mc/run`, payload, { signal }),
+  getPersonalPresets: () =>
+    api.get<import('@/types').McPersonalPresets>('/mc/presets/personal'),
+  savePersonalPresets: (payload: import('@/types').McPersonalPresets) =>
+    api.put<import('@/types').McPersonalPresets>('/mc/presets/personal', payload),
+  getSharedPresets: () =>
+    api.get<{ presets: McPreset[] }>('/mc/presets/shared'),
+  saveSharedPresets: (presets: McPreset[]) =>
+    api.put<{ presets: McPreset[] }>('/mc/presets/shared', { presets }),
+};
+
+// ── Terminal / log Appearance API ───────────────────────────────────────────
+export const terminalAppearanceApi = {
+  get: () =>
+    api.get<import('@/types').TerminalAppearanceResponse>('/terminal-appearance'),
+  save: (appearance: import('@/types').TerminalAppearance) =>
+    api.put<import('@/types').TerminalAppearanceResponse>('/terminal-appearance', { appearance }),
+  getShared: () =>
+    api.get<{ templates: import('@/types').TerminalTemplate[] }>('/terminal-appearance/shared'),
+  saveShared: (templates: import('@/types').TerminalTemplate[]) =>
+    api.put<{ templates: import('@/types').TerminalTemplate[] }>('/terminal-appearance/shared', { templates }),
 };
 
 export const etcdctlApi = {

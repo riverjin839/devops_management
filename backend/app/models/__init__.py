@@ -27,6 +27,7 @@ from app.models.service_entry import ServiceEntry
 from app.models.batch_job import BatchJob, BatchJobRun
 from app.models.command_entry import CommandEntry
 from app.models.user import User
+from app.models.user_setting import UserSetting
 from app.models.audit_log import AuditLog
 from app.models.deep_check import (
     DeepCheckDefinition,
@@ -97,6 +98,7 @@ __all__ = [
     "BatchJobRun",
     "CommandEntry",
     "User",
+    "UserSetting",
     "AuditLog",
     "DeepCheckDefinition",
     "DeepCheckResult",

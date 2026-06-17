@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Copy, Check, Search, WrapText } from 'lucide-react';
+import { useLogTheme } from '@/hooks/useTerminalAppearance';
+import { LogThemeButton } from './LogThemeButton';
 
 type LogFormat = 'json' | 'journal' | 'table' | 'plain';
 
@@ -94,34 +96,35 @@ const TOKEN_AMBER  = /^(WARN|WARNING|DEPRECATED|RETRY|STOPPED|INACTIVE|DOWN|DISA
 const TOKEN_SKY    = /^(INFO)$/;
 const TOKEN_MUTED  = /^(DEBUG|TRACE|null|None|nil)$/;
 
+// 색상은 LogViewer 컨테이너에 주입된 CSS 변수(--log-*)를 참조한다 (터미널 테마 연동).
 function classifyToken(tok: string): string {
-  if (TOKEN_GREEN.test(tok))  return 'text-emerald-500';
-  if (TOKEN_RED.test(tok))    return 'text-red-500 font-semibold';
-  if (TOKEN_AMBER.test(tok))  return 'text-amber-500';
-  if (TOKEN_SKY.test(tok))    return 'text-sky-500';
-  if (TOKEN_MUTED.test(tok))  return 'text-muted-foreground/70';
+  if (TOKEN_GREEN.test(tok))  return 'text-[color:var(--log-green)]';
+  if (TOKEN_RED.test(tok))    return 'text-[color:var(--log-red)] font-semibold';
+  if (TOKEN_AMBER.test(tok))  return 'text-[color:var(--log-amber)]';
+  if (TOKEN_SKY.test(tok))    return 'text-[color:var(--log-sky)]';
+  if (TOKEN_MUTED.test(tok))  return 'text-[color:var(--log-muted)]';
   // IPv4
-  if (/^(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?$/.test(tok)) return 'text-sky-500';
+  if (/^(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?$/.test(tok)) return 'text-[color:var(--log-sky)]';
   // ISO date / time
-  if (/^\d{4}-\d{2}-\d{2}/.test(tok) || /^\d{2}:\d{2}:\d{2}/.test(tok)) return 'text-muted-foreground';
+  if (/^\d{4}-\d{2}-\d{2}/.test(tok) || /^\d{2}:\d{2}:\d{2}/.test(tok)) return 'text-[color:var(--log-muted)]';
   // HTTP status
   if (/^[1-5]\d{2}$/.test(tok)) {
     const n = parseInt(tok, 10);
-    if (n >= 500) return 'text-red-500 font-semibold';
-    if (n >= 400) return 'text-amber-500';
-    if (n >= 300) return 'text-sky-500';
-    return 'text-emerald-500';
+    if (n >= 500) return 'text-[color:var(--log-red)] font-semibold';
+    if (n >= 400) return 'text-[color:var(--log-amber)]';
+    if (n >= 300) return 'text-[color:var(--log-sky)]';
+    return 'text-[color:var(--log-green)]';
   }
   // UUID / hash
   if (/^[0-9a-fA-F]{12,}$/.test(tok) || /^0x[0-9a-fA-F]+$/.test(tok) || /^[0-9a-fA-F]{8}-/.test(tok)) {
-    return 'text-purple-400/80';
+    return 'text-[color:var(--log-purple)]';
   }
   // 경로
-  if (tok.startsWith('/')) return 'text-cyan-500/80';
+  if (tok.startsWith('/')) return 'text-[color:var(--log-cyan)]';
   // 따옴표 문자열
-  if (tok.startsWith('"') || tok.startsWith("'")) return 'text-emerald-500/80';
+  if (tok.startsWith('"') || tok.startsWith("'")) return 'text-[color:var(--log-green)]';
   // 숫자 (단위 포함)
-  if (/^\d/.test(tok)) return 'text-amber-400/90';
+  if (/^\d/.test(tok)) return 'text-[color:var(--log-amber)]';
   return '';
 }
 
@@ -158,17 +161,17 @@ function renderJsonLine(line: string, key: number): React.ReactNode {
     }
     const tok = m[0];
     if (tok.endsWith(':')) {
-      tokens.push({ cls: 'text-sky-400', text: tok });
+      tokens.push({ cls: 'text-[color:var(--log-sky)]', text: tok });
     } else if (tok.startsWith('"')) {
-      tokens.push({ cls: 'text-emerald-400', text: tok });
+      tokens.push({ cls: 'text-[color:var(--log-green)]', text: tok });
     } else if (tok === 'true' || tok === 'false') {
-      tokens.push({ cls: 'text-amber-400', text: tok });
+      tokens.push({ cls: 'text-[color:var(--log-amber)]', text: tok });
     } else if (tok === 'null') {
-      tokens.push({ cls: 'text-muted-foreground', text: tok });
+      tokens.push({ cls: 'text-[color:var(--log-muted)]', text: tok });
     } else if (/^-?\d/.test(tok)) {
-      tokens.push({ cls: 'text-amber-400', text: tok });
+      tokens.push({ cls: 'text-[color:var(--log-amber)]', text: tok });
     } else {
-      tokens.push({ cls: 'text-muted-foreground', text: tok });
+      tokens.push({ cls: 'text-[color:var(--log-muted)]', text: tok });
     }
     lastIndex = re.lastIndex;
   }
@@ -197,12 +200,12 @@ function JsonView({ text }: { text: string }) {
 // ── Journalctl highlight ───────────────────────────────────────────────────
 
 const LEVEL_STYLE: Array<{ re: RegExp; cls: string }> = [
-  { re: /\b(FATAL|PANIC)\b/, cls: 'text-red-500 font-semibold' },
-  { re: /\b(ERROR|ERR)\b/,   cls: 'text-red-400' },
-  { re: /\b(WARN(?:ING)?)\b/, cls: 'text-amber-400' },
-  { re: /\b(INFO)\b/,         cls: 'text-sky-400' },
-  { re: /\b(DEBUG|TRACE)\b/,  cls: 'text-muted-foreground' },
-  { re: /\b(NOTICE)\b/,       cls: 'text-emerald-400' },
+  { re: /\b(FATAL|PANIC)\b/, cls: 'text-[color:var(--log-red)] font-semibold' },
+  { re: /\b(ERROR|ERR)\b/,   cls: 'text-[color:var(--log-red)]' },
+  { re: /\b(WARN(?:ING)?)\b/, cls: 'text-[color:var(--log-amber)]' },
+  { re: /\b(INFO)\b/,         cls: 'text-[color:var(--log-sky)]' },
+  { re: /\b(DEBUG|TRACE)\b/,  cls: 'text-[color:var(--log-muted)]' },
+  { re: /\b(NOTICE)\b/,       cls: 'text-[color:var(--log-green)]' },
 ];
 
 function classifyLine(line: string): { cls: string } {
@@ -221,9 +224,9 @@ function renderJournalLine(line: string, key: number): React.ReactNode {
     const [, ts, host, unit, rest] = m;
     return (
       <div key={key} className={cls}>
-        <span className="text-muted-foreground">{ts}</span>{' '}
-        <span className="text-slate-400">{host}</span>{' '}
-        <span className="text-purple-400">{unit}:</span>{' '}
+        <span className="text-[color:var(--log-muted)]">{ts}</span>{' '}
+        <span className="text-[color:var(--log-muted)]">{host}</span>{' '}
+        <span className="text-[color:var(--log-purple)]">{unit}:</span>{' '}
         <span>{tokenize(rest)}</span>
       </div>
     );
@@ -297,6 +300,7 @@ export function LogViewer({
   const [copied, setCopied] = useState(false);
   const [localFilter, setLocalFilter] = useState('');
   const [collapsed, setCollapsed] = useState(collapsible);
+  const { style: themeStyle } = useLogTheme();
 
   // 상위가 제어하면 그걸 쓰고, 아니면 자체 필터
   const filter = filterOverride !== undefined ? filterOverride : localFilter;
@@ -374,6 +378,7 @@ export function LogViewer({
           >
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
           </button>
+          <LogThemeButton />
           {collapsible && (
             <button
               onClick={() => setCollapsed((v) => !v)}
@@ -389,9 +394,10 @@ export function LogViewer({
       {/* 본문 */}
       {!collapsed && (
         <pre
+          style={themeStyle}
           className={`text-xs font-mono leading-relaxed px-3 py-2 overflow-auto ${maxHeight} ${
             wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
-          } ${asError ? 'text-red-400/90' : 'text-foreground/90'}`}
+          } ${asError ? 'text-[color:var(--log-red)]' : 'text-foreground/90'}`}
         >
           {fmt === 'json'    ? <JsonView    text={filtered} />
           : fmt === 'journal' ? <JournalView text={filtered} />

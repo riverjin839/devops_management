@@ -70,6 +70,7 @@ from app.routers import (
     service_topology_router,
     cluster_items_router,
     coroot_router,
+    terminal_appearance_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -777,6 +778,21 @@ def _run_migrations():
         _safe_create_index("ix_deep_check_definitions_cluster", "deep_check_definitions", "(cluster_id)")
         _safe_create_index("ix_deep_check_definitions_type", "deep_check_definitions", "(check_type)")
     if "deep_check_results" in inspector.get_table_names():
+        # 구버전 DB 호환 — 테이블이 이미 있으면 create_all 이 컬럼을 추가하지 않으므로
+        # 모델에 새로 생긴 컬럼을 명시적으로 보강한다. (index 생성보다 먼저!)
+        for col_name, col_type in [
+            ("definition_id", "UUID"),
+            ("ai_summary", "TEXT"),
+            ("ai_remediation", "TEXT"),
+            ("duration_ms", "INTEGER"),
+            ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
+        ]:
+            _safe_add_column("deep_check_results", col_name, col_type)
+        # checked_at 이 방금 추가됐다면 기존 행 backfill (NULL → 현재시각).
+        _safe_exec(
+            "UPDATE deep_check_results SET checked_at = NOW() WHERE checked_at IS NULL",
+            label="deep_check_results.checked_at backfill",
+        )
         _safe_create_index("ix_deep_check_results_cluster", "deep_check_results", "(cluster_id)")
         _safe_create_index("ix_deep_check_results_daily_log", "deep_check_results", "(daily_check_log_id)")
         _safe_create_index("ix_deep_check_results_checked_at", "deep_check_results", "(checked_at DESC)")
@@ -1421,6 +1437,8 @@ app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
 # coroot — 애플리케이션 APM 계층 (별도 배포된 coroot 연동: 헬스/요약/딥링크).
 app.include_router(coroot_router, prefix="/api/v1", dependencies=_auth)
+# terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).
+app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")
