@@ -1713,20 +1713,25 @@ export const k8sResourcesApi = {
 
 // ── K8s 자원 관리 (allocation: request vs 사용량 slack) ──────────────────────
 export const k8sAllocationApi = {
-  nodes: (clusterId: string) =>
+  nodes: (clusterId: string, refresh = false) =>
     api.get<import('@/types').AllocNodesResponse>(
       `/k8s/${clusterId}/allocation/nodes`,
-      { timeout: 120_000 },
+      { params: refresh ? { refresh: true } : undefined, timeout: 120_000 },
     ),
   node: (clusterId: string, node: string) =>
     api.get<import('@/types').AllocNodeRefreshResponse>(
       `/k8s/${clusterId}/allocation/nodes/${encodeURIComponent(node)}`,
       { timeout: 30_000 },
     ),
-  namespaces: (clusterId: string) =>
+  namespaces: (clusterId: string, refresh = false) =>
     api.get<import('@/types').AllocNamespacesResponse>(
       `/k8s/${clusterId}/allocation/namespaces`,
-      { timeout: 120_000 },
+      { params: refresh ? { refresh: true } : undefined, timeout: 120_000 },
+    ),
+  namespace: (clusterId: string, namespace: string) =>
+    api.get<import('@/types').AllocNamespaceRefreshResponse>(
+      `/k8s/${clusterId}/allocation/namespaces/${encodeURIComponent(namespace)}`,
+      { timeout: 30_000 },
     ),
   workloads: (clusterId: string, namespace: string) =>
     api.get<import('@/types').AllocWorkloadsResponse>(

@@ -1,21 +1,92 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Gauge, ChevronRight, ChevronDown, RefreshCw, AlertTriangle,
   Cpu, MemoryStick, Server, Layers, TrendingDown, BarChart3, PackageOpen,
+  FileSpreadsheet, ArrowUp, ArrowDown, ChevronsUpDown,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend,
 } from 'recharts';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar } from '@/components/common';
+import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar, ExportMenu } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
-  useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods, useRefreshAllocNode,
+  useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods,
+  useRefreshAllocNode, useRefreshAllocNamespace, useForceAllocRefresh,
 } from '@/hooks/useK8sAllocation';
+import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNodeRow, AllocNamespaceRow, AllocWorkloadRow } from '@/types';
+
+// ── 컬럼 정렬 공용(테이블 헤더 클릭) ───────────────────────────────────────────
+type SortDir = 'asc' | 'desc';
+interface SortState { key: string; dir: SortDir }
+
+/** 정렬 가능한 테이블 헤더 셀. 활성 시 ▲/▼, 비활성은 흐린 양방향 아이콘. */
+function SortableTh({ label, k, sort, onSort, align = 'left', title }: {
+  label: string; k: string; sort: SortState; onSort: (k: string) => void;
+  align?: 'left' | 'right'; title?: string;
+}) {
+  const active = sort.key === k;
+  const Icon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th className={`px-3 py-2 font-medium ${align === 'right' ? 'text-right' : ''}`} title={title}>
+      <button
+        onClick={() => onSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? 'text-primary' : ''} ${align === 'right' ? 'flex-row-reverse' : ''}`}
+      >
+        {label}
+        <Icon className={`w-3 h-3 ${active ? '' : 'opacity-40'}`} />
+      </button>
+    </th>
+  );
+}
+
+/** rows 를 accessors[sort.key] 기준 정렬(숫자/문자). 동일값은 name tiebreak. null 은 말단. */
+function useTableSort<T extends { name?: string; namespace?: string }>(
+  rows: T[], accessors: Record<string, (r: T) => number | string | null>, sort: SortState,
+): T[] {
+  return useMemo(() => {
+    const acc = accessors[sort.key];
+    if (!acc) return rows;
+    const mul = sort.dir === 'asc' ? 1 : -1;
+    const nameOf = (r: T) => (r.name ?? r.namespace ?? '') as string;
+    return [...rows].sort((a, b) => {
+      const va = acc(a); const vb = acc(b);
+      // null/undefined 는 항상 뒤로
+      if (va == null && vb == null) return nameOf(a).localeCompare(nameOf(b));
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      let c: number;
+      if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
+      else c = String(va).localeCompare(String(vb));
+      if (c === 0) return nameOf(a).localeCompare(nameOf(b));
+      return c * mul;
+    });
+  }, [rows, accessors, sort]);
+}
+
+function nextSort(prev: SortState, k: string, numeric: boolean): SortState {
+  if (prev.key === k) return { key: k, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+  return { key: k, dir: numeric ? 'desc' : 'asc' };
+}
+
+function CsvButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      title="현재 표를 CSV(엑셀)로 추출"
+      className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-50">
+      <FileSpreadsheet className="w-3.5 h-3.5" /> CSV 내보내기
+    </button>
+  );
+}
+
+function csvCluster(name: string | undefined): string {
+  return (name || 'cluster').replace(/[^\w.-]+/g, '-');
+}
+const today = () => new Date().toISOString().slice(0, 10);
 
 // 자동갱신 간격 옵션 (ms). false = 끔.
 const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
@@ -113,20 +184,28 @@ export function K8sAllocationPage() {
   const [view, setView] = useState<ViewMode>('visual');
   const [autoMs, setAutoMs] = useState<number | false>(false);
 
-  // 페이지 레벨 observer — 폴링(자동갱신/computing) 구동 + 진행률 바 + 수동 새로고침.
-  // (하위 뷰들과 동일 queryKey 라 캐시 공유)
-  const nsQ = useAllocNamespaces(clusterId, autoMs);
-  const nodesQ = useAllocNodes(clusterId, autoMs);
+  // 페이지 레벨 observer — computing 진행 표시 + 새로고침. (하위 뷰들과 동일 queryKey 라 캐시 공유)
+  const nsQ = useAllocNamespaces(clusterId);
+  const nodesQ = useAllocNodes(clusterId);
+  const forceRefresh = useForceAllocRefresh(clusterId);
   const computing = nsQ.data?.status === 'computing' || nodesQ.data?.status === 'computing';
   const progSrc = nsQ.data?.status === 'computing' ? nsQ.data : nodesQ.data;
-  const refreshAll = () => { nsQ.refetch(); nodesQ.refetch(); };
   const isFetching = nsQ.isFetching || nodesQ.isFetching;
+  const clusterName = clusters.find((c) => c.id === clusterId)?.name;
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!clusterId && clusters.length > 0) {
       navigate(`/k8s-allocation/${clusters[0].id}`, { replace: true });
     }
   }, [clusterId, clusters, navigate]);
+
+  // 자동 갱신: 켜져 있으면(autoMs) 주기마다 강제 재집계. OFF 면 완료 결과를 그대로 유지(0부터 재집계 없음).
+  useEffect(() => {
+    if (!autoMs || !clusterId) return;
+    const id = setInterval(() => { void forceRefresh(); }, autoMs);
+    return () => clearInterval(id);
+  }, [autoMs, clusterId, forceRefresh]);
 
   return (
     <div className="min-h-screen bg-background p-3">
@@ -140,7 +219,7 @@ export function K8sAllocationPage() {
           />
         </div>
 
-        <div className="flex-1 min-w-0 space-y-2">
+        <div ref={contentRef} className="flex-1 min-w-0 space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <Link to="/cluster-overview" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
               <ArrowLeft className="w-4 h-4" /> 클러스터 현황
@@ -151,8 +230,9 @@ export function K8sAllocationPage() {
             <span className="text-sm text-muted-foreground">노드 여유 대비 request·사용량(slack) 진단</span>
 
             {clusterId && (
-              <div className="ml-auto flex items-center gap-2">
-                <button onClick={refreshAll}
+              <div className="ml-auto flex items-center gap-2" data-export-ignore>
+                <ExportMenu targetRef={contentRef} filenameBase={`k8s-alloc-${csvCluster(clusterName)}`} />
+                <button onClick={() => void forceRefresh()}
                   className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card">
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
                 </button>
@@ -203,8 +283,8 @@ export function K8sAllocationPage() {
               </div>
 
               {view === 'visual' && <VisualView clusterId={clusterId} />}
-              {view === 'nodes' && <NodesView clusterId={clusterId} />}
-              {view === 'namespaces' && <NamespacesView clusterId={clusterId} />}
+              {view === 'nodes' && <NodesView clusterId={clusterId} clusterName={clusterName} />}
+              {view === 'namespaces' && <NamespacesView clusterId={clusterId} clusterName={clusterName} />}
             </>
           )}
         </div>
@@ -473,19 +553,34 @@ function VisualView({ clusterId }: { clusterId: string }) {
 }
 
 // ── 노드 뷰 ──────────────────────────────────────────────────────────────────
-type NodeSort = 'name' | 'cpuSlack' | 'memSlack';
-function NodesView({ clusterId }: { clusterId: string }) {
+const NODE_ACCESSORS: Record<string, (r: AllocNodeRow) => number | string | null> = {
+  name: (r) => r.name,
+  cpuReqM: (r) => r.cpuReqM,
+  memReqB: (r) => r.memReqB,
+  cpuSlackM: (r) => r.cpuSlackM,
+  memSlackB: (r) => r.memSlackB,
+  podCount: (r) => r.podCount,
+};
+function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNodes(clusterId);
   const refreshNode = useRefreshAllocNode(clusterId);
-  const [sort, setSort] = useState<NodeSort>('cpuSlack');
+  const [sort, setSort] = useState<SortState>({ key: 'cpuSlackM', dir: 'desc' });
+  const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'name'));
 
-  const rows = useMemo(() => {
-    const items = [...(data?.items ?? [])];
-    if (sort === 'cpuSlack') items.sort((a, b) => b.cpuSlackM - a.cpuSlackM);
-    else if (sort === 'memSlack') items.sort((a, b) => b.memSlackB - a.memSlackB);
-    else items.sort((a, b) => a.name.localeCompare(b.name));
-    return items;
-  }, [data, sort]);
+  const rows = useTableSort(data?.items ?? [], NODE_ACCESSORS, sort);
+
+  const exportCsv = () => {
+    const headers = ['Node', 'Roles', 'Cordoned', 'Pods',
+      'CPU 할당', 'CPU 요청', 'CPU 사용', 'CPU 가용',
+      'MEM 할당', 'MEM 요청', 'MEM 사용', 'MEM 가용'];
+    const data2 = rows.map((n) => [
+      n.name, n.roles.join(' '), n.unschedulable ? 'Y' : '',
+      n.podCount,
+      n.cpuAllocDisplay, n.cpuReqDisplay, n.cpuUsageDisplay ?? '', fmtCores(n.cpuSlackM),
+      n.memAllocDisplay, n.memReqDisplay, n.memUsageDisplay ?? '', fmtGi(n.memSlackB),
+    ]);
+    downloadCsv(`k8s-alloc-nodes-${csvCluster(clusterName)}-${today()}.csv`, buildCsv(headers, data2));
+  };
 
   if (isLoading) return <MacCard title="노드별 자원" bodyPadding="p-3"><Skeleton className="h-40 w-full" /></MacCard>;
   if (isError) return <MacCard title="노드별 자원" bodyPadding="p-3"><EmptyState title="조회 실패" description={(error as Error)?.message ?? '노드 자원을 불러오지 못했습니다.'} /></MacCard>;
@@ -502,29 +597,24 @@ function NodesView({ clusterId }: { clusterId: string }) {
   return (
     <MacCard title="노드별 자원" bodyPadding="p-0">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">정렬</span>
-          {([['cpuSlack', 'CPU slack'], ['memSlack', 'MEM slack'], ['name', '이름']] as [NodeSort, string][]).map(([k, l]) => (
-            <button key={k} onClick={() => setSort(k)}
-              className={`px-2 py-0.5 rounded-lg border ${sort === k ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-              {l}
-            </button>
-          ))}
+        <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+        <div className="flex items-center gap-3">
+          <CsvButton onClick={exportCsv} disabled={!rows.length} />
+          <button onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+          </button>
         </div>
-        <button onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
-        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-3 py-2 font-medium">Node</th>
-              <th className="px-3 py-2 font-medium">CPU (alloc 대비)</th>
-              <th className="px-3 py-2 font-medium">MEM (alloc 대비)</th>
-              <th className="px-3 py-2 font-medium text-right" title="할당 가용(slack=alloc−req) / 할당가능(allocatable)">CPU 가용 / 할당</th>
-              <th className="px-3 py-2 font-medium text-right" title="할당 가용(slack=alloc−req) / 할당가능(allocatable)">MEM 가용 / 할당</th>
-              <th className="px-3 py-2 font-medium text-right">Pods</th>
+              <SortableTh label="Node" k="name" sort={sort} onSort={onSort} />
+              <SortableTh label="CPU (req)" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
+              <SortableTh label="MEM (req)" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
+              <SortableTh label="CPU 가용 / 할당" k="cpuSlackM" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
+              <SortableTh label="MEM 가용 / 할당" k="memSlackB" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
+              <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
             </tr>
           </thead>
           <tbody>
@@ -572,9 +662,20 @@ function NodesView({ clusterId }: { clusterId: string }) {
 }
 
 // ── 네임스페이스 뷰 (드릴다운) ───────────────────────────────────────────────────
-function NamespacesView({ clusterId }: { clusterId: string }) {
+const NS_ACCESSORS: Record<string, (r: AllocNamespaceRow) => number | string | null> = {
+  namespace: (r) => r.namespace,
+  podCount: (r) => r.podCount,
+  workloadCount: (r) => r.workloadCount,
+  cpuReqM: (r) => r.cpuReqM,
+  memReqB: (r) => r.memReqB,
+  eff: (r) => (r.cpuUsageM == null ? null : r.cpuUsageM / Math.max(1, r.cpuReqM)),
+};
+function NamespacesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNamespaces(clusterId);
+  const refreshNs = useRefreshAllocNamespace(clusterId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<SortState>({ key: 'cpuReqM', dir: 'desc' });
+  const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'namespace'));
 
   const toggle = (ns: string) => setExpanded((prev) => {
     const next = new Set(prev);
@@ -582,9 +683,24 @@ function NamespacesView({ clusterId }: { clusterId: string }) {
     return next;
   });
 
+  const rows = useTableSort(data?.items ?? [], NS_ACCESSORS, sort);
+
+  const exportCsv = () => {
+    const headers = ['Namespace', 'Pods', 'Workloads', 'req미설정',
+      'CPU 요청', 'CPU 사용', 'MEM 요청', 'MEM 사용', '효율'];
+    const effLabel = (r: AllocNamespaceRow) => {
+      const k = efficiency(r.cpuReqM, r.cpuUsageM);
+      return k ? EFF_BADGE[k].label : '';
+    };
+    const data2 = rows.map((ns) => [
+      ns.namespace, ns.podCount, ns.workloadCount, ns.noRequestPods,
+      ns.cpuReqDisplay, ns.cpuUsageDisplay ?? '', ns.memReqDisplay, ns.memUsageDisplay ?? '', effLabel(ns),
+    ]);
+    downloadCsv(`k8s-alloc-namespaces-${csvCluster(clusterName)}-${today()}.csv`, buildCsv(headers, data2));
+  };
+
   if (isLoading) return <MacCard title="네임스페이스별 자원" bodyPadding="p-3"><Skeleton className="h-40 w-full" /></MacCard>;
   if (isError) return <MacCard title="네임스페이스별 자원" bodyPadding="p-3"><EmptyState title="조회 실패" description={(error as Error)?.message ?? '불러오지 못했습니다.'} /></MacCard>;
-  const rows = data?.items ?? [];
   if (data?.status === 'computing' && !rows.length) {
     return (
       <MacCard title="네임스페이스별 자원" bodyPadding="p-3">
@@ -596,23 +712,27 @@ function NamespacesView({ clusterId }: { clusterId: string }) {
   if (!rows.length) return <MacCard title="네임스페이스별 자원" bodyPadding="p-3"><EmptyState title="데이터 없음" description="표시할 네임스페이스가 없습니다." /></MacCard>;
 
   return (
-    <MacCard title={`네임스페이스별 자원 (${fmtN(rows.length)}개 · request 큰 순)`} bodyPadding="p-0">
-      <div className="flex items-center justify-end px-3 py-2 border-b border-border">
-        <button onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
-        </button>
+    <MacCard title={`네임스페이스별 자원 (${fmtN(rows.length)}개)`} bodyPadding="p-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+        <div className="flex items-center gap-3">
+          <CsvButton onClick={exportCsv} disabled={!rows.length} />
+          <button onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
             <tr>
               <th className="px-2 py-2 font-medium w-7" />
-              <th className="px-2 py-2 font-medium">Namespace</th>
-              <th className="px-2 py-2 font-medium text-right">Pods</th>
-              <th className="px-2 py-2 font-medium text-right">Workloads</th>
-              <th className="px-2 py-2 font-medium">CPU req/use</th>
-              <th className="px-2 py-2 font-medium">MEM req/use</th>
-              <th className="px-2 py-2 font-medium">효율</th>
+              <SortableTh label="Namespace" k="namespace" sort={sort} onSort={onSort} />
+              <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
+              <SortableTh label="Workloads" k="workloadCount" sort={sort} onSort={onSort} align="right" />
+              <SortableTh label="CPU req/use" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
+              <SortableTh label="MEM req/use" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
+              <SortableTh label="효율" k="eff" sort={sort} onSort={onSort} title="사용/요청 비율 기준 정렬" />
             </tr>
           </thead>
           <tbody>
@@ -623,7 +743,16 @@ function NamespacesView({ clusterId }: { clusterId: string }) {
                   <tr className="border-t border-border hover:bg-muted/10 cursor-pointer" onClick={() => toggle(ns.namespace)}>
                     <td className="px-2 py-2 text-muted-foreground">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
                     <td className="px-2 py-2 font-medium">
-                      {ns.namespace}
+                      <span className="inline-flex items-center gap-1.5">
+                        {ns.namespace}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); refreshNs.mutate(ns.namespace); }}
+                          title="이 네임스페이스만 새로고침"
+                          className="text-muted-foreground hover:text-primary shrink-0"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${refreshNs.isPending && refreshNs.variables === ns.namespace ? 'animate-spin' : ''}`} />
+                        </button>
+                      </span>
                       {ns.noRequestPods > 0 && <span className="ml-2 text-xs text-amber-600">· req미설정 {ns.noRequestPods}</span>}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums">{ns.podCount}</td>

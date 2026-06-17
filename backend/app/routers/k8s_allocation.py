@@ -518,11 +518,15 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
 
 
 # 비싼 overview 집계는 백그라운드 스냅샷 매니저로 수행(요청 스레드 비블로킹 → 502 방지).
-_overview_mgr = SnapshotManager(ttl=_CACHE_TTL)
+# TTL 을 길게 둬서 완료된 결과를 **그대로 유지**한다. 재집계는 오직 명시적 refresh(force)
+# 일 때만 — 자동갱신 OFF 면 0부터 다시 누적하는 일이 없도록(누적 결과 보존).
+_OVERVIEW_TTL = _envf("K8S_ALLOC_OVERVIEW_TTL", 86400.0)
+_overview_mgr = SnapshotManager(ttl=_OVERVIEW_TTL)
 
 
-def _overview_view(cluster_id: UUID, db: Session) -> dict:
-    """매니저 뷰 반환: {status, progress, processed, total, data(overview|None), stale, error}."""
+def _overview_view(cluster_id: UUID, db: Session, force: bool = False) -> dict:
+    """매니저 뷰 반환: {status, progress, processed, total, data(overview|None), stale, error}.
+    force=True 면(명시적 새로고침/주기 갱신) 캐시를 무시하고 재집계."""
     cluster = _require_cluster(cluster_id, db)
     cid = str(cluster_id)
     # kubeconfig 파일을 요청 스레드에서 미리 구체화(백그라운드 스레드의 detached 인스턴스 접근 회피).
@@ -533,6 +537,7 @@ def _overview_view(cluster_id: UUID, db: Session) -> dict:
     return _overview_mgr.get(
         f"{cid}:overview",
         lambda prog: _build_overview(cluster, cid, prog),
+        force=force,
     )
 
 
@@ -569,9 +574,10 @@ def _node_row(name: str, nb: dict, ag: dict, u) -> NodeAllocRow:
 
 
 @router.get("/{cluster_id}/allocation/nodes")
-def allocation_nodes(cluster_id: UUID, db: Session = Depends(get_db)):
-    """노드별 allocatable/capacity vs usage vs request/limit + slack. (요구 1·2)"""
-    view = _overview_view(cluster_id, db)
+def allocation_nodes(cluster_id: UUID, refresh: bool = False, db: Session = Depends(get_db)):
+    """노드별 allocatable/capacity vs usage vs request/limit + slack. (요구 1·2)
+    refresh=True 면 캐시 무시 재집계(명시적 새로고침/주기 갱신)."""
+    view = _overview_view(cluster_id, db, force=refresh)
     ov = view["data"]
     if ov is None:
         if view["status"] == "error":
@@ -624,10 +630,27 @@ def allocation_node_refresh(cluster_id: UUID, node: str, db: Session = Depends(g
     return {"item": _node_row(node, nb, ag, u), "metrics_available": bool(u)}
 
 
+def _ns_row(ns: str, s: dict) -> NamespaceAllocRow:
+    """per_ns 집계(s) → NamespaceAllocRow."""
+    return NamespaceAllocRow(
+        namespace=ns,
+        pod_count=s["pods"], workload_count=s.get("workload_count", 0),
+        no_request_pods=s["norq"],
+        cpu_req_m=s["rc"], mem_req_b=s["rm"], cpu_lim_m=s["lc"], mem_lim_b=s["lm"],
+        cpu_usage_m=(s["uc"] if s["has_usage"] else None),
+        mem_usage_b=(s["um"] if s["has_usage"] else None),
+        cpu_req_display=_fmt_cpu(s["rc"]), mem_req_display=_fmt_mem(s["rm"]),
+        cpu_lim_display=_fmt_cpu(s["lc"]), mem_lim_display=_fmt_mem(s["lm"]),
+        cpu_usage_display=(_fmt_cpu(s["uc"]) if s["has_usage"] else None),
+        mem_usage_display=(_fmt_mem(s["um"]) if s["has_usage"] else None),
+    )
+
+
 @router.get("/{cluster_id}/allocation/namespaces")
-def allocation_namespaces(cluster_id: UUID, db: Session = Depends(get_db)):
-    """네임스페이스별 request/limit/usage 총합 + 클러스터 summary. (요구 3)"""
-    view = _overview_view(cluster_id, db)
+def allocation_namespaces(cluster_id: UUID, refresh: bool = False, db: Session = Depends(get_db)):
+    """네임스페이스별 request/limit/usage 총합 + 클러스터 summary. (요구 3)
+    refresh=True 면 캐시 무시 재집계."""
+    view = _overview_view(cluster_id, db, force=refresh)
     ov = view["data"]
     if ov is None:
         if view["status"] == "error":
@@ -637,20 +660,7 @@ def allocation_namespaces(cluster_id: UUID, db: Session = Depends(get_db)):
                 "partial": False, **_alloc_meta(view)}
     per_ns = ov["per_ns"]
 
-    rows: list[NamespaceAllocRow] = []
-    for ns, s in per_ns.items():
-        rows.append(NamespaceAllocRow(
-            namespace=ns,
-            pod_count=s["pods"], workload_count=s.get("workload_count", 0),
-            no_request_pods=s["norq"],
-            cpu_req_m=s["rc"], mem_req_b=s["rm"], cpu_lim_m=s["lc"], mem_lim_b=s["lm"],
-            cpu_usage_m=(s["uc"] if s["has_usage"] else None),
-            mem_usage_b=(s["um"] if s["has_usage"] else None),
-            cpu_req_display=_fmt_cpu(s["rc"]), mem_req_display=_fmt_mem(s["rm"]),
-            cpu_lim_display=_fmt_cpu(s["lc"]), mem_lim_display=_fmt_mem(s["lm"]),
-            cpu_usage_display=(_fmt_cpu(s["uc"]) if s["has_usage"] else None),
-            mem_usage_display=(_fmt_mem(s["um"]) if s["has_usage"] else None),
-        ))
+    rows = [_ns_row(ns, s) for ns, s in per_ns.items()]
     rows.sort(key=lambda r: r.cpu_req_m, reverse=True)
     return {
         "count": len(rows),
@@ -661,6 +671,37 @@ def allocation_namespaces(cluster_id: UUID, db: Session = Depends(get_db)):
         "partial": ov.get("partial", False),
         **_alloc_meta(view),
     }
+
+
+@router.get("/{cluster_id}/allocation/namespaces/{namespace}")
+def allocation_namespace_refresh(cluster_id: UUID, namespace: str, db: Session = Depends(get_db)):
+    """단일 네임스페이스만 즉시 재계산(개별 REFRESH). 스냅샷 미경유 — 그 NS 활성 파드만 조회."""
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+    core = k8s_client.CoreV1Api(client)
+    apps = k8s_client.AppsV1Api(client)
+    try:
+        pods = _list_all(lambda **kw: core.list_namespaced_pod(namespace, **kw),
+                         field_selector=_ACTIVE_FIELD_SELECTOR)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
+    rs_map = _build_rs_owner_map(apps, namespace)
+    pusage = _pod_usage(client, namespace)  # best-effort
+    s = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
+         "pods": 0, "norq": 0, "owners": set(), "has_usage": False}
+    for p in pods:
+        if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+            continue
+        rc, rm, lc, lm = _sum_resources(p.spec.containers if p.spec else [])
+        s["rc"] += rc; s["rm"] += rm; s["lc"] += lc; s["lm"] += lm; s["pods"] += 1
+        if rc == 0 and rm == 0:
+            s["norq"] += 1
+        s["owners"].add(_top_owner(p, rs_map))
+        u = pusage.get((namespace, p.metadata.name))
+        if u:
+            s["uc"] += u["cpu"]; s["um"] += u["mem"]; s["has_usage"] = True
+    s["workload_count"] = len(s["owners"])
+    return {"item": _ns_row(namespace, s), "metrics_available": bool(pusage)}
 
 
 @router.get("/{cluster_id}/allocation/namespaces/{namespace}/workloads")

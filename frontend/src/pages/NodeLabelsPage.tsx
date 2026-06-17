@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Tags, Search, LayoutList, Tag, AlertTriangle, FileSpreadsheet, RefreshCw, Pause, Play } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useClustersNodes, usePatchNodeLabels, NodeRow } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, ExportMenu } from '@/components/common';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import { formatApiError } from '@/lib/utils';
 
@@ -51,6 +51,8 @@ export function NodeLabelsPage() {
   }, [clusters, effectiveSelection]);
 
   const isLoading = clustersLoading || nodesLoading;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const safeName = (headerLabel || 'cluster').replace(/[^\w.-]+/g, '-');
 
   // 현재 뷰/검색 결과를 CSV(엑셀)로 추출 — 화면에 보이는 행과 동일.
   const handleExportCsv = () => {
@@ -86,7 +88,7 @@ export function NodeLabelsPage() {
           allLabel="전체 클러스터"
           iconOnly
         />
-        <div className="flex-1 min-w-0">
+        <div ref={contentRef} className="flex-1 min-w-0">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
@@ -145,8 +147,9 @@ export function NodeLabelsPage() {
             </span>
           )}
 
-          {/* 우측 컨트롤 — CSV 내보내기 + 새로고침(수동/자동) */}
-          <div className="ml-auto flex items-center gap-1.5">
+          {/* 우측 컨트롤 — 내보내기 + CSV + 새로고침(수동/자동) */}
+          <div className="ml-auto flex items-center gap-1.5" data-export-ignore>
+            <ExportMenu targetRef={contentRef} filenameBase={`node-labels-${safeName}`} disabled={isLoading || nodes.length === 0} />
             {/* CSV(엑셀) 내보내기 — 현재 뷰/검색 결과 */}
             <button
               onClick={handleExportCsv}

@@ -2809,6 +2809,8 @@ export interface AllocSnapshotMeta {
 export interface AllocNodesResponse extends AllocSnapshotMeta { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
 /** 단일 노드 즉시 재계산(개별 REFRESH) 응답. */
 export interface AllocNodeRefreshResponse { item: AllocNodeRow; metricsAvailable: boolean }
+/** 단일 네임스페이스 즉시 재계산(개별 REFRESH) 응답. */
+export interface AllocNamespaceRefreshResponse { item: AllocNamespaceRow; metricsAvailable: boolean }
 
 export interface AllocSummary {
   nodeCount: number;
