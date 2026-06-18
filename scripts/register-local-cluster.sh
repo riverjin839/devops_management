@@ -2,7 +2,7 @@
 # ============================================================
 # 로컬 테스트 클러스터를 PEP(devops_management) 에 등록
 # ============================================================
-# kind / kubeadm(Vagrant) 클러스터를 PEP API 로 등록한다.
+# kind / k3s(Vagrant) 클러스터를 PEP API 로 등록한다.
 # kubeconfig 내용을 그대로 업로드(kubeconfig_content)하고, backend 컨테이너가
 # 접근 가능한 server URL 을 api_endpoint 로 지정한다.
 #
@@ -10,11 +10,11 @@
 #   # kind 클러스터 (컨테이너 네트워크 내부 주소로 자동 등록)
 #   bash scripts/register-local-cluster.sh --name kind-dev --kind k8s-monitor-dev
 #
-#   # Vagrant kubeadm (host-only 주소로 등록)
+#   # Vagrant k3s (Mac 호스트 포워딩 경유)
 #   bash scripts/register-local-cluster.sh \
-#       --name vagrant-kubeadm \
-#       --kubeconfig vagrant/kubeadm-kubeconfig.yaml \
-#       --server https://192.168.10.100:6443
+#       --name vagrant-k3s \
+#       --kubeconfig vagrant/k3s-kubeconfig.yaml \
+#       --server https://host.docker.internal:6443
 #
 # 옵션:
 #   --name NAME          PEP 에 표시될 클러스터 이름 (필수)

@@ -1,0 +1,199 @@
+# Vagrant K8s 클러스터 (PEP 등록 + MinIO) — AlmaLinux 10 / RHEL 10 호환
+
+PEP 에 등록해 모니터링하고, MinIO 를 올려볼 수 있는 kubeadm 기반 테스트 클러스터.
+**폐쇄망 운영(RHEL 10)과 동일하게** 검증하려고 OS 를 RHEL 1:1 리빌드인 **AlmaLinux 10**
+으로 맞췄습니다 (커널 6.12 + dnf/SELinux/firewalld/NetworkManager 동일 userland).
+
+이 디렉터리(`vagrant/kubeadm-almalinux/`)는 **AlmaLinux + kubeadm 멀티노드 VM**(VMware Fusion /
+VirtualBox) 경로입니다. 다른 테스트 환경(Ubuntu kubeadm Cilium 스터디 / Windows docker) 비교는
+[상위 vagrant/README.md](../README.md) 참고. 환경별 대안:
+
+| 환경 | 경로 | 형태 | 비고 |
+|---|---|---|---|
+| Mac/Intel/Linux — VMware·VirtualBox | `vagrant/kubeadm-almalinux/` (여기) | 멀티노드 VM | control-plane + worker N, worker 실디스크 |
+| **Mac Apple Silicon — 무료 QEMU** | [`qemu/`](qemu/README.md) | **단일노드 VM** | Fusion 불필요. QEMU 제약상 단일노드 |
+| **Windows — Docker** | [`../../windows-docker/`](../../windows-docker/README.md) | kind(Docker) | 동일 패턴을 Docker/kind 로 재현 |
+
+## 구성
+
+| 노드 | IP (host-only) | 역할 | 비고 |
+|---|---|---|---|
+| `k8s-control-1` | 192.168.56.10 | control-plane | API 6443 → Mac 호스트로 포워딩 |
+| `k8s-worker-1`  | 192.168.56.11 | worker | **+10GB 디스크 → /mnt/disks/minio** (MinIO) |
+| `k8s-worker-2`  | 192.168.56.12 | worker | +10GB 디스크 |
+
+- OS: **AlmaLinux 10**(RHEL 10 호환, 커널 6.12) / CRI: **CRI-O** / K8s **1.29**
+- CNI: **Cilium** (cilium-cli, ipam=kubernetes → PodCIDR `10.244.0.0/16`, host-only 망 미충돌)
+- worker 마다 10GB 추가 디스크를 **xfs** 로 `/mnt/disks/minio` 에 자동 포맷·마운트
+
+> **아키텍처 주의:** Apple Silicon 의 VMware Fusion 은 arm64 게스트만 돌리므로 이 박스는
+> **aarch64** 입니다. 폐쇄망 RHEL10 이 x86_64 라면 커널·userland 는 같아도 **CPU arch 는 다릅니다**
+> (Host Facts/체커 검증에는 대부분 무관). CRI 는 운영(containerd)과 달리 CRI-O 지만, PEP 는
+> kube-API 로 보므로 CRI 종류는 보이지 않습니다.
+>
+> **박스 가용성:** `almalinux/10` 의 aarch64 + vmware_desktop variant 가 아직 제한적일 수 있습니다.
+> 먼저 확인: `vagrant box add almalinux/10 --provider vmware_desktop` (없으면 알려주세요).
+
+## 요구사항
+
+- **Vagrant 2.3+**
+- **Apple Silicon(M1~) — VMware Fusion (개인용 무료, 권장):**
+  1. VMware Fusion 13.5+ 설치 — Broadcom 무료 계정으로 수동 다운로드
+     (https://profile.broadcom.com → support.broadcom.com 에서 "VMware Fusion" → Personal Use).
+     `brew install --cask vmware-fusion` 은 2025-06 부로 비활성화됨.
+  2. Vagrant 플러그인 + 유틸리티 설치:
+     ```bash
+     vagrant plugin install vagrant-vmware-desktop
+     brew install --cask vagrant-vmware-utility    # 유틸리티 cask 는 정상
+     ```
+- **Intel Mac / Linux / Windows — VirtualBox 6.1+** (별도 플러그인 불필요)
+  - Windows: `winget install Hashicorp.Vagrant Oracle.VirtualBox`. Docker Desktop(WSL2) 와
+    공존하려면 **VirtualBox 7.x + 최신 Windows** 필요. 전체 흐름은
+    [../../docs/WIN_LOCAL_TEST_GUIDE.md](../../docs/WIN_LOCAL_TEST_GUIDE.md) 참고.
+
+> Vagrantfile 은 `vmware_desktop` 과 `virtualbox` provider 블록을 **둘 다** 정의합니다.
+> 기동 시 `--provider` 로 사용할 것을 고르세요(아래).
+
+## 실행
+
+**Apple Silicon (VMware Fusion):**
+```bash
+cd vagrant/kubeadm-almalinux
+vagrant up --provider=vmware_desktop      # 5~10분 (control-plane → worker 순)
+# 매번 입력이 번거로우면: export VAGRANT_DEFAULT_PROVIDER=vmware_desktop
+vagrant status
+```
+
+**Intel Mac / Linux (VirtualBox):**
+```bash
+cd vagrant/kubeadm-almalinux
+vagrant up --provider=virtualbox
+```
+
+### 멀티 클러스터 (폐쇄망 동일 클러스터 2개+)
+
+폐쇄망 운영과 동일한 K8s 를 **여러 개** 띄워 PEP 멀티클러스터를 테스트한다. 같은 디렉터리에서
+`PEP_CLUSTER` 와 `VAGRANT_DOTFILE_PATH`(상태 분리)만 바꿔 독립 클러스터로 띄운다. 클러스터마다
+**서브넷 / host 포트 / VirtualBox 이름 / 산출물 디렉터리**가 자동 분리된다.
+
+| 클러스터 | host-only 서브넷 | API host 포트 | VM 이름 | 산출물 | PEP 등록 endpoint |
+|---|---|---|---|---|---|
+| `PEP_CLUSTER=1`(기본) | 192.168.56.x | 6443 | `k8s-control-1`… | `_out/` | `https://host.docker.internal:6443` |
+| `PEP_CLUSTER=2` | 192.168.57.x | 6444 | `c2-k8s-control-1`… | `_out-c2/` | `https://host.docker.internal:6444` |
+
+```bash
+# 클러스터 1 (기본)
+vagrant up --provider=virtualbox
+
+# 클러스터 2 (PowerShell)
+$env:PEP_CLUSTER=2; $env:VAGRANT_DOTFILE_PATH=".vagrant-c2"; vagrant up --provider=virtualbox
+# 클러스터 2 (bash)
+PEP_CLUSTER=2 VAGRANT_DOTFILE_PATH=.vagrant-c2 vagrant up --provider=virtualbox
+```
+
+> 클러스터 2 를 다룰 때도 매번 같은 `PEP_CLUSTER`/`VAGRANT_DOTFILE_PATH` 를 지정해야 한다
+> (`vagrant status`, `vagrant destroy` 포함). 그래야 c1 상태와 섞이지 않는다.
+> 프리셋은 개별 env(`NET_PREFIX`/`API_HOST_PORT`/`VBOX_PREFIX`/`OUT_NAME`/`NUM_WORKERS`)로 override 가능.
+
+> **코어 적은 호스트(예: 6코어)**: 워커는 기본 1 vCPU(`WORKER_CPUS`)다. CPU 포화로 VM 부팅/SSH 가
+> 느려 `Timed out while waiting for the machine to boot` 또는 `timeout during server version
+> negotiating` 가 나면, 부팅/SSH 타임아웃을 늘려 둔 기본값(`BOOT_TIMEOUT=600`,
+> `SSH_CONNECT_TIMEOUT=60`)이 받아준다. 그래도 잦으면 `WORKER_CPUS=1 CP_CPUS=2` 유지 + 호스트의
+> 무거운 앱(녹화/브라우저) 정리. 멀티클러스터(6 VM)는 6코어로 동시 구동이 버거우니 클러스터를
+> 번갈아(`vagrant halt`) 쓰거나 `NUM_WORKERS=1` 로 줄인다. 리소스 env: `CP_CPUS`/`CP_MEM`/`WORKER_CPUS`/`WORKER_MEM`/`BOOT_TIMEOUT`/`SSH_CONNECT_TIMEOUT`.
+
+완료되면 산출물 디렉터리(`_out/`, 멀티클러스터는 `_out-c2/` …)에 다음이 생성됩니다:
+
+| 파일 | 용도 |
+|---|---|
+| `_out/pep-kubeconfig.yaml` | **PEP 등록용** (server=`https://host.docker.internal:6443`) |
+| `_out/admin.conf` | Mac 에서 kubectl 직접 사용 (server=`192.168.56.10:6443`) |
+| `_out/join.sh` | worker join (자동 사용) |
+
+### Mac 에서 kubectl 로 확인
+
+```bash
+export KUBECONFIG=$PWD/_out/admin.conf
+kubectl get nodes -o wide      # control-1, worker-1, worker-2 가 Ready
+```
+
+## PEP 에 등록
+
+1. PEP 풀스택 기동(`docker-compose up -d --build`) 후 로그인.
+2. **설정 → 클러스터 → 클러스터 추가**:
+   - 프로바이더: `On-Premises` (또는 적절히)
+   - **API Endpoint**: `https://host.docker.internal:6443`
+   - **kubeconfig**: `_out/pep-kubeconfig.yaml` 전체 붙여넣기 (또는 파일 업로드)
+3. 등록 전 도달 확인(선택):
+   ```bash
+   docker-compose exec backend python -c \
+    "import httpx; print(httpx.get('https://host.docker.internal:6443/healthz', verify=False, timeout=5).text)"
+   # 'ok' 면 PEP 컨테이너에서 API 서버 도달 성공
+   ```
+
+> 포워딩 포인트: Vagrantfile 이 6443 을 `host_ip: 0.0.0.0` 으로 열어 두기 때문에
+> Docker Desktop 의 `host.docker.internal` 로 접속됩니다. apiserver 인증서 SAN 에
+> `host.docker.internal` 을 넣어 TLS 검증도 정상입니다(=skip-tls 불필요).
+
+## MinIO 설치
+
+```bash
+export KUBECONFIG=$PWD/_out/admin.conf
+kubectl apply -f manifests/minio.yaml
+kubectl -n minio rollout status deploy/minio
+```
+
+- API: http://192.168.56.11:30900
+- Console: http://192.168.56.11:30901  (`minioadmin` / `minioadmin` — 데모용, 변경 권장)
+
+worker-1 의 10GB 디스크(`/mnt/disks/minio/data`)를 로컬 PV 로 사용합니다.
+
+## 폐쇄망 동일 테스트 — Host Facts / SSH 기능
+
+kind 와 달리 이 vagrant 노드는 **SSH(root+비번)·bond·실디스크**가 있어, 폐쇄망 운영 노드와
+**동일한 방식으로** PEP 의 Host Facts 수집 / 대량실행(BulkExec) / 배치잡을 검증할 수 있습니다.
+
+- 각 노드에 **root 로그인 + 비번**(`ROOT_PASSWORD`, 기본 `rootpass`)이 활성화되어 있습니다
+  (운영의 root+비번 수집 흐름과 동일 — **테스트 전용**).
+- 각 노드에 **dummy bond0/bond1**(10.20.0.x / 10.30.0.x)이 미리 구성되어 있어 Host Facts 의
+  `bond0_ip/mac`, `bond1_ip/mac` 필드까지 운영처럼 채워집니다(k8s 트래픽과 분리, 테스트 전용).
+- PEP **노드 사양 페이지 → "Host Facts 수집"**:
+  - SSH user `root`, SSH password `rootpass`(=Vagrantfile 의 `ROOT_PASSWORD`)
+  - 호스트: `192.168.56.11`, `192.168.56.12` (워커)
+  - → bond/disk/vm 필드가 채워짐
+
+### ⚠️ PEP 가 노드 SSH(22)에 닿게 하기 — 실행 위치가 중요
+
+| PEP 실행 방식 | API(6443) | SSH(22, Host Facts) | 권장 |
+|---|---|---|---|
+| **맥 네이티브** (`make dev` / uvicorn) | `192.168.56.10:6443` 직접 | `192.168.56.x:22` 직접 | ✅ SSH 기능 테스트는 이쪽 |
+| docker-compose 컨테이너 | `host.docker.internal:6443` (포워딩) | host-only 망(192.168.56.x) **직접 도달 불가** | API/모니터링만 |
+
+> 컨테이너 PEP 는 host-only 망의 22번에 닿지 못합니다(앞서 6443 을 host.docker.internal 로
+> 우회한 것과 같은 제약). **Host Facts/대량실행 같은 SSH 기반 기능은 PEP 를 맥 네이티브로
+> 띄워** `192.168.56.x` 에 바로 SSH 하게 하는 것이 가장 단순하고 운영과 유사합니다.
+> 네이티브로 띄우면 클러스터 등록도 `https://192.168.56.10:6443` + `_out/admin.conf` 를 그대로
+> 쓰면 됩니다(host.docker.internal 불필요).
+
+## 정리
+
+```bash
+# 클러스터 1
+vagrant destroy -f
+rm -rf _out .vagrant
+
+# 클러스터 2 (띄웠다면 — 같은 env 를 줘야 c2 를 가리킨다)
+PEP_CLUSTER=2 VAGRANT_DOTFILE_PATH=.vagrant-c2 vagrant destroy -f
+rm -rf _out-c2 .vagrant-c2
+```
+
+## 트러블슈팅
+
+- **worker 가 NotReady**: `vagrant ssh k8s-worker-1 -c 'sudo journalctl -u kubelet -n50'`.
+  Cilium pod 가 떠야 Ready 가 됩니다 (`kubectl -n kube-system get pod -l k8s-app=cilium`).
+- **추가 디스크 미인식**: `vagrant ssh k8s-worker-1 -c 'lsblk'` 로 10G raw 디스크 확인.
+  Vagrant 2.3+ 필요(`VAGRANT_EXPERIMENTAL=disks` 는 Vagrantfile 에서 자동 설정).
+- **PEP 에서 offline**: 위 `httpx` 도달 확인부터. 타임아웃이면 6443 포워딩/방화벽,
+  인증 오류(401 가 아닌 TLS 오류)면 kubeconfig 의 server/CA 확인.
+- **MinIO Pending**: PVC 가 `WaitForFirstConsumer` 라 Pod 스케줄 시 바인딩됩니다.
+  Pod 가 k8s-worker-1 로 안 가면 PV nodeAffinity(`k8s-worker-1`) 와 노드명 일치 확인.

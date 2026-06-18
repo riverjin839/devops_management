@@ -1,0 +1,35 @@
+# PEP Host Facts(SSH) 테스트용 AlmaLinux 10 노드 컨테이너 2대.
+#
+#   cd windows-docker/node-ssh
+#   docker compose up -d --build
+#
+# 접속(테스트):
+#   ssh -p 2221 root@localhost   # pep-node-1 (비번 rootpass)
+#   ssh -p 2222 root@localhost   # pep-node-2
+#
+# PEP(docker-compose)에서 Host Facts 대상 호스트:
+#   host.docker.internal:2221 / host.docker.internal:2222  (user root / pass rootpass)
+#
+# 주의: bond0/bond1 을 채우려면 privileged 가 필요(호스트 커널 모듈 사용). 테스트 전용.
+services:
+  pep-node-1:
+    build:
+      context: .
+      args:
+        ROOT_PASSWORD: rootpass
+    hostname: pep-node-1
+    privileged: true            # dummy bond/dummy 모듈 사용 위함(없으면 bond 만 skip)
+    ports:
+      - "2221:22"
+    restart: unless-stopped
+
+  pep-node-2:
+    build:
+      context: .
+      args:
+        ROOT_PASSWORD: rootpass
+    hostname: pep-node-2
+    privileged: true
+    ports:
+      - "2222:22"
+    restart: unless-stopped

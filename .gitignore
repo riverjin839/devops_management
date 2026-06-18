@@ -70,8 +70,13 @@ temp/
 !.claude/skills/
 .superpowers/
 
-# Vagrant (로컬 테스트 클러스터 — kubeadm 3노드 Cilium lab)
+# Vagrant (로컬 테스트 클러스터 — Mac/Windows, 멀티클러스터 포함)
 vagrant/.vagrant/
 vagrant/*.yaml
 !vagrant/Vagrantfile
+# 서브디렉터리(kubeadm-almalinux 등) 의 vagrant 상태/산출물 — 멀티클러스터 c2 변형 포함
+vagrant/**/.vagrant/
+vagrant/**/.vagrant-*/
+vagrant/**/_out/
+vagrant/**/_out-*/
 *-kubeconfig.yaml
