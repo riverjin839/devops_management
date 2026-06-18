@@ -178,16 +178,17 @@ helm install cilium cilium/cilium --version 1.17.5 --namespace kube-system \
   --set endpointRoutes.enabled=true \
   --set installNoConntrackIptablesRules=true \
   --set bpf.masquerade=true \
-  --set ipv6.enabled=false
+  --set ipv6.enabled=false \
+  --set hubble.enabled=true \
+  --set hubble.relay.enabled=true \
+  --set hubble.ui.enabled=true
 ```
+
+> Hubble(relay/UI)을 기본 포함한다 — PEP 의 Hubble 딥 트러블슈팅(패킷 flow)이 `hubble-relay`
+> 서비스를 필요로 하기 때문. 로컬에서 UI 를 열려면 `vagrant ssh k8s-ctr -c 'sudo cilium hubble ui'`.
 
 > 손으로 학습하고 싶으면 `vagrant ssh k8s-ctr` 로 들어가 위 명령을 직접 실행해도 된다
 > (전체 내용은 [`vagrant/install-cilium.sh`](../vagrant/install-cilium.sh)).
-
-> **(선택) Hubble UI**: PEP 의 Hubble 딥 트러블슈팅 기능을 테스트하려면 Hubble 을 켠다.
-> ```bash
-> vagrant ssh k8s-ctr -c 'sudo cilium hubble enable --ui'
-> ```
 
 ### 2-3. kubeconfig 를 Mac 으로 가져오기
 

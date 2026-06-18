@@ -10,11 +10,16 @@
 #   CILIUM_VERSION   Cilium chart 버전 (기본 1.17.5)
 set -euo pipefail
 
+# Vagrant provisioner 는 root(uid 0)로 돌지만 HOME 이 /home/vagrant 로 남아 있어
+# helm 의 repo 설정과 kubeconfig(/root/.kube/config)를 못 찾는다. 명시적으로 고정한다.
+export HOME=/root
+export KUBECONFIG="${KUBECONFIG:-/root/.kube/config}"
+
 CILIUM_VERSION="${CILIUM_VERSION:-1.17.5}"
 
-echo "[cilium] helm repo 추가"
-helm repo add cilium https://helm.cilium.io/ >/dev/null 2>&1 || true
-helm repo update >/dev/null 2>&1 || true
+echo "[cilium] helm repo 추가/갱신"
+helm repo add cilium https://helm.cilium.io/
+helm repo update cilium
 
 if helm status cilium -n kube-system >/dev/null 2>&1; then
   echo "[cilium] 이미 설치됨 — skip (재설치하려면 helm uninstall cilium -n kube-system)"
@@ -31,7 +36,10 @@ else
     --set endpointRoutes.enabled=true \
     --set installNoConntrackIptablesRules=true \
     --set bpf.masquerade=true \
-    --set ipv6.enabled=false
+    --set ipv6.enabled=false \
+    --set hubble.enabled=true \
+    --set hubble.relay.enabled=true \
+    --set hubble.ui.enabled=true
 fi
 
 # cilium CLI (상태 확인용)
