@@ -103,16 +103,23 @@ echo "      api_endpoint = ${API_ENDPOINT}"
 
 # ── 로그인 → Bearer 토큰 (clusters 등록은 operator/admin 인증 필요) ──
 echo "[2/4] 로그인 중 (user=${PEP_USER})..."
+# `|| true`: 백엔드 미기동(connection refused) 시 curl 이 비0 으로 죽어도 set -e 로
+# 조용히 종료되지 않게 한다. 토큰이 빈 값이면 아래에서 명확한 사유를 출력한다.
 LOGIN_RESP="$(curl -s --max-time 20 -X POST "${API_URL}/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d "$(python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[1],"password":sys.argv[2]}))' "${PEP_USER}" "${PEP_PASS}")")"
+  -d "$(python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[1],"password":sys.argv[2]}))' "${PEP_USER}" "${PEP_PASS}")")" || true
 TOKEN="$(printf '%s' "${LOGIN_RESP}" | python3 -c 'import sys,json;
 try: print(json.load(sys.stdin).get("access_token",""))
 except Exception: print("")' 2>/dev/null || true)"
 
 if [ -z "${TOKEN}" ]; then
-  echo "ERROR: 로그인 실패 — 계정 확인 (기본 admin/admin, 또는 --user/--pass, 환경변수 PEP_USER/PEP_PASS)." >&2
-  echo "  응답: ${LOGIN_RESP}" >&2
+  if [ -z "${LOGIN_RESP}" ]; then
+    echo "ERROR: ${API_URL} 에 연결할 수 없습니다 — PEP 백엔드가 떠 있는지 확인하세요." >&2
+    echo "  먼저: docker-compose up -d  (확인: curl ${API_URL}/health)" >&2
+  else
+    echo "ERROR: 로그인 실패 — 계정 확인 (기본 admin/admin, 또는 --user/--pass, 환경변수 PEP_USER/PEP_PASS)." >&2
+    echo "  응답: ${LOGIN_RESP}" >&2
+  fi
   exit 1
 fi
 
