@@ -23,17 +23,7 @@ cluster-pool IPAM` 로 Helm 설치한다 — PEP 의 Cilium/Hubble 딥 트러블
   `host.docker.internal` 포워딩·tls-san 우회가 **필요 없다**.
 - CNI: **Cilium 1.17.5** (cluster-pool IPAM → PodCIDR `172.20.0.0/16`)
 
-## 테스트 환경 선택 (3가지)
-
-목적에 맞게 고른다. **이 디렉터리(`vagrant/`)가 기본 경로**(Ubuntu + kubeadm 3노드 + Cilium)다.
-
-| 경로 | OS / 런타임 | 형태 | 언제 쓰나 |
-|---|---|---|---|
-| **`vagrant/` (여기)** | Ubuntu 24.04 + **kubeadm**(VirtualBox) | 멀티노드(ctr+w1+w2) | **Cilium 스터디 1주차** 환경으로 PEP 등록·Cilium/Hubble 확인 |
-| [`vagrant/kubeadm-almalinux/`](kubeadm-almalinux/README.md) | **AlmaLinux 10**(RHEL10 호환) + kubeadm | 멀티노드(VMware/VBox) · 단일노드(QEMU) | **폐쇄망 RHEL 충실도** (CRI-O·SELinux·firewalld·실디스크·root SSH·bond) |
-| [`../windows-docker/`](../windows-docker/README.md) | kind(Docker) | control+worker | **Windows / Docker** 환경에서 동일 패턴 재현 |
-
-> RHEL 동일성·실디스크·SSH(Host Facts) 가 필요하면 AlmaLinux 경로를, Windows 면 windows-docker 를 쓴다.
+> Windows 사용자도 동일하게 VirtualBox + Vagrant 로 이 lab 을 쓴다(Notion 1주차 "Windows 사용자" 섹션 참고).
 
 ## 빠른 사용
 
