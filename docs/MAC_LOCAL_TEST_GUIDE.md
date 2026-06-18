@@ -184,6 +184,79 @@ curl -s http://localhost:8000/api/v1/clusters | python3 -m json.tool
 
 ---
 
+## 5.5 테스트 데이터 넣기 (샘플 데이터 주입)
+
+클러스터 2대만 등록하면 **대시보드/헬스체크**는 바로 동작하지만, 협업·지식·인프라
+페이지(작업/이슈, 프로젝트, 인프라 노드, 지식 문서, 운영 메모)는 비어 있다. PEP 의
+이런 기능까지 둘러보려면 샘플 데이터를 채워 넣는다.
+
+### 자동으로 채워지는 것 (시드)
+
+backend 가 **처음 부팅될 때** `main.py` 의 `_seed_*` 단계가 아래를 자동 생성한다 —
+별도 작업이 필요 없다.
+
+| 시드 | 내용 |
+|---|---|
+| `metric_cards` | 기본 PromQL 카드 6종 (CrashLoop/Failed Pod, CPU/메모리, PVC, 네트워크) |
+| `playbooks` | 기본 Ansible 플레이북 |
+| `deep_check_definitions` / `metric_checklist_items` | 운영 점검(Ops Checks) 항목 |
+| `lake_service_types` / `lake_service_entries` | Data Lake 서비스 카탈로그 |
+| `cluster_items` / `trend_sources` | 클러스터 항목·트렌드 소스 기본값 |
+| `initial_admin` | 부트스트랩 관리자 계정 `admin / admin` (`INITIAL_ADMIN_*` 로 변경 가능) |
+
+> 시드는 **테이블이 비어 있을 때만** 동작(멱등). 부팅 로그에서
+> `migration: ... ` / `seed_*` 흔적으로 확인할 수 있다.
+
+### 협업·지식·인프라 샘플 한 번에 넣기
+
+부팅 시 비어 있는 데이터(프로젝트·작업/이슈·인프라 노드·지식 문서·운영 메모)는
+헬퍼 스크립트로 채운다. 내부적으로 `admin` 으로 로그인해 Bearer 토큰을 받고
+(`/api/v1/auth/login`), 등록된 첫 번째 클러스터를 인프라 노드/작업에 연결한다.
+
+```bash
+# 4단계(클러스터 등록) 이후 실행 권장
+bash scripts/seed-test-data.sh
+
+# 계정/주소 변경 시
+API_URL=http://localhost:8000 PEP_USER=admin PEP_PASS=admin bash scripts/seed-test-data.sh
+```
+
+생성되는 샘플:
+
+| 영역 | API | 샘플 |
+|---|---|---|
+| 프로젝트 | `POST /projects` | "플랫폼 안정화 2026-Q3" 1건 |
+| 작업/이슈 | `POST /work-items` | task 2 + issue 1 (위 프로젝트·클러스터 연결) |
+| 인프라 노드 | `POST /infra-nodes` | master/worker/storage 4대 (클러스터 등록 시에만) |
+| 지식 문서 | `POST /knowledge/pages` | "노드 NotReady 대응 런북" 1건 |
+| 운영 메모 | `POST /ops-notes` | 스티키 노트 2건 |
+
+> ⚠️ **멱등하지 않다** — 같은 이름이 있어도 API 가 중복 생성한다. 한 번만 실행하길
+> 권장하고, 재실행하면 샘플이 중복으로 쌓인다(로컬 테스트라 무방).
+>
+> 클러스터를 아직 등록하지 않았으면 인프라 노드는 건너뛰고 나머지만 생성된다.
+
+### 직접 넣기 (수동)
+
+스크립트 없이 개별로 넣고 싶으면 Swagger UI(http://localhost:8000/docs)에서
+`POST /api/v1/auth/login` 으로 토큰을 받아 **Authorize** 에 붙인 뒤 각 엔드포인트를
+호출하거나, curl 로:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+
+curl -X POST http://localhost:8000/api/v1/ops-notes \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"service":"k8s","title":"메모","content":"내용","color":"yellow"}'
+```
+
+> 쓰기 API(`/work-items`, `/projects`, `/infra-nodes`, `/knowledge`, `/ops-notes` 등)는
+> operator/admin 인증이 필요하다. 토큰 없이 호출하면 401 이 난다.
+
+---
+
 ## 6. 정리 (Teardown)
 
 ```bash
@@ -246,5 +319,8 @@ docker-compose up -d --build
 bash scripts/register-local-cluster.sh --name test-a --kind test-a
 bash scripts/register-local-cluster.sh --name vagrant-k3s --kubeconfig vagrant/k3s-kubeconfig.yaml --server https://host.docker.internal:6443
 
-# 5) 확인 → http://localhost:5173
+# 5) 샘플 데이터 주입 (선택) — 협업/지식/인프라 페이지 둘러보기용
+bash scripts/seed-test-data.sh
+
+# 6) 확인 → http://localhost:5173
 ```
