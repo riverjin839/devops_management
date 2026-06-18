@@ -26,15 +26,17 @@ NOW="$(date +%Y-%m-%dT%H:%M:%S)"
 
 # ── 1. 로그인 → Bearer 토큰 (쓰기 API 는 operator/admin 인증 필요) ──
 echo "[1/6] 로그인 (${PEP_USER}@${API_URL}) ..."
+# `|| true`: 백엔드 미기동 시 curl 이 비0 으로 죽어도 set -e/pipefail 로 조용히
+# 종료되지 않게 한다. 토큰이 비면 아래에서 명확한 사유를 출력한다.
 TOKEN="$(curl -s --max-time 20 -X POST "${API_URL}/api/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"${PEP_USER}\",\"password\":\"${PEP_PASS}\"}" \
   | python3 -c 'import sys,json
 try: print(json.load(sys.stdin).get("access_token",""))
-except Exception: print("")')"
+except Exception: print("")')" || true
 
 if [ -z "${TOKEN}" ]; then
-  echo "ERROR: 로그인 실패. backend 기동 여부와 계정(${PEP_USER}/${PEP_PASS})을 확인하세요." >&2
+  echo "ERROR: 로그인 실패. backend 기동 여부(curl ${API_URL}/health)와 계정(${PEP_USER}/${PEP_PASS})을 확인하세요." >&2
   exit 1
 fi
 AUTH=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
