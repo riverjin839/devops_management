@@ -117,6 +117,16 @@ def _mem_b(v) -> int:
         return 0
 
 
+def _pods_n(v) -> int:
+    """allocatable pods 수량(예 "110") → int. 없거나 파싱 실패 시 0(미상=비제약 처리)."""
+    if not v:
+        return 0
+    try:
+        return int(Decimal(parse_quantity(v)))
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def _fmt_cpu(m: int) -> str:
     """millicores → 사람이 읽는 문자열 ('1.5' / '500m')."""
     if m <= 0:
@@ -270,6 +280,7 @@ class NodeAllocRow(BaseModel):
     roles: list[str] = []
     unschedulable: bool = False
     pod_count: int = 0
+    pods_allocatable: int = 0     # 노드 max-pods(allocatable["pods"], 보통 110). 0=미상
     cpu_alloc_m: int = 0
     mem_alloc_b: int = 0
     cpu_capacity_m: int = 0
@@ -445,6 +456,7 @@ def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> d
             "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
             "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
             "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
+            "pods_alloc": _pods_n(alloc.get("pods")),
         }
 
     per_node: dict[str, dict] = {}
@@ -560,6 +572,7 @@ def _node_row(name: str, nb: dict, ag: dict, u) -> NodeAllocRow:
     return NodeAllocRow(
         name=name, roles=nb["roles"], unschedulable=nb["unschedulable"],
         pod_count=ag.get("pods", 0),
+        pods_allocatable=nb.get("pods_alloc", 0),
         cpu_alloc_m=cpu_alloc, mem_alloc_b=mem_alloc,
         cpu_capacity_m=nb["cpu_cap"], mem_capacity_b=nb["mem_cap"],
         cpu_usage_m=(u[0] if u else None), mem_usage_b=(u[1] if u else None),
@@ -617,6 +630,7 @@ def allocation_node_refresh(cluster_id: UUID, node: str, db: Session = Depends(g
         "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
         "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
         "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
+        "pods_alloc": _pods_n(alloc.get("pods")),
     }
     fs = f"spec.nodeName={node},{_ACTIVE_FIELD_SELECTOR}"
     pods = _list_all(lambda **kw: core.list_pod_for_all_namespaces(**kw), field_selector=fs)

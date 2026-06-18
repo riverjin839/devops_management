@@ -2776,6 +2776,7 @@ export interface AllocNodeRow {
   roles: string[];
   unschedulable: boolean;
   podCount: number;
+  podsAllocatable: number;   // 노드 max-pods(allocatable pods, 보통 110). 0=미상
   cpuAllocM: number;
   memAllocB: number;
   cpuCapacityM: number;
