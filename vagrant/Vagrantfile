@@ -39,6 +39,10 @@ Vagrant.configure("2") do |config|
       subconfig.vm.provider "virtualbox" do |vb|
         vb.customize ["modifyvm", :id, "--groups", "/Cilium-Lab"]
         vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        # 게스트 DNS 를 호스트(Mac) 의 live resolver 로 프록시 — VirtualBox NAT 의
+        # 기본 DNS proxy 가 부팅 후 호스트 네트워크 변경(WiFi/VPN) 시 stale 되어
+        # 'lookup ... i/o timeout' 나는 것을 방지. (적용하려면 vagrant reload)
+        vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
         vb.name = "k8s-ctr"
         vb.cpus = 2
         vb.memory = 2048
@@ -63,6 +67,10 @@ Vagrant.configure("2") do |config|
       subconfig.vm.provider "virtualbox" do |vb|
         vb.customize ["modifyvm", :id, "--groups", "/Cilium-Lab"]
         vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        # 게스트 DNS 를 호스트(Mac) 의 live resolver 로 프록시 — VirtualBox NAT 의
+        # 기본 DNS proxy 가 부팅 후 호스트 네트워크 변경(WiFi/VPN) 시 stale 되어
+        # 'lookup ... i/o timeout' 나는 것을 방지. (적용하려면 vagrant reload)
+        vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
         vb.name = "k8s-w#{i}"
         vb.cpus = 2
         vb.memory = 1536

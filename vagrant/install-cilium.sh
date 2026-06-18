@@ -18,8 +18,22 @@ export KUBECONFIG="${KUBECONFIG:-/root/.kube/config}"
 CILIUM_VERSION="${CILIUM_VERSION:-1.17.5}"
 
 echo "[cilium] helm repo 추가/갱신"
-helm repo add cilium https://helm.cilium.io/
-helm repo update cilium
+# VM DNS 일시 오류(NAT DNS proxy stale 등)에 대비해 재시도.
+repo_ok=""
+for i in 1 2 3 4 5; do
+  if helm repo add cilium https://helm.cilium.io/ && helm repo update cilium; then
+    repo_ok="yes"; break
+  fi
+  echo "[cilium] helm repo 실패 (시도 ${i}/5) — VM DNS 확인 필요. 5초 후 재시도..."
+  sleep 5
+done
+if [ -z "${repo_ok}" ]; then
+  echo "[cilium] helm repo 추가 실패 — VM 에서 DNS 가 안 됩니다." >&2
+  echo "  점검:  resolvectl status ;  nslookup helm.cilium.io 8.8.8.8" >&2
+  echo "  빠른 우회:  sudo resolvectl dns eth0 8.8.8.8 1.1.1.1 && sudo resolvectl flush-caches" >&2
+  echo "  durable:  Mac 에서 'vagrant reload k8s-ctr' (Vagrantfile 의 natdnshostresolver1 적용)" >&2
+  exit 1
+fi
 
 if helm status cilium -n kube-system >/dev/null 2>&1; then
   echo "[cilium] 이미 설치됨 — skip (재설치하려면 helm uninstall cilium -n kube-system)"
