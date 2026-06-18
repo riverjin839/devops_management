@@ -15,7 +15,7 @@
 
 > ⚠️ **이 가이드의 명령은 실행 위치가 두 종류다. 헷갈리면 대부분의 오류가 여기서 난다.**
 > - `bash scripts/...`, `docker compose ...`, `cp .env.example ...` → **레포 루트**(`~/devops_management`)에서.
-> - `vagrant ...` (up/ssh/status/destroy) → **`cilium-lab/` 디렉토리**에서 (Vagrantfile 이 거기 있음).
+> - `vagrant ...` (up/ssh/status/destroy) → **`vagrant/` 디렉토리**에서 (Vagrantfile 이 거기 있음).
 
 ---
 
@@ -122,7 +122,11 @@ Notion **Cilium 스터디 1주차** 실습 환경을 그대로 사용한다. Vir
 control-plane 1대(`k8s-ctr`) + worker 2대(`k8s-w1`, `k8s-w2`) 를 띄운다. VM 은 **CNI 미설치**
 상태로 부팅되며(노드 `NotReady`), 이후 Cilium 을 Helm 으로 설치한다.
 
-배포 사양 (gasida `vagrant-lab` 기준):
+이 lab 은 **레포의 [`vagrant/`](../vagrant/README.md) 디렉터리에 고정**돼 있다
+(upstream: [gasida/vagrant-lab](https://github.com/gasida/vagrant-lab) `cilium-study/1w`). 인터넷에서
+매번 받지 않고 버전 고정된 in-repo 본을 쓴다.
+
+배포 사양 (`vagrant/Vagrantfile`):
 - Base box: `bento/ubuntu-24.04`
 - Kubernetes `1.33.2`, containerd `1.7.27`
 - `eth0` 10.0.2.15 (NAT, 모든 노드 동일 — 외부 인터넷), `eth1` 192.168.10.100/101/102 (host-only)
@@ -130,12 +134,11 @@ control-plane 1대(`k8s-ctr`) + worker 2대(`k8s-w1`, `k8s-w2`) 를 띄운다. V
 
 ### 2-1. VM 3대 배포
 
-> 📍 **`cilium-lab/` 디렉토리에서 실행.** (아래 `mkdir cilium-lab && cd cilium-lab` 로 진입)
-> Vagrantfile 이 없는 곳에서 `vagrant ...` 를 치면 `A Vagrant environment ... is required` 오류가 난다.
+> 📍 **`vagrant/` 디렉토리에서 실행.** (`cd vagrant`) Vagrantfile 이 없는 곳에서 `vagrant ...` 를
+> 치면 `A Vagrant environment ... is required` 오류가 난다.
 
 ```bash
-mkdir -p cilium-lab && cd cilium-lab
-curl -O https://raw.githubusercontent.com/gasida/vagrant-lab/refs/heads/main/cilium-study/1w/Vagrantfile
+cd vagrant
 vagrant up                # VM 3대 부팅 + init_cfg.sh + kubeadm init/join 자동 실행
 ```
 
@@ -149,15 +152,21 @@ kubectl get nodes -owide
 
 > ⚠️ VM 3대 프로비저닝(패키지 설치 + kubeadm init/join)은 첫 실행 시 수 분 걸린다.
 
-### 2-2. Cilium 설치 (Helm) — `k8s-ctr` 안에서
+### 2-2. Cilium 설치 (Helm)
 
-`init_cfg.sh` 가 helm 을 미리 설치해 둔다. control-plane 쉘에서 그대로 실행한다.
+CNI 는 부팅 시 설치하지 않으므로 따로 설치한다. `vagrant/install-cilium.sh` 가 named provisioner
+(`cilium`) 로 등록돼 있어 control-plane 에서 한 줄로 실행한다.
 
 ```bash
-# (k8s-ctr 안)
-helm repo add cilium https://helm.cilium.io/
+# (vagrant/ 디렉토리, Mac 쉘에서)
+vagrant provision k8s-ctr --provision-with cilium
+#   → 끝나면 cilium status --wait 통과, 3노드 모두 Ready
+```
 
-# kube-proxy 대체 + native 라우팅 + cluster-pool IPAM(172.20.0.0/16)
+이 provisioner 가 `k8s-ctr` 안에서 실행하는 것(= Cilium 스터디 1주차 설정, kube-proxy 대체 +
+native 라우팅 + cluster-pool IPAM `172.20.0.0/16`):
+
+```bash
 helm install cilium cilium/cilium --version 1.17.5 --namespace kube-system \
   --set k8sServiceHost=192.168.10.100 --set k8sServicePort=6443 \
   --set kubeProxyReplacement=true \
@@ -170,22 +179,14 @@ helm install cilium cilium/cilium --version 1.17.5 --namespace kube-system \
   --set installNoConntrackIptablesRules=true \
   --set bpf.masquerade=true \
   --set ipv6.enabled=false
-
-# Cilium CLI 설치 + 상태 확인
-CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-CLI_ARCH=amd64; [ "$(uname -m)" = "aarch64" ] && CLI_ARCH=arm64
-curl -L --fail --remote-name-all \
-  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz
-tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin && rm cilium-linux-${CLI_ARCH}.tar.gz
-
-cilium status --wait          # KubeProxyReplacement: True / Native 라우팅 확인
-kubectl get nodes             # 이제 3노드 모두 Ready
 ```
+
+> 손으로 학습하고 싶으면 `vagrant ssh k8s-ctr` 로 들어가 위 명령을 직접 실행해도 된다
+> (전체 내용은 [`vagrant/install-cilium.sh`](../vagrant/install-cilium.sh)).
 
 > **(선택) Hubble UI**: PEP 의 Hubble 딥 트러블슈팅 기능을 테스트하려면 Hubble 을 켠다.
 > ```bash
-> cilium hubble enable --ui
-> cilium status --wait
+> vagrant ssh k8s-ctr -c 'sudo cilium hubble enable --ui'
 > ```
 
 ### 2-3. kubeconfig 를 Mac 으로 가져오기
@@ -193,7 +194,7 @@ kubectl get nodes             # 이제 3노드 모두 Ready
 control-plane 의 `admin.conf` 는 이미 `server: https://192.168.10.100:6443` 으로 돼 있어 그대로 쓴다.
 
 ```bash
-# (cilium-lab/ 디렉터리, Mac 쉘에서)
+# (vagrant/ 디렉터리, Mac 쉘에서)
 vagrant ssh k8s-ctr -c 'sudo cat /etc/kubernetes/admin.conf' > kubeadm-kubeconfig.yaml
 cd ..
 ```
@@ -202,7 +203,7 @@ cd ..
 > **`--kubeconfig` 로 이 파일을 가리킨다** — 그냥 `kubectl get nodes` 를 치면 Mac 기본 kubeconfig 를
 > 보고 `The connection to the server localhost:8080 was refused` 가 난다.
 > ```bash
-> kubectl --kubeconfig cilium-lab/kubeadm-kubeconfig.yaml get nodes
+> kubectl --kubeconfig vagrant/kubeadm-kubeconfig.yaml get nodes
 > ```
 
 ---
@@ -255,7 +256,7 @@ bash scripts/register-local-cluster.sh --name test-a --kind test-a
 # 클러스터 B (Vagrant kubeadm) — control-plane host-only 주소로 등록
 bash scripts/register-local-cluster.sh \
   --name vagrant-kubeadm \
-  --kubeconfig cilium-lab/kubeadm-kubeconfig.yaml \
+  --kubeconfig vagrant/kubeadm-kubeconfig.yaml \
   --server https://192.168.10.100:6443
 ```
 
@@ -374,7 +375,7 @@ docker compose down              # 데이터 유지
 # docker compose down -v         # 볼륨(DB)까지 삭제
 
 # 클러스터 B (Vagrant kubeadm) 삭제
-cd cilium-lab && vagrant destroy -f && cd ..
+cd vagrant && vagrant destroy -f && cd ..
 
 # 클러스터 A (kind) 삭제  ※ docker compose down 이후에
 kind delete cluster --name test-a
@@ -391,15 +392,15 @@ kind delete cluster --name test-a
 |---|---|---|
 | `docker-compose: command not found` | v1(하이픈) 미설치 | **`docker compose`** (띄어쓰기, v2) 를 쓴다. Docker Desktop 에 포함됨 |
 | `cp: .env.example: No such file or directory` | 레포 루트가 아닌 곳에서 실행 | `cd ~/devops_management` 후 재실행 (`pwd` 로 확인) |
-| `vagrant ...` → `A Vagrant environment ... is required` | `cilium-lab/` 밖에서 실행 | `cd cilium-lab` 후 실행 (Vagrantfile 이 거기 있음) |
-| `kubectl ...` → `localhost:8080 ... connection refused` | kubeconfig 미지정 (Mac kubectl 기본값) | `kubectl --kubeconfig cilium-lab/kubeadm-kubeconfig.yaml get nodes`. VM 안에선 `vagrant ssh k8s-ctr -c 'sudo kubectl ...'` |
+| `vagrant ...` → `A Vagrant environment ... is required` | `vagrant/` 밖에서 실행 | `cd vagrant` 후 실행 (Vagrantfile 이 거기 있음) |
+| `kubectl ...` → `localhost:8080 ... connection refused` | kubeconfig 미지정 (Mac kubectl 기본값) | `kubectl --kubeconfig vagrant/kubeadm-kubeconfig.yaml get nodes`. VM 안에선 `vagrant ssh k8s-ctr -c 'sudo kubectl ...'` |
 | `docker compose up` → `network kind not found` | kind 클러스터(A)를 안 만듦 | 1단계 먼저 실행. 또는 B 만 테스트면 `docker network create kind` |
 | register 스크립트가 `[2/4] 로그인` 직후 종료 / "연결할 수 없습니다" | PEP 백엔드 미기동 | 3단계 완료 후 `curl localhost:8000/health` 확인 → 재실행 |
 | register 스크립트 "로그인 실패 — 계정 확인" | 잘못된 계정 | 기본 `admin/admin`, 또는 `--user/--pass` / `PEP_USER`·`PEP_PASS` |
 | 클러스터 A 가 `pending` | backend 가 kind 네트워크 미연결 | `docker network inspect kind` 에 `k8s_monitor_backend` 가 있는지 확인. 없으면 `docker compose up -d` 재실행 |
 | `vagrant up` → provider 오류 | VirtualBox 미설치 / 구버전 | VirtualBox **7.1+**(Apple Silicon 지원) 설치 확인 (`VBoxManage --version`) |
 | 클러스터 B 노드가 계속 `NotReady` | CNI(Cilium) 미설치/미완료 | `k8s-ctr` 안에서 2-2 의 `helm install cilium ...` 실행 후 `cilium status --wait` |
-| 클러스터 B 가 `pending` (connection refused) | 호스트→VM 도달 불가 | Mac 에서 `curl -k https://192.168.10.100:6443/livez` 확인. 안 되면 `cd cilium-lab && vagrant reload` 또는 host-only 어댑터(`192.168.10.1`) 확인 |
+| 클러스터 B 가 `pending` (connection refused) | 호스트→VM 도달 불가 | Mac 에서 `curl -k https://192.168.10.100:6443/livez` 확인. 안 되면 `cd vagrant && vagrant reload` 또는 host-only 어댑터(`192.168.10.1`) 확인 |
 | 클러스터 B 가 `certificate verify failed` | server 주소가 인증서 SAN 과 불일치 | `--server https://192.168.10.100:6443` 로 등록했는지 확인 (advertise-address 가 SAN 에 포함됨). 다른 주소로 접속하려면 kubeadm SAN 추가 필요 |
 | 클러스터 B 가 `pending` 인데 Mac→VM 은 정상 | backend 컨테이너가 host-only 망 미도달 | Docker Desktop 재시작 후 재시도. 그래도 안 되면 Docker Desktop 네트워킹 설정 확인, 또는 PEP 를 host 네트워크 모드로 임시 기동 |
 | kind 노드가 안 뜸 | Docker 리소스 부족 | Docker Desktop 메모리 8GB+ 로 상향 |
@@ -413,8 +414,8 @@ kind delete cluster --name test-a
 ```bash
 docker network inspect kind | grep -A3 Containers   # backend 가 kind 네트워크에 있나
 docker compose logs -f backend                       # backend 로그 (레포 루트)
-cd cilium-lab && vagrant ssh k8s-ctr -c 'sudo kubectl get nodes -owide'   # 클러스터 B 상태
-cd cilium-lab && vagrant ssh k8s-ctr -c 'sudo cilium status'             # 클러스터 B Cilium 상태
+cd vagrant && vagrant ssh k8s-ctr -c 'sudo kubectl get nodes -owide'   # 클러스터 B 상태
+cd vagrant && vagrant ssh k8s-ctr -c 'sudo cilium status'             # 클러스터 B Cilium 상태
 ```
 
 ---
@@ -422,16 +423,15 @@ cd cilium-lab && vagrant ssh k8s-ctr -c 'sudo cilium status'             # 클�
 ## 빠른 참조 (전체 흐름 한 번에)
 
 ```bash
-cd ~/devops_management            # 레포 루트 (vagrant 명령만 cilium-lab/ 에서)
+cd ~/devops_management            # 레포 루트 (vagrant 명령만 vagrant/ 에서)
 
 # 1) 클러스터 A (kind + Cilium) — docker 'kind' 네트워크 생성 = compose 전제조건
 bash scripts/local-cilium-kind.sh test-a
 
-# 2) 클러스터 B (Vagrant VirtualBox kubeadm 3노드)
-mkdir -p cilium-lab && cd cilium-lab
-curl -O https://raw.githubusercontent.com/gasida/vagrant-lab/refs/heads/main/cilium-study/1w/Vagrantfile
-vagrant up
-#   → k8s-ctr 안에서 2-2 의 'helm install cilium ...' 실행 (Cilium 설치)
+# 2) 클러스터 B (Vagrant VirtualBox kubeadm 3노드 — in-repo vagrant/)
+cd vagrant
+vagrant up                                          # VM 3대 (CNI 미설치 → NotReady)
+vagrant provision k8s-ctr --provision-with cilium   # Cilium 설치 → 3노드 Ready
 vagrant ssh k8s-ctr -c 'sudo cat /etc/kubernetes/admin.conf' > kubeadm-kubeconfig.yaml
 cd ..
 
@@ -443,7 +443,7 @@ curl http://localhost:8000/health
 # 4) 등록
 bash scripts/register-local-cluster.sh --name test-a --kind test-a
 bash scripts/register-local-cluster.sh --name vagrant-kubeadm \
-  --kubeconfig cilium-lab/kubeadm-kubeconfig.yaml --server https://192.168.10.100:6443
+  --kubeconfig vagrant/kubeadm-kubeconfig.yaml --server https://192.168.10.100:6443
 
 # 5) 샘플 데이터 주입 (선택) — 협업/지식/인프라 페이지 둘러보기용
 bash scripts/seed-test-data.sh
