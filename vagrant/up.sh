@@ -48,20 +48,37 @@ ask() { # ask "question" [default y/n] -> 0=yes
   [[ "$ans" =~ ^[Yy]$ ]]
 }
 
-# Vagrant 가 추적하지 않는데 VirtualBox 에만 남은 orphan VM 정리.
-# Vagrantfile 이 vb.name 을 고정(k8s-ctr 등)하므로, 잔존 VM 이 있으면
-# vagrant up 의 clone 이 "machine with the name '...' already exists" 로 실패한다.
+# Vagrant 가 추적하지 않는데 VirtualBox 에만 남은 orphan VM/폴더 정리.
+# Vagrantfile 이 vb.name 을 고정(k8s-ctr 등)하므로, 잔존물이 있으면 vagrant up 의
+# clone 이 "machine with the name '...' already exists" 로 실패한다.
+# 3가지 케이스를 모두 처리(이름만으로 부족했던 이유): ①정상등록 ②inaccessible 등록
+# ③중단된 clone 이 남긴 디스크 폴더. 대상은 k8s-ctr/w1/w2 로 한정.
 purge_vbox_orphans() {
   command -v VBoxManage >/dev/null 2>&1 || return 0
-  local vm found=false
+  local vm uuid base vbxml did=false
+  base="$(VBoxManage list systemproperties 2>/dev/null | sed -n 's/^Default machine folder:[[:space:]]*//p')"
+  vbxml="$HOME/Library/VirtualBox/VirtualBox.xml"
   for vm in k8s-ctr k8s-w1 k8s-w2; do
+    local removed=false
+    # ① 정상 등록 (이름으로 보임)
     if VBoxManage list vms 2>/dev/null | grep -q "^\"$vm\" "; then
-      $found || warn "VirtualBox 에 잔존(orphan) VM 정리 중..."
-      found=true
       VBoxManage controlvm "$vm" poweroff >/dev/null 2>&1 || true
       VBoxManage unregistervm "$vm" --delete >/dev/null 2>&1 || true
-      echo "      - removed: $vm"
+      removed=true
     fi
+    # ② 등록됐지만 inaccessible → VirtualBox.xml 에서 .vbox 경로로 uuid 찾아 제거
+    if [ -f "$vbxml" ]; then
+      uuid="$(grep -oE "\{[0-9a-fA-F-]+\}\"[[:space:]]+src=\"[^\"]*/${vm}/${vm}\.vbox\"" "$vbxml" 2>/dev/null | grep -oE "\{[0-9a-fA-F-]+\}" | head -1 || true)"
+      if [ -n "${uuid:-}" ]; then
+        VBoxManage unregistervm "$uuid" --delete >/dev/null 2>&1 || true
+        removed=true
+      fi
+    fi
+    # ③ 디스크에 남은 VM 폴더(중단된 clone)
+    for d in ${base:+"$base/$vm"} "$HOME/VirtualBox VMs/$vm"; do
+      if [ -e "$d" ]; then rm -rf "$d"; removed=true; fi
+    done
+    if $removed; then $did || warn "VirtualBox 잔존 VM/폴더 정리:"; did=true; echo "      - $vm"; fi
   done
 }
 
@@ -92,8 +109,16 @@ case "$VBOXV" in 7.*) ok "VirtualBox $VBOXV" ;; *) warn "VirtualBox 7.1+ 권장 
 ensure_cask vagrant vagrant "Vagrant"
 ensure_formula kubectl kubectl "kubectl(호스트 검증용)"
 
-[ "${VAGRANT_DEFAULT_PROVIDER:-}" = "qemu" ] && \
-  warn "VAGRANT_DEFAULT_PROVIDER=qemu 설정됨 → 이 스크립트는 --provider=virtualbox 로 강제합니다."
+# 이 프로젝트는 VirtualBox 전용. qemu 흔적이 있으면 정리 안내/제거.
+if [ "${VAGRANT_DEFAULT_PROVIDER:-}" = "qemu" ]; then
+  warn "쉘에 VAGRANT_DEFAULT_PROVIDER=qemu 가 있습니다(이 프로젝트는 virtualbox 로 강제됨)."
+  warn "  완전히 끄려면 ~/.zshrc 등에서 'export VAGRANT_DEFAULT_PROVIDER=qemu' 줄을 삭제하세요."
+fi
+if vagrant plugin list 2>/dev/null | grep -q vagrant-qemu; then
+  if ask "  안 쓰는 vagrant-qemu 플러그인을 제거할까요?" n; then
+    vagrant plugin uninstall vagrant-qemu >/dev/null 2>&1 && ok "vagrant-qemu 제거됨" || warn "vagrant-qemu 제거 실패(무시 가능)"
+  fi
+fi
 
 # ---- 3) 기존 VM 확인 ----
 created="$(vagrant status --machine-readable 2>/dev/null | awk -F, '$3=="state"{print $2"="$4}' | grep -v '=not_created$' || true)"

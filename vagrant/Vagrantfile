@@ -22,6 +22,10 @@
 # Mac/backend 에서 192.168.10.100:6443 으로 직접 도달하므로 host.docker.internal
 # 포워딩이나 tls-san 우회가 필요 없다.
 
+# 이 프로젝트는 VirtualBox 전용 — qemu 등 다른 provider 가 기본으로 잡히지 않도록 고정.
+# (CLI 의 --provider 나 사용자가 명시한 VAGRANT_DEFAULT_PROVIDER 가 있으면 그게 우선)
+ENV['VAGRANT_DEFAULT_PROVIDER'] ||= 'virtualbox'
+
 # Variables
 K8SV = '1.33.2-1.1'       # Kubernetes Version : apt list -a kubelet
 CONTAINERDV = '1.7.27-1'  # Containerd Version : apt list -a containerd.io
