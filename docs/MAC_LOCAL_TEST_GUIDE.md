@@ -404,6 +404,7 @@ kind delete cluster --name test-a
 | register 스크립트 "로그인 실패 — 계정 확인" | 잘못된 계정 | 기본 `admin/admin`, 또는 `--user/--pass` / `PEP_USER`·`PEP_PASS` |
 | 클러스터 A 가 `pending` | backend 가 kind 네트워크 미연결 | `docker network inspect kind` 에 `k8s_monitor_backend` 가 있는지 확인. 없으면 `docker compose up -d` 재실행 |
 | `vagrant up` → provider 오류 | VirtualBox 미설치 / 구버전 | VirtualBox **7.1+**(Apple Silicon 지원) 설치 확인 (`VBoxManage --version`) |
+| `vagrant up` → `machine with the name 'k8s-ctr' already exists` | Vagrant↔VirtualBox 상태 desync(orphan VM) | `bash up.sh` 가 자동 정리. 수동: `VBoxManage unregistervm k8s-ctr --delete`(w1/w2 도) 후 재시도 |
 | Cilium 설치 시 `lookup helm.cilium.io ... i/o timeout` | VM DNS(VirtualBox NAT proxy)가 stale | 빠른 우회: `vagrant ssh k8s-ctr -c 'sudo resolvectl dns eth0 8.8.8.8 1.1.1.1 && sudo resolvectl flush-caches'` 후 재시도. durable: `git pull` 후 `vagrant reload`(Vagrantfile `natdnshostresolver1` 적용) |
 | 클러스터 B 노드가 계속 `NotReady` | CNI(Cilium) 미설치/미완료 | `k8s-ctr` 안에서 2-2 의 `helm install cilium ...` 실행 후 `cilium status --wait` |
 | 클러스터 B 가 `pending` (connection refused) | 호스트→VM 도달 불가 | Mac 에서 `curl -k https://192.168.10.100:6443/livez` 확인. 안 되면 `cd vagrant && vagrant reload` 또는 host-only 어댑터(`192.168.10.1`) 확인 |

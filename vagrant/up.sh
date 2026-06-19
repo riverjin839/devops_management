@@ -48,6 +48,23 @@ ask() { # ask "question" [default y/n] -> 0=yes
   [[ "$ans" =~ ^[Yy]$ ]]
 }
 
+# Vagrant 가 추적하지 않는데 VirtualBox 에만 남은 orphan VM 정리.
+# Vagrantfile 이 vb.name 을 고정(k8s-ctr 등)하므로, 잔존 VM 이 있으면
+# vagrant up 의 clone 이 "machine with the name '...' already exists" 로 실패한다.
+purge_vbox_orphans() {
+  command -v VBoxManage >/dev/null 2>&1 || return 0
+  local vm found=false
+  for vm in k8s-ctr k8s-w1 k8s-w2; do
+    if VBoxManage list vms 2>/dev/null | grep -q "^\"$vm\" "; then
+      $found || warn "VirtualBox 에 잔존(orphan) VM 정리 중..."
+      found=true
+      VBoxManage controlvm "$vm" poweroff >/dev/null 2>&1 || true
+      VBoxManage unregistervm "$vm" --delete >/dev/null 2>&1 || true
+      echo "      - removed: $vm"
+    fi
+  done
+}
+
 # ---- 0) OS check ----
 [ "$(uname -s)" = "Darwin" ] || { err "macOS 전용입니다 (현재: $(uname -s))."; exit 1; }
 log "macOS / $(uname -m) 감지"
@@ -100,6 +117,9 @@ else
 fi
 
 # ---- 4) vagrant up ----
+# keep 모드(기존 유지)가 아니면, 부팅 전에 VirtualBox 잔존 VM 을 정리해
+# 'machine with the name ... already exists' 클론 충돌을 예방한다.
+[ "$MODE" = keep ] || purge_vbox_orphans
 log "VM 부팅 (vagrant up --provider=virtualbox) — 첫 실행은 수 분 소요..."
 vagrant up --provider=virtualbox
 ok "VM 부팅 완료 (CNI 미설치라 노드는 아직 NotReady 가 정상)"
