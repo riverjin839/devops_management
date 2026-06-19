@@ -132,6 +132,10 @@ control-plane 1대(`k8s-ctr`) + worker 2대(`k8s-w1`, `k8s-w2`) 를 띄운다. V
 - `eth0` 10.0.2.15 (NAT, 모든 노드 동일 — 외부 인터넷), `eth1` 192.168.10.100/101/102 (host-only)
 - `kubeadm init --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/16 --apiserver-advertise-address=192.168.10.100`
 
+> **원샷(권장)**: 아래 2-1~2-3 을 한 번에 하려면 `cd vagrant && bash up.sh`. 도구 확인·설치,
+> 기존 VM 인터랙티브 처리(삭제/유지), `vagrant up`, Cilium 설치, DNS/이미지풀 자동 보정,
+> kubeconfig 추출까지 처리한다(`--recreate` / `--yes` / `--register` 옵션). 아래는 수동 단계 설명.
+
 ### 2-1. VM 3대 배포
 
 > 📍 **`vagrant/` 디렉토리에서 실행.** (`cd vagrant`) Vagrantfile 이 없는 곳에서 `vagrant ...` 를

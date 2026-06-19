@@ -25,13 +25,33 @@ cluster-pool IPAM` 로 Helm 설치한다 — PEP 의 Cilium/Hubble 딥 트러블
 
 > Windows 사용자도 동일하게 VirtualBox + Vagrant 로 이 lab 을 쓴다(Notion 1주차 "Windows 사용자" 섹션 참고).
 
-## 빠른 사용
+## 원샷 설치 (권장)
+
+`up.sh` 가 사전 도구 확인·설치 → 기존 VM 확인(인터랙티브) → `vagrant up` → Cilium 설치
+→ DNS/이미지풀 자동 보정 → kubeconfig 추출까지 한 번에 처리한다.
+
+```bash
+cd vagrant
+bash up.sh                 # 인터랙티브 원샷
+bash up.sh --recreate      # 기존 VM 삭제 후 새로
+bash up.sh --yes --register  # 비대화 + 끝나면 PEP 등록까지
+```
+
+| 옵션 | 동작 |
+|---|---|
+| (없음) | 기존 VM 있으면 `삭제재생성[r]/유지[k]/중단[a]` 를 물어봄 |
+| `--recreate` | 기존 VM 강제 삭제 후 재생성 |
+| `--keep` | 기존 VM 유지하고 Cilium 만 재적용 |
+| `--yes` | 비대화(도구설치 자동 승인, 기존은 유지) |
+| `--register` | 완료 후 PEP(`localhost:8000`)에 등록 |
+
+## 빠른 사용 (수동 단계)
 
 ```bash
 # 사전: brew install --cask virtualbox vagrant   (VirtualBox 7.1+ — Apple Silicon arm64 지원)
 
 # 1) VM 3대 부팅 (init_cfg.sh + kubeadm init/join 자동 실행, CNI 미설치라 노드는 NotReady)
-vagrant up
+vagrant up --provider=virtualbox
 
 # 2) Cilium 설치 (control-plane 에서 Helm) — named provisioner
 vagrant provision k8s-ctr --provision-with cilium
@@ -52,6 +72,7 @@ vagrant destroy -f
 
 | 파일 | 설명 |
 |---|---|
+| `up.sh` | **원샷 설치** 스크립트(도구확인·기존VM 처리·up·Cilium·DNS보정·kubeconfig). `bash up.sh` |
 | `Vagrantfile` | VirtualBox 3노드(k8s-ctr/w1/w2). bento/ubuntu-24.04, host-only 192.168.10.0/24 |
 | `init_cfg.sh` | 모든 노드 공통: swap off, k8s repo, kubelet/kubeadm/kubectl + containerd + helm 설치 |
 | `k8s-ctr.sh` | control-plane `kubeadm init`(pod 10.244/16, svc 10.96/16, advertise 192.168.10.100) + 편의설정 |
