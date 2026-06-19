@@ -22,6 +22,10 @@
 # Mac/backend 에서 192.168.10.100:6443 으로 직접 도달하므로 host.docker.internal
 # 포워딩이나 tls-san 우회가 필요 없다.
 
+# 이 프로젝트는 VirtualBox 전용 — qemu 등 다른 provider 가 기본으로 잡히지 않도록 고정.
+# (CLI 의 --provider 나 사용자가 명시한 VAGRANT_DEFAULT_PROVIDER 가 있으면 그게 우선)
+ENV['VAGRANT_DEFAULT_PROVIDER'] ||= 'virtualbox'
+
 # Variables
 K8SV = '1.33.2-1.1'       # Kubernetes Version : apt list -a kubelet
 CONTAINERDV = '1.7.27-1'  # Containerd Version : apt list -a containerd.io
@@ -39,6 +43,10 @@ Vagrant.configure("2") do |config|
       subconfig.vm.provider "virtualbox" do |vb|
         vb.customize ["modifyvm", :id, "--groups", "/Cilium-Lab"]
         vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        # 게스트 DNS 를 호스트(Mac) 의 live resolver 로 프록시 — VirtualBox NAT 의
+        # 기본 DNS proxy 가 부팅 후 호스트 네트워크 변경(WiFi/VPN) 시 stale 되어
+        # 'lookup ... i/o timeout' 나는 것을 방지. (적용하려면 vagrant reload)
+        vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
         vb.name = "k8s-ctr"
         vb.cpus = 2
         vb.memory = 2048
@@ -63,6 +71,10 @@ Vagrant.configure("2") do |config|
       subconfig.vm.provider "virtualbox" do |vb|
         vb.customize ["modifyvm", :id, "--groups", "/Cilium-Lab"]
         vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        # 게스트 DNS 를 호스트(Mac) 의 live resolver 로 프록시 — VirtualBox NAT 의
+        # 기본 DNS proxy 가 부팅 후 호스트 네트워크 변경(WiFi/VPN) 시 stale 되어
+        # 'lookup ... i/o timeout' 나는 것을 방지. (적용하려면 vagrant reload)
+        vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
         vb.name = "k8s-w#{i}"
         vb.cpus = 2
         vb.memory = 1536
