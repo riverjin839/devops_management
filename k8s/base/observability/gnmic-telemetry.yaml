@@ -1,0 +1,88 @@
+---
+# gNMIc — gNMI/OpenConfig(YANG) 스트리밍 텔레메트리 수집기.
+# 장비의 gNMI gRPC(통상 57400)로 dial-out/dial-in 구독 → prometheus output(:9804) 노출.
+# SNMP 폴링 대비 push 기반 저지연. 인증서/계정은 환경에 맞게 Secret 으로 주입.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gnmic-config
+  namespace: network-observability
+  labels: { app: gnmic, component: observability }
+data:
+  gnmic.yaml: |
+    # 장비 gNMI 타깃 — 환경에 맞게 채움(57400 은 IOS-XR/EOS/SR OS 등 일반 기본값, 장비 설정 의존).
+    targets:
+      "10.0.0.1:57400":
+        timeout: 10s
+        skip-verify: true            # 사설 CA 면 tls-ca 로 교체 권장
+    username: ${GNMIC_USERNAME}
+    password: ${GNMIC_PASSWORD}
+    encoding: json_ietf
+
+    subscriptions:
+      if-counters:
+        paths:
+          - /interfaces/interface/state/counters
+          - /interfaces/interface/state/oper-status
+        stream-mode: sample
+        sample-interval: 30s
+      bgp-neighbors:                 # BGP 세션 상태(텔레메트리) — BMP 와 상호 보완
+        paths:
+          - /network-instances/network-instance/protocols/protocol/bgp/neighbors/neighbor/state
+        stream-mode: sample
+        sample-interval: 30s
+
+    outputs:
+      prom:
+        type: prometheus
+        listen: :9804                # gnmic prometheus output (명시 고정)
+        path: /metrics
+        strings-as-labels: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnmic
+  namespace: network-observability
+  labels: { app: gnmic, component: observability }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: gnmic }
+  template:
+    metadata:
+      labels: { app: gnmic, component: observability }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9804"
+    spec:
+      containers:
+        - name: gnmic
+          image: ghcr.io/openconfig/gnmic:0.38.2   # 업스트림 openconfig/gnmic(핀). 미러 교체 가능.
+          args: ["--config", "/app/gnmic.yaml", "subscribe"]
+          env:
+            - name: GNMIC_USERNAME
+              valueFrom: { secretKeyRef: { name: gnmic-secret, key: username, optional: true } }
+            - name: GNMIC_PASSWORD
+              valueFrom: { secretKeyRef: { name: gnmic-secret, key: password, optional: true } }
+          ports:
+            - { name: metrics, containerPort: 9804 }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: "1", memory: 1Gi }
+          volumeMounts:
+            - { name: config, mountPath: /app }
+      volumes:
+        - name: config
+          configMap: { name: gnmic-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gnmic
+  namespace: network-observability
+  labels: { app: gnmic, component: observability }
+spec:
+  selector: { app: gnmic }
+  ports:
+    - { name: metrics, port: 9804, targetPort: 9804 }

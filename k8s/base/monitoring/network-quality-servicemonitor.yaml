@@ -1,0 +1,78 @@
+---
+# ⚠ 이 파일의 리소스는 **prometheus-operator(kube-prometheus-stack)** 가 설치된 환경 전용.
+#    (monitoring.coreos.com CRD 필요) 운영 데이터레이크가 operator 를 쓰는 경우 적용.
+#    이 레포의 plain Prometheus 를 쓴다면 prometheus-configmap.yaml 의 scrape job 으로 대체된다.
+#
+# Probe — blackbox icmp 모듈로 네트워크 장비/엔드포인트의 지연·손실 측정.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: network-quality-icmp
+  labels: { component: monitoring, role: network-quality }
+spec:
+  interval: 30s
+  module: icmp
+  prober:
+    url: blackbox-exporter:9115
+  targets:
+    staticConfig:
+      # 측정 대상(게이트웨이/코어 스위치/원격 DC 등) — 환경에 맞게.
+      static:
+        - 10.0.0.1
+        - 10.0.0.2
+      labels:
+        tier: network
+---
+# gNMI/SNMP 수집기(network-observability) 메트릭을 operator 가 스크랩.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: network-observability-collectors
+  labels: { component: monitoring }
+spec:
+  namespaceSelector:
+    matchNames: ["network-observability"]
+  selector:
+    matchLabels: { component: observability }
+  endpoints:
+    - { port: metrics, interval: 30s }
+---
+# 지연/손실/지터 파생 + 임계 알림. (plain Prometheus 는 동일 식을 수동 rules 로 사용)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: network-quality-rules
+  labels: { component: monitoring, role: network-quality }
+spec:
+  groups:
+    - name: network-quality.rules
+      rules:
+        # 지연(ms) — 최근 5분 평균 RTT
+        - record: net:probe_latency_ms:avg5m
+          expr: avg_over_time(probe_icmp_duration_seconds{phase="rtt"}[5m]) * 1000
+        # 지터(ms) — RTT 표준편차(체감 품질 핵심 지표)
+        - record: net:probe_jitter_ms:stddev5m
+          expr: stddev_over_time(probe_icmp_duration_seconds{phase="rtt"}[5m]) * 1000
+        # 손실율(%) — 1 - 성공률
+        - record: net:probe_loss_ratio:5m
+          expr: (1 - avg_over_time(probe_success[5m])) * 100
+    - name: network-quality.alerts
+      rules:
+        - alert: NetworkProbeDown
+          expr: probe_success == 0
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "프로브 실패(100% 손실) — {{ $labels.instance }}"
+        - alert: NetworkHighLoss
+          expr: net:probe_loss_ratio:5m > 5
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "패킷 손실 {{ printf \"%.1f\" $value }}% — {{ $labels.instance }}"
+        - alert: NetworkHighJitter
+          expr: net:probe_jitter_ms:stddev5m > 30
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "지터 {{ printf \"%.1f\" $value }}ms — {{ $labels.instance }}"

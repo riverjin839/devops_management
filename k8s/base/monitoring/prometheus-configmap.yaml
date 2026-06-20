@@ -73,3 +73,29 @@ data:
         kubernetes_sd_configs:
           - role: node
         metrics_path: /metrics/resource
+
+      # ── 네트워크 옵저버빌리티 수집기 (k8s/base/observability) ──────────────
+      # Telegraf SNMP 수집기 → ifHCIn/OutOctets, ifIn/OutErrors, ifOperStatus
+      - job_name: 'telegraf-snmp'
+        static_configs:
+          - targets: ['telegraf-snmp.network-observability.svc:9273']
+      # gNMIc gNMI/OpenConfig 텔레메트리
+      - job_name: 'gnmic-telemetry'
+        static_configs:
+          - targets: ['gnmic.network-observability.svc:9804']
+
+      # ── 체감 품질(blackbox ICMP) — 멀티타깃 /probe 패턴 ────────────────────
+      # 측정 대상 IP 는 targets 에 채움. 지연=probe_icmp_duration_seconds, 손실=1-probe_success.
+      - job_name: 'blackbox-icmp'
+        metrics_path: /probe
+        params:
+          module: [icmp]
+        static_configs:
+          - targets: ['10.0.0.1', '10.0.0.2']   # 게이트웨이/코어 스위치 등으로 교체
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
