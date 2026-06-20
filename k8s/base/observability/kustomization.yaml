@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# 네트워크 옵저버빌리티 수집 스택 (SNMP / gNMI 텔레메트리 / BMP)
+# - telegraf-snmp     : SNMP 폴링 → Prometheus(:9273)
+# - gnmic-telemetry   : gNMI/OpenConfig 스트리밍 → Prometheus(:9804)
+# - openbmp-collector : BMP(TCP 5000) → Kafka(9092) 라우팅 모니터링 파이프라인
+resources:
+  - namespace.yaml
+  - telegraf-snmp.yaml
+  - gnmic-telemetry.yaml
+  - openbmp-collector.yaml
