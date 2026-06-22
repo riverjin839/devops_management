@@ -348,6 +348,8 @@ export interface Sprint {
   id: string;
   name: string;
   goal?: string;
+  jiraNo?: string;
+  confluenceLink?: string;
   startDate: string;
   endDate: string;
   status: SprintStatus;
@@ -363,6 +365,8 @@ export interface Sprint {
 export interface SprintCreate {
   name: string;
   goal?: string;
+  jiraNo?: string;
+  confluenceLink?: string;
   startDate: string;
   endDate: string;
   status?: SprintStatus;
