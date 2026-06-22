@@ -71,6 +71,8 @@ from app.routers import (
     cluster_items_router,
     coroot_router,
     terminal_appearance_router,
+    k8s_events_router,
+    k8s_events_ingest_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -842,6 +844,12 @@ def _run_migrations():
         _safe_add_column("cluster_items", "result_status", "VARCHAR(20)")
         _safe_create_index("ix_cluster_items_cluster", "cluster_items", "(cluster_id)")
 
+    # k8s_events: kubewatch 웹훅 수신 이벤트 — 테이블은 create_all, 인덱스 보강.
+    if "k8s_events" in inspector.get_table_names():
+        _safe_create_index("ix_k8s_events_received_at", "k8s_events", "(received_at DESC)")
+        _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
+        _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
@@ -1439,6 +1447,9 @@ app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(coroot_router, prefix="/api/v1", dependencies=_auth)
 # terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).
 app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_auth)
+# k8s_events — kubewatch 웹훅 수신(토큰 인증) + 이벤트 조회(JWT)
+app.include_router(k8s_events_ingest_router, prefix="/api/v1")
+app.include_router(k8s_events_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

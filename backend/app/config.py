@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # Prometheus / Grafana
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     grafana_url: str = "http://grafana.monitoring.svc:3000"
+    grafana_renderer_url: str = "http://grafana-renderer:8081"
+
+    # kubewatch 웹훅 인증 토큰 (미설정 시 토큰 검증 없이 수락)
+    kubewatch_token: str = ""
 
     # Coroot (application APM / observability) — 별도 배포 서비스.
     # 비어있으면 기능 전체가 offline 으로 우아하게 비활성화된다 (Prometheus/Ollama 와 동일 패턴).

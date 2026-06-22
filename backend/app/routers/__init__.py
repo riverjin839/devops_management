@@ -59,6 +59,7 @@ from app.routers.service_topology import router as service_topology_router
 from app.routers.cluster_items import router as cluster_items_router
 from app.routers.coroot import router as coroot_router
 from app.routers.terminal_appearance import router as terminal_appearance_router
+from app.routers.k8s_events import router as k8s_events_router, ingest_router as k8s_events_ingest_router
 
 __all__ = [
     "ops_check_router",
@@ -118,4 +119,6 @@ __all__ = [
     "cluster_items_router",
     "coroot_router",
     "terminal_appearance_router",
+    "k8s_events_router",
+    "k8s_events_ingest_router",
 ]
