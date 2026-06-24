@@ -9,13 +9,17 @@ import {
   ShieldCheck, Shield, FlaskConical, Wrench, Code2, AlertCircle, BadgeCheck,
   Diamond, Crown, Rocket, Flame, Star, Award, Bug, Hammer,
   Sparkles, Zap, Atom, Anchor, Settings2,
-  type LucideIcon,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { BRAND_ICONS, BRAND_ICON_LIST } from './brandIcons';
 
-/** 사용자가 클러스터 사이드바에서 선택할 수 있는 lucide-react 아이콘 화이트리스트.
- *  키는 lucide-react 컴포넌트 이름 그대로 — Cluster.icon 에 저장되는 값과 동일.
+/** className 만 받는 일반 아이콘 컴포넌트 타입 — lucide 아이콘과 브랜드(SVG) 아이콘 공용. */
+export type IconComponent = ComponentType<{ className?: string }>;
+
+/** 사용자가 클러스터 사이드바에서 선택할 수 있는 아이콘 화이트리스트.
+ *  키는 저장값(Cluster.icon)과 동일 — lucide 컴포넌트 이름 또는 브랜드 이름(Prometheus 등).
  *  하단 CLUSTER_ICON_GROUPS 에서 카테고리화한 것의 union 이다. */
-export const CLUSTER_ICON_OPTIONS: Record<string, LucideIcon> = {
+export const CLUSTER_ICON_OPTIONS: Record<string, IconComponent> = {
   // 기본
   Server, Database, Cloud, CloudCog, Cpu, HardDrive, Network,
   Box, Boxes, Layers, Workflow, Activity, Container, Cog, Hexagon, Component,
@@ -26,6 +30,8 @@ export const CLUSTER_ICON_OPTIONS: Record<string, LucideIcon> = {
   // 운영레벨 / 상태
   ShieldCheck, Shield, FlaskConical, Wrench, Code2, AlertCircle, BadgeCheck,
   Diamond, Crown, Rocket, Flame, Star, Award, Bug, Hammer, Sparkles,
+  // 오픈소스 / CNCF 브랜드 로고 (simple-icons)
+  ...BRAND_ICONS,
 };
 
 export interface ClusterIconGroup<T> {
@@ -36,7 +42,13 @@ export interface ClusterIconGroup<T> {
 }
 
 /** 카테고리화된 아이콘 그룹. 그리드에서 섹션 헤더와 함께 보여 줘 의미를 강조한다. */
-export const CLUSTER_ICON_GROUPS: ClusterIconGroup<{ name: string; Component: LucideIcon }>[] = [
+export const CLUSTER_ICON_GROUPS: ClusterIconGroup<{ name: string; Component: IconComponent }>[] = [
+  {
+    key: 'oss',
+    label: '오픈소스 / CNCF',
+    hint: 'Kubernetes·Prometheus·Cilium·Keycloak·Nexus 등 CNCF 졸업/인기 OSS 브랜드 로고',
+    items: BRAND_ICON_LIST,
+  },
   {
     key: 'general',
     label: '기본',
@@ -170,7 +182,7 @@ export const CLUSTER_EMOJI_GROUPS: ClusterIconGroup<string>[] = [
 ];
 
 export type ResolvedClusterIcon =
-  | { kind: 'lucide'; Component: LucideIcon }
+  | { kind: 'lucide'; Component: IconComponent }
   | { kind: 'text'; value: string }
   | { kind: 'image'; value: string }   // base64 data URL or http(s) image URL
   | null;
