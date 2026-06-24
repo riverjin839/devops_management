@@ -147,8 +147,8 @@ def get_k8s_event(event_id: UUID, db: Session = Depends(get_db)) -> K8sEventOut:
     return event
 
 
-@router.delete("/{event_id}", status_code=204, response_class=Response)
-def delete_k8s_event(event_id: UUID, db: Session = Depends(get_db)) -> None:
+@router.delete("/{event_id}", status_code=204)
+def delete_k8s_event(event_id: UUID, db: Session = Depends(get_db)):
     event = db.query(K8sEvent).filter(K8sEvent.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
