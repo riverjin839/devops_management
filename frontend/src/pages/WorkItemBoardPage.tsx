@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter, DownloadCloud } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -164,6 +164,15 @@ export function WorkItemBoardPage() {
   const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') ?? '');
   const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // 시작일/완료일 시간 표시 토글 (기본 off = 날짜만). localStorage 영속.
+  const [showTime, setShowTime] = useState<boolean>(() => {
+    try { return localStorage.getItem('k8s:item-board:show-time') === '1'; } catch { return false; }
+  });
+  const toggleShowTime = () => setShowTime((v) => {
+    const next = !v;
+    try { localStorage.setItem('k8s:item-board:show-time', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
 
   const colW = useColumnWidths('item-board-table', {
     defaults: COLUMN_WIDTH_DEFAULTS,
@@ -319,6 +328,26 @@ export function WorkItemBoardPage() {
       console.error('CSV export failed:', e);
     }
   };
+
+  // 이번주(월~일) 시작일 범위로 필터 설정.
+  const fmtDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const setThisWeek = () => {
+    const now = new Date();
+    const diffToMon = (now.getDay() + 6) % 7;   // 0=Sun..6=Sat → 월요일까지 거슬러 갈 일수
+    const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    setFilterFrom(fmtDate(mon));
+    setFilterTo(fmtDate(sun));
+  };
+  // 현재 from~to 가 이번주(월~일)와 정확히 일치하는지(버튼 활성 표시용).
+  const isThisWeek = (() => {
+    const now = new Date();
+    const diffToMon = (now.getDay() + 6) % 7;
+    const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return filterFrom === fmtDate(mon) && filterTo === fmtDate(sun);
+  })();
 
   const clearFilters = () => {
     setFilterClusterId('');
@@ -490,6 +519,17 @@ export function WorkItemBoardPage() {
                 ))}
               </select>
             )}
+            <button
+              type="button"
+              onClick={setThisWeek}
+              aria-pressed={isThisWeek}
+              title="이번주(월~일) 시작 업무만 보기"
+              className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                isThisWeek ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <CalendarRange className="w-3.5 h-3.5" /> 이번주
+            </button>
             <input
               type="date"
               value={filterFrom}
@@ -518,6 +558,17 @@ export function WorkItemBoardPage() {
                 초기화
               </button>
             )}
+            <button
+              type="button"
+              onClick={toggleShowTime}
+              aria-pressed={showTime}
+              title={showTime ? '시작일/완료일에서 시간 숨기기' : '시작일/완료일에 시간 표시'}
+              className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                showTime ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" /> 시간
+            </button>
             <SavedViews current={currentView} onApply={applyView} />
             <button
               type="button"
@@ -650,6 +701,7 @@ export function WorkItemBoardPage() {
                       projectNameById={projectNameById}
                       sprintNameById={sprintNameById}
                       isDragDisabled={!!sortKey}
+                      showTime={showTime}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
                       onAddSubItem={handleAddSubItem}

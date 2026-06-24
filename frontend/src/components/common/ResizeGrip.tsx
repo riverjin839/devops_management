@@ -25,7 +25,7 @@ function ResizeGripBase({ onMouseDown, onDoubleClick, width = 4, className = '' 
     >
       {/* 시각적 막대 (가운데) */}
       <span
-        className="absolute top-1.5 bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-transparent group-hover/grip:bg-primary/40 transition-colors"
+        className="absolute top-1.5 bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-border/70 group-hover/grip:bg-primary/50 transition-colors"
         style={{ width: `${width}px` }}
       />
     </span>

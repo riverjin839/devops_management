@@ -2,7 +2,16 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+def _blank_str_to_none(v):
+    """빈 문자열/공백만 있는 값을 None 으로 — datetime 필드가 ''(빈 input) 를 받아
+    'Input should be a valid datetime' 422 로 터지는 것을 방지한다.
+    프론트의 날짜 input 이 비워진 채 전송돼도 안전하게 null 처리."""
+    if isinstance(v, str) and v.strip() == "":
+        return None
+    return v
 
 WorkItemType = Literal["task", "issue", "meeting", "training", "etc"]
 KanbanStatus = Literal["backlog", "todo", "in_progress", "review_test", "done"]
@@ -62,6 +71,10 @@ class WorkItemBase(BaseModel):
     custom_values: Optional[dict] = None
     all_attendees: bool = False
 
+    _coerce_blank_dates = field_validator(
+        "started_at", "closed_at", mode="before"
+    )(_blank_str_to_none)
+
 
 class WorkItemCreate(WorkItemBase):
     pass
@@ -98,6 +111,10 @@ class WorkItemUpdate(BaseModel):
     related_work_item_id: Optional[UUID] = None
     custom_values: Optional[dict] = None
     all_attendees: Optional[bool] = None
+
+    _coerce_blank_dates = field_validator(
+        "started_at", "closed_at", mode="before"
+    )(_blank_str_to_none)
 
 
 class WorkItemCommentCreate(BaseModel):

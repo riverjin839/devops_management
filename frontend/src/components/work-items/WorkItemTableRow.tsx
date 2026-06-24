@@ -37,6 +37,15 @@ function formatDateTime(dateStr?: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** 날짜만(시간 제외) 표시. 기본 표시는 이 형식, '시간 표시' 옵션이 켜지면 formatDateTime 사용. */
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function toDateInput(dateStr?: string | null): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -187,6 +196,8 @@ interface WorkItemTableRowProps {
   /** sprintId → 스프린트명 매핑 (읽기전용 표시용). */
   sprintNameById?: Map<string, string>;
   isDragDisabled: boolean;
+  /** 시작일/완료일 셀에 시간까지 표시할지. 기본 false(날짜만). */
+  showTime?: boolean;
   onEdit: (item: WorkItem) => void;
   onDelete: (item: WorkItem) => void;
   onAddSubItem: (parent: WorkItem) => void;
@@ -194,7 +205,8 @@ interface WorkItemTableRowProps {
   onOpenDetail: (item: WorkItem) => void;
 }
 
-export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, onEdit, onDelete, onAddSubItem, onOpenDetail }: WorkItemTableRowProps) {
+export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail }: WorkItemTableRowProps) {
+  const fmtDate = showTime ? formatDateTime : formatDate;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -474,7 +486,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
                 className="px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
               />
-            ) : formatDateTime(item.startedAt)}
+            ) : fmtDate(item.startedAt)}
           </EditableCell>
         );
 
@@ -494,7 +506,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
                 className="px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
               />
-            ) : formatDateTime(item.closedAt)}
+            ) : fmtDate(item.closedAt)}
           </EditableCell>
         );
 
