@@ -4,7 +4,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Gauge, ChevronRight, ChevronDown, RefreshCw, AlertTriangle,
   Cpu, MemoryStick, Server, Layers, TrendingDown, BarChart3, PackageOpen,
-  FileSpreadsheet, ArrowUp, ArrowDown, ChevronsUpDown,
+  FileSpreadsheet, ArrowUp, ArrowDown, ChevronsUpDown, HelpCircle,
+  LayoutGrid, List,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend,
@@ -175,13 +176,13 @@ function ReqUseCell({ req, usage, icon }: { req: string; usage: string | null; i
   );
 }
 
-type ViewMode = 'visual' | 'nodes' | 'namespaces';
+type ViewMode = 'nodes' | 'namespaces' | 'ns-ranking';
 
 export function K8sAllocationPage() {
   const { clusterId = '' } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
   const { data: clusters = [] } = useClusters();
-  const [view, setView] = useState<ViewMode>('visual');
+  const [view, setView] = useState<ViewMode>('nodes');
   const [autoMs, setAutoMs] = useState<number | false>(false);
 
   // 페이지 레벨 observer — computing 진행 표시 + 새로고침. (하위 뷰들과 동일 queryKey 라 캐시 공유)
@@ -268,9 +269,9 @@ export function K8sAllocationPage() {
 
               <div className="inline-flex rounded-xl border border-border bg-card p-1">
                 {([
-                  ['visual', '시각화', <BarChart3 key="i" className="w-4 h-4" />],
                   ['nodes', '노드별 자원', <Server key="i" className="w-4 h-4" />],
                   ['namespaces', '네임스페이스별 자원', <Layers key="i" className="w-4 h-4" />],
+                  ['ns-ranking', '네임스페이스 비효율 랭킹', <BarChart3 key="i" className="w-4 h-4" />],
                 ] as [ViewMode, string, ReactNode][]).map(([k, l, icon]) => (
                   <button
                     key={k}
@@ -282,9 +283,9 @@ export function K8sAllocationPage() {
                 ))}
               </div>
 
-              {view === 'visual' && <VisualView clusterId={clusterId} />}
               {view === 'nodes' && <NodesView clusterId={clusterId} clusterName={clusterName} />}
               {view === 'namespaces' && <NamespacesView clusterId={clusterId} clusterName={clusterName} />}
+              {view === 'ns-ranking' && <NsRankingView clusterId={clusterId} />}
             </>
           )}
         </div>
@@ -321,12 +322,52 @@ function SummarySection({ clusterId }: { clusterId: string }) {
         <Stat label="네임스페이스" value={fmtN(s.namespaceCount)} icon={<Layers className="w-3.5 h-3.5" />} />
         <Stat label="파드 (활성)" value={fmtN(s.podCount)} icon={<Cpu className="w-3.5 h-3.5" />} />
         <Stat label="CPU 할당효율" value={pctText(s.cpuReqM, s.cpuAllocM)}
-          sub={`req ${fmtCores(s.cpuReqM)} / alloc ${fmtCores(s.cpuAllocM)}`} warn={ratio(s.cpuReqM, s.cpuAllocM) < 0.5} />
+          sub={`req ${fmtCores(s.cpuReqM)} / alloc ${fmtCores(s.cpuAllocM)}`}
+          warn={ratio(s.cpuReqM, s.cpuAllocM) < 0.5}
+          help={
+            <div className="space-y-1.5">
+              <p className="font-semibold text-foreground">CPU 할당효율 (Allocation Efficiency)</p>
+              <p><b>= Request ÷ Allocatable × 100</b></p>
+              <p>노드의 할당 가능 CPU 중 파드들이 <b>request로 예약</b>한 비율입니다.</p>
+              <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                <li>100% 초과 → 오버커밋 (스케줄 불가 위험)</li>
+                <li>50% 미만 → 할당 여유 많음 (주황 경고)</li>
+                <li>50–90% → 적정 범위</li>
+              </ul>
+            </div>
+          }
+        />
         <Stat label="MEM 할당효율" value={pctText(s.memReqB, s.memAllocB)}
-          sub={`req ${fmtGi(s.memReqB)} / alloc ${fmtGi(s.memAllocB)}`} />
+          sub={`req ${fmtGi(s.memReqB)} / alloc ${fmtGi(s.memAllocB)}`}
+          help={
+            <div className="space-y-1.5">
+              <p className="font-semibold text-foreground">MEM 할당효율 (Allocation Efficiency)</p>
+              <p><b>= Request ÷ Allocatable × 100</b></p>
+              <p>노드의 할당 가능 메모리 중 파드들이 <b>request로 예약</b>한 비율입니다.</p>
+              <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                <li>100% 초과 → 오버커밋 (OOM 위험)</li>
+                <li>50% 미만 → 메모리 여유 많음</li>
+              </ul>
+            </div>
+          }
+        />
         <Stat label="CPU 사용효율" value={useEff == null ? '—' : pctText(s.cpuUsageM ?? 0, s.cpuReqM)}
           sub={s.cpuUsageM == null ? '드릴다운에서 확인' : `use ${fmtCores(s.cpuUsageM)}`}
-          warn={useEff != null && useEff < 0.3} />
+          warn={useEff != null && useEff < 0.3}
+          help={
+            <div className="space-y-1.5">
+              <p className="font-semibold text-foreground">CPU 사용효율 (Usage Efficiency)</p>
+              <p><b>= 실사용량 ÷ Request × 100</b></p>
+              <p>request로 예약한 CPU 중 실제로 <b>사용 중인</b> 비율입니다.</p>
+              <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                <li>30% 미만 → request 과대 설정 (낭비, 주황 경고)</li>
+                <li>105% 초과 → 실사용이 request 초과 (스로틀 위험)</li>
+                <li>30–100% → 적정 범위</li>
+              </ul>
+              <p className="text-muted-foreground">※ 메트릭 서버 없으면 표시 불가</p>
+            </div>
+          }
+        />
       </div>
 
       {/* Pod 스케줄 가능 수 계산기 (MEM 할당효율 아래) */}
@@ -449,17 +490,35 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
   );
 }
 
-function Stat({ label, value, sub, icon, warn }: { label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean }) {
+function StatTooltip({ children }: { children: ReactNode }) {
+  return (
+    <span className="relative group inline-flex items-center ml-0.5 cursor-help">
+      <HelpCircle className="w-3 h-3 text-muted-foreground/60 hover:text-muted-foreground" />
+      <div
+        data-export-ignore
+        className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 w-64
+          rounded-lg border border-border bg-card shadow-lg p-2.5 text-xs leading-relaxed text-foreground whitespace-normal"
+      >
+        {children}
+      </div>
+    </span>
+  );
+}
+
+function Stat({ label, value, sub, icon, warn, help }: { label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean; help?: ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-card/50 px-2.5 py-2">
-      <div className="text-xs text-muted-foreground flex items-center gap-1">{icon}{label}</div>
+      <div className="text-xs text-muted-foreground flex items-center gap-1">
+        {icon}{label}
+        {help && <StatTooltip>{help}</StatTooltip>}
+      </div>
       <div className={`text-xl font-semibold leading-tight mt-0.5 ${warn ? 'text-amber-600' : ''}`}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground mt-0.5 truncate" title={sub}>{sub}</div>}
     </div>
   );
 }
 
-// ── 시각화 뷰 (게이지 카드 + 슬랙 랭킹 차트) ─────────────────────────────────────
+// ── 노드 게이지 행 (카드 뷰에서 사용) ─────────────────────────────────────────────
 function GaugeRow({ label, alloc, req, usage }: { label: string; alloc: number; req: number; usage: number | null }) {
   const reqPct = Math.min(100, ratio(req, alloc) * 100);
   const usePct = usage == null ? 0 : Math.min(100, ratio(usage, alloc) * 100);
@@ -481,10 +540,23 @@ function GaugeRow({ label, alloc, req, usage }: { label: string; alloc: number; 
   );
 }
 
+/** 노드 수에 따라 한 행에 표시할 컬럼 수를 동적으로 계산 */
+function calcGridCols(count: number): number {
+  if (count <= 1) return 1;
+  if (count <= 2) return 2;
+  if (count <= 4) return 2;
+  if (count <= 6) return 3;
+  if (count <= 9) return 3;
+  if (count <= 12) return 4;
+  if (count <= 16) return 4;
+  if (count <= 20) return 5;
+  return 6;
+}
+
+// ── 네임스페이스 비효율 랭킹 탭 ──────────────────────────────────────────────────
 type ChartMetric = 'cpu' | 'mem';
 
-function VisualView({ clusterId }: { clusterId: string }) {
-  const nodesQ = useAllocNodes(clusterId);
+function NsRankingView({ clusterId }: { clusterId: string }) {
   const nsQ = useAllocNamespaces(clusterId);
   const [metric, setMetric] = useState<ChartMetric>('cpu');
 
@@ -496,7 +568,6 @@ function VisualView({ clusterId }: { clusterId: string }) {
       const slack = use == null ? null : Math.max(0, req - use);
       return { namespace: n.namespace, req: +req.toFixed(2), use: use == null ? null : +use.toFixed(2), slack };
     });
-    // 비효율(slack=req−use) 내림차순 정렬. usage 없으면 req 기준.
     items.sort((a, b) => {
       if (a.slack != null && b.slack != null) return b.slack - a.slack;
       return b.req - a.req;
@@ -507,78 +578,45 @@ function VisualView({ clusterId }: { clusterId: string }) {
   const unit = metric === 'cpu' ? ' 코어' : ' Gi';
 
   return (
-    <div className="space-y-2">
-      <MacCard title="노드 자원 게이지 (alloc 대비 request·사용량)" bodyPadding="p-3">
-        {nodesQ.isLoading ? (
-          <Skeleton className="h-28 w-full" />
-        ) : nodesQ.data?.status === 'computing' && !nodesQ.data?.items.length ? (
-          <SnapshotProgressCard processed={nodesQ.data.processed ?? 0} total={nodesQ.data.total ?? null}
-            progress={nodesQ.data.progress ?? null} label="자원 집계 중" unit="Pod" />
-        ) : !nodesQ.data?.items.length ? (
-          <EmptyState title="노드 없음" description="표시할 노드가 없습니다." />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
-            {nodesQ.data.items.map((n) => (
-              <div key={n.name} className="rounded-lg border border-border bg-card/50 p-2.5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="font-medium text-sm truncate" title={n.name}>{n.name}</div>
-                  <span className="text-xs text-muted-foreground shrink-0 ml-2">{n.roles.join(',')}</span>
-                </div>
-                <div className="space-y-1.5">
-                  <GaugeRow label="CPU" alloc={n.cpuAllocM} req={n.cpuReqM} usage={n.cpuUsageM} />
-                  <GaugeRow label="MEM" alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB} />
-                </div>
-                <div className="flex justify-between text-xs text-emerald-600 mt-1.5 tabular-nums">
-                  <span>여유 CPU {fmtCores(n.cpuSlackM)}</span>
-                  <span>여유 MEM {fmtGi(n.memSlackB)}</span>
-                  <span className="text-muted-foreground">{n.podCount} pods</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </MacCard>
-
-      <MacCard title="네임스페이스 비효율 랭킹 (Top 15 · req vs 실사용, 간격이 클수록 낭비)" bodyPadding="p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm text-muted-foreground">기준</span>
-          {(['cpu', 'mem'] as ChartMetric[]).map((m) => (
-            <button key={m} onClick={() => setMetric(m)}
-              className={`px-2.5 py-1 rounded-lg border text-sm ${metric === m ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-              {m === 'cpu' ? 'CPU' : 'MEM'}
-            </button>
-          ))}
-          <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순</span>
-        </div>
-        {nsQ.isLoading ? (
-          <Skeleton className="h-64 w-full" />
-        ) : !nsChart.length ? (
-          <EmptyState title="데이터 없음" description="표시할 네임스페이스가 없습니다." />
-        ) : (
-          <ResponsiveContainer width="100%" height={Math.max(280, nsChart.length * 32)}>
-            <BarChart data={nsChart} layout="vertical" margin={{ left: 12, right: 24, top: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-              <XAxis type="number" tick={{ fontSize: 12 }} unit={unit} />
-              <YAxis type="category" dataKey="namespace" width={150} tick={{ fontSize: 12 }} />
-              <Tooltip
-                formatter={(v: number, name) => [`${v}${unit}`, name === 'req' ? 'request' : '실사용']}
-                contentStyle={{ fontSize: 13, borderRadius: 8 }}
-              />
-              <Legend formatter={(v) => (v === 'req' ? 'request' : '실사용')} wrapperStyle={{ fontSize: 13 }} />
-              <Bar dataKey="req" name="req" fill="#7dd3fc" radius={[0, 4, 4, 0]}>
-                {nsChart.map((d, i) => (
-                  <Cell key={i} fill={d.use != null && d.req > 0 && d.use / d.req < 0.3 ? '#fbbf24' : '#7dd3fc'} />
-                ))}
-              </Bar>
-              <Bar dataKey="use" name="use" fill="#22c55e" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-        {nsQ.data && !nsQ.data.metricsAvailable && (
-          <div className="text-sm text-muted-foreground mt-2">※ 사용량(use) 미가용 — request 기준만 표시됩니다.</div>
-        )}
-      </MacCard>
-    </div>
+    <MacCard title="네임스페이스 비효율 랭킹 (Top 15 · req vs 실사용, 간격이 클수록 낭비)" bodyPadding="p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-sm text-muted-foreground">기준</span>
+        {(['cpu', 'mem'] as ChartMetric[]).map((m) => (
+          <button key={m} onClick={() => setMetric(m)}
+            className={`px-2.5 py-1 rounded-lg border text-sm ${metric === m ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
+            {m === 'cpu' ? 'CPU' : 'MEM'}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순</span>
+      </div>
+      {nsQ.isLoading ? (
+        <Skeleton className="h-64 w-full" />
+      ) : !nsChart.length ? (
+        <EmptyState title="데이터 없음" description="표시할 네임스페이스가 없습니다." />
+      ) : (
+        <ResponsiveContainer width="100%" height={Math.max(280, nsChart.length * 32)}>
+          <BarChart data={nsChart} layout="vertical" margin={{ left: 12, right: 24, top: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+            <XAxis type="number" tick={{ fontSize: 12 }} unit={unit} />
+            <YAxis type="category" dataKey="namespace" width={150} tick={{ fontSize: 12 }} />
+            <Tooltip
+              formatter={(v: number, name) => [`${v}${unit}`, name === 'req' ? 'request' : '실사용']}
+              contentStyle={{ fontSize: 13, borderRadius: 8 }}
+            />
+            <Legend formatter={(v) => (v === 'req' ? 'request' : '실사용')} wrapperStyle={{ fontSize: 13 }} />
+            <Bar dataKey="req" name="req" fill="#7dd3fc" radius={[0, 4, 4, 0]}>
+              {nsChart.map((d, i) => (
+                <Cell key={i} fill={d.use != null && d.req > 0 && d.use / d.req < 0.3 ? '#fbbf24' : '#7dd3fc'} />
+              ))}
+            </Bar>
+            <Bar dataKey="use" name="use" fill="#22c55e" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+      {nsQ.data && !nsQ.data.metricsAvailable && (
+        <div className="text-sm text-muted-foreground mt-2">※ 사용량(use) 미가용 — request 기준만 표시됩니다.</div>
+      )}
+    </MacCard>
   );
 }
 
@@ -595,6 +633,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNodes(clusterId);
   const refreshNode = useRefreshAllocNode(clusterId);
   const [sort, setSort] = useState<SortState>({ key: 'cpuSlackM', dir: 'desc' });
+  const [viewStyle, setViewStyle] = useState<'table' | 'card'>('table');
   const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'name'));
 
   const rows = useTableSort(data?.items ?? [], NODE_ACCESSORS, sort);
@@ -624,10 +663,32 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
   }
   if (!rows.length) return <MacCard title="노드별 자원" bodyPadding="p-3"><EmptyState title="노드 없음" description="표시할 노드가 없습니다." /></MacCard>;
 
+  const gridCols = calcGridCols(rows.length);
+
   return (
     <MacCard title="노드별 자원" bodyPadding="p-0">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+        <div className="flex items-center gap-2">
+          {/* 뷰 전환 토글 */}
+          <div className="inline-flex rounded-lg border border-border bg-muted/20 p-0.5">
+            <button
+              onClick={() => setViewStyle('table')}
+              title="테이블 뷰"
+              className={`p-1.5 rounded-md ${viewStyle === 'table' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewStyle('card')}
+              title="카드 뷰"
+              className={`p-1.5 rounded-md ${viewStyle === 'card' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {viewStyle === 'table' && <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>}
+          {viewStyle === 'card' && <span className="text-xs text-muted-foreground">노드 {rows.length}개 · {gridCols}열 자동 배치</span>}
+        </div>
         <div className="flex items-center gap-3">
           <CsvButton onClick={exportCsv} disabled={!rows.length} />
           <button onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
@@ -635,58 +696,100 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
           </button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
-            <tr>
-              <SortableTh label="Node" k="name" sort={sort} onSort={onSort} />
-              <SortableTh label="CPU (req)" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
-              <SortableTh label="MEM (req)" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
-              <SortableTh label="CPU 가용 / 할당" k="cpuSlackM" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
-              <SortableTh label="MEM 가용 / 할당" k="memSlackB" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
-              <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
+
+      {/* 카드 뷰 */}
+      {viewStyle === 'card' && (
+        <div className="p-3">
+          <div
+            style={{ display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+            className="gap-2"
+          >
             {rows.map((n: AllocNodeRow) => (
-              <tr key={n.name} className="border-t border-border align-middle hover:bg-muted/10">
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-medium">{n.name}</span>
+              <div key={n.name} className="rounded-lg border border-border bg-card/50 p-2.5">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-medium text-sm truncate" title={n.name}>{n.name}</div>
+                  <div className="flex items-center gap-1 shrink-0 ml-1.5">
+                    <span className="text-xs text-muted-foreground">{n.roles.join(',')}</span>
+                    {n.unschedulable && <span className="text-xs text-amber-600">cordoned</span>}
                     <button
                       onClick={() => refreshNode.mutate(n.name)}
                       title="이 노드만 새로고침"
-                      className="text-muted-foreground hover:text-primary shrink-0"
+                      className="text-muted-foreground hover:text-primary"
                     >
                       <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
                     </button>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {n.roles.join(', ')}{n.unschedulable && <span className="text-amber-600"> · cordoned</span>}
-                  </div>
-                </td>
-                <td className="px-3 py-2">
-                  <MeterBar alloc={n.cpuAllocM} req={n.cpuReqM} usage={n.cpuUsageM}
-                    reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} />
-                </td>
-                <td className="px-3 py-2">
-                  <MeterBar alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB}
-                    reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  <div className="text-emerald-600 font-medium">{fmtCores(n.cpuSlackM)}</div>
-                  <div className="text-xs text-muted-foreground">/ {fmtCores(n.cpuAllocM)}</div>
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  <div className="text-emerald-600 font-medium">{fmtGi(n.memSlackB)}</div>
-                  <div className="text-xs text-muted-foreground">/ {fmtGi(n.memAllocB)}</div>
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">{n.podCount}</td>
-              </tr>
+                </div>
+                <div className="space-y-1.5">
+                  <GaugeRow label="CPU" alloc={n.cpuAllocM} req={n.cpuReqM} usage={n.cpuUsageM} />
+                  <GaugeRow label="MEM" alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB} />
+                </div>
+                <div className="flex justify-between text-xs text-emerald-600 mt-1.5 tabular-nums">
+                  <span>여유 {fmtCores(n.cpuSlackM)}</span>
+                  <span>여유 {fmtGi(n.memSlackB)}</span>
+                  <span className="text-muted-foreground">{n.podCount}p</span>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </div>
+      )}
+
+      {/* 테이블 뷰 */}
+      {viewStyle === 'table' && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
+              <tr>
+                <SortableTh label="Node" k="name" sort={sort} onSort={onSort} />
+                <SortableTh label="CPU (req)" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
+                <SortableTh label="MEM (req)" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
+                <SortableTh label="CPU 가용 / 할당" k="cpuSlackM" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
+                <SortableTh label="MEM 가용 / 할당" k="memSlackB" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
+                <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((n: AllocNodeRow) => (
+                <tr key={n.name} className="border-t border-border align-middle hover:bg-muted/10">
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{n.name}</span>
+                      <button
+                        onClick={() => refreshNode.mutate(n.name)}
+                        title="이 노드만 새로고침"
+                        className="text-muted-foreground hover:text-primary shrink-0"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {n.roles.join(', ')}{n.unschedulable && <span className="text-amber-600"> · cordoned</span>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <MeterBar alloc={n.cpuAllocM} req={n.cpuReqM} usage={n.cpuUsageM}
+                      reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <MeterBar alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB}
+                      reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <div className="text-emerald-600 font-medium">{fmtCores(n.cpuSlackM)}</div>
+                    <div className="text-xs text-muted-foreground">/ {fmtCores(n.cpuAllocM)}</div>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <div className="text-emerald-600 font-medium">{fmtGi(n.memSlackB)}</div>
+                    <div className="text-xs text-muted-foreground">/ {fmtGi(n.memAllocB)}</div>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{n.podCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </MacCard>
   );
 }
