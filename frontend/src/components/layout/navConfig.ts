@@ -68,8 +68,9 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services', '/coroot'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs'], modes: ['work'] },
-  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/knowledge', '/ops-notes', '/mindmap', '/ontology', '/trends', '/work-guides'], modes: ['work'] },
-  // 주: '/knowledge'(지식베이스)는 메뉴에서 제거됨 — 지식 허브(/docs)에서 문서 열기/새 문서로 접근.
+  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs'], modes: ['work'] },
+  // 주: 지식/분석은 지식 허브(/docs) 하나로 통합 — 지식베이스·Q&A(운영노트)·마인드맵·온톨로지·
+  //     기술동향·작업가이드(SOP)는 허브 탭/목록에서 접근하므로 개별 좌측 메뉴를 제거했다.
   { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
 ];
 
