@@ -97,6 +97,49 @@ const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
   { label: '5분', ms: 300_000 },
 ];
 
+// ── 페이징 공용 ───────────────────────────────────────────────────────────────
+/** 페이지당 표시 개수 선택. */
+function PageSizeSelect({ value, onChange, options }: {
+  value: number; onChange: (n: number) => void; options: number[];
+}) {
+  return (
+    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+      페이지당
+      <select
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground"
+        title="페이지당 표시 개수"
+      >
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      개
+    </label>
+  );
+}
+
+/** 이전/다음 페이지 이동. totalPages ≤ 1 이면 렌더 안 함. */
+function Pager({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center gap-1">
+      <button type="button" onClick={() => onPage(Math.max(1, page - 1))} disabled={page <= 1}
+        className="px-3 py-1 text-sm bg-secondary border border-border rounded-lg hover:bg-muted disabled:opacity-50">이전</button>
+      <span className="px-2 text-sm tabular-nums">{page} / {totalPages}</span>
+      <button type="button" onClick={() => onPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
+        className="px-3 py-1 text-sm bg-secondary border border-border rounded-lg hover:bg-muted disabled:opacity-50">다음</button>
+    </div>
+  );
+}
+
+/** rows 를 page/pageSize 로 잘라 현재 페이지 행과 메타를 돌려준다. page 범위는 자동 보정. */
+function paginate<T>(rows: T[], page: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * pageSize;
+  return { totalPages, safePage, start, pageRows: rows.slice(start, start + pageSize) };
+}
+
 // ── 포맷/계산 헬퍼 ───────────────────────────────────────────────────────────
 const ratio = (part: number, whole: number) => (whole > 0 ? part / whole : 0);
 const pctText = (part: number, whole: number) => `${Math.round(ratio(part, whole) * 100)}%`;
@@ -483,12 +526,15 @@ function GaugeRow({ label, alloc, req, usage }: { label: string; alloc: number; 
 
 type ChartMetric = 'cpu' | 'mem';
 
+const RANK_PAGE_SIZES = [10, 15, 25, 50];
 function VisualView({ clusterId }: { clusterId: string }) {
   const nodesQ = useAllocNodes(clusterId);
   const nsQ = useAllocNamespaces(clusterId);
   const [metric, setMetric] = useState<ChartMetric>('cpu');
+  const [pageSize, setPageSize] = useState(15);
+  const [page, setPage] = useState(1);
 
-  const nsChart = useMemo(() => {
+  const nsRanked = useMemo(() => {
     const items = (nsQ.data?.items ?? []).map((n) => {
       const req = metric === 'cpu' ? n.cpuReqM / 1000 : n.memReqB / 1024 ** 3;
       const useRaw = metric === 'cpu' ? n.cpuUsageM : n.memUsageB;
@@ -501,9 +547,10 @@ function VisualView({ clusterId }: { clusterId: string }) {
       if (a.slack != null && b.slack != null) return b.slack - a.slack;
       return b.req - a.req;
     });
-    return items.slice(0, 15);
+    return items;
   }, [nsQ.data, metric]);
 
+  const { totalPages, safePage, pageRows: nsChart } = paginate(nsRanked, page, pageSize);
   const unit = metric === 'cpu' ? ' 코어' : ' Gi';
 
   return (
@@ -539,8 +586,8 @@ function VisualView({ clusterId }: { clusterId: string }) {
         )}
       </MacCard>
 
-      <MacCard title="네임스페이스 비효율 랭킹 (Top 15 · req vs 실사용, 간격이 클수록 낭비)" bodyPadding="p-3">
-        <div className="flex items-center gap-2 mb-2">
+      <MacCard title={`네임스페이스 비효율 랭킹 (${fmtN(nsRanked.length)}개 · req vs 실사용, 간격이 클수록 낭비)`} bodyPadding="p-3">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <span className="text-sm text-muted-foreground">기준</span>
           {(['cpu', 'mem'] as ChartMetric[]).map((m) => (
             <button key={m} onClick={() => setMetric(m)}
@@ -549,6 +596,10 @@ function VisualView({ clusterId }: { clusterId: string }) {
             </button>
           ))}
           <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순</span>
+          <div className="ml-auto flex items-center gap-3">
+            <PageSizeSelect value={pageSize} onChange={(n) => { setPageSize(n); setPage(1); }} options={RANK_PAGE_SIZES} />
+            <Pager page={safePage} totalPages={totalPages} onPage={setPage} />
+          </div>
         </div>
         {nsQ.isLoading ? (
           <Skeleton className="h-64 w-full" />
@@ -591,11 +642,50 @@ const NODE_ACCESSORS: Record<string, (r: AllocNodeRow) => number | string | null
   memSlackB: (r) => r.memSlackB,
   podCount: (r) => r.podCount,
 };
+
+// 노드 카드 한 줄에 몇 열로 배치할지. 'auto' = 반응형 자동 배치.
+type ColMode = 'auto' | 5 | 10 | 20;
+const COL_OPTIONS: { label: string; value: ColMode }[] = [
+  { label: '자동 배치', value: 'auto' },
+  { label: '5열', value: 5 },
+  { label: '10열', value: 10 },
+  { label: '20열', value: 20 },
+];
+type NodeLayout = 'card' | 'table';
+
+/** 카드 한 장: 노드 1개의 CPU/MEM 게이지 + 여유/파드 요약. */
+function NodeCard({ n, onRefresh, refreshing }: { n: AllocNodeRow; onRefresh: () => void; refreshing: boolean }) {
+  return (
+    <div className="rounded-lg border border-border bg-card/50 p-2.5">
+      <div className="flex items-center justify-between mb-1.5 gap-1.5">
+        <div className="font-medium text-sm truncate min-w-0" title={n.name}>{n.name}</div>
+        <button onClick={onRefresh} title="이 노드만 새로고침" className="text-muted-foreground hover:text-primary shrink-0">
+          <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      <div className="text-xs text-muted-foreground truncate mb-1.5" title={n.roles.join(', ')}>
+        {n.roles.join(', ')}{n.unschedulable && <span className="text-amber-600"> · cordoned</span>}
+      </div>
+      <div className="space-y-1.5">
+        <GaugeRow label="CPU" alloc={n.cpuAllocM} req={n.cpuReqM} usage={n.cpuUsageM} />
+        <GaugeRow label="MEM" alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB} />
+      </div>
+      <div className="flex flex-wrap justify-between gap-x-2 text-xs text-emerald-600 mt-1.5 tabular-nums">
+        <span title="여유 CPU (alloc − req)">여유 {fmtCores(n.cpuSlackM)}</span>
+        <span title="여유 MEM (alloc − req)">여유 {fmtGi(n.memSlackB)}</span>
+        <span className="text-muted-foreground">{n.podCount} pods</span>
+      </div>
+    </div>
+  );
+}
+
 function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNodes(clusterId);
   const refreshNode = useRefreshAllocNode(clusterId);
   const [sort, setSort] = useState<SortState>({ key: 'cpuSlackM', dir: 'desc' });
   const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'name'));
+  const [layout, setLayout] = useState<NodeLayout>('card');   // 기본: 카드 뷰
+  const [colMode, setColMode] = useState<ColMode>('auto');    // 기본: 자동 배치
 
   const rows = useTableSort(data?.items ?? [], NODE_ACCESSORS, sort);
 
@@ -624,10 +714,41 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
   }
   if (!rows.length) return <MacCard title="노드별 자원" bodyPadding="p-3"><EmptyState title="노드 없음" description="표시할 노드가 없습니다." /></MacCard>;
 
+  // 카드 그리드: 자동은 반응형 클래스, 고정 열은 동적 gridTemplateColumns.
+  const gridClass = colMode === 'auto'
+    ? 'grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
+    : 'grid gap-2';
+  const gridStyle = colMode === 'auto' ? undefined : { gridTemplateColumns: `repeat(${colMode}, minmax(0, 1fr))` };
+
   return (
-    <MacCard title="노드별 자원" bodyPadding="p-0">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+    <MacCard title={`노드별 자원 (${fmtN(rows.length)}개)`} bodyPadding="p-0">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 카드 / 테이블 레이아웃 토글 */}
+          <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+            {([['card', '카드'], ['table', '테이블']] as [NodeLayout, string][]).map(([k, l]) => (
+              <button key={k} onClick={() => setLayout(k)}
+                className={`px-2.5 py-1 rounded-md text-sm ${layout === k ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {layout === 'card' ? (
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              열 수
+              <select
+                value={String(colMode)}
+                onChange={(e) => setColMode(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as ColMode))}
+                className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground"
+                title="한 줄에 표시할 카드 열 수"
+              >
+                {COL_OPTIONS.map((o) => <option key={o.label} value={String(o.value)}>{o.label}</option>)}
+              </select>
+            </label>
+          ) : (
+            <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <CsvButton onClick={exportCsv} disabled={!rows.length} />
           <button onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
@@ -635,58 +756,71 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
           </button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
-            <tr>
-              <SortableTh label="Node" k="name" sort={sort} onSort={onSort} />
-              <SortableTh label="CPU (req)" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
-              <SortableTh label="MEM (req)" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
-              <SortableTh label="CPU 가용 / 할당" k="cpuSlackM" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
-              <SortableTh label="MEM 가용 / 할당" k="memSlackB" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
-              <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
+
+      {layout === 'card' ? (
+        <div className="p-3 overflow-x-auto">
+          <div className={gridClass} style={gridStyle}>
             {rows.map((n: AllocNodeRow) => (
-              <tr key={n.name} className="border-t border-border align-middle hover:bg-muted/10">
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-medium">{n.name}</span>
-                    <button
-                      onClick={() => refreshNode.mutate(n.name)}
-                      title="이 노드만 새로고침"
-                      className="text-muted-foreground hover:text-primary shrink-0"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {n.roles.join(', ')}{n.unschedulable && <span className="text-amber-600"> · cordoned</span>}
-                  </div>
-                </td>
-                <td className="px-3 py-2">
-                  <MeterBar alloc={n.cpuAllocM} req={n.cpuReqM} usage={n.cpuUsageM}
-                    reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} />
-                </td>
-                <td className="px-3 py-2">
-                  <MeterBar alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB}
-                    reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  <div className="text-emerald-600 font-medium">{fmtCores(n.cpuSlackM)}</div>
-                  <div className="text-xs text-muted-foreground">/ {fmtCores(n.cpuAllocM)}</div>
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  <div className="text-emerald-600 font-medium">{fmtGi(n.memSlackB)}</div>
-                  <div className="text-xs text-muted-foreground">/ {fmtGi(n.memAllocB)}</div>
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">{n.podCount}</td>
-              </tr>
+              <NodeCard key={n.name} n={n}
+                onRefresh={() => refreshNode.mutate(n.name)}
+                refreshing={refreshNode.isPending && refreshNode.variables === n.name} />
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
+              <tr>
+                <SortableTh label="Node" k="name" sort={sort} onSort={onSort} />
+                <SortableTh label="CPU (req)" k="cpuReqM" sort={sort} onSort={onSort} title="CPU 요청량 기준 정렬" />
+                <SortableTh label="MEM (req)" k="memReqB" sort={sort} onSort={onSort} title="MEM 요청량 기준 정렬" />
+                <SortableTh label="CPU 가용 / 할당" k="cpuSlackM" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
+                <SortableTh label="MEM 가용 / 할당" k="memSlackB" sort={sort} onSort={onSort} align="right" title="할당 가용(slack=alloc−req) 기준 정렬" />
+                <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((n: AllocNodeRow) => (
+                <tr key={n.name} className="border-t border-border align-middle hover:bg-muted/10">
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{n.name}</span>
+                      <button
+                        onClick={() => refreshNode.mutate(n.name)}
+                        title="이 노드만 새로고침"
+                        className="text-muted-foreground hover:text-primary shrink-0"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {n.roles.join(', ')}{n.unschedulable && <span className="text-amber-600"> · cordoned</span>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <MeterBar alloc={n.cpuAllocM} req={n.cpuReqM} usage={n.cpuUsageM}
+                      reqDisplay={n.cpuReqDisplay} usageDisplay={n.cpuUsageDisplay} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <MeterBar alloc={n.memAllocB} req={n.memReqB} usage={n.memUsageB}
+                      reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <div className="text-emerald-600 font-medium">{fmtCores(n.cpuSlackM)}</div>
+                    <div className="text-xs text-muted-foreground">/ {fmtCores(n.cpuAllocM)}</div>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <div className="text-emerald-600 font-medium">{fmtGi(n.memSlackB)}</div>
+                    <div className="text-xs text-muted-foreground">/ {fmtGi(n.memAllocB)}</div>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{n.podCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </MacCard>
   );
 }
@@ -700,12 +834,15 @@ const NS_ACCESSORS: Record<string, (r: AllocNamespaceRow) => number | string | n
   memReqB: (r) => r.memReqB,
   eff: (r) => (r.cpuUsageM == null ? null : r.cpuUsageM / Math.max(1, r.cpuReqM)),
 };
+const NS_PAGE_SIZES = [10, 20, 50, 100];
 function NamespacesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNamespaces(clusterId);
   const refreshNs = useRefreshAllocNamespace(clusterId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortState>({ key: 'cpuReqM', dir: 'desc' });
   const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'namespace'));
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(1);
 
   const toggle = (ns: string) => setExpanded((prev) => {
     const next = new Set(prev);
@@ -714,6 +851,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
   });
 
   const rows = useTableSort(data?.items ?? [], NS_ACCESSORS, sort);
+  const { totalPages, safePage, start, pageRows } = paginate(rows, page, pageSize);
 
   const exportCsv = () => {
     const headers = ['Namespace', 'Pods', 'Workloads', 'req미설정',
@@ -743,8 +881,11 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
 
   return (
     <MacCard title={`네임스페이스별 자원 (${fmtN(rows.length)}개)`} bodyPadding="p-0">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+          <PageSizeSelect value={pageSize} onChange={(n) => { setPageSize(n); setPage(1); }} options={NS_PAGE_SIZES} />
+        </div>
         <div className="flex items-center gap-3">
           <CsvButton onClick={exportCsv} disabled={!rows.length} />
           <button onClick={() => refetch()} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
@@ -766,7 +907,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
             </tr>
           </thead>
           <tbody>
-            {rows.map((ns: AllocNamespaceRow) => {
+            {pageRows.map((ns: AllocNamespaceRow) => {
               const open = expanded.has(ns.namespace);
               return (
                 <Fragment key={ns.namespace}>
@@ -804,6 +945,12 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
             })}
           </tbody>
         </table>
+      </div>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border flex-wrap">
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {fmtN(start + 1)}–{fmtN(start + pageRows.length)} / {fmtN(rows.length)}
+        </span>
+        <Pager page={safePage} totalPages={totalPages} onPage={setPage} />
       </div>
     </MacCard>
   );
