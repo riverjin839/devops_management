@@ -58,6 +58,7 @@ from app.routers.metric_trend import router as metric_trend_router
 from app.routers.service_topology import router as service_topology_router
 from app.routers.cluster_items import router as cluster_items_router
 from app.routers.coroot import router as coroot_router
+from app.routers.cluster_trends import router as cluster_trends_router
 from app.routers.terminal_appearance import router as terminal_appearance_router
 
 __all__ = [
@@ -117,5 +118,6 @@ __all__ = [
     "lake_service_types_router",
     "cluster_items_router",
     "coroot_router",
+    "cluster_trends_router",
     "terminal_appearance_router",
 ]

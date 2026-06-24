@@ -70,6 +70,7 @@ from app.routers import (
     service_topology_router,
     cluster_items_router,
     coroot_router,
+    cluster_trends_router,
     terminal_appearance_router,
 )
 from app.auth.deps import get_current_user
@@ -262,6 +263,9 @@ def _run_migrations():
             ("coroot_project", "VARCHAR(100)"),
             ("coroot_url", "VARCHAR(512)"),
             ("coroot_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            # Cluster Trends — per-cluster Prometheus URL 오버라이드 + 토글.
+            ("prometheus_url", "VARCHAR(512)"),
+            ("prometheus_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ]
         for col_name, col_type in new_cluster_cols:
             _safe_add_column("clusters", col_name, col_type)
@@ -1426,6 +1430,8 @@ app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_auth)
 # k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
 app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_auth)
+# cluster-trends — per-node 메트릭 추이(Prometheus range query, 노드 명시선택+상한).
+app.include_router(cluster_trends_router, prefix="/api/v1", dependencies=_auth)
 # helm 릴리스 뷰어(읽기 전용).
 app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
 # pod exec 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.

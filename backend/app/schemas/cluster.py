@@ -53,6 +53,9 @@ class ClusterBase(BaseModel):
     coroot_project: Optional[str] = Field(default=None, max_length=100)
     coroot_url: Optional[str] = Field(default=None, max_length=512)
     coroot_enabled: Optional[bool] = None
+    # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
+    prometheus_url: Optional[str] = Field(default=None, max_length=512)
+    prometheus_enabled: Optional[bool] = None
 
 
 class ClusterCreate(ClusterBase):
@@ -97,6 +100,9 @@ class ClusterUpdate(BaseModel):
     coroot_project: Optional[str] = Field(default=None, max_length=100)
     coroot_url: Optional[str] = Field(default=None, max_length=512)
     coroot_enabled: Optional[bool] = None
+    # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
+    prometheus_url: Optional[str] = Field(default=None, max_length=512)
+    prometheus_enabled: Optional[bool] = None
 
 
 class ClusterResponse(ClusterBase):

@@ -49,6 +49,7 @@ import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
+import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -186,6 +187,8 @@ function AppShell() {
               {/* K8S 자원 관리 — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화 */}
               <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
               <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
+              <Route path="/cluster-trends/:clusterId" element={<ClusterTrendsPage />} />
+              <Route path="/cluster-trends" element={<ClusterTrendsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="/knowledge" element={<KnowledgeBasePage />} />
               <Route path="/knowledge/:id" element={<KnowledgeBasePage />} />

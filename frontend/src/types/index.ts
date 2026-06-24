@@ -54,6 +54,9 @@ export interface Cluster {
   corootProject?: string | null;
   corootUrl?: string | null;
   corootEnabled?: boolean;
+  // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
+  prometheusUrl?: string | null;
+  prometheusEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -141,6 +144,33 @@ export interface ClusterManageUpdate {
   corootProject?: string | null;
   corootUrl?: string | null;
   corootEnabled?: boolean;
+  prometheusUrl?: string | null;
+  prometheusEnabled?: boolean;
+}
+
+// ── Cluster Trends (per-node 메트릭 추이) ──────────────────────────────
+export type TrendMetricKey = 'cpu' | 'memory' | 'disk' | 'diskio' | 'network' | 'networkerr';
+export type TrendRange = '30m' | '1h' | '6h' | '24h' | '7d';
+
+export interface TrendPoint {
+  t: number;            // UNIX epoch seconds
+  v: number | null;
+}
+export interface TrendSeries {
+  node: string;
+  points: TrendPoint[];
+}
+export interface TrendMetricBlock {
+  unit: string;
+  series: TrendSeries[];
+}
+export interface ClusterTrendsResponse {
+  range: TrendRange;
+  step: string;
+  status: 'ok' | 'error' | 'offline';
+  error?: string | null;
+  dropped: string[];    // 상한 초과로 제외된 노드명
+  metrics: Partial<Record<TrendMetricKey, TrendMetricBlock>>;
 }
 
 // Addon
