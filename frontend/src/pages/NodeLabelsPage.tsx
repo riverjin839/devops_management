@@ -79,7 +79,7 @@ export function NodeLabelsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-3 py-3 flex gap-3">
+      <main className="pr-3 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={effectiveSelection}

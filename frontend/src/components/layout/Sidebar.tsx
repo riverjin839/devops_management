@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
-  Moon, Sun, Monitor, X, LogOut, User, ChevronRight, Home,
+  Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
   KeyRound, ShieldCheck, FileSearch, ServerCog,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
@@ -176,25 +176,24 @@ export function Sidebar() {
   const featureAllowed = (p: string) =>
     p !== '/wbs' || canAccessFeature(featureAccess, 'wbs', currentUser);
 
-  const { mode, toggle, setMode } = useHomeStore();
+  const { mode, toggle } = useHomeStore();
 
   const handleHomeClick = () => {
     if (location.pathname === '/') {
       toggle();
     } else {
-      setMode('work');
+      // 업무현황 홈 = 메인 홈. 현재 모드를 유지한 채 홈으로 — 아이콘이 가리키는 홈으로 일관 이동.
       navigate('/');
     }
   };
 
   const homeTooltip = location.pathname === '/'
     ? (mode === 'work' ? '업무 현황 (클릭 시 플랫폼 현황)' : '플랫폼 현황 (클릭 시 업무 현황)')
-    : '홈으로 이동';
+    : (mode === 'work' ? '업무 현황 홈으로' : '플랫폼 현황 홈으로');
 
-  // 홈 버튼 아이콘 — 현재 모드를 모양으로 구분. 기본값은 업무=ListTodo, 플랫폼=☸(톱니).
-  // Settings(홈 화면 설정)에서 모드별 커스텀 아이콘(lucide/이모지/이미지)을 지정 가능.
+  // 홈 버튼 아이콘 — 홈은 2개(업무현황=메인 홈 / 플랫폼현황)뿐이다. 어느 화면이든 현재 모드를
+  // 모양으로 구분(업무=ListTodo, 플랫폼=ServerCog). Settings(홈 화면 설정)에서 모드별 커스텀 가능.
   const renderHomeButtonIcon = () => {
-    if (location.pathname !== '/') return <Home className="w-5 h-5" />;
     const custom = mode === 'platform' ? settings?.homeIcons?.platform : settings?.homeIcons?.work;
     const resolved = resolveClusterIcon(custom);
     if (resolved?.kind === 'lucide') {
@@ -207,7 +206,7 @@ export function Sidebar() {
     if (resolved?.kind === 'text') {
       return <span className="text-base leading-none">{resolved.value}</span>;
     }
-    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=ServerCog — 플랫폼 관리 직관 + 업무와 모양/색 구분)
+    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=ServerCog)
     return mode === 'platform'
       ? <ServerCog className="w-5 h-5" />
       : <ListTodo className="w-5 h-5" />;

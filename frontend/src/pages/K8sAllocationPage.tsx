@@ -208,8 +208,8 @@ export function K8sAllocationPage() {
   }, [autoMs, clusterId, forceRefresh]);
 
   return (
-    <div className="min-h-screen bg-background p-3">
-      <div className="flex gap-3 max-w-[1800px] mx-auto">
+    <div className="min-h-screen bg-background py-3 pr-3">
+      <div className="flex gap-3">
         <div className="sticky top-3 self-start">
           <ClusterSidebar
             clusters={clusters}

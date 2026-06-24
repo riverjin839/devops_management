@@ -4,6 +4,7 @@ export { InlineEdit } from './InlineEdit';
 export { ConfirmDialog } from './ConfirmDialog';
 export { LogViewer } from './LogViewer';
 export { ClusterSidebar } from './ClusterSidebar';
+export { ServiceSidebar } from './ServiceSidebar';
 export { ClusterIconPicker } from './ClusterIconPicker';
 export { SavedCommands } from './SavedCommands';
 export { ResizeHandle } from './ResizeHandle';
