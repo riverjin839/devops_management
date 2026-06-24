@@ -201,7 +201,7 @@ export function PacketFlowPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-6 py-6 flex gap-5">
+      <main className="pr-6 py-6 flex gap-5">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}

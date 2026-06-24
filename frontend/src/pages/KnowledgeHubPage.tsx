@@ -14,6 +14,8 @@ import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
+import { ServiceSidebar } from '@/components/common';
+import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 
 // ── 통합 항목 모델 ───────────────────────────────────────────────────────────
 type HubKind = 'note' | 'command' | 'guide' | 'item' | 'workflow';
@@ -106,7 +108,9 @@ function SortTh({
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 export function KnowledgeHubPage() {
   const navigate = useNavigate();
+  const services = useServiceCatalog();
   const [search, setSearch] = useState('');
+  const [serviceFilter, setServiceFilter] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<HubKind | ''>('');
   const [openOnly, setOpenOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | ''>('updatedAt');
@@ -217,11 +221,12 @@ export function KnowledgeHubPage() {
   const trimmed = search.trim().toLowerCase();
   const filtered = useMemo(() => {
     let list = items;
+    if (serviceFilter) list = list.filter((it) => it.service === serviceFilter);
     if (kindFilter) list = list.filter((it) => it.kind === kindFilter);
     if (openOnly) list = list.filter((it) => it.kind === 'item' && it.statusLabel === '미조치');
     if (trimmed) list = list.filter((it) => it.searchBlob.includes(trimmed));
     return list;
-  }, [items, kindFilter, openOnly, trimmed]);
+  }, [items, serviceFilter, kindFilter, openOnly, trimmed]);
 
   // ── 정렬 ──
   const sorted = useMemo(() => {
@@ -254,12 +259,14 @@ export function KnowledgeHubPage() {
     [items],
   );
 
-  const hasFilters = !!kindFilter || openOnly || !!trimmed;
-  const clearFilters = () => { setKindFilter(''); setOpenOnly(false); setSearch(''); };
+  const hasFilters = !!serviceFilter || !!kindFilter || openOnly || !!trimmed;
+  const clearFilters = () => { setServiceFilter(null); setKindFilter(''); setOpenOnly(false); setSearch(''); };
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
+    // 메인 사이드바 바로 옆에 서비스 사이드바를 붙인다(공백 없이 flush). 본문은 flex-1.
+    <div className="min-h-screen bg-background flex">
+      <ServiceSidebar services={services} selectedKey={serviceFilter} onSelect={setServiceFilter} allLabel="전체 서비스" />
+      <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
         {/* ── Page header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">

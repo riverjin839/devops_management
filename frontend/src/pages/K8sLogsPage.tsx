@@ -106,8 +106,8 @@ export function K8sLogsPage() {
   const text = useMemo(() => lines.join('\n'), [lines]);
 
   return (
-    <div className="min-h-screen bg-background p-3">
-      <div className="flex gap-3 max-w-[1600px] mx-auto">
+    <div className="min-h-screen bg-background py-3 pr-3">
+      <div className="flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}

@@ -64,7 +64,7 @@ export function LakeServicesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-3 py-3 flex gap-3 max-w-[1600px]">
+      <main className="pr-3 py-3 flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar
             clusters={clusters}
