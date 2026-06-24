@@ -7,6 +7,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -146,7 +147,7 @@ def get_k8s_event(event_id: UUID, db: Session = Depends(get_db)) -> K8sEventOut:
     return event
 
 
-@router.delete("/{event_id}", status_code=204)
+@router.delete("/{event_id}", status_code=204, response_class=Response)
 def delete_k8s_event(event_id: UUID, db: Session = Depends(get_db)) -> None:
     event = db.query(K8sEvent).filter(K8sEvent.id == event_id).first()
     if not event:
