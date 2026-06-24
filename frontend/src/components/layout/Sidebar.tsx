@@ -389,7 +389,11 @@ export function Sidebar() {
                 active={activeGroup === g.id}
                 highlighted={openGroup === g.id}
                 suppressTooltip={openGroup === g.id}
-                onClick={(rect) => toggleGroup(g.id, rect)}
+                onClick={(rect) => {
+                  // 지식/분석은 플라이아웃 대신 지식 허브 홈(보드)으로 바로 이동.
+                  if (g.id === 'knowledge') { setOpenGroup(null); navigate('/docs'); }
+                  else toggleGroup(g.id, rect);
+                }}
               />
             ))}
           </div>

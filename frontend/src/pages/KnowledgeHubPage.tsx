@@ -5,20 +5,20 @@ import {
   Search, Pin, Terminal, AlertCircle, BookMarked,
   GitFork, StickyNote, AlertTriangle,
   Library, X, ChevronRight, ChevronUp, ChevronDown, ArrowUpDown,
-  FileQuestion,
+  FileQuestion, FolderTree, ListTodo, Plus, Map as MapIcon, Share2, Rss,
 } from 'lucide-react';
 import {
-  opsNotesApi, commandsApi, workGuidesApi, workItemsApi, workflowsApi,
+  opsNotesApi, commandsApi, workGuidesApi, workItemsApi, workflowsApi, knowledgeApi,
 } from '@/services/api';
 import type {
-  OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
+  OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance, KnowledgePage,
 } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
 import { ServiceSidebar } from '@/components/common';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 
 // ── 통합 항목 모델 ───────────────────────────────────────────────────────────
-type HubKind = 'note' | 'command' | 'guide' | 'item' | 'workflow';
+type HubKind = 'page' | 'task' | 'note' | 'command' | 'guide' | 'item' | 'workflow';
 
 interface HubItem {
   id: string;
@@ -40,6 +40,8 @@ const KIND_META: Record<HubKind, {
   accent: string;
   chip: string;
 }> = {
+  page:     { label: '지식문서',   Icon: FolderTree,    accent: 'text-primary',     chip: 'bg-primary/10 text-primary border-primary/30' },
+  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-indigo-500',  chip: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
   note:     { label: '노트',       Icon: StickyNote,    accent: 'text-amber-500',   chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30' },
   command:  { label: '명령어',     Icon: Terminal,      accent: 'text-sky-500',     chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30' },
   guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-emerald-500', chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
@@ -63,6 +65,10 @@ const STATUS_TEXT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
   slate:   'text-slate-600 dark:text-slate-400',
   primary: 'text-primary',
   sky:     'text-sky-600 dark:text-sky-400',
+};
+
+const PAGE_CAT_LABEL: Record<string, string> = {
+  enhancement: '고도화', operation: '운영업무', learning: '기술학습', build: '구축',
 };
 
 const IMPORTANCE_TONE: Record<CommandImportance, HubItem['statusTone']> = {
@@ -126,18 +132,39 @@ export function KnowledgeHubPage() {
   const { data: guideData,    isLoading: guideLoading    } = useQuery({ queryKey: ['work-guides'], queryFn: () => workGuidesApi.getAll().then((r) => r.data),  staleTime: 1000 * 30 });
   const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
   const { data: workflowData, isLoading: workflowLoading } = useQuery({ queryKey: ['workflows'],   queryFn: () => workflowsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
+  const { data: pageData,     isLoading: pageLoading     } = useQuery({ queryKey: ['knowledge', 'all'], queryFn: () => knowledgeApi.list().then((r) => r.data.data ?? []), staleTime: 1000 * 30 });
 
-  const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading;
+  const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading || pageLoading;
 
   const opsNotes  = useMemo<OpsNote[]>(()      => opsData?.data ?? [],      [opsData]);
   const commands  = useMemo<CommandEntry[]>(() => cmdData?.data ?? [],      [cmdData]);
   const guides    = useMemo<WorkGuide[]>(()    => guideData?.data ?? [],    [guideData]);
   const workItems = useMemo<WorkItem[]>(()     => issueData?.data ?? [],    [issueData]);
   const workflows = useMemo<Workflow[]>(()     => workflowData?.data ?? [], [workflowData]);
+  const pages     = useMemo<KnowledgePage[]>(() => pageData ?? [],          [pageData]);
 
   // ── 5종을 단일 HubItem 배열로 정규화 ──
   const items: HubItem[] = useMemo<HubItem[]>(() => {
     const out: HubItem[] = [];
+
+    // 지식베이스 문서 — 허브에서 모두 가시화 + 클릭 시 편집화면(/knowledge/:id)으로.
+    for (const p of pages) {
+      const tone: HubItem['statusTone'] = p.status === 'archived' ? 'slate' : p.status === 'draft' ? 'amber' : 'emerald';
+      const label = p.status === 'archived' ? '보관' : p.status === 'draft' ? '초안' : '활성';
+      out.push({
+        id: `page-${p.id}`,
+        kind: 'page',
+        title: p.title,
+        category: p.category ? (PAGE_CAT_LABEL[p.category] ?? p.category) : undefined,
+        service: p.service ?? undefined,
+        pinned: p.pinned,
+        statusLabel: label,
+        statusTone: tone,
+        updatedAt: p.updatedAt,
+        href: `/knowledge/${p.id}`,
+        searchBlob: `${p.title} ${stripHtml(p.content ?? '')} ${p.summary ?? ''}`.toLowerCase(),
+      });
+    }
 
     for (const n of opsNotes) {
       out.push({
@@ -186,16 +213,16 @@ export function KnowledgeHubPage() {
     }
 
     for (const i of workItems) {
-      if (i.type !== 'issue') continue;
       const resolved = !!i.closedAt;
+      const isIssue = i.type === 'issue';
       out.push({
-        id: `item-${i.id}`,
-        kind: 'item',
-        title: i.content.split('\n')[0] || i.category,
+        id: `${isIssue ? 'item' : 'task'}-${i.id}`,
+        kind: isIssue ? 'item' : 'task',
+        title: (i.title?.trim() || i.content.split('\n')[0] || i.category),
         category: i.category,
         service: i.service,
-        statusLabel: resolved ? '조치완료' : '미조치',
-        statusTone: resolved ? 'emerald' : 'red',
+        statusLabel: resolved ? '완료' : isIssue ? '미조치' : '진행',
+        statusTone: resolved ? 'emerald' : isIssue ? 'red' : 'amber',
         updatedAt: i.updatedAt,
         href: `/tasks-mgmt/${i.id}`,
         searchBlob: `${i.content} ${i.resolution ?? ''} ${i.category} ${i.assignee} ${i.clusterName ?? ''}`.toLowerCase(),
@@ -215,7 +242,7 @@ export function KnowledgeHubPage() {
     }
 
     return out;
-  }, [opsNotes, commands, guides, workItems, workflows]);
+  }, [pages, opsNotes, commands, guides, workItems, workflows]);
 
   // ── 검색 + 필터 ──
   const trimmed = search.trim().toLowerCase();
@@ -248,7 +275,7 @@ export function KnowledgeHubPage() {
 
   // 5종별 카운트 (필터 chip에 표시)
   const countByKind = useMemo<Record<HubKind, number>>(() => {
-    const map: Record<HubKind, number> = { note: 0, command: 0, guide: 0, item: 0, workflow: 0 };
+    const map: Record<HubKind, number> = { page: 0, task: 0, note: 0, command: 0, guide: 0, item: 0, workflow: 0 };
     for (const it of items) map[it.kind] += 1;
     return map;
   }, [items]);
@@ -276,9 +303,28 @@ export function KnowledgeHubPage() {
             <div className="min-w-0">
               <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
               <p className="text-sm text-muted-foreground">
-                운영 노트 · 명령어 · 작업 가이드 · 이슈 · 워크플로우를 한 대장에서.
+                지식문서 · 업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우를 한 대장에서.
               </p>
             </div>
+          </div>
+          {/* 우측 액션 — 새 지식문서 작성 + 분석 도구 바로가기 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => navigate('/knowledge')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> 새 문서
+            </button>
+            <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+            <button onClick={() => navigate('/mindmap')} className="flex items-center gap-1 px-2.5 py-1.5 text-sm bg-card border border-border rounded-xl hover:bg-secondary transition-colors">
+              <MapIcon className="w-3.5 h-3.5 text-muted-foreground" /> 마인드맵
+            </button>
+            <button onClick={() => navigate('/ontology')} className="flex items-center gap-1 px-2.5 py-1.5 text-sm bg-card border border-border rounded-xl hover:bg-secondary transition-colors">
+              <Share2 className="w-3.5 h-3.5 text-muted-foreground" /> 온톨로지
+            </button>
+            <button onClick={() => navigate('/trends')} className="flex items-center gap-1 px-2.5 py-1.5 text-sm bg-card border border-border rounded-xl hover:bg-secondary transition-colors">
+              <Rss className="w-3.5 h-3.5 text-muted-foreground" /> 기술동향
+            </button>
           </div>
         </div>
 

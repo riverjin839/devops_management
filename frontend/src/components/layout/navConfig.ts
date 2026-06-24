@@ -4,7 +4,7 @@ import {
   CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
-  ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, FolderTree, Bell,
+  ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -24,7 +24,6 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/coroot':             { defaultLabel: '애플리케이션 APM', icon: Gauge, iconColor: 'text-blue-500', iconSize: 'w-5 h-5' },
   '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
-  '/knowledge':          { defaultLabel: '지식베이스',      icon: FolderTree },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
   '/todo-today':         { defaultLabel: 'Work To Do',     icon: CalendarCheck2 },
@@ -70,6 +69,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs'], modes: ['work'] },
   { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/knowledge', '/ops-notes', '/mindmap', '/ontology', '/trends', '/work-guides'], modes: ['work'] },
+  // 주: '/knowledge'(지식베이스)는 메뉴에서 제거됨 — 지식 허브(/docs)에서 문서 열기/새 문서로 접근.
   { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
 ];
 
