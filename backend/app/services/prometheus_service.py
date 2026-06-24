@@ -78,6 +78,69 @@ class PrometheusService:
             logger.exception("Unexpected Prometheus error: %s", exc)
             return self._offline(str(exc))
 
+    async def query_range(
+        self, promql: str, start: float, end: float, step: str
+    ) -> dict:
+        """
+        Execute a PromQL **range** query (`/api/v1/query_range`).
+
+        Parameters
+        ----------
+        start, end : float   — UNIX epoch seconds.
+        step       : str     — resolution step (e.g. "30s", "5m").
+
+        Returns
+        -------
+        dict with keys:
+            status : "ok" | "error" | "offline"
+            series : list[dict] | None   — [{"labels": {...}, "values": [[ts, "val"], ...]}]
+            error  : str | None
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(
+                    f"{self.base_url}/api/v1/query_range",
+                    params={
+                        "query": promql,
+                        "start": start,
+                        "end": end,
+                        "step": step,
+                    },
+                )
+                resp.raise_for_status()
+                body = resp.json()
+
+                if body.get("status") != "success":
+                    return {
+                        "status": "error",
+                        "series": None,
+                        "error": body.get("error", "Unknown Prometheus error"),
+                    }
+
+                data = body.get("data", {})
+                series = [
+                    {"labels": item.get("metric", {}), "values": item.get("values", [])}
+                    for item in data.get("result", [])
+                ]
+                return {"status": "ok", "series": series, "error": None}
+
+        except httpx.ConnectError:
+            logger.warning("Prometheus connect error — service unreachable at %s", self.base_url)
+            return self._offline_range("Prometheus is not reachable.")
+
+        except httpx.TimeoutException:
+            logger.warning("Prometheus range query timed out after %ss", self.timeout)
+            return self._offline_range("Prometheus query timed out.")
+
+        except httpx.HTTPStatusError as exc:
+            code = exc.response.status_code
+            logger.warning("Prometheus returned HTTP %s", code)
+            return {"status": "error", "series": None, "error": f"HTTP {code}"}
+
+        except Exception as exc:
+            logger.exception("Unexpected Prometheus range error: %s", exc)
+            return self._offline_range(str(exc))
+
     async def health_check(self) -> dict:
         """Quick probe — returns online/offline status."""
         try:
@@ -102,6 +165,10 @@ class PrometheusService:
             "results": None,
             "error": message,
         }
+
+    @staticmethod
+    def _offline_range(message: str) -> dict:
+        return {"status": "offline", "series": None, "error": message}
 
     @staticmethod
     def _parse_result(data: dict) -> dict:
