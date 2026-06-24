@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     # kubewatch 웹훅 인증 토큰 (미설정 시 토큰 검증 없이 수락)
     kubewatch_token: str = ""
 
+    # Cluster Trends: node-exporter 메트릭에서 노드를 식별하는 라벨명.
+    # 보통 "instance" 지만 스크랩 relabeling 에 따라 "node"/"nodename" 등일 수 있어 배포 의존 → 설정 가능.
+    # 이 라벨의 값이 k8s Node.metadata.name 과 일치해야 per-node 추이가 매칭된다.
+    prometheus_node_label: str = "instance"
+    # 한 번에 추이 조회 가능한 최대 노드 수 (300+ 노드 과수집 방지 상한).
+    trends_max_nodes: int = 30
+
     # Coroot (application APM / observability) — 별도 배포 서비스.
     # 비어있으면 기능 전체가 offline 으로 우아하게 비활성화된다 (Prometheus/Ollama 와 동일 패턴).
     # per-cluster 매핑(coroot_project)은 clusters 테이블에 저장하고, base URL 은 전역으로 둔다.
