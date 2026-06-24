@@ -98,6 +98,49 @@ const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
   { label: '5분', ms: 300_000 },
 ];
 
+// ── 페이징 공용 ───────────────────────────────────────────────────────────────
+/** 페이지당 표시 개수 선택. */
+function PageSizeSelect({ value, onChange, options }: {
+  value: number; onChange: (n: number) => void; options: number[];
+}) {
+  return (
+    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+      페이지당
+      <select
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground"
+        title="페이지당 표시 개수"
+      >
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      개
+    </label>
+  );
+}
+
+/** 이전/다음 페이지 이동. totalPages ≤ 1 이면 렌더 안 함. */
+function Pager({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center gap-1">
+      <button type="button" onClick={() => onPage(Math.max(1, page - 1))} disabled={page <= 1}
+        className="px-3 py-1 text-sm bg-secondary border border-border rounded-lg hover:bg-muted disabled:opacity-50">이전</button>
+      <span className="px-2 text-sm tabular-nums">{page} / {totalPages}</span>
+      <button type="button" onClick={() => onPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
+        className="px-3 py-1 text-sm bg-secondary border border-border rounded-lg hover:bg-muted disabled:opacity-50">다음</button>
+    </div>
+  );
+}
+
+/** rows 를 page/pageSize 로 잘라 현재 페이지 행과 메타를 돌려준다. page 범위는 자동 보정. */
+function paginate<T>(rows: T[], page: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * pageSize;
+  return { totalPages, safePage, start, pageRows: rows.slice(start, start + pageSize) };
+}
+
 // ── 포맷/계산 헬퍼 ───────────────────────────────────────────────────────────
 const ratio = (part: number, whole: number) => (whole > 0 ? part / whole : 0);
 const pctText = (part: number, whole: number) => `${Math.round(ratio(part, whole) * 100)}%`;
@@ -602,13 +645,16 @@ function calcGridCols(count: number): number {
 
 // ── 네임스페이스 비효율 랭킹 탭 ──────────────────────────────────────────────────
 type ChartMetric = 'cpu' | 'mem';
+const RANK_PAGE_SIZES = [10, 15, 25, 50];
 
 function NsRankingView({ clusterId }: { clusterId: string }) {
   const nsQ = useAllocNamespaces(clusterId);
   const [metric, setMetric] = useState<ChartMetric>('cpu');
   const [q, setQ] = useState('');
+  const [pageSize, setPageSize] = useState(15);
+  const [page, setPage] = useState(1);
 
-  const nsChart = useMemo(() => {
+  const nsRanked = useMemo(() => {
     const s = q.trim().toLowerCase();
     const src = (nsQ.data?.items ?? []).filter((n) => !s || n.namespace.toLowerCase().includes(s));
     const items = src.map((n) => {
@@ -622,13 +668,17 @@ function NsRankingView({ clusterId }: { clusterId: string }) {
       if (a.slack != null && b.slack != null) return b.slack - a.slack;
       return b.req - a.req;
     });
-    return items.slice(0, 15);
+    return items;
   }, [nsQ.data, metric, q]);
+
+  const { totalPages, safePage, pageRows: nsChart } = paginate(nsRanked, page, pageSize);
+  // 기준/검색/페이지당 변경 시 1페이지로 리셋.
+  useEffect(() => { setPage(1); }, [metric, q, pageSize]);
 
   const unit = metric === 'cpu' ? ' 코어' : ' Gi';
 
   return (
-    <MacCard title="네임스페이스 비효율 랭킹 (Top 15 · req vs 실사용, 간격이 클수록 낭비)" bodyPadding="p-3">
+    <MacCard title={`네임스페이스 비효율 랭킹 (${fmtN(nsRanked.length)}개 · req vs 실사용, 간격이 클수록 낭비)`} bodyPadding="p-3">
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <span className="text-sm text-muted-foreground">기준</span>
         {(['cpu', 'mem'] as ChartMetric[]).map((m) => (
@@ -639,6 +689,10 @@ function NsRankingView({ clusterId }: { clusterId: string }) {
         ))}
         <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
         <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순</span>
+        <div className="ml-auto flex items-center gap-3">
+          <PageSizeSelect value={pageSize} onChange={setPageSize} options={RANK_PAGE_SIZES} />
+          <Pager page={safePage} totalPages={totalPages} onPage={setPage} />
+        </div>
       </div>
       {nsQ.isLoading ? (
         <Skeleton className="h-64 w-full" />
@@ -680,11 +734,21 @@ const NODE_ACCESSORS: Record<string, (r: AllocNodeRow) => number | string | null
   memSlackB: (r) => r.memSlackB,
   podCount: (r) => r.podCount,
 };
+
+// 카드 그리드 열 수: 'auto' = 노드 수 기반 자동 배치, 그 외 고정 열 수.
+type ColMode = 'auto' | 5 | 10 | 20;
+const COL_OPTIONS: { label: string; value: ColMode }[] = [
+  { label: '자동 배치', value: 'auto' },
+  { label: '5열', value: 5 },
+  { label: '10열', value: 10 },
+  { label: '20열', value: 20 },
+];
 function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNodes(clusterId);
   const refreshNode = useRefreshAllocNode(clusterId);
   const [sort, setSort] = useState<SortState>({ key: 'cpuSlackM', dir: 'desc' });
-  const [viewStyle, setViewStyle] = useState<'table' | 'card'>('table');
+  const [viewStyle, setViewStyle] = useState<'table' | 'card'>('card');
+  const [colMode, setColMode] = useState<ColMode>('auto');
   const [q, setQ] = useState('');
   const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'name'));
 
@@ -723,7 +787,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
   }
   if (!allItems.length) return <MacCard title="노드별 자원" bodyPadding="p-3"><EmptyState title="노드 없음" description="표시할 노드가 없습니다." /></MacCard>;
 
-  const gridCols = calcGridCols(Math.max(1, rows.length));
+  const gridCols = colMode === 'auto' ? calcGridCols(Math.max(1, rows.length)) : colMode;
 
   return (
     <MacCard title="노드별 자원" bodyPadding="p-0">
@@ -748,7 +812,22 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
           </div>
           <SearchInput value={q} onChange={setQ} placeholder="노드 찾기" />
           {viewStyle === 'table' && <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>}
-          {viewStyle === 'card' && <span className="text-xs text-muted-foreground">노드 {rows.length}개 · {gridCols}열 자동 배치</span>}
+          {viewStyle === 'card' && (
+            <>
+              <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                열 수
+                <select
+                  value={String(colMode)}
+                  onChange={(e) => setColMode(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as ColMode))}
+                  className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground"
+                  title="한 줄에 표시할 카드 열 수"
+                >
+                  {COL_OPTIONS.map((o) => <option key={o.label} value={String(o.value)}>{o.label}</option>)}
+                </select>
+              </label>
+              <span className="text-xs text-muted-foreground">노드 {rows.length}개 · {gridCols}열</span>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <CsvButton onClick={exportCsv} disabled={!rows.length} />
@@ -871,12 +950,15 @@ const NS_ACCESSORS: Record<string, (r: AllocNamespaceRow) => number | string | n
   memReqB: (r) => r.memReqB,
   eff: (r) => (r.cpuUsageM == null ? null : r.cpuUsageM / Math.max(1, r.cpuReqM)),
 };
+const NS_PAGE_SIZES = [10, 20, 50, 100];
 function NamespacesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNamespaces(clusterId);
   const refreshNs = useRefreshAllocNamespace(clusterId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortState>({ key: 'cpuReqM', dir: 'desc' });
   const [q, setQ] = useState('');
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(1);
   const onSort = (k: string) => setSort((p) => nextSort(p, k, k !== 'namespace'));
 
   const toggle = (ns: string) => setExpanded((prev) => {
@@ -891,6 +973,9 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
     return s ? allItems.filter((n) => n.namespace.toLowerCase().includes(s)) : allItems;
   }, [allItems, q]);
   const rows = useTableSort(filtered, NS_ACCESSORS, sort);
+  const { totalPages, safePage, start, pageRows } = paginate(rows, page, pageSize);
+  // 검색/정렬/페이지당 변경 시 1페이지로 리셋.
+  useEffect(() => { setPage(1); }, [q, sort, pageSize]);
 
   const exportCsv = () => {
     const headers = ['Namespace', 'Pods', 'Workloads', 'req미설정',
@@ -925,9 +1010,10 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
   return (
     <MacCard title={`네임스페이스별 자원 (${fmtN(rows.length)}/${fmtN(allItems.length)}개)`} bodyPadding="p-0">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
           <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
           <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+          <PageSizeSelect value={pageSize} onChange={setPageSize} options={NS_PAGE_SIZES} />
         </div>
         <div className="flex items-center gap-3">
           <CsvButton onClick={exportCsv} disabled={!rows.length} />
@@ -957,7 +1043,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
                 </td>
               </tr>
             )}
-            {rows.map((ns: AllocNamespaceRow) => {
+            {pageRows.map((ns: AllocNamespaceRow) => {
               const open = expanded.has(ns.namespace);
               return (
                 <Fragment key={ns.namespace}>
@@ -1002,6 +1088,14 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
           </tbody>
         </table>
       </div>
+      {rows.length > 0 && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border flex-wrap">
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {fmtN(start + 1)}–{fmtN(start + pageRows.length)} / {fmtN(rows.length)}
+          </span>
+          <Pager page={safePage} totalPages={totalPages} onPage={setPage} />
+        </div>
+      )}
     </MacCard>
   );
 }
