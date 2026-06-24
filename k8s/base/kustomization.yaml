@@ -46,6 +46,15 @@ resources:
   # Monitoring Stack (Prometheus, Grafana, kube-state-metrics, node-exporter)
   - monitoring/
 
+  # kubewatch — K8s 이벤트 실시간 수신 (webhook → /api/v1/events/kubewatch)
+  - kubewatch/rbac.yaml
+  - kubewatch/configmap.yaml
+  - kubewatch/deployment.yaml
+
+  # grafana-renderer — Grafana 패널 PNG 스냅샷 (PromQL 카드 /snapshot 엔드포인트)
+  - grafana-renderer/deployment.yaml
+  - grafana-renderer/service.yaml
+
 configMapGenerator:
   - name: k8s-monitor-config
     literals:
@@ -63,6 +72,7 @@ configMapGenerator:
       - OLLAMA_URL=http://ollama:11434
       - PROMETHEUS_URL=http://prometheus:9090
       - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_RENDERER_URL=http://grafana-renderer:8081
   - name: ansible-playbooks
     files:
       - check_cluster.yml=ansible-playbooks-check_cluster.yml

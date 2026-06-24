@@ -160,6 +160,29 @@ export interface Addon {
   lastCheck: string;
 }
 
+// K8s 실시간 이벤트 (kubewatch 웹훅 수신)
+export type K8sEventSeverity = 'info' | 'warning' | 'critical';
+
+export interface K8sEvent {
+  id: string;
+  clusterId?: string | null;
+  eventType: string;
+  resourceKind: string;
+  resourceName: string;
+  namespace?: string | null;
+  reason?: string | null;
+  message?: string | null;
+  severity: K8sEventSeverity;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw?: Record<string, any> | null;
+  receivedAt: string;
+}
+
+export interface K8sEventListResponse {
+  data: K8sEvent[];
+  total: number;
+}
+
 // Check Log
 export interface CheckLog {
   id: string;

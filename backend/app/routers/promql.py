@@ -9,6 +9,7 @@ from uuid import UUID
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,6 +22,7 @@ from app.schemas.metric_card import (
     MetricQueryResult,
 )
 from app.services.prometheus_service import prometheus_service
+from app.services.grafana_service import grafana_service
 
 router = APIRouter(prefix="/promql", tags=["promql"])
 
@@ -127,3 +129,27 @@ async def query_all_cards(db: Session = Depends(get_db)):
 async def prometheus_health():
     """Quick Prometheus availability probe."""
     return await prometheus_service.health_check()
+
+
+@router.get("/cards/{card_id}/snapshot", response_class=Response)
+async def snapshot_card(card_id: UUID, db: Session = Depends(get_db)):
+    """Grafana Image Renderer 를 통해 패널 PNG 스냅샷 반환.
+
+    MetricCard.grafana_panel_url 이 설정돼 있어야 한다 (예: /d-solo/abc/dash?panelId=2).
+    renderer 오프라인 또는 URL 미설정 시 503 반환.
+    """
+    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Metric card not found")
+    if not card.grafana_panel_url:
+        raise HTTPException(status_code=400, detail="grafana_panel_url not configured for this card")
+    png = await grafana_service.render_panel(card.grafana_panel_url)
+    if png is None:
+        raise HTTPException(status_code=503, detail="Grafana renderer unavailable")
+    return Response(content=png, media_type="image/png")
+
+
+@router.get("/renderer/health")
+async def renderer_health():
+    """Grafana Image Renderer 가용성 프로브."""
+    return await grafana_service.renderer_health_check()

@@ -1283,6 +1283,19 @@ export const serviceTopologyApi = {
   deleteExternalNode: (nodeId: string) => api.delete(`/service-topology/external-nodes/${nodeId}`),
 };
 
+// K8s Events API (kubewatch 웹훅 수신 이벤트 조회)
+export const k8sEventsApi = {
+  list: (params?: {
+    clusterId?: string;
+    severity?: string;
+    resourceKind?: string;
+    limit?: number;
+    offset?: number;
+  }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
+  get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
+  delete: (id: string) => api.delete(`/events/${id}`),
+};
+
 // Trend Digest API
 export const trendsApi = {
   triggerCollect: (targetDate?: string, lookbackDays?: number) =>

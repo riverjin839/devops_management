@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubewatch-config
+  namespace: k8s-monitor
+data:
+  .kubewatch.yaml: |
+    handler:
+      webhook:
+        enabled: true
+        url: "http://backend/api/v1/events/kubewatch"
+    resource:
+      pod: true
+      deployment: true
+      node: true
+      persistentvolumeclaim: true
+      daemonset: false
+      statefulset: false
+      services: false
+      job: false
+      clusterrole: false
