@@ -28,7 +28,6 @@ from app.routers import (
     ui_settings_router,
     workflows_router,
     work_guide_router,
-    knowledge_router,
     ops_note_router,
     reactions_router,
     mindmap_router,
@@ -691,10 +690,11 @@ def _run_migrations():
         _safe_add_column("work_guides", "parent_id", "UUID")
         _safe_add_column("work_guides", "sort_order", "INTEGER NOT NULL DEFAULT 0")
 
-    # knowledge_pages: 비파괴 가져오기 출처 컬럼 (구버전 DB 호환). 테이블 자체는 create_all 이 생성.
-    if "knowledge_pages" in inspector.get_table_names():
-        _safe_add_column("knowledge_pages", "source_ref", "VARCHAR(128)")
-        _safe_create_index("ix_knowledge_pages_source_ref", "knowledge_pages", "(source_ref)")
+    # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
+    # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
+    for _kb_table in ("knowledge_presence", "knowledge_page_versions", "knowledge_pages"):
+        if _kb_table in inspector.get_table_names():
+            _safe_exec(f"DROP TABLE IF EXISTS {_kb_table} CASCADE", label=f"drop {_kb_table}")
 
     # confluence_url 컬럼 — 모든 작성형 엔티티 (tasks/issues/ops_notes/work_guides/
     # command_entries/workflows/mindmaps)에 공통으로 Confluence 문서 링크를 저장.
@@ -1400,7 +1400,6 @@ app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(knowledge_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)

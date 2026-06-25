@@ -141,12 +141,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
     for (const item of taskItems) {
       const s = item.startedAt?.slice(0, 10);
       if (!s) continue;
-      // 완료일(closedAt)이 있으면 그날까지, 없으면 상태와 무관하게 "오늘"까지 계속 자란다.
       const closed = item.closedAt?.slice(0, 10);
-      const eRaw = closed ?? todayD;
-      const e = eRaw < s ? s : eRaw;
       // 완료일 미입력 + 시작이 오늘 이전/오늘 → 진행 중(성장 중)으로 본다.
       const growing = !closed && s <= todayD;
+      // 완료일(closedAt)이 있으면 그날까지. 진행 중이면 "오늘"에서 끊지 않고 보이는 주의
+      // 끝(금)까지 꽉 채워, 다음 주로 넘어가도 계속 이어지게 한다. 완료일도 없고 시작이
+      // 미래면(아직 시작 전) 시작일 하루만 표시.
+      const eRaw = closed ?? (growing ? weekEndStr : s);
+      const e = eRaw < s ? s : eRaw;
       // overlap test against [weekStartStr(월), weekEndStr(금)]
       if (e < weekStartStr || s > weekEndStr) continue;
 
