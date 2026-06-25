@@ -184,10 +184,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         if (arr) arr.push(b); else map.set(name, [b]);
       }
     }
+    // 로그인 본인을 최상단으로 — '담당자' 보기(MemberTodayTodos)와 동일하게 맞춘다.
+    const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
     return Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0], 'ko'))
+      .sort((a, b) =>
+        (b[0] === myName ? 1 : 0) - (a[0] === myName ? 1 : 0)
+        || a[0].localeCompare(b[0], 'ko'))
       .map(([name, bars]) => ({ name, lanes: packLanes(bars) }));
-  }, [taskBars]);
+  }, [taskBars, currentUser]);
 
   // ── milestones (issues that occurred this week) ──
   const milestones: Milestone[] = useMemo(() => {
