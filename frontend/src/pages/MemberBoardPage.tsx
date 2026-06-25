@@ -4,6 +4,7 @@ import { Users, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, Che
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useToast } from '@/components/common';
+import { useAuthStore } from '@/stores/authStore';
 import type { WorkItem, Assignee } from '@/types';
 
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
@@ -263,6 +264,7 @@ export function MemberBoardPage() {
   const { data: assignees = [] } = useAssignees();
   const { data: workItemsData } = useWorkItems();
   const toast = useToast();
+  const me = useAuthStore((s) => s.user);
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<MemberFilter>('active');
@@ -319,14 +321,25 @@ export function MemberBoardPage() {
       });
     }
 
-    // 정렬: 열린 작업/이슈 많은 순
-    list.sort((a, b) =>
-      (b.openTasks + b.unresolvedIssues) - (a.openTasks + a.unresolvedIssues)
-      || a.assignee.localeCompare(b.assignee),
-    );
+    // 본인(로그인 사용자) 판별 — 사번(username)↔employeeId 우선, 표시이름↔name 보조.
+    const isMe = (b: MemberBucket) =>
+      !!me && (
+        (!!b.info?.employeeId && b.info.employeeId === me.username) ||
+        (!!me.displayName && b.assignee === me.displayName) ||
+        b.assignee === me.username
+      );
+
+    // 정렬: 본인 최상단 → 열린 작업/이슈 많은 순 → 이름순
+    list.sort((a, b) => {
+      const am = isMe(a) ? 1 : 0;
+      const bm = isMe(b) ? 1 : 0;
+      if (am !== bm) return bm - am;
+      return (b.openTasks + b.unresolvedIssues) - (a.openTasks + a.unresolvedIssues)
+        || a.assignee.localeCompare(b.assignee);
+    });
 
     return list;
-  }, [assignees, workItemsData, includeSecondary, range]);
+  }, [assignees, workItemsData, includeSecondary, range, me]);
 
   const filtered = useMemo(() => {
     let list = buckets;
