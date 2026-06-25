@@ -11,7 +11,6 @@ import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAY
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
-import { SavedViews, type SavedViewState } from '@/components/work-items/SavedViews';
 import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
 import { useJiraConfig } from '@/hooks/useJira';
@@ -332,14 +331,6 @@ export function WorkItemBoardPage() {
   // 이번주(월~일) 시작일 범위로 필터 설정.
   const fmtDate = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const setThisWeek = () => {
-    const now = new Date();
-    const diffToMon = (now.getDay() + 6) % 7;   // 0=Sun..6=Sat → 월요일까지 거슬러 갈 일수
-    const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    setFilterFrom(fmtDate(mon));
-    setFilterTo(fmtDate(sun));
-  };
   // 현재 from~to 가 이번주(월~일)와 정확히 일치하는지(버튼 활성 표시용).
   const isThisWeek = (() => {
     const now = new Date();
@@ -348,6 +339,20 @@ export function WorkItemBoardPage() {
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     return filterFrom === fmtDate(mon) && filterTo === fmtDate(sun);
   })();
+  // 이번주 버튼 토글 — 이미 이번주 범위면 해제(범위 비움), 아니면 이번주(월~일)로 설정.
+  const toggleThisWeek = () => {
+    if (isThisWeek) {
+      setFilterFrom('');
+      setFilterTo('');
+      return;
+    }
+    const now = new Date();
+    const diffToMon = (now.getDay() + 6) % 7;   // 0=Sun..6=Sat → 월요일까지 거슬러 갈 일수
+    const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    setFilterFrom(fmtDate(mon));
+    setFilterTo(fmtDate(sun));
+  };
 
   const clearFilters = () => {
     setFilterClusterId('');
@@ -361,26 +366,6 @@ export function WorkItemBoardPage() {
   };
 
   const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterSprintId || filterFrom || filterTo;
-
-  // 저장된 뷰 — 현재 필터/정렬/보기 스냅샷 + 적용.
-  const currentView: SavedViewState = {
-    typeFilter, filterClusterId, filterAssignee, filterCategory, filterPriority,
-    filterModule, filterSprintId, filterFrom, filterTo, sortKey, sortDir, viewMode,
-  };
-  const applyView = (s: SavedViewState) => {
-    setTypeFilter((s.typeFilter as WorkItemType | 'all') || 'all');
-    setFilterClusterId(s.filterClusterId || '');
-    setFilterAssignee(s.filterAssignee || '');
-    setFilterCategory(s.filterCategory || '');
-    setFilterPriority(s.filterPriority || '');
-    setFilterModule((s.filterModule as WorkItemModule | '') || '');
-    setFilterSprintId(s.filterSprintId || '');
-    setFilterFrom(s.filterFrom || '');
-    setFilterTo(s.filterTo || '');
-    setSortKey((s.sortKey as WorkItemSortKey | '') || '');
-    setSortDir(s.sortDir === 'desc' ? 'desc' : 'asc');
-    setViewMode((s.viewMode as ViewMode) || 'table');
-  };
 
   const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
   const doneCount = items.filter((t) => t.kanbanStatus === 'done').length;
@@ -521,9 +506,9 @@ export function WorkItemBoardPage() {
             )}
             <button
               type="button"
-              onClick={setThisWeek}
+              onClick={toggleThisWeek}
               aria-pressed={isThisWeek}
-              title="이번주(월~일) 시작 업무만 보기"
+              title={isThisWeek ? '이번주 필터 해제' : '이번주(월~일) 시작 업무만 보기'}
               className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
                 isThisWeek ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
               }`}
@@ -569,7 +554,6 @@ export function WorkItemBoardPage() {
             >
               <Clock className="w-3.5 h-3.5" /> 시간
             </button>
-            <SavedViews current={currentView} onApply={applyView} />
             <button
               type="button"
               onClick={() => setCustomFieldsOpen(true)}

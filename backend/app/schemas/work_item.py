@@ -1,16 +1,28 @@
 from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
+import re
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-def _blank_str_to_none(v):
-    """빈 문자열/공백만 있는 값을 None 으로 — datetime 필드가 ''(빈 input) 를 받아
-    'Input should be a valid datetime' 422 로 터지는 것을 방지한다.
-    프론트의 날짜 input 이 비워진 채 전송돼도 안전하게 null 처리."""
-    if isinstance(v, str) and v.strip() == "":
-        return None
+_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _coerce_datetime_input(v):
+    """datetime 필드용 입력 보정 (mode=before).
+
+    - 빈 문자열/공백만 → None: 프론트 date input 이 비워진 채 전송돼도 안전하게 null 처리.
+    - 날짜만(YYYY-MM-DD) → 자정 datetime(YYYY-MM-DDT00:00:00): 인라인 표의 `<input type="date">`
+      가 date-only 로 보내면 pydantic(2.5.x)이 'Input should be a valid datetime' 422 로
+      거부하므로, 시간 부분을 자정으로 채워 datetime 파싱이 되도록 한다.
+    """
+    if isinstance(v, str):
+        s = v.strip()
+        if s == "":
+            return None
+        if _DATE_ONLY_RE.match(s):
+            return f"{s}T00:00:00"
     return v
 
 WorkItemType = Literal["task", "issue", "meeting", "training", "etc"]
@@ -73,7 +85,7 @@ class WorkItemBase(BaseModel):
 
     _coerce_blank_dates = field_validator(
         "started_at", "closed_at", mode="before"
-    )(_blank_str_to_none)
+    )(_coerce_datetime_input)
 
 
 class WorkItemCreate(WorkItemBase):
@@ -114,7 +126,7 @@ class WorkItemUpdate(BaseModel):
 
     _coerce_blank_dates = field_validator(
         "started_at", "closed_at", mode="before"
-    )(_blank_str_to_none)
+    )(_coerce_datetime_input)
 
 
 class WorkItemCommentCreate(BaseModel):
