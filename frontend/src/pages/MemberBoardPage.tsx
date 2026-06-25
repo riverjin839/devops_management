@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { Users, User, Search, X, ClipboardList, ListTodo, Mail, Hash, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useToast } from '@/components/common';
@@ -90,6 +90,18 @@ interface MemberBucket {
   doneTasks: number;
   unresolvedIssues: number;
   resolvedIssues: number;
+}
+
+// "나만 / 전체" 보기 범위 (당일 스케줄과 동일한 패턴).
+type ScopeMode = 'me' | 'all';
+
+/** 버킷이 로그인 본인인지 — 업무 등록 폼의 담당자 기본값과 같은 공식(displayName→username),
+ *  양쪽 trim, 사번(employeeId) 매칭 보조. */
+function bucketIsMine(b: MemberBucket, myName: string, myId: string): boolean {
+  const name = b.assignee.trim();
+  if (myName && name === myName) return true;
+  if (myId && (name === myId || (b.info?.employeeId ?? '').trim() === myId)) return true;
+  return false;
 }
 
 // ── 멤버별 섹션 ──────────────────────────────────────────────────────────────
@@ -271,6 +283,19 @@ export function MemberBoardPage() {
   const [period, setPeriod] = useState<Period>('all');
   const [includeSecondary, setIncludeSecondary] = useState(false);
 
+  // 보기 범위: 나만 / 전체 — 당일 스케줄과 동일하게 사용자별 localStorage 저장, 기본 '나만'.
+  const scopeKey = `k8s:memberBoardScope:${me?.username ?? 'guest'}`;
+  const [scope, setScope] = useState<ScopeMode>(() => {
+    try { return localStorage.getItem(scopeKey) === 'all' ? 'all' : 'me'; } catch { return 'me'; }
+  });
+  useEffect(() => {
+    try { setScope(localStorage.getItem(scopeKey) === 'all' ? 'all' : 'me'); } catch { /* noop */ }
+  }, [scopeKey]);
+  const changeScope = (next: ScopeMode) => {
+    setScope(next);
+    try { localStorage.setItem(scopeKey, next); } catch { /* noop */ }
+  };
+
   const range = useMemo(() => weekRange(period), [period]);
 
   const buckets = useMemo<MemberBucket[]>(() => {
@@ -321,18 +346,12 @@ export function MemberBoardPage() {
       });
     }
 
-    // 본인(로그인 사용자) 판별 — 사번(username)↔employeeId 우선, 표시이름↔name 보조.
-    const isMe = (b: MemberBucket) =>
-      !!me && (
-        (!!b.info?.employeeId && b.info.employeeId === me.username) ||
-        (!!me.displayName && b.assignee === me.displayName) ||
-        b.assignee === me.username
-      );
-
     // 정렬: 본인 최상단 → 열린 작업/이슈 많은 순 → 이름순
+    const myName = (me?.displayName?.trim() || me?.username?.trim() || '');
+    const myId = (me?.username ?? '').trim();
     list.sort((a, b) => {
-      const am = isMe(a) ? 1 : 0;
-      const bm = isMe(b) ? 1 : 0;
+      const am = me && bucketIsMine(a, myName, myId) ? 1 : 0;
+      const bm = me && bucketIsMine(b, myName, myId) ? 1 : 0;
       if (am !== bm) return bm - am;
       return (b.openTasks + b.unresolvedIssues) - (a.openTasks + a.unresolvedIssues)
         || a.assignee.localeCompare(b.assignee);
@@ -343,6 +362,12 @@ export function MemberBoardPage() {
 
   const filtered = useMemo(() => {
     let list = buckets;
+    // '나만' 범위 — 본인 버킷만. (이름 매칭 실패 시 빈 목록 → 안내 후 '전체' 전환 유도)
+    if (scope === 'me') {
+      const myName = (me?.displayName?.trim() || me?.username?.trim() || '');
+      const myId = (me?.username ?? '').trim();
+      list = list.filter((b) => bucketIsMine(b, myName, myId));
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((b) =>
@@ -358,7 +383,7 @@ export function MemberBoardPage() {
       list = list.filter((b) => b.openTasks > 0 || b.unresolvedIssues > 0);
     }
     return list;
-  }, [buckets, search, filter]);
+  }, [buckets, search, filter, scope, me]);
 
   const totalOpen = buckets.reduce((acc, b) => acc + b.openTasks + b.unresolvedIssues, 0);
 
@@ -396,6 +421,27 @@ export function MemberBoardPage() {
         {/* 필터 */}
         <div className="bg-card border border-border rounded-xl p-4 mb-5">
           <div className="flex flex-wrap items-center gap-3">
+            {/* 보기 범위: 나만 / 전체 (당일 스케줄과 동일) */}
+            <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+              <button
+                onClick={() => changeScope('me')}
+                aria-pressed={scope === 'me'}
+                className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${
+                  scope === 'me' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" /> 나만
+              </button>
+              <button
+                onClick={() => changeScope('all')}
+                aria-pressed={scope === 'all'}
+                className={`flex items-center gap-1 px-3 py-1.5 border-l border-border transition-colors ${
+                  scope === 'all' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" /> 전체
+              </button>
+            </div>
             <div className="flex-1 min-w-[220px] relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
@@ -472,7 +518,19 @@ export function MemberBoardPage() {
         {filtered.length === 0 ? (
           <div className="text-center py-20">
             <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground">조건에 맞는 멤버가 없습니다.</p>
+            {scope === 'me' ? (
+              <>
+                <p className="text-muted-foreground">{me ? '내 담당 업무가 없습니다.' : '로그인하면 내 업무를 볼 수 있습니다.'}</p>
+                <button
+                  onClick={() => changeScope('all')}
+                  className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Users className="w-3.5 h-3.5" /> 전체 보기
+                </button>
+              </>
+            ) : (
+              <p className="text-muted-foreground">조건에 맞는 멤버가 없습니다.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
