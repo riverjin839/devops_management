@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Plus, Settings2, ChevronDown } from 'lucide-react';
 import { WorkItem, WorkItemCreate, WorkItemUpdate, WorkItemType, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
-import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
+import { KANBAN_STATUS_LABEL } from './workItemKanbanUtils';
 import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
 import { RichTextEditor, assigneeWorkTableTemplate } from '@/components/editor';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
@@ -65,8 +65,6 @@ const PRIORITIES = [
 ];
 
 const KANBAN_STATUS_OPTIONS: KanbanStatus[] = ['backlog', 'todo', 'in_progress', 'review_test', 'done'];
-const MODULE_OPTIONS = Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][];
-const TYPE_OPTIONS = Object.entries(TYPE_LABEL_CONFIG) as [WorkItemTypeLabel, { label: string; cls: string }][];
 
 /** 신규 등록 기본값 — 현재 날짜+시간(YYYY-MM-DDTHH:mm). 등록 시점 자동 입력용. */
 function nowDatetime(): string {
@@ -281,27 +279,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     setImages((prev) => [...prev, dataUrl]);
   };
 
-  // 담당자(정) 복수 선택 — chip 추가/삭제 (쉼표/Enter 로 구분).
-  const addPrimary = (raw: string) => {
-    const name = raw.trim().replace(/,$/, '').trim();
-    if (!name) return;
-    setPrimaryList((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setPrimInput('');
-  };
-  const removePrimary = (name: string) => {
-    setPrimaryList((prev) => prev.filter((n) => n !== name));
-  };
-
-  // 담당자(부) 복수 선택 — chip 추가/삭제.
-  const addSecondary = (raw: string) => {
-    const name = raw.trim().replace(/,$/, '').trim();
-    if (!name) return;
-    setSecondaryList((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setSecInput('');
-  };
-  const removeSecondary = (name: string) => {
-    setSecondaryList((prev) => prev.filter((n) => n !== name));
-  };
 
   const allCategories = [...DEFAULT_TASK_CATEGORIES, ...customCategories, '기타'];
   const resolvedCategory = category === '기타' ? taskCategoryCustom.trim() : category;
@@ -311,7 +288,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const plainTaskContent = content.replace(/<[^>]*>/g, '').trim();
     // 입력 중이던(미확정) 담당자도 제출 시 반영.
     const primaryFinal = primInput.trim() && !primaryList.includes(primInput.trim())
       ? [...primaryList, primInput.trim()] : primaryList;
