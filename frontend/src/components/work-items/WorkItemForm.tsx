@@ -141,9 +141,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [primaryList, setPrimaryList] = useState<string[]>(
     !initial && !parentItem && defaultAssignee ? [defaultAssignee] : [],
   );
-  const [primInput, setPrimInput] = useState('');
   const [secondaryList, setSecondaryList] = useState<string[]>([]);
-  const [secInput, setSecInput] = useState('');
   const [clusterIds, setClusterIds] = useState<string[]>([]);
   const [category, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
@@ -288,11 +286,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 입력 중이던(미확정) 담당자도 제출 시 반영.
-    const primaryFinal = primInput.trim() && !primaryList.includes(primInput.trim())
-      ? [...primaryList, primInput.trim()] : primaryList;
-    const secondaryFinal = secInput.trim() && !secondaryList.includes(secInput.trim())
-      ? [...secondaryList, secInput.trim()] : secondaryList;
+    // 담당자(정) = 로그인 사용자 자동 맵핑(primaryList). 담당자(부)는 수정 시 보존.
+    const primaryFinal = primaryList;
+    const secondaryFinal = secondaryList;
     // 필수값 누락 — 조용히 return 하지 않고 무엇이 빠졌는지 알려준다.
     if (!service.trim()) { toast.error('등록 불가', '서비스를 선택하세요.'); return; }
 
