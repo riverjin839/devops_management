@@ -6,8 +6,10 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 ## 운영 / 사용
 - [MAC_LOCAL_TEST_GUIDE.md](MAC_LOCAL_TEST_GUIDE.md) — Apple Silicon Mac 로컬 테스트(kind+Vagrant 클러스터 2대 + PEP 기동)
 - [WIN_LOCAL_TEST_GUIDE.md](WIN_LOCAL_TEST_GUIDE.md) — Windows 로컬 테스트(VirtualBox + AlmaLinux kubeadm VM **2 클러스터** = 폐쇄망 동일 SSH/서버정보 + 멀티클러스터)
-- [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md) — 3단계 배포(kind / 폐쇄망 / 프로덕션)
+- [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md) — 로컬(Docker Compose)·3단계 배포(kind / 폐쇄망 / 프로덕션)
+- [AIRGAP_LLM_NEXUS.md](AIRGAP_LLM_NEXUS.md) — 폐쇄망 LLM(Ollama) 모델 수급(Nexus/오프라인)
 - [ADMIN_MANUAL.md](ADMIN_MANUAL.md) — 관리자 매뉴얼
+- [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) — 데이터 백업·복구(JSON export/import, merge/replace)
 - [PROJECT_FLOW_GUIDE.md](PROJECT_FLOW_GUIDE.md) — 요청/작업 흐름
 - [SERVICE_TOPOLOGY_GUIDE.md](SERVICE_TOPOLOGY_GUIDE.md) — 서비스 토폴로지(서비스 디스커버리) 사용 가이드
 - [PROJECT_PLAN.md](PROJECT_PLAN.md) — 프로젝트 계획

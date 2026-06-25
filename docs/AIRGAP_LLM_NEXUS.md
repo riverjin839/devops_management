@@ -121,6 +121,10 @@ Ollama 모델은 OCI 와 유사한 레지스트리 포맷으로 배포됩니다.
 `OLLAMA_MODEL` 은 `"qwen2.5"` 처럼 base 만 적어도 `qwen2.5:7b` 와 매칭됩니다
 (`agent_service.health_check` 가 base 이름 비교를 지원).
 
+> **Helm 폐쇄망 차트(`values-airgap.yaml`)** 는 모델을 **사전 적재한 커스텀 Ollama 이미지**를 쓰며
+> 기본 `OLLAMA_MODEL=qwen2.5-coder:7b` 로 설정돼 있다. 이 이미지를 그대로 쓰면 위 2장(모델 수급)
+> 절차가 필요 없다. 다른 모델을 쓰려면 `OLLAMA_MODEL` 을 바꾸고 2장 절차로 적재한다.
+
 ---
 
 ## 4. 연동 확인
