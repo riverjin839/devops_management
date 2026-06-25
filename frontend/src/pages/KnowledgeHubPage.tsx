@@ -1,24 +1,30 @@
 import { useMemo, useState, type ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Pin, Terminal, AlertCircle, BookMarked,
   GitFork, StickyNote, AlertTriangle,
   Library, X, ChevronRight, ChevronUp, ChevronDown, ArrowUpDown,
-  FileQuestion,
+  FileQuestion, FolderTree, ListTodo, Plus, Map as MapIcon, Share2, Rss, Download,
 } from 'lucide-react';
 import {
-  opsNotesApi, commandsApi, workGuidesApi, workItemsApi, workflowsApi,
+  opsNotesApi, commandsApi, workGuidesApi, workItemsApi, workflowsApi, knowledgeApi,
 } from '@/services/api';
 import type {
-  OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
+  OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance, KnowledgePage,
 } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
 import { ServiceSidebar } from '@/components/common';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
+import { useAuthStore } from '@/stores/authStore';
+// 허브 탭으로 임베드하는 기존 도구 페이지들 (개별 메뉴는 제거됨)
+import { OpsNotesPage } from './OpsNotesPage';
+import { MindMapPage } from './MindMapPage';
+import { OntologyPage } from './OntologyPage';
+import { TrendDigestPage } from './TrendDigestPage';
 
 // ── 통합 항목 모델 ───────────────────────────────────────────────────────────
-type HubKind = 'note' | 'command' | 'guide' | 'item' | 'workflow';
+type HubKind = 'page' | 'task' | 'note' | 'command' | 'guide' | 'item' | 'workflow';
 
 interface HubItem {
   id: string;
@@ -40,6 +46,8 @@ const KIND_META: Record<HubKind, {
   accent: string;
   chip: string;
 }> = {
+  page:     { label: '지식문서',   Icon: FolderTree,    accent: 'text-primary',     chip: 'bg-primary/10 text-primary border-primary/30' },
+  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-indigo-500',  chip: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
   note:     { label: '노트',       Icon: StickyNote,    accent: 'text-amber-500',   chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30' },
   command:  { label: '명령어',     Icon: Terminal,      accent: 'text-sky-500',     chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30' },
   guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-emerald-500', chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
@@ -64,6 +72,20 @@ const STATUS_TEXT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
   primary: 'text-primary',
   sky:     'text-sky-600 dark:text-sky-400',
 };
+
+const PAGE_CAT_LABEL: Record<string, string> = {
+  enhancement: '고도화', operation: '운영업무', learning: '기술학습', build: '구축',
+};
+
+// 허브 상단 탭 — 지식 목록(집계 표) + 임베드 도구(Q&A·마인드맵·온톨로지·기술동향).
+type HubTab = 'list' | 'qa' | 'mindmap' | 'ontology' | 'trends';
+const HUB_TABS: { key: HubTab; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+  { key: 'list',     label: '지식 목록', Icon: Library },
+  { key: 'qa',       label: 'Q&A 노트',  Icon: StickyNote },
+  { key: 'mindmap',  label: '마인드맵',  Icon: MapIcon },
+  { key: 'ontology', label: '온톨로지',  Icon: Share2 },
+  { key: 'trends',   label: '기술동향',  Icon: Rss },
+];
 
 const IMPORTANCE_TONE: Record<CommandImportance, HubItem['statusTone']> = {
   info: 'slate',
@@ -126,18 +148,39 @@ export function KnowledgeHubPage() {
   const { data: guideData,    isLoading: guideLoading    } = useQuery({ queryKey: ['work-guides'], queryFn: () => workGuidesApi.getAll().then((r) => r.data),  staleTime: 1000 * 30 });
   const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
   const { data: workflowData, isLoading: workflowLoading } = useQuery({ queryKey: ['workflows'],   queryFn: () => workflowsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
+  const { data: pageData,     isLoading: pageLoading     } = useQuery({ queryKey: ['knowledge', 'all'], queryFn: () => knowledgeApi.list().then((r) => r.data.data ?? []), staleTime: 1000 * 30 });
 
-  const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading;
+  const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading || pageLoading;
 
   const opsNotes  = useMemo<OpsNote[]>(()      => opsData?.data ?? [],      [opsData]);
   const commands  = useMemo<CommandEntry[]>(() => cmdData?.data ?? [],      [cmdData]);
   const guides    = useMemo<WorkGuide[]>(()    => guideData?.data ?? [],    [guideData]);
   const workItems = useMemo<WorkItem[]>(()     => issueData?.data ?? [],    [issueData]);
   const workflows = useMemo<Workflow[]>(()     => workflowData?.data ?? [], [workflowData]);
+  const pages     = useMemo<KnowledgePage[]>(() => pageData ?? [],          [pageData]);
 
   // ── 5종을 단일 HubItem 배열로 정규화 ──
   const items: HubItem[] = useMemo<HubItem[]>(() => {
     const out: HubItem[] = [];
+
+    // 지식베이스 문서 — 허브에서 모두 가시화 + 클릭 시 편집화면(/knowledge/:id)으로.
+    for (const p of pages) {
+      const tone: HubItem['statusTone'] = p.status === 'archived' ? 'slate' : p.status === 'draft' ? 'amber' : 'emerald';
+      const label = p.status === 'archived' ? '보관' : p.status === 'draft' ? '초안' : '활성';
+      out.push({
+        id: `page-${p.id}`,
+        kind: 'page',
+        title: p.title,
+        category: p.category ? (PAGE_CAT_LABEL[p.category] ?? p.category) : undefined,
+        service: p.service ?? undefined,
+        pinned: p.pinned,
+        statusLabel: label,
+        statusTone: tone,
+        updatedAt: p.updatedAt,
+        href: `/knowledge/${p.id}`,
+        searchBlob: `${p.title} ${stripHtml(p.content ?? '')} ${p.summary ?? ''}`.toLowerCase(),
+      });
+    }
 
     for (const n of opsNotes) {
       out.push({
@@ -186,16 +229,16 @@ export function KnowledgeHubPage() {
     }
 
     for (const i of workItems) {
-      if (i.type !== 'issue') continue;
       const resolved = !!i.closedAt;
+      const isIssue = i.type === 'issue';
       out.push({
-        id: `item-${i.id}`,
-        kind: 'item',
-        title: i.content.split('\n')[0] || i.category,
+        id: `${isIssue ? 'item' : 'task'}-${i.id}`,
+        kind: isIssue ? 'item' : 'task',
+        title: (i.title?.trim() || i.content.split('\n')[0] || i.category),
         category: i.category,
         service: i.service,
-        statusLabel: resolved ? '조치완료' : '미조치',
-        statusTone: resolved ? 'emerald' : 'red',
+        statusLabel: resolved ? '완료' : isIssue ? '미조치' : '진행',
+        statusTone: resolved ? 'emerald' : isIssue ? 'red' : 'amber',
         updatedAt: i.updatedAt,
         href: `/tasks-mgmt/${i.id}`,
         searchBlob: `${i.content} ${i.resolution ?? ''} ${i.category} ${i.assignee} ${i.clusterName ?? ''}`.toLowerCase(),
@@ -215,7 +258,7 @@ export function KnowledgeHubPage() {
     }
 
     return out;
-  }, [opsNotes, commands, guides, workItems, workflows]);
+  }, [pages, opsNotes, commands, guides, workItems, workflows]);
 
   // ── 검색 + 필터 ──
   const trimmed = search.trim().toLowerCase();
@@ -248,7 +291,7 @@ export function KnowledgeHubPage() {
 
   // 5종별 카운트 (필터 chip에 표시)
   const countByKind = useMemo<Record<HubKind, number>>(() => {
-    const map: Record<HubKind, number> = { note: 0, command: 0, guide: 0, item: 0, workflow: 0 };
+    const map: Record<HubKind, number> = { page: 0, task: 0, note: 0, command: 0, guide: 0, item: 0, workflow: 0 };
     for (const it of items) map[it.kind] += 1;
     return map;
   }, [items]);
@@ -262,26 +305,88 @@ export function KnowledgeHubPage() {
   const hasFilters = !!serviceFilter || !!kindFilter || openOnly || !!trimmed;
   const clearFilters = () => { setServiceFilter(null); setKindFilter(''); setOpenOnly(false); setSearch(''); };
 
+  const [tab, setTab] = useState<HubTab>('list');
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+  const qc = useQueryClient();
+  const [importing, setImporting] = useState(false);
+  // 기존 자료(SOP/운영노트/서비스 엔트리)를 지식베이스 문서로 비파괴 가져오기(중복 skip).
+  const runImport = async () => {
+    setImporting(true);
+    try {
+      await knowledgeApi.importExisting('all');
+      qc.invalidateQueries({ queryKey: ['knowledge'] });
+    } catch { /* 부분 성공 가능 — 조용히 무시 */ }
+    finally { setImporting(false); }
+  };
+
   return (
     // 메인 사이드바 바로 옆에 서비스 사이드바를 붙인다(공백 없이 flush). 본문은 flex-1.
     <div className="min-h-screen bg-background flex">
-      <ServiceSidebar services={services} selectedKey={serviceFilter} onSelect={setServiceFilter} allLabel="전체 서비스" />
-      <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
-        {/* ── Page header ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Library className="w-5 h-5 text-primary" />
+      {tab === 'list' && (
+        <ServiceSidebar services={services} selectedKey={serviceFilter} onSelect={setServiceFilter} allLabel="전체 서비스" />
+      )}
+      <main className="flex-1 min-w-0">
+        {/* ── 헤더 + 탭 ─────────────────────────────────────────────── */}
+        <div className="px-4 lg:px-6 pt-5 pb-2 border-b border-border">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Library className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
+                <p className="text-sm text-muted-foreground">
+                  지식문서 · 업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우 + 분석 도구를 한 곳에서.
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
-              <p className="text-sm text-muted-foreground">
-                운영 노트 · 명령어 · 작업 가이드 · 이슈 · 워크플로우를 한 대장에서.
-              </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => navigate('/knowledge')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> 새 문서
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={runImport}
+                  disabled={importing}
+                  title="기존 작업가이드(SOP)·운영노트·서비스 엔트리를 지식베이스 문서로 가져오기 (중복 자동 skip)"
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-sm bg-card border border-border rounded-xl hover:bg-secondary transition-colors disabled:opacity-60"
+                >
+                  <Download className="w-3.5 h-3.5 text-muted-foreground" /> {importing ? '가져오는 중…' : '기존 자료 가져오기'}
+                </button>
+              )}
             </div>
+          </div>
+          {/* 탭 바 */}
+          <div className="flex items-center gap-1 flex-wrap">
+            {HUB_TABS.map((t) => {
+              const TabIcon = t.Icon;
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border-b-2 transition-colors ${
+                    active ? 'text-primary border-primary' : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <TabIcon className="w-3.5 h-3.5" /> {t.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
+        {tab !== 'list' ? (
+          // 임베드 도구 — 자체 레이아웃을 가진 기존 페이지를 그대로 렌더.
+          tab === 'qa' ? <OpsNotesPage /> :
+          tab === 'mindmap' ? <MindMapPage /> :
+          tab === 'ontology' ? <OntologyPage /> :
+          <TrendDigestPage />
+        ) : (
+        <div className="px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
         {/* ── Filter / Search bar ─────────────────────────────────────── */}
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
@@ -470,6 +575,8 @@ export function KnowledgeHubPage() {
               총 {sorted.length}건{hasFilters && items.length !== sorted.length ? ` · 전체 ${items.length}건 중` : ''}
             </div>
           </div>
+        )}
+        </div>
         )}
       </main>
     </div>
