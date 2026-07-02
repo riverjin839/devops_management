@@ -174,7 +174,8 @@ export function KnowledgeHubPage() {
   const { data: opsData,      isLoading: opsLoading      } = useQuery({ queryKey: ['ops-notes'],   queryFn: () => opsNotesApi.getAll().then((r) => r.data),    staleTime: 1000 * 30 });
   const { data: cmdData,      isLoading: cmdLoading      } = useQuery({ queryKey: ['commands'],    queryFn: () => commandsApi.list().then((r) => r.data),      staleTime: 1000 * 30 });
   const { data: guideData,    isLoading: guideLoading    } = useQuery({ queryKey: ['work-guides'], queryFn: () => workGuidesApi.getAll().then((r) => r.data),  staleTime: 1000 * 30 });
-  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
+  // 기간/스프린트 필터가 로드된 목록 전체를 대상으로 동작하도록 백엔드 최대 limit(500)까지 요청.
+  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll({ limit: 500 }).then((r) => r.data),   staleTime: 1000 * 30 });
   const { data: workflowData, isLoading: workflowLoading } = useQuery({ queryKey: ['workflows'],   queryFn: () => workflowsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
 
   const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading;
