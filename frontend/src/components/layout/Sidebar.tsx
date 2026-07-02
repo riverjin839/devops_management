@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
-  KeyRound, ShieldCheck, FileSearch, ServerCog,
+  KeyRound, ShieldCheck, FileSearch, ServerCog, UserCheck,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -215,6 +215,9 @@ export function Sidebar() {
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
+  // 사용자 아이콘 클릭 시 여는 개인 메뉴(담당자 관리 / 비밀번호 변경) — 그룹 플라이아웃과 별개로 관리.
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<DOMRect | null>(null);
 
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
   const services = useServiceCatalog();
@@ -258,6 +261,7 @@ export function Sidebar() {
   // 경로 변경되면 flyout 자동 닫기 (단 사용자가 직접 클릭 후 같은 페이지인 경우는 무시)
   useEffect(() => {
     setOpenGroup(null);
+    setUserMenuOpen(false);
   }, [location.pathname]);
 
   // ESC 로 flyout / edit mode 닫기
@@ -265,6 +269,7 @@ export function Sidebar() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpenGroup(null);
+        setUserMenuOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -425,14 +430,12 @@ export function Sidebar() {
             <RailIconButton
               label={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}
               Icon={User}
-              onClick={() => { /* 호버 툴팁만 — 별도 동작 없음 */ }}
-            />
-          )}
-          {currentUser && (
-            <RailIconButton
-              label="비밀번호 변경"
-              Icon={KeyRound}
-              onClick={() => navigate('/me/change-password')}
+              highlighted={userMenuOpen}
+              suppressTooltip={userMenuOpen}
+              onClick={(rect) => {
+                setUserMenuOpen((v) => !v);
+                if (rect) setUserMenuAnchor(rect);
+              }}
             />
           )}
           {isAdmin && (
@@ -475,6 +478,39 @@ export function Sidebar() {
             onClose={() => setOpenGroup(null)}
           >
             {renderFlyoutBody(openGroup)}
+          </FlyoutShell>
+        </>
+      )}
+
+      {/* 사용자 메뉴 flyout — 담당자 관리 / 비밀번호 변경 (개인 사용자 self-service) */}
+      {userMenuOpen && userMenuAnchor && currentUser && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setUserMenuOpen(false)}
+            aria-hidden
+          />
+          <FlyoutShell
+            title={currentUser.displayName || currentUser.username}
+            anchorRect={userMenuAnchor}
+            onClose={() => setUserMenuOpen(false)}
+          >
+            <div className="space-y-1 pb-2">
+              <FlyoutLink
+                to="/me/assignees"
+                label="담당자 관리"
+                Icon={UserCheck}
+                active={location.pathname === '/me/assignees'}
+                onSelect={() => setUserMenuOpen(false)}
+              />
+              <FlyoutLink
+                to="/me/change-password"
+                label="비밀번호 변경"
+                Icon={KeyRound}
+                active={location.pathname === '/me/change-password'}
+                onSelect={() => setUserMenuOpen(false)}
+              />
+            </div>
           </FlyoutShell>
         </>
       )}
