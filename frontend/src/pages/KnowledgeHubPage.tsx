@@ -16,6 +16,7 @@ import type {
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
 import { ServiceSidebar } from '@/components/common';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
+import { useSprints } from '@/hooks/useSprints';
 // 허브 탭으로 임베드하는 기존 도구 페이지들 (개별 메뉴는 제거됨)
 import { OpsNotesPage } from './OpsNotesPage';
 import { MindMapPage } from './MindMapPage';
@@ -37,6 +38,7 @@ interface HubItem {
   updatedAt: string;
   href: string;
   searchBlob: string;
+  sprintId?: string | null;
 }
 
 const KIND_META: Record<HubKind, {
@@ -93,6 +95,33 @@ const IMPORTANCE_TONE: Record<CommandImportance, HubItem['statusTone']> = {
 type SortKey = 'kind' | 'title' | 'category' | 'status' | 'updatedAt';
 type SortDir = 'asc' | 'desc';
 
+// ── 기간 필터 (주 / 월 / 분기) ──────────────────────────────────────────────
+type PeriodFilter = '' | 'week' | 'month' | 'quarter';
+const PERIOD_META: { key: PeriodFilter; label: string }[] = [
+  { key: 'week',    label: '이번 주' },
+  { key: 'month',   label: '이번 달' },
+  { key: 'quarter', label: '이번 분기' },
+];
+
+function periodStart(period: PeriodFilter): Date | null {
+  const now = new Date();
+  if (period === 'week') {
+    const day = now.getDay() === 0 ? 7 : now.getDay(); // 월요일 시작
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(now.getDate() - (day - 1));
+    return start;
+  }
+  if (period === 'month') {
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  if (period === 'quarter') {
+    const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    return new Date(now.getFullYear(), qStartMonth, 1);
+  }
+  return null;
+}
+
 function SortTh({
   label, col, sortKey, sortDir, onSort, className,
 }: {
@@ -129,8 +158,13 @@ export function KnowledgeHubPage() {
   const [serviceFilter, setServiceFilter] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<HubKind | ''>('');
   const [openOnly, setOpenOnly] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('');
+  const [sprintFilter, setSprintFilter] = useState<string>('');
   const [sortKey, setSortKey] = useState<SortKey | ''>('updatedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const { data: sprintData } = useSprints();
+  const sprints = useMemo(() => sprintData?.data ?? [], [sprintData]);
 
   const handleSort = (col: SortKey) => {
     if (sortKey === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -140,7 +174,8 @@ export function KnowledgeHubPage() {
   const { data: opsData,      isLoading: opsLoading      } = useQuery({ queryKey: ['ops-notes'],   queryFn: () => opsNotesApi.getAll().then((r) => r.data),    staleTime: 1000 * 30 });
   const { data: cmdData,      isLoading: cmdLoading      } = useQuery({ queryKey: ['commands'],    queryFn: () => commandsApi.list().then((r) => r.data),      staleTime: 1000 * 30 });
   const { data: guideData,    isLoading: guideLoading    } = useQuery({ queryKey: ['work-guides'], queryFn: () => workGuidesApi.getAll().then((r) => r.data),  staleTime: 1000 * 30 });
-  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
+  // 기간/스프린트 필터가 로드된 목록 전체를 대상으로 동작하도록 백엔드 최대 limit(500)까지 요청.
+  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll({ limit: 500 }).then((r) => r.data),   staleTime: 1000 * 30 });
   const { data: workflowData, isLoading: workflowLoading } = useQuery({ queryKey: ['workflows'],   queryFn: () => workflowsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
 
   const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading;
@@ -215,6 +250,7 @@ export function KnowledgeHubPage() {
         updatedAt: i.updatedAt,
         href: `/tasks-mgmt/${i.id}`,
         searchBlob: `${i.content} ${i.resolution ?? ''} ${i.category} ${i.assignee} ${i.clusterName ?? ''}`.toLowerCase(),
+        sprintId: i.sprintId ?? null,
       });
     }
 
@@ -240,9 +276,14 @@ export function KnowledgeHubPage() {
     if (serviceFilter) list = list.filter((it) => it.service === serviceFilter);
     if (kindFilter) list = list.filter((it) => it.kind === kindFilter);
     if (openOnly) list = list.filter((it) => it.kind === 'item' && it.statusLabel === '미조치');
+    if (periodFilter) {
+      const start = periodStart(periodFilter);
+      if (start) list = list.filter((it) => new Date(it.updatedAt) >= start);
+    }
+    if (sprintFilter) list = list.filter((it) => it.sprintId === sprintFilter);
     if (trimmed) list = list.filter((it) => it.searchBlob.includes(trimmed));
     return list;
-  }, [items, serviceFilter, kindFilter, openOnly, trimmed]);
+  }, [items, serviceFilter, kindFilter, openOnly, periodFilter, sprintFilter, trimmed]);
 
   // ── 정렬 ──
   const sorted = useMemo(() => {
@@ -275,8 +316,11 @@ export function KnowledgeHubPage() {
     [items],
   );
 
-  const hasFilters = !!serviceFilter || !!kindFilter || openOnly || !!trimmed;
-  const clearFilters = () => { setServiceFilter(null); setKindFilter(''); setOpenOnly(false); setSearch(''); };
+  const hasFilters = !!serviceFilter || !!kindFilter || openOnly || !!periodFilter || !!sprintFilter || !!trimmed;
+  const clearFilters = () => {
+    setServiceFilter(null); setKindFilter(''); setOpenOnly(false);
+    setPeriodFilter(''); setSprintFilter(''); setSearch('');
+  };
 
   const [tab, setTab] = useState<HubTab>('list');
 
@@ -332,18 +376,16 @@ export function KnowledgeHubPage() {
         <div className="px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
         {/* ── Filter / Search bar ─────────────────────────────────────── */}
         <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Search className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">필터</span>
-            {hasFilters && (
+          {hasFilters && (
+            <div className="flex items-center justify-end mb-2">
               <button
                 onClick={clearFilters}
-                className="ml-auto flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3 h-3" /> 초기화
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
@@ -393,6 +435,42 @@ export function KnowledgeHubPage() {
                 미해결 이슈
                 <span className="opacity-70">({openIssueCount})</span>
               </button>
+            )}
+
+            <div className="w-px h-5 bg-border mx-1" />
+
+            {/* 기간 필터 — 주 / 월 / 분기 (updatedAt 기준) */}
+            {PERIOD_META.map(({ key, label }) => {
+              const isActive = periodFilter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setPeriodFilter(isActive ? '' : key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary border-primary/40 ring-1 ring-primary/30'
+                      : 'bg-background border-border text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+
+            {/* 스프린트 필터 — sprintId 매칭 (업무/이슈에만 적용) */}
+            {sprints.length > 0 && (
+              <select
+                value={sprintFilter}
+                onChange={(e) => setSprintFilter(e.target.value)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-full border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                  sprintFilter ? 'text-primary border-primary/40' : 'text-muted-foreground border-border'
+                }`}
+              >
+                <option value="">스프린트 전체</option>
+                {sprints.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             )}
 
             <div className="ml-auto relative w-full sm:w-80">

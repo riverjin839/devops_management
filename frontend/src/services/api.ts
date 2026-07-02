@@ -773,6 +773,7 @@ export interface WorkItemFilters {
   closed?: boolean;
   allAttendees?: boolean;
   sprintId?: string;
+  limit?: number;
 }
 
 export const projectsApi = {
