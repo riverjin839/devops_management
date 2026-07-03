@@ -1,4 +1,6 @@
+import re
 from datetime import datetime
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -139,8 +141,17 @@ def export_node_images_csv(
     csv_text = "\n".join(out_lines) + "\n"
     body = "﻿" + csv_text  # 엑셀 한글 호환 UTF-8 BOM
     fname = f"node-images-{cluster.name}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.csv"
+    # 응답 헤더는 latin-1 로 인코딩되므로 클러스터명에 한글 등 non-ASCII 가 있으면 raw filename 사용 시 500 발생.
+    # ASCII-only fallback(filename) + RFC 5987 인코딩(filename*)을 함께 제공.
+    ascii_fname = re.sub(r'[^\x20-\x7e]', '_', fname).replace('"', "'")
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{ascii_fname}"; '
+            f"filename*=UTF-8''{quote(fname, safe='')}"
+        ),
+    }
     return Response(
         content=body,
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        headers=headers,
     )
