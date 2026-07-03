@@ -1,11 +1,40 @@
 import { useState } from 'react';
-import { UserCheck, UserPlus, Check, X as XIcon, Trash2 } from 'lucide-react';
+import { UserCheck, UserPlus, Check, X as XIcon, Trash2, Download, ClipboardCopy } from 'lucide-react';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
 import { useToast, ResizeGrip, DoubleScrollX } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { Assignee } from '@/types';
 
-// 담당자 관리 — 로그인한 개인 사용자 누구나 접근/수정 가능 (Settings 의 admin 전용 탭에서 분리됨).
+const ASSIGNEE_COLUMNS: { key: keyof Assignee; label: string }[] = [
+  { key: 'employeeId', label: '사번' },
+  { key: 'name', label: '이름' },
+  { key: 'email', label: '이메일' },
+  { key: 'ip', label: 'IP 주소' },
+  { key: 'seatLocation', label: '좌석 위치' },
+  { key: 'primaryRole', label: '정 담당역할' },
+  { key: 'secondaryRole', label: '부담당 역할' },
+];
+
+// CSV 필드 이스케이프 — 콤마/따옴표/개행이 있으면 큰따옴표로 감싸고 내부 따옴표는 두 배로.
+function csvEscape(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+function assigneesToCsv(assignees: Assignee[]): string {
+  const header = ASSIGNEE_COLUMNS.map((c) => csvEscape(c.label)).join(',');
+  const rows = assignees.map((a) => ASSIGNEE_COLUMNS.map((c) => csvEscape((a[c.key] as string) || '')).join(','));
+  return [header, ...rows].join('\n');
+}
+
+function assigneesToMarkdown(assignees: Assignee[]): string {
+  const header = `| ${ASSIGNEE_COLUMNS.map((c) => c.label).join(' | ')} |`;
+  const divider = `| ${ASSIGNEE_COLUMNS.map(() => '---').join(' | ')} |`;
+  const rows = assignees.map((a) => `| ${ASSIGNEE_COLUMNS.map((c) => (a[c.key] as string) || '').join(' | ')} |`);
+  return [header, divider, ...rows].join('\n');
+}
+
+// 담당자 관리 — Settings ▸ 담당자 탭 (admin 전용).
 export function AssigneeManager() {
   const { data: assignees = [] } = useAssignees();
   const updateAssignees = useUpdateAssignees();
@@ -66,6 +95,28 @@ export function AssigneeManager() {
     setShowAddRow(false);
   };
 
+  const handleExportCsv = () => {
+    if (assignees.length === 0) return;
+    // 엑셀 한글 깨짐 방지 — UTF-8 BOM 추가.
+    const blob = new Blob(['﻿' + assigneesToCsv(assignees)], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `assignees-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyMarkdown = async () => {
+    if (assignees.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(assigneesToMarkdown(assignees));
+      toast.success('마크다운 표 복사됨', '클립보드에 복사했습니다.');
+    } catch {
+      toast.error('복사 실패', '클립보드 접근 권한을 확인하세요.');
+    }
+  };
+
   return (
     <div className="bg-card border border-border rounded-xl">
       <div className="px-6 py-4 border-b border-border flex items-center justify-between">
@@ -74,13 +125,33 @@ export function AssigneeManager() {
           <h2 className="font-semibold">담당자 관리</h2>
           <span className="text-sm text-muted-foreground ml-1">작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정</span>
         </div>
-        <button
-          onClick={() => { setShowAddRow(true); setEditingIdx(null); setAddForm({ name: '' }); }}
-          className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
-        >
-          <UserPlus className="w-4 h-4" />
-          담당자 추가
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopyMarkdown}
+            disabled={assignees.length === 0}
+            title="마크다운 표로 클립보드에 복사"
+            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ClipboardCopy className="w-4 h-4" />
+            .md 복사
+          </button>
+          <button
+            onClick={handleExportCsv}
+            disabled={assignees.length === 0}
+            title="CSV 파일로 내보내기"
+            className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-muted border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download className="w-4 h-4" />
+            CSV 내보내기
+          </button>
+          <button
+            onClick={() => { setShowAddRow(true); setEditingIdx(null); setAddForm({ name: '' }); }}
+            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            담당자 추가
+          </button>
+        </div>
       </div>
 
       <div className="px-6 py-3 border-b border-border bg-primary/5 text-sm text-muted-foreground leading-relaxed">

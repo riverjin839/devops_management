@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
-  KeyRound, ShieldCheck, FileSearch, ServerCog, UserCheck,
+  KeyRound, ShieldCheck, FileSearch, ServerCog,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
+import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
@@ -99,9 +100,11 @@ interface FlyoutProps {
   anchorRect: DOMRect;
   children: React.ReactNode;
   onClose: () => void;
+  /** 기본 min/max-width 를 넘어서는 콘텐츠(예: 폼)를 위한 폭 오버라이드. */
+  widthClassName?: string;
 }
 
-function FlyoutShell({ title, anchorRect, children, onClose }: FlyoutProps) {
+function FlyoutShell({ title, anchorRect, children, onClose, widthClassName }: FlyoutProps) {
   // popover top 은 아이콘의 top 에 맞추되, 화면 아래로 넘치면 위로 끌어올림.
   // max-height 로 본문 스크롤을 보장.
   const top = Math.min(anchorRect.top, window.innerHeight - 100);
@@ -110,7 +113,7 @@ function FlyoutShell({ title, anchorRect, children, onClose }: FlyoutProps) {
   return createPortal(
     <div
       style={{ top, left: NAV_WIDTH, maxHeight }}
-      className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col min-w-[180px] max-w-[260px] overflow-hidden"
+      className={`fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col overflow-hidden ${widthClassName || 'min-w-[180px] max-w-[260px]'}`}
       role="dialog"
       aria-label={title}
     >
@@ -494,15 +497,11 @@ export function Sidebar() {
             title={currentUser.displayName || currentUser.username}
             anchorRect={userMenuAnchor}
             onClose={() => setUserMenuOpen(false)}
+            widthClassName="min-w-[240px] max-w-[280px]"
           >
-            <div className="space-y-1 pb-2">
-              <FlyoutLink
-                to="/me/assignees"
-                label="담당자 관리"
-                Icon={UserCheck}
-                active={location.pathname === '/me/assignees'}
-                onSelect={() => setUserMenuOpen(false)}
-              />
+            <SelfAssigneePanel />
+            <div className="mx-1 my-1 border-t border-zinc-200" />
+            <div className="space-y-1 pb-1">
               <FlyoutLink
                 to="/me/change-password"
                 label="비밀번호 변경"

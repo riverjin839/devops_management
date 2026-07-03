@@ -59,7 +59,6 @@ import { HomePage } from '@/pages/HomePage';
 import { UsersPage } from '@/pages/UsersPage';
 import { AuditLogsPage } from '@/pages/AuditLogsPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
-import { AssigneeManagePage } from '@/pages/AssigneeManagePage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
 import { ToastProvider } from '@/components/common';
@@ -195,7 +194,6 @@ function AppShell() {
               <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
               <Route path="/settings/audit-logs" element={<RequireAdmin><AuditLogsPage /></RequireAdmin>} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
-              <Route path="/me/assignees" element={<AssigneeManagePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
       </PageStyleProvider>
