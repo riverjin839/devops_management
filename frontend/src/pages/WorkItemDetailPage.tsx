@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Pencil, Plus, Trash2, UploadCloud, Loader2 } from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud, Loader2 } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar } from '@/components/work-items';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
@@ -9,9 +9,11 @@ import { cn, formatApiError } from '@/lib/utils';
 
 export function WorkItemDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const editMode = location.pathname.endsWith('/edit');
+  // 별도 /edit 라우트 없이 페이지 내 상태로 편집 모드 전환. ?edit=1 로 진입 시 바로 편집 모드로 연다
+  // (칸반 보드 등 다른 화면의 ✏️ 버튼이 여기로 딥링크).
+  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1');
 
   const { data: listData } = useWorkItems();
   const item = listData?.data.find((x) => x.id === id) ?? null;
@@ -77,7 +79,7 @@ export function WorkItemDetailPage() {
     );
   };
 
-  const pageTitle = editMode ? '업무 수정' : '업무 상세';
+  const pageTitle = isEditing ? '업무 수정' : '업무 상세';
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,7 +95,7 @@ export function WorkItemDetailPage() {
           <ListTodo className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-2">
-            {!editMode && item.jiraIssueKey && (
+            {!isEditing && item.jiraIssueKey && (
               <button
                 onClick={() => doPush(false)}
                 disabled={pushJira.isPending}
@@ -104,7 +106,7 @@ export function WorkItemDetailPage() {
                 Jira 반영
               </button>
             )}
-            {!editMode && (
+            {!isEditing && (
               <>
                 <button
                   onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
@@ -112,12 +114,6 @@ export function WorkItemDetailPage() {
                   title="하위 업무 등록"
                 >
                   <Plus className="w-3.5 h-3.5" /> 하위
-                </button>
-                <button
-                  onClick={() => navigate(`/tasks-mgmt/${item.id}/edit`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                >
-                  <Pencil className="w-3.5 h-3.5" /> 수정
                 </button>
                 <button
                   onClick={handleDelete}
@@ -132,19 +128,19 @@ export function WorkItemDetailPage() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-4 pb-16">
-        {editMode ? (
+        {isEditing ? (
           <div className={cn('border border-border rounded-2xl p-5 mac-shadow', 'bg-card')}>
             <WorkItemForm
               initial={item}
-              onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
-              onSaved={() => navigate(`/tasks-mgmt/${item.id}`)}
+              onCancel={() => setIsEditing(false)}
+              onSaved={() => setIsEditing(false)}
               embedded
             />
           </div>
         ) : (
           <div className="flex gap-6 items-start">
             <div className={cn('flex-1 min-w-0 border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
-              <WorkItemReadView item={item} />
+              <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
             </div>
             {/* Cross-view (Phase A) — 같은 service 의 ServiceEntry 5건 sticky sidebar */}
             {item.service && <RelatedServiceEntriesSidebar service={item.service} />}

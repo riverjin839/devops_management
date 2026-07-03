@@ -292,9 +292,9 @@ export function WorkItemBoardPage() {
     });
   };
 
-  // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
+  // 행/카드의 ✏️ 버튼 — 상세 페이지를 편집 모드로 바로 연다 (별도 수정 페이지 없음).
   const handleEdit = (item: WorkItem) => {
-    navigate(`/tasks-mgmt/${item.id}/edit`);
+    navigate(`/tasks-mgmt/${item.id}?edit=1`);
   };
 
   // 하위 업무 등록.

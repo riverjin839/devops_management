@@ -924,6 +924,10 @@ export const nodeLabelsApi = {
 export const nodeImagesApi = {
   getNodeImages: (clusterId: string) =>
     api.get(`/clusters/${clusterId}/node-images`),
+  exportCsv: (clusterId: string, sort: 'default' | 'size' | 'lines' = 'default') =>
+    api.get<Blob>(`/clusters/${clusterId}/node-images/export.csv?sort=${sort}`, {
+      responseType: 'blob',
+    }),
 };
 
 export const clusterTrendsApi = {

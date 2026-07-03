@@ -119,12 +119,12 @@ function AppShell() {
               <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
               <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
               <Route path="/tasks-mgmt/:id" element={<WorkItemDetailPage />} />
-              <Route path="/tasks-mgmt/:id/edit" element={<WorkItemDetailPage />} />
               {/* 레거시 경로 — /tasks-mgmt 로 리다이렉트 (북마크/외부 링크 호환) */}
               <Route path="/work-items" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/work-items/new" element={<Navigate to="/tasks-mgmt/new" replace />} />
               <Route path="/work-items/:id" element={<RedirectWithId to="/tasks-mgmt" />} />
-              <Route path="/work-items/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="/edit" />} />
+              {/* 별도 수정 페이지 폐지 — 상세 페이지에서 바로 편집(?edit=1 로 진입 시 편집 모드로 시작) */}
+              <Route path="/work-items/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="?edit=1" />} />
               <Route path="/issues" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/tasks" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
