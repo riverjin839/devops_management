@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, Bug, HardDrive, BookOpen, Database, ListTodo, Palette } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
@@ -9,8 +9,10 @@ import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeMan
 import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
+import { AssigneeManager } from '@/components/settings/AssigneeManager';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
+import { useAssignees } from '@/hooks/useAssignees';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -483,7 +485,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
 
   // Debug 설정
@@ -492,9 +494,12 @@ export function SettingsPage() {
   const debugEventsCount = useDebugStore((s) => s.events.length);
   const debugActiveCount = Object.values(debugEnabled).filter(Boolean).length;
 
+  const { data: assignees = [] } = useAssignees();
+
   const TABS: { id: TabId; label: string; icon: JSX.Element; count: number }[] = [
     { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
+    { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'service', label: '서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
     { id: 'lake-types', label: 'LAKE 타입', icon: <Database className="w-4 h-4" />, count: 0 },
@@ -971,6 +976,9 @@ export function SettingsPage() {
             </div>
           )}
         </div>}
+
+        {/* 담당자 관리 */}
+        {activeTab === 'assignee' && <AssigneeManager />}
 
         {/* Debug 탭: 대시보드 별 상세 로그 토글 */}
         {activeTab === 'debug' && (
