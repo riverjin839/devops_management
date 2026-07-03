@@ -335,6 +335,7 @@ function ServerStatusBadge({ status }: { status: string }) {
 // ── Main Page ───────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const toast = useToast();
   // 업무 현황 스케줄 배경 (흰색/크림) — 사용자별 설정.
   const scheduleBg = useHomeStore((s) => s.scheduleBg);
   const setScheduleBg = useHomeStore((s) => s.setScheduleBg);
