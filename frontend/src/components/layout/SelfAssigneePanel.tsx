@@ -5,7 +5,7 @@ import { useToastSafe } from '@/components/common';
 import { useAuthStore } from '@/stores/authStore';
 import { Assignee } from '@/types';
 
-// 사용자 메뉴 flyout 상단에 표시되는 "본인 담당자 정보" 미니 폼.
+// 사용자 메뉴 SidePane 상단에 표시되는 "본인 담당자 정보" 폼.
 // 담당자 계정은 username = employeeId 로 provisioning 되므로, 이 매칭으로 본인 레코드만 찾아 편집한다.
 // 전체 담당자 목록 관리는 Settings ▸ 담당자 탭(admin 전용)에서만 가능.
 export function SelfAssigneePanel({ onSaved }: { onSaved?: () => void }) {
@@ -42,12 +42,16 @@ export function SelfAssigneePanel({ onSaved }: { onSaved?: () => void }) {
   };
 
   if (isLoading) {
-    return <div className="px-3 py-3 text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> 불러오는 중…</div>;
+    return (
+      <div className="px-5 py-4 text-sm text-muted-foreground flex items-center gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
+      </div>
+    );
   }
 
   if (!mine || !form) {
     return (
-      <div className="px-3 py-2.5 text-[13px] text-zinc-500 leading-relaxed">
+      <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed">
         등록된 담당자 정보가 없습니다. 관리자에게 사번 등록을 요청하세요.
       </div>
     );
@@ -55,24 +59,24 @@ export function SelfAssigneePanel({ onSaved }: { onSaved?: () => void }) {
 
   const field = (key: keyof Assignee, label: string, placeholder: string) => (
     <div>
-      <label htmlFor={f(key)} className="block text-[11px] font-medium text-zinc-500 mb-0.5">{label}</label>
+      <label htmlFor={f(key)} className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
         id={f(key)}
         type="text"
         value={(form[key] as string) ?? ''}
         onChange={(e) => setForm((cur) => (cur ? { ...cur, [key]: e.target.value } : cur))}
         placeholder={placeholder}
-        className="w-full px-2 py-1 bg-white border border-zinc-200 rounded text-[13px] text-black focus:outline-none focus:ring-1 focus:ring-primary"
+        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
       />
     </div>
   );
 
   return (
-    <div className="px-3 py-2.5 space-y-2">
-      <div className="flex items-center gap-1.5 text-[13px] font-semibold text-zinc-800">
-        <UserCheck className="w-3.5 h-3.5 text-primary" />
+    <div className="px-5 py-4 space-y-3">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <UserCheck className="w-4 h-4 text-primary" />
         {mine.name}
-        <span className="text-[11px] font-normal text-zinc-400">{mine.employeeId}</span>
+        <span className="text-xs font-normal text-muted-foreground">{mine.employeeId}</span>
       </div>
       {field('email', '이메일', 'user@company.com')}
       {field('ip', 'IP 주소', '10.0.0.1')}
@@ -83,9 +87,9 @@ export function SelfAssigneePanel({ onSaved }: { onSaved?: () => void }) {
         type="button"
         onClick={handleSave}
         disabled={!dirty || updateAssignees.isPending}
-        className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-[13px] font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
-        {updateAssignees.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+        {updateAssignees.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         저장
       </button>
     </div>

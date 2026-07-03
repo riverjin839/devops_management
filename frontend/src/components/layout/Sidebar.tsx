@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
+import { SidePane } from '@/components/common';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
@@ -100,11 +101,9 @@ interface FlyoutProps {
   anchorRect: DOMRect;
   children: React.ReactNode;
   onClose: () => void;
-  /** 기본 min/max-width 를 넘어서는 콘텐츠(예: 폼)를 위한 폭 오버라이드. */
-  widthClassName?: string;
 }
 
-function FlyoutShell({ title, anchorRect, children, onClose, widthClassName }: FlyoutProps) {
+function FlyoutShell({ title, anchorRect, children, onClose }: FlyoutProps) {
   // popover top 은 아이콘의 top 에 맞추되, 화면 아래로 넘치면 위로 끌어올림.
   // max-height 로 본문 스크롤을 보장.
   const top = Math.min(anchorRect.top, window.innerHeight - 100);
@@ -113,7 +112,7 @@ function FlyoutShell({ title, anchorRect, children, onClose, widthClassName }: F
   return createPortal(
     <div
       style={{ top, left: NAV_WIDTH, maxHeight }}
-      className={`fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col overflow-hidden ${widthClassName || 'min-w-[180px] max-w-[260px]'}`}
+      className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col overflow-hidden min-w-[180px] max-w-[260px]"
       role="dialog"
       aria-label={title}
     >
@@ -218,9 +217,8 @@ export function Sidebar() {
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
-  // 사용자 아이콘 클릭 시 여는 개인 메뉴(담당자 관리 / 비밀번호 변경) — 그룹 플라이아웃과 별개로 관리.
+  // 사용자 아이콘 클릭 시 여는 개인 메뉴(담당자 정보 / 비밀번호 변경) — 우측 슬라이드 SidePane.
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [userMenuAnchor, setUserMenuAnchor] = useState<DOMRect | null>(null);
 
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
   const services = useServiceCatalog();
@@ -435,10 +433,7 @@ export function Sidebar() {
               Icon={User}
               highlighted={userMenuOpen}
               suppressTooltip={userMenuOpen}
-              onClick={(rect) => {
-                setUserMenuOpen((v) => !v);
-                if (rect) setUserMenuAnchor(rect);
-              }}
+              onClick={() => setUserMenuOpen((v) => !v)}
             />
           )}
           {isAdmin && (
@@ -485,33 +480,32 @@ export function Sidebar() {
         </>
       )}
 
-      {/* 사용자 메뉴 flyout — 담당자 관리 / 비밀번호 변경 (개인 사용자 self-service) */}
-      {userMenuOpen && userMenuAnchor && currentUser && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setUserMenuOpen(false)}
-            aria-hidden
-          />
-          <FlyoutShell
-            title={currentUser.displayName || currentUser.username}
-            anchorRect={userMenuAnchor}
-            onClose={() => setUserMenuOpen(false)}
-            widthClassName="min-w-[240px] max-w-[280px]"
-          >
-            <SelfAssigneePanel />
-            <div className="mx-1 my-1 border-t border-zinc-200" />
-            <div className="space-y-1 pb-1">
-              <FlyoutLink
-                to="/me/change-password"
-                label="비밀번호 변경"
-                Icon={KeyRound}
-                active={location.pathname === '/me/change-password'}
-                onSelect={() => setUserMenuOpen(false)}
-              />
-            </div>
-          </FlyoutShell>
-        </>
+      {/* 사용자 메뉴 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}
+      {currentUser && (
+        <SidePane
+          open={userMenuOpen}
+          onClose={() => setUserMenuOpen(false)}
+          title={currentUser.displayName || currentUser.username}
+          width="380px"
+          bodyClassName="p-0"
+        >
+          <SelfAssigneePanel />
+          <div className="border-t border-border">
+            <Link
+              to="/me/change-password"
+              onClick={() => setUserMenuOpen(false)}
+              className={`flex items-center gap-2 px-5 py-3 text-sm transition-colors ${
+                location.pathname === '/me/change-password'
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'text-foreground hover:bg-secondary'
+              }`}
+            >
+              <KeyRound className="w-4 h-4 flex-shrink-0" />
+              <span className="flex-1 min-w-0">비밀번호 변경</span>
+              {location.pathname === '/me/change-password' && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />}
+            </Link>
+          </div>
+        </SidePane>
       )}
 
     </>
