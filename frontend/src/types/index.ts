@@ -1031,6 +1031,7 @@ export interface Assignee {
   employeeId?: string;
   email?: string;
   ip?: string;
+  seatLocation?: string;
   primaryRole?: string;
   secondaryRole?: string;
 }
