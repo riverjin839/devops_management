@@ -1,4 +1,4 @@
-import { ImagePlus, ExternalLink } from 'lucide-react';
+import { ImagePlus, ExternalLink, Pencil } from 'lucide-react';
 import { WorkItem } from '@/types';
 import { stripHtml } from '@/lib/utils';
 import { loadWorkItemImages } from '@/lib/workItemImages';
@@ -11,6 +11,8 @@ import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkIt
 
 interface WorkItemReadViewProps {
   item: WorkItem;
+  /** 지정 시 제목 옆에 인라인 수정 트리거를 노출 — 클릭하면 바로 편집 모드로 전환 (별도 수정 페이지 없음). */
+  onEdit?: () => void;
 }
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
@@ -41,7 +43,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
  * 업무 상세 read 뷰 본문. `WorkItemDetailPage` (`/work-items/:id`) 에서 사용.
  * 헤더(배지·수정 버튼)는 호출 측이 그림.
  */
-export function WorkItemReadView({ item }: WorkItemReadViewProps) {
+export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
   const images = loadWorkItemImages(item.id);
   const isCompleted = !!item.closedAt;
   const pStyle = PRIORITY_STYLES[item.priority] ?? PRIORITY_STYLES.medium;
@@ -98,11 +100,31 @@ export function WorkItemReadView({ item }: WorkItemReadViewProps) {
         </span>
       </div>
 
-      {/* 업무 제목 */}
-      <h1 className="text-xl font-bold tracking-tight leading-snug break-words">{displayTitle}</h1>
+      {/* 업무 제목 — 옆의 연필 아이콘으로 바로 편집 진입 (별도 수정 페이지 없음) */}
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-xl font-bold tracking-tight leading-snug break-words">{displayTitle}</h1>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            title="바로 수정"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent hover:border-border rounded-lg transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" /> 수정
+          </button>
+        )}
+      </div>
 
-      {/* 업무 내용 */}
-      <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+      {/* 업무 내용 — 클릭하면 바로 편집 모드로 전환 (본문 내 링크 클릭은 제외) */}
+      <div
+        onClick={(e) => {
+          if (!onEdit) return;
+          if ((e.target as HTMLElement).closest('a')) return;
+          onEdit();
+        }}
+        className={`bg-secondary/30 rounded-lg px-3 py-2.5 ${onEdit ? 'cursor-text hover:bg-secondary/50 transition-colors' : ''}`}
+        title={onEdit ? '클릭하여 수정' : undefined}
+      >
         <RichContent content={item.content} />
       </div>
 
