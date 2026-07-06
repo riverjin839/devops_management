@@ -180,34 +180,14 @@ def _parse_cert_not_after(der: bytes) -> tuple[datetime, str]:
 
 
 def _collect_ai_summary(item: ClusterItem, db: Session) -> ItemResult:
-    """Ollama LLM 으로 클러스터 상태를 한국어로 요약 + 위험도 산출 (폐쇄망)."""
-    from app.models import DailyCheckLog
+    """Ollama LLM 으로 클러스터 상태를 한국어로 요약 + 위험도 산출 (폐쇄망).
+
+    Agent Loop(5-node pipeline, agent_service.py) 의 context_collector →
+    prompt_builder → llm_caller → risk_parser → card_renderer 를 그대로 위임한다.
+    """
     from app.services.agent_service import agent_service
 
     cluster = item.cluster
-    log = (
-        db.query(DailyCheckLog)
-        .filter(DailyCheckLog.cluster_id == cluster.id)
-        .order_by(DailyCheckLog.checked_at.desc())
-        .first()
-    )
-
-    context: dict = {
-        "cluster_name": cluster.name,
-        "cluster_status": getattr(cluster.status, "value", str(cluster.status)),
-    }
-    if log is not None:
-        context["node_status"] = f"{log.ready_nodes}/{log.total_nodes} Ready"
-        if log.error_messages:
-            context["error_messages"] = log.error_messages
-        context["extra"] = (
-            f"overall={getattr(log.overall_status, 'value', log.overall_status)}, "
-            f"api_server={getattr(log.api_server_status, 'value', log.api_server_status)}, "
-            f"checked_at={log.checked_at}"
-        )
-    else:
-        context["extra"] = "최근 일일점검 기록 없음 (수동 점검을 먼저 실행하세요)"
-
     query = (
         "위 Kubernetes 클러스터의 현재 상태를 운영자 관점에서 한국어 1~2문장으로 간결히 요약하세요. "
         "마지막 줄에 반드시 'RISK: healthy' 또는 'RISK: warning' 또는 'RISK: critical' 형식으로 "
@@ -215,45 +195,32 @@ def _collect_ai_summary(item: ClusterItem, db: Session) -> ItemResult:
     )
 
     try:
-        res = asyncio.run(agent_service.ask_agent(query, context))
+        card = asyncio.run(agent_service.run_cluster_summary_pipeline(query, db=db, cluster=cluster))
     except RuntimeError:
         # 이미 이벤트 루프가 도는 컨텍스트일 경우 (대비) — 별도 루프 사용.
         loop = asyncio.new_event_loop()
         try:
-            res = loop.run_until_complete(agent_service.ask_agent(query, context))
+            card = loop.run_until_complete(
+                agent_service.run_cluster_summary_pipeline(query, db=db, cluster=cluster)
+            )
         finally:
             loop.close()
 
-    if res.get("status") != "ok":
+    if card.error:
         # LLM 미가용 — 카드에 에러로 표기하되 대시보드는 영향 없음.
-        return ItemResult(
-            error=f"LLM 미가용: {str(res.get('answer', '')).strip()[:200]}",
-            status="info",
-            detail={"model": res.get("model", "")},
-        )
+        return ItemResult(error=card.error, status="info", detail={"model": card.model})
 
-    answer = (res.get("answer") or "").strip()
-    risk = "info"
-    summary_lines: list[str] = []
-    for line in answer.splitlines():
-        stripped = line.strip()
-        upper = stripped.upper()
-        if upper.startswith("RISK:") or upper.startswith("RISK :"):
-            token = upper.split(":", 1)[1].strip().lower()
-            if token.startswith("critical"):
-                risk = "critical"
-            elif token.startswith("warning"):
-                risk = "warning"
-            elif token.startswith("healthy"):
-                risk = "healthy"
-            continue
-        if stripped:
-            summary_lines.append(stripped)
-    summary = " ".join(summary_lines).strip()[:400] or answer[:400]
     return ItemResult(
-        text=summary,
-        status=risk,
-        detail={"model": res.get("model", ""), "raw": answer[:1500]},
+        text=card.text,
+        status=card.status,
+        detail={
+            "model": card.model,
+            "raw": card.raw,
+            "audit": [
+                {"node": a.node, "status": a.status, "detail": a.detail, "duration_ms": a.duration_ms}
+                for a in card.audit
+            ],
+        },
     )
 
 

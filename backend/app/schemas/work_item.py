@@ -215,3 +215,21 @@ class WorkItemListResponse(BaseModel):
 
 
 WorkItemResponse.model_rebuild()
+
+
+class SimilarWorkItem(BaseModel):
+    """유사 WorkItem 검색 결과 1건 — pgvector cosine distance 기반."""
+    id: UUID
+    type: WorkItemType
+    title: Optional[str] = None
+    category: str
+    assignee: str
+    cluster_name: Optional[str] = None
+    similarity: float = Field(..., description="0(다름)~1(동일) 코사인 유사도")
+
+
+class SimilarWorkItemListResponse(BaseModel):
+    data: list[SimilarWorkItem]
+    embedding_available: bool = Field(
+        ..., description="False 면 이 WorkItem 의 임베딩이 아직 계산되지 않음(Celery 대기 중)"
+    )
