@@ -43,7 +43,10 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        # pgvector/pgvector:pg15 == postgres:15 + pgvector extension precompiled.
+        # work_items/work_guides.embedding (Vector 컬럼) 은 CREATE EXTENSION vector 가
+        # 성공해야 테이블 자체가 생성되므로, plain postgres:15 로는 CI 가 실패한다.
+        image: pgvector/pgvector:pg15
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

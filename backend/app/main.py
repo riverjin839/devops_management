@@ -82,6 +82,29 @@ from app.models.user import User
 _log = logging.getLogger("k8s_monitor.migration")
 
 
+def _ensure_pgvector_extension() -> None:
+    """``CREATE EXTENSION IF NOT EXISTS vector`` — WorkItem/WorkGuide 임베딩 컬럼(Vector 타입)이
+    쓰는 pgvector 확장을 보장한다.
+
+    폐쇄망에서는 Postgres 서버에 pgvector 확장 패키지가 Nexus 로 미리 반입되어 있어야 한다
+    (docs/AIRGAP_LLM_NEXUS.md 참고). ``Base.metadata.create_all()`` 보다 반드시 먼저 실행해야
+    브랜드 뉴 설치에서 ``CREATE TABLE work_items (... embedding vector(768) ...)`` 가
+    "type vector does not exist" 로 실패하지 않는다. 확장이 없으면 로깅만 하고 부팅은 계속 —
+    이 경우 work_items/work_guides 테이블 생성 자체가 실패할 수 있으나(신규 설치 한정),
+    다른 마이그레이션 단계는 개별 try/except 로 격리돼 있어 부팅 자체가 막히지 않는다.
+    """
+    from sqlalchemy import text as _text
+    try:
+        with engine.begin() as conn:
+            conn.execute(_text("CREATE EXTENSION IF NOT EXISTS vector"))
+        _log.info("migration: pgvector extension ensured")
+    except Exception as e:  # noqa: BLE001
+        _log.warning(
+            "migration: pgvector extension 생성 실패 (%s) — 임베딩 컬럼 관련 기능 비활성화 가능. "
+            "Nexus 로 postgresql-pgvector 패키지 반입 필요.", e,
+        )
+
+
 def _safe_add_column(table: str, col_name: str, col_type: str) -> None:
     """ALTER TABLE ... ADD COLUMN IF NOT EXISTS 를 단일 트랜잭션으로 실행.
 
@@ -603,6 +626,8 @@ def _run_migrations():
         _safe_add_column("work_items", "all_attendees", "BOOLEAN NOT NULL DEFAULT FALSE")
         # 스프린트(반복) 소속 — sprints 테이블은 create_all 로 생성됨.
         _safe_add_column("work_items", "sprint_id", "UUID")
+        # 유사 WorkItem 검색용 임베딩(제목+본문) — pgvector 확장 필요 (_ensure_pgvector_extension).
+        _safe_add_column("work_items", "embedding", f"VECTOR({settings.embedding_dim})")
         # 스프린트 JIRA 번호 및 Confluence 링크
         _safe_add_column("sprints", "jira_no", "VARCHAR(100)")
         _safe_add_column("sprints", "confluence_link", "VARCHAR(500)")
@@ -689,6 +714,8 @@ def _run_migrations():
     if "work_guides" in inspector.get_table_names():
         _safe_add_column("work_guides", "parent_id", "UUID")
         _safe_add_column("work_guides", "sort_order", "INTEGER NOT NULL DEFAULT 0")
+        # 유사 문서 검색용 임베딩(제목+본문) — pgvector 확장 필요 (_ensure_pgvector_extension).
+        _safe_add_column("work_guides", "embedding", f"VECTOR({settings.embedding_dim})")
 
     # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
     # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
@@ -1320,6 +1347,10 @@ async def lifespan(app: FastAPI):
     # 각 단계는 개별 try/except 로 격리해 한 군데 실패가 backend 전체를 막아
     # CrashLoopBackOff 가 되는 일을 방지한다. 실패는 로그로 남기되 부팅은 계속.
     _startup_log = logging.getLogger("k8s_monitor.startup")
+    try:
+        _ensure_pgvector_extension()
+    except Exception as e:  # noqa: BLE001
+        _startup_log.exception("pgvector extension step failed — continuing: %s", e)
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:  # noqa: BLE001

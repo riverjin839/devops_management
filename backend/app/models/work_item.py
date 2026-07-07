@@ -3,6 +3,8 @@ from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
+from app.config import settings
 from app.database import Base
 
 
@@ -89,6 +91,10 @@ class WorkItem(Base):
     jira_synced_at = Column(DateTime, nullable=True)        # 마지막 동기화 시각
     jira_updated_at = Column(DateTime, nullable=True)       # Jira updated (충돌 감지)
     jira_watchers = Column(JSONB, nullable=True)            # list[str] — 가져온 PEP username
+
+    # 유사 WorkItem 검색용 임베딩(제목+본문) — Celery 비동기로 계산·저장 (동기 쓰기 경로에 없음).
+    # settings.embedding_model 교체 시 차원(embedding_dim)도 함께 바뀌면 재계산 필요.
+    embedding = Column(Vector(settings.embedding_dim), nullable=True)
 
     # G-I2: server_default 추가 — DB 직접 INSERT (마이그레이션 backfill 등) 시에도 NULL 방지.
     # `default=datetime.utcnow` 는 ORM 레벨, `server_default=func.now()` 는 DB 레벨.

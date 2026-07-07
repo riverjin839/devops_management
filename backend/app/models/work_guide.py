@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID
+from pgvector.sqlalchemy import Vector
+from app.config import settings
 from app.database import Base
 
 
@@ -19,6 +21,8 @@ class WorkGuide(Base):
     author = Column(String(100), nullable=True)
     sort_order = Column(Integer, default=0)          # 동일 레벨 내 정렬 순서
     confluence_url = Column(Text, nullable=True)     # Confluence 문서 링크
+    # 유사 문서 검색용 임베딩(제목+본문) — Celery 비동기로 계산·저장 (동기 쓰기 경로에 없음).
+    embedding = Column(Vector(settings.embedding_dim), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

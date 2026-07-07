@@ -645,3 +645,84 @@ def run_ops_check_batch(self, run_id: str):
         return {"run_id": run_id, "error": str(e)[:200]}
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.compute_work_item_embedding")
+def compute_work_item_embedding(self, work_item_id: str):
+    """WorkItem 제목+본문 임베딩을 비동기로 계산·저장.
+
+    create_work_item/update_work_item 이 커밋 직후 .delay() 로 큐잉한다(best-effort —
+    Celery/Redis/Ollama 미가용이어도 쓰기 응답 자체는 이미 끝난 뒤라 영향 없음).
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models.work_item import WorkItem
+    from app.services.embedding_service import build_embedding_text, embedding_service
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        item = db.query(WorkItem).filter(WorkItem.id == work_item_id).first()
+        if item is None:
+            return {"work_item_id": work_item_id, "skipped": True, "reason": "not found"}
+
+        text = build_embedding_text(item.title, item.content)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            vector = loop.run_until_complete(embedding_service.embed(text))
+        finally:
+            loop.close()
+
+        if vector is None:
+            return {"work_item_id": work_item_id, "skipped": True, "reason": "embedding unavailable"}
+
+        item.embedding = vector
+        db.commit()
+        return {"work_item_id": work_item_id, "dim": len(vector)}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("compute_work_item_embedding failed (%s): %s", work_item_id, e)
+        return {"work_item_id": work_item_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.compute_work_guide_embedding")
+def compute_work_guide_embedding(self, work_guide_id: str):
+    """WorkGuide(지식허브 TipTap 문서) 제목+본문 임베딩을 비동기로 계산·저장.
+
+    create_guide/update_guide 가 커밋 직후 .delay() 로 큐잉한다(best-effort).
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models.work_guide import WorkGuide
+    from app.services.embedding_service import build_embedding_text, embedding_service
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        guide = db.query(WorkGuide).filter(WorkGuide.id == work_guide_id).first()
+        if guide is None:
+            return {"work_guide_id": work_guide_id, "skipped": True, "reason": "not found"}
+
+        text = build_embedding_text(guide.title, guide.content)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            vector = loop.run_until_complete(embedding_service.embed(text))
+        finally:
+            loop.close()
+
+        if vector is None:
+            return {"work_guide_id": work_guide_id, "skipped": True, "reason": "embedding unavailable"}
+
+        guide.embedding = vector
+        db.commit()
+        return {"work_guide_id": work_guide_id, "dim": len(vector)}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("compute_work_guide_embedding failed (%s): %s", work_guide_id, e)
+        return {"work_guide_id": work_guide_id, "error": str(e)[:200]}
+    finally:
+        db.close()

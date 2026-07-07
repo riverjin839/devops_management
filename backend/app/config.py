@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3"
     ollama_timeout: int = 120
 
+    # Embedding (Ollama /api/embeddings) — WorkItem / WorkGuide 유사 검색용.
+    # 폐쇄망 로컬 추론 전제 — Nexus 로 반입 (docs/AIRGAP_LLM_NEXUS.md 참고).
+    # nomic-embed-text 기준 차원(768). 모델 교체 시 embedding_dim 도 함께 맞춰야 한다
+    # (차원이 다르면 기존에 저장된 임베딩과 비교 불가 — 재계산 필요).
+    embedding_model: str = "nomic-embed-text"
+    embedding_dim: int = 768
+    embedding_timeout: int = 30
+
     # OpenClaw Alert Channels
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

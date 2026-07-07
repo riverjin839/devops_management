@@ -28,6 +28,8 @@ from app.schemas.work_item import (
     WorkItemStatusResponse,
     WorkItemCommentCreate,
     WorkItemCommentResponse,
+    SimilarWorkItem,
+    SimilarWorkItemListResponse,
 )
 from app.schemas.work_item_time_block import (
     TimeBlockCreate,
@@ -38,6 +40,19 @@ from app.schemas.work_item_time_block import (
 router = APIRouter(prefix="/work-items", tags=["work-items"])
 
 WIP_LIMIT = 2
+
+
+def _queue_embedding_recompute(work_item_id) -> None:
+    """임베딩 재계산 큐잉 — best-effort. Celery/Redis 미가용이어도 쓰기 응답에 영향 없음
+    (이미 commit 이 끝난 뒤 호출되므로 여기서 실패해도 트랜잭션은 이미 완료된 상태)."""
+    try:
+        from app.celery_app import compute_work_item_embedding
+        compute_work_item_embedding.delay(str(work_item_id))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Failed to queue embedding recompute for work_item %s", work_item_id
+        )
 
 
 # G-C4: Ownership 검증.
@@ -499,6 +514,52 @@ def get_work_item(
     return item
 
 
+@router.get("/{item_id}/similar", response_model=SimilarWorkItemListResponse)
+def get_similar_work_items(
+    item_id: UUID,
+    limit: int = Query(default=5, ge=1, le=20),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """pgvector 코사인 거리 기반 유사 WorkItem 검색 (제목+본문 임베딩).
+
+    대상 WorkItem 또는 후보 쪽 임베딩이 아직 계산되지 않았으면(Celery 대기 중)
+    ``embedding_available=False`` 와 함께 빈 목록을 반환한다 — 실패가 아니라 "아직 준비 안 됨".
+    """
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item:
+        raise _not_found(item_id)
+
+    if item.embedding is None:
+        return SimilarWorkItemListResponse(data=[], embedding_available=False)
+
+    distance = WorkItem.embedding.cosine_distance(item.embedding).label("distance")
+    rows = (
+        db.query(WorkItem, distance)
+        .filter(WorkItem.id != item.id)
+        .filter(WorkItem.embedding.isnot(None))
+        .order_by(distance.asc())
+        .limit(limit)
+        .all()
+    )
+
+    return SimilarWorkItemListResponse(
+        data=[
+            SimilarWorkItem(
+                id=row.id,
+                type=row.type,
+                title=row.title,
+                category=row.category,
+                assignee=row.assignee,
+                cluster_name=row.cluster_name,
+                similarity=max(0.0, 1.0 - dist),
+            )
+            for row, dist in rows
+        ],
+        embedding_available=True,
+    )
+
+
 @router.post("", response_model=WorkItemResponse, status_code=status.HTTP_201_CREATED)
 def create_work_item(
     payload: WorkItemCreate,
@@ -538,6 +599,7 @@ def create_work_item(
                  "cluster_id": str(item.cluster_id) if item.cluster_id else None},
         request=request,
     )
+    _queue_embedding_recompute(item.id)  # 비동기 — 쓰기 응답 속도에 영향 없음
     return item
 
 
@@ -586,6 +648,10 @@ def update_work_item(
         details={"changed_fields": sorted(update_data.keys())},
         request=request,
     )
+    # 제목/본문이 바뀐 경우에만 임베딩 재계산 큐잉 — 무관한 필드 변경(상태/담당자 등)마다
+    # 매번 Ollama 를 호출하지 않도록.
+    if "title" in update_data or "content" in update_data:
+        _queue_embedding_recompute(item.id)
     return item
 
 
