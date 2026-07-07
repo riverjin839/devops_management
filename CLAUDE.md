@@ -710,6 +710,24 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
 
 ---
 
+## 버전 관리 / CHANGELOG (필수 — 기능·패치 추가 시마다)
+
+**기능 추가(`feat:`)나 패치(`fix:`)를 담은 PR 은 `CHANGELOG.md` 의 `## [Unreleased]` 섹션에
+항목을 추가해야 한다.** PR 본문만 쓰고 CHANGELOG 갱신을 빠뜨리지 않는다 — 다음 릴리스 노트의
+원본이 바로 이 섹션이다.
+
+- 위치: `CHANGELOG.md` 최상단 `## [Unreleased]` 아래, 변경 성격에 따라 `### Added` /
+  `### Fixed` / `### Changed` 하위에 한두 줄로 추가 (기존 항목 형식 참고 — 굵게 기능명,
+  이어서 사용자 관점 요약, 필요 시 `Backend:`/`Frontend:` 로 구현 포인트 짧게).
+- 버전/브랜치/태그 전체 전략은 `docs/branch-tag-strategy.md` 참고. SemVer(`vMAJOR.MINOR.PATCH`),
+  버전 소스는 `frontend/package.json` `version` + `backend/app/main.py` FastAPI `version`.
+- **실제 버전을 올리고 태그를 찍어 릴리스를 컷하는 것**(버전 3곳 수정 + CHANGELOG 섹션 확정 +
+  `git tag` push)은 매 PR 마다 하지 않는다 — Unreleased 에 계속 쌓다가, 사용자가 릴리스를
+  요청하면 `/release` 스킬로 진행한다. `v*` 태그 push 시 `release.yml` 이 GHCR 이미지
+  빌드/태깅과 GitHub Release 생성을 자동 처리한다.
+
+---
+
 ## Key Conventions
 
 ### Python
