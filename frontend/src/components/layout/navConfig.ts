@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell,
-  TrendingUp,
+  TrendingUp, FileSpreadsheet,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/mindmap':            { defaultLabel: '마인드맵',       icon: Map },
   '/workflow':           { defaultLabel: '워크플로우',     icon: GitFork },
   '/settings':           { defaultLabel: 'Settings',       icon: Settings },
+  '/jira-import':        { defaultLabel: 'Jira Excel 가져오기', icon: FileSpreadsheet },
 };
 
 // 사이드바 레일에 표시되는 그룹들
@@ -68,7 +69,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs'], modes: ['work'] },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import'], modes: ['work'] },
   { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs'], modes: ['work'] },
   // 주: 지식/분석은 지식 허브(/docs) 하나로 통합 — 지식베이스·Q&A(운영노트)·마인드맵·온톨로지·
   //     기술동향·작업가이드(SOP)는 허브 탭/목록에서 접근하므로 개별 좌측 메뉴를 제거했다.

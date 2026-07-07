@@ -7,10 +7,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
+from io import BytesIO
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import openpyxl
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -31,6 +34,8 @@ from app.schemas.jira import (
     JiraImportRequest,
     JiraImportResult,
     JiraImportItemPreview,
+    JiraExcelRow,
+    JiraExcelImportResult,
     JiraPushRequest,
     JiraPushResult,
 )
@@ -72,6 +77,60 @@ def _build_assignee_resolver(db: Session):
         return by_lower.get(jira_name.strip().lower(), jira_name.strip())
 
     return _resolve
+
+
+def _build_assignee_roster(db: Session) -> dict[str, str]:
+    """등록된 담당자 name → name (대소문자 무시 매칭용 조회 테이블)."""
+    row = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
+    registry = row.value if row and isinstance(row.value, list) else []
+    return {
+        str(a["name"]).strip().lower(): str(a["name"]).strip()
+        for a in registry if isinstance(a, dict) and a.get("name")
+    }
+
+
+def _match_excel_assignee(raw: str, roster_by_lower: dict[str, str]) -> tuple[Optional[str], bool]:
+    """Jira Excel 의 담당자 셀("이름 회사")에서 이름을 추출해 담당자 레지스트리와 매칭.
+
+    한글 이름은 공백 없는 한 토큰이 일반적이므로 첫 토큰을 이름 후보로 본다.
+    실패하면 전체 문자열(회사명 없는 경우 대비)로 한 번 더 시도."""
+    s = (raw or "").strip()
+    if not s:
+        return None, False
+    first_token = s.split()[0]
+    name = roster_by_lower.get(first_token.lower())
+    if name:
+        return name, True
+    name = roster_by_lower.get(s.lower())
+    if name:
+        return name, True
+    return first_token, False
+
+
+_EXCEL_HEADER_ALIASES: dict[str, list[str]] = {
+    "key": ["key", "issue key", "issue id"],
+    "summary": ["summary"],
+    "issue_type": ["issue type", "issuetype", "type"],
+    "status": ["status"],
+    "assignee": ["assignee"],
+    "created": ["created"],
+    "resolved": ["resolved"],
+    "due_date": ["due date", "duedate"],
+    "environment": ["environment"],
+    "description": ["description"],
+}
+
+
+def _norm_excel_header(h) -> str:
+    return re.sub(r"\s+", " ", str(h or "").strip().lower())
+
+
+def _excel_cell_str(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, datetime):
+        return v.strftime("%Y-%m-%d %H:%M") if (v.hour or v.minute) else v.strftime("%Y-%m-%d")
+    return str(v).strip()
 
 
 def _user_token(db: Session, username: str) -> Optional[str]:
@@ -318,6 +377,96 @@ async def import_issues(
         errors=errors,
         items=preview[:50],
     )
+
+
+# ── Jira 에서 추출한 Excel(.xlsx) 가져오기 (미리보기 전용, 저장 없음) ─────────────
+_EXCEL_MAX_ROWS = 2000  # 과도한 업로드로부터의 안전장치
+
+
+@router.post("/import/excel", response_model=JiraExcelImportResult)
+async def import_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Jira 에서 내려받은 이슈 목록 Excel(.xlsx) 을 파싱해 테이블로 보여준다.
+
+    WorkItem 으로 저장하지 않는 순수 미리보기 기능 — 담당자 셀("이름 회사")에서
+    이름을 추출해 등록된 담당자(Settings ▸ 담당자) 레지스트리와 매칭한다.
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        return JiraExcelImportResult(status="error", detail=".xlsx 파일만 업로드할 수 있습니다.")
+
+    raw = await file.read()
+    try:
+        wb = openpyxl.load_workbook(BytesIO(raw), data_only=True, read_only=True)
+    except Exception as exc:  # noqa: BLE001
+        return JiraExcelImportResult(status="error", detail=f"엑셀 파일을 읽을 수 없습니다: {str(exc)[:150]}")
+
+    ws = wb.active
+    if ws is None:
+        return JiraExcelImportResult(status="error", detail="시트를 찾을 수 없습니다.")
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        header_row = next(rows_iter)
+    except StopIteration:
+        return JiraExcelImportResult(status="error", detail="빈 파일입니다.")
+
+    normalized = [_norm_excel_header(h) for h in header_row]
+    col_idx: dict[str, int] = {}
+    for field, aliases in _EXCEL_HEADER_ALIASES.items():
+        for i, h in enumerate(normalized):
+            if h in aliases:
+                col_idx[field] = i
+                break
+
+    missing = [f for f in ("key", "summary") if f not in col_idx]
+    if missing:
+        headers = ", ".join(str(h) for h in header_row if h)
+        return JiraExcelImportResult(
+            status="error",
+            detail=f"필수 컬럼을 찾을 수 없습니다: {', '.join(missing)} (헤더: {headers})",
+        )
+
+    cfg = _get_config(db)
+    base_url = (cfg.get("base_url") or "").rstrip("/")
+    roster_by_lower = _build_assignee_roster(db)
+
+    def cell(r: tuple, field: str) -> str:
+        idx = col_idx.get(field)
+        return _excel_cell_str(r[idx]) if idx is not None and idx < len(r) else ""
+
+    out_rows: list[JiraExcelRow] = []
+    matched = 0
+    for r in rows_iter:
+        if r is None or all(v is None for v in r):
+            continue
+        key = cell(r, "key")
+        if not key:
+            continue
+        assignee_raw = cell(r, "assignee")
+        assignee_name, is_matched = _match_excel_assignee(assignee_raw, roster_by_lower)
+        if is_matched:
+            matched += 1
+        out_rows.append(JiraExcelRow(
+            key=key,
+            jira_url=f"{base_url}/browse/{key}" if base_url else None,
+            summary=cell(r, "summary"),
+            issue_type=cell(r, "issue_type"),
+            status=cell(r, "status"),
+            assignee_raw=assignee_raw,
+            assignee_name=assignee_name,
+            assignee_matched=is_matched,
+            created=cell(r, "created"),
+            resolved=cell(r, "resolved"),
+            due_date=cell(r, "due_date"),
+            environment=cell(r, "environment"),
+            description=cell(r, "description"),
+        ))
+        if len(out_rows) >= _EXCEL_MAX_ROWS:
+            break
+
+    return JiraExcelImportResult(status="ok", total=len(out_rows), matched=matched, rows=out_rows)
 
 
 # ── 양방향 push: PEP 상태 → Jira 반영 (Phase 2) ─────────────────────────────────

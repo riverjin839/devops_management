@@ -57,7 +57,10 @@ api.interceptors.request.use(
     if (token) {
       config.headers.set('Authorization', `Bearer ${token}`);
     }
-    if (config.data && typeof config.data === 'object') {
+    // FormData/Blob/File 은 own-enumerable 프로퍼티가 없어 convertKeysToSnake 가
+    // 빈 객체({})로 뭉개버린다 — multipart 업로드(backup import 등)가 깨지므로 건너뛴다.
+    if (config.data && typeof config.data === 'object'
+      && !(config.data instanceof FormData) && !(config.data instanceof Blob)) {
       config.data = convertKeysToSnake(config.data);
     }
     if (isDebugEnabled('global')) {
@@ -866,6 +869,14 @@ export const jiraApi = {
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   import: (data: import('@/types').JiraImportRequest) =>
     api.post<import('@/types').JiraImportResult>('/jira/import', data),
+  importExcel: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<import('@/types').JiraExcelImportResult>('/jira/import/excel', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 2 * 60_000,
+    });
+  },
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
 };
