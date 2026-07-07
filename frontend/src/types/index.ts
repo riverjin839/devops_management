@@ -552,6 +552,31 @@ export interface JiraImportResult {
   items: JiraImportItemPreview[];
 }
 
+// Jira 에서 추출한 Excel(.xlsx) 가져오기 — 미리보기 전용, 저장 안 함.
+export interface JiraExcelRow {
+  key: string;
+  jiraUrl?: string | null;
+  summary: string;
+  issueType: string;
+  status: string;
+  assigneeRaw: string;
+  assigneeName?: string | null;
+  assigneeMatched: boolean;
+  created: string;
+  resolved: string;
+  dueDate: string;
+  environment: string;
+  description: string;
+}
+
+export interface JiraExcelImportResult {
+  status: 'ok' | 'error';
+  detail: string;
+  total: number;
+  matched: number;
+  rows: JiraExcelRow[];
+}
+
 export interface JiraPushRequest {
   comment?: string;
   force?: boolean;
