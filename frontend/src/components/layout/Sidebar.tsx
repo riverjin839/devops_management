@@ -7,7 +7,6 @@ import {
   KeyRound, ShieldCheck, FileSearch, ServerCog,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
-import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -221,24 +220,8 @@ export function Sidebar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
-  const services = useServiceCatalog();
 
-  // 동적 NAV_MAP — 정적 위에 ui_settings 의 서비스 항목을 덧씌움.
-  const navMap = useMemo(() => {
-    const m: typeof NAV_MAP = { ...NAV_MAP };
-    for (const s of services) {
-      if (s.key === 'other') continue;
-      m[`/services/${s.key}`] = { defaultLabel: s.label, icon: s.icon };
-    }
-    return m;
-  }, [services]);
-
-  const servicePaths = useMemo(
-    () => services.filter((s) => s.key !== 'other').map((s) => `/services/${s.key}`),
-    [services],
-  );
-
-  const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
+  const getLabel = (path: string) => navLabels[path] || NAV_MAP[path]?.defaultLabel || path;
 
   // 현재 모드에서 보여줄 그룹만 필터링 (상단 레일).
   // system(Settings) 그룹은 상단이 아니라 하단 푸터에서 admin 에게만 렌더한다.
@@ -252,7 +235,6 @@ export function Sidebar() {
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
-    if (location.pathname.startsWith('/services/')) return 'services';
     for (const g of GROUPS) {
       if (g.paths.includes(location.pathname)) return g.id;
     }
@@ -288,35 +270,11 @@ export function Sidebar() {
     if (!group) return null;
     const close = () => setOpenGroup(null);
 
-    if (id === 'services') {
-      return (
-        <div className="space-y-1 pb-2">
-          {group.paths.map((p) => {
-            const entry = navMap[p];
-            if (!entry || !featureAllowed(p)) return null;
-            return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close} />
-            );
-          })}
-          {servicePaths.length > 0 && <div className="mx-2 my-1 border-t border-zinc-200" />}
-          {servicePaths.map((p) => {
-            const entry = navMap[p];
-            if (!entry || !featureAllowed(p)) return null;
-            return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close} />
-            );
-          })}
-        </div>
-      );
-    }
-
     if (id === 'system') {
       return (
         <div className="space-y-1 pb-2">
           {group.paths.map((p) => {
-            const entry = navMap[p];
+            const entry = NAV_MAP[p];
             if (!entry || !featureAllowed(p)) return null;
             return (
               <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
@@ -330,7 +288,7 @@ export function Sidebar() {
     return (
       <div className="space-y-1 pb-2">
         {group.paths.map((p) => {
-          const entry = navMap[p];
+          const entry = NAV_MAP[p];
           if (!entry || !featureAllowed(p)) return null;
           return (
             <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
