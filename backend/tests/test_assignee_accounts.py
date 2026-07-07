@@ -11,6 +11,7 @@ os.environ["DATABASE_URL"] = os.environ.get(
 os.environ["REDIS_URL"] = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 from app.database import SessionLocal, Base, engine
+from app.main import _ensure_pgvector_extension
 from app.models.user import User
 from app.auth.security import verify_password
 from app.services.assignee_accounts import sync_assignee_accounts, ASSIGNEE_ACCOUNT_ROLE
@@ -18,6 +19,10 @@ from app.services.assignee_accounts import sync_assignee_accounts, ASSIGNEE_ACCO
 
 @pytest.fixture
 def db():
+    # work_items/work_guides.embedding 은 pgvector 확장이 필요 — 이 파일이 다른 테스트
+    # 파일보다 먼저(알파벳순) 실행되며 최초로 create_all() 을 부르는 경우, 확장이 아직
+    # 없으면 두 테이블 생성 자체가 실패한다. main.py 의 lifespan 과 동일한 순서로 보장.
+    _ensure_pgvector_extension()
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
     yield session
