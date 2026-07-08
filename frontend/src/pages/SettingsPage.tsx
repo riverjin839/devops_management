@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette, FileSearch } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
@@ -10,6 +10,7 @@ import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
+import { AuditLogManager } from '@/components/settings/AuditLogManager';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees } from '@/hooks/useAssignees';
@@ -485,7 +486,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
 
   // Debug 설정
@@ -508,6 +509,7 @@ export function SettingsPage() {
     { id: 'jira', label: '연동 (Jira)', icon: <Globe className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
+    { id: 'audit-log', label: '감사 로그', icon: <FileSearch className="w-4 h-4" />, count: 0 },
   ];
 
   return (
@@ -1048,6 +1050,8 @@ export function SettingsPage() {
         {activeTab === 'backup' && <BackupRestorePanel />}
 
         {activeTab === 'jira' && <JiraIntegrationPanel />}
+
+        {activeTab === 'audit-log' && <AuditLogManager />}
       </main>
 
       {/* Add Cluster Modal */}
