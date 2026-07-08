@@ -14,10 +14,11 @@ ARG PGVECTOR_VERSION=v0.7.4
 FROM postgres:${PG_VERSION}-alpine AS builder
 ARG PGVECTOR_VERSION
 
+# clang/llvm 은 넣지 않는다 — Alpine 의 postgresql 패키지는 LLVM JIT 없이 빌드되므로
+# pgvector 의 bitcode(.bc) 빌드 스텝이 스킵되고, 순수 C 확장(.so)만 build-base 로 충분하다.
+# (버전 접미사 붙인 clang15/llvm15 는 Alpine 저장소에 해당 이름이 없어 빌드가 실패했었음.)
 RUN apk add --no-cache --virtual .build-deps \
       build-base \
-      clang15 \
-      llvm15 \
       git \
       postgresql-dev \
   && git clone --branch "${PGVECTOR_VERSION}" --depth 1 https://github.com/pgvector/pgvector.git /tmp/pgvector \
