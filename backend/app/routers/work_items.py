@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import case, or_
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -530,18 +531,25 @@ def get_similar_work_items(
     if not item:
         raise _not_found(item_id)
 
-    if item.embedding is None:
-        return SimilarWorkItemListResponse(data=[], embedding_available=False)
+    try:
+        # item.embedding 은 deferred 컬럼 — 여기서 처음 접근할 때 DB 에서 로드된다.
+        # pgvector 확장/embedding 컬럼이 없는 환경(마이그레이션 fail-open)이면 이 시점에
+        # UndefinedColumn 이 나므로, "실패"가 아니라 "아직 준비 안 됨"으로 취급한다.
+        if item.embedding is None:
+            return SimilarWorkItemListResponse(data=[], embedding_available=False)
 
-    distance = WorkItem.embedding.cosine_distance(item.embedding).label("distance")
-    rows = (
-        db.query(WorkItem, distance)
-        .filter(WorkItem.id != item.id)
-        .filter(WorkItem.embedding.isnot(None))
-        .order_by(distance.asc())
-        .limit(limit)
-        .all()
-    )
+        distance = WorkItem.embedding.cosine_distance(item.embedding).label("distance")
+        rows = (
+            db.query(WorkItem, distance)
+            .filter(WorkItem.id != item.id)
+            .filter(WorkItem.embedding.isnot(None))
+            .order_by(distance.asc())
+            .limit(limit)
+            .all()
+        )
+    except DBAPIError:
+        db.rollback()
+        return SimilarWorkItemListResponse(data=[], embedding_available=False)
 
     return SimilarWorkItemListResponse(
         data=[

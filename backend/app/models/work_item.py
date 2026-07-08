@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, deferred
 from pgvector.sqlalchemy import Vector
 from app.config import settings
 from app.database import Base
@@ -94,7 +94,10 @@ class WorkItem(Base):
 
     # 유사 WorkItem 검색용 임베딩(제목+본문) — Celery 비동기로 계산·저장 (동기 쓰기 경로에 없음).
     # settings.embedding_model 교체 시 차원(embedding_dim)도 함께 바뀌면 재계산 필요.
-    embedding = Column(Vector(settings.embedding_dim), nullable=True)
+    # deferred() — 기본 SELECT(list/get 등 일반 쿼리)에 포함되지 않도록 지연 로딩. pgvector
+    # 확장이 없는 환경에서 컬럼 자체가 생성되지 않았어도(마이그레이션 fail-open) 이 컬럼을
+    # 실제로 사용하는 유사도 검색 쪽만 실패하고, 나머지 WorkItem 쿼리는 영향받지 않는다.
+    embedding = deferred(Column(Vector(settings.embedding_dim), nullable=True))
 
     # G-I2: server_default 추가 — DB 직접 INSERT (마이그레이션 backfill 등) 시에도 NULL 방지.
     # `default=datetime.utcnow` 는 ORM 레벨, `server_default=func.now()` 는 DB 레벨.
