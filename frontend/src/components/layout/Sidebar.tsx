@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
-  KeyRound, ShieldCheck, FileSearch, ServerCog,
+  KeyRound, ShieldCheck, ScrollText, ServerCog,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -14,6 +14,7 @@ import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
+import { RELEASE_NOTES } from '@/data/releaseNotes';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
@@ -218,6 +219,8 @@ export function Sidebar() {
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
   // 사용자 아이콘 클릭 시 여는 개인 메뉴(담당자 정보 / 비밀번호 변경) — 우측 슬라이드 SidePane.
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // 릴리즈 노트 — 우측 슬라이드 SidePane (감사 로그가 Settings 탭으로 이동한 자리).
+  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
 
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
 
@@ -245,6 +248,7 @@ export function Sidebar() {
   useEffect(() => {
     setOpenGroup(null);
     setUserMenuOpen(false);
+    setReleaseNotesOpen(false);
   }, [location.pathname]);
 
   // ESC 로 flyout / edit mode 닫기
@@ -253,6 +257,7 @@ export function Sidebar() {
       if (e.key === 'Escape') {
         setOpenGroup(null);
         setUserMenuOpen(false);
+        setReleaseNotesOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -402,12 +407,13 @@ export function Sidebar() {
               onClick={() => navigate('/settings/users')}
             />
           )}
-          {isAdmin && (
+          {currentUser && (
             <RailIconButton
-              label="감사 로그"
-              Icon={FileSearch}
-              active={location.pathname === '/settings/audit-logs'}
-              onClick={() => navigate('/settings/audit-logs')}
+              label="릴리즈 노트"
+              Icon={ScrollText}
+              highlighted={releaseNotesOpen}
+              suppressTooltip={releaseNotesOpen}
+              onClick={() => setReleaseNotesOpen((v) => !v)}
             />
           )}
           {currentUser && (
@@ -465,6 +471,33 @@ export function Sidebar() {
           </div>
         </SidePane>
       )}
+
+      {/* 릴리즈 노트 — 우측 슬라이드 SidePane. */}
+      <SidePane
+        open={releaseNotesOpen}
+        onClose={() => setReleaseNotesOpen(false)}
+        title="릴리즈 노트"
+        width="420px"
+      >
+        <div className="space-y-6">
+          {RELEASE_NOTES.map((entry) => (
+            <div key={entry.version}>
+              <div className="flex items-baseline gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-foreground">{entry.version}</h3>
+                {entry.date && <span className="text-xs text-muted-foreground">{entry.date}</span>}
+              </div>
+              <ul className="space-y-1.5">
+                {entry.highlights.map((h, i) => (
+                  <li key={i} className="text-sm text-muted-foreground flex gap-2">
+                    <span className="text-primary flex-shrink-0">·</span>
+                    <span>{h}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </SidePane>
 
     </>
   );

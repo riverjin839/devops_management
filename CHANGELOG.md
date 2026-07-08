@@ -61,10 +61,16 @@
   소스 빌드로 추가 — Docker Hub 공식 `pgvector/pgvector:pg15`(Debian/glibc)로 통째로 바꿀 때 생기는
   컬레이션 호환성 리스크를 피함. `.github/workflows/postgres-pgvector.yml` 이 앱 이미지와 동일한
   GHCR 네임스페이스(`ghcr.io/<owner>/<repo>/postgres-pgvector`)로 빌드/게시.
+- **릴리즈 노트 패널**: 사이드바 하단 레일에 "릴리즈 노트" 아이콘 추가(감사 로그가 빠진 자리) —
+  클릭 시 우측 슬라이드 SidePane 으로 최근 버전별 변경 요약을 보여줌. `frontend/src/data/releaseNotes.ts`
+  에 CHANGELOG.md 의 사용자 관점 요약을 수동 큐레이션(자동 동기화 아님, 사용자용 변경 시 함께 갱신).
 
 ### Changed
 - **플랫폼 현황 메뉴 정리**: 사이드바·홈 퀵 액세스에서 "서비스/앱"(LAKE 서비스·애플리케이션 APM) 메뉴
   제거 (라우트/페이지 자체는 유지, 메뉴에서만 제거).
+- **감사 로그 위치 이동**: 사이드바 하단 레일의 독립 아이콘(`/settings/audit-logs`)을 없애고
+  Settings ▸ 감사 로그 탭으로 이동(`AuditLogManager`). 페이지/라우트 자체는 삭제, 접근 권한은
+  `/settings` 라우트의 기존 admin 가드를 그대로 사용.
 
 ### Removed
 - **OpenClaw AI 알림 에이전트 통합 제거**: K8s 이벤트를 감시해 Telegram/Slack 으로 알림을 보내던

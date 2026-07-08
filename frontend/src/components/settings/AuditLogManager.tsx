@@ -1,14 +1,13 @@
 /**
- * 감사 로그 조회 페이지 — admin 전용.
+ * 감사 로그 조회 — Settings ▸ 감사 로그 탭 (admin 전용, SettingsPage 라우트 자체가 RequireAdmin).
  *
  * 로그인 성공/실패, 사용자 CRUD, 역할 변경, 클러스터/플레이북 등 위험 작업 기록 표시.
  */
 import { useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Search, FileSearch } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { RoleGate } from '@/components/auth/RoleGate';
 import { auditLogsApi } from '@/services/api';
 import type { AuditLog } from '@/types';
 import { formatApiError } from '@/lib/utils';
@@ -70,7 +69,7 @@ function DetailsCell({ row }: { row: AuditLog }) {
   );
 }
 
-export function AuditLogsPage() {
+export function AuditLogManager() {
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
   const [page, setPage] = useState(1);
@@ -96,7 +95,7 @@ export function AuditLogsPage() {
     return Math.max(1, Math.ceil(data.total / data.pageSize));
   }, [data]);
 
-  const content = (
+  return (
     <MacCard title="감사 로그">
       <div className="flex flex-wrap items-end gap-2 mb-3">
         <div className="flex flex-col">
@@ -225,28 +224,5 @@ export function AuditLogsPage() {
         </button>
       </div>
     </MacCard>
-  );
-
-  return (
-    <div className="min-h-screen bg-background p-5">
-      <div className="max-w-[1600px] mx-auto space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <FileSearch className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-bold">감사 로그</h1>
-        </div>
-        <RoleGate
-          allow={['admin']}
-          fallback={
-            <MacCard>
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                이 페이지는 admin 권한이 필요합니다.
-              </p>
-            </MacCard>
-          }
-        >
-          {content}
-        </RoleGate>
-      </div>
-    </div>
   );
 }
