@@ -46,6 +46,11 @@
   롤아웃 완료까지 대기. `dev|prod|kind` 환경 선택, `--only`(일부 컴포넌트만), `--dry-run`,
   `-y`(확인 생략) 지원. 이미지 레포는 git remote 에서 `ghcr.io/<owner>/<repo>` 로 자동 추론(`cd.yml`
   과 동일 규칙), `--registry` 로 오버라이드 가능.
+- **`docker/postgres-pgvector/`**: GHCR 프록시로만 이미지를 받는 폐쇄망 배포용 Postgres 15(Alpine)
+  + pgvector 확장 이미지. `postgres:15-alpine` 베이스(musl libc)를 그대로 유지한 채 pgvector 를
+  소스 빌드로 추가 — Docker Hub 공식 `pgvector/pgvector:pg15`(Debian/glibc)로 통째로 바꿀 때 생기는
+  컬레이션 호환성 리스크를 피함. `.github/workflows/postgres-pgvector.yml` 이 앱 이미지와 동일한
+  GHCR 네임스페이스(`ghcr.io/<owner>/<repo>/postgres-pgvector`)로 빌드/게시.
 
 ### Changed
 - **플랫폼 현황 메뉴 정리**: 사이드바·홈 퀵 액세스에서 "서비스/앱"(LAKE 서비스·애플리케이션 APM) 메뉴
