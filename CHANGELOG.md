@@ -11,6 +11,16 @@
 1.0.0 이후 main 에 병합된 변경 (다음 마이너 릴리스 후보).
 
 ### Added
+- **서비스 모듈 관계도(`/architecture`)**: RAG 파이프라인 인포그래픽처럼 노드 사이를 점이 흐르는
+  애니메이션 플로우 다이어그램. 탭 2개 — ① PEP 아키텍처(브라우저→Backend API→PostgreSQL/Redis/
+  Celery Beat·Worker/Prometheus/Ollama/K8s 클러스터)와 ② 클러스터 토폴로지(선택한 클러스터의
+  애드온을 hub-spoke 로 표시). 엣지·노드 색상과 흐름 속도가 실제 헬스체크 상태(정상/경고/위험)를
+  반영하며, 라이브 상태 신호가 없는 구성요소(Redis/Celery)는 점선·회색으로 "구조만 표시" 처리해
+  실제 상태인 것처럼 오인되지 않게 함. React Flow 등 신규 라이브러리 없이 SVG `animateMotion` 기반
+  전용 컴포넌트(`FlowDiagram`)로 구현해 번들 크기 영향 없음.
+  - Frontend: `components/architecture/*`(FlowDiagram, pepArchitecture 레이아웃), `hooks/useArchitecture.ts`
+    (기존 `/health/summary`, `/health/addons`, `/agent/health`, `/promql/health` 재사용, 신규 백엔드 변경 없음),
+    `pages/ArchitecturePage.tsx`, 사이드바 네트워크 그룹에 메뉴 추가.
 - **K8s 클러스터 추이(Cluster Trends)** — 신규 메뉴 `/cluster-trends`. per-node CPU/Memory/Disk/DiskIO/Network/NetworkErr
   시계열을 시간창(30m/1h/6h/24h/7d)별로 조회. 300+ 노드 과수집 방지(노드 명시 선택 + 상한 기본 30,
   시간창별 step 자동조정, 지표당 range query 1회). 데이터 소스는 클러스터별 Prometheus URL(미설정/비활성 시 offline).
