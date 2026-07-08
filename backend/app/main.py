@@ -95,6 +95,12 @@ def _ensure_pgvector_extension() -> None:
     from sqlalchemy import text as _text
     try:
         with engine.begin() as conn:
+            # backend/celery-worker/celery-beat 등 여러 replica 가 동시에 부팅하며 각자 이
+            # 함수를 실행하면 "CREATE EXTENSION IF NOT EXISTS" 의 존재 확인→생성이 원자적이지
+            # 않아 두 세션이 동시에 생성을 시도해 duplicate key value violates unique
+            # constraint "pg_extension_name_index" 로 충돌할 수 있다. 트랜잭션 advisory lock
+            # 으로 직렬화해 이 레이스를 막는다 (커밋/롤백 시 자동 해제, 별도 unlock 불필요).
+            conn.execute(_text("SELECT pg_advisory_xact_lock(872346192)"))
             conn.execute(_text("CREATE EXTENSION IF NOT EXISTS vector"))
         _log.info("migration: pgvector extension ensured")
     except Exception as e:  # noqa: BLE001

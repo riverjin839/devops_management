@@ -52,10 +52,10 @@
 - **mc 클라이언트 레이아웃**: 타겟/프리셋/결과 카드를 2:3:5 비율로 한 행에 배치, 결과 카드는 항상 같은
   위치에 고정되고 세로 스크롤만 허용(가로 스크롤 없음).
 - **`scripts/redeploy.sh`**: 이미지 태그만 교체하는 빠른 재배포 스크립트. kustomize/helm 전체 apply
-  없이 `kubectl set image` 로 backend/frontend/celery-worker/celery-beat 컨테이너 이미지를 바꾸고
-  롤아웃 완료까지 대기. `dev|prod|kind` 환경 선택, `--only`(일부 컴포넌트만), `--dry-run`,
-  `-y`(확인 생략) 지원. 이미지 레포는 git remote 에서 `ghcr.io/<owner>/<repo>` 로 자동 추론(`cd.yml`
-  과 동일 규칙), `--registry` 로 오버라이드 가능.
+  없이 `kubectl set image` + `rollout restart` 로 지정한 Deployment 컨테이너 이미지를 바꾸고 롤아웃
+  완료까지 대기. `-n <namespace>`(생략 시 현재 kubectl context 네임스페이스) + 전체 이미지 참조 +
+  `<deployment>:<container>` 목록을 직접 받는 단순한 인터페이스(이후 git remote 자동 추론 방식에서
+  변경, 아래 Fixed 참고).
 - **`docker/postgres-pgvector/`**: GHCR 프록시로만 이미지를 받는 폐쇄망 배포용 Postgres 15(Alpine)
   + pgvector 확장 이미지. `postgres:15-alpine` 베이스(musl libc)를 그대로 유지한 채 pgvector 를
   소스 빌드로 추가 — Docker Hub 공식 `pgvector/pgvector:pg15`(Debian/glibc)로 통째로 바꿀 때 생기는
@@ -98,6 +98,18 @@
   이전과 동일하면(예: `latest` 를 연달아 배포) diff 가 없어 새 ReplicaSet 을 만들지 않아, 레지스트리에
   새 이미지가 올라가도 파드가 재시작/재-pull 되지 않던 문제 → `set image` 뒤에 항상
   `kubectl rollout restart` 를 함께 호출하도록 수정.
+- **`scripts/redeploy.sh` — git remote 파싱 에러로 실행 자체가 실패하던 문제**: 이미지 레지스트리
+  베이스(`ghcr.io/<owner>/<repo>`)를 `git remote` URL 파싱으로 추론하던 로직이 특정 환경(프록시로
+  감싼 origin URL 등)에서 깨져 스크립트가 아예 실행되지 않던 문제 → git remote 추론/`dev|prod|kind`
+  환경 이름→네임스페이스·리소스 프리픽스 매핑을 모두 제거하고, `-n <namespace>`(생략 시 현재
+  kubectl context 네임스페이스) + 전체 이미지 참조 + `<deployment>:<container>` 목록을 직접 받는
+  단순한 인터페이스로 재작성.
+- **pgvector 확장 생성 시 `duplicate key value violates unique constraint "pg_extension_name_index"`**:
+  backend/celery-worker/celery-beat 등 여러 replica 가 동시에 부팅하며 각자 `CREATE EXTENSION IF NOT
+  EXISTS vector` 를 실행하면 존재 확인→생성이 원자적이지 않아 두 세션이 동시에 생성을 시도해 충돌하고,
+  이 예외가 (실제로는 확장이 정상 설치돼 있어도) "Nexus 로 postgresql-pgvector 패키지 반입 필요" 라는
+  오해 소지가 큰 메시지로 뭉뚱그려 로깅되던 문제 → `pg_advisory_xact_lock` 으로 이 구간을 직렬화해
+  레이스 자체를 제거.
 
 ## [1.0.0] - 2026-06-04 — 정식 오픈
 
