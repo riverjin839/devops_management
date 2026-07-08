@@ -18,7 +18,6 @@ from app.routers import (
     history_router,
     node_labels_router,
     node_images_router,
-    openclaw_router,
     playbooks_router,
     promql_router,
     work_items_router,
@@ -1421,7 +1420,6 @@ app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(openclaw_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)

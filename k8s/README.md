@@ -59,26 +59,16 @@ k8s/
 │   ├── grafana-renderer/              # Grafana 이미지 렌더러 사이드카
 │   │   ├── deployment.yaml
 │   │   └── service.yaml
-│   ├── kubewatch/                     # K8s 이벤트 감시 및 알림
-│   │   ├── deployment.yaml
-│   │   ├── configmap.yaml
-│   │   └── rbac.yaml
-│   └── openclaw/                      # OpenClaw 에이전트 (보안 정책 감사)
-│       ├── kustomization.yaml
+│   └── kubewatch/                     # K8s 이벤트 감시 및 알림
 │       ├── deployment.yaml
-│       ├── service.yaml
-│       ├── serviceaccount.yaml
 │       ├── configmap.yaml
-│       └── secret.yaml
+│       └── rbac.yaml
 │
 ├── overlays/                          # 환경별 Kustomize 오버레이
 │   ├── dev/                           # 개발 환경 (k8s-monitor-dev)
 │   ├── prod/                          # 프로덕션 환경 (k8s-monitor-prod)
 │   ├── kind/                          # 로컬 kind 클러스터 (NodePort 노출)
-│   ├── airgap/                        # 폐쇄망 배포 (내부 레지스트리 미러)
-│   ├── openclaw/                      # OpenClaw 포함 프로덕션 배포
-│   ├── dev-openclaw/                  # OpenClaw 포함 개발 환경 배포
-│   └── airgap-openclaw/               # OpenClaw 포함 폐쇄망 배포
+│   └── airgap/                        # 폐쇄망 배포 (내부 레지스트리 미러)
 │
 ├── superpod/                          # SuperPod 독립 배포 모듈
 │   ├── kustomization.yaml
@@ -222,21 +212,6 @@ K8s 클러스터에서 발생하는 Pod CrashLoop, 배포 실패 등의 이벤�
 
 ---
 
-### base/openclaw/ — OpenClaw 보안 정책 감사 에이전트
-
-K8s 클러스터의 보안 정책(RBAC, NetworkPolicy, PodSecurity 등)을 자동 감사하는 에이전트입니다.
-
-| 파일 | 역할 |
-|---|---|
-| `deployment.yaml` | OpenClaw 에이전트 컨테이너. 감사 스케줄 및 API 서버 연동 설정 |
-| `service.yaml` | ClusterIP Service. PEP 백엔드에서 감사 결과 조회 |
-| `serviceaccount.yaml` | ClusterRole + RoleBinding. 클러스터 전체 리소스 읽기 권한 |
-| `configmap.yaml` | 감사 정책 규칙 및 리포트 대상 설정 |
-| `secret.yaml` | API 토큰 / 외부 연동 자격증명 |
-| `kustomization.yaml` | openclaw 모듈 리소스 묶음 |
-
----
-
 ### overlays/ — 환경별 Kustomize 오버레이
 
 | 오버레이 | 네임스페이스 | 목적 및 주요 차이점 |
@@ -245,9 +220,6 @@ K8s 클러스터의 보안 정책(RBAC, NetworkPolicy, PodSecurity 등)을 자�
 | `prod/` | `k8s-monitor-prod` | 프로덕션. backend/frontend/celery 각 3개 레플리카, TLS(cert-manager), HPA 활성화, 체크 주기 5분 |
 | `kind/` | `k8s-monitor-dev` | 로컬 kind 클러스터. NodePort(30080 frontend / 30800 backend) 노출. `scripts/kind-setup.sh` 와 연동 |
 | `airgap/` | `k8s-monitor-prod` | 폐쇄망 프로덕션. 모든 이미지를 내부 레지스트리 미러로 교체. 외부 인터넷 불필요 |
-| `openclaw/` | `k8s-monitor-prod` | OpenClaw 포함 프로덕션. prod 오버레이에 openclaw 모듈 추가 적용 |
-| `dev-openclaw/` | `k8s-monitor-dev` | OpenClaw 포함 개발 환경. dev 오버레이에 openclaw 모듈 추가 적용 |
-| `airgap-openclaw/` | `k8s-monitor-prod` | OpenClaw 포함 폐쇄망 배포. airgap + openclaw 조합 |
 
 ---
 
@@ -314,19 +286,6 @@ bash scripts/kind-setup.sh reload  # 코드 변경 후 재빌드
 bash scripts/kind-setup.sh destroy # 클러스터 삭제
 # Frontend: http://localhost:30080
 # Backend:  http://localhost:30800/docs
-```
-
-### OpenClaw 포함 배포
-
-```bash
-# 개발 환경 + OpenClaw
-kubectl apply -k k8s/overlays/dev-openclaw
-
-# 프로덕션 + OpenClaw
-kubectl apply -k k8s/overlays/openclaw
-
-# 폐쇄망 + OpenClaw
-kubectl apply -k k8s/overlays/airgap-openclaw
 ```
 
 ### SuperPod 독립 배포

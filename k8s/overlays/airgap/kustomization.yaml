@@ -149,11 +149,6 @@ configMapGenerator:
       # Ollama: match the model name baked into the custom image
       - OLLAMA_MODEL=qwen2.5-coder:7b
       - OLLAMA_URL=http://ollama:11434
-  # openclaw also reads OLLAMA_MODEL for AI-enriched alert summaries
-  - name: openclaw-config
-    behavior: merge
-    literals:
-      - OLLAMA_MODEL=qwen2.5-coder:7b
 
 secretGenerator:
   - name: k8s-monitor-secret

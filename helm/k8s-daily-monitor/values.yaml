@@ -238,35 +238,6 @@ ollama:
     pullPolicy: IfNotPresent
 
 # ============================================
-# OpenClaw AI Alert Agent (Optional)
-# ============================================
-openclaw:
-  enabled: false
-  image:
-    repository: openclaw/openclaw
-    tag: latest
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "100m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
-  # Alert channels — set real values via --set or values-override
-  telegram:
-    botToken: ""
-    chatId: ""
-  slack:
-    webhookUrl: ""
-  # K8s event watch settings
-  watch:
-    namespaces: ""
-    eventTypes: "Warning"
-    errorPatterns: "CrashLoopBackOff,OOMKilled,ImagePullBackOff,ErrImagePull,FailedScheduling,Unhealthy,BackOff"
-    intervalSeconds: "30"
-
-# ============================================
 # Super Pod — Deep Daily Check
 # 같은 backend 이미지를 새 엔트리포인트로 띄워, 인증서 만료/etcd 단편화/
 # CNI flow/PVC/이미지풀/RBAC 등 deep check 를 수행한다.

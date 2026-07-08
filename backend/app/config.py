@@ -46,9 +46,7 @@ class Settings(BaseSettings):
     embedding_dim: int = 768
     embedding_timeout: int = 30
 
-    # OpenClaw Alert Channels
-    telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
+    # Alert Channels
     slack_webhook_url: str = ""
 
     # Prometheus / Grafana
@@ -99,7 +97,6 @@ class Settings(BaseSettings):
     mgmt_namespace: str = "k8s-monitor"
 
     # ─── 알림 채널 기본값 ───────────────────────────────────
-    # SLACK_WEBHOOK_URL 은 위 OpenClaw 와 공유.
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
