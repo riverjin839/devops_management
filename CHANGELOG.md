@@ -60,6 +60,13 @@
 - **Jira Excel 가져오기 413 에러**: 프론트엔드 nginx 에 `client_max_body_size` 가 없어 기본값(1m)이
   적용돼 수 MB 짜리 xlsx 업로드가 백엔드에 도달하기도 전에 거부되던 문제 → k8s ingress 와 동일하게
   10m 으로 설정(docker-compose/프로덕션 nginx 컨테이너 경로에만 있던 문제, k8s 배포는 영향 없었음).
+- **업무(Work to do)/work-items 500 에러**: pgvector 확장이 없는 환경에서 `embedding` 컬럼
+  마이그레이션이 조용히 실패(fail-open)했는데도 `WorkItem`/`WorkGuide` ORM 모델이 해당 컬럼을
+  무조건 SELECT 하도록 매핑돼 있어, 목록 조회를 포함한 모든 업무 쿼리가
+  `column work_items.embedding does not exist` 로 500 되던 문제 → 두 모델의 `embedding` 컬럼을
+  `deferred()` 로 지연 로딩해 기본 조회에서 제외(유사도 검색처럼 실제로 그 컬럼을 쓰는 기능만
+  영향받도록 격리). `/work-items/{id}/similar` 도 컬럼이 없으면 500 대신 `embedding_available=false` 로
+  안전하게 폴백.
 
 ## [1.0.0] - 2026-06-04 — 정식 오픈
 
