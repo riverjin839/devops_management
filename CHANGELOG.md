@@ -41,6 +41,11 @@
   - Backend: `POST /jira/import/excel` (openpyxl).
 - **mc 클라이언트 레이아웃**: 타겟/프리셋/결과 카드를 2:3:5 비율로 한 행에 배치, 결과 카드는 항상 같은
   위치에 고정되고 세로 스크롤만 허용(가로 스크롤 없음).
+- **`scripts/redeploy.sh`**: 이미지 태그만 교체하는 빠른 재배포 스크립트. kustomize/helm 전체 apply
+  없이 `kubectl set image` 로 backend/frontend/celery-worker/celery-beat 컨테이너 이미지를 바꾸고
+  롤아웃 완료까지 대기. `dev|prod|kind` 환경 선택, `--only`(일부 컴포넌트만), `--dry-run`,
+  `-y`(확인 생략) 지원. 이미지 레포는 git remote 에서 `ghcr.io/<owner>/<repo>` 로 자동 추론(`cd.yml`
+  과 동일 규칙), `--registry` 로 오버라이드 가능.
 
 ### Changed
 - **플랫폼 현황 메뉴 정리**: 사이드바·홈 퀵 액세스에서 "서비스/앱"(LAKE 서비스·애플리케이션 APM) 메뉴
