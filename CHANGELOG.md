@@ -72,6 +72,10 @@
   `deferred()` 로 지연 로딩해 기본 조회에서 제외(유사도 검색처럼 실제로 그 컬럼을 쓰는 기능만
   영향받도록 격리). `/work-items/{id}/similar` 도 컬럼이 없으면 500 대신 `embedding_available=false` 로
   안전하게 폴백.
+- **`scripts/redeploy.sh` — 태그 미변경 시 재배포 안 되던 문제**: `kubectl set image` 는 이미지 문자열이
+  이전과 동일하면(예: `latest` 를 연달아 배포) diff 가 없어 새 ReplicaSet 을 만들지 않아, 레지스트리에
+  새 이미지가 올라가도 파드가 재시작/재-pull 되지 않던 문제 → `set image` 뒤에 항상
+  `kubectl rollout restart` 를 함께 호출하도록 수정.
 
 ## [1.0.0] - 2026-06-04 — 정식 오픈
 

@@ -173,6 +173,7 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
     for c in "${SELECTED[@]}"; do
         IFS=':' read -r dep container image <<< "${c}"
         echo "  ${KCTL[*]} set image deployment/${PREFIX}${dep} ${container}=${image} -n ${NAMESPACE}"
+        echo "  ${KCTL[*]} rollout restart deployment/${PREFIX}${dep} -n ${NAMESPACE}"
     done
     for c in "${SELECTED[@]}"; do
         IFS=':' read -r dep _ _ <<< "${c}"
@@ -193,6 +194,11 @@ if [[ "${ASSUME_YES}" -ne 1 ]]; then
 fi
 
 # ── 이미지 태그 교체 ──────────────────────────────────────
+# 주의: tag 가 latest 처럼 변하지 않는 문자열이면 `kubectl set image` 는 이미지 문자열이
+# 그대로라 아무 변화가 없고, 새 ReplicaSet 이 생성되지 않아 파드가 재시작/재-pull 되지
+# 않는다(같은 태그를 두 번 배포하면 이전 내용이 계속 떠 있는 상태로 남는 흔한 함정).
+# 그래서 set image 뒤에 항상 `rollout restart` 를 함께 호출해, imagePullPolicy: Always
+# 인 백엔드/프론트엔드가 태그 변경 여부와 무관하게 항상 새로 pull 하도록 강제한다.
 log_step "이미지 태그 교체 중..."
 for c in "${SELECTED[@]}"; do
     IFS=':' read -r dep container image <<< "${c}"
@@ -203,6 +209,7 @@ for c in "${SELECTED[@]}"; do
     fi
     log_info "  ${name}: ${container} → ${image}"
     "${KCTL[@]}" set image "deployment/${name}" "${container}=${image}" -n "${NAMESPACE}"
+    "${KCTL[@]}" rollout restart "deployment/${name}" -n "${NAMESPACE}"
 done
 
 # ── 롤아웃 대기 ───────────────────────────────────────────
