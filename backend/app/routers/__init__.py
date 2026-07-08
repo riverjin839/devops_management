@@ -5,7 +5,6 @@ from app.routers.daily_check import router as daily_check_router
 from app.routers.playbooks import router as playbooks_router
 from app.routers.agent import router as agent_router
 from app.routers.promql import router as promql_router
-from app.routers.openclaw import router as openclaw_router
 from app.routers.work_items import router as work_items_router
 from app.routers.jira import router as jira_router
 from app.routers.ui_settings import router as ui_settings_router
@@ -75,7 +74,6 @@ __all__ = [
     "playbooks_router",
     "agent_router",
     "promql_router",
-    "openclaw_router",
     "work_items_router",
     "jira_router",
     "ui_settings_router",

@@ -66,6 +66,13 @@
 - **플랫폼 현황 메뉴 정리**: 사이드바·홈 퀵 액세스에서 "서비스/앱"(LAKE 서비스·애플리케이션 APM) 메뉴
   제거 (라우트/페이지 자체는 유지, 메뉴에서만 제거).
 
+### Removed
+- **OpenClaw AI 알림 에이전트 통합 제거**: K8s 이벤트를 감시해 Telegram/Slack 으로 알림을 보내던
+  OpenClaw 연동을 전체 제거. Backend: `openclaw` 라우터(`/api/v1/openclaw/*`)·`OpenClawAlertService`
+  삭제, `Settings.telegram_bot_token`/`telegram_chat_id` 제거(OpenClaw 전용, `slack_webhook_url` 은
+  기존 알림 채널과 공유되어 유지). Infra: `k8s/base/openclaw/` 모듈과 `openclaw`/`dev-openclaw`/
+  `airgap-openclaw` 오버레이, Helm `templates/openclaw.yaml` 및 `values.yaml` 의 `openclaw:` 블록 삭제.
+
 ### Fixed
 - **업무 게시판 날짜 저장 오류**: 날짜 input 이 빈 값('')으로 전송되면 `started_at`/`closed_at` 가
   `Input should be a valid datetime` 422 로 거부되어 상태를 done 으로 바꾸거나 완료일을 비울 때 저장 실패하던 문제 →
