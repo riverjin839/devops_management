@@ -14,13 +14,25 @@ ARG PGVECTOR_VERSION=v0.7.4
 FROM postgres:${PG_VERSION}-alpine AS builder
 ARG PGVECTOR_VERSION
 
-# clang/llvm 은 넣지 않는다 — Alpine 의 postgresql 패키지는 LLVM JIT 없이 빌드되므로
-# pgvector 의 bitcode(.bc) 빌드 스텝이 스킵되고, 순수 C 확장(.so)만 build-base 로 충분하다.
-# (버전 접미사 붙인 clang15/llvm15 는 Alpine 저장소에 해당 이름이 없어 빌드가 실패했었음.)
+# `postgresql-dev` 를 apk 로 설치하지 않는다 — 의도적인 선택이다.
+#
+# postgres:15-alpine 은 Alpine 이 15 버전용 apt/apk 패키지를 제공하지 않기 때문에(Alpine
+# 저장소엔 postgresql16-dev/17-dev 까지만 있고 15/18 은 없음) Postgres 를 소스에서 직접
+# 빌드해 /usr/local 에 설치한 이미지다. pg_config 와 확장 빌드용 헤더(-I/usr/local/include/
+# postgresql/server) 는 이미 그 소스 빌드 결과물로 base 이미지에 들어있다.
+#
+# 여기서 apk add postgresql-dev 를 하면 Alpine 롤링 저장소가 최신으로 해석한 전혀 다른
+# 메이저 버전(postgresql18-dev) 이 설치되어 — (a) 실제 실행되는 pg15 바이너리와 헤더/ABI
+# 버전이 어긋나는 위험이 생기고, (b) 그 18-dev 패키지가 LLVM JIT 지원으로 빌드돼 있어
+# clang/llvm 의존성을 끌고 들어와 pgvector 의 make 가 JIT bitcode(.bc) 빌드를 시도하다가
+# pg_config 가 가리키는 "clang-21" 바이너리가 없어 실패한다
+# (make: clang-21: No such file or directory).
+#
+# 그래서 build-base(gcc/make)+git 만 설치하고, base 이미지에 이미 있는 pg15 자체 헤더/
+# pg_config 를 그대로 사용한다 — 버전 불일치와 JIT 관련 실패를 모두 원천 차단한다.
 RUN apk add --no-cache --virtual .build-deps \
       build-base \
       git \
-      postgresql-dev \
   && git clone --branch "${PGVECTOR_VERSION}" --depth 1 https://github.com/pgvector/pgvector.git /tmp/pgvector \
   && make -C /tmp/pgvector OPTFLAGS="" \
   && make -C /tmp/pgvector install \
