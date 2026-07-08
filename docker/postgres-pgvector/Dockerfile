@@ -22,20 +22,22 @@ ARG PGVECTOR_VERSION
 # postgresql/server) 는 이미 그 소스 빌드 결과물로 base 이미지에 들어있다.
 #
 # 여기서 apk add postgresql-dev 를 하면 Alpine 롤링 저장소가 최신으로 해석한 전혀 다른
-# 메이저 버전(postgresql18-dev) 이 설치되어 — (a) 실제 실행되는 pg15 바이너리와 헤더/ABI
-# 버전이 어긋나는 위험이 생기고, (b) 그 18-dev 패키지가 LLVM JIT 지원으로 빌드돼 있어
-# clang/llvm 의존성을 끌고 들어와 pgvector 의 make 가 JIT bitcode(.bc) 빌드를 시도하다가
-# pg_config 가 가리키는 "clang-21" 바이너리가 없어 실패한다
-# (make: clang-21: No such file or directory).
+# 메이저 버전(postgresql18-dev) 이 설치되어 실제 실행되는 pg15 바이너리와 헤더/ABI 버전이
+# 어긋나는 위험이 생긴다.
 #
-# 그래서 build-base(gcc/make)+git 만 설치하고, base 이미지에 이미 있는 pg15 자체 헤더/
-# pg_config 를 그대로 사용한다 — 버전 불일치와 JIT 관련 실패를 모두 원천 차단한다.
+# with_llvm=no — postgres:15-alpine 자체가 --with-llvm 으로 빌드돼 있어(base 이미지의
+# pg_config 응답이라 apk 설치 여부와 무관), pgvector 의 make 가 기본적으로 JIT 용 LLVM
+# bitcode(.bc) 산출물까지 만들려고 시도한다. 이 bitcode 빌드는 pg_config 가 가리키는
+# "clang-21" 바이너리를 요구하는데 이 base 이미지엔 clang 자체가 아예 없어 항상 실패한다
+# (make: clang-21: No such file or directory). vector 확장의 유사도 검색 기능 자체에는
+# JIT bitcode 가 필요 없으므로, pgvector 가 제공하는 `with_llvm=no` 플래그로 이 빌드
+# 스텝을 건너뛴다.
 RUN apk add --no-cache --virtual .build-deps \
       build-base \
       git \
   && git clone --branch "${PGVECTOR_VERSION}" --depth 1 https://github.com/pgvector/pgvector.git /tmp/pgvector \
-  && make -C /tmp/pgvector OPTFLAGS="" \
-  && make -C /tmp/pgvector install \
+  && make -C /tmp/pgvector OPTFLAGS="" with_llvm=no \
+  && make -C /tmp/pgvector install with_llvm=no \
   && apk del .build-deps \
   && rm -rf /tmp/pgvector
 
