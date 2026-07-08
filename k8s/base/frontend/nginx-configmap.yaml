@@ -15,6 +15,13 @@ data:
         root /usr/share/nginx/html;
         index index.html;
 
+        # 업로드 크기 제한 — 기본값(1m)이면 Jira Excel/백업/kubeconfig 등 파일 업로드가
+        # 413/nginx client_max_body_size 오류로 거부된다. k8s ingress
+        # (nginx.ingress.kubernetes.io/proxy-body-size)와 동일하게 맞춤. 이 ConfigMap 이
+        # frontend Deployment 에서 /etc/nginx/conf.d/default.conf 를 volumeMount 로 덮어써
+        # 이미지에 빌드된 frontend/nginx.conf 를 무시하므로, 두 파일 모두 동일하게 유지해야 한다.
+        client_max_body_size 10m;
+
         # Gzip compression
         gzip on;
         gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;

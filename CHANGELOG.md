@@ -110,6 +110,12 @@
   이 예외가 (실제로는 확장이 정상 설치돼 있어도) "Nexus 로 postgresql-pgvector 패키지 반입 필요" 라는
   오해 소지가 큰 메시지로 뭉뚱그려 로깅되던 문제 → `pg_advisory_xact_lock` 으로 이 구간을 직렬화해
   레이스 자체를 제거.
+- **Jira Excel 가져오기 413/220 에러 — k8s 배포에서 재발**: PR #410 에서 `frontend/nginx.conf` 에
+  `client_max_body_size 10m` 을 추가했지만, k8s Deployment 는 `k8s/base/frontend/nginx-configmap.yaml`
+  ConfigMap 을 `/etc/nginx/conf.d/default.conf` 에 volumeMount 로 덮어써서 이미지에 빌드된
+  `nginx.conf` 를 완전히 무시하고 있었다 — 이 ConfigMap 은 별도 파일이라 image 재배포만으로는
+  절대 반영되지 않고 `kubectl apply` 로 직접 적용해야 한다는 점도 원인 중 하나였음. ConfigMap 에도
+  동일하게 `client_max_body_size 10m` 추가, 두 파일 모두 서로를 참조하는 주석으로 향후 드리프트 방지.
 
 ## [1.0.0] - 2026-06-04 — 정식 오픈
 
