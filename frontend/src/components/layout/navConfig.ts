@@ -49,6 +49,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
   '/cilium-trace':       { defaultLabel: 'Cilium BPF Trace', icon: Waves },
   '/service-topology':   { defaultLabel: '서비스 토폴로지', icon: Workflow },
+  '/architecture':       { defaultLabel: '서비스 모듈 관계도', icon: GitBranch },
   '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
   '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
   '/work-guides':        { defaultLabel: '표준 작업 가이드', icon: BookMarked },
@@ -66,7 +67,7 @@ export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'devops' | 
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
   { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
-  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
+  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/architecture', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import'], modes: ['work'] },
