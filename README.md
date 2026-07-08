@@ -1,6 +1,6 @@
 # PEP — Platform Engineering Portal
 
-> Kubernetes 운영·딥 트러블슈팅·팀 협업을 한 곳에서. (구 *K8s Daily Monitor* → 2026년 PEP 로 재정의)
+> Kubernetes 기반 인프라 서비스 운영·딥 트러블슈팅·팀 협업을 한 곳에서.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-0071E3.svg)
 ![License](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)
