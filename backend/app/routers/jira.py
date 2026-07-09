@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
+from html.parser import HTMLParser
 from io import BytesIO
 from typing import Optional
 
@@ -158,6 +159,76 @@ def _read_xls_rows(raw: bytes):
             yield tuple(values)
 
     return _rows()
+
+
+def _looks_like_html(raw: bytes) -> bool:
+    """Jira '엑셀(전체 필드)' 내보내기는 확장자가 `.xls` 지만 실제 내용은 HTML 테이블이다
+    (구버전 Excel 이 확장자만 보고 열어주던 호환 방식). xlrd 는 진짜 OLE2 바이너리만 지원해
+    이런 파일에 'Expected BOF record' 로 실패하므로, 업로드 시점에 먼저 감지한다."""
+    head = raw[:1024].lstrip().lower()
+    return head.startswith((b"<html", b"<!doctype", b"<?xml")) or b"<table" in raw[:4096].lower()
+
+
+class _JiraHtmlTableExtractor(HTMLParser):
+    """HTML 테이블(첫 번째 <table> 만) → 행 리스트. 표준 라이브러리만 사용하는 최소 파서."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.rows: list[list[str]] = []
+        self._in_table = False
+        self._table_done = False
+        self._in_row = False
+        self._in_cell = False
+        self._row_buf: list[str] = []
+        self._cell_buf: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # noqa: ARG002
+        if self._table_done:
+            return
+        if tag == "table" and not self._in_table:
+            self._in_table = True
+        elif self._in_table and tag == "tr":
+            self._in_row = True
+            self._row_buf = []
+        elif self._in_row and tag in ("td", "th"):
+            self._in_cell = True
+            self._cell_buf = []
+        elif self._in_cell and tag == "br":
+            self._cell_buf.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._table_done:
+            return
+        if self._in_cell and tag in ("td", "th"):
+            self._in_cell = False
+            self._row_buf.append("".join(self._cell_buf).strip())
+        elif self._in_row and tag == "tr":
+            self._in_row = False
+            self.rows.append(self._row_buf)
+        elif self._in_table and tag == "table":
+            self._in_table = False
+            self._table_done = True  # 첫 테이블만 사용(요약/메타 테이블이 뒤따르는 경우 대비)
+
+    def handle_data(self, data: str) -> None:
+        if self._in_cell:
+            self._cell_buf.append(data)
+
+
+def _read_html_table_rows(raw: bytes) -> list[tuple]:
+    """Jira 의 HTML 기반 '가짜 .xls' 내보내기 파싱. 인코딩은 UTF-8 우선, 실패 시
+    한글 환경에서 흔한 CP949/EUC-KR 로 재시도."""
+    text: Optional[str] = None
+    for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
+        try:
+            text = raw.decode(enc)
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    if text is None:
+        text = raw.decode("utf-8", errors="replace")
+    parser = _JiraHtmlTableExtractor()
+    parser.feed(text)
+    return [tuple(r) for r in parser.rows if any(v for v in r)]
 
 
 def _user_token(db: Session, username: str) -> Optional[str]:
@@ -428,7 +499,11 @@ async def import_excel(
     raw = await file.read()
     try:
         if fname.endswith(".xls"):
-            rows_iter = _read_xls_rows(raw)
+            if _looks_like_html(raw):
+                # Jira '엑셀(전체 필드)' 내보내기 — 확장자만 .xls, 실제로는 HTML 테이블.
+                rows_iter = iter(_read_html_table_rows(raw))
+            else:
+                rows_iter = _read_xls_rows(raw)
         else:
             wb = openpyxl.load_workbook(BytesIO(raw), data_only=True, read_only=True)
             ws = wb.active
