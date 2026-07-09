@@ -7,7 +7,7 @@ import type { JiraExcelImportResult, JiraExcelRow } from '@/types';
 import { formatApiError } from '@/lib/utils';
 
 /**
- * Jira 에서 추출한 이슈 목록 Excel(.xlsx) 을 업로드해 테이블로 보여준다.
+ * Jira 에서 추출한 이슈 목록 Excel(.xlsx, .xls) 을 업로드해 테이블로 보여준다.
  * 저장하지 않는 미리보기 전용 기능 — 담당자(Assignee, "이름 회사")에서 이름을 추출해
  * 등록된 PEP 담당자와 매칭한 결과를 함께 표시한다.
  */
@@ -50,7 +50,7 @@ export function JiraExcelImportPage() {
           <div>
             <h1 className="text-xl font-bold leading-tight">Jira Excel 가져오기</h1>
             <p className="text-sm text-muted-foreground">
-              Jira 에서 내려받은 이슈 목록(.xlsx)을 업로드하면 테이블로 보여줍니다. 저장되지 않는 미리보기입니다.
+              Jira 에서 내려받은 이슈 목록(.xlsx, .xls)을 업로드하면 테이블로 보여줍니다. 저장되지 않는 미리보기입니다.
             </p>
           </div>
         </div>
@@ -60,10 +60,10 @@ export function JiraExcelImportPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg cursor-pointer">
               <Upload className="w-3.5 h-3.5" />
-              파일 선택 (.xlsx)
+              파일 선택 (.xlsx, .xls)
               <input
                 type="file"
-                accept=".xlsx,.xlsm"
+                accept=".xlsx,.xlsm,.xls"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

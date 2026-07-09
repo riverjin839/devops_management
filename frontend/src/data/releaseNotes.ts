@@ -16,6 +16,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     version: 'Unreleased',
     date: '',
     highlights: [
+      'Jira Excel 가져오기 — 기존 .xlsx 뿐 아니라 구버전 .xls(Excel 97-2003) 파일도 업로드 가능',
       '담당자별 진행 현황 — 전체 참석(파트 회의 등) 업무를 "전체" 카드로 최우선 노출, 인당 표시' +
         ' 개수 옵션(기본 5개) 추가',
       '업무 등록 버튼이 페이지 이동 없이 팝업으로 열리도록 개선, 등록 폼 옵션 정리(우선순위/보드' +
