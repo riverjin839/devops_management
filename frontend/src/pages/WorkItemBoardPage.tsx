@@ -6,7 +6,7 @@ import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -223,6 +223,8 @@ export function WorkItemBoardPage() {
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createParent, setCreateParent] = useState<WorkItem | null>(null);
   const { data: jiraConfig } = useJiraConfig();
 
   const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
@@ -297,15 +299,16 @@ export function WorkItemBoardPage() {
     navigate(`/tasks-mgmt/${item.id}?edit=1`);
   };
 
-  // 하위 업무 등록.
+  // 하위 업무 등록 — 페이지 전환 없이 팝업으로.
   const handleAddSubItem = (item: WorkItem) => {
-    navigate(`/tasks-mgmt/new?parentId=${item.id}`);
+    setCreateParent(item);
+    setCreateOpen(true);
   };
 
-  // 신규 등록 — type tab 의 현재 값으로 기본 type 결정 (전체 탭이면 task 가 기본).
+  // 신규 등록 — type tab 의 현재 값으로 기본 type 결정 (전체 탭이면 task 가 기본). 팝업으로 등록.
   const handleCreateNew = () => {
-    const t = typeFilter === 'all' ? 'task' : typeFilter;
-    navigate(`/tasks-mgmt/new?type=${t}`);
+    setCreateParent(null);
+    setCreateOpen(true);
   };
 
   // 행 / 카드 클릭 — read 라우트로 진입.
@@ -715,6 +718,14 @@ export function WorkItemBoardPage() {
       <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
+
+      <WorkItemFormModal
+        open={createOpen}
+        defaultType={createParent ? undefined : (typeFilter === 'all' ? 'task' : typeFilter)}
+        parentItem={createParent}
+        onClose={() => { setCreateOpen(false); setCreateParent(null); }}
+        onSaved={() => setCreateParent(null)}
+      />
 
       <ConfirmDialog
         open={confirmDelete !== null}
