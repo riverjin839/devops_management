@@ -72,6 +72,7 @@ from app.routers import (
     terminal_appearance_router,
     k8s_events_router,
     k8s_events_ingest_router,
+    release_notes_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -1493,6 +1494,7 @@ app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_a
 # k8s_events — kubewatch 웹훅 수신(토큰 인증) + 이벤트 조회(JWT)
 app.include_router(k8s_events_ingest_router, prefix="/api/v1")
 app.include_router(k8s_events_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

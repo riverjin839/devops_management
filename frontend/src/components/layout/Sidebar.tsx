@@ -14,8 +14,8 @@ import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
-import { RELEASE_NOTES } from '@/data/releaseNotes';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
+import { ReleaseNotesPanel } from './ReleaseNotesPanel';
 import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
@@ -472,31 +472,15 @@ export function Sidebar() {
         </SidePane>
       )}
 
-      {/* 릴리즈 노트 — 우측 슬라이드 SidePane. */}
+      {/* 릴리즈 노트 — 우측 슬라이드 SidePane. CHANGELOG.md 를 파싱한 API 를 표로 렌더. */}
       <SidePane
         open={releaseNotesOpen}
         onClose={() => setReleaseNotesOpen(false)}
         title="릴리즈 노트"
-        width="420px"
+        width="480px"
+        bodyClassName="p-0"
       >
-        <div className="space-y-6">
-          {RELEASE_NOTES.map((entry) => (
-            <div key={entry.version}>
-              <div className="flex items-baseline gap-2 mb-2">
-                <h3 className="text-sm font-semibold text-foreground">{entry.version}</h3>
-                {entry.date && <span className="text-xs text-muted-foreground">{entry.date}</span>}
-              </div>
-              <ul className="space-y-1.5">
-                {entry.highlights.map((h, i) => (
-                  <li key={i} className="text-sm text-muted-foreground flex gap-2">
-                    <span className="text-primary flex-shrink-0">·</span>
-                    <span>{h}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <ReleaseNotesPanel open={releaseNotesOpen} />
       </SidePane>
 
     </>

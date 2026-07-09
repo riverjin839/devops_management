@@ -2384,6 +2384,29 @@ export interface AuditLogListResponse {
   pageSize: number;
 }
 
+// ─── 릴리즈 노트 (CHANGELOG.md 파싱, backend/app/routers/release_notes.py) ──────
+export interface ReleaseNoteItem {
+  summary: string;
+  detail: string;
+}
+
+export interface ReleaseNoteSection {
+  name: string;
+  items: ReleaseNoteItem[];
+}
+
+export interface ReleaseNoteEntry {
+  version: string;
+  date: string;
+  summary: string;
+  itemCount: number;
+  sections: ReleaseNoteSection[];
+}
+
+export interface ReleaseNotesResponse {
+  entries: ReleaseNoteEntry[];
+}
+
 // ─── LAKE Service Monitoring (lake-service-monitoring PDCA) ──────
 export type LakeServiceType =
   | 'airflow' | 'spark' | 'iceberg' | 'trino'
