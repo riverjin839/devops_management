@@ -8,16 +8,30 @@
 
 ## [Unreleased]
 
-1.0.0 이후 main 에 병합된 변경 (다음 마이너 릴리스 후보).
+1.1.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
-- **`scripts/redeploy.sh` — 태그만 지정하는 `-t` 옵션 + Deployment 단위 지정 추가**: 매번 전체
-  이미지 참조를 입력하지 않아도, `-t <tag>` 로 태그만 주면 각 target 의 현재 배포 이미지에서
+- **`scripts/redeploy.sh` — Deployment 이름만으로도 재배포 가능**: `-t` 옵션과 함께 쓰는 target 을
+  기존 `<deployment>:<container>` 뿐 아니라 `<deployment>` 이름만으로도 지정 가능(예:
+  `backend frontend`) — 컨테이너가 정확히 1개인 Deployment 는 자동 판별하고, 여러 개면 자동 판별
+  불가 사유와 함께 명시적으로 지정하라는 에러 메시지를 출력한다. v1.1.0 의 `-t` 옵션에 이어지는
+  개선.
+
+## [1.1.0] - 2026-07-09
+
+### Added
+- **당일 스케줄 — 담당자 순환 전환**: "나만" 버튼이 로그인 유저의 실명으로 표시되고, 양옆 화살표로
+  다른 담당자를 순환 선택해 그 사람의 당일 일정만 볼 수 있다("전체" 토글은 그대로 유지). 선택 상태는
+  사용자별 localStorage 에 저장(구버전 나만/전체 값과 하위호환).
+  - Frontend: `DayScheduleBoard.tsx` — `useAssignees()` 로 전체 담당자 목록 조회.
+- **업무 현황 홈 — 주간 타임라인 "업무 등록" 팝업화**: 홈페이지 "담당자별 진행 현황" 주간 탭의
+  "업무 등록" 버튼이 별도 페이지로 이동하지 않고 팝업(`WorkItemFormModal`)으로 바로 뜬다(업무 관리
+  페이지와 동일한 패턴).
+  - Frontend: `WeeklyStatusTimeline.tsx`.
+- **`scripts/redeploy.sh` — 태그만 지정하는 `-t` 옵션 추가**: 매번 전체 이미지 참조를 입력하지
+  않아도, `-t <tag>` 로 태그만 주면 각 `<deployment>:<container>` 의 현재 배포 이미지에서
   저장소 경로(레지스트리+repo)를 그대로 읽어와 태그만 바꿔친다. 레지스트리 포트(`host:5000/...`)나
-  다이제스트 고정(`@sha256:...`) 이미지도 안전하게 처리. target 은 컨테이너가 1개뿐인 Deployment면
-  `<deployment>:<container>` 대신 `<deployment>` 이름만 적어도 자동 판별(예: `backend frontend`) —
-  컨테이너가 여러 개면 자동 판별 불가 사유와 함께 명시적으로 지정하라는 에러 메시지 출력. 기존
-  전체 이미지 참조 방식도 그대로 유지.
+  다이제스트 고정(`@sha256:...`) 이미지도 안전하게 처리. 기존 전체 이미지 참조 방식도 그대로 유지.
 - **Jira Excel 가져오기 — 레거시 `.xls` 지원**: 기존 `.xlsx`/`.xlsm` 뿐 아니라 Excel 97-2003
   바이너리 형식(`.xls`)도 업로드 가능. 신규 라이브러리 `xlrd` 를 확장자 기준으로 분기 사용하고,
   헤더 매칭·담당자 매칭 등 파싱 이후 로직은 `.xlsx` 경로와 완전히 공유(행을 동일한 값-튜플
@@ -154,6 +168,10 @@
   `airgap-openclaw` 오버레이, Helm `templates/openclaw.yaml` 및 `values.yaml` 의 `openclaw:` 블록 삭제.
 
 ### Fixed
+- **업무 캘린더 날짜 클릭 등록 — 시작일 시간표시 기본값 오류**: 업무 관리 캘린더 뷰에서 날짜를 클릭해
+  여는 등록 패널이 시작일에 `T09:00` 을 하드코딩해 "시간 포함" 토글이 항상 켜진 채로 떴던 문제 →
+  날짜만 전달해 다른 등록 경로(팝업/전체 페이지)와 동일하게 날짜만 기본 표시.
+  - Frontend: `WorkItemCalendar.tsx`.
 - **업무 게시판 날짜 저장 오류**: 날짜 input 이 빈 값('')으로 전송되면 `started_at`/`closed_at` 가
   `Input should be a valid datetime` 422 로 거부되어 상태를 done 으로 바꾸거나 완료일을 비울 때 저장 실패하던 문제 →
   스키마 `field_validator` 로 빈 문자열/공백을 `None` 으로 강제(WorkItemBase·WorkItemUpdate).

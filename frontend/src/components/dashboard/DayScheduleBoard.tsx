@@ -6,6 +6,7 @@ import {
 import {
   useWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
 } from '@/hooks/useWorkItems';
+import { useAssignees } from '@/hooks/useAssignees';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
 import { stripHtml, cn } from '@/lib/utils';
@@ -131,7 +132,8 @@ function computeColumns(sessions: Session[]): Map<string, { col: number; cols: n
   return out;
 }
 
-type ScheduleScope = 'me' | 'all';
+type ScheduleScope = 'individual' | 'all';
+interface ScheduleScopeState { scope: ScheduleScope; selectedName: string }
 type DragMode = 'move' | 'top' | 'bottom';
 interface DragState {
   key: string;
@@ -157,18 +159,55 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const currentUser = useAuthStore((s) => s.user);
   const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
 
+  // 담당자 순환 전환용 전체 목록(가나다순) — 화살표로 "나만" 자리를 다른 사람으로 바꿀 때 사용.
+  const { data: assigneesData } = useAssignees();
+  const namesList = useMemo(() => {
+    const names = (assigneesData ?? []).map((a) => a.name).filter(Boolean);
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [assigneesData]);
+
   const scopeKey = `k8s:dayScheduleScope:${currentUser?.username ?? 'guest'}`;
-  const [scope, setScope] = useState<ScheduleScope>(() => {
-    try { return localStorage.getItem(scopeKey) === 'all' ? 'all' : 'me'; } catch { return 'me'; }
-  });
+  // 구버전 값('me'/'all' 문자열) → 신버전({scope,selectedName}) 마이그레이션.
+  const readScopeState = useCallback((): ScheduleScopeState => {
+    try {
+      const raw = localStorage.getItem(scopeKey);
+      if (raw === 'all') return { scope: 'all', selectedName: myName };
+      if (raw === 'me' || !raw) return { scope: 'individual', selectedName: myName };
+      const parsed = JSON.parse(raw) as Partial<ScheduleScopeState>;
+      if (parsed && (parsed.scope === 'all' || parsed.scope === 'individual')) {
+        return { scope: parsed.scope, selectedName: parsed.selectedName || myName };
+      }
+    } catch { /* noop */ }
+    return { scope: 'individual', selectedName: myName };
+  }, [scopeKey, myName]);
+
+  const [scope, setScope] = useState<ScheduleScope>(() => readScopeState().scope);
+  const [selectedName, setSelectedName] = useState<string>(() => readScopeState().selectedName);
   useEffect(() => {
-    try { setScope(localStorage.getItem(scopeKey) === 'all' ? 'all' : 'me'); } catch { /* noop */ }
+    const s = readScopeState();
+    setScope(s.scope);
+    setSelectedName(s.selectedName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey]);
+
+  const persistScope = (next: ScheduleScopeState) => {
+    try { localStorage.setItem(scopeKey, JSON.stringify(next)); } catch { /* noop */ }
+  };
   const changeScope = (next: ScheduleScope) => {
     setScope(next);
-    try { localStorage.setItem(scopeKey, next); } catch { /* noop */ }
+    persistScope({ scope: next, selectedName });
   };
-  const meOnly = scope === 'me';
+  /** 화살표 순환 — namesList 안에서 selectedName 을 ±1 이동, 개별 모드로 전환. */
+  const cycleSelectedName = (dir: 1 | -1) => {
+    if (namesList.length === 0) return;
+    const curIdx = namesList.indexOf(selectedName);
+    const nextIdx = ((curIdx >= 0 ? curIdx : 0) + dir + namesList.length) % namesList.length;
+    const next = namesList[nextIdx];
+    setSelectedName(next);
+    setScope('individual');
+    persistScope({ scope: 'individual', selectedName: next });
+  };
+  const meOnly = scope === 'individual';
 
   const { data: workItemsData, isLoading } = useWorkItems();
   const { data: dayBlocks = [] } = useTimeBlocksRange(viewDate, viewDate);
@@ -184,7 +223,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     const out: WorkItem[] = [];
     for (const w of allItems) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
-      if (meOnly && (!myName || !assigneeNames(w).includes(myName))) continue;
+      if (meOnly && (!selectedName || !assigneeNames(w).includes(selectedName))) continue;
       if (w.kanbanStatus === 'done') continue;
       const startD = parseLocal(w.startedAt);
       if (!startD) continue;
@@ -196,7 +235,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
       if (hasBlockToday || (viewDate >= startKey && viewDate <= endKey)) out.push(w);
     }
     return out;
-  }, [allItems, selectedClusterId, meOnly, myName, dayBlocks, viewDate]);
+  }, [allItems, selectedClusterId, meOnly, selectedName, dayBlocks, viewDate]);
 
   const itemById = useMemo(() => {
     const m = new Map<string, WorkItem>();
@@ -392,19 +431,36 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         )}
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">{totalCount}건</span>
         <button
-          onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(new Date().getHours(), 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
+          onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(new Date().getHours(), 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (selectedName || undefined) : undefined })}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20"
           title="업무 등록">
           <Plus className="w-3 h-3" /> 등록
         </button>
       </div>
 
-      {/* scope toggle */}
+      {/* scope toggle — 개별 담당자는 화살표로 순환 전환(기본값=로그인 유저), "전체"는 별도 버튼 */}
       <div className="flex-none flex items-center gap-2 pb-2 mb-1">
         <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
-          <button onClick={() => changeScope('me')} aria-pressed={meOnly}
-            className={cn('flex items-center gap-1 px-2 py-1', meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground')}>
-            <User className="w-3 h-3" /> 나만
+          <button
+            onClick={() => cycleSelectedName(-1)}
+            disabled={namesList.length === 0}
+            title="이전 담당자"
+            className="flex items-center justify-center w-6 py-1 border-r border-border hover:bg-secondary text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed">
+            <ChevronLeft className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => changeScope('individual')}
+            aria-pressed={meOnly}
+            title={myName && selectedName === myName ? '나만' : `${selectedName || '담당자'} 일정만 보기`}
+            className={cn('flex items-center gap-1 px-2 py-1 max-w-[120px]', meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground')}>
+            <User className="w-3 h-3 flex-shrink-0" /> <span className="truncate">{selectedName || '나만'}</span>
+          </button>
+          <button
+            onClick={() => cycleSelectedName(1)}
+            disabled={namesList.length === 0}
+            title="다음 담당자"
+            className="flex items-center justify-center w-6 py-1 border-l border-border hover:bg-secondary text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed">
+            <ChevronRight className="w-3 h-3" />
           </button>
           <button onClick={() => changeScope('all')} aria-pressed={!meOnly}
             className={cn('flex items-center gap-1 px-2 py-1 border-l border-border', !meOnly ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground')}>
@@ -479,7 +535,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
                     y={addMenu.y}
                     candidates={spanItems}
                     onPickItem={(it) => addBlockTo(it, addMenu.minute)}
-                    onNewTask={() => { setQuickAdd({ time: fmtMin(addMenu.minute), assignee: meOnly ? (myName || undefined) : undefined }); setAddMenu(null); }}
+                    onNewTask={() => { setQuickAdd({ time: fmtMin(addMenu.minute), assignee: meOnly ? (selectedName || undefined) : undefined }); setAddMenu(null); }}
                     onClose={() => setAddMenu(null)}
                   />
                 )}
@@ -500,11 +556,11 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
 
             {totalCount === 0 && (
               <div className="rounded-xl border border-dashed border-border/60 py-10 mt-2 text-center text-sm text-muted-foreground">
-                {meOnly && !myName
+                {meOnly && !selectedName
                   ? '로그인 후 나의 일정을 볼 수 있습니다. "전체" 로 모든 일정을 볼 수 있어요.'
-                  : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? '나의 ' : ''}일정이 없습니다.`}
+                  : `${isToday ? '오늘' : '해당 날짜'} ${meOnly ? `${selectedName === myName ? '나의' : `${selectedName}의`} ` : ''}일정이 없습니다.`}
                 <div>
-                  <button onClick={() => setQuickAdd({ time: '09:00', assignee: meOnly ? (myName || undefined) : undefined })}
+                  <button onClick={() => setQuickAdd({ time: '09:00', assignee: meOnly ? (selectedName || undefined) : undefined })}
                     className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-primary/10 text-primary hover:bg-primary/20">
                     <Plus className="w-3 h-3" /> 업무 등록
                   </button>

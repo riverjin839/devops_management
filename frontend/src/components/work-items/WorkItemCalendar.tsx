@@ -406,7 +406,7 @@ function CalendarRegisterPanel({ date, onClose, onSaved }: CalendarRegisterPanel
         </div>
         <div className="flex-1 overflow-y-auto p-5">
           <WorkItemForm
-            defaultStartedAt={`${date}T09:00`}
+            defaultStartedAt={date}
             onCancel={onClose}
             onSaved={onSaved}
             embedded
