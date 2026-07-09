@@ -372,7 +372,63 @@ KIND_MAP: dict[str, dict[str, Any]] = {
         "delete": lambda a, ns, n: a.delete_storage_class(n),
         "summary": lambda o: f"{o.provisioner}{' · default' if (o.metadata.annotations or {}).get('storageclass.kubernetes.io/is-default-class') == 'true' else ''}",
     },
+    # ── freelens 파리티 커버리지 확장 (전부 읽기 전용 — delete/patch 미제공) ────
+    "leases": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.CoordinationV1Api(c),
+        "list_all": lambda a: a.list_lease_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_lease(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_lease(n, ns),
+        "summary": lambda o: f"holder {(o.spec.holder_identity or '-') if o.spec else '-'}",
+    },
+    "endpointslices": {
+        "namespaced": True,
+        "api": lambda c: k8s_client.DiscoveryV1Api(c),
+        "list_all": lambda a: a.list_endpoint_slice_for_all_namespaces(limit=_LIST_LIMIT),
+        "list_ns": lambda a, ns: a.list_namespaced_endpoint_slice(ns, limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_namespaced_endpoint_slice(n, ns),
+        "summary": lambda o: f"{o.address_type} · {len(o.endpoints or [])} endpoints",
+    },
+    "runtimeclasses": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.NodeV1Api(c),
+        "list_all": lambda a: a.list_runtime_class(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_runtime_class(n),
+        "summary": lambda o: f"handler {o.handler}",
+    },
+    "mutatingwebhookconfigurations": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.AdmissionregistrationV1Api(c),
+        "list_all": lambda a: a.list_mutating_webhook_configuration(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_mutating_webhook_configuration(n),
+        "summary": lambda o: f"{len(o.webhooks or [])} webhooks",
+    },
+    "validatingwebhookconfigurations": {
+        "namespaced": False,
+        "api": lambda c: k8s_client.AdmissionregistrationV1Api(c),
+        "list_all": lambda a: a.list_validating_webhook_configuration(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_validating_webhook_configuration(n),
+        "summary": lambda o: f"{len(o.webhooks or [])} webhooks",
+    },
 }
+
+# ValidatingAdmissionPolicy — kubernetes SDK 29.x 는 v1beta1 로 노출.
+# SDK/클러스터가 지원하지 않으면 등록하지 않는다 (kind-availability 가 자동 숨김).
+if hasattr(k8s_client, "AdmissionregistrationV1beta1Api"):
+    KIND_MAP["validatingadmissionpolicies"] = {
+        "namespaced": False,
+        "api": lambda c: k8s_client.AdmissionregistrationV1beta1Api(c),
+        "list_all": lambda a: a.list_validating_admission_policy(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_validating_admission_policy(n),
+        "summary": lambda o: f"{len((o.spec.validations or []) if o.spec else [])} validations",
+    }
+    KIND_MAP["validatingadmissionpolicybindings"] = {
+        "namespaced": False,
+        "api": lambda c: k8s_client.AdmissionregistrationV1beta1Api(c),
+        "list_all": lambda a: a.list_validating_admission_policy_binding(limit=_LIST_LIMIT),
+        "read": lambda a, ns, n: a.read_validating_admission_policy_binding(n),
+        "summary": lambda o: f"→ {(o.spec.policy_name or '-') if o.spec else '-'}",
+    }
 
 # 쓰기 동작 권한 매트릭스 (UI 노출용 메타). 실제 가드는 엔드포인트 require_operator + kubeconfig RBAC.
 SCALABLE_KINDS = {"deployments", "statefulsets", "replicasets", "replicationcontrollers"}
@@ -458,6 +514,20 @@ RESOURCE_COLUMNS: dict[str, dict[str, Any]] = {
         "fn": lambda o: {"role": f"{o.role_ref.kind}/{o.role_ref.name}", "subjects": str(len(o.subjects or []))}},
     "namespaces": {"defs": [("status", "Status")],
         "fn": lambda o: {"status": _g(o,'status','phase',default='-')}},
+    "leases": {"defs": [("holder", "Holder"), ("duration", "Lease Duration")],
+        "fn": lambda o: {"holder": _g(o,'spec','holder_identity',default='-') or '-', "duration": f"{_g(o,'spec','lease_duration_seconds',default='-')}s"}},
+    "endpointslices": {"defs": [("addresstype", "AddressType"), ("endpoints", "Endpoints"), ("ports", "Ports")],
+        "fn": lambda o: {"addresstype": o.address_type or "-", "endpoints": str(len(o.endpoints or [])), "ports": str(len(o.ports or []))}},
+    "runtimeclasses": {"defs": [("handler", "Handler")],
+        "fn": lambda o: {"handler": o.handler or "-"}},
+    "mutatingwebhookconfigurations": {"defs": [("webhooks", "Webhooks")],
+        "fn": lambda o: {"webhooks": str(len(o.webhooks or []))}},
+    "validatingwebhookconfigurations": {"defs": [("webhooks", "Webhooks")],
+        "fn": lambda o: {"webhooks": str(len(o.webhooks or []))}},
+    "validatingadmissionpolicies": {"defs": [("validations", "Validations")],
+        "fn": lambda o: {"validations": str(len(_g(o,'spec','validations',default=[]) or []))}},
+    "validatingadmissionpolicybindings": {"defs": [("policy", "Policy")],
+        "fn": lambda o: {"policy": _g(o,'spec','policy_name',default='-') or '-'}},
 }
 
 
@@ -574,6 +644,80 @@ def get_resource_yaml(
     return {"kind": kind, "namespace": namespace, "name": name, "yaml": text, "sections": sections}
 
 
+# ── 관련 이벤트 (Lens 상세 드로어의 라이브 Events 섹션) ───────────────────────
+# plural(kind key) → K8s Kind 이름 (involvedObject.kind field selector 용)
+KIND_NAME: dict[str, str] = {
+    "deployments": "Deployment", "statefulsets": "StatefulSet", "daemonsets": "DaemonSet",
+    "services": "Service", "ingresses": "Ingress", "configmaps": "ConfigMap", "secrets": "Secret",
+    "persistentvolumeclaims": "PersistentVolumeClaim", "jobs": "Job", "cronjobs": "CronJob",
+    "pods": "Pod", "nodes": "Node", "namespaces": "Namespace",
+    "serviceaccounts": "ServiceAccount", "roles": "Role", "rolebindings": "RoleBinding",
+    "clusterroles": "ClusterRole", "clusterrolebindings": "ClusterRoleBinding",
+    "replicasets": "ReplicaSet", "replicationcontrollers": "ReplicationController",
+    "resourcequotas": "ResourceQuota", "limitranges": "LimitRange",
+    "horizontalpodautoscalers": "HorizontalPodAutoscaler",
+    "poddisruptionbudgets": "PodDisruptionBudget", "priorityclasses": "PriorityClass",
+    "endpoints": "Endpoints", "networkpolicies": "NetworkPolicy", "ingressclasses": "IngressClass",
+    "persistentvolumes": "PersistentVolume", "storageclasses": "StorageClass",
+    "leases": "Lease", "endpointslices": "EndpointSlice", "runtimeclasses": "RuntimeClass",
+    "mutatingwebhookconfigurations": "MutatingWebhookConfiguration",
+    "validatingwebhookconfigurations": "ValidatingWebhookConfiguration",
+    "validatingadmissionpolicies": "ValidatingAdmissionPolicy",
+    "validatingadmissionpolicybindings": "ValidatingAdmissionPolicyBinding",
+}
+
+
+@router.get("/{cluster_id}/resources/{kind}/{namespace}/{name}/events")
+def get_resource_events(
+    cluster_id: UUID,
+    kind: str,
+    namespace: str,
+    name: str,
+    db: Session = Depends(get_db),
+):
+    """오브젝트 관련 이벤트 (involvedObject field selector, 읽기전용)."""
+    spec = KIND_MAP.get(kind)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"지원하지 않는 종류: {kind}")
+    cluster = _require_cluster(cluster_id, db)
+    v1 = k8s_client.CoreV1Api(_api_client(cluster))
+    kind_name = KIND_NAME.get(kind)
+    fs = f"involvedObject.name={name}"
+    if kind_name:
+        fs += f",involvedObject.kind={kind_name}"
+    ns = None if namespace in ("-", "_cluster") else namespace
+    try:
+        if spec.get("namespaced") and ns:
+            evs = v1.list_namespaced_event(ns, field_selector=fs, limit=200, _request_timeout=15)
+        else:
+            evs = v1.list_event_for_all_namespaces(field_selector=fs, limit=200, _request_timeout=15)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"이벤트 조회 실패: {str(e)[:200]}")
+
+    items = []
+    for ev in (evs.items or []):
+        src = getattr(ev, "source", None)
+        source = None
+        if src is not None:
+            source = getattr(src, "component", None) or getattr(src, "host", None)
+        if not source:
+            source = getattr(ev, "reporting_component", None) or None
+        first = getattr(ev, "first_timestamp", None)
+        last = getattr(ev, "last_timestamp", None) or getattr(ev, "event_time", None)
+        items.append({
+            "type": ev.type,
+            "reason": ev.reason,
+            "message": (ev.message or "")[:500],
+            "count": ev.count,
+            "source": source,
+            "first_timestamp": first.isoformat() if first else None,
+            "last_timestamp": last.isoformat() if last else None,
+        })
+    # 최신순
+    items.sort(key=lambda x: x["last_timestamp"] or "", reverse=True)
+    return {"count": len(items), "items": items}
+
+
 # ── 구조화 상세(sections) — Lens 식 "요약" 탭용 ─────────────────────────────────
 # 프론트에 YAML 파서가 없으므로 백엔드가 읽기 쉬운 섹션을 만들어 내려준다.
 # 섹션 형식: {"title", "type": "kv"|"list"|"text", "items"|"text"}
@@ -665,6 +809,13 @@ def _build_detail_sections(kind: str, data: dict) -> list[dict[str, Any]]:
         imgs = [c.get("image") for c in (tmpl.get("containers") or []) if c.get("image")]
         if imgs:
             sections.append({"title": "Images", "type": "list", "items": imgs})
+        # Conditions 칩 (Lens 파리티) — Available/Progressing 등 상태 조건 요약
+        conds = [
+            f"{c.get('type')}={c.get('status')}" + (f" ({c.get('reason')})" if c.get("reason") else "")
+            for c in (status.get("conditions") or [])
+        ]
+        if conds:
+            sections.append({"title": "Conditions", "type": "list", "items": conds})
     elif kind == "nodes":
         ni = status.get("nodeInfo", {}) or {}
         sections.append({"title": "Info", **_kv([
@@ -1022,9 +1173,81 @@ def drain_node(
 
 
 # ── Custom Resources (CRD) — 동적 탐색, 읽기 전용 ────────────────────────────
+def _crd_printer_columns(spec, version_name: str) -> list[dict[str, Any]]:
+    """CRD served 버전의 additionalPrinterColumns → 직렬화 (kubectl 프린터 컬럼).
+
+    priority>0 컬럼은 kubectl -o wide 전용이므로 프론트가 목록에서 숨긴다.
+    """
+    cols: list[dict[str, Any]] = []
+    for v in (spec.versions or []):
+        if v.name != version_name:
+            continue
+        for pc in (getattr(v, "additional_printer_columns", None) or []):
+            name = getattr(pc, "name", None)
+            jp = getattr(pc, "json_path", None)
+            if not name or not jp or name.lower() == "age":
+                continue  # Age 는 자체 컬럼으로 항상 표시
+            cols.append({
+                "name": name,
+                "json_path": jp,
+                "type": getattr(pc, "type", None),
+                "priority": getattr(pc, "priority", None),
+            })
+    return cols
+
+
+def _jsonpath_value(obj: Any, json_path: str) -> Any:
+    """printer-column 용 경량 jsonPath 리졸버 — `.spec.foo`, `.status.conds[0].type` 형태.
+
+    kubectl 의 printer column jsonPath 는 대부분 단순 dotted path (+ [n] 인덱스)라
+    외부 의존성 없이 직접 걷는다. 해석 불가 시 None.
+    """
+    cur = obj
+    path = json_path.strip()
+    if path.startswith("."):
+        path = path[1:]
+    if not path:
+        return None
+    for part in path.split("."):
+        if cur is None:
+            return None
+        # 배열 인덱스 지원: conditions[0]
+        while "[" in part and part.endswith("]"):
+            key, _, idx_s = part.partition("[")
+            idx_s = idx_s[:-1]
+            if key:
+                if not isinstance(cur, dict):
+                    return None
+                cur = cur.get(key)
+            try:
+                idx = int(idx_s)
+            except ValueError:
+                return None
+            if not isinstance(cur, list) or idx >= len(cur):
+                return None
+            cur = cur[idx]
+            part = ""
+        if part:
+            if not isinstance(cur, dict):
+                return None
+            cur = cur.get(part)
+    return cur
+
+
+def _iso_age_seconds(ts: Optional[str]) -> Optional[int]:
+    """ISO8601 문자열(creationTimestamp) → 경과 초."""
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return int((datetime.now(timezone.utc) - dt).total_seconds())
+    except (ValueError, TypeError):
+        return None
+
+
 @router.get("/{cluster_id}/crds")
 def list_crds(cluster_id: UUID, db: Session = Depends(get_db)):
-    """클러스터에 설치된 CRD 목록(group/version/plural/kind/scope)."""
+    """클러스터에 설치된 CRD 목록(group/version/plural/kind/scope + printer columns)."""
     cluster = _require_cluster(cluster_id, db)
     ext = k8s_client.ApiextensionsV1Api(_api_client(cluster))
     try:
@@ -1035,6 +1258,11 @@ def list_crds(cluster_id: UUID, db: Session = Depends(get_db)):
     for crd in (result.items or []):
         spec = crd.spec
         served = [v.name for v in (spec.versions or []) if getattr(v, "served", False)]
+        version = served[0] if served else (spec.versions[0].name if spec.versions else "")
+        try:
+            printer_columns = _crd_printer_columns(spec, version)
+        except Exception:  # noqa: BLE001
+            printer_columns = []
         items.append({
             "name": crd.metadata.name,
             "group": spec.group,
@@ -1042,8 +1270,9 @@ def list_crds(cluster_id: UUID, db: Session = Depends(get_db)):
             "plural": spec.names.plural,
             "scope": spec.scope,  # Namespaced | Cluster
             "versions": served,
-            "version": served[0] if served else (spec.versions[0].name if spec.versions else ""),
+            "version": version,
             "age_seconds": _age_seconds(crd.metadata),
+            "printer_columns": printer_columns,
         })
     items.sort(key=lambda x: (x["group"] or "", x["kind"]))
     return {"count": len(items), "items": items}
@@ -1058,9 +1287,14 @@ def list_custom_objects(
     namespace: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """특정 CRD 의 커스텀 오브젝트 목록."""
+    """특정 CRD 의 커스텀 오브젝트 목록 — additionalPrinterColumns 를 동적 컬럼으로 평가.
+
+    kubectl 이 보여주는 것과 같은 프린터 컬럼(jsonPath)을 재현한다 (freelens 파리티).
+    priority>0 컬럼(wide 전용)은 제외. 컬럼 조회 실패 시 기존 summary 폴백.
+    """
     cluster = _require_cluster(cluster_id, db)
-    co = k8s_client.CustomObjectsApi(_api_client(cluster))
+    client = _api_client(cluster)
+    co = k8s_client.CustomObjectsApi(client)
     try:
         if namespace:
             res = co.list_namespaced_custom_object(group, version, namespace, plural, limit=_LIST_LIMIT)
@@ -1068,20 +1302,59 @@ def list_custom_objects(
             res = co.list_cluster_custom_object(group, version, plural, limit=_LIST_LIMIT)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"커스텀 오브젝트 조회 실패: {str(e)[:200]}")
+
+    # CRD 정의에서 프린터 컬럼 조회 (best-effort)
+    printer_cols: list[dict[str, Any]] = []
+    try:
+        ext = k8s_client.ApiextensionsV1Api(client)
+        crd = ext.read_custom_resource_definition(f"{plural}.{group}")
+        printer_cols = [
+            c for c in _crd_printer_columns(crd.spec, version)
+            if not (c.get("priority") or 0) > 0
+        ]
+    except Exception:  # noqa: BLE001
+        printer_cols = []
+
+    def _fmt_col(value: Any, col_type: Optional[str]) -> str:
+        if value is None:
+            return "-"
+        if col_type == "date":
+            sec = _iso_age_seconds(str(value))
+            if sec is None:
+                return str(value)
+            if sec < 60:
+                return f"{sec}s"
+            if sec < 3600:
+                return f"{sec // 60}m"
+            if sec < 86400:
+                return f"{sec // 3600}h"
+            return f"{sec // 86400}d"
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
     rows: list[ResourceRow] = []
     for o in (res.get("items") or []):
         meta = o.get("metadata", {})
         status = o.get("status", {})
         phase = status.get("phase") or status.get("state") or ""
+        cols: dict[str, str] = {}
+        for pc in printer_cols:
+            try:
+                cols[pc["name"]] = _fmt_col(_jsonpath_value(o, pc["json_path"]), pc.get("type"))
+            except Exception:  # noqa: BLE001
+                cols[pc["name"]] = "-"
         rows.append(ResourceRow(
             name=meta.get("name", ""),
             namespace=meta.get("namespace"),
             summary=str(phase),
-            age_seconds=None,
+            cols=cols,
+            age_seconds=_iso_age_seconds(meta.get("creationTimestamp")),
         ))
     rows.sort(key=lambda r: (r.namespace or "", r.name))
     truncated = bool(res.get("metadata", {}).get("continue"))
-    return ResourceListResponse(kind=plural, count=len(rows), truncated=truncated, items=rows)
+    columns = [ColumnDef(key=pc["name"], label=pc["name"]) for pc in printer_cols]
+    return ResourceListResponse(kind=plural, columns=columns, count=len(rows), truncated=truncated, items=rows)
 
 
 @router.get("/{cluster_id}/crds/{group}/{version}/{plural}/{namespace}/{name}/yaml")
@@ -1230,6 +1503,54 @@ class PodRichRow(BaseModel):
     phase: str = "-"
     status_color: str = "gray"  # green | amber | red | gray
     age_seconds: Optional[int] = None
+    cpu_usage: Optional[str] = None   # metrics-server 즉시값 (예: "12m")
+    mem_usage: Optional[str] = None   # 예: "128Mi"
+    warning_count: int = 0            # 최근 Warning 이벤트 수
+    warning_reason: Optional[str] = None  # 최신 Warning reason
+
+
+def _parse_cpu_to_millicores(v: str) -> Optional[float]:
+    """K8s CPU 수량 문자열 → millicores. 예: '123456789n', '12m', '1'."""
+    try:
+        s = str(v).strip()
+        if s.endswith("n"):
+            return float(s[:-1]) / 1_000_000
+        if s.endswith("u"):
+            return float(s[:-1]) / 1_000
+        if s.endswith("m"):
+            return float(s[:-1])
+        return float(s) * 1000
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_mem_to_bytes(v: str) -> Optional[float]:
+    """K8s 메모리 수량 문자열 → bytes. 예: '128974848', '123Mi', '1Gi'."""
+    try:
+        s = str(v).strip()
+        units = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40,
+                 "K": 10**3, "M": 10**6, "G": 10**9, "T": 10**12,
+                 "k": 10**3}
+        for suf, mul in units.items():
+            if s.endswith(suf):
+                return float(s[: -len(suf)]) * mul
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def _fmt_millicores(m: float) -> str:
+    if m >= 1000:
+        return f"{m / 1000:.1f}"
+    return f"{int(round(m))}m"
+
+
+def _fmt_bytes(b: float) -> str:
+    if b >= 2**30:
+        return f"{b / 2**30:.1f}Gi"
+    if b >= 2**20:
+        return f"{int(round(b / 2**20))}Mi"
+    return f"{int(round(b / 2**10))}Ki"
 
 
 def _container_cell(cs) -> PodContainerCell:
@@ -1266,14 +1587,86 @@ def _pod_status_color(phase: str, cells: list[PodContainerCell]) -> str:
 
 @router.get("/{cluster_id}/pods")
 def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Session = Depends(get_db)):
-    """파드 목록 — Lens 대등 컬럼 (컨테이너 색칸/재시작/소유자/노드/QoS/상태)."""
+    """파드 목록 — Lens 대등 컬럼 (컨테이너 색칸/재시작/소유자/노드/QoS/상태).
+
+    CPU/Mem 사용량(metrics-server)과 Warning 이벤트는 best-effort 병렬 조회 —
+    없거나 실패해도 목록은 정상 반환(freelens 의 즉시값 컬럼 파리티).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
     cluster = _require_cluster(cluster_id, db)
-    v1 = k8s_client.CoreV1Api(_api_client(cluster))
-    try:
-        res = v1.list_namespaced_pod(namespace, limit=_LIST_LIMIT) if namespace else v1.list_pod_for_all_namespaces(limit=_LIST_LIMIT)
-    except Exception as e:  # noqa: BLE001
-        code = 504 if "timeout" in str(e).lower() else 502
-        raise HTTPException(status_code=code, detail=f"파드 조회 실패: {str(e)[:200]}")
+    client = _api_client(cluster)
+    v1 = k8s_client.CoreV1Api(client)
+
+    def _fetch_pods():
+        return v1.list_namespaced_pod(namespace, limit=_LIST_LIMIT) if namespace else v1.list_pod_for_all_namespaces(limit=_LIST_LIMIT)
+
+    def _fetch_usage() -> dict[tuple[str, str], tuple[str, str]]:
+        """(ns, pod) → (cpu 표시, mem 표시). metrics-server 없으면 예외 → {}."""
+        co = k8s_client.CustomObjectsApi(client)
+        if namespace:
+            m = co.list_namespaced_custom_object(
+                "metrics.k8s.io", "v1beta1", namespace, "pods", _request_timeout=10)
+        else:
+            m = co.list_cluster_custom_object(
+                "metrics.k8s.io", "v1beta1", "pods", _request_timeout=10)
+        out: dict[tuple[str, str], tuple[str, str]] = {}
+        for it in (m.get("items") or []):
+            md = it.get("metadata", {}) or {}
+            cpu_m = 0.0
+            mem_b = 0.0
+            for c in (it.get("containers") or []):
+                u = c.get("usage") or {}
+                cpu_m += _parse_cpu_to_millicores(u.get("cpu", "0")) or 0.0
+                mem_b += _parse_mem_to_bytes(u.get("memory", "0")) or 0.0
+            out[(md.get("namespace", ""), md.get("name", ""))] = (_fmt_millicores(cpu_m), _fmt_bytes(mem_b))
+        return out
+
+    def _fetch_warnings() -> dict[tuple[str, str], tuple[int, str]]:
+        """(ns, pod) → (warning 수, 최신 reason). 실패 시 예외 → {}."""
+        fs = "type=Warning,involvedObject.kind=Pod"
+        if namespace:
+            evs = v1.list_namespaced_event(
+                namespace, field_selector=fs, limit=_LIST_LIMIT, _request_timeout=10)
+        else:
+            evs = v1.list_event_for_all_namespaces(
+                field_selector=fs, limit=_LIST_LIMIT, _request_timeout=10)
+        out: dict[tuple[str, str], tuple[int, str]] = {}
+        latest: dict[tuple[str, str], object] = {}
+        for ev in (evs.items or []):
+            io = getattr(ev, "involved_object", None)
+            if not io or not io.name:
+                continue
+            key = (io.namespace or "", io.name)
+            cnt, _reason = out.get(key, (0, ""))
+            ts = getattr(ev, "last_timestamp", None) or getattr(ev, "event_time", None)
+            prev_ts = latest.get(key)
+            if prev_ts is None or (ts is not None and ts > prev_ts):
+                latest[key] = ts
+                out[key] = (cnt + 1, ev.reason or "")
+            else:
+                out[key] = (cnt + 1, _reason)
+        return out
+
+    usage: dict[tuple[str, str], tuple[str, str]] = {}
+    warnings: dict[tuple[str, str], tuple[int, str]] = {}
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_pods = ex.submit(_fetch_pods)
+        f_usage = ex.submit(_fetch_usage)
+        f_warn = ex.submit(_fetch_warnings)
+        try:
+            res = f_pods.result()
+        except Exception as e:  # noqa: BLE001
+            code = 504 if "timeout" in str(e).lower() else 502
+            raise HTTPException(status_code=code, detail=f"파드 조회 실패: {str(e)[:200]}")
+        try:
+            usage = f_usage.result()
+        except Exception:  # noqa: BLE001
+            usage = {}
+        try:
+            warnings = f_warn.result()
+        except Exception:  # noqa: BLE001
+            warnings = {}
 
     rows: list[PodRichRow] = []
     for p in (res.items or []):
@@ -1291,6 +1684,9 @@ def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Sessio
         phase = (st.phase if st else "-") or "-"
         # 종료/대기 사유를 phase 에 보강 (예: CrashLoopBackOff)
         bad_reason = next((c.reason for c in cells if c.color == "red" and c.reason), None)
+        key = (p.metadata.namespace or "", p.metadata.name)
+        u = usage.get(key)
+        w = warnings.get(key)
         rows.append(PodRichRow(
             name=p.metadata.name,
             namespace=p.metadata.namespace,
@@ -1303,10 +1699,14 @@ def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Sessio
             phase=(bad_reason or phase),
             status_color=_pod_status_color(phase, cells),
             age_seconds=_age_seconds(p.metadata),
+            cpu_usage=u[0] if u else None,
+            mem_usage=u[1] if u else None,
+            warning_count=w[0] if w else 0,
+            warning_reason=w[1] if w else None,
         ))
     rows.sort(key=lambda r: (r.namespace or "", r.name))
     truncated = (res.metadata._continue is not None) if res.metadata else False
-    return {"count": len(rows), "truncated": truncated, "items": rows}
+    return {"count": len(rows), "truncated": truncated, "items": rows, "metrics_available": bool(usage)}
 
 
 # ── 종류 가용성 — 클러스터에 실제 존재(≥1)/지원하는 종류만 UI 노출용 ───────────

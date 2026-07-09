@@ -17,6 +17,36 @@
   형태로 정규화).
   - Backend: `xlrd==2.0.1` 추가, `routers/jira.py` `_read_xls_rows()`(날짜 셀→`datetime` 변환
     포함) + `import_excel` 확장자 분기.
+- **freelens 파리티 — 파드 로그 뷰어 고도화**: SSE 실시간 스트림은 유지하면서 컨테이너 드롭다운
+  (init 포함, `kubectl.kubernetes.io/default-container` 어노테이션 존중), previous(재시작 전) 로그,
+  타임스탬프·word-wrap 토글, 검색(정규식 옵션·prev/next·하이라이트), 다운로드(보이는 로그/전체),
+  react-virtuoso 가상화(버퍼 5천→2만 줄) 추가. K8s 관리 콘솔 파드 목록의 "로그" 버튼에서
+  `?namespace=&pod=` 딥링크로 자동 시작.
+  - Backend: `analyze.py` 로그 스트림에 `timestamps`/`since_seconds` 파라미터, 신규
+    `GET .../pods/{pod}/containers`·`GET .../logs/download`(10MB 상한).
+  - Frontend: 신규 `PodLogStream` 컴포넌트, `LogViewer` 의 ANSI strip·토큰 컬러를 `logLine.tsx` 로
+    추출해 공유.
+- **freelens 파리티 — xterm.js TTY 터미널**: 파드 터미널을 라인 기반 입력에서 xterm.js 진짜 TTY 로
+  교체 — vi/top 등 풀스크린 앱 동작, 창 크기 변경 시 K8s exec resize 채널로 반영, 멀티컨테이너
+  드롭다운. 권한(admin/operator)·감사로그·세션 상한은 기존 그대로.
+  - Backend: `k8s_exec.py` WS 인바운드를 JSON 프로토콜(`stdin`/`resize`)로 확장(비 JSON 프레임은
+    stdin 취급 — 하위호환). Frontend: `PodTerminal` xterm 재작성(deps `@xterm/xterm`, `@xterm/addon-fit`).
+- **freelens 파리티 — Pods 목록 컬럼 확장**: CPU/MEM 즉시 사용량(metrics-server, 없으면 `-`+안내),
+  Warning 이벤트 아이콘(건수·최신 reason 툴팁), 로그 바로가기 버튼. Backend 는 파드 목록과
+  메트릭·이벤트를 병렬 best-effort 조회.
+- **freelens 파리티 — 상세 드로어 이벤트 탭**: 리소스 상세 슬라이드오버에 관련 이벤트(involvedObject
+  기준, 15초 자동 갱신) 탭 추가, workload 요약에 Conditions 섹션 추가.
+  - Backend: `GET /k8s/{cluster}/resources/{kind}/{ns}/{name}/events`.
+- **freelens 파리티 — CRD 프린터 컬럼**: CR 목록이 CRD 의 `additionalPrinterColumns`(jsonPath)를
+  평가해 kubectl 과 동일한 컬럼을 표시(priority>0 제외, date 형은 age 표기). CR 의 Age 미표시 버그 수정.
+- **freelens 파리티 — 리소스 커버리지 확장(읽기 전용)**: Leases, EndpointSlices, RuntimeClasses,
+  Mutating/ValidatingWebhookConfigurations, ValidatingAdmissionPolicies(+Bindings) 추가.
+  kind-availability 프로브가 미지원 클러스터에서 자동 숨김.
+- **K8s 테이블 컬럼 표시/숨김**: 리소스/Pods/Nodes 테이블에 컬럼 토글 드롭다운 추가, 선택은
+  localStorage(`pep:k8s:cols:*`)에 영속화.
+- **이벤트 스트림 배칭·가상화**: 이벤트 SSE 를 1초 버퍼로 coalesce(같은 오브젝트 uid 는 최신만)
+  후 일괄 렌더 + Virtuoso 가상화(캡 1천→5천). freelens 의 watch 버퍼 패턴을 P2/P3 수용 기준으로
+  `docs/openlens-architecture-roadmap.md` 에 문서화.
 - **담당자별 진행 현황 — "전체" 카드 + 표시 개수 옵션**(홈 대시보드 `MemberTodayTodos`):
   전체 참석(`allAttendees=true`, 파트 회의 등) 업무를 담당자 그룹과 별개로 모아 "전체" 카드로
   0순위(맨 앞) 노출, 그다음 로그인 사용자 본인 카드가 1순위. 카드 그리드를 1열→2열

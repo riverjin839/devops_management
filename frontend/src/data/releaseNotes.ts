@@ -16,6 +16,8 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     version: 'Unreleased',
     date: '',
     highlights: [
+      'K8s 관리 콘솔 — freelens 파리티: 파드 로그 뷰어 고도화(검색/다운로드/타임스탬프), xterm.js' +
+        ' 터미널, Pods 컬럼 확장(CPU/MEM/이벤트), 리소스 이벤트 탭, CRD 프린터 컬럼, 컬럼 표시/숨김',
       'Jira Excel 가져오기 — 기존 .xlsx 뿐 아니라 구버전 .xls(Excel 97-2003) 파일도 업로드 가능',
       '담당자별 진행 현황 — 전체 참석(파트 회의 등) 업무를 "전체" 카드로 최우선 노출, 인당 표시' +
         ' 개수 옵션(기본 5개) 추가',

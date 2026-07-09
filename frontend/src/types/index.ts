@@ -2677,6 +2677,12 @@ export interface K8sDrainResult {
   skipped: { pod: string; reason: string }[];
   errors: { pod: string; error: string }[];
 }
+export interface K8sCrdPrinterColumn {
+  name: string;
+  jsonPath: string;
+  type?: string | null;     // string | integer | date | ...
+  priority?: number | null; // >0 은 wide 전용 → 목록에서 숨김
+}
 export interface K8sCrdInfo {
   name: string;
   group: string;
@@ -2686,6 +2692,7 @@ export interface K8sCrdInfo {
   versions: string[];
   version: string;
   ageSeconds?: number | null;
+  printerColumns?: K8sCrdPrinterColumn[];
 }
 export interface K8sCrdListResponse {
   count: number;
@@ -2769,8 +2776,41 @@ export interface K8sPodRichRow {
   phase: string;
   statusColor: K8sCellColor;
   ageSeconds?: number | null;
+  cpuUsage?: string | null;      // metrics-server 즉시값 (없으면 null)
+  memUsage?: string | null;
+  warningCount?: number;         // 최근 Warning 이벤트 수
+  warningReason?: string | null; // 최신 Warning reason
 }
-export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }
+export interface K8sPodsResponse {
+  count: number;
+  truncated: boolean;
+  items: K8sPodRichRow[];
+  metricsAvailable?: boolean;
+}
+
+// 파드 컨테이너 목록 (로그/터미널 셀렉터)
+export interface K8sPodContainerInfo {
+  name: string;
+  init: boolean;
+  state?: string | null; // running | waiting | terminated
+  restartCount: number;
+}
+export interface K8sPodContainersResponse {
+  containers: K8sPodContainerInfo[];
+  defaultContainer?: string | null;
+}
+
+// 리소스 관련 이벤트 (상세 드로어 이벤트 탭)
+export interface K8sRelatedEvent {
+  type?: string | null;   // Normal | Warning
+  reason?: string | null;
+  message?: string | null;
+  count?: number | null;
+  source?: string | null;
+  firstTimestamp?: string | null;
+  lastTimestamp?: string | null;
+}
+export interface K8sRelatedEventsResponse { count: number; items: K8sRelatedEvent[] }
 
 // ── K8s 자원 관리 (allocation: request vs 사용량 slack) ───────────────────────
 // CPU 는 millicores(int), MEM 은 bytes(int). *Display 는 사람이 읽는 문자열.
