@@ -11,6 +11,12 @@
 1.1.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **릴리즈 노트 패널 — 요약 리스트 + 섹션별 표 형태로 가독성 개선**: 사이드바 "릴리즈 노트"에서
+  버전별 "요약" 칸이 항목 1개만 잘려 보이던 것을 전체 항목 제목의 리스트로 바꾸고(항목이 많은
+  버전은 앞 6개 + "+N개 더" 안내), 행을 펼쳤을 때 Added/Fixed/Changed 등 섹션별 내용도 불릿
+  목록 대신 순번(#)이 있는 표로 렌더링.
+  - Frontend: `ReleaseNotesPanel.tsx` — 백엔드 `release_notes` 응답(`sections[].items[]`)을
+    그대로 재사용, 별도 API 변경 없음.
 - **`scripts/redeploy.sh` — Deployment 이름만으로도 재배포 가능**: `-t` 옵션과 함께 쓰는 target 을
   기존 `<deployment>:<container>` 뿐 아니라 `<deployment>` 이름만으로도 지정 가능(예:
   `backend frontend`) — 컨테이너가 정확히 1개인 Deployment 는 자동 판별하고, 여러 개면 자동 판별
