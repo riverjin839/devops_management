@@ -88,6 +88,31 @@
 4. **P4 Runbook**.
 5. (보류) **P5 admin YAML 편집**.
 
+## freelens 코드 분석 결과 — P2/P3 수용 기준 (2026-07 조사)
+
+OpenLens 의 활성 포크 freelens(v1.10.4) 의 실시간 데이터 계층
+(`packages/core/src/common/k8s-api/kube-object.store.ts`, `kube-api.ts`)을 분석한 결과,
+P2/P3 설계 방향이 실제 구현과 일치함을 확인했다. 아래를 **P2 watch→브로드캐스트
+서비스의 수용 기준**으로 삼는다:
+
+1. **단일 watch + resourceVersion 추적**: (클러스터, 종류)당 1개 watch. list 응답의
+   `metadata.resourceVersion` 을 네임스페이스별로 저장하고 watch 재개 시 사용.
+2. **410 Gone → 재list + 스냅샷 재브로드캐스트**: stale resourceVersion(410) 수신 시
+   전체 재list 후 watch 재시작 (freelens `watchNamespace()` 의 resync 패턴).
+3. **1s debounce 이벤트 버퍼**: watch 이벤트를 즉시 반영하지 않고 1초 버퍼에 모아
+   uid 기준 coalesce(같은 오브젝트는 최신만) 후 일괄 반영. freelens 는
+   `eventsBuffer` + MobX reaction(1000ms) 으로 동일 구현. → **프론트는
+   `EventsStream.tsx` 에 이미 적용됨(P3 선행)**.
+4. **store 상한**: 종류당 최대 50k 오브젝트로 캡(oldest 버림) — 브라우저/메모리 보호.
+5. **재연결**: watch 스트림 종료 시 고정 지연(freelens: 1s/5s) 재연결. 초기엔 고정
+   지연으로 충분하고, 300노드 부하 측정 후 백오프 도입 판단.
+
+참고 — freelens 는 로그를 **10초 HTTP 폴링(sinceTime 증분)** 으로 구현했으나 PEP 는
+SSE follow 스트림이 이미 우월하므로 유지한다. freelens 의 로그 뷰어 UX(컨테이너
+드롭다운/previous/검색/다운로드/가상화)와 xterm TTY 터미널, CRD printer columns,
+Pods 사용량·warning 컬럼, 드로어 이벤트 탭, 커버리지 확장(Leases/EndpointSlices/
+RuntimeClasses/Webhook configs/VAP)은 2026-07 에 차용 완료.
+
 ## 비고
 - 현재 파드 로그 기능은 `analyze.py` 의 1회성 조회로 존재(스트리밍 아님) → P0 에서 확장.
 - Go 사이드카는 "기존 코드 교체"가 아니라 **Watch/브로드캐스트 전담 추가** — Python 자산은 보존.

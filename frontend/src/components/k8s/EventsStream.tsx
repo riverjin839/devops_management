@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Square, Search } from 'lucide-react';
+import { Virtuoso } from 'react-virtuoso';
 import { getAuthToken } from '@/stores/authStore';
 import { k8sStreamUrls } from '@/services/api';
 import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
 
 interface K8sEvent {
   watchType?: string;
+  uid?: string | null;
+  name?: string | null;
   type?: string; // Normal | Warning
   reason?: string;
   message?: string;
@@ -18,7 +21,13 @@ interface K8sEvent {
   lastTimestamp?: string | null;
 }
 
-const MAX_EVENTS = 1000;
+// 가상화 + 1s 배칭 도입으로 상향 (이전 1000)
+const MAX_EVENTS = 5000;
+
+// coalesce 키 — 같은 이벤트 오브젝트(uid)의 watch MODIFIED 는 최신 1건만 유지
+function eventKey(e: K8sEvent): string {
+  return e.uid || `${e.namespace}/${e.involvedKind}/${e.involvedName}/${e.reason}`;
+}
 const COLS = 'grid-cols-[70px_120px_120px_1fr_150px_110px_46px_80px]';
 
 function rel(iso?: string | null): string {
@@ -46,6 +55,33 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
   const [typeFilter, setTypeFilter] = useState<'all' | 'Normal' | 'Warning'>('all');
   const [search, setSearch] = useState('');
   const acRef = useRef<AbortController | null>(null);
+  // 수신 이벤트를 1초 버퍼에 모아 일괄 반영 (freelens 의 debounced buffer 패턴).
+  // 이벤트 폭주 시에도 렌더는 초당 1회로 제한된다.
+  const bufRef = useRef<K8sEvent[]>([]);
+
+  useEffect(() => {
+    if (!streaming) return;
+    const iv = setInterval(() => {
+      if (bufRef.current.length === 0) return;
+      const incoming = bufRef.current;
+      bufRef.current = [];
+      setEvents((prev) => {
+        // 최신 우선(도착 역순) + uid coalesce — 같은 오브젝트의 갱신은 최신만
+        const merged = [...incoming.reverse(), ...prev];
+        const seen = new Set<string>();
+        const out: K8sEvent[] = [];
+        for (const e of merged) {
+          const k = eventKey(e);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push(e);
+          if (out.length >= MAX_EVENTS) break;
+        }
+        return out;
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [streaming]);
 
   const stop = () => {
     acRef.current?.abort();
@@ -56,6 +92,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
   const start = () => {
     stop();
     setEvents([]);
+    bufRef.current = [];
     setErr('');
     const ac = new AbortController();
     acRef.current = ac;
@@ -83,7 +120,7 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
               try {
                 const obj = JSON.parse(ln.slice(5).trim());
                 if (obj.error) { setErr(String(obj.error)); continue; }
-                setEvents((prev) => [obj as K8sEvent, ...prev].slice(0, MAX_EVENTS));
+                bufRef.current.push(obj as K8sEvent);
               } catch { /* skip malformed */ }
             }
           }
@@ -147,14 +184,16 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
         <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-xs font-semibold text-muted-foreground bg-secondary/30 border-b border-border`}>
           <span>유형</span><span>네임스페이스</span><span>Reason</span><span>메시지</span><span>대상</span><span>Source</span><span className="text-right">횟수</span><span className="text-right">Last Seen</span>
         </div>
-        <div className="max-h-[60vh] overflow-auto">
-          {filtered.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              {streaming ? '조건에 맞는 이벤트 대기 중…' : '재시작을 눌러 이벤트를 수신하세요.'}
-            </div>
-          ) : (
-            filtered.map((e, i) => (
-              <div key={i} className={`grid ${COLS} gap-2 px-3 py-1.5 text-sm border-b border-border/40 items-center`}>
+        {filtered.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            {streaming ? '조건에 맞는 이벤트 대기 중…' : '재시작을 눌러 이벤트를 수신하세요.'}
+          </div>
+        ) : (
+          <Virtuoso
+            style={{ height: '60vh' }}
+            data={filtered}
+            itemContent={(_i, e) => (
+              <div className={`grid ${COLS} gap-2 px-3 py-1.5 text-sm border-b border-border/40 items-center`}>
                 <span className={e.type === 'Warning' ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>{e.type ?? '-'}</span>
                 <span className="truncate text-muted-foreground">{e.namespace ?? '-'}</span>
                 <span className="truncate font-medium" title={e.reason ?? ''}>{e.reason ?? '-'}</span>
@@ -164,9 +203,9 @@ export function EventsStream({ clusterId, selectedNs, onSelectedNsChange }: Prop
                 <span className="text-right text-muted-foreground tabular-nums">{e.count ?? '-'}</span>
                 <span className="text-right text-muted-foreground tabular-nums">{rel(e.lastTimestamp)}</span>
               </div>
-            ))
-          )}
-        </div>
+            )}
+          />
+        )}
       </div>
     </div>
   );

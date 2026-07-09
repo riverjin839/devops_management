@@ -1198,6 +1198,11 @@ export const analyzeApi = {
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${podName}/context`,
       { params: { tail_lines: tailLines } },
     ),
+  /** 파드 컨테이너(+init) 목록 — 로그/터미널 셀렉터용. */
+  podContainers: (clusterId: string, namespace: string, podName: string) =>
+    api.get<import('@/types').K8sPodContainersResponse>(
+      `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${podName}/containers`,
+    ),
 };
 
 // Service Topology API — 자동 그래프 + 수동 연계 + 실트래픽
@@ -1662,6 +1667,10 @@ export const k8sResourcesApi = {
     api.get<import('@/types').K8sResourceDetail>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/yaml`,
     ),
+  resourceEvents: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.get<import('@/types').K8sRelatedEventsResponse>(
+      `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/events`,
+    ),
   // ── 쓰기 액션 (require_operator + 감사 로그) ───────────────────────────────
   capabilities: (clusterId: string) =>
     api.get<import('@/types').K8sCapabilitiesResponse>(`/k8s/${clusterId}/resources-capabilities`),
@@ -1767,6 +1776,26 @@ export const k8sStreamUrls = {
   events: (clusterId: string, namespace?: string) => {
     const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
     return `/api/v1/analyze/clusters/${clusterId}/events/stream${qs}`;
+  },
+  /** 파드 로그 SSE 스트림 — Authorization 헤더 fetch 로 소비. */
+  logsStream: (
+    clusterId: string, namespace: string, pod: string,
+    opts: { container?: string; tailLines?: number; follow?: boolean; previous?: boolean; timestamps?: boolean },
+  ) => {
+    const p = new URLSearchParams({
+      tail_lines: String(opts.tailLines ?? 200),
+      follow: String(opts.follow ?? true),
+      previous: String(opts.previous ?? false),
+      timestamps: String(opts.timestamps ?? true),
+    });
+    if (opts.container) p.set('container', opts.container);
+    return `/api/v1/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${pod}/logs/stream?${p.toString()}`;
+  },
+  /** 파드 로그 전체 다운로드 (non-follow) — Authorization fetch → blob. */
+  logsDownload: (clusterId: string, namespace: string, pod: string, container?: string, previous = false) => {
+    const p = new URLSearchParams({ previous: String(previous) });
+    if (container) p.set('container', container);
+    return `/api/v1/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${pod}/logs/download?${p.toString()}`;
   },
   /** Pod exec WebSocket — 토큰은 query param 으로 전달(WS 는 헤더 불가). */
   exec: (clusterId: string, namespace: string, pod: string, container: string | undefined, token: string | null, command = '/bin/sh') => {
