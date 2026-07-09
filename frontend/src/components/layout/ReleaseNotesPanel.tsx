@@ -59,11 +59,18 @@ export function ReleaseNotesPanel({ open }: Props) {
       <tbody>
         {entries.map((entry) => {
           const isOpen = expanded.has(entry.version);
+          // 요약 칸 — 한 줄 truncate 대신 전체 섹션의 항목 제목을 리스트로 모아 보여준다.
+          // 버전 하나에 수십 건이 쌓이는 경우(예: 릴리스 컷 직전 축적분)를 대비해 앞부분만 미리보고,
+          // 나머지는 "+N개 더" 로 안내(행 클릭 시 펼쳐지는 섹션별 표에서 전체 확인).
+          const SUMMARY_PREVIEW_LIMIT = 6;
+          const allSummaries = entry.sections.flatMap((s) => s.items.map((it) => it.summary));
+          const previewSummaries = allSummaries.slice(0, SUMMARY_PREVIEW_LIMIT);
+          const hiddenCount = allSummaries.length - previewSummaries.length;
           return (
             <Fragment key={entry.version}>
               <tr
                 onClick={() => toggle(entry.version)}
-                className="border-b border-border cursor-pointer hover:bg-secondary/50"
+                className="border-b border-border cursor-pointer hover:bg-secondary/50 align-top"
               >
                 <td className="py-2 px-3 font-mono font-semibold whitespace-nowrap">
                   <span className="inline-flex items-center gap-1">
@@ -76,7 +83,26 @@ export function ReleaseNotesPanel({ open }: Props) {
                   </span>
                 </td>
                 <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{entry.date}</td>
-                <td className="py-2 px-3 text-muted-foreground truncate max-w-0">{entry.summary}</td>
+                <td className="py-2 px-3 text-muted-foreground">
+                  {previewSummaries.length > 0 ? (
+                    <ul className="space-y-0.5">
+                      {previewSummaries.map((s, i) => (
+                        <li key={i} className="flex gap-1.5">
+                          <span className="text-primary flex-shrink-0">·</span>
+                          <span className="truncate">{s}</span>
+                        </li>
+                      ))}
+                      {hiddenCount > 0 && (
+                        <li className="flex gap-1.5 text-xs text-muted-foreground/70">
+                          <span className="flex-shrink-0 invisible">·</span>
+                          <span>+{hiddenCount}개 더 (클릭해서 전체 보기)</span>
+                        </li>
+                      )}
+                    </ul>
+                  ) : (
+                    entry.summary
+                  )}
+                </td>
               </tr>
               {isOpen && (
                 <tr className="border-b border-border bg-secondary/30">
@@ -87,19 +113,29 @@ export function ReleaseNotesPanel({ open }: Props) {
                           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                             {section.name}
                           </div>
-                          <ul className="space-y-1">
-                            {section.items.map((item, i) => (
-                              <li key={i} className="text-sm flex gap-2">
-                                <span className="text-primary flex-shrink-0">·</span>
-                                <span>
-                                  <span className="font-medium">{item.summary}</span>
-                                  {item.detail && (
-                                    <span className="text-muted-foreground"> — {item.detail}</span>
-                                  )}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
+                          <table className="w-full text-xs border border-border/60 rounded-md overflow-hidden">
+                            <thead className="bg-muted/40">
+                              <tr>
+                                <th className="py-1.5 px-2 font-medium text-left w-9">#</th>
+                                <th className="py-1.5 px-2 font-medium text-left">내용</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/60">
+                              {section.items.map((item, i) => (
+                                <tr key={i}>
+                                  <td className="py-1.5 px-2 text-muted-foreground align-top tabular-nums">
+                                    {i + 1}
+                                  </td>
+                                  <td className="py-1.5 px-2 align-top">
+                                    <span className="font-medium">{item.summary}</span>
+                                    {item.detail && (
+                                      <span className="text-muted-foreground"> — {item.detail}</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       ))}
                     </div>
