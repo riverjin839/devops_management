@@ -726,6 +726,22 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
   요청하면 `/release` 스킬로 진행한다. `v*` 태그 push 시 `release.yml` 이 GHCR 이미지
   빌드/태깅과 GitHub Release 생성을 자동 처리한다.
 
+### 사이드바 "릴리즈 노트" 패널 (`frontend/src/data/releaseNotes.ts`) — CHANGELOG 와 함께 필수 갱신
+
+사이드바 하단 레일의 "릴리즈 노트" 아이콘(감사 로그가 Settings 탭으로 이동한 자리)을 클릭하면
+우측 SidePane 에 `RELEASE_NOTES` 배열(`ReleaseNoteEntry[]` — `version`/`date`/`highlights`)이
+그대로 렌더된다. **`CHANGELOG.md` 를 갱신하는 PR 은 사용자에게 보여줄 만한 변경이면
+`releaseNotes.ts` 도 함께 갱신해야 한다** — 자동 동기화가 아니므로 빠뜨리면 앱 내 릴리즈 노트가
+CHANGELOG 와 어긋난 채로 조용히 드리프트한다.
+
+- 평소(PR 단위): `RELEASE_NOTES[0]`(`version: 'Unreleased'`) 의 `highlights` 배열에 한 줄
+  요약을 추가. `CHANGELOG.md` 의 굵은 기능명 + 사용자 관점 한 줄이면 충분 — `Backend:`/구현
+  포인트 같은 세부사항은 옮기지 않는다(이 패널은 일반 사용자용).
+- 릴리스 컷 시점(`/release` 스킬, MAJOR/MINOR/PATCH 버전 확정 시): `Unreleased` 의
+  `highlights` 를 새 `{ version: 'X.Y.Z', date: 'YYYY-MM-DD', highlights: [...] }` 항목으로
+  옮기고 `Unreleased` 항목은 빈 배열로 초기화(항목 자체는 유지 — SidePane 이 상시 표시하는
+  자리이므로 삭제하지 않는다).
+
 ---
 
 ## Key Conventions
