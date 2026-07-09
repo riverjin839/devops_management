@@ -9,6 +9,7 @@ import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { stripHtml, cn } from '@/lib/utils';
+import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
@@ -105,6 +106,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
+
+  // 업무 등록 — 팝업(WorkItemFormModal). 페이지 이동 없이 이 화면 컨텍스트를 유지.
+  const [createOpen, setCreateOpen] = useState(false);
 
   // ── 타임라인 색 반전 — 사용자별 설정(localStorage) ──
   const currentUser = useAuthStore((s) => s.user);
@@ -308,7 +312,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             </button>
             <button
               type="button"
-              onClick={() => navigate('/tasks-mgmt/new')}
+              onClick={() => setCreateOpen(true)}
               title="새 업무 등록"
               className="flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
               <Plus className="w-3 h-3" /> 업무 등록
@@ -526,6 +530,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-emerald-500" />해결 이슈</span>
         <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
       </div>
+
+      <WorkItemFormModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => setCreateOpen(false)}
+      />
     </div>
   );
 }
