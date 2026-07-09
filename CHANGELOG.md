@@ -11,6 +11,12 @@
 1.0.0 이후 main 에 병합된 변경 (다음 마이너 릴리스 후보).
 
 ### Added
+- **Jira Excel 가져오기 — 레거시 `.xls` 지원**: 기존 `.xlsx`/`.xlsm` 뿐 아니라 Excel 97-2003
+  바이너리 형식(`.xls`)도 업로드 가능. 신규 라이브러리 `xlrd` 를 확장자 기준으로 분기 사용하고,
+  헤더 매칭·담당자 매칭 등 파싱 이후 로직은 `.xlsx` 경로와 완전히 공유(행을 동일한 값-튜플
+  형태로 정규화).
+  - Backend: `xlrd==2.0.1` 추가, `routers/jira.py` `_read_xls_rows()`(날짜 셀→`datetime` 변환
+    포함) + `import_excel` 확장자 분기.
 - **freelens 파리티 — 파드 로그 뷰어 고도화**: SSE 실시간 스트림은 유지하면서 컨테이너 드롭다운
   (init 포함, `kubectl.kubernetes.io/default-container` 어노테이션 존중), previous(재시작 전) 로그,
   타임스탬프·word-wrap 토글, 검색(정규식 옵션·prev/next·하이라이트), 다운로드(보이는 로그/전체),
