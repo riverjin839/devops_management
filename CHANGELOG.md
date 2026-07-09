@@ -110,8 +110,21 @@
   컬레이션 호환성 리스크를 피함. `.github/workflows/postgres-pgvector.yml` 이 앱 이미지와 동일한
   GHCR 네임스페이스(`ghcr.io/<owner>/<repo>/postgres-pgvector`)로 빌드/게시.
 - **릴리즈 노트 패널**: 사이드바 하단 레일에 "릴리즈 노트" 아이콘 추가(감사 로그가 빠진 자리) —
-  클릭 시 우측 슬라이드 SidePane 으로 최근 버전별 변경 요약을 보여줌. `frontend/src/data/releaseNotes.ts`
-  에 CHANGELOG.md 의 사용자 관점 요약을 수동 큐레이션(자동 동기화 아님, 사용자용 변경 시 함께 갱신).
+  클릭 시 우측 슬라이드 SidePane 으로 버전별 변경 이력을 테이블(버전/날짜/요약)로 보여주고,
+  행 클릭 시 섹션별(Added/Fixed/Changed 등) 상세 항목이 아래로 펼쳐짐. 수동 큐레이션 데이터
+  사본이 아니라 `CHANGELOG.md` 를 직접 파싱해 항상 실제 릴리즈 내용과 정확히 일치.
+  - Backend: `GET /api/v1/release-notes` (`release_notes` 라우터, `[Unreleased]` 섹션은 제외).
+  - Frontend: `ReleaseNotesPanel`, `useReleaseNotes`.
+  - Infra: `cd.yml`/`release.yml` 이 backend 이미지 빌드 직전 `CHANGELOG.md` 를 build context
+    로 복사(release_notes 라우터가 이미지 안에서 읽을 수 있도록).
+- **릴리즈 자동화(`auto-release.yml`)**: `feat:`/`fix:` 등 conventional commit prefix PR 이
+  `main` 에 머지될 때마다 SemVer 버전을 자동으로 올리고(`feat:` → MINOR, 그 외 → PATCH)
+  `CHANGELOG.md` 의 `[Unreleased]` 를 새 버전 섹션으로 확정, `chore(release)` PR 을 열어
+  즉시 병합한 뒤 `vX.Y.Z` 태그를 push(→ 기존 `release.yml` 이 이어받아 GHCR 이미지 태깅 +
+  GitHub Release 생성). 기존 수동 `/release` 절차(`docs/branch-tag-strategy.md`)는 hotfix/
+  자동화 실패 시 fallback 으로 유지.
+  - 버전 계산/CHANGELOG 확정 로직은 `scripts/release/bump_version.py` 로 분리해 로컬에서도
+    검증 가능(`--dry-run`).
 
 ### Changed
 - **업무 등록 폼 효율화**: 기본 설정 그리드를 정리해 한 줄로 보이도록 축소.

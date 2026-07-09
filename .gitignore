@@ -13,6 +13,10 @@ env/
 dist/
 build/
 *.egg-info/
+
+# cd.yml/release.yml 가 docker build 컨텍스트로 복사해 넣는 CHANGELOG.md 사본
+# (release_notes 라우터가 이미지 안에서 읽음) — 저장소 루트 CHANGELOG.md 가 원본.
+backend/CHANGELOG.md
 .eggs/
 
 # IDE

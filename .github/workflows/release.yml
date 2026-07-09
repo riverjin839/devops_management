@@ -56,6 +56,11 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
+      - name: Copy CHANGELOG for backend image
+        # backend/app/routers/release_notes.py 가 이미지 안에서 CHANGELOG.md 를 읽어
+        # 릴리즈 노트 API 를 서빙한다 — cd.yml 과 동일한 이유로 여기서도 복사 필요.
+        run: cp CHANGELOG.md backend/CHANGELOG.md
+
       - name: Build and push Backend image
         uses: docker/build-push-action@v5
         with:

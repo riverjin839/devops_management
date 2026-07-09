@@ -7,6 +7,12 @@ description: 새 버전을 릴리스할 때(마이너 기능 추가/패치) 사�
 
 전략 상세: `docs/branch-tag-strategy.md`. `main` 단일 트렁크 + `vX.Y.Z` 태그.
 
+> **기본적으로는 이 스킬을 수동 실행할 필요가 없다.** `feat:`/`fix:` 등 conventional commit
+> prefix 를 가진 PR 이 `main` 에 머지되면 `.github/workflows/auto-release.yml` 이 버전업 →
+> CHANGELOG 확정 → 태그 push 까지 자동으로 수행한다. 이 스킬은 hotfix 나 자동화가 실패했을
+> 때(예: `RELEASE_PAT` 미설정으로 태그 push 가 `release.yml` 을 못 띄운 경우)의 수동 fallback
+> 절차다.
+
 ## 버전 결정
 - `feat:` 포함 → **MINOR**(x.Y.0). `fix:`/`docs:`/`chore:` 만 → **PATCH**(x.y.Z).
   하위호환 깨짐 → **MAJOR**.
@@ -20,20 +26,19 @@ description: 새 버전을 릴리스할 때(마이너 기능 추가/패치) 사�
    - `backend/app/main.py` FastAPI `version="..."`
    - `backend/app/main.py` `root()` 응답 `"version": "..."`
 3. `CHANGELOG.md` 최상단에 새 섹션(`## [X.Y.Z] - YYYY-MM-DD`) + Added/Changed/Fixed + 하단 링크.
-4. `frontend/src/data/releaseNotes.ts` 동기화 — `RELEASE_NOTES[0]`(`version: 'Unreleased'`) 의
-   `highlights` 를 새 `{ version: 'X.Y.Z', date: 'YYYY-MM-DD', highlights: [...] }` 항목으로
-   옮기고, `Unreleased` 항목은 `highlights: []` 로 비운다(항목 자체는 유지). 사이드바 "릴리즈
-   노트" SidePane 이 그대로 읽는 파일이라 빠뜨리면 앱 내 표시가 CHANGELOG 와 어긋난다.
-5. `chore(release): vX.Y.Z` 커밋 → PR → main 병합.
-6. 병합된 main 에 annotated 태그 push — **여기까지가 수동 마지막 단계**:
+   (2~3 은 `python3 scripts/release/bump_version.py <minor|patch>` 로 한 번에 처리 가능 —
+   `--dry-run` 으로 먼저 결과 미리보기 권장.) 사이드바 "릴리즈 노트" 패널은 이 파일을 backend
+   API(`/api/v1/release-notes`)로 직접 파싱해 보여주므로 별도 동기화 파일은 없다.
+4. `chore(release): vX.Y.Z` 커밋 → PR → main 병합.
+5. 병합된 main 에 annotated 태그 push — **여기까지가 수동 마지막 단계**:
    ```bash
    git checkout main && git pull
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-7. (자동) 태그 push 시 `.github/workflows/release.yml` 이 **GitHub Release 생성**(본문 = CHANGELOG `## [X.Y.Z]` 섹션) + **GHCR 이미지 `:X.Y.Z`/`:X.Y`/`:latest` 태깅**을 수행한다. 손으로 Release 를 만들거나 이미지를 태깅하지 않는다.
+6. (자동) 태그 push 시 `.github/workflows/release.yml` 이 **GitHub Release 생성**(본문 = CHANGELOG `## [X.Y.Z]` 섹션) + **GHCR 이미지 `:X.Y.Z`/`:X.Y`/`:latest` 태깅**을 수행한다. 손으로 Release 를 만들거나 이미지를 태깅하지 않는다.
 
-> 환경 제약: 격리된 실행 환경에서는 태그 ref push 가 막혀 있을 수 있다(403). 그 경우 6단계는 push 권한 있는 곳에서 수행하거나 GitHub UI "Draft a release from tag(Target=main)" 로 태그를 만들면 `release.yml` 이 동일하게 동작한다.
+> 환경 제약: 격리된 실행 환경에서는 태그 ref push 가 막혀 있을 수 있다(403). 그 경우 5단계는 push 권한 있는 곳에서 수행하거나 GitHub UI "Draft a release from tag(Target=main)" 로 태그를 만들면 `release.yml` 이 동일하게 동작한다.
 
 ## 규칙
 - 태그는 **main 커밋에만**(작업 브랜치 금지). 접두사 `v`. pre-release `vX.Y.Z-rc.N`.
