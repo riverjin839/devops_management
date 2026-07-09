@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Plus, Settings2, ChevronDown } from 'lucide-react';
 import { WorkItem, WorkItemCreate, WorkItemUpdate, WorkItemType, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
-import { KANBAN_STATUS_LABEL } from './workItemKanbanUtils';
 import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
 import { RichTextEditor, assigneeWorkTableTemplate } from '@/components/editor';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
@@ -15,8 +14,6 @@ import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useProjects } from '@/hooks/useProjects';
-import { useSprints } from '@/hooks/useSprints';
 import { useAuthStore } from '@/stores/authStore';
 
 const DEFAULT_TASK_CATEGORIES = [
@@ -40,6 +37,13 @@ const DEFAULT_TASK_CATEGORIES = [
 const TASK_CATEGORIES = [...DEFAULT_TASK_CATEGORIES, '기타'];
 const CATEGORY_STORAGE_KEY = 'k8s:item:categories';
 
+/** 서비스 운영에 직접 결부된 카테고리만 서비스 선택을 강제한다.
+ *  나머지 기본 카테고리(문서/회의/교육/코드리뷰/기획/기타)와 사용자 정의 카테고리는 선택사항. */
+const SERVICE_REQUIRED_CATEGORIES = new Set([
+  'Cluster 점검', 'Node 관리', 'Pod 배포', 'Network 설정', 'Storage 관리',
+  'RBAC / 보안', 'Monitoring 설정', 'Backup / Restore', '업그레이드', '장애 대응', '이슈 대응',
+]);
+
 function loadCustomCategories(): string[] {
   try {
     const raw = localStorage.getItem(CATEGORY_STORAGE_KEY);
@@ -58,19 +62,12 @@ function parseAssignees(s?: string | null): string[] {
   return s ? s.split(',').map((t) => t.trim()).filter(Boolean) : [];
 }
 
-const PRIORITIES = [
-  { value: 'high', label: '높음' },
-  { value: 'medium', label: '보통' },
-  { value: 'low', label: '낮음' },
-];
-
-const KANBAN_STATUS_OPTIONS: KanbanStatus[] = ['backlog', 'todo', 'in_progress', 'review_test', 'done'];
-
-/** 신규 등록 기본값 — 현재 날짜+시간(YYYY-MM-DDTHH:mm). 등록 시점 자동 입력용. */
-function nowDatetime(): string {
+/** 신규 등록 기본값 — 현재 날짜(YYYY-MM-DD, 시간 미포함). DateTimePicker 는 'T' 가 없으면
+ *  "시간 포함" 토글이 기본 꺼진 상태로 열려 날짜만 입력하는 흐름을 기본값으로 삼는다. */
+function nowDateOnly(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /**
@@ -130,13 +127,10 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
+  // 프로젝트/스프린트 배정은 등록 폼에서 뺐다(효율화) — 기존 값은 수정 시 유지되도록
+  // state 는 남겨두되 선택 UI 는 제공하지 않는다.
   const [projectId, setProjectId] = useState(initial?.projectId ?? '');
-  const { data: projectsData } = useProjects();
-  const projects = projectsData?.data ?? [];
-
   const [sprintId, setSprintId] = useState(initial?.sprintId ?? '');
-  const { data: sprintsData } = useSprints();
-  const sprints = sprintsData?.data ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
   const [primaryList, setPrimaryList] = useState<string[]>(
     !initial && !parentItem && defaultAssignee ? [defaultAssignee] : [],
@@ -152,7 +146,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [componentCustom, setComponentCustom] = useState('');
   const [content, setTaskContent] = useState('');
   const [resolution, setResultContent] = useState('');
-  const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? nowDatetime());
+  const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? nowDateOnly());
   const [closedAt, setCompletedAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
@@ -290,7 +284,11 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     const primaryFinal = primaryList;
     const secondaryFinal = secondaryList;
     // 필수값 누락 — 조용히 return 하지 않고 무엇이 빠졌는지 알려준다.
-    if (!service.trim()) { toast.error('등록 불가', '서비스를 선택하세요.'); return; }
+    // 서비스 운영 카테고리만 서비스 선택을 강제 — 회의/교육/기획 등은 서비스 없이도 등록 가능.
+    if (SERVICE_REQUIRED_CATEGORIES.has(resolvedCategory) && !service.trim()) {
+      toast.error('등록 불가', `"${resolvedCategory}" 카테고리는 서비스 선택이 필요합니다.`);
+      return;
+    }
 
     const payload: WorkItemCreate = {
       type,
@@ -359,12 +357,15 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const formInner = (
     <form id="item-form" onSubmit={handleSubmit} className="space-y-2.5">
       {/* 업무/이슈 구분 폐지 — type 선택 토글 제거. '이슈 대응' 은 분류(category)로 선택한다. */}
-      {/* ── 기본 설정 — 서비스(필수) 우선, 나머지 옵션 ── */}
+      {/* ── 기본 설정 — 한 줄 그리드. 우선순위/보드상태/프로젝트/스프린트는 등록 폼에서 제외
+           (우선순위·보드상태는 목록/칸반에서 바로 편집 가능). ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-x-2 gap-y-2">
-        {/* 서비스 — 필수 */}
+        {/* 서비스 — 서비스 운영 카테고리일 때만 필수 */}
         <div>
           <label htmlFor={f('service')} className={labelClass} title="통합지식 서비스 카탈로그 tag">
-            서비스 <span className="text-primary">*</span>
+            서비스{SERVICE_REQUIRED_CATEGORIES.has(resolvedCategory)
+              ? <span className="text-primary"> *</span>
+              : <span className="text-muted-foreground"> (선택)</span>}
           </label>
           <select
             id={f('service')}
@@ -377,11 +378,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             className={inputClass}
           >
             <option value="">— 선택 —</option>
-            {serviceCatalog
-              .filter((s) => s.key !== 'other')
-              .map((s) => (
-                <option key={s.key} value={s.key}>{s.label}</option>
-              ))}
+            {serviceCatalog.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
           </select>
         </div>
         {/* 컴포넌트 — service 선택 시만 표시 */}
@@ -491,34 +490,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             ))}
           </select>
         </div>
-        {/* 우선순위 — 기본 보통 */}
-        <div>
-          <label htmlFor={f('priority')} className={labelClass}>우선순위</label>
-          <select
-            id={f('priority')}
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            className={inputClass}
-          >
-            {PRIORITIES.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-        </div>
-        {/* 보드 상태 — 기본 진행중 */}
-        <div>
-          <label htmlFor={f('kanban')} className={labelClass}>보드 상태</label>
-          <select
-            id={f('kanban')}
-            value={kanbanStatus}
-            onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
-            className={inputClass}
-          >
-            {KANBAN_STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{KANBAN_STATUS_LABEL[s]}</option>
-            ))}
-          </select>
-        </div>
         {/* 업무 시작일 — 등록 시점 자동, 수정 가능 */}
         <div>
           <label htmlFor={f('startedAt')} className={labelClass}>업무 시작일</label>
@@ -562,42 +533,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             placeholder="https://jira.example.com/browse/..."
           />
         </div>
-        {/* 프로젝트 — 옵션 */}
-        {projects.length > 0 && (
-          <div>
-            <label htmlFor={f('project')} className={labelClass}>프로젝트</label>
-            <select
-              id={f('project')}
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">미분류</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-        {/* 스프린트 — 옵션 */}
-        {sprints.length > 0 && (
-          <div>
-            <label htmlFor={f('sprint')} className={labelClass}>스프린트</label>
-            <select
-              id={f('sprint')}
-              value={sprintId}
-              onChange={(e) => setSprintId(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">미배정</option>
-              {sprints.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}{s.status === 'active' ? ' (진행중)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       {/* 분류 관리 패널 — 토글 */}

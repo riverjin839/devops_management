@@ -4,13 +4,30 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight, CalendarCheck2, Clock, CircleDashed,
   ShieldAlert, ChevronLeft, ChevronRight, RotateCcw,
-  Square, CheckSquare,
+  Square, CheckSquare, Users,
 } from 'lucide-react';
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
+import { useWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { stripHtml } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
+
+const TEAM_ASSIGNEE = '전체';
+
+// 인당 표시 개수 — 기본 5개, 사용자별로 localStorage 에 저장.
+const ITEM_LIMIT_KEY = 'k8s:memberToday:itemLimit';
+const ITEM_LIMIT_OPTIONS = [3, 5, 8, 10];
+const DEFAULT_ITEM_LIMIT = 5;
+
+function loadItemLimit(): number {
+  try {
+    const n = Number(localStorage.getItem(ITEM_LIMIT_KEY));
+    return ITEM_LIMIT_OPTIONS.includes(n) ? n : DEFAULT_ITEM_LIMIT;
+  } catch {
+    return DEFAULT_ITEM_LIMIT;
+  }
+}
 
 interface MemberTodayTodosProps {
   selectedClusterId: string | null;
@@ -56,11 +73,20 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
       return next;
     });
 
+  const [itemLimit, setItemLimit] = useState(loadItemLimit);
+  const changeItemLimit = (n: number) => {
+    setItemLimit(n);
+    try { localStorage.setItem(ITEM_LIMIT_KEY, String(n)); } catch { /* ignore */ }
+  };
+
   const { data, isLoading } = useQuery({
     queryKey: ['items', 'today', viewDate],
     queryFn: () => todayWorkItemsApi.getSummary(viewDate).then((r) => r.data),
     refetchInterval: isToday ? 60000 : false,
   });
+
+  // 전체 참석(회의 등, allAttendees=true) — 담당자 그룹과 별개로 "전체" 카드에 모아 0순위로 노출.
+  const { data: allAttendData } = useWorkItems({ allAttendees: true });
 
   const { data: registeredAssignees = [] } = useAssignees();
   // 로그인한 사용자를 목록 맨 위로.
@@ -99,6 +125,27 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
       || a.i - b.i,
     )
     .map((x) => x.g);
+
+  // "전체" 카드 — allAttendees=true(전체 참석/파트 회의 등) 항목을 담당자 그룹과 별개로 모아
+  // 0순위(맨 앞)에 노출한다. 개별 담당자 카드(회의 주최자 등)에도 그대로 남아있을 수 있음(의도적 —
+  // TodoTodayPage 의 "내 업무 + 전체 참석" 병합과 동일한 전제, 전체 카드는 가시성용 오버레이).
+  const teamCandidates = (allAttendData?.data ?? [])
+    .filter((t) => !selectedClusterId || t.clusterId === selectedClusterId);
+  const teamGroup = {
+    assignee: TEAM_ASSIGNEE,
+    overdueTasks: teamCandidates.filter((t) => {
+      const d = t.startedAt?.slice(0, 10) ?? '';
+      return !!d && d < viewDate && t.kanbanStatus !== 'done';
+    }),
+    todayTasks: teamCandidates.filter((t) =>
+      (t.startedAt?.slice(0, 10) ?? '') === viewDate && t.kanbanStatus !== 'in_progress'),
+    inProgressTasks: teamCandidates.filter((t) =>
+      t.kanbanStatus === 'in_progress' && (t.startedAt?.slice(0, 10) ?? '') <= viewDate),
+  };
+  const teamHasItems = teamGroup.overdueTasks.length + teamGroup.todayTasks.length + teamGroup.inProgressTasks.length > 0;
+  // 담당자별 집계(totals)는 원래 groups 기준으로만 계산 — "전체" 카드는 가시성용 중복 노출이라
+  // 상단 합계에 포함하면 과대집계된다.
+  const displayGroups = teamHasItems ? [teamGroup, ...groups] : groups;
 
   const totals = groups.reduce(
     (acc, g) => {
@@ -164,8 +211,22 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
         </div>
       </div>
 
-      <div className="text-xs text-muted-foreground">
-        멤버별 진행 현황 (task + issue, primary/secondary 담당)
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          멤버별 진행 현황 (task + issue, primary/secondary 담당)
+        </div>
+        <label className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+          인당 표시
+          <select
+            value={itemLimit}
+            onChange={(e) => changeItemLimit(Number(e.target.value))}
+            className="px-1 py-0.5 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {ITEM_LIMIT_OPTIONS.map((n) => (
+              <option key={n} value={n}>{n}개</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {isLoading ? (
@@ -174,30 +235,35 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             <div key={i} className="h-16 rounded-xl bg-secondary/40 animate-pulse" />
           ))}
         </div>
-      ) : groups.length === 0 ? (
+      ) : displayGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 py-10 text-center text-sm text-muted-foreground">
           {isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
         </div>
       ) : (
-        <div className="space-y-2 pr-1">
-          {groups.map((g) => {
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 pr-1">
+          {displayGroups.map((g) => {
+            const isTeam = g.assignee === TEAM_ASSIGNEE;
             const overdue = g.overdueTasks ?? [];
             const all = [...overdue, ...g.todayTasks, ...g.inProgressTasks];
             const done = all.filter((t) => t.kanbanStatus === 'done').length;
             const total = all.length;
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
             const isExpanded = expanded.has(g.assignee);
-            const visible = isExpanded ? all : all.slice(0, 4);
+            const visible = isExpanded ? all : all.slice(0, itemLimit);
 
             return (
               <div
                 key={g.assignee}
-                className="rounded-xl border border-border/70 bg-transparent p-2.5"
+                className={`rounded-xl border p-2.5 ${
+                  isTeam ? 'lg:col-span-2 border-primary/40 bg-primary/5' : 'border-border/70 bg-transparent'
+                }`}
               >
                 {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center text-[10px] font-bold text-primary flex-shrink-0">
-                    {g.assignee.slice(0, 2).toUpperCase()}
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                    isTeam ? 'bg-primary/25 text-primary' : 'bg-primary/15 text-primary'
+                  }`}>
+                    {isTeam ? <Users className="w-3 h-3" /> : g.assignee.slice(0, 2).toUpperCase()}
                   </div>
                   <span className="text-sm font-semibold truncate flex-1 min-w-0">{g.assignee}</span>
                   <span className="text-xs text-muted-foreground flex-shrink-0 tabular-nums">{done}/{total} · {pct}%</span>
@@ -265,7 +331,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                       </li>
                     );
                   })}
-                  {all.length > 4 && (
+                  {all.length > itemLimit && (
                     <li>
                       <button
                         type="button"
@@ -273,7 +339,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                         className="text-xs text-muted-foreground hover:text-primary py-1 transition-colors"
                         aria-expanded={isExpanded}
                       >
-                        {isExpanded ? '접기' : `+${all.length - 4}건 더…`}
+                        {isExpanded ? '접기' : `+${all.length - itemLimit}건 더…`}
                       </button>
                     </li>
                   )}
