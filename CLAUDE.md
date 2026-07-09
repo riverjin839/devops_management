@@ -713,34 +713,29 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
 ## 버전 관리 / CHANGELOG (필수 — 기능·패치 추가 시마다)
 
 **기능 추가(`feat:`)나 패치(`fix:`)를 담은 PR 은 `CHANGELOG.md` 의 `## [Unreleased]` 섹션에
-항목을 추가해야 한다.** PR 본문만 쓰고 CHANGELOG 갱신을 빠뜨리지 않는다 — 다음 릴리스 노트의
-원본이 바로 이 섹션이다.
+항목을 추가해야 한다.** PR 본문만 쓰고 CHANGELOG 갱신을 빠뜨리지 않는다 — 릴리스 버전 섹션과
+사이드바 "릴리즈 노트" 패널 모두 이 섹션에서 파생된다.
 
 - 위치: `CHANGELOG.md` 최상단 `## [Unreleased]` 아래, 변경 성격에 따라 `### Added` /
   `### Fixed` / `### Changed` 하위에 한두 줄로 추가 (기존 항목 형식 참고 — 굵게 기능명,
   이어서 사용자 관점 요약, 필요 시 `Backend:`/`Frontend:` 로 구현 포인트 짧게).
 - 버전/브랜치/태그 전체 전략은 `docs/branch-tag-strategy.md` 참고. SemVer(`vMAJOR.MINOR.PATCH`),
   버전 소스는 `frontend/package.json` `version` + `backend/app/main.py` FastAPI `version`.
-- **실제 버전을 올리고 태그를 찍어 릴리스를 컷하는 것**(버전 3곳 수정 + CHANGELOG 섹션 확정 +
-  `git tag` push)은 매 PR 마다 하지 않는다 — Unreleased 에 계속 쌓다가, 사용자가 릴리스를
-  요청하면 `/release` 스킬로 진행한다. `v*` 태그 push 시 `release.yml` 이 GHCR 이미지
-  빌드/태깅과 GitHub Release 생성을 자동 처리한다.
+- **릴리스 자동화**: `feat:`/`fix:` 등 conventional commit prefix PR 이 `main` 에 머지되면
+  `.github/workflows/auto-release.yml` 이 SemVer 버전을 자동으로 올리고(`feat:`→MINOR, 그
+  외→PATCH) `CHANGELOG.md` 의 `[Unreleased]` 를 새 버전 섹션으로 확정한 뒤 `vX.Y.Z` 태그를
+  push 한다(→ `release.yml` 이 GHCR 이미지 태깅 + GitHub Release 생성). 버전 3곳 수정과
+  CHANGELOG 섹션 확정은 `scripts/release/bump_version.py` 로 자동화돼 있다. 수동 `/release`
+  스킬은 hotfix 나 자동화 실패 시의 fallback 이다 — 평소엔 실행할 필요 없음.
 
-### 사이드바 "릴리즈 노트" 패널 (`frontend/src/data/releaseNotes.ts`) — CHANGELOG 와 함께 필수 갱신
+### 사이드바 "릴리즈 노트" 패널
 
 사이드바 하단 레일의 "릴리즈 노트" 아이콘(감사 로그가 Settings 탭으로 이동한 자리)을 클릭하면
-우측 SidePane 에 `RELEASE_NOTES` 배열(`ReleaseNoteEntry[]` — `version`/`date`/`highlights`)이
-그대로 렌더된다. **`CHANGELOG.md` 를 갱신하는 PR 은 사용자에게 보여줄 만한 변경이면
-`releaseNotes.ts` 도 함께 갱신해야 한다** — 자동 동기화가 아니므로 빠뜨리면 앱 내 릴리즈 노트가
-CHANGELOG 와 어긋난 채로 조용히 드리프트한다.
-
-- 평소(PR 단위): `RELEASE_NOTES[0]`(`version: 'Unreleased'`) 의 `highlights` 배열에 한 줄
-  요약을 추가. `CHANGELOG.md` 의 굵은 기능명 + 사용자 관점 한 줄이면 충분 — `Backend:`/구현
-  포인트 같은 세부사항은 옮기지 않는다(이 패널은 일반 사용자용).
-- 릴리스 컷 시점(`/release` 스킬, MAJOR/MINOR/PATCH 버전 확정 시): `Unreleased` 의
-  `highlights` 를 새 `{ version: 'X.Y.Z', date: 'YYYY-MM-DD', highlights: [...] }` 항목으로
-  옮기고 `Unreleased` 항목은 빈 배열로 초기화(항목 자체는 유지 — SidePane 이 상시 표시하는
-  자리이므로 삭제하지 않는다).
+우측 SidePane(`ReleaseNotesPanel`)에 버전별 변경 이력이 테이블(버전/날짜/요약)로 표시되고, 행을
+클릭하면 섹션별(Added/Fixed/Changed 등) 상세가 펼쳐진다. Backend `GET /api/v1/release-notes`
+(`release_notes` 라우터)가 `CHANGELOG.md` 를 이미지 안에서 직접 파싱해 응답하므로 **별도로
+동기화해야 하는 사본 파일이 없다** — `CHANGELOG.md` 만 정확히 갱신하면 자동으로 반영된다
+(`[Unreleased]` 섹션은 이 API 응답에서 제외).
 
 ---
 

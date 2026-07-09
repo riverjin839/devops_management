@@ -10,11 +10,15 @@ set -euo pipefail
 # 두 가지 사용법:
 #
 # 1) 전체 이미지 참조를 직접 지정 (레지스트리/저장소를 바꿀 때 등):
-#   scripts/redeploy.sh [-n <namespace>] <image> <deployment>:<container> [<deployment>:<container> ...]
+#   scripts/redeploy.sh [-n <namespace>] <image> <target> [<target> ...]
 #
 # 2) -t 로 태그만 지정 (권장 — 저장소 경로는 클러스터에 이미 떠 있는 이미지에서 그대로 읽어와
 #    태그만 바꿔치기하므로, 레지스트리 경로를 매번 입력할 필요가 없다):
-#   scripts/redeploy.sh [-n <namespace>] -t <tag> <deployment>:<container> [<deployment>:<container> ...]
+#   scripts/redeploy.sh [-n <namespace>] -t <tag> <target> [<target> ...]
+#
+# <target> 은 둘 중 하나:
+#   - <deployment>              컨테이너가 1개뿐인 Deployment 는 이름만 적으면 자동 판별.
+#   - <deployment>:<container>  컨테이너가 여러 개면 명시적으로 지정.
 #
 # -n 을 생략하면 현재 kubectl context 의 네임스페이스를 그대로 쓴다.
 #
@@ -26,6 +30,9 @@ set -euo pipefail
 #   scripts/redeploy.sh -n k8s-monitor-prod -t v1.4.0 \
 #       prod-backend:backend prod-celery-worker:celery-worker prod-celery-beat:celery-beat \
 #       prod-frontend:frontend
+#
+# 예 (Deployment 이름만, 컨테이너 자동 판별 — 컨테이너 1개짜리 Deployment 인 backend/frontend):
+#   scripts/redeploy.sh -n k8s-monitor-prod -t v1.4.0 backend frontend
 # ============================================
 
 RED='\033[0;31m'
@@ -34,21 +41,22 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC}  $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 log_step() { echo -e "${CYAN}[STEP]${NC}  $*"; }
 
 usage() {
     cat <<EOF
 사용법:
-  전체 이미지 참조 지정: $(basename "$0") [-n <namespace>] <image> <deployment>:<container> [...]
-  태그만 지정(권장):      $(basename "$0") [-n <namespace>] -t <tag> <deployment>:<container> [...]
+  전체 이미지 참조 지정: $(basename "$0") [-n <namespace>] <image> <target> [<target> ...]
+  태그만 지정(권장):      $(basename "$0") [-n <namespace>] -t <tag> <target> [<target> ...]
 
 인자:
   -n <namespace>          네임스페이스 (생략 시 현재 kubectl context 의 네임스페이스 사용)
   -t <tag>                태그만 교체 — 저장소 경로는 각 컨테이너의 현재 배포 이미지에서 그대로
                            읽어와 태그만 바꿔친다. 지정 시 image 인자는 생략(각 target 만 나열).
   image                   전체 이미지 참조 (예: ghcr.io/owner/repo/backend:abc1234). -t 미사용 시 필수.
-  deployment:container    재배포할 Deployment 이름:컨테이너 이름 (여러 개 지정 가능)
+  target                  <deployment>(컨테이너 1개뿐이면 자동 판별) 또는
+                           <deployment>:<container>(컨테이너가 여러 개면 명시). 여러 개 지정 가능.
 
 예 (전체 이미지 참조):
   $(basename "$0") -n k8s-monitor-prod ghcr.io/riverjin839/devops_management/backend:abc1234 \\
@@ -58,6 +66,9 @@ usage() {
   $(basename "$0") -n k8s-monitor-prod -t v1.4.0 \\
       prod-backend:backend prod-celery-worker:celery-worker prod-celery-beat:celery-beat \\
       prod-frontend:frontend
+
+예 (Deployment 이름만 — 컨테이너 자동 판별):
+  $(basename "$0") -n k8s-monitor-prod -t v1.4.0 backend frontend
 EOF
 }
 
@@ -76,6 +87,28 @@ strip_tag() {
     else
         echo "${ref}"
     fi
+}
+
+# <deployment> 만 지정된 target 의 컨테이너 이름을 자동 판별한다. 컨테이너가 정확히 1개일 때만
+# 성공하고, 결과는 전역 변수 RESOLVED_CONTAINER 에 담는다 (서브셸/command substitution 을 쓰지
+# 않아야 실패 시 exit 이 스크립트 전체를 즉시 멈춘다 — $(...) 안에서 exit 하면 서브셸만 끝나고
+# 본 스크립트는 빈 값을 받은 채 계속 진행돼버린다).
+RESOLVED_CONTAINER=""
+resolve_container() {
+    local dep="$1"
+    local names
+    names="$("${KCTL[@]}" get "deployment/${dep}" "${NS_FLAG[@]}" \
+        -o jsonpath='{.spec.template.spec.containers[*].name}')"
+    if [[ -z "${names}" ]]; then
+        log_error "${dep} 에서 컨테이너 목록을 가져오지 못했습니다 (Deployment 이름 확인)."
+        exit 1
+    fi
+    local arr=(${names})
+    if [[ "${#arr[@]}" -ne 1 ]]; then
+        log_error "${dep} 에 컨테이너가 ${#arr[@]}개(${names// /, }) 있어 자동 판별할 수 없습니다. '${dep}:<container>' 형태로 지정하세요."
+        exit 1
+    fi
+    RESOLVED_CONTAINER="${arr[0]}"
 }
 
 NAMESPACE=""
@@ -105,7 +138,7 @@ else
 fi
 
 if [[ $# -eq 0 ]]; then
-    log_error "재배포할 <deployment>:<container> 를 최소 1개 이상 지정하세요."
+    log_error "재배포할 <deployment> 또는 <deployment>:<container> 를 최소 1개 이상 지정하세요."
     usage
     exit 1
 fi
@@ -129,10 +162,16 @@ echo ""
 # 항상 rollout restart 를 함께 호출해 태그 변경 여부와 무관하게 항상 새로 pull 하도록 한다.
 for t in "${TARGETS[@]}"; do
     dep="${t%%:*}"
-    container="${t#*:}"
-    if [[ -z "${dep}" || -z "${container}" || "${dep}" == "${t}" ]]; then
-        log_error "형식이 잘못됨: '${t}' (deployment:container 형태여야 함)"
-        exit 1
+    if [[ "${dep}" == "${t}" ]]; then
+        # 콜론 없음 — deployment 이름만 지정된 경우, 컨테이너를 자동 판별.
+        resolve_container "${dep}"
+        container="${RESOLVED_CONTAINER}"
+    else
+        container="${t#*:}"
+        if [[ -z "${dep}" || -z "${container}" ]]; then
+            log_error "형식이 잘못됨: '${t}' (deployment 또는 deployment:container 형태여야 함)"
+            exit 1
+        fi
     fi
 
     if [[ -n "${TAG}" ]]; then

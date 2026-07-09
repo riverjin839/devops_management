@@ -10,6 +10,13 @@
 
 1.1.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **`scripts/redeploy.sh` — Deployment 이름만으로도 재배포 가능**: `-t` 옵션과 함께 쓰는 target 을
+  기존 `<deployment>:<container>` 뿐 아니라 `<deployment>` 이름만으로도 지정 가능(예:
+  `backend frontend`) — 컨테이너가 정확히 1개인 Deployment 는 자동 판별하고, 여러 개면 자동 판별
+  불가 사유와 함께 명시적으로 지정하라는 에러 메시지를 출력한다. v1.1.0 의 `-t` 옵션에 이어지는
+  개선.
+
 ## [1.1.0] - 2026-07-09
 
 ### Added
