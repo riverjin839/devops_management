@@ -27,6 +27,12 @@
   개선.
 
 ### Fixed
+- **Jira Excel 가져오기 — `.xls` 업로드 시 "Expected BOF record" 오류**: Jira 의
+  "엑셀(전체 필드)" 내보내기는 확장자만 `.xls` 일 뿐 실제 내용은 HTML 테이블(구버전 Excel
+  호환용)이라, 진짜 OLE2 바이너리만 지원하는 xlrd 가 즉시 실패했다 → 업로드된 `.xls` 파일이
+  HTML 인지 먼저 감지해 표준 라이브러리 `html.parser` 기반 테이블 추출기로 파싱(신규
+  의존성 없음). 진짜 바이너리 `.xls` 는 기존 xlrd 경로 그대로 유지.
+  - Backend: `routers/jira.py` `_looks_like_html()`/`_read_html_table_rows()`.
 - **홈 "담당자별 진행 현황" — 인당 표시 개수 제한(기본 5개, 더보기)이 적용 안 되던 문제**:
   이 기능은 `MemberTodayTodos`(패널의 "담당자" 탭)에만 구현돼 있었는데, 패널의 기본 탭이
   "주간"(`WeeklyStatusTimeline` — 간트 스윔레인 뷰, 인당 표시 제한 없음)으로 설정돼 있어
