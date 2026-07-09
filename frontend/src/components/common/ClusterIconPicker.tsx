@@ -1,11 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, RotateCcw, Upload, Image as ImageIcon } from 'lucide-react';
+import { X, RotateCcw, Upload, Image as ImageIcon, Wand2 } from 'lucide-react';
 import {
   CLUSTER_ICON_GROUPS,
   CLUSTER_EMOJI_GROUPS,
   resolveClusterIcon,
 } from '@/lib/clusterIcons';
+import {
+  buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
+} from '@/lib/clusterIconBuilder';
+import { useOperationLevels, levelColor } from '@/hooks/useOperationLevels';
+
+/** 빌더 탭에 프리필할 클러스터 속성 — 전달되면 "빌더" 탭이 노출된다. */
+export interface IconBuilderContext {
+  name?: string | null;
+  region?: string | null;
+  operationLevel?: string | null;
+}
 
 interface ClusterIconPickerProps {
   /** 현재 저장된 icon 값 (lucide 이름 / emoji / data URL / null). */
@@ -19,9 +30,11 @@ interface ClusterIconPickerProps {
   title?: string;
   /** popover 기준 좌표 — 우클릭 위치 등에서 띄울 때 사용. 지정하지 않으면 화면 중앙 모달. */
   anchorRect?: DOMRect | null;
+  /** 클러스터 속성(이름/지역/운영등급) — 전달 시 이니셜+환경색+지역 조합 "빌더" 탭 활성. */
+  builderContext?: IconBuilderContext;
 }
 
-type Tab = 'icons' | 'emoji' | 'upload';
+type Tab = 'builder' | 'icons' | 'emoji' | 'upload';
 
 /** 업로드된 이미지를 64×64 정사각형 JPEG dataURL 로 리사이즈 (DB 저장 부담 최소화). */
 async function resizeImageToDataUrl(file: File, maxSize = 64): Promise<string> {
@@ -64,12 +77,14 @@ const POPOVER_MAX_HEIGHT = 520;
  *  - emoji 입력 + 추천 그리드
  *  - "기본값으로 되돌리기" 버튼 (icon=null) */
 export function ClusterIconPicker({
-  value, onChange, onClose, clusterName, title, anchorRect,
+  value, onChange, onClose, clusterName, title, anchorRect, builderContext,
 }: ClusterIconPickerProps) {
   const resolved = resolveClusterIcon(value);
+  const hasBuilder = !!builderContext;
   const initialTab: Tab =
     resolved?.kind === 'text' ? 'emoji'
     : resolved?.kind === 'image' ? 'upload'
+    : hasBuilder ? 'builder'
     : 'icons';
   const [tab, setTab] = useState<Tab>(initialTab);
   const [emojiInput, setEmojiInput] = useState(resolved?.kind === 'text' ? resolved.value : '');
@@ -198,6 +213,13 @@ export function ClusterIconPicker({
 
         {/* Tabs */}
         <div className="flex border-b border-border bg-secondary/30">
+          {hasBuilder && (
+            <TabButton active={tab === 'builder'} onClick={() => setTab('builder')}>
+              <span className="inline-flex items-center gap-1">
+                <Wand2 className="w-3 h-3" />빌더
+              </span>
+            </TabButton>
+          )}
           <TabButton active={tab === 'icons'} onClick={() => setTab('icons')}>아이콘</TabButton>
           <TabButton active={tab === 'emoji'} onClick={() => setTab('emoji')}>이모지</TabButton>
           <TabButton active={tab === 'upload'} onClick={() => setTab('upload')}>
@@ -217,6 +239,12 @@ export function ClusterIconPicker({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-2 space-y-3">
+          {tab === 'builder' && hasBuilder && (
+            <BuilderTab
+              context={builderContext!}
+              onApply={(dataUrl) => { onChange(dataUrl); onClose(); }}
+            />
+          )}
           {tab === 'icons' && (
             CLUSTER_ICON_GROUPS.map((group) => (
               <section key={group.key}>
@@ -359,6 +387,122 @@ export function ClusterIconPicker({
       </div>
     </>,
     document.body,
+  );
+}
+
+/** "빌더" 탭 — 이니셜 + 환경(운영등급)색 + 지역 약어 + k8s 워터마크를 조합해 SVG 아이콘 생성.
+ *  클러스터의 name/region/operationLevel 로 자동 프리필되고 모든 값은 편집 가능. */
+function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply: (dataUrl: string) => void }) {
+  const { data: levels } = useOperationLevels();
+  const [initials, setInitials] = useState(() => suggestInitials(context.name));
+  const [regionAbbr, setRegionAbbr] = useState(() => suggestRegionAbbr(context.region));
+  const [level, setLevel] = useState(context.operationLevel ?? '');
+  const [watermark, setWatermark] = useState(true);
+  const [shape, setShape] = useState<'square' | 'circle'>('square');
+
+  const colorToken = levelColor(levels, level || undefined);
+  const svg = useMemo(
+    () => buildClusterIconSvg({ initials, regionAbbr, colorToken, k8sWatermark: watermark, shape }),
+    [initials, regionAbbr, colorToken, watermark, shape],
+  );
+  const previewUrl = useMemo(() => svgToDataUrl(svg), [svg]);
+
+  return (
+    <div className="space-y-3 px-1">
+      <p className="text-xs text-muted-foreground">
+        서비스 이니셜 + 환경(운영등급) 색 + 지역 약어를 조합한 아이콘을 생성합니다.
+        사이드바 레일(40px)에서도 클러스터를 한눈에 구분할 수 있습니다.
+      </p>
+
+      {/* 미리보기 — 실제 크기(40px)와 확대(64px) 나란히 */}
+      <div className="rounded-lg border border-border bg-muted/20 p-3 flex items-center justify-center gap-6">
+        <div className="flex flex-col items-center gap-1">
+          <img src={previewUrl} alt="미리보기 64px" className="w-16 h-16" />
+          <span className="text-[10px] text-muted-foreground">64px</span>
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <img src={previewUrl} alt="미리보기 40px (사이드바)" className="w-10 h-10" />
+          <span className="text-[10px] text-muted-foreground">사이드바</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-muted-foreground">이니셜 (1~3자)</span>
+          <input
+            type="text"
+            value={initials}
+            onChange={(e) => setInitials(e.target.value.slice(0, 3))}
+            maxLength={3}
+            className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-muted-foreground">지역 약어 (비우면 밴드 생략)</span>
+          <input
+            type="text"
+            value={regionAbbr}
+            onChange={(e) => setRegionAbbr(e.target.value.slice(0, 3))}
+            maxLength={3}
+            placeholder="예: 이천"
+            className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+      </div>
+
+      <label className="flex flex-col gap-1 text-xs">
+        <span className="text-muted-foreground">환경 (운영등급 → 색 결정)</span>
+        <select
+          value={level}
+          onChange={(e) => setLevel(e.target.value)}
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="">(미지정 — 회색)</option>
+          {(levels ?? []).map((l) => (
+            <option key={l.value} value={l.value}>{l.label}</option>
+          ))}
+        </select>
+      </label>
+
+      <div className="flex items-center gap-4 text-xs">
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={watermark} onChange={(e) => setWatermark(e.target.checked)} className="accent-primary" />
+          k8s 휠 워터마크
+        </label>
+        <div className="inline-flex rounded-md border border-border overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShape('square')}
+            className={`px-2 py-1 ${shape === 'square' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+          >
+            사각
+          </button>
+          <button
+            type="button"
+            onClick={() => setShape('circle')}
+            className={`px-2 py-1 border-l border-border ${shape === 'circle' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+          >
+            원형
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onApply(previewUrl)}
+        disabled={!initials.trim()}
+        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+      >
+        <Wand2 className="w-3.5 h-3.5" />
+        이 아이콘 적용
+      </button>
+
+      <p className="text-xs text-muted-foreground/70 leading-relaxed">
+        • SVG 로 저장되어 어느 크기에서도 선명합니다<br />
+        • 우상단은 상태 표시(dot) 자리라 비워둡니다<br />
+        • 환경 색은 Settings ▸ 운영등급에서 바꿀 수 있습니다
+      </p>
+    </div>
   );
 }
 
