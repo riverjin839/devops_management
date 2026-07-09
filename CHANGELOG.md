@@ -11,6 +11,15 @@
 1.1.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **클러스터 아이콘 빌더**: 사이드바에서 클러스터를 한눈에 구분하기 어려운 문제 해결 —
+  서비스 이니셜(이름에서 자동 추출) + 환경색(운영등급: 운영=빨강/스테이지=주황/개발=파랑,
+  Settings 운영등급 색 설정 연동) + 하단 지역 약어 밴드(이천/용인/청주/우시 등) + k8s 휠
+  워터마크를 조합한 SVG 아이콘을 생성. 아이콘 선택창에 "빌더" 탭 추가(실시간 미리보기,
+  모든 값 편집 가능, 사각/원형), Settings ▸ 클러스터 탭에 **"아이콘 일괄 생성"** 버튼
+  (아이콘이 비어있는 클러스터만 자동 생성 — 기존 아이콘은 유지). SVG data URL 로 기존
+  icon 저장 형식을 그대로 사용해 백엔드 무변경, 모든 렌더 위치(사이드바/테이블/설정)
+  즉시 반영.
+  - Frontend: 신규 `lib/clusterIconBuilder.ts`, `ClusterIconPicker` 빌더 탭, `SettingsPage`.
 - **`scripts/redeploy.sh` — Deployment 이름만으로도 재배포 가능**: `-t` 옵션과 함께 쓰는 target 을
   기존 `<deployment>:<container>` 뿐 아니라 `<deployment>` 이름만으로도 지정 가능(예:
   `backend frontend`) — 컨테이너가 정확히 1개인 Deployment 는 자동 판별하고, 여러 개면 자동 판별

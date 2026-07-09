@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette, FileSearch } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette, FileSearch, Wand2 } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
@@ -23,6 +23,10 @@ import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
 import { useHomeStore } from '@/stores/homeStore';
 import { useToast, ClusterIconPicker } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
+import {
+  buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
+} from '@/lib/clusterIconBuilder';
+import { useOperationLevels, levelColor } from '@/hooks/useOperationLevels';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
@@ -353,6 +357,8 @@ export function SettingsPage() {
   const [iconPickerCluster, setIconPickerCluster] = useState<Cluster | null>(null);
   const [iconPickerAnchor, setIconPickerAnchor] = useState<DOMRect | null>(null);
   const updateClusterMut = useUpdateCluster();
+  const { data: opLevels } = useOperationLevels();
+  const [bulkGenBusy, setBulkGenBusy] = useState(false);
 
   // 홈 버튼 아이콘 커스터마이즈 (업무/플랫폼 모드별).
   const { data: uiSettings } = useUiSettings();
@@ -444,6 +450,38 @@ export function SettingsPage() {
     } finally {
       setVerifyingId(null);
     }
+  };
+
+  /** 아이콘이 비어있는 클러스터에 빌더 아이콘(이니셜+환경색+지역) 일괄 생성.
+   *  이미 아이콘이 설정된 클러스터는 절대 덮어쓰지 않는다. */
+  const handleBulkGenerateIcons = async () => {
+    const targets = clusters.filter((c) => !c.icon);
+    if (targets.length === 0) {
+      toast.info('대상 없음', '모든 클러스터에 이미 아이콘이 설정되어 있습니다.');
+      return;
+    }
+    if (!window.confirm(`아이콘이 없는 클러스터 ${targets.length}개에 빌더 아이콘(이니셜+환경색+지역)을 자동 생성할까요?\n(기존에 설정된 아이콘은 변경되지 않습니다)`)) {
+      return;
+    }
+    setBulkGenBusy(true);
+    let ok = 0;
+    let fail = 0;
+    for (const c of targets) {
+      try {
+        const svg = buildClusterIconSvg({
+          initials: suggestInitials(c.name),
+          regionAbbr: suggestRegionAbbr(c.region),
+          colorToken: levelColor(opLevels, c.operationLevel),
+        });
+        await updateClusterMut.mutateAsync({ id: c.id, data: { icon: svgToDataUrl(svg) } });
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkGenBusy(false);
+    if (fail === 0) toast.success('아이콘 일괄 생성 완료', `${ok}개 생성`);
+    else toast.warning('아이콘 일괄 생성 부분 완료', `${ok}개 성공 · ${fail}개 실패`);
   };
 
   const handlePing = async (server: ManagementServer) => {
@@ -711,15 +749,26 @@ export function SettingsPage() {
 
         {/* Cluster List */}
         {activeTab === 'cluster' && <div className="bg-card border border-border rounded-xl mb-8">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-2 flex-wrap">
             <h2 className="font-semibold">등록된 클러스터</h2>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              클러스터 추가
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBulkGenerateIcons}
+                disabled={bulkGenBusy}
+                title="아이콘이 비어있는 클러스터에 이니셜+환경색+지역 조합 아이콘을 자동 생성 (기존 아이콘은 유지)"
+                className="px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 text-foreground border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {bulkGenBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                아이콘 일괄 생성
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                클러스터 추가
+              </button>
+            </div>
           </div>
 
           {clusters.length === 0 ? (
@@ -864,6 +913,11 @@ export function SettingsPage() {
               clusterName={iconPickerCluster.name}
               value={iconPickerCluster.icon}
               anchorRect={iconPickerAnchor}
+              builderContext={{
+                name: iconPickerCluster.name,
+                region: iconPickerCluster.region,
+                operationLevel: iconPickerCluster.operationLevel,
+              }}
               onChange={(next) => {
                 updateClusterMut.mutate({ id: iconPickerCluster.id, data: { icon: next } });
               }}
