@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.1.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.2.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.2.0] - 2026-07-09
 
 ### Added
 - **`scripts/redeploy.sh` — Deployment 이름만으로도 재배포 가능**: `-t` 옵션과 함께 쓰는 target 을
