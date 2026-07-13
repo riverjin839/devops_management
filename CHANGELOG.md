@@ -31,6 +31,12 @@
   - Frontend: `ClusterSidebar.tsx` — `ICON_RAIL_SIZE_PRESETS`, `IconRailButton` 픽셀
     기반 동적 크기. `stores/sidebarStore.ts` `clusterIconRailSize` 영속화.
 
+### Removed
+- **주간 타임라인 "색 반전" 토글 제거**: 상태 막대(박스) 배경/글씨 색을 반전하던
+  기능을 제거 — 대신 주 이동 툴바(월/날짜범위)와 요일 헤더 글씨색을 테마와 무관하게
+  고정 검정계열(`text-slate-700/800`)로 바꿔 반전 없이도 가독성을 확보.
+  - Frontend: `WeeklyStatusTimeline.tsx`.
+
 ### Fixed
 - **인프라 토폴로지(`/infra-topology`) — 클러스터 선택이 표준 사이드바 대신 레거시
   가로 탭이었던 문제**: 클러스터를 클릭해도 다른 클러스터 페이지처럼 좌측 아이콘

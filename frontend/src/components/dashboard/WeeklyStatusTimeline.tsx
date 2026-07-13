@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck, Plus, Contrast,
+  ClipboardList, CalendarCheck, Plus,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
-import { stripHtml, cn } from '@/lib/utils';
+import { stripHtml } from '@/lib/utils';
 import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 
 // 평일(월~금)만 표시한다.
@@ -125,22 +125,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   // 업무 등록 — 팝업(WorkItemFormModal). 페이지 이동 없이 이 화면 컨텍스트를 유지.
   const [createOpen, setCreateOpen] = useState(false);
 
-  // ── 타임라인 색 반전 — 사용자별 설정(localStorage) ──
   const currentUser = useAuthStore((s) => s.user);
-  const invertKey = `k8s:weekTimelineInvert:${currentUser?.username ?? 'guest'}`;
-  const [invert, setInvert] = useState<boolean>(() => {
-    try { return localStorage.getItem(invertKey) === '1'; } catch { return false; }
-  });
-  useEffect(() => {
-    try { setInvert(localStorage.getItem(invertKey) === '1'); } catch { /* noop */ }
-  }, [invertKey]);
-  const toggleInvert = () => {
-    setInvert((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(invertKey, next ? '1' : '0'); } catch { /* noop */ }
-      return next;
-    });
-  };
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -275,8 +260,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-sm">
           <CalendarDays className="w-4 h-4 text-primary" />
-          <span className="font-semibold">{monthLabel}</span>
-          <span className="text-muted-foreground text-sm font-mono">{weekStartStr} ~ {weekEndStr}</span>
+          <span className="font-semibold text-slate-800">{monthLabel}</span>
+          <span className="text-slate-700 text-sm font-mono">{weekStartStr} ~ {weekEndStr}</span>
           {!isThisWeek && (
             <button onClick={goToday}
               className="ml-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
@@ -302,21 +287,6 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               <Users className="w-3 h-3" /> 담당자 기준
             </button>
           </div>
-          {/* 색 반전 토글 — 상태 막대(박스) 배경/글씨 색을 반전(사용자별 저장). 카드 전체가
-              아니라 각 업무 막대(버튼)에만 filter: invert 를 적용한다. */}
-          <button
-            type="button"
-            onClick={toggleInvert}
-            aria-pressed={invert}
-            title={invert ? '색 반전 끄기' : '색 반전 켜기'}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors',
-              invert
-                ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80',
-            )}>
-            <Contrast className="w-3 h-3" /> 색 반전
-          </button>
           {/* 단축키 — 업무 관리 / 오늘 할일 페이지로 바로 이동 */}
           <div className="flex items-center gap-1 text-xs">
             <button
@@ -373,10 +343,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               return (
                 <div key={ds}
                   className={`px-1 py-2 text-center border-l border-border/60 ${isTd ? 'bg-primary/10' : ''}`}>
-                  <div className={`text-xs ${isTd ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+                  <div className={`text-xs ${isTd ? 'text-primary font-bold' : 'text-slate-700'}`}>
                     {KR_DAYS[d.getDay()]}
                   </div>
-                  <div className={`text-xs font-semibold ${isTd ? 'text-primary' : ''}`}>
+                  <div className={`text-xs font-semibold ${isTd ? 'text-primary' : 'text-slate-800'}`}>
                     {d.getMonth() + 1}/{d.getDate()}
                   </div>
                 </div>
@@ -470,7 +440,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                         onClick={() => openWorkItem(item.id)}
                         title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                         className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
-                        ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''} ${invert ? 'invert' : ''}`}>
+                        ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-xs font-semibold truncate">{team || sv.label}</span>
                         {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
@@ -520,7 +490,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               onClick={() => openWorkItem(item.id)}
                               title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                               className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
-                              ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''} ${invert ? 'invert' : ''}`}>
+                              ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
                               <span className="text-xs font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                               {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
