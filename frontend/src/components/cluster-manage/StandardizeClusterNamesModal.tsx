@@ -4,18 +4,13 @@ import type { Cluster } from '@/types';
 import { clustersApi } from '@/services/api';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-
-const OPS = ['prod', 'dev', 'test', 'stage'];
+import { CLUSTER_NAME_OPS as OPS, parseClusterName } from '@/lib/clusterName';
 
 interface Parts { biz: string; ops: string; attr: string; }
 
 /** 현재 이름을 [업무명]-[운영타입]-[속성] 으로 분해(추정). 표준 형식이 아니면 전체를 업무명에. */
 function parseName(name: string): Parts {
-  const parts = name.split('-');
-  if (parts.length >= 2 && OPS.includes(parts[1].toLowerCase())) {
-    return { biz: parts[0], ops: parts[1].toLowerCase(), attr: parts.slice(2).join('-') };
-  }
-  return { biz: name, ops: '', attr: '' };
+  return parseClusterName(name) ?? { biz: name, ops: '', attr: '' };
 }
 function compose(p: Parts): string {
   return [p.biz, p.ops, p.attr].map((s) => s.trim()).filter(Boolean).join('-');

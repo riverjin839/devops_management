@@ -632,7 +632,7 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 - **파일**: `frontend/src/pages/InfraTopologyPage.tsx` (+ `components/infra/NodeVerifyModal.tsx`)
 - **목적 / UX**: 클러스터의 물리 노드를 스위치→랙→노드 계층으로 시각화해 물리 배치를 파악하고, 노드 CRUD·K8s 자동 동기화·신규노드 SSH/API 검증·Pod/Service→Switch 경로 추적(Trace)까지 한 화면에서 처리한다.
 - **UI 구성**:
-  - **⚠ `ClusterSidebar` 미사용** — 클러스터 선택을 화면 상단의 가로 버튼 탭(`clusters.map`)으로 구현(CLAUDE.md의 iconOnly 표준 사이드바 패턴과 다른 레거시 방식).
+  - `ClusterSidebar`는 `iconOnly` 단일선택(`allowAll` 없음) — 기존 상단 가로 버튼 탭에서 CLAUDE.md 표준 패턴으로 마이그레이션.
   - role별(Master/Worker/Storage/Infra) 요약 통계 카드, "K8s 동기화" / "노드 추가" 버튼.
   - Pod/Service → Switch Trace 패널(namespace/target type/name 입력 → hop 리스트 + 병목 의심 홉 하이라이트).
   - 스위치 헤더 → 랙 카드 → `NodeCard`(role 배지, CPU/RAM/Disk, 스위치명, OS, auto-synced 배지) 계층 렌더링.

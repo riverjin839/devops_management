@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, Status } from '@/types';
-import { useSidebarStore } from '@/stores/sidebarStore';
+import { useSidebarStore, type ClusterIconRailSize } from '@/stores/sidebarStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { ResizeHandle } from './ResizeHandle';
 
@@ -39,7 +39,17 @@ interface ClusterSidebarProps {
   iconOnly?: boolean;
 }
 
-const ICON_RAIL_WIDTH = 56;
+// 아이콘 레일 크기 프리셋 — 버튼/이미지/아이콘/도트 픽셀값. 기존 sm(40px 버튼 안에 24px
+// 이미지)은 여백이 커 보인다는 피드백에 따라 md 를 기본값으로 올렸다(버튼을 키우고 그
+// 안의 이미지/아이콘 비율도 같이 키워 여백을 줄임). 사용자가 레일 상단 크기 토글로
+// sm/md/lg 를 바꿀 수 있다 (useSidebarStore 에 영속).
+const ICON_RAIL_SIZE_PRESETS: Record<ClusterIconRailSize, {
+  rail: number; btn: number; image: number; icon: number; dot: number; emojiFont: number;
+}> = {
+  sm: { rail: 56, btn: 40, image: 28, icon: 20, dot: 6, emojiFont: 18 },
+  md: { rail: 64, btn: 48, image: 34, icon: 24, dot: 7, emojiFont: 21 },
+  lg: { rail: 72, btn: 56, image: 40, icon: 28, dot: 8, emojiFont: 24 },
+};
 
 const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> = {
   healthy: CheckCircle,
@@ -128,16 +138,18 @@ interface IconRailButtonProps {
   /** 우측 상단 작은 상태 도트 색상 (Tailwind class). 미지정 시 도트 미표시. */
   dotClass?: string;
   /** 표시할 lucide 컴포넌트. 다른 표시 옵션이 없을 때 사용. */
-  Icon?: React.ComponentType<{ className?: string }>;
+  Icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   /** 표시할 텍스트(주로 emoji 1자). 우선순위: imageSrc > emojiText > Icon. */
   emojiText?: string;
   /** 표시할 이미지 URL / data URL — 사용자가 업로드한 커스텀 아이콘. */
   imageSrc?: string;
   active?: boolean;
   onClick: () => void;
+  /** 픽셀 단위 크기 프리셋 (버튼/이미지/아이콘/도트). */
+  size: typeof ICON_RAIL_SIZE_PRESETS[ClusterIconRailSize];
 }
 
-function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, onClick }: IconRailButtonProps) {
+function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, onClick, size }: IconRailButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   // viewport 좌표 — 부모 overflow 를 회피하기 위해 portal 로 렌더한다.
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
@@ -161,7 +173,8 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}
         onBlur={hideTooltip}
-        className={`relative flex items-center justify-center w-10 h-10 rounded-md transition-colors ${
+        style={{ width: size.btn, height: size.btn }}
+        className={`relative flex items-center justify-center rounded-md transition-colors ${
           active
             ? 'bg-primary/15 text-primary'
             : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
@@ -171,16 +184,17 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
           <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
         )}
         {imageSrc
-          ? <img src={imageSrc} alt="" className="w-6 h-6 rounded object-cover" />
+          ? <img src={imageSrc} alt="" style={{ width: size.image, height: size.image }} className="rounded object-cover" />
           : emojiText
-            ? <span className="text-lg leading-none select-none" aria-hidden>{emojiText}</span>
+            ? <span style={{ fontSize: size.emojiFont }} className="leading-none select-none" aria-hidden>{emojiText}</span>
             : Icon
-              ? <Icon className="w-5 h-5" />
-              : <Server className="w-5 h-5" />}
+              ? <Icon style={{ width: size.icon, height: size.icon }} />
+              : <Server style={{ width: size.icon, height: size.icon }} />}
         {dotClass && (
           <span
             aria-hidden
-            className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ring-1 ring-card ${dotClass}`}
+            style={{ width: size.dot, height: size.dot }}
+            className={`absolute top-1 right-1 rounded-full ring-1 ring-card ${dotClass}`}
           />
         )}
       </button>
@@ -214,6 +228,10 @@ function ClusterSidebarIconRail({
     ? (selectedSet?.size ?? 0) === 0
     : selectedId === null;
 
+  const railSize = useSidebarStore((s) => s.clusterIconRailSize);
+  const setRailSize = useSidebarStore((s) => s.setClusterIconRailSize);
+  const size = ICON_RAIL_SIZE_PRESETS[railSize];
+
   // 사이드바에서는 아이콘 변경을 허용하지 않는다. 변경은 시스템 등록된 클러스터 관리 화면
   // (/cluster-manage) 의 테이블 첫 컬럼에서만 가능하도록 권한을 한정.
 
@@ -238,9 +256,28 @@ function ClusterSidebarIconRail({
 
   return (
     <aside
-      style={{ width: ICON_RAIL_WIDTH }}
+      style={{ width: size.rail }}
       className="flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
     >
+      {/* 아이콘 크기 조절 — S/M/L 프리셋, 사용자별 localStorage 에 저장 */}
+      <div className="flex items-center justify-center gap-0.5 mb-1.5 px-1">
+        {(['sm', 'md', 'lg'] as ClusterIconRailSize[]).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setRailSize(s)}
+            title={`아이콘 크기: ${s === 'sm' ? '작게' : s === 'md' ? '보통' : '크게'}`}
+            aria-pressed={railSize === s}
+            className={`px-1 py-0.5 text-[9px] font-bold uppercase rounded transition-colors ${
+              railSize === s
+                ? 'bg-primary/15 text-primary'
+                : 'text-muted-foreground/60 hover:bg-secondary hover:text-foreground'
+            }`}
+          >
+            {s === 'sm' ? 'S' : s === 'md' ? 'M' : 'L'}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-col items-center gap-1">
         {allowAll && (
           <IconRailButton
@@ -250,6 +287,7 @@ function ClusterSidebarIconRail({
             Icon={LayoutGrid}
             active={isAllActive && (highlightActive ?? true)}
             onClick={handleAllClick}
+            size={size}
           />
         )}
         {clusters.length === 0 ? (
@@ -268,7 +306,7 @@ function ClusterSidebarIconRail({
             // 사용자 지정 아이콘이 있으면 그걸 사용, 없으면 status 기반 fallback.
             const resolved = resolveClusterIcon(c.icon);
             const FallbackIcon = STATUS_ICON[c.status] ?? Server;
-            const lucideIcon: React.ComponentType<{ className?: string }> =
+            const lucideIcon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> =
               resolved?.kind === 'lucide' ? resolved.Component : FallbackIcon;
             const emojiText = resolved?.kind === 'text' ? resolved.value : undefined;
             const imageSrc = resolved?.kind === 'image' ? resolved.value : undefined;
@@ -283,6 +321,7 @@ function ClusterSidebarIconRail({
                 dotClass={STATUS_DOT[c.status] ?? 'bg-slate-400'}
                 active={isActive}
                 onClick={() => handleClusterClick(c.id)}
+                size={size}
               />
             );
           })
