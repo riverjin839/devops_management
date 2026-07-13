@@ -1033,6 +1033,7 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 - **Backend**: `POST /api/v1/jira/import/excel` — `backend/app/routers/jira.py` (openpyxl 등으로 파싱 후 `assigneeRaw`에서 이름 추출, PEP 담당자 마스터와 매칭해 `assigneeMatched`/`assigneeName` 계산). 응답 타입: `JiraExcelImportResult`(`total`, `matched`, `rows: JiraExcelRow[]`).
 - **핵심 기능**:
   - .xlsx/.xlsm/.xls 업로드 → 서버 파싱 → 테이블 렌더링(저장 없음)
+  - 헤더 행이 1행이 아니어도(제목행/빈 행이 위에 끼어 있어도) 최대 5행까지 순서대로 `Key`/`Summary` 헤더 후보를 탐색해 자동 인식(`_EXCEL_HEADER_SCAN_ROWS`) — 못 찾으면 스캔한 각 행의 헤더 후보를 에러 메시지에 그대로 노출
   - 담당자 이름 자동 추출 + PEP 등록 담당자와 매칭(매칭 성공/실패 아이콘 구분, 실패 시 원본 텍스트 tooltip)
   - Jira Key에 원본 이슈 링크(`jiraUrl`) 제공(있는 경우)
   - 총 건수 대비 매칭/미매칭 건수 요약 배지

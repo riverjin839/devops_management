@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import itertools
 import logging
 import re
 from datetime import datetime
@@ -479,6 +480,7 @@ async def import_issues(
 
 # ── Jira 에서 추출한 Excel(.xlsx/.xls) 가져오기 (미리보기 전용, 저장 없음) ─────────
 _EXCEL_MAX_ROWS = 2000  # 과도한 업로드로부터의 안전장치
+_EXCEL_HEADER_SCAN_ROWS = 5  # 헤더가 1행이 아닐 수 있어(제목행 등) 최대 이 행수까지 탐색
 
 
 @router.post("/import/excel", response_model=JiraExcelImportResult)
@@ -513,26 +515,48 @@ async def import_excel(
     except Exception as exc:  # noqa: BLE001
         return JiraExcelImportResult(status="error", detail=f"엑셀 파일을 읽을 수 없습니다: {str(exc)[:150]}")
 
-    try:
-        header_row = next(rows_iter)
-    except StopIteration:
+    # 제목행/빈 행이 앞에 끼어 있어 헤더가 1행이 아닐 수 있으므로 최대 _EXCEL_HEADER_SCAN_ROWS
+    # 행까지 순서대로 후보를 살펴보고, key/summary 를 모두 찾은 첫 행을 헤더로 채택한다.
+    scanned_rows: list[tuple] = []
+    for _ in range(_EXCEL_HEADER_SCAN_ROWS):
+        try:
+            scanned_rows.append(next(rows_iter))
+        except StopIteration:
+            break
+
+    if not scanned_rows:
         return JiraExcelImportResult(status="error", detail="빈 파일입니다.")
 
-    normalized = [_norm_excel_header(h) for h in header_row]
+    header_row: Optional[tuple] = None
+    header_row_idx = -1
     col_idx: dict[str, int] = {}
-    for field, aliases in _EXCEL_HEADER_ALIASES.items():
-        for i, h in enumerate(normalized):
-            if h in aliases:
-                col_idx[field] = i
-                break
+    for ridx, candidate in enumerate(scanned_rows):
+        normalized = [_norm_excel_header(h) for h in candidate]
+        candidate_idx: dict[str, int] = {}
+        for field, aliases in _EXCEL_HEADER_ALIASES.items():
+            for i, h in enumerate(normalized):
+                if h in aliases:
+                    candidate_idx[field] = i
+                    break
+        if "key" in candidate_idx and "summary" in candidate_idx:
+            header_row, header_row_idx, col_idx = candidate, ridx, candidate_idx
+            break
 
-    missing = [f for f in ("key", "summary") if f not in col_idx]
-    if missing:
-        headers = ", ".join(str(h) for h in header_row if h)
+    if header_row is None:
+        scanned_desc = "; ".join(
+            f"{i + 1}행: {', '.join(str(h) for h in r if h) or '(빈 행)'}"
+            for i, r in enumerate(scanned_rows)
+        )
         return JiraExcelImportResult(
             status="error",
-            detail=f"필수 컬럼을 찾을 수 없습니다: {', '.join(missing)} (헤더: {headers})",
+            detail=(
+                f"필수 컬럼(key, summary)을 찾을 수 없습니다 "
+                f"(최대 {len(scanned_rows)}행까지 확인). {scanned_desc}"
+            ),
         )
+
+    # 헤더 행 다음부터가 데이터 — 이미 읽어들인 나머지 스캔 행 + 아직 읽지 않은 rows_iter 를 이어붙인다.
+    rows_iter = itertools.chain(scanned_rows[header_row_idx + 1:], rows_iter)
 
     cfg = _get_config(db)
     base_url = (cfg.get("base_url") or "").rstrip("/")
