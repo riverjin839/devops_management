@@ -34,20 +34,20 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 
 ### 홈 (`/`)
 
-- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `InfraHealthBar.tsx`, `IncidentMiniPanel.tsx`, `DomainQuickAccess.tsx`, `DailyCheckReviewPanel.tsx`, `components/layout/WorkAlarmBell.tsx`)
+- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal}.tsx`, `components/dashboard/DomainQuickAccess.tsx`, `components/layout/WorkAlarmBell.tsx`)
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 좌측 상단 홈 버튼으로 "업무 현황"(work) ↔ "플랫폼 현황"(platform) 두 모드를 토글하며, 상단 고정 스트립에는 내 할일/미해결 이슈/위험 클러스터/다음 일정 KPI 필과 업무 알람 종이 항상 노출된다.
 - **UI 구성**:
   - 공통 상단 스트립: 사용자명 + 날짜, KPI 필 4종(`내 할일`→`/todo-today`, `미해결 이슈`→`/items`, `위험 클러스터`→`/cluster-overview`, `다음 일정`→`/items`), `WorkAlarmBell`.
   - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `member`).
-  - **플랫폼(platform) 모드**: `InfraHealthBar`(클러스터 헬스 바) → `DailyCheckReviewPanel`(일일점검 검토) → `IncidentMiniPanel`(장애 미니 패널) → `DomainQuickAccess`(도메인별 바로가기) 세로 스택.
+  - **플랫폼(platform) 모드**: `PlatformStatusMatrix` — 행(점검 항목) × 열(등록된 클러스터) 매트릭스. 첫 열은 sticky(항목명 + 위/아래 이동 버튼 + hover 시 수정/삭제 아이콘, 시스템 항목은 삭제 버튼 숨김), 클러스터 열 헤더는 이름 + cron 배지(클릭 시 팝오버로 `Cluster.check_cron_expr` 편집), 셀은 상태 dot + 값/라벨(클릭 시 `CheckMatrixCellDetailModal` — 기간별 트렌드 차트 + 변경 이력 + manual 항목이면 값 입력 폼 + core_bundle 이외 항목이면 항목×클러스터 cron 편집). 카드 헤더에 "항목 추가"(`CheckMatrixItemFormModal`) + 설정 톱니바퀴(`CheckMatrixSettingsModal`, 이력 보관 일수) 버튼. 하단에 `DomainQuickAccess`(도메인별 바로가기) 유지.
   - ClusterSidebar 미사용(홈은 특정 클러스터에 종속되지 않음).
-- **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 내부 컴포넌트가 각각 `useDailyCheckSummary()`(`hooks/useDailyCheck.ts`) 사용. 로컬 state: `weeklyTab`.
-- **Backend**: `GET /api/v1/clusters`(`clusters.py`) · `GET /api/v1/work-items`(`work_items.py`) · `GET /api/v1/daily-check/summary`(`daily_check.py`, `ClusterSummary` 응답, `InfraHealthBar`/`DailyCheckReviewPanel`/`IncidentMiniPanel` 공용, 5분 `staleTime`/`refetchInterval`).
+- **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 플랫폼 모드는 `hooks/useCheckMatrix.ts`(`useCheckMatrixGrid`/`useCheckMatrixItems`/`useReorderCheckMatrixItems`/`useDeleteCheckMatrixItem`/`usePutClusterCron`/`usePutSchedule`/`usePostManualEntry`/`useCheckMatrixCellHistory`/`useCheckMatrixSettings`). 로컬 state: `weeklyTab`.
+- **Backend**: `GET /api/v1/clusters`(`clusters.py`) · `GET /api/v1/work-items`(`work_items.py`) · 플랫폼 모드는 `check_matrix.py` 라우터(prefix `/check-matrix`): `GET /items`, `POST/PUT/DELETE /items(/{id})`, `POST /items/reorder`, `GET /grid`, `GET /cell/{item_id}/{cluster_id}/history`, `POST /cell/{item_id}/{cluster_id}/manual-entry`, `PUT /schedule/{item_id}/{cluster_id}`, `PUT /clusters/{cluster_id}/cron`, `GET/PUT /settings`. 실행/집계는 `services/check_matrix_service.py`(`build_grid`/`get_cell_history`/`dispatch_due`/`purge_expired_logs`/`seed_default_items`). 구 `daily-check/summary` 기반 `InfraHealthBar`/`DailyCheckReviewPanel`/`IncidentMiniPanel`(2026-07 이전) 및 `CheckSchedule`(아침/점심/저녁 온오프) 스케줄 체계는 **완전히 대체·제거**되었다 — 상세는 `check_matrix.py` 모델 주석 및 CHANGELOG 참고.
 - **핵심 기능**:
   - work/platform 2-모드 전환(세션 중에는 localStorage 유지, 단 **로그인할 때마다 항상 `'work'`로 리셋** — `authStore.setSession()`에서 강제).
-  - 내 담당 업무·미해결 이슈·위험 클러스터·다음 일정 실시간 요약.
-  - 담당자별 진행 현황을 주간/월간/담당자 3가지 뷰로 전환.
-  - 업무 모드 스케줄 배경색(흰색/크림) 커스터마이즈 반영(`SettingsPage`의 화면 UI 설정 탭에서 변경).
+  - 담당자별 진행 현황을 주간/월간/담당자 3가지 뷰로 전환, 업무 모드 스케줄 배경색(흰색/크림) 커스터마이즈(`SettingsPage`의 화면 UI 설정 탭에서 변경).
+  - 플랫폼 모드: 클러스터 상태에 영향을 주는 핵심 점검(API 서버 응답시간, `is_system=true`, 삭제 불가)은 클러스터 열의 cron(`Cluster.check_cron_expr`)으로, 그 외 자동 점검(deep_check/addon 소스)과 수동 항목은 항목×클러스터별 cron(`CheckMatrixSchedule`, 5분 미만 간격 거부)으로 독립 스케줄. `Cluster.status`는 `DailyChecker.run_daily_check()`(무변경)가 여전히 유일한 authoritative 소스이며 `check-matrix-dispatch` Celery Beat(매분)가 due 한 클러스터에 대해 그대로 호출한다.
+  - 셀 이력은 `CheckMatrixResultLog`에 append-only 저장되고, 설정한 보관 일수를 초과하면 `check-matrix-log-purge` Beat(매일 03:00 KST)가 청크 삭제로 정리한다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -333,7 +333,10 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
   - "Test now"(`POST /definitions/{id}/test`) — 저장 없이 즉시 1회 실행해 미리보기(`DeepCheckService.run_definition_once(persist=False)`).
   - `check_type` 이 `REGISTRY`(add-deep-checker 스킬로 등록되는 체커: cert_expiry, OS 파라미터, 스토리지 health, 네트워크 도달성 등)에 없으면 생성/수정 모두 거부.
   - `sort_order` 로 UI 표시 순서 제어.
-  - Celery Beat 09:15/13:15/18:15 기본 스케줄과 별도로 `schedule_cron` 지정 시 단독 실행 가능.
+  - **자동 실행 스케줄은 이 화면이 아니라 홈 "플랫폼 현황"(`/`, platform 모드) 매트릭스에서 관리한다** —
+    `CheckMatrixItem(source_type=deep_check, source_ref=check_type)` 이 여기서 정의한 `check_type` 을
+    가리키고, 실제 cron(항목×클러스터)은 매트릭스 셀 상세에서 설정한다(`CheckMatrixSchedule`, 5분
+    미만 간격 거부). `schedule_cron` 필드는 미배선 상태로 남아있다(레거시, 무시됨).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

@@ -97,7 +97,8 @@ k8s_daily_monitor/
 │   │   ├── celery_app.py        # Celery app + Beat schedule (3x/day)
 │   │   ├── models/              # SQLAlchemy ORM models
 │   │   │   ├── cluster.py       # Cluster, StatusEnum
-│   │   │   ├── daily_check.py   # DailyCheckLog, CheckSchedule, CheckScheduleType
+│   │   │   ├── daily_check.py   # DailyCheckLog, CheckScheduleType
+│   │   │   ├── check_matrix.py  # CheckMatrixItem/Schedule/Result/ResultLog (플랫폼 현황 매트릭스)
 │   │   │   ├── addon.py         # Addon (per-cluster add-ons e.g. Nexus, Keycloak)
 │   │   │   ├── check_log.py     # CheckLog
 │   │   │   ├── metric_card.py   # MetricCard (PromQL dashboard builder)

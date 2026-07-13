@@ -83,6 +83,11 @@ class Cluster(Base):
     prometheus_url = Column(String(512), nullable=True)        # 선택 — 클러스터별 Prometheus URL 오버라이드
     prometheus_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
 
+    # 점검 매트릭스(Check Matrix) — core_bundle 행(DailyChecker 원자 실행)의 클러스터별 cron.
+    # NULL 이면 미실행. check_schedules(구 아침/점심/저녁) 를 완전 대체.
+    check_cron_expr = Column(String(100), nullable=True)
+    check_last_run_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

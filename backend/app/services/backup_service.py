@@ -53,6 +53,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "os_param_changes",
     "resource_count_snapshots",
     "metric_check_states",
+    "deep_check_results",
+    "check_matrix_result_logs",
 })
 
 # 민감 정보 포함 — 옵션으로 마스킹
