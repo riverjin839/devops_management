@@ -10,6 +10,22 @@
 
 1.3.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **`ClusterSidebar` iconOnly 레일 — S/M/L 크기 토글을 드래그 리사이즈로 교체**: 1.3.0 의
+  작게/보통/크게 3단계 토글 대신, 레일 우측 가장자리를 드래그해 폭을 자유롭게(48~120px)
+  조절하는 방식으로 변경 — 아이콘이 레일 폭을 거의 그대로 채우도록(레일↔아이콘 여백을
+  고정 6px 로 최소화) 만들어, 레일을 늘리면 아이콘도 그만큼 커 보이게 했다. 더블클릭으로
+  기본값(64px) 복귀, 사용자별 localStorage 영속.
+  - Frontend: `ClusterSidebar.tsx` `iconSizeFor()`(레일 폭→버튼/이미지/아이콘/도트 비율
+    계산) + 기존 `ResizeHandle` 재사용. `stores/sidebarStore.ts` `clusterIconRailWidth`
+    (기존 `clusterIconRailSize` 프리셋 대체).
+
+### Removed
+- **주간 타임라인 "색 반전" 토글 제거**: 상태 막대(박스) 배경/글씨 색을 반전하던
+  기능을 제거 — 대신 주 이동 툴바(월/날짜범위)와 요일 헤더 글씨색을 테마와 무관하게
+  고정 검정계열(`text-slate-700/800`)로 바꿔 반전 없이도 가독성을 확보.
+  - Frontend: `WeeklyStatusTimeline.tsx`.
+
 ## [1.3.0] - 2026-07-13
 
 ### Added
