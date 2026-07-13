@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FileSpreadsheet, Upload, Loader2, ExternalLink, CheckCircle2, AlertTriangle, X, ClipboardPaste,
+  Save, ArrowRight,
 } from 'lucide-react';
 import { jiraApi } from '@/services/api';
-import type { JiraExcelImportResult, JiraExcelRow } from '@/types';
+import type { JiraExcelImportResult, JiraExcelRow, JiraImportResult } from '@/types';
 import { formatApiError } from '@/lib/utils';
 import { ViewModeBar } from '@/components/common';
 
@@ -11,8 +13,9 @@ type ImportMode = 'file' | 'paste';
 
 /**
  * Jira 에서 추출한 이슈 목록 Excel(.xlsx, .xls) 을 업로드하거나, 엑셀/Jira 표를 그대로
- * 복사해 붙여넣어 테이블로 보여준다. 저장하지 않는 미리보기 전용 기능 — 담당자(Assignee,
- * "이름 회사")에서 이름을 추출해 등록된 PEP 담당자와 매칭한 결과를 함께 표시한다.
+ * 복사해 붙여넣어 테이블로 미리보고, "저장"을 누르면 업무 관리 게시판(work_items)에
+ * 매핑되어 저장된다. 담당자(Assignee, "이름 회사")에서 이름을 추출해 등록된 PEP 담당자와
+ * 매칭한 결과를 함께 표시한다.
  */
 export function JiraExcelImportPage() {
   const [mode, setMode] = useState<ImportMode>('file');
@@ -22,10 +25,17 @@ export function JiraExcelImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<JiraExcelImportResult | null>(null);
 
+  // ── 업무 관리 게시판에 저장 ──
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveResult, setSaveResult] = useState<JiraImportResult | null>(null);
+
   const handleFile = async (file: File) => {
     setFileName(file.name);
     setError(null);
     setResult(null);
+    setSaveError(null);
+    setSaveResult(null);
     setLoading(true);
     try {
       const res = await jiraApi.importExcel(file);
@@ -45,6 +55,8 @@ export function JiraExcelImportPage() {
     if (!pasteText.trim() || loading) return;
     setError(null);
     setResult(null);
+    setSaveError(null);
+    setSaveResult(null);
     setLoading(true);
     try {
       const res = await jiraApi.importPaste(pasteText);
@@ -60,11 +72,31 @@ export function JiraExcelImportPage() {
     }
   };
 
+  const handleSave = async () => {
+    if (!result || result.rows.length === 0 || saving) return;
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const res = await jiraApi.importSaveToBoard(result.rows);
+      if (res.data.status === 'error') {
+        setSaveError(res.data.detail || '저장에 실패했습니다.');
+      } else {
+        setSaveResult(res.data);
+      }
+    } catch (e) {
+      setSaveError(formatApiError(e, '업무 관리 게시판에 저장하는 중 오류가 발생했습니다.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const reset = () => {
     setFileName(null);
     setPasteText('');
     setError(null);
     setResult(null);
+    setSaveError(null);
+    setSaveResult(null);
   };
 
   return (
@@ -76,19 +108,63 @@ export function JiraExcelImportPage() {
             <div>
               <h1 className="text-xl font-bold leading-tight">Jira Excel 가져오기</h1>
               <p className="text-sm text-muted-foreground">
-                Jira 에서 내려받은 이슈 목록(.xlsx, .xls)을 업로드하거나 표를 복사해 붙여넣으면 테이블로 보여줍니다. 저장되지 않는 미리보기입니다.
+                Jira 에서 내려받은 이슈 목록(.xlsx, .xls)을 업로드하거나 표를 복사해 붙여넣어 미리보고, "저장"을 누르면 업무 관리 게시판에 매핑되어 저장됩니다.
               </p>
             </div>
           </div>
-          <ViewModeBar
-            modes={[
-              { id: 'file', label: '파일 업로드', icon: <Upload className="w-3.5 h-3.5" /> },
-              { id: 'paste', label: '붙여넣기', icon: <ClipboardPaste className="w-3.5 h-3.5" /> },
-            ]}
-            active={mode}
-            onChange={(id) => { setMode(id as ImportMode); reset(); }}
-          />
+          <div className="flex items-center gap-3 flex-wrap">
+            <ViewModeBar
+              modes={[
+                { id: 'file', label: '파일 업로드', icon: <Upload className="w-3.5 h-3.5" /> },
+                { id: 'paste', label: '붙여넣기', icon: <ClipboardPaste className="w-3.5 h-3.5" /> },
+              ]}
+              active={mode}
+              onChange={(id) => { setMode(id as ImportMode); reset(); }}
+            />
+            {/* 업로드/붙여넣기가 정상 확인되면 상단에 저장 버튼 노출 — PEP 업무 관리
+                게시판(work_items)에 매핑되어 저장된다. */}
+            {result && result.status === 'ok' && result.rows.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                title="업무 관리 게시판에 저장"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                업무 관리에 저장
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* 저장 결과 배너 */}
+        {saveResult && (
+          <div className="mb-4 px-4 py-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-3 flex-wrap">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>
+              업무 관리 게시판에 저장했습니다 — 생성 {saveResult.imported}건 · 갱신 {saveResult.updated}건
+              {saveResult.skipped > 0 && ` · 스킵 ${saveResult.skipped}건`}
+            </span>
+            {saveResult.errors.length > 0 && (
+              <span className="text-amber-600 dark:text-amber-400">
+                (오류 {saveResult.errors.length}건: {saveResult.errors.slice(0, 3).join(', ')}{saveResult.errors.length > 3 ? ' …' : ''})
+              </span>
+            )}
+            <Link
+              to="/tasks-mgmt"
+              className="ml-auto inline-flex items-center gap-1 font-semibold text-primary hover:underline flex-shrink-0"
+            >
+              업무 관리 게시판에서 보기 <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
+        {saveError && (
+          <div className="mb-4 px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10 text-sm text-destructive flex items-start gap-1.5">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            {saveError}
+          </div>
+        )}
 
         {/* 파일 업로드 / 붙여넣기 */}
         <div className="bg-card border border-border rounded-xl p-4 mb-4">

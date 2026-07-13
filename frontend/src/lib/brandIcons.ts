@@ -13,14 +13,16 @@ import {
   siApacheairflow, siApachespark, siJupyter,
 } from 'simple-icons';
 
-/** simple-icons 항목(브랜드 로고 SVG path) → currentColor 로 채워지는 아이콘 컴포넌트.
+/** simple-icons 항목(브랜드 로고 SVG path) → 그 브랜드의 공식 단색(si.hex)으로 채워지는
+ *  아이콘 컴포넌트. currentColor 를 쓰지 않으므로 실제 로고 색으로 항상 표시된다(테마/선택
+ *  상태에 따른 강조는 주변 배경·링으로 표현 — ClusterIconPicker 참고).
  *  (이 파일은 .ts 라 JSX 대신 createElement 사용 — useServiceCatalog 와 동일 패턴.) */
-interface SI { path: string; title: string; }
+interface SI { path: string; title: string; hex: string; }
 function brand(si: SI): ComponentType<{ className?: string }> {
   const Icon: ComponentType<{ className?: string }> = ({ className }) =>
     createElement(
       'svg',
-      { viewBox: '0 0 24 24', className, fill: 'currentColor', role: 'img', 'aria-label': si.title },
+      { viewBox: '0 0 24 24', className, fill: `#${si.hex}`, role: 'img', 'aria-label': si.title },
       createElement('path', { d: si.path }),
     );
   Icon.displayName = `Brand(${si.title})`;

@@ -99,11 +99,11 @@ export function HomePage() {
       })
     : '없음';
 
-  // 기본 탭 = '담당자' — 인당 표시 개수 제한(기본 5개, 옵션 3/5/8/10) + "더보기" 가 실제로
-  // 적용되는 뷰는 MemberTodayTodos(담당자 탭) 뿐이다. '주간' 탭(WeeklyStatusTimeline)은
-  // 간트 스윔레인 형태라 이 제한이 적용되지 않아, 그걸 기본으로 두면 "5개 이상이어도 다
-  // 나온다"는 문제로 오인된다.
-  const [weeklyTab, setWeeklyTab] = useState<'week' | 'month' | 'member'>('member');
+  // 기본 탭 = '주간' — WeeklyStatusTimeline(담당자 기준 스윔레인 뷰)도 이제 담당자별
+  // 표시 개수 제한(기본 5개) + "더보기/접기", 항상 최상단 "전체" 요약 행, 화면당 표시
+  // 인원 수 제한(기본 20명, 옵션)을 모두 지원해 MemberTodayTodos(담당자 탭)와 동등한
+  // 밀도로 보이므로 기본 탭으로 되돌린다.
+  const [weeklyTab, setWeeklyTab] = useState<'week' | 'month' | 'member'>('week');
 
   const now = new Date();
   const dateStr = fmtKoreanDate(now);

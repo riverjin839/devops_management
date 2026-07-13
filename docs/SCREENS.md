@@ -38,7 +38,7 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 좌측 상단 홈 버튼으로 "업무 현황"(work) ↔ "플랫폼 현황"(platform) 두 모드를 토글하며, 상단 고정 스트립에는 내 할일/미해결 이슈/위험 클러스터/다음 일정 KPI 필과 업무 알람 종이 항상 노출된다.
 - **UI 구성**:
   - 공통 상단 스트립: 사용자명 + 날짜, KPI 필 4종(`내 할일`→`/todo-today`, `미해결 이슈`→`/items`, `위험 클러스터`→`/cluster-overview`, `다음 일정`→`/items`), `WorkAlarmBell`.
-  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `member`).
+  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "전체" 요약 행(본인 행보다 위), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원.
   - **플랫폼(platform) 모드**: `InfraHealthBar`(클러스터 헬스 바) → `DailyCheckReviewPanel`(일일점검 검토) → `IncidentMiniPanel`(장애 미니 패널) → `DomainQuickAccess`(도메인별 바로가기) 세로 스택.
   - ClusterSidebar 미사용(홈은 특정 클러스터에 종속되지 않음).
 - **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 내부 컴포넌트가 각각 `useDailyCheckSummary()`(`hooks/useDailyCheck.ts`) 사용. 로컬 state: `weeklyTab`.
@@ -1025,18 +1025,22 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 ### Jira Excel 가져오기 (`/jira-import`)
 
 - **파일**: `frontend/src/pages/JiraExcelImportPage.tsx`
-- **목적 / UX**: Jira에서 내보낸 이슈 목록 Excel(.xlsx/.xls)을 업로드하거나, 표를 그대로 복사해 붙여넣어 테이블로 미리보고, 담당자(Assignee, "이름 회사" 형식)를 PEP에 등록된 담당자와 자동 매칭해 확인하는 화면. **저장하지 않는 미리보기 전용** 기능 — 실제 work item 생성은 하지 않는다(그건 `WorkItemBoardPage`의 `JiraImportModal`/Jira API 연동 쪽 몫).
+- **목적 / UX**: Jira에서 내보낸 이슈 목록 Excel(.xlsx/.xls)을 업로드하거나, 표를 그대로 복사해 붙여넣어 테이블로 미리보고, 담당자(Assignee, "이름 회사" 형식)를 PEP에 등록된 담당자와 자동 매칭해 확인한 뒤 **"업무 관리에 저장"** 버튼으로 PEP 업무 관리 게시판(work_items)에 실제로 매핑 저장하는 화면. 저장 전까지는 미리보기(서버에 남지 않음).
 - **UI 구성**:
-  - 헤더 우측 `ViewModeBar`로 "파일 업로드" ↔ "붙여넣기" 모드 전환.
+  - 헤더 우측 `ViewModeBar`로 "파일 업로드" ↔ "붙여넣기" 모드 전환. 미리보기가 성공(`status: 'ok'`, 1건 이상)하면 그 옆에 **"업무 관리에 저장"** 버튼이 나타난다(`require_operator` — viewer 역할은 클릭 시 403 에러 배너로 표시됨).
+  - 저장 성공/실패 배너: 저장 직후 헤더 아래에 생성/갱신/스킵 건수(+오류 있으면 앞 3개 미리보기) 배너와 "업무 관리 게시판에서 보기"(`/tasks-mgmt`) 링크가 뜬다.
   - 파일 업로드 모드: 파일 선택 버튼(.xlsx/.xlsm/.xls), 로딩 스피너, 파일명, 결과 요약 배지(총 건수/담당자 매칭/미매칭), 초기화 버튼, 에러 메시지.
   - 붙여넣기 모드: 사용법 안내(Ctrl+C/Ctrl+V/Ctrl+Enter) + `<textarea>`(TSV 붙여넣기) + "가져오기" 버튼, 나머지 요약 배지/초기화/에러는 파일 모드와 공유(`ImportSummaryBadges`).
-  - 결과 테이블: Key(Jira 링크)/Summary/Issue Type/Status/Assignee(매칭 여부 아이콘)/Created/Resolved/Due Date/Environment/Description
-- **Frontend**: 전용 TanStack Query hook 없이 `jiraApi.importExcel(file)` / `jiraApi.importPaste(text)`를 로컬 `useState`(mode/loading/error/result)와 함께 직접 호출(파일은 FormData multipart, 붙여넣기는 JSON body, 둘 다 timeout 2분). 서버 상태 캐싱/재사용이 필요 없는 1회성 업로드-미리보기라 hook화하지 않은 것으로 보임.
-- **Backend**: `POST /api/v1/jira/import/excel`(파일), `POST /api/v1/jira/import/paste`(붙여넣은 TSV 텍스트, `JiraExcelPasteRequest{text}`) — 둘 다 `backend/app/routers/jira.py`의 공용 헬퍼 `_extract_jira_rows(tables, db)`로 수렴(표 목록에서 헤더를 찾아 `assigneeRaw`→이름 추출, PEP 담당자 마스터와 매칭해 `assigneeMatched`/`assigneeName` 계산). 응답 타입은 둘 다 동일한 `JiraExcelImportResult`(`total`, `matched`, `rows: JiraExcelRow[]`).
+  - 결과 테이블: Key(Jira 링크)/Summary/Issue Type/Status/Assignee(매칭 여부 아이콘)/Created(날짜만, 시간 제외)/Resolved/Due Date/Environment/Description
+- **Frontend**: 전용 TanStack Query hook 없이 `jiraApi.importExcel(file)` / `jiraApi.importPaste(text)` / `jiraApi.importSaveToBoard(rows)`를 로컬 `useState`(mode/loading/error/result/saving/saveError/saveResult)와 함께 직접 호출(파일은 FormData multipart, 붙여넣기·저장은 JSON body, 모두 timeout 2분). 저장은 파일을 다시 읽지 않고 이미 미리보기로 받아둔 `result.rows`(`JiraExcelRow[]`)를 그대로 되돌려 보낸다.
+- **Backend**: `POST /api/v1/jira/import/excel`(파일), `POST /api/v1/jira/import/paste`(붙여넣은 TSV 텍스트, `JiraExcelPasteRequest{text}`) — 둘 다 `backend/app/routers/jira.py`의 공용 헬퍼 `_extract_jira_rows(tables, db)`로 수렴(표 목록에서 헤더를 찾아 `assigneeRaw`→이름 추출, PEP 담당자 마스터와 매칭해 `assigneeMatched`/`assigneeName` 계산, `environment`/`description`은 `_strip_inline_html()`로 HTML 태그 제거). 응답 타입은 둘 다 `JiraExcelImportResult`(`total`, `matched`, `rows: JiraExcelRow[]`). **저장**은 `POST /api/v1/jira/import/excel/save`(`JiraExcelSaveRequest{rows}`, `require_operator`) — 라이브 JQL 가져오기(`POST /jira/import`)와 달리 `jira_issue_id`가 없으므로 **`jira_issue_key`로 dedup**해 기존 work_item을 갱신하거나 새로 생성(`type`은 `jira_service.map_issue_type()` 재사용, `kanban_status`는 상태명 텍스트 매칭 `_map_excel_status_to_kanban()`, `category="Jira"` 고정, `jira_watchers`에 저장한 사용자 추가). 응답은 라이브 가져오기와 같은 `JiraImportResult`(`imported`/`updated`/`skipped`/`errors`/`items`) 재사용.
 - **핵심 기능**:
-  - .xlsx/.xlsm/.xls 업로드 또는 표 복사·붙여넣기(TSV) → 서버 파싱 → 테이블 렌더링(저장 없음)
+  - .xlsx/.xlsm/.xls 업로드 또는 표 복사·붙여넣기(TSV) → 서버 파싱 → 테이블 미리보기
+  - **"업무 관리에 저장"** — 미리보기 행을 실제 work_items로 upsert(`jira_issue_key` dedup), 결과 배너 + 업무 관리 게시판 바로가기
   - 헤더 행이 1행이 아니어도(제목행/빈 행이 위에 끼어 있어도) 표마다 최대 5행까지 순서대로 `Key`/`Summary` 헤더 후보를 탐색해 자동 인식(`_EXCEL_HEADER_SCAN_ROWS`)
   - Jira의 HTML 기반 "가짜 .xls" 내보내기는 문서 안에 여러 `<table>`(요약 표 + 실제 이슈 표, 또는 레이아웃용 표에 중첩된 이슈 표)이 있을 수 있어 **모든 표를 스택 기반으로 분리 추출**한 뒤 순서대로 Key/Summary 헤더를 가진 첫 표를 사용 — 어떤 표에서도 못 찾으면 표별로 스캔한 행 후보를 에러 메시지에 그대로 노출
+  - Description/Environment 셀에 이스케이프된 HTML(`&lt;p dir="auto"&gt;...`)이 그대로 텍스트로 노출되던 문제 — 태그를 제거하고 순수 텍스트만 표시(`_strip_inline_html()`)
+  - Created 는 시간 없이 날짜만 표시(`_excel_date_only()` — HTML 텍스트 날짜/네이티브 Excel 날짜 셀 모두 파싱)
   - 담당자 이름 자동 추출 + PEP 등록 담당자와 매칭(매칭 성공/실패 아이콘 구분, 실패 시 원본 텍스트 tooltip)
   - Jira Key에 원본 이슈 링크(`jiraUrl`) 제공(있는 경우)
   - 총 건수 대비 매칭/미매칭 건수 요약 배지
