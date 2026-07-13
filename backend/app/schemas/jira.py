@@ -97,6 +97,12 @@ class JiraExcelPasteRequest(BaseModel):
     text: str
 
 
+class JiraExcelSaveRequest(BaseModel):
+    """미리보기(import_excel/import_paste)로 확인한 행을 실제 work_items 로 저장.
+    파일을 다시 읽지 않고 프론트가 이미 갖고 있는 미리보기 rows 를 그대로 되돌려 받는다."""
+    rows: list[JiraExcelRow]
+
+
 # ── 양방향 push (Phase 2) ──────────────────────────────────────────────────────
 class JiraPushRequest(BaseModel):
     comment: Optional[str] = None

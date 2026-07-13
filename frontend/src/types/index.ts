@@ -552,7 +552,8 @@ export interface JiraImportResult {
   items: JiraImportItemPreview[];
 }
 
-// Jira 에서 추출한 Excel(.xlsx) 가져오기 — 미리보기 전용, 저장 안 함.
+// Jira 에서 추출한 Excel(.xlsx) 가져오기 — 미리보기(저장 없음) + "저장" 시 업무 관리
+// 게시판(work_items)에 매핑 저장(jiraApi.importSaveToBoard, 응답은 JiraImportResult 재사용).
 export interface JiraExcelRow {
   key: string;
   jiraUrl?: string | null;
