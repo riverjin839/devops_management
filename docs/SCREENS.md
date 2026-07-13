@@ -44,7 +44,7 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 - **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 내부 컴포넌트가 각각 `useDailyCheckSummary()`(`hooks/useDailyCheck.ts`) 사용. 로컬 state: `weeklyTab`.
 - **Backend**: `GET /api/v1/clusters`(`clusters.py`) · `GET /api/v1/work-items`(`work_items.py`) · `GET /api/v1/daily-check/summary`(`daily_check.py`, `ClusterSummary` 응답, `InfraHealthBar`/`DailyCheckReviewPanel`/`IncidentMiniPanel` 공용, 5분 `staleTime`/`refetchInterval`).
 - **핵심 기능**:
-  - work/platform 2-모드 전환(사용자별 localStorage 유지).
+  - work/platform 2-모드 전환(세션 중에는 localStorage 유지, 단 **로그인할 때마다 항상 `'work'`로 리셋** — `authStore.setSession()`에서 강제).
   - 내 담당 업무·미해결 이슈·위험 클러스터·다음 일정 실시간 요약.
   - 담당자별 진행 현황을 주간/월간/담당자 3가지 뷰로 전환.
   - 업무 모드 스케줄 배경색(흰색/크림) 커스터마이즈 반영(`SettingsPage`의 화면 UI 설정 탭에서 변경).
@@ -57,10 +57,11 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 - **목적 / UX**: 별도 라우트 경로 없이 앱 전체를 감싸는 `AuthGate`가 유효한 세션(token+user)이 없으면 자동으로 `LoginPage`를 렌더링하는 방식의 게이트. 사용자명/비밀번호로 로그인하면 세션이 저장되고 `AuthGate`가 재렌더링되어 원래 화면으로 자연 전환된다(수동 navigate 없음).
 - **UI 구성**:
   - 중앙 정렬 단일 카드(`max-w-sm`): 로고+타이틀("DEVOPS MANAGEMENT" / "로그인"), 사용자명·비밀번호 입력, 에러 메시지(`role="alert"`), 로그인 버튼(제출 중 스피너).
-- **Frontend**: 로컬 state만 사용(`username`, `password`, `error`, `submitting`) — TanStack Query/Zustand 쿼리 훅 없음. `useAuthStore((s) => s.setSession)`으로 세션 저장. 호출 함수: `authApi.login(username, password)`.
+- **Frontend**: 로컬 state만 사용(`username`, `password`, `error`, `submitting`) — TanStack Query/Zustand 쿼리 훅 없음. `useAuthStore((s) => s.setSession)`으로 세션 저장. 호출 함수: `authApi.login(username, password)`. `authStore.setSession()` 내부에서 `useHomeStore.getState().setMode('work')`를 함께 호출해 홈 모드를 리셋한다.
 - **Backend**: `POST /api/v1/auth/login` (`backend/app/routers/auth.py`) — `User` 모델(`backend/app/models/user.py`) 조회 후 `verify_password` 검증, 성공 시 `create_access_token`으로 JWT 발급 + `audit_logger.record(action="login.success"/"login.failure")` 감사 로그 기록. 실패 시 401 + 한글 상세 메시지.
 - **핵심 기능**:
   - 사용자명/비밀번호 로그인, JWT + `AuthUser` 세션을 `localStorage`(`k8s:auth:token`, `k8s:auth:user`)에 저장.
+  - 로그인 성공 시 `useHomeStore` 모드를 항상 `'work'`(업무 현황)로 강제 리셋 — 이전 세션에서 플랫폼 현황으로 전환해뒀어도 로그인 직후에는 항상 업무 현황부터 보여준다(로그인 이후 토글은 자유롭게 가능, 그 상태는 다음 로그인 전까지만 유지).
   - 로그인 성공/실패 모두 감사 로그(`audit_logs`)에 기록.
   - 401 등 실패 응답의 `detail`을 그대로 폼 하단에 노출.
   - 이후 모든 API 호출은 axios 인터셉터가 저장된 token을 `Authorization: Bearer` 헤더로 첨부(`get_current_user`가 `OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")`로 검증).

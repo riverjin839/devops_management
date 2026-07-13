@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useHomeStore } from './homeStore';
 
 // API response interceptor converts snake_case → camelCase, so we model the
 // shape the React tree actually receives.
@@ -62,6 +63,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem(USER_KEY, JSON.stringify(u));
     } catch { /* ignore */ }
     set({ token, user: u });
+    // 로그인 직후 기본 화면은 항상 업무 현황이어야 한다 — 이전 세션에서
+    // 플랫폼 현황으로 전환해뒀더라도 새 로그인마다 업무 모드로 리셋한다.
+    useHomeStore.getState().setMode('work');
   },
   setUser: (user) => {
     const u = normalizeUser(user);
