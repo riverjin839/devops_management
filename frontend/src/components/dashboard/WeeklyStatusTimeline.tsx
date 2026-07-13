@@ -14,6 +14,11 @@ import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
 
+// 담당자 기준 뷰 — 한 담당자 당 기본 노출 sub-lane 수(담당자 탭 기본 5개 노출과 동일한 정책).
+// 초과분은 "+N건 더…" 로 접어두고, 클릭하면 전체 lane 을 펼친다.
+const LANE_LIMIT = 5;
+const MORE_ROW_H = 22; // "+N건 더…" 버튼 한 줄 높이(px)
+
 // ── date helpers ──────────────────────────────────────────────────────────────
 function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -106,6 +111,16 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
+
+  // 담당자 기준 뷰에서 "+N건 더…" 로 펼친 담당자 이름 집합(담당자 탭의 접기/더보기와 동일 패턴).
+  const [expandedAssignees, setExpandedAssignees] = useState<Set<string>>(new Set());
+  const toggleAssigneeExpand = (name: string) =>
+    setExpandedAssignees((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
 
   // 업무 등록 — 팝업(WorkItemFormModal). 페이지 이동 없이 이 화면 컨텍스트를 유지.
   const [createOpen, setCreateOpen] = useState(false);
@@ -468,8 +483,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             {/* ── 담당자 기준: 한 담당자 = 한 swimlane(여러 sub-lane) ── */}
             {viewMode === 'assignee' && assigneeRows.map(({ name, lanes }) => {
               const LANE_H = 32; // px per sub-lane
-              const trackH = lanes.length * LANE_H + 12;
               const total = lanes.reduce((n, l) => n + l.length, 0);
+              const isExpanded = expandedAssignees.has(name);
+              const overLimit = lanes.length > LANE_LIMIT;
+              const visibleLanes = isExpanded ? lanes : lanes.slice(0, LANE_LIMIT);
+              const hiddenItemCount = lanes.slice(LANE_LIMIT).reduce((n, l) => n + l.length, 0);
+              const trackH = visibleLanes.length * LANE_H + 12 + (overLimit ? MORE_ROW_H : 0);
               return (
                 <div key={name} className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] hover:bg-secondary/20 transition-colors">
                   {/* label */}
@@ -483,7 +502,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   {/* track */}
                   <div className={`relative grid ${colsClass}`} style={{ minHeight: trackH }}>
                     <DayCells />
-                    {lanes.map((lane, laneIdx) =>
+                    {visibleLanes.map((lane, laneIdx) =>
                       lane.map(({ item, startIdx, endIdx, clippedLeft, clippedRight, growing }) => {
                         const status = item.kanbanStatus ?? 'todo';
                         const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
@@ -508,6 +527,17 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                           </div>
                         );
                       }),
+                    )}
+                    {overLimit && (
+                      <button
+                        type="button"
+                        onClick={() => toggleAssigneeExpand(name)}
+                        className="absolute left-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                        style={{ top: visibleLanes.length * LANE_H + 8 }}
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded ? '접기' : `+${hiddenItemCount}건 더…`}
+                      </button>
                     )}
                   </div>
                 </div>
