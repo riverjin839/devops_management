@@ -132,6 +132,27 @@
   - Frontend: `JiraExcelImportPage.tsx` — `ViewModeBar` 로 파일 업로드/붙여넣기 전환,
     `jiraApi.importPaste()`.
   - Backend: `POST /api/v1/jira/import/paste` (`JiraExcelPasteRequest`) — `routers/jira.py`.
+- **홈 "담당자별 진행 현황 — 주간" 탭(WeeklyStatusTimeline) 밀도 개선 + 기본 탭 복귀**:
+  담당자 기준 스윔레인 뷰에도 "담당자" 탭(MemberTodayTodos)과 동등한 표시 제한/펼치기를
+  갖춰 기본 탭을 다시 '주간'으로 되돌렸다.
+  - 담당자별 기본 5건만 표시 → "+N건 더보기"로 펼치고, 펼친 뒤에는 "접기"로 다시 접을 수
+    있음.
+  - 이번 주 전체 업무를 모은 "전체" 요약 행을 항상 목록 최상단(로그인 본인 행보다도 위)에
+    강조 표시.
+  - 화면당 표시할 담당자(행) 수를 툴바에서 조절 가능(기본 20명, 옵션 10/20/30/50 —
+    사용자별 localStorage 저장), 라인 밀도(레인 높이 32→24px)와 글씨 크기를 줄여 스크롤
+    없이 더 많은 담당자가 한 화면에 보이도록 개선.
+  - Frontend: `WeeklyStatusTimeline.tsx`(`ASSIGNEE_ITEM_LIMIT`, `ROWS_LIMIT_OPTIONS`,
+    `TEAM_ROW_NAME`), `HomePage.tsx`(`weeklyTab` 기본값 `'week'`로 변경).
+- **Jira Excel 가져오기 — "업무 관리에 저장" 버튼**: 미리보기(파일 업로드/붙여넣기)가 성공하면
+  헤더에 저장 버튼이 나타나고, 클릭하면 그 자리에서 다시 파일을 읽지 않고 미리보기 행을
+  그대로 PEP 업무 관리 게시판(work_items)에 매핑 저장한다. 라이브 JQL 가져오기와 달리
+  `jira_issue_id` 가 없어 `jira_issue_key` 로 dedup(재저장 시 갱신), `type`/카테고리는
+  `jira_service.map_issue_type()` 재사용, 상태는 텍스트 매칭으로 kanban 상태 추정. 저장 후
+  생성/갱신/스킵 건수 배너 + 업무 관리 게시판 바로가기 링크 노출.
+  - Frontend: `JiraExcelImportPage.tsx` — 저장 버튼/결과 배너, `jiraApi.importSaveToBoard()`.
+  - Backend: `POST /api/v1/jira/import/excel/save`(`JiraExcelSaveRequest`, `require_operator`)
+    — `routers/jira.py` `import_excel_save()`, `_map_excel_status_to_kanban()`.
 
 ### Fixed
 - **Jira Excel 가져오기 — `.xls` 업로드 시 "Expected BOF record" 오류**: Jira 의
@@ -171,6 +192,19 @@
   반전되도록 정정.
   - Frontend: `WeeklyStatusTimeline.tsx`(상태 막대 버튼 className), `index.css`(불필요해진
     `.timeline-color-invert` 규칙 제거).
+- **Jira Excel 가져오기 — Description/Environment 셀에 이스케이프된 HTML 태그가 그대로
+  노출**: Jira 의 HTML 기반 내보내기는 rich-text 필드를 이스케이프된 HTML(예:
+  `&lt;p dir="auto"&gt;...&lt;/p&gt;`)로 담는 경우가 있는데, 파서가 엔티티를 복원하는
+  과정에서 `<p dir="auto">...` 처럼 태그가 그대로 텍스트로 남아 화면에 보였다 → 태그를
+  제거하고 순수 텍스트만 남기도록 정정. Created 필드도 시간까지 표시되던 것을 날짜만
+  보이도록 변경(HTML 텍스트 날짜/네이티브 Excel 날짜 셀 모두 지원).
+  - Backend: `routers/jira.py` `_strip_inline_html()`, `_excel_date_only()`/`_parse_excel_date()`.
+- **아이콘 picker — 브랜드 로고가 실제 브랜드 색이 아니라 단색(currentColor)으로 표시되던
+  문제**: Kubernetes/Prometheus/Cilium/Keycloak 등 simple-icons 기반 아이콘이 전부
+  `fill: currentColor` 라 주변 텍스트 색을 그대로 물려받아 브랜드를 구분하기 어려웠다 →
+  simple-icons 가 아이콘마다 제공하는 공식 브랜드 hex 컬러(`si.hex`)로 채우도록 변경, 항상
+  실제 로고 색으로 표시된다(StarRocks 는 이미 다색 원본이라 영향 없음).
+  - Frontend: `lib/brandIcons.ts` `brand()` — `fill: currentColor` → `fill: #${si.hex}`.
 
 ## [1.1.0] - 2026-07-09
 

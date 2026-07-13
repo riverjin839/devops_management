@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import html
 import logging
 import re
 from datetime import datetime
@@ -26,7 +27,7 @@ from app.models.work_item import WorkItem
 from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services import secret_box
 from app.services import audit_logger
-from app.services.jira_service import JiraService, map_jira_issue, parse_jira_dt, KANBAN_TO_CATEGORY
+from app.services.jira_service import JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY
 from app.schemas.jira import (
     JiraConfig,
     JiraConfigUpdate,
@@ -39,6 +40,7 @@ from app.schemas.jira import (
     JiraExcelRow,
     JiraExcelImportResult,
     JiraExcelPasteRequest,
+    JiraExcelSaveRequest,
     JiraPushRequest,
     JiraPushResult,
 )
@@ -134,6 +136,79 @@ def _excel_cell_str(v) -> str:
     if isinstance(v, datetime):
         return v.strftime("%Y-%m-%d %H:%M") if (v.hour or v.minute) else v.strftime("%Y-%m-%d")
     return str(v).strip()
+
+
+_INLINE_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_inline_html(s: str) -> str:
+    """Jira 의 HTML 기반 내보내기는 Description/Environment 같은 rich-text 필드 안에
+    이스케이프된 HTML(예: `&lt;p dir="auto"&gt;...&lt;/p&gt;`)이 들어있는 경우가 있다 —
+    html.parser 가 엔티티를 이미 복원해버려 `<p dir="auto">...` 처럼 태그가 그대로 텍스트로
+    노출된다. 태그를 제거하고 남은 텍스트만 정리해 돌려준다."""
+    if not s:
+        return s
+    text = html.unescape(s)
+    text = _INLINE_TAG_RE.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+# Jira 날짜 표시 포맷 후보 — HTML 기반 내보내기는 날짜를 문자열로 담고(예: "11/Jun/26 10:31 AM"),
+# xlsx/xls 는 네이티브 datetime 셀일 수 있어(이미 _excel_cell_str 이 "YYYY-MM-DD[ HH:MM]" 로
+# 정규화) 두 경우 모두 커버한다.
+_EXCEL_DATE_FORMATS = (
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d",
+    "%d/%b/%y %I:%M %p",
+    "%d/%b/%Y %I:%M %p",
+    "%d/%b/%y",
+    "%d/%b/%Y",
+    "%m/%d/%Y %I:%M %p",
+    "%m/%d/%y %I:%M %p",
+    "%m/%d/%Y",
+)
+
+
+def _parse_excel_date(v) -> Optional[datetime]:
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v
+    s = str(v).strip()
+    if not s:
+        return None
+    for fmt in _EXCEL_DATE_FORMATS:
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _excel_date_only(v) -> str:
+    """날짜 셀을 시간 없이 "YYYY-MM-DD" 로만 표시(Created 등은 시간까지는 불필요하다는
+    요청). 알려진 포맷으로 파싱되면 그 날짜를, 실패하면 첫 공백 앞부분만 보수적으로 남긴다."""
+    dt = _parse_excel_date(v)
+    if dt:
+        return dt.strftime("%Y-%m-%d")
+    s = str(v or "").strip()
+    return s.split(" ")[0] if s else ""
+
+
+_DONE_STATUS_WORDS = ("done", "closed", "resolved", "complete", "완료", "해결", "종료", "닫힘")
+_INPROGRESS_STATUS_WORDS = ("progress", "review", "진행", "검토", "처리중", "처리 중")
+
+
+def _map_excel_status_to_kanban(status_name: str) -> str:
+    """엑셀에는 Jira 의 statusCategory(new/indeterminate/done) 가 없고 상태명 문자열만
+    있으므로, 흔한 표기를 텍스트 매칭으로 추정한다(라이브 JQL 가져오기의
+    `map_status_category` 보다 느슨함 — 커스텀 워크플로 상태명은 기본값 todo 로 떨어진다)."""
+    s = (status_name or "").strip().lower()
+    if any(w in s for w in _DONE_STATUS_WORDS):
+        return "done"
+    if any(w in s for w in _INPROGRESS_STATUS_WORDS):
+        return "in_progress"
+    return "todo"
 
 
 def _read_xls_rows(raw: bytes):
@@ -572,11 +647,11 @@ def _extract_jira_rows(tables: list[list[tuple]], db: Session) -> JiraExcelImpor
             assignee_raw=assignee_raw,
             assignee_name=assignee_name,
             assignee_matched=is_matched,
-            created=cell(r, "created"),
+            created=_excel_date_only(cell(r, "created")),
             resolved=cell(r, "resolved"),
             due_date=cell(r, "due_date"),
-            environment=cell(r, "environment"),
-            description=cell(r, "description"),
+            environment=_strip_inline_html(cell(r, "environment")),
+            description=_strip_inline_html(cell(r, "description")),
         ))
         if len(out_rows) >= _EXCEL_MAX_ROWS:
             break
@@ -634,6 +709,114 @@ async def import_paste(
         return JiraExcelImportResult(status="error", detail="붙여넣은 내용이 비어 있습니다.")
     rows: list[tuple] = [tuple(cell.strip() for cell in ln.split("\t")) for ln in lines]
     return _extract_jira_rows([rows], db)
+
+
+@router.post("/import/excel/save", response_model=JiraImportResult)
+async def import_excel_save(
+    payload: JiraExcelSaveRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """import_excel/import_paste 로 미리 확인한 행을 실제 업무 관리 게시판(work_items)에
+    저장한다. 파일을 다시 읽지 않고 프론트가 들고 있던 미리보기 rows 를 그대로 받는다.
+
+    라이브 JQL 가져오기(POST /import)는 `jira_issue_id`(Jira 내부 불변 ID)로 dedup 하지만,
+    엑셀에는 그 값이 없으므로 여기서는 `jira_issue_key`(예: PROJ-123)로 dedup 한다 — 같은
+    이슈를 라이브로 먼저 가져왔다면 jira_issue_key 가 이미 채워져 있어 그 레코드를 그대로
+    갱신한다(반대로 엑셀로 먼저 저장한 뒤 라이브로 가져오면 jira_issue_id 매칭에는 안 걸려
+    새 레코드가 생길 수 있음 — 라이브 가져오기 dedup 정책은 이번 변경 범위 밖).
+    """
+    created = updated = skipped = 0
+    errors: list[str] = []
+    preview: list[JiraImportItemPreview] = []
+    now = datetime.utcnow()
+
+    for row in payload.rows:
+        key = (row.key or "").strip()
+        if not key:
+            skipped += 1
+            continue
+        try:
+            wtype, type_label = map_issue_type(row.issue_type)
+            kanban = _map_excel_status_to_kanban(row.status)
+            summary = (row.summary or "").strip()
+            title = f"{key} {summary}".strip()[:200]
+            content = row.description if (row.description or "").strip() else (summary or key)
+            started_at = _parse_excel_date(row.created) or now
+            closed_at = _parse_excel_date(row.resolved) if kanban == "done" else None
+            # assignee_name 은 미리보기 단계(_match_excel_assignee)에서 이미 담당자 레지스트리와
+            # 매칭 시도된 값 — 매칭 실패해도 원본 첫 토큰이 담겨 있어 빈 문자열이 아닌 한 그대로 쓴다.
+            assignee_name = (row.assignee_name or "").strip() or "(미할당)"
+
+            existing = db.query(WorkItem).filter(WorkItem.jira_issue_key == key).first()
+            action = "update" if existing else "create"
+            preview.append(JiraImportItemPreview(
+                jira_key=key, title=title, kanban_status=kanban, action=action,
+            ))
+
+            if existing:
+                existing.title = title
+                existing.content = content
+                existing.kanban_status = kanban
+                existing.jira_status = row.status
+                existing.jira_url = row.jira_url
+                existing.jira_synced_at = now
+                if closed_at and not existing.closed_at:
+                    existing.closed_at = closed_at
+                if not (existing.primary_assignee or "").strip() or existing.primary_assignee == "(미할당)":
+                    existing.primary_assignee = assignee_name
+                    existing.assignee = assignee_name
+                watchers = list(existing.jira_watchers or [])
+                if actor.username not in watchers:
+                    watchers.append(actor.username)
+                existing.jira_watchers = watchers
+                updated += 1
+            else:
+                item = WorkItem(
+                    type=wtype,
+                    type_label=type_label,
+                    assignee=assignee_name,
+                    primary_assignee=assignee_name,
+                    category="Jira",
+                    title=title,
+                    content=content,
+                    kanban_status=kanban,
+                    started_at=started_at,
+                    closed_at=closed_at,
+                    jira_issue_key=key,
+                    jira_url=row.jira_url,
+                    jira_status=row.status,
+                    jira_synced_at=now,
+                    jira_watchers=[actor.username],
+                    created_by=actor.username,
+                )
+                db.add(item)
+                created += 1
+        except Exception as exc:  # noqa: BLE001 - 한 행 실패가 전체 저장을 막지 않도록
+            logger.warning("Jira Excel 저장 항목 실패 (%s): %s", key, exc)
+            errors.append(f"{key}: {str(exc)[:120]}")
+
+    try:
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return JiraImportResult(status="error", detail=f"저장 실패: {str(exc)[:200]}")
+
+    audit_logger.record(
+        db, action="work_item.jira_excel_import", actor=actor,
+        target_type="work_item", target_id=None,
+        details={"created": created, "updated": updated, "skipped": skipped},
+    )
+
+    return JiraImportResult(
+        status="ok",
+        imported=created,
+        updated=updated,
+        skipped=skipped,
+        total=len(payload.rows),
+        errors=errors,
+        items=preview[:50],
+    )
 
 
 # ── 양방향 push: PEP 상태 → Jira 반영 (Phase 2) ─────────────────────────────────

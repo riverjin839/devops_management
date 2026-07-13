@@ -50,10 +50,6 @@ export interface Cluster {
   // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
   // null/empty 면 status 기반 기본 아이콘으로 fallback.
   icon?: string | null;
-  // coroot APM 연동 — project 매핑 / URL 오버라이드 / 토글.
-  corootProject?: string | null;
-  corootUrl?: string | null;
-  corootEnabled?: boolean;
   // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
@@ -141,9 +137,6 @@ export interface ClusterManageUpdate {
   bgpEnabled?: boolean;
   asNumber?: string;
   icon?: string | null;
-  corootProject?: string | null;
-  corootUrl?: string | null;
-  corootEnabled?: boolean;
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
 }
@@ -552,7 +545,8 @@ export interface JiraImportResult {
   items: JiraImportItemPreview[];
 }
 
-// Jira 에서 추출한 Excel(.xlsx) 가져오기 — 미리보기 전용, 저장 안 함.
+// Jira 에서 추출한 Excel(.xlsx) 가져오기 — 미리보기(저장 없음) + "저장" 시 업무 관리
+// 게시판(work_items)에 매핑 저장(jiraApi.importSaveToBoard, 응답은 JiraImportResult 재사용).
 export interface JiraExcelRow {
   key: string;
   jiraUrl?: string | null;
@@ -3015,38 +3009,6 @@ export interface ReactionSummary {
   targetId: string;
   total: number;
   groups: ReactionGroup[];
-}
-
-// ── Coroot APM (애플리케이션 옵저버빌리티 — 별도 배포된 coroot 연동) ──────────
-// 백엔드 응답(snake_case)은 api 인터셉터가 camelCase 로 변환한다.
-export interface CorootSummary {
-  status: 'ok' | 'error' | 'offline';
-  serviceCount: number | null;
-  healthy: number | null;
-  alerting: number | null;
-  error: string | null;
-  raw: unknown | null;
-}
-
-export interface CorootDeepLink {
-  url: string | null;
-  status: 'ok' | 'offline';
-  detail?: string;
-}
-
-// 서비스별 trace 드릴다운 — application 목록 + 항목.
-export interface CorootApplication {
-  id: string;                 // coroot 'ns:Kind:name'
-  name: string;
-  namespace: string | null;
-  kind: string | null;
-  status: string | null;      // ok / warning / critical 등 (소문자)
-}
-
-export interface CorootApplicationsResponse {
-  status: 'ok' | 'error' | 'offline';
-  applications: CorootApplication[];
-  error: string | null;
 }
 
 // ── mc client presets (personal custom + admin shared) ──────────────────────

@@ -49,10 +49,6 @@ class ClusterBase(BaseModel):
     # 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 또는 emoji 1자.
     # lucide 이름 / emoji 1자 / 업로드 이미지 base64 data URL. 길이 무제한.
     icon: Optional[str] = Field(default=None)
-    # coroot APM 연동 — per-cluster project 매핑 / URL 오버라이드 / 토글.
-    coroot_project: Optional[str] = Field(default=None, max_length=100)
-    coroot_url: Optional[str] = Field(default=None, max_length=512)
-    coroot_enabled: Optional[bool] = None
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
@@ -96,10 +92,6 @@ class ClusterUpdate(BaseModel):
     as_number: Optional[str] = None
     # lucide 이름 / emoji 1자 / 업로드 이미지 base64 data URL. 길이 무제한.
     icon: Optional[str] = Field(default=None)
-    # coroot APM 연동
-    coroot_project: Optional[str] = Field(default=None, max_length=100)
-    coroot_url: Optional[str] = Field(default=None, max_length=512)
-    coroot_enabled: Optional[bool] = None
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
