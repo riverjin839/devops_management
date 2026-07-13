@@ -734,22 +734,6 @@ export const promqlApi = {
     api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
 };
 
-// Coroot — 애플리케이션 APM (별도 배포된 coroot 연동: 헬스/요약/딥링크)
-export const corootApi = {
-  health: () =>
-    api.get<{ status: string; detail?: string }>('/coroot/health', { timeout: 6000 }),
-  getSummary: (clusterId: string) =>
-    api.get<import('@/types').CorootSummary>(`/coroot/${clusterId}/summary`, { timeout: 15000 }),
-  getDeepLink: (clusterId: string) =>
-    api.get<import('@/types').CorootDeepLink>(`/coroot/${clusterId}/deeplink`),
-  getApplications: (clusterId: string) =>
-    api.get<import('@/types').CorootApplicationsResponse>(`/coroot/${clusterId}/applications`, { timeout: 15000 }),
-  getApplicationDeepLink: (clusterId: string, appId: string, view = 'Tracing') =>
-    api.get<import('@/types').CorootDeepLink>(`/coroot/${clusterId}/application/deeplink`, {
-      params: { app_id: appId, view },
-    }),
-};
-
 // Cluster Items — 현황 관리 대시보드의 '아이템' 카드 (클러스터별)
 export const clusterItemsApi = {
   types: () =>

@@ -49,9 +49,6 @@ export function ClusterMetaFormPage() {
   const [description, setDescription]   = useState('');
   const [bgpEnabled, setBgpEnabled]     = useState(false);
   const [asNumber, setAsNumber]         = useState('');
-  const [corootProject, setCorootProject] = useState('');
-  const [corootUrl, setCorootUrl]       = useState('');
-  const [corootEnabled, setCorootEnabled] = useState(false);
   const [prometheusUrl, setPrometheusUrl] = useState('');
   const [prometheusEnabled, setPrometheusEnabled] = useState(false);
   const [saving, setSaving]             = useState(false);
@@ -87,9 +84,6 @@ export function ClusterMetaFormPage() {
     setDescription(cluster.description ?? '');
     setBgpEnabled(cluster.bgpEnabled ?? false);
     setAsNumber(cluster.asNumber ?? '');
-    setCorootProject(cluster.corootProject ?? '');
-    setCorootUrl(cluster.corootUrl ?? '');
-    setCorootEnabled(cluster.corootEnabled ?? false);
     setPrometheusUrl(cluster.prometheusUrl ?? '');
     setPrometheusEnabled(cluster.prometheusEnabled ?? false);
     setHydrated(true);
@@ -147,9 +141,6 @@ export function ClusterMetaFormPage() {
         description: description.trim() || undefined,
         bgpEnabled,
         asNumber: asNumber.trim() || undefined,
-        corootProject: corootProject.trim() || undefined,
-        corootUrl: corootUrl.trim() || undefined,
-        corootEnabled,
         prometheusUrl: prometheusUrl.trim() || undefined,
         prometheusEnabled,
       };
@@ -399,33 +390,6 @@ export function ClusterMetaFormPage() {
                   <textarea id={f('desc')} value={description} onChange={(e) => setDescription(e.target.value)}
                     placeholder="클러스터에 대한 추가 정보나 메모"
                     rows={5} className={`${ic} resize-none`} />
-                </div>
-
-                {/* coroot APM 연동 — 별도 배포된 coroot 의 project 매핑 */}
-                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
-                  <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider">애플리케이션 APM (Coroot)</p>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" className="accent-primary" checked={corootEnabled}
-                      onChange={(e) => setCorootEnabled(e.target.checked)} />
-                    이 클러스터에서 coroot 연동 사용
-                  </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor={f('corootProject')} className={lc}>Coroot Project</label>
-                      <input id={f('corootProject')} type="text" value={corootProject}
-                        onChange={(e) => setCorootProject(e.target.value)}
-                        placeholder="이 클러스터에 대응하는 coroot project 이름" className={ic} />
-                    </div>
-                    <div>
-                      <label htmlFor={f('corootUrl')} className={lc}>Coroot URL (선택 — 전역값 오버라이드)</label>
-                      <input id={f('corootUrl')} type="text" value={corootUrl}
-                        onChange={(e) => setCorootUrl(e.target.value)}
-                        placeholder="비우면 전역 COROOT_URL 사용" className={ic} />
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    base URL 은 서버 환경변수 <code>COROOT_URL</code> 로 두고, 클러스터마다 project 만 매핑하는 것을 권장합니다.
-                  </p>
                 </div>
 
                 {/* Cluster Trends — per-cluster Prometheus 연동 (노드 메트릭 추이) */}

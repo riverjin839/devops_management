@@ -301,9 +301,6 @@ Copy `.env.example` → `.env` in the **backend** directory for local developmen
 | `OLLAMA_TIMEOUT` | `120` | LLM request timeout (s) |
 | `PROMETHEUS_URL` | `http://prometheus-k8s.monitoring.svc:9090` | Prometheus endpoint |
 | `GRAFANA_URL` | `http://grafana.monitoring.svc:3000` | Grafana endpoint |
-| `COROOT_URL` | *(empty)* | Coroot APM base URL — 비우면 APM 기능 offline (별도 배포, `docs/COROOT_INTEGRATION_GUIDE.md`) |
-| `COROOT_API_KEY` | *(empty)* | Coroot API 키 (선택) |
-| `COROOT_TIMEOUT` | `10` | Coroot 요청 타임아웃 (s) |
 | `ALLOWED_ORIGINS` | *(empty)* | Comma-separated extra CORS origins |
 
 The `Settings` class (`backend/app/config.py`) uses pydantic-settings and reads from `.env` automatically. All variable names are case-insensitive.
