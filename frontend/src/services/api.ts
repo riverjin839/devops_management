@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -1618,6 +1618,32 @@ export const deepCheckDefinitionsApi = {
       undefined,
       { params: clusterId ? { cluster_id: clusterId } : undefined },
     ),
+};
+
+export const checkMatrixApi = {
+  listItems: () => api.get<CheckMatrixItem[]>('/check-matrix/items'),
+  createItem: (data: CheckMatrixItemInput) =>
+    api.post<CheckMatrixItem>('/check-matrix/items', data),
+  updateItem: (id: string, data: CheckMatrixItemInput) =>
+    api.put<CheckMatrixItem>(`/check-matrix/items/${id}`, data),
+  removeItem: (id: string) => api.delete(`/check-matrix/items/${id}`),
+  reorderItems: (itemIds: string[]) =>
+    api.post('/check-matrix/items/reorder', { itemIds }),
+  getGrid: () => api.get<CheckMatrixGrid>('/check-matrix/grid'),
+  getCellHistory: (itemId: string, clusterId: string, days = 30) =>
+    api.get<CheckMatrixHistory>(`/check-matrix/cell/${itemId}/${clusterId}/history`, { params: { days } }),
+  postManualEntry: (
+    itemId: string,
+    clusterId: string,
+    data: { status: string; value?: number | null; message?: string | null },
+  ) => api.post(`/check-matrix/cell/${itemId}/${clusterId}/manual-entry`, data),
+  putSchedule: (itemId: string, clusterId: string, data: { cronExpr: string | null; enabled: boolean }) =>
+    api.put(`/check-matrix/schedule/${itemId}/${clusterId}`, data),
+  putClusterCron: (clusterId: string, checkCronExpr: string | null) =>
+    api.put(`/check-matrix/clusters/${clusterId}/cron`, { checkCronExpr }),
+  getSettings: () => api.get<CheckMatrixSettings>('/check-matrix/settings'),
+  putSettings: (retentionDays: number) =>
+    api.put<CheckMatrixSettings>('/check-matrix/settings', { retentionDays }),
 };
 
 export const notificationsApi = {

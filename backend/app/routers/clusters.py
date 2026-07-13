@@ -15,7 +15,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import Cluster, Addon
 from app.models.cluster import StatusEnum
-from app.models.daily_check import DailyCheckLog, CheckSchedule
+from app.models.daily_check import DailyCheckLog
 from app.models.work_item import WorkItem
 from app.models.user import User
 from app.auth.deps import require_operator
@@ -467,9 +467,8 @@ def delete_cluster(
             pass
 
     # FK 제약 때문에 Cluster 삭제 전 연관 데이터 처리
-    # - DailyCheckLog, CheckSchedule: cluster_id NOT NULL → 먼저 삭제
+    # - DailyCheckLog: cluster_id NOT NULL → 먼저 삭제
     db.query(DailyCheckLog).filter(DailyCheckLog.cluster_id == cluster_id).delete(synchronize_session=False)
-    db.query(CheckSchedule).filter(CheckSchedule.cluster_id == cluster_id).delete(synchronize_session=False)
     # - WorkItem (issue / task 통합): cluster_id nullable → NULL 처리 (레코드 보관)
     db.query(WorkItem).filter(WorkItem.cluster_id == cluster_id).update(
         {"cluster_id": None}, synchronize_session=False

@@ -3071,3 +3071,71 @@ export interface TerminalAppearanceResponse {
   appearance: TerminalAppearance;
   shared: TerminalTemplate[];
 }
+
+// ── 점검 매트릭스 (플랫폼 현황 — 행: 점검 항목, 열: 클러스터) ──────────────
+export type CheckMatrixSourceType = 'core_bundle' | 'deep_check' | 'addon' | 'manual';
+
+export interface CheckMatrixItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  unit?: string | null;
+  sourceType: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  /** true = 시스템 항목(core_bundle) — 삭제 불가, Cluster.status 산정에 사용 */
+  isSystem: boolean;
+  /** false = 그리드에서 숨김(자동 실행은 계속됨) */
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CheckMatrixItemInput = Omit<
+  CheckMatrixItem,
+  'id' | 'isSystem' | 'sortOrder' | 'createdAt' | 'updatedAt'
+>;
+
+export interface CheckMatrixCell {
+  status: Status | null;
+  value: number | null;
+  message?: string | null;
+  checkedAt: string | null;
+  cronExpr: string | null;
+  scheduleEnabled: boolean;
+  hasResult: boolean;
+}
+
+export interface CheckMatrixGridCluster {
+  id: string;
+  name: string;
+  checkCronExpr: string | null;
+}
+
+export interface CheckMatrixGrid {
+  items: CheckMatrixItem[];
+  clusters: CheckMatrixGridCluster[];
+  /** cells[itemId][clusterId] */
+  cells: Record<string, Record<string, CheckMatrixCell>>;
+}
+
+export interface CheckMatrixHistoryPoint {
+  checkedAt: string;
+  status: Status;
+  value: number | null;
+}
+
+export interface CheckMatrixHistoryChange {
+  checkedAt: string;
+  status: Status;
+  message?: string | null;
+}
+
+export interface CheckMatrixHistory {
+  points: CheckMatrixHistoryPoint[];
+  changes: CheckMatrixHistoryChange[];
+}
+
+export interface CheckMatrixSettings {
+  retentionDays: number;
+}

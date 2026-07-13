@@ -10,6 +10,33 @@
 
 1.3.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **홈 "플랫폼 현황" 매트릭스 전면 개편**: `InfraHealthBar`/`DailyCheckReviewPanel`/
+  `IncidentMiniPanel` 세로 스택 대신, 행(점검 항목) × 열(등록된 클러스터) 매트릭스로
+  교체 — 셀 클릭 시 기간별 트렌드 차트 + 변경 이력 상세 모달. 점검 항목은 사용자가
+  추가/삭제/재정렬 가능(기본값으로 기존 자동 점검 전부 시드), AiStor/NFS/N-W 스위치처럼
+  자동 체커가 없는 항목은 수동 입력 타입으로 등록. 이력 보관 주기는 별도 설정(DB 용량
+  고려) 후 자동 정리.
+  - Backend: `models/check_matrix.py`(`CheckMatrixItem`/`Schedule`/`Result`/`ResultLog`),
+    `routers/check_matrix.py`, `services/check_matrix_service.py`, `Cluster.check_cron_expr`.
+  - Frontend: `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,
+    CheckMatrixItemFormModal,CheckMatrixSettingsModal}`, `hooks/useCheckMatrix.ts`.
+
+### Changed
+- **점검 스케줄 체계 완전 대체**: 하루 3회(09/13/18시) 하드코딩 + `CheckSchedule`
+  온오프 플래그를 제거하고, "플랫폼 현황" 매트릭스에서 클러스터별/항목별 cron 을 직접
+  관리하도록 변경. `Cluster.status` 산정에 쓰이는 핵심 점검(API 서버 응답시간)은
+  기존 `DailyChecker.run_daily_check()` 를 그대로 재사용해 authority/AI 리뷰 파이프라인은
+  무변경, 나머지 deep_check/addon 항목은 항목×클러스터 단위로 독립 스케줄(5분 미만
+  간격 거부).
+  - Backend: `celery_app.py`(`run_check_matrix_dispatch`/`run_check_matrix_log_purge` 가
+    `run_scheduled_check`/`run_scheduled_single_check`/`run_deep_check_all` 대체).
+
+### Removed
+- **`CheckSchedule`(아침/점심/저녁 온오프) 모델 및 `GET/PUT /daily-check/schedule/{cluster_id}`
+  API 제거** — 프론트에서 실제로 쓰이지 않던 기능(실제 시각은 항상 하드코딩값이었음).
+  `check_schedules` 테이블 자체는 드롭하지 않음(비파괴 마이그레이션).
+
 ## [1.3.1] - 2026-07-13
 
 ### Changed

@@ -1,7 +1,7 @@
 from app.models.cluster import Cluster, StatusEnum
 from app.models.addon import Addon
 from app.models.check_log import CheckLog
-from app.models.daily_check import DailyCheckLog, CheckSchedule, CheckScheduleType
+from app.models.daily_check import DailyCheckLog, CheckScheduleType
 from app.models.playbook import Playbook
 from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
@@ -52,6 +52,13 @@ from app.models.resource_count import (
     MetricCheckState,
     SnapshotSource,
 )
+from app.models.check_matrix import (
+    CheckMatrixItem,
+    CheckMatrixSchedule,
+    CheckMatrixResult,
+    CheckMatrixResultLog,
+    CheckMatrixSourceType,
+)
 
 __all__ = [
     "Cluster",
@@ -63,7 +70,6 @@ __all__ = [
     "CheckLog",
     "StatusEnum",
     "DailyCheckLog",
-    "CheckSchedule",
     "CheckScheduleType",
     "Playbook",
     "AnsiblePlaybookFile",
@@ -117,4 +123,9 @@ __all__ = [
     "UserJiraCredential",
     "K8sEvent",
     "Reaction",
+    "CheckMatrixItem",
+    "CheckMatrixSchedule",
+    "CheckMatrixResult",
+    "CheckMatrixResultLog",
+    "CheckMatrixSourceType",
 ]

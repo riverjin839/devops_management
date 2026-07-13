@@ -1,6 +1,7 @@
 """
 Celery 앱 설정 및 스케줄 태스크
-- 일일 3회 (아침/점심/저녁) 자동 헬스 체크
+- 점검 매트릭스(check_matrix) 디스패처가 매분 모든 클러스터/항목의 cron 을 평가해 실행
+  (구 아침/점심/저녁 하드코딩 스케줄 완전 대체)
 """
 from celery import Celery
 from celery.schedules import crontab
@@ -27,25 +28,18 @@ celery_app.conf.update(
     task_time_limit=300,  # 5분 타임아웃
 )
 
-# Beat 스케줄 설정 (일일 3회 체크)
+# Beat 스케줄 설정
 celery_app.conf.beat_schedule = {
-    # 아침 체크 (09:00 KST)
-    "daily-check-morning": {
-        "task": "app.celery_app.run_scheduled_check",
-        "schedule": crontab(hour=9, minute=0),
-        "args": ("morning",),
+    # 점검 매트릭스 디스패처 — 매분 Cluster.check_cron_expr(core_bundle) +
+    # CheckMatrixSchedule(deep_check/addon 행) 을 평가해 due 한 것만 실행.
+    "check-matrix-dispatch": {
+        "task": "app.celery_app.run_check_matrix_dispatch",
+        "schedule": crontab(minute="*"),
     },
-    # 점심 체크 (13:00 KST)
-    "daily-check-noon": {
-        "task": "app.celery_app.run_scheduled_check",
-        "schedule": crontab(hour=13, minute=0),
-        "args": ("noon",),
-    },
-    # 저녁 체크 (18:00 KST)
-    "daily-check-evening": {
-        "task": "app.celery_app.run_scheduled_check",
-        "schedule": crontab(hour=18, minute=0),
-        "args": ("evening",),
+    # 점검 매트릭스 이력 리텐션 정리 (매일 03:00 KST)
+    "check-matrix-log-purge": {
+        "task": "app.celery_app.run_check_matrix_log_purge",
+        "schedule": crontab(hour=3, minute=0),
     },
     # 기술 트렌드 수집 (07:00 KST)
     "daily-trend-collect": {
@@ -69,79 +63,45 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_cluster_item_dispatcher",
         "schedule": crontab(minute=0),
     },
-    # Deep check — daily check 15분 뒤. Super Pod (centralized) 모드용.
-    "daily-deep-check-morning": {
-        "task": "app.celery_app.run_deep_check_all",
-        "schedule": crontab(hour=9, minute=15),
-        "args": ("morning",),
-    },
-    "daily-deep-check-noon": {
-        "task": "app.celery_app.run_deep_check_all",
-        "schedule": crontab(hour=13, minute=15),
-        "args": ("noon",),
-    },
-    "daily-deep-check-evening": {
-        "task": "app.celery_app.run_deep_check_all",
-        "schedule": crontab(hour=18, minute=15),
-        "args": ("evening",),
-    },
 }
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_scheduled_check")
-def run_scheduled_check(self, schedule_type: str):
-    """
-    스케줄된 일일 체크 디스패처. 모든 활성 클러스터에 대해
-    `run_scheduled_single_check.delay(cluster_id, schedule_type)` 으로 fanout.
+@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_dispatch")
+def run_check_matrix_dispatch(self):
+    """점검 매트릭스 디스패처 — 매분 실행, due 한 core_bundle(Cluster.check_cron_expr) +
+    항목별 스케줄(CheckMatrixSchedule) 을 평가해 그 자리에서 동기 실행.
 
-    이전 구조 (직렬 for-loop) 는 클러스터 N개 × 평균 30초 → 5분 task_time_limit 초과 시
-    부분 결과만 commit 되고 나머지 클러스터는 회차 누락 (Plan SC-1 위반). 디스패처는
-    DB 조회 + queue 만 하므로 즉시 종료, 실제 체크는 worker concurrency 만큼 병렬 처리.
+    구 run_scheduled_check/run_scheduled_single_check(고정 09/13/18시 + CheckSchedule
+    on/off) 를 완전 대체. core_bundle 실행은 기존 DailyChecker.run_daily_check() 를
+    그대로 호출하므로 Cluster.status authority·AI 리뷰 파이프라인은 무변경.
     """
+    import logging
     from app.database import SessionLocal
-    from app.models import Cluster, CheckSchedule
+    from app.services import check_matrix_service as cms
 
     db = SessionLocal()
-    queued: list[dict] = []
-    skipped: list[dict] = []
-
     try:
-        clusters = db.query(Cluster).all()
+        return cms.dispatch_due(db)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_check_matrix_dispatch failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
 
-        for cluster in clusters:
-            schedule = db.query(CheckSchedule).filter(
-                CheckSchedule.cluster_id == cluster.id,
-                CheckSchedule.is_active == True  # noqa: E712
-            ).first()
 
-            # 스케줄이 명시적으로 비활성화돼 있으면 skip
-            if schedule:
-                enabled_attr = f"{schedule_type}_enabled"
-                if hasattr(schedule, enabled_attr) and not getattr(schedule, enabled_attr):
-                    skipped.append({"cluster": cluster.name, "reason": f"{schedule_type} disabled"})
-                    continue
+@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_log_purge")
+def run_check_matrix_log_purge(self):
+    """점검 매트릭스 이력 리텐션 정리 — 매일 03:00 KST, 설정된 보관 일수 초과분 청크 삭제."""
+    import logging
+    from app.database import SessionLocal
+    from app.services import check_matrix_service as cms
 
-            # Fanout — 각 클러스터 체크는 별도 task 로 큐잉. worker concurrency 만큼 병렬.
-            try:
-                run_scheduled_single_check.delay(str(cluster.id), schedule_type)
-                queued.append({"cluster": cluster.name})
-            except Exception as e:
-                # broker 자체 실패 — 어떤 클러스터도 큐잉 안 됨. 운영자가 알아채야 함.
-                import logging
-                logging.getLogger(__name__).exception(
-                    "Failed to queue daily check for cluster %s: %s", cluster.name, e
-                )
-                skipped.append({"cluster": cluster.name, "reason": f"queue error: {str(e)[:120]}"})
-
-        return {
-            "schedule_type": schedule_type,
-            "executed_at": datetime.now().isoformat(),
-            "queued": len(queued),
-            "skipped": len(skipped),
-            "queued_clusters": queued,
-            "skipped_clusters": skipped,
-        }
-
+    db = SessionLocal()
+    try:
+        return cms.purge_expired_logs(db)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_check_matrix_log_purge failed: %s", e)
+        return {"error": str(e)[:200]}
     finally:
         db.close()
 
@@ -256,45 +216,6 @@ def dispatch_resource_count_snapshot(self):
         collect_resource_counts.delay()
         rcs.set_schedule(db, sch["enabled"], cron_expr, last_run_at=datetime.now(_tz.utc).isoformat())
         return {"dispatched": True, "fired_at": now_aware.isoformat()}
-    finally:
-        db.close()
-
-
-@celery_app.task(bind=True, name="app.celery_app.run_scheduled_single_check")
-def run_scheduled_single_check(self, cluster_id: str, schedule_type: str):
-    """단일 클러스터 단일 회차 체크 — Beat 디스패처가 큐잉.
-
-    `run_single_check` (수동 트리거용) 과 분리한 이유: 수동은 항상 schedule_type=manual 이고,
-    스케줄은 morning/noon/evening 중 하나. 통계/로그 구분을 위해 별도 task name 사용.
-    """
-    from app.database import SessionLocal
-    from app.models import CheckScheduleType
-    from app.services.daily_checker import DailyChecker
-
-    db = SessionLocal()
-    try:
-        schedule_enum = CheckScheduleType(schedule_type)
-        checker = DailyChecker(db)
-        result = asyncio.run(
-            checker.run_daily_check(cluster_id, schedule_enum)
-        )
-        return {
-            "cluster_id": cluster_id,
-            "schedule_type": schedule_type,
-            "status": result.overall_status.value,
-            "checked_at": result.checked_at.isoformat(),
-        }
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception(
-            "Scheduled check failed for cluster %s (%s): %s",
-            cluster_id, schedule_type, e,
-        )
-        return {
-            "cluster_id": cluster_id,
-            "schedule_type": schedule_type,
-            "error": str(e)[:200],
-        }
     finally:
         db.close()
 
@@ -506,55 +427,6 @@ def run_review_and_notify(self, daily_check_log_id: str):
         return {
             "daily_check_log_id": daily_check_log_id,
             "ai_status": result.get("ai_status"),
-        }
-    finally:
-        db.close()
-
-
-@celery_app.task(bind=True, name="app.celery_app.run_deep_check_all")
-def run_deep_check_all(self, schedule_type: str = "manual"):
-    """모든 클러스터에 대해 deep check 를 centralized 모드로 실행.
-
-    각 클러스터의 가장 최근 DailyCheckLog 에 결과를 묶어 저장한다.
-    """
-    from app.database import SessionLocal
-    from app.models import Cluster
-    from app.services.deep_check_service import DeepCheckService
-
-    import logging
-    _log = logging.getLogger(__name__)
-
-    db = SessionLocal()
-    try:
-        svc = DeepCheckService(db)
-        clusters = db.query(Cluster).all()
-        results = []
-        for cluster in clusters:
-            linked_log_id = None
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    n, linked_log_id = loop.run_until_complete(
-                        svc.run_for_cluster(str(cluster.id))
-                    )
-                finally:
-                    loop.close()
-                results.append({"cluster": cluster.name, "checks_run": n, "log_id": linked_log_id})
-            except Exception as e:
-                results.append({"cluster": cluster.name, "error": str(e)})
-
-            # AI 리뷰 생성 + 알림 발송 — best-effort, 이벤트 루프 닫힌 뒤 실행
-            if linked_log_id:
-                try:
-                    run_review_and_notify.delay(linked_log_id)
-                except Exception:
-                    _log.warning("Failed to queue review/notify for log %s", linked_log_id)
-
-        return {
-            "schedule_type": schedule_type,
-            "executed_at": datetime.now().isoformat(),
-            "results": results,
         }
     finally:
         db.close()

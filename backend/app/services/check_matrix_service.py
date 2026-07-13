@@ -1,0 +1,557 @@
+"""CheckMatrixService — 점검 매트릭스(행 × 열) 그리드 빌드, 셀 이력, 기본 항목 시드,
+cron 디스패치 실행, 이력 리텐션 정리.
+
+행(CheckMatrixItem)은 3가지 실행 소스를 가진다:
+  - core_bundle : DailyChecker.run_daily_check() 원자 실행 결과 투영. cron 은
+                  Cluster.check_cron_expr (Cluster.status authority 보존을 위해 항목별이 아님).
+  - deep_check  : deep_checkers.REGISTRY 의 check_type 을 DeepCheckService 로 실행.
+  - addon       : Addon.type 매칭 인스턴스를 HealthChecker 로 실행.
+  - manual      : 자동 실행 없음 — record_manual_entry() 로만 값이 채워진다.
+
+deep_check/addon 행의 source_ref 는 "논리 키"(check_type / addon.type 문자열)이며, 클러스터별
+실제 인스턴스(DeepCheckDefinition/Addon)는 실행 시점에 이 키로 해석한다(OpsCheckService 의
+``f"type:{check_type}"`` fallback 패턴과 동일 사고).
+"""
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime, timedelta
+from typing import Any, Optional
+
+from sqlalchemy import asc
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.models import (
+    Addon,
+    CheckMatrixItem,
+    CheckMatrixResult,
+    CheckMatrixResultLog,
+    CheckMatrixSchedule,
+    CheckMatrixSourceType,
+    Cluster,
+    DeepCheckDefinition,
+    StatusEnum,
+)
+
+logger = logging.getLogger(__name__)
+
+# Ollama AI 리뷰(core_bundle)와 deep-check 부하 보호 — 이보다 짧은 평균 간격의 cron 은 거부.
+MIN_CRON_INTERVAL_MINUTES = 5
+RETENTION_SETTINGS_KEY = "check_matrix.settings"
+DEFAULT_RETENTION_DAYS = 90
+CORE_BUNDLE_ITEM_NAME = "K8S API-SERVER 응답시간"
+
+_ADDON_LABELS: dict[str, str] = {
+    "etcd-leader": "ETCD Leader",
+    "node-check": "노드 상태",
+    "control-plane": "컨트롤 플레인",
+    "system-pod": "시스템 파드",
+    "nexus": "Nexus",
+    "jenkins": "Jenkins",
+    "argocd": "ArgoCD",
+    "keycloak": "Keycloak",
+}
+
+
+# ──────────────────────────────────────────────────────────────
+# 설정(이력 보관 주기)
+# ──────────────────────────────────────────────────────────────
+def get_settings(db: Session) -> dict[str, Any]:
+    from app.models.app_setting import AppSetting
+    row = db.query(AppSetting).filter(AppSetting.key == RETENTION_SETTINGS_KEY).first()
+    val = (row.value if row and isinstance(row.value, dict) else None) or {}
+    return {"retention_days": int(val.get("retention_days") or DEFAULT_RETENTION_DAYS)}
+
+
+def set_settings(db: Session, retention_days: int) -> dict[str, Any]:
+    from app.models.app_setting import AppSetting
+    retention_days = max(1, int(retention_days))
+    row = db.query(AppSetting).filter(AppSetting.key == RETENTION_SETTINGS_KEY).first()
+    val = {"retention_days": retention_days}
+    if row:
+        row.value = val
+    else:
+        db.add(AppSetting(key=RETENTION_SETTINGS_KEY, value=val))
+    db.commit()
+    return val
+
+
+def validate_cron_min_interval(cron_expr: Optional[str]) -> None:
+    """평균 실행 간격이 MIN_CRON_INTERVAL_MINUTES 미만이면 거부."""
+    if not cron_expr:
+        return
+    try:
+        from croniter import croniter
+    except ImportError:
+        return
+    if not croniter.is_valid(cron_expr):
+        raise ValueError("올바르지 않은 cron 표현식입니다.")
+    base = datetime(2024, 1, 1, 0, 0, 0)
+    itr = croniter(cron_expr, base)
+    first = itr.get_next(datetime)
+    second = itr.get_next(datetime)
+    if (second - first).total_seconds() < MIN_CRON_INTERVAL_MINUTES * 60:
+        raise ValueError(f"cron 최소 간격은 {MIN_CRON_INTERVAL_MINUTES}분입니다.")
+
+
+# ──────────────────────────────────────────────────────────────
+# 그리드 / 이력
+# ──────────────────────────────────────────────────────────────
+def _item_to_dict(item: CheckMatrixItem) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "name": item.name,
+        "description": item.description,
+        "unit": item.unit,
+        "source_type": item.source_type.value,
+        "source_ref": item.source_ref,
+        "is_system": item.is_system,
+        "enabled": item.enabled,
+        "sort_order": item.sort_order,
+    }
+
+
+def build_grid(db: Session) -> dict[str, Any]:
+    items = (
+        db.query(CheckMatrixItem)
+        .order_by(CheckMatrixItem.sort_order.asc(), CheckMatrixItem.created_at.asc())
+        .all()
+    )
+    clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
+
+    result_by_cell: dict[tuple[str, str], CheckMatrixResult] = {
+        (str(r.item_id), str(r.cluster_id)): r for r in db.query(CheckMatrixResult).all()
+    }
+    schedule_by_cell: dict[tuple[str, str], CheckMatrixSchedule] = {
+        (str(s.item_id), str(s.cluster_id)): s for s in db.query(CheckMatrixSchedule).all()
+    }
+
+    cells: dict[str, dict[str, dict[str, Any]]] = {}
+    for item in items:
+        row: dict[str, Any] = {}
+        for cluster in clusters:
+            key = (str(item.id), str(cluster.id))
+            r = result_by_cell.get(key)
+            if item.source_type == CheckMatrixSourceType.core_bundle:
+                cron_expr = cluster.check_cron_expr
+                schedule_enabled = bool(cron_expr)
+            else:
+                sch = schedule_by_cell.get(key)
+                cron_expr = sch.cron_expr if sch else None
+                schedule_enabled = bool(sch and sch.enabled and sch.cron_expr)
+            row[str(cluster.id)] = {
+                # r 이 없으면 "미실행" — Addon.status 기본값(healthy) 등으로 오인 표시하지 않도록
+                # status 를 None 으로 명시 내려보낸다(프론트에서 "—" 렌더).
+                "status": r.status.value if r else None,
+                "value": r.value if r else None,
+                "message": r.message if r else None,
+                "checked_at": r.checked_at.isoformat() if r and r.checked_at else None,
+                "cron_expr": cron_expr,
+                "schedule_enabled": schedule_enabled,
+                "has_result": r is not None,
+            }
+        cells[str(item.id)] = row
+
+    return {
+        "items": [_item_to_dict(i) for i in items],
+        "clusters": [
+            {"id": str(c.id), "name": c.name, "check_cron_expr": c.check_cron_expr}
+            for c in clusters
+        ],
+        "cells": cells,
+    }
+
+
+def get_cell_history(db: Session, item_id, cluster_id, days: int = 30) -> dict[str, Any]:
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    logs = (
+        db.query(CheckMatrixResultLog)
+        .filter(
+            CheckMatrixResultLog.item_id == item_id,
+            CheckMatrixResultLog.cluster_id == cluster_id,
+            CheckMatrixResultLog.checked_at >= cutoff,
+        )
+        .order_by(asc(CheckMatrixResultLog.checked_at))
+        .all()
+    )
+    points = [
+        {"checked_at": l.checked_at.isoformat(), "status": l.status.value, "value": l.value}
+        for l in logs
+    ]
+    changes: list[dict[str, Any]] = []
+    prev_status: Optional[StatusEnum] = None
+    for l in logs:
+        if l.status != prev_status:
+            changes.append({
+                "checked_at": l.checked_at.isoformat(),
+                "status": l.status.value,
+                "message": l.message,
+            })
+            prev_status = l.status
+    return {"points": points, "changes": list(reversed(changes))}
+
+
+# ──────────────────────────────────────────────────────────────
+# 결과 upsert(레이스 방지: ON CONFLICT DO UPDATE) + 이력 append
+# ──────────────────────────────────────────────────────────────
+def _upsert_result(
+    db: Session,
+    item_id,
+    cluster_id,
+    status: StatusEnum,
+    value: Optional[float],
+    message: Optional[str],
+    details: Optional[dict],
+    checked_at: Optional[datetime] = None,
+) -> None:
+    checked_at = checked_at or datetime.utcnow()
+    stmt = pg_insert(CheckMatrixResult).values(
+        id=uuid.uuid4(),
+        item_id=item_id,
+        cluster_id=cluster_id,
+        status=status,
+        value=value,
+        message=message,
+        details=details,
+        checked_at=checked_at,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["item_id", "cluster_id"],
+        set_={
+            "status": status,
+            "value": value,
+            "message": message,
+            "details": details,
+            "checked_at": checked_at,
+        },
+    )
+    db.execute(stmt)
+    db.add(CheckMatrixResultLog(
+        item_id=item_id, cluster_id=cluster_id, status=status,
+        value=value, message=message, details=details, checked_at=checked_at,
+    ))
+
+
+def record_manual_entry(
+    db: Session, item_id, cluster_id, status: StatusEnum,
+    value: Optional[float], message: Optional[str],
+) -> None:
+    _upsert_result(db, item_id, cluster_id, status, value, message, details=None)
+    db.commit()
+
+
+def project_core_bundle_result(db: Session, cluster: Cluster, log: Any) -> None:
+    """DailyChecker 가 커밋한 DailyCheckLog 에서 API 응답시간을 core_bundle 행에 투영."""
+    item = (
+        db.query(CheckMatrixItem)
+        .filter(CheckMatrixItem.source_type == CheckMatrixSourceType.core_bundle)
+        .first()
+    )
+    if item is None:
+        return
+    value = float(log.api_server_response_time_ms) if log.api_server_response_time_ms is not None else None
+    message = f"API 서버 응답시간 {value:.0f}ms" if value is not None else "API 서버 응답 없음"
+    _upsert_result(
+        db, item.id, cluster.id, log.api_server_status, value, message,
+        log.api_server_details, checked_at=log.checked_at,
+    )
+    db.commit()
+
+
+# ──────────────────────────────────────────────────────────────
+# 논리 키 → 클러스터별 실제 인스턴스 해석 + 실행
+# ──────────────────────────────────────────────────────────────
+def _resolve_deep_check_definition(db: Session, check_type: str, cluster_id) -> Optional[DeepCheckDefinition]:
+    """클러스터 전용 정의 우선, 없으면 글로벌 정의로 fallback."""
+    d = (
+        db.query(DeepCheckDefinition)
+        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id == cluster_id)
+        .first()
+    )
+    if d is not None:
+        return d
+    return (
+        db.query(DeepCheckDefinition)
+        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id.is_(None))
+        .first()
+    )
+
+
+def _resolve_addon(db: Session, addon_type: str, cluster_id) -> Optional[Addon]:
+    return (
+        db.query(Addon)
+        .filter(Addon.type == addon_type, Addon.cluster_id == cluster_id)
+        .first()
+    )
+
+
+def execute_item_for_cluster(db: Session, item: CheckMatrixItem, cluster: Cluster) -> bool:
+    """due 한 item × cluster 셀을 실행하고 결과를 upsert. 실행 대상(정의/애드온)이
+    해당 클러스터에 없으면 조용히 False — 셀은 "미실행" 상태로 남는다."""
+    if item.source_type == CheckMatrixSourceType.deep_check:
+        definition = _resolve_deep_check_definition(db, item.source_ref, cluster.id)
+        if definition is None:
+            return False
+        from app.services.deep_check_service import DeepCheckService
+        res = DeepCheckService(db).run_definition_once(definition.id, cluster=cluster, persist=True)
+        try:
+            status = StatusEnum(res.get("status", "pending"))
+        except ValueError:
+            status = StatusEnum.pending
+        _upsert_result(db, item.id, cluster.id, status, None, res.get("message") or "", res.get("details"))
+        db.commit()
+        return True
+
+    if item.source_type == CheckMatrixSourceType.addon:
+        addon = _resolve_addon(db, item.source_ref, cluster.id)
+        if addon is None:
+            return False
+        from app.services.health_checker import HealthChecker
+        result = HealthChecker(db).run_single_addon_check(cluster.id, addon.id)
+        if result is None:
+            return False
+        _upsert_result(
+            db, item.id, cluster.id, result.status, result.response_time,
+            result.message or "", result.details,
+        )
+        db.commit()
+        return True
+
+    return False  # core_bundle / manual — 이 경로로 실행하지 않음
+
+
+def _run_core_bundle(db: Session, cluster: Cluster) -> None:
+    import asyncio
+    from app.models import CheckScheduleType
+    from app.services.daily_checker import DailyChecker
+
+    log = asyncio.run(DailyChecker(db).run_daily_check(str(cluster.id), CheckScheduleType.manual))
+    project_core_bundle_result(db, cluster, log)
+
+
+# ──────────────────────────────────────────────────────────────
+# 매분 cron 디스패치 (Celery Beat → run_check_matrix_dispatch 태스크가 호출)
+# ──────────────────────────────────────────────────────────────
+def _resolve_tz():
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    try:
+        return ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        return ZoneInfo("Asia/Seoul")
+
+
+def _anchor_naive(last_run_at: Optional[datetime], now_utc: datetime, tz) -> datetime:
+    from datetime import timezone as _tz
+    raw = last_run_at or (now_utc - timedelta(days=1))
+    if raw.tzinfo is None:
+        raw = raw.replace(tzinfo=_tz.utc)
+    return raw.astimezone(tz).replace(tzinfo=None)
+
+
+def dispatch_due(db: Session) -> dict[str, Any]:
+    from datetime import timezone as _tz
+
+    try:
+        from croniter import croniter
+    except ImportError:
+        return {"dispatched": 0, "reason": "croniter_missing"}
+
+    tz = _resolve_tz()
+    now_utc = datetime.now(_tz.utc)
+    now_aware = now_utc.astimezone(tz)
+    now_naive = now_aware.replace(tzinfo=None)
+    check_at = now_utc.replace(tzinfo=None)
+
+    core_fired = 0
+    cell_fired = 0
+    errors: list[str] = []
+
+    # 1) core_bundle — Cluster.check_cron_expr (Cluster.status authority 는 여기서만 갱신)
+    for cluster in db.query(Cluster).filter(Cluster.check_cron_expr.isnot(None)).all():
+        cron_expr = (cluster.check_cron_expr or "").strip()
+        if not cron_expr or not croniter.is_valid(cron_expr):
+            continue
+        anchor = _anchor_naive(cluster.check_last_run_at, now_utc, tz)
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            continue
+        if next_fire > now_naive:
+            continue
+        cluster.check_last_run_at = check_at
+        db.commit()
+        try:
+            _run_core_bundle(db, cluster)
+            core_fired += 1
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            errors.append(f"core:{cluster.name}:{str(e)[:150]}")
+            logger.exception("check-matrix core dispatch failed cluster=%s", cluster.name)
+
+    # 2) deep_check / addon 행 — CheckMatrixSchedule
+    schedules = (
+        db.query(CheckMatrixSchedule)
+        .filter(CheckMatrixSchedule.enabled.is_(True))
+        .filter(CheckMatrixSchedule.cron_expr.isnot(None))
+        .all()
+    )
+    for sch in schedules:
+        cron_expr = (sch.cron_expr or "").strip()
+        if not cron_expr or not croniter.is_valid(cron_expr):
+            continue
+        anchor = _anchor_naive(sch.last_run_at, now_utc, tz)
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            continue
+        if next_fire > now_naive:
+            continue
+
+        item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == sch.item_id).first()
+        cluster = db.query(Cluster).filter(Cluster.id == sch.cluster_id).first()
+        sch.last_run_at = check_at
+        db.commit()
+        if item is None or cluster is None:
+            continue
+        try:
+            if execute_item_for_cluster(db, item, cluster):
+                cell_fired += 1
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            errors.append(f"cell:{item.name}:{cluster.name}:{str(e)[:150]}")
+            logger.exception(
+                "check-matrix cell dispatch failed item=%s cluster=%s", item.name, cluster.name,
+            )
+
+    return {
+        "core_fired": core_fired,
+        "cell_fired": cell_fired,
+        "errors": errors,
+        "executed_at": now_aware.isoformat(),
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# 리텐션 정리 (일 1회 Celery Beat)
+# ──────────────────────────────────────────────────────────────
+def purge_expired_logs(db: Session, *, max_batches: int = 50, batch_size: int = 5000) -> dict[str, Any]:
+    """task_time_limit(5분) 보호 — 청크 단위 삭제 + 배치 상한."""
+    retention_days = get_settings(db)["retention_days"]
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    total_deleted = 0
+    for _ in range(max_batches):
+        ids = [
+            row[0]
+            for row in db.query(CheckMatrixResultLog.id)
+            .filter(CheckMatrixResultLog.checked_at < cutoff)
+            .limit(batch_size)
+            .all()
+        ]
+        if not ids:
+            break
+        db.query(CheckMatrixResultLog).filter(CheckMatrixResultLog.id.in_(ids)).delete(
+            synchronize_session=False,
+        )
+        db.commit()
+        total_deleted += len(ids)
+        if len(ids) < batch_size:
+            break
+    return {"retention_days": retention_days, "deleted": total_deleted}
+
+
+# ──────────────────────────────────────────────────────────────
+# 기본 항목 시드 (main.py lifespan, 테이블 비어있을 때만)
+# ──────────────────────────────────────────────────────────────
+def seed_default_items(db: Session) -> int:
+    if db.query(CheckMatrixItem).count() > 0:
+        return 0
+
+    added = 0
+    sort_order = 0
+
+    db.add(CheckMatrixItem(
+        name=CORE_BUNDLE_ITEM_NAME,
+        description=(
+            "DailyChecker 원자 실행(API 서버/컴포넌트/노드/시스템파드) 결과 중 API 응답시간 투영. "
+            "cron 은 클러스터 열 헤더에서 설정(Cluster.status 산정과 직결 — 삭제 불가)."
+        ),
+        unit="ms",
+        source_type=CheckMatrixSourceType.core_bundle,
+        source_ref=None,
+        is_system=True,
+        sort_order=sort_order,
+    ))
+    sort_order += 10
+    added += 1
+
+    from app.services.deep_checkers import REGISTRY
+    for check_type, (_, spec) in REGISTRY.items():
+        db.add(CheckMatrixItem(
+            name=spec.display_name,
+            description=spec.description,
+            source_type=CheckMatrixSourceType.deep_check,
+            source_ref=check_type,
+            is_system=False,
+            sort_order=sort_order,
+        ))
+        sort_order += 10
+        added += 1
+
+    addon_types = sorted({row[0] for row in db.query(Addon.type).distinct().all() if row[0]})
+    for addon_type in addon_types:
+        db.add(CheckMatrixItem(
+            name=_ADDON_LABELS.get(addon_type, addon_type),
+            source_type=CheckMatrixSourceType.addon,
+            source_ref=addon_type,
+            is_system=False,
+            sort_order=sort_order,
+        ))
+        sort_order += 10
+        added += 1
+
+    db.commit()
+    return added
+
+
+def seed_default_schedules(db: Session) -> int:
+    """시드 직후 1회 — deep_check 행 중 REGISTRY.default_enabled=True 인 항목만
+    기존 +15분 오프셋 cron 으로 클러스터마다 활성화(기존 자동 실행 동작 보존).
+    addon 행은 기존에도 자동 cron 이 없었으므로 스케줄을 만들지 않는다(수동 트리거만).
+    """
+    from app.services.deep_checkers import REGISTRY
+
+    items = (
+        db.query(CheckMatrixItem)
+        .filter(CheckMatrixItem.source_type == CheckMatrixSourceType.deep_check)
+        .all()
+    )
+    if not items:
+        return 0
+    clusters = db.query(Cluster).all()
+    if not clusters:
+        return 0
+
+    existing = {(str(s.item_id), str(s.cluster_id)) for s in db.query(CheckMatrixSchedule).all()}
+    added = 0
+    for item in items:
+        entry = REGISTRY.get(item.source_ref)
+        default_enabled = bool(entry[1].default_enabled) if entry else True
+        if not default_enabled:
+            continue
+        for cluster in clusters:
+            key = (str(item.id), str(cluster.id))
+            if key in existing:
+                continue
+            db.add(CheckMatrixSchedule(
+                item_id=item.id,
+                cluster_id=cluster.id,
+                cron_expr="15 9,13,18 * * *",
+                enabled=True,
+            ))
+            added += 1
+    if added:
+        db.commit()
+    return added

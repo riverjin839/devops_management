@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Integer, Boolean, Time, Text
+from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -73,38 +73,3 @@ class DailyCheckLog(Base):
 
     def __repr__(self):
         return f"<DailyCheckLog(cluster_id={self.cluster_id}, schedule={self.schedule_type}, status={self.overall_status})>"
-
-
-class CheckSchedule(Base):
-    """체크 스케줄 설정"""
-    __tablename__ = "check_schedules"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id"), nullable=False)
-
-    # 스케줄 활성화 여부
-    is_active = Column(Boolean, default=True)
-
-    # 아침 체크 시간 (예: 09:00)
-    morning_time = Column(Time, nullable=True)
-    morning_enabled = Column(Boolean, default=True)
-
-    # 점심 체크 시간 (예: 13:00)
-    noon_time = Column(Time, nullable=True)
-    noon_enabled = Column(Boolean, default=True)
-
-    # 저녁 체크 시간 (예: 18:00)
-    evening_time = Column(Time, nullable=True)
-    evening_enabled = Column(Boolean, default=True)
-
-    # 타임존
-    timezone = Column(String(50), default="Asia/Seoul")
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Relationships
-    cluster = relationship("Cluster", backref="check_schedule")
-
-    def __repr__(self):
-        return f"<CheckSchedule(cluster_id={self.cluster_id}, active={self.is_active})>"
