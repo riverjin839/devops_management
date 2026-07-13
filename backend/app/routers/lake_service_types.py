@@ -63,6 +63,8 @@ def _builtin_locked(op: str) -> HTTPException:
 @router.get("", response_model=LakeServiceTypeListResponse)
 def list_types(
     enabled: bool | None = Query(default=None, description="true=활성만, false=비활성만, 미지정=전체"),
+    domain: str | None = Query(default=None, description="pep|app 필터"),
+    category_id: Optional[UUID] = Query(default=None, description="상위 카테고리 필터"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -71,6 +73,10 @@ def list_types(
     q = db.query(LakeServiceType)
     if enabled is not None:
         q = q.filter(LakeServiceType.enabled == enabled)
+    if domain:
+        q = q.filter(LakeServiceType.domain == domain)
+    if category_id is not None:
+        q = q.filter(LakeServiceType.category_id == category_id)
     total = q.count()
     items = (
         q.order_by(LakeServiceType.sort_order, LakeServiceType.service_type)
@@ -122,6 +128,8 @@ def create_type(
         is_builtin=False,             # 운영자는 builtin 만들 수 없음
         enabled=payload.enabled,
         sort_order=payload.sort_order,
+        domain=payload.domain,
+        category_id=payload.category_id,
     )
     db.add(row)
     db.commit()
@@ -150,9 +158,10 @@ def update_type(
 
     update = payload.model_dump(exclude_unset=True)
 
-    # builtin 보호: label/category/default_path 변경 거부
+    # builtin 보호: label/category/default_path/domain 변경 거부 (category_id 재분류는 허용 —
+    # Runtime/Catalog/Workflow/JupyterLab 사이 이동은 운영자가 자유롭게 할 수 있어야 함)
     if row.is_builtin:
-        locked_fields = {"label", "category", "default_path"} & set(update.keys())
+        locked_fields = {"label", "category", "default_path", "domain"} & set(update.keys())
         if locked_fields:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

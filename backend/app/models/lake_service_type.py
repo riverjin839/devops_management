@@ -5,6 +5,9 @@
    부팅 시 자동 seed (is_builtin=true). 삭제 불가, enable/disable 만 가능.
  - custom type 은 운영자가 Settings 에서 추가 (is_builtin=false). 자유 add/edit/delete.
  - 같은 service_type slug 중복 X (unique constraint).
+ - domain('pep'|'app') + category_id(ServiceCategory FK) — 좌측 사이드바 "PEP 서비스"/
+   "APP 서비스" 2단 네비게이션(카테고리→하위 서비스)에 쓰인다. 기존 category 문자열
+   필드(catalog/runtime/analytics)는 /lake-services 페이지 하위호환용으로 그대로 유지.
 
 Probe 매핑:
  - builtin: services/lake_checkers/LAKE_CHECKER_REGISTRY 의 클래스
@@ -14,7 +17,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, String, Text, DateTime, Integer, Boolean, Index, UniqueConstraint, func,
+    Column, String, Text, DateTime, Integer, Boolean, ForeignKey, Index, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -28,6 +31,7 @@ class LakeServiceType(Base):
         UniqueConstraint("service_type", name="uq_lake_service_types_slug"),
         Index("ix_lake_types_enabled", "enabled"),
         Index("ix_lake_types_sort", "sort_order"),
+        Index("ix_lake_types_domain_category", "domain", "category_id"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -46,6 +50,12 @@ class LakeServiceType(Base):
     enabled = Column(Boolean, nullable=False, default=True, server_default="true")
     # UI 정렬 순서 (작을수록 위)
     sort_order = Column(Integer, nullable=False, default=100, server_default="100")
+    # pep | app — PEP 서비스/APP 서비스 사이드바 아이콘 구분 (기존 8개 builtin 은 전부 pep)
+    domain = Column(String(10), nullable=False, default="pep", server_default="pep")
+    # 상위 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) FK — null 이면 미분류
+    category_id = Column(
+        UUID(as_uuid=True), ForeignKey("service_categories.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_at = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False)
     updated_at = Column(

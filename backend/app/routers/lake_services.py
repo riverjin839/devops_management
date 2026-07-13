@@ -150,6 +150,8 @@ def list_lake_services(
     service_type: str | None = Query(default=None, description="service_type 필터 (airflow/spark/...)"),
     category: str | None = Query(default=None, description="catalog/runtime/analytics 필터"),
     enabled: bool | None = Query(default=None, description="enabled 토글 필터"),
+    domain: str | None = Query(default=None, description="pep|app 필터"),
+    category_id: Optional[UUID] = Query(default=None, description="상위 카테고리(ServiceCategory) 필터 — type 조인"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -165,6 +167,12 @@ def list_lake_services(
         q = q.filter(LakeService.category == category)
     if enabled is not None:
         q = q.filter(LakeService.enabled == enabled)
+    if domain:
+        q = q.filter(LakeService.domain == domain)
+    if category_id is not None:
+        q = q.join(LakeServiceType, LakeServiceType.service_type == LakeService.service_type).filter(
+            LakeServiceType.category_id == category_id
+        )
 
     total = q.count()
     items = (
@@ -243,7 +251,7 @@ def create_lake_service(
     if not cluster:
         raise _cluster_not_found(payload.cluster_id)
 
-    # category: DB row 우선, fallback 코드 catalog
+    # category/domain: DB row(LakeServiceType) 가 항상 우선 — client 입력값 무시
     category = type_row.category or get_category_for(payload.service_type)
     data = payload.model_dump(exclude={"meta"})
     svc = LakeService(
@@ -251,6 +259,7 @@ def create_lake_service(
         service_type=data["service_type"],
         name=data["name"],
         category=category,
+        domain=type_row.domain,
         endpoint_url=data["endpoint_url"],
         namespace=data.get("namespace"),
         enabled=data.get("enabled", True),

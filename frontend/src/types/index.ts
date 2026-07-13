@@ -2435,6 +2435,9 @@ export interface LakeServiceTypeRow {
   isBuiltin: boolean;
   enabled: boolean;
   sortOrder: number;
+  /** PEP 서비스 / APP 서비스 사이드바 2단 네비게이션용 — 도메인 + 상위 카테고리 FK */
+  domain: string;
+  categoryId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2448,6 +2451,8 @@ export interface LakeServiceTypeInput {
   icon?: string | null;
   enabled?: boolean;
   sortOrder?: number;
+  domain?: string;
+  categoryId?: string | null;
 }
 
 export interface LakeServiceTypeUpdate {
@@ -2458,6 +2463,48 @@ export interface LakeServiceTypeUpdate {
   icon?: string | null;
   enabled?: boolean;
   sortOrder?: number;
+  domain?: string;
+  categoryId?: string | null;
+}
+
+// ─── PEP/APP 서비스 상위 카테고리 (service-category-catalog) ──────
+export type ServiceDomain = 'pep' | 'app';
+
+export interface ServiceCategory {
+  id: string;
+  domain: ServiceDomain;
+  key: string;
+  label: string;
+  icon?: string | null;
+  isBuiltin: boolean;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceCategoryInput {
+  domain: ServiceDomain;
+  key: string;
+  label: string;
+  icon?: string | null;
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+export interface ServiceCategoryUpdate {
+  label?: string;
+  icon?: string | null;
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+export interface ServiceCategoryListResponse {
+  data: ServiceCategory[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 export interface LakeServiceTypeListResponseRows {
@@ -2474,6 +2521,7 @@ export interface LakeService {
   serviceType: string;
   name: string;
   category: string;
+  domain: ServiceDomain;
   endpointUrl: string;
   namespace?: string | null;
   enabled: boolean;
@@ -2488,7 +2536,8 @@ export interface LakeService {
 
 export interface LakeServiceInput {
   clusterId: string;
-  serviceType: LakeServiceType;
+  /** builtin(8종) + 운영자가 등록한 custom slug 모두 허용 — 실제 검증은 서버가 DB 조회로 수행. */
+  serviceType: string;
   name: string;
   endpointUrl: string;
   namespace?: string | null;

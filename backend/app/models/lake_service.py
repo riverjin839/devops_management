@@ -32,6 +32,7 @@ class LakeService(Base):
         UniqueConstraint("cluster_id", "service_type", "name", name="uq_lake_cluster_type_name"),
         Index("ix_lake_services_cluster_status", "cluster_id", "status"),
         Index("ix_lake_services_type", "service_type"),
+        Index("ix_lake_services_domain", "domain"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -44,6 +45,8 @@ class LakeService(Base):
     name = Column(String(100), nullable=False)
     # catalog|runtime|analytics — service_type 으로 자동 결정 권장 (router 에서 set)
     category = Column(String(20), nullable=False, default="runtime")
+    # pep | app — 등록 시 LakeServiceType.domain 에서 자동 파생 (router 에서 set)
+    domain = Column(String(10), nullable=False, default="pep", server_default="pep")
     endpoint_url = Column(String(512), nullable=False)
     namespace = Column(String(100), nullable=True)
     enabled = Column(Boolean, nullable=False, default=True, server_default="true")

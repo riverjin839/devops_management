@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell,
-  TrendingUp, FileSpreadsheet,
+  TrendingUp, FileSpreadsheet, Package,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -26,6 +26,8 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/coroot':             { defaultLabel: '애플리케이션 APM', icon: Gauge, iconColor: 'text-blue-500', iconSize: 'w-5 h-5' },
   '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
+  '/pep-services':       { defaultLabel: 'PEP 서비스',      icon: Package },
+  '/app-services':       { defaultLabel: 'APP 서비스',      icon: Boxes },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
   '/todo-today':         { defaultLabel: 'Work To Do',     icon: CalendarCheck2 },
@@ -63,7 +65,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
 };
 
 // 사이드바 레일에 표시되는 그룹들
-export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'devops' | 'collab' | 'knowledge' | 'system';
+export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'devops' | 'collab' | 'pep-services' | 'app-services' | 'system';
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
   { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
@@ -71,9 +73,11 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import'], modes: ['work'] },
-  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs'], modes: ['work'] },
-  // 주: 지식/분석은 지식 허브(/docs) 하나로 통합 — 지식베이스·Q&A(운영노트)·마인드맵·온톨로지·
-  //     기술동향·작업가이드(SOP)는 허브 탭/목록에서 접근하므로 개별 좌측 메뉴를 제거했다.
+  // 구 "지식/분석"(knowledge) 자리 재정의 — Runtime/Catalog/Workflow/JupyterLab 등 상위
+  // 카테고리(Settings → "서비스 카테고리"에서 추가 가능) → 하위 서비스 2단 네비게이션.
+  // 지식 허브(/docs)는 코드/데이터 그대로 유지되며 직접 URL 접근으로만 남는다(ops-notes 등과 동일).
+  { id: 'pep-services', label: 'PEP 서비스', icon: Package, paths: ['/pep-services'], modes: ['work'] },
+  { id: 'app-services', label: 'APP 서비스', icon: Boxes,   paths: ['/app-services'], modes: ['work'] },
   { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
 ];
 

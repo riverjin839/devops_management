@@ -10,6 +10,21 @@
 
 1.3.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **PEP 서비스 / APP 서비스 사이드바 아이콘 추가**: "지식/분석" 아이콘을 "PEP 서비스"로
+  이름·개념 변경(Runtime/Catalog/Workflow/JupyterLab 등 상위 카테고리 → 하위 서비스
+  2단 네비게이션)하고, 동일 구조의 "APP 서비스" 아이콘을 신규 추가(빈 카테고리로 시작,
+  Settings 에서 직접 등록). 상위 카테고리는 Settings → "서비스 카테고리"에서 관리자가
+  자유롭게 추가/편집/비활성화할 수 있다(PEP builtin 4개는 삭제 불가). 기존 LAKE 서비스
+  시스템을 확장해 재사용 — 신규 필드로 도메인(pep/app)과 상위 카테고리를 부여했다.
+  지식 허브(`/docs`)는 코드/데이터 그대로 유지되며 직접 URL 접근으로만 남는다.
+  - Backend: 신규 `ServiceCategory` 모델 + `/api/v1/service-categories` CRUD 라우터.
+    `LakeServiceType`/`LakeService` 에 `domain`/`category_id` 컬럼 추가(`_safe_add_column`),
+    부팅 시 PEP builtin 카테고리 4개 자동 시드 + 기존 8개 builtin 타입 category_id 백필.
+  - Frontend: `ServiceDomainCatalog`(카테고리 레일 + 서비스 카드), `/pep-services`,
+    `/app-services` 라우트, Settings `ServiceCategoryManager`, `LakeServiceTypeManager` 에
+    도메인/카테고리 필드 추가.
+
 ## [1.3.1] - 2026-07-13
 
 ### Changed

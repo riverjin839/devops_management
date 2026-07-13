@@ -1,18 +1,19 @@
 import { Link } from 'react-router-dom';
 import {
   Layers, Server, Network, Database,
-  GitBranch, Users, BookOpen, Settings,
+  GitBranch, Users, Package, Boxes, Settings,
 } from 'lucide-react';
 
 const DOMAINS = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    to: '/cluster-overview' },
-  { id: 'server',    label: '서버/인프라', icon: Server,    to: '/node-specs' },
-  { id: 'network',   label: '네트워크',   icon: Network,   to: '/cilium-trace' },
-  { id: 'storage',   label: '스토리지',   icon: Database,  to: '/mc' },
-  { id: 'devops',    label: 'DevOps',     icon: GitBranch, to: '/playbooks' },
-  { id: 'collab',    label: '협업',       icon: Users,     to: '/tasks-mgmt' },
-  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  to: '/docs' },
-  { id: 'system',    label: '시스템',     icon: Settings,  to: '/settings' },
+  { id: 'cluster',      label: '클러스터',   icon: Layers,    to: '/cluster-overview' },
+  { id: 'server',       label: '서버/인프라', icon: Server,    to: '/node-specs' },
+  { id: 'network',      label: '네트워크',   icon: Network,   to: '/cilium-trace' },
+  { id: 'storage',      label: '스토리지',   icon: Database,  to: '/mc' },
+  { id: 'devops',       label: 'DevOps',     icon: GitBranch, to: '/playbooks' },
+  { id: 'collab',       label: '협업',       icon: Users,     to: '/tasks-mgmt' },
+  { id: 'pep-services', label: 'PEP 서비스', icon: Package,   to: '/pep-services' },
+  { id: 'app-services', label: 'APP 서비스', icon: Boxes,     to: '/app-services' },
+  { id: 'system',       label: '시스템',     icon: Settings,  to: '/settings' },
 ] as const;
 
 export function DomainQuickAccess() {
