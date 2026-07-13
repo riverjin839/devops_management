@@ -33,6 +33,13 @@
   `backend frontend`) — 컨테이너가 정확히 1개인 Deployment 는 자동 판별하고, 여러 개면 자동 판별
   불가 사유와 함께 명시적으로 지정하라는 에러 메시지를 출력한다. v1.1.0 의 `-t` 옵션에 이어지는
   개선.
+- **아이콘 picker — Airflow / Spark / JupyterHub / JupyterLab 브랜드 로고 추가**: 클러스터 ·
+  서비스 카탈로그 아이콘 선택창(오픈소스 / CNCF 그룹)에서 LAKE 계열 OSS 로고를 고를 수 있게
+  simple-icons 기반 브랜드 아이콘을 추가. 요청된 항목 중 Cilium/Keycloak/Nexus/Prometheus/
+  Grafana/MinIO(AIStor)는 이미 등록되어 있어 그대로 재사용된다. StarRocks 는 simple-icons 에
+  공식 브랜드 SVG 가 없어 제외(필요 시 아이콘 picker 의 emoji/이미지 업로드로 대체 가능),
+  JupyterHub/JupyterLab 은 두 프로젝트가 공유하는 동일한 Jupyter 로고를 사용.
+  - Frontend: `lib/brandIcons.ts` — `BRAND_ICONS.Airflow/Spark/JupyterHub/JupyterLab`.
 
 ### Fixed
 - **Jira Excel 가져오기 — `.xls` 업로드 시 "Expected BOF record" 오류**: Jira 의
