@@ -105,6 +105,18 @@
   - Frontend: `JiraExcelImportPage.tsx` — `ViewModeBar` 로 파일 업로드/붙여넣기 전환,
     `jiraApi.importPaste()`.
   - Backend: `POST /api/v1/jira/import/paste` (`JiraExcelPasteRequest`) — `routers/jira.py`.
+- **홈 "담당자별 진행 현황 — 주간" 탭(WeeklyStatusTimeline) 밀도 개선 + 기본 탭 복귀**:
+  담당자 기준 스윔레인 뷰에도 "담당자" 탭(MemberTodayTodos)과 동등한 표시 제한/펼치기를
+  갖춰 기본 탭을 다시 '주간'으로 되돌렸다.
+  - 담당자별 기본 5건만 표시 → "+N건 더보기"로 펼치고, 펼친 뒤에는 "접기"로 다시 접을 수
+    있음.
+  - 이번 주 전체 업무를 모은 "전체" 요약 행을 항상 목록 최상단(로그인 본인 행보다도 위)에
+    강조 표시.
+  - 화면당 표시할 담당자(행) 수를 툴바에서 조절 가능(기본 20명, 옵션 10/20/30/50 —
+    사용자별 localStorage 저장), 라인 밀도(레인 높이 32→24px)와 글씨 크기를 줄여 스크롤
+    없이 더 많은 담당자가 한 화면에 보이도록 개선.
+  - Frontend: `WeeklyStatusTimeline.tsx`(`ASSIGNEE_ITEM_LIMIT`, `ROWS_LIMIT_OPTIONS`,
+    `TEAM_ROW_NAME`), `HomePage.tsx`(`weeklyTab` 기본값 `'week'`로 변경).
 
 ### Fixed
 - **Jira Excel 가져오기 — `.xls` 업로드 시 "Expected BOF record" 오류**: Jira 의

@@ -38,7 +38,7 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 좌측 상단 홈 버튼으로 "업무 현황"(work) ↔ "플랫폼 현황"(platform) 두 모드를 토글하며, 상단 고정 스트립에는 내 할일/미해결 이슈/위험 클러스터/다음 일정 KPI 필과 업무 알람 종이 항상 노출된다.
 - **UI 구성**:
   - 공통 상단 스트립: 사용자명 + 날짜, KPI 필 4종(`내 할일`→`/todo-today`, `미해결 이슈`→`/items`, `위험 클러스터`→`/cluster-overview`, `다음 일정`→`/items`), `WorkAlarmBell`.
-  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `member`).
+  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "전체" 요약 행(본인 행보다 위), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원.
   - **플랫폼(platform) 모드**: `InfraHealthBar`(클러스터 헬스 바) → `DailyCheckReviewPanel`(일일점검 검토) → `IncidentMiniPanel`(장애 미니 패널) → `DomainQuickAccess`(도메인별 바로가기) 세로 스택.
   - ClusterSidebar 미사용(홈은 특정 클러스터에 종속되지 않음).
 - **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 내부 컴포넌트가 각각 `useDailyCheckSummary()`(`hooks/useDailyCheck.ts`) 사용. 로컬 state: `weeklyTab`.
