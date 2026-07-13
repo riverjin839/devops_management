@@ -10,6 +10,7 @@ import {
   siApachekafka, siRabbitmq, siApacherocketmq,
   siAnsible, siTerraform, siVagrant,
   siBackstage, siDapr, siKnative, siCncf,
+  siApacheairflow, siApachespark, siJupyter,
 } from 'simple-icons';
 
 /** simple-icons 항목(브랜드 로고 SVG path) → currentColor 로 채워지는 아이콘 컴포넌트.
@@ -57,6 +58,12 @@ export const BRAND_ICONS: Record<string, ComponentType<{ className?: string }>> 
   Ansible: brand(siAnsible), Terraform: brand(siTerraform), Vagrant: brand(siVagrant),
   // 플랫폼
   Backstage: brand(siBackstage), Dapr: brand(siDapr), Knative: brand(siKnative), CNCF: brand(siCncf),
+  // 데이터 / LAKE (Airflow·Spark·JupyterHub·JupyterLab — 공식 simple-icons 로고 기준.
+  // StarRocks 는 simple-icons 에 등록된 브랜드 SVG 가 없어 제외 — 필요하면 아이콘 picker 의
+  // emoji/이미지 업로드로 대체 가능. JupyterHub/JupyterLab 은 두 프로젝트 모두 동일한
+  // Jupyter 로고를 공식 마크로 사용해 같은 아이콘을 공유한다.)
+  Airflow: brand(siApacheairflow), Spark: brand(siApachespark),
+  JupyterHub: brand(siJupyter), JupyterLab: brand(siJupyter),
 };
 
 export const BRAND_ICON_LIST: { name: string; Component: ComponentType<{ className?: string }> }[] =
