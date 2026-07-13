@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Plus, Settings2, ChevronDown, Users } from 'lucide-react';
+import { Plus, Settings2, ChevronDown } from 'lucide-react';
 import { WorkItem, WorkItemCreate, WorkItemUpdate, WorkItemType, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
-import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './workItemKanbanUtils';
 import { loadWorkItemImages, saveWorkItemImages } from '@/lib/workItemImages';
 import { RichTextEditor, assigneeWorkTableTemplate } from '@/components/editor';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
@@ -15,8 +14,6 @@ import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
 import { useWorkItems } from '@/hooks/useWorkItems';
-import { useProjects } from '@/hooks/useProjects';
-import { useSprints } from '@/hooks/useSprints';
 import { useAuthStore } from '@/stores/authStore';
 
 const DEFAULT_TASK_CATEGORIES = [
@@ -40,6 +37,13 @@ const DEFAULT_TASK_CATEGORIES = [
 const TASK_CATEGORIES = [...DEFAULT_TASK_CATEGORIES, '기타'];
 const CATEGORY_STORAGE_KEY = 'k8s:item:categories';
 
+/** 서비스 운영에 직접 결부된 카테고리만 서비스 선택을 강제한다.
+ *  나머지 기본 카테고리(문서/회의/교육/코드리뷰/기획/기타)와 사용자 정의 카테고리는 선택사항. */
+const SERVICE_REQUIRED_CATEGORIES = new Set([
+  'Cluster 점검', 'Node 관리', 'Pod 배포', 'Network 설정', 'Storage 관리',
+  'RBAC / 보안', 'Monitoring 설정', 'Backup / Restore', '업그레이드', '장애 대응', '이슈 대응',
+]);
+
 function loadCustomCategories(): string[] {
   try {
     const raw = localStorage.getItem(CATEGORY_STORAGE_KEY);
@@ -58,18 +62,9 @@ function parseAssignees(s?: string | null): string[] {
   return s ? s.split(',').map((t) => t.trim()).filter(Boolean) : [];
 }
 
-const PRIORITIES = [
-  { value: 'high', label: '높음' },
-  { value: 'medium', label: '보통' },
-  { value: 'low', label: '낮음' },
-];
-
-const KANBAN_STATUS_OPTIONS: KanbanStatus[] = ['backlog', 'todo', 'in_progress', 'review_test', 'done'];
-const MODULE_OPTIONS = Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][];
-const TYPE_OPTIONS = Object.entries(TYPE_LABEL_CONFIG) as [WorkItemTypeLabel, { label: string; cls: string }][];
-
-/** 신규 등록 기본값 — 시간 없이 날짜만(YYYY-MM-DD). 시간은 DateTimePicker 옵션으로 추가. */
-function todayDate(): string {
+/** 신규 등록 기본값 — 현재 날짜(YYYY-MM-DD, 시간 미포함). DateTimePicker 는 'T' 가 없으면
+ *  "시간 포함" 토글이 기본 꺼진 상태로 열려 날짜만 입력하는 흐름을 기본값으로 삼는다. */
+function nowDateOnly(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -132,20 +127,15 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
+  // 프로젝트/스프린트 배정은 등록 폼에서 뺐다(효율화) — 기존 값은 수정 시 유지되도록
+  // state 는 남겨두되 선택 UI 는 제공하지 않는다.
   const [projectId, setProjectId] = useState(initial?.projectId ?? '');
-  const { data: projectsData } = useProjects();
-  const projects = projectsData?.data ?? [];
-
   const [sprintId, setSprintId] = useState(initial?.sprintId ?? '');
-  const { data: sprintsData } = useSprints();
-  const sprints = sprintsData?.data ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
   const [primaryList, setPrimaryList] = useState<string[]>(
     !initial && !parentItem && defaultAssignee ? [defaultAssignee] : [],
   );
-  const [primInput, setPrimInput] = useState('');
   const [secondaryList, setSecondaryList] = useState<string[]>([]);
-  const [secInput, setSecInput] = useState('');
   const [clusterIds, setClusterIds] = useState<string[]>([]);
   const [category, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
@@ -156,7 +146,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [componentCustom, setComponentCustom] = useState('');
   const [content, setTaskContent] = useState('');
   const [resolution, setResultContent] = useState('');
-  const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? todayDate());
+  const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? nowDateOnly());
   const [closedAt, setCompletedAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
@@ -166,7 +156,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
   const [showCatManage, setShowCatManage] = useState(false);
   const [newCatInput, setNewCatInput] = useState('');
-  const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('todo');
+  const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('in_progress');
   const [module, setModule] = useState<WorkItemModule | ''>('');
   const [typeLabel, setTypeLabel] = useState<WorkItemTypeLabel | ''>('');
   const [effortHours, setEffortHours] = useState('');
@@ -281,27 +271,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     setImages((prev) => [...prev, dataUrl]);
   };
 
-  // 담당자(정) 복수 선택 — chip 추가/삭제 (쉼표/Enter 로 구분).
-  const addPrimary = (raw: string) => {
-    const name = raw.trim().replace(/,$/, '').trim();
-    if (!name) return;
-    setPrimaryList((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setPrimInput('');
-  };
-  const removePrimary = (name: string) => {
-    setPrimaryList((prev) => prev.filter((n) => n !== name));
-  };
-
-  // 담당자(부) 복수 선택 — chip 추가/삭제.
-  const addSecondary = (raw: string) => {
-    const name = raw.trim().replace(/,$/, '').trim();
-    if (!name) return;
-    setSecondaryList((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setSecInput('');
-  };
-  const removeSecondary = (name: string) => {
-    setSecondaryList((prev) => prev.filter((n) => n !== name));
-  };
 
   const allCategories = [...DEFAULT_TASK_CATEGORIES, ...customCategories, '기타'];
   const resolvedCategory = category === '기타' ? taskCategoryCustom.trim() : category;
@@ -311,17 +280,15 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const plainTaskContent = content.replace(/<[^>]*>/g, '').trim();
-    // 입력 중이던(미확정) 담당자도 제출 시 반영.
-    const primaryFinal = primInput.trim() && !primaryList.includes(primInput.trim())
-      ? [...primaryList, primInput.trim()] : primaryList;
-    const secondaryFinal = secInput.trim() && !secondaryList.includes(secInput.trim())
-      ? [...secondaryList, secInput.trim()] : secondaryList;
+    // 담당자(정) = 로그인 사용자 자동 맵핑(primaryList). 담당자(부)는 수정 시 보존.
+    const primaryFinal = primaryList;
+    const secondaryFinal = secondaryList;
     // 필수값 누락 — 조용히 return 하지 않고 무엇이 빠졌는지 알려준다.
-    if (!primaryFinal.length) { toast.error('등록 불가', '담당자(정)를 입력하세요.'); return; }
-    if (!resolvedCategory) { toast.error('등록 불가', '분류를 선택하세요.'); return; }
-    if (!plainTaskContent) { toast.error('등록 불가', '내용을 입력하세요.'); return; }
-    if (!startedAt) { toast.error('등록 불가', '예정일시를 선택하세요.'); return; }
+    // 서비스 운영 카테고리만 서비스 선택을 강제 — 회의/교육/기획 등은 서비스 없이도 등록 가능.
+    if (SERVICE_REQUIRED_CATEGORIES.has(resolvedCategory) && !service.trim()) {
+      toast.error('등록 불가', `"${resolvedCategory}" 카테고리는 서비스 선택이 필요합니다.`);
+      return;
+    }
 
     const payload: WorkItemCreate = {
       type,
@@ -390,133 +357,33 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const formInner = (
     <form id="item-form" onSubmit={handleSubmit} className="space-y-2.5">
       {/* 업무/이슈 구분 폐지 — type 선택 토글 제거. '이슈 대응' 은 분류(category)로 선택한다. */}
-      {/* ── 기본 설정 — 컴팩트 단일 그리드 (담당자/클러스터/서비스/우선순위/보드상태/분류/일정/프로젝트) ── */}
+      {/* ── 기본 설정 — 한 줄 그리드. 우선순위/보드상태/프로젝트/스프린트는 등록 폼에서 제외
+           (우선순위·보드상태는 목록/칸반에서 바로 편집 가능). ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-x-2 gap-y-2">
-        <div>
-          <label htmlFor={f('primary')} className={labelClass}>
-            담당자(정) * <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
-          </label>
-          <div className="w-full flex flex-wrap items-center gap-1 px-1.5 py-1 bg-background border border-border rounded-md min-h-[30px]">
-            {primaryList.map((name) => (
-              <span key={name} className="inline-flex items-center gap-0.5 text-xs bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded px-1.5 py-0.5">
-                {name}
-                <button type="button" onClick={() => removePrimary(name)} className="hover:text-red-500" aria-label={`${name} 제거`}>×</button>
-              </span>
-            ))}
-            <input
-              id={f('primary')}
-              type="text"
-              value={primInput}
-              onChange={(e) => setPrimInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addPrimary(primInput); }
-                else if (e.key === 'Backspace' && !primInput && primaryList.length) { removePrimary(primaryList[primaryList.length - 1]); }
-              }}
-              onBlur={() => { if (primInput.trim()) addPrimary(primInput); }}
-              list="item-assignee-list"
-              placeholder={primaryList.length ? '' : '이름 입력 후 Enter'}
-              className="flex-1 min-w-[64px] bg-transparent text-sm outline-none"
-            />
-          </div>
-          <datalist id="item-assignee-list">
-            {registeredAssignees.map((a) => (
-              <option key={a.name} value={a.name} />
-            ))}
-          </datalist>
-        </div>
-        <div className="md:col-span-2">
-          <div className="flex items-center justify-between mb-0.5">
-            <label htmlFor={f('secondary')} className="text-xs font-medium text-muted-foreground">
-              담당자(부) <span className="text-muted-foreground/60 font-normal">(복수 가능)</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => setAllAttendees((v) => !v)}
-              aria-pressed={allAttendees}
-              title="전체 참석 — 회의 등 모든 구성원이 참석. 체크 시 전원의 개인 일정(Work To Do)에 표시됩니다."
-              className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border transition-colors ${
-                allAttendees
-                  ? 'bg-primary/10 text-primary border-primary/30'
-                  : 'text-muted-foreground border-border hover:text-foreground hover:bg-secondary'
-              }`}
-            >
-              <Users className="w-2.5 h-2.5" /> 전체 참석
-            </button>
-          </div>
-          <div className="w-full flex flex-wrap items-center gap-1 px-1.5 py-1 bg-background border border-border rounded-md min-h-[30px]">
-            {secondaryList.map((name) => (
-              <span key={name} className="inline-flex items-center gap-0.5 text-xs bg-purple-500/10 text-purple-600 border border-purple-500/20 rounded px-1.5 py-0.5">
-                {name}
-                <button type="button" onClick={() => removeSecondary(name)} className="hover:text-red-500" aria-label={`${name} 제거`}>×</button>
-              </span>
-            ))}
-            <input
-              id={f('secondary')}
-              type="text"
-              value={secInput}
-              onChange={(e) => setSecInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSecondary(secInput); }
-                else if (e.key === 'Backspace' && !secInput && secondaryList.length) { removeSecondary(secondaryList[secondaryList.length - 1]); }
-              }}
-              onBlur={() => { if (secInput.trim()) addSecondary(secInput); }}
-              list="item-assignee-list"
-              placeholder={secondaryList.length ? '' : '이름 입력 후 Enter'}
-              className="flex-1 min-w-[64px] bg-transparent text-sm outline-none"
-            />
-          </div>
-        </div>
-        <div>
-          <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터 (다중)</label>
-          {clusterIds.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-1">
-              {clusterIds.map((id) => {
-                const c = clusters.find((x) => x.id === id);
-                return (
-                  <span key={id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs border border-primary/20">
-                    {c?.name ?? id}
-                    <button type="button" onClick={() => removeCluster(id)} className="hover:text-rose-500 leading-none" aria-label={`${c?.name ?? id} 제거`}>×</button>
-                  </span>
-                );
-              })}
-            </div>
-          )}
-          <select
-            id={f('cluster')}
-            value=""
-            onChange={(e) => { addCluster(e.target.value); e.currentTarget.selectedIndex = 0; }}
-            className={inputClass}
-          >
-            <option value="">{clusterIds.length ? '+ 클러스터 추가' : '— 선택 안 함 —'}</option>
-            {clusters.filter((c) => !clusterIds.includes(c.id)).map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+        {/* 서비스 — 서비스 운영 카테고리일 때만 필수 */}
         <div>
           <label htmlFor={f('service')} className={labelClass} title="통합지식 서비스 카탈로그 tag">
-            서비스
+            서비스{SERVICE_REQUIRED_CATEGORIES.has(resolvedCategory)
+              ? <span className="text-primary"> *</span>
+              : <span className="text-muted-foreground"> (선택)</span>}
           </label>
           <select
             id={f('service')}
             value={service}
             onChange={(e) => {
-              // Phase B cascade — service 변경 시 component 도 함께 reset (이전 값 잔존 방지)
               setService(e.target.value);
               setComponent('');
               setComponentCustom('');
             }}
             className={inputClass}
           >
-            <option value="">— 선택 안 함 —</option>
-            {serviceCatalog
-              .filter((s) => s.key !== 'other')
-              .map((s) => (
-                <option key={s.key} value={s.key}>{s.label}</option>
-              ))}
+            <option value="">— 선택 —</option>
+            {serviceCatalog.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
           </select>
         </div>
-        {/* Phase B — service 가 있을 때만 component dropdown 활성화 */}
+        {/* 컴포넌트 — service 선택 시만 표시 */}
         {service && (
           <div>
             <label htmlFor={f('component')} className={labelClass} title="서비스 하위 component (선택)">
@@ -528,7 +395,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               onChange={(e) => setComponent(e.target.value)}
               className={inputClass}
             >
-              <option value="">— component 선택 (선택) —</option>
+              <option value="">— 선택 안 함 —</option>
               {getComponentsForService(service).map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
@@ -546,35 +413,10 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             )}
           </div>
         )}
-        <div>
-          <label htmlFor={f('priority')} className={labelClass}>우선순위 *</label>
-          <select
-            id={f('priority')}
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            className={inputClass}
-          >
-            {PRIORITIES.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={f('kanban')} className={labelClass}>보드 상태</label>
-          <select
-            id={f('kanban')}
-            value={kanbanStatus}
-            onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
-            className={inputClass}
-          >
-            {KANBAN_STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{KANBAN_STATUS_LABEL[s]}</option>
-            ))}
-          </select>
-        </div>
+        {/* 업무 분류 — 옵션 */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label htmlFor={f('category')} className="text-xs font-medium text-muted-foreground">업무 분류 *</label>
+            <label htmlFor={f('category')} className="text-xs font-medium text-muted-foreground">업무 분류</label>
             <button
               type="button"
               onClick={() => setShowCatManage((v) => !v)}
@@ -613,25 +455,55 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               onChange={(e) => setTaskCategory(e.target.value)}
               className={inputClass}
             >
-              <option value="">— 선택 —</option>
+              <option value="">— 선택 안 함 —</option>
               {allCategories.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
           )}
         </div>
+        {/* 대상 클러스터 — 옵션 */}
         <div>
-          <label htmlFor={f('startedAt')} className={labelClass}>업무 예정일시 *</label>
+          <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터</label>
+          {clusterIds.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1">
+              {clusterIds.map((id) => {
+                const c = clusters.find((x) => x.id === id);
+                return (
+                  <span key={id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs border border-primary/20">
+                    {c?.name ?? id}
+                    <button type="button" onClick={() => removeCluster(id)} className="hover:text-rose-500 leading-none" aria-label={`${c?.name ?? id} 제거`}>×</button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <select
+            id={f('cluster')}
+            value=""
+            onChange={(e) => { addCluster(e.target.value); e.currentTarget.selectedIndex = 0; }}
+            className={inputClass}
+          >
+            <option value="">{clusterIds.length ? '+ 클러스터 추가' : '— 선택 안 함 —'}</option>
+            {clusters.filter((c) => !clusterIds.includes(c.id)).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* 업무 시작일 — 등록 시점 자동, 수정 가능 */}
+        <div>
+          <label htmlFor={f('startedAt')} className={labelClass}>업무 시작일</label>
           <DateTimePicker
             id={f('startedAt')}
             value={startedAt}
             onChange={setScheduledAt}
-            placeholder="예정일 선택"
+            placeholder="시작일 선택"
             clearable={false}
           />
         </div>
+        {/* 업무 완료일 — 옵션 */}
         <div>
-          <label htmlFor={f('closedAt')} className={labelClass}>업무 완료일시</label>
+          <label htmlFor={f('closedAt')} className={labelClass}>업무 완료일</label>
           <DateTimePicker
             id={f('closedAt')}
             value={closedAt}
@@ -639,40 +511,28 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             placeholder="완료 시 입력"
           />
         </div>
-        {projects.length > 0 && (
-          <div>
-            <label htmlFor={f('project')} className={labelClass}>프로젝트</label>
-            <select
-              id={f('project')}
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">미분류</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-        {sprints.length > 0 && (
-          <div>
-            <label htmlFor={f('sprint')} className={labelClass}>스프린트</label>
-            <select
-              id={f('sprint')}
-              value={sprintId}
-              onChange={(e) => setSprintId(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">미배정</option>
-              {sprints.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}{s.status === 'active' ? ' (진행중)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Confluence 링크 — 옵션 */}
+        <div className="md:col-span-2">
+          <ConfluenceUrlInput
+            id={f('confluenceUrl')}
+            value={confluenceUrl}
+            onChange={setConfluenceUrl}
+            inline
+            showHint={false}
+          />
+        </div>
+        {/* Jira 링크 — 옵션 */}
+        <div className="md:col-span-2">
+          <ConfluenceUrlInput
+            id={f('jiraUrl')}
+            label="Jira 링크"
+            value={jiraUrl}
+            onChange={setJiraUrl}
+            inline
+            showHint={false}
+            placeholder="https://jira.example.com/browse/..."
+          />
+        </div>
       </div>
 
       {/* 분류 관리 패널 — 토글 */}
@@ -737,12 +597,14 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         />
       </div>
 
-      {/* ── 본문 — type 에 따라 라벨 변경 ──────────────────────────────── */}
-      <div>
-        <label htmlFor={f('content')} className="block text-sm font-semibold text-foreground mb-1">
-          {type === 'issue' ? '이슈 내용' : '업무 내용'} <span className="text-primary">*</span>
-        </label>
-        <div id={f('content')}>
+      {/* ── 업무 내용 — 접이식 (기본 접힘) ──────────────────────────────── */}
+      <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
+        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
+          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          <span>{type === 'issue' ? '이슈 내용' : '업무 내용'}</span>
+          <span className="text-xs text-muted-foreground/70">(클릭해서 펼치기)</span>
+        </summary>
+        <div className="px-3 pb-3" id={f('content')}>
           <RichTextEditor
             value={content}
             onChange={setTaskContent}
@@ -754,7 +616,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             extraTemplates={worktableTemplates}
           />
         </div>
-      </div>
+      </details>
 
       {/* ── 이슈 상세 — type=issue 일 때만, 접이식 ────────────────────────── */}
       {type === 'issue' && (
@@ -778,45 +640,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         </details>
       )}
 
-      {/* ── Confluence / Jira 링크 — 업무 결과 바로 위, 한 줄 컴팩트 ──────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl">
-        <ConfluenceUrlInput
-          id={f('confluenceUrl')}
-          value={confluenceUrl}
-          onChange={setConfluenceUrl}
-          inline
-          showHint={false}
-        />
-        <ConfluenceUrlInput
-          id={f('jiraUrl')}
-          label="Jira 링크"
-          value={jiraUrl}
-          onChange={setJiraUrl}
-          inline
-          showHint={false}
-          placeholder="https://jira.example.com/browse/..."
-        />
-      </div>
-
-      {/* ── 조치 / 작업 결과 — 접이식 (default closed) ────────────────────── */}
-      <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
-        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
-          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
-          <span>{type === 'issue' ? '조치 내용' : '업무 결과'}</span>
-          <span className="text-xs text-muted-foreground/70">(클릭해서 펼치기 — 선택 입력)</span>
-        </summary>
-        <div className="px-3 pb-3">
-          <RichTextEditor
-            value={resolution}
-            onChange={setResultContent}
-            placeholder={type === 'issue' ? '조치 내용을 기술하세요' : '업무 결과를 기술하세요'}
-            minHeight="160px"
-            onImagePaste={handleImagePaste}
-            linkSearch={linkSearch}
-            defaultBg="#ffffff"
-          />
-        </div>
-      </details>
 
       {/* ── 사용자 정의 필드 ─────────────────────────────────────────────── */}
       {customFields.length > 0 && (
@@ -858,123 +681,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
         </details>
       )}
 
-      {/* ── 추가 옵션 — 접이식 (모듈/유형/이슈연결/비고) ─── */}
-      <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
-        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
-          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
-          <span>추가 옵션</span>
-          <span className="text-xs text-muted-foreground/70">
-            (모듈/유형 · 이슈 연결 · 비고)
-          </span>
-        </summary>
-        <div className="px-3 pb-3 space-y-2">
-          {/* 모듈 / 유형 */}
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground/80 mb-1 uppercase tracking-wider">모듈 / 유형</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <div>
-                <label htmlFor={f('module')} className={labelClass} title="추후 deprecate 예정 — 가능하면 위 '서비스/컴포넌트' 사용">
-                  모듈 <span className="text-[10px] text-muted-foreground/60">(legacy)</span>
-                </label>
-                <select
-                  id={f('module')}
-                  value={module}
-                  onChange={(e) => setModule(e.target.value as WorkItemModule | '')}
-                  className={inputClass}
-                >
-                  <option value="">— 선택 안 함 —</option>
-                  {MODULE_OPTIONS.map(([key, cfg]) => (
-                    <option key={key} value={key}>{cfg.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor={f('type')} className={labelClass}>유형</label>
-                <select
-                  id={f('type')}
-                  value={typeLabel}
-                  onChange={(e) => setTypeLabel(e.target.value as WorkItemTypeLabel | '')}
-                  className={inputClass}
-                >
-                  <option value="">— 선택 안 함 —</option>
-                  {TYPE_OPTIONS.map(([key, cfg]) => (
-                    <option key={key} value={key}>{cfg.label} ({key})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor={f('effort')} className={labelClass}>예상 소요 (h)</label>
-                <input
-                  id={f('effort')}
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={effortHours}
-                  onChange={(e) => setEffortHours(e.target.value)}
-                  placeholder="예: 4"
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            <div className="mt-2">
-              <label htmlFor={f('doneCond')} className={labelClass}>
-                완료 조건
-                <span className="ml-1 text-xs text-muted-foreground/70 font-normal">(Done 이동 기준)</span>
-              </label>
-              <input
-                id={f('doneCond')}
-                type="text"
-                value={doneCondition}
-                onChange={(e) => setDoneCondition(e.target.value)}
-                placeholder="예: docker pull 캐시 동작 확인"
-                className={inputClass}
-              />
-            </div>
-          </div>
-
-          {/* 연결된 이슈 / Confluence / 비고 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div className="md:col-span-2">
-              <label htmlFor={f('issueLink')} className={labelClass}>
-                연결된 이슈
-                <span className="ml-1 text-xs text-muted-foreground/70 font-normal">(이 업무의 원인/배경)</span>
-              </label>
-              <select
-                id={f('issueLink')}
-                value={relatedWorkItemId}
-                onChange={(e) => setIssueId(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">— 연결 안 함 —</option>
-                {items
-                  .slice()
-                  .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))
-                  .map((i) => {
-                    const title = i.content.replace(/<[^>]*>/g, '').slice(0, 60);
-                    const when = (i.startedAt ?? '').slice(0, 10);
-                    const status = i.closedAt ? '✓' : '●';
-                    return (
-                      <option key={i.id} value={i.id}>
-                        {status} [{i.category}] {title || i.category} — {when}
-                      </option>
-                    );
-                  })}
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label htmlFor={f('remarks')} className={labelClass}>비고</label>
-              <input
-                id={f('remarks')}
-                type="text"
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="추가 메모 (선택 사항)"
-                className={inputClass}
-              />
-            </div>
-          </div>
-        </div>
-      </details>
 
       {/* 푸터 액션 */}
       <div className="flex justify-end gap-2 pt-2 border-t border-border">

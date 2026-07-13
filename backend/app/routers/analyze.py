@@ -17,7 +17,7 @@ from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_watch
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -468,12 +468,15 @@ def stream_pod_logs(
     tail_lines: int = 200,
     follow: bool = True,
     previous: bool = False,
+    timestamps: bool = False,
+    since_seconds: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """파드 로그 SSE 스트림 (읽기전용). follow=True 면 실시간 tail.
 
     OpenLens 류의 follow 로그 뷰어용. 인증된 fetch 로 ``text/event-stream`` 소비.
     멀티컨테이너 파드는 ``container`` 미지정 시 에러 → 컨테이너명을 지정한다.
+    ``timestamps=True`` 면 각 줄 앞에 RFC3339 타임스탬프가 붙는다(표시 토글은 프론트).
     """
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
@@ -481,16 +484,19 @@ def stream_pod_logs(
     def _gen():
         resp = None
         try:
-            resp = v1.read_namespaced_pod_log(
+            kwargs = dict(
                 name=pod_name,
                 namespace=namespace,
                 container=container or None,
                 follow=follow,
                 tail_lines=max(1, min(tail_lines, 5000)),
                 previous=previous,
-                timestamps=False,
+                timestamps=timestamps,
                 _preload_content=False,
             )
+            if since_seconds is not None and since_seconds > 0:
+                kwargs["since_seconds"] = since_seconds
+            resp = v1.read_namespaced_pod_log(**kwargs)
             for chunk in resp.stream(amt=None, decode_content=True):
                 text = (
                     chunk.decode("utf-8", errors="replace")
@@ -509,6 +515,107 @@ def stream_pod_logs(
                 pass
 
     return StreamingResponse(_gen(), media_type="text/event-stream")
+
+
+class PodContainerInfo(BaseModel):
+    name: str
+    init: bool = False
+    state: Optional[str] = None  # running | waiting | terminated
+    restart_count: int = 0
+
+
+class PodContainersResponse(BaseModel):
+    containers: list[PodContainerInfo]
+    default_container: Optional[str] = None
+
+
+@router.get(
+    "/clusters/{cluster_id}/namespaces/{namespace}/pods/{pod_name}/containers",
+    response_model=PodContainersResponse,
+)
+def list_pod_containers(
+    cluster_id: UUID,
+    namespace: str,
+    pod_name: str,
+    db: Session = Depends(get_db),
+):
+    """파드의 컨테이너(+init) 목록 — 로그/터미널 컨테이너 셀렉터용.
+
+    ``kubectl.kubernetes.io/default-container`` 어노테이션이 있으면 그것을,
+    없으면 첫 일반 컨테이너를 default 로 반환한다.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    v1 = _get_core_v1(cluster)
+    try:
+        pod = v1.read_namespaced_pod(pod_name, namespace, _request_timeout=_K8S_TIMEOUT)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
+
+    def _state_of(statuses, name: str) -> tuple[Optional[str], int]:
+        for st in statuses or []:
+            if st.name != name:
+                continue
+            s = st.state
+            state = None
+            if s is not None:
+                if s.running:
+                    state = "running"
+                elif s.terminated:
+                    state = "terminated"
+                elif s.waiting:
+                    state = "waiting"
+            return state, int(st.restart_count or 0)
+        return None, 0
+
+    items: list[PodContainerInfo] = []
+    spec = pod.spec
+    status = pod.status
+    for c in spec.containers or []:
+        state, restarts = _state_of(status.container_statuses if status else None, c.name)
+        items.append(PodContainerInfo(name=c.name, init=False, state=state, restart_count=restarts))
+    for c in spec.init_containers or []:
+        state, restarts = _state_of(status.init_container_statuses if status else None, c.name)
+        items.append(PodContainerInfo(name=c.name, init=True, state=state, restart_count=restarts))
+
+    annotations = (pod.metadata.annotations or {}) if pod.metadata else {}
+    default = annotations.get("kubectl.kubernetes.io/default-container")
+    if not default:
+        default = next((c.name for c in items if not c.init), None)
+    return PodContainersResponse(containers=items, default_container=default)
+
+
+@router.get("/clusters/{cluster_id}/namespaces/{namespace}/pods/{pod_name}/logs/download")
+def download_pod_logs(
+    cluster_id: UUID,
+    namespace: str,
+    pod_name: str,
+    container: Optional[str] = None,
+    previous: bool = False,
+    tail_lines: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """파드 로그 전체 다운로드 (non-follow, 최대 10MB)."""
+    cluster = _require_cluster(cluster_id, db)
+    v1 = _get_core_v1(cluster)
+    try:
+        kwargs = dict(
+            name=pod_name,
+            namespace=namespace,
+            container=container or None,
+            previous=previous,
+            limit_bytes=10_000_000,
+            _request_timeout=60,
+        )
+        if tail_lines is not None and tail_lines > 0:
+            kwargs["tail_lines"] = tail_lines
+        text = v1.read_namespaced_pod_log(**kwargs)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"로그 조회 실패: {str(e)[:200]}") from e
+    filename = f"{pod_name}_{container or 'default'}{'.previous' if previous else ''}.log"
+    return PlainTextResponse(
+        text or "",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/clusters/{cluster_id}/events/stream")
@@ -538,6 +645,8 @@ def stream_cluster_events(
             source = getattr(obj, "reporting_component", None) or None
         payload = {
             "watchType": ev_type,
+            "uid": getattr(obj.metadata, "uid", None) if obj.metadata else None,
+            "name": getattr(obj.metadata, "name", None) if obj.metadata else None,
             "type": getattr(obj, "type", None),  # Normal | Warning
             "reason": getattr(obj, "reason", None),
             "message": (getattr(obj, "message", None) or "")[:500],

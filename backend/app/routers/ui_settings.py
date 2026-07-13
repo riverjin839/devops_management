@@ -179,6 +179,7 @@ def _normalize_assignee(a) -> dict | None:
             "employeeId": a.get("employeeId") or a.get("employee_id"),
             "email": a.get("email"),
             "ip": a.get("ip"),
+            "seatLocation": a.get("seatLocation") or a.get("seat_location"),
             "primaryRole": a.get("primaryRole") or a.get("primary_role"),
             "secondaryRole": a.get("secondaryRole") or a.get("secondary_role"),
         } if name else None

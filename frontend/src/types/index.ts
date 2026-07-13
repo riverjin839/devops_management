@@ -50,6 +50,9 @@ export interface Cluster {
   // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
   // null/empty 면 status 기반 기본 아이콘으로 fallback.
   icon?: string | null;
+  // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
+  prometheusUrl?: string | null;
+  prometheusEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +137,36 @@ export interface ClusterManageUpdate {
   bgpEnabled?: boolean;
   asNumber?: string;
   icon?: string | null;
+  prometheusUrl?: string | null;
+  prometheusEnabled?: boolean;
+}
+
+// ── Cluster Trends (per-node 메트릭 추이) ──────────────────────────────
+export type TrendMetricKey = 'cpu' | 'memory' | 'disk' | 'diskio' | 'network' | 'networkerr';
+export type TrendRange = '30m' | '1h' | '6h' | '24h' | '7d';
+
+// NOTE: 이름 충돌 회피 — daily-check 추이용 `TrendPoint`(checkedAt/status/...) 가
+// 이 파일 하단에 이미 존재한다. 같은 이름의 interface 두 개는 TS 선언 병합으로
+// 엉뚱하게 합쳐지므로, per-node 메트릭 포인트는 `TrendDataPoint` 로 둔다.
+export interface TrendDataPoint {
+  t: number;            // UNIX epoch seconds
+  v: number | null;
+}
+export interface TrendSeries {
+  node: string;
+  points: TrendDataPoint[];
+}
+export interface TrendMetricBlock {
+  unit: string;
+  series: TrendSeries[];
+}
+export interface ClusterTrendsResponse {
+  range: TrendRange;
+  step: string;
+  status: 'ok' | 'error' | 'offline';
+  error?: string | null;
+  dropped: string[];    // 상한 초과로 제외된 노드명
+  metrics: Partial<Record<TrendMetricKey, TrendMetricBlock>>;
 }
 
 // Addon
@@ -151,6 +184,29 @@ export interface Addon {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any>;
   lastCheck: string;
+}
+
+// K8s 실시간 이벤트 (kubewatch 웹훅 수신)
+export type K8sEventSeverity = 'info' | 'warning' | 'critical';
+
+export interface K8sEvent {
+  id: string;
+  clusterId?: string | null;
+  eventType: string;
+  resourceKind: string;
+  resourceName: string;
+  namespace?: string | null;
+  reason?: string | null;
+  message?: string | null;
+  severity: K8sEventSeverity;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw?: Record<string, any> | null;
+  receivedAt: string;
+}
+
+export interface K8sEventListResponse {
+  data: K8sEvent[];
+  total: number;
 }
 
 // Check Log
@@ -341,6 +397,8 @@ export interface Sprint {
   id: string;
   name: string;
   goal?: string;
+  jiraNo?: string;
+  confluenceLink?: string;
   startDate: string;
   endDate: string;
   status: SprintStatus;
@@ -356,6 +414,8 @@ export interface Sprint {
 export interface SprintCreate {
   name: string;
   goal?: string;
+  jiraNo?: string;
+  confluenceLink?: string;
   startDate: string;
   endDate: string;
   status?: SprintStatus;
@@ -483,6 +543,32 @@ export interface JiraImportResult {
   detail: string;
   errors: string[];
   items: JiraImportItemPreview[];
+}
+
+// Jira 에서 추출한 Excel(.xlsx) 가져오기 — 미리보기(저장 없음) + "저장" 시 업무 관리
+// 게시판(work_items)에 매핑 저장(jiraApi.importSaveToBoard, 응답은 JiraImportResult 재사용).
+export interface JiraExcelRow {
+  key: string;
+  jiraUrl?: string | null;
+  summary: string;
+  issueType: string;
+  status: string;
+  assigneeRaw: string;
+  assigneeName?: string | null;
+  assigneeMatched: boolean;
+  created: string;
+  resolved: string;
+  dueDate: string;
+  environment: string;
+  description: string;
+}
+
+export interface JiraExcelImportResult {
+  status: 'ok' | 'error';
+  detail: string;
+  total: number;
+  matched: number;
+  rows: JiraExcelRow[];
 }
 
 export interface JiraPushRequest {
@@ -832,89 +918,6 @@ export interface WorkGuideListResponse {
   data: WorkGuide[];
 }
 
-// ── Knowledge Base (서비스별 문서/노트 트리 + 버전 히스토리 + 공유) ──────────────
-export type KnowledgeKind = 'folder' | 'doc' | 'board' | 'roadmap';
-export type KnowledgeCategory = 'enhancement' | 'operation' | 'learning' | 'build' | string;
-export type KnowledgeVisibility = 'part' | 'private';
-
-export interface KnowledgePage {
-  id: string;
-  service?: string | null;       // SERVICE_CATALOG slug. null=공통
-  parentId?: string | null;
-  kind: KnowledgeKind;
-  category?: KnowledgeCategory | null;
-  title: string;
-  icon?: string | null;
-  content?: string | null;       // TipTap HTML
-  summary?: string | null;
-  tags?: string[] | null;
-  status: string;                // draft / active / archived
-  visibility: KnowledgeVisibility;
-  pinned: boolean;
-  sortOrder: number;
-  confluenceUrl?: string | null;
-  jiraUrl?: string | null;
-  startAt?: string | null;
-  dueAt?: string | null;
-  sprintId?: string | null;
-  sourceRef?: string | null;
-  createdBy?: string | null;
-  updatedBy?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** 트리 응답 — children 중첩. */
-export interface KnowledgePageNode extends KnowledgePage {
-  children: KnowledgePageNode[];
-}
-
-export interface KnowledgePresenceUser { username: string; displayName?: string | null; }
-export interface KnowledgePresenceResponse { editors: KnowledgePresenceUser[]; }
-export interface KnowledgeImportResult { imported: number; skipped: number; detail: Record<string, unknown>; }
-
-export interface KnowledgePageCreate {
-  service?: string | null;
-  parentId?: string | null;
-  kind?: KnowledgeKind;
-  category?: KnowledgeCategory | null;
-  title: string;
-  icon?: string | null;
-  content?: string | null;
-  summary?: string | null;
-  tags?: string[] | null;
-  status?: string;
-  visibility?: KnowledgeVisibility;
-  pinned?: boolean;
-  sortOrder?: number;
-  confluenceUrl?: string | null;
-  jiraUrl?: string | null;
-}
-
-export interface KnowledgePageUpdate extends Partial<KnowledgePageCreate> {}
-
-export interface KnowledgePageVersion {
-  id: string;
-  pageId: string;
-  versionNo: number;
-  kind: 'auto' | 'milestone';
-  label?: string | null;
-  title?: string | null;
-  author?: string | null;
-  createdAt: string;
-  content?: string | null;   // detail 응답에만 포함
-}
-
-export interface KnowledgeTreeResponse {
-  data: KnowledgePageNode[];
-}
-export interface KnowledgePageListResponse {
-  data: KnowledgePage[];
-}
-export interface KnowledgeVersionListResponse {
-  data: KnowledgePageVersion[];
-}
-
 export interface ClusterLink {
   id: string;
   label: string;
@@ -1047,6 +1050,7 @@ export interface Assignee {
   employeeId?: string;
   email?: string;
   ip?: string;
+  seatLocation?: string;
   primaryRole?: string;
   secondaryRole?: string;
 }
@@ -1968,6 +1972,19 @@ export interface TopologyGraphResponse {
   warnings: string[];
   generatedAt: string;
 }
+/** 전 네임스페이스 클러스터 토폴로지(요약/상세) + 백그라운드 진행 메타. */
+export interface ClusterTopologyResponse extends AllocSnapshotMeta {
+  clusterId: string;
+  mode: 'summary' | 'detail';
+  nodes: TopoNode[];          // 요약은 kind="Namespace"
+  edges: TopoEdge[];
+  metricsStatus: string;
+  truncated: boolean;
+  summaryRecommended: boolean;
+  namespaceCount: number;
+  warnings: string[];
+  generatedAt: string;
+}
 export interface TopologyTrafficEdge {
   source: string;
   target: string;
@@ -2361,6 +2378,29 @@ export interface AuditLogListResponse {
   pageSize: number;
 }
 
+// ─── 릴리즈 노트 (CHANGELOG.md 파싱, backend/app/routers/release_notes.py) ──────
+export interface ReleaseNoteItem {
+  summary: string;
+  detail: string;
+}
+
+export interface ReleaseNoteSection {
+  name: string;
+  items: ReleaseNoteItem[];
+}
+
+export interface ReleaseNoteEntry {
+  version: string;
+  date: string;
+  summary: string;
+  itemCount: number;
+  sections: ReleaseNoteSection[];
+}
+
+export interface ReleaseNotesResponse {
+  entries: ReleaseNoteEntry[];
+}
+
 // ─── LAKE Service Monitoring (lake-service-monitoring PDCA) ──────
 export type LakeServiceType =
   | 'airflow' | 'spark' | 'iceberg' | 'trino'
@@ -2654,6 +2694,12 @@ export interface K8sDrainResult {
   skipped: { pod: string; reason: string }[];
   errors: { pod: string; error: string }[];
 }
+export interface K8sCrdPrinterColumn {
+  name: string;
+  jsonPath: string;
+  type?: string | null;     // string | integer | date | ...
+  priority?: number | null; // >0 은 wide 전용 → 목록에서 숨김
+}
 export interface K8sCrdInfo {
   name: string;
   group: string;
@@ -2663,6 +2709,7 @@ export interface K8sCrdInfo {
   versions: string[];
   version: string;
   ageSeconds?: number | null;
+  printerColumns?: K8sCrdPrinterColumn[];
 }
 export interface K8sCrdListResponse {
   count: number;
@@ -2746,8 +2793,41 @@ export interface K8sPodRichRow {
   phase: string;
   statusColor: K8sCellColor;
   ageSeconds?: number | null;
+  cpuUsage?: string | null;      // metrics-server 즉시값 (없으면 null)
+  memUsage?: string | null;
+  warningCount?: number;         // 최근 Warning 이벤트 수
+  warningReason?: string | null; // 최신 Warning reason
 }
-export interface K8sPodsResponse { count: number; truncated: boolean; items: K8sPodRichRow[] }
+export interface K8sPodsResponse {
+  count: number;
+  truncated: boolean;
+  items: K8sPodRichRow[];
+  metricsAvailable?: boolean;
+}
+
+// 파드 컨테이너 목록 (로그/터미널 셀렉터)
+export interface K8sPodContainerInfo {
+  name: string;
+  init: boolean;
+  state?: string | null; // running | waiting | terminated
+  restartCount: number;
+}
+export interface K8sPodContainersResponse {
+  containers: K8sPodContainerInfo[];
+  defaultContainer?: string | null;
+}
+
+// 리소스 관련 이벤트 (상세 드로어 이벤트 탭)
+export interface K8sRelatedEvent {
+  type?: string | null;   // Normal | Warning
+  reason?: string | null;
+  message?: string | null;
+  count?: number | null;
+  source?: string | null;
+  firstTimestamp?: string | null;
+  lastTimestamp?: string | null;
+}
+export interface K8sRelatedEventsResponse { count: number; items: K8sRelatedEvent[] }
 
 // ── K8s 자원 관리 (allocation: request vs 사용량 slack) ───────────────────────
 // CPU 는 millicores(int), MEM 은 bytes(int). *Display 는 사람이 읽는 문자열.
@@ -2756,6 +2836,7 @@ export interface AllocNodeRow {
   roles: string[];
   unschedulable: boolean;
   podCount: number;
+  podsAllocatable: number;   // 노드 max-pods(allocatable pods, 보통 110). 0=미상
   cpuAllocM: number;
   memAllocB: number;
   cpuCapacityM: number;
@@ -2784,8 +2865,13 @@ export interface AllocSnapshotMeta {
   processed?: number;
   total?: number | null;
   stale?: boolean;
+  partial?: boolean;          // 부분(누적) 결과 여부
 }
 export interface AllocNodesResponse extends AllocSnapshotMeta { count: number; items: AllocNodeRow[]; metricsAvailable: boolean; partial?: boolean }
+/** 단일 노드 즉시 재계산(개별 REFRESH) 응답. */
+export interface AllocNodeRefreshResponse { item: AllocNodeRow; metricsAvailable: boolean }
+/** 단일 네임스페이스 즉시 재계산(개별 REFRESH) 응답. */
+export interface AllocNamespaceRefreshResponse { item: AllocNamespaceRow; metricsAvailable: boolean }
 
 export interface AllocSummary {
   nodeCount: number;

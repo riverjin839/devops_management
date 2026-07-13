@@ -42,17 +42,21 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Addon 카드 (dashboard) | `frontend/src/components/dashboard/AddonCard.tsx` |
 | 새 체커 추가 레시피 | 아래 "Recipes" 섹션 참고 |
 
-### 이슈 / 작업 게시판
+### 업무 관리 게시판 (이슈·작업 통합)
+> 1.0 이후 기존 issues/tasks 가 **work_items 단일 모델로 통합**됨 (`WorkItem.type = task|issue|meeting|training|etc`).
+> 레거시 `issues.py`/`tasks.py` 라우터·페이지는 제거됨.
+
 | 기능 | 백엔드 | 프론트엔드 |
 |---|---|---|
-| 이슈 CRUD + CSV 내보내기 | `backend/app/routers/issues.py` | 목록: `frontend/src/pages/IssueBoardPage.tsx`, 등록/수정: `frontend/src/pages/IssueFormPage.tsx` |
-| 이슈 상세 모달 | — | `frontend/src/components/issues/IssueDetailModal.tsx` |
-| 이슈 칸반 뷰 | — | `frontend/src/components/issues/IssueKanban.tsx` |
-| 작업 CRUD + 서브작업 + 칸반 | `backend/app/routers/tasks.py` | 목록: `TaskBoardPage.tsx`, 등록/수정: `TaskFormPage.tsx` |
-| 작업 달력/칸반 뷰 | — | `frontend/src/components/tasks/TaskCalendar.tsx` · `TaskKanban.tsx` |
-| 오늘 할일 (담당자별) | `backend/app/routers/today_tasks.py` | `frontend/src/pages/TodoTodayPage.tsx` |
-| 멤버별 업무 보드 | (tasks + issues 재사용) | `frontend/src/pages/MemberBoardPage.tsx` |
-| 담당자 마스터 | `backend/app/routers/assignees.py` | `frontend/src/hooks/useAssignees.ts` (SettingsPage 에서 관리) |
+| 업무 CRUD + 상태/우선순위 + 서브업무 + CSV | `backend/app/routers/work_items.py` (`/work-items`) | 게시판: `frontend/src/pages/WorkItemBoardPage.tsx`, 등록/수정: `tasks-mgmt/new\|:id/edit` → `WorkItemForm.tsx` |
+| 표 행(인라인 편집·시간옵션) / 칸반 / 캘린더 | — | `components/work-items/WorkItemTableRow.tsx` · `WorkItemKanban.tsx` · `WorkItemCalendar.tsx` |
+| 상세 보기 / 댓글·활동 | — | `WorkItemReadView.tsx` · `CommentThread.tsx` · `ActivityTimeline.tsx` |
+| 저장된 뷰(필터·정렬·보기 스냅샷, localStorage) | — | `components/work-items/SavedViews.tsx` |
+| 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
+| Jira 가져오기 | `backend/app/routers/jira.py` (`/jira`) | `JiraImportModal.tsx` |
+| 오늘 할일 / 멤버별 업무 | `work_items` 재사용 | `frontend/src/pages/TodoTodayPage.tsx` · `MemberBoardPage.tsx` |
+| 스프린트 / 프로젝트 | `routers/sprint.py` (`/sprints`) · `routers/projects.py` (`/projects`) | `SprintsPage.tsx` 등 |
+| 데이터 훅 | — | `frontend/src/hooks/useWorkItems.ts` · `useWorkItemCustomFields.ts` |
 
 ### PromQL / 메트릭 / AI Agent
 | 기능 | 위치 |

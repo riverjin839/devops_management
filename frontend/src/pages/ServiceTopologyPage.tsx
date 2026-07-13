@@ -2,24 +2,28 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Workflow, RefreshCw, Box, Boxes, Activity, Pencil, Eye, Loader2,
-  Server, Info, AlertTriangle, Layers, Grid3x3,
+  Server, Info, AlertTriangle, Layers, Grid3x3, Globe,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { analyzeApi } from '@/services/api';
-import { ClusterSidebar, DebugLogPanel, NamespaceSingleSelect, useToast } from '@/components/common';
+import {
+  ClusterSidebar, DebugLogPanel, NamespaceSingleSelect, SnapshotProgressCard, useToast,
+} from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   TopologyCanvas, Topology3D, NodeDetailPanel, ManualLinkDialog, AddExternalNodeDialog,
   EDGE_TYPE_LABEL,
 } from '@/components/topology';
 import {
-  useServiceTopologyGraph, useServiceTopologyTraffic,
+  useServiceTopologyGraph, useServiceTopologyTraffic, useClusterTopologyGraph,
   useCreateTopologyLink, useDeleteTopologyLink, useCreateExternalNode, useDeleteExternalNode,
 } from '@/hooks/useServiceTopology';
 import type { TopoNode } from '@/types';
 import { formatApiError } from '@/lib/utils';
 
 type ViewMode = '2d' | '3d';
+type Scope = 'namespace' | 'cluster';
+type ClusterMode = 'summary' | 'detail';
 
 export function ServiceTopologyPage() {
   const toast = useToast();
@@ -29,6 +33,8 @@ export function ServiceTopologyPage() {
 
   // toggles
   const [view, setView] = useState<ViewMode>('2d');
+  const [scope, setScope] = useState<Scope>('namespace');
+  const [clusterMode, setClusterMode] = useState<ClusterMode>('summary');
   const [includePods, setIncludePods] = useState(false);
   const [includeOrphans, setIncludeOrphans] = useState(false);
   const [showTraffic, setShowTraffic] = useState(false);
@@ -69,10 +75,19 @@ export function ServiceTopologyPage() {
     }
   }, [namespaces]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const graphQuery = useServiceTopologyGraph(clusterId || null, namespace, { includePods, includeOrphans, withMetrics: true });
-  const trafficQuery = useServiceTopologyTraffic(clusterId || null, namespace, showTraffic);
+  const isCluster = scope === 'cluster';
+  const graphQuery = useServiceTopologyGraph(
+    isCluster ? null : (clusterId || null), namespace, { includePods, includeOrphans, withMetrics: true },
+  );
+  const clusterQuery = useClusterTopologyGraph(
+    isCluster ? (clusterId || null) : null, { mode: clusterMode, includePods, withMetrics: false },
+  );
+  const trafficQuery = useServiceTopologyTraffic(clusterId || null, namespace, showTraffic && !isCluster);
 
-  const graph = graphQuery.data;
+  const activeQuery = isCluster ? clusterQuery : graphQuery;
+  const clusterData = clusterQuery.data;
+  const computing = isCluster && clusterData?.status === 'computing';
+  const graph = isCluster ? clusterQuery.data : graphQuery.data;
   const nodeById = useMemo(() => {
     const m = new Map<string, TopoNode>();
     for (const n of graph?.nodes ?? []) m.set(n.id, n);
@@ -146,7 +161,7 @@ export function ServiceTopologyPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-3 py-3 flex gap-3">
+      <main className="pr-3 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -155,7 +170,7 @@ export function ServiceTopologyPage() {
         />
 
         <div className="flex-1 min-w-0">
-          <DebugLogPanel pageKey="service-topology" extra={{ clusterId, namespace, view, nodes: graph?.nodes.length ?? 0 }} />
+          <DebugLogPanel pageKey="service-topology" extra={{ clusterId, scope, namespace, clusterMode, view, nodes: graph?.nodes.length ?? 0 }} />
 
           {/* 헤더 */}
           <div className="flex items-center gap-3 mb-2">
@@ -167,22 +182,35 @@ export function ServiceTopologyPage() {
           {/* 툴바 */}
           <MacCard title="컨트롤" className="mb-3" bodyPadding="p-3">
             <div className="flex flex-wrap items-center gap-2">
-              {/* namespace */}
-              <div className="flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-muted-foreground" />
-                <div className="min-w-[180px]">
-                  <NamespaceSingleSelect
-                    clusterId={clusterId}
-                    value={namespace}
-                    onChange={(ns) => { setNamespace(ns); setSelectedId(null); }}
-                    clearable={false}
-                  />
-                </div>
+              {/* scope: 네임스페이스 / 전체 클러스터 */}
+              <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+                <ToggleSeg active={!isCluster} onClick={() => { setScope('namespace'); setSelectedId(null); setEditMode(false); }} icon={<Layers className="w-3 h-3" />} label="네임스페이스" />
+                <ToggleSeg active={isCluster} onClick={() => { setScope('cluster'); setSelectedId(null); setEditMode(false); }} icon={<Globe className="w-3 h-3" />} label="전체 클러스터" border />
               </div>
 
-              <button onClick={() => graphQuery.refetch()}
+              {/* namespace 선택(NS scope) / 요약·상세(cluster scope) */}
+              {!isCluster ? (
+                <div className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+                  <div className="min-w-[180px]">
+                    <NamespaceSingleSelect
+                      clusterId={clusterId}
+                      value={namespace}
+                      onChange={(ns) => { setNamespace(ns); setSelectedId(null); }}
+                      clearable={false}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+                  <ToggleSeg active={clusterMode === 'summary'} onClick={() => { setClusterMode('summary'); setSelectedId(null); }} icon={<Boxes className="w-3 h-3" />} label="네임스페이스 요약" />
+                  <ToggleSeg active={clusterMode === 'detail'} onClick={() => { setClusterMode('detail'); setSelectedId(null); }} icon={<Grid3x3 className="w-3 h-3" />} label="전체 상세" border />
+                </div>
+              )}
+
+              <button onClick={() => activeQuery.refetch()}
                 className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
-                <RefreshCw className={`w-3 h-3 ${graphQuery.isFetching ? 'animate-spin' : ''}`} /> 새로고침
+                <RefreshCw className={`w-3 h-3 ${activeQuery.isFetching ? 'animate-spin' : ''}`} /> 새로고침
               </button>
 
               {/* 2D / 3D */}
@@ -192,22 +220,28 @@ export function ServiceTopologyPage() {
               </div>
 
               <PillToggle on={includePods} onClick={() => setIncludePods((v) => !v)} icon={<Box className="w-3 h-3" />} label="Pod 표시" />
-              <PillToggle on={includeOrphans} onClick={() => setIncludeOrphans((v) => !v)} icon={<Boxes className="w-3 h-3" />} label="미참조 설정" />
-              <PillToggle on={showTraffic} onClick={() => setShowTraffic((v) => !v)} icon={<Activity className="w-3 h-3" />} label="실트래픽"
-                loading={showTraffic && trafficQuery.isFetching} />
+              {!isCluster && (
+                <>
+                  <PillToggle on={includeOrphans} onClick={() => setIncludeOrphans((v) => !v)} icon={<Boxes className="w-3 h-3" />} label="미참조 설정" />
+                  <PillToggle on={showTraffic} onClick={() => setShowTraffic((v) => !v)} icon={<Activity className="w-3 h-3" />} label="실트래픽"
+                    loading={showTraffic && trafficQuery.isFetching} />
+                </>
+              )}
 
-              <div className="ml-auto flex items-center gap-2">
-                <button onClick={() => setExtOpen(true)}
-                  className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
-                  <Server className="w-3 h-3" /> 외부 노드
-                </button>
-                <button onClick={() => { setEditMode((v) => !v); setLinkSourceId(null); }}
-                  className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border ${
-                    editMode ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400' : 'bg-secondary border-border hover:bg-secondary/80'
-                  }`}>
-                  {editMode ? <Pencil className="w-3 h-3" /> : <Eye className="w-3 h-3" />} 링크 편집
-                </button>
-              </div>
+              {!isCluster && (
+                <div className="ml-auto flex items-center gap-2">
+                  <button onClick={() => setExtOpen(true)}
+                    className="px-2 py-1 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg inline-flex items-center gap-1">
+                    <Server className="w-3 h-3" /> 외부 노드
+                  </button>
+                  <button onClick={() => { setEditMode((v) => !v); setLinkSourceId(null); }}
+                    className={`px-2.5 py-1 text-sm rounded-lg inline-flex items-center gap-1 border ${
+                      editMode ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400' : 'bg-secondary border-border hover:bg-secondary/80'
+                    }`}>
+                    {editMode ? <Pencil className="w-3 h-3" /> : <Eye className="w-3 h-3" />} 링크 편집
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 상태/경고 라인 */}
@@ -220,6 +254,17 @@ export function ServiceTopologyPage() {
               {graph?.truncated && (
                 <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="w-3 h-3" /> 노드 수 상한 초과(truncated)
+                </span>
+              )}
+              {isCluster && clusterData?.summaryRecommended && clusterMode === 'detail' && (
+                <button onClick={() => { setClusterMode('summary'); setSelectedId(null); }}
+                  className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 underline">
+                  <AlertTriangle className="w-3 h-3" /> 노드가 많아 요약 보기 권장 — 전환
+                </button>
+              )}
+              {isCluster && clusterData && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Globe className="w-3 h-3" /> 네임스페이스 {clusterData.namespaceCount}개
                 </span>
               )}
               {showTraffic && trafficQuery.data && trafficQuery.data.status !== 'ok' && (
@@ -248,20 +293,32 @@ export function ServiceTopologyPage() {
           {/* 캔버스 */}
           <MacCard title={`그래프 · ${graph?.nodes.length ?? 0} 노드 / ${graph?.edges.length ?? 0} 엣지`} bodyPadding="p-0">
             <div ref={canvasRef} className="relative w-full h-[calc(100vh-260px)] min-h-[420px] overflow-hidden rounded-b-2xl">
-              {graphQuery.isLoading ? (
+              {computing ? (
+                <div className="absolute inset-0 flex items-center justify-center p-6">
+                  <div className="w-full max-w-md">
+                    <SnapshotProgressCard
+                      processed={clusterData?.processed ?? 0}
+                      total={clusterData?.total ?? null}
+                      progress={clusterData?.progress ?? null}
+                      label="클러스터 토폴로지 집계 중"
+                      unit="Pod"
+                    />
+                  </div>
+                </div>
+              ) : activeQuery.isLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center text-muted-foreground gap-2">
                   <Loader2 className="w-5 h-5 animate-spin" /> 토폴로지 수집 중…
                 </div>
-              ) : graphQuery.isError ? (
+              ) : activeQuery.isError ? (
                 <div className="absolute inset-0 flex items-center justify-center text-center px-6">
                   <div>
                     <AlertTriangle className="w-7 h-7 text-amber-500 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">{formatApiError(graphQuery.error)}</p>
+                    <p className="text-sm text-muted-foreground">{formatApiError(activeQuery.error)}</p>
                   </div>
                 </div>
               ) : !graph || graph.nodes.length === 0 ? (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-                  이 네임스페이스에 표시할 리소스가 없습니다.
+                  {isCluster ? '표시할 리소스가 없습니다.' : '이 네임스페이스에 표시할 리소스가 없습니다.'}
                 </div>
               ) : view === '2d' ? (
                 <TopologyCanvas

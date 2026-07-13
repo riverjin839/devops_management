@@ -21,6 +21,8 @@ class Sprint(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     status = Column(String(20), nullable=False, default="active")  # planning/active/completed
+    jira_no = Column(String(100), nullable=True)                   # JIRA 티켓 번호 (선택)
+    confluence_link = Column(String(500), nullable=True)           # Confluence 페이지 URL (선택)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -3,17 +3,19 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
-  Moon, Sun, Monitor, X, LogOut, User, ChevronRight, Home,
-  KeyRound, ShieldCheck, FileSearch, ServerCog,
+  Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
+  KeyRound, ShieldCheck, ScrollText, ServerCog,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
-import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
+import { SidePane } from '@/components/common';
+import { SelfAssigneePanel } from './SelfAssigneePanel';
+import { ReleaseNotesPanel } from './ReleaseNotesPanel';
 import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
@@ -110,7 +112,7 @@ function FlyoutShell({ title, anchorRect, children, onClose }: FlyoutProps) {
   return createPortal(
     <div
       style={{ top, left: NAV_WIDTH, maxHeight }}
-      className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col min-w-[180px] max-w-[260px] overflow-hidden"
+      className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col overflow-hidden min-w-[180px] max-w-[260px]"
       role="dialog"
       aria-label={title}
     >
@@ -176,25 +178,24 @@ export function Sidebar() {
   const featureAllowed = (p: string) =>
     p !== '/wbs' || canAccessFeature(featureAccess, 'wbs', currentUser);
 
-  const { mode, toggle, setMode } = useHomeStore();
+  const { mode, toggle } = useHomeStore();
 
   const handleHomeClick = () => {
     if (location.pathname === '/') {
       toggle();
     } else {
-      setMode('work');
+      // 업무현황 홈 = 메인 홈. 현재 모드를 유지한 채 홈으로 — 아이콘이 가리키는 홈으로 일관 이동.
       navigate('/');
     }
   };
 
   const homeTooltip = location.pathname === '/'
     ? (mode === 'work' ? '업무 현황 (클릭 시 플랫폼 현황)' : '플랫폼 현황 (클릭 시 업무 현황)')
-    : '홈으로 이동';
+    : (mode === 'work' ? '업무 현황 홈으로' : '플랫폼 현황 홈으로');
 
-  // 홈 버튼 아이콘 — 현재 모드를 모양으로 구분. 기본값은 업무=ListTodo, 플랫폼=☸(톱니).
-  // Settings(홈 화면 설정)에서 모드별 커스텀 아이콘(lucide/이모지/이미지)을 지정 가능.
+  // 홈 버튼 아이콘 — 홈은 2개(업무현황=메인 홈 / 플랫폼현황)뿐이다. 어느 화면이든 현재 모드를
+  // 모양으로 구분(업무=ListTodo, 플랫폼=ServerCog). Settings(홈 화면 설정)에서 모드별 커스텀 가능.
   const renderHomeButtonIcon = () => {
-    if (location.pathname !== '/') return <Home className="w-5 h-5" />;
     const custom = mode === 'platform' ? settings?.homeIcons?.platform : settings?.homeIcons?.work;
     const resolved = resolveClusterIcon(custom);
     if (resolved?.kind === 'lucide') {
@@ -207,7 +208,7 @@ export function Sidebar() {
     if (resolved?.kind === 'text') {
       return <span className="text-base leading-none">{resolved.value}</span>;
     }
-    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=ServerCog — 플랫폼 관리 직관 + 업무와 모양/색 구분)
+    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=ServerCog)
     return mode === 'platform'
       ? <ServerCog className="w-5 h-5" />
       : <ListTodo className="w-5 h-5" />;
@@ -216,26 +217,14 @@ export function Sidebar() {
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
+  // 사용자 아이콘 클릭 시 여는 개인 메뉴(담당자 정보 / 비밀번호 변경) — 우측 슬라이드 SidePane.
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // 릴리즈 노트 — 우측 슬라이드 SidePane (감사 로그가 Settings 탭으로 이동한 자리).
+  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
 
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
-  const services = useServiceCatalog();
 
-  // 동적 NAV_MAP — 정적 위에 ui_settings 의 서비스 항목을 덧씌움.
-  const navMap = useMemo(() => {
-    const m: typeof NAV_MAP = { ...NAV_MAP };
-    for (const s of services) {
-      if (s.key === 'other') continue;
-      m[`/services/${s.key}`] = { defaultLabel: s.label, icon: s.icon };
-    }
-    return m;
-  }, [services]);
-
-  const servicePaths = useMemo(
-    () => services.filter((s) => s.key !== 'other').map((s) => `/services/${s.key}`),
-    [services],
-  );
-
-  const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
+  const getLabel = (path: string) => navLabels[path] || NAV_MAP[path]?.defaultLabel || path;
 
   // 현재 모드에서 보여줄 그룹만 필터링 (상단 레일).
   // system(Settings) 그룹은 상단이 아니라 하단 푸터에서 admin 에게만 렌더한다.
@@ -249,7 +238,6 @@ export function Sidebar() {
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
-    if (location.pathname.startsWith('/services/')) return 'services';
     for (const g of GROUPS) {
       if (g.paths.includes(location.pathname)) return g.id;
     }
@@ -259,6 +247,8 @@ export function Sidebar() {
   // 경로 변경되면 flyout 자동 닫기 (단 사용자가 직접 클릭 후 같은 페이지인 경우는 무시)
   useEffect(() => {
     setOpenGroup(null);
+    setUserMenuOpen(false);
+    setReleaseNotesOpen(false);
   }, [location.pathname]);
 
   // ESC 로 flyout / edit mode 닫기
@@ -266,6 +256,8 @@ export function Sidebar() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpenGroup(null);
+        setUserMenuOpen(false);
+        setReleaseNotesOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -283,35 +275,11 @@ export function Sidebar() {
     if (!group) return null;
     const close = () => setOpenGroup(null);
 
-    if (id === 'services') {
-      return (
-        <div className="space-y-1 pb-2">
-          {group.paths.map((p) => {
-            const entry = navMap[p];
-            if (!entry || !featureAllowed(p)) return null;
-            return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close} />
-            );
-          })}
-          {servicePaths.length > 0 && <div className="mx-2 my-1 border-t border-zinc-200" />}
-          {servicePaths.map((p) => {
-            const entry = navMap[p];
-            if (!entry || !featureAllowed(p)) return null;
-            return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close} />
-            );
-          })}
-        </div>
-      );
-    }
-
     if (id === 'system') {
       return (
         <div className="space-y-1 pb-2">
           {group.paths.map((p) => {
-            const entry = navMap[p];
+            const entry = NAV_MAP[p];
             if (!entry || !featureAllowed(p)) return null;
             return (
               <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
@@ -325,7 +293,7 @@ export function Sidebar() {
     return (
       <div className="space-y-1 pb-2">
         {group.paths.map((p) => {
-          const entry = navMap[p];
+          const entry = NAV_MAP[p];
           if (!entry || !featureAllowed(p)) return null;
           return (
             <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
@@ -390,7 +358,11 @@ export function Sidebar() {
                 active={activeGroup === g.id}
                 highlighted={openGroup === g.id}
                 suppressTooltip={openGroup === g.id}
-                onClick={(rect) => toggleGroup(g.id, rect)}
+                onClick={(rect) => {
+                  // 지식/분석은 플라이아웃 대신 지식 허브 홈(보드)으로 바로 이동.
+                  if (g.id === 'knowledge') { setOpenGroup(null); navigate('/docs'); }
+                  else toggleGroup(g.id, rect);
+                }}
               />
             ))}
           </div>
@@ -422,14 +394,9 @@ export function Sidebar() {
             <RailIconButton
               label={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}
               Icon={User}
-              onClick={() => { /* 호버 툴팁만 — 별도 동작 없음 */ }}
-            />
-          )}
-          {currentUser && (
-            <RailIconButton
-              label="비밀번호 변경"
-              Icon={KeyRound}
-              onClick={() => navigate('/me/change-password')}
+              highlighted={userMenuOpen}
+              suppressTooltip={userMenuOpen}
+              onClick={() => setUserMenuOpen((v) => !v)}
             />
           )}
           {isAdmin && (
@@ -440,12 +407,13 @@ export function Sidebar() {
               onClick={() => navigate('/settings/users')}
             />
           )}
-          {isAdmin && (
+          {currentUser && (
             <RailIconButton
-              label="감사 로그"
-              Icon={FileSearch}
-              active={location.pathname === '/settings/audit-logs'}
-              onClick={() => navigate('/settings/audit-logs')}
+              label="릴리즈 노트"
+              Icon={ScrollText}
+              highlighted={releaseNotesOpen}
+              suppressTooltip={releaseNotesOpen}
+              onClick={() => setReleaseNotesOpen((v) => !v)}
             />
           )}
           {currentUser && (
@@ -475,6 +443,50 @@ export function Sidebar() {
           </FlyoutShell>
         </>
       )}
+
+      {/* 사용자 메뉴 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}
+      {currentUser && (
+        <SidePane
+          open={userMenuOpen}
+          onClose={() => setUserMenuOpen(false)}
+          title={currentUser.displayName || currentUser.username}
+          width="380px"
+          bodyClassName="p-0"
+        >
+          <SelfAssigneePanel />
+          <div className="border-t border-border">
+            <Link
+              to="/me/change-password"
+              onClick={() => setUserMenuOpen(false)}
+              className={`flex items-center gap-2 px-5 py-3 text-sm transition-colors ${
+                location.pathname === '/me/change-password'
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'text-foreground hover:bg-secondary'
+              }`}
+            >
+              <KeyRound className="w-4 h-4 flex-shrink-0" />
+              <span className="flex-1 min-w-0">비밀번호 변경</span>
+              {location.pathname === '/me/change-password' && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />}
+            </Link>
+          </div>
+        </SidePane>
+      )}
+
+      {/* 릴리즈 노트 — 우측 슬라이드 SidePane. CHANGELOG.md 를 파싱한 API 를 표로 렌더.
+          요약 텍스트가 잘리지 않도록 기본 폭을 넉넉히 잡고, 왼쪽 가장자리 드래그로 추가 확장 가능. */}
+      <SidePane
+        open={releaseNotesOpen}
+        onClose={() => setReleaseNotesOpen(false)}
+        title="릴리즈 노트"
+        width="640px"
+        bodyClassName="p-0"
+        resizable
+        widthStorageKey="k8s:releaseNotesPanelWidth"
+        minWidth={420}
+        maxWidth={1100}
+      >
+        <ReleaseNotesPanel open={releaseNotesOpen} />
+      </SidePane>
 
     </>
   );

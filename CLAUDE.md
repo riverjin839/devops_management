@@ -16,6 +16,16 @@ Originally "K8s Daily Monitor" (DevOps Management), redefined as Platform Engine
 
 ---
 
+## 화면 단위 명세서 (Screens Reference)
+
+프론트엔드의 모든 화면(라우트)을 화면 단위로 UX/UI/Frontend/Backend/핵심 기능으로 정리한 문서가
+**`docs/SCREENS.md`** 에 있다. 사용자가 화면별 개선 요청을 그 문서에 직접 적어두고, 이후 세션에서
+"docs/SCREENS.md 의 `<화면명>` 요청사항 반영해줘" 처럼 가리켜 작업을 요청하는 용도로 관리된다.
+특정 화면을 수정하기 전에 먼저 이 문서에서 해당 화면 섹션을 확인해 현재 구조(사용 hook/컴포넌트/API
+엔드포인트)를 파악하고 시작할 것. 화면 구조가 크게 바뀌면 해당 섹션도 함께 갱신해준다.
+
+---
+
 ## 참고 프로젝트 (Reference Projects)
 
 PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 때 **벤치마킹/응용 기준**으로 삼는 오픈소스 Notion 계열 프로젝트. 관련 요청(에디터 아키텍처, 블록/문서 모델, 협업/동기화, 지식베이스 UX 등)이 오면 이 두 레포를 참고 기준으로 활용한다.
@@ -514,11 +524,10 @@ min-h-screen bg-background
 ```
 
 **레이아웃 규칙:**
-- **간격 표준 (모든 per-cluster 페이지 동일)**: 컨테이너 행은 `px-3 py-3 flex gap-3` 으로 잡는다.
-  - 메인 사이드바 ↔ 클러스터 사이드바 = `px-3`(12px), 클러스터 사이드바 ↔ 본문 = `gap-3`(12px) → **좌우 간격을 12px 로 대칭/일관**되게 유지한다.
-  - 외곽 wrapper 가 따로 padding 을 줄 때(예: `min-h-screen bg-background p-3`)는 그 padding 이 좌측 간격이 되므로 `p-3`(12px) 로 맞추고 내부 행은 `flex gap-3` 만 쓴다. (이중 padding 금지)
-  - ❌ `px-6`/`py-6`/`gap-4`/`gap-5` 처럼 더 넓거나 페이지마다 다른 값 금지 — 불규칙·과넓은 틈의 원인.
-  - `max-w-[...]` (와이드 화면 가독성) 는 유지 가능하나 `px-3` 은 항상 둬서 최소 간격을 보장한다.
+- **간격 표준 (모든 per-cluster 페이지 동일)**: 보조 사이드바(클러스터/서비스)는 **메인 사이드바에 flush(좌측 공백 0)** 로 붙인다. 컨테이너 행은 좌측 패딩 없이 `py-3 pr-3 flex gap-3` (또는 `min-h-screen bg-background flex`) 로 잡는다.
+  - 메인 사이드바 ↔ 보조 사이드바 = **0px(공백 없음)**, 보조 사이드바 ↔ 본문 = `gap-3`(12px) 또는 본문의 좌측 패딩으로 띄운다.
+  - ❌ 행에 `mx-auto`/`max-w-[...]` 로 가운데 정렬하면 보조 사이드바가 우측으로 밀려 공백이 생긴다 — **행은 좌측 정렬**(센터링 금지). 가독성 max-width 가 필요하면 보조 사이드바가 아니라 **본문(`flex-1`)에만** 적용한다.
+  - ❌ 좌측 `px-3`/`px-6`/`p-3` 처럼 행 전체에 좌측 패딩을 줘서 메인 사이드바와 보조 사이드바 사이에 틈을 만들지 않는다.
 - 사이드바 옆 본문은 `<div className="flex-1 min-w-0">` 으로 감싼다.
 - 사이드바는 `sticky top-4` 로 고정되어 스크롤해도 따라온다.
 - `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
@@ -705,6 +714,35 @@ make skaffold-dev     # skaffold dev --profile=dev --port-forward
 4. `kubectl rollout status` for backend, frontend, celery-worker
 
 Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
+
+---
+
+## 버전 관리 / CHANGELOG (필수 — 기능·패치 추가 시마다)
+
+**기능 추가(`feat:`)나 패치(`fix:`)를 담은 PR 은 `CHANGELOG.md` 의 `## [Unreleased]` 섹션에
+항목을 추가해야 한다.** PR 본문만 쓰고 CHANGELOG 갱신을 빠뜨리지 않는다 — 릴리스 버전 섹션과
+사이드바 "릴리즈 노트" 패널 모두 이 섹션에서 파생된다.
+
+- 위치: `CHANGELOG.md` 최상단 `## [Unreleased]` 아래, 변경 성격에 따라 `### Added` /
+  `### Fixed` / `### Changed` 하위에 한두 줄로 추가 (기존 항목 형식 참고 — 굵게 기능명,
+  이어서 사용자 관점 요약, 필요 시 `Backend:`/`Frontend:` 로 구현 포인트 짧게).
+- 버전/브랜치/태그 전체 전략은 `docs/branch-tag-strategy.md` 참고. SemVer(`vMAJOR.MINOR.PATCH`),
+  버전 소스는 `frontend/package.json` `version` + `backend/app/main.py` FastAPI `version`.
+- **릴리스 자동화**: `feat:`/`fix:` 등 conventional commit prefix PR 이 `main` 에 머지되면
+  `.github/workflows/auto-release.yml` 이 SemVer 버전을 자동으로 올리고(`feat:`→MINOR, 그
+  외→PATCH) `CHANGELOG.md` 의 `[Unreleased]` 를 새 버전 섹션으로 확정한 뒤 `vX.Y.Z` 태그를
+  push 한다(→ `release.yml` 이 GHCR 이미지 태깅 + GitHub Release 생성). 버전 3곳 수정과
+  CHANGELOG 섹션 확정은 `scripts/release/bump_version.py` 로 자동화돼 있다. 수동 `/release`
+  스킬은 hotfix 나 자동화 실패 시의 fallback 이다 — 평소엔 실행할 필요 없음.
+
+### 사이드바 "릴리즈 노트" 패널
+
+사이드바 하단 레일의 "릴리즈 노트" 아이콘(감사 로그가 Settings 탭으로 이동한 자리)을 클릭하면
+우측 SidePane(`ReleaseNotesPanel`)에 버전별 변경 이력이 테이블(버전/날짜/요약)로 표시되고, 행을
+클릭하면 섹션별(Added/Fixed/Changed 등) 상세가 펼쳐진다. Backend `GET /api/v1/release-notes`
+(`release_notes` 라우터)가 `CHANGELOG.md` 를 이미지 안에서 직접 파싱해 응답하므로 **별도로
+동기화해야 하는 사본 파일이 없다** — `CHANGELOG.md` 만 정확히 갱신하면 자동으로 반영된다
+(`[Unreleased]` 섹션은 이 API 응답에서 제외).
 
 ---
 

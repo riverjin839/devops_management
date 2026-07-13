@@ -5,7 +5,6 @@ from app.routers.daily_check import router as daily_check_router
 from app.routers.playbooks import router as playbooks_router
 from app.routers.agent import router as agent_router
 from app.routers.promql import router as promql_router
-from app.routers.openclaw import router as openclaw_router
 from app.routers.work_items import router as work_items_router
 from app.routers.jira import router as jira_router
 from app.routers.ui_settings import router as ui_settings_router
@@ -13,7 +12,6 @@ from app.routers.node_labels import router as node_labels_router
 from app.routers.node_images import router as node_images_router
 from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
-from app.routers.knowledge import router as knowledge_router
 from app.routers.ops_note import router as ops_note_router
 from app.routers.reactions import router as reactions_router
 from app.routers.mindmap import router as mindmap_router
@@ -57,7 +55,10 @@ from app.routers.k8s_exec import router as k8s_exec_router
 from app.routers.metric_trend import router as metric_trend_router
 from app.routers.service_topology import router as service_topology_router
 from app.routers.cluster_items import router as cluster_items_router
+from app.routers.cluster_trends import router as cluster_trends_router
 from app.routers.terminal_appearance import router as terminal_appearance_router
+from app.routers.k8s_events import router as k8s_events_router, ingest_router as k8s_events_ingest_router
+from app.routers.release_notes import router as release_notes_router
 
 __all__ = [
     "ops_check_router",
@@ -73,7 +74,6 @@ __all__ = [
     "playbooks_router",
     "agent_router",
     "promql_router",
-    "openclaw_router",
     "work_items_router",
     "jira_router",
     "ui_settings_router",
@@ -81,7 +81,6 @@ __all__ = [
     "node_images_router",
     "workflows_router",
     "work_guide_router",
-    "knowledge_router",
     "ops_note_router",
     "reactions_router",
     "mindmap_router",
@@ -115,5 +114,9 @@ __all__ = [
     "bottleneck_router",
     "lake_service_types_router",
     "cluster_items_router",
+    "cluster_trends_router",
     "terminal_appearance_router",
+    "k8s_events_router",
+    "k8s_events_ingest_router",
+    "release_notes_router",
 ]

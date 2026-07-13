@@ -39,7 +39,7 @@ const STATUS_META: Record<SprintStatus, { label: string; cls: string }> = {
 };
 
 // ── create / edit modal ────────────────────────────────────────────────────
-interface FormState { name: string; goal: string; startDate: string; endDate: string; status: SprintStatus; }
+interface FormState { name: string; goal: string; jiraNo: string; confluenceLink: string; startDate: string; endDate: string; status: SprintStatus; }
 
 function SprintModal({
   initial, onClose, onSubmit, busy,
@@ -53,6 +53,8 @@ function SprintModal({
   const [form, setForm] = useState<FormState>({
     name: initial?.name ?? `스프린트 ${(() => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}`; })()}`,
     goal: initial?.goal ?? '',
+    jiraNo: initial?.jiraNo ?? '',
+    confluenceLink: initial?.confluenceLink ?? '',
     startDate: start,
     endDate: initial?.endDate ?? addDaysStr(start, 13),
     status: initial?.status ?? 'active',
@@ -93,6 +95,28 @@ function SprintModal({
               className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 resize-none"
               placeholder="이번 반복에서 이루려는 것"
             />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="sprint-jira-no" className="block text-sm font-medium text-muted-foreground mb-1">JIRA NO (선택)</label>
+              <input
+                id="sprint-jira-no"
+                value={form.jiraNo}
+                onChange={(e) => setForm((f) => ({ ...f, jiraNo: e.target.value }))}
+                className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+                placeholder="예) PROJ-123"
+              />
+            </div>
+            <div>
+              <label htmlFor="sprint-confluence" className="block text-sm font-medium text-muted-foreground mb-1">Confluence 링크 (선택)</label>
+              <input
+                id="sprint-confluence"
+                value={form.confluenceLink}
+                onChange={(e) => setForm((f) => ({ ...f, confluenceLink: e.target.value }))}
+                className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+                placeholder="https://..."
+              />
+            </div>
           </div>
           <div>
             <span className="block text-sm font-medium text-muted-foreground mb-1">기간</span>
@@ -151,7 +175,7 @@ function SprintModal({
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 border border-border">취소</button>
           <button
-            onClick={() => onSubmit({ name: form.name.trim(), goal: form.goal.trim() || undefined, startDate: form.startDate, endDate: form.endDate, status: form.status })}
+            onClick={() => onSubmit({ name: form.name.trim(), goal: form.goal.trim() || undefined, jiraNo: form.jiraNo.trim() || undefined, confluenceLink: form.confluenceLink.trim() || undefined, startDate: form.startDate, endDate: form.endDate, status: form.status })}
             disabled={!canSubmit}
             className="px-4 py-2 text-sm rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground inline-flex items-center gap-1.5 disabled:opacity-50"
           >

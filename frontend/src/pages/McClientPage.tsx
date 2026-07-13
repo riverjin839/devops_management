@@ -20,18 +20,31 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
 };
 
-function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
+// 타겟/프리셋 옆(우측)에 고정 위치로 배치 — 실행 전에도 같은 자리에 플레이스홀더를 보여줘
+// 결과가 나와도 레이아웃이 흔들리지 않는다. 카드 자체는 화면 높이에 맞춰 세로 스크롤만
+// 허용(overflow-y-auto) 하고 가로 스크롤은 막는다(overflow-x-hidden) — 좁은 카드 폭 안에
+// 긴 로그가 들어와도 페이지 전체가 옆으로 늘어나지 않는다.
+function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
+  if (!result) {
+    return (
+      <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-xl p-5 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-220px)]">
+        <p className="text-sm text-muted-foreground text-center">
+          mc 명령을 실행하면<br />결과가 여기에 표시됩니다.
+        </p>
+      </section>
+    );
+  }
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
   return (
-    <section className="bg-card border border-border rounded-xl overflow-hidden mt-5">
-      <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-muted/20">
-        <div className="flex items-center gap-3">
+    <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-xl overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-220px)]">
+      <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted/90 backdrop-blur-sm">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
             {meta.label}
           </span>
-          <span className="text-sm font-mono text-muted-foreground">{result.host}</span>
+          <span className="text-sm font-mono text-muted-foreground truncate">{result.host}</span>
           {result.exitCode !== null && result.exitCode !== undefined && (
             <span className="text-sm font-mono text-muted-foreground">exit {result.exitCode}</span>
           )}
@@ -42,7 +55,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
       <div className="px-5 py-3 space-y-3">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">executed</p>
-          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap text-foreground/80">
+          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
             {result.executedCommand || '(not provided)'}
           </pre>
         </div>
@@ -140,7 +153,7 @@ export function McClientPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-6 py-6 flex gap-5">
+      <main className="pr-6 py-6 flex gap-5">
         <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => { setClusterId(id ?? ''); setResult(null); }} iconOnly />
 
         <div className="flex-1 min-w-0">
@@ -159,9 +172,11 @@ export function McClientPage() {
             alias 는 미리 <code className="font-mono text-foreground">mc alias set</code> 으로 구성돼 있어야 합니다 (기본값: <code className="font-mono text-foreground">local</code>). 프리셋의 <code className="font-mono text-foreground">{'{alias}'}</code> 는 아래 alias 값으로 치환됩니다.
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* 타겟 2 : 프리셋 3 : 결과 5 비율 (10 컬럼 그리드) — 결과는 항상 같은 자리(우측)에 고정,
+              내부에서만 세로 스크롤(가로 스크롤 없음)되어 카드들이 한 화면 폭 안에 들어온다. */}
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 items-start">
             {/* 좌: 타겟 + 인증 */}
-            <section className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <section className="lg:col-span-2 min-w-0 bg-card border border-border rounded-xl p-5 space-y-4">
               <h2 className="text-sm font-semibold mb-1">타겟</h2>
 
               <div>
@@ -233,8 +248,8 @@ export function McClientPage() {
               )}
             </section>
 
-            {/* 우: 프리셋 + 명령 */}
-            <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
+            {/* 중: 프리셋 + 명령 */}
+            <section className="lg:col-span-3 min-w-0 bg-card border border-border rounded-xl p-5 space-y-4">
               <McPresetManager clusterId={clusterId} isAdmin={isAdmin} onPick={setArgs} />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -291,9 +306,10 @@ export function McClientPage() {
                 </button>
               </div>
             </section>
-          </div>
 
-          {result && <ResultPanel result={result} />}
+            {/* 우: 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
+            <ResultPanel result={result} />
+          </div>
         </div>
       </main>
 

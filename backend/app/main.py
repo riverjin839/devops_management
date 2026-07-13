@@ -18,7 +18,6 @@ from app.routers import (
     history_router,
     node_labels_router,
     node_images_router,
-    openclaw_router,
     playbooks_router,
     promql_router,
     work_items_router,
@@ -28,7 +27,6 @@ from app.routers import (
     ui_settings_router,
     workflows_router,
     work_guide_router,
-    knowledge_router,
     ops_note_router,
     reactions_router,
     mindmap_router,
@@ -69,7 +67,11 @@ from app.routers import (
     metric_trend_router,
     service_topology_router,
     cluster_items_router,
+    cluster_trends_router,
     terminal_appearance_router,
+    k8s_events_router,
+    k8s_events_ingest_router,
+    release_notes_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -77,6 +79,35 @@ from app.models.user import User
 
 
 _log = logging.getLogger("k8s_monitor.migration")
+
+
+def _ensure_pgvector_extension() -> None:
+    """``CREATE EXTENSION IF NOT EXISTS vector`` — WorkItem/WorkGuide 임베딩 컬럼(Vector 타입)이
+    쓰는 pgvector 확장을 보장한다.
+
+    폐쇄망에서는 Postgres 서버에 pgvector 확장 패키지가 Nexus 로 미리 반입되어 있어야 한다
+    (docs/AIRGAP_LLM_NEXUS.md 참고). ``Base.metadata.create_all()`` 보다 반드시 먼저 실행해야
+    브랜드 뉴 설치에서 ``CREATE TABLE work_items (... embedding vector(768) ...)`` 가
+    "type vector does not exist" 로 실패하지 않는다. 확장이 없으면 로깅만 하고 부팅은 계속 —
+    이 경우 work_items/work_guides 테이블 생성 자체가 실패할 수 있으나(신규 설치 한정),
+    다른 마이그레이션 단계는 개별 try/except 로 격리돼 있어 부팅 자체가 막히지 않는다.
+    """
+    from sqlalchemy import text as _text
+    try:
+        with engine.begin() as conn:
+            # backend/celery-worker/celery-beat 등 여러 replica 가 동시에 부팅하며 각자 이
+            # 함수를 실행하면 "CREATE EXTENSION IF NOT EXISTS" 의 존재 확인→생성이 원자적이지
+            # 않아 두 세션이 동시에 생성을 시도해 duplicate key value violates unique
+            # constraint "pg_extension_name_index" 로 충돌할 수 있다. 트랜잭션 advisory lock
+            # 으로 직렬화해 이 레이스를 막는다 (커밋/롤백 시 자동 해제, 별도 unlock 불필요).
+            conn.execute(_text("SELECT pg_advisory_xact_lock(872346192)"))
+            conn.execute(_text("CREATE EXTENSION IF NOT EXISTS vector"))
+        _log.info("migration: pgvector extension ensured")
+    except Exception as e:  # noqa: BLE001
+        _log.warning(
+            "migration: pgvector extension 생성 실패 (%s) — 임베딩 컬럼 관련 기능 비활성화 가능. "
+            "Nexus 로 postgresql-pgvector 패키지 반입 필요.", e,
+        )
 
 
 def _safe_add_column(table: str, col_name: str, col_type: str) -> None:
@@ -257,6 +288,9 @@ def _run_migrations():
             ("icon", "VARCHAR(64)"),
             # G-9: TLS 검증 옵트인. 기본 false = 기존 verify=False 동작 유지.
             ("tls_verify", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            # Cluster Trends — per-cluster Prometheus URL 오버라이드 + 토글.
+            ("prometheus_url", "VARCHAR(512)"),
+            ("prometheus_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ]
         for col_name, col_type in new_cluster_cols:
             _safe_add_column("clusters", col_name, col_type)
@@ -593,6 +627,11 @@ def _run_migrations():
         _safe_add_column("work_items", "all_attendees", "BOOLEAN NOT NULL DEFAULT FALSE")
         # 스프린트(반복) 소속 — sprints 테이블은 create_all 로 생성됨.
         _safe_add_column("work_items", "sprint_id", "UUID")
+        # 유사 WorkItem 검색용 임베딩(제목+본문) — pgvector 확장 필요 (_ensure_pgvector_extension).
+        _safe_add_column("work_items", "embedding", f"VECTOR({settings.embedding_dim})")
+        # 스프린트 JIRA 번호 및 Confluence 링크
+        _safe_add_column("sprints", "jira_no", "VARCHAR(100)")
+        _safe_add_column("sprints", "confluence_link", "VARCHAR(500)")
         _safe_create_index("ix_work_items_sprint_id", "work_items", "(sprint_id)")
         # 등록자(생성자) — 본인이 등록한 work item 을 (담당자가 아니어도) 수정/삭제할 수 있도록.
         _safe_add_column("work_items", "created_by", "VARCHAR(100)")
@@ -676,11 +715,14 @@ def _run_migrations():
     if "work_guides" in inspector.get_table_names():
         _safe_add_column("work_guides", "parent_id", "UUID")
         _safe_add_column("work_guides", "sort_order", "INTEGER NOT NULL DEFAULT 0")
+        # 유사 문서 검색용 임베딩(제목+본문) — pgvector 확장 필요 (_ensure_pgvector_extension).
+        _safe_add_column("work_guides", "embedding", f"VECTOR({settings.embedding_dim})")
 
-    # knowledge_pages: 비파괴 가져오기 출처 컬럼 (구버전 DB 호환). 테이블 자체는 create_all 이 생성.
-    if "knowledge_pages" in inspector.get_table_names():
-        _safe_add_column("knowledge_pages", "source_ref", "VARCHAR(128)")
-        _safe_create_index("ix_knowledge_pages_source_ref", "knowledge_pages", "(source_ref)")
+    # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
+    # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
+    for _kb_table in ("knowledge_presence", "knowledge_page_versions", "knowledge_pages"):
+        if _kb_table in inspector.get_table_names():
+            _safe_exec(f"DROP TABLE IF EXISTS {_kb_table} CASCADE", label=f"drop {_kb_table}")
 
     # confluence_url 컬럼 — 모든 작성형 엔티티 (tasks/issues/ops_notes/work_guides/
     # command_entries/workflows/mindmaps)에 공통으로 Confluence 문서 링크를 저장.
@@ -836,6 +878,12 @@ def _run_migrations():
         _safe_add_column("cluster_items", "previous_text", "TEXT")
         _safe_add_column("cluster_items", "result_status", "VARCHAR(20)")
         _safe_create_index("ix_cluster_items_cluster", "cluster_items", "(cluster_id)")
+
+    # k8s_events: kubewatch 웹훅 수신 이벤트 — 테이블은 create_all, 인덱스 보강.
+    if "k8s_events" in inspector.get_table_names():
+        _safe_create_index("ix_k8s_events_received_at", "k8s_events", "(received_at DESC)")
+        _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
+        _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
 
 
 def _seed_default_metric_cards():
@@ -1301,6 +1349,10 @@ async def lifespan(app: FastAPI):
     # CrashLoopBackOff 가 되는 일을 방지한다. 실패는 로그로 남기되 부팅은 계속.
     _startup_log = logging.getLogger("k8s_monitor.startup")
     try:
+        _ensure_pgvector_extension()
+    except Exception as e:  # noqa: BLE001
+        _startup_log.exception("pgvector extension step failed — continuing: %s", e)
+    try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:  # noqa: BLE001
         _startup_log.exception("create_all failed — continuing: %s", e)
@@ -1329,7 +1381,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.0.0",
+    version="1.3.1",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -1370,7 +1422,6 @@ app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(openclaw_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
@@ -1380,7 +1431,6 @@ app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(knowledge_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
@@ -1421,6 +1471,8 @@ app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_auth)
 # k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
 app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_auth)
+# cluster-trends — per-node 메트릭 추이(Prometheus range query, 노드 명시선택+상한).
+app.include_router(cluster_trends_router, prefix="/api/v1", dependencies=_auth)
 # helm 릴리스 뷰어(읽기 전용).
 app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
 # pod exec 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
@@ -1432,13 +1484,17 @@ app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
 # terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).
 app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_auth)
+# k8s_events — kubewatch 웹훅 수신(토큰 인증) + 이벤트 조회(JWT)
+app.include_router(k8s_events_ingest_router, prefix="/api/v1")
+app.include_router(k8s_events_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.0.0",
+        "version": "1.3.1",
         "status": "running"
     }
 

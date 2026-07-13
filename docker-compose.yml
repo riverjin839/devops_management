@@ -86,6 +86,53 @@ services:
     volumes:
       - ./ansible:/app/ansible:ro
 
+  # kubewatch — K8s 이벤트 실시간 감시 → PEP 웹훅
+  # 로컬 kind 클러스터 사용 시: kind-setup.sh up 후 ~/.kube/config 가 kind 클러스터를 가리킴.
+  # KUBEWATCH_TOKEN 은 .env 에서 설정 (미설정 시 토큰 검증 없이 수락).
+  kubewatch:
+    image: bitnami/kubewatch:latest
+    container_name: pep_kubewatch
+    volumes:
+      - ~/.kube/config:/opt/bitnami/kubewatch/.kube/config:ro
+      - ./k8s/base/kubewatch/configmap.yaml:/tmp/kw-configmap.yaml:ro
+    environment:
+      - KUBEWATCH_CONFIG=/opt/bitnami/kubewatch/.kubewatch.yaml
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cat > /opt/bitnami/kubewatch/.kubewatch.yaml <<'EOF'
+        handler:
+          webhook:
+            enabled: true
+            url: "http://backend:8000/api/v1/events/kubewatch"
+        resource:
+          pod: true
+          deployment: true
+          node: true
+          persistentvolumeclaim: true
+        EOF
+        /opt/bitnami/kubewatch/kubewatch
+    depends_on:
+      - backend
+    profiles:
+      - kubewatch
+
+  # Grafana Image Renderer — PromQL 카드 패널 PNG 스냅샷
+  grafana-renderer:
+    image: grafana/grafana-image-renderer:latest
+    container_name: pep_grafana_renderer
+    ports:
+      - "8081:8081"
+    environment:
+      - ENABLE_METRICS=true
+      - HTTP_PORT=8081
+      - RENDERING_MODE=clustered
+      - RENDERING_CLUSTERING_MODE=browser
+      - RENDERING_CLUSTERING_MAX_CONCURRENCY=5
+    profiles:
+      - grafana-renderer
+
   # Celery Beat (Scheduler)
   celery-beat:
     build:

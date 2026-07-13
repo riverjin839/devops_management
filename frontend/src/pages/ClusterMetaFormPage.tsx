@@ -49,6 +49,8 @@ export function ClusterMetaFormPage() {
   const [description, setDescription]   = useState('');
   const [bgpEnabled, setBgpEnabled]     = useState(false);
   const [asNumber, setAsNumber]         = useState('');
+  const [prometheusUrl, setPrometheusUrl] = useState('');
+  const [prometheusEnabled, setPrometheusEnabled] = useState(false);
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
   const [tab, setTab]                   = useState<TabId>('node');
@@ -82,6 +84,8 @@ export function ClusterMetaFormPage() {
     setDescription(cluster.description ?? '');
     setBgpEnabled(cluster.bgpEnabled ?? false);
     setAsNumber(cluster.asNumber ?? '');
+    setPrometheusUrl(cluster.prometheusUrl ?? '');
+    setPrometheusEnabled(cluster.prometheusEnabled ?? false);
     setHydrated(true);
   }, [cluster, hydrated]);
 
@@ -137,6 +141,8 @@ export function ClusterMetaFormPage() {
         description: description.trim() || undefined,
         bgpEnabled,
         asNumber: asNumber.trim() || undefined,
+        prometheusUrl: prometheusUrl.trim() || undefined,
+        prometheusEnabled,
       };
       await clustersApi.update(cluster.id, payload as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
@@ -386,6 +392,25 @@ export function ClusterMetaFormPage() {
                     rows={5} className={`${ic} resize-none`} />
                 </div>
 
+                {/* Cluster Trends — per-cluster Prometheus 연동 (노드 메트릭 추이) */}
+                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-cyan-500 uppercase tracking-wider">메트릭 추이 (Prometheus)</p>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" className="accent-primary" checked={prometheusEnabled}
+                      onChange={(e) => setPrometheusEnabled(e.target.checked)} />
+                    이 클러스터에서 클러스터 추이(Prometheus) 사용
+                  </label>
+                  <div>
+                    <label htmlFor={f('prometheusUrl')} className={lc}>Prometheus URL (선택 — 전역값 오버라이드)</label>
+                    <input id={f('prometheusUrl')} type="text" value={prometheusUrl}
+                      onChange={(e) => setPrometheusUrl(e.target.value)}
+                      placeholder="비우면 전역 PROMETHEUS_URL 사용" className={ic} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    node-exporter 메트릭의 노드 식별 라벨(<code>PROMETHEUS_NODE_LABEL</code>, 기본 <code>instance</code>)
+                    값이 k8s 노드명과 일치해야 per-node 추이가 매칭됩니다.
+                  </p>
+                </div>
               </div>
             )}
           </div>

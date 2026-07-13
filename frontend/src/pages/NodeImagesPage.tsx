@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Boxes, Search, AlertTriangle, LayoutList, LayoutGrid, Layers } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
-import { NodeImagesTable, NodeLabelGroupView, ImageCentricView } from '@/components/node-images';
-import { ClusterSidebar, SnapshotProgressCard } from '@/components/common';
+import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu } from '@/components/node-images';
+import { ClusterSidebar, SnapshotProgressCard, ExportMenu } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
@@ -56,21 +56,23 @@ export function NodeImagesPage() {
   }, [nodes]);
 
   const isLoading = clustersLoading || nodesLoading;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const safeName = (activeClusterName || 'cluster').replace(/[^\w.-]+/g, '-');
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-3 py-3 flex gap-3">
+      <main className="pr-3 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={activeClusterId || null}
           onSelect={(id) => setSelectedClusterId(id ?? '')}
           iconOnly
         />
-        <div className="flex-1 min-w-0">
+        <div ref={contentRef} className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <Boxes className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-semibold">Node Images</h1>
+              <h1 className="text-xl font-semibold">K8S 노드 이미지</h1>
               {activeClusterName !== '-' && (
                 <span className="text-sm text-muted-foreground">
                   — <span className="font-medium text-foreground">{activeClusterName}</span>
@@ -123,6 +125,11 @@ export function NodeImagesPage() {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="ml-auto flex items-center gap-2" data-export-ignore>
+              <NodeImagesCsvExportMenu clusterId={activeClusterId} disabled={isLoading || nodes.length === 0} />
+              <ExportMenu targetRef={contentRef} filenameBase={`node-images-${safeName}`} disabled={isLoading || nodes.length === 0} />
             </div>
           </div>
 

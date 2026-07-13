@@ -4,7 +4,8 @@ import {
   CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
-  ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, FolderTree,
+  ShieldCheck, Activity, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell,
+  TrendingUp, FileSpreadsheet,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -16,6 +17,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
   '/k8s-manage':         { defaultLabel: 'K8S 상세 관리',  icon: ShipWheel, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
   '/k8s-allocation':     { defaultLabel: 'K8S 자원 관리',  icon: Gauge, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
+  '/cluster-trends':     { defaultLabel: '클러스터 추이',  icon: TrendingUp, iconColor: 'text-cyan-500', iconSize: 'w-5 h-5' },
   '/ops-checks':         { defaultLabel: '운영 점검',       icon: ShieldCheck },
   '/k8s-logs':           { defaultLabel: '파드 로그',       icon: ScrollText },
   '/daily-check/review': { defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
@@ -23,7 +25,6 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/lake-services':      { defaultLabel: 'LAKE 서비스',     icon: Database },
   '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
-  '/knowledge':          { defaultLabel: '지식베이스',      icon: FolderTree },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
   '/todo-today':         { defaultLabel: 'Work To Do',     icon: CalendarCheck2 },
@@ -39,13 +40,15 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/infra-topology':     { defaultLabel: '인프라 토폴로지', icon: Network },
   '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
   '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
-  '/node-labels':        { defaultLabel: '노드 라벨',      icon: Tags },
-  '/node-images':        { defaultLabel: '노드 이미지',    icon: Boxes },
+  '/node-labels':        { defaultLabel: 'K8S 노드 라벨',   icon: Tags },
+  '/node-images':        { defaultLabel: 'K8S 노드 이미지', icon: Boxes },
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
+  '/k8s-events':         { defaultLabel: 'K8s 실시간 이벤트', icon: Bell, iconColor: 'text-orange-500' },
   '/incident-analysis':  { defaultLabel: 'K8s 로그 (분석·실시간)', icon: Zap },
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
   '/cilium-trace':       { defaultLabel: 'Cilium BPF Trace', icon: Waves },
   '/service-topology':   { defaultLabel: '서비스 토폴로지', icon: Workflow },
+  '/architecture':       { defaultLabel: '서비스 모듈 관계도', icon: GitBranch },
   '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
   '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
   '/work-guides':        { defaultLabel: '표준 작업 가이드', icon: BookMarked },
@@ -55,19 +58,21 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/mindmap':            { defaultLabel: '마인드맵',       icon: Map },
   '/workflow':           { defaultLabel: '워크플로우',     icon: GitFork },
   '/settings':           { defaultLabel: 'Settings',       icon: Settings },
+  '/jira-import':        { defaultLabel: 'Jira Excel 가져오기', icon: FileSpreadsheet },
 };
 
 // 사이드바 레일에 표시되는 그룹들
-export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'knowledge' | 'system';
+export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'devops' | 'collab' | 'knowledge' | 'system';
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/ops-checks', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
-  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/node-labels', '/node-images', '/kernel-params', '/infra-topology'], modes: ['platform'] },
-  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
+  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
+  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/architecture', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
-  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs'], modes: ['work'] },
-  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs', '/knowledge', '/ops-notes', '/mindmap', '/ontology', '/trends', '/work-guides'], modes: ['work'] },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import'], modes: ['work'] },
+  { id: 'knowledge', label: '지식/분석',  icon: BookOpen,  paths: ['/docs'], modes: ['work'] },
+  // 주: 지식/분석은 지식 허브(/docs) 하나로 통합 — 지식베이스·Q&A(운영노트)·마인드맵·온톨로지·
+  //     기술동향·작업가이드(SOP)는 허브 탭/목록에서 접근하므로 개별 좌측 메뉴를 제거했다.
   { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
 ];
 

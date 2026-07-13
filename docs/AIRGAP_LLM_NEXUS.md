@@ -121,6 +121,10 @@ Ollama 모델은 OCI 와 유사한 레지스트리 포맷으로 배포됩니다.
 `OLLAMA_MODEL` 은 `"qwen2.5"` 처럼 base 만 적어도 `qwen2.5:7b` 와 매칭됩니다
 (`agent_service.health_check` 가 base 이름 비교를 지원).
 
+> **Helm 폐쇄망 차트(`values-airgap.yaml`)** 는 모델을 **사전 적재한 커스텀 Ollama 이미지**를 쓰며
+> 기본 `OLLAMA_MODEL=qwen2.5-coder:7b` 로 설정돼 있다. 이 이미지를 그대로 쓰면 위 2장(모델 수급)
+> 절차가 필요 없다. 다른 모델을 쓰려면 `OLLAMA_MODEL` 을 바꾸고 2장 절차로 적재한다.
+
 ---
 
 ## 4. 연동 확인
@@ -173,6 +177,73 @@ curl -X POST http://<backend>/api/v1/agent/pull-model \
 | 카드에 `LLM 미가용: ... timed out` | 모델 최초 로딩이 김 / 서버 과부하. `OLLAMA_TIMEOUT` 상향, 작은 모델 사용 |
 | `ollama pull` 이 Nexus 에서 실패 | docker(proxy) 미설정 / Nexus→인터넷 차단(완전폐쇄면 방식 B) / self-signed CA 미신뢰 |
 | 위험도 dot 이 회색(info) | LLM 응답에 `RISK:` 라인이 없거나 미가용. 프롬프트는 마지막 줄에 `RISK: healthy|warning|critical` 를 요구함 |
+
+---
+
+## 7. 임베딩 모델 — WorkItem / 지식허브 유사 검색
+
+**PEP AI 계층 개선 Phase 1-2** 로 WorkItem(`work_items.embedding`)과 지식허브 문서
+(`work_guides.embedding`)에 pgvector 기반 유사 검색이 추가되었습니다. 별도 임베딩 서빙
+스택(sentence-transformers 등)을 새로 들이지 않고, **기존 Ollama 인프라를 그대로 재사용**해
+`/api/embeddings` 엔드포인트로 호출합니다 — 백엔드 관점에서는 2장의 LLM 모델 반입 절차와
+동일하게 Nexus 로 **임베딩 전용 모델**만 하나 더 적재하면 됩니다.
+
+### 7.1 임베딩 모델 반입
+
+기본값은 `nomic-embed-text` (차원 768, 경량, 다국어 양호). 2장(방식 A/B) 과 완전히 동일한
+절차로 반입합니다:
+
+```bash
+# 방식 A (Nexus docker-proxy 사용 시)
+ollama pull <nexus-host>:<port>/nomic-embed-text
+ollama cp <nexus-host>:<port>/nomic-embed-text nomic-embed-text
+
+# 방식 B (오프라인 tar 반입 시) — 2장 §B 절차와 동일
+```
+
+`EMBEDDING_MODEL` 환경변수로 모델명을, `EMBEDDING_DIM` 으로 차원을 지정합니다. **모델을
+바꾸면 차원도 함께 맞춰야 하며, 기존에 저장된 임베딩은 새 차원과 호환되지 않으므로
+재계산이 필요합니다** (WorkItem/WorkGuide 를 한 번씩 재저장하면 Celery 태스크가 자동
+재계산).
+
+### 7.2 pgvector 확장 반입 (PostgreSQL)
+
+`work_items.embedding` / `work_guides.embedding` 컬럼은 PostgreSQL `vector` 타입(pgvector
+확장)을 사용합니다. 폐쇄망 PostgreSQL 서버에 확장 패키지를 사전 반입해야 합니다.
+
+```bash
+# Ubuntu/Debian 계열 — Nexus apt(proxy) repo 를 통해 반입
+apt-get install postgresql-<버전>-pgvector
+
+# 또는 소스 빌드 (오프라인 tar 반입 시)
+# https://github.com/pgvector/pgvector 릴리스 tarball 을 Nexus raw(hosted) 로 반입 후
+# make && make install (PostgreSQL 서버와 동일 major 버전 devel 패키지 필요)
+```
+
+백엔드는 부팅 시 `CREATE EXTENSION IF NOT EXISTS vector` 를 자동 실행합니다
+(`main.py: _ensure_pgvector_extension`). 확장이 없으면 경고 로그만 남기고 부팅은
+계속되지만, `work_items`/`work_guides` 테이블이 **아직 한 번도 생성되지 않은 완전
+신규 설치**라면 해당 테이블 생성 자체가 실패할 수 있으므로, 반드시 최초 배포 전에
+pgvector 확장을 먼저 설치하세요. 이미 운영 중인 DB(테이블이 이미 존재)라면 확장만
+나중에 설치해도 재부팅 시 `embedding` 컬럼이 자동으로 추가됩니다(`_run_migrations`).
+
+### 7.3 동작 확인
+
+```bash
+# 임베딩 모델 응답 확인
+curl -s http://<ollama-host>:11434/api/embeddings \
+  -d '{"model": "nomic-embed-text", "prompt": "etcd 리더 없음"}' | jq '.embedding | length'
+# → 768
+
+# 유사 WorkItem 검색
+curl -s http://localhost:8000/api/v1/work-items/<work_item_id>/similar
+```
+
+WorkItem/지식허브 문서를 생성·수정하면 응답이 온 뒤 **백그라운드에서** Celery 워커가
+임베딩을 계산·저장합니다(쓰기 응답 자체는 임베딩 계산을 기다리지 않음). 임베딩 모델이
+아직 반입되지 않았거나 Ollama 가 오프라인이면 `embedding` 컬럼은 `NULL` 로 남고, 유사
+검색 API 는 `embedding_available: false` 를 반환합니다 — 대시보드/쓰기 경로에는 영향
+없음(agent_service 와 동일한 fail-safe 원칙).
 
 ---
 

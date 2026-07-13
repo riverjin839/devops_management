@@ -6,6 +6,377 @@
 [Keep a Changelog]: https://keepachangelog.com/ko/1.1.0/
 [SemVer]: https://semver.org/lang/ko/
 
+## [Unreleased]
+
+1.3.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.3.1] - 2026-07-13
+
+### Changed
+- **`ClusterSidebar` iconOnly 레일 — S/M/L 크기 토글을 드래그 리사이즈로 교체**: 1.3.0 의
+  작게/보통/크게 3단계 토글 대신, 레일 우측 가장자리를 드래그해 폭을 자유롭게(48~120px)
+  조절하는 방식으로 변경 — 아이콘이 레일 폭을 거의 그대로 채우도록(레일↔아이콘 여백을
+  고정 6px 로 최소화) 만들어, 레일을 늘리면 아이콘도 그만큼 커 보이게 했다. 더블클릭으로
+  기본값(64px) 복귀, 사용자별 localStorage 영속.
+  - Frontend: `ClusterSidebar.tsx` `iconSizeFor()`(레일 폭→버튼/이미지/아이콘/도트 비율
+    계산) + 기존 `ResizeHandle` 재사용. `stores/sidebarStore.ts` `clusterIconRailWidth`
+    (기존 `clusterIconRailSize` 프리셋 대체).
+
+### Removed
+- **주간 타임라인 "색 반전" 토글 제거**: 상태 막대(박스) 배경/글씨 색을 반전하던
+  기능을 제거 — 대신 주 이동 툴바(월/날짜범위)와 요일 헤더 글씨색을 테마와 무관하게
+  고정 검정계열(`text-slate-700/800`)로 바꿔 반전 없이도 가독성을 확보.
+  - Frontend: `WeeklyStatusTimeline.tsx`.
+
+## [1.3.0] - 2026-07-13
+
+### Added
+- **클러스터 아이콘 빌더 — 업무명/운영타입/속성/지역 4개 밴드 구조로 개편**: 기존
+  이니셜+환경색+지역 3요소 조합을 위→아래 4개 가로 밴드(1층 업무명, 2층 운영타입, 3층
+  속성, 4층 지역)로 재구성. 속성(3층)은 `[업무명]-[운영타입]-[속성]` 표준 클러스터
+  이름 규칙(클러스터 이름 표준화 도구와 동일 파싱)의 3번째 세그먼트(클러스터 기능 —
+  예: computing/storage)를 자동 추출해 프리필. 4개 밴드는 운영등급 색 토큰 하나를
+  명도만 달리해(운영타입 밴드가 가장 진한 강조색) 통일감 있게 표시.
+  - Frontend: `lib/clusterIconBuilder.ts` `buildClusterIconSvg()` 재작성 +
+    `suggestAttribute()`/`suggestOpTypeLabel()` 추가, 신규 `lib/clusterName.ts`
+    (표준 이름 파싱 — `StandardizeClusterNamesModal` 과 공유), `ClusterIconPicker`
+    빌더 탭 입력 폼 4개 필드로 확장.
+- **`ClusterSidebar` iconOnly 레일 — 아이콘 크기 확대 + S/M/L 크기 조절**: 40px 버튼
+  안에 24px 이미지만 차지해 여백이 커 보이던 문제 해결 — 기본 크기를 48px 버튼/34px
+  이미지로 키우고, 레일 상단에 작게/보통/크게(S/M/L) 토글을 추가해 사용자가 취향껏
+  조절 가능(사용자별 localStorage 저장). 아이콘 없는 클러스터의 status 아이콘(lucide)·
+  이모지 아이콘도 같은 비율로 함께 커진다.
+  - Frontend: `ClusterSidebar.tsx` — `ICON_RAIL_SIZE_PRESETS`, `IconRailButton` 픽셀
+    기반 동적 크기. `stores/sidebarStore.ts` `clusterIconRailSize` 영속화.
+
+### Fixed
+- **인프라 토폴로지(`/infra-topology`) — 클러스터 선택이 표준 사이드바 대신 레거시
+  가로 탭이었던 문제**: 클러스터를 클릭해도 다른 클러스터 페이지처럼 좌측 아이콘
+  사이드바가 뜨지 않고 상단 버튼 탭만 있던 것을 `ClusterSidebar iconOnly` 표준
+  패턴으로 마이그레이션.
+  - Frontend: `InfraTopologyPage.tsx`.
+- **릴리즈 노트 패널 — 요약 텍스트가 잘려 스크롤해야 보이던 문제**: 고정 480px 폭에서
+  버전별 요약이 한 줄 말줄임(truncate)으로 잘려 전체 내용을 볼 수 없었다 → 기본 폭을
+  640px 로 넓히고, 요약 텍스트를 말줄임 대신 줄바꿈(wrap)으로 바꿔 기본 상태에서도
+  잘림 없이 표시. 왼쪽 가장자리를 드래그하면 420~1100px 범위로 추가 확장 가능(사용자별
+  localStorage 영속).
+  - Frontend: `SidePane.tsx` 에 범용 `resizable`/`widthStorageKey`/`minWidth`/`maxWidth`
+    prop 추가(기존 `ResizeHandle` 재사용, 다른 SidePane 사용처는 옵트인이라 영향 없음),
+    `ResizeHandle` 의 `side` 를 `'left'` 도 지원하도록 확장, `ReleaseNotesPanel.tsx`
+    요약 미리보기 `truncate` → `break-words`, `Sidebar.tsx` 에서 활성화.
+
+## [1.2.0] - 2026-07-09
+
+### Added
+- **홈 "담당자별 진행 현황" — "주간"(담당자 기준) 탭에도 접기/더보기 적용**: 담당자 탭에만
+  있던 "인당 표시 5개 제한 + 더보기" 정책을 주간 탭의 담당자 기준 스윔레인 뷰에도 확장 —
+  겹치는 업무가 많아 sub-lane 이 5개를 넘는 담당자는 처음 5개 lane 만 보이고 "+N건 더…"
+  버튼으로 나머지를 펼치거나(클릭 시 "접기"로 되돌림) 다시 접을 수 있어, 특정 담당자의
+  업무가 몰려도 패널 전체 높이가 과도하게 늘어나지 않는다.
+  - Frontend: `WeeklyStatusTimeline.tsx` — `LANE_LIMIT`(5) + 담당자별 펼침 상태(`expandedAssignees`).
+- **클러스터 아이콘 빌더**: 사이드바에서 클러스터를 한눈에 구분하기 어려운 문제 해결 —
+  서비스 이니셜(이름에서 자동 추출) + 환경색(운영등급: 운영=빨강/스테이지=주황/개발=파랑,
+  Settings 운영등급 색 설정 연동) + 하단 지역 약어 밴드(이천/용인/청주/우시 등) + k8s 휠
+  워터마크를 조합한 SVG 아이콘을 생성. 아이콘 선택창에 "빌더" 탭 추가(실시간 미리보기,
+  모든 값 편집 가능, 사각/원형), Settings ▸ 클러스터 탭에 **"아이콘 일괄 생성"** 버튼
+  (아이콘이 비어있는 클러스터만 자동 생성 — 기존 아이콘은 유지). SVG data URL 로 기존
+  icon 저장 형식을 그대로 사용해 백엔드 무변경, 모든 렌더 위치(사이드바/테이블/설정)
+  즉시 반영.
+  - Frontend: 신규 `lib/clusterIconBuilder.ts`, `ClusterIconPicker` 빌더 탭, `SettingsPage`.
+- **`scripts/redeploy.sh` — Deployment 이름만으로도 재배포 가능**: `-t` 옵션과 함께 쓰는 target 을
+  기존 `<deployment>:<container>` 뿐 아니라 `<deployment>` 이름만으로도 지정 가능(예:
+  `backend frontend`) — 컨테이너가 정확히 1개인 Deployment 는 자동 판별하고, 여러 개면 자동 판별
+  불가 사유와 함께 명시적으로 지정하라는 에러 메시지를 출력한다. v1.1.0 의 `-t` 옵션에 이어지는
+  개선.
+- **아이콘 picker — Airflow / Spark / JupyterHub / JupyterLab / StarRocks / CI-CD 아이콘 추가**:
+  클러스터 · 서비스 카탈로그 아이콘 선택창(오픈소스 / CNCF 그룹 + 기본 그룹)에서 LAKE 계열
+  OSS 로고와 일반 CI/CD 파이프라인 아이콘을 고를 수 있게 추가. 요청된 항목 중 Cilium/
+  Keycloak/Nexus/Prometheus/Grafana/MinIO(AIStor)는 이미 등록되어 있어 그대로 재사용된다.
+  Airflow/Spark 는 simple-icons 공식 로고, JupyterHub/JupyterLab 은 두 프로젝트가 공유하는
+  동일한 Jupyter 로고. StarRocks 는 simple-icons 에 등록되어 있지 않아 공식 사이트
+  (docs.starrocks.io) 의 원본 다색(골드+틸) 로고 SVG 를 직접 이식. CI/CD 는 특정 브랜드가
+  아니라 lucide `Waypoints`(파이프라인 단계 형태) 아이콘을 범용으로 매핑.
+  - Frontend: `lib/brandIcons.ts` — `BRAND_ICONS.Airflow/Spark/JupyterHub/JupyterLab/StarRocks`
+    (+ 다색 SVG 전용 `brandMulti()` 헬퍼 신설), `lib/clusterIcons.ts` — `CLUSTER_ICON_OPTIONS['CI/CD']`.
+- **Jira Excel 가져오기 — 복사·붙여넣기(TSV)로도 가져오기 가능**: 파일 업로드 없이 Jira
+  이슈 목록/엑셀 표를 마우스로 드래그해 복사한 뒤 그대로 붙여넣어 가져올 수 있는 모드를
+  추가. 파일 업로드와 동일한 헤더 자동 탐색·담당자 매칭 로직(`_extract_jira_rows`)을
+  공유한다.
+  - Frontend: `JiraExcelImportPage.tsx` — `ViewModeBar` 로 파일 업로드/붙여넣기 전환,
+    `jiraApi.importPaste()`.
+  - Backend: `POST /api/v1/jira/import/paste` (`JiraExcelPasteRequest`) — `routers/jira.py`.
+- **홈 "담당자별 진행 현황 — 주간" 탭(WeeklyStatusTimeline) 밀도 개선 + 기본 탭 복귀**:
+  담당자 기준 스윔레인 뷰에도 "담당자" 탭(MemberTodayTodos)과 동등한 표시 제한/펼치기를
+  갖춰 기본 탭을 다시 '주간'으로 되돌렸다.
+  - 담당자별 기본 5건만 표시 → "+N건 더보기"로 펼치고, 펼친 뒤에는 "접기"로 다시 접을 수
+    있음.
+  - 이번 주 전체 업무를 모은 "전체" 요약 행을 항상 목록 최상단(로그인 본인 행보다도 위)에
+    강조 표시.
+  - 화면당 표시할 담당자(행) 수를 툴바에서 조절 가능(기본 20명, 옵션 10/20/30/50 —
+    사용자별 localStorage 저장), 라인 밀도(레인 높이 32→24px)와 글씨 크기를 줄여 스크롤
+    없이 더 많은 담당자가 한 화면에 보이도록 개선.
+  - Frontend: `WeeklyStatusTimeline.tsx`(`ASSIGNEE_ITEM_LIMIT`, `ROWS_LIMIT_OPTIONS`,
+    `TEAM_ROW_NAME`), `HomePage.tsx`(`weeklyTab` 기본값 `'week'`로 변경).
+- **Jira Excel 가져오기 — "업무 관리에 저장" 버튼**: 미리보기(파일 업로드/붙여넣기)가 성공하면
+  헤더에 저장 버튼이 나타나고, 클릭하면 그 자리에서 다시 파일을 읽지 않고 미리보기 행을
+  그대로 PEP 업무 관리 게시판(work_items)에 매핑 저장한다. 라이브 JQL 가져오기와 달리
+  `jira_issue_id` 가 없어 `jira_issue_key` 로 dedup(재저장 시 갱신), `type`/카테고리는
+  `jira_service.map_issue_type()` 재사용, 상태는 텍스트 매칭으로 kanban 상태 추정. 저장 후
+  생성/갱신/스킵 건수 배너 + 업무 관리 게시판 바로가기 링크 노출.
+  - Frontend: `JiraExcelImportPage.tsx` — 저장 버튼/결과 배너, `jiraApi.importSaveToBoard()`.
+  - Backend: `POST /api/v1/jira/import/excel/save`(`JiraExcelSaveRequest`, `require_operator`)
+    — `routers/jira.py` `import_excel_save()`, `_map_excel_status_to_kanban()`.
+
+### Fixed
+- **Jira Excel 가져오기 — `.xls` 업로드 시 "Expected BOF record" 오류**: Jira 의
+  "엑셀(전체 필드)" 내보내기는 확장자만 `.xls` 일 뿐 실제 내용은 HTML 테이블(구버전 Excel
+  호환용)이라, 진짜 OLE2 바이너리만 지원하는 xlrd 가 즉시 실패했다 → 업로드된 `.xls` 파일이
+  HTML 인지 먼저 감지해 표준 라이브러리 `html.parser` 기반 테이블 추출기로 파싱(신규
+  의존성 없음). 진짜 바이너리 `.xls` 는 기존 xlrd 경로 그대로 유지.
+  - Backend: `routers/jira.py` `_looks_like_html()`/`_read_html_table_rows()`.
+- **홈 "담당자별 진행 현황" — 인당 표시 개수 제한(기본 5개, 더보기)이 적용 안 되던 문제**:
+  이 기능은 `MemberTodayTodos`(패널의 "담당자" 탭)에만 구현돼 있었는데, 패널의 기본 탭이
+  "주간"(`WeeklyStatusTimeline` — 간트 스윔레인 뷰, 인당 표시 제한 없음)으로 설정돼 있어
+  대부분의 사용자가 제한이 적용된 뷰를 아예 보지 못했다 → 기본 탭을 "담당자"로 변경.
+- **Jira Excel 가져오기 — 헤더가 1행이 아니면 "필수 컬럼을 찾을 수 없습니다" 오류**: 제목행/빈
+  행이 표 위에 끼어 있어 실제 `Key`/`Summary` 헤더가 2~4번째 행에 오는 엑셀은 무조건 실패했다
+  → 첫 행만 보던 것을 최대 5행까지 순서대로 후보로 살펴 key/summary 를 모두 찾은 첫 행을
+  헤더로 채택하도록 변경. 그래도 못 찾으면 에러 메시지에 스캔한 각 행의 헤더 후보를 함께 노출.
+  - Backend: `routers/jira.py` `import_excel()` — `_EXCEL_HEADER_SCAN_ROWS`.
+- **Jira Excel 가져오기 — HTML 기반 `.xls` 에서 표가 2개 이상이면 "최대 2행까지 확인" 오류
+  (위 수정의 실제 근본 원인)**: `.xls` 확장자지만 실제로는 HTML 표인 Jira "엑셀(전체 필드)"
+  내보내기 파서가 **문서의 첫 `<table>` 하나만** 읽도록 하드코딩돼 있었다. Jira 내보내기가
+  요약/메타 정보를 담은 작은 표를 실제 이슈 목록 표보다 앞에 두거나(형제 표), 레이아웃용
+  바깥 표 안에 실제 이슈 표를 중첩시키는 구조면, 작은 첫 표(예: 2행)만 읽고 진짜 데이터
+  표는 통째로 무시된 채 "필수 컬럼을 찾을 수 없음" 이 났다 → 파서를 테이블 스택 기반으로
+  다시 짜 문서 안의 모든 표(중첩 포함)를 각각 독립적으로 추출하도록 변경, 헤더 탐색도 표
+  하나가 아니라 발견된 모든 표를 순서대로 확인해 Key/Summary 헤더를 가진 첫 표를 사용하도록
+  확장. 파일 업로드/붙여넣기 공통 로직 `_extract_jira_rows()` 로 통합.
+  - Backend: `routers/jira.py` `_JiraHtmlTableExtractor`(스택 기반 재작성) → `_read_html_tables()`,
+    `_find_header_in_rows()`, `_extract_jira_rows()`.
+- **로그인 시 홈 기본 화면이 이전 세션의 "플랫폼 현황" 상태를 물려받던 문제**: 로그인마다 홈
+  모드를 항상 "업무 현황"으로 리셋하도록 변경(로그인 후 토글은 그대로 가능).
+  - Frontend: `stores/authStore.ts` `setSession()`.
+- **주간 타임라인 "색 반전" 토글 — 의도와 다르게 카드 전체 배경/텍스트가 반전되던 문제**:
+  본래 의도는 상태 막대(업무 박스)의 배경색과 그 안의 글씨색을 반전하는 것인데, 카드
+  surface 토큰(배경/테두리/보조색 등)을 통째로 어두운 팔레트로 덮어써 타임라인 전체
+  분위기가 바뀌었다 → 카드 레벨 오버라이드를 제거하고, 각 상태 막대 버튼에만 Tailwind
+  `invert`(filter: invert) 를 조건부로 적용해 그 막대의 배경 그라데이션과 글씨색만
+  반전되도록 정정.
+  - Frontend: `WeeklyStatusTimeline.tsx`(상태 막대 버튼 className), `index.css`(불필요해진
+    `.timeline-color-invert` 규칙 제거).
+- **Jira Excel 가져오기 — Description/Environment 셀에 이스케이프된 HTML 태그가 그대로
+  노출**: Jira 의 HTML 기반 내보내기는 rich-text 필드를 이스케이프된 HTML(예:
+  `&lt;p dir="auto"&gt;...&lt;/p&gt;`)로 담는 경우가 있는데, 파서가 엔티티를 복원하는
+  과정에서 `<p dir="auto">...` 처럼 태그가 그대로 텍스트로 남아 화면에 보였다 → 태그를
+  제거하고 순수 텍스트만 남기도록 정정. Created 필드도 시간까지 표시되던 것을 날짜만
+  보이도록 변경(HTML 텍스트 날짜/네이티브 Excel 날짜 셀 모두 지원).
+  - Backend: `routers/jira.py` `_strip_inline_html()`, `_excel_date_only()`/`_parse_excel_date()`.
+- **아이콘 picker — 브랜드 로고가 실제 브랜드 색이 아니라 단색(currentColor)으로 표시되던
+  문제**: Kubernetes/Prometheus/Cilium/Keycloak 등 simple-icons 기반 아이콘이 전부
+  `fill: currentColor` 라 주변 텍스트 색을 그대로 물려받아 브랜드를 구분하기 어려웠다 →
+  simple-icons 가 아이콘마다 제공하는 공식 브랜드 hex 컬러(`si.hex`)로 채우도록 변경, 항상
+  실제 로고 색으로 표시된다(StarRocks 는 이미 다색 원본이라 영향 없음).
+  - Frontend: `lib/brandIcons.ts` `brand()` — `fill: currentColor` → `fill: #${si.hex}`.
+
+## [1.1.0] - 2026-07-09
+
+### Added
+- **당일 스케줄 — 담당자 순환 전환**: "나만" 버튼이 로그인 유저의 실명으로 표시되고, 양옆 화살표로
+  다른 담당자를 순환 선택해 그 사람의 당일 일정만 볼 수 있다("전체" 토글은 그대로 유지). 선택 상태는
+  사용자별 localStorage 에 저장(구버전 나만/전체 값과 하위호환).
+  - Frontend: `DayScheduleBoard.tsx` — `useAssignees()` 로 전체 담당자 목록 조회.
+- **업무 현황 홈 — 주간 타임라인 "업무 등록" 팝업화**: 홈페이지 "담당자별 진행 현황" 주간 탭의
+  "업무 등록" 버튼이 별도 페이지로 이동하지 않고 팝업(`WorkItemFormModal`)으로 바로 뜬다(업무 관리
+  페이지와 동일한 패턴).
+  - Frontend: `WeeklyStatusTimeline.tsx`.
+- **`scripts/redeploy.sh` — 태그만 지정하는 `-t` 옵션 추가**: 매번 전체 이미지 참조를 입력하지
+  않아도, `-t <tag>` 로 태그만 주면 각 `<deployment>:<container>` 의 현재 배포 이미지에서
+  저장소 경로(레지스트리+repo)를 그대로 읽어와 태그만 바꿔친다. 레지스트리 포트(`host:5000/...`)나
+  다이제스트 고정(`@sha256:...`) 이미지도 안전하게 처리. 기존 전체 이미지 참조 방식도 그대로 유지.
+- **Jira Excel 가져오기 — 레거시 `.xls` 지원**: 기존 `.xlsx`/`.xlsm` 뿐 아니라 Excel 97-2003
+  바이너리 형식(`.xls`)도 업로드 가능. 신규 라이브러리 `xlrd` 를 확장자 기준으로 분기 사용하고,
+  헤더 매칭·담당자 매칭 등 파싱 이후 로직은 `.xlsx` 경로와 완전히 공유(행을 동일한 값-튜플
+  형태로 정규화).
+  - Backend: `xlrd==2.0.1` 추가, `routers/jira.py` `_read_xls_rows()`(날짜 셀→`datetime` 변환
+    포함) + `import_excel` 확장자 분기.
+- **freelens 파리티 — 파드 로그 뷰어 고도화**: SSE 실시간 스트림은 유지하면서 컨테이너 드롭다운
+  (init 포함, `kubectl.kubernetes.io/default-container` 어노테이션 존중), previous(재시작 전) 로그,
+  타임스탬프·word-wrap 토글, 검색(정규식 옵션·prev/next·하이라이트), 다운로드(보이는 로그/전체),
+  react-virtuoso 가상화(버퍼 5천→2만 줄) 추가. K8s 관리 콘솔 파드 목록의 "로그" 버튼에서
+  `?namespace=&pod=` 딥링크로 자동 시작.
+  - Backend: `analyze.py` 로그 스트림에 `timestamps`/`since_seconds` 파라미터, 신규
+    `GET .../pods/{pod}/containers`·`GET .../logs/download`(10MB 상한).
+  - Frontend: 신규 `PodLogStream` 컴포넌트, `LogViewer` 의 ANSI strip·토큰 컬러를 `logLine.tsx` 로
+    추출해 공유.
+- **freelens 파리티 — xterm.js TTY 터미널**: 파드 터미널을 라인 기반 입력에서 xterm.js 진짜 TTY 로
+  교체 — vi/top 등 풀스크린 앱 동작, 창 크기 변경 시 K8s exec resize 채널로 반영, 멀티컨테이너
+  드롭다운. 권한(admin/operator)·감사로그·세션 상한은 기존 그대로.
+  - Backend: `k8s_exec.py` WS 인바운드를 JSON 프로토콜(`stdin`/`resize`)로 확장(비 JSON 프레임은
+    stdin 취급 — 하위호환). Frontend: `PodTerminal` xterm 재작성(deps `@xterm/xterm`, `@xterm/addon-fit`).
+- **freelens 파리티 — Pods 목록 컬럼 확장**: CPU/MEM 즉시 사용량(metrics-server, 없으면 `-`+안내),
+  Warning 이벤트 아이콘(건수·최신 reason 툴팁), 로그 바로가기 버튼. Backend 는 파드 목록과
+  메트릭·이벤트를 병렬 best-effort 조회.
+- **freelens 파리티 — 상세 드로어 이벤트 탭**: 리소스 상세 슬라이드오버에 관련 이벤트(involvedObject
+  기준, 15초 자동 갱신) 탭 추가, workload 요약에 Conditions 섹션 추가.
+  - Backend: `GET /k8s/{cluster}/resources/{kind}/{ns}/{name}/events`.
+- **freelens 파리티 — CRD 프린터 컬럼**: CR 목록이 CRD 의 `additionalPrinterColumns`(jsonPath)를
+  평가해 kubectl 과 동일한 컬럼을 표시(priority>0 제외, date 형은 age 표기). CR 의 Age 미표시 버그 수정.
+- **freelens 파리티 — 리소스 커버리지 확장(읽기 전용)**: Leases, EndpointSlices, RuntimeClasses,
+  Mutating/ValidatingWebhookConfigurations, ValidatingAdmissionPolicies(+Bindings) 추가.
+  kind-availability 프로브가 미지원 클러스터에서 자동 숨김.
+- **K8s 테이블 컬럼 표시/숨김**: 리소스/Pods/Nodes 테이블에 컬럼 토글 드롭다운 추가, 선택은
+  localStorage(`pep:k8s:cols:*`)에 영속화.
+- **이벤트 스트림 배칭·가상화**: 이벤트 SSE 를 1초 버퍼로 coalesce(같은 오브젝트 uid 는 최신만)
+  후 일괄 렌더 + Virtuoso 가상화(캡 1천→5천). freelens 의 watch 버퍼 패턴을 P2/P3 수용 기준으로
+  `docs/openlens-architecture-roadmap.md` 에 문서화.
+- **담당자별 진행 현황 — "전체" 카드 + 표시 개수 옵션**(홈 대시보드 `MemberTodayTodos`):
+  전체 참석(`allAttendees=true`, 파트 회의 등) 업무를 담당자 그룹과 별개로 모아 "전체" 카드로
+  0순위(맨 앞) 노출, 그다음 로그인 사용자 본인 카드가 1순위. 카드 그리드를 1열→2열
+  (`lg:grid-cols-2`, "전체" 카드는 전체 폭)로 바꾸고 인당 표시 개수를 기본 5개(옵션: 3/5/8/10,
+  localStorage 저장)로 조정 가능하게 해 스크롤 없이 더 많은 인원이 한 화면에 보이도록 개선.
+- **업무 등록 — 팝업 모달**: 업무현황(`/tasks-mgmt`)의 "업무 등록"/"하위 업무 등록" 버튼이 별도
+  페이지(`/tasks-mgmt/new`)로 이동하지 않고 팝업(`WorkItemFormModal`)으로 바로 뜬다. 목록/보드
+  화면 컨텍스트를 잃지 않고 등록 가능.
+- **서비스 모듈 관계도(`/architecture`)**: RAG 파이프라인 인포그래픽처럼 노드 사이를 점이 흐르는
+  애니메이션 플로우 다이어그램. 탭 2개 — ① PEP 아키텍처(브라우저→Backend API→PostgreSQL/Redis/
+  Celery Beat·Worker/Prometheus/Ollama/K8s 클러스터)와 ② 클러스터 토폴로지(선택한 클러스터의
+  애드온을 hub-spoke 로 표시). 엣지·노드 색상과 흐름 속도가 실제 헬스체크 상태(정상/경고/위험)를
+  반영하며, 라이브 상태 신호가 없는 구성요소(Redis/Celery)는 점선·회색으로 "구조만 표시" 처리해
+  실제 상태인 것처럼 오인되지 않게 함. React Flow 등 신규 라이브러리 없이 SVG `animateMotion` 기반
+  전용 컴포넌트(`FlowDiagram`)로 구현해 번들 크기 영향 없음.
+  - Frontend: `components/architecture/*`(FlowDiagram, pepArchitecture 레이아웃), `hooks/useArchitecture.ts`
+    (기존 `/health/summary`, `/health/addons`, `/agent/health`, `/promql/health` 재사용, 신규 백엔드 변경 없음),
+    `pages/ArchitecturePage.tsx`, 사이드바 네트워크 그룹에 메뉴 추가.
+- **K8s 클러스터 추이(Cluster Trends)** — 신규 메뉴 `/cluster-trends`. per-node CPU/Memory/Disk/DiskIO/Network/NetworkErr
+  시계열을 시간창(30m/1h/6h/24h/7d)별로 조회. 300+ 노드 과수집 방지(노드 명시 선택 + 상한 기본 30,
+  시간창별 step 자동조정, 지표당 range query 1회). 데이터 소스는 클러스터별 Prometheus URL(미설정/비활성 시 offline).
+  - Backend: `PrometheusService.query_range()`(fail-safe), `Cluster.prometheus_url/prometheus_enabled` 컬럼,
+    `cluster_trends` 라우터, config `PROMETHEUS_NODE_LABEL`(기본 instance)·`TRENDS_MAX_NODES`(기본 30).
+- **K8s 자원 관리 — 사용률(R/L) 표시**: k9s util 스타일로 모든 탭에 `R=사용/요청`·`L=사용/제한` 노출
+  (노드 카드/테이블, 네임스페이스, 워크로드/파드 드릴다운). CSV 에도 사용률 컬럼 추가.
+- **K8s 자원 관리 — 노드 카드 "열 수" 선택**(자동/5/10/20) + **네임스페이스·비효율 랭킹 페이징**
+  (`PageSizeSelect`/`Pager`/`paginate`). 노드/네임스페이스 **검색 필터** 추가.
+- **지식 허브 통합**: 지식/분석 메뉴를 `/docs` 하나로 통합(지식베이스·Q&A·마인드맵·온톨로지·기술동향·작업가이드를
+  허브 탭/목록에서 접근). 관리자 '기존 자료 가져오기'(SOP/운영노트 → 지식문서, 중복 skip, 비파괴).
+- **오픈소스/CNCF 브랜드 아이콘** 50종(`simple-icons`) — 클러스터·서비스 아이콘 picker 에 추가.
+- **업무 게시판**: 시작일/완료일 **시간 표시 옵션**(기본 off=날짜만), **이번주(월~일) 빠른 필터**.
+- **지식 허브 필터**: "필터" 타이틀 라인을 제거해 공간을 확보하고, 이번 주/이번 달/이번 분기 및 스프린트
+  필터 칩을 추가.
+- **업무 상세 페이지 바로 수정**: 우측 상단 "수정" 버튼과 별도 수정 페이지(라우트)를 없애고, 제목 옆
+  연필 버튼이나 본문 클릭으로 그 자리에서 바로 편집 모드(기존 폼)로 전환.
+- **사용자 메뉴 개편**: 사이드바 사용자 아이콘 클릭 시 작은 팝업 대신 우측 슬라이드 SidePane 으로 전환,
+  상단에 본인 담당자 정보(이메일/IP/좌석 위치/정·부 담당역할)를 바로 수정할 수 있는 셀프 서비스 폼 추가,
+  하단에 비밀번호 변경 메뉴.
+- **담당자 관리**: 좌석 위치(`seatLocation`) 필드 추가, Settings ▸ 담당자 탭에 CSV 내보내기와 마크다운
+  표 클립보드 복사 버튼 추가.
+- **K8s 노드 이미지 CSV 내보내기**: 노드 순서/용량 기준/라인 수 기준 정렬 옵션을 지원하는 CSV 다운로드
+  추가 (`/clusters/{id}/node-images/export.csv`).
+- **Jira Excel 가져오기**: Jira 에서 추출한 이슈 목록 `.xlsx` 를 업로드하면 Key/Summary/Issue Type/
+  Status/Assignee/Created/Resolved/Due Date/Environment/Description 을 테이블로 미리보기(저장 없음).
+  Assignee 셀("이름 회사")에서 이름을 추출해 등록된 담당자와 자동 매핑. 신규 페이지 `/jira-import`.
+  - Backend: `POST /jira/import/excel` (openpyxl).
+- **mc 클라이언트 레이아웃**: 타겟/프리셋/결과 카드를 2:3:5 비율로 한 행에 배치, 결과 카드는 항상 같은
+  위치에 고정되고 세로 스크롤만 허용(가로 스크롤 없음).
+- **`scripts/redeploy.sh`**: 이미지 태그만 교체하는 빠른 재배포 스크립트. kustomize/helm 전체 apply
+  없이 `kubectl set image` + `rollout restart` 로 지정한 Deployment 컨테이너 이미지를 바꾸고 롤아웃
+  완료까지 대기. `-n <namespace>`(생략 시 현재 kubectl context 네임스페이스) + 전체 이미지 참조 +
+  `<deployment>:<container>` 목록을 직접 받는 단순한 인터페이스(이후 git remote 자동 추론 방식에서
+  변경, 아래 Fixed 참고).
+- **`docker/postgres-pgvector/`**: GHCR 프록시로만 이미지를 받는 폐쇄망 배포용 Postgres 15(Alpine)
+  + pgvector 확장 이미지. `postgres:15-alpine` 베이스(musl libc)를 그대로 유지한 채 pgvector 를
+  소스 빌드로 추가 — Docker Hub 공식 `pgvector/pgvector:pg15`(Debian/glibc)로 통째로 바꿀 때 생기는
+  컬레이션 호환성 리스크를 피함. `.github/workflows/postgres-pgvector.yml` 이 앱 이미지와 동일한
+  GHCR 네임스페이스(`ghcr.io/<owner>/<repo>/postgres-pgvector`)로 빌드/게시.
+- **릴리즈 노트 패널**: 사이드바 하단 레일에 "릴리즈 노트" 아이콘 추가(감사 로그가 빠진 자리) —
+  클릭 시 우측 슬라이드 SidePane 으로 버전별 변경 이력을 테이블(버전/날짜/요약)로 보여주고,
+  행 클릭 시 섹션별(Added/Fixed/Changed 등) 상세 항목이 아래로 펼쳐짐. 수동 큐레이션 데이터
+  사본이 아니라 `CHANGELOG.md` 를 직접 파싱해 항상 실제 릴리즈 내용과 정확히 일치.
+  - Backend: `GET /api/v1/release-notes` (`release_notes` 라우터, `[Unreleased]` 섹션은 제외).
+  - Frontend: `ReleaseNotesPanel`, `useReleaseNotes`.
+  - Infra: `cd.yml`/`release.yml` 이 backend 이미지 빌드 직전 `CHANGELOG.md` 를 build context
+    로 복사(release_notes 라우터가 이미지 안에서 읽을 수 있도록).
+- **릴리즈 자동화(`auto-release.yml`)**: `feat:`/`fix:` 등 conventional commit prefix PR 이
+  `main` 에 머지될 때마다 SemVer 버전을 자동으로 올리고(`feat:` → MINOR, 그 외 → PATCH)
+  `CHANGELOG.md` 의 `[Unreleased]` 를 새 버전 섹션으로 확정, `chore(release)` PR 을 열어
+  즉시 병합한 뒤 `vX.Y.Z` 태그를 push(→ 기존 `release.yml` 이 이어받아 GHCR 이미지 태깅 +
+  GitHub Release 생성). 기존 수동 `/release` 절차(`docs/branch-tag-strategy.md`)는 hotfix/
+  자동화 실패 시 fallback 으로 유지.
+  - 버전 계산/CHANGELOG 확정 로직은 `scripts/release/bump_version.py` 로 분리해 로컬에서도
+    검증 가능(`--dry-run`).
+
+### Changed
+- **업무 등록 폼 효율화**: 기본 설정 그리드를 정리해 한 줄로 보이도록 축소.
+  - **서비스 선택 — 카테고리 기준 조건부 필수**: "Cluster 점검"/"Node 관리"/"Pod 배포" 등 서비스
+    운영 카테고리만 서비스 선택을 강제하고, "회의참석"/"교육 / 학습"/"기획 / 검토"/"문서 작업"/
+    사용자 정의 카테고리는 서비스 없이도 등록 가능("파트 회의"처럼 특정 서비스에 속하지 않는
+    업무 등록 지원). 숨겨져 있던 "기타" 서비스 옵션도 드롭다운에 복원.
+  - **업무 시작일 기본값 — 시간 미포함**: 신규 등록 시 시작일 기본값이 더 이상 현재 시각을 포함하지
+    않고 날짜만 채워짐(날짜 선택기의 "시간 포함" 토글이 기본 꺼짐).
+  - **우선순위 / 보드 상태 / 프로젝트 / 스프린트 필드 제거**: 등록 폼에서 제외(효율화). 우선순위·
+    보드 상태는 업무 목록/칸반 보드에서 바로 편집 가능(기존 기능 유지), 프로젝트·스프린트는 기본값
+    없이(미분류/미배정) 등록되며 별도 UI 는 제공하지 않음.
+- **플랫폼 현황 메뉴 정리**: 사이드바·홈 퀵 액세스에서 "서비스/앱"(LAKE 서비스·애플리케이션 APM) 메뉴
+  제거 (라우트/페이지 자체는 유지, 메뉴에서만 제거).
+- **감사 로그 위치 이동**: 사이드바 하단 레일의 독립 아이콘(`/settings/audit-logs`)을 없애고
+  Settings ▸ 감사 로그 탭으로 이동(`AuditLogManager`). 페이지/라우트 자체는 삭제, 접근 권한은
+  `/settings` 라우트의 기존 admin 가드를 그대로 사용.
+
+### Removed
+- **OpenClaw AI 알림 에이전트 통합 제거**: K8s 이벤트를 감시해 Telegram/Slack 으로 알림을 보내던
+  OpenClaw 연동을 전체 제거. Backend: `openclaw` 라우터(`/api/v1/openclaw/*`)·`OpenClawAlertService`
+  삭제, `Settings.telegram_bot_token`/`telegram_chat_id` 제거(OpenClaw 전용, `slack_webhook_url` 은
+  기존 알림 채널과 공유되어 유지). Infra: `k8s/base/openclaw/` 모듈과 `openclaw`/`dev-openclaw`/
+  `airgap-openclaw` 오버레이, Helm `templates/openclaw.yaml` 및 `values.yaml` 의 `openclaw:` 블록 삭제.
+
+### Fixed
+- **업무 캘린더 날짜 클릭 등록 — 시작일 시간표시 기본값 오류**: 업무 관리 캘린더 뷰에서 날짜를 클릭해
+  여는 등록 패널이 시작일에 `T09:00` 을 하드코딩해 "시간 포함" 토글이 항상 켜진 채로 떴던 문제 →
+  날짜만 전달해 다른 등록 경로(팝업/전체 페이지)와 동일하게 날짜만 기본 표시.
+  - Frontend: `WorkItemCalendar.tsx`.
+- **업무 게시판 날짜 저장 오류**: 날짜 input 이 빈 값('')으로 전송되면 `started_at`/`closed_at` 가
+  `Input should be a valid datetime` 422 로 거부되어 상태를 done 으로 바꾸거나 완료일을 비울 때 저장 실패하던 문제 →
+  스키마 `field_validator` 로 빈 문자열/공백을 `None` 으로 강제(WorkItemBase·WorkItemUpdate).
+- 컬럼 리사이즈 그립을 평소에도 옅게 노출(`ResizeGrip`) — 컬럼 너비 조정 기능 발견성 개선(모든 테이블 공통).
+- **업무 수정 딥링크**: `/tasks-mgmt/:id/edit` 라우트 제거 후 남아있던 구 북마크/딥링크가 캐치올에 걸려
+  홈으로 튕기던 문제 → 상세 페이지 편집 모드(`?edit=1`)로 리다이렉트.
+- **노드 이미지 CSV 다운로드**: 클러스터명에 한글 등 non-ASCII 문자가 있으면 `Content-Disposition`
+  헤더 인코딩 실패로 500 이 나던 문제 → ASCII fallback + RFC 5987 `filename*` 인코딩.
+- **파일 업로드 API 인터셉터**: `FormData`/`Blob` 페이로드가 camelCase→snake_case 변환기를 거치며
+  빈 객체로 뭉개지던 문제 → multipart 업로드(백업 가져오기 포함) 전반에 영향이 있어 함께 수정.
+- **Jira Excel 가져오기 413 에러**: 프론트엔드 nginx 에 `client_max_body_size` 가 없어 기본값(1m)이
+  적용돼 수 MB 짜리 xlsx 업로드가 백엔드에 도달하기도 전에 거부되던 문제 → k8s ingress 와 동일하게
+  10m 으로 설정(docker-compose/프로덕션 nginx 컨테이너 경로에만 있던 문제, k8s 배포는 영향 없었음).
+- **업무(Work to do)/work-items 500 에러**: pgvector 확장이 없는 환경에서 `embedding` 컬럼
+  마이그레이션이 조용히 실패(fail-open)했는데도 `WorkItem`/`WorkGuide` ORM 모델이 해당 컬럼을
+  무조건 SELECT 하도록 매핑돼 있어, 목록 조회를 포함한 모든 업무 쿼리가
+  `column work_items.embedding does not exist` 로 500 되던 문제 → 두 모델의 `embedding` 컬럼을
+  `deferred()` 로 지연 로딩해 기본 조회에서 제외(유사도 검색처럼 실제로 그 컬럼을 쓰는 기능만
+  영향받도록 격리). `/work-items/{id}/similar` 도 컬럼이 없으면 500 대신 `embedding_available=false` 로
+  안전하게 폴백.
+- **`scripts/redeploy.sh` — 태그 미변경 시 재배포 안 되던 문제**: `kubectl set image` 는 이미지 문자열이
+  이전과 동일하면(예: `latest` 를 연달아 배포) diff 가 없어 새 ReplicaSet 을 만들지 않아, 레지스트리에
+  새 이미지가 올라가도 파드가 재시작/재-pull 되지 않던 문제 → `set image` 뒤에 항상
+  `kubectl rollout restart` 를 함께 호출하도록 수정.
+- **`scripts/redeploy.sh` — git remote 파싱 에러로 실행 자체가 실패하던 문제**: 이미지 레지스트리
+  베이스(`ghcr.io/<owner>/<repo>`)를 `git remote` URL 파싱으로 추론하던 로직이 특정 환경(프록시로
+  감싼 origin URL 등)에서 깨져 스크립트가 아예 실행되지 않던 문제 → git remote 추론/`dev|prod|kind`
+  환경 이름→네임스페이스·리소스 프리픽스 매핑을 모두 제거하고, `-n <namespace>`(생략 시 현재
+  kubectl context 네임스페이스) + 전체 이미지 참조 + `<deployment>:<container>` 목록을 직접 받는
+  단순한 인터페이스로 재작성.
+- **pgvector 확장 생성 시 `duplicate key value violates unique constraint "pg_extension_name_index"`**:
+  backend/celery-worker/celery-beat 등 여러 replica 가 동시에 부팅하며 각자 `CREATE EXTENSION IF NOT
+  EXISTS vector` 를 실행하면 존재 확인→생성이 원자적이지 않아 두 세션이 동시에 생성을 시도해 충돌하고,
+  이 예외가 (실제로는 확장이 정상 설치돼 있어도) "Nexus 로 postgresql-pgvector 패키지 반입 필요" 라는
+  오해 소지가 큰 메시지로 뭉뚱그려 로깅되던 문제 → `pg_advisory_xact_lock` 으로 이 구간을 직렬화해
+  레이스 자체를 제거.
+- **Jira Excel 가져오기 413/220 에러 — k8s 배포에서 재발**: PR #410 에서 `frontend/nginx.conf` 에
+  `client_max_body_size 10m` 을 추가했지만, k8s Deployment 는 `k8s/base/frontend/nginx-configmap.yaml`
+  ConfigMap 을 `/etc/nginx/conf.d/default.conf` 에 volumeMount 로 덮어써서 이미지에 빌드된
+  `nginx.conf` 를 완전히 무시하고 있었다 — 이 ConfigMap 은 별도 파일이라 image 재배포만으로는
+  절대 반영되지 않고 `kubectl apply` 로 직접 적용해야 한다는 점도 원인 중 하나였음. ConfigMap 에도
+  동일하게 `client_max_body_size 10m` 추가, 두 파일 모두 서로를 참조하는 주석으로 향후 드리프트 방지.
+
 ## [1.0.0] - 2026-06-04 — 정식 오픈
 
 플랫폼 엔지니어링 포털(PEP) 첫 정식 릴리스.

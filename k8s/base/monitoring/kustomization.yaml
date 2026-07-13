@@ -14,3 +14,7 @@ resources:
   - grafana-configmap.yaml
   - grafana-deployment.yaml
   - grafana-service.yaml
+  # 체감 품질(능동 프로브): ICMP 지연/손실 + 지터(rule 파생)
+  - blackbox-exporter.yaml
+  # network-quality-servicemonitor.yaml 은 prometheus-operator(CRD) 전용 →
+  # operator 없는 base 에 넣으면 apply 실패하므로 의도적으로 제외(해당 환경에서 개별 apply).

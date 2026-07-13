@@ -15,6 +15,7 @@ Lens 의 Pod Shell 에 대응. 브라우저 ↔ FastAPI WebSocket ↔ kubernetes
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -141,12 +142,36 @@ async def pod_exec(
                 return None
             return data
 
+        _RESIZE_CHANNEL = 4  # K8s exec 프로토콜의 resize 채널
+
         async def _pump_input():
-            """브라우저 → pod stdin."""
+            """브라우저 → pod stdin / resize.
+
+            xterm 클라이언트는 JSON 프레임(`{"type":"stdin"|"resize",...}`)을 보낸다.
+            JSON 이 아닌 프레임은 통째로 stdin 취급 (구 라인 기반 클라이언트 하위호환).
+            """
             try:
                 while True:
                     msg = await websocket.receive_text()
-                    await loop.run_in_executor(None, resp.write_stdin, msg)
+                    data: str | None = msg
+                    if msg[:1] == "{":
+                        try:
+                            obj = json.loads(msg)
+                            mtype = obj.get("type")
+                            if mtype == "stdin":
+                                data = obj.get("data", "")
+                            elif mtype == "resize":
+                                cols = int(obj.get("cols") or 0)
+                                rows = int(obj.get("rows") or 0)
+                                if cols > 0 and rows > 0:
+                                    payload = json.dumps({"Width": cols, "Height": rows})
+                                    await loop.run_in_executor(
+                                        None, resp.write_channel, _RESIZE_CHANNEL, payload)
+                                data = None
+                        except (ValueError, TypeError):
+                            data = msg  # JSON 아님 → stdin
+                    if data:
+                        await loop.run_in_executor(None, resp.write_stdin, data)
             except WebSocketDisconnect:
                 pass
             except Exception:  # noqa: BLE001

@@ -26,6 +26,7 @@ from kubernetes import client as k8s_client, config as k8s_config
 
 from app.models import Cluster
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.k8s_paging import iter_all, list_all
 
 logger = logging.getLogger(__name__)
 
@@ -538,6 +539,171 @@ def _pod_status(ready: int, total: int, restarts: int) -> str:
     if restarts > 5:
         return "warning"
     return "healthy"
+
+
+# ── 클러스터 전체(전 네임스페이스) 토폴로지 ───────────────────────────────────────
+_STATUS_RANK = {"healthy": 0, "warning": 1, "critical": 2}
+
+
+def _worst_status(a: str, b: str) -> str:
+    return a if _STATUS_RANK.get(a, 0) >= _STATUS_RANK.get(b, 0) else b
+
+
+def collect_cluster_topology(
+    cluster: Cluster,
+    *,
+    include_pods: bool = False,
+    mode: str = "summary",          # "summary" | "detail"
+    progress=None,                  # snapshot_jobs.Progress | None
+) -> dict[str, Any]:
+    """전 네임스페이스 집계 그래프. SnapshotManager 백그라운드에서 호출(시간예산 없음).
+
+    - summary: 네임스페이스당 노드 1개(kind="Namespace") + 카운트. Pod 는 스트리밍 카운트만(메모리 안전).
+    - detail: 후보 네임스페이스를 노드 캡 내에서 통째로 기존 collect_topology 로 조립·병합(NS 그룹핑).
+    반환: {nodes, edges, warnings, truncated, mode, summary_recommended, namespace_count, detail_node_estimate}
+    """
+    client = api_client(cluster)
+    apps = k8s_client.AppsV1Api(client)
+    core = k8s_client.CoreV1Api(client)
+    batch = k8s_client.BatchV1Api(client)
+    net = k8s_client.NetworkingV1Api(client)
+
+    warnings: list[str] = []
+
+    def _safe(label: str, fn):
+        try:
+            return list_all(fn)
+        except Exception as e:  # noqa: BLE001
+            warnings.append(f"{label} 조회 실패: {str(e)[:120]}")
+            return []
+
+    if progress is not None:
+        progress.phase = "workloads"
+    deployments = _safe("deployments", lambda **kw: apps.list_deployment_for_all_namespaces(**kw))
+    statefulsets = _safe("statefulsets", lambda **kw: apps.list_stateful_set_for_all_namespaces(**kw))
+    daemonsets = _safe("daemonsets", lambda **kw: apps.list_daemon_set_for_all_namespaces(**kw))
+    jobs = _safe("jobs", lambda **kw: batch.list_job_for_all_namespaces(**kw))
+    cronjobs = _safe("cronjobs", lambda **kw: batch.list_cron_job_for_all_namespaces(**kw))
+    services = _safe("services", lambda **kw: core.list_service_for_all_namespaces(**kw))
+    ingresses = _safe("ingresses", lambda **kw: net.list_ingress_for_all_namespaces(**kw))
+
+    # 네임스페이스별 집계 누적기
+    agg: dict[str, dict] = {}
+
+    def _ns(ns: str) -> dict:
+        return agg.setdefault(ns, {
+            "workloads": 0, "services": 0, "ingresses": 0,
+            "pods": 0, "ready": 0, "restarts": 0,
+        })
+
+    for d in deployments:
+        _ns(d.metadata.namespace)["workloads"] += 1
+    for s in statefulsets:
+        _ns(s.metadata.namespace)["workloads"] += 1
+    for ds in daemonsets:
+        _ns(ds.metadata.namespace)["workloads"] += 1
+    for cj in cronjobs:
+        _ns(cj.metadata.namespace)["workloads"] += 1
+    for j in jobs:
+        # CronJob 소유 Job 은 워크로드 카운트에서 제외(CronJob 으로 흡수)
+        if _owner_ref(j.metadata) is None:
+            _ns(j.metadata.namespace)["workloads"] += 1
+    for svc in services:
+        _ns(svc.metadata.namespace)["services"] += 1
+    for ing in ingresses:
+        _ns(ing.metadata.namespace)["ingresses"] += 1
+
+    # Pod 스트리밍 카운트(전량 메모리 적재 금지 → OOM 방지)
+    if progress is not None:
+        progress.phase = "pods"
+    partial: list = []
+    active_fs = "status.phase!=Succeeded,status.phase!=Failed"
+    for p in iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
+                      field_selector=active_fs, report=partial):
+        if progress is not None:
+            progress.processed += 1
+        ns = p.metadata.namespace
+        if ns is None:
+            continue
+        b = _ns(ns)
+        st = p.status
+        cs = (st.container_statuses or []) if st else []
+        ready = sum(1 for c in cs if c.ready)
+        b["pods"] += 1
+        b["ready"] += 1 if (len(cs) > 0 and ready == len(cs)) else 0
+        b["restarts"] += sum((c.restart_count or 0) for c in cs)
+    if partial:
+        warnings.append("Pod 전수 순회 중 일부 페이지 누락(continue 토큰 만료) — 부분 집계")
+
+    # 멤버가 있는 네임스페이스만
+    member_ns = sorted(
+        ns for ns, b in agg.items()
+        if (b["workloads"] or b["services"] or b["ingresses"] or b["pods"])
+    )
+    namespace_count = len(member_ns)
+    detail_node_estimate = sum(
+        agg[ns]["workloads"] + agg[ns]["services"] + agg[ns]["ingresses"]
+        + (agg[ns]["pods"] if include_pods else 0)
+        for ns in member_ns
+    )
+    summary_recommended = detail_node_estimate > _NODE_CAP
+
+    if progress is not None:
+        progress.phase = "build"
+
+    if mode != "detail":
+        # summary — 네임스페이스당 노드 1개
+        nodes: list[dict] = []
+        for ns in member_ns:
+            b = agg[ns]
+            status = _pod_status(b["ready"], b["pods"], b["restarts"])
+            nid = node_id("Namespace", ns, ns)
+            nodes.append({
+                "id": nid, "kind": "Namespace", "name": ns, "namespace": ns,
+                "status": status, "pod_count": b["pods"],
+                "ready_count": b["ready"], "restart_count": b["restarts"],
+                "ghost": False, "age_seconds": None,
+                "detail": f"{b['workloads']} workloads · {b['services']} svc · {b['ingresses']} ing",
+                "metrics": {"cpu": {}, "mem": {}},
+            })
+        return {
+            "nodes": nodes, "edges": [], "warnings": warnings, "truncated": False,
+            "mode": "summary", "summary_recommended": summary_recommended,
+            "namespace_count": namespace_count, "detail_node_estimate": detail_node_estimate,
+        }
+
+    # detail — 노드 캡 내에서 네임스페이스를 통째로 조립(기존 collect_topology 재사용)
+    nodes_by_id: dict[str, dict] = {}
+    edges: list[dict] = []
+    truncated = False
+    for ns in member_ns:
+        try:
+            sub = collect_topology(cluster, ns, include_pods=include_pods)
+        except Exception as e:  # noqa: BLE001
+            warnings.append(f"{ns} 토폴로지 수집 실패: {str(e)[:120]}")
+            continue
+        sub_nodes = sub.get("nodes", [])
+        if nodes_by_id and (len(nodes_by_id) + len(sub_nodes)) > _NODE_CAP:
+            truncated = True
+            break
+        for n in sub_nodes:
+            n["group"] = ns
+            nodes_by_id[n["id"]] = n
+        edges.extend(sub.get("edges", []))
+        warnings.extend(sub.get("warnings", []))
+
+    if truncated:
+        kept = len({n["namespace"] for n in nodes_by_id.values()})
+        warnings.append(f"네임스페이스 {kept}/{namespace_count}개만 표시(truncated) — 요약 보기 권장")
+        valid = set(nodes_by_id.keys())
+        edges = [e for e in edges if e["source"] in valid and e["target"] in valid]
+
+    return {
+        "nodes": list(nodes_by_id.values()), "edges": edges, "warnings": warnings,
+        "truncated": truncated, "mode": "detail",
+        "summary_recommended": summary_recommended or truncated,
+        "namespace_count": namespace_count, "detail_node_estimate": detail_node_estimate,
+    }
 
 
 # ── traffic (Phase C) ────────────────────────────────────────────────────────────

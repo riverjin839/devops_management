@@ -16,6 +16,18 @@ from app.schemas.work_guide import (
 router = APIRouter(prefix="/work-guides", tags=["work-guides"])
 
 
+def _queue_embedding_recompute(work_guide_id) -> None:
+    """임베딩 재계산 큐잉 — best-effort (work_items.py 의 동일 헬퍼와 동일한 패턴)."""
+    try:
+        from app.celery_app import compute_work_guide_embedding
+        compute_work_guide_embedding.delay(str(work_guide_id))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Failed to queue embedding recompute for work_guide %s", work_guide_id
+        )
+
+
 @router.get("", response_model=WorkGuideListResponse)
 def list_guides(
     category: Optional[str] = None,
@@ -47,6 +59,7 @@ def create_guide(payload: WorkGuideCreate, db: Session = Depends(get_db)):
     db.add(guide)
     db.commit()
     db.refresh(guide)
+    _queue_embedding_recompute(guide.id)  # 비동기 — 쓰기 응답 속도에 영향 없음
     return guide
 
 
@@ -55,10 +68,13 @@ def update_guide(guide_id: UUID, payload: WorkGuideUpdate, db: Session = Depends
     guide = db.query(WorkGuide).filter(WorkGuide.id == guide_id).first()
     if not guide:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guide not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    update_data = payload.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
         setattr(guide, k, v)
     db.commit()
     db.refresh(guide)
+    if "title" in update_data or "content" in update_data:
+        _queue_embedding_recompute(guide.id)
     return guide
 
 

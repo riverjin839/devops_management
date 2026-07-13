@@ -5,7 +5,7 @@ import {
   Search, Pin, Terminal, AlertCircle, BookMarked,
   GitFork, StickyNote, AlertTriangle,
   Library, X, ChevronRight, ChevronUp, ChevronDown, ArrowUpDown,
-  FileQuestion,
+  FileQuestion, ListTodo, Map as MapIcon, Share2, Rss,
 } from 'lucide-react';
 import {
   opsNotesApi, commandsApi, workGuidesApi, workItemsApi, workflowsApi,
@@ -14,9 +14,17 @@ import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
+import { ServiceSidebar } from '@/components/common';
+import { useServiceCatalog } from '@/hooks/useServiceCatalog';
+import { useSprints } from '@/hooks/useSprints';
+// 허브 탭으로 임베드하는 기존 도구 페이지들 (개별 메뉴는 제거됨)
+import { OpsNotesPage } from './OpsNotesPage';
+import { MindMapPage } from './MindMapPage';
+import { OntologyPage } from './OntologyPage';
+import { TrendDigestPage } from './TrendDigestPage';
 
 // ── 통합 항목 모델 ───────────────────────────────────────────────────────────
-type HubKind = 'note' | 'command' | 'guide' | 'item' | 'workflow';
+type HubKind = 'task' | 'note' | 'command' | 'guide' | 'item' | 'workflow';
 
 interface HubItem {
   id: string;
@@ -30,6 +38,7 @@ interface HubItem {
   updatedAt: string;
   href: string;
   searchBlob: string;
+  sprintId?: string | null;
 }
 
 const KIND_META: Record<HubKind, {
@@ -38,6 +47,7 @@ const KIND_META: Record<HubKind, {
   accent: string;
   chip: string;
 }> = {
+  task:     { label: '업무',       Icon: ListTodo,      accent: 'text-indigo-500',  chip: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
   note:     { label: '노트',       Icon: StickyNote,    accent: 'text-amber-500',   chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30' },
   command:  { label: '명령어',     Icon: Terminal,      accent: 'text-sky-500',     chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30' },
   guide:    { label: '가이드',     Icon: BookMarked,    accent: 'text-emerald-500', chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
@@ -63,6 +73,16 @@ const STATUS_TEXT_TONE: Record<NonNullable<HubItem['statusTone']>, string> = {
   sky:     'text-sky-600 dark:text-sky-400',
 };
 
+// 허브 상단 탭 — 지식 목록(집계 표) + 임베드 도구(Q&A·마인드맵·온톨로지·기술동향).
+type HubTab = 'list' | 'qa' | 'mindmap' | 'ontology' | 'trends';
+const HUB_TABS: { key: HubTab; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+  { key: 'list',     label: '지식 목록', Icon: Library },
+  { key: 'qa',       label: 'Q&A 노트',  Icon: StickyNote },
+  { key: 'mindmap',  label: '마인드맵',  Icon: MapIcon },
+  { key: 'ontology', label: '온톨로지',  Icon: Share2 },
+  { key: 'trends',   label: '기술동향',  Icon: Rss },
+];
+
 const IMPORTANCE_TONE: Record<CommandImportance, HubItem['statusTone']> = {
   info: 'slate',
   low: 'sky',
@@ -74,6 +94,33 @@ const IMPORTANCE_TONE: Record<CommandImportance, HubItem['statusTone']> = {
 // ── 정렬 ─────────────────────────────────────────────────────────────────────
 type SortKey = 'kind' | 'title' | 'category' | 'status' | 'updatedAt';
 type SortDir = 'asc' | 'desc';
+
+// ── 기간 필터 (주 / 월 / 분기) ──────────────────────────────────────────────
+type PeriodFilter = '' | 'week' | 'month' | 'quarter';
+const PERIOD_META: { key: PeriodFilter; label: string }[] = [
+  { key: 'week',    label: '이번 주' },
+  { key: 'month',   label: '이번 달' },
+  { key: 'quarter', label: '이번 분기' },
+];
+
+function periodStart(period: PeriodFilter): Date | null {
+  const now = new Date();
+  if (period === 'week') {
+    const day = now.getDay() === 0 ? 7 : now.getDay(); // 월요일 시작
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(now.getDate() - (day - 1));
+    return start;
+  }
+  if (period === 'month') {
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  if (period === 'quarter') {
+    const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    return new Date(now.getFullYear(), qStartMonth, 1);
+  }
+  return null;
+}
 
 function SortTh({
   label, col, sortKey, sortDir, onSort, className,
@@ -106,11 +153,18 @@ function SortTh({
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 export function KnowledgeHubPage() {
   const navigate = useNavigate();
+  const services = useServiceCatalog();
   const [search, setSearch] = useState('');
+  const [serviceFilter, setServiceFilter] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<HubKind | ''>('');
   const [openOnly, setOpenOnly] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('');
+  const [sprintFilter, setSprintFilter] = useState<string>('');
   const [sortKey, setSortKey] = useState<SortKey | ''>('updatedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const { data: sprintData } = useSprints();
+  const sprints = useMemo(() => sprintData?.data ?? [], [sprintData]);
 
   const handleSort = (col: SortKey) => {
     if (sortKey === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -120,7 +174,8 @@ export function KnowledgeHubPage() {
   const { data: opsData,      isLoading: opsLoading      } = useQuery({ queryKey: ['ops-notes'],   queryFn: () => opsNotesApi.getAll().then((r) => r.data),    staleTime: 1000 * 30 });
   const { data: cmdData,      isLoading: cmdLoading      } = useQuery({ queryKey: ['commands'],    queryFn: () => commandsApi.list().then((r) => r.data),      staleTime: 1000 * 30 });
   const { data: guideData,    isLoading: guideLoading    } = useQuery({ queryKey: ['work-guides'], queryFn: () => workGuidesApi.getAll().then((r) => r.data),  staleTime: 1000 * 30 });
-  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
+  // 기간/스프린트 필터가 로드된 목록 전체를 대상으로 동작하도록 백엔드 최대 limit(500)까지 요청.
+  const { data: issueData,    isLoading: issueLoading    } = useQuery({ queryKey: ['items'],       queryFn: () => workItemsApi.getAll({ limit: 500 }).then((r) => r.data),   staleTime: 1000 * 30 });
   const { data: workflowData, isLoading: workflowLoading } = useQuery({ queryKey: ['workflows'],   queryFn: () => workflowsApi.getAll().then((r) => r.data),   staleTime: 1000 * 30 });
 
   const isLoading = opsLoading || cmdLoading || guideLoading || issueLoading || workflowLoading;
@@ -182,19 +237,20 @@ export function KnowledgeHubPage() {
     }
 
     for (const i of workItems) {
-      if (i.type !== 'issue') continue;
       const resolved = !!i.closedAt;
+      const isIssue = i.type === 'issue';
       out.push({
-        id: `item-${i.id}`,
-        kind: 'item',
-        title: i.content.split('\n')[0] || i.category,
+        id: `${isIssue ? 'item' : 'task'}-${i.id}`,
+        kind: isIssue ? 'item' : 'task',
+        title: (i.title?.trim() || i.content.split('\n')[0] || i.category),
         category: i.category,
         service: i.service,
-        statusLabel: resolved ? '조치완료' : '미조치',
-        statusTone: resolved ? 'emerald' : 'red',
+        statusLabel: resolved ? '완료' : isIssue ? '미조치' : '진행',
+        statusTone: resolved ? 'emerald' : isIssue ? 'red' : 'amber',
         updatedAt: i.updatedAt,
         href: `/tasks-mgmt/${i.id}`,
         searchBlob: `${i.content} ${i.resolution ?? ''} ${i.category} ${i.assignee} ${i.clusterName ?? ''}`.toLowerCase(),
+        sprintId: i.sprintId ?? null,
       });
     }
 
@@ -217,11 +273,17 @@ export function KnowledgeHubPage() {
   const trimmed = search.trim().toLowerCase();
   const filtered = useMemo(() => {
     let list = items;
+    if (serviceFilter) list = list.filter((it) => it.service === serviceFilter);
     if (kindFilter) list = list.filter((it) => it.kind === kindFilter);
     if (openOnly) list = list.filter((it) => it.kind === 'item' && it.statusLabel === '미조치');
+    if (periodFilter) {
+      const start = periodStart(periodFilter);
+      if (start) list = list.filter((it) => new Date(it.updatedAt) >= start);
+    }
+    if (sprintFilter) list = list.filter((it) => it.sprintId === sprintFilter);
     if (trimmed) list = list.filter((it) => it.searchBlob.includes(trimmed));
     return list;
-  }, [items, kindFilter, openOnly, trimmed]);
+  }, [items, serviceFilter, kindFilter, openOnly, periodFilter, sprintFilter, trimmed]);
 
   // ── 정렬 ──
   const sorted = useMemo(() => {
@@ -243,7 +305,7 @@ export function KnowledgeHubPage() {
 
   // 5종별 카운트 (필터 chip에 표시)
   const countByKind = useMemo<Record<HubKind, number>>(() => {
-    const map: Record<HubKind, number> = { note: 0, command: 0, guide: 0, item: 0, workflow: 0 };
+    const map: Record<HubKind, number> = { task: 0, note: 0, command: 0, guide: 0, item: 0, workflow: 0 };
     for (const it of items) map[it.kind] += 1;
     return map;
   }, [items]);
@@ -254,41 +316,76 @@ export function KnowledgeHubPage() {
     [items],
   );
 
-  const hasFilters = !!kindFilter || openOnly || !!trimmed;
-  const clearFilters = () => { setKindFilter(''); setOpenOnly(false); setSearch(''); };
+  const hasFilters = !!serviceFilter || !!kindFilter || openOnly || !!periodFilter || !!sprintFilter || !!trimmed;
+  const clearFilters = () => {
+    setServiceFilter(null); setKindFilter(''); setOpenOnly(false);
+    setPeriodFilter(''); setSprintFilter(''); setSearch('');
+  };
+
+  const [tab, setTab] = useState<HubTab>('list');
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
-        {/* ── Page header ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Library className="w-5 h-5 text-primary" />
+    // 메인 사이드바 바로 옆에 서비스 사이드바를 붙인다(공백 없이 flush). 본문은 flex-1.
+    <div className="min-h-screen bg-background flex">
+      {tab === 'list' && (
+        <ServiceSidebar services={services} selectedKey={serviceFilter} onSelect={setServiceFilter} allLabel="전체 서비스" />
+      )}
+      <main className="flex-1 min-w-0">
+        {/* ── 헤더 + 탭 ─────────────────────────────────────────────── */}
+        <div className="px-4 lg:px-6 pt-5 pb-2 border-b border-border">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Library className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
+                <p className="text-sm text-muted-foreground">
+                  업무 · 노트 · 명령어 · 가이드 · 이슈 · 워크플로우 + 분석 도구를 한 곳에서.
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">지식 허브</h1>
-              <p className="text-sm text-muted-foreground">
-                운영 노트 · 명령어 · 작업 가이드 · 이슈 · 워크플로우를 한 대장에서.
-              </p>
-            </div>
+          </div>
+          {/* 탭 바 */}
+          <div className="flex items-center gap-1 flex-wrap">
+            {HUB_TABS.map((t) => {
+              const TabIcon = t.Icon;
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border-b-2 transition-colors ${
+                    active ? 'text-primary border-primary' : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <TabIcon className="w-3.5 h-3.5" /> {t.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
+        {tab !== 'list' ? (
+          // 임베드 도구 — 자체 레이아웃을 가진 기존 페이지를 그대로 렌더.
+          tab === 'qa' ? <OpsNotesPage /> :
+          tab === 'mindmap' ? <MindMapPage /> :
+          tab === 'ontology' ? <OntologyPage /> :
+          <TrendDigestPage />
+        ) : (
+        <div className="px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
         {/* ── Filter / Search bar ─────────────────────────────────────── */}
         <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Search className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">필터</span>
-            {hasFilters && (
+          {hasFilters && (
+            <div className="flex items-center justify-end mb-2">
               <button
                 onClick={clearFilters}
-                className="ml-auto flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3 h-3" /> 초기화
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
@@ -338,6 +435,42 @@ export function KnowledgeHubPage() {
                 미해결 이슈
                 <span className="opacity-70">({openIssueCount})</span>
               </button>
+            )}
+
+            <div className="w-px h-5 bg-border mx-1" />
+
+            {/* 기간 필터 — 주 / 월 / 분기 (updatedAt 기준) */}
+            {PERIOD_META.map(({ key, label }) => {
+              const isActive = periodFilter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setPeriodFilter(isActive ? '' : key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary border-primary/40 ring-1 ring-primary/30'
+                      : 'bg-background border-border text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+
+            {/* 스프린트 필터 — sprintId 매칭 (업무/이슈에만 적용) */}
+            {sprints.length > 0 && (
+              <select
+                value={sprintFilter}
+                onChange={(e) => setSprintFilter(e.target.value)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-full border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                  sprintFilter ? 'text-primary border-primary/40' : 'text-muted-foreground border-border'
+                }`}
+              >
+                <option value="">스프린트 전체</option>
+                {sprints.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             )}
 
             <div className="ml-auto relative w-full sm:w-80">
@@ -463,6 +596,8 @@ export function KnowledgeHubPage() {
               총 {sorted.length}건{hasFilters && items.length !== sorted.length ? ` · 전체 ${items.length}건 중` : ''}
             </div>
           </div>
+        )}
+        </div>
         )}
       </main>
     </div>

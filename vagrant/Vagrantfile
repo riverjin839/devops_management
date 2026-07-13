@@ -1,61 +1,92 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 #
-# Apple Silicon(M1~M4) Mac 전용 — Vagrant 단일 노드 k3s 테스트 클러스터
+# Apple Silicon(M1~M4) Mac 전용 — kubeadm 3노드 + Cilium 테스트 클러스터
 # ---------------------------------------------------------------------
-# PEP(devops_management) 가 모니터링할 "2번째 테스트 클러스터"를 VM 으로 띄운다.
+# PEP(devops_management) 가 모니터링할 "2번째 테스트 클러스터"를 VirtualBox 위에
+# kubeadm 으로 띄운다 (control-plane 1 + worker 2). CNI 는 미설치 상태로 부팅되고
+# (노드 NotReady), Cilium 은 Helm 으로 따로 설치한다(`install-cilium.sh`).
 #
-# 기본 provider: QEMU (무료, brew 설치만으로 사용 가능, GUI 불필요)
-#   brew install qemu
-#   vagrant plugin install vagrant-qemu
+# 이 구성은 Cilium 스터디 1주차 실습 환경을 그대로 옮긴 것이다(레포 고정본):
+#   - 가이드: docs/MAC_LOCAL_TEST_GUIDE.md 의 "클러스터 B" 참고
+#   - upstream: https://github.com/gasida/vagrant-lab (cilium-study/1w)
 #
-# 대안 provider (주석 참고):
-#   - VMware Fusion 13 (개인용 무료) + vagrant-vmware-desktop
-#   - Parallels Desktop (유료) + vagrant-parallels
+# provider: VirtualBox 7.1+ (Apple Silicon arm64 지원)
+#   brew install --cask virtualbox vagrant
 #
-# k3s API 서버(6443) 를 Mac 호스트로 포워딩 → docker-compose 의 backend 컨테이너가
-# host.docker.internal:6443 으로 접속한다. provision 스크립트가 k3s 를
-# --tls-san host.docker.internal 로 설치해 TLS 인증서 SAN 을 맞춘다.
+# 네트워크:
+#   - eth0 10.0.2.15 (NAT, 모든 노드 동일 — 외부 인터넷)
+#   - eth1 192.168.10.100/101/102 (host-only private_network)
+#   - control-plane API: 192.168.10.100:6443 (인증서 SAN 에 advertise IP 포함)
+#
+# Mac/backend 에서 192.168.10.100:6443 으로 직접 도달하므로 host.docker.internal
+# 포워딩이나 tls-san 우회가 필요 없다.
+
+# 이 프로젝트는 VirtualBox 전용 — qemu 등 다른 provider 가 기본으로 잡히지 않도록 고정.
+# (CLI 의 --provider 나 사용자가 명시한 VAGRANT_DEFAULT_PROVIDER 가 있으면 그게 우선)
+ENV['VAGRANT_DEFAULT_PROVIDER'] ||= 'virtualbox'
+
+# Variables
+K8SV = '1.33.2-1.1'       # Kubernetes Version : apt list -a kubelet
+CONTAINERDV = '1.7.27-1'  # Containerd Version : apt list -a containerd.io
+N = 2                     # max number of worker nodes
+
+# Base Image  https://portal.cloud.hashicorp.com/vagrant/discover/bento/ubuntu-24.04
+BOX_IMAGE = "bento/ubuntu-24.04"
+BOX_VERSION = "202502.21.0"
 
 Vagrant.configure("2") do |config|
-  config.vm.hostname = "pep-k3s"
+#-ControlPlane Node
+    config.vm.define "k8s-ctr" do |subconfig|
+      subconfig.vm.box = BOX_IMAGE
+      subconfig.vm.box_version = BOX_VERSION
+      subconfig.vm.provider "virtualbox" do |vb|
+        vb.customize ["modifyvm", :id, "--groups", "/Cilium-Lab"]
+        vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        # 게스트 DNS 를 호스트(Mac) 의 live resolver 로 프록시 — VirtualBox NAT 의
+        # 기본 DNS proxy 가 부팅 후 호스트 네트워크 변경(WiFi/VPN) 시 stale 되어
+        # 'lookup ... i/o timeout' 나는 것을 방지. (적용하려면 vagrant reload)
+        vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+        vb.name = "k8s-ctr"
+        vb.cpus = 2
+        vb.memory = 2048
+        vb.linked_clone = true
+      end
+      subconfig.vm.host_name = "k8s-ctr"
+      subconfig.vm.network "private_network", ip: "192.168.10.100"
+      subconfig.vm.network "forwarded_port", guest: 22, host: 60000, auto_correct: true, id: "ssh"
+      subconfig.vm.synced_folder "./", "/vagrant", disabled: true
+      subconfig.vm.provision "shell", path: "init_cfg.sh", args: [ K8SV, CONTAINERDV]
+      subconfig.vm.provision "shell", path: "k8s-ctr.sh", args: [ N ]
+      # Cilium 설치는 자동 실행하지 않는다(스터디 흐름 = 수동 Helm 설치).
+      #   vagrant provision k8s-ctr --provision-with cilium
+      subconfig.vm.provision "cilium", type: "shell", path: "install-cilium.sh", run: "never"
+    end
 
-  # k3s API 서버를 Mac 호스트 6443 으로 포워딩
-  # (backend 컨테이너 → host.docker.internal:6443 로 도달)
-  config.vm.network "forwarded_port", guest: 6443, host: 6443, host_ip: "127.0.0.1"
-
-  # ── 기본 provider: QEMU (Apple Silicon, 무료) ──────────────────────
-  config.vm.box = "perk/ubuntu-2204-arm64"
-
-  config.vm.provider "qemu" do |qe|
-    qe.arch        = "aarch64"
-    qe.machine     = "virt,accel=hvf,highmem=on"
-    qe.cpu         = "host"
-    qe.net_device  = "virtio-net-pci"
-    qe.smp         = "2"
-    qe.memory      = "4G"   # Cilium + Hubble 구동 여유분
-    # 콘솔 GUI 불필요 (headless)
-    qe.no_daemonize = false
+#-Worker Nodes Subnet1
+  (1..N).each do |i|
+    config.vm.define "k8s-w#{i}" do |subconfig|
+      subconfig.vm.box = BOX_IMAGE
+      subconfig.vm.box_version = BOX_VERSION
+      subconfig.vm.provider "virtualbox" do |vb|
+        vb.customize ["modifyvm", :id, "--groups", "/Cilium-Lab"]
+        vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        # 게스트 DNS 를 호스트(Mac) 의 live resolver 로 프록시 — VirtualBox NAT 의
+        # 기본 DNS proxy 가 부팅 후 호스트 네트워크 변경(WiFi/VPN) 시 stale 되어
+        # 'lookup ... i/o timeout' 나는 것을 방지. (적용하려면 vagrant reload)
+        vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+        vb.name = "k8s-w#{i}"
+        vb.cpus = 2
+        vb.memory = 1536
+        vb.linked_clone = true
+      end
+      subconfig.vm.host_name = "k8s-w#{i}"
+      subconfig.vm.network "private_network", ip: "192.168.10.10#{i}"
+      subconfig.vm.network "forwarded_port", guest: 22, host: "6000#{i}", auto_correct: true, id: "ssh"
+      subconfig.vm.synced_folder "./", "/vagrant", disabled: true
+      subconfig.vm.provision "shell", path: "init_cfg.sh", args: [ K8SV, CONTAINERDV]
+      subconfig.vm.provision "shell", path: "k8s-w.sh"
+    end
   end
 
-  # ── 대안 1: VMware Fusion (개인용 무료) ────────────────────────────
-  # box 를 bento/ubuntu-22.04 로 바꾸고 아래 블록 주석 해제,
-  # 위 qemu 블록은 주석 처리.
-  #   config.vm.box = "bento/ubuntu-22.04"
-  #   config.vm.provider "vmware_desktop" do |v|
-  #     v.gui    = false
-  #     v.memory = 3072
-  #     v.cpus   = 2
-  #     v.vmx["ethernet0.virtualDev"] = "vmxnet3"
-  #   end
-
-  # ── 대안 2: Parallels Desktop (유료) ───────────────────────────────
-  #   config.vm.box = "bento/ubuntu-22.04"
-  #   config.vm.provider "parallels" do |prl|
-  #     prl.memory = 3072
-  #     prl.cpus   = 2
-  #   end
-
-  # k3s 설치 + tls-san 설정
-  config.vm.provision "shell", path: "provision-k3s.sh"
 end

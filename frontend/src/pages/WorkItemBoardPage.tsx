@@ -2,16 +2,15 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter, DownloadCloud } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
-import { SavedViews, type SavedViewState } from '@/components/work-items/SavedViews';
 import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
 import { useJiraConfig } from '@/hooks/useJira';
@@ -164,6 +163,15 @@ export function WorkItemBoardPage() {
   const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') ?? '');
   const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // 시작일/완료일 시간 표시 토글 (기본 off = 날짜만). localStorage 영속.
+  const [showTime, setShowTime] = useState<boolean>(() => {
+    try { return localStorage.getItem('k8s:item-board:show-time') === '1'; } catch { return false; }
+  });
+  const toggleShowTime = () => setShowTime((v) => {
+    const next = !v;
+    try { localStorage.setItem('k8s:item-board:show-time', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
 
   const colW = useColumnWidths('item-board-table', {
     defaults: COLUMN_WIDTH_DEFAULTS,
@@ -215,6 +223,8 @@ export function WorkItemBoardPage() {
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createParent, setCreateParent] = useState<WorkItem | null>(null);
   const { data: jiraConfig } = useJiraConfig();
 
   const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
@@ -284,20 +294,21 @@ export function WorkItemBoardPage() {
     });
   };
 
-  // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
+  // 행/카드의 ✏️ 버튼 — 상세 페이지를 편집 모드로 바로 연다 (별도 수정 페이지 없음).
   const handleEdit = (item: WorkItem) => {
-    navigate(`/tasks-mgmt/${item.id}/edit`);
+    navigate(`/tasks-mgmt/${item.id}?edit=1`);
   };
 
-  // 하위 업무 등록.
+  // 하위 업무 등록 — 페이지 전환 없이 팝업으로.
   const handleAddSubItem = (item: WorkItem) => {
-    navigate(`/tasks-mgmt/new?parentId=${item.id}`);
+    setCreateParent(item);
+    setCreateOpen(true);
   };
 
-  // 신규 등록 — type tab 의 현재 값으로 기본 type 결정 (전체 탭이면 task 가 기본).
+  // 신규 등록 — type tab 의 현재 값으로 기본 type 결정 (전체 탭이면 task 가 기본). 팝업으로 등록.
   const handleCreateNew = () => {
-    const t = typeFilter === 'all' ? 'task' : typeFilter;
-    navigate(`/tasks-mgmt/new?type=${t}`);
+    setCreateParent(null);
+    setCreateOpen(true);
   };
 
   // 행 / 카드 클릭 — read 라우트로 진입.
@@ -320,6 +331,32 @@ export function WorkItemBoardPage() {
     }
   };
 
+  // 이번주(월~일) 시작일 범위로 필터 설정.
+  const fmtDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // 현재 from~to 가 이번주(월~일)와 정확히 일치하는지(버튼 활성 표시용).
+  const isThisWeek = (() => {
+    const now = new Date();
+    const diffToMon = (now.getDay() + 6) % 7;
+    const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return filterFrom === fmtDate(mon) && filterTo === fmtDate(sun);
+  })();
+  // 이번주 버튼 토글 — 이미 이번주 범위면 해제(범위 비움), 아니면 이번주(월~일)로 설정.
+  const toggleThisWeek = () => {
+    if (isThisWeek) {
+      setFilterFrom('');
+      setFilterTo('');
+      return;
+    }
+    const now = new Date();
+    const diffToMon = (now.getDay() + 6) % 7;   // 0=Sun..6=Sat → 월요일까지 거슬러 갈 일수
+    const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    setFilterFrom(fmtDate(mon));
+    setFilterTo(fmtDate(sun));
+  };
+
   const clearFilters = () => {
     setFilterClusterId('');
     setFilterAssignee('');
@@ -332,26 +369,6 @@ export function WorkItemBoardPage() {
   };
 
   const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterSprintId || filterFrom || filterTo;
-
-  // 저장된 뷰 — 현재 필터/정렬/보기 스냅샷 + 적용.
-  const currentView: SavedViewState = {
-    typeFilter, filterClusterId, filterAssignee, filterCategory, filterPriority,
-    filterModule, filterSprintId, filterFrom, filterTo, sortKey, sortDir, viewMode,
-  };
-  const applyView = (s: SavedViewState) => {
-    setTypeFilter((s.typeFilter as WorkItemType | 'all') || 'all');
-    setFilterClusterId(s.filterClusterId || '');
-    setFilterAssignee(s.filterAssignee || '');
-    setFilterCategory(s.filterCategory || '');
-    setFilterPriority(s.filterPriority || '');
-    setFilterModule((s.filterModule as WorkItemModule | '') || '');
-    setFilterSprintId(s.filterSprintId || '');
-    setFilterFrom(s.filterFrom || '');
-    setFilterTo(s.filterTo || '');
-    setSortKey((s.sortKey as WorkItemSortKey | '') || '');
-    setSortDir(s.sortDir === 'desc' ? 'desc' : 'asc');
-    setViewMode((s.viewMode as ViewMode) || 'table');
-  };
 
   const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
   const doneCount = items.filter((t) => t.kanbanStatus === 'done').length;
@@ -490,6 +507,17 @@ export function WorkItemBoardPage() {
                 ))}
               </select>
             )}
+            <button
+              type="button"
+              onClick={toggleThisWeek}
+              aria-pressed={isThisWeek}
+              title={isThisWeek ? '이번주 필터 해제' : '이번주(월~일) 시작 업무만 보기'}
+              className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                isThisWeek ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <CalendarRange className="w-3.5 h-3.5" /> 이번주
+            </button>
             <input
               type="date"
               value={filterFrom}
@@ -518,7 +546,17 @@ export function WorkItemBoardPage() {
                 초기화
               </button>
             )}
-            <SavedViews current={currentView} onApply={applyView} />
+            <button
+              type="button"
+              onClick={toggleShowTime}
+              aria-pressed={showTime}
+              title={showTime ? '시작일/완료일에서 시간 숨기기' : '시작일/완료일에 시간 표시'}
+              className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                showTime ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" /> 시간
+            </button>
             <button
               type="button"
               onClick={() => setCustomFieldsOpen(true)}
@@ -650,6 +688,7 @@ export function WorkItemBoardPage() {
                       projectNameById={projectNameById}
                       sprintNameById={sprintNameById}
                       isDragDisabled={!!sortKey}
+                      showTime={showTime}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
                       onAddSubItem={handleAddSubItem}
@@ -679,6 +718,14 @@ export function WorkItemBoardPage() {
       <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
+
+      <WorkItemFormModal
+        open={createOpen}
+        defaultType={createParent ? undefined : (typeFilter === 'all' ? 'task' : typeFilter)}
+        parentItem={createParent}
+        onClose={() => { setCreateOpen(false); setCreateParent(null); }}
+        onSaved={() => setCreateParent(null)}
+      />
 
       <ConfirmDialog
         open={confirmDelete !== null}

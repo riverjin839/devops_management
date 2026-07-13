@@ -7,6 +7,24 @@ export interface TopologyGraphOptions {
   withMetrics?: boolean;
 }
 
+// 백그라운드 집계 진행 중(status==='computing')이면 1.5s 폴링, 완료 시 멈춘다.
+const pollWhileComputing = (q: { state: { data?: { status?: string } } }) =>
+  q.state.data?.status === 'computing' ? 1500 : false;
+
+/** 전 네임스페이스(클러스터 전체) 토폴로지 — 요약/상세. computing 동안 폴링. */
+export function useClusterTopologyGraph(
+  clusterId: string | null,
+  opts: { mode: 'summary' | 'detail'; includePods?: boolean; withMetrics?: boolean },
+) {
+  return useQuery({
+    queryKey: ['serviceTopology', 'cluster-graph', clusterId, opts.mode, opts.includePods, opts.withMetrics],
+    queryFn: async () => (await serviceTopologyApi.getClusterGraph(clusterId!, opts)).data,
+    enabled: !!clusterId,
+    staleTime: 1000 * 15,
+    refetchInterval: pollWhileComputing,
+  });
+}
+
 /** (cluster, namespace) 자동 발견 그래프 + 수동 엣지/외부 노드 병합본. */
 export function useServiceTopologyGraph(
   clusterId: string | null,

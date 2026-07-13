@@ -18,7 +18,7 @@ export const DEBUG_PAGES = [
   { key: 'etcdctl',        label: 'etcdctl' },
   { key: 'mc',             label: 'mc client' },
   { key: 'kernel-params',  label: '커널 파라미터' },
-  { key: 'node-labels',    label: '노드 라벨' },
+  { key: 'node-labels',    label: 'K8S 노드 라벨' },
   { key: 'service-topology', label: '서비스 토폴로지' },
   { key: 'members',        label: '멤버 / 업무' },
   { key: 'services',       label: '서비스 지식관리' },

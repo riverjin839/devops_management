@@ -72,6 +72,11 @@ class Cluster(Base):
     # null/empty 면 status 기반 기본 아이콘으로 fallback.
     icon = Column(Text, nullable=True)
 
+    # Cluster Trends(노드 메트릭 추이) 연동 — 클러스터별 Prometheus.
+    # base URL 은 비우면 전역 settings.prometheus_url fallback. enabled=false 면 Trends offline 표기.
+    prometheus_url = Column(String(512), nullable=True)        # 선택 — 클러스터별 Prometheus URL 오버라이드
+    prometheus_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubewatch
+  namespace: k8s-monitor
+  labels:
+    app: kubewatch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubewatch
+  template:
+    metadata:
+      labels:
+        app: kubewatch
+    spec:
+      serviceAccountName: kubewatch
+      containers:
+        - name: kubewatch
+          image: bitnami/kubewatch:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KUBEWATCH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-secret
+                  key: KUBEWATCH_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /opt/bitnami/kubewatch/.kubewatch.yaml
+              subPath: .kubewatch.yaml
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: kubewatch-config

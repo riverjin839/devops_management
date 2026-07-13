@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck, Plus, Contrast,
+  ClipboardList, CalendarCheck, Plus,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { stripHtml, cn } from '@/lib/utils';
+import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
@@ -69,7 +70,27 @@ interface Milestone {
 }
 interface AssigneeRow {
   name: string;
-  lanes: TaskBar[][];   // greedy-packed sub-lanes so overlapping bars never collide
+  bars: TaskBar[];   // 이 담당자(또는 "전체")의 업무 막대 — packLanes 는 표시 시점(펼침 여부)에 따라 렌더에서 계산
+}
+
+/** 이번 주 전체 업무를 모은 요약 행 이름 — 항상 목록 최상단(본인 행보다 위)에 온다. */
+const TEAM_ROW_NAME = '전체';
+
+// 담당자별 기본 표시 업무 수 — 넘으면 "+N건 더보기"/"접기" 토글(주간 스윔레인 뷰).
+const ASSIGNEE_ITEM_LIMIT = 5;
+
+// 한 화면에 보일 담당자(행) 수 — 기본 20, 사용자별로 localStorage 에 저장.
+const ROWS_LIMIT_KEY = 'k8s:weekTimeline:rowsLimit';
+const ROWS_LIMIT_OPTIONS = [10, 20, 30, 50];
+const DEFAULT_ROWS_LIMIT = 20;
+
+function loadRowsLimit(): number {
+  try {
+    const n = Number(localStorage.getItem(ROWS_LIMIT_KEY));
+    return ROWS_LIMIT_OPTIONS.includes(n) ? n : DEFAULT_ROWS_LIMIT;
+  } catch {
+    return DEFAULT_ROWS_LIMIT;
+  }
 }
 
 /** 겹치지 않게 막대를 sub-lane 으로 분배 (greedy interval packing). */
@@ -106,22 +127,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
 
-  // ── 타임라인 색 반전 — 사용자별 설정(localStorage) ──
+  // 업무 등록 — 팝업(WorkItemFormModal). 페이지 이동 없이 이 화면 컨텍스트를 유지.
+  const [createOpen, setCreateOpen] = useState(false);
+
   const currentUser = useAuthStore((s) => s.user);
-  const invertKey = `k8s:weekTimelineInvert:${currentUser?.username ?? 'guest'}`;
-  const [invert, setInvert] = useState<boolean>(() => {
-    try { return localStorage.getItem(invertKey) === '1'; } catch { return false; }
-  });
-  useEffect(() => {
-    try { setInvert(localStorage.getItem(invertKey) === '1'); } catch { /* noop */ }
-  }, [invertKey]);
-  const toggleInvert = () => {
-    setInvert((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(invertKey, next ? '1' : '0'); } catch { /* noop */ }
-      return next;
-    });
-  };
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -141,12 +150,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
     for (const item of taskItems) {
       const s = item.startedAt?.slice(0, 10);
       if (!s) continue;
-      // 완료일(closedAt)이 있으면 그날까지, 없으면 상태와 무관하게 "오늘"까지 계속 자란다.
       const closed = item.closedAt?.slice(0, 10);
-      const eRaw = closed ?? todayD;
-      const e = eRaw < s ? s : eRaw;
       // 완료일 미입력 + 시작이 오늘 이전/오늘 → 진행 중(성장 중)으로 본다.
       const growing = !closed && s <= todayD;
+      // 완료일(closedAt)이 있으면 그날까지. 진행 중이면 "오늘"에서 끊지 않고 보이는 주의
+      // 끝(금)까지 꽉 채워, 다음 주로 넘어가도 계속 이어지게 한다. 완료일도 없고 시작이
+      // 미래면(아직 시작 전) 시작일 하루만 표시.
+      const eRaw = closed ?? (growing ? weekEndStr : s);
+      const e = eRaw < s ? s : eRaw;
       // overlap test against [weekStartStr(월), weekEndStr(금)]
       if (e < weekStartStr || s > weekEndStr) continue;
 
@@ -182,10 +193,34 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         if (arr) arr.push(b); else map.set(name, [b]);
       }
     }
-    return Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0], 'ko'))
-      .map(([name, bars]) => ({ name, lanes: packLanes(bars) }));
-  }, [taskBars]);
+    // 로그인 본인을 최상단으로 — '담당자' 보기(MemberTodayTodos)와 동일하게 맞춘다.
+    const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
+    const individual = Array.from(map.entries())
+      .sort((a, b) =>
+        (b[0] === myName ? 1 : 0) - (a[0] === myName ? 1 : 0)
+        || a[0].localeCompare(b[0], 'ko'))
+      .map(([name, bars]) => ({ name, bars }));
+    // "전체" 요약 행 — 이번 주 모든 업무를 모아 항상 맨 위(본인 행보다도 위)에 노출.
+    return taskBars.length > 0 ? [{ name: TEAM_ROW_NAME, bars: taskBars }, ...individual] : individual;
+  }, [taskBars, currentUser]);
+
+  // ── 담당자별 "+N건 더보기"/"접기" (기본 ASSIGNEE_ITEM_LIMIT 개만 표시) ──
+  const [expandedAssignees, setExpandedAssignees] = useState<Set<string>>(new Set());
+  const toggleAssigneeExpand = (name: string) =>
+    setExpandedAssignees((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+
+  // ── 한 화면에 보일 담당자(행) 수 — 사용자별 설정(localStorage) ──
+  const [rowsLimit, setRowsLimit] = useState(loadRowsLimit);
+  const changeRowsLimit = (n: number) => {
+    setRowsLimit(n);
+    try { localStorage.setItem(ROWS_LIMIT_KEY, String(n)); } catch { /* ignore */ }
+  };
+  const visibleAssigneeRows = useMemo(() => assigneeRows.slice(0, rowsLimit), [assigneeRows, rowsLimit]);
+  const hiddenAssigneeCount = Math.max(0, assigneeRows.length - visibleAssigneeRows.length);
 
   // ── milestones (issues that occurred this week) ──
   const milestones: Milestone[] = useMemo(() => {
@@ -250,8 +285,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-sm">
           <CalendarDays className="w-4 h-4 text-primary" />
-          <span className="font-semibold">{monthLabel}</span>
-          <span className="text-muted-foreground text-sm font-mono">{weekStartStr} ~ {weekEndStr}</span>
+          <span className="font-semibold text-slate-800">{monthLabel}</span>
+          <span className="text-slate-700 text-sm font-mono">{weekStartStr} ~ {weekEndStr}</span>
           {!isThisWeek && (
             <button onClick={goToday}
               className="ml-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
@@ -277,20 +312,23 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               <Users className="w-3 h-3" /> 담당자 기준
             </button>
           </div>
-          {/* 색 반전 토글 — 타임라인 카드 배경/글씨 색을 반전(사용자별 저장) */}
-          <button
-            type="button"
-            onClick={toggleInvert}
-            aria-pressed={invert}
-            title={invert ? '색 반전 끄기' : '색 반전 켜기'}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors',
-              invert
-                ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80',
-            )}>
-            <Contrast className="w-3 h-3" /> 색 반전
-          </button>
+          {/* 표시 인원 — 담당자 기준 뷰에서만 의미 있음. 한 화면에 보일 담당자(행) 수 제한
+              (기본 20, 사용자별 저장) — 라인 밀도를 줄인 것과 함께 스크롤 없이 더 많은
+              담당자가 보이게 하는 게 목적. */}
+          {viewMode === 'assignee' && (
+            <label className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+              표시 인원
+              <select
+                value={rowsLimit}
+                onChange={(e) => changeRowsLimit(Number(e.target.value))}
+                className="px-1 py-0.5 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {ROWS_LIMIT_OPTIONS.map((n) => (
+                  <option key={n} value={n}>{n}명</option>
+                ))}
+              </select>
+            </label>
+          )}
           {/* 단축키 — 업무 관리 / 오늘 할일 페이지로 바로 이동 */}
           <div className="flex items-center gap-1 text-xs">
             <button
@@ -302,7 +340,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             </button>
             <button
               type="button"
-              onClick={() => navigate('/tasks-mgmt/new')}
+              onClick={() => setCreateOpen(true)}
               title="새 업무 등록"
               className="flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
               <Plus className="w-3 h-3" /> 업무 등록
@@ -324,7 +362,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
 
 
       {/* ── timeline grid ───────────────────────────────────────────────────── */}
-      <div className={cn('rounded-2xl border border-border bg-card overflow-hidden mac-shadow', invert && 'timeline-color-invert')}>
+      <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
         {/* header: weekday columns (월~금) — 주 이동은 양끝 화살표(월 옆 ◀ / 금 옆 ▶)로 한다 */}
         <div className="relative grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
           <div className="px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center justify-between gap-1">
@@ -347,10 +385,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               return (
                 <div key={ds}
                   className={`px-1 py-2 text-center border-l border-border/60 ${isTd ? 'bg-primary/10' : ''}`}>
-                  <div className={`text-xs ${isTd ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+                  <div className={`text-xs ${isTd ? 'text-primary font-bold' : 'text-slate-700'}`}>
                     {KR_DAYS[d.getDay()]}
                   </div>
-                  <div className={`text-xs font-semibold ${isTd ? 'text-primary' : ''}`}>
+                  <div className={`text-xs font-semibold ${isTd ? 'text-primary' : 'text-slate-800'}`}>
                     {d.getMonth() + 1}/{d.getDate()}
                   </div>
                 </div>
@@ -455,20 +493,43 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               );
             })}
 
-            {/* ── 담당자 기준: 한 담당자 = 한 swimlane(여러 sub-lane) ── */}
-            {viewMode === 'assignee' && assigneeRows.map(({ name, lanes }) => {
-              const LANE_H = 32; // px per sub-lane
-              const trackH = lanes.length * LANE_H + 12;
-              const total = lanes.reduce((n, l) => n + l.length, 0);
+            {/* ── 담당자 기준: 한 담당자 = 한 swimlane(여러 sub-lane) ──
+                라인 밀도를 낮춰(LANE_H 24px, 축소된 글씨) 한 화면에 더 많은 담당자가
+                보이게 하고, 담당자별 기본 ASSIGNEE_ITEM_LIMIT 개만 보여준 뒤
+                "+N건 더보기"/"접기" 로 펼치고 다시 접을 수 있다. "전체" 행은 이번 주
+                모든 업무를 모아 항상 맨 위(본인 행보다도 위)에 강조 표시된다. */}
+            {viewMode === 'assignee' && visibleAssigneeRows.map(({ name, bars }) => {
+              const LANE_H = 24; // px per sub-lane (축소 — 기존 32px)
+              const isTeamRow = name === TEAM_ROW_NAME;
+              const isExpanded = expandedAssignees.has(name);
+              const visibleBars = isExpanded ? bars : bars.slice(0, ASSIGNEE_ITEM_LIMIT);
+              const lanes = packLanes(visibleBars);
+              const hasMore = bars.length > ASSIGNEE_ITEM_LIMIT;
+              const trackH = lanes.length * LANE_H + 10;
               return (
-                <div key={name} className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] hover:bg-secondary/20 transition-colors">
+                <div key={name} className={cn(
+                  'grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] transition-colors',
+                  isTeamRow ? 'bg-primary/[0.03] hover:bg-primary/[0.06]' : 'hover:bg-secondary/20',
+                )}>
                   {/* label */}
-                  <div className="px-4 py-3 min-w-0 flex flex-col justify-center">
+                  <div className="px-4 py-2 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Users className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
-                      <span className="text-sm font-semibold truncate">{name}</span>
+                      <span className={`text-[13px] truncate ${isTeamRow ? 'font-bold text-primary' : 'font-semibold'}`}>{name}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 pl-5">{total}건</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 pl-5">
+                      <p className="text-[11px] text-muted-foreground">{bars.length}건</p>
+                      {hasMore && (
+                        <button
+                          type="button"
+                          onClick={() => toggleAssigneeExpand(name)}
+                          className="text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded ? '접기' : `+${bars.length - ASSIGNEE_ITEM_LIMIT}건 더보기`}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {/* track */}
                   <div className={`relative grid ${colsClass}`} style={{ minHeight: trackH }}>
@@ -484,15 +545,15 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                             style={{
                               left: `${(startIdx / DAY_COUNT) * 100}%`,
                               width: `${(span / DAY_COUNT) * 100}%`,
-                              top: laneIdx * LANE_H + 6,
+                              top: laneIdx * LANE_H + 4,
                             }}>
                             <button type="button"
                               onClick={() => openWorkItem(item.id)}
                               title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
-                              className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
+                              className={`w-full h-5 rounded-md bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-1.5 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
-                              <span className="text-xs font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
+                              <span className="text-[11px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                               {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
                             </button>
                           </div>
@@ -503,6 +564,11 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                 </div>
               );
             })}
+            {viewMode === 'assignee' && hiddenAssigneeCount > 0 && (
+              <div className="px-4 py-2 text-xs text-muted-foreground text-center">
+                외 {hiddenAssigneeCount}명 더 있음 — 상단 "표시 인원"에서 늘려보세요.
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -520,6 +586,12 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-emerald-500" />해결 이슈</span>
         <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
       </div>
+
+      <WorkItemFormModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => setCreateOpen(false)}
+      />
     </div>
   );
 }

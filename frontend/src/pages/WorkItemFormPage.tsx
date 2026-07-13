@@ -1,14 +1,14 @@
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ListTodo } from 'lucide-react';
 import { WorkItemForm } from '@/components/work-items';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import type { WorkItemType } from '@/types';
 
+// 업무 신규 등록 전용 페이지 (`/tasks-mgmt/new`). 기존 업무 수정은 상세 페이지에서 바로 진행하며
+// 별도 수정 페이지/라우트는 없다 (WorkItemDetailPage 참고).
 export function WorkItemFormPage() {
-  const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const isEdit = !!id;
   const parentId = searchParams.get('parentId') || undefined;
   const queryType = searchParams.get('type');
   const VALID_TYPES: WorkItemType[] = ['task', 'issue', 'meeting', 'training', 'etc'];
@@ -18,30 +18,9 @@ export function WorkItemFormPage() {
   const defaultStartedAt = searchParams.get('startedAt') || undefined;
 
   const { data: listData } = useWorkItems();
-  const editTask = isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
   const parentItem = parentId ? listData?.data.find((x) => x.id === parentId) ?? null : null;
 
-
-  if (isEdit && listData && !editTask) {
-    return (
-      <div className="min-h-screen bg-background">
-        <main className="max-w-[1200px] mx-auto px-8 py-8">
-          <div className="text-center py-20">
-            <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">업무를 찾을 수 없습니다.</p>
-            <button
-              onClick={() => navigate('/tasks-mgmt')}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-            >
-              업무 목록으로
-            </button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  const pageTitle = parentItem ? '하위 업무 등록' : isEdit ? '업무 수정' : '업무 등록';
+  const pageTitle = parentItem ? '하위 업무 등록' : '업무 등록';
 
   return (
     <div className="min-h-screen bg-background">
@@ -71,10 +50,9 @@ export function WorkItemFormPage() {
       <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
         <div className="border border-border rounded-2xl p-5 mac-shadow bg-card">
           <WorkItemForm
-            initial={editTask ?? undefined}
             defaultType={defaultType}
             parentItem={parentItem}
-            defaultStartedAt={!isEdit ? defaultStartedAt : undefined}
+            defaultStartedAt={defaultStartedAt}
             onCancel={() => navigate('/tasks-mgmt')}
             onSaved={() => navigate('/tasks-mgmt')}
             embedded

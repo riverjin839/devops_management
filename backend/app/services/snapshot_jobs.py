@@ -27,6 +27,8 @@ class Progress:
     processed: int = 0
     total: Optional[int] = None
     phase: str = ""
+    # 빌더가 주기적으로 publish 하는 중간(부분) 결과 — 누적 표시용. ready 전에도 노출된다.
+    partial: Any = None
 
     @property
     def ratio(self) -> Optional[float]:
@@ -55,7 +57,7 @@ class SnapshotManager:
         self._lock = threading.Lock()
 
     def get(self, key: str, builder: Callable[[Progress], Any],
-            initial_wait: float = 2.0) -> dict:
+            initial_wait: float = 2.0, force: bool = False) -> dict:
         """현재 스냅샷 뷰를 반환. 신선한 캐시가 없으면 백그라운드 계산을 1개 기동한다.
 
         소규모 클러스터 효율: 보여줄 직전 데이터가 없을 때만, 새 계산을 최대 `initial_wait`
@@ -68,12 +70,12 @@ class SnapshotManager:
         new: Optional[_Job] = None
         with self._lock:
             job = self._jobs.get(key)
-            # 신선한 완료 결과 → 그대로 반환
-            if (job and job.status == "ready" and job.finished_at is not None
-                    and (now - job.finished_at) < self._ttl):
-                return self._view(job)
-            # 이미 계산 중 → 진행 상황(또는 stale 데이터) 반환
+            # 이미 계산 중 → 진행 상황(또는 stale 데이터) 반환 (force 라도 재시작 안 함 — 폭주 방지)
             if job and job.status == "computing":
+                return self._view(job)
+            # 신선한 완료 결과 → 그대로 반환 (force 면 무시하고 재계산)
+            if (not force and job and job.status == "ready" and job.finished_at is not None
+                    and (now - job.finished_at) < self._ttl):
                 return self._view(job)
             # 새 계산 시작(직전 결과/추정 total 은 보존해 stale 제공 + 진행률 분모로 사용)
             new = _Job(key=key)
@@ -114,8 +116,22 @@ class SnapshotManager:
             job.finished_at = time.monotonic()
 
     def _view(self, job: _Job) -> dict:
-        data = job.result if job.status == "ready" else job.last_result
-        stale = job.status != "ready" and data is not None
+        # computing 중에는 빌더가 publish 한 부분결과(progress.partial)를 우선 노출하고,
+        # 없으면 직전 성공 결과(stale)를 보여준다. ready 면 최종 결과.
+        if job.status == "ready":
+            data = job.result
+            is_partial = False
+            stale = False
+        else:
+            partial = job.progress.partial
+            if partial is not None:
+                data = partial
+                is_partial = True
+                stale = False
+            else:
+                data = job.last_result
+                is_partial = False
+                stale = data is not None
         return {
             "status": job.status,
             "progress": job.progress.ratio,
@@ -123,6 +139,7 @@ class SnapshotManager:
             "total": job.progress.total,
             "phase": job.progress.phase,
             "data": data,
+            "partial": is_partial,
             "stale": stale,
             "error": job.error,
         }

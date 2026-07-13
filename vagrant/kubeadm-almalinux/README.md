@@ -5,7 +5,7 @@ PEP 에 등록해 모니터링하고, MinIO 를 올려볼 수 있는 kubeadm 기
 으로 맞췄습니다 (커널 6.12 + dnf/SELinux/firewalld/NetworkManager 동일 userland).
 
 이 디렉터리(`vagrant/kubeadm-almalinux/`)는 **AlmaLinux + kubeadm 멀티노드 VM**(VMware Fusion /
-VirtualBox) 경로입니다. 다른 테스트 환경(빠른 k3s / Windows docker) 비교는
+VirtualBox) 경로입니다. 다른 테스트 환경(Ubuntu kubeadm Cilium 스터디 / Windows docker) 비교는
 [상위 vagrant/README.md](../README.md) 참고. 환경별 대안:
 
 | 환경 | 경로 | 형태 | 비고 |

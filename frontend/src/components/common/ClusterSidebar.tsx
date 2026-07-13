@@ -39,7 +39,24 @@ interface ClusterSidebarProps {
   iconOnly?: boolean;
 }
 
-const ICON_RAIL_WIDTH = 56;
+// 아이콘 레일 폭(useSidebarStore.clusterIconRailWidth, 드래그로 조절)에서 아이콘 크기를
+// 파생시킨다. 레일과 아이콘 사이 여백을 거의 없애기 위해 버튼은 레일 폭에서 고정
+// ICON_RAIL_PADDING 만 뺀 크기로 꽉 채우고, 내부 이미지/아이콘/도트는 기존 sm(40)/md(48)/
+// lg(56) 프리셋 비율(이미지≈0.71·아이콘=0.5·도트≈0.145·이모지≈0.44)을 그대로 유지해
+// 비율감을 보존한다.
+const ICON_RAIL_PADDING = 6; // 레일 폭에서 버튼을 뺄 여백(좌우 합, 즉 한쪽당 3px)
+
+function iconSizeFor(railWidth: number) {
+  const btn = Math.max(24, railWidth - ICON_RAIL_PADDING);
+  return {
+    rail: railWidth,
+    btn,
+    image: Math.round(btn * 0.71),
+    icon: Math.round(btn * 0.5),
+    dot: Math.max(5, Math.round(btn * 0.145)),
+    emojiFont: Math.round(btn * 0.44),
+  };
+}
 
 const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> = {
   healthy: CheckCircle,
@@ -128,16 +145,18 @@ interface IconRailButtonProps {
   /** 우측 상단 작은 상태 도트 색상 (Tailwind class). 미지정 시 도트 미표시. */
   dotClass?: string;
   /** 표시할 lucide 컴포넌트. 다른 표시 옵션이 없을 때 사용. */
-  Icon?: React.ComponentType<{ className?: string }>;
+  Icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   /** 표시할 텍스트(주로 emoji 1자). 우선순위: imageSrc > emojiText > Icon. */
   emojiText?: string;
   /** 표시할 이미지 URL / data URL — 사용자가 업로드한 커스텀 아이콘. */
   imageSrc?: string;
   active?: boolean;
   onClick: () => void;
+  /** 픽셀 단위 크기 프리셋 (버튼/이미지/아이콘/도트). */
+  size: ReturnType<typeof iconSizeFor>;
 }
 
-function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, onClick }: IconRailButtonProps) {
+function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, onClick, size }: IconRailButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   // viewport 좌표 — 부모 overflow 를 회피하기 위해 portal 로 렌더한다.
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
@@ -161,7 +180,8 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}
         onBlur={hideTooltip}
-        className={`relative flex items-center justify-center w-10 h-10 rounded-md transition-colors ${
+        style={{ width: size.btn, height: size.btn }}
+        className={`relative flex items-center justify-center rounded-md transition-colors ${
           active
             ? 'bg-primary/15 text-primary'
             : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
@@ -171,16 +191,17 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
           <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
         )}
         {imageSrc
-          ? <img src={imageSrc} alt="" className="w-6 h-6 rounded object-cover" />
+          ? <img src={imageSrc} alt="" style={{ width: size.image, height: size.image }} className="rounded object-cover" />
           : emojiText
-            ? <span className="text-lg leading-none select-none" aria-hidden>{emojiText}</span>
+            ? <span style={{ fontSize: size.emojiFont }} className="leading-none select-none" aria-hidden>{emojiText}</span>
             : Icon
-              ? <Icon className="w-5 h-5" />
-              : <Server className="w-5 h-5" />}
+              ? <Icon style={{ width: size.icon, height: size.icon }} />
+              : <Server style={{ width: size.icon, height: size.icon }} />}
         {dotClass && (
           <span
             aria-hidden
-            className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ring-1 ring-card ${dotClass}`}
+            style={{ width: size.dot, height: size.dot }}
+            className={`absolute top-1 right-1 rounded-full ring-1 ring-card ${dotClass}`}
           />
         )}
       </button>
@@ -214,6 +235,11 @@ function ClusterSidebarIconRail({
     ? (selectedSet?.size ?? 0) === 0
     : selectedId === null;
 
+  const railWidth = useSidebarStore((s) => s.clusterIconRailWidth);
+  const setRailWidth = useSidebarStore((s) => s.setClusterIconRailWidth);
+  const resetRailWidth = useSidebarStore((s) => s.resetClusterIconRailWidth);
+  const size = iconSizeFor(railWidth);
+
   // 사이드바에서는 아이콘 변경을 허용하지 않는다. 변경은 시스템 등록된 클러스터 관리 화면
   // (/cluster-manage) 의 테이블 첫 컬럼에서만 가능하도록 권한을 한정.
 
@@ -238,8 +264,8 @@ function ClusterSidebarIconRail({
 
   return (
     <aside
-      style={{ width: ICON_RAIL_WIDTH }}
-      className="flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
+      style={{ width: size.rail }}
+      className="relative flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
     >
       <div className="flex flex-col items-center gap-1">
         {allowAll && (
@@ -250,6 +276,7 @@ function ClusterSidebarIconRail({
             Icon={LayoutGrid}
             active={isAllActive && (highlightActive ?? true)}
             onClick={handleAllClick}
+            size={size}
           />
         )}
         {clusters.length === 0 ? (
@@ -268,7 +295,7 @@ function ClusterSidebarIconRail({
             // 사용자 지정 아이콘이 있으면 그걸 사용, 없으면 status 기반 fallback.
             const resolved = resolveClusterIcon(c.icon);
             const FallbackIcon = STATUS_ICON[c.status] ?? Server;
-            const lucideIcon: React.ComponentType<{ className?: string }> =
+            const lucideIcon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> =
               resolved?.kind === 'lucide' ? resolved.Component : FallbackIcon;
             const emojiText = resolved?.kind === 'text' ? resolved.value : undefined;
             const imageSrc = resolved?.kind === 'image' ? resolved.value : undefined;
@@ -283,11 +310,13 @@ function ClusterSidebarIconRail({
                 dotClass={STATUS_DOT[c.status] ?? 'bg-slate-400'}
                 active={isActive}
                 onClick={() => handleClusterClick(c.id)}
+                size={size}
               />
             );
           })
         )}
       </div>
+      <ResizeHandle width={railWidth} onResize={setRailWidth} onReset={resetRailWidth} />
     </aside>
   );
 }

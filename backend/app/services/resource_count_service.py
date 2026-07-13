@@ -51,6 +51,11 @@ COUNT_METHODS: dict[str, tuple[str, str]] = {
     "serviceaccounts": ("CoreV1Api", "list_service_account_for_all_namespaces"),
     "networkpolicies": ("NetworkingV1Api", "list_network_policy_for_all_namespaces"),
     "storageclasses": ("StorageV1Api", "list_storage_class"),
+    "leases": ("CoordinationV1Api", "list_lease_for_all_namespaces"),
+    "endpointslices": ("DiscoveryV1Api", "list_endpoint_slice_for_all_namespaces"),
+    "runtimeclasses": ("NodeV1Api", "list_runtime_class"),
+    "mutatingwebhookconfigurations": ("AdmissionregistrationV1Api", "list_mutating_webhook_configuration"),
+    "validatingwebhookconfigurations": ("AdmissionregistrationV1Api", "list_validating_webhook_configuration"),
 }
 
 DEFAULT_ITEMS: list[tuple[str, str, str]] = [

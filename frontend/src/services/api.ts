@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -57,7 +57,10 @@ api.interceptors.request.use(
     if (token) {
       config.headers.set('Authorization', `Bearer ${token}`);
     }
-    if (config.data && typeof config.data === 'object') {
+    // FormData/Blob/File 은 own-enumerable 프로퍼티가 없어 convertKeysToSnake 가
+    // 빈 객체({})로 뭉개버린다 — multipart 업로드(backup import 등)가 깨지므로 건너뛴다.
+    if (config.data && typeof config.data === 'object'
+      && !(config.data instanceof FormData) && !(config.data instanceof Blob)) {
       config.data = convertKeysToSnake(config.data);
     }
     if (isDebugEnabled('global')) {
@@ -172,6 +175,10 @@ export const auditLogsApi = {
     if (params.dateTo) q.date_to = params.dateTo;
     return api.get<import('@/types').AuditLogListResponse>('/audit-logs', { params: q });
   },
+};
+
+export const releaseNotesApi = {
+  list: () => api.get<ReleaseNotesResponse>('/release-notes'),
 };
 
 // Clusters API
@@ -757,6 +764,7 @@ export interface WorkItemFilters {
   closed?: boolean;
   allAttendees?: boolean;
   sprintId?: string;
+  limit?: number;
 }
 
 export const projectsApi = {
@@ -849,6 +857,22 @@ export const jiraApi = {
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   import: (data: import('@/types').JiraImportRequest) =>
     api.post<import('@/types').JiraImportResult>('/jira/import', data),
+  importExcel: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<import('@/types').JiraExcelImportResult>('/jira/import/excel', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 2 * 60_000,
+    });
+  },
+  importPaste: (text: string) =>
+    api.post<import('@/types').JiraExcelImportResult>('/jira/import/paste', { text }, {
+      timeout: 2 * 60_000,
+    }),
+  importSaveToBoard: (rows: import('@/types').JiraExcelRow[]) =>
+    api.post<import('@/types').JiraImportResult>('/jira/import/excel/save', { rows }, {
+      timeout: 2 * 60_000,
+    }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
 };
@@ -907,6 +931,26 @@ export const nodeLabelsApi = {
 export const nodeImagesApi = {
   getNodeImages: (clusterId: string) =>
     api.get(`/clusters/${clusterId}/node-images`),
+  exportCsv: (clusterId: string, sort: 'default' | 'size' | 'lines' = 'default') =>
+    api.get<Blob>(`/clusters/${clusterId}/node-images/export.csv?sort=${sort}`, {
+      responseType: 'blob',
+    }),
+};
+
+export const clusterTrendsApi = {
+  // per-node 메트릭 추이. metrics/nodes 는 콤마 구분 문자열로 전달.
+  get: (
+    clusterId: string,
+    params: { range: string; metrics: string[]; nodes: string[] }
+  ) =>
+    api.get<ClusterTrendsResponse>(`/k8s/${clusterId}/trends`, {
+      params: {
+        range: params.range,
+        metrics: params.metrics.join(','),
+        nodes: params.nodes.join(','),
+      },
+      timeout: 60_000,
+    }),
 };
 
 
@@ -945,52 +989,6 @@ export const workGuidesApi = {
   create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
   update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
   delete: (id: string) => api.delete(`/work-guides/${id}`),
-};
-
-// Knowledge Base API (서비스별 문서/노트 트리 + 버전 히스토리 + 공유)
-export const knowledgeApi = {
-  tree: (service?: string) =>
-    api.get<import('@/types').KnowledgeTreeResponse>('/knowledge/pages/tree', {
-      params: service ? { service } : undefined,
-    }),
-  list: (params?: { service?: string; category?: string; kind?: string; q?: string }) =>
-    api.get<import('@/types').KnowledgePageListResponse>('/knowledge/pages', {
-      params: params
-        ? Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''))
-        : undefined,
-    }),
-  get: (id: string) => api.get<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`),
-  create: (data: import('@/types').KnowledgePageCreate) =>
-    api.post<import('@/types').KnowledgePage>('/knowledge/pages', data),
-  update: (id: string, data: import('@/types').KnowledgePageUpdate, expectedUpdatedAt?: string) =>
-    api.put<import('@/types').KnowledgePage>(`/knowledge/pages/${id}`, data, {
-      params: expectedUpdatedAt ? { expected_updated_at: expectedUpdatedAt } : undefined,
-    }),
-  heartbeat: (id: string) =>
-    api.post<import('@/types').KnowledgePresenceResponse>(`/knowledge/pages/${id}/heartbeat`),
-  importExisting: (source: 'all' | 'ops_notes' | 'work_guides' | 'service_entries' = 'all') =>
-    api.post<import('@/types').KnowledgeImportResult>('/knowledge/import', undefined, { params: { source } }),
-  move: (id: string, data: { parentId?: string | null; sortOrder: number }) =>
-    api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/move`, data),
-  remove: (id: string) => api.delete(`/knowledge/pages/${id}`),
-  versions: (id: string) =>
-    api.get<import('@/types').KnowledgeVersionListResponse>(`/knowledge/pages/${id}/versions`),
-  getVersion: (versionId: string) =>
-    api.get<import('@/types').KnowledgePageVersion>(`/knowledge/versions/${versionId}`),
-  saveMilestone: (id: string, label: string) =>
-    api.post<import('@/types').KnowledgePageVersion>(`/knowledge/pages/${id}/versions`, { label }),
-  restore: (id: string, versionId: string) =>
-    api.post<import('@/types').KnowledgePage>(`/knowledge/pages/${id}/restore/${versionId}`),
-  roadmap: (params?: { service?: string; category?: string }) =>
-    api.get<import('@/types').KnowledgePageListResponse>('/knowledge/roadmap', {
-      params: params
-        ? Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined))
-        : undefined,
-    }),
-  reorder: (parentId: string | null, orderedIds: string[]) =>
-    api.post('/knowledge/reorder', { parentId, orderedIds }),
-  backlinks: (id: string) =>
-    api.get<import('@/types').KnowledgePageListResponse>(`/knowledge/pages/${id}/backlinks`),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
@@ -1196,10 +1194,30 @@ export const analyzeApi = {
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${podName}/context`,
       { params: { tail_lines: tailLines } },
     ),
+  /** 파드 컨테이너(+init) 목록 — 로그/터미널 셀렉터용. */
+  podContainers: (clusterId: string, namespace: string, podName: string) =>
+    api.get<import('@/types').K8sPodContainersResponse>(
+      `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${podName}/containers`,
+    ),
 };
 
 // Service Topology API — 자동 그래프 + 수동 연계 + 실트래픽
 export const serviceTopologyApi = {
+  getClusterGraph: (
+    clusterId: string,
+    opts?: { mode?: 'summary' | 'detail'; includePods?: boolean; withMetrics?: boolean },
+  ) =>
+    api.get<import('@/types').ClusterTopologyResponse>(
+      `/service-topology/${clusterId}/cluster-graph`,
+      {
+        params: {
+          mode: opts?.mode ?? 'summary',
+          include_pods: opts?.includePods ?? false,
+          with_metrics: opts?.withMetrics ?? false,
+        },
+        timeout: 120_000,
+      },
+    ),
   getGraph: (
     clusterId: string,
     namespace: string,
@@ -1250,6 +1268,19 @@ export const serviceTopologyApi = {
     namespace: string; name: string; nodeType: string; note?: string | null;
   }) => api.post<import('@/types').ServiceTopologyExternalNode>(`/service-topology/${clusterId}/external-nodes`, data),
   deleteExternalNode: (nodeId: string) => api.delete(`/service-topology/external-nodes/${nodeId}`),
+};
+
+// K8s Events API (kubewatch 웹훅 수신 이벤트 조회)
+export const k8sEventsApi = {
+  list: (params?: {
+    clusterId?: string;
+    severity?: string;
+    resourceKind?: string;
+    limit?: number;
+    offset?: number;
+  }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
+  get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
+  delete: (id: string) => api.delete(`/events/${id}`),
 };
 
 // Trend Digest API
@@ -1632,6 +1663,10 @@ export const k8sResourcesApi = {
     api.get<import('@/types').K8sResourceDetail>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/yaml`,
     ),
+  resourceEvents: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.get<import('@/types').K8sRelatedEventsResponse>(
+      `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/events`,
+    ),
   // ── 쓰기 액션 (require_operator + 감사 로그) ───────────────────────────────
   capabilities: (clusterId: string) =>
     api.get<import('@/types').K8sCapabilitiesResponse>(`/k8s/${clusterId}/resources-capabilities`),
@@ -1682,15 +1717,25 @@ export const k8sResourcesApi = {
 
 // ── K8s 자원 관리 (allocation: request vs 사용량 slack) ──────────────────────
 export const k8sAllocationApi = {
-  nodes: (clusterId: string) =>
+  nodes: (clusterId: string, refresh = false) =>
     api.get<import('@/types').AllocNodesResponse>(
       `/k8s/${clusterId}/allocation/nodes`,
-      { timeout: 120_000 },
+      { params: refresh ? { refresh: true } : undefined, timeout: 120_000 },
     ),
-  namespaces: (clusterId: string) =>
+  node: (clusterId: string, node: string) =>
+    api.get<import('@/types').AllocNodeRefreshResponse>(
+      `/k8s/${clusterId}/allocation/nodes/${encodeURIComponent(node)}`,
+      { timeout: 30_000 },
+    ),
+  namespaces: (clusterId: string, refresh = false) =>
     api.get<import('@/types').AllocNamespacesResponse>(
       `/k8s/${clusterId}/allocation/namespaces`,
-      { timeout: 120_000 },
+      { params: refresh ? { refresh: true } : undefined, timeout: 120_000 },
+    ),
+  namespace: (clusterId: string, namespace: string) =>
+    api.get<import('@/types').AllocNamespaceRefreshResponse>(
+      `/k8s/${clusterId}/allocation/namespaces/${encodeURIComponent(namespace)}`,
+      { timeout: 30_000 },
     ),
   workloads: (clusterId: string, namespace: string) =>
     api.get<import('@/types').AllocWorkloadsResponse>(
@@ -1727,6 +1772,26 @@ export const k8sStreamUrls = {
   events: (clusterId: string, namespace?: string) => {
     const qs = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
     return `/api/v1/analyze/clusters/${clusterId}/events/stream${qs}`;
+  },
+  /** 파드 로그 SSE 스트림 — Authorization 헤더 fetch 로 소비. */
+  logsStream: (
+    clusterId: string, namespace: string, pod: string,
+    opts: { container?: string; tailLines?: number; follow?: boolean; previous?: boolean; timestamps?: boolean },
+  ) => {
+    const p = new URLSearchParams({
+      tail_lines: String(opts.tailLines ?? 200),
+      follow: String(opts.follow ?? true),
+      previous: String(opts.previous ?? false),
+      timestamps: String(opts.timestamps ?? true),
+    });
+    if (opts.container) p.set('container', opts.container);
+    return `/api/v1/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${pod}/logs/stream?${p.toString()}`;
+  },
+  /** 파드 로그 전체 다운로드 (non-follow) — Authorization fetch → blob. */
+  logsDownload: (clusterId: string, namespace: string, pod: string, container?: string, previous = false) => {
+    const p = new URLSearchParams({ previous: String(previous) });
+    if (container) p.set('container', container);
+    return `/api/v1/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${pod}/logs/download?${p.toString()}`;
   },
   /** Pod exec WebSocket — 토큰은 query param 으로 전달(WS 는 헤더 불가). */
   exec: (clusterId: string, namespace: string, pod: string, container: string | undefined, token: string | null, command = '/bin/sh') => {

@@ -1,8 +1,29 @@
 from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
+import re
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _coerce_datetime_input(v):
+    """datetime 필드용 입력 보정 (mode=before).
+
+    - 빈 문자열/공백만 → None: 프론트 date input 이 비워진 채 전송돼도 안전하게 null 처리.
+    - 날짜만(YYYY-MM-DD) → 자정 datetime(YYYY-MM-DDT00:00:00): 인라인 표의 `<input type="date">`
+      가 date-only 로 보내면 pydantic(2.5.x)이 'Input should be a valid datetime' 422 로
+      거부하므로, 시간 부분을 자정으로 채워 datetime 파싱이 되도록 한다.
+    """
+    if isinstance(v, str):
+        s = v.strip()
+        if s == "":
+            return None
+        if _DATE_ONLY_RE.match(s):
+            return f"{s}T00:00:00"
+    return v
 
 WorkItemType = Literal["task", "issue", "meeting", "training", "etc"]
 KanbanStatus = Literal["backlog", "todo", "in_progress", "review_test", "done"]
@@ -62,6 +83,10 @@ class WorkItemBase(BaseModel):
     custom_values: Optional[dict] = None
     all_attendees: bool = False
 
+    _coerce_blank_dates = field_validator(
+        "started_at", "closed_at", mode="before"
+    )(_coerce_datetime_input)
+
 
 class WorkItemCreate(WorkItemBase):
     pass
@@ -98,6 +123,10 @@ class WorkItemUpdate(BaseModel):
     related_work_item_id: Optional[UUID] = None
     custom_values: Optional[dict] = None
     all_attendees: Optional[bool] = None
+
+    _coerce_blank_dates = field_validator(
+        "started_at", "closed_at", mode="before"
+    )(_coerce_datetime_input)
 
 
 class WorkItemCommentCreate(BaseModel):
@@ -186,3 +215,21 @@ class WorkItemListResponse(BaseModel):
 
 
 WorkItemResponse.model_rebuild()
+
+
+class SimilarWorkItem(BaseModel):
+    """유사 WorkItem 검색 결과 1건 — pgvector cosine distance 기반."""
+    id: UUID
+    type: WorkItemType
+    title: Optional[str] = None
+    category: str
+    assignee: str
+    cluster_name: Optional[str] = None
+    similarity: float = Field(..., description="0(다름)~1(동일) 코사인 유사도")
+
+
+class SimilarWorkItemListResponse(BaseModel):
+    data: list[SimilarWorkItem]
+    embedding_available: bool = Field(
+        ..., description="False 면 이 WorkItem 의 임베딩이 아직 계산되지 않음(Celery 대기 중)"
+    )

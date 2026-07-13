@@ -5,6 +5,7 @@ import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
 import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
 import { WorkItemDetailPage } from '@/pages/WorkItemDetailPage';
+import { JiraExcelImportPage } from '@/pages/JiraExcelImportPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SprintsPage } from '@/pages/SprintsPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
@@ -24,7 +25,6 @@ import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
-import { KnowledgeBasePage } from '@/pages/KnowledgeBasePage';
 import { CommandsPage } from '@/pages/CommandsPage';
 import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -42,12 +42,15 @@ import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
+import { ArchitecturePage } from '@/pages/ArchitecturePage';
+import { K8sEventsPage } from '@/pages/K8sEventsPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
+import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -55,7 +58,6 @@ import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { UsersPage } from '@/pages/UsersPage';
-import { AuditLogsPage } from '@/pages/AuditLogsPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
@@ -117,17 +119,19 @@ function AppShell() {
               <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
               <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
               <Route path="/tasks-mgmt/:id" element={<WorkItemDetailPage />} />
-              <Route path="/tasks-mgmt/:id/edit" element={<WorkItemDetailPage />} />
+              {/* 별도 수정 페이지 폐지 — 옛 /edit 딥링크/북마크는 상세 페이지의 편집 모드(?edit=1)로 리다이렉트 */}
+              <Route path="/tasks-mgmt/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="?edit=1" />} />
               {/* 레거시 경로 — /tasks-mgmt 로 리다이렉트 (북마크/외부 링크 호환) */}
               <Route path="/work-items" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/work-items/new" element={<Navigate to="/tasks-mgmt/new" replace />} />
               <Route path="/work-items/:id" element={<RedirectWithId to="/tasks-mgmt" />} />
-              <Route path="/work-items/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="/edit" />} />
+              <Route path="/work-items/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="?edit=1" />} />
               <Route path="/issues" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/tasks" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
               <Route path="/sprints" element={<SprintsPage />} />
               <Route path="/members" element={<MemberBoardPage />} />
+              <Route path="/jira-import" element={<JiraExcelImportPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/node-images" element={<NodeImagesPage />} />
@@ -166,6 +170,8 @@ function AppShell() {
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
+              <Route path="/architecture" element={<ArchitecturePage />} />
+              <Route path="/k8s-events" element={<K8sEventsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
@@ -184,11 +190,10 @@ function AppShell() {
               {/* K8S 자원 관리 — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화 */}
               <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
               <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
+              <Route path="/cluster-trends/:clusterId" element={<ClusterTrendsPage />} />
+              <Route path="/cluster-trends" element={<ClusterTrendsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
-              <Route path="/knowledge" element={<KnowledgeBasePage />} />
-              <Route path="/knowledge/:id" element={<KnowledgeBasePage />} />
               <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
-              <Route path="/settings/audit-logs" element={<RequireAdmin><AuditLogsPage /></RequireAdmin>} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

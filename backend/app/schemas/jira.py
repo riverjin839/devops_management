@@ -66,6 +66,43 @@ class JiraImportResult(BaseModel):
     items: list[JiraImportItemPreview] = []
 
 
+# ── Excel 가져오기 (Jira 에서 추출한 .xlsx 임포트, 미리보기 전용 — 저장하지 않음) ──────
+class JiraExcelRow(BaseModel):
+    key: str = ""
+    jira_url: Optional[str] = None   # base_url 설정 시 {base_url}/browse/{key}
+    summary: str = ""
+    issue_type: str = ""
+    status: str = ""
+    assignee_raw: str = ""            # 엑셀 원본 ("이름 회사")
+    assignee_name: Optional[str] = None  # 추출된 이름 (매칭 실패 시 원본 첫 토큰)
+    assignee_matched: bool = False    # PEP 담당자 레지스트리와 매칭 성공 여부
+    created: str = ""
+    resolved: str = ""
+    due_date: str = ""
+    environment: str = ""
+    description: str = ""
+
+
+class JiraExcelImportResult(BaseModel):
+    status: Literal["ok", "error"]
+    detail: str = ""
+    total: int = 0
+    matched: int = 0
+    rows: list[JiraExcelRow] = []
+
+
+class JiraExcelPasteRequest(BaseModel):
+    """엑셀/Jira 표를 복사해 붙여넣은 원본 텍스트 — 탭 구분(TSV), 브라우저 표 복사도 보통
+    탭으로 붙여넣기된다. 줄바꿈은 행 구분."""
+    text: str
+
+
+class JiraExcelSaveRequest(BaseModel):
+    """미리보기(import_excel/import_paste)로 확인한 행을 실제 work_items 로 저장.
+    파일을 다시 읽지 않고 프론트가 이미 갖고 있는 미리보기 rows 를 그대로 되돌려 받는다."""
+    rows: list[JiraExcelRow]
+
+
 # ── 양방향 push (Phase 2) ──────────────────────────────────────────────────────
 class JiraPushRequest(BaseModel):
     comment: Optional[str] = None

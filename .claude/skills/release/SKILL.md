@@ -7,6 +7,12 @@ description: 새 버전을 릴리스할 때(마이너 기능 추가/패치) 사�
 
 전략 상세: `docs/branch-tag-strategy.md`. `main` 단일 트렁크 + `vX.Y.Z` 태그.
 
+> **기본적으로는 이 스킬을 수동 실행할 필요가 없다.** `feat:`/`fix:` 등 conventional commit
+> prefix 를 가진 PR 이 `main` 에 머지되면 `.github/workflows/auto-release.yml` 이 버전업 →
+> CHANGELOG 확정 → 태그 push 까지 자동으로 수행한다. 이 스킬은 hotfix 나 자동화가 실패했을
+> 때(예: `RELEASE_PAT` 미설정으로 태그 push 가 `release.yml` 을 못 띄운 경우)의 수동 fallback
+> 절차다.
+
 ## 버전 결정
 - `feat:` 포함 → **MINOR**(x.Y.0). `fix:`/`docs:`/`chore:` 만 → **PATCH**(x.y.Z).
   하위호환 깨짐 → **MAJOR**.
@@ -20,6 +26,9 @@ description: 새 버전을 릴리스할 때(마이너 기능 추가/패치) 사�
    - `backend/app/main.py` FastAPI `version="..."`
    - `backend/app/main.py` `root()` 응답 `"version": "..."`
 3. `CHANGELOG.md` 최상단에 새 섹션(`## [X.Y.Z] - YYYY-MM-DD`) + Added/Changed/Fixed + 하단 링크.
+   (2~3 은 `python3 scripts/release/bump_version.py <minor|patch>` 로 한 번에 처리 가능 —
+   `--dry-run` 으로 먼저 결과 미리보기 권장.) 사이드바 "릴리즈 노트" 패널은 이 파일을 backend
+   API(`/api/v1/release-notes`)로 직접 파싱해 보여주므로 별도 동기화 파일은 없다.
 4. `chore(release): vX.Y.Z` 커밋 → PR → main 병합.
 5. 병합된 main 에 annotated 태그 push — **여기까지가 수동 마지막 단계**:
    ```bash

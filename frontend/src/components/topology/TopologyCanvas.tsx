@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { TopologyGraphResponse, TopologyTrafficEdge } from '@/types';
+import type { TopoNode, TopoEdge, TopologyTrafficEdge } from '@/types';
 import {
   computeLayout, edgeStyle, kindAccent, statusColor, usageRatio,
   KIND_ABBR, NODE_W, NODE_H, type LayoutPos,
 } from './topologyShared';
 
+/** namespace 단위 그래프와 cluster 전체 그래프 모두 받도록 구조적 타입. */
+type TopoGraphLike = { nodes: TopoNode[]; edges: TopoEdge[]; generatedAt: string };
+
 interface Props {
-  graph: TopologyGraphResponse;
+  graph: TopoGraphLike;
   trafficEdges?: TopologyTrafficEdge[];
   showTraffic: boolean;
   selectedId: string | null;
@@ -28,7 +31,8 @@ export function TopologyCanvas({
   const panning = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
 
   const baseLayout = useMemo(() => computeLayout(graph.nodes, graph.edges), [graph]);
-  const layout = useMemo(() => ({ ...baseLayout, ...override }), [baseLayout, override]);
+  const layout = useMemo(() => ({ ...baseLayout.pos, ...override }), [baseLayout, override]);
+  const groups = baseLayout.groups;
   // 새 그래프 로드 시 수동 이동 초기화
   useEffect(() => { setOverride({}); }, [graph.generatedAt]);
 
@@ -101,6 +105,18 @@ export function TopologyCanvas({
         </marker>
       </defs>
       <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+        {/* 네임스페이스 그룹 박스 (cluster 상세) */}
+        {groups.map((box) => (
+          <g key={`ns-${box.namespace}`} className="pointer-events-none">
+            <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={12}
+              fill="hsl(var(--secondary))" fillOpacity={0.25}
+              stroke="hsl(var(--border))" strokeDasharray="4 4" />
+            <text x={box.x + 12} y={box.y + 17} fontSize={11} fontWeight={700}
+              fill="hsl(var(--muted-foreground))">
+              {box.namespace}
+            </text>
+          </g>
+        ))}
         {/* 구조 엣지 */}
         {graph.edges.map((e) => {
           const a = center(e.source); const b = center(e.target);
@@ -175,8 +191,14 @@ export function TopologyCanvas({
               <text x={12} y={31} fontSize={11} fontWeight={600} fill="hsl(var(--foreground))">
                 {n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name}
               </text>
+              {/* Namespace 요약 — 카운트 표시 */}
+              {n.kind === 'Namespace' && n.detail && (
+                <text x={12} y={45} fontSize={8} fill="hsl(var(--muted-foreground))">
+                  {n.detail.length > 24 ? n.detail.slice(0, 23) + '…' : n.detail}
+                </text>
+              )}
               {/* pod 수 / 미니 usage 바 */}
-              {(n.kind !== 'ConfigMap' && n.kind !== 'Secret' && n.kind !== 'External') && (
+              {(n.kind !== 'ConfigMap' && n.kind !== 'Secret' && n.kind !== 'External' && n.kind !== 'Namespace') && (
                 <>
                   {n.podCount > 0 && (
                     <text x={12} y={45} fontSize={8.5} fill="hsl(var(--muted-foreground))">

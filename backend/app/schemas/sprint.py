@@ -10,6 +10,8 @@ SprintStatus = str  # planning / active / completed
 class SprintBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     goal: Optional[str] = None
+    jira_no: Optional[str] = Field(None, max_length=100)
+    confluence_link: Optional[str] = Field(None, max_length=500)
     start_date: date
     end_date: date
     status: SprintStatus = "active"
@@ -22,6 +24,8 @@ class SprintCreate(SprintBase):
 class SprintUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     goal: Optional[str] = None
+    jira_no: Optional[str] = Field(None, max_length=100)
+    confluence_link: Optional[str] = Field(None, max_length=500)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     status: Optional[SprintStatus] = None

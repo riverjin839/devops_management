@@ -18,10 +18,12 @@ import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
 import { PodTerminal } from '@/components/k8s/PodTerminal';
 import { EventsStream } from '@/components/k8s/EventsStream';
 import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
+import { ColumnToggle } from '@/components/k8s/ColumnToggle';
+import { useColumnPrefs } from '@/hooks/useColumnPrefs';
 import type {
   K8sResourceRow, K8sResourceCapability, K8sCrdInfo, HelmRelease,
   K8sNodeRichRow, ResourceDetailSection, ResourceDetailKVItem,
-  K8sPodRichRow, K8sCellColor,
+  K8sPodRichRow, K8sCellColor, K8sRelatedEvent,
 } from '@/types';
 
 // 셀 색상 → Tailwind 클래스
@@ -61,12 +63,19 @@ const NAV: NavCat[] = [
       { id: 'horizontalpodautoscalers', label: 'HPA', mode: 'kind', kind: 'horizontalpodautoscalers' },
       { id: 'poddisruptionbudgets', label: 'Pod Disruption Budgets', mode: 'kind', kind: 'poddisruptionbudgets' },
       { id: 'priorityclasses', label: 'Priority Classes', mode: 'kind', kind: 'priorityclasses' },
+      { id: 'runtimeclasses', label: 'Runtime Classes', mode: 'kind', kind: 'runtimeclasses' },
+      { id: 'leases', label: 'Leases', mode: 'kind', kind: 'leases' },
+      { id: 'mutatingwebhookconfigurations', label: 'Mutating Webhooks', mode: 'kind', kind: 'mutatingwebhookconfigurations' },
+      { id: 'validatingwebhookconfigurations', label: 'Validating Webhooks', mode: 'kind', kind: 'validatingwebhookconfigurations' },
+      { id: 'validatingadmissionpolicies', label: 'Validating Admission Policies', mode: 'kind', kind: 'validatingadmissionpolicies' },
+      { id: 'validatingadmissionpolicybindings', label: 'VAP Bindings', mode: 'kind', kind: 'validatingadmissionpolicybindings' },
     ],
   },
   {
     id: 'network', label: 'Network', icon: Network, leaves: [
       { id: 'services', label: 'Services', mode: 'kind', kind: 'services' },
       { id: 'endpoints', label: 'Endpoints', mode: 'kind', kind: 'endpoints' },
+      { id: 'endpointslices', label: 'Endpoint Slices', mode: 'kind', kind: 'endpointslices' },
       { id: 'ingresses', label: 'Ingresses', mode: 'kind', kind: 'ingresses' },
       { id: 'ingressclasses', label: 'Ingress Classes', mode: 'kind', kind: 'ingressclasses' },
       { id: 'networkpolicies', label: 'Network Policies', mode: 'kind', kind: 'networkpolicies' },
@@ -236,8 +245,8 @@ export function K8sManagePage() {
   const closeDetail = () => { setDetail(null); setEditing(false); setDraft(''); };
 
   return (
-    <div className="min-h-screen bg-background p-3">
-      <div className="flex gap-3 max-w-[1700px] mx-auto">
+    <div className="min-h-screen bg-background py-3 pr-3">
+      <div className="flex gap-3">
         {/* 클러스터 선택 레일 */}
         <div className="sticky top-4 self-start">
           <ClusterSidebar
@@ -457,8 +466,10 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
     return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary} ${Object.values(r.cols ?? {}).join(' ')}`.toLowerCase().includes(q));
   }, [data, search, selectedNs, isNamespaced]);
 
-  const columns = data?.columns ?? [];
-  const useSummary = columns.length === 0;
+  const allColumns = data?.columns ?? [];
+  const { hidden, toggle } = useColumnPrefs(kind);
+  const columns = allColumns.filter((c) => !hidden.has(c.key));
+  const useSummary = allColumns.length === 0;
   const gridTemplate = [
     'minmax(160px,1.6fr)',
     isNamespaced ? '130px' : '',
@@ -482,9 +493,12 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
-        <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
+          <button onClick={() => refetch()} title="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={{ gridTemplateColumns: gridTemplate }}>
@@ -647,12 +661,29 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
   });
 
   if (selectedCrd) {
+    // additionalPrinterColumns 기반 동적 컬럼 (kubectl 파리티) — 없으면 summary 폴백
+    const dynCols = objects.data?.columns ?? [];
+    const namespaced = selectedCrd.scope === 'Namespaced';
+    const grid = {
+      gridTemplateColumns: [
+        'minmax(160px,1.4fr)',
+        ...(namespaced ? ['minmax(120px,160px)'] : []),
+        ...(dynCols.length > 0 ? dynCols.map(() => 'minmax(80px,1fr)') : ['1fr']),
+        '60px',
+      ].join(' '),
+    };
     return (
       <MacCard title={`${selectedCrd.kind} (${selectedCrd.group})`} bodyPadding="p-0">
         <div className="px-4 py-2 border-b border-border">
           <button onClick={() => setSelectedCrd(null)} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
             <ArrowLeft className="w-3.5 h-3.5" /> CRD 목록
           </button>
+        </div>
+        <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={grid}>
+          <span>이름</span>
+          {namespaced && <span>네임스페이스</span>}
+          {dynCols.length > 0 ? dynCols.map((c) => <span key={c.key} className="truncate">{c.label}</span>) : <span>Summary</span>}
+          <span className="text-right">Age</span>
         </div>
         {objects.isLoading ? (
           <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
@@ -663,10 +694,15 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
         ) : (
           objects.data!.items.map((r) => (
             <button key={`${r.namespace}/${r.name}`} onClick={() => onOpenObject(selectedCrd, r)}
-              className="w-full grid grid-cols-[1fr_160px_1fr] gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30">
+              className="w-full grid gap-2 px-4 py-1.5 text-sm text-left border-b border-border/40 hover:bg-secondary/30 items-center" style={grid}>
               <span className="truncate font-medium">{r.name}</span>
-              <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>
-              <span className="truncate text-muted-foreground">{r.summary}</span>
+              {namespaced && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+              {dynCols.length > 0
+                ? dynCols.map((c) => (
+                    <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '-'}</span>
+                  ))
+                : <span className="truncate text-muted-foreground">{r.summary}</span>}
+              <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
             </button>
           ))
         )}
@@ -723,7 +759,16 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
   const yamlText = yamlQuery.data?.yaml ?? '';
   const sections = (yamlQuery.data as { sections?: ResourceDetailSection[] } | undefined)?.sections;
   const hasSections = !!(sections && sections.length);
-  const [tab, setTab] = useState<'summary' | 'yaml'>('summary');
+  const [tab, setTab] = useState<'summary' | 'yaml' | 'events'>('summary');
+
+  // 관련 이벤트 (k8s 리소스만) — 탭 활성 시 15s 라이브 갱신 (Lens 파리티)
+  const hasEvents = detail.kind === 'k8s';
+  const eventsQuery = useQuery({
+    queryKey: ['k8s-mng-obj-events', clusterId, detail.resourceKind, detail.namespace, detail.name],
+    queryFn: async () => (await k8sResourcesApi.resourceEvents(clusterId, detail.resourceKind!, detail.namespace, detail.name)).data,
+    enabled: hasEvents && tab === 'events',
+    refetchInterval: 15_000,
+  });
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex justify-end" onClick={onClose}>
@@ -758,7 +803,7 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
           ) : yamlQuery.isError ? (
             <div className="text-sm text-red-500">조회 실패: {errMsg(yamlQuery.error)}</div>
           ) : (
-            <Tabs.Root value={editing || !hasSections ? 'yaml' : tab} onValueChange={(v) => setTab(v as 'summary' | 'yaml')}>
+            <Tabs.Root value={editing || (!hasSections && tab === 'summary') ? 'yaml' : tab} onValueChange={(v) => setTab(v as 'summary' | 'yaml' | 'events')}>
               <Tabs.List className="flex gap-1 mb-3 border-b border-border">
                 {hasSections && (
                   <Tabs.Trigger value="summary" disabled={editing}
@@ -770,10 +815,25 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
                   className="px-3 py-1.5 text-sm font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground">
                   YAML
                 </Tabs.Trigger>
+                {hasEvents && (
+                  <Tabs.Trigger value="events" disabled={editing}
+                    className="px-3 py-1.5 text-sm font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary text-muted-foreground disabled:opacity-40">
+                    이벤트
+                  </Tabs.Trigger>
+                )}
               </Tabs.List>
               {hasSections && (
                 <Tabs.Content value="summary">
                   <SectionsView sections={sections!} />
+                </Tabs.Content>
+              )}
+              {hasEvents && (
+                <Tabs.Content value="events">
+                  <RelatedEventsView
+                    loading={eventsQuery.isLoading}
+                    error={eventsQuery.isError ? errMsg(eventsQuery.error) : null}
+                    items={eventsQuery.data?.items ?? []}
+                  />
                 </Tabs.Content>
               )}
               <Tabs.Content value="yaml">
@@ -792,6 +852,41 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── 관련 이벤트 탭 (Lens 상세 드로어 파리티) ──────────────────────────────────
+function RelatedEventsView({ loading, error, items }: { loading: boolean; error: string | null; items: K8sRelatedEvent[] }) {
+  const rel = (iso?: string | null) => {
+    if (!iso) return '-';
+    const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+    return `${age(sec)} 전`;
+  };
+  if (loading) return <div className="text-sm text-muted-foreground">이벤트 불러오는 중…</div>;
+  if (error) return <div className="text-sm text-red-500">이벤트 조회 실패: {error}</div>;
+  if (items.length === 0) return <div className="text-sm text-muted-foreground p-6 text-center">관련 이벤트 없음</div>;
+  return (
+    <div className="space-y-2 max-h-[80vh] overflow-auto pr-1">
+      {items.map((ev, i) => (
+        <div
+          key={i}
+          className={`rounded-xl border p-3 text-sm ${ev.type === 'Warning' ? 'border-amber-400/50 bg-amber-500/5' : 'border-border'}`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            {ev.type === 'Warning'
+              ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              : <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+            <span className="font-medium truncate">{ev.reason ?? '-'}</span>
+            {(ev.count ?? 0) > 1 && <span className="text-xs text-muted-foreground">×{ev.count}</span>}
+            <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0" title={ev.lastTimestamp ?? ''}>
+              {rel(ev.lastTimestamp)}
+            </span>
+          </div>
+          <p className="text-muted-foreground break-all whitespace-pre-wrap m-0">{ev.message ?? ''}</p>
+          {ev.source && <p className="mt-1 text-xs text-muted-foreground/70 m-0">source: {ev.source}</p>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -846,16 +941,35 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
   });
   const rows: K8sNodeRichRow[] = data?.items ?? [];
 
+  const NODES_TOGGLE_COLS: { key: string; label: string; width: string }[] = [
+    { key: 'roles', label: 'Roles', width: 'minmax(80px,1fr)' },
+    { key: 'version', label: 'Version', width: '90px' },
+    { key: 'taints', label: 'Taints', width: '60px' },
+    { key: 'cpu', label: 'CPU', width: 'minmax(80px,1fr)' },
+    { key: 'memory', label: 'Memory', width: 'minmax(80px,1fr)' },
+    { key: 'age', label: 'Age', width: '60px' },
+  ];
+  const { hidden, toggle, isHidden } = useColumnPrefs('nodes');
+  const visibleCols = NODES_TOGGLE_COLS.filter((c) => !hidden.has(c.key));
+  const gridStyle = {
+    gridTemplateColumns: ['minmax(160px,1.4fr)', ...visibleCols.map((c) => c.width), '160px'].join(' '),
+  };
+
   return (
     <MacCard title="Nodes" bodyPadding="p-0">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
         <span className="text-sm text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
-        <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <ColumnToggle columns={NODES_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
+          <button onClick={() => refetch()} title="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
-      <div className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30">
-        <span>이름</span><span>Roles</span><span>Version</span><span>Taints</span><span>CPU</span><span>Memory</span><span className="text-right">Age</span><span className="text-right pr-2">동작</span>
+      <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>
+        <span>이름</span>
+        {visibleCols.map((c) => <span key={c.key} className={c.key === 'age' ? 'text-right' : ''}>{c.label}</span>)}
+        <span className="text-right pr-2">동작</span>
       </div>
       {isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
@@ -868,18 +982,18 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
           const ready = n.conditions.includes('Ready');
           const warn = n.conditions.filter((c) => c !== 'Ready');
           return (
-            <div key={n.name} className="grid grid-cols-[1.4fr_1fr_90px_60px_1fr_1fr_60px_160px] gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center">
+            <div key={n.name} className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={gridStyle}>
               <button onClick={() => onOpenDetail(n.name)} className="truncate font-medium text-left hover:text-primary flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${ready ? 'bg-green-500' : 'bg-red-500'}`} />
                 <span className="truncate">{n.name}</span>
                 {n.unschedulable && <span className="text-[10px] rounded px-1 bg-amber-500/15 text-amber-600">cordoned</span>}
               </button>
-              <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>
-              <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>
-              <span className="text-muted-foreground tabular-nums">{n.taints}</span>
-              <span className="truncate text-muted-foreground">{n.cpuUsage ? `${n.cpuUsage} / ` : ''}{n.cpuCapacity ?? '-'}</span>
-              <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>
-              <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>
+              {!isHidden('roles') && <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>}
+              {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>}
+              {!isHidden('taints') && <span className="text-muted-foreground tabular-nums">{n.taints}</span>}
+              {!isHidden('cpu') && <span className="truncate text-muted-foreground">{n.cpuUsage ? `${n.cpuUsage} / ` : ''}{n.cpuCapacity ?? '-'}</span>}
+              {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>}
+              {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>}
               <div className="flex items-center justify-end gap-1">
                 {warn.length > 0 && <span className="text-[10px] text-amber-600 mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
                 <RoleGate allow={['admin', 'operator']}>
@@ -911,6 +1025,7 @@ interface PodsPanelProps {
 }
 function PodsPanel(p: PodsPanelProps) {
   const { clusterId, selectedNs, setSelectedNs, search, setSearch } = p;
+  const navigate = useNavigate();
   const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
   const serverNs = nsArr.length === 1 ? nsArr[0] : undefined;
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
@@ -926,7 +1041,23 @@ function PodsPanel(p: PodsPanelProps) {
     return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.phase} ${r.node ?? ''} ${r.controlledBy ?? ''}`.toLowerCase().includes(q));
   }, [data, search, selectedNs]);
 
-  const COLS = 'grid-cols-[1.6fr_110px_90px_56px_1fr_110px_72px_50px_110px_90px]';
+  // 토글 가능 컬럼 (이름/상태/동작은 항상 표시)
+  const PODS_TOGGLE_COLS: { key: string; label: string; width: string }[] = [
+    { key: 'namespace', label: '네임스페이스', width: '110px' },
+    { key: 'containers', label: '컨테이너', width: '90px' },
+    { key: 'restarts', label: '재시작', width: '56px' },
+    { key: 'cpu', label: 'CPU', width: '64px' },
+    { key: 'mem', label: 'MEM', width: '70px' },
+    { key: 'controlledBy', label: 'Controlled By', width: 'minmax(80px,1fr)' },
+    { key: 'node', label: '노드', width: '110px' },
+    { key: 'qos', label: 'QoS', width: '72px' },
+    { key: 'age', label: 'Age', width: '50px' },
+  ];
+  const { hidden, toggle, isHidden } = useColumnPrefs('pods');
+  const visibleCols = PODS_TOGGLE_COLS.filter((c) => !hidden.has(c.key));
+  const gridStyle = {
+    gridTemplateColumns: ['minmax(160px,1.6fr)', ...visibleCols.map((c) => c.width), '110px', '110px'].join(' '),
+  };
 
   return (
     <MacCard title="Pods" bodyPadding="p-0">
@@ -937,12 +1068,17 @@ function PodsPanel(p: PodsPanelProps) {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이름/노드/소유자 검색"
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-primary" />
         </div>
-        <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <ColumnToggle columns={PODS_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
+          <button onClick={() => refetch()} title="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
-      <div className={`grid ${COLS} gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30`}>
-        <span>이름</span><span>네임스페이스</span><span>컨테이너</span><span>재시작</span><span>Controlled By</span><span>노드</span><span>QoS</span><span className="text-right">Age</span><span>상태</span><span className="text-right pr-2">동작</span>
+      <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>
+        <span>이름</span>
+        {visibleCols.map((c) => <span key={c.key} className={c.key === 'age' ? 'text-right' : ''}>{c.label}</span>)}
+        <span>상태</span><span className="text-right pr-2">동작</span>
       </div>
       {isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
@@ -957,24 +1093,39 @@ function PodsPanel(p: PodsPanelProps) {
           itemContent={(_i, r) => {
             const ns = r.namespace || '-';
             return (
-              <div className={`grid ${COLS} gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center`}>
+              <div className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={gridStyle}>
                 <button onClick={() => p.onOpenDetail(r)} className="truncate font-medium text-left hover:text-primary">{r.name}</button>
-                <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>
-                <span className="flex items-center gap-0.5" title={r.containers.map((c) => `${c.name}: ${c.state}${c.reason ? ` (${c.reason})` : ''}`).join('\n')}>
-                  {r.containers.slice(0, 12).map((c, j) => (
-                    <span key={j} className={`w-2.5 h-2.5 rounded-sm ${CELL_BG[c.color]}`} />
-                  ))}
-                  <span className="ml-1 text-xs text-muted-foreground tabular-nums">{r.ready}</span>
-                </span>
-                <span className={`tabular-nums ${r.restarts > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>
-                <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '-'}</span>
-                <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '-'}</span>
-                <span className="truncate text-muted-foreground">{r.qos ?? '-'}</span>
-                <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
+                {!isHidden('namespace') && <span className="truncate text-muted-foreground">{r.namespace ?? '-'}</span>}
+                {!isHidden('containers') && (
+                  <span className="flex items-center gap-0.5" title={r.containers.map((c) => `${c.name}: ${c.state}${c.reason ? ` (${c.reason})` : ''}`).join('\n')}>
+                    {r.containers.slice(0, 12).map((c, j) => (
+                      <span key={j} className={`w-2.5 h-2.5 rounded-sm ${CELL_BG[c.color]}`} />
+                    ))}
+                    <span className="ml-1 text-xs text-muted-foreground tabular-nums">{r.ready}</span>
+                  </span>
+                )}
+                {!isHidden('restarts') && <span className={`tabular-nums ${r.restarts > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>}
+                {!isHidden('cpu') && <span className="truncate text-muted-foreground tabular-nums">{r.cpuUsage ?? '-'}</span>}
+                {!isHidden('mem') && <span className="truncate text-muted-foreground tabular-nums">{r.memUsage ?? '-'}</span>}
+                {!isHidden('controlledBy') && <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '-'}</span>}
+                {!isHidden('node') && <span className="truncate text-muted-foreground" title={r.node ?? ''}>{r.node ?? '-'}</span>}
+                {!isHidden('qos') && <span className="truncate text-muted-foreground">{r.qos ?? '-'}</span>}
+                {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>}
                 <span className={`truncate font-medium ${STATUS_TEXT[r.statusColor]}`} title={r.phase}>
                   <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${CELL_BG[r.statusColor]}`} />{r.phase}
                 </span>
                 <div className="flex items-center justify-end gap-1">
+                  {(r.warningCount ?? 0) > 0 && (
+                    <span title={`Warning 이벤트 ${r.warningCount}건${r.warningReason ? ` · 최신: ${r.warningReason}` : ''}`}>
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                    </span>
+                  )}
+                  <IconBtn
+                    title="로그"
+                    onClick={() => navigate(`/k8s-logs/${clusterId}?namespace=${encodeURIComponent(ns)}&pod=${encodeURIComponent(r.name)}`)}
+                  >
+                    <ScrollText className="w-3.5 h-3.5" />
+                  </IconBtn>
                   <RoleGate allow={['admin', 'operator']}>
                     <IconBtn title="터미널" onClick={() => p.onTerminal(ns, r.name)}><Terminal className="w-3.5 h-3.5" /></IconBtn>
                     {p.caps?.deletable && (
@@ -988,7 +1139,8 @@ function PodsPanel(p: PodsPanelProps) {
         />
       )}
       <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
-        {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''} · 컨테이너 색칸: 초록=실행/정상, 노랑=대기/준비안됨, 빨강=오류, 회색=종료/대기
+        {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''}
+        {data && data.metricsAvailable === false ? ' · metrics-server 없음(CPU/MEM 생략)' : ''} · 컨테이너 색칸: 초록=실행/정상, 노랑=대기/준비안됨, 빨강=오류, 회색=종료/대기
       </div>
     </MacCard>
   );

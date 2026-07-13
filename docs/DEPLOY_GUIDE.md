@@ -35,6 +35,34 @@
 
 ---
 
+## 로컬 개발 빠른 시작 (K8s 없이)
+
+K8s 클러스터 없이 앱만 띄워 개발할 때는 **Docker Compose** 가 가장 빠르다.
+
+```bash
+git clone <repo-url> && cd devops_management
+cp .env.example backend/.env
+docker-compose up -d        # postgres + redis + backend + frontend + celery(worker/beat)
+# Frontend  http://localhost:5173   (컨테이너 80 → 호스트 5173)
+# Backend   http://localhost:8000/docs
+docker-compose down         # 정리
+```
+
+네이티브 실행(핫리로드)·Makefile 단축 명령:
+
+```bash
+make install   # backend pip + frontend npm 설치
+make dev       # uvicorn(:8000) + vite(:5173) 병렬 기동
+make test      # backend pytest + frontend lint
+make help      # 전체 타깃
+```
+
+> kubectl 기반 점검(노드/파드/이벤트)은 컨테이너 안에 kubeconfig 가 없으면 동작하지 않는다.
+> 실제 클러스터를 붙여 테스트하려면 OS 별 가이드를 따른다:
+> **Mac** → [MAC_LOCAL_TEST_GUIDE.md](MAC_LOCAL_TEST_GUIDE.md) · **Windows** → [WIN_LOCAL_TEST_GUIDE.md](WIN_LOCAL_TEST_GUIDE.md)
+
+---
+
 ## Phase 1: 로컬 개발 (kind 클러스터)
 
 집이나 인터넷 되는 환경의 Mac/Linux에서 git clone 후 바로 K8s 환경을 띄워서 테스트합니다.
@@ -51,10 +79,14 @@ brew install docker kind kubectl helm
 
 ```bash
 git clone <repo-url>
-cd k8s_daily_monitor
+cd devops_management
 
-bash scripts/kind-setup.sh up
+bash scripts/kind-setup.sh up   # kind 노드 이미지 v1.34.0, 기본 CNI(kindnet)
 ```
+
+> kind 는 기본 CNI(kindnet)로 뜬다. **Cilium/Hubble 딥 트러블슈팅**까지 로컬에서 검증하려면
+> 별도 워크플로(`scripts/local-cilium-kind.sh`)나 Vagrant 클러스터를 쓴다 —
+> [MAC_LOCAL_TEST_GUIDE.md](MAC_LOCAL_TEST_GUIDE.md) 참고.
 
 이 명령이 수행하는 작업:
 
@@ -247,11 +279,15 @@ bash scripts/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 
 | 항목 | 기본값 | 설명 |
 |------|--------|------|
-| `global.imageRegistry` | `10.61.162.101:5000` | Private Registry 주소 |
-| `secrets.databasePassword` | `postgres` | DB 비밀번호 |
-| `secrets.secretKey` | `airgap-secret-key-change-this` | 앱 시크릿 키 |
+| `global.imageRegistry` | `10.61.162.101:5000` | Private Registry 주소 — **반드시 자기 환경 값으로 변경** (`--set` 도 가능) |
+| `secrets.databasePassword` | `postgres` | DB 비밀번호 — 운영 전 변경 |
+| `secrets.secretKey` | `airgap-secret-key-change-this` | 앱 시크릿 키 — 운영 전 변경 |
 | `nodePort.frontend` | `30080` | Frontend NodePort |
 | `nodePort.backend` | `30800` | Backend NodePort |
+| `ollama.model` | `qwen2.5-coder:7b` | 폐쇄망 LLM 모델(사전 적재 커스텀 이미지 기준). AI 점검/요약 사용 시 |
+
+> 폐쇄망에서 **Ollama 모델을 Nexus/오프라인으로 적재**하는 방법(docker-proxy / raw repo / tar.gz)은
+> [AIRGAP_LLM_NEXUS.md](AIRGAP_LLM_NEXUS.md) 참고. LLM 미설정 시 AI 기능만 offline 으로 우아하게 비활성화된다.
 
 ---
 
@@ -413,6 +449,16 @@ helm template k8s-monitor ./helm/k8s-daily-monitor \
 helm lint ./helm/k8s-daily-monitor \
   -f ./helm/k8s-daily-monitor/values-prod.yaml
 ```
+
+---
+
+## 데이터 백업 / 복구
+
+애플리케이션 데이터(클러스터·업무·점검 정의·지식 문서·설정 등)는 **Settings → 백업 / 복구** 탭에서
+JSON 단일 파일로 내보내고 되돌릴 수 있다(테이블별 fault-tolerant, 민감 컬럼 기본 마스킹).
+배포·업그레이드 전 백업 권장. 상세 절차·옵션·API 는 [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md).
+
+> 인프라 차원(PV 스냅샷, `pg_dump`)은 별도 병행을 권장한다.
 
 ---
 

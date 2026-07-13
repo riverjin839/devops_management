@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Pencil } from 'lucide-react';
 import { NodeRow } from '@/hooks/useNodeLabels';
+import { matchesSearch, buildLabelEntries, filterLabelEntries, type LabelEntry } from './nodeLabelsShared';
 
 interface Props {
   nodes: NodeRow[];
@@ -9,17 +10,6 @@ interface Props {
   viewMode: 'node' | 'label';
   /** 여러 클러스터 취합 시 클러스터 컬럼/태그를 노출. */
   showCluster?: boolean;
-}
-
-// ── 검색 필터 ─────────────────────────────────────────────
-function matchesSearch(node: NodeRow, query: string): boolean {
-  if (!query.trim()) return true;
-  const q = query.toLowerCase();
-  if (node.name.toLowerCase().includes(q)) return true;
-  if (node.clusterName.toLowerCase().includes(q)) return true;
-  return Object.entries(node.labels ?? {}).some(
-    ([k, v]) => k.toLowerCase().includes(q) || (v ?? '').toLowerCase().includes(q),
-  );
 }
 
 // ── 노드 기준 뷰 ──────────────────────────────────────────
@@ -132,18 +122,6 @@ function NodeView({
 }
 
 // ── 레이블 기준 뷰 ────────────────────────────────────────
-interface LabelNodeRef {
-  clusterId: string;
-  clusterName: string;
-  name: string;
-}
-interface LabelEntry {
-  key: string;
-  value: string;
-  tag: string;
-  nodes: LabelNodeRef[];
-}
-
 function LabelView({
   nodes,
   searchQuery,
@@ -153,46 +131,8 @@ function LabelView({
   searchQuery: string;
   showCluster: boolean;
 }) {
-  const labelMap = useMemo<LabelEntry[]>(() => {
-    const map = new Map<string, { nodes: LabelNodeRef[]; value: string }>();
-    for (const node of nodes) {
-      // 원칙: 모든 노드의 모든 라벨을 누락 없이 집계.
-      for (const [k, v] of Object.entries(node.labels ?? {})) {
-        const tag = v ? `${k}=${v}` : k;
-        const ref: LabelNodeRef = { clusterId: node.clusterId, clusterName: node.clusterName, name: node.name };
-        const entry = map.get(tag);
-        if (entry) {
-          entry.nodes.push(ref);
-        } else {
-          map.set(tag, { nodes: [ref], value: v });
-        }
-      }
-    }
-    return Array.from(map.entries())
-      .map(([tag, { nodes: ns, value }]) => ({
-        key: tag.split('=')[0],
-        value,
-        tag,
-        nodes: ns,
-      }))
-      .sort((a, b) => {
-        // system labels last, then sort by key
-        const aSystem = a.key.includes('kubernetes.io') || a.key.includes('k8s.io');
-        const bSystem = b.key.includes('kubernetes.io') || b.key.includes('k8s.io');
-        if (aSystem !== bSystem) return aSystem ? 1 : -1;
-        return a.tag.localeCompare(b.tag);
-      });
-  }, [nodes]);
-
-  const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return labelMap;
-    const q = searchQuery.toLowerCase();
-    return labelMap.filter(
-      (entry) =>
-        entry.tag.toLowerCase().includes(q) ||
-        entry.nodes.some((n) => n.name.toLowerCase().includes(q) || n.clusterName.toLowerCase().includes(q)),
-    );
-  }, [labelMap, searchQuery]);
+  const labelMap = useMemo<LabelEntry[]>(() => buildLabelEntries(nodes), [nodes]);
+  const filtered = useMemo(() => filterLabelEntries(labelMap, searchQuery), [labelMap, searchQuery]);
 
   if (filtered.length === 0) {
     return (

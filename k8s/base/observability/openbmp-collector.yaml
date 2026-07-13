@@ -1,0 +1,47 @@
+---
+# OpenBMP collector — 라우터가 BMP(RFC 7854)로 push 하는 BGP 상태(adj-rib-in, peer up/down,
+# route monitoring/withdraw)를 수집해 Kafka(메시지 버스)로 흘려보낸다.
+# 라우터 설정 예: `bmp server <collector-ip> port 5000`.
+#
+# ⚠ 이미지 핀: 업스트림 OpenBMP(github.com/OpenBMP) 는 배포 이미지 태그가 환경마다 다르므로,
+#   에어갭/사내 레지스트리 미러의 **검증된 태그로 반드시 교체**할 것(아래는 자리표시 예시).
+#   대안: GoBMP(github.com/sbezverk/gobmp) — gRPC/Kafka 기반 경량 collector.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openbmp-collector
+  namespace: network-observability
+  labels: { app: openbmp-collector, component: observability }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: openbmp-collector }
+  template:
+    metadata:
+      labels: { app: openbmp-collector, component: observability }
+    spec:
+      containers:
+        - name: collector
+          image: openbmp/collector:latest      # ⚠ 사내 미러의 검증 태그로 교체
+          env:
+            # Kafka 브로커(같은 네임스페이스 또는 외부 데이터레이크 Kafka)
+            - { name: KAFKA_FQDN, value: "kafka.network-observability.svc:9092" }
+            - { name: BMP_PORT,   value: "5000" }
+          ports:
+            - { name: bmp, containerPort: 5000, protocol: TCP }
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits:   { cpu: "1", memory: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openbmp-collector
+  namespace: network-observability
+  labels: { app: openbmp-collector, component: observability }
+spec:
+  # 라우터(클러스터 외부)가 접속하므로 환경에 따라 LoadBalancer/NodePort 로 노출.
+  type: LoadBalancer
+  selector: { app: openbmp-collector }
+  ports:
+    - { name: bmp, port: 5000, targetPort: 5000, protocol: TCP }

@@ -1,0 +1,154 @@
+name: Auto Release (version bump + tag)
+
+# PR 이 main 에 머지될 때마다 자동으로 SemVer 버전을 올리고 CHANGELOG.md 의 [Unreleased] 를
+# 확정한 뒤, chore(release) PR 을 만들어 즉시 머지하고 vX.Y.Z 태그를 push 한다.
+# 태그 push 는 release.yml 을 트리거해 GHCR 이미지 태깅 + GitHub Release 생성까지 이어진다.
+#
+# docs/branch-tag-strategy.md / .claude/skills/release/SKILL.md 의 수동 절차를 그대로
+# 자동화한 것 — 결과물(버전 3곳, CHANGELOG 섹션, 태그)은 동일하다.
+#
+# ⚠️ 설정 필요: 이 워크플로우가 만든 chore(release) 커밋으로 vX.Y.Z 태그를 push 할 때
+# 기본 GITHUB_TOKEN 을 쓰면 그 push 가 release.yml 을 트리거하지 못한다(GitHub 가
+# GITHUB_TOKEN 으로 발생한 이벤트는 다른 워크플로우를 재귀적으로 트리거하지 않도록 막기
+# 때문). release.yml 이 자동으로 이어지게 하려면 repo·workflow 스코프를 가진 PAT 를
+# 만들어 `RELEASE_PAT` 시크릿으로 등록해야 한다(Settings ▸ Secrets and variables ▸
+# Actions). 없으면 태그는 push 되지만 release.yml 은 수동으로 재실행하거나 GitHub UI
+# "Draft a release from tag" 로 대신 트리거해야 한다 — 아래 태그 push 스텝에서 경고 로그로 안내.
+#
+# ⚠️ 별도 설정 필요(repo 관리자): "Open + merge release PR" 스텝의 `gh pr create` 는
+# repo Settings ▸ Actions ▸ General ▸ Workflow permissions ▸ "Allow GitHub Actions to
+# create and approve pull requests" 가 꺼져 있으면 기본 GITHUB_TOKEN 으로는
+# "GitHub Actions is not permitted to create or approve pull requests" 에러로 항상
+# 실패한다. 이 설정을 켜거나(권장) 위 RELEASE_PAT(일반 PAT 는 이 제약을 받지 않음)를
+# 등록해야 릴리즈 PR 생성이 실제로 동작한다 — 이 두 조치 중 하나가 없으면 release 잡이
+# 매번 여기서 실패한다.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  determine-bump:
+    runs-on: ubuntu-latest
+    outputs:
+      bump: ${{ steps.decide.outputs.bump }}
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Decide bump type from the merged PR title
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          echo "commit message: $COMMIT_MSG"
+
+          PR_NUMBER="$(echo "$COMMIT_MSG" | grep -oE '#[0-9]+' | head -1 | tr -d '#' || true)"
+          if [[ -z "${PR_NUMBER}" ]]; then
+            echo "PR 번호를 커밋 메시지에서 찾지 못함 — 일반 push 로 간주, 릴리즈 스킵"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TITLE="$(gh pr view "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --json title -q .title 2>/dev/null || true)"
+          echo "PR #${PR_NUMBER} title: ${TITLE}"
+
+          if [[ -z "${TITLE}" ]]; then
+            echo "PR 제목을 가져오지 못함 — 스킵"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
+          elif [[ "${TITLE}" == chore\(release\):* ]]; then
+            echo "release 자동 PR 자신의 머지 — 무한루프 방지, 스킵"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
+          elif [[ "${TITLE}" == feat:* ]]; then
+            echo "bump=minor" >> "$GITHUB_OUTPUT"
+          elif [[ "${TITLE}" == fix:* || "${TITLE}" == docs:* || "${TITLE}" == chore:* || "${TITLE}" == refactor:* ]]; then
+            echo "bump=patch" >> "$GITHUB_OUTPUT"
+          else
+            echo "인식할 수 없는 conventional commit prefix — 스킵 (${TITLE})"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: determine-bump
+    if: needs.determine-bump.outputs.bump != 'none'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT || github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Bump version + finalize CHANGELOG
+        id: bump
+        run: |
+          set -euo pipefail
+          set +e
+          OUTPUT="$(python3 scripts/release/bump_version.py ${{ needs.determine-bump.outputs.bump }})"
+          CODE=$?
+          set -e
+          echo "$OUTPUT"
+          if [[ $CODE -eq 3 ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          elif [[ $CODE -ne 0 ]]; then
+            exit $CODE
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          NEW_VERSION="$(echo "$OUTPUT" | grep '^new_version=' | cut -d= -f2)"
+          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Open + merge release PR
+        if: steps.bump.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="chore/release-v${NEW_VERSION}"
+          # 이전 실행이 PR 생성/머지 단계에서 실패하면 이 이름의 브랜치가 원격에 그대로
+          # 남는다. 다음 실행이 같은 버전을 다시 계산해 같은 브랜치명으로 push 하면
+          # non-fast-forward 로 거부되어 매번 여기서 막힌다 — 항상 새로 만들 수 있도록
+          # 재실행 전에 동일 이름의 원격/로컬 브랜치를 먼저 정리한다.
+          git push origin --delete "${BRANCH}" 2>/dev/null || true
+          git branch -D "${BRANCH}" 2>/dev/null || true
+          git checkout -b "${BRANCH}"
+          git add frontend/package.json backend/app/main.py CHANGELOG.md
+          git commit -m "chore(release): v${NEW_VERSION}"
+          git push -u origin "${BRANCH}"
+
+          gh pr create \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body "자동 생성된 릴리즈 PR — 버전 3곳(frontend/package.json, backend/app/main.py ×2) + CHANGELOG.md [Unreleased] 확정. .github/workflows/auto-release.yml 참고." \
+            --base main --head "${BRANCH}"
+
+          gh pr merge "${BRANCH}" --merge --admin --delete-branch
+
+      - name: Tag the merged release commit
+        if: steps.bump.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+          git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION}"
+          git push origin "v${NEW_VERSION}"
+
+          if [[ -z "${{ secrets.RELEASE_PAT }}" ]]; then
+            echo "::warning::RELEASE_PAT 시크릿이 없어 기본 GITHUB_TOKEN 으로 태그를 push 했습니다. GitHub 정책상 GITHUB_TOKEN 이 발생시킨 push 는 release.yml 을 자동 트리거하지 못할 수 있습니다. repo+workflow 스코프 PAT 를 RELEASE_PAT 시크릿으로 등록하거나, GitHub UI 에서 'Draft a release from tag v${NEW_VERSION}' 로 수동 트리거하세요."
+          fi

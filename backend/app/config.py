@@ -38,14 +38,31 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3"
     ollama_timeout: int = 120
 
-    # OpenClaw Alert Channels
-    telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
+    # Embedding (Ollama /api/embeddings) — WorkItem / WorkGuide 유사 검색용.
+    # 폐쇄망 로컬 추론 전제 — Nexus 로 반입 (docs/AIRGAP_LLM_NEXUS.md 참고).
+    # nomic-embed-text 기준 차원(768). 모델 교체 시 embedding_dim 도 함께 맞춰야 한다
+    # (차원이 다르면 기존에 저장된 임베딩과 비교 불가 — 재계산 필요).
+    embedding_model: str = "nomic-embed-text"
+    embedding_dim: int = 768
+    embedding_timeout: int = 30
+
+    # Alert Channels
     slack_webhook_url: str = ""
 
     # Prometheus / Grafana
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     grafana_url: str = "http://grafana.monitoring.svc:3000"
+    grafana_renderer_url: str = "http://grafana-renderer:8081"
+
+    # kubewatch 웹훅 인증 토큰 (미설정 시 토큰 검증 없이 수락)
+    kubewatch_token: str = ""
+
+    # Cluster Trends: node-exporter 메트릭에서 노드를 식별하는 라벨명.
+    # 보통 "instance" 지만 스크랩 relabeling 에 따라 "node"/"nodename" 등일 수 있어 배포 의존 → 설정 가능.
+    # 이 라벨의 값이 k8s Node.metadata.name 과 일치해야 per-node 추이가 매칭된다.
+    prometheus_node_label: str = "instance"
+    # 한 번에 추이 조회 가능한 최대 노드 수 (300+ 노드 과수집 방지 상한).
+    trends_max_nodes: int = 30
 
     # Trend Digest
     # 폐쇄망: github_api_url을 내부 GitHub Enterprise 주소로 변경
@@ -73,7 +90,6 @@ class Settings(BaseSettings):
     mgmt_namespace: str = "k8s-monitor"
 
     # ─── 알림 채널 기본값 ───────────────────────────────────
-    # SLACK_WEBHOOK_URL 은 위 OpenClaw 와 공유.
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

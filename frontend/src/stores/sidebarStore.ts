@@ -4,6 +4,7 @@ import { create } from 'zustand';
 // The resize-related localStorage keys (k8s:sidebar-width-v2) are ignored.
 const CLUSTER_KEY = 'k8s:cluster-sidebar-width';
 const NAV_GROUPS_KEY = 'k8s:sidebar-collapsed-groups-v1';
+const ICON_RAIL_WIDTH_KEY = 'k8s:cluster-icon-rail-width';
 
 // 아이콘 전용 레일 — 호버 툴팁 + 클릭 popover 디자인. 패널은 클릭한 아이콘 우측에 컴팩트하게 떠서 폭/높이 자동.
 export const NAV_WIDTH = 56;
@@ -23,6 +24,12 @@ function loadInt(key: string, fallback: number, min: number, max: number): numbe
     return fallback;
   }
 }
+
+// 아이콘 전용 레일(ClusterSidebar iconOnly) 폭 — 드래그로 자유 조절, 아이콘은 이 폭에서
+// 고정 여백만 뺀 크기로 꽉 채워 그린다(ClusterSidebar.tsx 의 ICON_RAIL_PADDING 참고).
+export const ICON_RAIL_DEFAULT = 64;
+export const ICON_RAIL_MIN = 48;
+export const ICON_RAIL_MAX = 120;
 
 function loadCollapsedGroups(): Record<string, boolean> {
   try {
@@ -48,6 +55,11 @@ interface SidebarState {
   setClusterSidebarWidth: (w: number) => void;
   resetClusterSidebar: () => void;
 
+  /** ClusterSidebar iconOnly 레일 폭(px) — 드래그로 조절, 아이콘 크기는 여기서 파생. */
+  clusterIconRailWidth: number;
+  setClusterIconRailWidth: (w: number) => void;
+  resetClusterIconRailWidth: () => void;
+
   /** 그룹 ID → 접힘 여부. true = 접힘(자식 항목 숨김). */
   collapsedGroups: Record<string, boolean>;
   toggleGroup: (id: string) => void;
@@ -66,6 +78,17 @@ export const useSidebarStore = create<SidebarState>()((set) => ({
   resetClusterSidebar: () => {
     try { localStorage.setItem(CLUSTER_KEY, String(CLUSTER_DEFAULT)); } catch { /* ignore */ }
     set({ clusterSidebarWidth: CLUSTER_DEFAULT });
+  },
+
+  clusterIconRailWidth: loadInt(ICON_RAIL_WIDTH_KEY, ICON_RAIL_DEFAULT, ICON_RAIL_MIN, ICON_RAIL_MAX),
+  setClusterIconRailWidth: (w) => {
+    const clamped = Math.max(ICON_RAIL_MIN, Math.min(ICON_RAIL_MAX, Math.round(w)));
+    try { localStorage.setItem(ICON_RAIL_WIDTH_KEY, String(clamped)); } catch { /* ignore */ }
+    set({ clusterIconRailWidth: clamped });
+  },
+  resetClusterIconRailWidth: () => {
+    try { localStorage.setItem(ICON_RAIL_WIDTH_KEY, String(ICON_RAIL_DEFAULT)); } catch { /* ignore */ }
+    set({ clusterIconRailWidth: ICON_RAIL_DEFAULT });
   },
 
   collapsedGroups: loadCollapsedGroups(),
