@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, Status } from '@/types';
-import { useSidebarStore, type ClusterIconRailSize } from '@/stores/sidebarStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { ResizeHandle } from './ResizeHandle';
 
@@ -39,17 +39,24 @@ interface ClusterSidebarProps {
   iconOnly?: boolean;
 }
 
-// 아이콘 레일 크기 프리셋 — 버튼/이미지/아이콘/도트 픽셀값. 기존 sm(40px 버튼 안에 24px
-// 이미지)은 여백이 커 보인다는 피드백에 따라 md 를 기본값으로 올렸다(버튼을 키우고 그
-// 안의 이미지/아이콘 비율도 같이 키워 여백을 줄임). 사용자가 레일 상단 크기 토글로
-// sm/md/lg 를 바꿀 수 있다 (useSidebarStore 에 영속).
-const ICON_RAIL_SIZE_PRESETS: Record<ClusterIconRailSize, {
-  rail: number; btn: number; image: number; icon: number; dot: number; emojiFont: number;
-}> = {
-  sm: { rail: 56, btn: 40, image: 28, icon: 20, dot: 6, emojiFont: 18 },
-  md: { rail: 64, btn: 48, image: 34, icon: 24, dot: 7, emojiFont: 21 },
-  lg: { rail: 72, btn: 56, image: 40, icon: 28, dot: 8, emojiFont: 24 },
-};
+// 아이콘 레일 폭(useSidebarStore.clusterIconRailWidth, 드래그로 조절)에서 아이콘 크기를
+// 파생시킨다. 레일과 아이콘 사이 여백을 거의 없애기 위해 버튼은 레일 폭에서 고정
+// ICON_RAIL_PADDING 만 뺀 크기로 꽉 채우고, 내부 이미지/아이콘/도트는 기존 sm(40)/md(48)/
+// lg(56) 프리셋 비율(이미지≈0.71·아이콘=0.5·도트≈0.145·이모지≈0.44)을 그대로 유지해
+// 비율감을 보존한다.
+const ICON_RAIL_PADDING = 6; // 레일 폭에서 버튼을 뺄 여백(좌우 합, 즉 한쪽당 3px)
+
+function iconSizeFor(railWidth: number) {
+  const btn = Math.max(24, railWidth - ICON_RAIL_PADDING);
+  return {
+    rail: railWidth,
+    btn,
+    image: Math.round(btn * 0.71),
+    icon: Math.round(btn * 0.5),
+    dot: Math.max(5, Math.round(btn * 0.145)),
+    emojiFont: Math.round(btn * 0.44),
+  };
+}
 
 const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> = {
   healthy: CheckCircle,
@@ -146,7 +153,7 @@ interface IconRailButtonProps {
   active?: boolean;
   onClick: () => void;
   /** 픽셀 단위 크기 프리셋 (버튼/이미지/아이콘/도트). */
-  size: typeof ICON_RAIL_SIZE_PRESETS[ClusterIconRailSize];
+  size: ReturnType<typeof iconSizeFor>;
 }
 
 function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, onClick, size }: IconRailButtonProps) {
@@ -228,9 +235,10 @@ function ClusterSidebarIconRail({
     ? (selectedSet?.size ?? 0) === 0
     : selectedId === null;
 
-  const railSize = useSidebarStore((s) => s.clusterIconRailSize);
-  const setRailSize = useSidebarStore((s) => s.setClusterIconRailSize);
-  const size = ICON_RAIL_SIZE_PRESETS[railSize];
+  const railWidth = useSidebarStore((s) => s.clusterIconRailWidth);
+  const setRailWidth = useSidebarStore((s) => s.setClusterIconRailWidth);
+  const resetRailWidth = useSidebarStore((s) => s.resetClusterIconRailWidth);
+  const size = iconSizeFor(railWidth);
 
   // 사이드바에서는 아이콘 변경을 허용하지 않는다. 변경은 시스템 등록된 클러스터 관리 화면
   // (/cluster-manage) 의 테이블 첫 컬럼에서만 가능하도록 권한을 한정.
@@ -257,27 +265,8 @@ function ClusterSidebarIconRail({
   return (
     <aside
       style={{ width: size.rail }}
-      className="flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
+      className="relative flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
     >
-      {/* 아이콘 크기 조절 — S/M/L 프리셋, 사용자별 localStorage 에 저장 */}
-      <div className="flex items-center justify-center gap-0.5 mb-1.5 px-1">
-        {(['sm', 'md', 'lg'] as ClusterIconRailSize[]).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setRailSize(s)}
-            title={`아이콘 크기: ${s === 'sm' ? '작게' : s === 'md' ? '보통' : '크게'}`}
-            aria-pressed={railSize === s}
-            className={`px-1 py-0.5 text-[9px] font-bold uppercase rounded transition-colors ${
-              railSize === s
-                ? 'bg-primary/15 text-primary'
-                : 'text-muted-foreground/60 hover:bg-secondary hover:text-foreground'
-            }`}
-          >
-            {s === 'sm' ? 'S' : s === 'md' ? 'M' : 'L'}
-          </button>
-        ))}
-      </div>
       <div className="flex flex-col items-center gap-1">
         {allowAll && (
           <IconRailButton
@@ -327,6 +316,7 @@ function ClusterSidebarIconRail({
           })
         )}
       </div>
+      <ResizeHandle width={railWidth} onResize={setRailWidth} onReset={resetRailWidth} />
     </aside>
   );
 }
