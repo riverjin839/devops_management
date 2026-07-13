@@ -97,7 +97,8 @@ k8s_daily_monitor/
 │   │   ├── celery_app.py        # Celery app + Beat schedule (3x/day)
 │   │   ├── models/              # SQLAlchemy ORM models
 │   │   │   ├── cluster.py       # Cluster, StatusEnum
-│   │   │   ├── daily_check.py   # DailyCheckLog, CheckSchedule, CheckScheduleType
+│   │   │   ├── daily_check.py   # DailyCheckLog, CheckScheduleType
+│   │   │   ├── check_matrix.py  # CheckMatrixItem/Schedule/Result/ResultLog (플랫폼 현황 매트릭스)
 │   │   │   ├── addon.py         # Addon (per-cluster add-ons e.g. Nexus, Keycloak)
 │   │   │   ├── check_log.py     # CheckLog
 │   │   │   ├── metric_card.py   # MetricCard (PromQL dashboard builder)
@@ -301,9 +302,6 @@ Copy `.env.example` → `.env` in the **backend** directory for local developmen
 | `OLLAMA_TIMEOUT` | `120` | LLM request timeout (s) |
 | `PROMETHEUS_URL` | `http://prometheus-k8s.monitoring.svc:9090` | Prometheus endpoint |
 | `GRAFANA_URL` | `http://grafana.monitoring.svc:3000` | Grafana endpoint |
-| `COROOT_URL` | *(empty)* | Coroot APM base URL — 비우면 APM 기능 offline (별도 배포, `docs/COROOT_INTEGRATION_GUIDE.md`) |
-| `COROOT_API_KEY` | *(empty)* | Coroot API 키 (선택) |
-| `COROOT_TIMEOUT` | `10` | Coroot 요청 타임아웃 (s) |
 | `ALLOWED_ORIGINS` | *(empty)* | Comma-separated extra CORS origins |
 
 The `Settings` class (`backend/app/config.py`) uses pydantic-settings and reads from `.env` automatically. All variable names are case-insensitive.

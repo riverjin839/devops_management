@@ -23,7 +23,6 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/daily-check/review': { defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
   '/daily-check/settings':{ defaultLabel: '점검 항목 관리',  icon: Sparkles },
   '/lake-services':      { defaultLabel: 'LAKE 서비스',     icon: Database },
-  '/coroot':             { defaultLabel: '애플리케이션 APM', icon: Gauge, iconColor: 'text-blue-500', iconSize: 'w-5 h-5' },
   '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
   '/pep-services':       { defaultLabel: 'PEP 서비스',      icon: Package },
