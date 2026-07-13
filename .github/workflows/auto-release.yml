@@ -14,6 +14,14 @@ name: Auto Release (version bump + tag)
 # 만들어 `RELEASE_PAT` 시크릿으로 등록해야 한다(Settings ▸ Secrets and variables ▸
 # Actions). 없으면 태그는 push 되지만 release.yml 은 수동으로 재실행하거나 GitHub UI
 # "Draft a release from tag" 로 대신 트리거해야 한다 — 아래 태그 push 스텝에서 경고 로그로 안내.
+#
+# ⚠️ 별도 설정 필요(repo 관리자): "Open + merge release PR" 스텝의 `gh pr create` 는
+# repo Settings ▸ Actions ▸ General ▸ Workflow permissions ▸ "Allow GitHub Actions to
+# create and approve pull requests" 가 꺼져 있으면 기본 GITHUB_TOKEN 으로는
+# "GitHub Actions is not permitted to create or approve pull requests" 에러로 항상
+# 실패한다. 이 설정을 켜거나(권장) 위 RELEASE_PAT(일반 PAT 는 이 제약을 받지 않음)를
+# 등록해야 릴리즈 PR 생성이 실제로 동작한다 — 이 두 조치 중 하나가 없으면 release 잡이
+# 매번 여기서 실패한다.
 
 on:
   push:
@@ -110,6 +118,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           BRANCH="chore/release-v${NEW_VERSION}"
+          # 이전 실행이 PR 생성/머지 단계에서 실패하면 이 이름의 브랜치가 원격에 그대로
+          # 남는다. 다음 실행이 같은 버전을 다시 계산해 같은 브랜치명으로 push 하면
+          # non-fast-forward 로 거부되어 매번 여기서 막힌다 — 항상 새로 만들 수 있도록
+          # 재실행 전에 동일 이름의 원격/로컬 브랜치를 먼저 정리한다.
+          git push origin --delete "${BRANCH}" 2>/dev/null || true
+          git branch -D "${BRANCH}" 2>/dev/null || true
           git checkout -b "${BRANCH}"
           git add frontend/package.json backend/app/main.py CHANGELOG.md
           git commit -m "chore(release): v${NEW_VERSION}"
