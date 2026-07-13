@@ -6,7 +6,6 @@
 """
 from __future__ import annotations
 
-import itertools
 import logging
 import re
 from datetime import datetime
@@ -39,6 +38,7 @@ from app.schemas.jira import (
     JiraImportItemPreview,
     JiraExcelRow,
     JiraExcelImportResult,
+    JiraExcelPasteRequest,
     JiraPushRequest,
     JiraPushResult,
 )
@@ -171,52 +171,55 @@ def _looks_like_html(raw: bytes) -> bool:
 
 
 class _JiraHtmlTableExtractor(HTMLParser):
-    """HTML 테이블(첫 번째 <table> 만) → 행 리스트. 표준 라이브러리만 사용하는 최소 파서."""
+    """HTML 문서 안의 모든 <table>(중첩 포함) 을 각각 독립된 행 목록으로 추출.
+    표준 라이브러리만 사용하는 최소 파서.
+
+    과거에는 "첫 번째 <table> 만" 사용했는데, Jira 내보내기가 요약/메타 정보를 담은 작은
+    표를 실제 이슈 목록 표보다 앞에 두거나(형제 테이블), 레이아웃용 바깥 테이블 <td> 안에
+    실제 이슈 표를 중첩시키는 경우 모두 있어 — 첫 테이블만 보면 진짜 데이터 표를 통째로
+    놓치고 "필수 컬럼을 찾을 수 없음" 오류가 났다. 테이블 스택으로 중첩을 추적해 발견되는
+    모든 <table> 을 순서대로 `self.tables` 에 쌓고, 호출부가 각 표를 순회하며 Key/Summary
+    헤더를 가진 표를 찾는다(아래 `_find_header` 참고)."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.rows: list[list[str]] = []
-        self._in_table = False
-        self._table_done = False
-        self._in_row = False
+        self.tables: list[list[list[str]]] = []
+        self._table_stack: list[list[list[str]]] = []  # 진행 중인 표(중첩 가능) 스택
+        self._row_stack: list[list[str]] = []           # 스택 위치별 현재 행 버퍼
         self._in_cell = False
-        self._row_buf: list[str] = []
         self._cell_buf: list[str] = []
 
     def handle_starttag(self, tag: str, attrs) -> None:  # noqa: ARG002
-        if self._table_done:
-            return
-        if tag == "table" and not self._in_table:
-            self._in_table = True
-        elif self._in_table and tag == "tr":
-            self._in_row = True
-            self._row_buf = []
-        elif self._in_row and tag in ("td", "th"):
+        if tag == "table":
+            self._table_stack.append([])
+            self._row_stack.append([])
+        elif tag == "tr" and self._table_stack:
+            self._row_stack[-1] = []
+        elif tag in ("td", "th") and self._table_stack:
             self._in_cell = True
             self._cell_buf = []
         elif self._in_cell and tag == "br":
             self._cell_buf.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
-        if self._table_done:
-            return
-        if self._in_cell and tag in ("td", "th"):
+        if tag in ("td", "th") and self._in_cell:
             self._in_cell = False
-            self._row_buf.append("".join(self._cell_buf).strip())
-        elif self._in_row and tag == "tr":
-            self._in_row = False
-            self.rows.append(self._row_buf)
-        elif self._in_table and tag == "table":
-            self._in_table = False
-            self._table_done = True  # 첫 테이블만 사용(요약/메타 테이블이 뒤따르는 경우 대비)
+            self._row_stack[-1].append("".join(self._cell_buf).strip())
+        elif tag == "tr" and self._table_stack:
+            self._table_stack[-1].append(self._row_stack[-1])
+        elif tag == "table" and self._table_stack:
+            rows = self._table_stack.pop()
+            self._row_stack.pop()
+            self.tables.append(rows)
 
     def handle_data(self, data: str) -> None:
         if self._in_cell:
             self._cell_buf.append(data)
 
 
-def _read_html_table_rows(raw: bytes) -> list[tuple]:
-    """Jira 의 HTML 기반 '가짜 .xls' 내보내기 파싱. 인코딩은 UTF-8 우선, 실패 시
+def _read_html_tables(raw: bytes) -> list[list[tuple]]:
+    """Jira 의 HTML 기반 '가짜 .xls' 내보내기를 파싱해 문서 안의 모든 표를 반환한다
+    (표 하나 = 행 튜플 리스트, 완전히 빈 행은 제거). 인코딩은 UTF-8 우선, 실패 시
     한글 환경에서 흔한 CP949/EUC-KR 로 재시도."""
     text: Optional[str] = None
     for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
@@ -229,7 +232,10 @@ def _read_html_table_rows(raw: bytes) -> list[tuple]:
         text = raw.decode("utf-8", errors="replace")
     parser = _JiraHtmlTableExtractor()
     parser.feed(text)
-    return [tuple(r) for r in parser.rows if any(v for v in r)]
+    return [
+        [tuple(r) for r in table if any(v for v in r)]
+        for table in parser.tables
+    ]
 
 
 def _user_token(db: Session, username: str) -> Optional[str]:
@@ -478,59 +484,16 @@ async def import_issues(
     )
 
 
-# ── Jira 에서 추출한 Excel(.xlsx/.xls) 가져오기 (미리보기 전용, 저장 없음) ─────────
+# ── Jira 에서 추출한 Excel(.xlsx/.xls) / 복사·붙여넣기 가져오기 (미리보기 전용, 저장 없음) ──
 _EXCEL_MAX_ROWS = 2000  # 과도한 업로드로부터의 안전장치
 _EXCEL_HEADER_SCAN_ROWS = 5  # 헤더가 1행이 아닐 수 있어(제목행 등) 최대 이 행수까지 탐색
 
 
-@router.post("/import/excel", response_model=JiraExcelImportResult)
-async def import_excel(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    """Jira 에서 내려받은 이슈 목록 Excel(.xlsx/.xls) 을 파싱해 테이블로 보여준다.
-
-    WorkItem 으로 저장하지 않는 순수 미리보기 기능 — 담당자 셀("이름 회사")에서
-    이름을 추출해 등록된 담당자(Settings ▸ 담당자) 레지스트리와 매칭한다.
-    """
-    fname = (file.filename or "").lower()
-    if not fname.endswith((".xlsx", ".xlsm", ".xls")):
-        return JiraExcelImportResult(status="error", detail=".xlsx/.xls 파일만 업로드할 수 있습니다.")
-
-    raw = await file.read()
-    try:
-        if fname.endswith(".xls"):
-            if _looks_like_html(raw):
-                # Jira '엑셀(전체 필드)' 내보내기 — 확장자만 .xls, 실제로는 HTML 테이블.
-                rows_iter = iter(_read_html_table_rows(raw))
-            else:
-                rows_iter = _read_xls_rows(raw)
-        else:
-            wb = openpyxl.load_workbook(BytesIO(raw), data_only=True, read_only=True)
-            ws = wb.active
-            if ws is None:
-                return JiraExcelImportResult(status="error", detail="시트를 찾을 수 없습니다.")
-            rows_iter = ws.iter_rows(values_only=True)
-    except Exception as exc:  # noqa: BLE001
-        return JiraExcelImportResult(status="error", detail=f"엑셀 파일을 읽을 수 없습니다: {str(exc)[:150]}")
-
-    # 제목행/빈 행이 앞에 끼어 있어 헤더가 1행이 아닐 수 있으므로 최대 _EXCEL_HEADER_SCAN_ROWS
-    # 행까지 순서대로 후보를 살펴보고, key/summary 를 모두 찾은 첫 행을 헤더로 채택한다.
-    scanned_rows: list[tuple] = []
-    for _ in range(_EXCEL_HEADER_SCAN_ROWS):
-        try:
-            scanned_rows.append(next(rows_iter))
-        except StopIteration:
-            break
-
-    if not scanned_rows:
-        return JiraExcelImportResult(status="error", detail="빈 파일입니다.")
-
-    header_row: Optional[tuple] = None
-    header_row_idx = -1
-    col_idx: dict[str, int] = {}
-    for ridx, candidate in enumerate(scanned_rows):
+def _find_header_in_rows(rows: list[tuple]) -> tuple[Optional[tuple], int, dict[str, int], list[tuple]]:
+    """rows 앞부분(최대 _EXCEL_HEADER_SCAN_ROWS 행)에서 key/summary 를 모두 가진 헤더 행을
+    찾는다. 반환: (헤더 행 또는 None, 헤더의 rows 내 인덱스, 컬럼 인덱스 맵, 스캔한 후보 행들)."""
+    scanned = rows[:_EXCEL_HEADER_SCAN_ROWS]
+    for ridx, candidate in enumerate(scanned):
         normalized = [_norm_excel_header(h) for h in candidate]
         candidate_idx: dict[str, int] = {}
         for field, aliases in _EXCEL_HEADER_ALIASES.items():
@@ -539,24 +502,46 @@ async def import_excel(
                     candidate_idx[field] = i
                     break
         if "key" in candidate_idx and "summary" in candidate_idx:
-            header_row, header_row_idx, col_idx = candidate, ridx, candidate_idx
+            return candidate, ridx, candidate_idx, scanned
+    return None, -1, {}, scanned
+
+
+def _extract_jira_rows(tables: list[list[tuple]], db: Session) -> JiraExcelImportResult:
+    """표(시트/HTML 표/붙여넣은 TSV) 목록을 순서대로 살펴 key/summary 헤더를 가진 첫 표를
+    찾아 JiraExcelRow 목록으로 변환한다. 파일 업로드(import_excel)와 복사·붙여넣기
+    (import_paste) 가 공유하는 핵심 로직 — 표가 여러 개(예: Jira 요약 표 + 실제 이슈 표)
+    있어도 순서대로 확인해 첫 번째로 헤더를 찾은 표를 사용한다."""
+    tables = [t for t in tables if t]
+    if not tables:
+        return JiraExcelImportResult(status="error", detail="빈 파일입니다.")
+
+    header_row: Optional[tuple] = None
+    header_row_idx = -1
+    col_idx: dict[str, int] = {}
+    data_rows: list[tuple] = []
+    scan_report: list[str] = []
+    for t_idx, table_rows in enumerate(tables):
+        h, hidx, cidx, scanned = _find_header_in_rows(table_rows)
+        if h is not None:
+            header_row, header_row_idx, col_idx = h, hidx, cidx
+            data_rows = table_rows[hidx + 1:]
             break
+        scanned_desc = "; ".join(
+            f"{i + 1}행: {', '.join(str(v) for v in r if v) or '(빈 행)'}"
+            for i, r in enumerate(scanned)
+        )
+        scan_report.append(f"[표 {t_idx + 1}] {scanned_desc}")
 
     if header_row is None:
-        scanned_desc = "; ".join(
-            f"{i + 1}행: {', '.join(str(h) for h in r if h) or '(빈 행)'}"
-            for i, r in enumerate(scanned_rows)
-        )
+        table_note = f"표 {len(tables)}개 확인 — " if len(tables) > 1 else ""
         return JiraExcelImportResult(
             status="error",
             detail=(
-                f"필수 컬럼(key, summary)을 찾을 수 없습니다 "
-                f"(최대 {len(scanned_rows)}행까지 확인). {scanned_desc}"
+                f"필수 컬럼(key, summary)을 찾을 수 없습니다 (표마다 최대 "
+                f"{_EXCEL_HEADER_SCAN_ROWS}행까지 확인, {table_note}각 표의 첫 행들: "
+                + " / ".join(scan_report) + ")"
             ),
         )
-
-    # 헤더 행 다음부터가 데이터 — 이미 읽어들인 나머지 스캔 행 + 아직 읽지 않은 rows_iter 를 이어붙인다.
-    rows_iter = itertools.chain(scanned_rows[header_row_idx + 1:], rows_iter)
 
     cfg = _get_config(db)
     base_url = (cfg.get("base_url") or "").rstrip("/")
@@ -568,8 +553,8 @@ async def import_excel(
 
     out_rows: list[JiraExcelRow] = []
     matched = 0
-    for r in rows_iter:
-        if r is None or all(v is None for v in r):
+    for r in data_rows:
+        if r is None or all(v is None or v == "" for v in r):
             continue
         key = cell(r, "key")
         if not key:
@@ -597,6 +582,58 @@ async def import_excel(
             break
 
     return JiraExcelImportResult(status="ok", total=len(out_rows), matched=matched, rows=out_rows)
+
+
+@router.post("/import/excel", response_model=JiraExcelImportResult)
+async def import_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Jira 에서 내려받은 이슈 목록 Excel(.xlsx/.xls) 을 파싱해 테이블로 보여준다.
+
+    WorkItem 으로 저장하지 않는 순수 미리보기 기능 — 담당자 셀("이름 회사")에서
+    이름을 추출해 등록된 담당자(Settings ▸ 담당자) 레지스트리와 매칭한다.
+    """
+    fname = (file.filename or "").lower()
+    if not fname.endswith((".xlsx", ".xlsm", ".xls")):
+        return JiraExcelImportResult(status="error", detail=".xlsx/.xls 파일만 업로드할 수 있습니다.")
+
+    raw = await file.read()
+    try:
+        if fname.endswith(".xls"):
+            if _looks_like_html(raw):
+                # Jira '엑셀(전체 필드)' 내보내기 — 확장자만 .xls, 실제로는 HTML 표(여러 개일 수 있음).
+                tables = _read_html_tables(raw)
+            else:
+                tables = [list(_read_xls_rows(raw))]
+        else:
+            wb = openpyxl.load_workbook(BytesIO(raw), data_only=True, read_only=True)
+            ws = wb.active
+            if ws is None:
+                return JiraExcelImportResult(status="error", detail="시트를 찾을 수 없습니다.")
+            tables = [list(ws.iter_rows(values_only=True))]
+    except Exception as exc:  # noqa: BLE001
+        return JiraExcelImportResult(status="error", detail=f"엑셀 파일을 읽을 수 없습니다: {str(exc)[:150]}")
+
+    return _extract_jira_rows(tables, db)
+
+
+@router.post("/import/paste", response_model=JiraExcelImportResult)
+async def import_paste(
+    payload: JiraExcelPasteRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """엑셀/Jira 표를 복사해 그대로 붙여넣은 텍스트를 파싱한다(파일 업로드 없이).
+    브라우저에서 표를 드래그로 복사하면 클립보드에 탭(TSV) 구분 텍스트가 담기는 것을
+    이용 — 파일 업로드(import_excel)와 동일한 헤더 탐색/매칭 로직을 공유한다."""
+    text = payload.text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [ln for ln in text.split("\n") if ln.strip() != ""]
+    if not lines:
+        return JiraExcelImportResult(status="error", detail="붙여넣은 내용이 비어 있습니다.")
+    rows: list[tuple] = [tuple(cell.strip() for cell in ln.split("\t")) for ln in lines]
+    return _extract_jira_rows([rows], db)
 
 
 # ── 양방향 push: PEP 상태 → Jira 반영 (Phase 2) ─────────────────────────────────

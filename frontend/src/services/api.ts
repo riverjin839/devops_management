@@ -881,6 +881,10 @@ export const jiraApi = {
       timeout: 2 * 60_000,
     });
   },
+  importPaste: (text: string) =>
+    api.post<import('@/types').JiraExcelImportResult>('/jira/import/paste', { text }, {
+      timeout: 2 * 60_000,
+    }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
 };

@@ -35,6 +35,13 @@
   아니라 lucide `Waypoints`(파이프라인 단계 형태) 아이콘을 범용으로 매핑.
   - Frontend: `lib/brandIcons.ts` — `BRAND_ICONS.Airflow/Spark/JupyterHub/JupyterLab/StarRocks`
     (+ 다색 SVG 전용 `brandMulti()` 헬퍼 신설), `lib/clusterIcons.ts` — `CLUSTER_ICON_OPTIONS['CI/CD']`.
+- **Jira Excel 가져오기 — 복사·붙여넣기(TSV)로도 가져오기 가능**: 파일 업로드 없이 Jira
+  이슈 목록/엑셀 표를 마우스로 드래그해 복사한 뒤 그대로 붙여넣어 가져올 수 있는 모드를
+  추가. 파일 업로드와 동일한 헤더 자동 탐색·담당자 매칭 로직(`_extract_jira_rows`)을
+  공유한다.
+  - Frontend: `JiraExcelImportPage.tsx` — `ViewModeBar` 로 파일 업로드/붙여넣기 전환,
+    `jiraApi.importPaste()`.
+  - Backend: `POST /api/v1/jira/import/paste` (`JiraExcelPasteRequest`) — `routers/jira.py`.
 
 ### Fixed
 - **Jira Excel 가져오기 — `.xls` 업로드 시 "Expected BOF record" 오류**: Jira 의
@@ -52,6 +59,17 @@
   → 첫 행만 보던 것을 최대 5행까지 순서대로 후보로 살펴 key/summary 를 모두 찾은 첫 행을
   헤더로 채택하도록 변경. 그래도 못 찾으면 에러 메시지에 스캔한 각 행의 헤더 후보를 함께 노출.
   - Backend: `routers/jira.py` `import_excel()` — `_EXCEL_HEADER_SCAN_ROWS`.
+- **Jira Excel 가져오기 — HTML 기반 `.xls` 에서 표가 2개 이상이면 "최대 2행까지 확인" 오류
+  (위 수정의 실제 근본 원인)**: `.xls` 확장자지만 실제로는 HTML 표인 Jira "엑셀(전체 필드)"
+  내보내기 파서가 **문서의 첫 `<table>` 하나만** 읽도록 하드코딩돼 있었다. Jira 내보내기가
+  요약/메타 정보를 담은 작은 표를 실제 이슈 목록 표보다 앞에 두거나(형제 표), 레이아웃용
+  바깥 표 안에 실제 이슈 표를 중첩시키는 구조면, 작은 첫 표(예: 2행)만 읽고 진짜 데이터
+  표는 통째로 무시된 채 "필수 컬럼을 찾을 수 없음" 이 났다 → 파서를 테이블 스택 기반으로
+  다시 짜 문서 안의 모든 표(중첩 포함)를 각각 독립적으로 추출하도록 변경, 헤더 탐색도 표
+  하나가 아니라 발견된 모든 표를 순서대로 확인해 Key/Summary 헤더를 가진 첫 표를 사용하도록
+  확장. 파일 업로드/붙여넣기 공통 로직 `_extract_jira_rows()` 로 통합.
+  - Backend: `routers/jira.py` `_JiraHtmlTableExtractor`(스택 기반 재작성) → `_read_html_tables()`,
+    `_find_header_in_rows()`, `_extract_jira_rows()`.
 - **로그인 시 홈 기본 화면이 이전 세션의 "플랫폼 현황" 상태를 물려받던 문제**: 로그인마다 홈
   모드를 항상 "업무 현황"으로 리셋하도록 변경(로그인 후 토글은 그대로 가능).
   - Frontend: `stores/authStore.ts` `setSession()`.
