@@ -53,6 +53,15 @@
   사이드바가 뜨지 않고 상단 버튼 탭만 있던 것을 `ClusterSidebar iconOnly` 표준
   패턴으로 마이그레이션.
   - Frontend: `InfraTopologyPage.tsx`.
+- **릴리즈 노트 패널 — 요약 텍스트가 잘려 스크롤해야 보이던 문제**: 고정 480px 폭에서
+  버전별 요약이 한 줄 말줄임(truncate)으로 잘려 전체 내용을 볼 수 없었다 → 기본 폭을
+  640px 로 넓히고, 요약 텍스트를 말줄임 대신 줄바꿈(wrap)으로 바꿔 기본 상태에서도
+  잘림 없이 표시. 왼쪽 가장자리를 드래그하면 420~1100px 범위로 추가 확장 가능(사용자별
+  localStorage 영속).
+  - Frontend: `SidePane.tsx` 에 범용 `resizable`/`widthStorageKey`/`minWidth`/`maxWidth`
+    prop 추가(기존 `ResizeHandle` 재사용, 다른 SidePane 사용처는 옵트인이라 영향 없음),
+    `ResizeHandle` 의 `side` 를 `'left'` 도 지원하도록 확장, `ReleaseNotesPanel.tsx`
+    요약 미리보기 `truncate` → `break-words`, `Sidebar.tsx` 에서 활성화.
 
 ## [1.2.0] - 2026-07-09
 

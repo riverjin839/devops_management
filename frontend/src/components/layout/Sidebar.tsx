@@ -472,13 +472,18 @@ export function Sidebar() {
         </SidePane>
       )}
 
-      {/* 릴리즈 노트 — 우측 슬라이드 SidePane. CHANGELOG.md 를 파싱한 API 를 표로 렌더. */}
+      {/* 릴리즈 노트 — 우측 슬라이드 SidePane. CHANGELOG.md 를 파싱한 API 를 표로 렌더.
+          요약 텍스트가 잘리지 않도록 기본 폭을 넉넉히 잡고, 왼쪽 가장자리 드래그로 추가 확장 가능. */}
       <SidePane
         open={releaseNotesOpen}
         onClose={() => setReleaseNotesOpen(false)}
         title="릴리즈 노트"
-        width="480px"
+        width="640px"
         bodyClassName="p-0"
+        resizable
+        widthStorageKey="k8s:releaseNotesPanelWidth"
+        minWidth={420}
+        maxWidth={1100}
       >
         <ReleaseNotesPanel open={releaseNotesOpen} />
       </SidePane>

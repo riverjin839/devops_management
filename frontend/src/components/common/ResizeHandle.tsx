@@ -4,11 +4,13 @@ interface ResizeHandleProps {
   width: number;
   onResize: (next: number) => void;
   onReset?: () => void;
-  side?: 'right';
+  /** 핸들이 붙는 가장자리. 'right'(기본) = 좌측 고정 패널의 오른쪽 가장자리(오른쪽 드래그=확대).
+   *  'left' = 우측 고정 패널(예: SidePane)의 왼쪽 가장자리(왼쪽 드래그=확대). */
+  side?: 'right' | 'left';
   className?: string;
 }
 
-/** 사이드바 우측 가장자리에 붙여서 가로 폭 드래그 리사이즈.
+/** 사이드바/패널 가장자리에 붙여서 가로 폭 드래그 리사이즈.
  *  부모는 position:relative 또는 fixed 여야 absolute 핸들이 보임.
  *  더블클릭 → onReset (기본값으로).
  */
