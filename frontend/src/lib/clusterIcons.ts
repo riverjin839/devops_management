@@ -1,7 +1,7 @@
 import {
   // 기본
   Server, Database, Cloud, CloudCog, Cpu, HardDrive, Network,
-  Box, Boxes, Layers, Workflow, Activity, Container, Cog, Hexagon, Component,
+  Box, Boxes, Layers, Workflow, Activity, Container, Cog, Hexagon, Component, Waypoints,
   // 지역 / 위치
   Globe, MapPin, Map, Flag, Building2, Building, Landmark, Mountain,
   Trees, Waves, Compass, Palmtree, Tent, Castle,
@@ -24,6 +24,7 @@ export const CLUSTER_ICON_OPTIONS: Record<string, IconComponent> = {
   Server, Database, Cloud, CloudCog, Cpu, HardDrive, Network,
   Box, Boxes, Layers, Workflow, Activity, Container, Cog, Hexagon, Component,
   Settings2, Anchor, Atom, Zap,
+  'CI/CD': Waypoints,
   // 지역 / 위치
   Globe, MapPin, Map, Flag, Building2, Building, Landmark, Mountain,
   Trees, Waves, Compass, Palmtree, Tent, Castle,
@@ -74,6 +75,7 @@ export const CLUSTER_ICON_GROUPS: ClusterIconGroup<{ name: string; Component: Ic
       { name: 'Anchor',    Component: Anchor },
       { name: 'Atom',      Component: Atom },
       { name: 'Zap',       Component: Zap },
+      { name: 'CI/CD',     Component: Waypoints },
     ],
   },
   {

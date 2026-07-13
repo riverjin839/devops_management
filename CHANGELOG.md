@@ -25,13 +25,16 @@
   `backend frontend`) — 컨테이너가 정확히 1개인 Deployment 는 자동 판별하고, 여러 개면 자동 판별
   불가 사유와 함께 명시적으로 지정하라는 에러 메시지를 출력한다. v1.1.0 의 `-t` 옵션에 이어지는
   개선.
-- **아이콘 picker — Airflow / Spark / JupyterHub / JupyterLab 브랜드 로고 추가**: 클러스터 ·
-  서비스 카탈로그 아이콘 선택창(오픈소스 / CNCF 그룹)에서 LAKE 계열 OSS 로고를 고를 수 있게
-  simple-icons 기반 브랜드 아이콘을 추가. 요청된 항목 중 Cilium/Keycloak/Nexus/Prometheus/
-  Grafana/MinIO(AIStor)는 이미 등록되어 있어 그대로 재사용된다. StarRocks 는 simple-icons 에
-  공식 브랜드 SVG 가 없어 제외(필요 시 아이콘 picker 의 emoji/이미지 업로드로 대체 가능),
-  JupyterHub/JupyterLab 은 두 프로젝트가 공유하는 동일한 Jupyter 로고를 사용.
-  - Frontend: `lib/brandIcons.ts` — `BRAND_ICONS.Airflow/Spark/JupyterHub/JupyterLab`.
+- **아이콘 picker — Airflow / Spark / JupyterHub / JupyterLab / StarRocks / CI-CD 아이콘 추가**:
+  클러스터 · 서비스 카탈로그 아이콘 선택창(오픈소스 / CNCF 그룹 + 기본 그룹)에서 LAKE 계열
+  OSS 로고와 일반 CI/CD 파이프라인 아이콘을 고를 수 있게 추가. 요청된 항목 중 Cilium/
+  Keycloak/Nexus/Prometheus/Grafana/MinIO(AIStor)는 이미 등록되어 있어 그대로 재사용된다.
+  Airflow/Spark 는 simple-icons 공식 로고, JupyterHub/JupyterLab 은 두 프로젝트가 공유하는
+  동일한 Jupyter 로고. StarRocks 는 simple-icons 에 등록되어 있지 않아 공식 사이트
+  (docs.starrocks.io) 의 원본 다색(골드+틸) 로고 SVG 를 직접 이식. CI/CD 는 특정 브랜드가
+  아니라 lucide `Waypoints`(파이프라인 단계 형태) 아이콘을 범용으로 매핑.
+  - Frontend: `lib/brandIcons.ts` — `BRAND_ICONS.Airflow/Spark/JupyterHub/JupyterLab/StarRocks`
+    (+ 다색 SVG 전용 `brandMulti()` 헬퍼 신설), `lib/clusterIcons.ts` — `CLUSTER_ICON_OPTIONS['CI/CD']`.
 
 ### Fixed
 - **Jira Excel 가져오기 — `.xls` 업로드 시 "Expected BOF record" 오류**: Jira 의
