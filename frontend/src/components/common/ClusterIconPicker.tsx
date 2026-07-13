@@ -8,8 +8,9 @@ import {
 } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
+  suggestAttribute, suggestOpTypeLabel,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelColor, levelLabel } from '@/hooks/useOperationLevels';
 
 /** 빌더 탭에 프리필할 클러스터 속성 — 전달되면 "빌더" 탭이 노출된다. */
 export interface IconBuilderContext {
@@ -390,28 +391,30 @@ export function ClusterIconPicker({
   );
 }
 
-/** "빌더" 탭 — 이니셜 + 환경(운영등급)색 + 지역 약어 + k8s 워터마크를 조합해 SVG 아이콘 생성.
+/** "빌더" 탭 — 업무명/운영타입/속성/지역 4개 가로 밴드 + k8s 워터마크를 조합해 SVG 아이콘 생성.
  *  클러스터의 name/region/operationLevel 로 자동 프리필되고 모든 값은 편집 가능. */
 function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply: (dataUrl: string) => void }) {
   const { data: levels } = useOperationLevels();
-  const [initials, setInitials] = useState(() => suggestInitials(context.name));
-  const [regionAbbr, setRegionAbbr] = useState(() => suggestRegionAbbr(context.region));
+  const [workName, setWorkName] = useState(() => suggestInitials(context.name));
   const [level, setLevel] = useState(context.operationLevel ?? '');
+  const [attribute, setAttribute] = useState(() => suggestAttribute(context.name));
+  const [regionAbbr, setRegionAbbr] = useState(() => suggestRegionAbbr(context.region));
   const [watermark, setWatermark] = useState(true);
   const [shape, setShape] = useState<'square' | 'circle'>('square');
 
   const colorToken = levelColor(levels, level || undefined);
+  const opTypeLabel = suggestOpTypeLabel(levelLabel(levels, level || undefined));
   const svg = useMemo(
-    () => buildClusterIconSvg({ initials, regionAbbr, colorToken, k8sWatermark: watermark, shape }),
-    [initials, regionAbbr, colorToken, watermark, shape],
+    () => buildClusterIconSvg({ workName, opTypeLabel, attribute, regionAbbr, colorToken, k8sWatermark: watermark, shape }),
+    [workName, opTypeLabel, attribute, regionAbbr, colorToken, watermark, shape],
   );
   const previewUrl = useMemo(() => svgToDataUrl(svg), [svg]);
 
   return (
     <div className="space-y-3 px-1">
       <p className="text-xs text-muted-foreground">
-        서비스 이니셜 + 환경(운영등급) 색 + 지역 약어를 조합한 아이콘을 생성합니다.
-        사이드바 레일(40px)에서도 클러스터를 한눈에 구분할 수 있습니다.
+        업무명 / 운영타입 / 속성 / 지역 4개 밴드를 위→아래로 쌓은 아이콘을 생성합니다.
+        사이드바 레일에서도 클러스터를 한눈에 구분할 수 있습니다.
       </p>
 
       {/* 미리보기 — 실제 크기(40px)와 확대(64px) 나란히 */}
@@ -426,32 +429,20 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">이니셜 (1~3자)</span>
-          <input
-            type="text"
-            value={initials}
-            onChange={(e) => setInitials(e.target.value.slice(0, 3))}
-            maxLength={3}
-            className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">지역 약어 (비우면 밴드 생략)</span>
-          <input
-            type="text"
-            value={regionAbbr}
-            onChange={(e) => setRegionAbbr(e.target.value.slice(0, 3))}
-            maxLength={3}
-            placeholder="예: 이천"
-            className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </label>
-      </div>
+      {/* 4개 층 — 위→아래 순서 그대로 입력 */}
+      <label className="flex flex-col gap-1 text-xs">
+        <span className="text-muted-foreground">1층 · 업무명 (1~5자)</span>
+        <input
+          type="text"
+          value={workName}
+          onChange={(e) => setWorkName(e.target.value.slice(0, 5))}
+          maxLength={5}
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </label>
 
       <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">환경 (운영등급 → 색 결정)</span>
+        <span className="text-muted-foreground">2층 · 운영타입 (환경 → 색 + 라벨 결정)</span>
         <select
           value={level}
           onChange={(e) => setLevel(e.target.value)}
@@ -462,6 +453,30 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
             <option key={l.value} value={l.value}>{l.label}</option>
           ))}
         </select>
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs">
+        <span className="text-muted-foreground">3층 · 속성 — 클러스터 기능 (예: Computing/Storage)</span>
+        <input
+          type="text"
+          value={attribute}
+          onChange={(e) => setAttribute(e.target.value.slice(0, 5))}
+          maxLength={5}
+          placeholder="예: Compute"
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs">
+        <span className="text-muted-foreground">4층 · 지역 약어</span>
+        <input
+          type="text"
+          value={regionAbbr}
+          onChange={(e) => setRegionAbbr(e.target.value.slice(0, 5))}
+          maxLength={5}
+          placeholder="예: 이천"
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+        />
       </label>
 
       <div className="flex items-center gap-4 text-xs">
@@ -490,7 +505,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       <button
         type="button"
         onClick={() => onApply(previewUrl)}
-        disabled={!initials.trim()}
+        disabled={!workName.trim()}
         className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
       >
         <Wand2 className="w-3.5 h-3.5" />

@@ -10,6 +10,32 @@
 
 1.2.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **클러스터 아이콘 빌더 — 업무명/운영타입/속성/지역 4개 밴드 구조로 개편**: 기존
+  이니셜+환경색+지역 3요소 조합을 위→아래 4개 가로 밴드(1층 업무명, 2층 운영타입, 3층
+  속성, 4층 지역)로 재구성. 속성(3층)은 `[업무명]-[운영타입]-[속성]` 표준 클러스터
+  이름 규칙(클러스터 이름 표준화 도구와 동일 파싱)의 3번째 세그먼트(클러스터 기능 —
+  예: computing/storage)를 자동 추출해 프리필. 4개 밴드는 운영등급 색 토큰 하나를
+  명도만 달리해(운영타입 밴드가 가장 진한 강조색) 통일감 있게 표시.
+  - Frontend: `lib/clusterIconBuilder.ts` `buildClusterIconSvg()` 재작성 +
+    `suggestAttribute()`/`suggestOpTypeLabel()` 추가, 신규 `lib/clusterName.ts`
+    (표준 이름 파싱 — `StandardizeClusterNamesModal` 과 공유), `ClusterIconPicker`
+    빌더 탭 입력 폼 4개 필드로 확장.
+- **`ClusterSidebar` iconOnly 레일 — 아이콘 크기 확대 + S/M/L 크기 조절**: 40px 버튼
+  안에 24px 이미지만 차지해 여백이 커 보이던 문제 해결 — 기본 크기를 48px 버튼/34px
+  이미지로 키우고, 레일 상단에 작게/보통/크게(S/M/L) 토글을 추가해 사용자가 취향껏
+  조절 가능(사용자별 localStorage 저장). 아이콘 없는 클러스터의 status 아이콘(lucide)·
+  이모지 아이콘도 같은 비율로 함께 커진다.
+  - Frontend: `ClusterSidebar.tsx` — `ICON_RAIL_SIZE_PRESETS`, `IconRailButton` 픽셀
+    기반 동적 크기. `stores/sidebarStore.ts` `clusterIconRailSize` 영속화.
+
+### Fixed
+- **인프라 토폴로지(`/infra-topology`) — 클러스터 선택이 표준 사이드바 대신 레거시
+  가로 탭이었던 문제**: 클러스터를 클릭해도 다른 클러스터 페이지처럼 좌측 아이콘
+  사이드바가 뜨지 않고 상단 버튼 탭만 있던 것을 `ClusterSidebar iconOnly` 표준
+  패턴으로 마이그레이션.
+  - Frontend: `InfraTopologyPage.tsx`.
+
 ## [1.2.0] - 2026-07-09
 
 ### Added

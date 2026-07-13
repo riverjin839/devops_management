@@ -13,6 +13,7 @@ import {
   useVerifyInfraNode,
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
+import { ClusterSidebar } from '@/components/common';
 import { topologyTraceApi } from '@/services/api';
 import type {
   InfraNode,
@@ -575,7 +576,15 @@ export function InfraTopologyPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-8 py-8">
+      <main className="pr-3 py-3 flex gap-3">
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={activeClusterId || null}
+          onSelect={(id) => setSelectedClusterId(id ?? '')}
+          iconOnly
+        />
+
+        <div className="flex-1 min-w-0 px-5">
 
         {/* 헤더 */}
         <div className="flex items-center justify-between gap-4 mb-6">
@@ -609,7 +618,6 @@ export function InfraTopologyPage() {
           </div>
         </div>
 
-        {/* 클러스터 탭 */}
         {clustersLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground text-sm mb-6">
             <Loader2 className="w-4 h-4 animate-spin" />로딩 중...
@@ -621,27 +629,6 @@ export function InfraTopologyPage() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-1">
-              {clusters.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedClusterId(c.id)}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-colors whitespace-nowrap flex-shrink-0 ${
-                    c.id === activeClusterId
-                      ? 'bg-primary/10 border-primary/40 text-primary font-medium'
-                      : 'border-border text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    c.status === 'healthy' ? 'bg-emerald-400' :
-                    c.status === 'warning' ? 'bg-amber-400' :
-                    c.status === 'critical' ? 'bg-red-400' : 'bg-slate-400'
-                  }`} />
-                  {c.name}
-                  {c.region && <span className="text-sm opacity-60">({c.region})</span>}
-                </button>
-              ))}
-            </div>
 
             {/* 동기화 오류 */}
             {syncError && (
@@ -841,6 +828,7 @@ export function InfraTopologyPage() {
             )}
           </>
         )}
+        </div>
       </main>
 
       {/* 추가/수정 모달 */}
