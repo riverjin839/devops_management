@@ -302,7 +302,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               <Users className="w-3 h-3" /> 담당자 기준
             </button>
           </div>
-          {/* 색 반전 토글 — 타임라인 카드 배경/글씨 색을 반전(사용자별 저장) */}
+          {/* 색 반전 토글 — 상태 막대(박스) 배경/글씨 색을 반전(사용자별 저장). 카드 전체가
+              아니라 각 업무 막대(버튼)에만 filter: invert 를 적용한다. */}
           <button
             type="button"
             onClick={toggleInvert}
@@ -349,7 +350,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
 
 
       {/* ── timeline grid ───────────────────────────────────────────────────── */}
-      <div className={cn('rounded-2xl border border-border bg-card overflow-hidden mac-shadow', invert && 'timeline-color-invert')}>
+      <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
         {/* header: weekday columns (월~금) — 주 이동은 양끝 화살표(월 옆 ◀ / 금 옆 ▶)로 한다 */}
         <div className="relative grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
           <div className="px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center justify-between gap-1">
@@ -469,7 +470,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                         onClick={() => openWorkItem(item.id)}
                         title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                         className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
-                        ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
+                        ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''} ${invert ? 'invert' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-xs font-semibold truncate">{team || sv.label}</span>
                         {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
@@ -519,7 +520,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               onClick={() => openWorkItem(item.id)}
                               title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                               className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
-                              ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
+                              ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''} ${invert ? 'invert' : ''}`}>
                               <StatusGlyph status={status} />
                               <span className="text-xs font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                               {growing && <ChevronRight className="w-3 h-3 flex-shrink-0 ml-auto animate-pulse" aria-label="진행 중" />}
