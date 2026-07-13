@@ -91,6 +91,12 @@ class JiraExcelImportResult(BaseModel):
     rows: list[JiraExcelRow] = []
 
 
+class JiraExcelPasteRequest(BaseModel):
+    """엑셀/Jira 표를 복사해 붙여넣은 원본 텍스트 — 탭 구분(TSV), 브라우저 표 복사도 보통
+    탭으로 붙여넣기된다. 줄바꿈은 행 구분."""
+    text: str
+
+
 # ── 양방향 push (Phase 2) ──────────────────────────────────────────────────────
 class JiraPushRequest(BaseModel):
     comment: Optional[str] = None

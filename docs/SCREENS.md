@@ -1025,15 +1025,18 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 ### Jira Excel 가져오기 (`/jira-import`)
 
 - **파일**: `frontend/src/pages/JiraExcelImportPage.tsx`
-- **목적 / UX**: Jira에서 내보낸 이슈 목록 Excel(.xlsx/.xls)을 업로드해 테이블로 미리보고, 담당자(Assignee, "이름 회사" 형식)를 PEP에 등록된 담당자와 자동 매칭해 확인하는 화면. **저장하지 않는 미리보기 전용** 기능 — 실제 work item 생성은 하지 않는다(그건 `WorkItemBoardPage`의 `JiraImportModal`/Jira API 연동 쪽 몫).
+- **목적 / UX**: Jira에서 내보낸 이슈 목록 Excel(.xlsx/.xls)을 업로드하거나, 표를 그대로 복사해 붙여넣어 테이블로 미리보고, 담당자(Assignee, "이름 회사" 형식)를 PEP에 등록된 담당자와 자동 매칭해 확인하는 화면. **저장하지 않는 미리보기 전용** 기능 — 실제 work item 생성은 하지 않는다(그건 `WorkItemBoardPage`의 `JiraImportModal`/Jira API 연동 쪽 몫).
 - **UI 구성**:
-  - 파일 업로드 바: 파일 선택 버튼(.xlsx/.xlsm/.xls), 로딩 스피너, 파일명, 결과 요약 배지(총 건수/담당자 매칭/미매칭), 초기화 버튼, 에러 메시지
+  - 헤더 우측 `ViewModeBar`로 "파일 업로드" ↔ "붙여넣기" 모드 전환.
+  - 파일 업로드 모드: 파일 선택 버튼(.xlsx/.xlsm/.xls), 로딩 스피너, 파일명, 결과 요약 배지(총 건수/담당자 매칭/미매칭), 초기화 버튼, 에러 메시지.
+  - 붙여넣기 모드: 사용법 안내(Ctrl+C/Ctrl+V/Ctrl+Enter) + `<textarea>`(TSV 붙여넣기) + "가져오기" 버튼, 나머지 요약 배지/초기화/에러는 파일 모드와 공유(`ImportSummaryBadges`).
   - 결과 테이블: Key(Jira 링크)/Summary/Issue Type/Status/Assignee(매칭 여부 아이콘)/Created/Resolved/Due Date/Environment/Description
-- **Frontend**: 전용 TanStack Query hook 없이 `jiraApi.importExcel(file)`을 로컬 `useState`(loading/error/result)와 함께 직접 호출(FormData multipart, timeout 2분). 서버 상태 캐싱/재사용이 필요 없는 1회성 업로드-미리보기라 hook화하지 않은 것으로 보임.
-- **Backend**: `POST /api/v1/jira/import/excel` — `backend/app/routers/jira.py` (openpyxl 등으로 파싱 후 `assigneeRaw`에서 이름 추출, PEP 담당자 마스터와 매칭해 `assigneeMatched`/`assigneeName` 계산). 응답 타입: `JiraExcelImportResult`(`total`, `matched`, `rows: JiraExcelRow[]`).
+- **Frontend**: 전용 TanStack Query hook 없이 `jiraApi.importExcel(file)` / `jiraApi.importPaste(text)`를 로컬 `useState`(mode/loading/error/result)와 함께 직접 호출(파일은 FormData multipart, 붙여넣기는 JSON body, 둘 다 timeout 2분). 서버 상태 캐싱/재사용이 필요 없는 1회성 업로드-미리보기라 hook화하지 않은 것으로 보임.
+- **Backend**: `POST /api/v1/jira/import/excel`(파일), `POST /api/v1/jira/import/paste`(붙여넣은 TSV 텍스트, `JiraExcelPasteRequest{text}`) — 둘 다 `backend/app/routers/jira.py`의 공용 헬퍼 `_extract_jira_rows(tables, db)`로 수렴(표 목록에서 헤더를 찾아 `assigneeRaw`→이름 추출, PEP 담당자 마스터와 매칭해 `assigneeMatched`/`assigneeName` 계산). 응답 타입은 둘 다 동일한 `JiraExcelImportResult`(`total`, `matched`, `rows: JiraExcelRow[]`).
 - **핵심 기능**:
-  - .xlsx/.xlsm/.xls 업로드 → 서버 파싱 → 테이블 렌더링(저장 없음)
-  - 헤더 행이 1행이 아니어도(제목행/빈 행이 위에 끼어 있어도) 최대 5행까지 순서대로 `Key`/`Summary` 헤더 후보를 탐색해 자동 인식(`_EXCEL_HEADER_SCAN_ROWS`) — 못 찾으면 스캔한 각 행의 헤더 후보를 에러 메시지에 그대로 노출
+  - .xlsx/.xlsm/.xls 업로드 또는 표 복사·붙여넣기(TSV) → 서버 파싱 → 테이블 렌더링(저장 없음)
+  - 헤더 행이 1행이 아니어도(제목행/빈 행이 위에 끼어 있어도) 표마다 최대 5행까지 순서대로 `Key`/`Summary` 헤더 후보를 탐색해 자동 인식(`_EXCEL_HEADER_SCAN_ROWS`)
+  - Jira의 HTML 기반 "가짜 .xls" 내보내기는 문서 안에 여러 `<table>`(요약 표 + 실제 이슈 표, 또는 레이아웃용 표에 중첩된 이슈 표)이 있을 수 있어 **모든 표를 스택 기반으로 분리 추출**한 뒤 순서대로 Key/Summary 헤더를 가진 첫 표를 사용 — 어떤 표에서도 못 찾으면 표별로 스캔한 행 후보를 에러 메시지에 그대로 노출
   - 담당자 이름 자동 추출 + PEP 등록 담당자와 매칭(매칭 성공/실패 아이콘 구분, 실패 시 원본 텍스트 tooltip)
   - Jira Key에 원본 이슈 링크(`jiraUrl`) 제공(있는 경우)
   - 총 건수 대비 매칭/미매칭 건수 요약 배지
