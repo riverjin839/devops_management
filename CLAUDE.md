@@ -16,6 +16,16 @@ Originally "K8s Daily Monitor" (DevOps Management), redefined as Platform Engine
 
 ---
 
+## 화면 단위 명세서 (Screens Reference)
+
+프론트엔드의 모든 화면(라우트)을 화면 단위로 UX/UI/Frontend/Backend/핵심 기능으로 정리한 문서가
+**`docs/SCREENS.md`** 에 있다. 사용자가 화면별 개선 요청을 그 문서에 직접 적어두고, 이후 세션에서
+"docs/SCREENS.md 의 `<화면명>` 요청사항 반영해줘" 처럼 가리켜 작업을 요청하는 용도로 관리된다.
+특정 화면을 수정하기 전에 먼저 이 문서에서 해당 화면 섹션을 확인해 현재 구조(사용 hook/컴포넌트/API
+엔드포인트)를 파악하고 시작할 것. 화면 구조가 크게 바뀌면 해당 섹션도 함께 갱신해준다.
+
+---
+
 ## 참고 프로젝트 (Reference Projects)
 
 PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 때 **벤치마킹/응용 기준**으로 삼는 오픈소스 Notion 계열 프로젝트. 관련 요청(에디터 아키텍처, 블록/문서 모델, 협업/동기화, 지식베이스 UX 등)이 오면 이 두 레포를 참고 기준으로 활용한다.
