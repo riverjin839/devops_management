@@ -87,9 +87,9 @@ export function ReleaseNotesPanel({ open }: Props) {
                   {previewSummaries.length > 0 ? (
                     <ul className="space-y-0.5">
                       {previewSummaries.map((s, i) => (
-                        <li key={i} className="flex gap-1.5">
+                        <li key={i} className="flex gap-1.5 items-start">
                           <span className="text-primary flex-shrink-0">·</span>
-                          <span className="truncate">{s}</span>
+                          <span className="min-w-0 break-words">{s}</span>
                         </li>
                       ))}
                       {hiddenCount > 0 && (
