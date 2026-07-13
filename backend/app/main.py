@@ -69,7 +69,6 @@ from app.routers import (
     metric_trend_router,
     service_topology_router,
     cluster_items_router,
-    coroot_router,
     terminal_appearance_router,
 )
 from app.auth.deps import get_current_user
@@ -258,10 +257,6 @@ def _run_migrations():
             ("icon", "VARCHAR(64)"),
             # G-9: TLS 검증 옵트인. 기본 false = 기존 verify=False 동작 유지.
             ("tls_verify", "BOOLEAN NOT NULL DEFAULT FALSE"),
-            # coroot APM 연동 — per-cluster project 매핑 + URL 오버라이드 + 토글.
-            ("coroot_project", "VARCHAR(100)"),
-            ("coroot_url", "VARCHAR(512)"),
-            ("coroot_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ]
         for col_name, col_type in new_cluster_cols:
             _safe_add_column("clusters", col_name, col_type)
@@ -1435,8 +1430,6 @@ app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
-# coroot — 애플리케이션 APM 계층 (별도 배포된 coroot 연동: 헬스/요약/딥링크).
-app.include_router(coroot_router, prefix="/api/v1", dependencies=_auth)
 # terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).
 app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_auth)
 
