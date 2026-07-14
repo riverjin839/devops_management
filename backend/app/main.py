@@ -59,6 +59,7 @@ from app.routers import (
     lake_services_router,
     bottleneck_router,
     lake_service_types_router,
+    service_categories_router,
     ops_check_router,
     k8s_resources_router,
     k8s_allocation_router,
@@ -898,6 +899,22 @@ def _run_migrations():
         _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
         _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
 
+    # PEP/APP 서비스 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) — service_categories 는
+    # create_all 로 신규 생성, lake_service_types/lake_services 에 domain/category_id 보강.
+    if "lake_service_types" in inspector.get_table_names():
+        _safe_add_column("lake_service_types", "domain", "VARCHAR(10) NOT NULL DEFAULT 'pep'")
+        _safe_add_column("lake_service_types", "category_id", "UUID")
+        _safe_create_index("ix_lake_types_domain_category", "lake_service_types", "(domain, category_id)")
+        _safe_add_constraint(
+            "lake_service_types", "lake_service_types_category_id_fkey",
+            "FOREIGN KEY (category_id) REFERENCES service_categories(id) ON DELETE SET NULL",
+            requires_tables=("service_categories",),
+            label="lake_service_types.category_id FK",
+        )
+    if "lake_services" in inspector.get_table_names():
+        _safe_add_column("lake_services", "domain", "VARCHAR(10) NOT NULL DEFAULT 'pep'")
+        _safe_create_index("ix_lake_services_domain", "lake_services", "(domain)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
@@ -1266,6 +1283,78 @@ def _seed_default_lake_service_types():
         db.close()
 
 
+# domain='pep' builtin 카테고리 4개 — key -> (label, icon, sort_order)
+# icon 은 frontend CLUSTER_ICON_OPTIONS 화이트리스트(resolveClusterIcon 공용 리졸버)의
+# lucide 컴포넌트 이름이어야 렌더된다 — 화이트리스트에 없는 이름은 텍스트로 취급됨에 주의.
+_PEP_BUILTIN_CATEGORIES: dict[str, tuple[str, str, int]] = {
+    "runtime":    ("Runtime",    "Cpu",      10),
+    "catalog":    ("Catalog",    "Database", 20),
+    "workflow":   ("Workflow",   "Workflow", 30),
+    "jupyterlab": ("JupyterLab", "Code2",    40),
+}
+
+# 8 builtin LakeServiceType slug -> 소속 카테고리 key (기존 category 문자열과는 다른 재분류 —
+# PEP 서비스 사이드바용 신규 의미: Runtime=실행 엔진, Catalog=테이블/메타 카탈로그, Workflow=오케스트레이션).
+_PEP_TYPE_CATEGORY_KEY: dict[str, str] = {
+    "spark": "runtime", "starrocks": "runtime", "trino": "runtime", "superset": "runtime",
+    "iceberg": "catalog", "polaris": "catalog",
+    "airflow": "workflow",
+    "jupyterlab": "jupyterlab",
+}
+
+
+def _seed_default_service_categories():
+    """PEP 서비스(domain='pep') builtin 카테고리 4개(Runtime/Catalog/Workflow/JupyterLab) 자동 등록 +
+    기존 8 builtin LakeServiceType 의 category_id 백필. APP 서비스(domain='app')는 seed 없음 —
+    운영자가 Settings 에서 직접 추가.
+
+    idempotent — 이미 있는 카테고리 key 는 skip, category_id 가 이미 설정된 type 은 건드리지 않음
+    (운영자가 재분류했을 수 있어 보존).
+    """
+    from app.models import ServiceCategory, LakeServiceType
+
+    db = SessionLocal()
+    try:
+        existing = {
+            row[0]: row[1] for row in
+            db.query(ServiceCategory.key, ServiceCategory.id).filter(ServiceCategory.domain == "pep").all()
+        }
+        added = 0
+        for key, (label, icon, sort_order) in _PEP_BUILTIN_CATEGORIES.items():
+            if key in existing:
+                continue
+            row = ServiceCategory(
+                domain="pep", key=key, label=label, icon=icon,
+                is_builtin=True, enabled=True, sort_order=sort_order,
+            )
+            db.add(row)
+            db.flush()
+            existing[key] = row.id
+            added += 1
+        if added:
+            db.commit()
+            _log.info("seeded %d builtin pep service categories", added)
+
+        backfilled = 0
+        for slug, cat_key in _PEP_TYPE_CATEGORY_KEY.items():
+            cat_id = existing.get(cat_key)
+            if cat_id is None:
+                continue
+            type_row = db.query(LakeServiceType).filter(
+                LakeServiceType.service_type == slug, LakeServiceType.category_id.is_(None),
+            ).first()
+            if type_row is None:
+                continue
+            type_row.category_id = cat_id
+            type_row.domain = "pep"
+            backfilled += 1
+        if backfilled:
+            db.commit()
+            _log.info("backfilled category_id for %d builtin lake service types", backfilled)
+    finally:
+        db.close()
+
+
 def _seed_default_lake_service_entries():
     """LAKE 8 OSS 서비스의 "기능 동작 특징" 가이드를 ServiceEntry kind=guide 로
     전역 등록. service+title 매칭으로 idempotent — 운영자가 수정하거나 삭제한
@@ -1406,6 +1495,7 @@ async def lifespan(app: FastAPI):
         ("seed_check_matrix_schedules", _seed_check_matrix_schedules),
         ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
         ("seed_lake_service_types", _seed_default_lake_service_types),
+        ("seed_service_categories", _seed_default_service_categories),
         ("seed_lake_service_entries", _seed_default_lake_service_entries),
         ("seed_initial_admin", _seed_initial_admin),
         ("seed_assignee_users", _seed_assignee_users),
@@ -1507,6 +1597,8 @@ app.include_router(lake_services_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(bottleneck_router, prefix="/api/v1", dependencies=_auth)
 # lake-service-type-management (신규 PDCA) — DB-driven service_type 카탈로그.
 app.include_router(lake_service_types_router, prefix="/api/v1", dependencies=_auth)
+# PEP/APP 서비스 상위 카테고리 카탈로그 (Runtime/Catalog/Workflow/JupyterLab 등, Settings 관리).
+app.include_router(service_categories_router, prefix="/api/v1", dependencies=_auth)
 # ops-checks (운영 점검 통합 콘솔) — 여러 점검 소스를 골라 일괄/개별 실행.
 app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
 # k8s-resources (Lens 식 상세 관리) — 리소스 탐색 + 쓰기 액션(require_operator) + RBAC/CRD.

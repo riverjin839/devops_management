@@ -1,11 +1,13 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette, FileSearch, Wand2 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette, FileSearch, Wand2, Boxes } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
 import { ServiceCatalogManager } from '@/components/settings/ServiceCatalogManager';
 import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
+import { ServiceCategoryManager } from '@/components/settings/ServiceCategoryManager';
 import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
@@ -527,8 +529,10 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
-  const [activeTab, setActiveTab] = useState<TabId>('cluster');
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'service-categories' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as TabId | null);
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'cluster');
 
   // Debug 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
@@ -545,6 +549,7 @@ export function SettingsPage() {
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'service', label: '서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
     { id: 'lake-types', label: 'LAKE 타입', icon: <Database className="w-4 h-4" />, count: 0 },
+    { id: 'service-categories', label: '서비스 카테고리', icon: <Boxes className="w-4 h-4" />, count: 0 },
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
     { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'jira', label: '연동 (Jira)', icon: <Globe className="w-4 h-4" />, count: 0 },
@@ -747,6 +752,13 @@ export function SettingsPage() {
         {activeTab === 'lake-types' && (
           <div className="mb-8">
             <LakeServiceTypeManager />
+          </div>
+        )}
+
+        {/* PEP/APP 서비스 상위 카테고리 — service-category-catalog PDCA */}
+        {activeTab === 'service-categories' && (
+          <div className="mb-8">
+            <ServiceCategoryManager />
           </div>
         )}
 

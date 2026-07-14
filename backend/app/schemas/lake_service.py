@@ -7,11 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-# 코드 catalog — design 의 SERVICE_TYPE_CATALOG 와 매핑.
-ServiceType = Literal[
-    "airflow", "spark", "iceberg", "trino",
-    "starrocks", "jupyterlab", "superset", "polaris",
-]
+# 8 builtin(design 의 SERVICE_TYPE_CATALOG) + 운영자가 Settings 에서 등록한 custom slug 도
+# 허용해야 하므로 Literal 이 아닌 자유 문자열 — 실제 존재/활성 검증은 router 가 DB 조회로 수행.
 Category = Literal["catalog", "runtime", "analytics"]
 StatusLiteral = Literal["healthy", "warning", "critical", "pending"]
 TriggeredBy = Literal["manual", "scheduled"]
@@ -19,7 +16,7 @@ TriggeredBy = Literal["manual", "scheduled"]
 
 class LakeServiceBase(BaseModel):
     cluster_id: UUID
-    service_type: ServiceType
+    service_type: str = Field(..., min_length=1, max_length=32)
     name: str = Field(..., min_length=1, max_length=100)
     endpoint_url: str = Field(..., min_length=1, max_length=512)
     namespace: Optional[str] = Field(None, max_length=100)
@@ -68,6 +65,7 @@ class LakeServiceResponse(BaseModel):
     service_type: str
     name: str
     category: str
+    domain: str
     endpoint_url: str
     namespace: Optional[str] = None
     enabled: bool

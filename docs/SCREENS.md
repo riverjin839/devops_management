@@ -23,10 +23,13 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 5. [서버·인프라 / 네트워크 / 스토리지](#서버인프라--네트워크--스토리지)
 6. [DevOps — Playbook / Batch Job / 명령어](#devops--playbook--batch-job--명령어)
 7. [협업 — 업무 관리 / 스프린트 / 워크플로우](#협업--업무-관리--스프린트--워크플로우)
-8. [지식/분석 — 지식 허브](#지식분석--지식-허브)
+8. [PEP 서비스 / APP 서비스](#pep-서비스--app-서비스)
+9. [지식 허브 (사이드바 아이콘 없음 — 직접 URL 접근)](#지식-허브-사이드바-아이콘-없음--직접-url-접근)
 
 각 그룹은 사이드바(`frontend/src/components/layout/navConfig.ts`)의 그룹 분류(클러스터/서버·인프라/네트워크/
-스토리지/DevOps/협업/지식·분석/시스템)를 기준으로 나눴습니다.
+스토리지/DevOps/협업/PEP 서비스/APP 서비스/시스템)를 기준으로 나눴습니다. "지식/분석" 아이콘은
+PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9 참고), 지식 허브 자체는 코드/데이터
+그대로 유지되며 직접 URL(`/docs`)로만 접근 가능하다.
 
 ---
 
@@ -1052,12 +1055,54 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 
 ---
 
-## 지식/분석 — 지식 허브
+## PEP 서비스 / APP 서비스
+
+기존 "지식/분석" 사이드바 아이콘(2번째)이 이름·개념을 바꿔 "PEP 서비스"가 되었고, 동일 구조의
+"APP 서비스" 아이콘(3번째)이 신규 추가되었다. 두 화면 모두 좌측 `CategoryRail`(상위 카테고리
+아이콘 레일 — Runtime/Catalog/Workflow/JupyterLab 등, `ClusterSidebar iconOnly` 시각 컨벤션
+준용)을 클릭하면 우측에 해당 카테고리 하위 서비스 인스턴스 카드가 표시되는 2단 네비게이션이다.
+백엔드 데이터는 기존 LAKE 서비스 시스템(`LakeService`/`LakeServiceType`)을 확장해 재사용한다
+(신규 `domain`: pep/app, `category_id`: 상위 카테고리 FK).
+
+### PEP 서비스 (`/pep-services`)
+
+- **파일**: `frontend/src/pages/PepServicesPage.tsx` → `components/service-domain/ServiceDomainCatalog.tsx` (`domain="pep"`) (+ `CategoryRail`, `AddServiceInstanceModal`, 기존 `LakeServiceCard`/`ServiceTypeIcon` 재사용)
+- **목적 / UX**: 플랫폼 엔지니어링 서비스 카탈로그. 좌측 카테고리 레일에 Runtime/Catalog/Workflow/JupyterLab(부팅 시 자동 시드되는 builtin 4개, 삭제 불가·label/icon/정렬은 편집 가능) + 운영자가 추가한 custom 카테고리가 표시된다. Runtime 카테고리에는 spark/starrocks/trino/superset, Catalog 에는 iceberg/polaris, Workflow 에는 airflow, JupyterLab 에는 jupyterlab 타입이 기본 배정된다(부팅 시 1회 백필, 이후 Settings 에서 재분류 가능).
+- **UI 구성**: `CategoryRail`(좌, sticky) + 헤더(제목/설명 + 클러스터 필터 select + "카테고리 관리"(Settings 딥링크) + "서비스 등록") + 카테고리 chip 요약(카운트) + 서비스 카드 그리드(카드 클릭 시 기존 `/lake-services/:id` 상세로 이동 — 도메인 무관 공용 상세 페이지).
+- **Frontend**: `useServiceCategories('pep', {enabled:true})`, `useLakeServiceTypeRows({domain:'pep', enabled:true})`, `useLakeServices({domain:'pep', limit:500})` — 카테고리/클러스터 필터는 쿼리 파라미터 대신 응답을 클라이언트에서 필터링(axios 가 multi-word 쿼리 키를 camelCase 그대로 보내 백엔드 snake_case 파라미터와 어긋나는 기존 이슈를 회피).
+- **Backend**: `GET /api/v1/service-categories?domain=pep`, `GET /api/v1/lake-service-types?domain=pep`, `GET /api/v1/lake-services?domain=pep` — 모두 기존 라우터에 `domain`/`category_id` 필터를 추가한 것.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### APP 서비스 (`/app-services`)
+
+- **파일**: `frontend/src/pages/AppServicesPage.tsx` → 동일 `ServiceDomainCatalog.tsx` (`domain="app"`)
+- **목적 / UX**: PEP 서비스와 동일한 구조의 애플리케이션 서비스 카탈로그. 기본 카테고리가 하나도 없는 빈 상태로 시작하며, Settings → "서비스 카테고리"에서 관리자가 카테고리를 먼저 추가하고 → Settings → "LAKE 타입"에서 해당 카테고리에 속하는 서비스 타입(custom slug)을 등록해야 이 화면에서 인스턴스 등록이 가능하다.
+- **UI/Frontend/Backend**: PEP 서비스와 동일 컴포넌트/훅/엔드포인트를 `domain="app"`으로만 다르게 호출.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### Settings — 서비스 카테고리 관리 (`/settings?tab=service-categories`)
+
+- **파일**: `frontend/src/components/settings/ServiceCategoryManager.tsx` (Settings 탭 `service-categories`)
+- **목적 / UX**: PEP/APP 서비스 상위 카테고리 CRUD. 도메인 탭(PEP/APP) 전환 + 테이블(아이콘/key/label/builtin 여부/활성/정렬) + 추가/편집 모달. PEP builtin 4개는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능.
+- **Backend**: `GET/POST /api/v1/service-categories`, `PUT/DELETE /api/v1/service-categories/{id}` — `backend/app/routers/service_categories.py`, 모델 `ServiceCategory`(`backend/app/models/service_category.py`).
+- **관련**: `LakeServiceTypeManager.tsx`(Settings "LAKE 타입" 탭)에도 도메인(PEP/APP) 필터 탭과 상위 카테고리 select 가 추가되어, 서비스 타입을 특정 카테고리에 배정할 수 있다.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+---
+
+## 지식 허브 (사이드바 아이콘 없음 — 직접 URL 접근)
+
+> 구 "지식/분석" 사이드바 아이콘이 PEP 서비스로 대체되면서, 아래 화면들은 좌측 메뉴 진입점이
+> 없어졌다. 코드/데이터는 그대로 유지되며 `/docs` 등 직접 URL 로만 접근 가능하다(기존
+> `/ops-notes`·`/mindmap`·`/ontology`·`/trends` 와 동일한 성격).
 
 ### 지식 허브 (`/docs`)
 
 - **파일**: `frontend/src/pages/KnowledgeHubPage.tsx` (+ 하위 임베드: `OpsNotesPage`, `MindMapPage`, `OntologyPage`, `TrendDigestPage`, 공통 `ServiceSidebar`)
-- **목적 / UX**: 업무·노트·명령어·가이드·이슈·워크플로우 5종 지식 항목을 하나의 통합 표로 모아 검색·필터링하고, 상단 탭으로 Q&A/마인드맵/온톨로지/기술동향 같은 개별 분석 도구를 페이지 이동 없이 그대로 임베드해서 보여주는 허브 화면이다. CLAUDE.md 정책대로 `/ops-notes`·`/mindmap`·`/ontology`·`/trends`는 좌측 메뉴에서 제거되고 이 허브의 탭(`qa`/`mindmap`/`ontology`/`trends`)으로만 진입하는 것이 기본 동선이며, 라우트 자체는 직접 접근용으로 남아 있다. `work-guides`는 탭에는 없고 지식 목록 표의 `guide` 종류 행 클릭으로 `/work-guides/:id`로 이동한다.
+- **목적 / UX**: 업무·노트·명령어·가이드·이슈·워크플로우 5종 지식 항목을 하나의 통합 표로 모아 검색·필터링하고, 상단 탭으로 Q&A/마인드맵/온톨로지/기술동향 같은 개별 분석 도구를 페이지 이동 없이 그대로 임베드해서 보여주는 허브 화면이다. CLAUDE.md 정책대로 `/ops-notes`·`/mindmap`·`/ontology`·`/trends`는 좌측 메뉴에서 제거되고 이 허브의 탭(`qa`/`mindmap`/`ontology`/`trends`)으로만 진입하는 것이 기본 동선이었으나, 2026-07 기준 지식 허브 자신도 좌측 메뉴에서 제거되어 모든 하위 화면이 직접 URL 접근으로만 남아 있다. `work-guides`는 탭에는 없고 지식 목록 표의 `guide` 종류 행 클릭으로 `/work-guides/:id`로 이동한다.
 - **UI 구성**:
   - 상단 탭바: 지식 목록 / Q&A 노트 / 마인드맵 / 온톨로지 / 기술동향
   - `지식 목록` 탭: 좌측 `ServiceSidebar`(서비스별 필터) + 종류(업무/노트/명령어/가이드/이슈/워크플로우) chip 필터 + 미해결 이슈 빠른 필터 + 기간(주/월/분기) 필터 + 스프린트 select + 검색 + 정렬 가능한 테이블

@@ -1330,6 +1330,8 @@ export const lakeServicesApi = {
     serviceType?: string;
     category?: string;
     enabled?: boolean;
+    domain?: string;
+    categoryId?: string;
     offset?: number;
     limit?: number;
   }) => api.get<_LakeServiceListResponse>('/lake-services', { params }),
@@ -1352,7 +1354,7 @@ import type {
 } from '@/types';
 
 export const lakeServiceTypesApi = {
-  list: (params?: { enabled?: boolean; offset?: number; limit?: number }) =>
+  list: (params?: { enabled?: boolean; domain?: string; offset?: number; limit?: number }) =>
     api.get<_LakeServiceTypeListResponseRows>('/lake-service-types', { params }),
   get: (id: string) => api.get<_LakeServiceTypeRow>(`/lake-service-types/${id}`),
   create: (data: _LakeServiceTypeInput) =>
@@ -1362,6 +1364,25 @@ export const lakeServiceTypesApi = {
   toggleEnabled: (id: string, enabled: boolean) =>
     api.patch<_LakeServiceTypeRow>(`/lake-service-types/${id}/enabled`, { enabled }),
   remove: (id: string) => api.delete(`/lake-service-types/${id}`),
+};
+
+// PEP/APP 서비스 상위 카테고리 (service-category-catalog PDCA)
+import type {
+  ServiceCategory as _ServiceCategory,
+  ServiceCategoryInput as _ServiceCategoryInput,
+  ServiceCategoryUpdate as _ServiceCategoryUpdate,
+  ServiceCategoryListResponse as _ServiceCategoryListResponse,
+} from '@/types';
+
+export const serviceCategoriesApi = {
+  list: (params?: { domain?: string; enabled?: boolean; offset?: number; limit?: number }) =>
+    api.get<_ServiceCategoryListResponse>('/service-categories', { params }),
+  get: (id: string) => api.get<_ServiceCategory>(`/service-categories/${id}`),
+  create: (data: _ServiceCategoryInput) =>
+    api.post<_ServiceCategory>('/service-categories', data),
+  update: (id: string, data: _ServiceCategoryUpdate) =>
+    api.put<_ServiceCategory>(`/service-categories/${id}`, data),
+  remove: (id: string) => api.delete(`/service-categories/${id}`),
 };
 
 // Pod-to-pod bottleneck analyzer — pod-bottleneck-analyzer PDCA

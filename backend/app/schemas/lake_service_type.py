@@ -36,6 +36,9 @@ class LakeServiceTypeCreate(BaseModel):
     icon: Optional[str] = Field(None, max_length=64)
     enabled: bool = True
     sort_order: int = Field(default=100, ge=0, le=10000)
+    # PEP/APP 서비스 사이드바 2단 네비게이션용 — domain(pep|app) + 상위 카테고리 FK
+    domain: str = Field(default="pep", max_length=10)
+    category_id: Optional[UUID] = None
 
     @field_validator("service_type")
     @classmethod
@@ -49,8 +52,8 @@ class LakeServiceTypeCreate(BaseModel):
 
 
 class LakeServiceTypeUpdate(BaseModel):
-    """PUT /lake-service-types/{id} — builtin 은 enabled/sort_order/description/icon 만 의미.
-    label/category/default_path 변경은 builtin 에 대해 router 가 거부."""
+    """PUT /lake-service-types/{id} — builtin 은 enabled/sort_order/description/icon/category_id 만 의미.
+    label/category/default_path/domain 변경은 builtin 에 대해 router 가 거부."""
     label: Optional[str] = Field(None, min_length=1, max_length=100)
     category: Optional[str] = Field(None, max_length=20)
     default_path: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -58,6 +61,8 @@ class LakeServiceTypeUpdate(BaseModel):
     icon: Optional[str] = Field(None, max_length=64)
     enabled: Optional[bool] = None
     sort_order: Optional[int] = Field(None, ge=0, le=10000)
+    domain: Optional[str] = Field(None, max_length=10)
+    category_id: Optional[UUID] = None
 
     @field_validator("default_path")
     @classmethod
@@ -81,6 +86,8 @@ class LakeServiceTypeResponse(BaseModel):
     is_builtin: bool
     enabled: bool
     sort_order: int
+    domain: str
+    category_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
