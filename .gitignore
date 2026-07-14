@@ -69,6 +69,9 @@ tmp/
 temp/
 .tmp/
 
+# Redis local persistence dump (created when running redis-server from a repo subdir)
+dump.rdb
+
 # Claude Code local settings — 내용은 무시하되, 공유용 Agent Skills 는 추적(github 반영)
 .claude/*
 !.claude/skills/
