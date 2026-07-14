@@ -120,7 +120,7 @@ export function SidePane({
         aria-modal="true"
         aria-hidden={!open}
         style={{ width: `min(100vw, ${effectiveWidth})` }}
-        className={`fixed top-0 right-0 h-full bg-card border-l border-border shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out relative ${
+        className={`fixed top-0 right-0 h-full bg-card border-l border-border shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
       >

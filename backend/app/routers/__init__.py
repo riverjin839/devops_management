@@ -45,6 +45,7 @@ from app.routers.notifications import router as notifications_router
 from app.routers.lake_services import router as lake_services_router
 from app.routers.bottleneck import router as bottleneck_router
 from app.routers.lake_service_types import router as lake_service_types_router
+from app.routers.service_categories import router as service_categories_router
 from app.routers.projects import router as projects_router
 from app.routers.sprint import router as sprints_router
 from app.routers.ops_check import router as ops_check_router
@@ -115,6 +116,7 @@ __all__ = [
     "lake_services_router",
     "bottleneck_router",
     "lake_service_types_router",
+    "service_categories_router",
     "cluster_items_router",
     "cluster_trends_router",
     "terminal_appearance_router",

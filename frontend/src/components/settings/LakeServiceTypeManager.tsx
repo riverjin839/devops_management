@@ -9,15 +9,28 @@ import {
   useToggleLakeServiceType,
   useDeleteLakeServiceType,
 } from '@/hooks/useLakeServices';
+import { useServiceCategories } from '@/hooks/useServiceCategories';
 import type {
-  LakeServiceTypeInput, LakeServiceTypeRow, LakeServiceTypeUpdate,
+  LakeServiceTypeInput, LakeServiceTypeRow, LakeServiceTypeUpdate, ServiceDomain,
 } from '@/types';
 
 const CATEGORIES = ['catalog', 'runtime', 'analytics', 'other'] as const;
+const DOMAINS: { id: ServiceDomain | 'all'; label: string }[] = [
+  { id: 'all', label: '전체' },
+  { id: 'pep', label: 'PEP 서비스' },
+  { id: 'app', label: 'APP 서비스' },
+];
 
 /** LAKE service type 카탈로그 관리 — Settings → "LAKE 타입" 탭 본문. */
 export function LakeServiceTypeManager() {
-  const { data, isLoading, error } = useLakeServiceTypeRows({ limit: 200 });
+  const [domainFilter, setDomainFilter] = useState<ServiceDomain | 'all'>('all');
+  const { data, isLoading, error } = useLakeServiceTypeRows({
+    limit: 200, domain: domainFilter === 'all' ? undefined : domainFilter,
+  });
+  const { data: pepCategoriesResp } = useServiceCategories('pep');
+  const { data: appCategoriesResp } = useServiceCategories('app');
+  const allCategories = [...(pepCategoriesResp?.data ?? []), ...(appCategoriesResp?.data ?? [])];
+  const categoryLabelMap = Object.fromEntries(allCategories.map((c) => [c.id, c.label]));
   const toggle = useToggleLakeServiceType();
   const del = useDeleteLakeServiceType();
   const [editing, setEditing] = useState<LakeServiceTypeRow | null>(null);
@@ -60,6 +73,22 @@ export function LakeServiceTypeManager() {
         </button>
       </div>
 
+      {/* Domain tabs */}
+      <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
+        {DOMAINS.map((d) => (
+          <button
+            key={d.id}
+            type="button"
+            onClick={() => setDomainFilter(d.id)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              domainFilter === d.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+
       {/* Error/loading/empty */}
       {error && (
         <div className="rounded-md border border-red-500/40 bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-500">
@@ -99,6 +128,7 @@ export function LakeServiceTypeManager() {
                 <th className="px-3 py-2 text-left font-medium">slug</th>
                 <th className="px-3 py-2 text-left font-medium">label</th>
                 <th className="px-3 py-2 text-left font-medium">category</th>
+                <th className="px-3 py-2 text-left font-medium">PEP/APP 카테고리</th>
                 <th className="px-3 py-2 text-left font-medium">default_path</th>
                 <th className="px-3 py-2 text-center font-medium">유형</th>
                 <th className="px-3 py-2 text-center font-medium">활성</th>
@@ -115,6 +145,12 @@ export function LakeServiceTypeManager() {
                   <td className="px-3 py-2 font-mono">{r.serviceType}</td>
                   <td className="px-3 py-2 font-medium">{r.label}</td>
                   <td className="px-3 py-2 text-muted-foreground">{r.category}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    <span className="text-xs rounded-full px-2 py-0.5 bg-secondary border border-border mr-1">
+                      {r.domain === 'app' ? 'APP' : 'PEP'}
+                    </span>
+                    {r.categoryId ? (categoryLabelMap[r.categoryId] ?? '—') : <span className="text-muted-foreground/50">미분류</span>}
+                  </td>
                   <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.defaultPath}</td>
                   <td className="px-3 py-2 text-center">
                     {r.isBuiltin ? (
@@ -232,7 +268,12 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
   const [icon, setIcon] = useState(row?.icon ?? '');
   const [enabled, setEnabled] = useState(row?.enabled ?? true);
   const [sortOrder, setSortOrder] = useState(row?.sortOrder ?? 100);
+  const [domain, setDomain] = useState<ServiceDomain>((row?.domain as ServiceDomain) ?? 'pep');
+  const [categoryId, setCategoryId] = useState(row?.categoryId ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const { data: domainCategoriesResp } = useServiceCategories(domain);
+  const domainCategories = domainCategoriesResp?.data ?? [];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -257,20 +298,24 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
           icon: icon.trim() || null,
           enabled,
           sortOrder,
+          domain,
+          categoryId: categoryId || null,
         };
         await create.mutateAsync(payload);
       } else if (row) {
         const payload: LakeServiceTypeUpdate = {};
-        // builtin: enabled/sort_order/description/icon 만
+        // builtin: enabled/sort_order/description/icon/categoryId 만 — label/category/default_path/domain readonly
         if (!isBuiltin) {
           if (label !== row.label) payload.label = label.trim();
           if (category !== row.category) payload.category = category;
           if (defaultPath !== row.defaultPath) payload.defaultPath = defaultPath.trim();
+          if (domain !== row.domain) payload.domain = domain;
         }
         if (description !== (row.description ?? '')) payload.description = description.trim() || null;
         if (icon !== (row.icon ?? '')) payload.icon = icon.trim() || null;
         if (enabled !== row.enabled) payload.enabled = enabled;
         if (sortOrder !== row.sortOrder) payload.sortOrder = sortOrder;
+        if ((categoryId || null) !== (row.categoryId ?? null)) payload.categoryId = categoryId || null;
         await update.mutateAsync({ id: row.id, data: payload });
       }
       onClose();
@@ -341,6 +386,34 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
                 aria-label="sort order"
                 className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
               />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="PEP/APP 도메인" disabled={isBuiltin}>
+              <select
+                value={domain}
+                onChange={(e) => { setDomain(e.target.value as ServiceDomain); setCategoryId(''); }}
+                aria-label="domain"
+                disabled={isBuiltin}
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
+              >
+                <option value="pep">PEP 서비스</option>
+                <option value="app">APP 서비스</option>
+              </select>
+            </Field>
+            <Field label="상위 카테고리">
+              <select
+                value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
+                aria-label="상위 카테고리"
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              >
+                <option value="">— 미분류 —</option>
+                {domainCategories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                PEP 서비스/APP 서비스 사이드바에서 이 타입이 속할 상위 카테고리 (Settings → "서비스 카테고리"에서 추가)
+              </p>
             </Field>
           </div>
 

@@ -401,8 +401,9 @@ export function Sidebar() {
                 highlighted={openGroup === g.id}
                 suppressTooltip={openGroup === g.id}
                 onClick={(rect) => {
-                  // 지식/분석은 플라이아웃 대신 지식 허브 홈(보드)으로 바로 이동.
-                  if (g.id === 'knowledge') { setOpenGroup(null); navigate('/docs'); }
+                  // 하위 경로가 1개뿐인 그룹(PEP 서비스/APP 서비스 등)은 플라이아웃이 무의미하므로
+                  // 바로 이동. 2개 이상이면 플라이아웃으로 하위 메뉴를 고른다.
+                  if (g.paths.length === 1) { setOpenGroup(null); navigate(g.paths[0]); }
                   else toggleGroup(g.id, rect);
                 }}
               />

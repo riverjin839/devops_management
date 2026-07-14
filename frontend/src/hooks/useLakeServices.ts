@@ -27,6 +27,7 @@ export function useLakeServices(params?: {
   serviceType?: string;
   category?: string;
   enabled?: boolean;
+  domain?: string;
   offset?: number;
   limit?: number;
 }) {
@@ -109,6 +110,7 @@ export const lakeServiceTypeKeys = {
 
 export function useLakeServiceTypeRows(params?: {
   enabled?: boolean;
+  domain?: string;
   offset?: number;
   limit?: number;
 }) {

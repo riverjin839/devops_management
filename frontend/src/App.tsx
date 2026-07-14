@@ -52,6 +52,8 @@ import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
+import { PepServicesPage } from '@/pages/PepServicesPage';
+import { AppServicesPage } from '@/pages/AppServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
@@ -111,6 +113,10 @@ function AppShell() {
               {/* LAKE service monitoring (lake-service-monitoring PDCA) */}
               <Route path="/lake-services" element={<LakeServicesPage />} />
               <Route path="/lake-services/:id" element={<LakeServiceDetailPage />} />
+
+              {/* PEP 서비스 / APP 서비스 — service-category-catalog PDCA (구 "지식/분석" 아이콘 자리 재정의 + 신규) */}
+              <Route path="/pep-services" element={<PepServicesPage />} />
+              <Route path="/app-services" element={<AppServicesPage />} />
 
               {/* Pod-to-pod bottleneck analyzer (pod-bottleneck-analyzer PDCA) */}
               <Route path="/pod-bottleneck" element={<PodBottleneckPage />} />

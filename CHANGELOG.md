@@ -11,6 +11,19 @@
 1.3.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **PEP 서비스 / APP 서비스 사이드바 아이콘 추가**: "지식/분석" 아이콘을 "PEP 서비스"로
+  이름·개념 변경(Runtime/Catalog/Workflow/JupyterLab 등 상위 카테고리 → 하위 서비스
+  2단 네비게이션)하고, 동일 구조의 "APP 서비스" 아이콘을 신규 추가(빈 카테고리로 시작,
+  Settings 에서 직접 등록). 상위 카테고리는 Settings → "서비스 카테고리"에서 관리자가
+  자유롭게 추가/편집/비활성화할 수 있다(PEP builtin 4개는 삭제 불가). 기존 LAKE 서비스
+  시스템을 확장해 재사용 — 신규 필드로 도메인(pep/app)과 상위 카테고리를 부여했다.
+  지식 허브(`/docs`)는 코드/데이터 그대로 유지되며 직접 URL 접근으로만 남는다.
+  - Backend: 신규 `ServiceCategory` 모델 + `/api/v1/service-categories` CRUD 라우터.
+    `LakeServiceType`/`LakeService` 에 `domain`/`category_id` 컬럼 추가(`_safe_add_column`),
+    부팅 시 PEP builtin 카테고리 4개 자동 시드 + 기존 8개 builtin 타입 category_id 백필.
+  - Frontend: `ServiceDomainCatalog`(카테고리 레일 + 서비스 카드), `/pep-services`,
+    `/app-services` 라우트, Settings `ServiceCategoryManager`, `LakeServiceTypeManager` 에
+    도메인/카테고리 필드 추가.
 - **홈 "플랫폼 현황" 매트릭스 전면 개편**: `InfraHealthBar`/`DailyCheckReviewPanel`/
   `IncidentMiniPanel` 세로 스택 대신, 행(점검 항목) × 열(등록된 클러스터) 매트릭스로
   교체 — 셀 클릭 시 기간별 트렌드 차트 + 변경 이력 상세 모달. 점검 항목은 사용자가
@@ -36,6 +49,16 @@
 - **`CheckSchedule`(아침/점심/저녁 온오프) 모델 및 `GET/PUT /daily-check/schedule/{cluster_id}`
   API 제거** — 프론트에서 실제로 쓰이지 않던 기능(실제 시각은 항상 하드코딩값이었음).
   `check_schedules` 테이블 자체는 드롭하지 않음(비파괴 마이그레이션).
+
+### Fixed
+- **우측 슬라이드 패널(릴리즈 노트 / 계정 메뉴)이 오버레이 대신 메인 UI 안에 그대로
+  노출되던 문제**: `SidePane` 의 `<aside>` 에 `fixed` 와 `relative` 클래스가 동시에
+  들어가 있어 Tailwind 유틸리티 우선순위상 `relative` 가 이겨 실제 `position` 이
+  `relative` 로 계산됐다 — `translate-x-full`(닫힘 상태) 오프셋이 뷰포트 기준이 아닌
+  일반 문서 흐름 기준으로 적용되면서, 로그인 직후 두 패널이 항상 화면 중앙 부근에
+  나란히 "튀어나온" 것처럼 보였다. 중복된 `relative` 클래스를 제거해 `fixed`(이미
+  absolute 자손의 containing block 역할도 겸함) 하나만 남기는 것으로 해결.
+  - Frontend: `components/common/SidePane.tsx`.
 
 ## [1.3.1] - 2026-07-13
 
