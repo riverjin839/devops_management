@@ -25,6 +25,16 @@
     `/app-services` 라우트, Settings `ServiceCategoryManager`, `LakeServiceTypeManager` 에
     도메인/카테고리 필드 추가.
 
+### Fixed
+- **우측 슬라이드 패널(릴리즈 노트 / 계정 메뉴)이 오버레이 대신 메인 UI 안에 그대로
+  노출되던 문제**: `SidePane` 의 `<aside>` 에 `fixed` 와 `relative` 클래스가 동시에
+  들어가 있어 Tailwind 유틸리티 우선순위상 `relative` 가 이겨 실제 `position` 이
+  `relative` 로 계산됐다 — `translate-x-full`(닫힘 상태) 오프셋이 뷰포트 기준이 아닌
+  일반 문서 흐름 기준으로 적용되면서, 로그인 직후 두 패널이 항상 화면 중앙 부근에
+  나란히 "튀어나온" 것처럼 보였다. 중복된 `relative` 클래스를 제거해 `fixed`(이미
+  absolute 자손의 containing block 역할도 겸함) 하나만 남기는 것으로 해결.
+  - Frontend: `components/common/SidePane.tsx`.
+
 ## [1.3.1] - 2026-07-13
 
 ### Changed
