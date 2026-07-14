@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
@@ -508,6 +508,48 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
               />
             ) : fmtDate(item.closedAt)}
           </EditableCell>
+        );
+
+      case 'jiraLink':
+        return (
+          <td key="jiraLink" className="px-4 py-1.5 whitespace-nowrap">
+            {item.jiraUrl ? (
+              <a
+                href={item.jiraUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={item.jiraUrl}
+                className="inline-flex items-center gap-1 text-sm text-[#0052CC] dark:text-blue-300 hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                {item.jiraIssueKey || 'Jira'}
+              </a>
+            ) : (
+              <span className="text-muted-foreground/50 text-sm">-</span>
+            )}
+          </td>
+        );
+
+      case 'confluenceLink':
+        return (
+          <td key="confluenceLink" className="px-4 py-1.5 whitespace-nowrap">
+            {item.confluenceUrl ? (
+              <a
+                href={item.confluenceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={item.confluenceUrl}
+                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                Confl.
+              </a>
+            ) : (
+              <span className="text-muted-foreground/50 text-sm">-</span>
+            )}
+          </td>
         );
 
       case 'remarks':

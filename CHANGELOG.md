@@ -11,6 +11,14 @@
 1.3.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **업무관리 게시판 — Jira/Confluence 링크 컬럼 추가**: `WorkItem` 모델에는 이미
+  `jiraUrl`/`confluenceUrl` 필드가 있어 업무 등록/수정 폼과 상세 보기에서는 편집·확인이
+  가능했지만, 게시판 목록(테이블)에는 (Jira API 연동으로 채워지는) `jiraIssueKey` 뱃지
+  외엔 노출 위치가 없었다 — 컬럼 관리에서 켤 수 있는 "Jira 링크"/"Confl. 링크" 컬럼을
+  추가해 수동 입력/Jira Excel 미리보기 등 어떤 경로로 채워졌든 클릭 한 번으로 열 수 있게
+  했다(기본은 숨김).
+  - Frontend: `components/work-items/workItemColumns.ts`(`jiraLink`/`confluenceLink`
+    컬럼 메타 추가), `WorkItemTableRow.tsx` 셀 렌더링 추가.
 - **PEP 서비스 / APP 서비스 사이드바 아이콘 추가**: "지식/분석" 아이콘을 "PEP 서비스"로
   이름·개념 변경(Runtime/Catalog/Workflow/JupyterLab 등 상위 카테고리 → 하위 서비스
   2단 네비게이션)하고, 동일 구조의 "APP 서비스" 아이콘을 신규 추가(빈 카테고리로 시작,
