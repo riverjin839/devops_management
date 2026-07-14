@@ -11,6 +11,14 @@
 1.3.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **담당자별 진행 현황(주간) 스윔레인 — 상태 막대 투명도 + 글자색 커스터마이즈**: 홈
+  "담당자별 진행 현황" 주간 탭의 상태 막대(완료/진행중/검토/Todo/Backlog)를 Settings →
+  "화면 UI 설정" → 홈 화면 설정에서 배경 투명도(0~100% 슬라이더)와 막대 안 글자색(색상
+  피커, 기본값 흰색)으로 조절 가능. 사용자별 localStorage 저장, 범례 스와치도 동일하게
+  반영.
+  - Frontend: `stores/homeStore.ts`(`weeklyBarOpacity`/`weeklyBarTextColor`),
+    `WeeklyStatusTimeline.tsx`(Tailwind 그라데이션 클래스 → hex 기반 `rgba()` inline
+    style 로 전환), `SettingsPage.tsx` 슬라이더/색상 피커 UI.
 - **PEP 서비스 / APP 서비스 사이드바 아이콘 추가**: "지식/분석" 아이콘을 "PEP 서비스"로
   이름·개념 변경(Runtime/Catalog/Workflow/JupyterLab 등 상위 카테고리 → 하위 서비스
   2단 네비게이션)하고, 동일 구조의 "APP 서비스" 아이콘을 신규 추가(빈 카테고리로 시작,

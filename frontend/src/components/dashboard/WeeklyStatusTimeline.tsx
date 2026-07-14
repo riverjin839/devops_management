@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
@@ -8,6 +8,7 @@ import {
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
+import { useHomeStore } from '@/stores/homeStore';
 import { stripHtml, cn } from '@/lib/utils';
 import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 
@@ -40,13 +41,28 @@ const KR_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 type ViewMode = 'task' | 'assignee';
 
 // ── status visual map (macOS / Claude soft gradient bars) ───────────────────────
-const STATUS_BAR: Record<KanbanStatus, { grad: string; ring: string; label: string }> = {
-  done:        { grad: 'from-emerald-400 to-emerald-500', ring: 'ring-emerald-500/30', label: '완료' },
-  in_progress: { grad: 'from-sky-400 to-blue-500',        ring: 'ring-blue-500/30',    label: '진행중' },
-  review_test: { grad: 'from-violet-400 to-purple-500',   ring: 'ring-purple-500/30',  label: '검토' },
-  todo:        { grad: 'from-amber-300 to-orange-400',    ring: 'ring-orange-500/30',  label: 'Todo' },
-  backlog:     { grad: 'from-slate-300 to-slate-400',     ring: 'ring-slate-500/30',   label: 'Backlog' },
+// from/to 는 Tailwind 팔레트와 동일한 hex — 배경 투명도(Settings → 홈 화면 설정)를
+// 사용자가 조절할 수 있도록 클래스 대신 hex 로 들고 rgba() 로 조합해 inline style 렌더.
+const STATUS_BAR: Record<KanbanStatus, { from: string; to: string; ring: string; label: string }> = {
+  done:        { from: '#34d399', to: '#10b981', ring: 'ring-emerald-500/30', label: '완료' },
+  in_progress: { from: '#38bdf8', to: '#3b82f6', ring: 'ring-blue-500/30',    label: '진행중' },
+  review_test: { from: '#a78bfa', to: '#a855f7', ring: 'ring-purple-500/30',  label: '검토' },
+  todo:        { from: '#fcd34d', to: '#fb923c', ring: 'ring-orange-500/30', label: 'Todo' },
+  backlog:     { from: '#cbd5e1', to: '#94a3b8', ring: 'ring-slate-500/30',  label: 'Backlog' },
 };
+
+/** #rrggbb + 0~100 투명도 → rgba() 문자열. */
+function hexToRgba(hex: string, opacityPct: number): string {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const [r, g, b] = [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(100, opacityPct)) / 100})`;
+}
+
+/** 상태 막대 배경(그라데이션) inline style — 투명도 반영. */
+function barBackgroundStyle(sv: { from: string; to: string }, opacityPct: number): CSSProperties {
+  return { backgroundImage: `linear-gradient(to right, ${hexToRgba(sv.from, opacityPct)}, ${hexToRgba(sv.to, opacityPct)})` };
+}
 
 function StatusGlyph({ status }: { status: KanbanStatus }) {
   if (status === 'done') return <CheckCircle2 className="w-3 h-3 flex-shrink-0" />;
@@ -131,6 +147,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const [createOpen, setCreateOpen] = useState(false);
 
   const currentUser = useAuthStore((s) => s.user);
+  const barOpacity = useHomeStore((s) => s.weeklyBarOpacity);
+  const barTextColor = useHomeStore((s) => s.weeklyBarTextColor);
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -463,7 +481,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                   {/* label */}
                   <div className="px-4 py-2.5 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full bg-gradient-to-r ${sv.grad}`} />
+                      <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full" style={barBackgroundStyle(sv, barOpacity)} />
                       <span className="text-sm font-medium truncate">{item.title?.trim() || stripHtml(item.content)}</span>
                     </div>
                     {item.category && (
@@ -481,7 +499,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                       <button type="button"
                         onClick={() => openWorkItem(item.id)}
                         title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
-                        className={`w-full h-6 rounded-lg bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
+                        style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor }}
+                        className={`w-full h-6 rounded-lg ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 overflow-hidden cursor-pointer hover:brightness-110 transition
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-xs font-semibold truncate">{team || sv.label}</span>
@@ -550,7 +569,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                             <button type="button"
                               onClick={() => openWorkItem(item.id)}
                               title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
-                              className={`w-full h-5 rounded-md bg-gradient-to-r ${sv.grad} ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-1.5 text-white overflow-hidden cursor-pointer hover:brightness-110 transition
+                              style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor }}
+                              className={`w-full h-5 rounded-md ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-1.5 overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
                               <span className="text-[11px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
@@ -578,7 +598,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         <span className="font-medium">범례</span>
         {(Object.keys(STATUS_BAR) as KanbanStatus[]).map((k) => (
           <span key={k} className="flex items-center gap-1">
-            <span className={`w-3 h-2.5 rounded-sm bg-gradient-to-r ${STATUS_BAR[k].grad}`} />
+            <span className="w-3 h-2.5 rounded-sm" style={barBackgroundStyle(STATUS_BAR[k], barOpacity)} />
             {STATUS_BAR[k].label}
           </span>
         ))}

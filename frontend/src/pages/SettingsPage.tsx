@@ -349,6 +349,10 @@ export function SettingsPage() {
   // 업무 현황 스케줄 배경 (흰색/크림) — 사용자별 설정.
   const scheduleBg = useHomeStore((s) => s.scheduleBg);
   const setScheduleBg = useHomeStore((s) => s.setScheduleBg);
+  const weeklyBarOpacity = useHomeStore((s) => s.weeklyBarOpacity);
+  const setWeeklyBarOpacity = useHomeStore((s) => s.setWeeklyBarOpacity);
+  const weeklyBarTextColor = useHomeStore((s) => s.weeklyBarTextColor);
+  const setWeeklyBarTextColor = useHomeStore((s) => s.setWeeklyBarTextColor);
   // Cluster state
   const [showAddModal, setShowAddModal] = useState(false);
   const [editCluster, setEditCluster] = useState<Cluster | null>(null);
@@ -673,6 +677,49 @@ export function SettingsPage() {
                   {label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* 담당자별 진행 현황(주간) 스윔레인 상태 막대 — 배경 투명도 + 글자색 */}
+          <div className="px-4 py-3 flex items-center justify-between border-t border-border">
+            <div>
+              <p className="text-sm">담당자별 진행 현황(주간) 막대 투명도</p>
+              <p className="text-xs text-muted-foreground">스윔레인 상태 막대(완료/진행중/검토/Todo/Backlog)의 배경 색 투명도</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={weeklyBarOpacity}
+                onChange={(e) => setWeeklyBarOpacity(Number(e.target.value))}
+                aria-label="주간 스윔레인 막대 투명도"
+                className="w-32 accent-primary"
+              />
+              <span className="w-10 text-xs text-muted-foreground text-right font-mono">{weeklyBarOpacity}%</span>
+            </div>
+          </div>
+          <div className="px-4 py-3 flex items-center justify-between border-t border-border">
+            <div>
+              <p className="text-sm">위 막대 안 글자색</p>
+              <p className="text-xs text-muted-foreground">막대 배경이 연해지면 기본 흰 글씨가 묻힐 수 있어 직접 지정 가능</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={weeklyBarTextColor}
+                onChange={(e) => setWeeklyBarTextColor(e.target.value)}
+                aria-label="주간 스윔레인 막대 글자색"
+                className="w-9 h-7 rounded-md border border-border cursor-pointer bg-transparent p-0.5"
+              />
+              <span className="text-xs text-muted-foreground font-mono">{weeklyBarTextColor}</span>
+              <button
+                type="button"
+                onClick={() => setWeeklyBarTextColor('#ffffff')}
+                className="text-xs text-primary hover:underline"
+              >
+                기본값
+              </button>
             </div>
           </div>
         </div>
