@@ -68,12 +68,12 @@ from app.routers import (
     metric_trend_router,
     service_topology_router,
     cluster_items_router,
-    coroot_router,
     cluster_trends_router,
     terminal_appearance_router,
     k8s_events_router,
     k8s_events_ingest_router,
     release_notes_router,
+    check_matrix_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -290,16 +290,24 @@ def _run_migrations():
             ("icon", "VARCHAR(64)"),
             # G-9: TLS 검증 옵트인. 기본 false = 기존 verify=False 동작 유지.
             ("tls_verify", "BOOLEAN NOT NULL DEFAULT FALSE"),
-            # coroot APM 연동 — per-cluster project 매핑 + URL 오버라이드 + 토글.
-            ("coroot_project", "VARCHAR(100)"),
-            ("coroot_url", "VARCHAR(512)"),
-            ("coroot_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
             # Cluster Trends — per-cluster Prometheus URL 오버라이드 + 토글.
             ("prometheus_url", "VARCHAR(512)"),
             ("prometheus_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            # 점검 매트릭스 — core_bundle 행(DailyChecker 원자 실행) 클러스터별 cron.
+            # check_schedules(구 아침/점심/저녁) 완전 대체.
+            ("check_cron_expr", "VARCHAR(100)"),
+            ("check_last_run_at", "TIMESTAMP"),
         ]
         for col_name, col_type in new_cluster_cols:
             _safe_add_column("clusters", col_name, col_type)
+
+        # check_cron_expr 백필 — 기존 09/13/18시 하드코딩 스케줄과 동일한 동작을 보존.
+        # cron 이 아직 설정 안 된(NULL) 클러스터에만 적용 — 사용자가 명시적으로 지운 경우는 없음
+        # (지우기=NULL 로 재설정하는 UI 를 제공하지 않을 예정이라 매 부팅 재적용해도 안전).
+        _safe_exec(
+            "UPDATE clusters SET check_cron_expr = '0 9,13,18 * * *' WHERE check_cron_expr IS NULL",
+            label="backfill clusters.check_cron_expr",
+        )
 
         # seq 백필 — 기존 레코드는 created_at 순서대로 1000, 1010, 1020, ...
         # 새 컬럼이 막 추가됐다면 모두 default(1000) 이라 정렬이 안정적이지 않다.
@@ -1418,6 +1426,32 @@ def _seed_assignee_users():
         db.close()
 
 
+def _seed_check_matrix_items():
+    """점검 매트릭스 기본 행 시드 — 테이블이 비어있을 때만(사용자 삭제/추가는 보존)."""
+    from app.services import check_matrix_service as cms
+
+    db = SessionLocal()
+    try:
+        added = cms.seed_default_items(db)
+        if added:
+            _log.info("seeded %d check matrix items", added)
+    finally:
+        db.close()
+
+
+def _seed_check_matrix_schedules():
+    """시드된 deep_check 행 중 REGISTRY.default_enabled 인 것만 클러스터별 기본 cron 부여."""
+    from app.services import check_matrix_service as cms
+
+    db = SessionLocal()
+    try:
+        added = cms.seed_default_schedules(db)
+        if added:
+            _log.info("seeded %d check matrix schedules", added)
+    finally:
+        db.close()
+
+
 def _seed_initial_admin():
     """Create the bootstrap admin if no users exist yet. Idempotent."""
     db = SessionLocal()
@@ -1457,6 +1491,8 @@ async def lifespan(app: FastAPI):
         ("seed_trend_sources", _seed_default_trend_sources),
         ("seed_playbooks", _seed_default_playbooks),
         ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
+        ("seed_check_matrix_items", _seed_check_matrix_items),
+        ("seed_check_matrix_schedules", _seed_check_matrix_schedules),
         ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
         ("seed_lake_service_types", _seed_default_lake_service_types),
         ("seed_service_categories", _seed_default_service_categories),
@@ -1514,6 +1550,7 @@ _auth = [Depends(get_current_user)]
 app.include_router(clusters_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(history_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
@@ -1579,8 +1616,6 @@ app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
-# coroot — 애플리케이션 APM 계층 (별도 배포된 coroot 연동: 헬스/요약/딥링크).
-app.include_router(coroot_router, prefix="/api/v1", dependencies=_auth)
 # terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).
 app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_auth)
 # k8s_events — kubewatch 웹훅 수신(토큰 인증) + 이벤트 조회(JWT)

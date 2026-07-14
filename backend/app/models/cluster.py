@@ -72,16 +72,15 @@ class Cluster(Base):
     # null/empty 면 status 기반 기본 아이콘으로 fallback.
     icon = Column(Text, nullable=True)
 
-    # coroot APM 연동 — 별도 배포된 coroot 의 project 매핑/URL 오버라이드/토글.
-    # base URL 은 전역 settings.coroot_url, project 는 클러스터마다 다름.
-    coroot_project = Column(String(100), nullable=True)        # 이 클러스터에 대응하는 coroot project
-    coroot_url = Column(String(512), nullable=True)            # 선택 — 전역 URL 오버라이드
-    coroot_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
-
     # Cluster Trends(노드 메트릭 추이) 연동 — 클러스터별 Prometheus.
     # base URL 은 비우면 전역 settings.prometheus_url fallback. enabled=false 면 Trends offline 표기.
     prometheus_url = Column(String(512), nullable=True)        # 선택 — 클러스터별 Prometheus URL 오버라이드
     prometheus_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    # 점검 매트릭스(Check Matrix) — core_bundle 행(DailyChecker 원자 실행)의 클러스터별 cron.
+    # NULL 이면 미실행. check_schedules(구 아침/점심/저녁) 를 완전 대체.
+    check_cron_expr = Column(String(100), nullable=True)
+    check_last_run_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

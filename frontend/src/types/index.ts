@@ -50,10 +50,6 @@ export interface Cluster {
   // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
   // null/empty 면 status 기반 기본 아이콘으로 fallback.
   icon?: string | null;
-  // coroot APM 연동 — project 매핑 / URL 오버라이드 / 토글.
-  corootProject?: string | null;
-  corootUrl?: string | null;
-  corootEnabled?: boolean;
   // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
@@ -141,9 +137,6 @@ export interface ClusterManageUpdate {
   bgpEnabled?: boolean;
   asNumber?: string;
   icon?: string | null;
-  corootProject?: string | null;
-  corootUrl?: string | null;
-  corootEnabled?: boolean;
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
 }
@@ -3067,38 +3060,6 @@ export interface ReactionSummary {
   groups: ReactionGroup[];
 }
 
-// ── Coroot APM (애플리케이션 옵저버빌리티 — 별도 배포된 coroot 연동) ──────────
-// 백엔드 응답(snake_case)은 api 인터셉터가 camelCase 로 변환한다.
-export interface CorootSummary {
-  status: 'ok' | 'error' | 'offline';
-  serviceCount: number | null;
-  healthy: number | null;
-  alerting: number | null;
-  error: string | null;
-  raw: unknown | null;
-}
-
-export interface CorootDeepLink {
-  url: string | null;
-  status: 'ok' | 'offline';
-  detail?: string;
-}
-
-// 서비스별 trace 드릴다운 — application 목록 + 항목.
-export interface CorootApplication {
-  id: string;                 // coroot 'ns:Kind:name'
-  name: string;
-  namespace: string | null;
-  kind: string | null;
-  status: string | null;      // ok / warning / critical 등 (소문자)
-}
-
-export interface CorootApplicationsResponse {
-  status: 'ok' | 'error' | 'offline';
-  applications: CorootApplication[];
-  error: string | null;
-}
-
 // ── mc client presets (personal custom + admin shared) ──────────────────────
 export interface McPresetItem {
   key: string;
@@ -3158,4 +3119,72 @@ export interface TerminalAppearance {
 export interface TerminalAppearanceResponse {
   appearance: TerminalAppearance;
   shared: TerminalTemplate[];
+}
+
+// ── 점검 매트릭스 (플랫폼 현황 — 행: 점검 항목, 열: 클러스터) ──────────────
+export type CheckMatrixSourceType = 'core_bundle' | 'deep_check' | 'addon' | 'manual';
+
+export interface CheckMatrixItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  unit?: string | null;
+  sourceType: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  /** true = 시스템 항목(core_bundle) — 삭제 불가, Cluster.status 산정에 사용 */
+  isSystem: boolean;
+  /** false = 그리드에서 숨김(자동 실행은 계속됨) */
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CheckMatrixItemInput = Omit<
+  CheckMatrixItem,
+  'id' | 'isSystem' | 'sortOrder' | 'createdAt' | 'updatedAt'
+>;
+
+export interface CheckMatrixCell {
+  status: Status | null;
+  value: number | null;
+  message?: string | null;
+  checkedAt: string | null;
+  cronExpr: string | null;
+  scheduleEnabled: boolean;
+  hasResult: boolean;
+}
+
+export interface CheckMatrixGridCluster {
+  id: string;
+  name: string;
+  checkCronExpr: string | null;
+}
+
+export interface CheckMatrixGrid {
+  items: CheckMatrixItem[];
+  clusters: CheckMatrixGridCluster[];
+  /** cells[itemId][clusterId] */
+  cells: Record<string, Record<string, CheckMatrixCell>>;
+}
+
+export interface CheckMatrixHistoryPoint {
+  checkedAt: string;
+  status: Status;
+  value: number | null;
+}
+
+export interface CheckMatrixHistoryChange {
+  checkedAt: string;
+  status: Status;
+  message?: string | null;
+}
+
+export interface CheckMatrixHistory {
+  points: CheckMatrixHistoryPoint[];
+  changes: CheckMatrixHistoryChange[];
+}
+
+export interface CheckMatrixSettings {
+  retentionDays: number;
 }
