@@ -113,7 +113,8 @@ class JiraExcelSaveRequest(BaseModel):
 # ── 양방향 push (Phase 2) ──────────────────────────────────────────────────────
 class JiraPushRequest(BaseModel):
     comment: Optional[str] = None
-    force: bool = False     # Jira 쪽이 더 최신이어도 덮어쓰기
+    force: bool = False           # Jira 쪽이 더 최신이어도 덮어쓰기
+    push_fields: bool = True      # 제목(summary)/설명(description)/우선순위(priority) 반영 여부
 
 
 class JiraPushResult(BaseModel):
@@ -121,5 +122,7 @@ class JiraPushResult(BaseModel):
     detail: str = ""
     transitioned: bool = False
     comment_added: bool = False
+    fields_updated: list[str] = []   # 실제로 Jira 에 반영된 필드명 (summary/description/priority)
+    field_errors: list[str] = []     # 반영 실패한 필드 사유 (예: 우선순위 이름 불일치)
     jira_status: Optional[str] = None
     available_transitions: list[str] = []

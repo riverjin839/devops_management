@@ -27,7 +27,10 @@ from app.models.work_item import WorkItem
 from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services import secret_box
 from app.services import audit_logger
-from app.services.jira_service import JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY
+from app.services.jira_service import (
+    JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY,
+    PEP_PRIORITY_TO_JIRA, strip_issue_key_prefix,
+)
 from app.schemas.jira import (
     JiraConfig,
     JiraConfigUpdate,
@@ -869,6 +872,32 @@ async def push_to_jira(
             jira_status=(jfields.get("status") or {}).get("name"),
         )
 
+    # 1.5) 값 필드 편집 반영 (제목/설명/우선순위). assignee 는 PEP 담당자명 ↔ Jira username
+    #      역매핑이 불안정해 제외한다. summary/description 은 저위험이라 한 번에 PUT 하고,
+    #      priority 는 프로젝트별 우선순위 스킴 차이로 실패할 수 있어 별도 best-effort PUT.
+    fields_updated: list[str] = []
+    field_errors: list[str] = []
+    if payload.push_fields:
+        core: dict = {}
+        summary = strip_issue_key_prefix(item.title, key)
+        if summary:
+            core["summary"] = summary[:255]
+        if item.content is not None:
+            core["description"] = item.content or ""
+        if core:
+            upd = await svc.update_issue(key, core)
+            if upd.get("status") == "ok":
+                fields_updated.extend(core.keys())
+            else:
+                field_errors.append(upd.get("detail", "제목/설명 반영 실패"))
+        jira_priority = PEP_PRIORITY_TO_JIRA.get((item.priority or "medium").lower())
+        if jira_priority:
+            pres = await svc.update_issue(key, {"priority": {"name": jira_priority}})
+            if pres.get("status") == "ok":
+                fields_updated.append("priority")
+            else:
+                field_errors.append(f"priority({jira_priority}): {pres.get('detail', '반영 실패')}")
+
     # 2) 상태 transition
     transitioned = False
     desired_cat = KANBAN_TO_CATEGORY.get(item.kanban_status or "todo", "new")
@@ -911,11 +940,29 @@ async def push_to_jira(
     audit_logger.record(
         db, action="work_item.jira_push", actor=actor,
         target_type="work_item", target_id=str(item.id),
-        details={"key": key, "transitioned": transitioned, "comment": comment_added, "force": payload.force},
+        details={
+            "key": key, "transitioned": transitioned, "comment": comment_added,
+            "fields": fields_updated, "force": payload.force,
+        },
     )
 
-    detail = "Jira 반영 완료" if (transitioned or comment_added) else "이미 동기화 상태입니다."
+    changed = transitioned or comment_added or bool(fields_updated)
+    if changed:
+        parts = []
+        if fields_updated:
+            _labels = {"summary": "제목", "description": "설명", "priority": "우선순위"}
+            parts.append("필드(" + ", ".join(_labels.get(f, f) for f in fields_updated) + ")")
+        if transitioned:
+            parts.append("상태")
+        if comment_added:
+            parts.append("코멘트")
+        detail = "Jira 반영 완료: " + " · ".join(parts)
+    else:
+        detail = "이미 동기화 상태입니다."
+    if field_errors:
+        detail += " (일부 실패: " + "; ".join(field_errors[:3]) + ")"
     return JiraPushResult(
         status="ok", detail=detail, transitioned=transitioned,
-        comment_added=comment_added, jira_status=new_status_name or (jfields.get("status") or {}).get("name"),
+        comment_added=comment_added, fields_updated=fields_updated, field_errors=field_errors,
+        jira_status=new_status_name or (jfields.get("status") or {}).get("name"),
     )
