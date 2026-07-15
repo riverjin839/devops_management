@@ -24,6 +24,14 @@
 ## [1.4.0] - 2026-07-14
 
 ### Added
+- **담당자별 진행 현황(주간) 스윔레인 — 상태 막대 투명도 + 글자색 커스터마이즈**: 홈
+  "담당자별 진행 현황" 주간 탭의 상태 막대(완료/진행중/검토/Todo/Backlog)를 Settings →
+  "화면 UI 설정" → 홈 화면 설정에서 배경 투명도(0~100% 슬라이더)와 막대 안 글자색(색상
+  피커, 기본값 흰색)으로 조절 가능. 사용자별 localStorage 저장, 범례 스와치도 동일하게
+  반영.
+  - Frontend: `stores/homeStore.ts`(`weeklyBarOpacity`/`weeklyBarTextColor`),
+    `WeeklyStatusTimeline.tsx`(Tailwind 그라데이션 클래스 → hex 기반 `rgba()` inline
+    style 로 전환), `SettingsPage.tsx` 슬라이더/색상 피커 UI.
 - **업무관리 게시판 — Jira/Confluence 링크 컬럼 추가**: `WorkItem` 모델에는 이미
   `jiraUrl`/`confluenceUrl` 필드가 있어 업무 등록/수정 폼과 상세 보기에서는 편집·확인이
   가능했지만, 게시판 목록(테이블)에는 (Jira API 연동으로 채워지는) `jiraIssueKey` 뱃지
