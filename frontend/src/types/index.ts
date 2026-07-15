@@ -506,8 +506,12 @@ export interface JiraConfig {
   defaultProjectKey?: string | null;
 }
 
+// 인증 방식: 'pat'(Personal Access Token → Bearer) | 'cookie'(브라우저 세션 쿠키 재사용).
+export type JiraAuthType = 'pat' | 'cookie';
+
 export interface JiraCredentialStatus {
   configured: boolean;
+  authType: JiraAuthType;
   jiraAccount?: string | null;
   lastVerifiedAt?: string | null;
 }

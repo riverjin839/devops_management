@@ -21,14 +21,21 @@ class JiraConfigUpdate(BaseModel):
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────
+# 인증 방식: 'pat'(Personal Access Token → Bearer) | 'cookie'(브라우저 세션 쿠키 재사용).
+JiraAuthType = Literal["pat", "cookie"]
+
+
 class JiraCredentialStatus(BaseModel):
     configured: bool
+    auth_type: JiraAuthType = "pat"
     jira_account: Optional[str] = None
     last_verified_at: Optional[datetime] = None
 
 
 class JiraCredentialUpdate(BaseModel):
+    # PAT 문자열 또는 세션 쿠키 문자열 (auth_type 에 따라 해석). 둘 다 token_encrypted 에 암호화 저장.
     token: str
+    auth_type: JiraAuthType = "pat"
     jira_account: Optional[str] = None
 
 

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { jiraApi } from '@/services/api';
 import { workItemKeys } from '@/hooks/useWorkItems';
-import type { JiraConfig, JiraImportRequest, JiraPushRequest } from '@/types';
+import type { JiraAuthType, JiraConfig, JiraImportRequest, JiraPushRequest } from '@/types';
 
 export const jiraKeys = {
   config: ['jira', 'config'] as const,
@@ -35,8 +35,8 @@ export function useJiraCredential() {
 export function useSaveJiraCredential() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ token, jiraAccount }: { token: string; jiraAccount?: string }) =>
-      jiraApi.saveCredential(token, jiraAccount),
+    mutationFn: ({ token, authType, jiraAccount }: { token: string; authType?: JiraAuthType; jiraAccount?: string }) =>
+      jiraApi.saveCredential(token, authType ?? 'pat', jiraAccount),
     onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.credential }),
   });
 }
