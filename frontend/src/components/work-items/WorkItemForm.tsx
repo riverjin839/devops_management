@@ -511,6 +511,21 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             placeholder="완료 시 입력"
           />
         </div>
+        {/* 전체 참석 — 옵션. 개인 담당자와 별개로 홈 "담당자별 진행 현황" 의 "전체" 카드에도 노출된다 */}
+        <div className="md:col-span-2">
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allAttendees}
+              onChange={(e) => setAllAttendees(e.target.checked)}
+              className="accent-primary"
+            />
+            <span className="font-medium">👥 전체 참석</span>
+            <span className="text-xs text-muted-foreground">
+              (파트 회의 등 모든 멤버가 함께 하는 업무 — 홈 "전체" 카드에도 노출)
+            </span>
+          </label>
+        </div>
         {/* Confluence 링크 — 옵션 */}
         <div className="md:col-span-2">
           <ConfluenceUrlInput
