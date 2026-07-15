@@ -8,7 +8,20 @@
 
 ## [Unreleased]
 
-1.3.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.5.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.5.0] - 2026-07-15
+
+### Added
+- **운영 노트(운영관리) — DL 링크 추가**: 운영 노트(`/ops-notes`)에 기존 Confluence
+  링크와 나란히 "DL 링크"(Data Lake 등 참고 자료) 필드를 추가. 등록/수정 폼, 목록 테이블
+  작업 컬럼, 카드 보기 푸터, 상세 읽기 화면에 모두 노출된다.
+  - Backend: `OpsNote` 모델에 `dl_url` 컬럼 추가(`_safe_add_column`으로 마이그레이션),
+    schema/router 반영.
+  - Frontend: `OpsNoteForm.tsx` 에 `ConfluenceUrlInput` 재사용으로 DL 링크 입력 추가,
+    `OpsNoteTable.tsx`/`OpsNoteReadView.tsx`/`OpsNotesPage.tsx`(카드 보기)에 링크 노출.
+
+## [1.4.0] - 2026-07-14
 
 ### Added
 - **담당자별 진행 현황(주간) 스윔레인 — 상태 막대 투명도 + 글자색 커스터마이즈**: 홈
@@ -19,6 +32,14 @@
   - Frontend: `stores/homeStore.ts`(`weeklyBarOpacity`/`weeklyBarTextColor`),
     `WeeklyStatusTimeline.tsx`(Tailwind 그라데이션 클래스 → hex 기반 `rgba()` inline
     style 로 전환), `SettingsPage.tsx` 슬라이더/색상 피커 UI.
+- **업무관리 게시판 — Jira/Confluence 링크 컬럼 추가**: `WorkItem` 모델에는 이미
+  `jiraUrl`/`confluenceUrl` 필드가 있어 업무 등록/수정 폼과 상세 보기에서는 편집·확인이
+  가능했지만, 게시판 목록(테이블)에는 (Jira API 연동으로 채워지는) `jiraIssueKey` 뱃지
+  외엔 노출 위치가 없었다 — 컬럼 관리에서 켤 수 있는 "Jira 링크"/"Confl. 링크" 컬럼을
+  추가해 수동 입력/Jira Excel 미리보기 등 어떤 경로로 채워졌든 클릭 한 번으로 열 수 있게
+  했다(기본은 숨김).
+  - Frontend: `components/work-items/workItemColumns.ts`(`jiraLink`/`confluenceLink`
+    컬럼 메타 추가), `WorkItemTableRow.tsx` 셀 렌더링 추가.
 - **PEP 서비스 / APP 서비스 사이드바 아이콘 추가**: "지식/분석" 아이콘을 "PEP 서비스"로
   이름·개념 변경(Runtime/Catalog/Workflow/JupyterLab 등 상위 카테고리 → 하위 서비스
   2단 네비게이션)하고, 동일 구조의 "APP 서비스" 아이콘을 신규 추가(빈 카테고리로 시작,

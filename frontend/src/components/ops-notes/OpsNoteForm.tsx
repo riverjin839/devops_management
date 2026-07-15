@@ -43,6 +43,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
   const [author, setAuthor]           = useState(initial?.author ?? '');
   const [pinned, setPinned]           = useState(initial?.pinned ?? false);
   const [confluenceUrl, setConfluenceUrl] = useState(initial?.confluenceUrl ?? '');
+  const [dlUrl, setDlUrl]             = useState(initial?.dlUrl ?? '');
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
 
@@ -63,6 +64,7 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
         author: author.trim() || undefined,
         pinned,
         confluenceUrl: confluenceUrl.trim() || undefined,
+        dlUrl: dlUrl.trim() || undefined,
       };
       let savedId: string | undefined;
       if (isEdit && initial) {
@@ -208,6 +210,16 @@ export function OpsNoteForm({ initial, defaultService, onCancel, onSaved }: OpsN
           id={f('confluence')}
           value={confluenceUrl}
           onChange={setConfluenceUrl}
+        />
+
+        {/* DL 링크 */}
+        <ConfluenceUrlInput
+          id={f('dl')}
+          value={dlUrl}
+          onChange={setDlUrl}
+          label="DL 링크"
+          placeholder="https://..."
+          hint="관련 DL(Data Lake 등) 문서/대시보드가 있다면 URL 을 붙여넣으세요. (선택)"
         />
 
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
