@@ -10,6 +10,15 @@
 
 1.4.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **운영 노트(운영관리) — DL 링크 추가**: 운영 노트(`/ops-notes`)에 기존 Confluence
+  링크와 나란히 "DL 링크"(Data Lake 등 참고 자료) 필드를 추가. 등록/수정 폼, 목록 테이블
+  작업 컬럼, 카드 보기 푸터, 상세 읽기 화면에 모두 노출된다.
+  - Backend: `OpsNote` 모델에 `dl_url` 컬럼 추가(`_safe_add_column`으로 마이그레이션),
+    schema/router 반영.
+  - Frontend: `OpsNoteForm.tsx` 에 `ConfluenceUrlInput` 재사용으로 DL 링크 입력 추가,
+    `OpsNoteTable.tsx`/`OpsNoteReadView.tsx`/`OpsNotesPage.tsx`(카드 보기)에 링크 노출.
+
 ## [1.4.0] - 2026-07-14
 
 ### Added

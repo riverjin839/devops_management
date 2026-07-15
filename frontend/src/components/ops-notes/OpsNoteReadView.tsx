@@ -48,6 +48,17 @@ export function OpsNoteReadView({ note }: OpsNoteReadViewProps) {
             <ExternalLink className="w-3 h-3" /> Confluence
           </a>
         )}
+        {note.dlUrl && (
+          <a
+            href={note.dlUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-semibold"
+            title={note.dlUrl}
+          >
+            <ExternalLink className="w-3 h-3" /> DL
+          </a>
+        )}
         <span className="text-muted-foreground ml-auto">
           {formatRelativeTime(note.updatedAt)}
         </span>

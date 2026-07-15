@@ -17,6 +17,7 @@ class OpsNote(Base):
     author = Column(String(100), nullable=True)
     pinned = Column(Boolean, nullable=False, default=False)
     confluence_url = Column(Text, nullable=True)       # Confluence 문서 링크
+    dl_url = Column(Text, nullable=True)               # DL(Data Lake 등) 참고 링크
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

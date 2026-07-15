@@ -49,6 +49,7 @@ def create_ops_note(
         author=payload.author,
         pinned=payload.pinned,
         confluence_url=payload.confluence_url,
+        dl_url=payload.dl_url,
     )
     db.add(note)
     db.commit()

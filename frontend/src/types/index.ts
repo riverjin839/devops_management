@@ -950,6 +950,8 @@ export interface OpsNote {
   pinned: boolean;
   /** Confluence 문서 링크 */
   confluenceUrl?: string;
+  /** DL(Data Lake 등) 참고 링크 */
+  dlUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -963,6 +965,7 @@ export interface OpsNoteCreate {
   author?: string;
   pinned?: boolean;
   confluenceUrl?: string;
+  dlUrl?: string;
 }
 
 export interface OpsNoteUpdate extends Partial<OpsNoteCreate> {}
