@@ -71,7 +71,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold leading-tight">Jira 가져오기</h2>
-            <p className="text-xs text-muted-foreground">내 PAT 권한으로 이슈를 work item 으로 가져옵니다.</p>
+            <p className="text-xs text-muted-foreground">내 Jira 인증(PAT·세션 쿠키) 권한으로 이슈를 work item 으로 가져옵니다.</p>
           </div>
           <button type="button" onClick={onClose} disabled={busy}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50" aria-label="닫기">

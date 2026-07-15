@@ -10,6 +10,18 @@
 
 1.5.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Jira 가져오기 — 세션 쿠키 인증 방식 추가**: PAT(Personal Access Token) 발급이 막힌 SSO
+  환경을 위해, 사용자가 사내 브라우저로 Jira 에 로그인한 뒤 세션 쿠키를 복사해 등록하면 그
+  쿠키로 이슈를 가져올 수 있게 했다. 설정 ▸ Jira 연동에서 "Personal Access Token"과
+  "세션 쿠키(SSO)" 중 선택하고, 쿠키 얻는 방법(개발자 도구 ▸ Network ▸ Request Headers 의
+  Cookie 복사) 안내를 함께 제공한다.
+  - Backend: `UserJiraCredential.auth_type` 컬럼 추가(`_safe_add_column` 마이그레이션),
+    `JiraService` 가 `auth_type='cookie'` 일 때 `Cookie` 헤더 + XSRF 회피용
+    `X-Atlassian-Token: no-check` 로 REST 호출. 자격 저장/테스트/가져오기/push 경로 모두 반영.
+  - Frontend: `JiraIntegrationPanel` 에 인증 방식 토글·쿠키 입력(textarea)·안내 추가,
+    `types`/`api`/`useJira` 에 `authType` 전달.
+
 ## [1.5.0] - 2026-07-15
 
 ### Added

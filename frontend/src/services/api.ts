@@ -851,8 +851,8 @@ export const jiraApi = {
   updateConfig: (data: Partial<import('@/types').JiraConfig>) =>
     api.put<import('@/types').JiraConfig>('/jira/config', data),
   getCredential: () => api.get<import('@/types').JiraCredentialStatus>('/jira/credential'),
-  saveCredential: (token: string, jiraAccount?: string) =>
-    api.put<import('@/types').JiraCredentialStatus>('/jira/credential', { token, jiraAccount }),
+  saveCredential: (token: string, authType: import('@/types').JiraAuthType = 'pat', jiraAccount?: string) =>
+    api.put<import('@/types').JiraCredentialStatus>('/jira/credential', { token, authType, jiraAccount }),
   deleteCredential: () => api.delete('/jira/credential'),
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   import: (data: import('@/types').JiraImportRequest) =>

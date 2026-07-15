@@ -852,6 +852,10 @@ def _run_migrations():
         _safe_create_index("ix_deep_check_results_daily_log", "deep_check_results", "(daily_check_log_id)")
         _safe_create_index("ix_deep_check_results_checked_at", "deep_check_results", "(checked_at DESC)")
 
+    # user_jira_credentials: 인증 방식 컬럼 (PAT | 세션 쿠키). 구버전 DB 는 PAT 전용이라 기본 'pat'.
+    if "user_jira_credentials" in inspector.get_table_names():
+        _safe_add_column("user_jira_credentials", "auth_type", "VARCHAR(16) NOT NULL DEFAULT 'pat'")
+
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
         _safe_add_column("batch_jobs", "encrypted_password", "TEXT")

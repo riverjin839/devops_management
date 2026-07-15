@@ -4,7 +4,11 @@
  - async httpx 사용
  - **모든 예외를 잡아** 구조화된 `{"status": "ok|offline|error", ...}` dict 반환 — 절대 raise 안 함
  - 자체서명 TLS 대비 `verify` 옵션
- - 인증: 사용자별 PAT → `Authorization: Bearer <token>` (DC 8.14+)
+ - 인증 2가지 (`auth_type`):
+     · `pat`    → `Authorization: Bearer <token>` (DC 8.14+)
+     · `cookie` → `Cookie: <세션 쿠키 문자열>` (PAT 발급 불가한 SSO 환경 — 사용자가 브라우저
+                  세션 쿠키를 통째로 복사해 등록). POST(REST) 의 XSRF 회피 위해
+                  `X-Atlassian-Token: no-check` 를 함께 보낸다.
 
 매핑 헬퍼는 순수 함수로 분리해 테스트/override 가능.
 """
@@ -85,11 +89,13 @@ class JiraService:
         base_url: Optional[str] = None,
         token: Optional[str] = None,
         *,
+        auth_type: str = "pat",
         verify: bool = True,
         timeout: int = 30,
     ):
         self.base_url = (base_url or "").rstrip("/")
         self.token = token or ""
+        self.auth_type = (auth_type or "pat").strip().lower()
         self.verify = verify
         self.timeout = timeout
 
@@ -98,11 +104,18 @@ class JiraService:
         return bool(self.base_url and self.token)
 
     def _headers(self) -> dict:
-        return {
-            "Authorization": f"Bearer {self.token}",
+        headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
+        if self.auth_type == "cookie":
+            # 세션 쿠키 재사용 — 사용자가 브라우저에서 복사한 Cookie 헤더 값 전체를 그대로 사용.
+            # 쿠키 인증은 Jira 의 XSRF 방어를 타므로 REST POST 를 위해 no-check 토큰을 함께 보낸다.
+            headers["Cookie"] = self.token
+            headers["X-Atlassian-Token"] = "no-check"
+        else:
+            headers["Authorization"] = f"Bearer {self.token}"
+        return headers
 
     async def myself(self) -> dict:
         """연결 + 권한 확인. 성공 시 displayName 반환."""

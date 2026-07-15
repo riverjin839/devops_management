@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie } from 'lucide-react';
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
   useSaveJiraCredential, useDeleteJiraCredential, useJiraTest,
@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+import type { JiraAuthType } from '@/types';
 
 const inputCls =
   'w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground ' +
@@ -38,9 +39,15 @@ export function JiraIntegrationPanel() {
     }
   }, [config]);
 
-  // 사용자 PAT
+  // 사용자 인증 (PAT | 세션 쿠키)
+  const [authType, setAuthType] = useState<JiraAuthType>('pat');
   const [token, setToken] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
+
+  // 등록된 자격의 방식을 초기 선택값으로 반영.
+  useEffect(() => {
+    if (cred?.configured && cred.authType) setAuthType(cred.authType);
+  }, [cred?.configured, cred?.authType]);
 
   const handleSaveConfig = async () => {
     try {
@@ -57,11 +64,18 @@ export function JiraIntegrationPanel() {
   };
 
   const handleSaveToken = async () => {
-    if (!token.trim()) { toast.error('토큰을 입력하세요'); return; }
+    if (!token.trim()) {
+      toast.error(authType === 'cookie' ? '세션 쿠키를 입력하세요' : '토큰을 입력하세요');
+      return;
+    }
     try {
-      await saveCred.mutateAsync({ token: token.trim() });
+      await saveCred.mutateAsync({ token: token.trim(), authType });
       setToken('');
-      toast.success('내 PAT 저장됨', '이제 연결 테스트와 가져오기를 할 수 있습니다.');
+      setTestResult(null);
+      toast.success(
+        authType === 'cookie' ? '내 세션 쿠키 저장됨' : '내 PAT 저장됨',
+        '이제 연결 테스트와 가져오기를 할 수 있습니다.',
+      );
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));
     }
@@ -81,7 +95,7 @@ export function JiraIntegrationPanel() {
     try {
       await deleteCred.mutateAsync();
       setTestResult(null);
-      toast.success('내 PAT 삭제됨');
+      toast.success('내 Jira 인증 삭제됨');
     } catch (err) {
       toast.error('삭제 실패', formatApiError(err));
     }
@@ -137,16 +151,37 @@ export function JiraIntegrationPanel() {
         )}
       </div>
 
-      {/* 내 PAT (전 사용자) */}
+      {/* 내 인증 (전 사용자) — PAT 또는 세션 쿠키 */}
       <div className="bg-card border border-border rounded-xl p-5">
         <div className="flex items-center gap-2 mb-1">
           <KeyRound className="w-4 h-4 text-primary" />
-          <h3 className="font-semibold">내 Jira 인증 (Personal Access Token)</h3>
+          <h3 className="font-semibold">내 Jira 인증</h3>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          본인 Jira 계정의 PAT 를 등록하면 <b>본인 권한</b>으로 이슈를 가져옵니다. 토큰은 암호화되어 저장되며
-          화면에 다시 표시되지 않습니다.
+          본인 Jira 계정 자격을 등록하면 <b>본인 권한</b>으로 이슈를 가져옵니다. 자격은 암호화되어 저장되며
+          화면에 다시 표시되지 않습니다. PAT 발급이 막힌 SSO 환경이면 <b>세션 쿠키</b> 방식을 사용하세요.
         </p>
+
+        {/* 인증 방식 선택 */}
+        <div className="flex items-stretch gap-1.5 mb-3">
+          {([
+            { id: 'pat' as const, label: 'Personal Access Token', icon: KeyRound },
+            { id: 'cookie' as const, label: '세션 쿠키 (SSO)', icon: Cookie },
+          ]).map((m) => {
+            const Icon = m.icon;
+            return (
+              <button key={m.id} type="button" onClick={() => { setAuthType(m.id); setToken(''); setTestResult(null); }}
+                aria-pressed={authType === m.id}
+                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                  authType === m.id
+                    ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                }`}>
+                <Icon className="w-4 h-4" /> {m.label}
+              </button>
+            );
+          })}
+        </div>
 
         <div className="flex items-center gap-2 mb-3">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
@@ -154,7 +189,7 @@ export function JiraIntegrationPanel() {
               ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
               : 'bg-secondary text-muted-foreground border-border'
           }`}>
-            {cred?.configured ? '등록됨' : '미등록'}
+            {cred?.configured ? `등록됨 · ${cred.authType === 'cookie' ? '세션 쿠키' : 'PAT'}` : '미등록'}
           </span>
           {cred?.jiraAccount && <span className="text-sm text-muted-foreground">계정: {cred.jiraAccount}</span>}
           {cred?.lastVerifiedAt && (
@@ -162,15 +197,36 @@ export function JiraIntegrationPanel() {
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input className={inputCls} type="password" placeholder="PAT 붙여넣기" value={token}
-            onChange={(e) => setToken(e.target.value)} autoComplete="off" />
-          <button onClick={handleSaveToken} disabled={saveCred.isPending}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap">
-            {saveCred.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            저장
-          </button>
-        </div>
+        {authType === 'cookie' ? (
+          <div className="space-y-2">
+            <div className="rounded-lg bg-secondary/50 border border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed">
+              <p className="font-medium text-foreground mb-1 flex items-center gap-1.5"><Cookie className="w-3.5 h-3.5" /> 세션 쿠키 얻는 법</p>
+              <ol className="list-decimal list-inside space-y-0.5">
+                <li>사내 브라우저에서 Jira 에 SSO 로그인합니다.</li>
+                <li>개발자 도구(F12) ▸ Network 탭에서 아무 요청이나 클릭 ▸ Request Headers 의 <code className="px-1 rounded bg-background">Cookie</code> 값을 통째로 복사합니다.</li>
+                <li>아래에 붙여넣고 저장 후 <b>연결 테스트</b>로 확인하세요. 세션이 만료되면 다시 등록해야 합니다.</li>
+              </ol>
+            </div>
+            <textarea className={`${inputCls} font-mono text-xs min-h-[76px] resize-y`}
+              placeholder="JSESSIONID=...; atlassian.xsrf.token=...; seraph.rememberme.cookie=..."
+              value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false} />
+            <button onClick={handleSaveToken} disabled={saveCred.isPending}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap">
+              {saveCred.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              세션 쿠키 저장
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input className={inputCls} type="password" placeholder="PAT 붙여넣기" value={token}
+              onChange={(e) => setToken(e.target.value)} autoComplete="off" />
+            <button onClick={handleSaveToken} disabled={saveCred.isPending}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap">
+              {saveCred.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              저장
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center gap-2 mt-3">
           <button onClick={handleTest} disabled={testConn.isPending || !cred?.configured}
@@ -181,7 +237,7 @@ export function JiraIntegrationPanel() {
           {cred?.configured && (
             <button onClick={handleDeleteToken} disabled={deleteCred.isPending}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-red-500 hover:bg-red-500/10 disabled:opacity-50">
-              <Trash2 className="w-4 h-4" /> 토큰 삭제
+              <Trash2 className="w-4 h-4" /> 인증 삭제
             </button>
           )}
         </div>

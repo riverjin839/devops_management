@@ -313,14 +313,16 @@ def _read_html_tables(raw: bytes) -> list[list[tuple]]:
     ]
 
 
-def _user_token(db: Session, username: str) -> Optional[str]:
+def _user_credential(db: Session, username: str) -> tuple[Optional[str], str]:
+    """사용자별 Jira 자격 (복호화된 secret, auth_type) 반환. 미등록/복호화 실패 시 (None, 'pat')."""
     cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == username).first()
     if not cred:
-        return None
+        return None, "pat"
+    auth_type = (getattr(cred, "auth_type", None) or "pat").strip().lower()
     try:
-        return secret_box.decrypt(cred.token_encrypted)
+        return secret_box.decrypt(cred.token_encrypted), auth_type
     except ValueError:
-        return None
+        return None, auth_type
 
 
 # ── 공통 설정 ──────────────────────────────────────────────────────────────────
@@ -360,7 +362,10 @@ def get_credential(db: Session = Depends(get_db), actor: User = Depends(get_curr
     if not cred:
         return JiraCredentialStatus(configured=False)
     return JiraCredentialStatus(
-        configured=True, jira_account=cred.jira_account, last_verified_at=cred.last_verified_at
+        configured=True,
+        auth_type=(getattr(cred, "auth_type", None) or "pat"),
+        jira_account=cred.jira_account,
+        last_verified_at=cred.last_verified_at,
     )
 
 
@@ -372,22 +377,30 @@ def save_credential(
 ):
     token = (payload.token or "").strip()
     if not token:
-        raise HTTPException(status_code=422, detail="토큰을 입력하세요.")
+        raise HTTPException(status_code=422, detail="인증 값을 입력하세요 (PAT 또는 세션 쿠키).")
+    auth_type = (payload.auth_type or "pat").strip().lower()
+    if auth_type not in ("pat", "cookie"):
+        raise HTTPException(status_code=422, detail="auth_type 은 'pat' 또는 'cookie' 여야 합니다.")
     enc = secret_box.encrypt(token)
     cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
     if cred:
         cred.token_encrypted = enc
+        cred.auth_type = auth_type
+        # 인증 값을 새로 저장하면 이전 검증 시각은 무의미 — 초기화해 재검증을 유도.
+        cred.last_verified_at = None
         if payload.jira_account is not None:
             cred.jira_account = payload.jira_account
     else:
         cred = UserJiraCredential(
-            username=actor.username, token_encrypted=enc, jira_account=payload.jira_account
+            username=actor.username, token_encrypted=enc, auth_type=auth_type,
+            jira_account=payload.jira_account,
         )
         db.add(cred)
     db.commit()
     db.refresh(cred)
     return JiraCredentialStatus(
-        configured=True, jira_account=cred.jira_account, last_verified_at=cred.last_verified_at
+        configured=True, auth_type=cred.auth_type,
+        jira_account=cred.jira_account, last_verified_at=cred.last_verified_at,
     )
 
 
@@ -405,10 +418,10 @@ async def test_connection(db: Session = Depends(get_db), actor: User = Depends(g
     cfg = _get_config(db)
     if not cfg.get("base_url"):
         return JiraTestResult(ok=False, detail="관리자가 Jira URL 을 설정하지 않았습니다.")
-    token = _user_token(db, actor.username)
+    token, auth_type = _user_credential(db, actor.username)
     if not token:
-        return JiraTestResult(ok=False, detail="내 PAT 가 등록되지 않았습니다.")
-    svc = JiraService(cfg["base_url"], token, verify=bool(cfg.get("verify_tls", True)))
+        return JiraTestResult(ok=False, detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다.")
+    svc = JiraService(cfg["base_url"], token, auth_type=auth_type, verify=bool(cfg.get("verify_tls", True)))
     res = await svc.myself()
     if res.get("status") == "ok":
         cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
@@ -432,9 +445,9 @@ async def import_issues(
     base_url = cfg.get("base_url", "")
     if not base_url or not cfg.get("enabled", False):
         return JiraImportResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정 (설정에서 활성화하세요).")
-    token = _user_token(db, actor.username)
+    token, auth_type = _user_credential(db, actor.username)
     if not token:
-        return JiraImportResult(status="error", detail="내 PAT 가 등록되지 않았습니다 (설정 > 연동에서 등록).")
+        return JiraImportResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동에서 등록).")
 
     # JQL 구성
     if payload.scope == "me":
@@ -449,7 +462,7 @@ async def import_issues(
         if not jql:
             return JiraImportResult(status="error", detail="JQL 을 입력하세요.")
 
-    svc = JiraService(base_url, token, verify=bool(cfg.get("verify_tls", True)))
+    svc = JiraService(base_url, token, auth_type=auth_type, verify=bool(cfg.get("verify_tls", True)))
     search = await svc.search(jql)
     if search.get("status") != "ok":
         return JiraImportResult(
@@ -836,12 +849,12 @@ async def push_to_jira(
     cfg = _get_config(db)
     if not cfg.get("base_url") or not cfg.get("enabled", False):
         return JiraPushResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정.")
-    token = _user_token(db, actor.username)
+    token, auth_type = _user_credential(db, actor.username)
     if not token:
-        return JiraPushResult(status="error", detail="내 PAT 가 등록되지 않았습니다 (설정 > 연동).")
+        return JiraPushResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동).")
 
     key = item.jira_issue_key
-    svc = JiraService(cfg["base_url"], token, verify=bool(cfg.get("verify_tls", True)))
+    svc = JiraService(cfg["base_url"], token, auth_type=auth_type, verify=bool(cfg.get("verify_tls", True)))
 
     # 1) 현재 Jira 상태 + updated 조회 (충돌 감지)
     got = await svc.get_issue(key, fields=["status", "updated"])
