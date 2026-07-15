@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock } from 'lucide-react';
+import { Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock, HelpCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast } from '@/components/common';
 import {
@@ -10,6 +10,7 @@ import { formatApiError } from '@/lib/utils';
 import { CheckMatrixCellDetailModal } from './CheckMatrixCellDetailModal';
 import { CheckMatrixItemFormModal } from './CheckMatrixItemFormModal';
 import { CheckMatrixSettingsModal } from './CheckMatrixSettingsModal';
+import { CheckMatrixHelpPanel } from './CheckMatrixHelpPanel';
 
 const STATUS_LABEL: Record<Status, string> = {
   healthy: '정상', warning: '경고', critical: '위험', pending: '대기',
@@ -105,6 +106,7 @@ export function PlatformStatusMatrix() {
   const deleteMut = useDeleteCheckMatrixItem();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [formItem, setFormItem] = useState<CheckMatrixItem | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<CheckMatrixItem | null>(null);
   const [cellTarget, setCellTarget] = useState<{ item: CheckMatrixItem; cluster: CheckMatrixGridCluster } | null>(null);
@@ -139,6 +141,14 @@ export function PlatformStatusMatrix() {
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
             플랫폼 현황
           </span>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="p-0.5 rounded-full text-muted-foreground hover:text-primary hover:bg-secondary transition-colors"
+            title="사용법 도움말"
+            aria-label="사용법 도움말"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+          </button>
           <span className="text-[11px] text-muted-foreground">항목 × 클러스터 점검 매트릭스</span>
           <div className="ml-auto flex items-center gap-1.5">
             <button
@@ -248,6 +258,7 @@ export function PlatformStatusMatrix() {
       </MacCard>
 
       <CheckMatrixSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CheckMatrixHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
       <CheckMatrixItemFormModal
         isOpen={formItem !== null}
         onClose={() => setFormItem(null)}
