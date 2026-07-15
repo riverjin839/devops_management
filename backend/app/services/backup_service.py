@@ -64,6 +64,8 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "users": ["hashed_password"],
     # Jira PAT — 암호문이지만 export 기본 마스킹 (SECRET_KEY 유출 시 복호 방지).
     "user_jira_credentials": ["token_encrypted"],
+    # Isilon SSH 자격증명 — 암호문이지만 export 기본 마스킹.
+    "isilon_servers": ["encrypted_password", "encrypted_private_key"],
 }
 
 
