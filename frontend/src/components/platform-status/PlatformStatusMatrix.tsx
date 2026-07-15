@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast } from '@/components/common';
-import { DomainQuickAccess } from '@/components/dashboard/DomainQuickAccess';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
 } from '@/hooks/useCheckMatrix';
@@ -247,8 +246,6 @@ export function PlatformStatusMatrix() {
           </div>
         )}
       </MacCard>
-
-      <DomainQuickAccess />
 
       <CheckMatrixSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <CheckMatrixItemFormModal
