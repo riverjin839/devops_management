@@ -637,7 +637,7 @@ def _run_migrations():
         _safe_add_column("work_items", "cluster_names", "JSONB")
         # 사용자 정의 필드 값
         _safe_add_column("work_items", "custom_values", "JSONB")
-        # 전체 참석(회의 등)
+        # 공통업무(파트 회의 등)
         _safe_add_column("work_items", "all_attendees", "BOOLEAN NOT NULL DEFAULT FALSE")
         # 스프린트(반복) 소속 — sprints 테이블은 create_all 로 생성됨.
         _safe_add_column("work_items", "sprint_id", "UUID")

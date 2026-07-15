@@ -511,7 +511,11 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             placeholder="완료 시 입력"
           />
         </div>
-        {/* 전체 참석 — 옵션. 개인 담당자와 별개로 홈 "담당자별 진행 현황" 의 "전체" 카드에도 노출된다 */}
+        {/* 공통업무 — 옵션. 특정 개인 담당자 업무가 아니라 파트 전체가 함께 하는 업무(회의 등).
+            개인 담당자와 별개로 홈 "담당자별 진행 현황" 의 "전체" 카드에도 노출된다.
+            "전체 참석" 이라는 문구는 마치 전원이 반드시 참석해야 하는 것처럼 읽혀 의미가
+            좁게 오해될 수 있어 "공통업무" 로 표기 — 실제 의미(특정 담당자 개인 업무가 아닌
+            파트 공통 업무)에 더 가깝다. 필드명(allAttendees)/데이터는 그대로 유지, 표시 문구만 변경. */}
         <div className="md:col-span-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
             <input
@@ -520,9 +524,9 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
               onChange={(e) => setAllAttendees(e.target.checked)}
               className="accent-primary"
             />
-            <span className="font-medium">👥 전체 참석</span>
+            <span className="font-medium">👥 공통업무</span>
             <span className="text-xs text-muted-foreground">
-              (파트 회의 등 모든 멤버가 함께 하는 업무 — 홈 "전체" 카드에도 노출)
+              (파트 회의 등 특정 담당자 개인 업무가 아닌 공통 업무 — 홈 "전체" 카드에도 노출)
             </span>
           </label>
         </div>

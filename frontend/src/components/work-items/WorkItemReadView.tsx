@@ -87,7 +87,7 @@ export function WorkItemReadView({ item, onEdit }: WorkItemReadViewProps) {
         )}
         {item.allAttendees && (
           <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/30 font-medium">
-            👥 전체 참석
+            👥 공통업무
           </span>
         )}
         <span className="inline-flex items-center gap-x-2 flex-wrap text-muted-foreground">

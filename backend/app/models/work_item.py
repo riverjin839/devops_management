@@ -41,7 +41,7 @@ class WorkItem(Base):
     cluster_ids = Column(JSONB, nullable=True)    # list[str(uuid)]
     cluster_names = Column(JSONB, nullable=True)  # list[str] — cluster_ids 와 1:1
     custom_values = Column(JSONB, nullable=True)   # {field_key: value} — 사용자 정의 필드 값
-    # 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시.
+    # 공통업무(파트 회의 등, 특정 개인 담당자 업무가 아님) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시.
     all_attendees = Column(Boolean, nullable=False, default=False, server_default="false")
 
     # 공통 의미 — 통일된 이름
