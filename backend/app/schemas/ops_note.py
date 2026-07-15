@@ -12,6 +12,7 @@ class OpsNoteCreate(BaseModel):
     author: Optional[str] = Field(None, max_length=100)
     pinned: bool = False
     confluence_url: Optional[str] = Field(None, max_length=2048)
+    dl_url: Optional[str] = Field(None, max_length=2048)
 
 
 class OpsNoteUpdate(BaseModel):
@@ -23,6 +24,7 @@ class OpsNoteUpdate(BaseModel):
     author: Optional[str] = Field(None, max_length=100)
     pinned: Optional[bool] = None
     confluence_url: Optional[str] = Field(None, max_length=2048)
+    dl_url: Optional[str] = Field(None, max_length=2048)
 
 
 class OpsNoteResponse(BaseModel):
@@ -35,6 +37,7 @@ class OpsNoteResponse(BaseModel):
     author: Optional[str] = None
     pinned: bool
     confluence_url: Optional[str] = None
+    dl_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

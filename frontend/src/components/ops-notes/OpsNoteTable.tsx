@@ -197,6 +197,17 @@ function OpsNoteRow({
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
+          {note.dlUrl && (
+            <a
+              href={note.dlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 hover:bg-primary/10 rounded-md text-muted-foreground hover:text-primary transition-colors"
+              title={`DL: ${note.dlUrl}`}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
           <button
             onClick={() => onTogglePin(note)}
             className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-primary transition-colors"

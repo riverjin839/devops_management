@@ -196,6 +196,18 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
               <ExternalLink className="w-2.5 h-2.5" /> Confluence
             </a>
           )}
+          {note.dlUrl && (
+            <a
+              href={note.dlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={stop}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-semibold"
+              title={note.dlUrl}
+            >
+              <ExternalLink className="w-2.5 h-2.5" /> DL
+            </a>
+          )}
         </span>
         <span className="flex-shrink-0 tabular-nums">{formatRelativeTime(note.updatedAt)}</span>
       </footer>

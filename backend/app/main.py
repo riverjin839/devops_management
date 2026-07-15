@@ -749,6 +749,10 @@ def _run_migrations():
         if tbl in _current_tables:
             _safe_add_column(tbl, "confluence_url", "TEXT")
 
+    # dl_url 컬럼 — 운영 노트(ops_notes) 전용 DL(Data Lake 등) 참고 링크.
+    if "ops_notes" in _current_tables:
+        _safe_add_column("ops_notes", "dl_url", "TEXT")
+
     # node_server_specs: 자산 대장 신규 필드
     if "node_server_specs" in inspector.get_table_names():
         _safe_add_column("node_server_specs", "is_ssd", "BOOLEAN")
