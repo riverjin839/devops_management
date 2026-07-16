@@ -220,7 +220,7 @@ def list_work_items(
     started_from: date | None = Query(default=None, description="started_at 시작 (포함)"),
     started_to: date | None = Query(default=None, description="started_at 종료 (포함)"),
     closed: bool | None = Query(default=None, description="true=closed 만, false=open 만, 미지정=전체"),
-    all_attendees: bool | None = Query(default=None, description="true=전체 참석 항목만"),
+    all_attendees: bool | None = Query(default=None, description="true=공통업무 항목만"),
     sprint_id: UUID | None = Query(default=None, description="스프린트 ID 필터"),
     # G-C2: 페이지네이션 — 클라이언트가 명시적으로 limit 지정. 기본 100, 최대 500.
     offset: int = Query(default=0, ge=0, description="페이지네이션 offset (0 부터)"),
