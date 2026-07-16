@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.5.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.5.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.5.1] - 2026-07-16
 
 ### Added
 - **Jira 가져오기 — 세션 쿠키 인증 방식 추가**: PAT(Personal Access Token) 발급이 막힌 SSO
