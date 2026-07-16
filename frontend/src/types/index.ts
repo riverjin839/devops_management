@@ -486,7 +486,7 @@ export interface WorkItem {
   createdBy?: string;
   /** 사용자 정의 필드 값 {fieldKey: value} */
   customValues?: Record<string, unknown> | null;
-  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  /** 공통업무(파트 회의 등, 특정 개인 담당자 업무가 아님) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
   allAttendees?: boolean;
   /** Jira 연동 — 가져온 이슈 linkage (없으면 일반 work item). */
   jiraIssueKey?: string | null;
@@ -659,7 +659,7 @@ export interface WorkItemCreate {
   doneCondition?: string;
   parentId?: string;
   relatedWorkItemId?: string;
-  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  /** 공통업무(파트 회의 등, 특정 개인 담당자 업무가 아님) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
   allAttendees?: boolean;
 }
 
