@@ -783,6 +783,26 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 
 ---
 
+### NFS 모니터링 (Isilon) (`/isilon-nfs`)
+
+- **파일**: `frontend/src/pages/IsilonNfsPage.tsx` (+ `components/isilon/IsilonServerModal.tsx`, `components/isilon/IsilonCommandManager.tsx`)
+- **목적 / UX**: K8s 가 마운트해서 쓰는 NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검. SSH 로 `isi` 명령을 실행해 Export/마운트 가용성·쿼터/용량·클라이언트/성능·노드 health 를 수집하고, K8s PV(`spec.nfs`) ↔ Isilon export 매칭(누락 감지)을 보여준다. **NAS 무부하**가 최우선 — 읽기전용 명령만·SSH 세션 1개 직렬 실행·서버별 60초 TTL 캐시(강제 재수집은 명시적 새로고침만).
+- **UI 구성**:
+  - 좌측 서버 레일(Isilon 서버 목록, status dot + 기본 배지) + "서버 추가"/"isi 명령 관리" 버튼. 클러스터가 아닌 **서버 스코프**라 `ClusterSidebar` 대신 전용 서버 레일 사용.
+  - 본문: 서버 헤더(접속 상태·수집시각·캐시 배지·새로고침) → "K8s 가 사용하는 NFS(PV↔export)" 매칭 테이블 → 섹션별(`SECTION_LABEL`) 수집 결과 카드(`MacCard`, parsed JSON/raw).
+  - `IsilonServerModal`: host/port/user/비밀번호|PEM 키 + 연결 테스트. 자격증명은 암호화 저장, 응답엔 `hasPassword`/`hasPrivateKey` 플래그만.
+  - `IsilonCommandManager`: `isi` 명령 등록/편집/삭제(글로벌 기본 + 서버 전용). 변경 동사·셸 메타문자·`--repeat` 등은 저장이 422 로 거부됨(부하 보호). builtin 은 비활성만(삭제 불가).
+- **Frontend**: `useIsilonServers`/`useIsilonOverview`/`useIsilonCommands` + CRUD/test 뮤테이션(`hooks/useIsilonNfs.ts`), `isilonNfsApi`(`services/api.ts`), 타입은 `types/index.ts`(`IsilonServer`/`IsilonCommand`/`IsilonNfsOverview` 등). overview 는 부하 보호상 자동 폴링 안 함.
+- **Backend**: `GET/POST/PUT/DELETE /api/v1/isilon-nfs/servers` (+ `/servers/{id}/test`), `GET/POST/PUT/DELETE /api/v1/isilon-nfs/commands`, `GET /api/v1/isilon-nfs/overview` — 라우터 `backend/app/routers/isilon_nfs.py`. 수집·검증·캐시는 `services/isilon_service.py`, 모델 `models/isilon_server.py`(`IsilonServer`/`IsilonCommand`, 자격증명 `secret_box` 암호화 + 백업 마스킹). 같은 수집을 쓰는 `isilon_nfs` deep checker(`services/deep_checkers/isilon_nfs_checker.py`, registry 등록)가 운영 점검 콘솔/cron 에도 노출(기본 비활성).
+- **핵심 기능**:
+  - SSH 기반 `isi` 명령 수집(비밀번호/PEM 키), 읽기전용·무부하 보장.
+  - K8s NFS PV ↔ Isilon export 매칭으로 "실제 K8s 가 쓰는 NFS" 가용성 가시화.
+  - `isi` 명령 커스텀 등록(DB 관리, OneFS 버전별 편집) + deep checker 통합(쿼터/가용성/health 판정).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+---
+
 ## DevOps — Playbook / Batch Job / 명령어
 
 ### Ansible Playbooks (`/playbooks`)

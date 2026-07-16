@@ -1098,6 +1098,124 @@ export interface ManagementServerListResponse {
   data: ManagementServer[];
 }
 
+// ── Isilon NFS 모니터링 ──────────────────────────────────────────────────────
+export interface IsilonServer {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username?: string;
+  description?: string;
+  status?: string;        // online / offline / unknown
+  isDefault: boolean;
+  hasPassword: boolean;
+  hasPrivateKey: boolean;
+  lastChecked?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface IsilonServerCreate {
+  name: string;
+  host: string;
+  port?: number;
+  username?: string;
+  description?: string;
+  isDefault?: boolean;
+  savedPassword?: string;
+  savedPrivateKey?: string;
+}
+
+export interface IsilonServerUpdate extends Partial<IsilonServerCreate> {
+  clearSavedPassword?: boolean;
+  clearSavedPrivateKey?: boolean;
+}
+
+export type IsilonCommandSection =
+  | 'exports' | 'nfs_settings' | 'quotas' | 'clients' | 'node_health' | 'custom';
+
+export interface IsilonCommand {
+  id: string;
+  serverId?: string | null;   // null = 글로벌 기본
+  key: string;
+  label: string;
+  section: IsilonCommandSection;
+  command: string;
+  parseMode: 'json' | 'text';
+  timeoutSeconds: number;
+  enabled: boolean;
+  showOnOverview: boolean;
+  sortOrder: number;
+  isBuiltin: boolean;
+}
+
+export interface IsilonCommandCreate {
+  serverId?: string | null;
+  key: string;
+  label: string;
+  section?: IsilonCommandSection;
+  command: string;
+  parseMode?: 'json' | 'text';
+  timeoutSeconds?: number;
+  enabled?: boolean;
+  showOnOverview?: boolean;
+  sortOrder?: number;
+}
+
+export interface IsilonCommandUpdate {
+  label?: string;
+  section?: IsilonCommandSection;
+  command?: string;
+  parseMode?: 'json' | 'text';
+  timeoutSeconds?: number;
+  enabled?: boolean;
+  showOnOverview?: boolean;
+  sortOrder?: number;
+}
+
+export interface IsilonCommandResult {
+  key: string;
+  label: string;
+  section: IsilonCommandSection;
+  command: string;
+  parseMode: 'json' | 'text';
+  showOnOverview: boolean;
+  ok: boolean;
+  exitCode?: number | null;
+  parsed?: unknown;
+  raw?: string;
+  error?: string | null;
+  durationMs: number;
+}
+
+export interface IsilonK8sNfsPv {
+  pv: string;
+  server?: string | null;
+  path: string;
+  pvc?: string | null;
+  phase?: string | null;
+}
+
+export interface IsilonNfsOverview {
+  configured: boolean;
+  message?: string;
+  server?: { id: string; name: string; host: string };
+  collectedAt?: string;
+  fromCache?: boolean;
+  connectionOk?: boolean;
+  connectionError?: string | null;
+  results?: IsilonCommandResult[];
+  errors?: string[];
+  k8sNfsPvs?: IsilonK8sNfsPv[];
+}
+
+export interface IsilonTestResult {
+  ok: boolean;
+  status: string;
+  detail: string;
+  durationMs: number;
+}
+
 // Infrastructure Nodes (물리 서버 노드)
 export type InfraNodeRole = 'master' | 'worker' | 'storage' | 'infra';
 

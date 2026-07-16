@@ -13,6 +13,21 @@
 ## [1.5.1] - 2026-07-16
 
 ### Added
+- **NFS 모니터링(Isilon) — NAS 서버 SSH 기반 신규 화면·점검 추가**: K8s 가 마운트해서 쓰는
+  NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검한다. 좌측에서 Isilon 서버를 선택하면 `isi`
+  명령 수집 결과(Export/마운트, 쿼터·용량, 클라이언트/성능, 노드 health)와 K8s PV(`spec.nfs`)↔
+  Isilon export 매칭(누락 감지)을 보여주는 전용 페이지(`/isilon-nfs`, 스토리지 그룹)를 추가.
+  같은 수집 로직을 쓰는 `isilon_nfs` deep checker 를 등록해 운영 점검 콘솔·cron·알림에도 통합했다
+  (기본 비활성, 권장 15~30분).
+  - **NAS 무부하 설계**: 읽기전용 `isi` 명령만 허용(변경 동사·셸 메타문자·`--repeat` 등 거부),
+    한 수집당 SSH 세션 1개로 직렬 실행, 서버별 60초 TTL 캐시(강제 재수집은 명시적 새로고침만).
+  - **isi 명령 커스텀 등록**: 수집 명령을 DB(`isilon_commands`)로 관리 — 기본 명령도 시드되어
+    OneFS 버전/환경에 맞게 편집·비활성·추가 가능(페이지의 "isi 명령 관리" 모달).
+  - Backend: `IsilonServer`/`IsilonCommand` 모델(+`_run_migrations` 보강, 자격증명은 `secret_box`
+    암호화 저장·백업 마스킹), `isilon_service`(검증·캐시·수집), `isilon_nfs` deep checker + registry,
+    `/api/v1/isilon-nfs/*` 라우터(서버·명령 CRUD, 연결 테스트, `/overview`), builtin 명령 시드.
+  - Frontend: `IsilonNfsPage` + 서버/명령 관리 모달, `useIsilonNfs` 훅, `isilonNfsApi`, 타입,
+    사이드바 스토리지 그룹에 `NFS 모니터링` 등록.
 - **Jira 가져오기 — 세션 쿠키 인증 방식 추가**: PAT(Personal Access Token) 발급이 막힌 SSO
   환경을 위해, 사용자가 사내 브라우저로 Jira 에 로그인한 뒤 세션 쿠키를 복사해 등록하면 그
   쿠키로 이슈를 가져올 수 있게 했다. 설정 ▸ Jira 연동에서 "Personal Access Token"과

@@ -38,6 +38,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/etcdctl':            { defaultLabel: 'etcdctl 콘솔',   icon: Database },
   '/batch-jobs':         { defaultLabel: 'Batch Jobs',     icon: ListTree },
   '/mc':                 { defaultLabel: 'mc 클라이언트',  icon: HardDrive },
+  '/isilon-nfs':         { defaultLabel: 'NFS 모니터링',   icon: HardDrive, iconColor: 'text-sky-500' },
   '/kernel-params':      { defaultLabel: '커널 파라미터',  icon: Cpu },
   '/infra-topology':     { defaultLabel: '인프라 토폴로지', icon: Network },
   '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
@@ -69,7 +70,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/architecture', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
-  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc'], modes: ['platform'] },
+  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], modes: ['platform'] },
   // /coroot 는 COROOT APM 통합 전체 제거로 더 이상 존재하지 않는 라우트 — 재추가하지 않음.
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },

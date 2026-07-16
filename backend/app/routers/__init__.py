@@ -16,6 +16,7 @@ from app.routers.ops_note import router as ops_note_router
 from app.routers.reactions import router as reactions_router
 from app.routers.mindmap import router as mindmap_router
 from app.routers.management_servers import router as management_server_router
+from app.routers.isilon_nfs import router as isilon_nfs_router
 from app.routers.infra_nodes import router as infra_nodes_router
 from app.routers.topology_trace import router as topology_trace_router
 from app.routers.ontology import router as ontology_router
@@ -88,6 +89,7 @@ __all__ = [
     "reactions_router",
     "mindmap_router",
     "management_server_router",
+    "isilon_nfs_router",
     "infra_nodes_router",
     "topology_trace_router",
     "ontology_router",
