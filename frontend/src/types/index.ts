@@ -578,6 +578,7 @@ export interface JiraExcelImportResult {
 export interface JiraPushRequest {
   comment?: string;
   force?: boolean;
+  pushFields?: boolean;   // 제목/설명/우선순위 반영 여부 (기본 true)
 }
 
 export interface JiraPushResult {
@@ -585,6 +586,8 @@ export interface JiraPushResult {
   detail: string;
   transitioned: boolean;
   commentAdded: boolean;
+  fieldsUpdated: string[];   // 실제 반영된 필드명 (summary/description/priority)
+  fieldErrors: string[];     // 반영 실패 사유
   jiraStatus?: string | null;
   availableTransitions: string[];
 }

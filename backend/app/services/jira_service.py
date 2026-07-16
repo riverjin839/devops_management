@@ -64,6 +64,21 @@ def map_priority(jira_priority: str | None) -> str:
     return "medium"
 
 
+# PEP priority → Jira priority 이름 (push 시 역매핑). Jira Server/DC 기본 스킴(Highest/High/
+# Medium/Low/Lowest) 기준. 프로젝트가 커스텀 우선순위를 쓰면 이름 불일치로 실패할 수 있어
+# push 는 우선순위 갱신을 best-effort 로 처리한다(전체 반영을 막지 않음).
+PEP_PRIORITY_TO_JIRA = {"high": "High", "medium": "Medium", "low": "Low"}
+
+
+def strip_issue_key_prefix(title: str | None, key: str | None) -> str:
+    """PEP title 은 가져올 때 `"{KEY} {summary}"` 로 저장되므로, Jira 로 summary 를 되돌릴
+    때 앞의 키 접두어를 제거한다. 접두어가 없으면(사용자가 제목을 통째로 바꿈) 원본 그대로."""
+    t = (title or "").strip()
+    if key and t.startswith(f"{key} "):
+        return t[len(key) + 1:].strip()
+    return t
+
+
 def parse_jira_dt(value: str | None) -> Optional[datetime]:
     """Jira datetime (예: '2026-06-11T10:00:00.000+0900') → naive UTC datetime."""
     if not value:
@@ -200,6 +215,42 @@ class JiraService:
         return f"{self.base_url}/browse/{key}" if self.base_url and key else ""
 
     # ── 양방향 push (Phase 2) ────────────────────────────────────────────────
+    async def update_issue(self, key: str, fields: dict) -> dict:
+        """이슈 필드 편집 — `PUT /rest/api/2/issue/{key}` (`{"fields": {...}}`).
+
+        summary/description/priority 등 값 필드 갱신용. 성공 시 204. 400 이면 Jira 가 준
+        errorMessages/errors 를 사유로 돌려준다(예: 존재하지 않는 priority 이름, screen 에
+        없는 필드). 절대 raise 하지 않고 구조화 dict 반환."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Jira 미설정"}
+        if not fields:
+            return {"status": "ok", "detail": "변경 없음"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.put(
+                    f"{self.base_url}/rest/api/2/issue/{key}",
+                    headers=self._headers(), json={"fields": fields},
+                )
+                if resp.status_code in (200, 204):
+                    return {"status": "ok"}
+                detail = ""
+                try:
+                    body = resp.json()
+                    msgs = list(body.get("errorMessages", []))
+                    errs = body.get("errors", {}) or {}
+                    msgs.extend(f"{k}: {v}" for k, v in errs.items())
+                    detail = "; ".join(msgs)
+                except Exception:  # noqa: BLE001
+                    detail = resp.text[:200]
+                return {"status": "error", "detail": detail or f"HTTP {resp.status_code}"}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Jira 연결 불가"}
+        except httpx.TimeoutException:
+            return {"status": "offline", "detail": "Jira 응답 시간 초과"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Jira update_issue error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
     async def get_issue(self, key: str, fields: Optional[list[str]] = None) -> dict:
         """단일 이슈 조회 (충돌 감지/현재 상태 확인용)."""
         if not self.configured:

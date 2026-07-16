@@ -13,6 +13,16 @@
 ## [1.5.1] - 2026-07-16
 
 ### Added
+- **Jira 양방향 반영 — 편집 내용 되쓰기(제목/설명/우선순위)**: 업무 상세의 "Jira 반영"이
+  기존에는 칸반 상태 transition + 코멘트만 보냈는데, PEP 에서 편집한 **제목(summary)·
+  설명(description)·우선순위(priority)** 도 연결된 Jira 이슈에 `PUT /rest/api/2/issue/{key}`
+  로 되쓰도록 확장. 클릭 시 무엇이 반영되는지 보여주는 확인 다이얼로그(`JiraPushDialog`)와
+  선택 코멘트를 추가하고, Jira 쪽이 더 최신이면 충돌 안내 후 강제 반영을 지원한다.
+  담당자(assignee)는 이름 역매핑이 불안정해 반영에서 제외, 우선순위는 프로젝트별 스킴
+  차이를 감안해 best-effort(실패 시 나머지는 정상 반영).
+  - Backend: `JiraService.update_issue()`, `PEP_PRIORITY_TO_JIRA`/`strip_issue_key_prefix`
+    헬퍼, `push_to_jira` 확장, `JiraPushRequest.push_fields`/`JiraPushResult.fields_updated`.
+  - Frontend: `JiraPushDialog` 신설, `WorkItemDetailPage` 의 원클릭 push → 다이얼로그로 교체.
 - **NFS 모니터링(Isilon) — NAS 서버 SSH 기반 신규 화면·점검 추가**: K8s 가 마운트해서 쓰는
   NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검한다. 좌측에서 Isilon 서버를 선택하면 `isi`
   명령 수집 결과(Export/마운트, 쿼터·용량, 클라이언트/성능, 노드 health)와 K8s PV(`spec.nfs`)↔
