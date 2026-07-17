@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server, WifiOff } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import {
-  SummaryStats,
+  HealthHero,
   AddonGrid,
   AddClusterModal,
   AddAddonModal,
@@ -357,10 +357,11 @@ export function Dashboard() {
       <main className="flex-1 min-w-0 space-y-3">
         <DebugLogPanel pageKey="dashboard" extra={{ activeClusterId, clusters: clusters.length, metricCards: metricCards.length }} />
 
-        {/* ── Summary Stats ──────────────────────────────────────────────── */}
-        <SummaryStats
+        {/* ── Health Hero (Bento) ──────────────────────────────────────────── */}
+        <HealthHero
           stats={summary ?? { totalClusters: 0, healthy: 0, warning: 0, critical: 0 }}
           isLoading={summaryLoading}
+          lastCheckTime={lastCheckTime}
         />
 
         {/* ── 현황 아이템 (클러스터에 붙는 단위 카드) ─────────────────────── */}
