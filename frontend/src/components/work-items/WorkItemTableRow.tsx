@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
 import { useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { ServiceChip } from '@/components/services/ServiceChip';
+import { Badge } from '@/components/ui/badge';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
 import type { WorkItemColumnKey } from './workItemColumns';
@@ -293,10 +294,9 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
               </select>
             ) : (
-              <span className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
-                <span className={`text-sm font-medium ${pStyle.text}`}>{pStyle.label}</span>
-              </span>
+              <Badge variant="outline" dot dotClassName={pStyle.dot} className={`border-transparent px-0 py-0 text-sm font-medium ${pStyle.text}`}>
+                {pStyle.label}
+              </Badge>
             )}
           </EditableCell>
         );
@@ -412,7 +412,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-                  className="flex-shrink-0 mt-0.5 inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-[#0052CC]/10 text-[#0052CC] dark:text-blue-300 border border-[#0052CC]/20 hover:bg-[#0052CC]/20"
+                  className="flex-shrink-0 mt-0.5 inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
                 >
                   {item.jiraIssueKey}
                 </a>
@@ -520,7 +520,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 title={item.jiraUrl}
-                className="inline-flex items-center gap-1 text-sm text-[#0052CC] dark:text-blue-300 hover:underline"
+                className="inline-flex items-center gap-1 text-sm text-brand-jira dark:text-blue-300 hover:underline"
               >
                 <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
                 {item.jiraIssueKey || 'Jira'}

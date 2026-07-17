@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.5.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.5.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **사용자 VOC 게시판 추가**: 사이드바 하단 레일의 "릴리즈 노트" 아이콘 **바로 위**에 "사용자 VOC
@@ -21,6 +21,38 @@
     (신규 테이블 자동 생성, 마이그레이션 불필요).
   - Frontend: `VocBoardPanel`(목록/작성/상세/답변 master-detail) + `Sidebar` 레일 아이콘·SidePane,
     `useVoc` 훅, `vocApi`, 타입. 상세에서 기존 `ReactionBar` 재사용(`voc_post`).
+- **shadcn MCP 연결 + Base UI 기준 전환**: `frontend/.mcp.json`(shadcn MCP 등록)과
+  `frontend/components.json`(shadcn CLI 설정, style `new-york`, Base UI 기본)을 추가해
+  이후 컴포넌트 추가 시 레지스트리를 실제로 조회하도록 배선. `Button`/`Card`/`Badge`/
+  `Tooltip`/`Dialog` 5종을 `frontend/src/components/ui/`에 도입(Tooltip·Dialog 는
+  `@base-ui/react`, Button 은 기존 `@radix-ui/react-slot` 재사용 — 낡은 Radix 버전은
+  그대로 두고 신규만 Base UI로 감).
+  - 대량 교체 대신 어댑터 방식으로 점진 적용: 기존 `MacCard` 는 API 그대로 두고 내부만
+    새 `Card` 위에 재구성(traffic-light dot 은 `variant="mac"` 옵션으로 보존). 대표
+    사용처로 `JiraPushDialog`(커스텀 모달 → `Dialog`+`Button`)와 업무 표의 우선순위
+    칩(`WorkItemTableRow` → `Badge` dot+텍스트)을 교체해 동작을 증명.
+
+### Changed
+- **브랜드/상태 raw HEX → 토큰화**: Jira 브랜드색 `#0052CC` 를 `brand.jira` 토큰
+  (`--brand-jira`)으로 옮기고 `WorkItemTableRow`/`JiraPushDialog`/`WorkItemDetailPage`
+  에서 참조. `NodeDetailPanel` 의 사용률 게이지 raw hex 도 `status.*` CSS 변수로 교체.
+- DESIGN_SYSTEM.md §6/§10, CLAUDE.md 의 styling 스택 설명을 "Base UI 기본·Radix 호환 +
+  shadcn MCP" 로 갱신하고, W1 raw-HEX DoD 에 3D/canvas/recharts/컬러픽커 화이트리스트를
+  명시.
+
+## [1.5.1] - 2026-07-16
+
+### Added
+- **Jira 양방향 반영 — 편집 내용 되쓰기(제목/설명/우선순위)**: 업무 상세의 "Jira 반영"이
+  기존에는 칸반 상태 transition + 코멘트만 보냈는데, PEP 에서 편집한 **제목(summary)·
+  설명(description)·우선순위(priority)** 도 연결된 Jira 이슈에 `PUT /rest/api/2/issue/{key}`
+  로 되쓰도록 확장. 클릭 시 무엇이 반영되는지 보여주는 확인 다이얼로그(`JiraPushDialog`)와
+  선택 코멘트를 추가하고, Jira 쪽이 더 최신이면 충돌 안내 후 강제 반영을 지원한다.
+  담당자(assignee)는 이름 역매핑이 불안정해 반영에서 제외, 우선순위는 프로젝트별 스킴
+  차이를 감안해 best-effort(실패 시 나머지는 정상 반영).
+  - Backend: `JiraService.update_issue()`, `PEP_PRIORITY_TO_JIRA`/`strip_issue_key_prefix`
+    헬퍼, `push_to_jira` 확장, `JiraPushRequest.push_fields`/`JiraPushResult.fields_updated`.
+  - Frontend: `JiraPushDialog` 신설, `WorkItemDetailPage` 의 원클릭 push → 다이얼로그로 교체.
 - **NFS 모니터링(Isilon) — NAS 서버 SSH 기반 신규 화면·점검 추가**: K8s 가 마운트해서 쓰는
   NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검한다. 좌측에서 Isilon 서버를 선택하면 `isi`
   명령 수집 결과(Export/마운트, 쿼터·용량, 클라이언트/성능, 노드 health)와 K8s PV(`spec.nfs`)↔
@@ -125,6 +157,13 @@
   나란히 "튀어나온" 것처럼 보였다. 중복된 `relative` 클래스를 제거해 `fixed`(이미
   absolute 자손의 containing block 역할도 겸함) 하나만 남기는 것으로 해결.
   - Frontend: `components/common/SidePane.tsx`.
+- **업무 등록/수정 폼에 "공통업무" 체크박스가 없던 문제**: `WorkItem.allAttendees` 필드는
+  백엔드·타입·상세보기 배지·홈 "전체" 카드 필터까지 전부 연결돼 있었지만, 정작 등록/수정
+  폼에 이 값을 켤 수 있는 UI 컨트롤이 없어 사용자가 지정할 방법이 없었다(state 는 있지만
+  어떤 `onChange` 도 호출하지 않는 죽은 필드). `WorkItemForm.tsx` 에 체크박스를 추가해
+  실제로 지정 가능하도록 수정. 표시 문구는 "전체 참석"(전원이 반드시 참석해야 하는 것처럼
+  오해될 수 있음) 대신 실제 의미에 맞게 "공통업무"(특정 담당자 개인 업무가 아닌 파트 공통
+  업무)로 표기(`👥 공통업무`, 필드명/데이터는 그대로 유지).
 
 ## [1.3.1] - 2026-07-13
 

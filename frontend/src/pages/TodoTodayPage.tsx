@@ -216,11 +216,11 @@ export function TodoTodayPage() {
   const { data, isLoading, isError, refetch, isFetching } = useWorkItems(
     myName ? { assignee: myName } : undefined,
   );
-  // 전체 참석(회의 등) — 담당자가 아니어도 모두의 일정에 포함.
+  // 공통업무(파트 회의 등) — 담당자가 아니어도 모두의 일정에 포함.
   const { data: allAttendData } = useWorkItems({ allAttendees: true });
   const patchStatus = usePatchWorkItemStatus();
 
-  // 정확히 "내" 업무만 (담당자 정/부/legacy 중 내 이름) + 전체 참석 항목.
+  // 정확히 "내" 업무만 (담당자 정/부/legacy 중 내 이름) + 공통업무 항목.
   const mine = useMemo(() => {
     if (!myName) return [];
     const items = data?.data ?? [];
@@ -231,7 +231,7 @@ export function TodoTodayPage() {
       const names = [...splitNames(t.assignee), ...splitNames(t.primaryAssignee), ...splitNames(t.secondaryAssignee)];
       return names.includes(myName);
     });
-    // 전체 참석 항목 merge (id 중복 제거).
+    // 공통업무 항목 merge (id 중복 제거).
     const seen = new Set(mineItems.map((t) => t.id));
     const allAttend = (allAttendData?.data ?? []).filter((t) => !seen.has(t.id));
     return [...mineItems, ...allAttend];

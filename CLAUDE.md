@@ -62,7 +62,7 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
 |---|---|
 | Framework | React 18 + TypeScript 5.3 |
 | Build | Vite 5 |
-| Styling | Tailwind CSS 3 + shadcn/ui (Radix primitives) |
+| Styling | Tailwind CSS 3 + shadcn/ui (Base UI 기본 · Radix 호환) + shadcn MCP (`frontend/.mcp.json`) |
 | State | Zustand 4 (client state) + TanStack Query 5 (server state) |
 | HTTP | axios |
 | Charts | Recharts |
@@ -561,7 +561,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 - Components are grouped by feature under `src/components/` (`dashboard/`, `agent/`, `playbooks/`, `layout/`).
 - Each group has an `index.ts` barrel export.
-- Use shadcn/ui (Radix) primitives for dialogs, tabs, dropdowns, toasts.
+- Use shadcn/ui primitives (Base UI default, Radix compatible) for dialogs, tabs, dropdowns, toasts. Add components via the shadcn MCP so the AI reads the real registry instead of guessing props.
 - Tailwind CSS only — no CSS modules or styled-components.
 - Do not use inline styles.
 

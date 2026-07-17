@@ -486,7 +486,7 @@ export interface WorkItem {
   createdBy?: string;
   /** 사용자 정의 필드 값 {fieldKey: value} */
   customValues?: Record<string, unknown> | null;
-  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  /** 공통업무(파트 회의 등, 특정 개인 담당자 업무가 아님) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
   allAttendees?: boolean;
   /** Jira 연동 — 가져온 이슈 linkage (없으면 일반 work item). */
   jiraIssueKey?: string | null;
@@ -578,6 +578,7 @@ export interface JiraExcelImportResult {
 export interface JiraPushRequest {
   comment?: string;
   force?: boolean;
+  pushFields?: boolean;   // 제목/설명/우선순위 반영 여부 (기본 true)
 }
 
 export interface JiraPushResult {
@@ -585,6 +586,8 @@ export interface JiraPushResult {
   detail: string;
   transitioned: boolean;
   commentAdded: boolean;
+  fieldsUpdated: string[];   // 실제 반영된 필드명 (summary/description/priority)
+  fieldErrors: string[];     // 반영 실패 사유
   jiraStatus?: string | null;
   availableTransitions: string[];
 }
@@ -659,7 +662,7 @@ export interface WorkItemCreate {
   doneCondition?: string;
   parentId?: string;
   relatedWorkItemId?: string;
-  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  /** 공통업무(파트 회의 등, 특정 개인 담당자 업무가 아님) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
   allAttendees?: boolean;
 }
 
