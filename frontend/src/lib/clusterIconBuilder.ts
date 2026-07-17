@@ -11,6 +11,7 @@
 //   ※ 우상단은 사이드바 레일의 status dot 오버레이 자리이므로 텍스트를 넣지 않는다.
 
 import { parseClusterName } from './clusterName';
+import { deriveToneSet, isValidHex } from './colorTone';
 
 export interface ClusterIconBuildOptions {
   /** 1층(최상단) — 업무명 (1~5자 권장, 이상은 잘림) */
@@ -23,6 +24,8 @@ export interface ClusterIconBuildOptions {
   regionAbbr: string;
   /** 환경 색 토큰 — useOperationLevels 의 color 토큰과 동일 키 (red/amber/blue/…) */
   colorToken: string;
+  /** 지정되면 colorToken 프리셋 대신 이 hex 를 시드로 톤을 자동 산출한다(운영레벨 customHex). */
+  customHex?: string | null;
   /** k8s 휠 워터마크 표시 (기본 true) */
   k8sWatermark?: boolean;
   /** 모양 — rounded-square(기본) 또는 원 */
@@ -48,7 +51,8 @@ export const COLOR_HEX: Record<string, { bg: string; ring: string; band: string;
   muted:   { bg: '#e5e5e5', ring: '#737373', band: '#525252', text: '#262626' },
 };
 
-function paletteOf(token: string) {
+function paletteOf(token: string, customHex?: string | null) {
+  if (isValidHex(customHex)) return deriveToneSet(customHex);
   return COLOR_HEX[token] ?? COLOR_HEX.slate;
 }
 
@@ -151,7 +155,7 @@ const BAND_H = 16; // 64 / 4개 밴드
 
 /** 옵션 조합으로 64×64 SVG 문자열 생성 — 업무명/운영타입/속성/지역 4개 가로 밴드. */
 export function buildClusterIconSvg(opts: ClusterIconBuildOptions): string {
-  const pal = paletteOf(opts.colorToken);
+  const pal = paletteOf(opts.colorToken, opts.customHex);
   const watermark = opts.k8sWatermark !== false;
   const circle = opts.shape === 'circle';
 

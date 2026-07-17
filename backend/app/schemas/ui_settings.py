@@ -94,12 +94,16 @@ class OperationLevelItem(BaseModel):
     - value: 클러스터.operation_level 에 저장되는 식별자 (영문 슬러그 권장).
     - label: 화면 표시 이름 (한글 가능).
     - color: 컬러 키 (red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted).
+      custom_hex 가 지정되면 프리셋 대신 fallback 으로만 쓰인다.
     - icon: 클러스터 카드/행에 표시될 이모지 1자. 비어있으면 운영레벨별 기본값 사용.
+    - custom_hex: 프리셋 13색 대신 임의의 hex(#RRGGBB) 를 시드로 bg/ring/band/text 톤을
+      자동 산출할 때 지정. 비어있으면 color 프리셋을 그대로 사용.
     """
     value: str = Field(..., min_length=1, max_length=64)
     label: str = Field(..., min_length=1, max_length=64)
     color: str = Field(default="slate", max_length=32)
     icon: str | None = Field(default=None, max_length=8)
+    custom_hex: str | None = Field(default=None, max_length=9, pattern=r"^#[0-9a-fA-F]{3,8}$")
 
 
 class OperationLevelsResponse(BaseModel):

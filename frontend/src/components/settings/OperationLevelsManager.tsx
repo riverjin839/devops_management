@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Save, Loader2, Layers, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Layers, ChevronDown, Palette, X } from 'lucide-react';
 import type { OperationLevelItem } from '@/types';
 import {
   COLOR_OPTIONS,
@@ -9,6 +9,7 @@ import {
   useOperationLevels,
   useUpdateOperationLevels,
 } from '@/hooks/useOperationLevels';
+import { deriveToneSet, isValidHex } from '@/lib/colorTone';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
@@ -137,7 +138,10 @@ export function OperationLevelsManager() {
       const value = (l.value || deriveValue(label)).trim();
       if (!value || seen.has(value)) continue;
       seen.add(value);
-      cleaned.push({ value, label, color: l.color || 'slate', icon: l.icon || undefined });
+      cleaned.push({
+        value, label, color: l.color || 'slate', icon: l.icon || undefined,
+        customHex: isValidHex(l.customHex) ? l.customHex : undefined,
+      });
     }
     try {
       await updateMut.mutateAsync(cleaned);
@@ -225,6 +229,31 @@ export function OperationLevelsManager() {
                     className="w-full px-1 py-1 text-sm bg-background border border-border rounded">
                     {COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  <div className="flex items-center gap-1 mt-1">
+                    <label
+                      className="relative flex items-center justify-center w-6 h-6 rounded border border-border cursor-pointer flex-shrink-0"
+                      style={{ background: isValidHex(l.customHex) ? l.customHex : undefined }}
+                      title="커스텀 색상 — 프리셋 대신 임의 hex 로 톤 자동 생성"
+                    >
+                      {!isValidHex(l.customHex) && <Palette className="w-3 h-3 text-muted-foreground" />}
+                      <input
+                        type="color"
+                        value={isValidHex(l.customHex) ? l.customHex : '#94a3b8'}
+                        onChange={(e) => update(idx, { customHex: e.target.value })}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                    </label>
+                    {isValidHex(l.customHex) && (
+                      <>
+                        <span className="text-[10px] font-mono text-muted-foreground">{l.customHex}</span>
+                        <button type="button" onClick={() => update(idx, { customHex: undefined })}
+                          title="커스텀 색상 해제 → 프리셋 사용"
+                          className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
                 <td className="px-2 py-1">
                   <EmojiPicker
@@ -234,7 +263,13 @@ export function OperationLevelsManager() {
                   />
                 </td>
                 <td className="px-2 py-1">
-                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${levelBadgeClass(l.color)}`}>
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${levelBadgeClass(l.color)}`}
+                    style={isValidHex(l.customHex) ? (() => {
+                      const { bg, ring, text } = deriveToneSet(l.customHex);
+                      return { backgroundColor: bg, color: text, borderColor: ring };
+                    })() : undefined}
+                  >
                     <span className="text-sm leading-none">
                       {l.icon || levelIcon([{ value: l.value || 'auto', label: l.label, color: l.color }], l.value || 'auto')}
                     </span>

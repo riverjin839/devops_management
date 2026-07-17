@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -28,6 +29,7 @@ FEATURE_ACCESS_KEY = "feature_access"
 DEFAULT_FEATURE_ACCESS: dict = {}
 OPERATION_LEVELS_KEY = "operation_levels"
 DEFAULT_ASSIGNEES = []
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 DEFAULT_OPERATION_LEVELS = {
     "levels": [
         {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀"},
@@ -302,11 +304,13 @@ def get_operation_levels(db: Session = Depends(get_db)):
             continue
         seen.add(v)
         icon_raw = it.get("icon")
+        hex_raw = it.get("custom_hex")
         items.append(OperationLevelItem(
             value=v,
             label=str(it.get("label", v)),
             color=str(it.get("color", "slate")),
             icon=str(icon_raw) if isinstance(icon_raw, str) and icon_raw.strip() else None,
+            custom_hex=str(hex_raw) if isinstance(hex_raw, str) and _HEX_RE.match(hex_raw) else None,
         ))
     if not items:
         items = [OperationLevelItem(**x) for x in DEFAULT_OPERATION_LEVELS["levels"]]
@@ -324,7 +328,13 @@ def update_operation_levels(payload: OperationLevelsUpdate, db: Session = Depend
             continue
         seen.add(v)
         icon = (it.icon or "").strip() or None
-        cleaned.append({"value": v, "label": it.label.strip() or v, "color": it.color or "slate", "icon": icon})
+        custom_hex = (it.custom_hex or "").strip() or None
+        if custom_hex and not _HEX_RE.match(custom_hex):
+            custom_hex = None
+        cleaned.append({
+            "value": v, "label": it.label.strip() or v, "color": it.color or "slate",
+            "icon": icon, "custom_hex": custom_hex,
+        })
     setting.value = {"levels": cleaned}
     db.commit()
     db.refresh(setting)
