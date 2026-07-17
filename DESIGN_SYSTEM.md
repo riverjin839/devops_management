@@ -317,7 +317,9 @@ ui-ux-pro-max `landing.csv` 검색 결과:
 | Input | `Input`, `Label`, `Select`, `Switch` | 폼 필드 표준화 |
 | Skeleton | `Skeleton` | 자체 Skeleton 교체 |
 
-설치: `npx shadcn-ui@latest init` → 위 목록 순차 추가.
+설치: `npx shadcn@latest init` → 위 목록 순차 추가.
+(패키지명이 `shadcn-ui` → `shadcn` 으로 바뀌었다. 2026.7 기준 `init` 시 **Base UI** 가 기본 프리미티브이며, Radix 도 계속 지원한다. shadcn 추상화 덕에 컴포넌트 API 는 동일하므로 기존 Radix 코드와 공존한다.)
+AI(Claude Code)로 컴포넌트를 추가할 땐 `frontend/.mcp.json` 의 shadcn MCP 를 통해 레지스트리에서 실제 컴포넌트를 조회·설치한다(props 환각 방지).
 
 ---
 
@@ -376,8 +378,8 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 
 | 스프린트 | 작업 | DoD |
 |---|---|---|
-| **W1** | 토큰 정합 — `index.css` rewrite + `tailwind.config.js` `status.*` 추가 + raw HEX 사용처 grep 후 전수 치환 | `grep -rE "#[0-9a-fA-F]{6}" frontend/src` 결과가 토큰 정의부 외 0건 |
-| **W2** | shadcn/ui 도입 — `Button`, `Card`, `Badge`, `Tooltip`, `Dialog` 5종부터. 기존 자체 컴포넌트 어댑터 추가 | 새 컴포넌트는 shadcn 사용, 기존은 점진 마이그레이션 |
+| **W1** | 토큰 정합 — `index.css` rewrite + `tailwind.config.js` `status.*` 추가 + raw HEX 사용처 grep 후 전수 치환 | `grep -rE "#[0-9a-fA-F]{6}" frontend/src` 결과가 **토큰 정의부 + 화이트리스트 외 0건**. 화이트리스트 = three.js/canvas/recharts 파일(`FlowGraph3D`, `Topology*`, `*Chart*`, `*Timeline`, `KanbanSummaryCharts`) 및 컬러픽커 기본값 prop(`defaultBg="#..."`) — 이들은 CSS class 를 못 쓰므로 hex 불가피. 외부 서비스 고유색(Jira `#0052CC` 등)은 `brand.*` 토큰 경유. |
+| **W2** | shadcn/ui 도입(MCP 경유) — `Button`, `Card`, `Badge`, `Tooltip`, `Dialog` 5종부터. 기존 자체 컴포넌트 어댑터 추가 | 새 컴포넌트는 shadcn 사용, 기존은 점진 마이그레이션 |
 | **W3** | Health Hero PoC — 12-col Bento + Bullet Chart 컴포넌트 구현 + Dashboard 상단 교체 | Lighthouse a11y 점수 ≥ 95 |
 | **W4** | 접근성 패스 — `eslint-plugin-jsx-a11y` 도입 + skip link + aria-label 일괄 보강 | CI에서 a11y lint 통과 |
 | **W5+** | 차트 교체 — Sparkline 카드 변환, Recent History를 Heat Map으로 | 차트마다 sr-only 데이터 표 동반 |
