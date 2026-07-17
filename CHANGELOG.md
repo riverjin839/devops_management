@@ -10,6 +10,28 @@
 
 1.6.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **문서-코드 동기화 자동 검사(docs guard)**: 기능 추가 시 문서 갱신이 누락되지 않도록
+  `scripts/docs/check_docs_sync.py` 를 추가하고 CI 에 `docs-sync` job 을 신설. App.tsx
+  라우트 ↔ `docs/SCREENS.md` 섹션, 라우터/페이지 파일 ↔ `CODE_MAP.md`, `docs/*.md` ↔
+  `docs/README.md` 인덱스, frontend/backend 버전 일치를 기계 검사하며, feat/fix PR 이
+  앱 코드를 바꾸면서 CHANGELOG/문서를 안 건드리면 실패한다(예외: PR 제목 `[skip-docs]`).
+  `.claude/skills/docs-sync` 스킬(변경 유형 → 갱신 문서 매핑)과 PR 템플릿 docs 체크 항목,
+  CLAUDE.md "문서 동기화 규칙" 절도 함께 추가.
+- **폐쇄망 LLM 아키텍처 문서**: `docs/AIRGAP_LLM_ARCHITECTURE.md` 신설 — 내부 제공
+  모델(GLM-5.2)의 vLLM(OpenAI-호환) 서빙 구성, K8s 로그 모니터링–에러 **자동 분석**(조치
+  권한 없음, 분석 전용) 파이프라인, PEP 내부 문서(작업 가이드/Q&A/업무 이력) RAG 설계와
+  단계별 구현 로드맵/운영 체크리스트를 상세화. `AIRGAP_LLM_NEXUS.md` 와 상호 링크.
+
+### Changed
+- **내부 문서 전면 현행화(v1.6.0 기준 감사)**: README(버전 배지 1.0.0→1.6.0, 핵심 기능표에
+  VOC/Jira/스프린트/온톨로지/Isilon NFS/Deep Check/서비스 카탈로그/인프라 대장/알림 등
+  누락 도메인 보강), CLAUDE.md(저장소 레이아웃·환경변수 표를 config.py 기준 재생성,
+  Celery "3회/일" → check-matrix 디스패처 체계로 정정, API/DB 도메인 인덱스 추가),
+  CODE_MAP.md(미기재 라우터 47개·페이지 48개 도메인 표 추가, `trends/` 패키지·
+  `navConfig.ts` 등 낡은 경로 정정), docs/README.md(누락 색인 6건),
+  docs/SCREENS.md(제거된 `/coroot` 섹션 정리, 검증 기준일 헤더 추가).
+
 ## [1.6.0] - 2026-07-17
 
 ### Added
