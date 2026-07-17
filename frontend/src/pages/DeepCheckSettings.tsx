@@ -1,40 +1,71 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import {
   DeepCheckDefinitionForm,
   DeepCheckDefinitionList,
+  DeepCheckRunHistory,
   NotificationSettingsPanel,
 } from '@/components/daily-check';
 import { useClusters } from '@/hooks/useCluster';
 import {
+  useCheckTypes,
   useDeepCheckDefinitions,
   useCreateDefinition,
   useUpdateDefinition,
 } from '@/hooks/useDeepCheckDefinitions';
 import type { DeepCheckDefinition } from '@/types';
 
+const CATEGORY_LABELS: Record<string, string> = {
+  all: '전체',
+  k8s: 'K8s',
+  os: 'OS',
+  storage: '스토리지',
+  network: '네트워크',
+  app: '앱',
+};
+
 export function DeepCheckSettingsPage() {
   const { data: clusters = [] } = useClusters();
+  const { data: checkTypes = [] } = useCheckTypes();
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [editing, setEditing] = useState<DeepCheckDefinition | null>(null);
   const [adding, setAdding] = useState(false);
+  const [historyOf, setHistoryOf] = useState<DeepCheckDefinition | null>(null);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
 
   const filterClusterId = selectedClusterId ?? undefined;
-  const { data: definitions = [] } = useDeepCheckDefinitions(filterClusterId, true);
+  const { data: definitions = [] } = useDeepCheckDefinitions(filterClusterId, true, true);
   const create = useCreateDefinition();
   const update = useUpdateDefinition();
 
-  const sorted = useMemo(
-    () =>
-      [...definitions].sort((a, b) => {
+  const categoryByType = useMemo(
+    () => new Map(checkTypes.map((t) => [t.checkType, t.category ?? 'k8s'])),
+    [checkTypes],
+  );
+
+  const sorted = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return [...definitions]
+      .filter((d) => {
+        if (category !== 'all' && (categoryByType.get(d.checkType) ?? 'k8s') !== category) {
+          return false;
+        }
+        if (!term) return true;
+        return (
+          d.name.toLowerCase().includes(term)
+          || d.checkType.toLowerCase().includes(term)
+          || (d.description ?? '').toLowerCase().includes(term)
+        );
+      })
+      .sort((a, b) => {
         if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
         return a.name.localeCompare(b.name);
-      }),
-    [definitions],
-  );
+      });
+  }, [definitions, search, category, categoryByType]);
 
   return (
     <div className="min-h-screen bg-background py-3 pr-3">
@@ -72,6 +103,34 @@ export function DeepCheckSettingsPage() {
             </button>
           </div>
 
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="이름 / 타입 검색"
+                className="rounded-xl border border-border bg-card pl-8 pr-3 py-1.5 text-sm w-56"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCategory(key)}
+                  className={`rounded-lg px-2.5 py-1 text-xs ${
+                    category === key
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {adding && (
             <MacCard title="새 정의">
               <DeepCheckDefinitionForm
@@ -89,7 +148,7 @@ export function DeepCheckSettingsPage() {
             <MacCard title={`편집 — ${editing.name}`}>
               <DeepCheckDefinitionForm
                 initial={editing}
-                clusterId={editing.clusterId ?? undefined}
+                clusterId={editing.clusterId ?? selectedClusterId ?? undefined}
                 onSubmit={async (body) => {
                   await update.mutateAsync({ id: editing.id, body });
                   setEditing(null);
@@ -99,7 +158,24 @@ export function DeepCheckSettingsPage() {
             </MacCard>
           )}
 
-          <DeepCheckDefinitionList definitions={sorted} onEdit={(d) => setEditing(d)} />
+          {historyOf && (
+            <DeepCheckRunHistory
+              definition={historyOf}
+              clusters={clusters}
+              runClusterId={selectedClusterId}
+              onClose={() => setHistoryOf(null)}
+            />
+          )}
+
+          <DeepCheckDefinitionList
+            definitions={sorted}
+            onEdit={(d) => {
+              setAdding(false);
+              setEditing(d);
+            }}
+            onShowHistory={(d) => setHistoryOf(d)}
+            runClusterId={selectedClusterId}
+          />
 
           <NotificationSettingsPanel />
         </div>

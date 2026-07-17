@@ -323,27 +323,26 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### Deep Check 정의 관리 (`/daily-check/settings`)
+### Deep Check 정의 관리 (`/daily-check/settings`) — admin 전용
 
-- **파일**: `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/{DeepCheckDefinitionForm,DeepCheckDefinitionList,NotificationSettingsPanel}`)
-- **목적 / UX**: 인증서 만료, OS 파라미터, 스토리지/네트워크 등 deep-check 항목의 "정의"(check_type, 임계값, cron, params)를 CRUD 하는 화면. 클러스터별 전용 정의와 전체 클러스터 공용(글로벌, `cluster_id=NULL`) 정의를 함께 관리한다.
+- **파일**: `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/{DeepCheckDefinitionForm,DeepCheckDefinitionList,DeepCheckRunHistory,NotificationSettingsPanel}`)
+- **목적 / UX**: 인증서 만료, OS 파라미터, 스토리지/네트워크 등 deep-check 항목의 "정의"(check_type, 임계값, cron, params)를 admin 이 CRUD 하는 화면. 클러스터별 전용 정의와 전체 클러스터 공용(글로벌, `cluster_id=NULL`) 정의를 함께 관리하고, **커스텀 체커 3종(`custom_http`/`custom_kubectl`/`custom_promql`)으로 코드 없이 새 점검을 직접 만들 수 있다**. 정의별 실행 이력(개별 로그)도 이 화면에서 확인한다. 라우트는 `RequireAdmin` 가드로 보호.
 - **UI 구성**:
-  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="글로벌 + 전체"`) + 단일 선택. 선택된 클러스터로 정의 목록을 필터링(글로벌 정의는 항상 포함).
-  - 헤더 "정의 추가" 토글 버튼 → MacCard "새 정의"(`DeepCheckDefinitionForm`).
-  - 행 클릭/편집 버튼 → MacCard "편집 — {name}"(같은 폼 재사용, `initial` prop).
-  - `DeepCheckDefinitionList` — sortOrder → name 순 정렬된 정의 테이블/리스트.
+  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="글로벌 + 전체"`) + 단일 선택. 선택된 클러스터로 정의 목록을 필터링(글로벌 정의는 항상 포함). 글로벌 정의의 "즉시 실행" 대상 클러스터로도 사용.
+  - 검색 입력 + 카테고리 필터 칩(전체/K8s/OS/스토리지/네트워크/앱 — check-types 의 `category` 기준).
+  - 헤더 "정의 추가" 토글 버튼 → MacCard "새 정의"(`DeepCheckDefinitionForm`). Check Type 셀렉트는 "커스텀 (UI 에서 직접 정의)" / "내장 체커" optgroup 으로 구분(`seed_default` 플래그).
+  - 행 편집 버튼 → MacCard "편집 — {name}"(같은 폼 재사용, `initial` prop). 폼은 boolean 체크박스 / list 줄바꿈 textarea / 라벨 `(a|b)` 패턴 자동 select / cron 프리셋 + 직접 입력을 지원하고, **"미리 실행"**(저장 전 폼 값 그대로 ad-hoc 실행)과 "Test now"(저장된 값 실행) 버튼이 있다. 결과는 `ExecutionStepsTimeline` + 상세 JSON 으로 표시.
+  - `DeepCheckDefinitionList` — sortOrder → name 순 정렬. 행마다 최근 실행 상태 dot(`with_status` 요약)·최근 실행 시각/소요·즉시 실행(이력 기록)·실행 이력·복제·편집·삭제·활성 토글 버튼.
+  - `DeepCheckRunHistory` — 실행 이력 버튼으로 여는 MacCard 패널: 상태 필터 칩 + 페이지네이션 목록(상태/시각/클러스터/메시지/소요), 행 펼치면 step 타임라인(`details._steps`)과 상세 JSON. "지금 실행" 버튼 포함.
   - `NotificationSettingsPanel` 하단 배치.
-- **Frontend**: `useClusters`, `useDeepCheckDefinitions(clusterId, includeGlobal=true)`, `useCreateDefinition()`, `useUpdateDefinition()`(둘 다 성공 시 `['deepCheckDefinitions']` 전체 무효화). 로컬 state: `selectedClusterId`, `editing`, `adding`. api.ts: `deepCheckDefinitionsApi.list/create/update` (+ 컴포넌트 내부에서 `listCheckTypes`/`remove`/`test` 도 사용 가능하나 이 페이지에서 직접 delete/test 버튼은 `DeepCheckDefinitionList`/`Form` 쪽 구현 확인 필요).
-- **Backend**: `GET /api/v1/deep-check/definitions`, `POST /api/v1/deep-check/definitions`, `PUT /api/v1/deep-check/definitions/{id}`, `DELETE /api/v1/deep-check/definitions/{id}`, `POST /api/v1/deep-check/definitions/{id}/test`, `GET /api/v1/deep-check/check-types` — `backend/app/routers/deep_check_definitions.py`. `check_type` 은 `app/services/deep_checkers/REGISTRY` 화이트리스트로 검증(미등록 타입은 400). 모델: `DeepCheckDefinition`(`backend/app/models/deep_check.py`, `cluster_id` nullable = 글로벌, `thresholds`/`params` JSONB, `schedule_cron`).
+- **Frontend**: `useClusters`, `useCheckTypes`, `useDeepCheckDefinitions(clusterId, includeGlobal, withStatus=true)`, `useCreateDefinition`/`useUpdateDefinition`/`useDeleteDefinition`/`useDuplicateDefinition`/`useRunDefinition`/`useTestDefinition`/`usePreviewCheck`, `useDefinitionResults(definitionId)`. 로컬 state: `selectedClusterId`, `editing`, `adding`, `historyOf`, `search`, `category`. api.ts: `deepCheckDefinitionsApi.list(withStatus)/create/update/remove/duplicate/test/run/preview/results` — 쿼리 파라미터는 수동 snake_case, thresholds/params 는 응답 camelize 를 폼에서 필드명(snake)으로 재정규화.
+- **Backend**: `backend/app/routers/deep_check_definitions.py` — `GET/POST /api/v1/deep-check/definitions`(`with_status` 시 정의별 최신 결과 요약 포함), `PUT/DELETE /definitions/{id}`(admin, 삭제 시 이력은 `definition_id=NULL` 로 보존), `POST /definitions/{id}/duplicate`(admin, 비활성 복제), `POST /definitions/{id}/test`(operator, 무기록), `POST /definitions/{id}/run`(operator, `DeepCheckResult` 영속), `GET /definitions/{id}/results`(이력 페이지네이션 + status 필터), `POST /definitions/preview`(operator, 저장 전 ad-hoc), `GET /check-types`. `check_type` 은 `app/services/deep_checkers/REGISTRY` 화이트리스트 검증, `schedule_cron` 은 `validate_cron_min_interval`(5분 미만 거부). 모델: `DeepCheckDefinition`(+`last_run_at`), `DeepCheckResult`.
 - **핵심 기능**:
   - `cluster_id=None` 정의는 모든 클러스터에 적용되는 글로벌 정의로 취급.
-  - "Test now"(`POST /definitions/{id}/test`) — 저장 없이 즉시 1회 실행해 미리보기(`DeepCheckService.run_definition_once(persist=False)`).
-  - `check_type` 이 `REGISTRY`(add-deep-checker 스킬로 등록되는 체커: cert_expiry, OS 파라미터, 스토리지 health, 네트워크 도달성 등)에 없으면 생성/수정 모두 거부.
+  - **커스텀 점검 생성**: `custom_http`(URL/host:port 프로브 — 기대 status/본문 정규식/지연 임계), `custom_kubectl`(읽기전용 verb 화이트리스트 kubectl + lines/number/regex_count 파싱, gte/lte 임계), `custom_promql`(instant 쿼리 + max/min/sum/avg/count 집계). `seed_default=False` 라 자동 시드/체크매트릭스에서 제외되고 admin 이 인스턴스를 직접 만든다.
+  - **정의별 개별 로그**: 모든 실행(자동/수동)이 `DeepCheckResult` 로 남고 `details._steps` 에 단계별 로그 저장 → 실행 이력 패널에서 회차별 확인.
+  - **`schedule_cron` 배선됨**: 값을 주면 매분 check-matrix 디스패처가 이 정의만 due 평가해 자동 실행(글로벌 정의는 전 클러스터). 비우면 기존처럼 홈 "플랫폼 현황" 매트릭스의 `CheckMatrixSchedule` cron 만 적용(내장 체커의 기본 경로). 둘 다 최소 5분 간격.
   - `sort_order` 로 UI 표시 순서 제어.
-  - **자동 실행 스케줄은 이 화면이 아니라 홈 "플랫폼 현황"(`/`, platform 모드) 매트릭스에서 관리한다** —
-    `CheckMatrixItem(source_type=deep_check, source_ref=check_type)` 이 여기서 정의한 `check_type` 을
-    가리키고, 실제 cron(항목×클러스터)은 매트릭스 셀 상세에서 설정한다(`CheckMatrixSchedule`, 5분
-    미만 간격 거부). `schedule_cron` 필드는 미배선 상태로 남아있다(레거시, 무시됨).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

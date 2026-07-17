@@ -1616,6 +1616,8 @@ export const batchJobsApi = {
 import type {
   DeepCheckDefinition,
   DeepCheckDefinitionInput,
+  DeepCheckDefinitionResults,
+  DeepCheckPreviewInput,
   DeepCheckResult,
   DeepCheckReview,
   DeepCheckTestResult,
@@ -1667,20 +1669,38 @@ export const deepCheckApi = {
 
 export const deepCheckDefinitionsApi = {
   listCheckTypes: () => api.get<DeepCheckTypeSchema[]>('/deep-check/check-types'),
-  list: (params?: { clusterId?: string; includeGlobal?: boolean }) =>
-    api.get<DeepCheckDefinition[]>('/deep-check/definitions', { params }),
+  list: (params?: { clusterId?: string; includeGlobal?: boolean; withStatus?: boolean }) => {
+    // Manual snake_case for query params so axios doesn't double-convert.
+    const q: Record<string, string | boolean> = {};
+    if (params?.clusterId) q.cluster_id = params.clusterId;
+    if (params?.includeGlobal !== undefined) q.include_global = params.includeGlobal;
+    if (params?.withStatus) q.with_status = true;
+    return api.get<DeepCheckDefinition[]>('/deep-check/definitions', { params: q });
+  },
   get: (id: string) => api.get<DeepCheckDefinition>(`/deep-check/definitions/${id}`),
   create: (data: DeepCheckDefinitionInput) =>
     api.post<DeepCheckDefinition>('/deep-check/definitions', data),
   update: (id: string, data: DeepCheckDefinitionInput) =>
     api.put<DeepCheckDefinition>(`/deep-check/definitions/${id}`, data),
   remove: (id: string) => api.delete(`/deep-check/definitions/${id}`),
+  duplicate: (id: string) =>
+    api.post<DeepCheckDefinition>(`/deep-check/definitions/${id}/duplicate`),
   test: (id: string, clusterId?: string) =>
     api.post<DeepCheckTestResult>(
       `/deep-check/definitions/${id}/test`,
       undefined,
       { params: clusterId ? { cluster_id: clusterId } : undefined },
     ),
+  run: (id: string, clusterId?: string) =>
+    api.post<DeepCheckTestResult>(
+      `/deep-check/definitions/${id}/run`,
+      undefined,
+      { params: clusterId ? { cluster_id: clusterId } : undefined },
+    ),
+  preview: (data: DeepCheckPreviewInput) =>
+    api.post<DeepCheckTestResult>('/deep-check/definitions/preview', data),
+  results: (id: string, params?: { limit?: number; offset?: number; status?: string }) =>
+    api.get<DeepCheckDefinitionResults>(`/deep-check/definitions/${id}/results`, { params }),
 };
 
 export const checkMatrixApi = {

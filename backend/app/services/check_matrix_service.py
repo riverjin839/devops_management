@@ -426,9 +426,50 @@ def dispatch_due(db: Session) -> dict[str, Any]:
                 "check-matrix cell dispatch failed item=%s cluster=%s", item.name, cluster.name,
             )
 
+    # 3) DeepCheckDefinition.schedule_cron — 정의별 단독 cron (custom_* 정의의 주 스케줄).
+    #    글로벌 정의(cluster_id NULL)는 전체 클러스터 대상으로 실행한다.
+    from app.services.deep_check_service import DeepCheckService
+
+    definition_fired = 0
+    due_defs = (
+        db.query(DeepCheckDefinition)
+        .filter(DeepCheckDefinition.enabled.is_(True))
+        .filter(DeepCheckDefinition.schedule_cron.isnot(None))
+        .all()
+    )
+    for d in due_defs:
+        cron_expr = (d.schedule_cron or "").strip()
+        if not cron_expr or not croniter.is_valid(cron_expr):
+            continue
+        anchor = _anchor_naive(d.last_run_at, now_utc, tz)
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            continue
+        if next_fire > now_naive:
+            continue
+        d.last_run_at = check_at
+        db.commit()
+
+        if d.cluster_id is not None:
+            targets = db.query(Cluster).filter(Cluster.id == d.cluster_id).all()
+        else:
+            targets = db.query(Cluster).all()
+        for cluster in targets:
+            try:
+                DeepCheckService(db).run_definition_once(d.id, cluster=cluster, persist=True)
+                definition_fired += 1
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                errors.append(f"definition:{d.name}:{cluster.name}:{str(e)[:150]}")
+                logger.exception(
+                    "check-matrix definition dispatch failed def=%s cluster=%s", d.name, cluster.name,
+                )
+
     return {
         "core_fired": core_fired,
         "cell_fired": cell_fired,
+        "definition_fired": definition_fired,
         "errors": errors,
         "executed_at": now_aware.isoformat(),
     }
@@ -489,6 +530,9 @@ def seed_default_items(db: Session) -> int:
 
     from app.services.deep_checkers import REGISTRY
     for check_type, (_, spec) in REGISTRY.items():
+        # custom_* 템플릿형 타입은 check_type→정의 1:1 매핑이 성립하지 않으므로 매트릭스 제외.
+        if not getattr(spec, "seed_default", True):
+            continue
         db.add(CheckMatrixItem(
             name=spec.display_name,
             description=spec.description,
