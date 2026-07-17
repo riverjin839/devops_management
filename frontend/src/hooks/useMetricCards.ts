@@ -7,6 +7,7 @@ export const metricCardKeys = {
   card: (id: string) => ['metricCards', id] as const,
   results: ['metricResults'] as const,
   result: (id: string) => ['metricResults', id] as const,
+  sparkline: (id: string) => ['metricSparkline', id] as const,
   health: ['prometheusHealth'] as const,
 };
 
@@ -42,6 +43,21 @@ export function useMetricCardResult(cardId: string) {
     },
     enabled: !!cardId,
     refetchInterval: 30000,
+  });
+}
+
+/** KPI 카드 하단 Sparkline 용 최근 1시간 추이. Prometheus 미연결이어도 500 없이
+ *  status: 'offline'/'error' 로 응답(fail-safe) — 카드 쪽에서 조용히 숨기면 됨. */
+export function useMetricSparkline(cardId: string, enabled = true) {
+  return useQuery({
+    queryKey: metricCardKeys.sparkline(cardId),
+    queryFn: async () => {
+      const { data } = await promqlApi.querySparkline(cardId);
+      return data;
+    },
+    enabled: !!cardId && enabled,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 }
 

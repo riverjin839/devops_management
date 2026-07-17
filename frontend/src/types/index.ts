@@ -691,6 +691,18 @@ export interface MetricQueryResult {
   error?: string | null;
 }
 
+export interface MetricSparklinePoint {
+  ts: number;
+  value: number;
+}
+
+export interface MetricSparklineResult {
+  cardId: string;
+  status: 'ok' | 'error' | 'offline';
+  points: MetricSparklinePoint[];
+  error?: string | null;
+}
+
 // ── Cluster Items (현황 관리 대시보드 '아이템' 카드) ─────────────────────
 export type ClusterItemSource = 'manual' | 'auto' | 'ai';
 export type ClusterItemCardSize = 'sm' | 'md' | 'lg';
