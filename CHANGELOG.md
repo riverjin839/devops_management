@@ -10,6 +10,26 @@
 
 1.5.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **shadcn MCP 연결 + Base UI 기준 전환**: `frontend/.mcp.json`(shadcn MCP 등록)과
+  `frontend/components.json`(shadcn CLI 설정, style `new-york`, Base UI 기본)을 추가해
+  이후 컴포넌트 추가 시 레지스트리를 실제로 조회하도록 배선. `Button`/`Card`/`Badge`/
+  `Tooltip`/`Dialog` 5종을 `frontend/src/components/ui/`에 도입(Tooltip·Dialog 는
+  `@base-ui/react`, Button 은 기존 `@radix-ui/react-slot` 재사용 — 낡은 Radix 버전은
+  그대로 두고 신규만 Base UI로 감).
+  - 대량 교체 대신 어댑터 방식으로 점진 적용: 기존 `MacCard` 는 API 그대로 두고 내부만
+    새 `Card` 위에 재구성(traffic-light dot 은 `variant="mac"` 옵션으로 보존). 대표
+    사용처로 `JiraPushDialog`(커스텀 모달 → `Dialog`+`Button`)와 업무 표의 우선순위
+    칩(`WorkItemTableRow` → `Badge` dot+텍스트)을 교체해 동작을 증명.
+
+### Changed
+- **브랜드/상태 raw HEX → 토큰화**: Jira 브랜드색 `#0052CC` 를 `brand.jira` 토큰
+  (`--brand-jira`)으로 옮기고 `WorkItemTableRow`/`JiraPushDialog`/`WorkItemDetailPage`
+  에서 참조. `NodeDetailPanel` 의 사용률 게이지 raw hex 도 `status.*` CSS 변수로 교체.
+- DESIGN_SYSTEM.md §6/§10, CLAUDE.md 의 styling 스택 설명을 "Base UI 기본·Radix 호환 +
+  shadcn MCP" 로 갱신하고, W1 raw-HEX DoD 에 3D/canvas/recharts/컬러픽커 화이트리스트를
+  명시.
+
 ## [1.5.1] - 2026-07-16
 
 ### Added
