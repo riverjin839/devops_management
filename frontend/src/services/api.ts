@@ -1021,6 +1021,19 @@ export const opsNotesApi = {
   delete: (id: string) => api.delete(`/ops-notes/${id}`),
 };
 
+// VOC 게시판 API
+export const vocApi = {
+  getAll: (params?: { category?: string; status?: string }) =>
+    api.get<import('@/types').VocListResponse>('/voc', { params: params || undefined }),
+  getById: (id: string) => api.get<import('@/types').VocPost>(`/voc/${id}`),
+  create: (data: import('@/types').VocCreate) => api.post<import('@/types').VocPost>('/voc', data),
+  update: (id: string, data: import('@/types').VocUpdate) =>
+    api.put<import('@/types').VocPost>(`/voc/${id}`, data),
+  reply: (id: string, data: import('@/types').VocReply) =>
+    api.post<import('@/types').VocPost>(`/voc/${id}/reply`, data),
+  delete: (id: string) => api.delete(`/voc/${id}`),
+};
+
 // Mind Map API
 export const mindmapApi = {
   list: () => api.get<MindMapListItem[]>('/mindmaps/'),

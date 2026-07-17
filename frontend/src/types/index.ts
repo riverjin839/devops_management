@@ -979,6 +979,47 @@ export interface OpsNoteListResponse {
   total: number;
 }
 
+// ── 사용자 VOC 게시판 ────────────────────────────────────────────────────────
+export type VocCategory = '문의' | '개선' | '불만' | '제안';
+export type VocStatus = '접수' | '검토중' | '완료';
+
+export interface VocPost {
+  id: string;
+  title: string;
+  content?: string;
+  category: VocCategory;
+  status: VocStatus;
+  author?: string;
+  createdBy?: string;
+  adminReply?: string | null;
+  adminReplyBy?: string | null;
+  adminReplyAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VocCreate {
+  title: string;
+  content?: string;
+  category: VocCategory;
+}
+
+export interface VocUpdate {
+  title?: string;
+  content?: string;
+  category?: VocCategory;
+}
+
+export interface VocReply {
+  adminReply?: string;
+  status?: VocStatus;
+}
+
+export interface VocListResponse {
+  data: VocPost[];
+  total: number;
+}
+
 // Mind Map
 export interface MindMapNode {
   id: string;
@@ -3166,7 +3207,7 @@ export interface MetricChecklistItemT {
 }
 
 // ── 이모지 공감(리액션) — ops_note / work_item_comment / work_guide 공통 ──────────
-export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item';
+export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item' | 'voc_post';
 
 // 백엔드 REACTION_EMOJIS 와 동일 순서로 유지.
 export const REACTION_EMOJIS = ['👍', '❤️', '🎉', '✅', '👀', '🙏', '🔥', '😄'] as const;
