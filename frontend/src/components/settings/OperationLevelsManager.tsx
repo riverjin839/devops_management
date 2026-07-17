@@ -180,13 +180,13 @@ export function OperationLevelsManager() {
         <table className="w-full text-sm">
           <thead className="bg-muted/30 text-left">
             <tr className="text-xs text-muted-foreground uppercase">
-              <th className="px-2 py-1.5 w-8"></th>
+              <th className="px-2 py-1.5 w-8"><span className="sr-only">순서</span></th>
               <th className="px-2 py-1.5">표시 라벨</th>
               <th className="px-2 py-1.5">value (식별자)</th>
               <th className="px-2 py-1.5">색상</th>
               <th className="px-2 py-1.5 w-24">이모지</th>
               <th className="px-2 py-1.5">미리보기</th>
-              <th className="px-2 py-1.5 w-10"></th>
+              <th className="px-2 py-1.5 w-10"><span className="sr-only">작업</span></th>
             </tr>
           </thead>
           <tbody>
@@ -200,8 +200,10 @@ export function OperationLevelsManager() {
                 <td className="px-1 py-1 text-muted-foreground/60 text-center">
                   <div className="flex flex-col">
                     <button onClick={() => move(idx, -1)} disabled={idx === 0}
+                      aria-label="위로 이동"
                       className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
                     <button onClick={() => move(idx, 1)} disabled={idx === draft.length - 1}
+                      aria-label="아래로 이동"
                       className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
                   </div>
                 </td>
@@ -215,12 +217,14 @@ export function OperationLevelsManager() {
                       }
                     }}
                     placeholder="운영 (Production)"
+                    aria-label="표시 라벨 입력"
                     className="w-full px-2 py-1 text-sm bg-background border border-border rounded" />
                 </td>
                 <td className="px-2 py-1">
                   <input value={l.value}
                     onChange={(e) => { setValueTouched((s) => new Set(s).add(idx)); update(idx, { value: e.target.value }); }}
                     placeholder="production"
+                    aria-label="value 입력"
                     className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded" />
                 </td>
                 <td className="px-2 py-1">
@@ -269,6 +273,7 @@ export function OperationLevelsManager() {
                       const { bg, ring, text } = deriveToneSet(l.customHex);
                       return { backgroundColor: bg, color: text, borderColor: ring };
                     })() : undefined}
+                    aria-label={l.label || l.value || '미리보기'}
                   >
                     <span className="text-sm leading-none">
                       {l.icon || levelIcon([{ value: l.value || 'auto', label: l.label, color: l.color }], l.value || 'auto')}
