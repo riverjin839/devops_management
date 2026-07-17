@@ -125,7 +125,8 @@ Context 조립 ─┘                                     │
 - **in_cluster**: 대상 클러스터 **내부**에서 실행. DB 가 없으므로 registry 의 모든 check_type 을
   기본 임계/파라미터로 1회씩 돌리고, 결과를 `SUPERPOD_INGEST_URL`(`/deep-check/ingest`)로
   Bearer 토큰(`SUPERPOD_INGEST_TOKEN`) 인증 POST. 관리 backend 가 최신 회차에 자동 연결 후
-  AI 리뷰 큐잉.
+  AI 리뷰 큐잉. 배포 산출물은 **`k8s/superpod/`**(CronJob + kustomization + secret 템플릿) —
+  Helm CronJob(`SUPERPOD_MODE=centralized`, 기본값)과는 별도의 kustomize 번들이다.
 
 ---
 
@@ -192,10 +193,11 @@ Base: `/api/v1`
 | `node_health` | 노드 추가 검증(기본+네트워킹) | k8s | ✅ | Ready/Pressure/Taint/Allocatable + CNI/kube-proxy 데몬셋 |
 | `kernel_param_drift` | OS 파라미터 변경 점검 | os | ❌ | `ClusterConfigSnapshot` 연속 스냅샷 sysctl 드리프트 |
 | `minio_health` | MinIO 스토리지 health | storage | ❌ | `/minio/health/cluster·live` 쿼럼/degraded |
+| `isilon_nfs` | Isilon NFS (NAS) | storage | ❌ | `isi` 명령 SSH 수집 + K8s NFS PV 매칭, export 가용성/쿼터 |
 
-> `default_enabled=False`(kernel_param_drift, minio_health) 는 **위험/무겁거나 사전 준비가
-> 필요한** 점검 — 시드로 등록만 되고 운영자가 켠다. 콘솔 카탈로그에는 비활성도 노출(수동 실행
-> 가능)되지만, cron 은 `enabled=True` 만 실행한다.
+> `default_enabled=False`(kernel_param_drift, minio_health, isilon_nfs) 는 **위험/무겁거나
+> 사전 준비가 필요한** 점검 — 시드로 등록만 되고 운영자가 켠다. 콘솔 카탈로그에는 비활성도
+> 노출(수동 실행 가능)되지만, cron 은 `enabled=True` 만 실행한다.
 
 각 check_type 의 `threshold_fields`/`param_fields`/기본값은 `registry.py` 를 직접 확인
 (`GET /deep-check/check-types` 응답과 동일).

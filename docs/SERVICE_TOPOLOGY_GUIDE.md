@@ -70,6 +70,7 @@ PEP의 "서비스 디스커버리"는 **서비스 토폴로지** 화면입니다
 | Method | Path | 설명 |
 |---|---|---|
 | GET | `/{cluster_id}/graph?namespace=<ns>` | 자동 그래프(+수동 엣지/외부 노드 병합). 옵션: `include_pods`, `include_orphans`, `with_metrics` |
+| GET | `/{cluster_id}/cluster-graph` | 네임스페이스 스코프 없이 클러스터 전체 그래프 |
 | GET | `/{cluster_id}/traffic?namespace=<ns>` | 실트래픽 엣지. 옵션: `since_seconds`(1~3600), `limit`(1~10000) |
 | GET | `/{cluster_id}/links?namespace=<ns>` | 수동 링크 목록 |
 | POST | `/{cluster_id}/links` | 수동 링크 생성 |

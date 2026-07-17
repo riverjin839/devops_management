@@ -17,7 +17,8 @@ DB 덤프(`pg_dump`)가 아니라 **애플리케이션 레벨 백업**이라, �
   check_logs, daily_check_logs, cluster_config_snapshots, topology_audit_logs,
   ontology_events, trend_items, trend_digests, audit_logs,
   ops_check_runs, ops_check_run_items, os_param_changes,
-  resource_count_snapshots, metric_check_states
+  resource_count_snapshots, metric_check_states,
+  deep_check_results, check_matrix_result_logs
   ```
 - **기본 마스킹 — 민감 컬럼**: `include_sensitive=false`(기본)면 다음 컬럼은 `null` 로 마스킹된다.
   | 테이블 | 컬럼 |
@@ -25,6 +26,7 @@ DB 덤프(`pg_dump`)가 아니라 **애플리케이션 레벨 백업**이라, �
   | `clusters` | `kubeconfig_content`, `kubeconfig_path` |
   | `users` | `hashed_password` |
   | `user_jira_credentials` | `token_encrypted` |
+  | `isilon_servers` | `encrypted_password`, `encrypted_private_key` |
 
 > ⚠️ 민감 필드를 포함(`include_sensitive=true`)하면 **kubeconfig·비밀번호 해시·암호화 토큰**이 평문 JSON 에 담긴다.
 > 안전한 곳에만 보관하고, 일반 백업은 마스킹(기본)을 권장한다.

@@ -10,6 +10,20 @@
 
 1.6.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **docs/ 가이드 본문 2차 현행화**: 1차(README/CLAUDE.md/CODE_MAP/색인/SCREENS)에 이어 실제
+  운영 가이드 본문을 코드와 대조해 정정. `ADMIN_MANUAL.md`(제품명 PEP 전환, Deployment/라벨
+  셀렉터 실명 오류 수정, 클러스터 등록 위치를 Settings 로 정정, 09/13/18 고정 스케줄 →
+  check-matrix cron 디스패처로 재작성, 내장 백업/복구·사용자 관리/RBAC·감사 로그·VOC·배치잡
+  등 누락 관리 기능 보강), `DEPLOY_GUIDE.md`(compose kind 네트워크 선행 생성 안내, airgap
+  save 산출물 tar.gz 개수 정정, dev→kind overlay 정정, GitHub Actions 가 기본 CI/CD 임을
+  명시), `BACKUP_RESTORE_GUIDE.md`(LOG_TABLES·SENSITIVE_COLUMNS 최신 컬럼 반영),
+  `DEEP_CHECKER_GUIDE.md`/`K8S_OPS_CHECKLIST.md`(체커 카탈로그에 누락됐던 `isilon_nfs`·
+  `node_health` 반영, in_cluster 배포 산출물 `k8s/superpod/` 명시), `SERVICE_TOPOLOGY_GUIDE.md`
+  (`/cluster-graph` 엔드포인트 추가), `KNOWLEDGE_BASE_DESIGN.md`(미채택 설계안임을 명시하는
+  구현 결과 노트 추가), `JIRA_기능정리.md`(시점 스냅샷 고지 + 실제 PEP↔Jira 연동 기능인
+  Excel/붙여넣기 가져오기·v1.5.1 양방향 push 절 신설 — 기존 문서에 전혀 없던 내용).
+
 ### Added
 - **문서-코드 동기화 자동 검사(docs guard)**: 기능 추가 시 문서 갱신이 누락되지 않도록
   `scripts/docs/check_docs_sync.py` 를 추가하고 CI 에 `docs-sync` job 을 신설. App.tsx

@@ -44,6 +44,7 @@
 | 항목 | 점검 내용 | 기준(예시) | 상태 | check_type / 출처 |
 |---|---|---|---|---|
 | 노드 Ready | NotReady 노드 수 | 0 | ✅ | 일일점검 `_check_nodes` |
+| 노드 추가 검증(기본+네트워킹) | Ready/Pressure/Taint/Allocatable + CNI/kube-proxy 데몬셋 | 이상 없음 | ✅ | `node_health` |
 | 노드 Pressure | Disk/Memory/PID Pressure, NetworkUnavailable | warn 1 / crit 3 노드 | ✅ | `node_pressure` |
 | OS 커널 파라미터 드리프트 | sysctl 스냅샷 연속 비교 | 변경 warn 1 / crit 20 | ✅ | `kernel_param_drift` (기본 off) |
 | 컨테이너 런타임 버전 | `containerRuntimeVersion` 수집·표시 | — | 🟡 | `node_server_specs` (메타만) |
@@ -87,6 +88,7 @@
 |---|---|---|---|---|
 | PVC / PV 상태 | Pending/Lost PVC, orphan PV | warn 1 / crit 5 | ✅ | `pvc_health` |
 | MinIO health | cluster/live health 엔드포인트 | warn 1% / crit 50% | ✅ | `minio_health` (기본 off) |
+| Isilon NFS(NAS) | `isi` SSH 수집 + K8s NFS PV 매칭, export 가용성/쿼터 | 이상 없음 | ✅ | `isilon_nfs` (기본 off) |
 | **MinIO(AIStor) S3 호출/응답시간** | S3 API 호출 정상 여부(ListBuckets/HeadBucket/Get·PutObject) + 왕복 응답시간 | 호출 성공, 응답시간 warn 500ms / crit 2s | ⬜ | (신규) `minio_s3_latency` — health 엔드포인트만 보는 `minio_health` 와 분리된 데이터경로 SLO 점검. 파라미터: `endpoints`(S3 base URL)·`access_key`/`secret_key`(민감→백업 마스킹)·`region`·`bucket`/`object_key`(선택)·`http_timeout_seconds`·`verify_tls` |
 | PV 사용률 | 볼륨 used/capacity (kubelet volume stats) | warn 80% / crit 90% | ⬜ | (신규) `pv_usage` |
 | StorageClass / CSI | default SC 존재, CSI 드라이버 Ready | OK | ⬜ | (신규) `csi_health` |
