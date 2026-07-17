@@ -11,6 +11,16 @@
 1.5.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **사용자 VOC 게시판 추가**: 사이드바 하단 레일의 "릴리즈 노트" 아이콘 **바로 위**에 "사용자 VOC
+  게시판" 아이콘을 추가하고, 클릭하면 릴리즈 노트와 동일한 우측 SidePane 으로 게시판이 열린다.
+  사용자가 문의/개선/불만/제안을 남기면 관리자가 답변하고 상태(접수/검토중/완료)를 관리한다.
+  전체 공개 board(모두 열람, 수정·삭제는 본인 글 또는 관리자), 👍 공감, 관리자 답변 시 작성자에게
+  인앱 알림.
+  - Backend: `VocPost` 모델 + `/api/v1/voc` 라우터(CRUD + `POST /{id}/reply` 관리자 답변/상태),
+    `user_notify.notify_voc_reply`(작성자 알림), reactions `REACTION_TARGET_TYPES` 에 `voc_post` 추가
+    (신규 테이블 자동 생성, 마이그레이션 불필요).
+  - Frontend: `VocBoardPanel`(목록/작성/상세/답변 master-detail) + `Sidebar` 레일 아이콘·SidePane,
+    `useVoc` 훅, `vocApi`, 타입. 상세에서 기존 `ReactionBar` 재사용(`voc_post`).
 - **shadcn MCP 연결 + Base UI 기준 전환**: `frontend/.mcp.json`(shadcn MCP 등록)과
   `frontend/components.json`(shadcn CLI 설정, style `new-york`, Base UI 기본)을 추가해
   이후 컴포넌트 추가 시 레지스트리를 실제로 조회하도록 배선. `Button`/`Card`/`Badge`/
