@@ -31,8 +31,9 @@ export function BulletChart({
 }: BulletChartProps) {
   const clamped = Math.max(0, Math.min(100, value));
   const gradId = useId();
+  const zoneLabel = zones.find((z) => clamped <= z.end)?.label;
   const label = ariaLabel
-    ?? `현재 값 ${Math.round(clamped)}%${target != null ? `, 목표 ${Math.round(target)}%` : ''}`;
+    ?? `현재 값 ${Math.round(clamped)}%${zoneLabel ? ` (${zoneLabel} 구간)` : ''}${target != null ? `, 목표 ${Math.round(target)}%` : ''}`;
 
   return (
     <svg

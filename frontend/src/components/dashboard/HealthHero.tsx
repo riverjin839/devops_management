@@ -93,7 +93,7 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
               { end: 90, color: 'hsl(var(--status-warning-bg))', label: '주의' },
               { end: 100, color: 'hsl(var(--status-healthy-bg))', label: '정상' },
             ]}
-            ariaLabel={`전체 헬스 ${healthyPct}%, 목표 100% 정상`}
+            ariaLabel={`전체 헬스 ${healthyPct}% (${overallLabel}), 목표 100% 정상`}
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
             <span>0%</span>
