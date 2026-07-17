@@ -9,12 +9,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import Cluster, DeepCheckDefinition
 from app.services.deep_check_service import DeepCheckService
 from app.services.deep_checkers import REGISTRY, list_check_types
 
 router = APIRouter(prefix="/deep-check", tags=["Deep Check Definitions"])
+
+# 정의 변경/실행은 operator 이상만 — 임계값 변경은 전 클러스터에 영향을 주고,
+# test/run 은 컨트롤플레인 exec·파드생성 같은 강력한 동작을 유발할 수 있다.
+_operator = [Depends(require_operator)]
 
 
 class DefinitionIn(BaseModel):
@@ -70,7 +75,7 @@ def list_definitions(
     return q.order_by(DeepCheckDefinition.sort_order.asc()).all()
 
 
-@router.post("/definitions", response_model=DefinitionOut)
+@router.post("/definitions", response_model=DefinitionOut, dependencies=_operator)
 def create_definition(body: DefinitionIn, db: Session = Depends(get_db)):
     if body.check_type not in REGISTRY:
         raise HTTPException(status_code=400, detail=f"Unknown check_type: {body.check_type}")
@@ -93,7 +98,7 @@ def get_definition(def_id: UUID, db: Session = Depends(get_db)):
     return row
 
 
-@router.put("/definitions/{def_id}", response_model=DefinitionOut)
+@router.put("/definitions/{def_id}", response_model=DefinitionOut, dependencies=_operator)
 def update_definition(def_id: UUID, body: DefinitionIn, db: Session = Depends(get_db)):
     row = db.query(DeepCheckDefinition).filter(DeepCheckDefinition.id == def_id).first()
     if row is None:
@@ -107,7 +112,7 @@ def update_definition(def_id: UUID, body: DefinitionIn, db: Session = Depends(ge
     return row
 
 
-@router.delete("/definitions/{def_id}")
+@router.delete("/definitions/{def_id}", dependencies=_operator)
 def delete_definition(def_id: UUID, db: Session = Depends(get_db)):
     row = db.query(DeepCheckDefinition).filter(DeepCheckDefinition.id == def_id).first()
     if row is None:
@@ -117,7 +122,7 @@ def delete_definition(def_id: UUID, db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 
-@router.post("/definitions/{def_id}/test")
+@router.post("/definitions/{def_id}/test", dependencies=_operator)
 def test_definition(
     def_id: UUID,
     cluster_id: Optional[UUID] = None,

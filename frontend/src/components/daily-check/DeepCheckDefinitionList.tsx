@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2, Power, PowerOff, Globe2 } from 'lucide-react';
+import { Pencil, Trash2, Power, PowerOff, Globe2, Copy } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { useUpdateDefinition, useDeleteDefinition } from '@/hooks/useDeepCheckDefinitions';
 import type { DeepCheckDefinition } from '@/types';
@@ -7,14 +7,22 @@ import type { DeepCheckDefinition } from '@/types';
 interface Props {
   definitions: DeepCheckDefinition[];
   onEdit: (d: DeepCheckDefinition) => void;
+  /** 글로벌 정의를 현재 선택 클러스터 전용으로 복제 — 제공 시 글로벌 행에 복제 버튼 노출. */
+  onDuplicateToCluster?: (d: DeepCheckDefinition) => void;
 }
 
-export function DeepCheckDefinitionList({ definitions, onEdit }: Props) {
+export function DeepCheckDefinitionList({ definitions, onEdit, onDuplicateToCluster }: Props) {
   const update = useUpdateDefinition();
   const remove = useDeleteDefinition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const toggle = (d: DeepCheckDefinition) => {
+    // 글로벌 정의를 끄면 전 클러스터에 영향 → 실수 방지용 확인.
+    if (d.enabled && !d.clusterId) {
+      if (!window.confirm(`"${d.name}" 은 글로벌 정의입니다. 비활성화하면 모든 클러스터에서 이 점검이 cron 실행되지 않습니다. 계속할까요?`)) {
+        return;
+      }
+    }
     update.mutate({
       id: d.id,
       body: {
@@ -71,6 +79,14 @@ export function DeepCheckDefinitionList({ definitions, onEdit }: Props) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <span className="truncate">{d.name}</span>
+                {!d.enabled && (
+                  <span
+                    title="비활성 — cron 미실행, 수동 실행만 가능"
+                    className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground border border-border"
+                  >
+                    비활성
+                  </span>
+                )}
                 {!d.clusterId && (
                   <span
                     title="글로벌 (모든 클러스터)"
@@ -100,6 +116,16 @@ export function DeepCheckDefinitionList({ definitions, onEdit }: Props) {
                 )}
               </div>
             </div>
+            {onDuplicateToCluster && !d.clusterId && (
+              <button
+                type="button"
+                onClick={() => onDuplicateToCluster(d)}
+                className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="이 클러스터 전용으로 복제"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onEdit(d)}

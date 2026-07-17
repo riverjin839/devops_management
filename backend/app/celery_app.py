@@ -41,6 +41,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_check_matrix_log_purge",
         "schedule": crontab(hour=3, minute=0),
     },
+    # deep_check_results 리텐션 정리 (매일 03:10 KST)
+    "deep-check-results-purge": {
+        "task": "app.celery_app.run_deep_check_results_purge",
+        "schedule": crontab(hour=3, minute=10),
+    },
     # 기술 트렌드 수집 (07:00 KST)
     "daily-trend-collect": {
         "task": "app.celery_app.run_trend_collect",
@@ -515,6 +520,72 @@ def run_ops_check_batch(self, run_id: str):
         import logging
         logging.getLogger(__name__).exception("run_ops_check_batch failed (%s): %s", run_id, e)
         return {"run_id": run_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_deep_check_for_cluster")
+def run_deep_check_for_cluster(self, cluster_id: str, daily_check_log_id: str | None = None):
+    """클러스터의 enabled deep check 전체를 백그라운드로 실행 + AI 리뷰 큐잉.
+
+    수동 "지금 실행"(POST /deep-check/run/{cluster_id}) 이 exec·파드생성 다수를
+    직렬로 도는 동안 요청이 블로킹/504 되는 것을 막기 위해 worker 로 넘긴다.
+    """
+    from app.database import SessionLocal
+    from app.services.deep_check_service import DeepCheckService
+
+    db = SessionLocal()
+    try:
+        svc = DeepCheckService(db)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            n, log_id = loop.run_until_complete(
+                svc.run_for_cluster(
+                    cluster_id,
+                    in_cluster=False,
+                    daily_check_log_id=daily_check_log_id,
+                )
+            )
+        finally:
+            loop.close()
+
+        if log_id:
+            try:
+                run_review_and_notify.delay(log_id)
+            except Exception:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).warning(
+                    "run_deep_check_for_cluster: review 큐잉 실패 (log=%s)", log_id
+                )
+        return {"cluster_id": cluster_id, "checks_run": n, "daily_check_log_id": log_id}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception(
+            "run_deep_check_for_cluster failed (%s): %s", cluster_id, e
+        )
+        return {"cluster_id": cluster_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_deep_check_results_purge")
+def run_deep_check_results_purge(self):
+    """deep_check_results 리텐션 정리 — 매일 03:10 KST, 보관일수 초과분 청크 삭제.
+
+    check_matrix_result_logs 와 동일하게 무한 증가를 막는다(각 cron 실행마다 행 적재).
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.services.deep_check_service import purge_expired_results
+
+    db = SessionLocal()
+    try:
+        return purge_expired_results(db)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_deep_check_results_purge failed: %s", e)
+        return {"error": str(e)[:200]}
     finally:
         db.close()
 
