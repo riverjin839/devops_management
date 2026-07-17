@@ -3,6 +3,7 @@ import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriang
 import { formatDateTime } from '@/lib/utils';
 import {
   HealthHero,
+  CheckHistoryHeatmap,
   AddonGrid,
   AddClusterModal,
   AddAddonModal,
@@ -19,7 +20,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
-import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
+import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck, useCheckHistoryHeatmap } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { useClusterItems, useRunClusterItem, useUpdateClusterItem, useDeleteClusterItem } from '@/hooks/useClusterItems';
@@ -172,6 +173,9 @@ export function Dashboard() {
   // 선택된 클러스터의 애드온 로드
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
   const { isLoading: addonsLoading } = useAddons(activeClusterId);
+
+  // Recent Check History — Heat Map (cluster × time)
+  const { data: historyLogs = [], isLoading: historyLoading } = useCheckHistoryHeatmap();
 
   // Health Check mutation
   const healthCheck = useHealthCheck();
@@ -492,6 +496,11 @@ export function Dashboard() {
             />
           </MacCard>
         </div>
+
+        {/* ── Recent Check History (Heat Map) ──────────────────────────── */}
+        <MacCard title="Recent Check History" bodyPadding="p-0">
+          <CheckHistoryHeatmap logs={historyLogs} isLoading={historyLoading} />
+        </MacCard>
 
       </main>
       </div>
