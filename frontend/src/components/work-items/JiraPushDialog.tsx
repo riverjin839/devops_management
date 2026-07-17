@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { X, Loader2, UploadCloud, AlertTriangle, MessageSquare } from 'lucide-react';
+import { Loader2, UploadCloud, AlertTriangle, MessageSquare } from 'lucide-react';
 import { useJiraPush } from '@/hooks/useJira';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { KANBAN_STATUS_LABEL } from './workItemKanbanUtils';
 import type { WorkItem } from '@/types';
 
@@ -31,8 +33,6 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
     if (open) { setComment(''); setPushFields(true); setConflict(null); }
   }, [open]);
 
-  if (!open) return null;
-
   const busy = pushJira.isPending;
   const key = item.jiraIssueKey ?? '';
 
@@ -56,25 +56,19 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#0052CC]/10 flex items-center justify-center flex-shrink-0">
-            <UploadCloud className="w-5 h-5 text-[#0052CC] dark:text-blue-300" />
+    <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader className="flex-row items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-brand-jira/10 flex items-center justify-center flex-shrink-0">
+            <UploadCloud className="w-5 h-5 text-brand-jira dark:text-blue-300" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold leading-tight">Jira 반영</h2>
-            <p className="text-xs text-muted-foreground">
+            <DialogTitle>Jira 반영</DialogTitle>
+            <DialogDescription>
               편집 내용을 <span className="font-mono">{key}</span> 이슈에 씁니다.
-            </p>
+            </DialogDescription>
           </div>
-          <button type="button" onClick={onClose} disabled={busy}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50" aria-label="닫기">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        </DialogHeader>
 
         <div className="px-5 pb-5 space-y-3.5">
           {/* 반영 대상 미리보기 */}
@@ -121,27 +115,30 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
               <span>{conflict}</span>
             </div>
           )}
-
-          {/* 액션 */}
-          <div className="flex items-center gap-2 pt-1">
-            {conflict ? (
-              <button type="button" onClick={() => run(true)} disabled={busy}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-500/90 disabled:opacity-50">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                강제 반영
-              </button>
-            ) : (
-              <button type="button" onClick={() => run(false)} disabled={busy}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0052CC] text-white text-sm font-medium hover:bg-[#0052CC]/90 disabled:opacity-50">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                반영
-              </button>
-            )}
-            <button type="button" onClick={onClose} disabled={busy}
-              className="ml-auto px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground">닫기</button>
-          </div>
         </div>
-      </div>
-    </div>
+
+        <DialogFooter className="pt-0">
+          {conflict ? (
+            <Button type="button" variant="destructive" onClick={() => run(true)} disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+              강제 반영
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => run(false)}
+              disabled={busy}
+              className="bg-brand-jira text-white hover:bg-brand-jira/90"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+              반영
+            </Button>
+          )}
+          <Button type="button" variant="ghost" onClick={onClose} disabled={busy} className="ml-auto">
+            닫기
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
