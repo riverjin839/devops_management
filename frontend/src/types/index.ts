@@ -486,7 +486,7 @@ export interface WorkItem {
   createdBy?: string;
   /** 사용자 정의 필드 값 {fieldKey: value} */
   customValues?: Record<string, unknown> | null;
-  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  /** 공통업무(파트 회의 등, 특정 개인 담당자 업무가 아님) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
   allAttendees?: boolean;
   /** Jira 연동 — 가져온 이슈 linkage (없으면 일반 work item). */
   jiraIssueKey?: string | null;
@@ -578,6 +578,7 @@ export interface JiraExcelImportResult {
 export interface JiraPushRequest {
   comment?: string;
   force?: boolean;
+  pushFields?: boolean;   // 제목/설명/우선순위 반영 여부 (기본 true)
 }
 
 export interface JiraPushResult {
@@ -585,6 +586,8 @@ export interface JiraPushResult {
   detail: string;
   transitioned: boolean;
   commentAdded: boolean;
+  fieldsUpdated: string[];   // 실제 반영된 필드명 (summary/description/priority)
+  fieldErrors: string[];     // 반영 실패 사유
   jiraStatus?: string | null;
   availableTransitions: string[];
 }
@@ -659,7 +662,7 @@ export interface WorkItemCreate {
   doneCondition?: string;
   parentId?: string;
   relatedWorkItemId?: string;
-  /** 전체 참석(회의 등) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
+  /** 공통업무(파트 회의 등, 특정 개인 담당자 업무가 아님) — true 면 모든 사용자의 개인 일정(Work To Do)에 표시. */
   allAttendees?: boolean;
 }
 
@@ -979,6 +982,47 @@ export interface OpsNoteListResponse {
   total: number;
 }
 
+// ── 사용자 VOC 게시판 ────────────────────────────────────────────────────────
+export type VocCategory = '문의' | '개선' | '불만' | '제안';
+export type VocStatus = '접수' | '검토중' | '완료';
+
+export interface VocPost {
+  id: string;
+  title: string;
+  content?: string;
+  category: VocCategory;
+  status: VocStatus;
+  author?: string;
+  createdBy?: string;
+  adminReply?: string | null;
+  adminReplyBy?: string | null;
+  adminReplyAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VocCreate {
+  title: string;
+  content?: string;
+  category: VocCategory;
+}
+
+export interface VocUpdate {
+  title?: string;
+  content?: string;
+  category?: VocCategory;
+}
+
+export interface VocReply {
+  adminReply?: string;
+  status?: VocStatus;
+}
+
+export interface VocListResponse {
+  data: VocPost[];
+  total: number;
+}
+
 // Mind Map
 export interface MindMapNode {
   id: string;
@@ -1096,6 +1140,124 @@ export interface ManagementServerUpdate extends Partial<ManagementServerCreate> 
 
 export interface ManagementServerListResponse {
   data: ManagementServer[];
+}
+
+// ── Isilon NFS 모니터링 ──────────────────────────────────────────────────────
+export interface IsilonServer {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username?: string;
+  description?: string;
+  status?: string;        // online / offline / unknown
+  isDefault: boolean;
+  hasPassword: boolean;
+  hasPrivateKey: boolean;
+  lastChecked?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface IsilonServerCreate {
+  name: string;
+  host: string;
+  port?: number;
+  username?: string;
+  description?: string;
+  isDefault?: boolean;
+  savedPassword?: string;
+  savedPrivateKey?: string;
+}
+
+export interface IsilonServerUpdate extends Partial<IsilonServerCreate> {
+  clearSavedPassword?: boolean;
+  clearSavedPrivateKey?: boolean;
+}
+
+export type IsilonCommandSection =
+  | 'exports' | 'nfs_settings' | 'quotas' | 'clients' | 'node_health' | 'custom';
+
+export interface IsilonCommand {
+  id: string;
+  serverId?: string | null;   // null = 글로벌 기본
+  key: string;
+  label: string;
+  section: IsilonCommandSection;
+  command: string;
+  parseMode: 'json' | 'text';
+  timeoutSeconds: number;
+  enabled: boolean;
+  showOnOverview: boolean;
+  sortOrder: number;
+  isBuiltin: boolean;
+}
+
+export interface IsilonCommandCreate {
+  serverId?: string | null;
+  key: string;
+  label: string;
+  section?: IsilonCommandSection;
+  command: string;
+  parseMode?: 'json' | 'text';
+  timeoutSeconds?: number;
+  enabled?: boolean;
+  showOnOverview?: boolean;
+  sortOrder?: number;
+}
+
+export interface IsilonCommandUpdate {
+  label?: string;
+  section?: IsilonCommandSection;
+  command?: string;
+  parseMode?: 'json' | 'text';
+  timeoutSeconds?: number;
+  enabled?: boolean;
+  showOnOverview?: boolean;
+  sortOrder?: number;
+}
+
+export interface IsilonCommandResult {
+  key: string;
+  label: string;
+  section: IsilonCommandSection;
+  command: string;
+  parseMode: 'json' | 'text';
+  showOnOverview: boolean;
+  ok: boolean;
+  exitCode?: number | null;
+  parsed?: unknown;
+  raw?: string;
+  error?: string | null;
+  durationMs: number;
+}
+
+export interface IsilonK8sNfsPv {
+  pv: string;
+  server?: string | null;
+  path: string;
+  pvc?: string | null;
+  phase?: string | null;
+}
+
+export interface IsilonNfsOverview {
+  configured: boolean;
+  message?: string;
+  server?: { id: string; name: string; host: string };
+  collectedAt?: string;
+  fromCache?: boolean;
+  connectionOk?: boolean;
+  connectionError?: string | null;
+  results?: IsilonCommandResult[];
+  errors?: string[];
+  k8sNfsPvs?: IsilonK8sNfsPv[];
+}
+
+export interface IsilonTestResult {
+  ok: boolean;
+  status: string;
+  detail: string;
+  durationMs: number;
 }
 
 // Infrastructure Nodes (물리 서버 노드)
@@ -3048,7 +3210,7 @@ export interface MetricChecklistItemT {
 }
 
 // ── 이모지 공감(리액션) — ops_note / work_item_comment / work_guide 공통 ──────────
-export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item';
+export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item' | 'voc_post';
 
 // 백엔드 REACTION_EMOJIS 와 동일 순서로 유지.
 export const REACTION_EMOJIS = ['👍', '❤️', '🎉', '✅', '👀', '🙏', '🔥', '😄'] as const;

@@ -85,7 +85,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
     refetchInterval: isToday ? 60000 : false,
   });
 
-  // 전체 참석(회의 등, allAttendees=true) — 담당자 그룹과 별개로 "전체" 카드에 모아 0순위로 노출.
+  // 공통업무(파트 회의 등, allAttendees=true) — 담당자 그룹과 별개로 "전체" 카드에 모아 0순위로 노출.
   const { data: allAttendData } = useWorkItems({ allAttendees: true });
 
   const { data: registeredAssignees = [] } = useAssignees();
@@ -126,9 +126,9 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
     )
     .map((x) => x.g);
 
-  // "전체" 카드 — allAttendees=true(전체 참석/파트 회의 등) 항목을 담당자 그룹과 별개로 모아
+  // "전체" 카드 — allAttendees=true(공통업무/파트 회의 등) 항목을 담당자 그룹과 별개로 모아
   // 0순위(맨 앞)에 노출한다. 개별 담당자 카드(회의 주최자 등)에도 그대로 남아있을 수 있음(의도적 —
-  // TodoTodayPage 의 "내 업무 + 전체 참석" 병합과 동일한 전제, 전체 카드는 가시성용 오버레이).
+  // TodoTodayPage 의 "내 업무 + 공통업무" 병합과 동일한 전제, 전체 카드는 가시성용 오버레이).
   const teamCandidates = (allAttendData?.data ?? [])
     .filter((t) => !selectedClusterId || t.clusterId === selectedClusterId);
   const teamGroup = {

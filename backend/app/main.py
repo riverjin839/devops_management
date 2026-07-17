@@ -28,9 +28,11 @@ from app.routers import (
     workflows_router,
     work_guide_router,
     ops_note_router,
+    voc_router,
     reactions_router,
     mindmap_router,
     management_server_router,
+    isilon_nfs_router,
     infra_nodes_router,
     topology_trace_router,
     ontology_router,
@@ -637,7 +639,7 @@ def _run_migrations():
         _safe_add_column("work_items", "cluster_names", "JSONB")
         # 사용자 정의 필드 값
         _safe_add_column("work_items", "custom_values", "JSONB")
-        # 전체 참석(회의 등)
+        # 공통업무(파트 회의 등)
         _safe_add_column("work_items", "all_attendees", "BOOLEAN NOT NULL DEFAULT FALSE")
         # 스프린트(반복) 소속 — sprints 테이블은 create_all 로 생성됨.
         _safe_add_column("work_items", "sprint_id", "UUID")
@@ -705,6 +707,17 @@ def _run_migrations():
             label="unique index infra_nodes(cluster_id, hostname)",
         )
         _safe_create_index("ix_infra_nodes_cluster_hostname", "infra_nodes", "(cluster_id, hostname)")
+
+    # isilon_servers / isilon_commands: Isilon NFS 모니터링 (테이블은 create_all 로 생성,
+    # 구버전 DB 호환용으로 신규 컬럼 보강). 향후 컬럼 추가 시 여기에 _safe_add_column 추가.
+    if "isilon_servers" in inspector.get_table_names():
+        _safe_add_column("isilon_servers", "is_default", "BOOLEAN DEFAULT FALSE")
+        _safe_add_column("isilon_servers", "encrypted_password", "VARCHAR")
+        _safe_add_column("isilon_servers", "encrypted_private_key", "VARCHAR")
+    if "isilon_commands" in inspector.get_table_names():
+        _safe_add_column("isilon_commands", "show_on_overview", "BOOLEAN DEFAULT TRUE")
+        _safe_add_column("isilon_commands", "is_builtin", "BOOLEAN DEFAULT FALSE")
+        _safe_create_index("ix_isilon_commands_server", "isilon_commands", "(server_id)")
 
     # topology_audit_logs: 토폴로지 변경 감사 로그
     if "topology_audit_logs" not in inspector.get_table_names():
@@ -1220,6 +1233,53 @@ def _seed_default_deep_check_definitions():
         db.close()
 
 
+def _seed_default_isilon_commands():
+    """Isilon NFS 수집용 기본(builtin) 명령을 글로벌 기본(server_id IS NULL)으로 시드.
+
+    isilon_service.BUILTIN_COMMANDS 를 key 기준 idempotent 로 등록한다(같은 글로벌 key 가
+    없을 때만). 운영자가 편집/비활성/추가할 수 있고, 삭제한 builtin 은 다음 부팅 시 복구된다.
+    시드 전 validate_isi_command 로 읽기전용·무부하 정책을 재확인한다(부하 보호).
+    """
+    from app.models.isilon_server import IsilonCommand
+    from app.services.isilon_service import BUILTIN_COMMANDS, validate_isi_command
+
+    db = SessionLocal()
+    try:
+        existing = {
+            row[0]
+            for row in db.query(IsilonCommand.key)
+            .filter(IsilonCommand.server_id.is_(None))
+            .all()
+        }
+        added = 0
+        for spec in BUILTIN_COMMANDS:
+            if spec["key"] in existing:
+                continue
+            try:
+                validate_isi_command(spec["command"])
+            except Exception as e:  # noqa: BLE001 — 잘못된 builtin 은 스킵(로그만).
+                _startup_log.warning("isilon builtin '%s' skipped (invalid): %s", spec["key"], e)
+                continue
+            db.add(IsilonCommand(
+                server_id=None,
+                key=spec["key"],
+                label=spec["label"],
+                section=spec["section"],
+                command=spec["command"],
+                parse_mode=spec.get("parse_mode", "text"),
+                timeout_seconds=spec.get("timeout_seconds", 15),
+                enabled=spec.get("enabled", True),
+                show_on_overview=spec.get("show_on_overview", True),
+                sort_order=spec.get("sort_order", 100),
+                is_builtin=True,
+            ))
+            added += 1
+        if added:
+            db.commit()
+    finally:
+        db.close()
+
+
 def _seed_default_metric_checklist_items():
     """리소스 수 추세 체크리스트 기본 항목(글로벌) 시드 — item_key 매칭 idempotent.
 
@@ -1499,6 +1559,7 @@ async def lifespan(app: FastAPI):
         ("seed_trend_sources", _seed_default_trend_sources),
         ("seed_playbooks", _seed_default_playbooks),
         ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
+        ("seed_isilon_commands", _seed_default_isilon_commands),
         ("seed_check_matrix_items", _seed_check_matrix_items),
         ("seed_check_matrix_schedules", _seed_check_matrix_schedules),
         ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
@@ -1520,7 +1581,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.5.0",
+    version="1.6.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -1572,9 +1633,11 @@ app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(voc_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(isilon_nfs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(infra_nodes_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(topology_trace_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ontology_router, prefix="/api/v1", dependencies=_auth)
@@ -1636,7 +1699,7 @@ app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.5.0",
+        "version": "1.6.0",
         "status": "running"
     }
 

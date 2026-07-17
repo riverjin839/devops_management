@@ -59,6 +59,10 @@ export default {
           unknown:  "hsl(var(--status-pending)  / <alpha-value>)",
           info:     "hsl(var(--status-info)     / <alpha-value>)",
         },
+        // ── Brand tokens (외부 서비스 고유색. raw HEX 대신 이 토큰 경유) ──
+        brand: {
+          jira: "hsl(var(--brand-jira) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

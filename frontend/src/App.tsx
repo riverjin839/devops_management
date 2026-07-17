@@ -23,6 +23,7 @@ import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { McClientPage } from '@/pages/McClientPage';
+import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { CommandsPage } from '@/pages/CommandsPage';
@@ -151,6 +152,7 @@ function AppShell() {
               <Route path="/batch-jobs" element={<BatchJobsPage />} />
               <Route path="/kernel-params" element={<KernelParamsPage />} />
               <Route path="/mc" element={<McClientPage />} />
+              <Route path="/isilon-nfs" element={<IsilonNfsPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/node-specs" element={<NodeSpecPage />} />
               <Route path="/services" element={<ServicesCatalogPage />} />

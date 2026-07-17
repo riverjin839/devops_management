@@ -7,6 +7,41 @@ on:
     branches: [main, develop]
 
 jobs:
+  # 문서-코드 동기화 검사 (docs guard)
+  docs-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Docs sync check
+        run: python3 scripts/docs/check_docs_sync.py
+
+      # feat/fix 성격의 코드 변경 PR 인데 CHANGELOG/문서를 하나도 안 건드리면 실패.
+      # 의도된 예외는 PR 제목에 [skip-docs] 를 붙인다 (예: 리팩토링-only, 실험 브랜치).
+      - name: Changelog / docs updated check (PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          case "$PR_TITLE" in
+            *"[skip-docs]"*) echo "skip-docs 태그 — 검사 생략"; exit 0 ;;
+          esac
+          CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD)
+          echo "$CHANGED"
+          if ! echo "$CHANGED" | grep -qE '^(backend/app/|frontend/src/)'; then
+            echo "앱 코드 변경 없음 — 검사 생략"; exit 0
+          fi
+          if echo "$PR_TITLE" | grep -qE '^(feat|fix)(\(|:|!)'; then
+            if ! echo "$CHANGED" | grep -qE '^(CHANGELOG\.md|docs/|CLAUDE\.md|CODE_MAP\.md|README\.md|DESIGN_SYSTEM\.md)'; then
+              echo "::error::feat/fix PR 인데 CHANGELOG.md 나 문서(docs/, CLAUDE.md, CODE_MAP.md, README.md) 갱신이 없습니다."
+              echo "::error::CHANGELOG.md [Unreleased] 에 항목을 추가하고, 구조가 바뀌었으면 해당 문서도 갱신하세요. 의도적 예외는 PR 제목에 [skip-docs]."
+              exit 1
+            fi
+          fi
+
   # Frontend 테스트
   frontend:
     runs-on: ubuntu-latest

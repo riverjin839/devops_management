@@ -7,8 +7,14 @@
  *
  * Call-site compatible — existing <MacCard title="..."> calls automatically
  * render in the new 'flat' variant.
+ *
+ * Internally a thin adapter over the shadcn `Card` primitive (see `ui/card.tsx`)
+ * so both share one base implementation — the macOS traffic-light dots stay an
+ * opt-in visual (`variant="mac"`), not a rewrite of every call site.
  */
 import type { ReactNode } from 'react';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface MacCardProps {
   /** Section title — uppercase label in flat variant, centred in mac variant */
@@ -36,9 +42,7 @@ export function MacCard({
 
   if (variant === 'mac') {
     return (
-      <div
-        className={`bg-card rounded-2xl border border-border overflow-hidden mac-shadow ${rootClassName}`}
-      >
+      <Card className={cn('mac-shadow', rootClassName)}>
         <div className="flex items-center px-4 py-3 gap-2">
           <div className="flex items-center gap-[6px] flex-shrink-0">
             <span className="w-[13px] h-[13px] rounded-full" style={{ background: 'var(--mac-red)' }} />
@@ -52,14 +56,14 @@ export function MacCard({
           )}
         </div>
         <div className="h-px bg-border/60" />
-        <div className={`${padding} ${className}`}>{children}</div>
-      </div>
+        <div className={cn(padding, className)}>{children}</div>
+      </Card>
     );
   }
 
   // 'flat' (default)
   return (
-    <div className={`bg-card rounded-md border border-border overflow-hidden ${rootClassName}`}>
+    <Card className={cn('rounded-md', rootClassName)}>
       {title && (
         <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
@@ -67,7 +71,7 @@ export function MacCard({
           </span>
         </div>
       )}
-      <div className={`${padding} ${className}`}>{children}</div>
-    </div>
+      <div className={cn(padding, className)}>{children}</div>
+    </Card>
   );
 }

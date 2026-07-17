@@ -6,6 +6,11 @@
 >
 > 이 문서는 Ollama 배포 → Nexus 로 모델 수급 → 백엔드 연동 → AI 아이템 사용까지의
 > 전체 절차를 다룹니다.
+>
+> **아키텍처/기능 설계** — 내부 제공 모델(GLM-5.2)로의 전환, vLLM(OpenAI-호환) 서빙,
+> K8s 로그 자동 분석(분석 전용), PEP 내부 문서 RAG 는
+> [AIRGAP_LLM_ARCHITECTURE.md](AIRGAP_LLM_ARCHITECTURE.md) 를 참고하세요.
+> (GLM 가중치/vLLM 이미지 반입도 본 문서의 방식 B(raw-hosted)를 그대로 적용합니다.)
 
 ---
 

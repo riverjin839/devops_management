@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.5.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.6.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **Deep Check 참조 가이드 문서**: deep-check 서브시스템의 목적·아키텍처·실행 경로·API·
@@ -20,6 +20,87 @@
   - Frontend: `DeepCheckDefinitionForm`/`DeepCheckDefinitionList`/`DeepCheckSettings`/
     `OpsCheckConsolePage` — 잘못된 숫자 입력(NaN)을 null 로 방어, 글로벌 비활성화 시 확인 대화상자.
 
+- **문서-코드 동기화 자동 검사(docs guard)**: 기능 추가 시 문서 갱신이 누락되지 않도록
+  `scripts/docs/check_docs_sync.py` 를 추가하고 CI 에 `docs-sync` job 을 신설. App.tsx
+  라우트 ↔ `docs/SCREENS.md` 섹션, 라우터/페이지 파일 ↔ `CODE_MAP.md`, `docs/*.md` ↔
+  `docs/README.md` 인덱스, frontend/backend 버전 일치를 기계 검사하며, feat/fix PR 이
+  앱 코드를 바꾸면서 CHANGELOG/문서를 안 건드리면 실패한다(예외: PR 제목 `[skip-docs]`).
+  `.claude/skills/docs-sync` 스킬(변경 유형 → 갱신 문서 매핑)과 PR 템플릿 docs 체크 항목,
+  CLAUDE.md "문서 동기화 규칙" 절도 함께 추가.
+- **폐쇄망 LLM 아키텍처 문서**: `docs/AIRGAP_LLM_ARCHITECTURE.md` 신설 — 내부 제공
+  모델(GLM-5.2)의 vLLM(OpenAI-호환) 서빙 구성, K8s 로그 모니터링–에러 **자동 분석**(조치
+  권한 없음, 분석 전용) 파이프라인, PEP 내부 문서(작업 가이드/Q&A/업무 이력) RAG 설계와
+  단계별 구현 로드맵/운영 체크리스트를 상세화. `AIRGAP_LLM_NEXUS.md` 와 상호 링크.
+
+### Changed
+- **내부 문서 전면 현행화(v1.6.0 기준 감사)**: README(버전 배지 1.0.0→1.6.0, 핵심 기능표에
+  VOC/Jira/스프린트/온톨로지/Isilon NFS/Deep Check/서비스 카탈로그/인프라 대장/알림 등
+  누락 도메인 보강), CLAUDE.md(저장소 레이아웃·환경변수 표를 config.py 기준 재생성,
+  Celery "3회/일" → check-matrix 디스패처 체계로 정정, API/DB 도메인 인덱스 추가),
+  CODE_MAP.md(미기재 라우터 47개·페이지 48개 도메인 표 추가, `trends/` 패키지·
+  `navConfig.ts` 등 낡은 경로 정정), docs/README.md(누락 색인 6건),
+  docs/SCREENS.md(제거된 `/coroot` 섹션 정리, 검증 기준일 헤더 추가).
+
+## [1.6.0] - 2026-07-17
+
+### Added
+- **사용자 VOC 게시판 추가**: 사이드바 하단 레일의 "릴리즈 노트" 아이콘 **바로 위**에 "사용자 VOC
+  게시판" 아이콘을 추가하고, 클릭하면 릴리즈 노트와 동일한 우측 SidePane 으로 게시판이 열린다.
+  사용자가 문의/개선/불만/제안을 남기면 관리자가 답변하고 상태(접수/검토중/완료)를 관리한다.
+  전체 공개 board(모두 열람, 수정·삭제는 본인 글 또는 관리자), 👍 공감, 관리자 답변 시 작성자에게
+  인앱 알림.
+  - Backend: `VocPost` 모델 + `/api/v1/voc` 라우터(CRUD + `POST /{id}/reply` 관리자 답변/상태),
+    `user_notify.notify_voc_reply`(작성자 알림), reactions `REACTION_TARGET_TYPES` 에 `voc_post` 추가
+    (신규 테이블 자동 생성, 마이그레이션 불필요).
+  - Frontend: `VocBoardPanel`(목록/작성/상세/답변 master-detail) + `Sidebar` 레일 아이콘·SidePane,
+    `useVoc` 훅, `vocApi`, 타입. 상세에서 기존 `ReactionBar` 재사용(`voc_post`).
+- **shadcn MCP 연결 + Base UI 기준 전환**: `frontend/.mcp.json`(shadcn MCP 등록)과
+  `frontend/components.json`(shadcn CLI 설정, style `new-york`, Base UI 기본)을 추가해
+  이후 컴포넌트 추가 시 레지스트리를 실제로 조회하도록 배선. `Button`/`Card`/`Badge`/
+  `Tooltip`/`Dialog` 5종을 `frontend/src/components/ui/`에 도입(Tooltip·Dialog 는
+  `@base-ui/react`, Button 은 기존 `@radix-ui/react-slot` 재사용 — 낡은 Radix 버전은
+  그대로 두고 신규만 Base UI로 감).
+  - 대량 교체 대신 어댑터 방식으로 점진 적용: 기존 `MacCard` 는 API 그대로 두고 내부만
+    새 `Card` 위에 재구성(traffic-light dot 은 `variant="mac"` 옵션으로 보존). 대표
+    사용처로 `JiraPushDialog`(커스텀 모달 → `Dialog`+`Button`)와 업무 표의 우선순위
+    칩(`WorkItemTableRow` → `Badge` dot+텍스트)을 교체해 동작을 증명.
+
+### Changed
+- **브랜드/상태 raw HEX → 토큰화**: Jira 브랜드색 `#0052CC` 를 `brand.jira` 토큰
+  (`--brand-jira`)으로 옮기고 `WorkItemTableRow`/`JiraPushDialog`/`WorkItemDetailPage`
+  에서 참조. `NodeDetailPanel` 의 사용률 게이지 raw hex 도 `status.*` CSS 변수로 교체.
+- DESIGN_SYSTEM.md §6/§10, CLAUDE.md 의 styling 스택 설명을 "Base UI 기본·Radix 호환 +
+  shadcn MCP" 로 갱신하고, W1 raw-HEX DoD 에 3D/canvas/recharts/컬러픽커 화이트리스트를
+  명시.
+
+## [1.5.1] - 2026-07-16
+
+### Added
+- **Jira 양방향 반영 — 편집 내용 되쓰기(제목/설명/우선순위)**: 업무 상세의 "Jira 반영"이
+  기존에는 칸반 상태 transition + 코멘트만 보냈는데, PEP 에서 편집한 **제목(summary)·
+  설명(description)·우선순위(priority)** 도 연결된 Jira 이슈에 `PUT /rest/api/2/issue/{key}`
+  로 되쓰도록 확장. 클릭 시 무엇이 반영되는지 보여주는 확인 다이얼로그(`JiraPushDialog`)와
+  선택 코멘트를 추가하고, Jira 쪽이 더 최신이면 충돌 안내 후 강제 반영을 지원한다.
+  담당자(assignee)는 이름 역매핑이 불안정해 반영에서 제외, 우선순위는 프로젝트별 스킴
+  차이를 감안해 best-effort(실패 시 나머지는 정상 반영).
+  - Backend: `JiraService.update_issue()`, `PEP_PRIORITY_TO_JIRA`/`strip_issue_key_prefix`
+    헬퍼, `push_to_jira` 확장, `JiraPushRequest.push_fields`/`JiraPushResult.fields_updated`.
+  - Frontend: `JiraPushDialog` 신설, `WorkItemDetailPage` 의 원클릭 push → 다이얼로그로 교체.
+- **NFS 모니터링(Isilon) — NAS 서버 SSH 기반 신규 화면·점검 추가**: K8s 가 마운트해서 쓰는
+  NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검한다. 좌측에서 Isilon 서버를 선택하면 `isi`
+  명령 수집 결과(Export/마운트, 쿼터·용량, 클라이언트/성능, 노드 health)와 K8s PV(`spec.nfs`)↔
+  Isilon export 매칭(누락 감지)을 보여주는 전용 페이지(`/isilon-nfs`, 스토리지 그룹)를 추가.
+  같은 수집 로직을 쓰는 `isilon_nfs` deep checker 를 등록해 운영 점검 콘솔·cron·알림에도 통합했다
+  (기본 비활성, 권장 15~30분).
+  - **NAS 무부하 설계**: 읽기전용 `isi` 명령만 허용(변경 동사·셸 메타문자·`--repeat` 등 거부),
+    한 수집당 SSH 세션 1개로 직렬 실행, 서버별 60초 TTL 캐시(강제 재수집은 명시적 새로고침만).
+  - **isi 명령 커스텀 등록**: 수집 명령을 DB(`isilon_commands`)로 관리 — 기본 명령도 시드되어
+    OneFS 버전/환경에 맞게 편집·비활성·추가 가능(페이지의 "isi 명령 관리" 모달).
+  - Backend: `IsilonServer`/`IsilonCommand` 모델(+`_run_migrations` 보강, 자격증명은 `secret_box`
+    암호화 저장·백업 마스킹), `isilon_service`(검증·캐시·수집), `isilon_nfs` deep checker + registry,
+    `/api/v1/isilon-nfs/*` 라우터(서버·명령 CRUD, 연결 테스트, `/overview`), builtin 명령 시드.
+  - Frontend: `IsilonNfsPage` + 서버/명령 관리 모달, `useIsilonNfs` 훅, `isilonNfsApi`, 타입,
+    사이드바 스토리지 그룹에 `NFS 모니터링` 등록.
 - **Jira 가져오기 — 세션 쿠키 인증 방식 추가**: PAT(Personal Access Token) 발급이 막힌 SSO
   환경을 위해, 사용자가 사내 브라우저로 Jira 에 로그인한 뒤 세션 쿠키를 복사해 등록하면 그
   쿠키로 이슈를 가져올 수 있게 했다. 설정 ▸ Jira 연동에서 "Personal Access Token"과
@@ -122,6 +203,13 @@
   나란히 "튀어나온" 것처럼 보였다. 중복된 `relative` 클래스를 제거해 `fixed`(이미
   absolute 자손의 containing block 역할도 겸함) 하나만 남기는 것으로 해결.
   - Frontend: `components/common/SidePane.tsx`.
+- **업무 등록/수정 폼에 "공통업무" 체크박스가 없던 문제**: `WorkItem.allAttendees` 필드는
+  백엔드·타입·상세보기 배지·홈 "전체" 카드 필터까지 전부 연결돼 있었지만, 정작 등록/수정
+  폼에 이 값을 켤 수 있는 UI 컨트롤이 없어 사용자가 지정할 방법이 없었다(state 는 있지만
+  어떤 `onChange` 도 호출하지 않는 죽은 필드). `WorkItemForm.tsx` 에 체크박스를 추가해
+  실제로 지정 가능하도록 수정. 표시 문구는 "전체 참석"(전원이 반드시 참석해야 하는 것처럼
+  오해될 수 있음) 대신 실제 의미에 맞게 "공통업무"(특정 담당자 개인 업무가 아닌 파트 공통
+  업무)로 표기(`👥 공통업무`, 필드명/데이터는 그대로 유지).
 
 ## [1.3.1] - 2026-07-13
 

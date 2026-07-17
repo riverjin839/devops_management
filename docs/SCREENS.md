@@ -3,6 +3,10 @@
 PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로 정리한 문서입니다.
 소스 코드(`frontend/src/pages/`, `frontend/src/services/api.ts`, `backend/app/routers/`)를 직접 읽어 생성했습니다.
 
+> 최종 검증: 2026-07-17 (v1.6.0 기준). CI 의 `docs-sync` 검사가 `App.tsx` 의 모든 라우트가
+> 이 문서에 섹션으로 존재하는지 자동 확인한다 — 새 라우트 추가 시 섹션도 함께 추가할 것
+> (헤딩에 `` `/route` `` 백틱 표기 필수).
+
 ## 사용법
 
 - 이 문서는 **여러분이 직접 편집**하는 것을 전제로 합니다. 각 화면 섹션 맨 아래 **"요청사항 (수정 요청)"** 항목에
@@ -569,26 +573,9 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 애플리케이션 APM (Coroot) (`/coroot`)
-
-- **파일**: `frontend/src/pages/CorootApmPage.tsx` (+ `components/ui/MacCard`)
-- **목적 / UX**: 별도 배포된 Coroot APM 인스턴스를 클러스터별로 연동해, 서비스 지연·에러율·SLO 요약을 보고 개별 서비스의 trace/logs/profiling을 새 탭 또는 임베드(iframe)로 열람한다. Coroot가 배포되지 않았거나 클러스터에 project 매핑이 없으면 오프라인으로 우아하게 처리된다.
-- **UI 구성**:
-  - `ClusterSidebar` — `allowAll={false}` + `iconOnly` (단일 선택, 전체 옵션 없음)
-  - 헤더: 전역 coroot online/offline 배지, 새로고침
-  - 요약 스트립(서비스 수/정상/알림·주의 3칸, 오프라인 시 안내 배너로 대체)
-  - "Open in Coroot" 딥링크 버튼(새 탭) + "여기에 임베드" 토글
-  - 서비스 목록(`ServiceList` — 검색, 상태 dot, Trace 임베드/새 탭 버튼)
-  - 임베드 패널(iframe, CSP/X-Frame-Options 차단 가능성 안내 문구 포함)
-- **Frontend**: `useClusters()` + `useClusterStore()`. `useCorootHealth()`, `useCorootSummary(cid)`, `useCorootDeepLink(cid)`, `useCorootApplications(cid)` (`hooks/useCoroot.ts`) — 모두 fail-safe(offline 시 200 + status 필드). 개별 서비스 딥링크는 `corootApi.getApplicationDeepLink`를 직접 호출(비-hook). 호출 함수: `corootApi.{health,getSummary,getDeepLink,getApplications,getApplicationDeepLink}`.
-- **Backend**: `GET /api/v1/coroot/health`, `GET /api/v1/coroot/{cluster_id}/summary`, `GET /api/v1/coroot/{cluster_id}/deeplink`, `GET /api/v1/coroot/{cluster_id}/applications`, `GET /api/v1/coroot/{cluster_id}/application/deeplink?app_id=&view=` — `backend/app/routers/coroot.py`, 서비스 `app/services/coroot_service.py`(`CorootService`, 싱글턴 `coroot_service` + 클러스터별 `coroot_url` 오버라이드 시 별도 인스턴스). 매핑은 `Cluster.coroot_project`(필수)/`coroot_enabled`(토글)/`coroot_url`(선택, 전역 `COROOT_URL` env 오버라이드) 컬럼. 미설정/미배포 시 500 대신 `status:"offline"` 반환(PrometheusService와 동일 fail-safe 패턴).
-- **핵심 기능**:
-  - 전역 Coroot 가용성 프로브 + 클러스터별 project 매핑 요약(서비스 수/정상/알림)
-  - 서비스별 Tracing/Logs/Profiling 딥링크 — 새 탭 열기 또는 페이지 내 iframe 임베드
-  - 서비스 검색(이름/네임스페이스/ID)
-  - Coroot 미배포/미매핑 시 500 없이 오프라인 안내로 대체
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+> ℹ️ **제거된 화면 — 애플리케이션 APM (Coroot) (`/coroot` 였음)**: COROOT APM 통합은 전체
+> 제거되어 라우트/페이지/백엔드 라우터가 더 이상 존재하지 않는다
+> (`navConfig.ts` 주석 참고 — 재추가하지 않음). 과거 명세는 git 히스토리에서 확인.
 
 ---
 
@@ -778,6 +765,26 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
   - 개인/공유 프리셋 관리(`McPresetManager`) + `{alias}` 자동 치환.
   - 위험 명령(rm/mirror/policy/admin service 등) 정규식 기반 사전 경고 및 `danger` 확인 다이얼로그.
   - 클러스터 운영등급에 연동된 터미널 외관 자동 전환.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+---
+
+### NFS 모니터링 (Isilon) (`/isilon-nfs`)
+
+- **파일**: `frontend/src/pages/IsilonNfsPage.tsx` (+ `components/isilon/IsilonServerModal.tsx`, `components/isilon/IsilonCommandManager.tsx`)
+- **목적 / UX**: K8s 가 마운트해서 쓰는 NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검. SSH 로 `isi` 명령을 실행해 Export/마운트 가용성·쿼터/용량·클라이언트/성능·노드 health 를 수집하고, K8s PV(`spec.nfs`) ↔ Isilon export 매칭(누락 감지)을 보여준다. **NAS 무부하**가 최우선 — 읽기전용 명령만·SSH 세션 1개 직렬 실행·서버별 60초 TTL 캐시(강제 재수집은 명시적 새로고침만).
+- **UI 구성**:
+  - 좌측 서버 레일(Isilon 서버 목록, status dot + 기본 배지) + "서버 추가"/"isi 명령 관리" 버튼. 클러스터가 아닌 **서버 스코프**라 `ClusterSidebar` 대신 전용 서버 레일 사용.
+  - 본문: 서버 헤더(접속 상태·수집시각·캐시 배지·새로고침) → "K8s 가 사용하는 NFS(PV↔export)" 매칭 테이블 → 섹션별(`SECTION_LABEL`) 수집 결과 카드(`MacCard`, parsed JSON/raw).
+  - `IsilonServerModal`: host/port/user/비밀번호|PEM 키 + 연결 테스트. 자격증명은 암호화 저장, 응답엔 `hasPassword`/`hasPrivateKey` 플래그만.
+  - `IsilonCommandManager`: `isi` 명령 등록/편집/삭제(글로벌 기본 + 서버 전용). 변경 동사·셸 메타문자·`--repeat` 등은 저장이 422 로 거부됨(부하 보호). builtin 은 비활성만(삭제 불가).
+- **Frontend**: `useIsilonServers`/`useIsilonOverview`/`useIsilonCommands` + CRUD/test 뮤테이션(`hooks/useIsilonNfs.ts`), `isilonNfsApi`(`services/api.ts`), 타입은 `types/index.ts`(`IsilonServer`/`IsilonCommand`/`IsilonNfsOverview` 등). overview 는 부하 보호상 자동 폴링 안 함.
+- **Backend**: `GET/POST/PUT/DELETE /api/v1/isilon-nfs/servers` (+ `/servers/{id}/test`), `GET/POST/PUT/DELETE /api/v1/isilon-nfs/commands`, `GET /api/v1/isilon-nfs/overview` — 라우터 `backend/app/routers/isilon_nfs.py`. 수집·검증·캐시는 `services/isilon_service.py`, 모델 `models/isilon_server.py`(`IsilonServer`/`IsilonCommand`, 자격증명 `secret_box` 암호화 + 백업 마스킹). 같은 수집을 쓰는 `isilon_nfs` deep checker(`services/deep_checkers/isilon_nfs_checker.py`, registry 등록)가 운영 점검 콘솔/cron 에도 노출(기본 비활성).
+- **핵심 기능**:
+  - SSH 기반 `isi` 명령 수집(비밀번호/PEM 키), 읽기전용·무부하 보장.
+  - K8s NFS PV ↔ Isilon export 매칭으로 "실제 K8s 가 쓰는 NFS" 가용성 가시화.
+  - `isi` 명령 커스텀 등록(DB 관리, OneFS 버전별 편집) + deep checker 통합(쿼터/가용성/health 판정).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

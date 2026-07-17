@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
-  KeyRound, ShieldCheck, ScrollText, ServerCog,
+  KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -17,6 +17,7 @@ import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { ReleaseNotesPanel } from './ReleaseNotesPanel';
+import { VocBoardPanel } from './VocBoardPanel';
 import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
@@ -222,6 +223,8 @@ export function Sidebar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   // 릴리즈 노트 — 우측 슬라이드 SidePane (감사 로그가 Settings 탭으로 이동한 자리).
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
+  // 사용자 VOC 게시판 — 릴리즈 노트 바로 위 레일 아이콘 → 우측 SidePane.
+  const [vocOpen, setVocOpen] = useState(false);
 
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
   const services = useServiceCatalog();
@@ -267,6 +270,7 @@ export function Sidebar() {
     setOpenGroup(null);
     setUserMenuOpen(false);
     setReleaseNotesOpen(false);
+    setVocOpen(false);
   }, [location.pathname]);
 
   // ESC 로 flyout / edit mode 닫기
@@ -276,6 +280,7 @@ export function Sidebar() {
         setOpenGroup(null);
         setUserMenuOpen(false);
         setReleaseNotesOpen(false);
+        setVocOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -452,6 +457,15 @@ export function Sidebar() {
           )}
           {currentUser && (
             <RailIconButton
+              label="사용자 VOC 게시판"
+              Icon={MessageSquare}
+              highlighted={vocOpen}
+              suppressTooltip={vocOpen}
+              onClick={() => setVocOpen((v) => !v)}
+            />
+          )}
+          {currentUser && (
+            <RailIconButton
               label="릴리즈 노트"
               Icon={ScrollText}
               highlighted={releaseNotesOpen}
@@ -529,6 +543,21 @@ export function Sidebar() {
         maxWidth={1100}
       >
         <ReleaseNotesPanel open={releaseNotesOpen} />
+      </SidePane>
+
+      {/* 사용자 VOC 게시판 — 릴리즈 노트와 동일한 우측 슬라이드 SidePane. */}
+      <SidePane
+        open={vocOpen}
+        onClose={() => setVocOpen(false)}
+        title="사용자 VOC 게시판"
+        width="640px"
+        bodyClassName="p-0"
+        resizable
+        widthStorageKey="k8s:vocPanelWidth"
+        minWidth={420}
+        maxWidth={1100}
+      >
+        <VocBoardPanel open={vocOpen} />
       </SidePane>
 
     </>

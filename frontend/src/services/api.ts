@@ -1021,6 +1021,19 @@ export const opsNotesApi = {
   delete: (id: string) => api.delete(`/ops-notes/${id}`),
 };
 
+// VOC 게시판 API
+export const vocApi = {
+  getAll: (params?: { category?: string; status?: string }) =>
+    api.get<import('@/types').VocListResponse>('/voc', { params: params || undefined }),
+  getById: (id: string) => api.get<import('@/types').VocPost>(`/voc/${id}`),
+  create: (data: import('@/types').VocCreate) => api.post<import('@/types').VocPost>('/voc', data),
+  update: (id: string, data: import('@/types').VocUpdate) =>
+    api.put<import('@/types').VocPost>(`/voc/${id}`, data),
+  reply: (id: string, data: import('@/types').VocReply) =>
+    api.post<import('@/types').VocPost>(`/voc/${id}/reply`, data),
+  delete: (id: string) => api.delete(`/voc/${id}`),
+};
+
 // Mind Map API
 export const mindmapApi = {
   list: () => api.get<MindMapListItem[]>('/mindmaps/'),
@@ -1054,6 +1067,35 @@ export const managementServersApi = {
     api.post<{ ok: boolean; host: string; port: number; latency_ms: number | null; detail: string }>(
       `/management-servers/${id}/ping`
     ),
+};
+
+// Isilon NFS 모니터링 API
+export const isilonNfsApi = {
+  servers: {
+    getAll: () => api.get<import('@/types').IsilonServer[]>('/isilon-nfs/servers'),
+    create: (data: import('@/types').IsilonServerCreate) =>
+      api.post<import('@/types').IsilonServer>('/isilon-nfs/servers', data),
+    update: (id: string, data: import('@/types').IsilonServerUpdate) =>
+      api.put<import('@/types').IsilonServer>(`/isilon-nfs/servers/${id}`, data),
+    delete: (id: string) => api.delete(`/isilon-nfs/servers/${id}`),
+    test: (id: string) =>
+      api.post<import('@/types').IsilonTestResult>(`/isilon-nfs/servers/${id}/test`),
+  },
+  commands: {
+    getAll: (serverId?: string) =>
+      api.get<import('@/types').IsilonCommand[]>('/isilon-nfs/commands', {
+        params: serverId ? { server_id: serverId } : {},
+      }),
+    create: (data: import('@/types').IsilonCommandCreate) =>
+      api.post<import('@/types').IsilonCommand>('/isilon-nfs/commands', data),
+    update: (id: string, data: import('@/types').IsilonCommandUpdate) =>
+      api.put<import('@/types').IsilonCommand>(`/isilon-nfs/commands/${id}`, data),
+    delete: (id: string) => api.delete(`/isilon-nfs/commands/${id}`),
+  },
+  getOverview: (serverId?: string, force = false) =>
+    api.get<import('@/types').IsilonNfsOverview>('/isilon-nfs/overview', {
+      params: { ...(serverId ? { server_id: serverId } : {}), force },
+    }),
 };
 
 // Infra Nodes API (물리 서버 노드)

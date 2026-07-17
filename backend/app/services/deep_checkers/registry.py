@@ -16,6 +16,7 @@ from app.services.deep_checkers.coredns_health_checker import CoreDnsHealthCheck
 from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
 from app.services.deep_checkers.external_to_pod_checker import ExternalToPodChecker
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
+from app.services.deep_checkers.isilon_nfs_checker import IsilonNfsChecker
 from app.services.deep_checkers.kernel_param_drift_checker import KernelParamDriftChecker
 from app.services.deep_checkers.minio_health_checker import MinioHealthChecker
 from app.services.deep_checkers.node_health_checker import NodeHealthChecker
@@ -364,6 +365,32 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             default_enabled=False,
         ),
     ),
+    "isilon_nfs": (
+        IsilonNfsChecker,
+        DeepCheckTypeSpec(
+            check_type="isilon_nfs",
+            display_name="Isilon NFS (NAS)",
+            description=(
+                "Isilon(OneFS) NAS 에 SSH 접속해 isi 명령으로 NFS export 가용성·쿼터 사용률·"
+                "노드/서비스 health 를 수집하고 K8s PV(spec.nfs) 와 매칭해 판정. "
+                "NAS 무부하 위해 읽기전용 명령만·단발 실행·서버별 60s 캐시. "
+                "수집 명령은 NFS 모니터링 페이지에서 커스텀 등록 가능. "
+                "접속정보 미설정이면 pending. 권장 스케줄 15~30분."
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_quota_pct", "float", "쿼터 경고 (%)", 80),
+                DeepCheckFieldSpec("critical_quota_pct", "float", "쿼터 심각 (%)", 95),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("isilon_server_name", "string", "Isilon 서버 이름(비우면 기본)", ""),
+                DeepCheckFieldSpec("nfs_pv_only", "boolean", "K8s 가 쓰는 export 누락만 critical 판정", True),
+            ],
+            default_thresholds={"warning_quota_pct": 80, "critical_quota_pct": 95},
+            default_params={"isilon_server_name": "", "nfs_pv_only": True},
+            category="storage",
+            default_enabled=False,
+        ),
+    ),
     "node_health": (
         NodeHealthChecker,
         DeepCheckTypeSpec(
@@ -480,6 +507,11 @@ STEP_PLANS: dict[str, list[tuple[str, str]]] = {
     "external_to_pod": [("resolve", "외부→파드 경로 해석"), ("probe", "도달성 프로브"), ("verdict", "판정")],
     "kernel_param_drift": [("collect", "노드 sysctl 수집"), ("compare", "기준값 대비 드리프트"), ("verdict", "판정")],
     "minio_health": [("connect", "MinIO 연결"), ("probe", "health/버킷 점검"), ("verdict", "판정")],
+    "isilon_nfs": [
+        ("ssh_connect", "Isilon 서버 조회 · SSH 수집(캐시)"),
+        ("match_k8s_pv", "K8s NFS PV ↔ export 매칭"),
+        ("verdict", "가용성 · 쿼터 · health 판정"),
+    ],
 }
 
 
