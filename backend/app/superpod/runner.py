@@ -80,7 +80,10 @@ def _run_in_cluster() -> int:
     }
 
     from app.superpod.ingest_client import post_ingest
-    ack = post_ingest(ingest_url, ingest_token, payload)
+    verify_tls = os.environ.get("SUPERPOD_INGEST_VERIFY_TLS", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+    ack = post_ingest(ingest_url, ingest_token, payload, verify_tls=verify_tls)
     logger.info("Ingest ack: %s", json.dumps(ack)[:1000])
     return 0 if ack.get("status") == "ok" else 1
 

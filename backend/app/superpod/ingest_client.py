@@ -20,8 +20,14 @@ def post_ingest(
     *,
     timeout: int = 30,
     max_retries: int = 4,
+    verify_tls: bool = False,
 ) -> dict[str, Any]:
-    """Ingest API 로 결과 POST. 실패 시 지수 백오프 재시도."""
+    """Ingest API 로 결과 POST. 실패 시 지수 백오프 재시도.
+
+    보안: bearer 토큰을 실어 보내므로, HTTPS ingest 를 쓴다면 ``verify_tls=True`` 로
+    인증서를 검증해 MITM 에 의한 토큰 노출을 막는 것을 권장한다(기본 False 는
+    사설 CA/자기서명 환경 하위호환용).
+    """
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -29,7 +35,7 @@ def post_ingest(
     last_error: str | None = None
     for attempt in range(max_retries + 1):
         try:
-            with httpx.Client(timeout=timeout, verify=False) as cli:
+            with httpx.Client(timeout=timeout, verify=verify_tls) as cli:
                 resp = cli.post(url, json=payload, headers=headers)
                 if resp.status_code < 300:
                     return {"status": "ok", "http_status": resp.status_code, "body": resp.text[:1000]}

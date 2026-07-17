@@ -1620,7 +1620,10 @@ export const deepCheckApi = {
   trend: (clusterId: string, days = 7) =>
     api.get<DailyCheckTrend>(`/deep-check/trend/${clusterId}`, { params: { days } }),
   runNow: (clusterId: string) =>
-    api.post<{ status: string; checksRun: number }>(`/deep-check/run/${clusterId}`),
+    // 백그라운드(Celery) 실행 — status:'queued'(+taskId). worker 부재 시 동기 폴백(status:'ok'+checksRun).
+    api.post<{ status: string; checksRun?: number; taskId?: string | null }>(
+      `/deep-check/run/${clusterId}`,
+    ),
 };
 
 export const deepCheckDefinitionsApi = {

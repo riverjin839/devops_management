@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Play, Save, X } from 'lucide-react';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { useCheckTypes, useTestDefinition } from '@/hooks/useDeepCheckDefinitions';
 import type {
   DeepCheckDefinition,
@@ -21,17 +23,34 @@ interface Props {
 function coerceValue(spec: DeepCheckFieldSpec, raw: any): any {
   if (raw === '' || raw === null || raw === undefined) return null;
   switch (spec.type) {
-    case 'int':
-      return parseInt(String(raw), 10);
-    case 'float':
-      return parseFloat(String(raw));
+    case 'int': {
+      const n = parseInt(String(raw), 10);
+      return Number.isNaN(n) ? null : n; // 잘못된 입력은 조용히 유실되지 않고 null
+    }
+    case 'float': {
+      const n = parseFloat(String(raw));
+      return Number.isNaN(n) ? null : n;
+    }
     case 'boolean':
       return raw === true || raw === 'true';
     case 'list':
-      return Array.isArray(raw) ? raw : String(raw).split(',').map((s) => s.trim());
+      // 줄바꿈 또는 콤마 구분 모두 허용(endpoints 등은 줄바꿈이 자연스러움).
+      return Array.isArray(raw)
+        ? raw
+        : String(raw)
+            .split(/[\n,]/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
     default:
       return String(raw);
   }
+}
+
+/** list 값(배열)을 textarea 표시용 문자열로 — 줄바꿈 구분. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function listToText(v: any): string {
+  if (Array.isArray(v)) return v.join('\n');
+  return v == null ? '' : String(v);
 }
 
 export function DeepCheckDefinitionForm({
@@ -42,6 +61,7 @@ export function DeepCheckDefinitionForm({
 }: Props) {
   const { data: schemas } = useCheckTypes();
   const testMut = useTestDefinition();
+  const toast = useToast();
 
   const [checkType, setCheckType] = useState(initial?.checkType ?? '');
   const [name, setName] = useState(initial?.name ?? '');
@@ -86,6 +106,8 @@ export function DeepCheckDefinitionForm({
         params,
         sortOrder: initial?.sortOrder ?? 0,
       });
+    } catch (e) {
+      toast.error('저장 실패', formatApiError(e));
     } finally {
       setSaving(false);
     }
@@ -102,8 +124,20 @@ export function DeepCheckDefinitionForm({
       });
       return;
     }
-    const { data } = await testMut.mutateAsync({ id: initial.id, clusterId });
-    setTestResult(data);
+    try {
+      const { data } = await testMut.mutateAsync({ id: initial.id, clusterId });
+      setTestResult(data);
+    } catch (e) {
+      const msg = formatApiError(e);
+      toast.error('Test 실행 실패', msg);
+      setTestResult({
+        definitionId: initial.id,
+        checkType,
+        status: 'pending',
+        message: `Test 실행 실패: ${msg}`,
+        durationMs: 0,
+      });
+    }
   };
 
   return (
@@ -161,6 +195,9 @@ export function DeepCheckDefinitionForm({
             placeholder="예: */30 * * * * (비우면 기본 09:15/13:15/18:15)"
             className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono"
           />
+          <div className="text-xs text-muted-foreground">
+            표준 5필드 cron (분 시 일 월 요일). 최소 실행 간격은 5분입니다.
+          </div>
         </Field>
       </div>
 
@@ -258,17 +295,42 @@ function FieldGroup({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {fields.map((f) => (
           <Field key={f.name} label={f.label}>
-            <input
-              type={f.type === 'int' || f.type === 'float' ? 'number' : 'text'}
-              step={f.type === 'float' ? '0.01' : '1'}
-              value={values[f.name] ?? ''}
-              placeholder={String(f.default ?? '')}
-              onChange={(e) =>
-                onChange({ ...values, [f.name]: coerceValue(f, e.target.value) })
-              }
-              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-            />
+            {f.type === 'boolean' ? (
+              <label className="inline-flex items-center gap-2 text-sm py-1.5">
+                <input
+                  type="checkbox"
+                  checked={values[f.name] === true || values[f.name] === 'true'}
+                  onChange={(e) => onChange({ ...values, [f.name]: e.target.checked })}
+                  className="accent-primary"
+                />
+                <span className="text-muted-foreground">
+                  {values[f.name] === true || values[f.name] === 'true' ? '켜짐' : '꺼짐'}
+                </span>
+              </label>
+            ) : f.type === 'list' ? (
+              <textarea
+                rows={3}
+                value={listToText(values[f.name])}
+                placeholder={Array.isArray(f.default) ? f.default.join('\n') : '한 줄에 하나씩'}
+                onChange={(e) => onChange({ ...values, [f.name]: coerceValue(f, e.target.value) })}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono resize-y"
+              />
+            ) : (
+              <input
+                type={f.type === 'int' || f.type === 'float' ? 'number' : 'text'}
+                step={f.type === 'float' ? '0.01' : '1'}
+                value={values[f.name] ?? ''}
+                placeholder={String(f.default ?? '')}
+                onChange={(e) =>
+                  onChange({ ...values, [f.name]: coerceValue(f, e.target.value) })
+                }
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+              />
+            )}
             {f.help && <div className="text-xs text-muted-foreground">{f.help}</div>}
+            {f.type === 'list' && (
+              <div className="text-xs text-muted-foreground">줄바꿈 또는 콤마로 여러 개 입력</div>
+            )}
           </Field>
         ))}
       </div>

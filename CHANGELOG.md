@@ -11,6 +11,15 @@
 1.5.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **Deep Check 참조 가이드 문서**: deep-check 서브시스템의 목적·아키텍처·실행 경로·API·
+  체커 카탈로그·확장 방법을 정리한 `docs/DEEP_CHECKER_GUIDE.md` 추가(AI/개발자 참조용).
+- **Deep Check 정의 관리 UX 개선**: 정의 목록 검색, 글로벌 정의를 선택 클러스터 전용으로
+  복제하는 버튼, 비활성 텍스트 배지, 동적 폼의 boolean 체크박스·list textarea(줄바꿈/콤마)
+  위젯을 추가. 운영 점검 콘솔 상세 모달에 실행 단계 타임라인을 노출하고, 실행 시작 실패 시
+  toast 로 사유를 표면화.
+  - Frontend: `DeepCheckDefinitionForm`/`DeepCheckDefinitionList`/`DeepCheckSettings`/
+    `OpsCheckConsolePage` — 잘못된 숫자 입력(NaN)을 null 로 방어, 글로벌 비활성화 시 확인 대화상자.
+
 - **Jira 가져오기 — 세션 쿠키 인증 방식 추가**: PAT(Personal Access Token) 발급이 막힌 SSO
   환경을 위해, 사용자가 사내 브라우저로 Jira 에 로그인한 뒤 세션 쿠키를 복사해 등록하면 그
   쿠키로 이슈를 가져올 수 있게 했다. 설정 ▸ Jira 연동에서 "Personal Access Token"과
@@ -21,6 +30,19 @@
     `X-Atlassian-Token: no-check` 로 REST 호출. 자격 저장/테스트/가져오기/push 경로 모두 반영.
   - Frontend: `JiraIntegrationPanel` 에 인증 방식 토글·쿠키 입력(textarea)·안내 추가,
     `types`/`api`/`useJira` 에 `authType` 전달.
+
+### Fixed
+- **Deep Check ingest 무인증 차단**: `SUPERPOD_INGEST_TOKEN` 미설정 시 `/deep-check/ingest`
+  를 fail-closed(503)로 거부하고, 토큰 비교를 `secrets.compare_digest`(상수시간)로 변경해
+  임의 결과 주입·타이밍 공격을 차단.
+- **Deep Check 실행/정의 권한 강화**: 정의 생성/수정/삭제/Test, `POST /deep-check/run/{id}`,
+  운영 점검 실행을 operator 이상으로 제한(컨트롤플레인 exec·파드 생성 유발 동작 보호).
+- **Deep Check 부하/안정성**: `POST /deep-check/run/{id}` 를 Celery 백그라운드로 전환(504
+  방지, worker 부재 시 동기 폴백), `deep_check_results` 리텐션 정리 태스크 추가(매일 03:10),
+  `pod_to_pod` 임시 프로브 파드 명시 삭제로 누수 방지, 결과 자동연결을 최근 회차(6h)로 제한.
+- **Deep Check 판정 정확성**: `cert_expiry` 가 연/주 단위 잔여기간(CA 인증서 등)을 놓치던
+  정규식을 duration 파서로 교체, `etcd_defrag` 파싱 실패를 warning→pending 으로 정정,
+  `pod_to_pod` 의 신뢰 불가한 밀리초 계측 제거. ingest 클라이언트 TLS 검증 옵션화.
 
 ## [1.5.0] - 2026-07-15
 
