@@ -88,7 +88,9 @@ export function CheckHistoryHeatmap({ logs, isLoading, days = 14 }: CheckHistory
         <table className="border-separate" style={{ borderSpacing: '3px' }}>
           <thead>
             <tr>
-              <th className="text-left sticky left-0 bg-card" />
+              <th className="text-left sticky left-0 bg-card">
+                <span className="sr-only">클러스터</span>
+              </th>
               {dayCols.map((d) => (
                 <th key={d} className="text-[10px] font-normal text-muted-foreground w-5" title={d}>
                   {d.slice(5).replace('-', '/')}

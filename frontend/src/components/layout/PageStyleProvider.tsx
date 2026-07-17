@@ -16,6 +16,7 @@ export function PageStyleProvider({ children }: { children: ReactNode }) {
 
   return (
     <div
+      id="main-content"
       className="flex-1 min-w-0"
       style={{ marginLeft: NAV_WIDTH, ...pageStyleToCss(eff) }}
     >
