@@ -1083,7 +1083,7 @@ export function BulkExecPage() {
                   </colgroup>
                   <thead>
                     <tr className="border-b border-border bg-muted/30 text-left">
-                      <th></th>
+                      <th><span className="sr-only">펼치기</span></th>
                       <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">호스트
                         <ResizeGrip onMouseDown={(e) => detailColW.beginResize('host', e)} onDoubleClick={() => detailColW.autoFit('host')} />
                       </th>
