@@ -38,6 +38,12 @@
   추가. Dashboard 하단에 "Recent Check History" Heat Map(`CheckHistoryHeatmap`,
   cluster×time, hover 시 Tooltip 상세)을 신설 — 이전에 빠져 있던(orphan) 히스토리
   섹션을 대체.
+- **W4 접근성 패스**: 사이드바를 건너뛰고 바로 본문(`#main-content`)으로 이동하는
+  skip link 추가(Tab 포커스 시 노출). `jsx-a11y/control-has-associated-label` 규칙으로
+  전체 코드베이스를 스캔해 icon-only 버튼/빈 테이블 헤더/폼 컨트롤의 접근 가능한 이름
+  누락 54건을 25개 파일에서 수정하고, 회귀 방지를 위해 규칙을 상시 활성화. 신규 차트
+  컴포넌트(Sparkline)에 sr-only 데이터 표, BulletChart 에는 값이 속한 구간(위험/주의/정상)
+  까지 포함한 상세 aria-label 을 추가.
 
 ### Fixed
 - **Prometheus Insights 섹션이 항상 "Loading..." 에 멈추던 버그**: `/promql/query/all`

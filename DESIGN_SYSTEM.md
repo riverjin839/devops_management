@@ -354,15 +354,15 @@ ui-ux-pro-max 룰 §7 기준.
 
 ui-ux-pro-max Quick Reference §1 기준 — PR마다 확인.
 
-- [ ] 본문 텍스트 contrast ≥ 4.5:1 (보조 텍스트 ≥ 3:1)
-- [ ] 모든 icon-only 버튼에 `aria-label`
-- [ ] 모든 status 표시는 색 + 텍스트/아이콘 동시 (`color-not-only`)
-- [ ] focus ring 2~4px 가시 (focus-visible)
-- [ ] Tab 순서가 시각 순서와 일치
-- [ ] 차트는 `<table className="sr-only">` 데이터 표 동반
-- [ ] form input은 `<label htmlFor>` 연결
-- [ ] 메인 레이아웃 최상단에 `<a href="#main" className="sr-only focus:not-sr-only">Skip to content</a>`
-- [ ] `prefers-reduced-motion` 존중
+- [ ] 본문 텍스트 contrast ≥ 4.5:1 (보조 텍스트 ≥ 3:1) — 정량 측정 미실시(환경 제약), 토큰 설계 단계에서는 고려됨
+- [x] 모든 icon-only 버튼에 `aria-label` — `jsx-a11y/control-has-associated-label` 로 전수 스캔·수정(2026-07), 룰 상시 활성화로 회귀 방지
+- [x] 모든 status 표시는 색 + 텍스트/아이콘 동시 (`color-not-only`) — `StatusBadge`/`Badge`(W2) 공통 패턴
+- [x] focus ring 2~4px 가시 (focus-visible) — `index.css` 전역 `*:focus-visible` 2px outline
+- [ ] Tab 순서가 시각 순서와 일치 — 별도 전수 감사 미실시
+- [x] 차트는 `<table className="sr-only">` 데이터 표 동반 — `Sparkline` 적용. `BulletChart`/`CheckHistoryHeatmap` 은 단일값·실제 버튼+aria-label/Tooltip 구조라 동일 목적을 다른 방식으로 충족
+- [ ] form input은 `<label htmlFor>` 연결 — 대부분 `aria-label` 로 대체(동등하지만 리터럴 `<label htmlFor>` 전수 감사는 미실시)
+- [x] 메인 레이아웃 최상단에 `<a href="#main" className="sr-only focus:not-sr-only">Skip to content</a>` — `App.tsx` AppShell 에 추가, Tab 포커스로 실동작 확인
+- [x] `prefers-reduced-motion` 존중 — `index.css` `@media (prefers-reduced-motion: reduce)` 기존 적용
 
 ---
 
@@ -388,7 +388,7 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 | **W1** | 토큰 정합 — `index.css` rewrite + `tailwind.config.js` `status.*` 추가 + raw HEX 사용처 grep 후 전수 치환 | `grep -rE "#[0-9a-fA-F]{6}" frontend/src` 결과가 **토큰 정의부 + 화이트리스트 외 0건**. 화이트리스트 = three.js/canvas/recharts 파일(`FlowGraph3D`, `Topology*`, `*Chart*`, `*Timeline`, `KanbanSummaryCharts`) 및 컬러픽커 기본값 prop(`defaultBg="#..."`) — 이들은 CSS class 를 못 쓰므로 hex 불가피. 외부 서비스 고유색(Jira `#0052CC` 등)은 `brand.*` 토큰 경유. |
 | **W2** | shadcn/ui 도입(MCP 경유) — `Button`, `Card`, `Badge`, `Tooltip`, `Dialog` 5종부터. 기존 자체 컴포넌트 어댑터 추가 | 새 컴포넌트는 shadcn 사용, 기존은 점진 마이그레이션 |
 | **W3** | ✅ Health Hero PoC — 12-col Bento(`HealthHero`) + Bullet Chart(`ui/BulletChart`) 구현 + Dashboard 상단 교체(`SummaryStats` 삭제) | Bullet Chart `role="img"` + `aria-label` 로 AAA 패턴 적용. Lighthouse 정량 측정은 미실시(환경 제약) — W4 진행 시 함께 측정 권장 |
-| **W4** | 접근성 패스 — `eslint-plugin-jsx-a11y` 도입 + skip link + aria-label 일괄 보강 | CI에서 a11y lint 통과 |
+| **W4** | ✅ 접근성 패스 — `eslint-plugin-jsx-a11y` (기존 도입돼있던 것 확인) + `jsx-a11y/control-has-associated-label` 신규 활성화 + 전수 스캔 위반 54건 수정 + skip link + 신규 차트 sr-only 데이터 표 | `npx eslint . --rule '{"jsx-a11y/control-has-associated-label":"warn"}'` 전체 스캔 0건, `npm run lint` 그대로 통과(회귀 방지 위해 룰 상시 활성화) |
 | **W5+** | ✅ 차트 교체 — Sparkline(`ui/Sparkline`, MetricCard 하단) + Recent Check History → Heat Map(`CheckHistoryHeatmap`, cluster×time, hover 시 Tooltip) | Heat Map 셀은 `aria-label="cluster=… time=… status=…"` + 실제 `<button>`(키보드 포커스 가능). sr-only 데이터 표는 별도로 추가하지 않음 — 후속 W4 에서 검토 |
 
 ---
