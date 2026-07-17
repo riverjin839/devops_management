@@ -21,6 +21,32 @@
     새 `Card` 위에 재구성(traffic-light dot 은 `variant="mac"` 옵션으로 보존). 대표
     사용처로 `JiraPushDialog`(커스텀 모달 → `Dialog`+`Button`)와 업무 표의 우선순위
     칩(`WorkItemTableRow` → `Badge` dot+텍스트)을 교체해 동작을 증명.
+- **운영레벨 커스텀 색상 — 시드 hex → 톤 자동 생성**: 운영레벨 색상이 13개 고정
+  프리셋뿐이었는데, 관리자가 임의의 hex 를 지정하면 bg/ring/band/text 4단계 톤을
+  자동 산출(`lib/colorTone.ts`, HSL 근사)해 클러스터 아이콘(SVG)과 뱃지(인라인 style)에
+  반영하도록 확장. `OperationLevelsManager` 에 커스텀 색상 피커 추가, customHex 미지정
+  시 기존 동작 그대로 유지.
+- **W3 Health Hero — Bento + Bullet Chart**: Dashboard 상단 4-col 통계 카드를 12-col
+  Asymmetric Bento(`HealthHero`)로 교체. 좌측 큰 셀에 SVG Bullet Chart(`ui/BulletChart`,
+  3-zone 배경 + 목표선 마커, `role="img"` a11y)로 전체 헬스 %를 표시하고 우측에
+  위험/경고/정상/마지막 점검 KPI 4셀 배치.
+- **Surface Container 5단계 토큰**: Material Theme Builder 의 surface-container 개념을
+  차용해 그림자 대신 톤 차이로 깊이감을 주는 5단계 토큰(`bg-surface-container-lowest`
+  ~ `-highest`) 추가 — 기존 "그림자 없는 flat 카드" 철학과 일치.
+- **W5+ Sparkline / Heat Map**: PromQL 메트릭 카드 하단에 최근 1시간 추이 Sparkline
+  (`ui/Sparkline`, 새 백엔드 range-query 엔드포인트 `/promql/query/{id}/sparkline`)을
+  추가. Dashboard 하단에 "Recent Check History" Heat Map(`CheckHistoryHeatmap`,
+  cluster×time, hover 시 Tooltip 상세)을 신설 — 이전에 빠져 있던(orphan) 히스토리
+  섹션을 대체.
+
+### Fixed
+- **Prometheus Insights 섹션이 항상 "Loading..." 에 멈추던 버그**: `/promql/query/all`
+  라우트가 `/promql/query/{card_id}` 보다 뒤에 선언돼 있어 UUID 타입 검증이 먼저 실패해
+  422 를 반환하고 폴백되지 않았다. 라우트 선언 순서를 바로잡아 해결.
+- **`historyApi.getLogs` 의 `pageSize` 파라미터가 항상 무시되던 버그**: axios 요청
+  인터셉터의 camelCase→snake_case 변환이 body 에만 적용되고 쿼리 파라미터(`params`)에는
+  적용되지 않아, 백엔드가 기대하는 `page_size`/`cluster_id` 대신 `pageSize`/`clusterId`
+  가 그대로 전송돼 항상 기본값(20건)만 조회됐다. 파라미터명을 백엔드에 맞게 수정.
 
 ### Changed
 - **브랜드/상태 raw HEX → 토큰화**: Jira 브랜드색 `#0052CC` 를 `brand.jira` 토큰
