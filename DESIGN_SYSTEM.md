@@ -59,6 +59,13 @@ ui-ux-pro-max `colors.csv` 검색 결과:
 | `border`            | `#334155` | `215 25% 27%` | 카드 테두리 (slate-700) |
 | `border-subtle`     | `#1E293B` | `217 33% 17%` | 표 행 구분선 (slate-800) |
 
+**Surface Container 5단계** (W3, Material Theme Builder 벤치마킹 — `index.css`/`tailwind.config.js` 실제 구현):
+그림자 대신 톤 차이로 깊이감을 준다(`--card-shadow: none` 철학과 일치). 중첩된 패널(카드 안 카드,
+사이드바 안 서브패널 등)에서 표면 단계를 구분할 때 사용 — `bg-surface-container-lowest` ~
+`bg-surface-container-highest` (라이트: lowest=가장 밝음(바탕) → highest=가장 진함/도드라짐,
+다크: 반대로 lowest=배경과 동일(sunken) → highest=가장 밝음(elevated)). 테마별 실제 HSL 값은
+`index.css` 참고.
+
 #### 2.2 Text Tokens
 
 | Token | HEX | HSL | 용도 |

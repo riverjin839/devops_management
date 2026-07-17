@@ -65,7 +65,7 @@ export function MacCard({
   return (
     <Card className={cn('rounded-md', rootClassName)}>
       {title && (
-        <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40">
+        <div className="flex items-center px-4 py-2.5 border-b border-border bg-surface-container-high">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
             {title}
           </span>
