@@ -727,6 +727,7 @@ function HistoryTimeline({
                 className={`w-full text-left rounded-md px-3 py-2 transition-colors ${
                   picked ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/40'
                 }`}
+                aria-label={s.version || '(version 없음)'}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-sm text-foreground">

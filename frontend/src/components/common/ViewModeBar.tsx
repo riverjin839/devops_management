@@ -139,6 +139,7 @@ function StylePanel({ style, patchStyle }: {
             <button
               key={s.value}
               title={s.title}
+              aria-label={s.title}
               onClick={() => patchStyle({ headerTheme: s.value })}
               className={`w-[18px] h-[18px] rounded-full transition-all duration-100 ${s.color} ${
                 style.headerTheme === s.value

@@ -32,6 +32,15 @@
 ## [1.6.1] - 2026-07-17
 
 ### Added
+- **Deep Check 참조 가이드 문서**: deep-check 서브시스템의 목적·아키텍처·실행 경로·API·
+  체커 카탈로그·확장 방법을 정리한 `docs/DEEP_CHECKER_GUIDE.md` 추가(AI/개발자 참조용).
+- **Deep Check 정의 관리 UX 개선**: 정의 목록 검색, 글로벌 정의를 선택 클러스터 전용으로
+  복제하는 버튼, 비활성 텍스트 배지, 동적 폼의 boolean 체크박스·list textarea(줄바꿈/콤마)
+  위젯을 추가. 운영 점검 콘솔 상세 모달에 실행 단계 타임라인을 노출하고, 실행 시작 실패 시
+  toast 로 사유를 표면화.
+  - Frontend: `DeepCheckDefinitionForm`/`DeepCheckDefinitionList`/`DeepCheckSettings`/
+    `OpsCheckConsolePage` — 잘못된 숫자 입력(NaN)을 null 로 방어, 글로벌 비활성화 시 확인 대화상자.
+
 - **문서-코드 동기화 자동 검사(docs guard)**: 기능 추가 시 문서 갱신이 누락되지 않도록
   `scripts/docs/check_docs_sync.py` 를 추가하고 CI 에 `docs-sync` job 을 신설. App.tsx
   라우트 ↔ `docs/SCREENS.md` 섹션, 라우터/페이지 파일 ↔ `CODE_MAP.md`, `docs/*.md` ↔
@@ -76,6 +85,38 @@
     새 `Card` 위에 재구성(traffic-light dot 은 `variant="mac"` 옵션으로 보존). 대표
     사용처로 `JiraPushDialog`(커스텀 모달 → `Dialog`+`Button`)와 업무 표의 우선순위
     칩(`WorkItemTableRow` → `Badge` dot+텍스트)을 교체해 동작을 증명.
+- **운영레벨 커스텀 색상 — 시드 hex → 톤 자동 생성**: 운영레벨 색상이 13개 고정
+  프리셋뿐이었는데, 관리자가 임의의 hex 를 지정하면 bg/ring/band/text 4단계 톤을
+  자동 산출(`lib/colorTone.ts`, HSL 근사)해 클러스터 아이콘(SVG)과 뱃지(인라인 style)에
+  반영하도록 확장. `OperationLevelsManager` 에 커스텀 색상 피커 추가, customHex 미지정
+  시 기존 동작 그대로 유지.
+- **W3 Health Hero — Bento + Bullet Chart**: Dashboard 상단 4-col 통계 카드를 12-col
+  Asymmetric Bento(`HealthHero`)로 교체. 좌측 큰 셀에 SVG Bullet Chart(`ui/BulletChart`,
+  3-zone 배경 + 목표선 마커, `role="img"` a11y)로 전체 헬스 %를 표시하고 우측에
+  위험/경고/정상/마지막 점검 KPI 4셀 배치.
+- **Surface Container 5단계 토큰**: Material Theme Builder 의 surface-container 개념을
+  차용해 그림자 대신 톤 차이로 깊이감을 주는 5단계 토큰(`bg-surface-container-lowest`
+  ~ `-highest`) 추가 — 기존 "그림자 없는 flat 카드" 철학과 일치.
+- **W5+ Sparkline / Heat Map**: PromQL 메트릭 카드 하단에 최근 1시간 추이 Sparkline
+  (`ui/Sparkline`, 새 백엔드 range-query 엔드포인트 `/promql/query/{id}/sparkline`)을
+  추가. Dashboard 하단에 "Recent Check History" Heat Map(`CheckHistoryHeatmap`,
+  cluster×time, hover 시 Tooltip 상세)을 신설 — 이전에 빠져 있던(orphan) 히스토리
+  섹션을 대체.
+- **W4 접근성 패스**: 사이드바를 건너뛰고 바로 본문(`#main-content`)으로 이동하는
+  skip link 추가(Tab 포커스 시 노출). `jsx-a11y/control-has-associated-label` 규칙으로
+  전체 코드베이스를 스캔해 icon-only 버튼/빈 테이블 헤더/폼 컨트롤의 접근 가능한 이름
+  누락 54건을 25개 파일에서 수정하고, 회귀 방지를 위해 규칙을 상시 활성화. 신규 차트
+  컴포넌트(Sparkline)에 sr-only 데이터 표, BulletChart 에는 값이 속한 구간(위험/주의/정상)
+  까지 포함한 상세 aria-label 을 추가.
+
+### Fixed
+- **Prometheus Insights 섹션이 항상 "Loading..." 에 멈추던 버그**: `/promql/query/all`
+  라우트가 `/promql/query/{card_id}` 보다 뒤에 선언돼 있어 UUID 타입 검증이 먼저 실패해
+  422 를 반환하고 폴백되지 않았다. 라우트 선언 순서를 바로잡아 해결.
+- **`historyApi.getLogs` 의 `pageSize` 파라미터가 항상 무시되던 버그**: axios 요청
+  인터셉터의 camelCase→snake_case 변환이 body 에만 적용되고 쿼리 파라미터(`params`)에는
+  적용되지 않아, 백엔드가 기대하는 `page_size`/`cluster_id` 대신 `pageSize`/`clusterId`
+  가 그대로 전송돼 항상 기본값(20건)만 조회됐다. 파라미터명을 백엔드에 맞게 수정.
 
 ### Changed
 - **브랜드/상태 raw HEX → 토큰화**: Jira 브랜드색 `#0052CC` 를 `brand.jira` 토큰
@@ -123,6 +164,19 @@
     `X-Atlassian-Token: no-check` 로 REST 호출. 자격 저장/테스트/가져오기/push 경로 모두 반영.
   - Frontend: `JiraIntegrationPanel` 에 인증 방식 토글·쿠키 입력(textarea)·안내 추가,
     `types`/`api`/`useJira` 에 `authType` 전달.
+
+### Fixed
+- **Deep Check ingest 무인증 차단**: `SUPERPOD_INGEST_TOKEN` 미설정 시 `/deep-check/ingest`
+  를 fail-closed(503)로 거부하고, 토큰 비교를 `secrets.compare_digest`(상수시간)로 변경해
+  임의 결과 주입·타이밍 공격을 차단.
+- **Deep Check 실행/정의 권한 강화**: 정의 생성/수정/삭제/Test, `POST /deep-check/run/{id}`,
+  운영 점검 실행을 operator 이상으로 제한(컨트롤플레인 exec·파드 생성 유발 동작 보호).
+- **Deep Check 부하/안정성**: `POST /deep-check/run/{id}` 를 Celery 백그라운드로 전환(504
+  방지, worker 부재 시 동기 폴백), `deep_check_results` 리텐션 정리 태스크 추가(매일 03:10),
+  `pod_to_pod` 임시 프로브 파드 명시 삭제로 누수 방지, 결과 자동연결을 최근 회차(6h)로 제한.
+- **Deep Check 판정 정확성**: `cert_expiry` 가 연/주 단위 잔여기간(CA 인증서 등)을 놓치던
+  정규식을 duration 파서로 교체, `etcd_defrag` 파싱 실패를 warning→pending 으로 정정,
+  `pod_to_pod` 의 신뢰 불가한 밀리초 계측 제거. ingest 클라이언트 TLS 검증 옵션화.
 
 ## [1.5.0] - 2026-07-15
 

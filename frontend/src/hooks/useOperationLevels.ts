@@ -1,6 +1,8 @@
+import type { CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uiSettingsApi } from '@/services/api';
 import type { OperationLevelItem } from '@/types';
+import { deriveToneSet, isValidHex } from '@/lib/colorTone';
 
 export const opsLevelsKeys = {
   list: ['ui-settings', 'operation-levels'] as const,
@@ -91,11 +93,27 @@ export function levelLabel(levels: OperationLevelItem[] | undefined, value: stri
   return hit?.label ?? value;
 }
 
-/** value → color */
+/** value → color (프리셋 키, customHex 가 있어도 SVG fallback 용으로 계속 반환) */
 export function levelColor(levels: OperationLevelItem[] | undefined, value: string | null | undefined): string {
   if (!value) return 'slate';
   const hit = levels?.find((l) => l.value === value);
   return hit?.color ?? 'slate';
+}
+
+/** value → 커스텀 hex (지정 안 됐으면 undefined — 이땐 프리셋 color 를 그대로 쓰면 됨) */
+export function levelCustomHex(levels: OperationLevelItem[] | undefined, value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const hit = levels?.find((l) => l.value === value);
+  return isValidHex(hit?.customHex) ? hit.customHex : undefined;
+}
+
+/** customHex 가 지정된 레벨의 뱃지 인라인 스타일(bg/text/border) — Tailwind 로는 표현 불가능한
+ *  임의 hex 라 style 로 오버라이드한다. 미지정이면 undefined(levelBadgeClass 의 프리셋 그대로 사용). */
+export function levelBadgeStyle(levels: OperationLevelItem[] | undefined, value: string | null | undefined): CSSProperties | undefined {
+  const hex = levelCustomHex(levels, value);
+  if (!hex) return undefined;
+  const { bg, ring, text } = deriveToneSet(hex);
+  return { backgroundColor: bg, color: text, borderColor: ring };
 }
 
 /** value → 이모지. 명시된 icon 우선 → value/label 키워드 hint → fallback. */

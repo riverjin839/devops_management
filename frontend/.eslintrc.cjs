@@ -34,5 +34,9 @@ module.exports = {
        no-autofocus 가 우려하는 "페이지 로드 시 예상치 못한 포커스 이동"
        시나리오가 없어 off. 새 코드에서는 항상 사용자 액션 직후에만 사용. */
     'jsx-a11y/no-autofocus': 'off',
+    /* icon-only 버튼/빈 <th>/폼 컨트롤에 접근 가능한 이름이 있는지 — recommended
+       프리셋엔 없지만 W4 접근성 패스에서 전수 검사 후 위반 54건을 모두 고쳤다(2026-07).
+       회귀 방지를 위해 명시적으로 켜둔다. */
+    'jsx-a11y/control-has-associated-label': 'warn',
   },
 };

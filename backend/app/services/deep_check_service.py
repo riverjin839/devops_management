@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 from uuid import UUID
 
@@ -27,6 +27,38 @@ from app.services.deep_checkers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 회차 자동 연결 시, 이보다 오래된 DailyCheckLog 에는 붙이지 않는다(엉뚱한 과거
+# 회차에 deep 결과가 매달려 리뷰/트렌드가 왜곡되는 것을 방지).
+_AUTO_LINK_MAX_AGE_HOURS = 6
+
+
+def purge_expired_results(db: Session, *, max_batches: int = 50, batch_size: int = 5000) -> dict[str, Any]:
+    """deep_check_results 리텐션 정리 — check_matrix 와 동일한 보관일수 설정을 공유.
+
+    task_time_limit(5분) 보호를 위해 청크 단위 삭제 + 배치 상한.
+    """
+    from app.services.check_matrix_service import get_settings
+
+    retention_days = get_settings(db)["retention_days"]
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    total_deleted = 0
+    for _ in range(max_batches):
+        ids = [
+            row[0]
+            for row in db.query(DeepCheckResult.id)
+            .filter(DeepCheckResult.checked_at < cutoff)
+            .limit(batch_size)
+            .all()
+        ]
+        if not ids:
+            break
+        db.query(DeepCheckResult).filter(DeepCheckResult.id.in_(ids)).delete(
+            synchronize_session=False,
+        )
+        db.commit()
+        total_deleted += len(ids)
+    return {"deleted": total_deleted, "retention_days": retention_days}
 
 
 class DeepCheckService:
@@ -64,7 +96,8 @@ class DeepCheckService:
             .all()
         )
 
-        # daily_check_log_id 미지정 시 최근 1건과 연결
+        # daily_check_log_id 미지정 시 최근 1건과 연결 — 단, 너무 오래된 회차에는
+        # 붙이지 않는다(deep check 가 daily check 보다 먼저 돌면 과거 회차에 오연결됨).
         log_id = daily_check_log_id
         if log_id is None and cluster is not None:
             latest = (
@@ -73,8 +106,15 @@ class DeepCheckService:
                 .order_by(desc(DailyCheckLog.checked_at))
                 .first()
             )
-            if latest is not None:
-                log_id = latest.id
+            if latest is not None and latest.checked_at is not None:
+                age = datetime.utcnow() - latest.checked_at
+                if age <= timedelta(hours=_AUTO_LINK_MAX_AGE_HOURS):
+                    log_id = latest.id
+                else:
+                    logger.info(
+                        "run_for_cluster: 최신 DailyCheckLog 가 %s 시간 전이라 자동연결 skip (cluster=%s)",
+                        round(age.total_seconds() / 3600, 1), cluster.id,
+                    )
 
         executed = 0
         for d in defs:

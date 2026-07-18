@@ -653,7 +653,7 @@ function UnscheduledCard({ item, onOpen }: { item: WorkItem; onOpen: (id: string
   const names = assigneeNames(item);
   const label = item.title?.trim() || stripHtml(item.content) || item.category;
   return (
-    <button type="button" onClick={() => onOpen(item.id)} title={label}
+    <button type="button" onClick={() => onOpen(item.id)} title={label} aria-label={label}
       className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint)}>
       <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
       <div className="min-w-0 flex-1">

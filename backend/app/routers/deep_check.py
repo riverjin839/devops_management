@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timedelta
 from typing import Any, Optional
 from uuid import UUID
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.config import settings
 from app.database import get_db
 from app.models import (
@@ -89,14 +91,27 @@ def ingest_results(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    """In-cluster super pod 의 결과 push 진입점. Bearer 토큰 인증."""
+    """In-cluster super pod 의 결과 push 진입점. Bearer 토큰 인증.
+
+    보안: 이 라우터는 JWT 없이 마운트되므로 **토큰이 유일한 방어선**이다.
+    - 토큰 미설정(빈 값)이면 fail-closed 로 503 거부 — 무인증 상태로 임의 결과가
+      주입돼 대시보드/알림이 오염되는 것을 막는다 (SUPERPOD_INGEST_TOKEN 설정 필수).
+    - 비교는 타이밍 공격 방지를 위해 secrets.compare_digest 사용.
+    """
     expected = (settings.superpod_ingest_token or "").strip()
-    if expected:
-        token = ""
-        if authorization and authorization.lower().startswith("bearer "):
-            token = authorization.split(None, 1)[1].strip()
-        if token != expected:
-            raise HTTPException(status_code=401, detail="Invalid ingest token")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Ingest 비활성화: SUPERPOD_INGEST_TOKEN 이 설정되지 않았습니다. "
+                "관리자가 토큰을 설정해야 in-cluster 결과 수집이 허용됩니다."
+            ),
+        )
+    token = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(None, 1)[1].strip()
+    if not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=401, detail="Invalid ingest token")
 
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if cluster is None:
@@ -120,23 +135,41 @@ def ingest_results(
 # Manual trigger
 # ───────────────────────────────────────────────────────────────
 
-@router.post("/run/{cluster_id}")
-async def run_deep_check_now(
+@router.post("/run/{cluster_id}", dependencies=[Depends(require_operator)])
+def run_deep_check_now(
     cluster_id: UUID,
     daily_check_log_id: Optional[UUID] = None,
     db: Session = Depends(get_db),
 ):
+    """클러스터의 enabled deep check 전체 실행.
+
+    부하/타임아웃 보호: exec·파드생성이 섞인 다수 점검을 요청 스레드에서 직렬로
+    돌리면 게이트웨이 타임아웃(504) 위험이 있어 **Celery 백그라운드로 enqueue** 한다.
+    broker/worker 부재 시에만 동기 폴백(ops-checks 와 동일 패턴). 권한: operator 이상.
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if cluster is None:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    svc = DeepCheckService(db)
-    n, log_id = await svc.run_for_cluster(
-        str(cluster_id),
-        in_cluster=False,
-        daily_check_log_id=daily_check_log_id,
-    )
 
-    # AI 리뷰 + 알림 — best-effort
+    log_arg = str(daily_check_log_id) if daily_check_log_id else None
+    try:
+        from app.celery_app import run_deep_check_for_cluster
+        task = run_deep_check_for_cluster.delay(str(cluster_id), log_arg)
+        return {"status": "queued", "task_id": str(getattr(task, "id", "")) or None}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("run_now: Celery enqueue 실패 → 동기 폴백 (%s)", e)
+
+    # 동기 폴백 — worker/broker 부재 환경.
+    import asyncio
+
+    svc = DeepCheckService(db)
+    n, log_id = asyncio.run(
+        svc.run_for_cluster(
+            str(cluster_id),
+            in_cluster=False,
+            daily_check_log_id=daily_check_log_id,
+        )
+    )
     if log_id:
         try:
             from app.celery_app import run_review_and_notify

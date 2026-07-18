@@ -19,7 +19,27 @@ from app.services.deep_checkers.base import (
 )
 
 
-_DAYS_RE = re.compile(r"(\d+)d")
+# kubeadm 의 RESIDUAL TIME 은 HumanDuration 포맷(예: "362d", "9y", "1y64d", "23h").
+# 'd' 만 잡던 기존 정규식은 연/주 단위(CA 인증서 등)를 통째로 놓쳐 rows 에서 누락됐다.
+_DURATION_RE = re.compile(r"(\d+)\s*(y|w|d|h)")
+
+
+def _residual_days(line: str) -> int | None:
+    """한 라인에서 잔여기간 토큰(y/w/d/h)을 모아 일수로 환산. 없으면 None."""
+    total = 0.0
+    found = False
+    for num, unit in _DURATION_RE.findall(line):
+        found = True
+        n = int(num)
+        if unit == "y":
+            total += n * 365
+        elif unit == "w":
+            total += n * 7
+        elif unit == "d":
+            total += n
+        elif unit == "h":
+            total += n / 24
+    return int(total) if found else None
 
 
 class CertExpiryChecker(DeepCheckerBase):
@@ -123,12 +143,8 @@ class CertExpiryChecker(DeepCheckerBase):
             line = raw.strip()
             if not line or line.startswith("CERTIFICATE"):
                 continue
-            m = _DAYS_RE.search(line)
-            if not m:
-                continue
-            try:
-                days = int(m.group(1))
-            except ValueError:
+            days = _residual_days(line)
+            if days is None:
                 continue
             # 첫 토큰 = 인증서 이름
             name = line.split()[0]

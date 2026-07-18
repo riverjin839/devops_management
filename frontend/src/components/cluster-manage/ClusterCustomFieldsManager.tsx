@@ -144,12 +144,12 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
             <table className="w-full text-sm">
               <thead className="bg-muted/30 text-left">
                 <tr className="text-xs text-muted-foreground uppercase">
-                  <th className="px-2 py-1.5 w-6"></th>
+                  <th className="px-2 py-1.5 w-6"><span className="sr-only">순서</span></th>
                   <th className="px-2 py-1.5">라벨</th>
                   <th className="px-2 py-1.5">key</th>
                   <th className="px-2 py-1.5">타입</th>
                   <th className="px-2 py-1.5">옵션</th>
-                  <th className="px-2 py-1.5 w-20"></th>
+                  <th className="px-2 py-1.5 w-20"><span className="sr-only">작업</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -168,8 +168,10 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                     <td className="px-1 py-1 text-muted-foreground/60">
                       <div className="flex flex-col">
                         <button onClick={() => shift(f, -1)} disabled={idx === 0}
+                          aria-label="위로 이동"
                           className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
                         <button onClick={() => shift(f, 1)} disabled={idx === fields.length - 1}
+                          aria-label="아래로 이동"
                           className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
                       </div>
                     </td>
@@ -177,6 +179,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                       <input
                         defaultValue={f.label}
                         onBlur={(e) => quickLabel(f, e.target.value)}
+                        aria-label="컬럼 라벨"
                         className="w-full bg-transparent border border-transparent hover:border-border focus:border-primary rounded px-1 py-0.5 text-sm"
                       />
                     </td>
@@ -225,6 +228,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                         autoFocus value={draft.label}
                         onChange={(e) => setDraft({ ...draft, label: e.target.value })}
                         placeholder="라벨 (예: 운영환경)"
+                        aria-label="라벨 입력"
                         className="w-full px-1 py-0.5 text-sm bg-background border border-border rounded"
                       />
                     </td>
@@ -233,6 +237,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                         value={draft.key}
                         onChange={(e) => { setDraft({ ...draft, key: e.target.value }); setKeyTouched(true); }}
                         placeholder="ops_env"
+                        aria-label="key 입력"
                         className="w-full px-1 py-0.5 text-xs font-mono bg-background border border-border rounded"
                       />
                     </td>
@@ -260,10 +265,12 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                     <td className="px-2 py-1 text-right">
                       <div className="flex items-center gap-1 justify-end">
                         <button onClick={save} disabled={createMut.isPending}
+                          aria-label="저장"
                           className="p-1 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50">
                           {createMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                         </button>
                         <button onClick={resetDraft}
+                          aria-label="취소"
                           className="p-1 rounded hover:bg-secondary text-muted-foreground">
                           <X className="w-3.5 h-3.5" />
                         </button>

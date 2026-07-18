@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlaskConical, Play, Save, X } from 'lucide-react';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import {
   useCheckTypes,
   usePreviewCheck,
@@ -67,22 +69,34 @@ function normalizeValues(
 function coerceValue(spec: DeepCheckFieldSpec, raw: any): any {
   if (raw === '' || raw === null || raw === undefined) return null;
   switch (spec.type) {
-    case 'int':
-      return parseInt(String(raw), 10);
-    case 'float':
-      return parseFloat(String(raw));
+    case 'int': {
+      const n = parseInt(String(raw), 10);
+      return Number.isNaN(n) ? null : n; // 잘못된 입력은 조용히 유실되지 않고 null
+    }
+    case 'float': {
+      const n = parseFloat(String(raw));
+      return Number.isNaN(n) ? null : n;
+    }
     case 'boolean':
       return raw === true || raw === 'true';
     case 'list':
+      // 줄바꿈 또는 콤마 구분 모두 허용(endpoints 등은 줄바꿈이 자연스러움).
       return Array.isArray(raw)
         ? raw
         : String(raw)
-            .split(/\n|,/)
+            .split(/[\n,]/)
             .map((s) => s.trim())
-            .filter(Boolean);
+            .filter((s) => s.length > 0);
     default:
       return String(raw);
   }
+}
+
+/** list 값(배열)을 textarea 표시용 문자열로 — 줄바꿈 구분. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function listToText(v: any): string {
+  if (Array.isArray(v)) return v.join('\n');
+  return v == null ? '' : String(v);
 }
 
 /** 라벨의 "(a|b|c)" 패턴에서 select 옵션 추출 — 예: "비교 방향 (gte|lte)" */
@@ -100,6 +114,7 @@ export function DeepCheckDefinitionForm({
   const { data: schemas } = useCheckTypes();
   const testMut = useTestDefinition();
   const previewMut = usePreviewCheck();
+  const toast = useToast();
 
   const [checkType, setCheckType] = useState(initial?.checkType ?? '');
   const [name, setName] = useState(initial?.name ?? '');
@@ -111,7 +126,6 @@ export function DeepCheckDefinitionForm({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [params, setParams] = useState<Record<string, any>>({});
   const [testResult, setTestResult] = useState<DeepCheckTestResult | null>(null);
-  const [testError, setTestError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const schema = useMemo<DeepCheckTypeSchema | undefined>(
@@ -136,22 +150,22 @@ export function DeepCheckDefinitionForm({
     setParams(normalizeValues(schema.paramFields, schema.defaultParams));
   }, [schema, initial]);
 
-  const buildBody = (): DeepCheckDefinitionInput => ({
-    clusterId: clusterId || initial?.clusterId || null,
-    checkType,
-    name: name || schema?.displayName || checkType,
-    description: description || null,
-    enabled,
-    scheduleCron: scheduleCron || null,
-    thresholds,
-    params,
-    sortOrder: initial?.sortOrder ?? 0,
-  });
-
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await onSubmit(buildBody());
+      await onSubmit({
+        clusterId: clusterId || initial?.clusterId || null,
+        checkType,
+        name: name || schema?.displayName || checkType,
+        description: description || null,
+        enabled,
+        scheduleCron: scheduleCron || null,
+        thresholds,
+        params,
+        sortOrder: initial?.sortOrder ?? 0,
+      });
+    } catch (e) {
+      toast.error('저장 실패', formatApiError(e));
     } finally {
       setSaving(false);
     }
@@ -159,7 +173,6 @@ export function DeepCheckDefinitionForm({
 
   /** 저장 전에도 현재 폼 값 그대로 ad-hoc 실행해 미리 확인. */
   const handlePreview = async () => {
-    setTestError(null);
     try {
       const { data } = await previewMut.mutateAsync({
         checkType,
@@ -169,20 +182,32 @@ export function DeepCheckDefinitionForm({
       });
       setTestResult(data);
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setTestError(String((e as any)?.response?.data?.detail ?? e));
+      const msg = formatApiError(e);
+      toast.error('미리 실행 실패', msg);
+      setTestResult({
+        checkType,
+        status: 'pending',
+        message: `미리 실행 실패: ${msg}`,
+        durationMs: 0,
+      });
     }
   };
 
   const handleTest = async () => {
     if (!initial) return handlePreview();
-    setTestError(null);
     try {
       const { data } = await testMut.mutateAsync({ id: initial.id, clusterId });
       setTestResult(data);
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setTestError(String((e as any)?.response?.data?.detail ?? e));
+      const msg = formatApiError(e);
+      toast.error('Test 실행 실패', msg);
+      setTestResult({
+        definitionId: initial.id,
+        checkType,
+        status: 'pending',
+        message: `Test 실행 실패: ${msg}`,
+        durationMs: 0,
+      });
     }
   };
 
@@ -197,6 +222,7 @@ export function DeepCheckDefinitionForm({
             value={checkType}
             onChange={(e) => setCheckType(e.target.value)}
             disabled={!!initial}
+            aria-label="Check Type 선택"
             className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm disabled:opacity-60"
           >
             <option value="">선택…</option>
@@ -236,6 +262,7 @@ export function DeepCheckDefinitionForm({
           value={description ?? ''}
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
+          aria-label="정의 설명"
           className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm resize-y"
         />
       </Field>
@@ -258,6 +285,7 @@ export function DeepCheckDefinitionForm({
               onChange={(e) => {
                 if (e.target.value !== '__custom__') setScheduleCron(e.target.value);
               }}
+              aria-label="cron 프리셋 선택"
               className="rounded-xl border border-border bg-card px-2 py-2 text-sm"
             >
               {CRON_PRESETS.map((p) => (
@@ -271,11 +299,13 @@ export function DeepCheckDefinitionForm({
               value={scheduleCron ?? ''}
               onChange={(e) => setScheduleCron(e.target.value)}
               placeholder="예: */30 * * * * (비우면 매트릭스 스케줄만)"
+              aria-label="cron 표현식"
               className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono"
             />
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            지정 시 디스패처가 이 정의만 해당 주기로 자동 실행합니다 (최소 5분 간격, 글로벌 정의는 전체 클러스터 대상).
+            표준 5필드 cron (분 시 일 월 요일), 최소 간격 5분. 지정 시 디스패처가 이 정의만 해당
+            주기로 자동 실행합니다 (글로벌 정의는 전체 클러스터 대상).
           </div>
         </Field>
       </div>
@@ -285,12 +315,6 @@ export function DeepCheckDefinitionForm({
           <FieldGroup title="임계값" fields={schema.thresholdFields} values={thresholds} onChange={setThresholds} />
           <FieldGroup title="파라미터" fields={schema.paramFields} values={params} onChange={setParams} />
         </>
-      )}
-
-      {testError && (
-        <div className="rounded-xl border border-red-300 bg-red-500/10 p-3 text-sm text-red-600 break-words">
-          실행 실패: {testError}
-        </div>
       )}
 
       {testResult && (
@@ -388,24 +412,26 @@ function FieldInput({
   onChange: (v: any) => void;
 }) {
   if (spec.type === 'boolean') {
+    const on = value === true || value === 'true';
     return (
-      <label className="inline-flex items-center gap-2 text-sm py-2">
+      <label className="inline-flex items-center gap-2 text-sm py-1.5">
         <input
           type="checkbox"
-          checked={value === true || value === 'true'}
+          checked={on}
           onChange={(e) => onChange(e.target.checked)}
+          className="accent-primary"
         />
-        <span className="text-muted-foreground">사용</span>
+        <span className="text-muted-foreground">{on ? '켜짐' : '꺼짐'}</span>
       </label>
     );
   }
   if (spec.type === 'list') {
-    const text = Array.isArray(value) ? value.join('\n') : String(value ?? '');
     return (
       <textarea
-        value={text}
-        rows={Math.min(Math.max(2, (Array.isArray(value) ? value.length : 1) + 1), 6)}
+        rows={3}
+        value={listToText(value)}
         placeholder={Array.isArray(spec.default) ? spec.default.join('\n') : '한 줄에 하나씩'}
+        aria-label={spec.label}
         onChange={(e) => onChange(coerceValue(spec, e.target.value))}
         className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono resize-y"
       />
@@ -417,6 +443,7 @@ function FieldInput({
       <select
         value={String(value ?? spec.default ?? '')}
         onChange={(e) => onChange(e.target.value)}
+        aria-label={spec.label}
         className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
       >
         {enumOptions.map((opt) => (
@@ -433,6 +460,7 @@ function FieldInput({
       step={spec.type === 'float' ? '0.01' : '1'}
       value={value ?? ''}
       placeholder={String(spec.default ?? '')}
+      aria-label={spec.label}
       onChange={(e) => onChange(coerceValue(spec, e.target.value))}
       className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
     />

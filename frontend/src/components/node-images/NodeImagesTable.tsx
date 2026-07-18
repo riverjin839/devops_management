@@ -43,7 +43,9 @@ export function NodeImagesTable({ nodes, searchQuery }: Props) {
       <table className="w-full text-sm">
         <thead className="bg-muted/20">
           <tr>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-8" />
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-8">
+              <span className="sr-only">펼치기</span>
+            </th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-64">Node</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-32">Role</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Status</th>

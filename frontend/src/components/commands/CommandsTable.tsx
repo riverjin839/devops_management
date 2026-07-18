@@ -371,6 +371,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             onClick={onOpenForm}
             className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-secondary hover:bg-secondary/80"
             title="전체 폼으로 수정"
+            aria-label="전체 폼으로 수정"
           >
             <Pencil className="w-3 h-3" /> 폼
           </button>
@@ -378,6 +379,7 @@ function CommandRow({ entry: e, onUpdate, onDelete, onTogglePin, onOpenForm }: C
             onClick={onDelete}
             className="inline-flex items-center justify-center px-1.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
             title="삭제"
+            aria-label="삭제"
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -454,6 +456,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           placeholder="kubectl"
+          aria-label="카테고리 입력"
           className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded"
         />
       </td>
@@ -469,6 +472,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
             }}
             placeholder="명령어 (필수, Ctrl+Enter 로 저장)"
             rows={2}
+            aria-label="명령어 입력"
             className="w-full px-2 py-1.5 text-sm font-mono bg-background border border-border rounded focus:outline-none focus:border-primary"
           />
           <input
@@ -476,6 +480,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="의미 (선택)"
+            aria-label="의미 입력"
             className="w-full px-2 py-1 text-sm bg-background border border-border rounded"
           />
         </div>
@@ -486,6 +491,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
             type="button"
             onClick={submit}
             disabled={!command.trim()}
+            aria-label="저장"
             className="px-2 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Check className="w-3 h-3" /> 저장
@@ -493,6 +499,7 @@ function AddCommandRow({ onCreate }: { onCreate: (data: CommandEntryCreate) => v
           <button
             type="button"
             onClick={() => { reset(); setOpen(false); }}
+            aria-label="취소"
             className="px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-secondary inline-flex items-center gap-1"
           >
             <X className="w-3 h-3" /> 취소

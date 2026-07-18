@@ -1026,7 +1026,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
         <table className="w-full text-sm">
           <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-2 py-2 font-medium w-7" />
+              <th className="px-2 py-2 font-medium w-7"><span className="sr-only">펼치기</span></th>
               <SortableTh label="Namespace" k="namespace" sort={sort} onSort={onSort} />
               <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
               <SortableTh label="Workloads" k="workloadCount" sort={sort} onSort={onSort} align="right" />
@@ -1076,7 +1076,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
                   </tr>
                   {open && (
                     <tr className="bg-muted/5">
-                      <td />
+                      <td aria-hidden="true" />
                       <td colSpan={6} className="px-2 py-2">
                         <WorkloadsDrill clusterId={clusterId} namespace={ns.namespace} />
                       </td>
@@ -1120,7 +1120,7 @@ function WorkloadsDrill({ clusterId, namespace }: { clusterId: string; namespace
       <table className="w-full text-sm">
         <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
           <tr>
-            <th className="px-2 py-1.5 font-medium w-7" />
+            <th className="px-2 py-1.5 font-medium w-7"><span className="sr-only">펼치기</span></th>
             <th className="px-2 py-1.5 font-medium">Workload</th>
             <th className="px-2 py-1.5 font-medium text-right">Pods</th>
             <th className="px-2 py-1.5 font-medium">CPU req/use</th>
@@ -1154,7 +1154,7 @@ function WorkloadsDrill({ clusterId, namespace }: { clusterId: string; namespace
                 </tr>
                 {open && (
                   <tr className="bg-muted/5">
-                    <td />
+                    <td aria-hidden="true" />
                     <td colSpan={5} className="px-2 py-1.5">
                       <PodsDrill clusterId={clusterId} namespace={namespace} kind={w.kind} name={w.name} />
                     </td>
@@ -1214,8 +1214,8 @@ function PodsDrill({ clusterId, namespace, kind, name }: { clusterId: string; na
                     ↳ {c.name}
                     {!c.hasRequests && <span className="ml-2 text-amber-600">req 미설정</span>}
                   </td>
-                  <td />
-                  <td />
+                  <td aria-hidden="true" />
+                  <td aria-hidden="true" />
                   <td className="px-2 py-1 text-xs tabular-nums">{fmtCores(c.cpuReqM)} / {fmtCores(c.cpuLimM)} / {c.cpuUsageM == null ? '—' : fmtCores(c.cpuUsageM)}</td>
                   <td className="px-2 py-1 text-xs tabular-nums">{fmtGi(c.memReqB)} / {fmtGi(c.memLimB)} / {c.memUsageB == null ? '—' : fmtGi(c.memUsageB)}</td>
                 </tr>

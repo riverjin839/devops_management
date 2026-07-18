@@ -142,7 +142,7 @@ export function K8sEventsPage() {
                       <th className="text-left py-2 pr-3 font-medium w-32">네임스페이스</th>
                       <th className="text-left py-2 pr-3 font-medium w-36">Reason</th>
                       <th className="text-left py-2 font-medium">메시지</th>
-                      <th className="w-8"></th>
+                      <th className="w-8"><span className="sr-only">펼치기</span></th>
                     </tr>
                   </thead>
                   <tbody>

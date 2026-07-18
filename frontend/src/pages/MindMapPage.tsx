@@ -398,6 +398,7 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
                   key={`${c.label}-${c.value}`}
                   type="button"
                   onClick={() => setColor(c.value)}
+                  aria-label={c.label}
                   className={`w-5 h-5 rounded-full border-2 transition-all ${
                     color === c.value ? 'scale-125 border-white' : 'border-transparent opacity-75 hover:opacity-100'
                   }`}

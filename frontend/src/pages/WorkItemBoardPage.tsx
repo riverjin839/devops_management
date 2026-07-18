@@ -661,7 +661,7 @@ export function WorkItemBoardPage() {
                   >
                     <SortableContext items={visibleCols} strategy={horizontalListSortingStrategy}>
                       <tr className="border-b border-border bg-muted/30">
-                        <th />
+                        <th><span className="sr-only">정렬</span></th>
                         {visibleCols.map((k) => (
                           <DraggableSortHeader
                             key={k}

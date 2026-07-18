@@ -1173,19 +1173,19 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
 
         {/* 자동완성 데이터 — namespace / pod 는 API + 관측, protocol / verdict 는 정적 enum */}
         <datalist id="hubble-ns-list">
-          {namespaceOptions.map((n) => <option key={n} value={n} />)}
+          {namespaceOptions.map((n) => <option key={n} value={n} aria-label={n} />)}
         </datalist>
         <datalist id="hubble-from-pod-list">
-          {fromPodOptions.map((p) => <option key={p} value={p} />)}
+          {fromPodOptions.map((p) => <option key={p} value={p} aria-label={p} />)}
         </datalist>
         <datalist id="hubble-to-pod-list">
-          {toPodOptions.map((p) => <option key={p} value={p} />)}
+          {toPodOptions.map((p) => <option key={p} value={p} aria-label={p} />)}
         </datalist>
         <datalist id="hubble-protocol-list">
-          {HUBBLE_PROTOCOLS.map((p) => <option key={p} value={p} />)}
+          {HUBBLE_PROTOCOLS.map((p) => <option key={p} value={p} aria-label={p} />)}
         </datalist>
         <datalist id="hubble-verdict-list">
-          {HUBBLE_VERDICTS.map((v) => <option key={v} value={v} />)}
+          {HUBBLE_VERDICTS.map((v) => <option key={v} value={v} aria-label={v} />)}
         </datalist>
         <div className="flex items-center gap-2 flex-wrap pt-1">
           {!running ? (

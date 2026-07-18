@@ -8,6 +8,9 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { StatusBadge, StatusDot, statusToVariant } from '@/components/common/StatusBadge';
 import { LogViewer } from '@/components/common/LogViewer';
+import { useToast } from '@/components/common';
+import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
+import { formatApiError } from '@/lib/utils';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useOpsCheckCatalog, useStartOpsRun, useOpsRun, useOpsRunItems,
@@ -38,6 +41,7 @@ export function OpsCheckConsolePage() {
 
   const { data: catalog = [], isLoading } = useOpsCheckCatalog(clusterId);
   const startRun = useStartOpsRun();
+  const toast = useToast();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState<string>('all');
@@ -101,14 +105,20 @@ export function OpsCheckConsolePage() {
     if (chosen.length === 0 || !clusterId) return;
     startRun.mutate(
       { clusterId, items: runItemsToRequest(chosen) },
-      { onSuccess: (r) => setActiveRunId(r.id) },
+      {
+        onSuccess: (r) => setActiveRunId(r.id),
+        onError: (e) => toast.error('실행 시작 실패', formatApiError(e)),
+      },
     );
   };
   const runOne = (c: OpsCheckCatalogItem) => {
     if (!clusterId) return;
     startRun.mutate(
       { clusterId, items: runItemsToRequest([c]) },
-      { onSuccess: (r) => setActiveRunId(r.id) },
+      {
+        onSuccess: (r) => setActiveRunId(r.id),
+        onError: (e) => toast.error('실행 시작 실패', formatApiError(e)),
+      },
     );
   };
 
@@ -208,7 +218,7 @@ export function OpsCheckConsolePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-border">
-                    <th className="w-9 px-3 py-2"></th>
+                    <th className="w-9 px-3 py-2"><span className="sr-only">선택</span></th>
                     <th className="text-left px-2 py-2 font-medium">이름</th>
                     <th className="text-left px-2 py-2 font-medium w-24">분류</th>
                     <th className="text-left px-2 py-2 font-medium w-20">소스</th>
@@ -223,7 +233,7 @@ export function OpsCheckConsolePage() {
                     return (
                       <tr key={k} className="border-b border-border/50 hover:bg-secondary/20">
                         <td className="px-3 py-2">
-                          <input type="checkbox" checked={selected.has(k)} onChange={() => toggle(c)} className="accent-primary" />
+                          <input type="checkbox" checked={selected.has(k)} onChange={() => toggle(c)} className="accent-primary" aria-label="선택" />
                         </td>
                         <td className="px-2 py-2">
                           <div className="flex items-center gap-1.5">
@@ -343,6 +353,9 @@ export function OpsCheckConsolePage() {
             </div>
             <div className="p-5 space-y-3">
               {detail.message && <p className="text-sm">{detail.message}</p>}
+              {Array.isArray(detail.details?._steps) && detail.details!._steps.length > 0 && (
+                <ExecutionStepsTimeline steps={detail.details!._steps} />
+              )}
               <div>
                 <div className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" /> 상세 로그

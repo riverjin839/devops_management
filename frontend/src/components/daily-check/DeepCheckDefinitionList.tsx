@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   Copy,
+  CopyPlus,
   Globe2,
   History,
   Pencil,
@@ -31,6 +32,8 @@ interface Props {
   onShowHistory: (d: DeepCheckDefinition) => void;
   /** 글로벌 정의를 즉시 실행할 때 사용할 클러스터 (사이드바 선택) */
   runClusterId?: string | null;
+  /** 글로벌 정의를 현재 선택 클러스터 전용으로 복제 — 제공 시 글로벌 행에 복제 버튼 노출. */
+  onDuplicateToCluster?: (d: DeepCheckDefinition) => void;
 }
 
 export function DeepCheckDefinitionList({
@@ -38,6 +41,7 @@ export function DeepCheckDefinitionList({
   onEdit,
   onShowHistory,
   runClusterId,
+  onDuplicateToCluster,
 }: Props) {
   const update = useUpdateDefinition();
   const remove = useDeleteDefinition();
@@ -47,6 +51,12 @@ export function DeepCheckDefinitionList({
   const [runningId, setRunningId] = useState<string | null>(null);
 
   const toggle = (d: DeepCheckDefinition) => {
+    // 글로벌 정의를 끄면 전 클러스터에 영향 → 실수 방지용 확인.
+    if (d.enabled && !d.clusterId) {
+      if (!window.confirm(`"${d.name}" 은 글로벌 정의입니다. 비활성화하면 모든 클러스터에서 이 점검이 cron 실행되지 않습니다. 계속할까요?`)) {
+        return;
+      }
+    }
     update.mutate({
       id: d.id,
       body: {
@@ -107,6 +117,7 @@ export function DeepCheckDefinitionList({
               type="button"
               onClick={() => toggle(d)}
               title={d.enabled ? '비활성화' : '활성화'}
+              aria-label={d.enabled ? `${d.name} 비활성화` : `${d.name} 활성화`}
               className={`flex-shrink-0 rounded-lg p-1.5 ${
                 d.enabled
                   ? 'text-emerald-600 hover:bg-emerald-500/10'
@@ -124,6 +135,14 @@ export function DeepCheckDefinitionList({
                   />
                 )}
                 <span className="truncate">{d.name}</span>
+                {!d.enabled && (
+                  <span
+                    title="비활성 — cron 미실행, 수동 실행만 가능"
+                    className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground border border-border"
+                  >
+                    비활성
+                  </span>
+                )}
                 {!d.clusterId && (
                   <span
                     title="글로벌 (모든 클러스터)"
@@ -165,6 +184,7 @@ export function DeepCheckDefinitionList({
               disabled={runningId === d.id}
               className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
               title="즉시 실행 (이력에 기록)"
+              aria-label={`${d.name} 즉시 실행`}
             >
               <Play className={`w-4 h-4 ${runningId === d.id ? 'animate-pulse' : ''}`} />
             </button>
@@ -173,15 +193,28 @@ export function DeepCheckDefinitionList({
               onClick={() => onShowHistory(d)}
               className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="실행 이력 / 개별 로그"
+              aria-label={`${d.name} 실행 이력`}
             >
               <History className="w-4 h-4" />
             </button>
+            {onDuplicateToCluster && !d.clusterId && (
+              <button
+                type="button"
+                onClick={() => onDuplicateToCluster(d)}
+                className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="이 클러스터 전용으로 복제"
+                aria-label={`${d.name} 클러스터 전용 복제`}
+              >
+                <CopyPlus className="w-4 h-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => duplicate.mutate(d.id)}
               disabled={duplicate.isPending}
               className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
               title="복제 (비활성 상태로 생성)"
+              aria-label={`${d.name} 복제`}
             >
               <Copy className="w-4 h-4" />
             </button>
@@ -190,6 +223,7 @@ export function DeepCheckDefinitionList({
               onClick={() => onEdit(d)}
               className="flex-shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="편집"
+              aria-label={`${d.name} 편집`}
             >
               <Pencil className="w-4 h-4" />
             </button>
@@ -199,6 +233,7 @@ export function DeepCheckDefinitionList({
               disabled={deletingId === d.id}
               className="flex-shrink-0 rounded-lg p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
               title="삭제"
+              aria-label={`${d.name} 삭제`}
             >
               <Trash2 className="w-4 h-4" />
             </button>

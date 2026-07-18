@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -647,8 +647,10 @@ export const healthApi = {
 // History API
 export const historyApi = {
   getLogs: (clusterId?: string, page = 1, pageSize = 20) =>
+    // GET 쿼리 파라미터는 요청 인터셉터의 camelCase→snake_case 변환이 적용되지 않아
+    // (params 가 아니라 body 만 변환) 백엔드 파라미터명(cluster_id/page_size)을 직접 맞춘다.
     api.get<PaginatedResponse<CheckLog>>('/history', {
-      params: { clusterId, page, pageSize },
+      params: { cluster_id: clusterId, page, page_size: pageSize },
     }),
   exportCsv: (clusterId: string) =>
     api.get(`/history/${clusterId}/export`, { responseType: 'blob' }),
@@ -726,6 +728,8 @@ export const promqlApi = {
   deleteCard: (id: string) => api.delete(`/promql/cards/${id}`),
   queryCard: (id: string) =>
     api.get<MetricQueryResult>(`/promql/query/${id}`),
+  querySparkline: (id: string) =>
+    api.get<MetricSparklineResult>(`/promql/query/${id}/sparkline`),
   queryAll: () =>
     api.get<MetricQueryResult[]>('/promql/query/all'),
   testQuery: (promql: string) =>
@@ -1664,7 +1668,10 @@ export const deepCheckApi = {
   trend: (clusterId: string, days = 7) =>
     api.get<DailyCheckTrend>(`/deep-check/trend/${clusterId}`, { params: { days } }),
   runNow: (clusterId: string) =>
-    api.post<{ status: string; checksRun: number }>(`/deep-check/run/${clusterId}`),
+    // 백그라운드(Celery) 실행 — status:'queued'(+taskId). worker 부재 시 동기 폴백(status:'ok'+checksRun).
+    api.post<{ status: string; checksRun?: number; taskId?: string | null }>(
+      `/deep-check/run/${clusterId}`,
+    ),
 };
 
 export const deepCheckDefinitionsApi = {

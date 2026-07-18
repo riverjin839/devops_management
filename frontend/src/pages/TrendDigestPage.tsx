@@ -281,6 +281,7 @@ function SourceRow({ s }: { s: TrendSource }) {
               s.enabled ? 'bg-primary' : 'bg-secondary border border-border'
             }`}
             title="활성/비활성"
+            aria-label="활성/비활성"
           >
             <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transform transition-transform ${
               s.enabled ? 'translate-x-4' : 'translate-x-0.5'

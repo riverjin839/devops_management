@@ -528,7 +528,7 @@ export function TodoTodayPage() {
                     <th className="text-left px-3 py-2 w-20">상태</th>
                     <th className="text-center px-2 py-2 w-12">우선</th>
                     <th className="text-left px-3 py-2 w-32">클러스터</th>
-                    <th className="w-10" />
+                    <th className="w-10"><span className="sr-only">작업</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
@@ -544,7 +544,7 @@ export function TodoTodayPage() {
                             {STATUS_META[t.kanbanStatus]?.label ?? '할일'}
                           </span>
                         </td>
-                        <td className="px-2 py-2 text-center"><span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} /></td>
+                        <td className="px-2 py-2 text-center" aria-label={`우선순위 ${t.priority}`}><span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} /></td>
                         <td className="px-3 py-2 text-sm text-muted-foreground truncate max-w-[140px]">{cl ?? '—'}</td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <CompleteBtn item={t} busy={busyId === t.id} onToggleDone={onToggleDone} />

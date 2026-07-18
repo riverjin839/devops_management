@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
-import { useOperationLevels, levelBadgeClass, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
 import { CidrRow } from './CidrRow';
 import { InternalIpRow } from './InternalIpRow';
 import { BondIpRow } from './BondIpRow';
@@ -79,7 +79,10 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
               {cluster.operationLevel && (
-                <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}>
+                <span
+                  className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}
+                  style={levelBadgeStyle(opsLevels, cluster.operationLevel)}
+                >
                   <span>{levelIcon(opsLevels, cluster.operationLevel)}</span>
                   <span>{levelLabel(opsLevels, cluster.operationLevel)}</span>
                 </span>

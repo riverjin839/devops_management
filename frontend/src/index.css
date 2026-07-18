@@ -57,6 +57,15 @@
     --status-neutral:     215 12% 55%;
     --status-neutral-bg:  215 12% 93%;
 
+    /* ── Surface Container 5단계 (DESIGN_SYSTEM §2.1 확장, M3 개념 차용) ──
+       그림자 대신 톤 차이로 깊이감을 준다(--card-shadow: none 철학과 일치).
+       lowest(가장 밝음/바탕에 가까움) → highest(가장 진함/가장 도드라짐). */
+    --surface-container-lowest:  210 40% 100%;
+    --surface-container-low:     210 35% 98%;
+    --surface-container:         210 33% 96.5%;
+    --surface-container-high:    210 32% 95%;
+    --surface-container-highest: 210 30% 93%;
+
     /* ── Brand tokens (외부 서비스 고유색. 앱 primary 와 구분) ── */
     --brand-jira:         216 100% 40%;  /* #0052CC Atlassian/Jira blue */
 
@@ -118,6 +127,13 @@
     --status-info-bg:     199 50% 16%;
     --status-neutral:     215 8% 60%;
     --status-neutral-bg:  215 8% 18%;
+
+    /* Dark: 어두운 배경 위에서는 밝을수록 더 "떠 있는"(elevated) 톤 — lowest 는 background 와 동일. */
+    --surface-container-lowest:  220 18% 7%;
+    --surface-container-low:     220 17% 9%;
+    --surface-container:         220 17% 11%;
+    --surface-container-high:    220 15% 14%;
+    --surface-container-highest: 220 14% 17%;
 
     --motion-fast: 150ms;
     --motion-base: 200ms;
@@ -214,6 +230,12 @@
     --status-info-bg:     199 50% 92%;
     --status-neutral:     28 10% 50%;
     --status-neutral-bg:  35 15% 90%;
+
+    --surface-container-lowest:  38 50% 99%;
+    --surface-container-low:     37 42% 98%;
+    --surface-container:         36 38% 96%;
+    --surface-container-high:    35 32% 94%;
+    --surface-container-highest: 35 30% 92%;
 
     --motion-fast: 150ms;
     --motion-base: 200ms;
