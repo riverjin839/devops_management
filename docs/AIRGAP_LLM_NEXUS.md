@@ -54,6 +54,13 @@
 K8s 로 배포 시 백엔드와 같은 네임스페이스에 올리면 `OLLAMA_URL=http://ollama:11434` 로
 접근할 수 있습니다.
 
+> ⚠️ **`k8s/base/ollama.yaml` 은 이미 `qwen2.5-coder:7b` 모델을 사전 적재한 커스텀 이미지**
+> (`ghcr.io/riverjin839/ollama-qwen2.5-coder:7b`)를 쓰며, 매니페스트 자체에 "폐쇄망에서
+> `ollama pull` 을 args 에 넣지 말 것(실패하거나 무한 대기)"이라는 주석이 있다. `k8s/overlays/
+> airgap/` 도 같은 이미지를 내부 레지스트리로 경로만 바꿔 재사용한다. 즉 **이 이미지를 그대로
+> 쓰면 아래 §2(Nexus 모델 수급) 절차 자체가 필요 없다** — 이미 반입돼 있다. 다른 모델로
+> 바꾸거나 vanilla Ollama 이미지를 쓸 때만 §2 를 따른다.
+
 ---
 
 ## 2. Nexus 로 모델 수급 — 두 가지 방식
@@ -120,7 +127,7 @@ Ollama 모델은 OCI 와 유사한 레지스트리 포맷으로 배포됩니다.
 | 변수 | 예시 | 설명 |
 |---|---|---|
 | `OLLAMA_URL` | `http://ollama:11434` | 사내 Ollama 서버 주소 |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | 적재한 모델 이름 (별칭 권장) |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | 적재한 모델 이름 (별칭 권장). **기본값은 `llama3`**(`config.py`) — 폐쇄망 배포 시 반드시 재설정할 것 |
 | `OLLAMA_TIMEOUT` | `120` | LLM 요청 타임아웃(초) |
 
 `OLLAMA_MODEL` 은 `"qwen2.5"` 처럼 base 만 적어도 `qwen2.5:7b` 와 매칭됩니다

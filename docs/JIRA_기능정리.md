@@ -1,8 +1,17 @@
 # DevOps Management — Jira 등록용 주요 기능 정리
 
-> 작성일: 2026-05-12
+> 작성일: 2026-05-12 (**시점 스냅샷** — v1.0 이전 기준. 이후 라우트/구조가 다수 변경됐다.
+> Epic/Story 뼈대 참고용으로만 쓰고, 최신 화면/API 는 [SCREENS.md](SCREENS.md) ·
+> [CODE_MAP.md](../CODE_MAP.md) 를 신뢰할 것 — 예: 아래 EPIC 2의 `/issues`·`/work-summary`
+> 는 현재 `WorkItem` 단일 모델(`/tasks-mgmt`)로 통합됐고, 점검 스케줄은 09/13/18 고정이
+> 아니라 check-matrix cron 디스패처로 대체됐다.)
 > 대상: Jira Epic/Story 등록을 위한 현행 기능 목록
-> 범위: 현재 운영 중인 frontend 페이지 + backend API 기준 (총 43개 라우트 / 36개 라우터 / 27개 모델)
+> 범위: 작성 시점 기준 (총 43개 라우트 / 36개 라우터 / 27개 모델). **v1.6.0 현재는
+> 라우터 62개 / 모델 49개 / 페이지 63개** — CLAUDE.md 참고.
+>
+> ℹ️ 이 문서는 **PEP 자체 기능을 Jira 티켓으로 등록**하기 위한 카탈로그이며, PEP 의
+> **Jira 연동(외부 시스템 통합) 기능**을 다루지 않는다. Jira 연동 기능은 문서 하단
+> "PEP ↔ Jira 연동 기능" 절 참고.
 
 ---
 
@@ -197,3 +206,21 @@ ConfigSnapshot · AppSetting · User
    - Label: `[NEW]` 표시된 항목은 `recently-shipped` 라벨 부여
 3. 부록 A 의 도메인 모델을 Jira Project Component 로 일괄 등록 시 버그/개선 티켓 분류가 쉬워집니다.
 4. EPIC 9 는 별도 "DevOps/Platform" 프로젝트로 분리 권장.
+
+---
+
+## PEP ↔ Jira 연동 기능 (v1.6.0 기준, 실제 통합)
+
+위 EPIC 목록과는 별개로, PEP 는 **외부 Jira 시스템과 실제로 연동**한다. 코드 기준:
+
+| 기능 | 설명 | 엔드포인트 / 코드 |
+|---|---|---|
+| Excel 가져오기 | Jira 에서 내려받은 Excel(xlsx) 을 업로드해 `WorkItem` 으로 일괄 등록 | `POST /jira/import/excel`, `frontend/src/pages/JiraExcelImportPage.tsx` (`/jira-import`) |
+| 붙여넣기 가져오기 | 표를 복사-붙여넣기로도 동일하게 가져오기 | `POST /jira/import/paste` |
+| 가져오기 결과 저장 | 미리보기 후 확정 저장 | `POST /jira/import/excel/save` |
+| 사용자별 Jira 자격증명 | 개인 API 토큰 등록/조회 (암호화 저장) | `routers/jira.py` `/config`, `/credential`, `models/user_jira_credential.py` |
+| **양방향 반영(push)** — v1.5.1 추가 | PEP 에서 편집한 업무를 연결된 Jira 이슈에 되쓰기: 칸반 상태 transition + 코멘트 + **제목(summary)·설명(description)·우선순위(priority)** 를 `PUT /rest/api/2/issue/{key}` 로 반영 | `POST /jira/push/{item_id}`, `services/jira_service.py` `update_issue()`, UI `components/work-items/JiraPushDialog.tsx` |
+| 동기화 메타데이터 | 연결 상태·최근 동기화 시각을 업무에 저장 | `WorkItem` 컬럼: `jira_issue_id`, `jira_issue_key`, `jira_url`, `jira_status`, `jira_synced_at`, `jira_updated_at`, `jira_watchers` |
+
+상세 흐름·필드 매핑은 `backend/app/services/jira_service.py` 와 `backend/app/routers/jira.py` 를
+직접 참고 (본 문서는 아직 이 기능의 전용 설계 절을 갖추지 않음 — 필요 시 별도 절로 확장).

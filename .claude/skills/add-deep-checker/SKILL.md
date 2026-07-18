@@ -23,6 +23,8 @@ registry 에 등록만 하면 ① cron(`run_deep_check_all`) ② 운영 점검 �
    - import 추가 + `REGISTRY` 에 `(Checker, DeepCheckTypeSpec(...))` 항목.
    - `DeepCheckTypeSpec` 에 `category`(os|k8s|storage|network|app), `default_enabled`(위험/무거운 건 False),
      `threshold_fields`/`param_fields`(UI 동적 폼), `default_thresholds`/`default_params`.
+   - `STEP_PLANS` 에도 `(step_id, label)` 튜플 목록을 추가하면 별도 계측(`_step`) 없이도
+     운영 점검 콘솔이 실행 메커니즘을 실시간 애니메이션으로 그린다.
 3. **시드** — `_seed_default_deep_check_definitions()` (main.py) 가 registry 를 돌며 글로벌 정의를
    자동 생성한다. `enabled=spec.default_enabled` 를 따른다. 별도 작업 불필요.
 4. **이력 테이블이 필요하면** (예: 변경 이력) `backend/app/models/` 에 모델 추가 →
