@@ -16,7 +16,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [PROJECT_FLOW_GUIDE.md](PROJECT_FLOW_GUIDE.md) — 요청/작업 흐름
 - [SERVICE_TOPOLOGY_GUIDE.md](SERVICE_TOPOLOGY_GUIDE.md) — 서비스 토폴로지(서비스 디스커버리) 사용 가이드
 - [JIRA_기능정리.md](JIRA_기능정리.md) — Jira 연동 기능 정리(Excel 가져오기, 양방향 반영)
-- [PROJECT_PLAN.md](PROJECT_PLAN.md) — 프로젝트 계획
+- [PROJECT_PLAN.md](PROJECT_PLAN.md) — 최초 기획서(보관용, 현재 상태 아님 — README/CLAUDE.md 신뢰)
 
 ## 화면 / 설계 레퍼런스
 - [SCREENS.md](SCREENS.md) — **화면 단위 명세서**(전 라우트의 UX/UI/Frontend/Backend/핵심 기능; 화면별 개선 요청 기록용)

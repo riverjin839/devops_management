@@ -678,7 +678,8 @@ AI가 매번 그 파일을 읽고 시작하기 때문에 맥락을 유지할 수
 - Docker 베이스: python:3.11-alpine (backend), node:20-alpine (frontend)
 - Ollama 모델은 사전 로드 필요 (외부 다운로드 불가)
 
-## 현재 게시판 목록과 저장 위치
+## 현재 게시판 목록과 저장 위치 (예시 — 작성 시점 스냅샷, 이후 Task/Issue 는
+##                                  WorkItem 단일 모델로 통합되어 PostgreSQL 로 이관됨)
 - Task Board      → localStorage (브라우저)
 - Issue Board     → localStorage (브라우저)
 - Ops Notes       → PostgreSQL (백엔드 API)

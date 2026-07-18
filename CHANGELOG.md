@@ -31,6 +31,34 @@
 
 ## [1.6.1] - 2026-07-17
 
+### Changed
+- **3차 문서 감사: infra README·스킬·로드맵 문서**: `k8s/README.md` 의 실제 오류 정정 —
+  kind/airgap 오버레이 네임스페이스 오기재(`k8s-monitor-dev/prod` → 실제 `k8s-monitor`),
+  airgap 환경 표(레플리카 1·HPA 전체 삭제·`DEBUG=true`·TLS 없음) 정정, observability
+  네임스페이스명(`network-observability`), superpod 네임스페이스(`k8s-monitor-agent`+
+  `devops`)·배포 절차 정정, `base/secret.yaml`/`configmap.yaml` 이 kustomization 미참조
+  고아 파일임을 명시. `.claude/skills/` 4개 스킬 정정: `add-deep-checker`(`STEP_PLANS`
+  보강), `backend-feature`(Celery 비동기 브리지 실제 패턴으로 정정), `frontend-page`
+  (`Sidebar.tsx` → 실제 `navConfig.ts`), `editor-docs`(폐기된 `whiteBg` → 실제 `defaultBg`
+  컬러 프리셋 방식, `linkSearch`/`extraTemplates`/콜아웃·토글 블록 보강). `docs/
+  AIRGAP_LLM_NEXUS.md`(사전 적재 이미지라 Nexus 수급 절차가 불필요한 경우 명시, `OLLAMA_MODEL`
+  기본값 `llama3` 주의), `docs/openlens-architecture-roadmap.md`(P5 YAML 편집이 "보류"가
+  아니라 이미 배포됐고 dry-run 등 안전장치만 미흡함을 정정, 가상화/edit 게이팅 완료 표시),
+  `docs/PROJECT_PLAN.md`·`docs/README.md` 색인(최초 기획서 보관용 배너 추가),
+  `docs/collab-tooling-borrow-report.md`(Top 7 중 이미 구현된 4.5개 항목을 완료로 갱신).
+- **docs/ 가이드 본문 2차 현행화**: 1차(README/CLAUDE.md/CODE_MAP/색인/SCREENS)에 이어 실제
+  운영 가이드 본문을 코드와 대조해 정정. `ADMIN_MANUAL.md`(제품명 PEP 전환, Deployment/라벨
+  셀렉터 실명 오류 수정, 클러스터 등록 위치를 Settings 로 정정, 09/13/18 고정 스케줄 →
+  check-matrix cron 디스패처로 재작성, 내장 백업/복구·사용자 관리/RBAC·감사 로그·VOC·배치잡
+  등 누락 관리 기능 보강), `DEPLOY_GUIDE.md`(compose kind 네트워크 선행 생성 안내, airgap
+  save 산출물 tar.gz 개수 정정, dev→kind overlay 정정, GitHub Actions 가 기본 CI/CD 임을
+  명시), `BACKUP_RESTORE_GUIDE.md`(LOG_TABLES·SENSITIVE_COLUMNS 최신 컬럼 반영),
+  `DEEP_CHECKER_GUIDE.md`/`K8S_OPS_CHECKLIST.md`(체커 카탈로그에 누락됐던 `isilon_nfs`·
+  `node_health` 반영, in_cluster 배포 산출물 `k8s/superpod/` 명시), `SERVICE_TOPOLOGY_GUIDE.md`
+  (`/cluster-graph` 엔드포인트 추가), `KNOWLEDGE_BASE_DESIGN.md`(미채택 설계안임을 명시하는
+  구현 결과 노트 추가), `JIRA_기능정리.md`(시점 스냅샷 고지 + 실제 PEP↔Jira 연동 기능인
+  Excel/붙여넣기 가져오기·v1.5.1 양방향 push 절 신설 — 기존 문서에 전혀 없던 내용).
+
 ### Added
 - **Deep Check 참조 가이드 문서**: deep-check 서브시스템의 목적·아키텍처·실행 경로·API·
   체커 카탈로그·확장 방법을 정리한 `docs/DEEP_CHECKER_GUIDE.md` 추가(AI/개발자 참조용).

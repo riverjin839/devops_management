@@ -1,5 +1,12 @@
 ## DEVOPS MANAGEMENT - DevOps Daily 운영 모니터링 시스템
 
+> ⚠️ **이 문서는 프로젝트 착수 시점(2025년 초, 구명 `k8s_daily_monitor`)의 최초 기획서이며
+> 보관용입니다. 이후 "PEP(Platform Engineering Portal)"로 리브랜딩(2026-05)됐고, 아래
+> 프로젝트 구조·개발 로드맵(Phase 1~4)은 현재 상태를 반영하지 않습니다(예: Alembic 마이그레이션
+> 서술은 실제로 채택되지 않음 — 현재는 `_run_migrations()` 경량 방식). 현재 아키텍처/기능은
+> [README.md](../README.md) · [CLAUDE.md](../CLAUDE.md) · [CODE_MAP.md](../CODE_MAP.md) 를
+> 신뢰하세요.
+
 ---
 
 ## 프로젝트 개요

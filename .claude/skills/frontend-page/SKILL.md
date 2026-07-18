@@ -32,7 +32,8 @@ min-h-screen bg-background p-5
 
 ## 라우팅·메뉴
 - `src/App.tsx` 에 `<Route path="/x(/:id)" element={<XPage />} />`. 레거시 경로는 redirect 로 호환 유지.
-- `src/components/layout/Sidebar.tsx`: `NAV_MAP` 에 라벨/아이콘, `GROUPS` 의 적절한 그룹 `paths` 에 경로 추가.
+- `src/components/layout/navConfig.ts`: `NAV_MAP` 에 라벨/아이콘, `GROUPS` 의 적절한 그룹
+  `paths` 에 경로 추가 (`Sidebar.tsx` 는 이 값을 import 해서 렌더만 함 — 직접 수정 금지).
   메뉴 라벨은 `uiSettings.navLabels` 로 사용자 커스터마이즈 가능.
 
 ## 검증 (커밋 전 필수)
