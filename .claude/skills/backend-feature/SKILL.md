@@ -31,7 +31,10 @@ description: FastAPI 백엔드에 새 기능(모델/라우터/서비스/스키�
   - per-table fault-tolerant 패턴 유지(한 테이블 실패가 전체 백업을 깨지 않게).
 
 ## 비동기/Celery
-- async 서비스 메서드를 Celery(sync) 에서 부를 땐 `asyncio.run(...)` 브리지(`celery_app.py` 패턴 참고).
+- async 서비스 메서드를 Celery(sync) 에서 부를 땐
+  `loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop); loop.run_until_complete(...)`
+  브리지 (`celery_app.py` 의 기존 task 패턴 참고, 예: `run_batch_job`). `asyncio.run(...)` 은
+  Celery 밖 동기 서비스 코드(예: `check_matrix_service.py`)에서 쓰는 패턴이니 혼동하지 말 것.
 - 새 task 추가 시 **celery-worker 재배포** 필요(워커가 task 를 알아야 `.delay()` 가 실행됨).
 
 ## 자격증명

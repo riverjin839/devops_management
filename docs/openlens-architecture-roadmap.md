@@ -10,6 +10,13 @@
 - 기존 코드를 엎지 않고 **역할 분리(Python 두뇌 / Go 신경망)** 로 증설.
 - 모든 단계는 독립 배포·검증 가능한 작은 PR.
 
+> ⚠️ **가드레일 이탈 기록 (v1.6.0 확인)**: 위 원칙과 달리, `routers/k8s_resources.py`
+> 에 scale/restart/delete/**YAML apply**(`PUT .../resources/{kind}/{ns}/{name}/yaml`)/
+> cordon/drain 이 **이미 구현·배포**되어 있다. 권한은 `require_admin` 이 아니라
+> `require_operator`(admin+operator 모두 허용)이고, **dry-run 로직은 없다**. audit 로그
+> 기록만 지켜지고 있다. 안전장치 보강(dry-run, admin 전용 재검토)이 후속 과제다 — 아래
+> P5 섹션도 "보류"가 아니라 "완료(안전장치 미흡)" 로 다시 읽을 것.
+
 ## 현재 vs OpenLens (조사 결과 근거)
 | 영역 | 현재 (파일) | 격차 |
 |---|---|---|
@@ -17,8 +24,8 @@
 | 로그 | `analyze.py` `read_namespaced_pod_log`(1회성, tail 200, 장애분석에 종속) | **스트리밍/follow·멀티컨테이너 없음** |
 | 실시간 | SSE 제너레이터(`cilium_trace_service` monitor/hubble) — **K8s Watch 아님** | **Watch→브로드캐스트 없음** |
 | 멀티클러스터 | TanStack Query 30s 폴링(`useCluster.ts`), Zustand(`clusterStore`) | 전환 시 폴링 지연·깜빡임 |
-| 대용량 렌더 | 가상화 라이브러리 없음(package.json) | 수천 행 시 브라우저 프리징 |
-| 권한 | `auth/deps.py` require_admin/operator/viewer | edit 게이팅 미정의 |
+| 대용량 렌더 | ✅ `react-virtuoso` 도입 완료(`K8sManagePage.tsx` 등에서 실사용) | (해소됨 — 아래 P3 참고) |
+| 권한 | `auth/deps.py` require_admin/operator/viewer | edit 은 `require_operator` 로 이미 게이팅됨(단 dry-run 없음) |
 | Redis | Celery broker 전용(pub/sub·캐시 미사용) | 이벤트 버스로 확장 여지 |
 
 ## 재사용 자산 (조사 매핑)
@@ -32,19 +39,24 @@
 
 ## 단계별 로드맵
 
-### P0 — 로그 스트리밍 + 읽기전용 리소스 뷰어 MVP (Python only)
-- **로그 스트리밍**: `GET /k8s/{cluster}/ns/{ns}/pods/{pod}/logs/stream?container=&follow=1&tail=` →
-  `read_namespaced_pod_log(follow=True, _preload_content=False)` 를 SSE 로 흘림(cilium SSE 패턴 재사용).
-  멀티컨테이너 선택, tail/since, 다운로드. 프론트는 `LogViewer` 재사용 + 자동 스크롤.
-- **읽기전용 리소스 뷰어(좁은 범위 먼저)**: pods/services/deployments/ingress/pvc 등 핵심 셋만
-  generic list/get 엔드포인트로. **react-virtuoso 가상화 필수**(P3 선행 적용).
-- 권한: viewer 이상 읽기. edit 없음.
+### P0 — 로그 스트리밍 + 읽기전용 리소스 뷰어 MVP (Python only) — ✅ 완료 (경로는 계획과 다름)
+- **로그 스트리밍**: 계획한 경로(`/k8s/{cluster}/ns/{ns}/pods/{pod}/logs/stream`)가 아니라
+  실제로는 **`routers/analyze.py`** 의 `GET /analyze/clusters/{id}/namespaces/{ns}/pods/{pod}/
+  logs/stream`(SSE, `follow=True`)로 구현됨. 프론트는 `K8sLogsPage.tsx`. 통합 시 경로를
+  하나로 정리할지 결정 필요(현재는 `/analyze` 네임스페이스에 남아 있음).
+- **읽기전용 리소스 뷰어**: `routers/k8s_resources.py`(파일 헤더에 "OpenLens P1 MVP" 로 자칭)로
+  이미 상당 범위 구현. `react-virtuoso` 가상화도 적용됨(P3 조기 도입).
+- 권한: viewer 이상 읽기 — 정확. (단 이 라우터에 이미 쓰기 계열도 추가돼 있음, 가드레일 절 참고)
 
-### P1 — 동적 리소스 탐색기 (Discovery API)
-- 백엔드: K8s **Discovery API**(`/apis`, `/api/v1`)로 클러스터가 지원하는 모든 API 그룹·리소스(CRD 포함)
-  메타데이터 조회(`kubeconfig.py` 확장 + `CustomObjectsApi`/dynamic client). 캐시(클러스터별, TTL).
-- 프론트: `Sidebar.tsx` 가 메타데이터로 **K8s 리소스 트리 동적 렌더**(목적별 화면과 공존).
-- 리소스 상세: **Monaco read-only**로 YAML 보기(슬라이드오버). 편집 비활성(P5까지).
+### P1 — 동적 리소스 탐색기 (Discovery API) — 🟡 부분 구현
+- 백엔드: `k8s_resources.py` 가 타입별 list/get + 일부 CRD(`CustomObjectsApi`) 를 지원하나,
+  **전체 Discovery API(`/apis`, `/api/v1`) 기반 완전 동적 조회는 여전히 미구현**
+  (코드 주석: "전체 Discovery/CRD 동적 조회는 후속(P1 확장)" — 이 부분만 계획대로 남아 있음).
+- 프론트: 리소스 트리는 `navConfig.ts` 기반 정적 메뉴 + `K8sManagePage.tsx` 탭 — Discovery
+  메타데이터로 동적 렌더하는 방식은 아직 아님.
+- 리소스 상세: **Monaco 는 도입되지 않음**(`package.json` 에 `monaco-editor` 없음). 현재는
+  `LogViewer`(plain text)로 YAML 을 보여준다. **YAML 편집 자체는 이미 배포됨**(P5 참고 —
+  "편집 비활성(P5까지)" 전제가 깨졌다).
 
 ### P2 — 실시간 동기화 (N:1 Shared Informer → 브로드캐스트)
 - **핵심 원칙**: 클라이언트마다 Watch 금지. 백엔드가 **리소스종류별 단일 Watch** 를 맺고
@@ -68,9 +80,14 @@
 - 재사용: `batch_job_service`(실행·결과), deep checkers/ops-check(pre/post 검증), `BatchJobRun`(이력).
 - 권한: operator 이상. 각 단계 결과·승인·롤백 트리거를 DB 에 기록(감사).
 
-### P5 — (보류) YAML 편집/적용
-- **admin 전용**. `kubectl apply`/replace 또는 SDK patch + **dry-run(server-side)** 선행 + diff 확인 +
-  감사로그 + read-only SA 와 분리된 edit SA. 충분한 안전장치 전까지 비활성 유지.
+### P5 — YAML 편집/적용 — ⚠️ 이미 배포됨, 안전장치는 미흡
+- 원래 계획은 "보류, admin 전용 + dry-run + 감사 전까지 비활성"이었으나, `k8s_resources.py`
+  에 scale/restart/delete/YAML apply/cordon/drain 이 **이미 배포되어 사용 중**이다.
+  - 구현된 것: `require_operator` 게이팅(admin+operator), 쓰기 작업마다 `audit_logger` 기록.
+  - **아직 없는 것**: server-side dry-run 선행 + diff 확인, admin 전용으로의 재제한 검토,
+    read-only SA 와 분리된 별도 edit SA.
+- 후속 과제: 위 미흡 항목을 채워 원래 가드레일 수준으로 끌어올릴 것 — 이미 배포된 기능을
+  롤백하는 것이 아니라 **안전장치를 사후 보강**하는 방향.
 
 ---
 

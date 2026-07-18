@@ -6,15 +6,19 @@
 > UX·기능 개념만 현재 스택(TipTap + React + Tailwind)에 맞게 구현한다.
 
 ## Top 7 (ROI 순)
+
+> ✅ v1.6.0 기준 **1, 4, 5, 7과 6의 내보내기 부분은 이미 구현 완료**됐다. 아래 표의 "현재"
+> 컬럼을 갱신했고, 잔여 과제는 하단 "잔여 과제(갱신)" 절 참고.
+
 | # | 차용 기능 | 출처 | 현재 | 적용 위치 | 효과/난이도 |
 |---|---|---|---|---|---|
-| 1 | 에디터 슬래시 메뉴(`/`) + 콜아웃/토글/구분선 | 둘 다 | 없음 | RichTextEditor | ⭐⭐⭐ / 중 |
-| 2 | 템플릿(업무·문서 시작 양식) | 둘 다 | **전무** | 업무폼·문서폼 | ⭐⭐⭐ / 하~중 |
-| 3 | 저장된 뷰(필터+정렬+컬럼 프리셋) | AppFlowy grid | 부분(localStorage) | WorkItemBoard | ⭐⭐⭐ / 중 |
-| 4 | 댓글 스레드 + 변경 이력 | 둘 다 | 없음 | WorkItemDetail·OpsNote | ⭐⭐⭐ / 중 |
-| 5 | 백링크 + 에디터 `@`/`[[ ]]` 내부 링크 | AFFiNE | relatedWorkItemId만 | 전 문서/업무 | ⭐⭐ / 중 |
-| 6 | 마인드맵 내보내기(PNG/SVG)·서브트리 접기·AI 생성 | AFFiNE | 레이아웃 강함 | MindMapPage | ⭐⭐ / 하~중 |
-| 7 | 커스텀 필드/속성 타입(DB화) | 둘 다 | 스키마 고정 | WorkItem | ⭐⭐ / 상 |
+| 1 | 에디터 슬래시 메뉴(`/`) + 콜아웃/토글/구분선 | 둘 다 | ✅ 완료 — `SLASH_ITEMS`, `Callout`/`ToggleBlock`(`blocks.ts`), `setHorizontalRule` | RichTextEditor | — |
+| 2 | 템플릿(업무·문서 시작 양식) | 둘 다 | 부분 — `docTemplates.ts`(문서용)는 있으나 업무폼 시작 템플릿은 없음 | 업무폼·문서폼 | ⭐⭐⭐ / 하~중 |
+| 3 | 저장된 뷰(필터+정렬+컬럼 프리셋) | AppFlowy grid | 부분(localStorage, `SavedViews.tsx`) — 서버 저장/공유는 없음 | WorkItemBoard | ⭐⭐⭐ / 중 |
+| 4 | 댓글 스레드 + 변경 이력 | 둘 다 | ✅ 완료 — `work_item_comment` 모델 + `/work-items/{id}/comments`, 변경 이력은 `audit_logs` 재활용 | WorkItemDetail·OpsNote | — |
+| 5 | 백링크 + 에디터 `@`/`[[ ]]` 내부 링크 | AFFiNE | ✅ 완료 — RichTextEditor `[[ ]]` 백링크 검색/삽입(`linkSearch` prop) | 전 문서/업무 | — |
+| 6 | 마인드맵 내보내기(PNG/SVG)·서브트리 접기·AI 생성 | AFFiNE | 내보내기 ✅ 완료(`exportMindMap('svg'\|'png')`) — 서브트리 접기·AI 생성은 미구현 | MindMapPage | ⭐⭐ / 하~중 |
+| 7 | 커스텀 필드/속성 타입(DB화) | 둘 다 | ✅ 완료 — `WorkItemCustomField` 모델 + `routers/work_item_custom_fields.py` (클러스터용 `cluster_custom_fields`도 별도 존재) | WorkItem | — |
 
 ## 영역별 메모
 - **업무/할일**: 같은 데이터·여러 뷰 + 저장된 뷰, 그리드 인라인 편집, 임의 필드 그룹핑 보드, 상세 상단 속성 패널, 반복 작업/용량.
@@ -31,12 +35,18 @@
 5. **명령어 관리(표)** — 명령어 | 설명 | 비고 (엑셀처럼 표 관리)
 6. **구조도 문서** — 도식(draw.io 임베드) + 설명 *(diagram 임베드 도입 후)*
 
+## 잔여 과제(갱신, v1.6.0 기준)
+Top 7 중 미구현으로 남은 것만 재정리: **#2 업무폼 시작 템플릿**, **#3 저장된 뷰 서버 저장/공유**,
+**#6 마인드맵 서브트리 접기·AI 생성**. 그 외 `.md import`, draw.io/diagrams.net 임베드,
+엑셀형 표 관리(데이터그리드 블록)도 여전히 미구현.
+
 ## 문서 기능 고도화(코드 적용 방향)
-- **이미지 용량 관리**: 현재 붙여넣기 이미지가 base64 로 본문에 박혀 DB 비대화 위험.
-  → 붙여넣기 시 **캔버스 다운스케일+재인코딩(webp/jpeg)** 으로 경량화. (서버 업로드는 후속 옵션)
-- **.md import**: 마크다운 파일 → 에디터 본문 변환(경량 파서).
-- **draw.io/diagrams.net 임베드**: PNG 가 아니라 **.drawio XML / SVG(벡터)** 로 저장해 경량 유지.
-- **엑셀형 표 관리**: TipTap 표 강화(행/열 추가·정렬, CSV 붙여넣기) 또는 데이터그리드 블록.
+- **이미지 용량 관리**: ✅ **적용 완료** — `src/lib/imageCompress.ts` 의 `compressImageFile`
+  (캔버스 다운스케일 maxDim=1600 + webp/jpeg 재인코딩, 200KB 미만 스킵)이 RichTextEditor
+  붙여넣기 경로에서 이미 동작 중. (서버 업로드+URL 참조는 여전히 후속 옵션)
+- **.md import**: 마크다운 파일 → 에디터 본문 변환(경량 파서). *(미구현)*
+- **draw.io/diagrams.net 임베드**: PNG 가 아니라 **.drawio XML / SVG(벡터)** 로 저장해 경량 유지. *(미구현)*
+- **엑셀형 표 관리**: TipTap 표 강화(행/열 추가·정렬, CSV 붙여넣기) 또는 데이터그리드 블록. *(미구현)*
 
 ## 비고
 - "안 쓰는 템플릿은 추가하지 않음" 원칙 — 위 6종만 우선.

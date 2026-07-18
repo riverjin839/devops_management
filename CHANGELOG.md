@@ -11,6 +11,20 @@
 1.6.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Changed
+- **3차 문서 감사: infra README·스킬·로드맵 문서**: `k8s/README.md` 의 실제 오류 정정 —
+  kind/airgap 오버레이 네임스페이스 오기재(`k8s-monitor-dev/prod` → 실제 `k8s-monitor`),
+  airgap 환경 표(레플리카 1·HPA 전체 삭제·`DEBUG=true`·TLS 없음) 정정, observability
+  네임스페이스명(`network-observability`), superpod 네임스페이스(`k8s-monitor-agent`+
+  `devops`)·배포 절차 정정, `base/secret.yaml`/`configmap.yaml` 이 kustomization 미참조
+  고아 파일임을 명시. `.claude/skills/` 4개 스킬 정정: `add-deep-checker`(`STEP_PLANS`
+  보강), `backend-feature`(Celery 비동기 브리지 실제 패턴으로 정정), `frontend-page`
+  (`Sidebar.tsx` → 실제 `navConfig.ts`), `editor-docs`(폐기된 `whiteBg` → 실제 `defaultBg`
+  컬러 프리셋 방식, `linkSearch`/`extraTemplates`/콜아웃·토글 블록 보강). `docs/
+  AIRGAP_LLM_NEXUS.md`(사전 적재 이미지라 Nexus 수급 절차가 불필요한 경우 명시, `OLLAMA_MODEL`
+  기본값 `llama3` 주의), `docs/openlens-architecture-roadmap.md`(P5 YAML 편집이 "보류"가
+  아니라 이미 배포됐고 dry-run 등 안전장치만 미흡함을 정정, 가상화/edit 게이팅 완료 표시),
+  `docs/PROJECT_PLAN.md`·`docs/README.md` 색인(최초 기획서 보관용 배너 추가),
+  `docs/collab-tooling-borrow-report.md`(Top 7 중 이미 구현된 4.5개 항목을 완료로 갱신).
 - **docs/ 가이드 본문 2차 현행화**: 1차(README/CLAUDE.md/CODE_MAP/색인/SCREENS)에 이어 실제
   운영 가이드 본문을 코드와 대조해 정정. `ADMIN_MANUAL.md`(제품명 PEP 전환, Deployment/라벨
   셀렉터 실명 오류 수정, 클러스터 등록 위치를 Settings 로 정정, 09/13/18 고정 스케줄 →

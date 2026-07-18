@@ -11,8 +11,8 @@ k8s/
 ├── base/                              # 환경 공통 기본 매니페스트
 │   ├── kustomization.yaml             # Kustomize 루트 설정
 │   ├── namespace.yaml                 # 네임스페이스 정의
-│   ├── configmap.yaml                 # 앱 공통 환경변수 ConfigMap
-│   ├── secret.yaml                    # DB/Redis 자격증명 Secret (개발용 기본값)
+│   ├── configmap.yaml                 # (미사용) 레거시 참고용 — 실제 값은 kustomization.yaml 의 configMapGenerator 가 생성
+│   ├── secret.yaml                    # (미사용) 레거시 참고용 — 실제 값은 kustomization.yaml 의 secretGenerator 가 생성
 │   ├── ingress.yaml                   # NGINX Ingress 라우팅 규칙
 │   ├── hpa.yaml                       # HorizontalPodAutoscaler (backend/frontend/celery)
 │   ├── ollama.yaml                    # Ollama LLM 서버 (선택적 배포)
@@ -91,11 +91,14 @@ k8s/
 #### `namespace.yaml`
 네임스페이스(`k8s-monitor`)를 정의합니다. 오버레이에서 `namePrefix`로 `dev-` / `prod-` 를 붙여 환경을 분리합니다.
 
-#### `configmap.yaml`
-백엔드·셀러리가 공통으로 읽는 환경변수(`DATABASE_URL`, `REDIS_URL`, `OLLAMA_URL` 등)를 ConfigMap으로 관리합니다.
-
-#### `secret.yaml`
-DB 비밀번호, JWT `SECRET_KEY` 등 민감 값을 담는 기본 Secret입니다. 프로덕션에서는 External Secrets Operator, Sealed Secrets, Vault 중 하나로 교체합니다.
+#### `configmap.yaml` / `secret.yaml` — ⚠️ 미사용 (고아 파일)
+두 파일 모두 `kustomization.yaml` 의 `resources:` 목록에 **포함되어 있지 않아 실제로는
+적용되지 않는다.** 실제 환경변수/민감값은 같은 `kustomization.yaml` 하단의
+**`configMapGenerator`**(`k8s-monitor-config`)와 **`secretGenerator`**(`k8s-monitor-secret`)
+가 리터럴로 생성한다 (`DATABASE_URL`, `REDIS_URL`, `OLLAMA_URL`, DB 비밀번호, JWT
+`SECRET_KEY` 등). 값을 바꾸려면 이 두 generator 를 수정할 것 — `base/configmap.yaml`·
+`base/secret.yaml` 을 고쳐도 반영되지 않는다. 프로덕션에서는 generator 리터럴을 External
+Secrets Operator, Sealed Secrets, Vault 중 하나로 교체 검토.
 
 #### `ingress.yaml`
 NGINX Ingress Controller 기반 라우팅 규칙입니다. `/api/*` 는 backend Service 로, 나머지는 frontend Service 로 프록시합니다.
@@ -177,15 +180,17 @@ Prometheus + Grafana 기반 모니터링 스택입니다. 자체 `kustomization.
 
 ### base/observability/ — 네트워크 텔레메트리 수집
 
-네트워크 장비(라우터·스위치)로부터 gNMI / BMP / SNMP 데이터를 수집하는 별도 네임스페이스(`observability`) 스택입니다.
+네트워크 장비(라우터·스위치)로부터 gNMI / BMP / SNMP 데이터를 수집하는 별도 네임스페이스(`network-observability`) 스택입니다.
 
 | 파일 | 역할 |
 |---|---|
 | `gnmic-telemetry.yaml` | gNMIc Collector. gNMI Streaming Telemetry 로 네트워크 장비 인터페이스·BGP 상태 수집 |
 | `openbmp-collector.yaml` | OpenBMP Collector. BGP Monitoring Protocol 메시지를 수신·파싱하여 Kafka 또는 PostgreSQL 에 저장 |
 | `telegraf-snmp.yaml` | Telegraf SNMP input 플러그인. SNMP v2c/v3 폴링으로 네트워크 장비 메트릭 수집 후 Prometheus remote_write |
-| `namespace.yaml` | `observability` 전용 네임스페이스 |
+| `namespace.yaml` | `network-observability` 전용 네임스페이스 |
 | `kustomization.yaml` | 하위 리소스 묶음 |
+
+> 상세는 [base/observability/README.md](base/observability/README.md) 참고 (포트·Prometheus 연동 등).
 
 ---
 
@@ -216,24 +221,27 @@ K8s 클러스터에서 발생하는 Pod CrashLoop, 배포 실패 등의 이벤�
 
 | 오버레이 | 네임스페이스 | 목적 및 주요 차이점 |
 |---|---|---|
-| `dev/` | `k8s-monitor-dev` | 개발 환경. 레플리카 1개, DEBUG 활성화, 체크 주기 1분, 인그레스 호스트 `k8s-monitor-dev.local` |
-| `prod/` | `k8s-monitor-prod` | 프로덕션. backend/frontend/celery 각 3개 레플리카, TLS(cert-manager), HPA 활성화, 체크 주기 5분 |
-| `kind/` | `k8s-monitor-dev` | 로컬 kind 클러스터. NodePort(30080 frontend / 30800 backend) 노출. `scripts/kind-setup.sh` 와 연동 |
-| `airgap/` | `k8s-monitor-prod` | 폐쇄망 프로덕션. 모든 이미지를 내부 레지스트리 미러로 교체. 외부 인터넷 불필요 |
+| `dev/` | `k8s-monitor-dev` (namePrefix `dev-`) | 개발 환경. 레플리카 1개, DEBUG 활성화, 체크 주기 1분, 인그레스 호스트 `k8s-monitor-dev.local` |
+| `prod/` | `k8s-monitor-prod` (namePrefix `prod-`) | 프로덕션. backend/frontend/celery 각 3개 레플리카, TLS(cert-manager), HPA 활성화, 체크 주기 5분 |
+| `kind/` | `k8s-monitor` | 로컬 kind 클러스터. NodePort(30080 frontend / 30800 backend) 노출. `scripts/kind-setup.sh` 와 연동 |
+| `airgap/` | `k8s-monitor` | 폐쇄망. 모든 이미지를 내부 레지스트리 미러로 교체, 외부 인터넷 불필요. **레플리카 1개**(HPA 전체 삭제), `DEBUG=true`, Ingress 삭제(NodePort 노출, TLS 없음) |
 
 ---
 
 ### superpod/ — SuperPod 독립 배포
 
-PEP 메인 스택과 별도로 배포되는 SuperPod CronJob 모듈입니다. 독립적인 네임스페이스와 ServiceAccount 를 가지며, 스케줄 기반으로 클러스터 점검 작업을 수행합니다.
+PEP 메인 스택과 별도로 배포되는 SuperPod(in_cluster deep check) CronJob 모듈입니다.
+독립적인 네임스페이스와 ServiceAccount 를 가지며, 스케줄 기반으로 클러스터 점검 작업을
+수행합니다. **상세 배포 절차는 [superpod/README.md](superpod/README.md) 를 신뢰할 것**
+(이 표는 파일 역할 요약만).
 
 | 파일 | 역할 |
 |---|---|
-| `namespace.yaml` | `superpod` 전용 네임스페이스 (+ ResourceQuota) |
-| `serviceaccount.yaml` | SuperPod 전용 ServiceAccount + ClusterRole. 노드·Pod 읽기 권한 |
-| `cronjob.yaml` | SuperPod CronJob. 정기적으로 클러스터 상태 점검 및 리포트 생성 |
-| `secret.yaml.tmpl` | API 키·자격증명 Secret 템플릿 (실제 값은 배포 시 치환) |
-| `kustomization.yaml` | superpod 모듈 리소스 묶음 |
+| `namespace.yaml` | `k8s-monitor-agent`(SuperPod 본체) + `devops`(pod_to_pod 체커의 일회용 probe pod 용) 2개 네임스페이스 생성. ResourceQuota 없음 |
+| `serviceaccount.yaml` | SuperPod 전용 ServiceAccount + ClusterRole — 노드/Pod 읽기 외에도 services/endpoints/deployments/statefulsets/RBAC 조회, `pods/exec`·`pods/proxy`·`nodes/proxy` 실행, `pods` create/delete 등 광범위한 권한 포함 |
+| `cronjob.yaml` | SuperPod CronJob. 정기적으로 `python -m app.superpod.runner` 실행 (`SUPERPOD_MODE=in_cluster`) |
+| `secret.yaml.tmpl` | API 키·자격증명 Secret 템플릿. `cp secret.yaml.tmpl secret.yaml` 후 값 채우고 kustomization.yaml 에서 주석 해제 → `kubectl apply -k .` (envsubst 방식 아님) |
+| `kustomization.yaml` | superpod 모듈 리소스 묶음, namespace `k8s-monitor-agent` |
 
 ---
 
@@ -291,10 +299,13 @@ bash scripts/kind-setup.sh destroy # 클러스터 삭제
 ### SuperPod 독립 배포
 
 ```bash
-# secret 템플릿 치환 후 배포
-envsubst < k8s/superpod/secret.yaml.tmpl | kubectl apply -f -
+# secret 템플릿 복사·값 채우기 → kustomization.yaml 에서 secret.yaml 주석 해제 → 배포
+cp k8s/superpod/secret.yaml.tmpl k8s/superpod/secret.yaml
+# secret.yaml 값 채운 뒤:
 kubectl apply -k k8s/superpod/
 ```
+
+> 상세 절차는 [superpod/README.md](superpod/README.md) 참고 (`envsubst` 방식이 아니다).
 
 ---
 
@@ -302,13 +313,13 @@ kubectl apply -k k8s/superpod/
 
 | 항목 | dev | prod | kind | airgap |
 |---|---|---|---|---|
-| 네임스페이스 | `k8s-monitor-dev` | `k8s-monitor-prod` | `k8s-monitor-dev` | `k8s-monitor-prod` |
-| Backend 레플리카 | 1 | 3 | 1 | 3 |
-| HPA | 비활성 | 활성 | 비활성 | 활성 |
-| TLS | X | cert-manager | X | 내부 CA |
+| 네임스페이스 | `k8s-monitor-dev` | `k8s-monitor-prod` | `k8s-monitor` | `k8s-monitor` |
+| Backend 레플리카 | 1 | 3 | 1 | **1** |
+| HPA | 비활성 | 활성 | 비활성 | **비활성**(전체 삭제) |
+| TLS | X | cert-manager | X | **없음**(NodePort 평문) |
 | 이미지 레지스트리 | GHCR | GHCR | 로컬 빌드 | 내부 미러 |
-| 인그레스 호스트 | `k8s-monitor-dev.local` | `k8s-monitor.example.com` | NodePort | 내부 도메인 |
-| DEBUG 모드 | 활성 | 비활성 | 활성 | 비활성 |
+| 인그레스 호스트 | `k8s-monitor-dev.local` | `k8s-monitor.example.com` | NodePort | **Ingress 삭제, NodePort** |
+| DEBUG 모드 | 활성 | 비활성 | 활성 | **활성** |
 | 체크 주기 | 1분 | 5분 | 1분 | 5분 |
 
 ---
@@ -330,7 +341,8 @@ kubectl apply -k k8s/superpod/
 
 ## 시크릿 관리 (프로덕션)
 
-프로덕션 환경에서는 `base/secret.yaml` 의 평문 값을 반드시 교체하세요.
+프로덕션 환경에서는 `kustomization.yaml` 의 `secretGenerator`(`k8s-monitor-secret`) 리터럴
+평문 값을 반드시 교체하세요 (`base/secret.yaml` 파일 자체는 미사용 — 위 참고).
 
 ### External Secrets Operator
 
@@ -355,7 +367,8 @@ spec:
 ### Sealed Secrets
 
 ```bash
-kubeseal --format yaml < k8s/base/secret.yaml > sealed-secret.yaml
+# k8s-monitor-secret 리터럴을 kustomize build 로 렌더링한 뒤 실제 Secret 을 봉인
+kubectl kustomize k8s/base | kubeseal --format yaml > sealed-secret.yaml
 ```
 
 ### HashiCorp Vault
@@ -475,6 +488,6 @@ kubectl rollout undo deployment/prod-frontend -n k8s-monitor-prod
 kubectl delete -k k8s/overlays/dev
 kubectl delete -k k8s/overlays/prod
 kubectl delete -k k8s/superpod/
-# 또는 네임스페이스 전체 삭제
-kubectl delete namespace k8s-monitor-dev k8s-monitor-prod superpod
+# 또는 네임스페이스 전체 삭제 (kind/airgap 은 둘 다 k8s-monitor 공유 — 함께 삭제됨)
+kubectl delete namespace k8s-monitor-dev k8s-monitor-prod k8s-monitor k8s-monitor-agent devops
 ```
