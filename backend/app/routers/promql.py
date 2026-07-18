@@ -5,6 +5,7 @@ Provides a No-Code dashboard builder: users create metric cards via the UI
 with a PromQL query, and the backend executes them against Prometheus.
 """
 
+import time
 from uuid import UUID
 from typing import Optional
 
@@ -20,6 +21,8 @@ from app.schemas.metric_card import (
     MetricCardResponse,
     MetricCardListResponse,
     MetricQueryResult,
+    MetricSparklineResult,
+    MetricSparklinePoint,
 )
 from app.services.prometheus_service import prometheus_service
 from app.services.grafana_service import grafana_service
@@ -85,27 +88,11 @@ def delete_card(card_id: UUID, db: Session = Depends(get_db)):
 
 
 # ── Query execution ───────────────────────────────────────────────────
-
-@router.get("/query/{card_id}", response_model=MetricQueryResult)
-async def query_card(card_id: UUID, db: Session = Depends(get_db)):
-    """Execute the PromQL query for a specific card and return the result."""
-    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="Metric card not found")
-
-    result = await prometheus_service.query(card.promql)
-    return MetricQueryResult(card_id=card.id, **result)
-
-
-@router.post("/query/test")
-async def test_query(body: dict):
-    """Test an arbitrary PromQL query without saving it."""
-    promql = body.get("promql", "")
-    if not promql:
-        raise HTTPException(status_code=400, detail="promql is required")
-    result = await prometheus_service.query(promql)
-    return result
-
+# 주의: /query/all 은 반드시 /query/{card_id} 보다 먼저 선언해야 한다.
+# card_id: UUID 타입 검증이 "all" 문자열에서 먼저 실패해 422 를 내버리면
+# 아래 /query/all 라우트로 폴백되지 않는다(Starlette 는 컨버터 실패 시
+# 다음 라우트로 넘어가지 않음) — 실제로 이 순서가 뒤집혀 있어 전체
+# Prometheus Insights 섹션이 항상 "Loading..." 에 멈춰있던 버그였다.
 
 @router.get("/query/all", response_model=list[MetricQueryResult])
 async def query_all_cards(db: Session = Depends(get_db)):
@@ -121,6 +108,52 @@ async def query_all_cards(db: Session = Depends(get_db)):
         result = await prometheus_service.query(card.promql)
         results.append(MetricQueryResult(card_id=card.id, **result))
     return results
+
+
+@router.get("/query/{card_id}", response_model=MetricQueryResult)
+async def query_card(card_id: UUID, db: Session = Depends(get_db)):
+    """Execute the PromQL query for a specific card and return the result."""
+    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Metric card not found")
+
+    result = await prometheus_service.query(card.promql)
+    return MetricQueryResult(card_id=card.id, **result)
+
+
+@router.get("/query/{card_id}/sparkline", response_model=MetricSparklineResult)
+async def query_card_sparkline(card_id: UUID, db: Session = Depends(get_db)):
+    """카드의 PromQL 을 최근 1시간 range query 로 실행 — KPI 카드 하단 Sparkline 용
+    (DESIGN_SYSTEM §5②). Prometheus 미연결/쿼리 실패는 fail-safe 로 offline/error 반환,
+    500 을 내지 않는다(PrometheusService 규약)."""
+    card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Metric card not found")
+
+    now = time.time()
+    result = await prometheus_service.query_range(card.promql, now - 3600, now, "5m")
+    if result["status"] != "ok":
+        return MetricSparklineResult(card_id=card.id, status=result["status"], error=result.get("error"))
+
+    series = result.get("series") or []
+    if not series:
+        return MetricSparklineResult(card_id=card.id, status="ok", points=[])
+
+    points = [
+        MetricSparklinePoint(ts=float(ts), value=float(val))
+        for ts, val in series[0].get("values", [])
+    ]
+    return MetricSparklineResult(card_id=card.id, status="ok", points=points)
+
+
+@router.post("/query/test")
+async def test_query(body: dict):
+    """Test an arbitrary PromQL query without saving it."""
+    promql = body.get("promql", "")
+    if not promql:
+        raise HTTPException(status_code=400, detail="promql is required")
+    result = await prometheus_service.query(promql)
+    return result
 
 
 # ── Prometheus health ─────────────────────────────────────────────────

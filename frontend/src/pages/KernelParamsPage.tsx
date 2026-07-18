@@ -358,6 +358,7 @@ export function KernelParamsPage() {
                       <button
                         key={p.key}
                         onClick={() => setPresetKey(p.key)}
+                        aria-label={p.label}
                         className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-left transition-colors ${
                           active
                             ? 'bg-primary/10 border-primary/40 text-primary'

@@ -159,7 +159,7 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2" aria-label={`${r.nodes.length}/${totalNodes} 노드에 적재됨`}>
                       <span className="text-sm tabular-nums text-muted-foreground">
                         {r.nodes.length}/{totalNodes}
                       </span>

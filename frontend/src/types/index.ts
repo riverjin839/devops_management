@@ -691,6 +691,18 @@ export interface MetricQueryResult {
   error?: string | null;
 }
 
+export interface MetricSparklinePoint {
+  ts: number;
+  value: number;
+}
+
+export interface MetricSparklineResult {
+  cardId: string;
+  status: 'ok' | 'error' | 'offline';
+  points: MetricSparklinePoint[];
+  error?: string | null;
+}
+
 // ── Cluster Items (현황 관리 대시보드 '아이템' 카드) ─────────────────────
 export type ClusterItemSource = 'manual' | 'auto' | 'ai';
 export type ClusterItemCardSize = 'sm' | 'md' | 'lg';
@@ -793,10 +805,13 @@ export interface ServiceCatalogEntry {
 export interface OperationLevelItem {
   value: string;
   label: string;
-  /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted */
+  /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted.
+   *  customHex 가 있으면 fallback 으로만 쓰인다. */
   color: string;
   /** 클러스터 카드/행 앞에 표시될 이모지 1자. 비어있으면 EMOJI_OPTIONS 의 fallback 사용. */
   icon?: string;
+  /** 프리셋 13색 대신 임의의 hex(#RRGGBB) 를 시드로 bg/ring/band/text 톤을 자동 산출할 때 지정. */
+  customHex?: string | null;
 }
 
 // Workflow Board — 큰 작업을 단계별로 시각화하는 기획 게시판.

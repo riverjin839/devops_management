@@ -579,6 +579,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 onClick={(e) => { e.stopPropagation(); onEdit(item); }}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                 title="전체 수정 (리치 텍스트 / 이미지 포함)"
+                aria-label="전체 수정 (리치 텍스트 / 이미지 포함)"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
@@ -586,6 +587,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 onClick={(e) => { e.stopPropagation(); onAddSubItem(item); }}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
                 title="하위 업무 추가"
+                aria-label="하위 업무 추가"
               >
                 <GitBranch className="w-3.5 h-3.5" />
               </button>
@@ -593,6 +595,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 onClick={(e) => { e.stopPropagation(); onDelete(item); }}
                 className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
                 title="삭제"
+                aria-label="삭제"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -696,10 +699,12 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
       <td colSpan={colSpan} className="px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <select value={kanbanStatus} onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
+            aria-label="상태 선택"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded">
             {KS_OPTIONS.map((s) => <option key={s} value={s}>{KS_LABEL[s]}</option>)}
           </select>
           <select value={priority} onChange={(e) => setPriority(e.target.value as 'high' | 'medium' | 'low')}
+            aria-label="우선순위 선택"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded">
             {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
           </select>
@@ -709,15 +714,18 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
             value={primaryAssignee}
             onChange={(e) => setPrimaryAssignee(e.target.value)}
             placeholder="정 담당자 (필수)"
+            aria-label="정 담당자 입력"
             className="w-32 px-2 py-1 text-sm bg-background border border-border rounded"
           />
           <select value={clusterId} onChange={(e) => setClusterId(e.target.value)}
+            aria-label="클러스터 선택"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded">
             <option value="">— 클러스터 —</option>
             {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <input type="text" value={category} onChange={(e) => setTaskCategory(e.target.value)}
             placeholder="분류 (필수)"
+            aria-label="분류 입력"
             className="w-32 px-2 py-1 text-sm bg-background border border-border rounded" />
           <input type="text" value={content} onChange={(e) => setTaskContent(e.target.value)}
             onKeyDown={(e) => {
@@ -725,14 +733,18 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
               if (e.key === 'Escape') { reset(); setOpen(false); }
             }}
             placeholder="업무 내용 (필수, Enter 저장)"
+            aria-label="업무 내용 입력"
             className="flex-1 min-w-[180px] px-2 py-1 text-sm bg-background border border-border rounded" />
           <input type="date" value={startedAt} onChange={(e) => setScheduledAt(e.target.value)}
+            aria-label="시작일 입력"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded font-mono" />
           <button type="button" onClick={submit} disabled={!canSave}
+            aria-label="저장"
             className="px-2.5 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1">
             <Check className="w-3 h-3" /> 저장
           </button>
           <button type="button" onClick={() => { reset(); setOpen(false); }}
+            aria-label="취소"
             className="px-2.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-secondary inline-flex items-center gap-1">
             <X className="w-3 h-3" /> 취소
           </button>

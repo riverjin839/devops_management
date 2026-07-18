@@ -398,6 +398,7 @@ function Toolbar({ editor, surfaceBg, bgColor, onPickBg, extraTemplates }: {
             key={c}
             type="button"
             title={`배경색 ${c}`}
+            aria-label={`배경색 ${c}`}
             onClick={() => onPickBg?.(c)}
             className={`w-5 h-5 rounded border ${bgColor === c ? 'ring-2 ring-primary ring-offset-1' : 'border-border'}`}
             style={{ backgroundColor: c }}

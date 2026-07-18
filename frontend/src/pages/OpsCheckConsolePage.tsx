@@ -218,7 +218,7 @@ export function OpsCheckConsolePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-border">
-                    <th className="w-9 px-3 py-2"></th>
+                    <th className="w-9 px-3 py-2"><span className="sr-only">선택</span></th>
                     <th className="text-left px-2 py-2 font-medium">이름</th>
                     <th className="text-left px-2 py-2 font-medium w-24">분류</th>
                     <th className="text-left px-2 py-2 font-medium w-20">소스</th>
@@ -233,7 +233,7 @@ export function OpsCheckConsolePage() {
                     return (
                       <tr key={k} className="border-b border-border/50 hover:bg-secondary/20">
                         <td className="px-3 py-2">
-                          <input type="checkbox" checked={selected.has(k)} onChange={() => toggle(c)} className="accent-primary" />
+                          <input type="checkbox" checked={selected.has(k)} onChange={() => toggle(c)} className="accent-primary" aria-label="선택" />
                         </td>
                         <td className="px-2 py-2">
                           <div className="flex items-center gap-1.5">

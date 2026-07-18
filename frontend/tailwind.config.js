@@ -48,8 +48,19 @@ export default {
           primary: "hsl(var(--sidebar-primary))",
         },
         // ── Surface tokens (DESIGN_SYSTEM §2.1) ──
-        surface: "hsl(var(--card))",
-        "surface-elevated": "hsl(var(--popover))",
+        surface: {
+          DEFAULT: "hsl(var(--card))",
+          elevated: "hsl(var(--popover))",
+          // 5단계 — 그림자 대신 톤 차이로 깊이감(card-shadow: none 철학과 일치).
+          // lowest(바탕에 가까움) → highest(가장 도드라짐). bg-surface-container-* 로 사용.
+          container: {
+            lowest:  "hsl(var(--surface-container-lowest)  / <alpha-value>)",
+            low:     "hsl(var(--surface-container-low)     / <alpha-value>)",
+            DEFAULT: "hsl(var(--surface-container)          / <alpha-value>)",
+            high:    "hsl(var(--surface-container-high)    / <alpha-value>)",
+            highest: "hsl(var(--surface-container-highest) / <alpha-value>)",
+          },
+        },
         // ── Semantic status tokens (DESIGN_SYSTEM §2.4) ──
         // raw HEX 사용 금지. 모든 status 색은 이 토큰 경유.
         status: {

@@ -29,7 +29,7 @@ import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
   suggestAttribute, suggestOpTypeLabel,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor, levelLabel } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelColor, levelLabel, levelCustomHex } from '@/hooks/useOperationLevels';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
@@ -481,6 +481,7 @@ export function SettingsPage() {
           attribute: suggestAttribute(c.name),
           regionAbbr: suggestRegionAbbr(c.region),
           colorToken: levelColor(opLevels, c.operationLevel),
+          customHex: levelCustomHex(opLevels, c.operationLevel),
         });
         await updateClusterMut.mutateAsync({ id: c.id, data: { icon: svgToDataUrl(svg) } });
         ok++;

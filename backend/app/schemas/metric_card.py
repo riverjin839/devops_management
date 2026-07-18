@@ -58,3 +58,18 @@ class MetricQueryResult(BaseModel):
     # For 'list' display_type: multiple results
     results: Optional[list[dict]] = None
     error: Optional[str] = None
+
+
+class MetricSparklinePoint(BaseModel):
+    """단일 시계열 포인트 — KPI 카드 하단 Sparkline 용 (DESIGN_SYSTEM §5②)."""
+    ts: float  # unix epoch seconds
+    value: float
+
+
+class MetricSparklineResult(BaseModel):
+    """카드의 PromQL 을 range query 로 실행한 결과 — 최근 값들의 추세(추이)만 필요하므로
+    라벨 조합이 여러 개면 첫 series 만 사용한다."""
+    card_id: UUID
+    status: str = "ok"  # ok | error | offline
+    points: list[MetricSparklinePoint] = Field(default_factory=list)
+    error: Optional[str] = None

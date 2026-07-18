@@ -109,7 +109,7 @@ export function ServicesCatalogPage() {
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground w-24">항목 수</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">유형별</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap w-28">최근 업데이트</th>
-                    <th className="px-4 py-3 w-8" />
+                    <th className="px-4 py-3 w-8"><span className="sr-only">상세 보기</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -125,7 +125,7 @@ export function ServicesCatalogPage() {
                     return (
                       <tr key={def.key} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors group">
                         <td className="px-4 py-3">
-                          <Link to={`/services/${def.key}`} className="flex items-center gap-2.5 min-w-0">
+                          <Link to={`/services/${def.key}`} className="flex items-center gap-2.5 min-w-0" aria-label={def.label}>
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${cls}`}>
                               <Icon className="w-4 h-4" />
                             </div>
