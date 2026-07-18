@@ -190,7 +190,7 @@ function AppShell() {
               <Route path="/k8s-events" element={<K8sEventsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
-              <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
+              <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />
               {/* 운영 점검 통합 콘솔 — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그 */}
               <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />
               <Route path="/ops-checks" element={<OpsCheckConsolePage />} />

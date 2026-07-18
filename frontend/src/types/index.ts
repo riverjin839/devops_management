@@ -2366,12 +2366,15 @@ export interface DeepCheckTypeSchema {
   checkType: DeepCheckType;
   displayName: string;
   description: string;
+  category?: string;
   thresholdFields: DeepCheckFieldSpec[];
   paramFields: DeepCheckFieldSpec[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultThresholds: Record<string, any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultParams: Record<string, any>;
+  /** false = admin 이 인스턴스를 직접 만드는 커스텀(템플릿형) 타입 */
+  seedDefault?: boolean;
 }
 
 export interface DeepCheckDefinition {
@@ -2387,14 +2390,35 @@ export interface DeepCheckDefinition {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params?: Record<string, any> | null;
   sortOrder: number;
+  lastRunAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  // with_status=true 조회 시에만 채워지는 최근 실행 요약
+  lastStatus?: Status | null;
+  lastCheckedAt?: string | null;
+  lastMessage?: string | null;
+  lastDurationMs?: number | null;
 }
 
 export type DeepCheckDefinitionInput = Omit<
   DeepCheckDefinition,
-  'id' | 'createdAt' | 'updatedAt'
+  | 'id' | 'createdAt' | 'updatedAt' | 'lastRunAt'
+  | 'lastStatus' | 'lastCheckedAt' | 'lastMessage' | 'lastDurationMs'
 >;
+
+export interface DeepCheckDefinitionResults {
+  total: number;
+  results: DeepCheckResult[];
+}
+
+export interface DeepCheckPreviewInput {
+  checkType: DeepCheckType;
+  clusterId?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  thresholds?: Record<string, any> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any> | null;
+}
 
 export interface DeepCheckResult {
   id: string;
@@ -2424,7 +2448,7 @@ export interface DeepCheckExecStep {
 export interface DeepCheckStepPlanItem { id: string; label: string }
 
 export interface DeepCheckTestResult {
-  definitionId: string;
+  definitionId?: string;
   checkType: DeepCheckType;
   status: Status;
   message: string;

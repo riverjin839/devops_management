@@ -81,7 +81,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` → `frontend/src/pages/HomePage.tsx` |
 | 클러스터 대시보드 | `backend/app/routers/daily_check.py` · `history.py` → `frontend/src/pages/Dashboard.tsx` (`/cluster-overview`) |
 | 일일 점검 리뷰 | `daily_check.py` → `frontend/src/pages/DailyCheckReview.tsx` |
-| Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py` + `backend/app/services/deep_checkers/` → `frontend/src/pages/DeepCheckSettings.tsx` |
+| Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/deep_checkers/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔 | `backend/app/routers/ops_check.py` + `services/ops_check_service.py` → `frontend/src/pages/OpsCheckConsolePage.tsx` |
 | K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py` + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
 | Pod 병목 진단 | `backend/app/routers/bottleneck.py` + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |

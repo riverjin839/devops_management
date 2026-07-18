@@ -843,6 +843,8 @@ def _run_migrations():
     # deep_check_definitions / deep_check_results — Super Pod 결과 저장.
     # SQLAlchemy create_all 이 이미 생성하지만, 명시적으로 인덱스/idempotent 보장.
     if "deep_check_definitions" in inspector.get_table_names():
+        # 정의별 cron 디스패치 anchor (schedule_cron 배선) — 구버전 DB 보강.
+        _safe_add_column("deep_check_definitions", "last_run_at", "TIMESTAMP WITHOUT TIME ZONE")
         _safe_create_index("ix_deep_check_definitions_cluster", "deep_check_definitions", "(cluster_id)")
         _safe_create_index("ix_deep_check_definitions_type", "deep_check_definitions", "(check_type)")
     if "deep_check_results" in inspector.get_table_names():
@@ -864,6 +866,8 @@ def _run_migrations():
         _safe_create_index("ix_deep_check_results_cluster", "deep_check_results", "(cluster_id)")
         _safe_create_index("ix_deep_check_results_daily_log", "deep_check_results", "(daily_check_log_id)")
         _safe_create_index("ix_deep_check_results_checked_at", "deep_check_results", "(checked_at DESC)")
+        # 정의별 실행 이력 조회용 (definitions/{id}/results)
+        _safe_create_index("ix_deep_check_results_definition", "deep_check_results", "(definition_id, checked_at DESC)")
 
     # user_jira_credentials: 인증 방식 컬럼 (PAT | 세션 쿠키). 구버전 DB 는 PAT 전용이라 기본 'pat'.
     if "user_jira_credentials" in inspector.get_table_names():
@@ -1213,6 +1217,9 @@ def _seed_default_deep_check_definitions():
         added = 0
         for ct, (_, spec) in REGISTRY.items():
             if ct in existing:
+                continue
+            # custom_* 같은 템플릿형 타입은 admin 이 인스턴스를 직접 만든다 — 자동 시드 제외.
+            if not getattr(spec, "seed_default", True):
                 continue
             db.add(DeepCheckDefinition(
                 cluster_id=None,

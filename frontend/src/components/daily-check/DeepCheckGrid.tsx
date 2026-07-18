@@ -50,9 +50,15 @@ export function DeepCheckGrid({ results }: Props) {
                 <span>{new Date(r.checkedAt).toLocaleTimeString('ko-KR')}</span>
                 <span>{r.durationMs}ms</span>
               </div>
-              {Array.isArray(r.details?._steps) && r.details!._steps.length > 0 && (
-                <ExecutionStepsTimeline steps={r.details!._steps as DeepCheckExecStep[]} />
-              )}
+              {/* 응답 인터셉터가 _steps 키를 camelize(→ Steps) 하므로 둘 다 조회 */}
+              {(() => {
+                const steps = (r.details?._steps ?? r.details?.Steps) as
+                  | DeepCheckExecStep[]
+                  | undefined;
+                return Array.isArray(steps) && steps.length > 0 ? (
+                  <ExecutionStepsTimeline steps={steps} />
+                ) : null;
+              })()}
               {r.details && Object.keys(r.details).length > 0 && (
                 <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground">상세</summary>

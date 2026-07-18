@@ -10,6 +10,25 @@
 
 1.6.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Deep Checker 고도화 — UI 커스텀 점검 생성 + 정의별 실행 이력/개별 로그**: admin 이
+  코드 없이 UI 에서 새 점검을 만드는 커스텀 체커 3종(`custom_http` HTTP/TCP 프로브,
+  `custom_kubectl` 읽기전용 kubectl 명령 + 라인/숫자/정규식 파싱, `custom_promql`
+  PromQL 임계 판정)을 추가하고, Deep Check 정의 관리 화면(`/daily-check/settings`)을
+  admin 전용으로 재구성. 정의별 즉시 실행(이력 기록)·복제·검색/카테고리 필터·최근 실행
+  상태 배지와, 실행 회차별 단계(step) 타임라인/상세 JSON 을 펼쳐보는 **실행 이력 패널**을
+  신설. Backend: `GET /deep-check/definitions/{id}/results`, `POST …/run`(영속 실행),
+  `POST …/duplicate`, `POST /deep-check/definitions/preview`(저장 전 ad-hoc 실행),
+  `with_status` 목록 요약, CRUD admin·실행 operator 권한 가드, 미배선이던
+  `DeepCheckDefinition.schedule_cron` 을 check-matrix 디스패처에 배선(정의별 단독 cron,
+  최소 5분 간격, 글로벌 정의는 전 클러스터 실행).
+
+### Fixed
+- **Deep Check 정의 편집 폼 저장값 미표시 수정**: axios 응답 인터셉터가 thresholds/params
+  의 snake_case 키를 camelCase 로 바꿔 편집 폼·클러스터 필터·결과 step 타임라인이 조용히
+  깨지던 문제를 정규화 로직으로 수정 (definitions 목록 쿼리 파라미터 snake_case 변환,
+  `details._steps`→`Steps` camelize fallback 포함).
+
 ## [1.6.1] - 2026-07-17
 
 ### Changed

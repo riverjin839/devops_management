@@ -196,6 +196,19 @@ Base: `/api/v1`
 | `node_health` | 노드 추가 검증(기본+네트워킹) | k8s | ✅ | Ready/Pressure/Taint/Allocatable + CNI/kube-proxy 데몬셋 |
 | `kernel_param_drift` | OS 파라미터 변경 점검 | os | ❌ | `ClusterConfigSnapshot` 연속 스냅샷 sysctl 드리프트 |
 | `minio_health` | MinIO 스토리지 health | storage | ❌ | `/minio/health/cluster·live` 쿼럼/degraded |
+| `isilon_nfs` | Isilon NFS (NAS) | storage | ❌ | OneFS SSH 수집 + K8s NFS PV 매칭·쿼터 판정 |
+| `custom_http` | 커스텀 HTTP/TCP 프로브 | network | ❌ | **UI 정의형** — endpoints 프로브, 기대 status/본문 정규식/지연 임계 |
+| `custom_kubectl` | 커스텀 kubectl 점검 | k8s | ❌ | **UI 정의형** — 읽기전용 kubectl + lines/number/regex_count 파싱 |
+| `custom_promql` | 커스텀 PromQL 점검 | app | ❌ | **UI 정의형** — instant 쿼리 + max/min/sum/avg/count 집계 임계 |
+
+> `default_enabled=False`(kernel_param_drift, minio_health, isilon_nfs, custom_*) 는
+> **위험/무겁거나 사전 준비가 필요한** 점검 — 시드로 등록만 되고 운영자가 켠다. 콘솔
+> 카탈로그에는 비활성도 노출(수동 실행 가능)되지만, cron 은 `enabled=True` 만 실행한다.
+>
+> `custom_*` 3종은 추가로 **`seed_default=False`(템플릿형)** — 부팅 시 글로벌 정의 자동
+> 시드와 체크매트릭스 항목 시드에서 제외되고, admin 이 `/daily-check/settings` 에서 같은
+> check_type 으로 **인스턴스(정의)를 여러 개 직접 생성**한다. 자동 실행은 정의별
+> `schedule_cron`(check-matrix 디스패처가 매분 due 평가, 최소 5분 간격)으로 건다.
 | `isilon_nfs` | Isilon NFS (NAS) | storage | ❌ | `isi` 명령 SSH 수집 + K8s NFS PV 매칭, export 가용성/쿼터 |
 
 > `default_enabled=False`(kernel_param_drift, minio_health, isilon_nfs) 는 **위험/무겁거나

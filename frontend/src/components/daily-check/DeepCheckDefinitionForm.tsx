@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Play, Save, X } from 'lucide-react';
+import { FlaskConical, Play, Save, X } from 'lucide-react';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { useCheckTypes, useTestDefinition } from '@/hooks/useDeepCheckDefinitions';
+import {
+  useCheckTypes,
+  usePreviewCheck,
+  useTestDefinition,
+} from '@/hooks/useDeepCheckDefinitions';
 import type {
   DeepCheckDefinition,
   DeepCheckDefinitionInput,
@@ -17,6 +21,48 @@ interface Props {
   clusterId?: string;
   onSubmit: (body: DeepCheckDefinitionInput) => Promise<void> | void;
   onCancel?: () => void;
+}
+
+const CRON_PRESETS: { label: string; value: string }[] = [
+  { label: '매트릭스 스케줄 사용 (비움)', value: '' },
+  { label: '5분마다', value: '*/5 * * * *' },
+  { label: '15분마다', value: '*/15 * * * *' },
+  { label: '30분마다', value: '*/30 * * * *' },
+  { label: '매시 정각', value: '0 * * * *' },
+  { label: '매일 09:00', value: '0 9 * * *' },
+  { label: '매일 09/13/18시', value: '0 9,13,18 * * *' },
+];
+
+function toSnake(str: string): string {
+  return str.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
+}
+
+/**
+ * axios 응답 인터셉터가 thresholds/params 의 키까지 camelCase 로 바꿔버리므로
+ * (warning_days → warningDays) 스키마 필드명(snake_case)으로 되돌려 맞춘다.
+ * 이 정규화가 없으면 편집 폼이 저장된 값을 보여주지 못한다.
+ */
+function normalizeValues(
+  fields: DeepCheckFieldSpec[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw: Record<string, any> | null | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: Record<string, any> = {};
+  const source = raw ?? {};
+  const camelToSnake = Object.fromEntries(
+    Object.entries(source).map(([k, v]) => [toSnake(k), v]),
+  );
+  for (const f of fields) {
+    const v = source[f.name] ?? camelToSnake[f.name];
+    if (v !== undefined) out[f.name] = v;
+  }
+  // 스키마에 없는 (사용자 정의) 키도 보존
+  for (const [k, v] of Object.entries(camelToSnake)) {
+    if (!(k in out)) out[k] = v;
+  }
+  return out;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,6 +99,12 @@ function listToText(v: any): string {
   return v == null ? '' : String(v);
 }
 
+/** 라벨의 "(a|b|c)" 패턴에서 select 옵션 추출 — 예: "비교 방향 (gte|lte)" */
+function enumOptionsFromLabel(label: string): string[] | null {
+  const m = label.match(/\(([\w-]+(?:\|[\w-]+)+)\)/);
+  return m ? m[1].split('|') : null;
+}
+
 export function DeepCheckDefinitionForm({
   initial,
   clusterId,
@@ -61,6 +113,7 @@ export function DeepCheckDefinitionForm({
 }: Props) {
   const { data: schemas } = useCheckTypes();
   const testMut = useTestDefinition();
+  const previewMut = usePreviewCheck();
   const toast = useToast();
 
   const [checkType, setCheckType] = useState(initial?.checkType ?? '');
@@ -69,11 +122,9 @@ export function DeepCheckDefinitionForm({
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [scheduleCron, setScheduleCron] = useState(initial?.scheduleCron ?? '');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [thresholds, setThresholds] = useState<Record<string, any>>(
-    initial?.thresholds ?? {}
-  );
+  const [thresholds, setThresholds] = useState<Record<string, any>>({});
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [params, setParams] = useState<Record<string, any>>(initial?.params ?? {});
+  const [params, setParams] = useState<Record<string, any>>({});
   const [testResult, setTestResult] = useState<DeepCheckTestResult | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -82,14 +133,21 @@ export function DeepCheckDefinitionForm({
     [schemas, checkType],
   );
 
-  // checkType 바뀔 때 기본값으로 채우기 (신규 모드일 때만)
+  // 편집 모드: 스키마 로드 후 저장값을 필드명(snake_case)으로 정규화해 채운다.
+  useEffect(() => {
+    if (!initial || !schema) return;
+    setThresholds(normalizeValues(schema.thresholdFields, initial.thresholds));
+    setParams(normalizeValues(schema.paramFields, initial.params));
+  }, [initial, schema]);
+
+  // 신규 모드: checkType 선택 시 기본값 채움.
   useEffect(() => {
     if (initial) return;
     if (!schema) return;
     setName((cur) => cur || schema.displayName);
     setDescription((cur) => cur || schema.description);
-    setThresholds({ ...schema.defaultThresholds });
-    setParams({ ...schema.defaultParams });
+    setThresholds(normalizeValues(schema.thresholdFields, schema.defaultThresholds));
+    setParams(normalizeValues(schema.paramFields, schema.defaultParams));
   }, [schema, initial]);
 
   const handleSubmit = async () => {
@@ -113,17 +171,30 @@ export function DeepCheckDefinitionForm({
     }
   };
 
-  const handleTest = async () => {
-    if (!initial) {
+  /** 저장 전에도 현재 폼 값 그대로 ad-hoc 실행해 미리 확인. */
+  const handlePreview = async () => {
+    try {
+      const { data } = await previewMut.mutateAsync({
+        checkType,
+        clusterId: clusterId || initial?.clusterId || null,
+        thresholds,
+        params,
+      });
+      setTestResult(data);
+    } catch (e) {
+      const msg = formatApiError(e);
+      toast.error('미리 실행 실패', msg);
       setTestResult({
-        definitionId: '',
         checkType,
         status: 'pending',
-        message: '먼저 저장 후 Test 가능합니다.',
+        message: `미리 실행 실패: ${msg}`,
         durationMs: 0,
       });
-      return;
     }
+  };
+
+  const handleTest = async () => {
+    if (!initial) return handlePreview();
     try {
       const { data } = await testMut.mutateAsync({ id: initial.id, clusterId });
       setTestResult(data);
@@ -140,6 +211,9 @@ export function DeepCheckDefinitionForm({
     }
   };
 
+  const customTypes = schemas?.filter((s) => s.seedDefault === false) ?? [];
+  const builtinTypes = schemas?.filter((s) => s.seedDefault !== false) ?? [];
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -148,15 +222,30 @@ export function DeepCheckDefinitionForm({
             value={checkType}
             onChange={(e) => setCheckType(e.target.value)}
             disabled={!!initial}
+            aria-label="Check Type 선택"
             className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm disabled:opacity-60"
           >
             <option value="">선택…</option>
-            {schemas?.map((s) => (
-              <option key={s.checkType} value={s.checkType}>
-                {s.displayName} ({s.checkType})
-              </option>
-            ))}
+            {customTypes.length > 0 && (
+              <optgroup label="커스텀 (UI 에서 직접 정의)">
+                {customTypes.map((s) => (
+                  <option key={s.checkType} value={s.checkType}>
+                    {s.displayName} ({s.checkType})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="내장 체커">
+              {builtinTypes.map((s) => (
+                <option key={s.checkType} value={s.checkType}>
+                  {s.displayName} ({s.checkType})
+                </option>
+              ))}
+            </optgroup>
           </select>
+          {schema?.description && (
+            <div className="text-xs text-muted-foreground mt-1">{schema.description}</div>
+          )}
         </Field>
         <Field label="이름">
           <input
@@ -173,6 +262,7 @@ export function DeepCheckDefinitionForm({
           value={description ?? ''}
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
+          aria-label="정의 설명"
           className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm resize-y"
         />
       </Field>
@@ -188,15 +278,34 @@ export function DeepCheckDefinitionForm({
             <span>이 정의를 활성화</span>
           </label>
         </Field>
-        <Field label="스케줄 cron (선택)">
-          <input
-            value={scheduleCron ?? ''}
-            onChange={(e) => setScheduleCron(e.target.value)}
-            placeholder="예: */30 * * * * (비우면 기본 09:15/13:15/18:15)"
-            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono"
-          />
-          <div className="text-xs text-muted-foreground">
-            표준 5필드 cron (분 시 일 월 요일). 최소 실행 간격은 5분입니다.
+        <Field label="스케줄 cron (선택 — 정의별 단독 실행)">
+          <div className="flex gap-2">
+            <select
+              value={CRON_PRESETS.some((p) => p.value === (scheduleCron ?? '')) ? scheduleCron ?? '' : '__custom__'}
+              onChange={(e) => {
+                if (e.target.value !== '__custom__') setScheduleCron(e.target.value);
+              }}
+              aria-label="cron 프리셋 선택"
+              className="rounded-xl border border-border bg-card px-2 py-2 text-sm"
+            >
+              {CRON_PRESETS.map((p) => (
+                <option key={p.label} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+              <option value="__custom__">직접 입력…</option>
+            </select>
+            <input
+              value={scheduleCron ?? ''}
+              onChange={(e) => setScheduleCron(e.target.value)}
+              placeholder="예: */30 * * * * (비우면 매트릭스 스케줄만)"
+              aria-label="cron 표현식"
+              className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono"
+            />
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            표준 5필드 cron (분 시 일 월 요일), 최소 간격 5분. 지정 시 디스패처가 이 정의만 해당
+            주기로 자동 실행합니다 (글로벌 정의는 전체 클러스터 대상).
           </div>
         </Field>
       </div>
@@ -212,12 +321,19 @@ export function DeepCheckDefinitionForm({
         <div className="space-y-2">
           <ExecutionStepsTimeline stepPlan={testResult.stepPlan} steps={testResult.steps} />
           <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm space-y-1">
-            <div className="font-semibold">Test 결과: {testResult.status}</div>
+            <div className="font-semibold">
+              실행 결과: {testResult.status}
+              {testResult.durationMs != null && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {testResult.durationMs}ms
+                </span>
+              )}
+            </div>
             <div className="text-muted-foreground break-words">{testResult.message}</div>
             {testResult.details && (
               <details className="mt-1">
                 <summary className="cursor-pointer text-xs text-muted-foreground">상세(JSON)</summary>
-                <pre className="mt-1 rounded bg-muted p-2 overflow-x-auto max-h-48">
+                <pre className="mt-1 rounded bg-muted p-2 overflow-x-auto max-h-48 text-xs">
                   {JSON.stringify(testResult.details, null, 2)}
                 </pre>
               </details>
@@ -227,11 +343,22 @@ export function DeepCheckDefinitionForm({
       )}
 
       <div className="flex items-center justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={handlePreview}
+          disabled={!checkType || previewMut.isPending}
+          title="현재 폼 값 그대로 저장 없이 1회 실행"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+        >
+          <FlaskConical className="w-3.5 h-3.5" />
+          미리 실행
+        </button>
         {initial && (
           <button
             type="button"
             onClick={handleTest}
             disabled={testMut.isPending}
+            title="저장된 정의 값으로 1회 실행 (기록 없음)"
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5" />
@@ -273,6 +400,73 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function FieldInput({
+  spec,
+  value,
+  onChange,
+}: {
+  spec: DeepCheckFieldSpec;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  value: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onChange: (v: any) => void;
+}) {
+  if (spec.type === 'boolean') {
+    const on = value === true || value === 'true';
+    return (
+      <label className="inline-flex items-center gap-2 text-sm py-1.5">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => onChange(e.target.checked)}
+          className="accent-primary"
+        />
+        <span className="text-muted-foreground">{on ? '켜짐' : '꺼짐'}</span>
+      </label>
+    );
+  }
+  if (spec.type === 'list') {
+    return (
+      <textarea
+        rows={3}
+        value={listToText(value)}
+        placeholder={Array.isArray(spec.default) ? spec.default.join('\n') : '한 줄에 하나씩'}
+        aria-label={spec.label}
+        onChange={(e) => onChange(coerceValue(spec, e.target.value))}
+        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono resize-y"
+      />
+    );
+  }
+  const enumOptions = spec.type === 'string' ? enumOptionsFromLabel(spec.label) : null;
+  if (enumOptions) {
+    return (
+      <select
+        value={String(value ?? spec.default ?? '')}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={spec.label}
+        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+      >
+        {enumOptions.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <input
+      type={spec.type === 'int' || spec.type === 'float' ? 'number' : 'text'}
+      step={spec.type === 'float' ? '0.01' : '1'}
+      value={value ?? ''}
+      placeholder={String(spec.default ?? '')}
+      aria-label={spec.label}
+      onChange={(e) => onChange(coerceValue(spec, e.target.value))}
+      className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+    />
+  );
+}
+
 function FieldGroup({
   title,
   fields,
@@ -295,42 +489,12 @@ function FieldGroup({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {fields.map((f) => (
           <Field key={f.name} label={f.label}>
-            {f.type === 'boolean' ? (
-              <label className="inline-flex items-center gap-2 text-sm py-1.5">
-                <input
-                  type="checkbox"
-                  checked={values[f.name] === true || values[f.name] === 'true'}
-                  onChange={(e) => onChange({ ...values, [f.name]: e.target.checked })}
-                  className="accent-primary"
-                />
-                <span className="text-muted-foreground">
-                  {values[f.name] === true || values[f.name] === 'true' ? '켜짐' : '꺼짐'}
-                </span>
-              </label>
-            ) : f.type === 'list' ? (
-              <textarea
-                rows={3}
-                value={listToText(values[f.name])}
-                placeholder={Array.isArray(f.default) ? f.default.join('\n') : '한 줄에 하나씩'}
-                onChange={(e) => onChange({ ...values, [f.name]: coerceValue(f, e.target.value) })}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono resize-y"
-              />
-            ) : (
-              <input
-                type={f.type === 'int' || f.type === 'float' ? 'number' : 'text'}
-                step={f.type === 'float' ? '0.01' : '1'}
-                value={values[f.name] ?? ''}
-                placeholder={String(f.default ?? '')}
-                onChange={(e) =>
-                  onChange({ ...values, [f.name]: coerceValue(f, e.target.value) })
-                }
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-              />
-            )}
+            <FieldInput
+              spec={f}
+              value={values[f.name]}
+              onChange={(v) => onChange({ ...values, [f.name]: v })}
+            />
             {f.help && <div className="text-xs text-muted-foreground">{f.help}</div>}
-            {f.type === 'list' && (
-              <div className="text-xs text-muted-foreground">줄바꿈 또는 콤마로 여러 개 입력</div>
-            )}
           </Field>
         ))}
       </div>

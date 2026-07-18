@@ -13,6 +13,9 @@ from app.services.deep_checkers.base import DeepCheckerBase
 from app.services.deep_checkers.cert_expiry_checker import CertExpiryChecker
 from app.services.deep_checkers.cni_flow_checker import CniFlowChecker
 from app.services.deep_checkers.coredns_health_checker import CoreDnsHealthChecker
+from app.services.deep_checkers.custom_http_checker import CustomHttpChecker
+from app.services.deep_checkers.custom_kubectl_checker import CustomKubectlChecker
+from app.services.deep_checkers.custom_promql_checker import CustomPromqlChecker
 from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
 from app.services.deep_checkers.external_to_pod_checker import ExternalToPodChecker
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
@@ -50,6 +53,9 @@ class DeepCheckTypeSpec:
     category: str = "k8s"
     # 기본 시드 시 enabled 여부 — 위험/무거운 점검은 False 로 등록만 해두고 운영자가 켠다.
     default_enabled: bool = True
+    # False 면 부팅 시 글로벌 정의/체크매트릭스 자동 시드에서 제외 — custom_* 처럼
+    # "같은 check_type 으로 여러 인스턴스를 admin 이 직접 만드는" 템플릿형 체커용.
+    seed_default: bool = True
 
 
 REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
@@ -425,6 +431,120 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             default_enabled=True,
         ),
     ),
+    # ── 커스텀(템플릿형) 체커 — admin 이 UI 에서 params 만으로 새 점검을 정의 ──
+    "custom_http": (
+        CustomHttpChecker,
+        DeepCheckTypeSpec(
+            check_type="custom_http",
+            display_name="커스텀 HTTP/TCP 프로브",
+            description=(
+                "params.endpoints 의 URL(http/https)/host:port 를 프로브해 실패율·지연을 "
+                "판정하는 범용 점검. 같은 타입으로 대상별 정의를 여러 개 만들어 쓴다."
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_failure_pct", "float", "실패율 경고 (%)", 1),
+                DeepCheckFieldSpec("critical_failure_pct", "float", "실패율 심각 (%)", 50),
+                DeepCheckFieldSpec("warning_latency_ms", "int", "지연 경고 (ms, 0=미사용)", 0),
+                DeepCheckFieldSpec("critical_latency_ms", "int", "지연 심각 (ms, 0=미사용)", 0),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("endpoints", "list", "대상 endpoint (URL 또는 host:port)", []),
+                DeepCheckFieldSpec("expected_status", "string", "기대 HTTP status 범위", "200-399",
+                                   help='예: "200-399" 또는 "200"'),
+                DeepCheckFieldSpec("body_regex", "string", "본문 정규식 (선택)", "",
+                                   help="지정 시 응답 본문이 이 정규식과 매치해야 성공"),
+                DeepCheckFieldSpec("http_timeout_seconds", "int", "timeout (초)", 5),
+                DeepCheckFieldSpec("verify_tls", "boolean", "TLS 인증서 검증", False),
+            ],
+            default_thresholds={
+                "warning_failure_pct": 1,
+                "critical_failure_pct": 50,
+                "warning_latency_ms": 0,
+                "critical_latency_ms": 0,
+            },
+            default_params={
+                "endpoints": [],
+                "expected_status": "200-399",
+                "body_regex": "",
+                "http_timeout_seconds": 5,
+                "verify_tls": False,
+            },
+            category="network",
+            default_enabled=False,
+            seed_default=False,
+        ),
+    ),
+    "custom_kubectl": (
+        CustomKubectlChecker,
+        DeepCheckTypeSpec(
+            check_type="custom_kubectl",
+            display_name="커스텀 kubectl 점검",
+            description=(
+                "params.args 의 kubectl 명령(기본 읽기 전용 verb 만)을 대상 클러스터에서 "
+                "실행하고 출력(라인 수/숫자/정규식 매치 수)을 임계값과 비교하는 범용 점검."
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_value", "float", "경고 임계값", 1),
+                DeepCheckFieldSpec("critical_value", "float", "심각 임계값", 5),
+                DeepCheckFieldSpec("compare", "string", "비교 방향 (gte|lte)", "gte",
+                                   help="gte: 값이 임계 이상이면 이상 / lte: 값이 임계 이하이면 이상"),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("args", "string", "kubectl 인자", "",
+                                   help="예: get pods -A --field-selector=status.phase=Failed -o name"),
+                DeepCheckFieldSpec("parse_mode", "string", "파싱 방식 (lines|number|regex_count)", "lines"),
+                DeepCheckFieldSpec("pattern", "string", "정규식 (regex_count 용)", ""),
+                DeepCheckFieldSpec("timeout_seconds", "int", "timeout (초)", 30),
+                DeepCheckFieldSpec("allow_mutation", "boolean", "읽기 전용 verb 제한 해제", False,
+                                   help="켜면 get/describe 외 verb 도 허용 — 주의해서 사용"),
+            ],
+            default_thresholds={"warning_value": 1, "critical_value": 5, "compare": "gte"},
+            default_params={
+                "args": "",
+                "parse_mode": "lines",
+                "pattern": "",
+                "timeout_seconds": 30,
+                "allow_mutation": False,
+            },
+            category="k8s",
+            default_enabled=False,
+            seed_default=False,
+        ),
+    ),
+    "custom_promql": (
+        CustomPromqlChecker,
+        DeepCheckTypeSpec(
+            check_type="custom_promql",
+            display_name="커스텀 PromQL 점검",
+            description=(
+                "params.query 의 PromQL instant 쿼리 결과를 aggregate(max/min/sum/avg/count) 로 "
+                "접어 임계값과 비교하는 범용 점검. Prometheus 도달 불가는 pending."
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_value", "float", "경고 임계값", 1),
+                DeepCheckFieldSpec("critical_value", "float", "심각 임계값", 5),
+                DeepCheckFieldSpec("compare", "string", "비교 방향 (gte|lte)", "gte",
+                                   help="gte: 값이 임계 이상이면 이상 / lte: 값이 임계 이하이면 이상"),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("query", "string", "PromQL 쿼리", "",
+                                   help='예: sum(kube_pod_status_phase{phase="Failed"})'),
+                DeepCheckFieldSpec("aggregate", "string", "집계 (max|min|sum|avg|count)", "max"),
+                DeepCheckFieldSpec("prometheus_url", "string", "Prometheus URL (비우면 기본)", ""),
+                DeepCheckFieldSpec("timeout_seconds", "int", "timeout (초)", 10),
+            ],
+            default_thresholds={"warning_value": 1, "critical_value": 5, "compare": "gte"},
+            default_params={
+                "query": "",
+                "aggregate": "max",
+                "prometheus_url": "",
+                "timeout_seconds": 10,
+            },
+            category="app",
+            default_enabled=False,
+            seed_default=False,
+        ),
+    ),
 }
 
 
@@ -446,6 +566,8 @@ def list_check_types() -> list[dict[str, Any]]:
             "param_fields": [_field_to_dict(f) for f in spec.param_fields],
             "default_thresholds": spec.default_thresholds,
             "default_params": spec.default_params,
+            # UI 그룹핑용 — False 면 admin 이 인스턴스를 직접 만드는 커스텀(템플릿형) 타입.
+            "seed_default": spec.seed_default,
         })
     return out
 
@@ -511,6 +633,22 @@ STEP_PLANS: dict[str, list[tuple[str, str]]] = {
         ("ssh_connect", "Isilon 서버 조회 · SSH 수집(캐시)"),
         ("match_k8s_pv", "K8s NFS PV ↔ export 매칭"),
         ("verdict", "가용성 · 쿼터 · health 판정"),
+    ],
+    "custom_http": [
+        ("resolve", "대상 endpoint 해석"),
+        ("probe", "endpoint 프로브"),
+        ("verdict", "실패율 · 지연 임계 비교"),
+    ],
+    "custom_kubectl": [
+        ("validate", "명령 검증"),
+        ("exec", "kubectl 실행"),
+        ("parse", "출력 파싱"),
+        ("verdict", "임계 비교"),
+    ],
+    "custom_promql": [
+        ("query", "PromQL instant 쿼리"),
+        ("parse", "결과 집계"),
+        ("verdict", "임계 비교"),
     ],
 }
 

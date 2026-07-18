@@ -52,8 +52,12 @@ class DeepCheckDefinition(Base):
     enabled = Column(Boolean, default=True, nullable=False)
 
     schedule_cron = Column(String(100), nullable=True)
-    # 기본은 Celery Beat 의 09:15/13:15/18:15 와 함께 실행되므로 NULL.
-    # 별도 cron 을 지정하면 dispatcher 가 해당 시각에 단독 실행.
+    # NULL 이면 체크매트릭스(CheckMatrixSchedule) 쪽 cron 만 적용.
+    # 값을 주면 매분 check-matrix 디스패처가 이 정의를 단독으로 due 평가해 실행한다
+    # (글로벌 정의는 전체 클러스터 대상). custom_* 정의의 주 스케줄 수단.
+
+    last_run_at = Column(DateTime, nullable=True)
+    # schedule_cron 디스패치 anchor — 마지막 자동 실행 시각(UTC).
 
     thresholds = Column(JSONB, nullable=True)
     # 예: {"warning_days": 30, "critical_days": 7}
