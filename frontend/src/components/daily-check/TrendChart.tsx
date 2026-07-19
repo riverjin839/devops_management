@@ -51,7 +51,7 @@ export function TrendChart({ trend, days = 7 }: Props) {
                   k === 'critical' ? 'h-2 w-2 rounded-full bg-red-500' :
                   k === 'warning'  ? 'h-2 w-2 rounded-full bg-amber-500' :
                   k === 'healthy'  ? 'h-2 w-2 rounded-full bg-emerald-500' :
-                                     'h-2 w-2 rounded-full bg-gray-400'
+                                     'h-2 w-2 rounded-full bg-status-unknown'
                 }
               />
               {k}: {v}
