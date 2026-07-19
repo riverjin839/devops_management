@@ -173,7 +173,9 @@ devops_management/
 │                                #  +kubewatch+grafana-renderer)
 ├── skaffold.yaml, Makefile, Jenkinsfile
 ├── CODE_MAP.md                  # 기능 → 파일 지도 (여기부터 볼 것)
-├── DESIGN_SYSTEM.md             # UI 디자인 시스템 상세
+├── DESIGN_SYSTEM.md             # UI 디자인 시스템 상세 (토큰/규격 원천)
+├── DESIGN.md                    # UX/UI 운영 문서 — 현행화·개선포인트 백로그·고도화 로드맵·점검 이력
+│                                #  (ux-ui-designer 에이전트/스킬이 관리)
 └── .env.example                 # backend 환경변수 템플릿
 ```
 
