@@ -26,5 +26,6 @@
 | `editor-docs` | 리치텍스트 에디터·문서 템플릿·이미지/렌더 관련 작업을 할 때 |
 | `release` | 새 버전 릴리스(마이너/패치) — SemVer 버전업·CHANGELOG·태그 절차 |
 | `docs-sync` | 기능 추가/변경 후 문서(README·CLAUDE.md·CODE_MAP·SCREENS·CHANGELOG) 동기화. CI `docs-sync` 검사 실패 시 |
+| `ux-ui-designer` | 디자인 감사·UX 점검·`DESIGN.md` 현행화/백로그 운영 (전담 에이전트: `.claude/agents/ux-ui-designer.md`) |
 
 > 참고: 운영 점검(Ops Checks) 콘솔 아키텍처와 점검 소스 추가는 `add-deep-checker` 에 정리.

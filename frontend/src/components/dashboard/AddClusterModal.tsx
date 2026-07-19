@@ -213,6 +213,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             </div>
           </div>
           <button onClick={handleClose} disabled={isSubmitting}
+            aria-label="닫기"
             className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground disabled:opacity-40">
             <X className="w-5 h-5" />
           </button>

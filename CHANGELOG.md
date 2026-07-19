@@ -11,6 +11,12 @@
 1.6.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **UX/UI 디자이너 운영 체계 + 차트 색 토큰**: 디자인 감사·백로그를 운영하는 `DESIGN.md`
+  문서 체계(ux-ui-designer 에이전트/스킬)를 신설하고 1회차 감사 실행. Frontend: 테마
+  추종 categorical 차트 토큰 `--chart-1~8`(3테마) 신설, 주요 차트(칸반 요약·클러스터
+  추이·주간 타임라인·버전 그래프)를 hex → 토큰으로 이관해 다크/라이트 전환 시 차트
+  대비가 테마를 따라가도록 개선.
+
 - **Deep Checker 고도화 — UI 커스텀 점검 생성 + 정의별 실행 이력/개별 로그**: admin 이
   코드 없이 UI 에서 새 점검을 만드는 커스텀 체커 3종(`custom_http` HTTP/TCP 프로브,
   `custom_kubectl` 읽기전용 kubectl 명령 + 라인/숫자/정규식 파싱, `custom_promql`
@@ -32,6 +38,11 @@
 ## [1.6.1] - 2026-07-17
 
 ### Changed
+- **디자인 컨벤션 정리 (DESIGN.md D-001~D-008)**: Settings/InfraTopology/NodeImages 의
+  수제 카드를 MacCard 로 수렴, button `sm` 라운딩을 base(`rounded-xl`)로 통일, 잔존
+  고정 팔레트(gray-*)를 status 토큰으로 치환, 아이콘 전용 버튼에 `aria-label` 병행
+  표준 적용. CLAUDE.md UI 섹션·DESIGN_SYSTEM.md 헤더를 실제 테마 체계(default/light/
+  dark 3종, radius 토큰)로 현행화.
 - **3차 문서 감사: infra README·스킬·로드맵 문서**: `k8s/README.md` 의 실제 오류 정정 —
   kind/airgap 오버레이 네임스페이스 오기재(`k8s-monitor-dev/prod` → 실제 `k8s-monitor`),
   airgap 환경 표(레플리카 1·HPA 전체 삭제·`DEBUG=true`·TLS 없음) 정정, observability

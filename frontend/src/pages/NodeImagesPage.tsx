@@ -4,6 +4,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
 import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu } from '@/components/node-images';
 import { ClusterSidebar, SnapshotProgressCard, ExportMenu } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
@@ -134,9 +135,9 @@ export function NodeImagesPage() {
           </div>
 
           {isLoading ? (
-            <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
+            <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
               {clustersLoading ? 'Loading clusters...' : 'Loading node images...'}
-            </div>
+            </MacCard>
           ) : computing ? (
             <SnapshotProgressCard
               processed={result?.processed ?? 0}
@@ -146,11 +147,11 @@ export function NodeImagesPage() {
               unit="노드"
             />
           ) : !activeClusterId ? (
-            <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
+            <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
               클러스터를 선택하세요.
-            </div>
+            </MacCard>
           ) : nodesError ? (
-            <div className="bg-card border border-red-500/30 rounded-xl p-8">
+            <MacCard rootClassName="border-red-500/30" bodyPadding="p-8">
               <div className="flex flex-col items-center gap-3 text-center">
                 <AlertTriangle className="w-8 h-8 text-red-400" />
                 <div>
@@ -163,7 +164,7 @@ export function NodeImagesPage() {
                   클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
                 </p>
               </div>
-            </div>
+            </MacCard>
           ) : view === 'node-table' ? (
             <NodeImagesTable nodes={nodes} searchQuery={searchQuery} />
           ) : view === 'label-group' ? (

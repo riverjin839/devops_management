@@ -75,6 +75,7 @@ dump.rdb
 # Claude Code local settings — 내용은 무시하되, 공유용 Agent Skills 는 추적(github 반영)
 .claude/*
 !.claude/skills/
+!.claude/agents/
 .superpowers/
 
 # Vagrant (로컬 테스트 클러스터 — Mac/Windows, 멀티클러스터 포함)

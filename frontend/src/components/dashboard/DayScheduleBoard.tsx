@@ -410,7 +410,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
       {/* header */}
       <div className="flex-none flex items-center gap-1.5 mb-2">
         <button onClick={() => setViewDate((d) => addDays(d, -1))}
-          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="이전 날">
+          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="이전 날" aria-label="이전 날">
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
         <div className="flex items-center gap-1.5 px-1">
@@ -420,12 +420,12 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
           </span>
         </div>
         <button onClick={() => setViewDate((d) => addDays(d, 1))}
-          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="다음 날">
+          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="다음 날" aria-label="다음 날">
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
         {!isToday && (
           <button onClick={() => setViewDate(todayStr)}
-            className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-primary" title="오늘로 돌아가기">
+            className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-primary" title="오늘로 돌아가기" aria-label="오늘로 돌아가기">
             <RotateCcw className="w-3 h-3" />
           </button>
         )}
@@ -445,6 +445,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             onClick={() => cycleSelectedName(-1)}
             disabled={namesList.length === 0}
             title="이전 담당자"
+            aria-label="이전 담당자"
             className="flex items-center justify-center w-6 py-1 border-r border-border hover:bg-secondary text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed">
             <ChevronLeft className="w-3 h-3" />
           </button>
@@ -459,6 +460,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             onClick={() => cycleSelectedName(1)}
             disabled={namesList.length === 0}
             title="다음 담당자"
+            aria-label="다음 담당자"
             className="flex items-center justify-center w-6 py-1 border-l border-border hover:bg-secondary text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed">
             <ChevronRight className="w-3 h-3" />
           </button>
@@ -623,7 +625,7 @@ function SessionBox({
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 flex-shrink-0"
-              title="이 시간 블록 삭제">
+              title="이 시간 블록 삭제" aria-label="이 시간 블록 삭제">
               <Trash2 className="w-3 h-3" />
             </button>
           )}
@@ -679,7 +681,7 @@ function AddBlockMenu({
         style={{ top: Math.max(0, y) }}>
         <div className="flex items-center justify-between px-1.5 py-1">
           <span className="text-xs font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
+          <button onClick={onClose} aria-label="닫기" className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
         </div>
         {candidates.length > 0 && (
           <>

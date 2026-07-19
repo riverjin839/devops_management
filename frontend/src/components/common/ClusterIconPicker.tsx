@@ -265,6 +265,7 @@ export function ClusterIconPicker({
                         key={name}
                         onClick={() => handleSelectLucide(name)}
                         title={name}
+                        aria-label={name}
                         className={`flex items-center justify-center aspect-square rounded-md transition-colors ${
                           isActive
                             ? 'bg-primary/15 text-primary ring-1 ring-primary/40'

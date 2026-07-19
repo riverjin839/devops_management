@@ -173,7 +173,9 @@ devops_management/
 │                                #  +kubewatch+grafana-renderer)
 ├── skaffold.yaml, Makefile, Jenkinsfile
 ├── CODE_MAP.md                  # 기능 → 파일 지도 (여기부터 볼 것)
-├── DESIGN_SYSTEM.md             # UI 디자인 시스템 상세
+├── DESIGN_SYSTEM.md             # UI 디자인 시스템 상세 (토큰/규격 원천)
+├── DESIGN.md                    # UX/UI 운영 문서 — 현행화·개선포인트 백로그·고도화 로드맵·점검 이력
+│                                #  (ux-ui-designer 에이전트/스킬이 관리)
 └── .env.example                 # backend 환경변수 템플릿
 ```
 
@@ -437,82 +439,59 @@ Both `AIAgentService` (`agent_service.py`) and `PrometheusService` (`prometheus_
 
 ## UI Design System
 
-The frontend uses a **macOS-inspired light theme** (reference: weather-theme.vercel.app screenshot).
+테마 3종 + 토큰 기반 시스템이다. 토큰 실측값의 원천은 `frontend/src/index.css`, 규격 근거는
+`DESIGN_SYSTEM.md`, 운영(감사·백로그)은 `DESIGN.md`.
 
-### Core Visual Identity
+### Theme System (`stores/themeStore.ts` — `k8s:theme`, fallback `'default'`)
 
-| Token | Value | Usage |
+| `<html>` 클래스 | 성격 | 비고 |
 |---|---|---|
-| `--background` | `hsl(0 0% 87%)` — `#DEDEDE` | Page background (medium gray) |
-| `--card` | `hsl(0 0% 97%)` — `#F7F7F7` | Card surface (near white) |
-| `--border` | `hsl(0 0% 80%)` — `#CCCCCC` | Subtle card borders |
-| `--primary` | `hsl(211 100% 44%)` — `#0071E3` | macOS blue accent |
-| `--muted-foreground` | `hsl(0 0% 42%)` — `#6B6B6B` | Secondary text |
-| `--radius` | `0.875rem` (14 px) | Base border radius |
-| `--card-shadow` | `0 2px 14px rgba(0,0,0,0.07)` | Subtle elevation |
+| `html.default` | **기본값** — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경, `--radius` 14px, 은은한 그림자, 코랄 accent) | 신규 사용자 첫 진입 화면. 레거시 `'claude'` 값은 자동 마이그레이션 |
+| `:root` / `html.light` | Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign |
+| `html.dark` | Databricks-leaning 다크 | DESIGN_SYSTEM.md "Ops Slate" 계열 |
+| (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 |
+
+핵심 원칙: **모든 색·라운딩은 테마별로 값이 달라지므로 고정값 대신 토큰을 쓴다.**
+Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단계
+(`bg-surface-container-lowest~highest`), brand(`--brand-jira`), motion(`--motion-*`) 토큰이
+`index.css` 에 3테마 모두 정의돼 있다.
+
+### 라운딩 (radius 토큰)
+
+`tailwind.config.js` 매핑: `rounded-lg` = `var(--radius)` / `rounded-md` = radius−2px /
+`rounded-sm` = radius−4px — **테마 인지(theme-aware)**. `rounded-xl`/`rounded-2xl` 은 고정값.
+
+- **카드**: `MacCard`(flat 기본, `rounded-md` 토큰) 사용 — 페이지에서 카드 div 를 직접 만들지 않는다.
+- **버튼/입력**: `rounded-xl` (`ui/button.tsx` 기준). sharp corner 금지.
+- 직접 `rounded-2xl` 카드는 레거시(mac variant·다이얼로그) — 신규 코드에서 사용하지 않는다.
 
 ### MacCard Component (`frontend/src/components/ui/MacCard.tsx`)
 
-Every major UI section is wrapped in a `MacCard`. The pattern:
+모든 주요 섹션은 `MacCard` 로 감싼다. shadcn `Card` 프리미티브의 어댑터이며 variant 2종:
 
-```
-┌──────────────────────────────────────────┐
-│  ● ● ●        SECTION TITLE              │  ← header: traffic lights + centered title
-├──────────────────────────────────────────┤  ← 1 px divider
-│                                          │
-│   {children}                             │  ← body: p-5 default padding
-│                                          │
-└──────────────────────────────────────────┘
-```
+- **`flat` (기본)**: 평평한 표면 + 1px 보더, 좌측 정렬 소형 대문자 라벨 헤더 (`bg-surface-container-high`), 라운딩 `rounded-md` 토큰. 신규 코드는 전부 이것.
+- **`mac` (레거시 opt-in)**: 신호등 3점 + 중앙 타이틀의 구 macOS 창 스타일. 신규 사용 금지.
 
-Traffic-light colors (CSS vars available anywhere):
-- `--mac-red`    `#FF5F57`
-- `--mac-yellow` `#FEBC2E`
-- `--mac-green`  `#28C840`
-
-**Usage:**
 ```tsx
 import { MacCard } from '@/components/ui/MacCard';
 
-<MacCard title="Cluster Status">
-  {/* content */}
-</MacCard>
+<MacCard title="Cluster Status">{/* content */}</MacCard>
 ```
 
-Props: `title?`, `children`, `className?` (body extra classes), `rootClassName?`, `bodyPadding?` (default `"p-5"`).
+Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className?`(body),
+`rootClassName?`, `bodyPadding?`(기본 flat `p-4` / mac `p-5`).
+신호등 CSS 변수(`--mac-red/yellow/green`)는 mac variant 전용으로만 유지된다.
 
-### Theme System
+### Component Conventions
 
-Default theme: **light** (macOS palette). Dark mode available via sidebar toggle.
-
-`themeStore.ts` applies `.light` / `.dark` class to `<html>`:
-- `:root` (no class) → light macOS palette
-- `html.light`       → same light palette (explicit class)
-- `html.dark`        → standard dark palette
-
-**Changing default:** `localStorage.getItem('k8s:theme')` — falls back to `'light'` if unset.
-
-### Dashboard Layout Conventions
-
-```
-min-h-screen bg-background
-  sticky top-bar (backdrop-blur)
-  main (max-w-[1600px] space-y-5)
-    grid 4-col SummaryStats  ← individual MacCards (no outer title)
-    MacCard "Cluster Status"
-    MacCard "Prometheus Insights"
-    MacCard "Playbook Checks"   (conditional)
-    MacCard "작업 / 이슈 현황"
-    MacCard "Recent Check History"  (bodyPadding="p-0")
-```
-
-### Component Conventions (updated)
-
-- **Rounded corners**: always `rounded-2xl` for cards, `rounded-xl` for buttons/inputs.
-- **Shadows**: use `.mac-shadow` utility class (maps to `--card-shadow`).
-- **Buttons**: `rounded-xl`, never sharp corners.
-- **Section titles inside MacCard**: content should NOT repeat the card title as an `<h2>` — the MacCard header already carries it.
-- **Colors**: avoid raw hex in JSX; prefer Tailwind tokens (`text-primary`, `bg-secondary`, etc.) or `hsl(var(--*))`.
+- **카드**: `MacCard` 사용, 직접 `bg-card border` div 조합 금지 (DESIGN.md D-004).
+- **Shadows**: light/dark 는 `--card-shadow: none`(보더가 그림자 대체), default 테마만 은은한 depth —
+  `.mac-shadow` 유틸이 토큰을 따라가므로 개별 shadow 클래스를 만들지 않는다.
+- **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
+- **Colors**: JSX 내 raw hex 금지 — Tailwind 토큰(`text-primary` 등) 또는 `hsl(var(--*))`.
+  고정 팔레트(`text-white`, `bg-gray-*` 등)도 금지 — 테마 토큰(`text-foreground`,
+  `text-muted-foreground`, `bg-card`, `bg-secondary`)을 쓴다. 차트/캔버스는 `--chart-*` 토큰 우선.
+- **접근성**: 아이콘 전용 버튼은 `title` 과 함께 **`aria-label` 병행**을 표준으로 한다.
 
 ### Cluster Sidebar Standard (`ClusterSidebar`) — required for all per-cluster pages
 

@@ -45,9 +45,9 @@ export function MacCard({
       <Card className={cn('mac-shadow', rootClassName)}>
         <div className="flex items-center px-4 py-3 gap-2">
           <div className="flex items-center gap-[6px] flex-shrink-0">
-            <span className="w-[13px] h-[13px] rounded-full" style={{ background: 'var(--mac-red)' }} />
-            <span className="w-[13px] h-[13px] rounded-full" style={{ background: 'var(--mac-yellow)' }} />
-            <span className="w-[13px] h-[13px] rounded-full" style={{ background: 'var(--mac-green)' }} />
+            <span className="w-[13px] h-[13px] rounded-full bg-[var(--mac-red)]" />
+            <span className="w-[13px] h-[13px] rounded-full bg-[var(--mac-yellow)]" />
+            <span className="w-[13px] h-[13px] rounded-full bg-[var(--mac-green)]" />
           </div>
           {title && (
             <span className="flex-1 text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground select-none pr-8">
