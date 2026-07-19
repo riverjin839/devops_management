@@ -170,6 +170,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             onClick={() => setViewDate((d) => addDays(d, -1))}
             className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
             title="이전 날"
+            aria-label="이전 날"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
@@ -185,6 +186,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             onClick={() => setViewDate((d) => addDays(d, 1))}
             className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
             title="다음 날"
+            aria-label="다음 날"
           >
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -194,6 +196,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
               onClick={() => setViewDate(todayStr)}
               className="ml-1 w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary transition-colors text-muted-foreground hover:text-primary"
               title="오늘로 돌아가기"
+              aria-label="오늘로 돌아가기"
             >
               <RotateCcw className="w-3 h-3" />
             </button>

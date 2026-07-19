@@ -214,6 +214,7 @@ export function ViewModeBar({
             ref={btnRef}
             onClick={() => setOpen((v) => !v)}
             title="표 스타일 설정"
+            aria-label="표 스타일 설정"
             className={`p-[6px] rounded-lg border transition-all duration-150 ${
               open
                 ? 'border-primary/40 bg-primary/10 text-primary'

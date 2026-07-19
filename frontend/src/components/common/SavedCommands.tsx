@@ -106,10 +106,12 @@ export function SavedCommands({
             className="flex-1 px-2 py-1 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <button onClick={add} disabled={!nameInput.trim()}
+            aria-label="저장"
             className="p-1 rounded bg-primary text-primary-foreground disabled:opacity-40">
             <Check className="w-3 h-3" />
           </button>
           <button onClick={() => { setAdding(false); setNameInput(''); }}
+            aria-label="취소"
             className="p-1 rounded bg-secondary text-muted-foreground">
             <X className="w-3 h-3" />
           </button>
@@ -136,6 +138,7 @@ export function SavedCommands({
                   if (confirm(`"${it.name}" 저장된 명령을 삭제하시겠습니까?`)) remove(it.id);
                 }}
                 title="삭제"
+                aria-label="삭제"
                 className="px-1.5 py-1 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
               >
                 <Trash2 className="w-3 h-3" />

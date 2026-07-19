@@ -157,7 +157,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
           <h2 className="text-lg font-semibold">
             {editingAddon ? `Edit: ${editingAddon.name}` : selected ? selected.name : 'Add Health Check'}
           </h2>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
+          <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

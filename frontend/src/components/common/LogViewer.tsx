@@ -250,6 +250,7 @@ export function LogViewer({
           <button
             onClick={() => setWrap((v) => !v)}
             title={wrap ? '줄바꿈 해제' : '줄바꿈'}
+            aria-label={wrap ? '줄바꿈 해제' : '줄바꿈'}
             className={`p-1 rounded hover:bg-secondary ${wrap ? 'text-primary' : 'text-muted-foreground'}`}
           >
             <WrapText className="w-3 h-3" />
@@ -257,6 +258,7 @@ export function LogViewer({
           <button
             onClick={copy}
             title="복사"
+            aria-label="복사"
             className="p-1 rounded hover:bg-secondary text-muted-foreground"
           >
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}

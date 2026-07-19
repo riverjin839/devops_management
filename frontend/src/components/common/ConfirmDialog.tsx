@@ -50,6 +50,7 @@ export function ConfirmDialog({
           </div>
           <button
             onClick={onCancel}
+            aria-label="닫기"
             className="p-1 rounded hover:bg-secondary text-muted-foreground flex-shrink-0"
           >
             <X className="w-4 h-4" />

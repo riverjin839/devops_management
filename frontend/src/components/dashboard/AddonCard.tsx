@@ -410,6 +410,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
               }}
               className="p-1.5 rounded-md hover:bg-emerald-500/10 text-emerald-400 transition-colors"
               title="Run this check"
+              aria-label="Run this check"
             >
               <Play className="w-4 h-4" />
             </button>
@@ -422,6 +423,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
               }}
               className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors"
               title="Edit check"
+              aria-label="Edit check"
             >
               <Pencil className="w-4 h-4" />
             </button>
@@ -434,6 +436,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
               }}
               className="p-1.5 rounded-md hover:bg-red-500/10 text-red-400 transition-colors"
               title="Delete check"
+              aria-label="Delete check"
             >
               <Trash2 className="w-4 h-4" />
             </button>
