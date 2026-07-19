@@ -27,13 +27,13 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 
 | 지표 | 건수 (2026-07-19) | 목표 | 비고 |
 |---|---|---|---|
-| JSX 내 raw hex 색상 | 130건 / 22파일 | 화이트리스트 외 0 | 거의 전량 차트·SVG·3D 시각화 색 상수(허용 예외) — 단 `--chart-*` 토큰화 시 다크모드 대비 개선 여지 (D-005) |
+| JSX 내 raw hex 색상 | 130건 / 22파일 → Recharts/SVG 계열 이관 완료 | 화이트리스트 외 0 | D-005 처리: `--chart-1~8` 신설 + 4파일 이관. 잔존은 캔버스/three.js 허용 예외 |
 | 인라인 `style={{...}}` | 220건 / 71파일 | 동적 계산 외 0 | 상위 파일은 그래프/캔버스 좌표 계산으로 정당. 색·배경 하드코딩성 인라인 혼재 (D-008) |
-| 고정 팔레트(`text/bg-white·black·gray-*`) | 338건 / 106파일 | 0 | 설정·워크아이템·서비스 도메인 컴포넌트에 집중 — 다크모드 대비 저하 위험 (D-003) |
-| 카드/버튼의 컨벤션 외 라운딩 | 카드성 87건 · 버튼 33건 | 0 | **MacCard 기본(flat)이 `rounded-md`** 로 문서(rounded-2xl)와 불일치 (D-002), button `sm` variant `rounded-lg` (D-006) |
+| 고정 팔레트(`text/bg-white·black·gray-*`) | ~~338건~~ **오탐 정정** → 실측 110건 (스크림 62 · 유색 배경 위 text-white 등 43 · gray-* 5) | gray-* 0 | D-003 처리: gray-* 5건 토큰 치환 완료. 스크림·유색 배경 위 text-white 는 허용 예외 |
+| 카드/버튼의 컨벤션 외 라운딩 | 해소 | 토큰 기준 준수 | D-002 판정: `rounded-md`=radius 토큰이 정본, 문서를 현행화. D-006: button `sm` 라운딩 base 통일 |
 | ClusterSidebar 비-iconOnly | **0건** (26개 사용처 전부 준수) | 0 | ✅ 완전 준수 |
 | 페이지 내 `<select>` 클러스터 선택기 | **0건** | 0 | ✅ 완전 준수 (pages 의 select 40여 개는 전부 필터/폼/페이지네이션용) |
-| MacCard 미사용 수제 카드 div | 116줄 / 약 20개 페이지 | 수렴 | SettingsPage·InfraTopologyPage·NodeImagesPage 등 (D-004) |
+| MacCard 미사용 수제 카드 div | 116줄 / 약 20개 페이지 → 1차 트랜치 8개 카드 전환 | 수렴 | D-004 1차: Settings·InfraTopology·NodeImages 완료. 잔여는 2회차 감사에서 재산정 |
 | 접근성 (`aria-*` / 아이콘 버튼 라벨) | aria 사용 파일 43% · 버튼 1084개 중 `title` 718 | aria-label 병행 | `title` 위주 정착 — 스크린리더 신뢰도 위해 `aria-label` 병행 표준화 (D-007) |
 
 ### 1.3 허용 예외 (위반으로 세지 않음)
@@ -44,6 +44,9 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | 컬러픽커 기본값 prop (`defaultBg="#..."`) | 색상 값 자체가 데이터 |
 | 외부 서비스 고유색 (Jira `#0052CC` 등) | `brand.*` 토큰 경유로 관리 |
 | portal/tooltip 위치 계산 인라인 스타일 | 런타임 좌표 — Tailwind 로 표현 불가 |
+| `bg-black/60` 모달 스크림 (~62건/20파일) | 레포 공통 모달 백드롭 컨벤션 — 테마 중립(양 테마 성립) |
+| 유색 배경(status/primary) 위 `text-white` | 대비가 배경색으로 보장됨 |
+| WebGL(ForceGraph3D) 엣지 alpha-hex (`#ffffff55` 등) | WebGL 링크 블렌딩이 alpha-hex 직접 파싱 — 토큰 이관 시 동작 보장 불가 (코드 주석 명시) |
 
 ---
 
@@ -54,14 +57,14 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 
 | ID | 영역 | 문제 | 사용자 영향 | 심각도 | 상태 | 비고 |
 |---|---|---|---|---|---|---|
-| D-001 | 문서 정합성 | CLAUDE.md UI 섹션은 "macOS 라이트 기본"으로, DESIGN_SYSTEM.md 는 "다크 기본(Ops Slate)"으로 서술 — 기본 테마 서술 충돌 | 신규 화면 작업 시 기준 혼선 → 화면 간 톤 불일치 유발 | 중간 | 대기 | 실제 기본값(`themeStore` fallback) 확인 후 한쪽으로 통일 |
-| D-002 | 컴포넌트-문서 불일치 | `MacCard` 기본 'flat' variant 가 `rounded-md` 렌더 (`MacCard.tsx:66`) — 문서 컨벤션(카드 `rounded-2xl`, 기반 `card.tsx` 는 2xl)과 충돌 | 페이지마다 카드 라운딩이 달라져 시각 일관성 훼손. 신규 작업 시 기준 혼선 | 중간 | 대기 | 문서 또는 컴포넌트 중 한쪽으로 현행화 결정 필요 — 감사 1회차 우선순위 #1 |
-| D-003 | 다크모드 | 고정 팔레트(`text/bg-white·black·gray-*`) 338건/106파일 — `LakeServiceTypeManager`(18) `ServiceCategoryManager`(13) `WorkItemTableRow`(12) `WorkItemBoardPage`(10) 등 설정·워크아이템·서비스 도메인에 집중 | 다크모드에서 대비 저하·가독성 손상 가능 | 높음 | 대기 | 집중 파일부터 `text-foreground`/`bg-card`/`text-muted-foreground` 토큰으로 치환 |
-| D-004 | 일관성 | 약 20개 페이지가 MacCard 없이 수제 카드 div(`bg-card border rounded-*`) 사용 — `SettingsPage`(9) `InfraTopologyPage`(7) `NodeImagesPage`(6) 등 | 카드 헤더·라운딩·구분선이 페이지마다 달라짐 | 중간 | 대기 | MacCard 로 점진 수렴 (frontend-page 스킬 컨벤션) |
-| D-005 | 시각화 토큰 | 차트·다이어그램 raw hex 130건/22파일 (`MindMapPage` 33 · `OntologyPage` 15 · `KanbanSummaryCharts` 9 등) — 허용 예외이나 색이 테마와 무관하게 고정 | 다크/라이트 전환 시 차트 대비 불균형 | 중간 | 대기 | `hsl(var(--chart-*))` 토큰 체계로 이관 (DESIGN_SYSTEM.md W1 화이트리스트 축소) |
-| D-006 | 컴포넌트 규격 | `button.tsx:22` `sm` variant 가 `rounded-lg` (base 는 `rounded-xl`) — 소형 버튼이 시스템 차원에서 라운딩 이탈 | 소형 버튼 톤 불일치 (경미) | 낮음 | 대기 | variant 정의 1곳 수정으로 전체 해소 가능 |
+| D-001 | 문서 정합성 | CLAUDE.md UI 섹션은 "macOS 라이트 기본"으로, DESIGN_SYSTEM.md 는 "다크 기본(Ops Slate)"으로 서술 — 기본 테마 서술 충돌 | 신규 화면 작업 시 기준 혼선 → 화면 간 톤 불일치 유발 | 중간 | 완료 | 실측: 기본값은 `'default'`(Claude 브랜드 톤), light/dark 는 Databricks 계열 대안. 양쪽 문서 서술 통일 (`6bac1cf`) |
+| D-002 | 컴포넌트-문서 불일치 | `MacCard` 기본 'flat' variant 가 `rounded-md` 렌더 (`MacCard.tsx:66`) — 문서 컨벤션(카드 `rounded-2xl`, 기반 `card.tsx` 는 2xl)과 충돌 | 페이지마다 카드 라운딩이 달라져 시각 일관성 훼손. 신규 작업 시 기준 혼선 | 중간 | 완료 | 판정: `rounded-md` 는 `var(--radius)` 기반 **테마 인지 토큰**이라 코드가 규격상 옳음 → 문서 현행화로 해소. CLAUDE.md UI 섹션 전면 갱신 + frontend-page 스킬 문구 갱신 (`6bac1cf`) |
+| D-003 | 다크모드 | 고정 팔레트(`text/bg-white·black·gray-*`) 338건/106파일 — `LakeServiceTypeManager`(18) `ServiceCategoryManager`(13) `WorkItemTableRow`(12) `WorkItemBoardPage`(10) 등 설정·워크아이템·서비스 도메인에 집중 | 다크모드에서 대비 저하·가독성 손상 가능 | 높음 | 완료 | **1차 감사 338건은 과대집계 오탐** — 상위 파일들은 기존 작업에서 이미 토큰화 완료 상태였음. 실측 잔존 gray-* 5건(3파일)만 `status-unknown` 토큰으로 치환 (`4c8ab30`). `bg-black/60` 모달 스크림 62건은 허용 예외 등재 |
+| D-004 | 일관성 | 약 20개 페이지가 MacCard 없이 수제 카드 div(`bg-card border rounded-*`) 사용 — `SettingsPage`(9) `InfraTopologyPage`(7) `NodeImagesPage`(6) 등 | 카드 헤더·라운딩·구분선이 페이지마다 달라짐 | 중간 | 완료 | 1차 트랜치: Settings(4)·InfraTopology(1)·NodeImages(3) 섹션 카드 8개 전환 (`2868cb5`). stat 타일/리스트 행/모달 내부는 컨벤션대로 유지. 잔여 페이지는 2회차 감사에서 재산정 |
+| D-005 | 시각화 토큰 | 차트·다이어그램 raw hex 130건/22파일 (`MindMapPage` 33 · `OntologyPage` 15 · `KanbanSummaryCharts` 9 등) — 허용 예외이나 색이 테마와 무관하게 고정 | 다크/라이트 전환 시 차트 대비 불균형 | 중간 | 완료 | `--chart-1~8` 토큰 신설(3테마) + Kanban/ClusterTrends/WeeklyTimeline/VersionGraph 이관, three.js 는 `chartTokenColor()` computed-style 헬퍼 (`7886815`). MindMap/Ontology/FlowGraph3D 캔버스는 허용 예외 유지 |
+| D-006 | 컴포넌트 규격 | `button.tsx:22` `sm` variant 가 `rounded-lg` (base 는 `rounded-xl`) — 소형 버튼이 시스템 차원에서 라운딩 이탈 | 소형 버튼 톤 불일치 (경미) | 낮음 | 완료 | `sm` 의 `rounded-lg` 오버라이드 제거 → base `rounded-xl` 상속으로 통일 (`6bac1cf`) |
 | D-007 | 접근성 | 아이콘 전용 버튼이 `title` 위주(718/1084) — `aria-label` 병행이 표준화돼 있지 않음 | `title` 은 스크린리더 지원 신뢰도가 낮아 보조기기 사용성 저하 | 중간 | 대기 | 아이콘 버튼 `aria-label` 병행을 규칙화 + 점진 적용 (R-3 연계) |
-| D-008 | 인라인 스타일 | 시각화 외 파일의 색·배경 인라인 하드코딩 혼재 (예: `MacCard.tsx:48` `style={{ background:'var(--mac-red)' }}` 류) | 토큰 우회 경로가 남아 테마 관리 어려움 | 낮음 | 대기 | 폼/모달류 파일 선별 정리 — 동적 좌표 계산은 허용 예외 유지 |
+| D-008 | 인라인 스타일 | 시각화 외 파일의 색·배경 인라인 하드코딩 혼재 (예: `MacCard.tsx:48` `style={{ background:'var(--mac-red)' }}` 류) | 토큰 우회 경로가 남아 테마 관리 어려움 | 낮음 | 완료 | MacCard 신호등 인라인 → Tailwind arbitrary 클래스, ViewModeBar 의 깨진 `color: var(--muted-foreground)` (HSL triplet 원시 사용 버그) 수정 (`6bac1cf`). 동적 좌표 계산은 허용 예외 유지 |
 
 ---
 
