@@ -3,18 +3,19 @@ import {
 } from 'recharts';
 import type { WorkItem } from '@/types';
 
-// ── 색상 ──────────────────────────────────────────────────────────────────────
+// ── 색상 (D-005: 차트 토큰 체계) ─────────────────────────────────────────────
+// 시리즈 구분색은 --chart-N, 의미 있는 색(완료/해결=성공, 미해결=경고)은 --status-*.
 const TASK_COLORS: Record<string, string> = {
-  'Backlog':        '#6b7280',
-  'To Do':          '#3b82f6',
-  'In Progress':    '#f59e0b',
-  'Review & Test':  '#8b5cf6',
-  'Done':           '#10b981',
+  'Backlog':        'hsl(var(--chart-8))',
+  'To Do':          'hsl(var(--chart-1))',
+  'In Progress':    'hsl(var(--chart-3))',
+  'Review & Test':  'hsl(var(--chart-4))',
+  'Done':           'hsl(var(--status-healthy))',
 };
 
 const ISSUE_COLORS: Record<string, string> = {
-  '미해결': '#f59e0b',
-  '해결':   '#10b981',
+  '미해결': 'hsl(var(--status-warning))',
+  '해결':   'hsl(var(--status-healthy))',
 };
 
 // ── 커스텀 툴팁 ───────────────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]} name="건수">
                 {taskData.map((entry) => (
-                  <Cell key={entry.name} fill={TASK_COLORS[entry.name] ?? '#6b7280'} />
+                  <Cell key={entry.name} fill={TASK_COLORS[entry.name] ?? 'hsl(var(--chart-8))'} />
                 ))}
               </Bar>
             </BarChart>
@@ -162,7 +163,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
               <Legend wrapperStyle={{ display: 'none' }} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]} name="건수">
                 {issueData.map((entry) => (
-                  <Cell key={entry.name} fill={ISSUE_COLORS[entry.name] ?? '#6b7280'} />
+                  <Cell key={entry.name} fill={ISSUE_COLORS[entry.name] ?? 'hsl(var(--chart-8))'} />
                 ))}
               </Bar>
             </BarChart>

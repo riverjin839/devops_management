@@ -40,28 +40,22 @@ const KR_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 type ViewMode = 'task' | 'assignee';
 
-// ── status visual map (macOS / Claude soft gradient bars) ───────────────────────
-// from/to 는 Tailwind 팔레트와 동일한 hex — 배경 투명도(Settings → 홈 화면 설정)를
-// 사용자가 조절할 수 있도록 클래스 대신 hex 로 들고 rgba() 로 조합해 inline style 렌더.
-const STATUS_BAR: Record<KanbanStatus, { from: string; to: string; ring: string; label: string }> = {
-  done:        { from: '#34d399', to: '#10b981', ring: 'ring-emerald-500/30', label: '완료' },
-  in_progress: { from: '#38bdf8', to: '#3b82f6', ring: 'ring-blue-500/30',    label: '진행중' },
-  review_test: { from: '#a78bfa', to: '#a855f7', ring: 'ring-purple-500/30',  label: '검토' },
-  todo:        { from: '#fcd34d', to: '#fb923c', ring: 'ring-orange-500/30', label: 'Todo' },
-  backlog:     { from: '#cbd5e1', to: '#94a3b8', ring: 'ring-slate-500/30',  label: 'Backlog' },
+// ── status visual map (D-005: 차트/상태 토큰 체계) ─────────────────────────────
+// 배경 투명도(Settings → 홈 화면 설정)를 사용자가 조절할 수 있도록 토큰명을 들고
+// hsl(var(--x) / a%) 로 조합해 inline style 렌더한다 — 테마(light/dark/default) 추종.
+// done 은 "완료=성공" 의미가 있어 --status-healthy, 나머지는 시리즈 구분용 --chart-N.
+const STATUS_BAR: Record<KanbanStatus, { token: string; ring: string; label: string }> = {
+  done:        { token: '--status-healthy', ring: 'ring-emerald-500/30', label: '완료' },
+  in_progress: { token: '--chart-1',        ring: 'ring-blue-500/30',    label: '진행중' },
+  review_test: { token: '--chart-4',        ring: 'ring-purple-500/30',  label: '검토' },
+  todo:        { token: '--chart-7',        ring: 'ring-orange-500/30',  label: 'Todo' },
+  backlog:     { token: '--chart-8',        ring: 'ring-slate-500/30',   label: 'Backlog' },
 };
 
-/** #rrggbb + 0~100 투명도 → rgba() 문자열. */
-function hexToRgba(hex: string, opacityPct: number): string {
-  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-  if (!m) return hex;
-  const [r, g, b] = [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
-  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(100, opacityPct)) / 100})`;
-}
-
-/** 상태 막대 배경(그라데이션) inline style — 투명도 반영. */
-function barBackgroundStyle(sv: { from: string; to: string }, opacityPct: number): CSSProperties {
-  return { backgroundImage: `linear-gradient(to right, ${hexToRgba(sv.from, opacityPct)}, ${hexToRgba(sv.to, opacityPct)})` };
+/** 상태 막대 배경 inline style — 토큰 + 투명도(0~100) 반영. */
+function barBackgroundStyle(sv: { token: string }, opacityPct: number): CSSProperties {
+  const pct = Math.max(0, Math.min(100, opacityPct));
+  return { background: `hsl(var(${sv.token}) / ${pct}%)` };
 }
 
 function StatusGlyph({ status }: { status: KanbanStatus }) {

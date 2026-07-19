@@ -74,6 +74,18 @@ export default {
         brand: {
           jira: "hsl(var(--brand-jira) / <alpha-value>)",
         },
+        // ── Categorical chart tokens (D-005) — Recharts/SVG 시리즈 구분색 ──
+        // 의미 있는 색(성공/실패)은 status.* 를 쓰고, 시리즈 구분용만 chart-N 사용.
+        chart: {
+          1: "hsl(var(--chart-1) / <alpha-value>)",
+          2: "hsl(var(--chart-2) / <alpha-value>)",
+          3: "hsl(var(--chart-3) / <alpha-value>)",
+          4: "hsl(var(--chart-4) / <alpha-value>)",
+          5: "hsl(var(--chart-5) / <alpha-value>)",
+          6: "hsl(var(--chart-6) / <alpha-value>)",
+          7: "hsl(var(--chart-7) / <alpha-value>)",
+          8: "hsl(var(--chart-8) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
