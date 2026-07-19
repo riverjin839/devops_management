@@ -1,8 +1,11 @@
 # DEVOPS MANAGEMENT — Design System
 
 > **Stack**: React 18 + TypeScript + Tailwind CSS + Recharts + shadcn/ui (Radix)
-> **Mode**: Dark mode primary (light mode 보조)
-> **Source of truth**: 이 문서. 컴포넌트는 여기 정의된 토큰만 참조해야 함.
+> **Mode**: 테마 3종 — 기본값은 `default`(Anthropic Claude 브랜드 톤, radius 14px), 대안으로
+> `light`/`dark`(Databricks-leaning flat, radius 8px) + `system`. 이 문서의 "Ops Slate" 다크
+> 규격은 `html.dark` 테마에 해당한다. (테마 전환: `stores/themeStore.ts`, fallback `'default'`)
+> **Source of truth**: 규격 근거는 이 문서, 토큰 **실측값**은 `frontend/src/index.css` (테마별 상이).
+> 컴포넌트는 토큰만 참조해야 함. 운영(감사·백로그)은 `DESIGN.md`.
 > **검증**: ui-ux-pro-max v2.5.0 (50+ 스타일 / 161 팔레트 / 57 페어링 / 25 차트) 데이터와 대조 확정.
 
 ---

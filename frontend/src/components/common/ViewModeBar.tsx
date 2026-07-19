@@ -235,10 +235,7 @@ export function ViewModeBar({
                 <span className="text-xs font-semibold tracking-widest uppercase text-muted-foreground/60">
                   표 스타일
                 </span>
-                <div
-                  className="flex items-center gap-1"
-                  style={{ color: 'var(--muted-foreground)' }}
-                >
+                <div className="flex items-center gap-1 text-muted-foreground">
                   {/* live preview dot — matches active headerTheme */}
                   <div
                     className={`w-2 h-2 rounded-full ${
