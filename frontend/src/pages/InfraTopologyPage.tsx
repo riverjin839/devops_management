@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
-  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, GitBranch, Activity, ShieldCheck,
+  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, Activity, ShieldCheck,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
 import { ClusterSidebar } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
 import type {
   InfraNode,
@@ -685,11 +686,7 @@ export function InfraTopologyPage() {
 
             {/* Trace 패널 */}
             {activeCluster && (
-              <div className="bg-card border border-border rounded-xl p-4 mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <GitBranch className="w-4 h-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground">Pod/Service → Switch Trace</h2>
-                </div>
+              <MacCard title="Pod/Service → Switch Trace" rootClassName="mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
                   <input
                     value={traceNamespace}
@@ -759,7 +756,7 @@ export function InfraTopologyPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </MacCard>
             )}
 
             {/* 토폴로지 본문 */}
