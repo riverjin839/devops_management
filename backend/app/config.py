@@ -9,7 +9,14 @@ class Settings(BaseSettings):
     
     # Database
     database_url: str = "postgresql://postgres:postgres@localhost:5432/k8s_monitor"
-    
+    # SQLAlchemy 엔진 커넥션 풀. backend(API, HPA 2~10)와 celery worker/beat(HPA 2~8 + 1)
+    # 가 이 값을 공유하는 같은 engine 코드를 쓰므로, 기본값을 그대로 두면 replica 합계가
+    # PostgreSQL 기본 max_connections(100)를 쉽게 넘는다(예: baseline 만도 (2+2+1)×
+    # (10+20)=150). k8s worker/beat 배포는 DB_POOL_SIZE/DB_MAX_OVERFLOW 를 더 작게
+    # 오버라이드해서 쓴다(k8s/base/celery/*.yaml).
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
     

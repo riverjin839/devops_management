@@ -17,6 +17,8 @@ from typing import Literal, Optional
 
 import paramiko
 
+from app.services.ssh_host_keys import TofuHostKeyPolicy, apply_known_key
+
 
 @dataclass
 class SSHResult:
@@ -53,8 +55,12 @@ class SSHTarget:
 
 def _build_client(tgt: SSHTarget, connect_timeout: int) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
-    # 사내망/알려진 호스트만 다룬다는 전제에서 known_hosts 불필요
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    # 운영자가 매번 임의 사내 IP 를 입력하므로 고정 known_hosts 를 미리 배포할 수
+    # 없다 — 그렇다고 무조건 수락(AutoAddPolicy)하면 재접속 시 키가 바뀌어도
+    # (MITM/재설치) 알 방법이 없다. TOFU: 처음 보는 호스트는 수락+기록(Redis),
+    # 이미 아는 호스트는 저장된 키를 미리 심어둬 paramiko 가 스스로 검증하게 한다.
+    client.set_missing_host_key_policy(TofuHostKeyPolicy())
+    apply_known_key(client, tgt.host, tgt.port)
 
     kwargs: dict = {
         "hostname": tgt.host,

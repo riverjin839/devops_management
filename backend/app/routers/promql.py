@@ -14,8 +14,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models.metric_card import MetricCard
+from app.models.user import User
 from app.schemas.metric_card import (
     MetricCardCreate,
     MetricCardUpdate,
@@ -72,7 +74,11 @@ def get_card(card_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/cards", response_model=MetricCardResponse)
-def create_card(body: MetricCardCreate, db: Session = Depends(get_db)):
+def create_card(
+    body: MetricCardCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     card = MetricCard(**body.model_dump())
     db.add(card)
     db.commit()
@@ -82,7 +88,12 @@ def create_card(body: MetricCardCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/cards/{card_id}", response_model=MetricCardResponse)
-def update_card(card_id: UUID, body: MetricCardUpdate, db: Session = Depends(get_db)):
+def update_card(
+    card_id: UUID,
+    body: MetricCardUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Metric card not found")
@@ -95,7 +106,11 @@ def update_card(card_id: UUID, body: MetricCardUpdate, db: Session = Depends(get
 
 
 @router.delete("/cards/{card_id}")
-def delete_card(card_id: UUID, db: Session = Depends(get_db)):
+def delete_card(
+    card_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     card = db.query(MetricCard).filter(MetricCard.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Metric card not found")
@@ -177,8 +192,12 @@ async def query_card_sparkline(card_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/query/test")
-async def test_query(body: dict):
-    """Test an arbitrary PromQL query without saving it."""
+async def test_query(body: dict, _: User = Depends(require_operator)):
+    """Test an arbitrary PromQL query without saving it.
+
+    임의 PromQL 을 즉시 실행하는 프로브라 내부 Prometheus 를 정찰하는 데 쓰일 수
+    있음 — viewer 가 아닌 operator 이상만 허용.
+    """
     promql = body.get("promql", "")
     if not promql:
         raise HTTPException(status_code=400, detail="promql is required")

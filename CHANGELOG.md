@@ -17,9 +17,32 @@
   전체 아이콘 전용 버튼에 `aria-label` 83건 병행(K8sManage 공용 IconBtn 은
   aria-label 기본 배선) — 보드/캔버스형 페이지는 구조 리스크로 보류 기록.
 
-## [1.7.1] - 2026-07-20
-
 ### Fixed
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Low 5건)**: Blocker/High/Medium 조치에 이어
+  잔여 Low 등급 항목을 마저 반영.
+  - **SSH 호스트 키 무검증**: 배치잡/명령 실행이 `paramiko.AutoAddPolicy()` 로 첫 접속
+    시 호스트 키를 무조건 신뢰하고 이후에도 검증 없이 재사용하던 것을, Redis 에
+    최초 접속 시 키를 기록(TOFU, 90일 TTL)하고 이후 접속에서 paramiko 자체 검증으로
+    불일치 시 접속을 거부하도록 전환(`ssh_host_keys.py` 신규). Redis 장애 시에는
+    기존 동작으로 fail-open(재배포/Redis 재시작 시 기록된 키는 초기화됨 — 알려진
+    한계).
+  - **PromQL 카드 관리 권한 노출**: `/promql/cards` 생성/수정/삭제와 임의 PromQL 즉시
+    실행 프로브(`test_query`)가 인증만으로 접근 가능해 viewer 도 내부 Prometheus 를
+    정찰/수정할 수 있던 것을 operator 이상으로 제한(조회 계열 엔드포인트는 viewer
+    유지). 프런트 Dashboard 도 operator 미만에게 카드 추가/편집/삭제 아이콘을 숨김.
+  - **DB 커넥션 풀 크기 고정**: backend/celery worker/beat 가 동일 engine 코드를
+    공유하면서 각각 기본 풀(10+20)을 쓰면 replica 합계가 Postgres 기본
+    `max_connections`(100)를 쉽게 넘던 것을, `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`
+    환경변수로 설정 가능하게 하고 celery worker(3+5)/beat(2+3) 매니페스트에 더 작은
+    값을 오버라이드.
+  - **리치 텍스트 렌더링 방어 강화**: `RichContent` 의 DOMPurify sanitize 이후 단계에
+    후처리 훅을 추가 — `target="_blank"` 링크에 `rel="noopener noreferrer"` 를 강제해
+    reverse-tabnabbing 을 막고, `style` 속성을 색상/정렬 등 화이트리스트 속성만
+    남기도록 필터링해 `position:fixed` 오버레이 등을 이용한 UI 위장(피싱 배너 흉내)을
+    차단.
+  - **감사 로그 기록 경로 점검**: 주요 변경 작업의 audit log 기록이 실패해도 본 요청이
+    막히지 않는 fail-safe 패턴을 재확인(코드 변경 없음).
+
 - **상용 출시 전 보안/안정성 점검 후속 조치 (Medium 8건)**: Blocker/High 조치에 이어
   Medium 등급 항목을 마저 반영.
   - **kubewatch ingest fail-closed**: `KUBEWATCH_TOKEN` 미설정 시 무인증으로 웹훅을
@@ -86,6 +109,9 @@
     직접 파싱해 9시간(KST) 어긋나게 표시되던 지점 20여 곳(감사 로그, 점검 이력, VOC,
     트렌드, Lake 서비스, Isilon, 홈 "다음 마감" 등)을 일괄 수정.
 
+## [1.7.1] - 2026-07-20
+
+### Fixed
 - **상용 출시 전 보안/안정성 점검 후속 조치 (Blocker 7건)**: 상세 코드 감사에서 발견된
   치명 결함을 수정.
   - **인증/인가**: 운영 배포(`DEBUG=false`)에서 `SECRET_KEY` 가 기본값이거나 32자
