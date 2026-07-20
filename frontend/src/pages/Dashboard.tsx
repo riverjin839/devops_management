@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server, WifiOff } from 'lucide-react';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, formatApiError } from '@/lib/utils';
 import {
   HealthHero,
   CheckHistoryHeatmap,
@@ -17,7 +17,7 @@ import {
 import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar, DebugLogPanel } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck, useCheckHistoryHeatmap } from '@/hooks/useCluster';
@@ -68,7 +68,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
           <button
             key={cluster.id}
             onClick={() => onSelectCluster(cluster.id)}
-            className={`bg-card border rounded-xl p-4 text-left hover:shadow-md transition-all group ${statusColor.border} hover:border-primary/40`}
+            className={`bg-card border rounded-xl p-4 text-left transition-all hover:-translate-y-0.5 group ${statusColor.border} hover:border-primary/40`}
           >
             {/* Header */}
             <div className="flex items-start justify-between mb-3 min-w-0">
@@ -151,6 +151,14 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
   );
 }
 
+// ── 삭제 확인 대상 (ConfirmDialog 하나를 여러 삭제 액션이 공유) ────────────
+type PendingDelete =
+  | { kind: 'clusterItem'; item: ClusterItem }
+  | { kind: 'addon'; addon: Addon }
+  | { kind: 'metricCard'; id: string }
+  | { kind: 'playbook'; playbook: Playbook }
+  | null;
+
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [showAddCluster, setShowAddCluster] = useState(false);
@@ -165,8 +173,10 @@ export function Dashboard() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<ClusterItem | null>(null);
   const [runningItemIds, setRunningItemIds] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
   const { clusters, summary, addons, isChecking, lastCheckTime } = useClusterStore();
   const authUser = useAuthStore((s) => s.user);
+  const toast = useToast();
   // 카드 생성/수정/삭제/테스트는 백엔드가 operator 이상만 허용(require_operator) —
   // viewer 에게는 버튼 자체를 숨겨 403 을 미리 막는다.
   const canManageMetricCards = hasRole(authUser, 'admin', 'operator');
@@ -223,6 +233,32 @@ export function Dashboard() {
   const handleResizeItem = (item: ClusterItem, size: ClusterItemCardSize) => {
     updateClusterItem.mutate({ id: item.id, data: { cardSize: size } });
   };
+
+  const confirmPendingDelete = () => {
+    if (!pendingDelete) return;
+    switch (pendingDelete.kind) {
+      case 'clusterItem':
+        deleteClusterItem.mutate(pendingDelete.item.id);
+        break;
+      case 'addon':
+        deleteAddon.mutate({ addonId: pendingDelete.addon.id, clusterId: pendingDelete.addon.clusterId });
+        break;
+      case 'metricCard':
+        deleteMetricCard.mutate(pendingDelete.id);
+        break;
+      case 'playbook':
+        deletePlaybook.mutate(pendingDelete.playbook.id);
+        break;
+    }
+    setPendingDelete(null);
+  };
+
+  const pendingDeleteTitle = pendingDelete && {
+    clusterItem: `아이템 "${pendingDelete.kind === 'clusterItem' ? pendingDelete.item.title : ''}" 을(를) 삭제할까요?`,
+    addon: `점검 항목 "${pendingDelete.kind === 'addon' ? pendingDelete.addon.name : ''}" 을(를) 삭제할까요?`,
+    metricCard: '이 메트릭 카드를 삭제할까요?',
+    playbook: `플레이북 "${pendingDelete.kind === 'playbook' ? pendingDelete.playbook.name : ''}" 을(를) 삭제할까요?`,
+  }[pendingDelete.kind];
 
   // Kanban summary data — 통합 work items 한 번에 가져와 type 으로 분할
   const { data: workItemsData, isLoading: workItemsLoading } = useWorkItems();
@@ -282,7 +318,7 @@ export function Dashboard() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error('Export failed:', e);
+      toast.error('리포트 다운로드 실패', formatApiError(e));
     }
   };
 
@@ -293,7 +329,7 @@ export function Dashboard() {
         <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">DEVOPS MANAGEMENT</h1>
         {lastCheckTime && (
           <p className="text-xs text-muted-foreground font-mono hidden sm:block">
-            Last: {formatDateTime(lastCheckTime)}
+            마지막 점검: {formatDateTime(lastCheckTime)}
           </p>
         )}
 
@@ -302,42 +338,36 @@ export function Dashboard() {
             onClick={() => setShowAddCluster(true)}
             className="px-2.5 py-1 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors flex items-center gap-1"
           >
-            <Plus className="w-3 h-3" /> Cluster
+            <Plus className="w-3 h-3" /> 클러스터
           </button>
           {clusters.length > 0 && (
             <button
               onClick={() => setShowAddAddon(true)}
               className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border rounded-xl transition-colors flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" /> Check
+              <Plus className="w-3 h-3" /> 점검 항목
             </button>
           )}
           {canManageMetricCards && (
             <button
               onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-              className="px-2.5 py-1 text-sm font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-sm font-medium bg-brand-ai/10 hover:bg-brand-ai/20 text-brand-ai border border-brand-ai/20 rounded-xl transition-colors flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" /> Metric
+              <Plus className="w-3 h-3" /> 메트릭
             </button>
           )}
-          <button
-            onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border rounded-xl transition-colors flex items-center gap-1"
-          >
-            <Plus className="w-3 h-3" /> Metric
-          </button>
           <div className="w-px h-4 bg-border mx-0.5" />
           <button
             onClick={() => handleDailyReport('md')}
             className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1"
-            title="Daily Report (markdown)"
+            title="일일 리포트 다운로드 (.md)"
           >
             <Download className="w-3 h-3" /> .md
           </button>
           <button
             onClick={() => handleDailyReport('csv')}
             className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1"
-            title="Daily Report (csv)"
+            title="일일 리포트 다운로드 (.csv)"
           >
             <Download className="w-3 h-3" /> .csv
           </button>
@@ -356,7 +386,7 @@ export function Dashboard() {
             className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-            {isChecking ? 'Checking...' : 'Run Check'}
+            {isChecking ? '점검 중...' : '점검 실행'}
           </button>
         </div>
       </div>
@@ -396,7 +426,7 @@ export function Dashboard() {
               onAdd={() => { setEditingItem(null); setShowItemModal(true); }}
               onRun={handleRunItem}
               onEdit={(item) => { setEditingItem(item); setShowItemModal(true); }}
-              onDelete={(item) => { if (confirm(`아이템 "${item.title}" 을(를) 삭제할까요?`)) deleteClusterItem.mutate(item.id); }}
+              onDelete={(item) => setPendingDelete({ kind: 'clusterItem', item })}
               onResize={handleResizeItem}
             />
           </MacCard>
@@ -437,7 +467,7 @@ export function Dashboard() {
                   isLoading={clustersLoading || addonsLoading}
                   onAddDefaultAddons={!isSelectedDisconnected && clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
                   onEditAddon={(addon) => { setEditingAddon(addon); setShowAddAddon(true); }}
-                  onDeleteAddon={(addon) => { if (confirm(`Delete check "${addon.name}"?`)) deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId }); }}
+                  onDeleteAddon={(addon) => setPendingDelete({ kind: 'addon', addon })}
                   onRunAddon={(addon) => addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id })}
                 />
               </div>
@@ -456,7 +486,7 @@ export function Dashboard() {
             results={metricResults}
             isLoading={metricsLoading}
             onDeleteCard={canManageMetricCards
-              ? (id) => { if (confirm('Delete this metric card?')) deleteMetricCard.mutate(id); }
+              ? (id) => setPendingDelete({ kind: 'metricCard', id })
               : undefined}
             onEditCard={canManageMetricCards
               ? (card) => { setEditingMetricCard(card); setShowAddMetric(true); }
@@ -494,7 +524,7 @@ export function Dashboard() {
                         setCredsTarget(playbook);
                       }
                     }}
-                    onDelete={() => { if (confirm(`Delete playbook "${playbook.name}"?`)) deletePlaybook.mutate(playbook.id); }}
+                    onDelete={() => setPendingDelete({ kind: 'playbook', playbook })}
                     onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
                     onEdit={() => { setEditingPlaybook(playbook); setShowPlaybookModal(true); }}
                   />
@@ -608,6 +638,16 @@ export function Dashboard() {
             setCredsTarget(null);
           }
         }}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title={pendingDeleteTitle ?? ''}
+        description="이 작업은 되돌릴 수 없습니다."
+        confirmLabel="삭제"
+        danger
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmPendingDelete}
       />
     </div>
   );

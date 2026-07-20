@@ -1,5 +1,5 @@
 import { Addon } from '@/types';
-import { Pencil, Play, Trash2 } from 'lucide-react';
+import { Pencil, Play, Trash2, Crown, ClipboardList, Clock, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { formatRelativeTime } from '@/lib/utils';
 
@@ -35,8 +35,10 @@ function EtcdDetails({ details }: { details: Details }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       {details.isLeader !== undefined && (
-        <span className="text-sm text-muted-foreground font-mono">
-          {details.isLeader ? '👑 Leader' : '📋 Follower'}
+        <span className="text-sm text-muted-foreground font-mono inline-flex items-center gap-1">
+          {details.isLeader
+            ? <><Crown className="w-3.5 h-3.5" /> Leader</>
+            : <><ClipboardList className="w-3.5 h-3.5" /> Follower</>}
         </span>
       )}
       {details.version && (
@@ -125,7 +127,9 @@ function NodeDetails({ details }: { details: Details }) {
           {ready}/{total} Ready
         </span>
         {issues.length > 0 && (
-          <span className="text-sm text-status-critical font-mono">⚠ {issues.length} pressure</span>
+          <span className="text-sm text-status-critical font-mono inline-flex items-center gap-1">
+            <AlertTriangle className="w-3.5 h-3.5" /> {issues.length} pressure
+          </span>
         )}
       </div>
       <div className="w-full bg-secondary rounded-full h-1.5">
@@ -452,7 +456,7 @@ export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCard
         <div className="flex items-center gap-4">
           {addon.responseTime !== undefined && addon.responseTime > 0 && (
             <span className="text-sm text-muted-foreground font-mono flex items-center gap-1.5">
-              ⏱ {addon.responseTime}ms
+              <Clock className="w-3 h-3" /> {addon.responseTime}ms
             </span>
           )}
           <span className="text-sm text-muted-foreground font-mono ml-auto">
@@ -490,13 +494,13 @@ export function AddonGrid({ addons, isLoading, onAddonClick, onAddDefaultAddons,
   if (addons.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground mb-4">No addons configured for this cluster</p>
+        <p className="text-muted-foreground mb-4">이 클러스터에 등록된 점검 항목이 없습니다</p>
         {onAddDefaultAddons && (
           <button
             onClick={onAddDefaultAddons}
-            className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors"
           >
-            + Add Default Health Checks
+            + 기본 점검 항목 추가
           </button>
         )}
       </div>
@@ -521,9 +525,9 @@ export function AddonGrid({ addons, isLoading, onAddonClick, onAddDefaultAddons,
         <div className="text-center">
           <button
             onClick={onAddDefaultAddons}
-            className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors"
           >
-            + Add Missing Health Checks
+            + 누락된 점검 항목 추가
           </button>
         </div>
       )}

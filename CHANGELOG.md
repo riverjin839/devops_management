@@ -10,6 +10,41 @@
 
 1.7.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **개성있는 웹폰트 옵션 (Outfit / Geist)**: 설정 → 화면 UI 설정 → 페이지별 화면 스타일에서
+  폰트로 `Outfit`/`Geist` 를 선택할 수 있다. 두 폰트 모두 `@fontsource-variable/*` 로
+  빌드 산출물에 직접 번들되어 CDN 요청 없이 동작(폐쇄망 배포 안전). 라틴 문자만
+  포함하므로 한글은 자동으로 스택의 한글 폴백 폰트로 렌더링된다.
+  - Frontend: `frontend/src/lib/pageStyles.ts`(`PAGE_FONT_OPTIONS`), `frontend/src/main.tsx`
+    (폰트 CSS 전역 import).
+
+### Fixed
+- **`__default__` 전체 기본 화면 스타일이 항상 무시되던 문제**: API 응답의 camelCase 자동
+  변환(`services/api.ts` `convertKeys`)이 `pageStyles` 맵의 센티널 키 `__default__` 를
+  일반 필드명으로 오인해 `_Default__` 로 깨뜨려, "전체 기본(모든 페이지)" 로 저장한
+  폰트/글자색/배경색 설정이 서버에는 정상 저장되지만 화면에는 절대 반영되지 않던 버그를
+  수정. `__...__` 형태의 dunder 키는 camelCase/snake_case 변환에서 제외한다.
+- **클러스터 대시보드(`/cluster-overview`) UX 감사 후속 정리 9건**:
+  - 툴바에 "Metric" 추가 버튼이 operator/admin 로그인 시 중복 렌더되던 버그 수정
+    (`Dashboard.tsx`).
+  - 삭제 확인이 브라우저 네이티브 `confirm()`(스타일 불가, 접근성 열악)으로 처리되던
+    4곳(점검 항목/애드온/메트릭 카드/플레이북 삭제)을 프로젝트 표준 `ConfirmDialog` 로
+    전환.
+  - "리포트 다운로드" 실패 시 콘솔 로그만 남고 사용자에게 아무 피드백이 없던 문제를
+    토스트 에러로 노출.
+  - `purple-500`/`amber-500` 등 테마 비인지 고정 Tailwind 팔레트 색상을 토큰으로 전환:
+    새 `--brand-ai`(AI 기능 배지) 토큰 추가, 클러스터 provider 선택 색상은 기존
+    `--chart-N` 카테고리 토큰으로, "임시 가등록" 경고 계열은 `--status-warning` 으로
+    통일(`index.css`, `tailwind.config.js`, `Dashboard.tsx`, `ClusterItemCard.tsx`,
+    `AddClusterModal.tsx`, `ConfirmDialog.tsx`).
+  - 툴바 버튼 라운딩(`rounded-lg`/`rounded-xl` 혼용)과 차트 툴팁의 하드코딩
+    `rgba(255,255,255,0.05)`(라이트 테마에서 사실상 안 보임)를 테마 토큰 기준으로 통일.
+  - 애드온/현황 아이템 카드에 섞여 있던 장식용 이모지(👑📋⏱⚠)를 같은 카드에서 이미 쓰는
+    lucide 아이콘으로 통일(사용자 지정 아이콘 데이터 필드는 유지).
+  - 툴바 버튼 라벨과 일부 카드 empty-state 문구의 영어/한글 혼용을 한글로 통일.
+  - "전체 현황" 클러스터 카드의 hover 모션(`shadow-md`)을 다른 카드와 동일한
+    `-translate-y-0.5` 로 정렬(라이트/다크 테마의 "그림자 없음" 원칙과도 합치).
+
 ## [1.7.4] - 2026-07-20
 
 ### Fixed

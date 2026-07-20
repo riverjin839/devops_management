@@ -37,10 +37,10 @@ export function ConfirmDialog({
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
         <div className={`flex items-start gap-3 px-5 py-4 border-b border-border ${
-          danger ? 'bg-red-500/5' : 'bg-muted/30'
+          danger ? 'bg-status-critical/5' : 'bg-muted/30'
         }`}>
           <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-            danger ? 'bg-red-500/10 text-red-400' : 'bg-primary/10 text-primary'
+            danger ? 'bg-status-critical/10 text-status-critical' : 'bg-primary/10 text-primary'
           }`}>
             <AlertTriangle className="w-4 h-4" />
           </div>
@@ -69,7 +69,7 @@ export function ConfirmDialog({
             autoFocus
             className={`px-4 py-1.5 text-sm font-semibold rounded-lg text-primary-foreground ${
               danger
-                ? 'bg-red-500 hover:bg-red-600'
+                ? 'bg-status-critical hover:bg-status-critical/90'
                 : 'bg-primary hover:bg-primary/90'
             }`}
           >

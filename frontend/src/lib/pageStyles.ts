@@ -4,13 +4,18 @@ import type { PageStyle } from '@/types';
 /** 전 페이지 공통 기본값을 담는 특수 키. 그 외 키는 라우트 경로('/path'). */
 export const PAGE_STYLE_DEFAULT_KEY = '__default__';
 
-/** 폰트 선택지 — 외부 웹폰트에 의존하지 않는 안전한 CSS 폰트 스택만 사용. */
+/** 폰트 선택지 — 시스템 폰트 스택 + 자체 호스팅(번들 포함) 웹폰트.
+ *  자체 호스팅 폰트(Outfit/Geist)는 CDN 요청 없이 빌드 산출물에 포함되므로
+ *  폐쇄망(airgap) 배포에서도 안전하게 동작한다(main.tsx 에서 import).
+ *  단, 두 폰트 모두 라틴 문자만 포함 — 한글은 자동으로 스택의 다음 폰트로 폴백된다. */
 export const PAGE_FONT_OPTIONS: { label: string; value: string }[] = [
   { label: '기본 (테마 폰트)', value: '' },
   { label: '산세리프 (System Sans)', value: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
   { label: '명조 (Serif)', value: 'Georgia, "Times New Roman", "Noto Serif KR", serif' },
   { label: '고딕 (Korean Gothic)', value: '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif' },
   { label: '모노스페이스', value: 'ui-monospace, "JetBrains Mono", "Courier New", monospace' },
+  { label: 'Outfit (개성있는 지오메트릭 산세리프)', value: '"Outfit Variable", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif' },
+  { label: 'Geist (모던 산세리프)', value: '"Geist Variable", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif' },
 ];
 
 /** 폰트 배율 선택지 (본문 영역 zoom). */
