@@ -10,6 +10,21 @@
 
 1.7.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **개성있는 웹폰트 옵션 (Outfit / Geist)**: 설정 → 화면 UI 설정 → 페이지별 화면 스타일에서
+  폰트로 `Outfit`/`Geist` 를 선택할 수 있다. 두 폰트 모두 `@fontsource-variable/*` 로
+  빌드 산출물에 직접 번들되어 CDN 요청 없이 동작(폐쇄망 배포 안전). 라틴 문자만
+  포함하므로 한글은 자동으로 스택의 한글 폴백 폰트로 렌더링된다.
+  - Frontend: `frontend/src/lib/pageStyles.ts`(`PAGE_FONT_OPTIONS`), `frontend/src/main.tsx`
+    (폰트 CSS 전역 import).
+
+### Fixed
+- **`__default__` 전체 기본 화면 스타일이 항상 무시되던 문제**: API 응답의 camelCase 자동
+  변환(`services/api.ts` `convertKeys`)이 `pageStyles` 맵의 센티널 키 `__default__` 를
+  일반 필드명으로 오인해 `_Default__` 로 깨뜨려, "전체 기본(모든 페이지)" 로 저장한
+  폰트/글자색/배경색 설정이 서버에는 정상 저장되지만 화면에는 절대 반영되지 않던 버그를
+  수정. `__...__` 형태의 dunder 키는 camelCase/snake_case 변환에서 제외한다.
+
 ## [1.7.4] - 2026-07-20
 
 ### Fixed

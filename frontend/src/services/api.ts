@@ -13,12 +13,17 @@ function toSnakeCase(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
+// dunder 스타일 리터럴 키(예: pageStyles 의 '__default__' 센티널)는 필드명이 아니라
+// 맵의 고정 식별자이므로 camelCase/snake_case 변환 대상에서 제외한다 — 변환하면
+// '__default__' → '_Default__' 로 깨져 조회가 항상 실패한다.
+const LITERAL_KEY_RE = /^__.+__$/;
+
 function convertKeys(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(convertKeys);
   if (obj !== null && typeof obj === 'object') {
     return Object.fromEntries(
       Object.entries(obj as Record<string, unknown>).map(([key, value]) => [
-        toCamelCase(key),
+        LITERAL_KEY_RE.test(key) ? key : toCamelCase(key),
         convertKeys(value),
       ])
     );
@@ -31,7 +36,7 @@ function convertKeysToSnake(obj: unknown): unknown {
   if (obj !== null && typeof obj === 'object') {
     return Object.fromEntries(
       Object.entries(obj as Record<string, unknown>).map(([key, value]) => [
-        toSnakeCase(key),
+        LITERAL_KEY_RE.test(key) ? key : toSnakeCase(key),
         convertKeysToSnake(value),
       ])
     );
