@@ -10,9 +10,20 @@
 
 1.5.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
-## [1.5.1] - 2026-07-16
-
 ### Added
+- **Jira SSO 자동 로그인 — 세션 쿠키 자동 캡처 (수동 복사 제거)**: 참고 프로젝트
+  (lake-task-manager)의 "Playwright SSO 세션 재사용"을 PEP 에 구현. 설정 ▸ Jira 연동의
+  **"브라우저로 SSO 로그인"** 버튼을 누르면 백엔드가 브라우저를 띄우고, 사용자가 평소처럼
+  사내 SSO 로그인만 마치면 세션 쿠키를 자동으로 캡처·저장한다(토큰/쿠키 직접 복사 불필요).
+  캡처한 쿠키는 기존 `auth_type='sso'` REST 경로로 가져오기·되쓰기에 그대로 쓰인다. 기존
+  PAT/수동 쿠키 등록은 "수동 등록" 대체 수단으로 유지.
+  - Backend: `services/jira_sso_service.py`(`capture_sso_session` — Playwright 헤디드 로그인 +
+    myself 폴링 + 호스트 범위 쿠키 헤더 빌드, 전 예외 fail-safe), `POST /jira/sso/login`
+    (`asyncio.to_thread` 로 블로킹 로그인 실행 후 쿠키 검증·저장), `auth_type` 에 'sso' 추가,
+    `requirements.txt` 에 playwright 추가.
+  - Frontend: `JiraIntegrationPanel` 에 SSO 로그인(권장) 블록 + 수동 등록 접이식 섹션.
+  - 배포 주의: 헤디드 브라우저라 백엔드 호스트에 표시 가능한 디스플레이 필요(헤드리스
+    K8s 면 Xvfb/noVNC 등 원격 화면 계층이 추가로 필요).
 - **Jira 양방향 반영 — 편집 내용 되쓰기(제목/설명/우선순위)**: 업무 상세의 "Jira 반영"이
   기존에는 칸반 상태 transition + 코멘트만 보냈는데, PEP 에서 편집한 **제목(summary)·
   설명(description)·우선순위(priority)** 도 연결된 Jira 이슈에 `PUT /rest/api/2/issue/{key}`
@@ -23,6 +34,20 @@
   - Backend: `JiraService.update_issue()`, `PEP_PRIORITY_TO_JIRA`/`strip_issue_key_prefix`
     헬퍼, `push_to_jira` 확장, `JiraPushRequest.push_fields`/`JiraPushResult.fields_updated`.
   - Frontend: `JiraPushDialog` 신설, `WorkItemDetailPage` 의 원클릭 push → 다이얼로그로 교체.
+- **Jira 가져오기 — 세션 쿠키 인증 방식 추가**: PAT(Personal Access Token) 발급이 막힌 SSO
+  환경을 위해, 사용자가 사내 브라우저로 Jira 에 로그인한 뒤 세션 쿠키를 복사해 등록하면 그
+  쿠키로 이슈를 가져올 수 있게 했다. 설정 ▸ Jira 연동에서 "Personal Access Token"과
+  "세션 쿠키(SSO)" 중 선택하고, 쿠키 얻는 방법(개발자 도구 ▸ Network ▸ Request Headers 의
+  Cookie 복사) 안내를 함께 제공한다.
+  - Backend: `UserJiraCredential.auth_type` 컬럼 추가(`_safe_add_column` 마이그레이션),
+    `JiraService` 가 `auth_type='cookie'` 일 때 `Cookie` 헤더 + XSRF 회피용
+    `X-Atlassian-Token: no-check` 로 REST 호출. 자격 저장/테스트/가져오기/push 경로 모두 반영.
+  - Frontend: `JiraIntegrationPanel` 에 인증 방식 토글·쿠키 입력(textarea)·안내 추가,
+    `types`/`api`/`useJira` 에 `authType` 전달.
+
+## [1.5.1] - 2026-07-16
+
+### Added
 - **NFS 모니터링(Isilon) — NAS 서버 SSH 기반 신규 화면·점검 추가**: K8s 가 마운트해서 쓰는
   NFS 를 Isilon(OneFS) NAS **서버 쪽**에서 점검한다. 좌측에서 Isilon 서버를 선택하면 `isi`
   명령 수집 결과(Export/마운트, 쿼터·용량, 클라이언트/성능, 노드 health)와 K8s PV(`spec.nfs`)↔
@@ -38,16 +63,6 @@
     `/api/v1/isilon-nfs/*` 라우터(서버·명령 CRUD, 연결 테스트, `/overview`), builtin 명령 시드.
   - Frontend: `IsilonNfsPage` + 서버/명령 관리 모달, `useIsilonNfs` 훅, `isilonNfsApi`, 타입,
     사이드바 스토리지 그룹에 `NFS 모니터링` 등록.
-- **Jira 가져오기 — 세션 쿠키 인증 방식 추가**: PAT(Personal Access Token) 발급이 막힌 SSO
-  환경을 위해, 사용자가 사내 브라우저로 Jira 에 로그인한 뒤 세션 쿠키를 복사해 등록하면 그
-  쿠키로 이슈를 가져올 수 있게 했다. 설정 ▸ Jira 연동에서 "Personal Access Token"과
-  "세션 쿠키(SSO)" 중 선택하고, 쿠키 얻는 방법(개발자 도구 ▸ Network ▸ Request Headers 의
-  Cookie 복사) 안내를 함께 제공한다.
-  - Backend: `UserJiraCredential.auth_type` 컬럼 추가(`_safe_add_column` 마이그레이션),
-    `JiraService` 가 `auth_type='cookie'` 일 때 `Cookie` 헤더 + XSRF 회피용
-    `X-Atlassian-Token: no-check` 로 REST 호출. 자격 저장/테스트/가져오기/push 경로 모두 반영.
-  - Frontend: `JiraIntegrationPanel` 에 인증 방식 토글·쿠키 입력(textarea)·안내 추가,
-    `types`/`api`/`useJira` 에 `authType` 전달.
 
 ## [1.5.0] - 2026-07-15
 
