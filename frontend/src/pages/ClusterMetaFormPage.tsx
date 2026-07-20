@@ -163,6 +163,7 @@ export function ClusterMetaFormPage() {
             onClick={() => navigate('/cluster-manage')}
             className="p-2 hover:bg-secondary rounded-lg transition-colors"
             title="목록으로"
+            aria-label="목록으로"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>

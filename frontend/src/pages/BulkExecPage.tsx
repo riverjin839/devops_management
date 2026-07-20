@@ -251,6 +251,7 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
           <button
             onClick={() => setExpanded((v) => !v)}
             className="p-0.5 text-muted-foreground hover:text-foreground"
+            aria-label={expanded ? '접기' : '펼치기'}
           >
             {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
@@ -647,6 +648,7 @@ export function BulkExecPage() {
             disabled={clusterIds.length === 0}
             className="p-2 bg-secondary hover:bg-secondary/80 rounded-lg text-muted-foreground disabled:opacity-50"
             title="노드 목록 새로고침"
+            aria-label="노드 목록 새로고침"
           >
             <RefreshCw className={`w-4 h-4 ${isAnyFetching ? 'animate-spin' : ''}`} />
           </button>
@@ -1022,6 +1024,7 @@ export function BulkExecPage() {
                     <button
                       onClick={() => setGlobalFilter('')}
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="필터 지우기"
                     >×</button>
                   )}
                 </div>
