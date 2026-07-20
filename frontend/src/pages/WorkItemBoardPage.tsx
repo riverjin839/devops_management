@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -384,21 +385,21 @@ export function WorkItemBoardPage() {
             <h1 className="text-xl font-bold">업무 관리 게시판</h1>
             {items.length > 0 && (
               <div className="flex items-center gap-2 ml-4">
-                <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+                <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
                   전체 {items.length}
                 </span>
                 {inProgressCount > 0 && (
                   <span className={`text-sm px-2 py-0.5 rounded-full border ${
                     inProgressCount >= 2
-                      ? 'bg-red-500/15 text-red-400 border-red-500/30'
-                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                      ? 'bg-status-critical/15 text-status-critical border-status-critical/30'
+                      : 'bg-status-warning/15 text-status-warning border-status-warning/30'
                   }`}>
                     WIP {inProgressCount}/2
                     {inProgressCount >= 2 && ' ⚠'}
                   </span>
                 )}
                 {doneCount > 0 && (
-                  <span className="text-sm px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
                     Done {doneCount}
                   </span>
                 )}
@@ -576,7 +577,7 @@ export function WorkItemBoardPage() {
 
         {/* G-U2: error state 분기 — 이전엔 isLoading 만 있고 error 는 empty 로 흡수됐음 */}
         {error && (
-          <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+          <div className="mb-4 rounded-md border border-status-critical/40 bg-status-critical/5 p-3 flex items-start gap-2 text-sm text-status-critical">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-medium">업무 목록 조회 실패</div>
@@ -607,7 +608,7 @@ export function WorkItemBoardPage() {
 
         {/* Table / Calendar view */}
         {viewMode !== 'kanban' && (viewMode === 'calendar' ? (
-          <div className="bg-card border border-border rounded-xl p-6">
+          <MacCard bodyPadding="p-6">
             {isLoading ? (
               <div className="grid grid-cols-7 gap-0">
                 {[...Array(35)].map((_, i) => (
@@ -617,13 +618,13 @@ export function WorkItemBoardPage() {
             ) : (
               <WorkItemCalendar items={items} onItemClick={openTaskDetail} />
             )}
-          </div>
+          </MacCard>
         ) : isLoading ? (
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
             ))}
-          </div>
+          </MacCard>
         ) : items.length === 0 ? (
           <div className="text-center py-20">
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
@@ -640,7 +641,7 @@ export function WorkItemBoardPage() {
             )}
           </div>
         ) : (
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
             <DoubleScrollX>
               <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
@@ -710,7 +711,7 @@ export function WorkItemBoardPage() {
                 </DndContext>
               </table>
             </DoubleScrollX>
-          </div>
+          </MacCard>
         ))}
         </div>
       </main>
@@ -730,7 +731,12 @@ export function WorkItemBoardPage() {
       <ConfirmDialog
         open={confirmDelete !== null}
         title="업무 삭제"
-        description={confirmDelete ? `"${confirmDelete.category}" 업무를 삭제하시겠습니까?` : ''}
+        description={(() => {
+          if (!confirmDelete) return '';
+          // 성공 토스트 라벨(title || category)과 동일 계산식. 값이 없으면 빈 따옴표 노출 방지.
+          const label = confirmDelete.title?.trim() || confirmDelete.category;
+          return label ? `"${label}" 업무를 삭제하시겠습니까?` : '이 업무를 삭제하시겠습니까?';
+        })()}
         confirmLabel="삭제"
         cancelLabel="취소"
         danger

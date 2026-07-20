@@ -68,6 +68,20 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | D-010 | 접근성 | D-007 잔여 — pages/ 하위 아이콘 전용 버튼 aria-label 미병행 | 보조기기 사용성 저하 | 중간 | 완료 | pages/ 전수 스윕 완료 — 25파일 83건 추가 (A~J 17 · K~Z 59 · 잔여 9페이지 7). `IconBtn`(K8sManage) 공용 컴포넌트에 aria-label 기본 배선. 클릭 가능한 `<tr>`/`<th>` 행 네비게이션은 키보드 접근 불가로 보고만 — R-3 후보 |
 | D-008 | 인라인 스타일 | 시각화 외 파일의 색·배경 인라인 하드코딩 혼재 (예: `MacCard.tsx:48` `style={{ background:'var(--mac-red)' }}` 류) | 토큰 우회 경로가 남아 테마 관리 어려움 | 낮음 | 완료 | MacCard 신호등 인라인 → Tailwind arbitrary 클래스, ViewModeBar 의 깨진 `color: var(--muted-foreground)` (HSL triplet 원시 사용 버그) 수정 (`6bac1cf`). 동적 좌표 계산은 허용 예외 유지 |
 
+### R-4 1차 라운드 발견 (홈·대시보드·운영점검·업무 — 2026-07-20)
+
+| ID | 영역 | 문제 | 사용자 영향 | 심각도 | 상태 | 비고 |
+|---|---|---|---|---|---|---|
+| D-011 | 상태색 토큰 | **상태색 고정 팔레트(`-400/-500`)가 4화면 전부에 재발** — Dashboard `statusColor`(59-64)·AddonCard 전반·툴바 버튼, HomePage KpiPill accent·DayScheduleBoard `STATUS_STYLE`(57-63), OpsCheckConsole `text-emerald-500`(305), WorkItemTableRow `KS_DOT/KS_TEXT/PRI_STYLES`·담당자칩·헤더배지 | `-400` 톤은 다크 기준이라 라이트/default 테마에서 대비 급락 + 화면마다 "같은 정상색"이 달라 스캔 학습 붕괴 | 높음 | 완료 | 4화면 전부 `--status-*` 토큰 전환 — Dashboard/AddonCard(`1d32d7e`), HomePage/DayScheduleBoard/WeeklyTimeline(`1d32d7e`), OpsCheck(`b31714d`), WorkItemBoard/Row(`f42ae63`). 무의미 구분색은 중립/`--chart-*`, Jira 브랜드색은 유지 |
+| D-012 | 에러 상태 | API 실패를 빈 상태로 위장 — HomePage/DayScheduleBoard/WeeklyStatusTimeline `isError` 미처리, OpsCheckConsole 카탈로그 `isError` 무시하고 "항목 없음"(42,213) | 백엔드 장애·인증만료를 "정상이라 비어있음"으로 오인 → 실이슈 누락 | 높음 | 완료 | HomePage KpiPill·DayScheduleBoard·WeeklyTimeline·OpsCheck 카탈로그에 isError 분기(배너+재시도) 추가. 빈 상태는 성공+빈 배열일 때만 (`1d32d7e`·`b31714d`) |
+| D-013 | 접근성 | 인라인 편집/클릭 요소 키보드 접근 불가 — WorkItemTableRow `EditableCell`(101-109) `td onClick`·담당자칩 span, (R-3 후보였던 클릭 `<tr>`/`<th>` 포함) | 마우스 없이 편집·행 이동 불가 — 핵심 워크플로가 키보드/스크린리더에 닫힘 | 높음 | 완료 | WorkItemTableRow EditableCell·담당자칩에 `role=button+tabIndex+onKeyDown(Enter/Space)+aria-label+focus:ring` (`f42ae63`). 클릭 `<tr>`/`<th>` 행 네비게이션은 R-3 로 이관 |
+| D-014 | 인터랙션/안전 | OpsCheckConsole SSH(`batch_job`)·Ansible(`playbook`) 실행이 확인 없이 즉시 트리거(114-123,280) — 조회성 deep_check 와 동일 무확인 버튼 | 오클릭 시 실서버에 원격 명령. 전체선택 일괄실행 시 위험 규모 큼 | 높음 | 완료 | 사용자 결정: **모든 실행을 운영 위험 레벨로 간주**. 개별·선택 실행 전 ConfirmDialog(danger) — 클러스터명·건수 + 소스별(SSH/Ansible/점검/애드온) 대상 목록 요약. 즉시 실행 경로 제거 |
+| D-015 | 접근성 | 색 단독 상태 전달 — OpsCheckConsole `lastStatus` StatusDot 만(267, 옆 텍스트는 시각뿐), CheckHistoryHeatmap 색만+화면 범례 없음(107) | 색맹·스크린리더 사용자가 과거 결과 정상/위험 판별 불가 | 중간 | 부분완료 | OpsCheck lastStatus 를 StatusBadge(아이콘+텍스트)로 교체 완료(`b31714d`). **히트맵 상시 범례는 미처리 — 다음 라운드** |
+| D-016 | 일관성/레이아웃 | MacCard·ClusterSidebar 표준 이탈 — WorkItemBoardPage 3 wrapper 직접 `bg-card border rounded-xl`(610,622,643), Dashboard 행 `mx-auto px-3`(351)로 보조 사이드바 flush 규칙 위반 | 카드·레일 위치가 다른 화면과 어긋나 전환 시 점프 | 중간 | 완료 | WorkItemBoard wrapper 3곳 MacCard 전환(`f42ae63`), Dashboard 행 `mx-auto px-3`→`pr-3`(`1d32d7e`) |
+| D-017 | 로딩 상태 | 로딩 비일관 — HomePage `useWorkItems` `isLoading` 미반영해 3필 "0"으로 튐(73), PlatformStatusMatrix 텍스트 로딩(170), WorkItemBoard skeleton 컬럼 미반영(621), HealthHero 스켈레톤 `rounded-2xl` 시프트 | 로딩→로드 전환 시 오정보·레이아웃 시프트 | 중간 | 부분완료 | HomePage `useWorkItems` isLoading 반영해 KPI 필 "…" 통일(`1d32d7e`). **PlatformStatusMatrix·WorkItemBoard skeleton 구조화, HealthHero 스켈레톤 rounded-md 는 미처리 — 다음 라운드** |
+| D-018 | 접근성/일관성 | OpsCheckConsole 상세 모달이 raw `fixed inset-0`(341) — Escape·포커스트랩·`role=dialog` 없음, `rounded-2xl` 레거시 | 키보드로 모달 열고닫기 불가, 배경 포커스 누수 | 중간 | 보류 | shadcn `Dialog` 로 교체(R-2 연계) — 리팩터 규모로 다음 라운드 |
+| D-019 | 반응형/정확성 | 기타: HomePage work 모드 xl 미만 스크롤 중첩(171), OpsCheckConsole 테이블 `overflow-x` 컨테이너 부재(218), CheckHistoryHeatmap UTC `dayKey`(30-42)로 KST 날짜 경계 오프셋, 삭제 다이얼로그 문구/빈 따옴표(733), WIP 배지 ⚠ 이모지 의존(390) | 랩톱 폭 밀도 저하, 심야 점검 이력 오배치, 삭제 대상 오인 | 중간 | 부분완료 | 히트맵 KST dayKey(`62be648`)·삭제 다이얼로그 문구/빈 따옴표(`f42ae63`) 처리. **HomePage work 모드 스크롤 중첩, OpsCheck 테이블 overflow-x, WIP ⚠ 이모지는 미처리 — 다음 라운드** |
+
 ---
 
 ## 3. 고도화 로드맵 (Roadmap)
@@ -77,7 +91,7 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | R-1 토큰 정합 완결 | DESIGN_SYSTEM.md W1 마무리 — raw hex 전수 치환(화이트리스트 외 0건) | 백로그의 hex 관련 항목 처리 | 진행 중 |
 | R-2 shadcn/ui 확산 | W2 — Button/Card/Badge/Tooltip/Dialog 5종 우선 도입, 기존 자체 컴포넌트 어댑터화 | R-1 | 진행 중 |
 | R-3 접근성 상시화 | W4 성과(jsx-a11y 룰 상시화) 위에 sr-only 데이터 표·Lighthouse 정량 측정 추가 | - | 대기 |
-| R-4 화면 단위 UX 리뷰 | docs/SCREENS.md 기준 주요 화면(홈/대시보드/업무/점검 콘솔) 순회 정성 리뷰 | 감사 1회차 완료 ✅ | 착수 가능 |
+| R-4 화면 단위 UX 리뷰 | docs/SCREENS.md 기준 주요 화면 순회 정성 리뷰 | 감사 1회차 완료 ✅ | 진행중 — 1차 라운드(홈·대시보드·운영점검·업무) 완료, D-011~D-019 도출·처리. 다음 라운드 대상: K8s 관리·일일점검 리뷰·LAKE·인프라 토폴로지 등 |
 
 ---
 
@@ -88,3 +102,5 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | 2026-07-19 | 체계 구축 + 1회차 전수 감사 (`frontend/src` grep 정량 + 구조 점검) | 8 (D-001~D-008) | 0 | ux-ui-designer | ClusterSidebar iconOnly·클러스터 select 금지 완전 준수 확인. 우선순위: D-002 → D-003 → D-004 → D-005 |
 | 2026-07-19 | 백로그 전량 처리 (D-001~D-008) | 0 | 8 | ux-ui-designer | 문서 현행화(D-001/002)·차트 토큰 신설(D-005)·MacCard 수렴 1차(D-004)·aria-label 33건(D-007) 등. D-003 은 감사 오탐 정정 후 잔존 5건 처리. lint/tsc/build 전체 게이트 통과. PR #478 (머지, v1.7.0) |
 | 2026-07-20 | 미진행분 2차 처리 (D-009·D-010) | 2 | 2 | ux-ui-designer | MacCard 2차 수렴 9페이지 28건 + pages aria-label 83건. 보류: 보드/캔버스형 페이지 MacCard(R-4 연계), 행 네비게이션 키보드 접근(R-3 연계). lint/tsc/build 게이트 통과 |
+| 2026-07-20 | R-4 1차 라운드 — 화면 정성 리뷰 4화면 + 처리 (D-011~D-019) | 9 | 5.5 | ux-ui-designer | 홈·대시보드·운영점검·업무 리뷰로 32건 발견→9항목 등재. **완료** D-011(상태색 토큰 4화면)·D-012(에러상태)·D-013(편집셀 a11y)·D-016(MacCard/레이아웃)·D-019(KST·삭제문구). **부분** D-015·D-017. **보류** D-014(위험실행 확인·사용자 판단 필요)·D-018(모달 리팩터). lint/tsc/build 통과. 병렬 에이전트가 공유 워킹트리에서 `git stash` 로 충돌 → stash 복구로 무손실 수습(교훈: 다중 에이전트 파일수정은 worktree 격리 필요) |
+| 2026-07-20 | D-014 처리 (사용자 결정: 모든 실행 = 운영 위험) | 0 | 1 | ux-ui-designer | 운영 점검 개별·선택 실행에 ConfirmDialog(danger, 대상·건수·소스 요약) 게이팅. lint/tsc/build 통과 |
