@@ -68,6 +68,20 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | D-010 | 접근성 | D-007 잔여 — pages/ 하위 아이콘 전용 버튼 aria-label 미병행 | 보조기기 사용성 저하 | 중간 | 완료 | pages/ 전수 스윕 완료 — 25파일 83건 추가 (A~J 17 · K~Z 59 · 잔여 9페이지 7). `IconBtn`(K8sManage) 공용 컴포넌트에 aria-label 기본 배선. 클릭 가능한 `<tr>`/`<th>` 행 네비게이션은 키보드 접근 불가로 보고만 — R-3 후보 |
 | D-008 | 인라인 스타일 | 시각화 외 파일의 색·배경 인라인 하드코딩 혼재 (예: `MacCard.tsx:48` `style={{ background:'var(--mac-red)' }}` 류) | 토큰 우회 경로가 남아 테마 관리 어려움 | 낮음 | 완료 | MacCard 신호등 인라인 → Tailwind arbitrary 클래스, ViewModeBar 의 깨진 `color: var(--muted-foreground)` (HSL triplet 원시 사용 버그) 수정 (`6bac1cf`). 동적 좌표 계산은 허용 예외 유지 |
 
+### R-4 1차 라운드 발견 (홈·대시보드·운영점검·업무 — 2026-07-20)
+
+| ID | 영역 | 문제 | 사용자 영향 | 심각도 | 상태 | 비고 |
+|---|---|---|---|---|---|---|
+| D-011 | 상태색 토큰 | **상태색 고정 팔레트(`-400/-500`)가 4화면 전부에 재발** — Dashboard `statusColor`(59-64)·AddonCard 전반·툴바 버튼, HomePage KpiPill accent·DayScheduleBoard `STATUS_STYLE`(57-63), OpsCheckConsole `text-emerald-500`(305), WorkItemTableRow `KS_DOT/KS_TEXT/PRI_STYLES`·담당자칩·헤더배지 | `-400` 톤은 다크 기준이라 라이트/default 테마에서 대비 급락 + 화면마다 "같은 정상색"이 달라 스캔 학습 붕괴 | 높음 | 진행중 | D-003 이 "status 색 스코프 외"로 제외한 부분. `--status-*` 토큰으로 전환 (green→healthy, amber/yellow→warning, red→critical, slate/gray→muted/unknown, 무의미 색→secondary) |
+| D-012 | 에러 상태 | API 실패를 빈 상태로 위장 — HomePage/DayScheduleBoard/WeeklyStatusTimeline `isError` 미처리, OpsCheckConsole 카탈로그 `isError` 무시하고 "항목 없음"(42,213) | 백엔드 장애·인증만료를 "정상이라 비어있음"으로 오인 → 실이슈 누락 | 높음 | 진행중 | 각 위젯에 isError 분기(에러 배너+재시도). 빈 상태는 성공+빈 배열일 때만 |
+| D-013 | 접근성 | 인라인 편집/클릭 요소 키보드 접근 불가 — WorkItemTableRow `EditableCell`(101-109) `td onClick`·담당자칩 span, (R-3 후보였던 클릭 `<tr>`/`<th>` 포함) | 마우스 없이 편집·행 이동 불가 — 핵심 워크플로가 키보드/스크린리더에 닫힘 | 높음 | 진행중 | `<button>` 또는 `role+tabIndex+onKeyDown(Enter/Space)` |
+| D-014 | 인터랙션/안전 | OpsCheckConsole SSH(`batch_job`)·Ansible(`playbook`) 실행이 확인 없이 즉시 트리거(114-123,280) — 조회성 deep_check 와 동일 무확인 버튼 | 오클릭 시 실서버에 원격 명령. 전체선택 일괄실행 시 위험 규모 큼 | 높음 | 대기 | 부작용 소스/다중 실행에 AlertDialog(대상·건수 요약). **소스 위험 분류는 확인 필요** |
+| D-015 | 접근성 | 색 단독 상태 전달 — OpsCheckConsole `lastStatus` StatusDot 만(267, 옆 텍스트는 시각뿐), CheckHistoryHeatmap 색만+화면 범례 없음(107) | 색맹·스크린리더 사용자가 과거 결과 정상/위험 판별 불가 | 중간 | 대기 | 상태 텍스트/StatusBadge 병기, 히트맵 상시 범례 |
+| D-016 | 일관성/레이아웃 | MacCard·ClusterSidebar 표준 이탈 — WorkItemBoardPage 3 wrapper 직접 `bg-card border rounded-xl`(610,622,643), Dashboard 행 `mx-auto px-3`(351)로 보조 사이드바 flush 규칙 위반 | 카드·레일 위치가 다른 화면과 어긋나 전환 시 점프 | 중간 | 진행중 | wrapper→MacCard, 행→`pr-3`(센터링/좌패딩 제거) |
+| D-017 | 로딩 상태 | 로딩 비일관 — HomePage `useWorkItems` `isLoading` 미반영해 3필 "0"으로 튐(73), PlatformStatusMatrix 텍스트 로딩(170), WorkItemBoard skeleton 컬럼 미반영(621), HealthHero 스켈레톤 `rounded-2xl` 시프트 | 로딩→로드 전환 시 오정보·레이아웃 시프트 | 중간 | 대기 | isLoading 통일(`…`), 구조 반영 skeleton, 스켈레톤 라운딩 `rounded-md` |
+| D-018 | 접근성/일관성 | OpsCheckConsole 상세 모달이 raw `fixed inset-0`(341) — Escape·포커스트랩·`role=dialog` 없음, `rounded-2xl` 레거시 | 키보드로 모달 열고닫기 불가, 배경 포커스 누수 | 중간 | 대기 | shadcn `Dialog` 로 교체(R-2 연계) |
+| D-019 | 반응형/정확성 | 기타: HomePage work 모드 xl 미만 스크롤 중첩(171), OpsCheckConsole 테이블 `overflow-x` 컨테이너 부재(218), CheckHistoryHeatmap UTC `dayKey`(30-42)로 KST 날짜 경계 오프셋, 삭제 다이얼로그 문구/빈 따옴표(733), WIP 배지 ⚠ 이모지 의존(390) | 랩톱 폭 밀도 저하, 심야 점검 이력 오배치, 삭제 대상 오인 | 중간 | 진행중 | 히트맵 KST dayKey·삭제 다이얼로그 문구는 이번 라운드 처리, 나머지 후속 |
+
 ---
 
 ## 3. 고도화 로드맵 (Roadmap)
