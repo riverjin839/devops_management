@@ -490,8 +490,15 @@ def delete_cluster(
 
 
 @router.get("/{cluster_id}/kubeconfig", response_model=KubeconfigResponse)
-def get_kubeconfig(cluster_id: UUID, db: Session = Depends(get_db)):
-    """클러스터 kubeconfig 내용 조회 — DB 우선, 파일은 폴백."""
+def get_kubeconfig(
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """클러스터 kubeconfig 내용 조회 — DB 우선, 파일은 폴백.
+
+    cluster-admin 자격증명 원문을 반환하므로 viewer 는 접근할 수 없다.
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")

@@ -1545,11 +1545,43 @@ def _seed_initial_admin():
         db.close()
 
 
+_INSECURE_SECRET_KEYS = {
+    "your-secret-key-change-in-production",
+    "your-super-secret-key-change-this-in-production",
+    "change_me_in_production",
+    "changeme",
+    "secret",
+    "",
+}
+
+
+def _assert_secret_key_is_safe():
+    """DEBUG=false(운영성 배포)인데 SECRET_KEY 가 기본/placeholder 값이면 기동을 거부한다.
+
+    SECRET_KEY 는 JWT 서명키이자 secret_box(Jira/Isilon 자격증명 암호화) 파생키의
+    원천이므로, 기본값 그대로 배포되면 토큰 위조 + 저장된 모든 비밀 복호화로
+    직결된다. 조용히 경고만 남기고 계속 뜨는 대신 명시적으로 기동을 막는다.
+    """
+    if settings.debug:
+        return
+    key = settings.secret_key or ""
+    if key.strip().lower() in _INSECURE_SECRET_KEYS or len(key) < 32:
+        raise RuntimeError(
+            "SECRET_KEY 가 기본값이거나 32자 미만입니다. 운영 배포(DEBUG=false)에서는 "
+            "무작위로 생성된 32자 이상의 SECRET_KEY 를 반드시 설정해야 합니다 "
+            "(예: python -c \"import secrets; print(secrets.token_urlsafe(32))\"). "
+            "기동을 중단합니다."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: DB 테이블 생성 + 마이그레이션 + seed.
     # 각 단계는 개별 try/except 로 격리해 한 군데 실패가 backend 전체를 막아
     # CrashLoopBackOff 가 되는 일을 방지한다. 실패는 로그로 남기되 부팅은 계속.
+    # 단, SECRET_KEY 안전성 검사는 예외 — 운영 배포에서 기본 키로 뜨는 것 자체가
+    # 보안 사고이므로 여기서만 fail-fast 로 부팅을 막는다.
+    _assert_secret_key_is_safe()
     _startup_log = logging.getLogger("k8s_monitor.startup")
     try:
         _ensure_pgvector_extension()

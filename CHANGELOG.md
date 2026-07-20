@@ -10,6 +10,40 @@
 
 1.7.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Blocker 7건)**: 상세 코드 감사에서 발견된
+  치명 결함을 수정.
+  - **인증/인가**: 운영 배포(`DEBUG=false`)에서 `SECRET_KEY` 가 기본값이거나 32자
+    미만이면 기동을 거부(fail-fast) — 방치 시 JWT 위조 + 저장된 Jira/Isilon 자격증명
+    복호화로 이어질 수 있었다. `docker-compose.yml`/`.env.example` 은 로컬 개발 기본값을
+    `DEBUG=true` 로 맞춰(dev/kind/airgap overlay 와 동일) 이 가드에 영향받지 않도록
+    조정 — 운영 배포(prod overlay)는 그대로 `DEBUG=false` + `SECRET_KEY` 교체 필수.
+    `GET /clusters/{id}/kubeconfig`(cluster-admin 자격증명
+    원문 반환) 와 `batch-jobs`/`versions`(SSH 수집)/`mc/run`/`topology-trace`(tcpdump)/
+    `node-specs`/`isilon-nfs` 의 실행·쓰기 엔드포인트에 누락돼 있던 operator 권한
+    가드를 추가. `versions` 의 `systemctl show {unit}` 원격 명령에 유효하지 않은 unit
+    이름을 통한 명령 인젝션 경로를 차단(패턴 검증).
+  - **백업 복원 데이터 유실 방지**: 마스킹된(비민감 export) 백업을 merge import 하면
+    실제 kubeconfig/비밀번호/토큰이 `NULL` 로 덮어써지던 문제를 센티널 값으로 구분해
+    수정 — 마스킹된 컬럼은 이제 갱신 대상에서 제외돼 기존 값이 보존된다. import 를
+    테이블 전체 SAVEPOINT 1개로 감싸던 구조를 행/테이블 단위 SAVEPOINT 로 바꿔, 한 행
+    실패가 이미 처리된 다른 행까지 롤백시키면서도 성공한 것처럼 응답하던 문제를 수정.
+    UUID 기본키 타입 불일치로 백업 미리보기(diff)가 항상 "전부 신규/전체 삭제후보"로
+    잘못 표시되던 문제도 함께 수정.
+  - **점검 매트릭스 디스패처 유실 방지**: 매분 디스패처가 due 한 모든 클러스터/셀
+    점검을 태스크 하나 안에서 직렬 실행해 `task_time_limit`(5분) 초과 시 SIGKILL 당하고
+    이후 클러스터 점검이 재시도 없이 유실되던 문제를 수정. 이제 디스패처는 cron 평가와
+    큐잉만 하고(수 초 내 종료), 실제 실행은 클러스터/셀 단위 개별 Celery 태스크로
+    fan-out 되어 독립된 time_limit 을 갖는다. 큐잉 시 랜덤 countdown(jitter) 을 줘 동일
+    분에 due 한 여러 클러스터가 동시에 API 를 두드리는 thundering herd 도 완화.
+  - **대형 클러스터 OOM 방지**: `pod_to_pod`/`image_pull`/`stuck_terminating`/
+    `oom_events` deep checker 가 `list_pod_for_all_namespaces` 등을 페이지네이션 없이
+    한 번에 호출해 5k+ pod 클러스터에서 워커가 OOMKill 될 수 있던 문제를 기존
+    `k8s_paging.iter_all` 페이지 스트리밍으로 전환.
+  - **오탐 healthy 판정 수정**: kubeconfig 인증 만료/RBAC 회수 등으로 노드·컴포넌트
+    조회 자체가 실패해도(`total=0/ready=0`) 클러스터가 healthy 로 보고되던 문제를
+    수정 — 조회 실패 시 최소 warning 으로 강등하고 에러 메시지를 노출한다.
+
 ## [1.7.0] - 2026-07-19
 
 ### Added

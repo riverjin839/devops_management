@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from kubernetes import client as k8s_client, config as k8s_config
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
-from app.models import Cluster, NodeServerSpec
+from app.models import Cluster, NodeServerSpec, User
 from app.schemas.node_server_spec import (
     NodeServerSpecCreate,
     NodeServerSpecList,
@@ -90,7 +91,11 @@ def get_spec(spec_id: UUID, db: Session = Depends(get_db)):
 # ── Create / Update / Delete ─────────────────────────────────────────────────
 
 @router.post("", response_model=NodeServerSpecOut, status_code=status.HTTP_201_CREATED)
-def create_spec(payload: NodeServerSpecCreate, db: Session = Depends(get_db)):
+def create_spec(
+    payload: NodeServerSpecCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     if payload.cluster_id is not None:
         if not db.query(Cluster).filter(Cluster.id == payload.cluster_id).first():
             raise HTTPException(status_code=422, detail="Cluster not found")
@@ -118,7 +123,12 @@ def create_spec(payload: NodeServerSpecCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{spec_id}", response_model=NodeServerSpecOut)
-def update_spec(spec_id: UUID, payload: NodeServerSpecUpdate, db: Session = Depends(get_db)):
+def update_spec(
+    spec_id: UUID,
+    payload: NodeServerSpecUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     spec = db.query(NodeServerSpec).filter(NodeServerSpec.id == spec_id).first()
     if not spec:
         raise HTTPException(status_code=404, detail="NodeServerSpec not found")
@@ -134,7 +144,11 @@ def update_spec(spec_id: UUID, payload: NodeServerSpecUpdate, db: Session = Depe
 
 
 @router.delete("/{spec_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_spec(spec_id: UUID, db: Session = Depends(get_db)):
+def delete_spec(
+    spec_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     spec = db.query(NodeServerSpec).filter(NodeServerSpec.id == spec_id).first()
     if not spec:
         raise HTTPException(status_code=404, detail="NodeServerSpec not found")
@@ -420,6 +434,7 @@ def import_from_cluster(
     cluster_id: UUID,
     payload: NodeSpecImportRequest = NodeSpecImportRequest(),
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """k8s API 로 노드 메타데이터를 끌어와 NodeServerSpec 에 upsert.
 
@@ -553,6 +568,7 @@ async def collect_host_facts(
     cluster_id: UUID,
     payload: NodeSpecHostFactsCollectRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
@@ -727,7 +743,11 @@ def csv_preview(payload: NodeSpecCsvUploadRequest, db: Session = Depends(get_db)
 
 
 @router.post("/csv/apply", response_model=NodeSpecCsvApplyResponse)
-def csv_apply(payload: NodeSpecCsvUploadRequest, db: Session = Depends(get_db)):
+def csv_apply(
+    payload: NodeSpecCsvUploadRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """CSV 업로드 실제 반영 — preview 와 동일한 로직으로 insert/update."""
     payload.dry_run = False
     diffs, actions = _compute_diffs(payload, db)
