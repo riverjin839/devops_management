@@ -10,13 +10,16 @@ import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
 import type { WorkItemColumnKey } from './workItemColumns';
 
+// 상태색은 semantic status 토큰으로 (D-011). backlog=대기→unknown, todo=정보→info,
+// in_progress=진행중→warning, done=완료→healthy. review_test 는 status 토큰이 없는
+// 장식(purple)이므로 임의 status 대신 중립 토큰(muted)으로 둔다.
 const KS_DOT: Record<string, string> = {
-  backlog: 'bg-slate-400', todo: 'bg-blue-400', in_progress: 'bg-amber-400',
-  review_test: 'bg-purple-400', done: 'bg-emerald-400',
+  backlog: 'bg-status-unknown', todo: 'bg-status-info', in_progress: 'bg-status-warning',
+  review_test: 'bg-muted-foreground', done: 'bg-status-healthy',
 };
 const KS_TEXT: Record<string, string> = {
-  backlog: 'text-slate-400', todo: 'text-blue-400', in_progress: 'text-amber-400',
-  review_test: 'text-purple-400', done: 'text-emerald-400',
+  backlog: 'text-status-unknown', todo: 'text-status-info', in_progress: 'text-status-warning',
+  review_test: 'text-muted-foreground', done: 'text-status-healthy',
 };
 const KS_LABEL: Record<string, string> = {
   backlog: 'Backlog', todo: 'To Do', in_progress: 'In Progress',
@@ -25,9 +28,9 @@ const KS_LABEL: Record<string, string> = {
 const KS_OPTIONS: KanbanStatus[] = ['backlog', 'todo', 'in_progress', 'review_test', 'done'];
 
 const PRI_STYLES: Record<string, { dot: string; text: string; label: string }> = {
-  high:   { dot: 'bg-red-500',   text: 'text-red-400',   label: 'High' },
-  medium: { dot: 'bg-amber-500', text: 'text-amber-400', label: 'Medium' },
-  low:    { dot: 'bg-sky-500',   text: 'text-sky-400',   label: 'Low' },
+  high:   { dot: 'bg-status-critical', text: 'text-status-critical', label: 'High' },
+  medium: { dot: 'bg-status-warning',  text: 'text-status-warning',  label: 'Medium' },
+  low:    { dot: 'bg-status-info',     text: 'text-status-info',     label: 'Low' },
 };
 const PRI_OPTIONS: Array<'high' | 'medium' | 'low'> = ['high', 'medium', 'low'];
 
@@ -100,9 +103,15 @@ function EditableCell({
   }
   return (
     <td
-      className={`px-4 py-1.5 select-none cursor-pointer hover:bg-primary/5 transition-colors ${className}`}
+      role="button"
+      tabIndex={0}
+      className={`px-4 py-1.5 select-none cursor-pointer hover:bg-primary/5 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors ${className}`}
       onClick={onEnter}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEnter(); }
+      }}
       title={title}
+      aria-label={title}
     >
       {children}
     </td>
@@ -270,8 +279,8 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
               </select>
             ) : (
               <span className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-slate-400'}`} />
-                <span className={`text-sm font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-slate-400'}`}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-status-unknown'}`} />
+                <span className={`text-sm font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-status-unknown'}`}>
                   {KS_LABEL[ks] ?? ks}
                 </span>
               </span>
@@ -315,9 +324,15 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 />
               ) : (
                 <span
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setEditing('primaryAssignee')}
-                  className="px-2 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing('primaryAssignee'); }
+                  }}
+                  className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border cursor-pointer hover:bg-secondary/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
                   title="클릭하여 수정"
+                  aria-label="정 담당자 클릭하여 수정"
                 >
                   정: {item.primaryAssignee || item.assignee || '-'}
                 </span>
@@ -332,9 +347,15 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 />
               ) : item.secondaryAssignee ? (
                 <span
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setEditing('secondaryAssignee')}
-                  className="px-2 py-0.5 text-xs rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing('secondaryAssignee'); }
+                  }}
+                  className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border cursor-pointer hover:bg-secondary/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
                   title="클릭하여 수정"
+                  aria-label="부 담당자 클릭하여 수정"
                 >
                   부: {item.secondaryAssignee}
                 </span>
@@ -593,7 +614,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(item); }}
-                className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
+                className="p-1.5 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical"
                 title="삭제"
                 aria-label="삭제"
               >
