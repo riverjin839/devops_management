@@ -238,7 +238,8 @@ export function ServiceHubPage() {
                       <h3 className="flex-1 font-semibold text-sm leading-snug line-clamp-2">{e.title}</h3>
                       <button onClick={() => togglePin(e)}
                         className={`p-1 rounded hover:bg-secondary flex-shrink-0 ${e.pinned ? 'text-primary' : 'text-muted-foreground'}`}
-                        title={e.pinned ? '고정 해제' : '상단 고정'}>
+                        title={e.pinned ? '고정 해제' : '상단 고정'}
+                        aria-label={e.pinned ? '고정 해제' : '상단 고정'}>
                         <Pin className={`w-3.5 h-3.5 ${e.pinned ? 'fill-current' : ''}`} />
                       </button>
                     </header>
@@ -282,13 +283,13 @@ export function ServiceHubPage() {
                         </>
                       )}
                       <div className="ml-auto flex items-center gap-0.5">
-                        <button onClick={() => handleCopyShare(e)} title="공유 URL 복사"
+                        <button onClick={() => handleCopyShare(e)} title="공유 URL 복사" aria-label="공유 URL 복사"
                           className="p-1 rounded hover:bg-secondary"><Share2 className="w-3 h-3" /></button>
-                        <button onClick={() => handleCopyMarkdown(e)} title="Markdown 복사 (Slack/Teams)"
+                        <button onClick={() => handleCopyMarkdown(e)} title="Markdown 복사 (Slack/Teams)" aria-label="Markdown 복사 (Slack/Teams)"
                           className="p-1 rounded hover:bg-secondary"><Copy className="w-3 h-3" /></button>
-                        <button onClick={() => setEditEntry(e)} title="수정"
+                        <button onClick={() => setEditEntry(e)} title="수정" aria-label="수정"
                           className="p-1 rounded hover:bg-secondary"><Pencil className="w-3 h-3" /></button>
-                        <button onClick={() => setConfirmDelete(e)} title="삭제"
+                        <button onClick={() => setConfirmDelete(e)} title="삭제" aria-label="삭제"
                           className="p-1 rounded hover:bg-red-500/10 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
                       </div>
                     </footer>

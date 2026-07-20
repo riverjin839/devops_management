@@ -928,6 +928,7 @@ export function SettingsPage() {
                       disabled={verifyingId === cluster.id}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
                       title="연결 확인"
+                      aria-label="연결 확인"
                     >
                       {verifyingId === cluster.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -939,6 +940,7 @@ export function SettingsPage() {
                       onClick={() => setKubeconfigCluster(cluster)}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                       title="Kubeconfig 확인/수정"
+                      aria-label="Kubeconfig 확인/수정"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
@@ -946,6 +948,7 @@ export function SettingsPage() {
                       onClick={() => setEditCluster(cluster)}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                       title="수정"
+                      aria-label="수정"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -954,6 +957,7 @@ export function SettingsPage() {
                       disabled={deletingId === cluster.id}
                       className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40"
                       title="삭제"
+                      aria-label="삭제"
                     >
                       {deletingId === cluster.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1069,6 +1073,7 @@ export function SettingsPage() {
                       disabled={pingingId === server.id}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
                       title="연결 확인 (Ping)"
+                      aria-label="연결 확인 (Ping)"
                     >
                       {pingingId === server.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
                     </button>
@@ -1076,6 +1081,7 @@ export function SettingsPage() {
                       onClick={() => { setEditServer(server); setShowServerModal(true); }}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                       title="수정"
+                      aria-label="수정"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -1084,6 +1090,7 @@ export function SettingsPage() {
                       disabled={deleteServerMutation.isPending}
                       className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40"
                       title="삭제"
+                      aria-label="삭제"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

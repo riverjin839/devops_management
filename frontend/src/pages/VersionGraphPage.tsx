@@ -84,7 +84,7 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.label}</p>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-secondary rounded text-muted-foreground flex-shrink-0">
+        <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded text-muted-foreground flex-shrink-0">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -201,7 +201,7 @@ export function VersionGraphPage() {
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
         <button onClick={() => navigate('/versions')}
           className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
-          title="버전 페이지로">
+          title="버전 페이지로" aria-label="버전 페이지로">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <Share2 className="w-5 h-5 text-primary flex-shrink-0" />

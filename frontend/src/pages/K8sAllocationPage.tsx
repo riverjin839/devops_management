@@ -798,6 +798,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
             <button
               onClick={() => setViewStyle('table')}
               title="테이블 뷰"
+              aria-label="테이블 뷰"
               className={`p-1.5 rounded-md ${viewStyle === 'table' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <List className="w-3.5 h-3.5" />
@@ -805,6 +806,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
             <button
               onClick={() => setViewStyle('card')}
               title="카드 뷰"
+              aria-label="카드 뷰"
               className={`p-1.5 rounded-md ${viewStyle === 'card' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -861,6 +863,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
                     <button
                       onClick={() => refreshNode.mutate(n.name)}
                       title="이 노드만 새로고침"
+                      aria-label="이 노드만 새로고침"
                       className="text-muted-foreground hover:text-primary"
                     >
                       <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
@@ -905,6 +908,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
                       <button
                         onClick={() => refreshNode.mutate(n.name)}
                         title="이 노드만 새로고침"
+                        aria-label="이 노드만 새로고침"
                         className="text-muted-foreground hover:text-primary shrink-0"
                       >
                         <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
@@ -1055,6 +1059,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
                         <button
                           onClick={(e) => { e.stopPropagation(); refreshNs.mutate(ns.namespace); }}
                           title="이 네임스페이스만 새로고침"
+                          aria-label="이 네임스페이스만 새로고침"
                           className="text-muted-foreground hover:text-primary shrink-0"
                         >
                           <RefreshCw className={`w-3 h-3 ${refreshNs.isPending && refreshNs.variables === ns.namespace ? 'animate-spin' : ''}`} />
