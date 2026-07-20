@@ -514,7 +514,17 @@ def stream_pod_logs(
             except Exception:  # noqa: BLE001
                 pass
 
-    return StreamingResponse(_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # nginx 의 기본 proxy_buffering 을 이 응답에 한해 끔 — 없으면 nginx 가
+            # 응답을 다 모을 때까지 버퍼링해 로그 스트림 실시간성이 사라진다.
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 class PodContainerInfo(BaseModel):
@@ -680,7 +690,15 @@ def stream_cluster_events(
             except Exception:  # noqa: BLE001
                 pass
 
-    return StreamingResponse(_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get(

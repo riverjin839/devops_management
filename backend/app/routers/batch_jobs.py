@@ -50,26 +50,40 @@ def _require_cron_credentials(
     cron: str | None,
     has_password: bool,
     has_private_key: bool,
+    default_host: str | None = None,
 ) -> None:
-    """Raise 422 if a cron schedule is set but no credential will be persisted.
+    """Raise 422 if a cron schedule is set but is missing what unattended runs need.
 
     Design Ref: §2.3.3 — shared invariant for create + update.
     Plan SC: SC-2 (POST 422) / SC-3 (PUT 422 after merge).
 
     Arguments reflect the *final* post-merge state — for PUT the caller
     must merge ``payload`` with the existing DB row first.
+
+    ``default_host`` 검증은 자격증명 검증과 같은 이유로 필요하다 — host 가 없으면
+    ``execute_job`` 이 매 실행마다 ``ValueError`` 를 raise 하는데, 그 시점이
+    ``last_run_at`` 갱신 *이전*이라 디스패처가 이 잡을 계속 due 로 보고 매분
+    재큐잉하는 retry storm 이 된다. 저장 시점에 막아 애초에 그런 잡이 등록되지
+    않게 한다.
     """
     if not (cron and cron.strip()):
         return
-    if has_password or has_private_key:
-        return
-    raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail=(
-            "cron 을 사용하려면 saved_password 또는 saved_private_key 중 "
-            "하나가 필요합니다. 둘 다 비우면 스케줄러가 매분 silent skip 합니다."
-        ),
-    )
+    if not (has_password or has_private_key):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "cron 을 사용하려면 saved_password 또는 saved_private_key 중 "
+                "하나가 필요합니다. 둘 다 비우면 스케줄러가 매분 silent skip 합니다."
+            ),
+        )
+    if not (default_host and default_host.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "cron 을 사용하려면 default_host 가 필요합니다. 비우면 무인 실행마다 "
+                "실패하면서 디스패처가 매분 재시도합니다."
+            ),
+        )
 
 
 def _to_response(job: BatchJob) -> dict:
@@ -142,6 +156,7 @@ def create_job(
         cron=payload.cron,
         has_password=bool(payload.saved_password),
         has_private_key=bool(payload.saved_private_key),
+        default_host=payload.default_host,
     )
 
     data = payload.model_dump()
@@ -238,10 +253,12 @@ def update_job(
         final_has_key = bool(saved_private_key)
     else:
         final_has_key = bool(job.encrypted_private_key)
+    final_default_host = update.get("default_host", job.default_host) if "default_host" in update else job.default_host
     _require_cron_credentials(
         cron=final_cron,
         has_password=final_has_pw,
         has_private_key=final_has_key,
+        default_host=final_default_host,
     )
 
     for field, value in update.items():

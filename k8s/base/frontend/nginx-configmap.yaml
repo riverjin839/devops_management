@@ -27,6 +27,26 @@ data:
         gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
         gzip_min_length 1000;
 
+        # Pod exec 웹소켓 + SSE 스트림(로그/이벤트 tail) — 대화형 터미널/장시간 스트림이라
+        # 일반 API 의 60s read timeout 에 걸려 끊기면 안 된다. 정규식 location 이 아래
+        # 일반 /api/ prefix location 보다 항상 우선 매치된다(순서 무관).
+        location ~ ^/api/v1/(k8s/[^/]+/exec|analyze/.*/stream) {
+            proxy_pass http://backend:8000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 3600s;
+            proxy_read_timeout 3600s;
+            # SSE 응답은 백엔드가 X-Accel-Buffering: no 를 보내 개별적으로 버퍼링을 끈다
+            # (analyze.py/cilium_trace.py) — 여기서 전역으로 끌 필요는 없다.
+        }
+
         # API proxy to backend service
         location /api/ {
             proxy_pass http://backend:8000/api/;
@@ -66,4 +86,10 @@ data:
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-XSS-Protection "1; mode=block" always;
+        # CSP — index.html 의 인라인 <script>/<style>(로더 애니메이션, JS 로드 실패
+        # 감지) 때문에 script-src/style-src 에 'unsafe-inline' 이 필요하다(nonce 로
+        # 강화하려면 그 인라인 블록들을 먼저 외부 파일로 분리해야 함 — 후속 과제).
+        # 그래도 frame-ancestors/object-src/connect-src 를 좁혀 외부 스크립트 로드·
+        # clickjacking·임의 origin 데이터 유출은 차단한다.
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; connect-src 'self'" always;
     }

@@ -5,6 +5,7 @@ import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sEvents, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
 import type { K8sEvent, K8sEventSeverity } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const SEVERITY_TABS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '전체' },
@@ -37,7 +38,7 @@ function SeverityBadge({ severity }: { severity: K8sEventSeverity }) {
 
 function formatTime(iso: string) {
   try {
-    return new Date(iso).toLocaleString('ko-KR', {
+    return parseUTC(iso).toLocaleString('ko-KR', {
       month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     });

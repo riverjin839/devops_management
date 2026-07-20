@@ -12,7 +12,7 @@ import { useClusters } from '@/hooks/useCluster';
 import type {
   IncidentAnalysisRequest, IncidentAnalysisResult, KubeEvent, AnalyzePodItem,
 } from '@/types';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; bg: string; border: string; text: string; badge: string }> = {
   critical: { icon: AlertTriangle, bg: 'bg-red-500/10',    border: 'border-red-500/40',    text: 'text-red-400',    badge: 'bg-red-500/15 text-red-400 border-red-500/30' },
@@ -55,7 +55,7 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
             {BACKEND_LABEL[result.analyzedBy] ?? result.analyzedBy}
           </span>
           <span className="text-xs text-muted-foreground">
-            {new Date(result.analyzedAt).toLocaleTimeString('ko-KR')}
+            {parseUTC(result.analyzedAt).toLocaleTimeString('ko-KR')}
           </span>
         </div>
       </div>

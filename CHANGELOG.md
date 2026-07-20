@@ -20,6 +20,42 @@
 ## [1.7.1] - 2026-07-20
 
 ### Fixed
+- **상용 출시 전 보안/안정성 점검 후속 조치 (High 11건)**: Blocker 조치에 이어 High
+  등급 항목을 마저 반영.
+  - **인증/인가**: `ui-settings` 의 앱 설정/클러스터 링크/담당자/운영레벨 PUT 엔드포인트가
+    인증만으로 접근 가능하던 것을 admin 전용으로 강제(feature-access 와 동일 패턴).
+  - **클러스터 삭제 500 수정**: deep_check_results/batch_jobs(+runs)/ops_check_runs/
+    os_param_changes/ansible_inventories 를 선삭제하지 않아 FK 위반으로 실패하던
+    `DELETE /clusters/{id}` 를 수정 — deep check 가 한 번이라도 돈 클러스터는 삭제가
+    불가능했다.
+  - **멀티클러스터 점검 격리**: deep checker 가 `config.load_kube_config()`(프로세스
+    전역 상태)를 사용해 동시 실행 시 한 클러스터의 kubeconfig 로 다른 클러스터를
+    점검할 수 있던 race 를 `new_client_from_config()` 격리로 수정(daily_checker.py 와
+    동일 패턴).
+  - **배치잡 재시도 스톰 방지**: `default_host` 없이 cron 이 걸린 배치잡이 매분 실패
+    → 재큐잉을 반복하던 문제를 저장 시점 검증(운영자) + 실패 시에도 `last_run_at`
+    갱신(자가 치유)으로 이중 차단.
+  - **K8s SDK 타임아웃/이벤트 루프 블로킹**: daily checker 의 K8s SDK 호출에 클라이언트
+    타임아웃(`_request_timeout`)이 없어 무응답 클러스터가 디스패처를 무기한 붙잡던
+    문제, 그리고 `POST /daily-check/run` 이 동기 SDK 호출로 FastAPI 이벤트 루프 자체를
+    막던 문제(`asyncio.to_thread` 로 오프로드)를 수정.
+  - **Celery 안정성**: Redis 브로커의 `allkeys-lru` eviction 정책이 예약 점검/배치잡
+    큐 자체를 지울 수 있던 것을 `noeviction` + 메모리 여유로 수정, 결과를 아무도
+    조회하지 않는 매분 디스패처류 태스크 10개에 `ignore_result=True` 적용.
+  - **AI 리뷰 큐 부하 완화**: core_bundle 점검마다 무조건 Ollama 리뷰를 큐잉하던 것을
+    상태 변화가 있거나 healthy 가 아닐 때만 큐잉하도록 게이팅 — 작은 워커 동시성이
+    Ollama 대기로 계속 점유돼 배치잡/수동 점검이 밀리던 문제 완화.
+  - **로그 테이블 리텐션**: `daily_check_logs`/`check_logs`/`k8s_events`/`audit_logs`/
+    `user_notifications` 가 purge 대상이 아니어서 무기한 증가하던 것을 청크 삭제
+    리텐션(각 21~365일)으로 정리, 관련 조회 인덱스도 보강.
+  - **Pod exec/SSE 안정성**: nginx `proxy_read_timeout` 60s 로 대화형 터미널이 끊기던
+    문제를 exec/스트림 경로 전용 location(3600s)으로 수정, 파드 로그·이벤트 SSE 응답에
+    `X-Accel-Buffering: no` 를 추가해 nginx 버퍼링으로 실시간성이 사라지던 문제 수정.
+    frontend nginx 설정에 CSP 등 보안 헤더도 추가(docker-compose/k8s 두 설정 동기화).
+  - **시각 표시 오류**: `parseUTC` 유틸을 거치지 않고 `new Date()`로 API 타임스탬프를
+    직접 파싱해 9시간(KST) 어긋나게 표시되던 지점 20여 곳(감사 로그, 점검 이력, VOC,
+    트렌드, Lake 서비스, Isilon, 홈 "다음 마감" 등)을 일괄 수정.
+
 - **상용 출시 전 보안/안정성 점검 후속 조치 (Blocker 7건)**: 상세 코드 감사에서 발견된
   치명 결함을 수정.
   - **인증/인가**: 운영 배포(`DEBUG=false`)에서 `SECRET_KEY` 가 기본값이거나 32자

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clustersApi, healthApi, historyApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { Cluster, Addon } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 // Query Keys
 export const queryKeys = {
@@ -26,7 +27,7 @@ export function useClusters() {
         const sa = a.seq ?? 1000;
         const sb = b.seq ?? 1000;
         if (sa !== sb) return sa - sb;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return parseUTC(a.createdAt).getTime() - parseUTC(b.createdAt).getTime();
       });
       setClusters(clusters);
       return clusters;

@@ -940,6 +940,16 @@ def _run_migrations():
         _safe_add_column("lake_services", "domain", "VARCHAR(10) NOT NULL DEFAULT 'pep'")
         _safe_create_index("ix_lake_services_domain", "lake_services", "(domain)")
 
+    # 로그성 테이블 리텐션 purge 쿼리(WHERE <ts> < cutoff)가 seq scan 없이 돌도록
+    # 타임스탬프 컬럼에 인덱스 보강. daily_check_logs/check_logs/user_notifications 는
+    # 지금까지 purge 대상이 아니었어서 인덱스가 없었다 — purge_logging_tables 추가와 짝.
+    if "daily_check_logs" in inspector.get_table_names():
+        _safe_create_index("ix_daily_check_logs_check_date", "daily_check_logs", "(check_date)")
+    if "check_logs" in inspector.get_table_names():
+        _safe_create_index("ix_check_logs_checked_at", "check_logs", "(checked_at)")
+    if "user_notifications" in inspector.get_table_names():
+        _safe_create_index("ix_user_notifications_created_at", "user_notifications", "(created_at)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""

@@ -46,6 +46,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_deep_check_results_purge",
         "schedule": crontab(hour=3, minute=10),
     },
+    # 나머지 로그성 테이블(daily_check_logs/check_logs/k8s_events/audit_logs/
+    # user_notifications) 리텐션 정리 — 지금까지 purge 대상이 아니어서 무기한
+    # 증가했다. 위 두 purge 와 겹치지 않게 03:20 KST.
+    "log-tables-purge": {
+        "task": "app.celery_app.run_log_tables_purge",
+        "schedule": crontab(hour=3, minute=20),
+    },
     # 기술 트렌드 수집 (07:00 KST)
     "daily-trend-collect": {
         "task": "app.celery_app.run_trend_collect",
@@ -71,7 +78,7 @@ celery_app.conf.beat_schedule = {
 }
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_dispatch")
+@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_dispatch", ignore_result=True)
 def run_check_matrix_dispatch(self):
     """점검 매트릭스 디스패처 — 매분 실행, due 한 core_bundle(Cluster.check_cron_expr) +
     항목별 스케줄(CheckMatrixSchedule) 을 평가해 그 자리에서 동기 실행.
@@ -203,7 +210,7 @@ def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_log_purge")
+@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_log_purge", ignore_result=True)
 def run_check_matrix_log_purge(self):
     """점검 매트릭스 이력 리텐션 정리 — 매일 03:00 KST, 설정된 보관 일수 초과분 청크 삭제."""
     import logging
@@ -273,7 +280,7 @@ def collect_resource_counts_one(self, cluster_id: str, user_id: str | None = Non
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.dispatch_resource_count_snapshot")
+@celery_app.task(bind=True, name="app.celery_app.dispatch_resource_count_snapshot", ignore_result=True)
 def dispatch_resource_count_snapshot(self):
     """운영자 설정 cron 에 맞춰 리소스 수 스냅샷을 트리거(매분 평가).
 
@@ -334,7 +341,7 @@ def dispatch_resource_count_snapshot(self):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_trend_collect")
+@celery_app.task(bind=True, name="app.celery_app.run_trend_collect", ignore_result=True)
 def run_trend_collect(self):
     """매일 07:00 KST 기술 트렌드 수집"""
     from app.database import SessionLocal
@@ -399,7 +406,7 @@ def run_batch_job(self, job_id: str, *, password: str | None = None, private_key
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_batch_job_dispatcher")
+@celery_app.task(bind=True, name="app.celery_app.run_batch_job_dispatcher", ignore_result=True)
 def run_batch_job_dispatcher(self):
     """Scan registered BatchJob rows and queue any whose cron expression
     is due. Runs every minute via Celery Beat.
@@ -510,7 +517,7 @@ def run_batch_job_dispatcher(self):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_review_and_notify")
+@celery_app.task(bind=True, name="app.celery_app.run_review_and_notify", ignore_result=True)
 def run_review_and_notify(self, daily_check_log_id: str):
     """Ollama 기반 AI 리뷰 생성 → DailyCheckLog 에 저장 → 알림 채널 fan-out.
 
@@ -578,7 +585,7 @@ def run_single_check(self, cluster_id: str):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_cluster_item_dispatcher")
+@celery_app.task(bind=True, name="app.celery_app.run_cluster_item_dispatcher", ignore_result=True)
 def run_cluster_item_dispatcher(self):
     """현황 카드(ClusterItem) 자동 수집 디스패처 — 매시 정각 실행(Beat).
 
@@ -679,7 +686,7 @@ def run_deep_check_for_cluster(self, cluster_id: str, daily_check_log_id: str | 
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_deep_check_results_purge")
+@celery_app.task(bind=True, name="app.celery_app.run_deep_check_results_purge", ignore_result=True)
 def run_deep_check_results_purge(self):
     """deep_check_results 리텐션 정리 — 매일 03:10 KST, 보관일수 초과분 청크 삭제.
 
@@ -694,6 +701,25 @@ def run_deep_check_results_purge(self):
         return purge_expired_results(db)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).exception("run_deep_check_results_purge failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_log_tables_purge", ignore_result=True)
+def run_log_tables_purge(self):
+    """daily_check_logs/check_logs/k8s_events/audit_logs/user_notifications 리텐션
+    정리 — 매일 03:20 KST. 테이블별 보관일수는 log_retention_service.RETENTION_DAYS.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.services import log_retention_service
+
+    db = SessionLocal()
+    try:
+        return log_retention_service.purge_all(db)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_log_tables_purge failed: %s", e)
         return {"error": str(e)[:200]}
     finally:
         db.close()

@@ -10,7 +10,7 @@ import { StatusBadge, StatusDot, statusToVariant } from '@/components/common/Sta
 import { LogViewer } from '@/components/common/LogViewer';
 import { useToast } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useOpsCheckCatalog, useStartOpsRun, useOpsRun, useOpsRunItems,
@@ -267,7 +267,7 @@ export function OpsCheckConsolePage() {
                           ) : c.lastStatus ? (
                             <span className="inline-flex items-center gap-1">
                               <StatusDot variant={statusToVariant(c.lastStatus)} />
-                              <span className="text-xs text-muted-foreground">{c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : ''}</span>
+                              <span className="text-xs text-muted-foreground">{c.lastRunAt ? parseUTC(c.lastRunAt).toLocaleString() : ''}</span>
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60">

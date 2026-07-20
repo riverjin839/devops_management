@@ -91,7 +91,11 @@ def get_ui_settings(db: Session = Depends(get_db)):
 
 
 @router.put("", response_model=UiSettingsResponse)
-def update_ui_settings(payload: UiSettingsUpdate, db: Session = Depends(get_db)):
+def update_ui_settings(
+    payload: UiSettingsUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     setting = _get_or_create(db, UI_SETTINGS_KEY, DEFAULT_UI_SETTINGS)
     current = setting.value or DEFAULT_UI_SETTINGS.copy()
 
@@ -156,7 +160,11 @@ def get_cluster_links(db: Session = Depends(get_db)):
 
 
 @router.put("/cluster-links", response_model=ClusterLinksResponse)
-def update_cluster_links(payload: ClusterLinksUpdate, db: Session = Depends(get_db)):
+def update_cluster_links(
+    payload: ClusterLinksUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     setting = _get_or_create(db, CLUSTER_LINKS_KEY, DEFAULT_CLUSTER_LINKS)
     next_value = {
         "common_links": [item.model_dump() for item in payload.common_links],
@@ -200,7 +208,11 @@ def get_assignees(db: Session = Depends(get_db)):
 
 
 @router.put("/assignees")
-def update_assignees(payload: dict, db: Session = Depends(get_db)):
+def update_assignees(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     raw_list = payload.get("assignees", [])
     if not isinstance(raw_list, list):
         raw_list = []
@@ -318,7 +330,11 @@ def get_operation_levels(db: Session = Depends(get_db)):
 
 
 @router.put("/operation-levels", response_model=OperationLevelsResponse)
-def update_operation_levels(payload: OperationLevelsUpdate, db: Session = Depends(get_db)):
+def update_operation_levels(
+    payload: OperationLevelsUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     setting = _get_or_create(db, OPERATION_LEVELS_KEY, DEFAULT_OPERATION_LEVELS)
     seen: set[str] = set()
     cleaned: list[dict] = []

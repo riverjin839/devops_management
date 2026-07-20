@@ -9,6 +9,7 @@ import {
   useRunBottleneckAnalysis,
 } from '@/hooks/usePodBottleneck';
 import type { BottleneckRun, BottleneckStatus } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const STATUS_COLOR: Record<BottleneckStatus, string> = {
   healthy:  'border-emerald-500/40 bg-emerald-500/5',
@@ -238,7 +239,7 @@ function RunRow({ run, onClick }: { run: BottleneckRun; onClick: () => void }) {
           {run.destPod}
         </span>
         <span className="text-xs text-muted-foreground">
-          {new Date(run.createdAt).toLocaleString('ko-KR')}
+          {parseUTC(run.createdAt).toLocaleString('ko-KR')}
         </span>
         <span className="text-xs font-mono text-muted-foreground">
           {run.durationMs}ms
