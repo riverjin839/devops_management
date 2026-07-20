@@ -39,7 +39,7 @@ export function DiffPanel({ diff }: Props) {
         {(diff.readyNodesDelta ?? 0) !== 0 && (
           <div className="text-sm">
             <span className="text-muted-foreground">Ready 노드 변화: </span>
-            <span className={(diff.readyNodesDelta ?? 0) < 0 ? 'text-red-500' : 'text-emerald-500'}>
+            <span className={(diff.readyNodesDelta ?? 0) < 0 ? 'text-status-critical' : 'text-status-healthy'}>
               {(diff.readyNodesDelta ?? 0) > 0 ? '+' : ''}
               {diff.readyNodesDelta}
             </span>
@@ -55,9 +55,9 @@ export function DiffPanel({ diff }: Props) {
                 {s.items.map((it, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-sm">
                     {s.positive ? (
-                      <Minus className="w-3 h-3 mt-0.5 flex-shrink-0 text-emerald-500" />
+                      <Minus className="w-3 h-3 mt-0.5 flex-shrink-0 text-status-healthy" />
                     ) : (
-                      <Plus className="w-3 h-3 mt-0.5 flex-shrink-0 text-red-500" />
+                      <Plus className="w-3 h-3 mt-0.5 flex-shrink-0 text-status-critical" />
                     )}
                     <span className="break-words">{it}</span>
                   </li>

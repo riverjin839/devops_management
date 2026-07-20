@@ -1,5 +1,5 @@
 import { Play, ChevronRight } from 'lucide-react';
-import { HealthBadge } from './HealthBadge';
+import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { ServiceTypeIcon } from './ServiceTypeIcon';
 import type { LakeService } from '@/types';
 import { parseUTC } from '@/lib/utils';
@@ -16,11 +16,18 @@ export function LakeServiceCard({
   service, typeLabel, onClick, onRunCheck, isChecking,
 }: LakeServiceCardProps) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onClick(service)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(service);
+        }
+      }}
       aria-label={`${service.name} 상세 보기`}
-      className="group text-left bg-card border border-border rounded-md p-4 hover:border-primary/40 hover:shadow-md transition-all"
+      className="group text-left bg-card border border-border rounded-md p-4 hover:border-primary/40 transition-all cursor-pointer"
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-3">
@@ -37,7 +44,7 @@ export function LakeServiceCard({
             </p>
           </div>
         </div>
-        <HealthBadge status={service.status} />
+        <StatusBadge variant={statusToVariant(service.status)} />
       </div>
 
       {/* Endpoint + meta */}
@@ -58,9 +65,9 @@ export function LakeServiceCard({
             : '점검 기록 없음'}
         </span>
         <div className="flex items-center gap-1">
-          <span
-            role="button"
-            tabIndex={0}
+          <button
+            type="button"
+            disabled={isChecking}
             onClick={(e) => {
               e.stopPropagation();
               if (!isChecking) onRunCheck(service);
@@ -68,16 +75,15 @@ export function LakeServiceCard({
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.stopPropagation();
-                if (!isChecking) onRunCheck(service);
               }
             }}
             aria-label={`${service.name} 지금 점검`}
-            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 cursor-pointer
-              ${isChecking ? 'opacity-50 cursor-not-allowed' : 'hover:bg-secondary'}`}
+            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5
+              ${isChecking ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-secondary'}`}
           >
             <Play className="w-3 h-3" />
             {isChecking ? '실행 중…' : '지금 점검'}
-          </span>
+          </button>
           <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-50" />
         </div>
       </div>
@@ -87,6 +93,6 @@ export function LakeServiceCard({
           {service.lastMessage}
         </p>
       )}
-    </button>
+    </div>
   );
 }

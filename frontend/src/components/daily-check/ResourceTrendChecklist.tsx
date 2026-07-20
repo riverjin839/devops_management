@@ -74,7 +74,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
     <MacCard title="리소스 수 추세 체크리스트" bodyPadding="p-0">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
         <span className="text-sm text-muted-foreground">
-          {data?.latestCollectedAt ? `최근 수집: ${parseUTC(data.latestCollectedAt).toLocaleString()}` : '수집된 스냅샷 없음'}
+          {data?.latestCollectedAt ? `최근 수집: ${parseUTC(data.latestCollectedAt).toLocaleString('ko-KR')}` : '수집된 스냅샷 없음'}
         </span>
         <RoleGate allow={['admin', 'operator']}>
           <button onClick={doSnapshot} disabled={busy}
@@ -92,13 +92,13 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
             <Clock className="w-3.5 h-3.5" /> 주기 설정
           </button>
         </RoleGate>
-        <button onClick={() => refetch()} title="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+        <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
           <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       {msg && (
-        <div className={`px-4 py-2 text-sm ${msg.ok ? 'text-green-700 bg-green-500/10' : 'text-red-600 bg-red-500/10'}`}>{msg.text}</div>
+        <div className={`px-4 py-2 text-sm ${msg.ok ? 'text-status-healthy bg-status-healthy-soft' : 'text-status-critical bg-status-critical-soft'}`}>{msg.text}</div>
       )}
 
       <div className={`grid ${COLS} gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30`}>
@@ -110,7 +110,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
       {isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
       ) : isError ? (
-        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-status-critical">조회 실패: {errMsg(error)}</div>
       ) : (data?.items.length ?? 0) === 0 ? (
         <div className="p-8 text-center text-sm text-muted-foreground">추적 항목이 없습니다. "항목 관리"에서 추가하세요.</div>
       ) : (
@@ -126,8 +126,8 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
             <span className="text-right tabular-nums text-muted-foreground">{num(r.d28)}</span>
             <span className="text-sm"><TrendCell row={r} /></span>
             <span className="flex justify-center">
-              <RoleGate allow={['admin', 'operator']} fallback={r.isChecked ? <Check className="w-4 h-4 text-green-600" /> : <span className="text-muted-foreground">-</span>}>
-                <input type="checkbox" checked={r.isChecked} onChange={() => toggleCheck(r)} title={r.checkedBy ? `${r.checkedBy} · ${r.checkedAt}` : ''}
+              <RoleGate allow={['admin', 'operator']} fallback={r.isChecked ? <Check className="w-4 h-4 text-status-healthy" /> : <span className="text-muted-foreground">-</span>}>
+                <input type="checkbox" checked={r.isChecked} onChange={() => toggleCheck(r)} title={r.checkedBy ? `${r.checkedBy} · ${r.checkedAt ? parseUTC(r.checkedAt).toLocaleString('ko-KR') : ''}` : ''}
                   className="w-4 h-4 accent-primary cursor-pointer" />
               </RoleGate>
             </span>
@@ -276,7 +276,7 @@ function ItemsModal({ clusterId, onClose }: { clusterId: string; onClose: () => 
                 <span className="font-medium">{it.label}</span>
                 <span className="text-muted-foreground">· {it.resourceKind}</span>
                 <span className="text-xs text-muted-foreground">{it.clusterId ? '(클러스터)' : '(전역)'}</span>
-                <button onClick={() => remove(it)} className="ml-auto p-1 rounded text-red-500 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => remove(it)} title="항목 삭제" aria-label={`${it.label} 항목 삭제`} className="ml-auto p-1 rounded text-status-critical hover:bg-status-critical-soft"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}
           </div>

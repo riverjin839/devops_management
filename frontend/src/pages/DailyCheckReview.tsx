@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import type { AxiosError } from 'axios';
 import { ArrowLeft, Play, Settings, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
@@ -24,6 +25,11 @@ import {
 } from '@/hooks/useDailyCheck';
 import { parseUTC } from '@/lib/utils';
 
+function errMsg(e: unknown): string {
+  const ax = e as AxiosError<{ detail?: string }>;
+  return ax?.response?.data?.detail || (e as Error)?.message || '알 수 없는 오류';
+}
+
 export function DailyCheckReviewPage() {
   const { clusterId = '' } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
@@ -42,8 +48,18 @@ export function DailyCheckReviewPage() {
   const { data: latestLog } = useLatestDailyCheckLog(clusterId);
   const dailyCheckLogId = params.get('log') || latestLog?.id || '';
 
-  const { data: review, isLoading: reviewLoading } = useDeepCheckReview(dailyCheckLogId);
-  const { data: trend } = useDailyCheckTrend(clusterId, 7);
+  const {
+    data: review,
+    isLoading: reviewLoading,
+    isError: reviewIsError,
+    error: reviewError,
+    refetch: refetchReview,
+  } = useDeepCheckReview(dailyCheckLogId);
+  const {
+    data: trend,
+    isError: trendIsError,
+    error: trendError,
+  } = useDailyCheckTrend(clusterId, 7);
   const runDeep = useRunDeepCheckNow();
   const runDaily = useRunDailyCheckNow();
 
@@ -135,10 +151,26 @@ export function DailyCheckReviewPage() {
                   <div className="text-sm text-muted-foreground italic">불러오는 중…</div>
                 </MacCard>
               )}
+              {!reviewLoading && reviewIsError && (
+                <MacCard title="AI 자동 리뷰">
+                  <div className="rounded-xl border border-status-critical/40 bg-status-critical-soft p-3 text-sm">
+                    <p className="font-medium text-status-critical">리뷰를 불러오지 못했습니다</p>
+                    <p className="mt-1 text-muted-foreground break-words">{errMsg(reviewError)}</p>
+                    <button
+                      type="button"
+                      onClick={() => refetchReview()}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      재시도
+                    </button>
+                  </div>
+                </MacCard>
+              )}
               {review && <AiSummaryCard review={review} />}
               {review && <DeepCheckGrid results={review.deepResults} />}
               {review && <DiffPanel diff={review.aiDiff} />}
-              <TrendChart trend={trend} />
+              <TrendChart trend={trend} isError={trendIsError} error={trendError} />
               <NotificationSettingsPanel />
             </>
           )}
@@ -156,6 +188,14 @@ const STATUS_MARKER: Record<string, string> = {
   warning: '🟡',
   critical: '🔴',
   pending: '⚪',
+};
+
+// 회차 배지 색 — 고정 팔레트 대신 status 토큰 (D-020)
+const STATUS_BADGE: Record<string, string> = {
+  healthy: 'bg-status-healthy-soft text-status-healthy',
+  warning: 'bg-status-warning-soft text-status-warning',
+  critical: 'bg-status-critical-soft text-status-critical',
+  pending: 'bg-status-unknown-soft text-status-unknown',
 };
 
 const SCHEDULE_LABEL: Record<string, string> = {
@@ -202,13 +242,7 @@ function DailyCheckLogPicker({
         {selected && (
           <span
             className={`text-xs font-medium px-2 py-1 rounded-full ${
-              selected.overallStatus === 'critical'
-                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                : selected.overallStatus === 'warning'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-500'
-                  : selected.overallStatus === 'healthy'
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-slate-500/10 text-slate-500'
+              STATUS_BADGE[selected.overallStatus] ?? STATUS_BADGE.pending
             }`}
           >
             {selected.overallStatus}
