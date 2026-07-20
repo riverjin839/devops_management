@@ -1,0 +1,20 @@
+# Jira SSO 자동 로그인(세션 쿠키 자동 캡처, services/jira_sso_service.py)용 optional 의존성.
+#
+# requirements.txt 에서 분리한 이유: playwright 는 musllinux(Alpine) wheel 을 배포하지
+# 않아 기본 백엔드 이미지(backend/Dockerfile, python:3.11-alpine 기반)에서
+# `pip install playwright` 자체가 100% 실패한다(버전을 바꿔도 동일 — PyPI 에 Alpine 용
+# 배포물이 없음). 참고 프로젝트(lake-task-manager)도 이 optional 의존성을 별도
+# requirements-sso.txt 로 분리하고 컨테이너가 아닌 소스 실행(호스트에 실 디스플레이가
+# 있는 환경)으로 배포한다 — 동일 패턴을 따른다.
+#
+# 이 파일은 기본 Docker 빌드에 포함되지 않는다. SSO 자동 로그인을 실제로 쓰려면:
+#   1. glibc 기반 이미지(예: python:3.11-slim)로 별도 빌드하거나 호스트에서 직접 실행
+#   2. pip install -r requirements.txt -r requirements-sso.txt
+#   3. playwright install chromium
+#   4. 헤디드 브라우저이므로 표시 가능한 디스플레이 필요(K8s 라면 Xvfb 등 가상 디스플레이
+#      계층 추가 필요) — 없으면 JIRA_SSO_HEADLESS=1 로 헤드리스 강제 가능(테스트용)
+#
+# 미설치 상태에서는 services/jira_sso_service.py 가 ImportError 를 fail-safe 로 처리해
+# "Playwright 미설치" 구조화 에러를 반환한다(앱 기동 자체는 영향 없음) — 기존 PAT/수동
+# 쿠키 등록 경로는 이 파일 설치 여부와 무관하게 항상 정상 동작한다.
+playwright==1.44.0

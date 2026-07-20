@@ -10,6 +10,20 @@
 
 1.7.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **CD 백엔드 이미지 빌드 실패 (playwright ↔ Alpine 비호환)**: PR #489 가 Jira SSO 자동
+  로그인용 `playwright` 를 `requirements.txt` 에 추가하면서, 백엔드 기본 이미지
+  (`backend/Dockerfile`, `python:3.11-alpine`)의 `pip install -r requirements.txt` 가
+  매 커밋마다 100% 실패해 `main` 의 모든 배포가 막혀 있던 문제를 수정. `playwright` 는
+  musllinux(Alpine) wheel 을 배포하지 않아 어떤 버전을 pin 해도 Alpine 위에서는 설치
+  자체가 불가능하다(버전 문제가 아니라 근본적 비호환). 참고 프로젝트(lake-task-manager)도
+  이 optional 의존성을 별도 파일로 분리하고 컨테이너가 아닌 소스 실행으로 배포하는
+  것을 확인 — 동일 패턴으로 `playwright` 를 `requirements.txt` 에서 빼 신설
+  `backend/requirements-sso.txt` 로 분리했다. 기본 배포 이미지는 이 파일을 설치하지
+  않으며, `services/jira_sso_service.py` 가 이미 `ImportError` 를 fail-safe 로 처리하므로
+  SSO 자동 로그인만 "Playwright 미설치" 에러로 비활성화되고 기존 PAT/수동 쿠키 등록
+  경로와 앱 기동 자체는 영향받지 않는다.
+
 ## [1.7.3] - 2026-07-20
 
 ### Fixed
@@ -359,7 +373,8 @@
   - Backend: `services/jira_sso_service.py`(`capture_sso_session` — Playwright 헤디드 로그인 +
     myself 폴링 + 호스트 범위 쿠키 헤더 빌드, 전 예외 fail-safe), `POST /jira/sso/login`
     (`asyncio.to_thread` 로 블로킹 로그인 실행 후 쿠키 검증·저장), `auth_type` 에 'sso' 추가,
-    `requirements.txt` 에 playwright 추가.
+    `requirements-sso.txt`(optional) 에 playwright 추가 — 기본 배포 이미지에는
+    설치하지 않는다(아래 Fixed 참고).
   - Frontend: `JiraIntegrationPanel` 에 SSO 로그인(권장) 블록 + 수동 등록 접이식 섹션.
   - 배포 주의: 헤디드 브라우저라 백엔드 호스트에 표시 가능한 디스플레이 필요(헤드리스
     K8s 면 Xvfb/noVNC 등 원격 화면 계층이 추가로 필요).
