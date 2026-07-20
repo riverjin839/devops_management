@@ -123,9 +123,10 @@ class JiraService:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        if self.auth_type == "cookie":
-            # 세션 쿠키 재사용 — 사용자가 브라우저에서 복사한 Cookie 헤더 값 전체를 그대로 사용.
-            # 쿠키 인증은 Jira 의 XSRF 방어를 타므로 REST POST 를 위해 no-check 토큰을 함께 보낸다.
+        if self.auth_type in ("cookie", "sso"):
+            # 세션 쿠키 재사용 — 'cookie'=사용자가 직접 붙여넣은 값, 'sso'=Playwright 로그인이
+            # 자동 캡처한 값. 둘 다 Cookie 헤더로 동일하게 처리한다. 쿠키 인증은 Jira 의 XSRF
+            # 방어를 타므로 REST POST 를 위해 no-check 토큰을 함께 보낸다.
             headers["Cookie"] = self.token
             headers["X-Atlassian-Token"] = "no-check"
         else:

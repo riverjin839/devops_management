@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 import re
@@ -31,12 +32,14 @@ from app.services.jira_service import (
     JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY,
     PEP_PRIORITY_TO_JIRA, strip_issue_key_prefix,
 )
+from app.services.jira_sso_service import capture_sso_session
 from app.schemas.jira import (
     JiraConfig,
     JiraConfigUpdate,
     JiraCredentialStatus,
     JiraCredentialUpdate,
     JiraTestResult,
+    JiraSsoLoginResult,
     JiraImportRequest,
     JiraImportResult,
     JiraImportItemPreview,
@@ -435,6 +438,64 @@ async def test_connection(db: Session = Depends(get_db), actor: User = Depends(g
             db.commit()
         return JiraTestResult(ok=True, detail="연결 정상", display_name=res.get("display_name"))
     return JiraTestResult(ok=False, detail=res.get("detail", "연결 실패"))
+
+
+# ── SSO 자동 로그인 (Playwright 로 세션 쿠키 자동 캡처) ─────────────────────────────
+@router.post("/sso/login", response_model=JiraSsoLoginResult)
+async def sso_login(db: Session = Depends(get_db), actor: User = Depends(get_current_user)):
+    """백엔드가 브라우저를 띄워 SSO 로그인을 대신 수행하고 세션 쿠키를 자동 저장한다.
+
+    PAT/쿠키 수동 입력을 없애기 위한 경로 — 사용자는 팝업된 브라우저에서 평소처럼 SSO
+    로그인만 하면 된다. 성공 시 캡처한 쿠키가 `auth_type='sso'` 로 저장돼 가져오기·되쓰기가
+    바로 동작한다. **백엔드 호스트에 표시 가능한 디스플레이가 필요**(헤드리스면 Xvfb 등).
+    """
+    cfg = _get_config(db)
+    base_url = cfg.get("base_url", "")
+    if not base_url:
+        return JiraSsoLoginResult(ok=False, detail="관리자가 Jira URL 을 설정하지 않았습니다.")
+    verify_tls = bool(cfg.get("verify_tls", True))
+
+    # 블로킹 Playwright 로그인(헤디드 브라우저 → 사용자가 SSO 완료할 때까지 대기)을 스레드에서 실행.
+    result = await asyncio.to_thread(capture_sso_session, base_url, verify_tls=verify_tls)
+    if result.get("status") != "ok":
+        return JiraSsoLoginResult(ok=False, detail=result.get("detail", "SSO 로그인 실패"))
+
+    cookie_header = result["cookie_header"]
+    # 캡처한 쿠키로 실제 REST 접근이 되는지 검증(사용자 권한 확인).
+    svc = JiraService(base_url, cookie_header, auth_type="sso", verify=verify_tls)
+    verified = await svc.myself()
+    if verified.get("status") != "ok":
+        return JiraSsoLoginResult(
+            ok=False,
+            detail=f"로그인은 감지됐으나 백엔드에서 세션 검증에 실패했습니다: {verified.get('detail', '')} "
+                   "(자체서명 인증서면 공통설정 'TLS 인증서 검증' 해제, 백엔드→Jira 네트워크 확인).",
+        )
+
+    display = verified.get("display_name") or result.get("display_name")
+    account = result.get("account") or verified.get("account")
+    enc = secret_box.encrypt(cookie_header)
+    now = datetime.utcnow()
+    cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
+    if cred:
+        cred.token_encrypted = enc
+        cred.auth_type = "sso"
+        cred.jira_account = display or account or cred.jira_account
+        cred.last_verified_at = now
+    else:
+        cred = UserJiraCredential(
+            username=actor.username, token_encrypted=enc, auth_type="sso",
+            jira_account=display or account, last_verified_at=now,
+        )
+        db.add(cred)
+    db.commit()
+    audit_logger.record(
+        db, action="work_item.jira_sso_login", actor=actor,
+        target_type="user_jira_credential", target_id=None, details={"account": account},
+    )
+    return JiraSsoLoginResult(
+        ok=True, detail="SSO 로그인 완료 — 세션이 저장되었습니다.",
+        jira_account=account, display_name=display,
+    )
 
 
 # ── 가져오기 (단방향, upsert by jira_issue_id) ──────────────────────────────────

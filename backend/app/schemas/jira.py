@@ -21,8 +21,11 @@ class JiraConfigUpdate(BaseModel):
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────
-# 인증 방식: 'pat'(Personal Access Token → Bearer) | 'cookie'(브라우저 세션 쿠키 재사용).
-JiraAuthType = Literal["pat", "cookie"]
+# 인증 방식:
+#   'pat'    — Personal Access Token → Bearer
+#   'cookie' — 사용자가 직접 붙여넣은 브라우저 세션 쿠키
+#   'sso'    — Playwright SSO 로그인이 자동 캡처한 세션 쿠키 (REST 는 cookie 와 동일 처리)
+JiraAuthType = Literal["pat", "cookie", "sso"]
 
 
 class JiraCredentialStatus(BaseModel):
@@ -42,6 +45,14 @@ class JiraCredentialUpdate(BaseModel):
 class JiraTestResult(BaseModel):
     ok: bool
     detail: str = ""
+    display_name: Optional[str] = None
+
+
+class JiraSsoLoginResult(BaseModel):
+    """Playwright SSO 자동 로그인 결과 — 성공 시 세션 쿠키가 자동 저장(auth_type='sso')됐음."""
+    ok: bool
+    detail: str = ""
+    jira_account: Optional[str] = None
     display_name: Optional[str] = None
 
 
