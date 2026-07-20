@@ -26,6 +26,15 @@
   SSO 자동 로그인만 "Playwright 미설치" 에러로 비활성화되고 기존 PAT/수동 쿠키 등록
   경로와 앱 기동 자체는 영향받지 않는다.
 
+### Fixed
+- **Jira SSO 자동 로그인 — 다른 탭에서 로그인해도 세션 감지**: SSO 가 새 탭에서 완료되거나
+  사용자가 초기 탭이 아닌 다른 탭에서 Jira 에 로그인하면, 초기 페이지 하나만 폴링하던 기존
+  로직이 로그인을 감지하지 못해 세션이 저장되지 않던 문제 수정. 이제 브라우저 컨텍스트의
+  **모든 탭**을 순회해 Jira 오리진 탭에서 in-page fetch 로 세션을 확인하고, 실패 시 진단
+  메시지에 열린 탭 호스트 목록을 노출한다.
+  - Backend: `jira_sso_service.capture_sso_session` 의 `_probe_page` → `_probe_pages`
+    (context.pages 전체 순회), 진단값 `tab_hosts` 추가.
+
 ## [1.7.3] - 2026-07-20
 
 ### Fixed
