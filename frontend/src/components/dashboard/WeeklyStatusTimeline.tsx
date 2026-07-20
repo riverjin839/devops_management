@@ -84,8 +84,8 @@ interface AssigneeRow {
   bars: TaskBar[];   // 이 담당자(또는 "전체")의 업무 막대 — packLanes 는 표시 시점(펼침 여부)에 따라 렌더에서 계산
 }
 
-/** 이번 주 전체 업무를 모은 요약 행 이름 — 항상 목록 최상단(본인 행보다 위)에 온다. */
-const TEAM_ROW_NAME = '전체';
+/** 파트 전체 대상 공통업무(all_attendees) 요약 행 이름 — 항상 목록 최상단(본인 행보다 위)에 온다. */
+const TEAM_ROW_NAME = '공통';
 
 // 담당자별 기본 표시 업무 수 — 넘으면 "+N건 더보기"/"접기" 토글(주간 스윔레인 뷰).
 const ASSIGNEE_ITEM_LIMIT = 5;
@@ -215,8 +215,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         (b[0] === myName ? 1 : 0) - (a[0] === myName ? 1 : 0)
         || a[0].localeCompare(b[0], 'ko'))
       .map(([name, bars]) => ({ name, bars }));
-    // "전체" 요약 행 — 이번 주 모든 업무를 모아 항상 맨 위(본인 행보다도 위)에 노출.
-    return taskBars.length > 0 ? [{ name: TEAM_ROW_NAME, bars: taskBars }, ...individual] : individual;
+    // "공통" 요약 행 — 특정 담당자가 아닌 파트 전체 대상 업무(allAttendees, 예: 파트 회의)만
+    // 모아 항상 맨 위(본인 행보다도 위)에 노출한다. 전체 업무 병합이 아니다.
+    const teamBars = taskBars.filter((b) => b.item.allAttendees);
+    return teamBars.length > 0 ? [{ name: TEAM_ROW_NAME, bars: teamBars }, ...individual] : individual;
   }, [taskBars, currentUser]);
 
   // ── 담당자별 "+N건 더보기"/"접기" (기본 ASSIGNEE_ITEM_LIMIT 개만 표시) ──
@@ -520,8 +522,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             {/* ── 담당자 기준: 한 담당자 = 한 swimlane(여러 sub-lane) ──
                 라인 밀도를 낮춰(LANE_H 24px, 축소된 글씨) 한 화면에 더 많은 담당자가
                 보이게 하고, 담당자별 기본 ASSIGNEE_ITEM_LIMIT 개만 보여준 뒤
-                "+N건 더보기"/"접기" 로 펼치고 다시 접을 수 있다. "전체" 행은 이번 주
-                모든 업무를 모아 항상 맨 위(본인 행보다도 위)에 강조 표시된다. */}
+                "+N건 더보기"/"접기" 로 펼치고 다시 접을 수 있다. "공통" 행은 파트 전체
+                대상 업무(allAttendees)만 모아 항상 맨 위(본인 행보다도 위)에 강조 표시된다. */}
             {viewMode === 'assignee' && visibleAssigneeRows.map(({ name, bars }) => {
               const LANE_H = 24; // px per sub-lane (축소 — 기존 32px)
               const isTeamRow = name === TEAM_ROW_NAME;

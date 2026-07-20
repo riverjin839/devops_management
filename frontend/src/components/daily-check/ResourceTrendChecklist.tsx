@@ -6,6 +6,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { metricTrendApi } from '@/services/api';
 import type { MetricTrendRow, MetricChecklistItemT } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 function errMsg(e: unknown): string {
   const ax = e as AxiosError<{ detail?: string }>;
@@ -73,7 +74,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
     <MacCard title="리소스 수 추세 체크리스트" bodyPadding="p-0">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
         <span className="text-sm text-muted-foreground">
-          {data?.latestCollectedAt ? `최근 수집: ${new Date(data.latestCollectedAt).toLocaleString()}` : '수집된 스냅샷 없음'}
+          {data?.latestCollectedAt ? `최근 수집: ${parseUTC(data.latestCollectedAt).toLocaleString()}` : '수집된 스냅샷 없음'}
         </span>
         <RoleGate allow={['admin', 'operator']}>
           <button onClick={doSnapshot} disabled={busy}
@@ -204,7 +205,7 @@ function ScheduleModal({ onClose }: { onClose: () => void }) {
           {mode === 'cron' && (
             <label className="block">cron <input value={cron} onChange={(e) => setCron(e.target.value)} placeholder="0 8 * * *" className="ml-2 w-48 rounded-lg border border-border bg-background px-2 py-1 font-mono" /></label>
           )}
-          <div className="text-xs text-muted-foreground">생성 cron: <span className="font-mono">{buildCron()}</span>{nextRun && <> · 다음 실행: {new Date(nextRun).toLocaleString()}</>}</div>
+          <div className="text-xs text-muted-foreground">생성 cron: <span className="font-mono">{buildCron()}</span>{nextRun && <> · 다음 실행: {parseUTC(nextRun).toLocaleString()}</>}</div>
           {err && <div className="text-sm text-red-500">{err}</div>}
           {saved && <div className="text-sm text-green-600">저장됨</div>}
         </div>

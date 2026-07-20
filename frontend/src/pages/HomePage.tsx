@@ -15,7 +15,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, parseUTC } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function dateKey(d: Date): string {
@@ -31,7 +31,7 @@ function nextDueTask(items: WorkItem[]): WorkItem | null {
   const now = Date.now();
   const candidates = items
     .filter((t) => t.startedAt && t.kanbanStatus !== 'done')
-    .map((t) => ({ t, ms: new Date(t.startedAt as string).getTime() }))
+    .map((t) => ({ t, ms: parseUTC(t.startedAt as string).getTime() }))
     .filter(({ ms }) => Number.isFinite(ms) && ms >= now - 1000 * 60 * 60 * 24)
     .sort((a, b) => a.ms - b.ms);
   return candidates[0]?.t ?? null;
@@ -104,7 +104,7 @@ export function HomePage() {
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);
   const upcomingTask = useMemo(() => nextDueTask(allTasks), [allTasks]);
   const upcomingLabel = upcomingTask?.startedAt
-    ? new Date(upcomingTask.startedAt).toLocaleString('ko-KR', {
+    ? parseUTC(upcomingTask.startedAt).toLocaleString('ko-KR', {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
       })
     : '없음';

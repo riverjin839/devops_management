@@ -2,6 +2,7 @@ import { Play, ChevronRight } from 'lucide-react';
 import { HealthBadge } from './HealthBadge';
 import { ServiceTypeIcon } from './ServiceTypeIcon';
 import type { LakeService } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 interface LakeServiceCardProps {
   service: LakeService;
@@ -53,7 +54,7 @@ export function LakeServiceCard({
       <div className="flex items-center justify-between text-xs mt-3">
         <span className="text-muted-foreground">
           {service.lastCheckedAt
-            ? `마지막 점검: ${new Date(service.lastCheckedAt).toLocaleString('ko-KR')}`
+            ? `마지막 점검: ${parseUTC(service.lastCheckedAt).toLocaleString('ko-KR')}`
             : '점검 기록 없음'}
         </span>
         <div className="flex items-center gap-1">

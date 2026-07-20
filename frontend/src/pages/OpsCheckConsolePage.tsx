@@ -11,7 +11,7 @@ import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { LogViewer } from '@/components/common/LogViewer';
 import { useToast, ConfirmDialog } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useOpsCheckCatalog, useStartOpsRun, useOpsRun, useOpsRunItems,
@@ -283,6 +283,9 @@ export function OpsCheckConsolePage() {
                               </span>
                             )
                           ) : c.lastStatus ? (
+                            <span className="inline-flex items-center gap-1">
+                              <StatusDot variant={statusToVariant(c.lastStatus)} />
+                              <span className="text-xs text-muted-foreground">{c.lastRunAt ? parseUTC(c.lastRunAt).toLocaleString() : ''}</span>
                             <span className="inline-flex items-center gap-1.5">
                               <StatusBadge variant={statusToVariant(c.lastStatus)} />
                               {c.lastRunAt && (

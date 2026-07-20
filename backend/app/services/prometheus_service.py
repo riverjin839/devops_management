@@ -21,6 +21,16 @@ class PrometheusService:
     def __init__(self, base_url: Optional[str] = None, timeout: int = 10):
         self.base_url = (base_url or settings.prometheus_url).rstrip("/")
         self.timeout = timeout
+        # 요청마다 새 httpx.AsyncClient 를 만들면 매번 TCP/TLS 핸드셰이크가 반복된다
+        # (/promql/query/all 은 카드마다 이 메서드를 호출) — 커넥션을 재사용하는 공유
+        # 클라이언트를 지연 생성해 재사용한다. asyncio 단일 스레드 특성상 별도 락 없이도
+        # 동시 코루틴이 최초 1~2회 중복 생성하는 정도의 미미한 레이스만 존재.
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
 
     async def query(self, promql: str) -> dict:
         """
@@ -36,24 +46,24 @@ class PrometheusService:
             error    : str | None
         """
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/v1/query",
-                    params={"query": promql},
-                )
-                resp.raise_for_status()
-                body = resp.json()
+            client = self._get_client()
+            resp = await client.get(
+                f"{self.base_url}/api/v1/query",
+                params={"query": promql},
+            )
+            resp.raise_for_status()
+            body = resp.json()
 
-                if body.get("status") != "success":
-                    return {
-                        "status": "error",
-                        "value": None,
-                        "labels": None,
-                        "results": None,
-                        "error": body.get("error", "Unknown Prometheus error"),
-                    }
+            if body.get("status") != "success":
+                return {
+                    "status": "error",
+                    "value": None,
+                    "labels": None,
+                    "results": None,
+                    "error": body.get("error", "Unknown Prometheus error"),
+                }
 
-                return self._parse_result(body["data"])
+            return self._parse_result(body["data"])
 
         except httpx.ConnectError:
             logger.warning("Prometheus connect error — service unreachable at %s", self.base_url)
@@ -97,32 +107,32 @@ class PrometheusService:
             error  : str | None
         """
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/v1/query_range",
-                    params={
-                        "query": promql,
-                        "start": start,
-                        "end": end,
-                        "step": step,
-                    },
-                )
-                resp.raise_for_status()
-                body = resp.json()
+            client = self._get_client()
+            resp = await client.get(
+                f"{self.base_url}/api/v1/query_range",
+                params={
+                    "query": promql,
+                    "start": start,
+                    "end": end,
+                    "step": step,
+                },
+            )
+            resp.raise_for_status()
+            body = resp.json()
 
-                if body.get("status") != "success":
-                    return {
-                        "status": "error",
-                        "series": None,
-                        "error": body.get("error", "Unknown Prometheus error"),
-                    }
+            if body.get("status") != "success":
+                return {
+                    "status": "error",
+                    "series": None,
+                    "error": body.get("error", "Unknown Prometheus error"),
+                }
 
-                data = body.get("data", {})
-                series = [
-                    {"labels": item.get("metric", {}), "values": item.get("values", [])}
-                    for item in data.get("result", [])
-                ]
-                return {"status": "ok", "series": series, "error": None}
+            data = body.get("data", {})
+            series = [
+                {"labels": item.get("metric", {}), "values": item.get("values", [])}
+                for item in data.get("result", [])
+            ]
+            return {"status": "ok", "series": series, "error": None}
 
         except httpx.ConnectError:
             logger.warning("Prometheus connect error — service unreachable at %s", self.base_url)
