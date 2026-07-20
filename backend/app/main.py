@@ -851,6 +851,7 @@ def _run_migrations():
         # 구버전 DB 호환 — 테이블이 이미 있으면 create_all 이 컬럼을 추가하지 않으므로
         # 모델에 새로 생긴 컬럼을 명시적으로 보강한다. (index 생성보다 먼저!)
         for col_name, col_type in [
+            ("check_type", "VARCHAR(50)"),
             ("definition_id", "UUID"),
             ("ai_summary", "TEXT"),
             ("ai_remediation", "TEXT"),
@@ -858,6 +859,11 @@ def _run_migrations():
             ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
         ]:
             _safe_add_column("deep_check_results", col_name, col_type)
+        # check_type 이 방금 추가됐다면 기존 행 backfill (NULL → 'unknown', 모델은 NOT NULL).
+        _safe_exec(
+            "UPDATE deep_check_results SET check_type = 'unknown' WHERE check_type IS NULL",
+            label="deep_check_results.check_type backfill",
+        )
         # checked_at 이 방금 추가됐다면 기존 행 backfill (NULL → 현재시각).
         _safe_exec(
             "UPDATE deep_check_results SET checked_at = NOW() WHERE checked_at IS NULL",
