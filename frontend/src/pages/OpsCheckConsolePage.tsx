@@ -283,13 +283,10 @@ export function OpsCheckConsolePage() {
                               </span>
                             )
                           ) : c.lastStatus ? (
-                            <span className="inline-flex items-center gap-1">
-                              <StatusDot variant={statusToVariant(c.lastStatus)} />
-                              <span className="text-xs text-muted-foreground">{c.lastRunAt ? parseUTC(c.lastRunAt).toLocaleString() : ''}</span>
                             <span className="inline-flex items-center gap-1.5">
                               <StatusBadge variant={statusToVariant(c.lastStatus)} />
                               {c.lastRunAt && (
-                                <span className="text-xs text-muted-foreground">{new Date(c.lastRunAt).toLocaleString()}</span>
+                                <span className="text-xs text-muted-foreground">{parseUTC(c.lastRunAt).toLocaleString()}</span>
                               )}
                             </span>
                           ) : (
