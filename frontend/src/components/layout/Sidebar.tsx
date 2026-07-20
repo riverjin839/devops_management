@@ -425,7 +425,11 @@ export function Sidebar() {
               active={activeGroup === 'system'}
               highlighted={openGroup === 'system'}
               suppressTooltip={openGroup === 'system'}
-              onClick={(rect) => toggleGroup('system', rect)}
+              onClick={(rect) => {
+                // 하위 경로가 1개뿐이면(현재 '/settings' 단일) 플라이아웃 없이 바로 이동.
+                if (systemGroup.paths.length === 1) { setOpenGroup(null); navigate(systemGroup.paths[0]); }
+                else toggleGroup('system', rect);
+              }}
             />
           )}
           <RailIconButton
