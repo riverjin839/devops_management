@@ -5,6 +5,7 @@ import { useClustersNodes, usePatchNodeLabels, NodeRow } from '@/hooks/useNodeLa
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
 import { matchesSearch, buildLabelEntries, filterLabelEntries } from '@/components/node-labels/nodeLabelsShared';
 import { ClusterSidebar, ExportMenu } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import { formatApiError } from '@/lib/utils';
 
@@ -198,15 +199,15 @@ export function NodeLabelsPage() {
 
         {/* Table */}
         {isLoading ? (
-          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
+          <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
             {clustersLoading ? 'Loading clusters...' : 'Loading nodes...'}
-          </div>
+          </MacCard>
         ) : clusters.length === 0 ? (
-          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
+          <MacCard bodyPadding="p-8" className="text-center text-muted-foreground">
             등록된 클러스터가 없습니다.
-          </div>
+          </MacCard>
         ) : isError ? (
-          <div className="bg-card border border-red-500/30 rounded-xl p-8">
+          <MacCard rootClassName="border-red-500/30" bodyPadding="p-8">
             <div className="flex flex-col items-center gap-3 text-center">
               <AlertTriangle className="w-8 h-8 text-red-400" />
               <div>
@@ -219,7 +220,7 @@ export function NodeLabelsPage() {
                 클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
               </p>
             </div>
-          </div>
+          </MacCard>
         ) : (
           <NodeLabelsTable
             nodes={nodes}
