@@ -180,6 +180,7 @@ export function K8sEventsPage() {
                                 e.stopPropagation();
                                 deleteEvent.mutate(ev.id);
                               }}
+                              aria-label="이벤트 삭제"
                               className="p-1 rounded hover:bg-red-100 hover:text-red-600 text-muted-foreground transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

@@ -432,6 +432,7 @@ export function WorkflowBoardPage() {
           </div>
           <button
             onClick={() => setShowCreateWf(true)}
+            aria-label="새 워크플로우 만들기"
             className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -519,11 +520,12 @@ export function WorkflowBoardPage() {
                       />
                       <button
                         onClick={() => wfEditTitle.trim() && updateWorkflow.mutate({ id: wf.id, d: { title: wfEditTitle.trim() } })}
+                        aria-label="제목 저장"
                         className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => setEditingWfId(null)} className="p-1 rounded text-muted-foreground hover:bg-secondary">
+                      <button onClick={() => setEditingWfId(null)} aria-label="편집 취소" className="p-1 rounded text-muted-foreground hover:bg-secondary">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -547,6 +549,7 @@ export function WorkflowBoardPage() {
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditingWfId(wf.id); setWfEditTitle(wf.title); }}
+                          aria-label="이름 변경"
                           className="p-1 rounded hover:bg-blue-500/20 hover:text-blue-400 text-muted-foreground"
                         >
                           <Pencil className="w-3 h-3" />
@@ -556,6 +559,7 @@ export function WorkflowBoardPage() {
                             e.stopPropagation();
                             if (confirm(`"${wf.title}" 워크플로우를 삭제할까요?`)) deleteWorkflow.mutate(wf.id);
                           }}
+                          aria-label="워크플로우 삭제"
                           className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-muted-foreground"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -602,11 +606,12 @@ export function WorkflowBoardPage() {
                     />
                     <button
                       onClick={() => headerTitleDraft.trim() && updateWorkflow.mutate({ id: selectedWf.id, d: { title: headerTitleDraft.trim() } })}
+                      aria-label="제목 저장"
                       className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10"
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setEditingHeaderTitle(false)} className="p-1 rounded text-muted-foreground hover:bg-secondary">
+                    <button onClick={() => setEditingHeaderTitle(false)} aria-label="편집 취소" className="p-1 rounded text-muted-foreground hover:bg-secondary">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </>
@@ -651,11 +656,12 @@ export function WorkflowBoardPage() {
                         });
                         setEditingHeaderConfluence(false);
                       }}
+                      aria-label="Confluence 링크 저장"
                       className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10"
                     >
                       <Check className="w-3 h-3" />
                     </button>
-                    <button onClick={() => setEditingHeaderConfluence(false)} className="p-1 rounded text-muted-foreground hover:bg-secondary">
+                    <button onClick={() => setEditingHeaderConfluence(false)} aria-label="편집 취소" className="p-1 rounded text-muted-foreground hover:bg-secondary">
                       <X className="w-3 h-3" />
                     </button>
                   </div>
@@ -674,6 +680,7 @@ export function WorkflowBoardPage() {
                       onClick={() => { setHeaderConfluenceDraft(selectedWf.confluenceUrl ?? ''); setEditingHeaderConfluence(true); }}
                       className="p-0.5 rounded text-muted-foreground/50 hover:text-primary hover:bg-secondary"
                       title="Confluence 링크 수정"
+                      aria-label="Confluence 링크 수정"
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
@@ -724,6 +731,7 @@ export function WorkflowBoardPage() {
                 {/* zoom */}
                 <div className="flex items-center gap-0.5 border border-border rounded-lg overflow-hidden">
                   <button onClick={() => setZoom((z) => Math.max(ZOOM_MIN, +(z - 0.1).toFixed(2)))}
+                    aria-label="축소"
                     className="px-2 py-1.5 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
@@ -732,10 +740,12 @@ export function WorkflowBoardPage() {
                     {Math.round(zoom * 100)}%
                   </button>
                   <button onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + 0.1).toFixed(2)))}
+                    aria-label="확대"
                     className="px-2 py-1.5 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
                     <ZoomIn className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={() => setZoom(1)}
+                    aria-label="배율 초기화"
                     className="px-2 py-1.5 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors border-l border-border">
                     <Maximize2 className="w-3.5 h-3.5" />
                   </button>
@@ -964,6 +974,7 @@ export function WorkflowBoardPage() {
                             <span className="text-sm text-muted-foreground/60 font-mono">#{selectedWf.steps.indexOf(step) + 1}</span>
                             <button
                               onClick={(e) => { e.stopPropagation(); if (confirm('이 단계를 삭제할까요?')) deleteStep.mutate({ wfId: selectedWf.id, stepId: step.id }); }}
+                              aria-label="단계 삭제"
                               className="p-0.5 rounded text-muted-foreground/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -976,6 +987,7 @@ export function WorkflowBoardPage() {
                           <div className="flex items-start gap-2 mb-1.5">
                             <button
                               onClick={(e) => { e.stopPropagation(); if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { completed: !step.completed } }); }}
+                              aria-label={step.completed ? '완료 해제' : '완료로 표시'}
                               className={`flex-shrink-0 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors mt-0.5 ${step.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-border hover:border-emerald-400'}`}
                             >
                               {step.completed && <Check className="w-2.5 h-2.5" />}
@@ -1037,6 +1049,7 @@ export function WorkflowBoardPage() {
                                   저장
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setEditingStep(null); }}
+                                  aria-label="편집 취소"
                                   className="px-2 py-1 text-sm bg-secondary rounded hover:bg-secondary/80 transition-colors">
                                   <X className="w-3 h-3" />
                                 </button>

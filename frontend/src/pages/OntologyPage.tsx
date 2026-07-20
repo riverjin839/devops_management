@@ -81,7 +81,7 @@ function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.name}</p>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-secondary rounded text-muted-foreground flex-shrink-0">
+        <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded text-muted-foreground flex-shrink-0">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -143,7 +143,7 @@ function ImpactPanel({ result, onClose }: {
           <AlertTriangle className="w-4 h-4 text-amber-400" />
           <p className="text-sm font-bold text-amber-400">변경 영향 분석</p>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-secondary rounded text-muted-foreground">
+        <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded text-muted-foreground">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -385,6 +385,7 @@ export function OntologyPage() {
         <button
           onClick={() => refetch()}
           disabled={isLoading}
+          aria-label="새로고침"
           className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard, DoubleScrollX} from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
@@ -762,7 +763,7 @@ function DiffPanel({
   });
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 mt-4">
+    <MacCard rootClassName="mt-4" bodyPadding="p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="text-sm font-semibold mb-0.5">
@@ -773,7 +774,7 @@ function DiffPanel({
             {formatDateTime(from.collectedAt)} → {formatDateTime(to.collectedAt)}
           </p>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-secondary text-muted-foreground">
+        <button onClick={onClose} aria-label="diff 닫기" className="p-1 rounded hover:bg-secondary text-muted-foreground">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -799,7 +800,7 @@ function DiffPanel({
           ))}
         </div>
       )}
-    </div>
+    </MacCard>
   );
 }
 
@@ -1109,7 +1110,7 @@ export function VersionsPage() {
               const groupCollapsed = collapsedGroups.has(category);
               const groupExpandedCount = items.filter((s) => expanded.has(s.component)).length;
               return (
-                <section key={category} className="bg-card border border-border rounded-xl overflow-hidden">
+                <MacCard key={category} bodyPadding="p-0">
                   <header className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/20">
                     <button
                       onClick={() => toggleGroup(category)}
@@ -1194,7 +1195,7 @@ export function VersionsPage() {
                     })}
                   </ul>
                   )}
-                </section>
+                </MacCard>
               );
             })}
 

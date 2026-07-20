@@ -145,6 +145,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           </span>
           <button
             onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? '접기' : '펼치기'}
             className="p-1.5 hover:bg-secondary rounded text-muted-foreground"
           >
             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}

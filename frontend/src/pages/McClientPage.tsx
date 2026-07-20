@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { McPresetManager } from '@/components/mc/McPresetManager';
 import { mcApi, bulkExecApi, type EtcdCtlRunResponse, type NodeSummary } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
@@ -27,17 +28,17 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
 function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
   if (!result) {
     return (
-      <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-xl p-5 flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-220px)]">
+      <MacCard rootClassName="lg:col-span-5 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-220px)]">
         <p className="text-sm text-muted-foreground text-center">
           mc 명령을 실행하면<br />결과가 여기에 표시됩니다.
         </p>
-      </section>
+      </MacCard>
     );
   }
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
   return (
-    <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-xl overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-220px)]">
+    <MacCard rootClassName="lg:col-span-5 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-220px)]" bodyPadding="p-0">
       <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted/90 backdrop-blur-sm">
         <div className="flex items-center gap-3 flex-wrap">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
@@ -70,7 +71,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
           </div>
         )}
       </div>
-    </section>
+    </MacCard>
   );
 }
 
@@ -167,18 +168,16 @@ export function McClientPage() {
             )}
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
+          <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
             MinIO <code className="font-mono text-foreground">mc</code> 가 설치된 호스트에 SSH 로 접속해 명령 실행.
             alias 는 미리 <code className="font-mono text-foreground">mc alias set</code> 으로 구성돼 있어야 합니다 (기본값: <code className="font-mono text-foreground">local</code>). 프리셋의 <code className="font-mono text-foreground">{'{alias}'}</code> 는 아래 alias 값으로 치환됩니다.
-          </div>
+          </MacCard>
 
           {/* 타겟 2 : 프리셋 3 : 결과 5 비율 (10 컬럼 그리드) — 결과는 항상 같은 자리(우측)에 고정,
               내부에서만 세로 스크롤(가로 스크롤 없음)되어 카드들이 한 화면 폭 안에 들어온다. */}
           <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 items-start">
             {/* 좌: 타겟 + 인증 */}
-            <section className="lg:col-span-2 min-w-0 bg-card border border-border rounded-xl p-5 space-y-4">
-              <h2 className="text-sm font-semibold mb-1">타겟</h2>
-
+            <MacCard title="타겟" rootClassName="lg:col-span-2 min-w-0" bodyPadding="p-5" className="space-y-4">
               <div>
                 <label htmlFor={f('node')} className="block text-sm text-muted-foreground mb-1">호스트 (mc 설치된 노드)</label>
                 <select
@@ -246,10 +245,10 @@ export function McClientPage() {
                     className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
                 </div>
               )}
-            </section>
+            </MacCard>
 
             {/* 중: 프리셋 + 명령 */}
-            <section className="lg:col-span-3 min-w-0 bg-card border border-border rounded-xl p-5 space-y-4">
+            <MacCard rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
               <McPresetManager clusterId={clusterId} isAdmin={isAdmin} onPick={setArgs} />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -305,7 +304,7 @@ export function McClientPage() {
                   mc 실행
                 </button>
               </div>
-            </section>
+            </MacCard>
 
             {/* 우: 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
             <ResultPanel result={result} />

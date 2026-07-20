@@ -36,6 +36,7 @@ function SortableCardCell({ playbook, isRunning, onRun, onEdit, onDelete, onTogg
         {...attributes} {...listeners}
         className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
         title="드래그하여 순서 변경"
+        aria-label="드래그하여 순서 변경"
       >
         ⠿
       </button>
@@ -311,6 +312,7 @@ export function PlaybooksPage() {
                   onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
                   className="px-2 py-1.5 text-sm bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
                   title={sortDir === 'asc' ? '오름차순' : '내림차순'}
+                  aria-label={sortDir === 'asc' ? '오름차순' : '내림차순'}
                 >
                   {sortDir === 'asc' ? '↑' : '↓'}
                 </button>

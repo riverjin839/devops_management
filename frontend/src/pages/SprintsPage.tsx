@@ -72,7 +72,7 @@ function SprintModal({
       <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 className="font-bold flex items-center gap-2"><Rocket className="w-4 h-4 text-primary" />{initial ? '스프린트 수정' : '새 스프린트'}</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-3">
           <div>
@@ -205,7 +205,7 @@ function CarryOverModal({
       <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 className="font-bold flex items-center gap-2"><ArrowRightLeft className="w-4 h-4 text-primary" />미완료 이월</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -279,8 +279,8 @@ function SprintCard({
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={() => onEdit(sprint)} title="수정" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
-          <button onClick={() => onDelete(sprint)} title="삭제" className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onEdit(sprint)} title="수정" aria-label="수정" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(sprint)} title="삭제" aria-label="삭제" className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </div>
 
