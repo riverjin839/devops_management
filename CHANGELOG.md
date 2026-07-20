@@ -85,6 +85,18 @@
   맞춰 정리. LAKE HealthBadge 를 공용 StatusBadge 로 통합.
 
 ### Changed
+- **Settings "서비스" 탭을 "PEP 서비스"로 이름 변경 + 사이드바 "PEP 서비스" 진입점을 서비스
+  카탈로그로 재연결**: 사이드바 "PEP 서비스" 아이콘이 지금까지는 LakeService 기반 카탈로그
+  (`/pep-services` — Runtime/Catalog/Workflow/JupyterLab 인스턴스 그리드)를 가리켰는데, 이는
+  Settings "서비스" 탭(`ui_settings.serviceCatalog` — k8s/keycloak/nexus/jenkins/argocd 등
+  devops 인프라 서비스 카탈로그)과는 무관한 별개 데이터였다. 이제 사이드바 "PEP 서비스"는
+  서비스 카탈로그 / 통합지식(`/services` → `/services/:service`)으로 연결되어, 클릭 시 서비스별
+  작업 계획서·업무 소개·이슈 대응·구축 작업 노트와 연관 업무를 바로 확인할 수 있다. 기존
+  `/pep-services`(LakeService) 화면은 라우트/데이터 그대로 유지되나 사이드바 노출은 종료(`/docs`와
+  동일하게 직접 URL 접근만 가능). Frontend: `pages/SettingsPage.tsx`,
+  `components/layout/navConfig.ts`, `pages/ServicesCatalogPage.tsx`,
+  `components/settings/ServiceCatalogManager.tsx`.
+
 - **홈 "담당자별 진행 현황" 최상단 행/카드를 "전체"→"공통"으로 변경**: 지금까지 최상단
   행(`WeeklyStatusTimeline`)은 이번 주 모든 업무를 단순 병합해 보여줘 "전체 = 모든 업무
   목록"처럼 보였다. 이제 파트 전체 대상 업무(업무 등록 시 "공통업무" 체크,

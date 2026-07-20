@@ -27,13 +27,13 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 5. [서버·인프라 / 네트워크 / 스토리지](#서버인프라--네트워크--스토리지)
 6. [DevOps — Playbook / Batch Job / 명령어](#devops--playbook--batch-job--명령어)
 7. [협업 — 업무 관리 / 스프린트 / 워크플로우](#협업--업무-관리--스프린트--워크플로우)
-8. [PEP 서비스 / APP 서비스](#pep-서비스--app-서비스)
+8. [PEP 서비스 (LAKE 기반, 구) / APP 서비스](#pep-서비스-lake-기반-구--app-서비스)
 9. [지식 허브 (사이드바 아이콘 없음 — 직접 URL 접근)](#지식-허브-사이드바-아이콘-없음--직접-url-접근)
 
 각 그룹은 사이드바(`frontend/src/components/layout/navConfig.ts`)의 그룹 분류(클러스터/서버·인프라/네트워크/
-스토리지/DevOps/협업/PEP 서비스/APP 서비스/시스템)를 기준으로 나눴습니다. "지식/분석" 아이콘은
-PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9 참고), 지식 허브 자체는 코드/데이터
-그대로 유지되며 직접 URL(`/docs`)로만 접근 가능하다.
+스토리지/DevOps/협업/PEP 서비스/APP 서비스/시스템)를 기준으로 나눴습니다. 사이드바 "PEP 서비스"
+아이콘은 서비스 카탈로그 / 통합지식(`/services`, §9 참고)으로 연결되며, 과거 이 아이콘이 가리키던
+LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직접 URL 로만 접근 가능하다.
 
 ---
 
@@ -1061,16 +1061,23 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 
 ---
 
-## PEP 서비스 / APP 서비스
+## PEP 서비스 (LAKE 기반, 구) / APP 서비스
 
-기존 "지식/분석" 사이드바 아이콘(2번째)이 이름·개념을 바꿔 "PEP 서비스"가 되었고, 동일 구조의
-"APP 서비스" 아이콘(3번째)이 신규 추가되었다. 두 화면 모두 좌측 `CategoryRail`(상위 카테고리
-아이콘 레일 — Runtime/Catalog/Workflow/JupyterLab 등, `ClusterSidebar iconOnly` 시각 컨벤션
-준용)을 클릭하면 우측에 해당 카테고리 하위 서비스 인스턴스 카드가 표시되는 2단 네비게이션이다.
-백엔드 데이터는 기존 LAKE 서비스 시스템(`LakeService`/`LakeServiceType`)을 확장해 재사용한다
-(신규 `domain`: pep/app, `category_id`: 상위 카테고리 FK).
+> **사이드바 "PEP 서비스" 아이콘은 더 이상 이 `/pep-services` 화면을 가리키지 않는다.**
+> Settings "서비스" 탭이 "PEP 서비스" 탭으로 이름이 바뀌면서(ui_settings.serviceCatalog 편집기),
+> 사이드바 "PEP 서비스" 그룹의 진입 경로도 `/pep-services`(LakeService 기반)에서
+> `/services`(서비스 카탈로그 / 통합지식 — [§ 서비스 카탈로그 / 통합지식](#서비스-카탈로그--통합지식-services))로
+> 변경되었다. 아래 `/pep-services` 화면은 라우트/데이터는 그대로 유지되지만 사이드바 노출은
+> 종료되어(`/docs`와 동일한 성격) 직접 URL 로만 접근 가능하다.
 
-### PEP 서비스 (`/pep-services`)
+동일 구조의 "APP 서비스" 아이콘(사이드바 유지)은 그대로 `/app-services` 를 가리킨다. 두 화면
+모두 좌측 `CategoryRail`(상위 카테고리 아이콘 레일 — Runtime/Catalog/Workflow/JupyterLab 등,
+`ClusterSidebar iconOnly` 시각 컨벤션 준용)을 클릭하면 우측에 해당 카테고리 하위 서비스 인스턴스
+카드가 표시되는 2단 네비게이션이다. 백엔드 데이터는 기존 LAKE 서비스 시스템
+(`LakeService`/`LakeServiceType`)을 확장해 재사용한다(신규 `domain`: pep/app, `category_id`:
+상위 카테고리 FK).
+
+### PEP 서비스 — LAKE 기반, 구 (`/pep-services`, 사이드바 노출 종료)
 
 - **파일**: `frontend/src/pages/PepServicesPage.tsx` → `components/service-domain/ServiceDomainCatalog.tsx` (`domain="pep"`) (+ `CategoryRail`, `AddServiceInstanceModal`, 기존 `LakeServiceCard`/`ServiceTypeIcon` 재사용)
 - **목적 / UX**: 플랫폼 엔지니어링 서비스 카탈로그. 좌측 카테고리 레일에 Runtime/Catalog/Workflow/JupyterLab(부팅 시 자동 시드되는 builtin 4개, 삭제 불가·label/icon/정렬은 편집 가능) + 운영자가 추가한 custom 카테고리가 표시된다. Runtime 카테고리에는 spark/starrocks/trino/superset, Catalog 에는 iceberg/polaris, Workflow 에는 airflow, JupyterLab 에는 jupyterlab 타입이 기본 배정된다(부팅 시 1회 백필, 이후 Settings 에서 재분류 가능).
@@ -1103,7 +1110,9 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 
 > 구 "지식/분석" 사이드바 아이콘이 PEP 서비스로 대체되면서, 아래 화면들은 좌측 메뉴 진입점이
 > 없어졌다. 코드/데이터는 그대로 유지되며 `/docs` 등 직접 URL 로만 접근 가능하다(기존
-> `/ops-notes`·`/mindmap`·`/ontology`·`/trends` 와 동일한 성격).
+> `/ops-notes`·`/mindmap`·`/ontology`·`/trends` 와 동일한 성격). **예외**: 이 그룹에 함께
+> 정리된 [서비스 카탈로그 / 통합지식 (`/services`)](#서비스-카탈로그--통합지식-services)만
+> 사이드바 "PEP 서비스" 아이콘의 진입점으로 재연결되어 좌측 메뉴에서 다시 접근 가능하다.
 
 ### 지식 허브 (`/docs`)
 
@@ -1248,6 +1257,10 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 
 ### 서비스 카탈로그 / 통합지식 (`/services`)
 
+> **사이드바 "PEP 서비스" 아이콘의 진입점.** 클릭하면 이 화면으로 이동하고, 서비스 카드/행을
+> 클릭하면 아래 [서비스 허브 (`/services/:service`)](#서비스-허브-servicesservice)로 이동해
+> 작업 계획서·업무 소개·이슈 대응·구축 작업 노트와 연관 업무를 확인한다.
+
 - **파일**: `frontend/src/pages/ServicesCatalogPage.tsx` (+ `frontend/src/components/services/serviceCatalog.ts`의 `colorBadgeClass`, `frontend/src/components/common`의 `DebugLogPanel`/`ViewModeBar`/`DoubleScrollX`)
 - **목적 / UX**: k8s/keycloak/nexus/jenkins/argocd 등 관리 서비스별로 등록된 지식 항목(가이드/트러블슈팅/변경이력/메모/링크) 개수와 최근 갱신을 한눈에 보고 각 서비스 허브로 진입하는 진입점 화면. Settings의 서비스 카탈로그 정의(`ui_settings.serviceCatalog`)와 실제 DB에 쌓인 통계를 병합해 표시한다.
 - **UI 구성**: 뷰 모드 토글(리스트/카드) + 서비스 검색. 리스트 뷰는 서비스/설명/항목수/유형별 분포/최근 업데이트 컬럼 테이블(가로 스크롤 `DoubleScrollX`), 카드 뷰는 서비스별 카드 그리드.
@@ -1257,7 +1270,7 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
   - 서비스명/키 검색
   - 서비스별 등록 항목 수 + kind별(가이드/트러블슈팅/변경이력/메모/링크) 분포 배지
   - 각 행/카드 클릭 시 `/services/:service` 상세 허브로 이동
-  - 서비스 카탈로그 자체의 추가/수정은 이 화면이 아닌 Settings → 서비스 탭에서 수행함을 안내 문구로 명시
+  - 서비스 카탈로그 자체의 추가/수정은 이 화면이 아닌 Settings → "PEP 서비스" 탭에서 수행함을 안내 문구로 명시
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

@@ -18,7 +18,7 @@ function deriveSlug(label: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** 통합지식 메뉴와 task/issue 의 service tag 가 사용하는 서비스 카탈로그 편집기.
+/** 사이드바 "PEP 서비스"(/services)와 task/issue 의 service tag 가 사용하는 서비스 카탈로그 편집기.
  *  ui_settings.serviceCatalog 에 저장된다. 비어있으면 정적 SERVICE_CATALOG 가 폴백. */
 export function ServiceCatalogManager() {
   const toast = useToast();

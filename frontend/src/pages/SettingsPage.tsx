@@ -553,7 +553,7 @@ export function SettingsPage() {
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
-    { id: 'service', label: '서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
+    { id: 'service', label: 'PEP 서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
     { id: 'lake-types', label: 'LAKE 타입', icon: <Database className="w-4 h-4" />, count: 0 },
     { id: 'service-categories', label: '서비스 카테고리', icon: <Boxes className="w-4 h-4" />, count: 0 },
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
