@@ -14,6 +14,7 @@ import { isilonNfsApi } from '@/services/api';
 import type {
   IsilonServer, IsilonCommandResult, IsilonNfsOverview, IsilonK8sNfsPv,
 } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const SECTION_LABEL: Record<string, string> = {
   exports: 'Export / 마운트',
@@ -131,7 +132,7 @@ export function IsilonNfsPage() {
                   <div className="ml-auto flex items-center gap-3">
                     {overview?.collectedAt && (
                       <span className="text-xs text-muted-foreground">
-                        수집 {new Date(overview.collectedAt).toLocaleTimeString()}
+                        수집 {parseUTC(overview.collectedAt).toLocaleTimeString()}
                         {overview.fromCache && <span className="ml-1 text-[10px] px-1 rounded bg-muted">캐시</span>}
                       </span>
                     )}

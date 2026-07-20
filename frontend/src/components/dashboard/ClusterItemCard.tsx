@@ -1,5 +1,5 @@
 import { ClusterItem, ClusterItemCardSize } from '@/types';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, parseUTC } from '@/lib/utils';
 import {
   RefreshCw,
   Pencil,
@@ -44,7 +44,7 @@ function detailLine(item: ClusterItem): string | null {
     case 'k8s_version':
       return d.skew ? '⚠ 노드 버전 불일치 (skew)' : '노드 버전 일치';
     case 'cert_expiry':
-      return d.not_after ? `만료 ${new Date(d.not_after).toLocaleDateString('ko-KR')}` : null;
+      return d.not_after ? `만료 ${parseUTC(d.not_after).toLocaleDateString('ko-KR')}` : null;
     case 'ai_cluster_summary':
       return d.model ? `모델 ${d.model}` : null;
     default:

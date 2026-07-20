@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
 from typing import Optional
 import csv
 import io
 
 from app.database import get_db
-from app.models import CheckLog, Cluster, Addon
+from app.models import CheckLog
 from app.schemas import CheckLogListResponse, CheckLogResponse
 
 router = APIRouter(prefix="/history", tags=["history"])
@@ -21,14 +21,19 @@ def get_check_logs(
     db: Session = Depends(get_db)
 ):
     """점검 히스토리 조회"""
-    query = db.query(CheckLog).join(Cluster)
-    
+    # joinedload 로 cluster/addon 을 한 쿼리에서 LEFT JOIN 으로 함께 가져온다.
+    # 예전엔 join(Cluster) 만 걸고 아래에서 log.cluster.name/log.addon_id 조회를
+    # 각 행마다 별도 쿼리로 실행해(N+1) 페이지 20행에 최대 41쿼리가 나갔다.
+    query = db.query(CheckLog).options(
+        joinedload(CheckLog.cluster), joinedload(CheckLog.addon),
+    )
+
     if cluster_id:
         query = query.filter(CheckLog.cluster_id == cluster_id)
-    
+
     # 총 개수
     total = query.count()
-    
+
     # 페이지네이션
     logs = (
         query
@@ -37,15 +42,12 @@ def get_check_logs(
         .limit(page_size)
         .all()
     )
-    
+
     # Response 변환
     log_responses = []
     for log in logs:
-        addon_name = None
-        if log.addon_id:
-            addon = db.query(Addon).filter(Addon.id == log.addon_id).first()
-            addon_name = addon.name if addon else None
-        
+        addon_name = log.addon.name if log.addon else None
+
         log_responses.append(CheckLogResponse(
             id=log.id,
             cluster_id=log.cluster_id,
@@ -67,12 +69,19 @@ def get_check_logs(
 
 
 @router.get("/{cluster_id}/export")
-def export_logs_csv(cluster_id: UUID, db: Session = Depends(get_db)):
-    """클러스터 로그 CSV 내보내기"""
+def export_logs_csv(
+    cluster_id: UUID,
+    limit: int = Query(default=5000, ge=1, le=20000, description="최대 export 행 수 (메모리 보호용)"),
+    db: Session = Depends(get_db),
+):
+    """클러스터 로그 CSV 내보내기 (최대 limit 행). 예전엔 상한 없이 클러스터 전체
+    이력을 한 번에 메모리에 올려 로그가 오래 쌓인 클러스터에서 응답이 커지고
+    느려질 수 있었다."""
     logs = (
         db.query(CheckLog)
         .filter(CheckLog.cluster_id == cluster_id)
         .order_by(CheckLog.checked_at.desc())
+        .limit(limit)
         .all()
     )
     

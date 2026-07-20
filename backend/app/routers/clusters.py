@@ -13,10 +13,18 @@ from uuid import UUID
 
 from app.config import settings
 from app.database import get_db
-from app.models import Cluster, Addon
+from app.models import (
+    AnsibleInventory,
+    BatchJob,
+    BatchJobRun,
+    Cluster,
+    Addon,
+    DeepCheckResult,
+    OpsCheckRun,
+    OsParamChange,
+)
 from app.models.cluster import StatusEnum
 from app.models.daily_check import DailyCheckLog
-from app.models.deep_check import DeepCheckResult
 from app.models.work_item import WorkItem
 from app.models.user import User
 from app.auth.deps import require_operator
@@ -467,13 +475,31 @@ def delete_cluster(
         except OSError:
             pass
 
-    # FK 제약 때문에 Cluster 삭제 전 연관 데이터 처리
-    # - DeepCheckResult: cluster_id NOT NULL 이고 daily_check_logs 를 FK 참조하므로
-    #   DailyCheckLog 삭제보다 먼저 지운다. (명시적 삭제로 ORM backref 를 통한 암묵적
-    #   cascade SELECT — 구버전 DB 에 컬럼이 없을 때 500 을 유발했던 경로 — 를 피한다.)
+    # FK 제약 때문에 Cluster 삭제 전 연관 데이터 처리.
+    # addons/check_logs/playbooks/infra_nodes/items 는 Cluster 모델의 ORM
+    # relationship(cascade="all, delete-orphan")로 db.delete(cluster) 시 자동 정리된다.
+    # 아래는 cluster_id NOT NULL 이면서 ORM cascade 가 없는(=FK 위반으로 500 이 나는)
+    # 테이블들을 bulk delete 로 선행 정리한다.
+    # - DeepCheckResult: cluster_id NOT NULL. daily_check_log_id 도 FK(ondelete 없음)라
+    #   DailyCheckLog 보다 먼저 지워야 그쪽 FK 도 안전하다.
     db.query(DeepCheckResult).filter(DeepCheckResult.cluster_id == cluster_id).delete(synchronize_session=False)
     # - DailyCheckLog: cluster_id NOT NULL → 먼저 삭제
     db.query(DailyCheckLog).filter(DailyCheckLog.cluster_id == cluster_id).delete(synchronize_session=False)
+    # - BatchJobRun: BatchJob.id FK(ondelete 없음). BatchJob.runs 의 ORM cascade 는
+    #   session.delete() 경로에서만 발동하므로, bulk delete 로는 먼저 명시 삭제해야 한다.
+    db.query(BatchJobRun).filter(
+        BatchJobRun.job_id.in_(
+            db.query(BatchJob.id).filter(BatchJob.cluster_id == cluster_id)
+        )
+    ).delete(synchronize_session=False)
+    db.query(BatchJob).filter(BatchJob.cluster_id == cluster_id).delete(synchronize_session=False)
+    # - OpsCheckRun: cluster_id NOT NULL. OpsCheckRunItem 은 run_id FK 가 DB 레벨
+    #   ondelete=CASCADE 라 별도 처리 불필요.
+    db.query(OpsCheckRun).filter(OpsCheckRun.cluster_id == cluster_id).delete(synchronize_session=False)
+    # - OsParamChange: cluster_id NOT NULL
+    db.query(OsParamChange).filter(OsParamChange.cluster_id == cluster_id).delete(synchronize_session=False)
+    # - AnsibleInventory: cluster_id NOT NULL
+    db.query(AnsibleInventory).filter(AnsibleInventory.cluster_id == cluster_id).delete(synchronize_session=False)
     # - WorkItem (issue / task 통합): cluster_id nullable → NULL 처리 (레코드 보관)
     db.query(WorkItem).filter(WorkItem.cluster_id == cluster_id).update(
         {"cluster_id": None}, synchronize_session=False

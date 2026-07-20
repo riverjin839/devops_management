@@ -8,7 +8,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard, DoubleScrollX} from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
@@ -32,7 +32,7 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{
 };
 
 function formatDateTime(iso: string): string {
-  const d = new Date(iso);
+  const d = parseUTC(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

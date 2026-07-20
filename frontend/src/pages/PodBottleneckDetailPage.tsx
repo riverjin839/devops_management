@@ -10,6 +10,7 @@ import {
   useDeleteBottleneckRun,
 } from '@/hooks/usePodBottleneck';
 import type { BottleneckStatus } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const STATUS_BADGE: Record<BottleneckStatus, { label: string; cls: string }> = {
   healthy:  { label: '정상',  cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
@@ -94,7 +95,7 @@ export function PodBottleneckDetailPage() {
               )}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {new Date(run.createdAt).toLocaleString('ko-KR')}
+              {parseUTC(run.createdAt).toLocaleString('ko-KR')}
               {run.triggeredByUser && ` · ${run.triggeredByUser}`}
               {run.durationMs != null && ` · ${run.durationMs}ms`}
             </p>

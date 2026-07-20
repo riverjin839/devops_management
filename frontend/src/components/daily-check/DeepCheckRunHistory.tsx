@@ -7,6 +7,7 @@ import {
   useRunDefinition,
 } from '@/hooks/useDeepCheckDefinitions';
 import type { Cluster, DeepCheckDefinition, DeepCheckExecStep, DeepCheckResult } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
@@ -135,7 +136,7 @@ export function DeepCheckRunHistory({ definition, clusters, runClusterId, onClos
                   title={r.status}
                 />
                 <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
-                  {r.checkedAt ? new Date(r.checkedAt).toLocaleString() : '-'}
+                  {r.checkedAt ? parseUTC(r.checkedAt).toLocaleString() : '-'}
                 </span>
                 <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap">
                   {clusterName(r.clusterId)}

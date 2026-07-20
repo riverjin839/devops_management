@@ -10,6 +10,7 @@ import {
   useVocPosts, useCreateVoc, useUpdateVoc, useReplyVoc, useDeleteVoc,
 } from '@/hooks/useVoc';
 import type { VocPost, VocCategory, VocStatus } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const INP = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
 const CATEGORIES: VocCategory[] = ['문의', '개선', '불만', '제안'];
@@ -116,7 +117,7 @@ export function VocBoardPanel({ open }: Props) {
                     <StatusBadge variant={STATUS_VARIANT[p.status]} label={p.status} />
                     {p.adminReply && <StatusDot variant="healthy" title="답변 완료" />}
                     <span className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap">
-                      {new Date(p.createdAt).toLocaleDateString()}
+                      {parseUTC(p.createdAt).toLocaleDateString()}
                     </span>
                   </div>
                   <div className="text-sm font-medium mt-1 truncate">{p.title}</div>
@@ -200,7 +201,7 @@ function VocDetail({
           </div>
           <h3 className="text-base font-semibold">{post.title}</h3>
           <div className="text-xs text-muted-foreground mt-1">
-            {post.author ?? '익명'} · {new Date(post.createdAt).toLocaleString()}
+            {post.author ?? '익명'} · {parseUTC(post.createdAt).toLocaleString()}
           </div>
         </div>
 

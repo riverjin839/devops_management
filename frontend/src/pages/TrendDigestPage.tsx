@@ -3,6 +3,7 @@ import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCir
 import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource, useCreateSource, useUpdateSource, useDeleteSource } from '@/hooks/useTrends';
 import { MacCard } from '@/components/ui/MacCard';
 import type { TrendDigest, TrendItem, TrendSource } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 // ── 카테고리 색상 ────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
@@ -56,7 +57,7 @@ function TrendItemCard({ item }: { item: TrendItem }) {
               </span>
             )}
             <span className="text-xs text-muted-foreground ml-auto">
-              {new Date(item.publishedAt).toLocaleDateString('ko-KR')}
+              {parseUTC(item.publishedAt).toLocaleDateString('ko-KR')}
             </span>
           </div>
           <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
@@ -193,7 +194,7 @@ const SOURCE_STATUS_CLS: Record<string, string> = {
 
 function formatDateTimeShort(iso?: string | null): string {
   if (!iso) return '-';
-  const d = new Date(iso);
+  const d = parseUTC(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { X, FlaskConical, CheckCircle2, AlertTriangle, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCreateMetricCard, useTestPromql, useUpdateMetricCard } from '@/hooks/useMetricCards';
 import { MetricCard } from '@/types';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 interface AddMetricCardModalProps {
   isOpen: boolean;
@@ -164,7 +166,9 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
 
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [testResult, setTestResult] = useState<string>('');
+  const [saving, setSaving] = useState(false);
 
+  const toast = useToast();
   const createCard = useCreateMetricCard();
   const updateCard = useUpdateMetricCard();
   const testQuery = useTestPromql();
@@ -229,7 +233,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim() || !promql.trim()) return;
 
     const payload = {
@@ -246,14 +250,24 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
       enabled: editingCard?.enabled ?? true,
     };
 
-    if (editingCard) {
-      updateCard.mutate({ id: editingCard.id, data: payload });
-    } else {
-      createCard.mutate(payload);
+    setSaving(true);
+    try {
+      if (editingCard) {
+        await updateCard.mutateAsync({ id: editingCard.id, data: payload });
+      } else {
+        await createCard.mutateAsync(payload);
+      }
+      // 성공했을 때만 폼 리셋 + 모달 닫기 — 실패 시 입력값을 보존해 재시도 가능하게 한다.
+      resetForm();
+      onClose();
+    } catch (err) {
+      toast.error(
+        editingCard ? '카드 수정 실패' : '카드 생성 실패',
+        formatApiError(err, '저장 중 오류가 발생했습니다.'),
+      );
+    } finally {
+      setSaving(false);
     }
-
-    resetForm();
-    onClose();
   };
 
   const handleTemplateSelect = (tpl: PromqlTemplate) => {
@@ -540,10 +554,10 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
             </button>
             <button
               onClick={handleSave}
-              disabled={!title.trim() || !promql.trim()}
+              disabled={!title.trim() || !promql.trim() || saving}
               className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-40"
             >
-              {isEditMode ? 'Save Changes' : 'Create Card'}
+              {saving ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Card'}
             </button>
           </div>
         </div>

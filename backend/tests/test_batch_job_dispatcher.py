@@ -38,31 +38,45 @@ class TestRequireCronCredentials:
         _require_cron_credentials(cron="   ", has_password=False, has_private_key=False)
 
     def test_cron_with_password_allowed(self):
-        """cron + 비밀번호 → 통과."""
+        """cron + 비밀번호 + default_host → 통과."""
         _require_cron_credentials(
-            cron="0 23 * * *", has_password=True, has_private_key=False
+            cron="0 23 * * *", has_password=True, has_private_key=False,
+            default_host="host.example.com",
         )
 
     def test_cron_with_private_key_allowed(self):
-        """cron + 개인키 → 통과."""
+        """cron + 개인키 + default_host → 통과."""
         _require_cron_credentials(
-            cron="0 23 * * *", has_password=False, has_private_key=True
+            cron="0 23 * * *", has_password=False, has_private_key=True,
+            default_host="host.example.com",
         )
 
     def test_cron_with_both_creds_allowed(self):
         _require_cron_credentials(
-            cron="0 23 * * *", has_password=True, has_private_key=True
+            cron="0 23 * * *", has_password=True, has_private_key=True,
+            default_host="host.example.com",
         )
 
     def test_cron_without_any_creds_raises_422(self):
         """SC-2 / SC-3 의 핵심 경로."""
         with pytest.raises(HTTPException) as exc:
             _require_cron_credentials(
-                cron="0 23 * * *", has_password=False, has_private_key=False
+                cron="0 23 * * *", has_password=False, has_private_key=False,
+                default_host="host.example.com",
             )
         assert exc.value.status_code == 422
         assert "saved_password" in exc.value.detail
         assert "silent skip" in exc.value.detail
+
+    def test_cron_without_default_host_raises_422(self):
+        """cron + 자격증명은 있지만 default_host 없음 → 422 (재시도 스톰 방지, H-9)."""
+        with pytest.raises(HTTPException) as exc:
+            _require_cron_credentials(
+                cron="0 23 * * *", has_password=True, has_private_key=False,
+                default_host=None,
+            )
+        assert exc.value.status_code == 422
+        assert "default_host" in exc.value.detail
 
 
 # ── dispatcher timezone logic (Plan SC-1) ────────────────────────────────

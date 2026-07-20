@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { Addon } from '@/types';
 import { useCreateAddon, useUpdateAddon } from '@/hooks/useCluster';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 interface AddAddonModalProps {
   isOpen: boolean;
@@ -53,6 +55,8 @@ type Template = { name: string; type: string; icon: string; description: string;
 export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddAddonModalProps) {
   const [selected, setSelected] = useState<Template | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
   const createAddon = useCreateAddon();
   const updateAddon = useUpdateAddon();
 
@@ -90,7 +94,7 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
 
   const currentTemplate = selected ?? ADDON_TEMPLATES.flatMap((group) => group.items).find((tpl) => tpl.type === editingAddon?.type) ?? null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (editingAddon) {
       const config: Record<string, string> = {};
       Object.entries(configValues).forEach(([key, value]) => {
@@ -98,21 +102,27 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
         if (trimmed) config[key] = trimmed;
       });
 
-      updateAddon.mutate({
-        id: editingAddon.id,
-        data: {
-          clusterId: editingAddon.clusterId,
-          name: editingAddon.name,
-          type: editingAddon.type,
-          icon: editingAddon.icon,
-          description: editingAddon.description,
-          config: Object.keys(config).length > 0 ? config : undefined,
-        },
-      });
-
-      setSelected(null);
-      setConfigValues({});
-      onClose();
+      setSaving(true);
+      try {
+        await updateAddon.mutateAsync({
+          id: editingAddon.id,
+          data: {
+            clusterId: editingAddon.clusterId,
+            name: editingAddon.name,
+            type: editingAddon.type,
+            icon: editingAddon.icon,
+            description: editingAddon.description,
+            config: Object.keys(config).length > 0 ? config : undefined,
+          },
+        });
+        setSelected(null);
+        setConfigValues({});
+        onClose();
+      } catch (err) {
+        toast.error('수정 실패', formatApiError(err, '저장 중 오류가 발생했습니다.'));
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
@@ -130,18 +140,24 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
 
     if (!valid) return;
 
-    createAddon.mutate({
-      clusterId,
-      name: selected.name,
-      type: selected.type,
-      icon: selected.icon,
-      description: selected.description,
-      config: Object.keys(config).length > 0 ? config : undefined,
-    });
-
-    setSelected(null);
-    setConfigValues({});
-    onClose();
+    setSaving(true);
+    try {
+      await createAddon.mutateAsync({
+        clusterId,
+        name: selected.name,
+        type: selected.type,
+        icon: selected.icon,
+        description: selected.description,
+        config: Object.keys(config).length > 0 ? config : undefined,
+      });
+      setSelected(null);
+      setConfigValues({});
+      onClose();
+    } catch (err) {
+      toast.error('등록 실패', formatApiError(err, '저장 중 오류가 발생했습니다.'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleBack = () => {
@@ -231,9 +247,10 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
                 </button>
                 <button
                   onClick={handleSubmit}
-                  className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-40"
                 >
-                  {editingAddon ? 'Save' : 'Add Check'}
+                  {saving ? 'Saving...' : editingAddon ? 'Save' : 'Add Check'}
                 </button>
               </div>
             </div>
