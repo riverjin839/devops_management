@@ -24,6 +24,14 @@
   요약한 확인 다이얼로그를 거치도록 변경 — 실서버로 원격 명령이 오클릭으로 나가던 위험 차단.
 
 ### Changed
+- **홈 "담당자별 진행 현황" 최상단 행/카드를 "전체"→"공통"으로 변경**: 지금까지 최상단
+  행(`WeeklyStatusTimeline`)은 이번 주 모든 업무를 단순 병합해 보여줘 "전체 = 모든 업무
+  목록"처럼 보였다. 이제 파트 전체 대상 업무(업무 등록 시 "공통업무" 체크,
+  `allAttendees=true` — 예: 파트 회의)만 모아 "공통" 행/카드로 표시한다. `MemberTodayTodos`
+  (담당자 탭)는 원래도 `allAttendees` 기준으로 동작했으나 라벨만 "전체"→"공통"으로 맞춤.
+  Frontend: `components/dashboard/WeeklyStatusTimeline.tsx`,
+  `components/dashboard/MemberTodayTodos.tsx`.
+
 - **디자인 컨벤션 정리 2차 (DESIGN.md D-009·D-010)**: 수제 카드 페이지 9개
   (NodeLabels/KernelParams/McClient/TrendDigest/TodoToday/Versions/EtcdCtl/
   KnowledgeHub/JiraExcelImport)의 섹션 카드 28건을 MacCard 로 수렴하고, pages/
