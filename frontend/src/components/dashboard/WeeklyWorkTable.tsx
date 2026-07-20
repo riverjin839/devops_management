@@ -76,6 +76,7 @@ export function WeeklyWorkTable() {
           onClick={() => setWeekOffset((n) => n - 1)}
           className="p-0.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
           title="이전 주"
+          aria-label="이전 주"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
@@ -86,6 +87,7 @@ export function WeeklyWorkTable() {
               onClick={() => setWeekOffset(0)}
               className="p-0.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
               title="이번 주"
+              aria-label="이번 주"
             >
               <RotateCcw className="w-3 h-3" />
             </button>
@@ -94,6 +96,7 @@ export function WeeklyWorkTable() {
             onClick={() => setWeekOffset((n) => n + 1)}
             className="p-0.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
             title="다음 주"
+            aria-label="다음 주"
           >
             <ChevronRight className="w-3.5 h-3.5" />
           </button>

@@ -9,14 +9,24 @@ import { useClusters } from '@/hooks/useCluster';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
-// ── 타입별 색상 ────────────────────────────────────────────────────────────
+// ── 타입별 색상 (D-005: 차트 토큰 체계) ─────────────────────────────────────
+// three.js(WebGL) 는 CSS var() 문자열을 해석하지 못하므로, 토큰명을 들고 있다가
+// 렌더 시점에 computed value 를 읽어 THREE.Color 와 DOM 이 모두 파싱 가능한
+// hsl(h, s%, l%) 문자열로 변환해 쓴다.
 
-const NODE_COLOR: Record<VersionGraphNode['type'], string> = {
-  cluster:   '#60a5fa', // blue
-  category:  '#c084fc', // purple
-  component: '#4ade80', // green
-  flag:      '#fbbf24', // amber
+const NODE_TOKEN: Record<VersionGraphNode['type'], string> = {
+  cluster:   '--chart-1', // blue
+  category:  '--chart-4', // violet
+  component: '--chart-2', // teal/green
+  flag:      '--chart-3', // amber
 };
+
+function chartTokenColor(token: string | undefined): string {
+  if (!token) return 'hsl(215, 15%, 50%)'; // --chart-8 slate fallback
+  const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  if (!v) return 'hsl(215, 15%, 50%)';
+  return `hsl(${v.split(/\s+/).join(', ')})`;
+}
 
 const NODE_SIZE: Record<VersionGraphNode['type'], number> = {
   cluster:   14,
@@ -25,6 +35,8 @@ const NODE_SIZE: Record<VersionGraphNode['type'], number> = {
   flag:      3.5,
 };
 
+// EDGE_COLOR — 허용 예외(D-005): alpha 포함 hex 를 ForceGraph3D(WebGL 링크 블렌딩)가
+// 직접 파싱하므로 CSS 토큰으로 이관하지 않는다 (FlowGraph3D 등 canvas/three.js 와 동일 예외).
 const EDGE_COLOR: Record<VersionGraphEdge['type'], string> = {
   contains:   '#ffffff55',
   param:      '#fbbf2466',
@@ -53,7 +65,7 @@ interface GLink extends LinkObject {
 function makeNodeObject(node: NodeObject): THREE.Mesh {
   const n = node as GNode;
   const size = NODE_SIZE[n.type] ?? 5;
-  const color = NODE_COLOR[n.type] ?? '#888';
+  const color = chartTokenColor(NODE_TOKEN[n.type]);
   const geo = new THREE.SphereGeometry(size, 16, 16);
   const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.92 });
   return new THREE.Mesh(geo, mat);
@@ -65,14 +77,14 @@ function NodeDetail({ node, onClose }: { node: GNode; onClose: () => void }) {
   return (
     <div className="absolute top-4 right-4 w-80 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-10">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border"
-        style={{ borderLeftColor: NODE_COLOR[node.type], borderLeftWidth: 4 }}>
+        style={{ borderLeftColor: chartTokenColor(NODE_TOKEN[node.type]), borderLeftWidth: 4 }}>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {node.type}
           </p>
           <p className="text-sm font-bold text-foreground truncate">{node.label}</p>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-secondary rounded text-muted-foreground flex-shrink-0">
+        <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded text-muted-foreground flex-shrink-0">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -189,7 +201,7 @@ export function VersionGraphPage() {
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
         <button onClick={() => navigate('/versions')}
           className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
-          title="버전 페이지로">
+          title="버전 페이지로" aria-label="버전 페이지로">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <Share2 className="w-5 h-5 text-primary flex-shrink-0" />
@@ -204,9 +216,9 @@ export function VersionGraphPage() {
           {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <div className="flex items-center gap-1 ml-auto text-xs text-muted-foreground flex-wrap">
-          {(Object.entries(NODE_COLOR) as Array<[VersionGraphNode['type'], string]>).map(([k, v]) => (
+          {(Object.entries(NODE_TOKEN) as Array<[VersionGraphNode['type'], string]>).map(([k, v]) => (
             <span key={k} className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full" style={{ background: v }} />
+              <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(${v}))` }} />
               {k}
             </span>
           ))}

@@ -124,7 +124,7 @@ export function ClusterUpdateDiffDialog({
                   <tr className="text-left text-xs text-muted-foreground border-b border-border">
                     <th className="py-1.5 font-medium">필드</th>
                     <th className="py-1.5 font-medium">기존 값</th>
-                    <th className="py-1.5 font-medium w-4"></th>
+                    <th className="py-1.5 font-medium w-4"><span className="sr-only">변경 방향</span></th>
                     <th className="py-1.5 font-medium">신규 값</th>
                   </tr>
                 </thead>

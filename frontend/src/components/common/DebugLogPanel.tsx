@@ -57,6 +57,7 @@ export function DebugLogPanel({ pageKey, extra }: Props) {
             <Trash2 className="w-3 h-3" /> clear
           </button>
           <button onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? '펼치기' : '접기'}
             className="p-0.5 rounded hover:bg-secondary text-muted-foreground">
             {collapsed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
           </button>

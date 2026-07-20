@@ -13,8 +13,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
-from app.models import BatchJob, BatchJobRun, Cluster
+from app.models import BatchJob, BatchJobRun, Cluster, User
 from app.schemas.batch_job import (
     BatchJobBulkRunItem,
     BatchJobBulkRunRequest,
@@ -49,26 +50,40 @@ def _require_cron_credentials(
     cron: str | None,
     has_password: bool,
     has_private_key: bool,
+    default_host: str | None = None,
 ) -> None:
-    """Raise 422 if a cron schedule is set but no credential will be persisted.
+    """Raise 422 if a cron schedule is set but is missing what unattended runs need.
 
     Design Ref: §2.3.3 — shared invariant for create + update.
     Plan SC: SC-2 (POST 422) / SC-3 (PUT 422 after merge).
 
     Arguments reflect the *final* post-merge state — for PUT the caller
     must merge ``payload`` with the existing DB row first.
+
+    ``default_host`` 검증은 자격증명 검증과 같은 이유로 필요하다 — host 가 없으면
+    ``execute_job`` 이 매 실행마다 ``ValueError`` 를 raise 하는데, 그 시점이
+    ``last_run_at`` 갱신 *이전*이라 디스패처가 이 잡을 계속 due 로 보고 매분
+    재큐잉하는 retry storm 이 된다. 저장 시점에 막아 애초에 그런 잡이 등록되지
+    않게 한다.
     """
     if not (cron and cron.strip()):
         return
-    if has_password or has_private_key:
-        return
-    raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail=(
-            "cron 을 사용하려면 saved_password 또는 saved_private_key 중 "
-            "하나가 필요합니다. 둘 다 비우면 스케줄러가 매분 silent skip 합니다."
-        ),
-    )
+    if not (has_password or has_private_key):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "cron 을 사용하려면 saved_password 또는 saved_private_key 중 "
+                "하나가 필요합니다. 둘 다 비우면 스케줄러가 매분 silent skip 합니다."
+            ),
+        )
+    if not (default_host and default_host.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "cron 을 사용하려면 default_host 가 필요합니다. 비우면 무인 실행마다 "
+                "실패하면서 디스패처가 매분 재시도합니다."
+            ),
+        )
 
 
 def _to_response(job: BatchJob) -> dict:
@@ -123,7 +138,11 @@ def list_jobs(
 
 
 @router.post("", response_model=BatchJobResponse, status_code=status.HTTP_201_CREATED)
-def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
+def create_job(
+    payload: BatchJobCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     if not db.query(Cluster).filter(Cluster.id == payload.cluster_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
     if get_executor(payload.job_type) is None:
@@ -137,6 +156,7 @@ def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
         cron=payload.cron,
         has_password=bool(payload.saved_password),
         has_private_key=bool(payload.saved_private_key),
+        default_host=payload.default_host,
     )
 
     data = payload.model_dump()
@@ -155,7 +175,11 @@ def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/bulk-run", response_model=BatchJobBulkRunResponse)
-def bulk_run_jobs(payload: BatchJobBulkRunRequest, db: Session = Depends(get_db)):
+def bulk_run_jobs(
+    payload: BatchJobBulkRunRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """선택한 여러 잡(여러 클러스터)을 백그라운드로 일괄 실행.
 
     저장된 자격증명을 사용하므로 자격증명이 없는 잡은 스킵한다(평문 비밀번호를 broker 로
@@ -196,7 +220,12 @@ def get_job(job_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/{job_id}", response_model=BatchJobResponse)
-def update_job(job_id: UUID, payload: BatchJobUpdate, db: Session = Depends(get_db)):
+def update_job(
+    job_id: UUID,
+    payload: BatchJobUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     try:
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
@@ -224,10 +253,12 @@ def update_job(job_id: UUID, payload: BatchJobUpdate, db: Session = Depends(get_
         final_has_key = bool(saved_private_key)
     else:
         final_has_key = bool(job.encrypted_private_key)
+    final_default_host = update.get("default_host", job.default_host) if "default_host" in update else job.default_host
     _require_cron_credentials(
         cron=final_cron,
         has_password=final_has_pw,
         has_private_key=final_has_key,
+        default_host=final_default_host,
     )
 
     for field, value in update.items():
@@ -248,7 +279,11 @@ def update_job(job_id: UUID, payload: BatchJobUpdate, db: Session = Depends(get_
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_job(job_id: UUID, db: Session = Depends(get_db)):
+def delete_job(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     try:
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
@@ -263,7 +298,12 @@ def delete_job(job_id: UUID, db: Session = Depends(get_db)):
 # ── execution + run history ──────────────────────────────────────────────────
 
 @router.post("/{job_id}/run", response_model=BatchJobRunResponse)
-async def run_job(job_id: UUID, payload: BatchJobRunRequest, db: Session = Depends(get_db)):
+async def run_job(
+    job_id: UUID,
+    payload: BatchJobRunRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     try:
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
@@ -305,6 +345,7 @@ async def test_job_connection(
     job_id: UUID,
     payload: BatchJobTestConnectionRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """SSH 자격증명/네트워크만 검증. 명령은 실행하지 않고 BatchJobRun 도 생성하지 않음.
 

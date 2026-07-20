@@ -96,8 +96,9 @@ class EtcdDefragChecker(DeepCheckerBase):
             except Exception as e:
                 st.status = "failed"
                 st.detail = str(e)[:120]
+                # 파싱 실패는 '점검 불가' 이지 이상 상태가 아니므로 pending (fail-safe 관례).
                 return DeepCheckOutcome(
-                    status=StatusEnum.warning,
+                    status=StatusEnum.pending,
                     message=f"etcd status 파싱 실패: {e}",
                     details={"raw": (endpoint_proc.stdout or "")[:1000]},
                 )

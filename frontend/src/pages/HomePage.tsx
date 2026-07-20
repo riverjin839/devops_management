@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Sun, ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays,
+  Sun, ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle,
 } from 'lucide-react';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
@@ -15,7 +15,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, parseUTC } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function dateKey(d: Date): string {
@@ -31,7 +31,7 @@ function nextDueTask(items: WorkItem[]): WorkItem | null {
   const now = Date.now();
   const candidates = items
     .filter((t) => t.startedAt && t.kanbanStatus !== 'done')
-    .map((t) => ({ t, ms: new Date(t.startedAt as string).getTime() }))
+    .map((t) => ({ t, ms: parseUTC(t.startedAt as string).getTime() }))
     .filter(({ ms }) => Number.isFinite(ms) && ms >= now - 1000 * 60 * 60 * 24)
     .sort((a, b) => a.ms - b.ms);
   return candidates[0]?.t ?? null;
@@ -45,15 +45,28 @@ interface KpiPillProps {
   Icon: typeof ClipboardList;
   accent: string;
   to?: string;
+  isLoading?: boolean;
+  isError?: boolean;
 }
 
-function KpiPill({ label, value, hint, Icon, accent, to }: KpiPillProps) {
+function KpiPill({ label, value, hint, Icon, accent, to, isLoading, isError }: KpiPillProps) {
   const body = (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border hover:border-primary/40 transition-colors text-xs whitespace-nowrap">
-      <Icon className={`w-3 h-3 flex-shrink-0 ${accent}`} />
+    <div className={cn(
+      'flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border transition-colors text-xs whitespace-nowrap',
+      isError ? 'border-status-critical/40' : 'border-border hover:border-primary/40',
+    )}>
+      {isError
+        ? <AlertTriangle className="w-3 h-3 flex-shrink-0 text-status-critical" />
+        : <Icon className={cn('w-3 h-3 flex-shrink-0', accent)} />}
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-semibold tabular-nums">{value}</span>
-      {hint && <span className="text-muted-foreground">{hint}</span>}
+      {isError ? (
+        <span className="font-semibold text-status-critical" title="불러오기 실패">!</span>
+      ) : (
+        <>
+          <span className="font-semibold tabular-nums">{isLoading ? '…' : value}</span>
+          {hint && !isLoading && <span className="text-muted-foreground">{hint}</span>}
+        </>
+      )}
     </div>
   );
   return to ? <Link to={to}>{body}</Link> : body;
@@ -68,9 +81,9 @@ export function HomePage() {
   const myName = user?.displayName?.trim() || user?.username || null;
 
   const { clusters } = useClusterStore();
-  const { isLoading: clustersLoading } = useClusters();
+  const { isLoading: clustersLoading, isError: clustersError } = useClusters();
 
-  const { data: workItemsData } = useWorkItems();
+  const { data: workItemsData, isLoading: workItemsLoading, isError: workItemsError } = useWorkItems();
   const allWorkItems = useMemo<WorkItem[]>(() => workItemsData?.data ?? [], [workItemsData]);
   const allTasks  = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'task'), [allWorkItems]);
   const allIssues = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'issue'), [allWorkItems]);
@@ -91,7 +104,7 @@ export function HomePage() {
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);
   const upcomingTask = useMemo(() => nextDueTask(allTasks), [allTasks]);
   const upcomingLabel = upcomingTask?.startedAt
-    ? new Date(upcomingTask.startedAt).toLocaleString('ko-KR', {
+    ? parseUTC(upcomingTask.startedAt).toLocaleString('ko-KR', {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
       })
     : '없음';
@@ -128,29 +141,37 @@ export function HomePage() {
             Icon={ClipboardList}
             accent="text-primary"
             to="/todo-today"
+            isLoading={workItemsLoading}
+            isError={workItemsError}
           />
           <KpiPill
             label="미해결 이슈"
             value={openIssueCount}
             hint="건"
             Icon={AlertCircle}
-            accent="text-red-500"
+            accent="text-status-critical"
             to="/items"
+            isLoading={workItemsLoading}
+            isError={workItemsError}
           />
           <KpiPill
             label="위험 클러스터"
-            value={clustersLoading ? '…' : criticalClusters}
-            hint={clustersLoading ? '' : `/ ${clusters.length}`}
+            value={criticalClusters}
+            hint={`/ ${clusters.length}`}
             Icon={Server}
-            accent="text-amber-500"
+            accent="text-status-warning"
             to="/cluster-overview"
+            isLoading={clustersLoading}
+            isError={clustersError}
           />
           <KpiPill
             label="다음 일정"
             value={upcomingLabel}
             Icon={CalendarClock}
-            accent="text-sky-500"
+            accent="text-status-info"
             to="/items"
+            isLoading={workItemsLoading}
+            isError={workItemsError}
           />
           {/* 업무 알람 종 — KPI pill 과 같은 높이/디자인으로 우측 끝에 배치 */}
           <div className="flex items-center rounded-lg border border-border bg-card overflow-hidden">

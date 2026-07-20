@@ -41,6 +41,18 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_check_matrix_log_purge",
         "schedule": crontab(hour=3, minute=0),
     },
+    # deep_check_results 리텐션 정리 (매일 03:10 KST)
+    "deep-check-results-purge": {
+        "task": "app.celery_app.run_deep_check_results_purge",
+        "schedule": crontab(hour=3, minute=10),
+    },
+    # 나머지 로그성 테이블(daily_check_logs/check_logs/k8s_events/audit_logs/
+    # user_notifications) 리텐션 정리 — 지금까지 purge 대상이 아니어서 무기한
+    # 증가했다. 위 두 purge 와 겹치지 않게 03:20 KST.
+    "log-tables-purge": {
+        "task": "app.celery_app.run_log_tables_purge",
+        "schedule": crontab(hour=3, minute=20),
+    },
     # 기술 트렌드 수집 (07:00 KST)
     "daily-trend-collect": {
         "task": "app.celery_app.run_trend_collect",
@@ -66,7 +78,7 @@ celery_app.conf.beat_schedule = {
 }
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_dispatch")
+@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_dispatch", ignore_result=True)
 def run_check_matrix_dispatch(self):
     """점검 매트릭스 디스패처 — 매분 실행, due 한 core_bundle(Cluster.check_cron_expr) +
     항목별 스케줄(CheckMatrixSchedule) 을 평가해 그 자리에서 동기 실행.
@@ -89,7 +101,116 @@ def run_check_matrix_dispatch(self):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_log_purge")
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_core_bundle_one",
+    time_limit=180,
+    soft_time_limit=150,
+    ignore_result=True,
+)
+def run_check_matrix_core_bundle_one(self, cluster_id: str):
+    """디스패처가 fan-out 한 단일 클러스터 core_bundle 실행.
+
+    독립된 time_limit 을 가지므로 이 클러스터가 느리거나 멎어도 같은 분에 큐잉된
+    다른 클러스터/셀 태스크에 영향을 주지 않는다(과거엔 디스패처 태스크 하나 안에서
+    전 클러스터를 직렬 실행해 하나가 느리면 전체가 5분 SIGKILL 로 유실됐다).
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services import check_matrix_service as cms
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        cms.run_core_bundle(db, cluster)
+        return {"cluster_id": cluster_id, "ok": True}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("check-matrix core_bundle task failed cluster_id=%s: %s", cluster_id, e)
+        return {"error": str(e)[:200], "cluster_id": cluster_id}
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_cell_one",
+    time_limit=280,
+    soft_time_limit=240,
+    ignore_result=True,
+)
+def run_check_matrix_cell_one(self, item_id: str, cluster_id: str):
+    """디스패처가 fan-out 한 단일 item×cluster 셀(deep_check/addon) 실행."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster, CheckMatrixItem
+    from app.services import check_matrix_service as cms
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if item is None or cluster is None:
+            return {
+                "error": "item or cluster not found",
+                "item_id": item_id,
+                "cluster_id": cluster_id,
+            }
+        executed = cms.execute_item_for_cluster(db, item, cluster)
+        return {"item_id": item_id, "cluster_id": cluster_id, "executed": executed}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception(
+            "check-matrix cell task failed item_id=%s cluster_id=%s: %s", item_id, cluster_id, e,
+        )
+        return {"error": str(e)[:200], "item_id": item_id, "cluster_id": cluster_id}
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_definition_one",
+    time_limit=280,
+    soft_time_limit=240,
+    ignore_result=True,
+)
+def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
+    """디스패처가 fan-out 한 단일 DeepCheckDefinition×cluster 실행."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services.deep_check_service import DeepCheckService
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        DeepCheckService(db).run_definition_once(definition_id, cluster=cluster, persist=True)
+        return {"definition_id": definition_id, "cluster_id": cluster_id, "ok": True}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception(
+            "check-matrix definition task failed definition_id=%s cluster_id=%s: %s",
+            definition_id, cluster_id, e,
+        )
+        return {
+            "error": str(e)[:200],
+            "definition_id": definition_id,
+            "cluster_id": cluster_id,
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_check_matrix_log_purge", ignore_result=True)
 def run_check_matrix_log_purge(self):
     """점검 매트릭스 이력 리텐션 정리 — 매일 03:00 KST, 설정된 보관 일수 초과분 청크 삭제."""
     import logging
@@ -159,7 +280,7 @@ def collect_resource_counts_one(self, cluster_id: str, user_id: str | None = Non
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.dispatch_resource_count_snapshot")
+@celery_app.task(bind=True, name="app.celery_app.dispatch_resource_count_snapshot", ignore_result=True)
 def dispatch_resource_count_snapshot(self):
     """운영자 설정 cron 에 맞춰 리소스 수 스냅샷을 트리거(매분 평가).
 
@@ -220,7 +341,7 @@ def dispatch_resource_count_snapshot(self):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_trend_collect")
+@celery_app.task(bind=True, name="app.celery_app.run_trend_collect", ignore_result=True)
 def run_trend_collect(self):
     """매일 07:00 KST 기술 트렌드 수집"""
     from app.database import SessionLocal
@@ -285,7 +406,7 @@ def run_batch_job(self, job_id: str, *, password: str | None = None, private_key
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_batch_job_dispatcher")
+@celery_app.task(bind=True, name="app.celery_app.run_batch_job_dispatcher", ignore_result=True)
 def run_batch_job_dispatcher(self):
     """Scan registered BatchJob rows and queue any whose cron expression
     is due. Runs every minute via Celery Beat.
@@ -371,8 +492,16 @@ def run_batch_job_dispatcher(self):
                     if next_fire > now_naive:
                         note = f"대기 — 다음 실행 {next_fire:%Y-%m-%d %H:%M} ({tz_name})"
                     else:
+                        # anchor(last_run_at)를 큐잉 시점에 바로 전진시킨다. 예전엔
+                        # execute_job 이 실제로 "끝난" 뒤에야 last_run_at 을 갱신했는데,
+                        # 워커가 바빠서 큐잉된 태스크가 1분 안에 시작도 못 하면 다음 분
+                        # 디스패처가 여전히 옛 anchor 를 보고 같은 잡을 또 큐잉했다
+                        # (etcd defrag 같은 잡이 중복 실행될 수 있었음). execute_job 이
+                        # 완료 후 다시 last_run_at 을 finished_at 으로 갱신하므로 anchor 는
+                        # 계속 전진만 한다(역행 없음).
                         run_batch_job.delay(str(job.id))
                         dispatched.append(str(job.id))
+                        job.last_run_at = check_at
                         note = "실행 큐잉됨"
 
             job.last_schedule_check_at = check_at
@@ -396,7 +525,7 @@ def run_batch_job_dispatcher(self):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_review_and_notify")
+@celery_app.task(bind=True, name="app.celery_app.run_review_and_notify", ignore_result=True)
 def run_review_and_notify(self, daily_check_log_id: str):
     """Ollama 기반 AI 리뷰 생성 → DailyCheckLog 에 저장 → 알림 채널 fan-out.
 
@@ -464,7 +593,7 @@ def run_single_check(self, cluster_id: str):
         db.close()
 
 
-@celery_app.task(bind=True, name="app.celery_app.run_cluster_item_dispatcher")
+@celery_app.task(bind=True, name="app.celery_app.run_cluster_item_dispatcher", ignore_result=True)
 def run_cluster_item_dispatcher(self):
     """현황 카드(ClusterItem) 자동 수집 디스패처 — 매시 정각 실행(Beat).
 
@@ -515,6 +644,91 @@ def run_ops_check_batch(self, run_id: str):
         import logging
         logging.getLogger(__name__).exception("run_ops_check_batch failed (%s): %s", run_id, e)
         return {"run_id": run_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_deep_check_for_cluster")
+def run_deep_check_for_cluster(self, cluster_id: str, daily_check_log_id: str | None = None):
+    """클러스터의 enabled deep check 전체를 백그라운드로 실행 + AI 리뷰 큐잉.
+
+    수동 "지금 실행"(POST /deep-check/run/{cluster_id}) 이 exec·파드생성 다수를
+    직렬로 도는 동안 요청이 블로킹/504 되는 것을 막기 위해 worker 로 넘긴다.
+    """
+    from app.database import SessionLocal
+    from app.services.deep_check_service import DeepCheckService
+
+    db = SessionLocal()
+    try:
+        svc = DeepCheckService(db)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            n, log_id = loop.run_until_complete(
+                svc.run_for_cluster(
+                    cluster_id,
+                    in_cluster=False,
+                    daily_check_log_id=daily_check_log_id,
+                )
+            )
+        finally:
+            loop.close()
+
+        if log_id:
+            try:
+                run_review_and_notify.delay(log_id)
+            except Exception:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).warning(
+                    "run_deep_check_for_cluster: review 큐잉 실패 (log=%s)", log_id
+                )
+        return {"cluster_id": cluster_id, "checks_run": n, "daily_check_log_id": log_id}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception(
+            "run_deep_check_for_cluster failed (%s): %s", cluster_id, e
+        )
+        return {"cluster_id": cluster_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_deep_check_results_purge", ignore_result=True)
+def run_deep_check_results_purge(self):
+    """deep_check_results 리텐션 정리 — 매일 03:10 KST, 보관일수 초과분 청크 삭제.
+
+    check_matrix_result_logs 와 동일하게 무한 증가를 막는다(각 cron 실행마다 행 적재).
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.services.deep_check_service import purge_expired_results
+
+    db = SessionLocal()
+    try:
+        return purge_expired_results(db)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_deep_check_results_purge failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_log_tables_purge", ignore_result=True)
+def run_log_tables_purge(self):
+    """daily_check_logs/check_logs/k8s_events/audit_logs/user_notifications 리텐션
+    정리 — 매일 03:20 KST. 테이블별 보관일수는 log_retention_service.RETENTION_DAYS.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.services import log_retention_service
+
+    db = SessionLocal()
+    try:
+        return log_retention_service.purge_all(db)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("run_log_tables_purge failed: %s", e)
+        return {"error": str(e)[:200]}
     finally:
         db.close()
 

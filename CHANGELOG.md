@@ -8,7 +8,346 @@
 
 ## [Unreleased]
 
-1.5.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.7.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.7.3] - 2026-07-20
+
+### Fixed
+- **main CI 회귀 수정 (#485/#486 머지 후)**: 두 PR 을 잇따라 병합하는 과정에서 발생한
+  텍스트 레벨 자동 병합 오류를 바로잡음(브랜치 히스토리상 실제 충돌 마커는 없었지만
+  같은 위치를 건드린 두 변경이 잘못 겹쳐써짐).
+  - **프런트 lint 파싱 에러**: `OpsCheckConsolePage.tsx` 의 "마지막 실행 상태" 셀에
+    `StatusDot`(구버전, import 없음)+`parseUTC` 블록과 `StatusBadge`(디자인 토큰
+    수렴 결과)+`new Date` 블록이 태그가 안 닫힌 채 중복 삽입돼 있던 것을 정리 —
+    `StatusBadge`(디자인 컨벤션) + `parseUTC`(KST 정확한 시각 표시) 로 통합.
+  - **백엔드 테스트 실패**: 배치잡 cron 등록 시 `default_host` 를 요구하는 가드(H-9)를
+    추가하면서, 자격증명만 검증하던 기존 `_require_cron_credentials` 단위 테스트 3건이
+    `default_host` 를 넘기지 않아 422 로 실패하던 것을 테스트에 `default_host` 를
+    포함하도록 갱신하고, `default_host` 누락 케이스를 검증하는 테스트를 추가.
+
+### Fixed
+- **최상단 시스템(설정) 아이콘 원클릭 진입**: 사이드바 푸터의 시스템 아이콘이 하위 경로가
+  1개(`/settings`)뿐인데도 플라이아웃을 먼저 열어 한 번 더 클릭해야 이동되던 불필요한
+  hop 을 제거 — 상단 그룹 레일과 동일하게 단일 경로면 바로 이동하도록 통일.
+- **클러스터 삭제 500 에러 (`deep_check_results.check_type` 컬럼 누락)**: 구버전 DB 에서
+  `deep_check_results` 테이블에 `check_type` 컬럼이 마이그레이션되지 않아, 클러스터 삭제 시
+  SQLAlchemy 가 연관 로우를 조회하며 `UndefinedColumn` 500 을 던지던 문제 수정 — 마이그레이션에
+  `check_type` 컬럼 보강(backfill 포함)을 추가하고, 클러스터 삭제 라우터가 `deep_check_results`
+  를 명시적으로 먼저 삭제하도록 변경.
+- **주요 화면 상태색 테마 정합·접근성·안정성 (DESIGN.md R-4 1차: 홈·대시보드·운영점검·업무)**:
+  홈/대시보드/업무/운영점검 콘솔의 상태색 고정 팔레트(`-400/-500`)를 `--status-*` 토큰으로
+  전환해 라이트/다크 테마에서 상태 대비가 일관되게 유지되도록 함. 홈 KPI·당일 일정·주간
+  타임라인·운영점검 카탈로그에 **에러 상태 분기(재시도 버튼)** 를 추가해 API 실패가
+  "0건/빈 목록"으로 위장되던 문제를 해소. 업무 게시판 인라인 편집 셀·담당자 칩을 **키보드로
+  열 수 있도록**(role/tabindex/Enter·Space) 개선하고, 운영점검 "마지막 실행 상태"를 색 단독
+  전달에서 아이콘+텍스트 배지로 교체. 점검 이력 히트맵의 날짜 버킷을 KST 기준으로 바로잡아
+  심야 점검이 전날 칸으로 밀리던 오배치를 수정. 업무 삭제 확인 문구 정정.
+- **운영 점검 실행 전 확인 다이얼로그**: 운영 점검 콘솔의 개별·선택 실행을 모두 운영 위험
+  레벨로 간주해, 실행 전 대상 클러스터·항목 수와 소스별(SSH/Ansible/점검/애드온) 목록을
+  요약한 확인 다이얼로그를 거치도록 변경 — 실서버로 원격 명령이 오클릭으로 나가던 위험 차단.
+
+### Changed
+- **홈 "담당자별 진행 현황" 최상단 행/카드를 "전체"→"공통"으로 변경**: 지금까지 최상단
+  행(`WeeklyStatusTimeline`)은 이번 주 모든 업무를 단순 병합해 보여줘 "전체 = 모든 업무
+  목록"처럼 보였다. 이제 파트 전체 대상 업무(업무 등록 시 "공통업무" 체크,
+  `allAttendees=true` — 예: 파트 회의)만 모아 "공통" 행/카드로 표시한다. `MemberTodayTodos`
+  (담당자 탭)는 원래도 `allAttendees` 기준으로 동작했으나 라벨만 "전체"→"공통"으로 맞춤.
+  Frontend: `components/dashboard/WeeklyStatusTimeline.tsx`,
+  `components/dashboard/MemberTodayTodos.tsx`.
+
+- **디자인 컨벤션 정리 2차 (DESIGN.md D-009·D-010)**: 수제 카드 페이지 9개
+  (NodeLabels/KernelParams/McClient/TrendDigest/TodoToday/Versions/EtcdCtl/
+  KnowledgeHub/JiraExcelImport)의 섹션 카드 28건을 MacCard 로 수렴하고, pages/
+  전체 아이콘 전용 버튼에 `aria-label` 83건 병행(K8sManage 공용 IconBtn 은
+  aria-label 기본 배선) — 보드/캔버스형 페이지는 구조 리스크로 보류 기록.
+- **주요 화면 카드/레이아웃 표준화 (R-4)**: 업무 게시판의 수제 카드 3곳을 MacCard 로
+  수렴하고, 클러스터 대시보드 컨테이너 행의 센터링/좌측 패딩을 제거해 보조 사이드바가
+  메인 사이드바에 flush 되도록 정렬 표준을 맞춤.
+
+### Fixed
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Low 5건)**: Blocker/High/Medium 조치에 이어
+  잔여 Low 등급 항목을 마저 반영.
+  - **SSH 호스트 키 무검증**: 배치잡/명령 실행이 `paramiko.AutoAddPolicy()` 로 첫 접속
+    시 호스트 키를 무조건 신뢰하고 이후에도 검증 없이 재사용하던 것을, Redis 에
+    최초 접속 시 키를 기록(TOFU, 90일 TTL)하고 이후 접속에서 paramiko 자체 검증으로
+    불일치 시 접속을 거부하도록 전환(`ssh_host_keys.py` 신규). Redis 장애 시에는
+    기존 동작으로 fail-open(재배포/Redis 재시작 시 기록된 키는 초기화됨 — 알려진
+    한계).
+  - **PromQL 카드 관리 권한 노출**: `/promql/cards` 생성/수정/삭제와 임의 PromQL 즉시
+    실행 프로브(`test_query`)가 인증만으로 접근 가능해 viewer 도 내부 Prometheus 를
+    정찰/수정할 수 있던 것을 operator 이상으로 제한(조회 계열 엔드포인트는 viewer
+    유지). 프런트 Dashboard 도 operator 미만에게 카드 추가/편집/삭제 아이콘을 숨김.
+  - **DB 커넥션 풀 크기 고정**: backend/celery worker/beat 가 동일 engine 코드를
+    공유하면서 각각 기본 풀(10+20)을 쓰면 replica 합계가 Postgres 기본
+    `max_connections`(100)를 쉽게 넘던 것을, `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`
+    환경변수로 설정 가능하게 하고 celery worker(3+5)/beat(2+3) 매니페스트에 더 작은
+    값을 오버라이드.
+  - **리치 텍스트 렌더링 방어 강화**: `RichContent` 의 DOMPurify sanitize 이후 단계에
+    후처리 훅을 추가 — `target="_blank"` 링크에 `rel="noopener noreferrer"` 를 강제해
+    reverse-tabnabbing 을 막고, `style` 속성을 색상/정렬 등 화이트리스트 속성만
+    남기도록 필터링해 `position:fixed` 오버레이 등을 이용한 UI 위장(피싱 배너 흉내)을
+    차단.
+  - **감사 로그 기록 경로 점검**: 주요 변경 작업의 audit log 기록이 실패해도 본 요청이
+    막히지 않는 fail-safe 패턴을 재확인(코드 변경 없음).
+
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Medium 8건)**: Blocker/High 조치에 이어
+  Medium 등급 항목을 마저 반영.
+  - **kubewatch ingest fail-closed**: `KUBEWATCH_TOKEN` 미설정 시 무인증으로 웹훅을
+    수락하던 것을 deep_check ingest 와 동일하게 fail-closed(503)로 전환 +
+    `secrets.compare_digest` 적용.
+  - **로그인 무차별 대입 방어**: `/auth/login` 에 Redis 기반 rate limit 추가 — IP 단위
+    (창 5분/20회) + 계정 단위(창 15분/5회) 이중 방어. Redis 불가 시 로그인 자체는
+    막지 않는 fail-open(다른 외부 서비스와 동일 컨벤션).
+  - **PromQL 카드 조회 성능**: `/promql/query/all` 이 카드를 직렬 실행하고 매 호출
+    새 httpx 클라이언트를 만들던 것을 병렬 실행(`asyncio.gather`) + 클라이언트 재사용
+    + 15초 TTL 캐시로 개선 — 대시보드 탭 여러 개가 동시에 폴링해도 Prometheus 부하가
+    상수화된다.
+  - **점검 이력 N+1 + CSV 무제한 export**: `history.py` 의 `log.cluster.name`/addon
+    조회가 행마다 별도 쿼리를 날리던 것을 `joinedload` 로 묶고, CSV export 에 상한
+    (기본 5000, 최대 20000행)을 추가.
+  - **멀티 replica 마이그레이션 직렬화**: backend/celery 여러 replica 가 동시에 부팅
+    시 스키마 마이그레이션이 카탈로그 레벨 race 로 드물게 스킵될 수 있던 것을 세션
+    advisory lock 으로 부팅 시퀀스 전체를 직렬화하도록 수정(pgvector 확장 생성은 기존
+    xact-lock 그대로 유지).
+  - **배치잡 디스패처 중복 실행 방지**: cron 잡을 큐잉만 하고 워커가 늦게 시작하면
+    다음 분 디스패처가 같은 잡을 또 큐잉하던 문제를, 큐잉 시점에 바로 anchor
+    (`last_run_at`)를 전진시키도록 수정.
+  - **저장 모달 에러 처리**: `AddMetricCardModal`/`AddAddonModal`/`ClusterItemModal`
+    이 `mutate()` 를 fire-and-forget 으로 호출하고 결과와 무관하게 즉시 모달을 닫던
+    것을, `mutateAsync` + 실패 시 모달 유지 + 에러 토스트로 통일.
+  - **kubeconfig 저장 암호화**: `clusters.kubeconfig_content` 를 평문으로 저장하던
+    것을 `secret_box` 로 투명 암호화하는 SQLAlchemy 컬럼 타입(`EncryptedText`)으로
+    전환. 기존 평문 행은 복호화 실패 시 그대로 반환(lazy migration)해 별도 백필
+    없이 다음 저장 시 자동으로 암호화된다.
+
+- **상용 출시 전 보안/안정성 점검 후속 조치 (High 11건)**: Blocker 조치에 이어 High
+  등급 항목을 마저 반영.
+  - **인증/인가**: `ui-settings` 의 앱 설정/클러스터 링크/담당자/운영레벨 PUT 엔드포인트가
+    인증만으로 접근 가능하던 것을 admin 전용으로 강제(feature-access 와 동일 패턴).
+  - **클러스터 삭제 500 수정**: deep_check_results/batch_jobs(+runs)/ops_check_runs/
+    os_param_changes/ansible_inventories 를 선삭제하지 않아 FK 위반으로 실패하던
+    `DELETE /clusters/{id}` 를 수정 — deep check 가 한 번이라도 돈 클러스터는 삭제가
+    불가능했다.
+  - **멀티클러스터 점검 격리**: deep checker 가 `config.load_kube_config()`(프로세스
+    전역 상태)를 사용해 동시 실행 시 한 클러스터의 kubeconfig 로 다른 클러스터를
+    점검할 수 있던 race 를 `new_client_from_config()` 격리로 수정(daily_checker.py 와
+    동일 패턴).
+  - **배치잡 재시도 스톰 방지**: `default_host` 없이 cron 이 걸린 배치잡이 매분 실패
+    → 재큐잉을 반복하던 문제를 저장 시점 검증(운영자) + 실패 시에도 `last_run_at`
+    갱신(자가 치유)으로 이중 차단.
+  - **K8s SDK 타임아웃/이벤트 루프 블로킹**: daily checker 의 K8s SDK 호출에 클라이언트
+    타임아웃(`_request_timeout`)이 없어 무응답 클러스터가 디스패처를 무기한 붙잡던
+    문제, 그리고 `POST /daily-check/run` 이 동기 SDK 호출로 FastAPI 이벤트 루프 자체를
+    막던 문제(`asyncio.to_thread` 로 오프로드)를 수정.
+  - **Celery 안정성**: Redis 브로커의 `allkeys-lru` eviction 정책이 예약 점검/배치잡
+    큐 자체를 지울 수 있던 것을 `noeviction` + 메모리 여유로 수정, 결과를 아무도
+    조회하지 않는 매분 디스패처류 태스크 10개에 `ignore_result=True` 적용.
+  - **AI 리뷰 큐 부하 완화**: core_bundle 점검마다 무조건 Ollama 리뷰를 큐잉하던 것을
+    상태 변화가 있거나 healthy 가 아닐 때만 큐잉하도록 게이팅 — 작은 워커 동시성이
+    Ollama 대기로 계속 점유돼 배치잡/수동 점검이 밀리던 문제 완화.
+  - **로그 테이블 리텐션**: `daily_check_logs`/`check_logs`/`k8s_events`/`audit_logs`/
+    `user_notifications` 가 purge 대상이 아니어서 무기한 증가하던 것을 청크 삭제
+    리텐션(각 21~365일)으로 정리, 관련 조회 인덱스도 보강.
+  - **Pod exec/SSE 안정성**: nginx `proxy_read_timeout` 60s 로 대화형 터미널이 끊기던
+    문제를 exec/스트림 경로 전용 location(3600s)으로 수정, 파드 로그·이벤트 SSE 응답에
+    `X-Accel-Buffering: no` 를 추가해 nginx 버퍼링으로 실시간성이 사라지던 문제 수정.
+    frontend nginx 설정에 CSP 등 보안 헤더도 추가(docker-compose/k8s 두 설정 동기화).
+  - **시각 표시 오류**: `parseUTC` 유틸을 거치지 않고 `new Date()`로 API 타임스탬프를
+    직접 파싱해 9시간(KST) 어긋나게 표시되던 지점 20여 곳(감사 로그, 점검 이력, VOC,
+    트렌드, Lake 서비스, Isilon, 홈 "다음 마감" 등)을 일괄 수정.
+
+## [1.7.1] - 2026-07-20
+
+### Fixed
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Blocker 7건)**: 상세 코드 감사에서 발견된
+  치명 결함을 수정.
+  - **인증/인가**: 운영 배포(`DEBUG=false`)에서 `SECRET_KEY` 가 기본값이거나 32자
+    미만이면 기동을 거부(fail-fast) — 방치 시 JWT 위조 + 저장된 Jira/Isilon 자격증명
+    복호화로 이어질 수 있었다. `docker-compose.yml`/`.env.example` 은 로컬 개발 기본값을
+    `DEBUG=true` 로 맞춰(dev/kind/airgap overlay 와 동일) 이 가드에 영향받지 않도록
+    조정 — 운영 배포(prod overlay)는 그대로 `DEBUG=false` + `SECRET_KEY` 교체 필수.
+    `GET /clusters/{id}/kubeconfig`(cluster-admin 자격증명
+    원문 반환) 와 `batch-jobs`/`versions`(SSH 수집)/`mc/run`/`topology-trace`(tcpdump)/
+    `node-specs`/`isilon-nfs` 의 실행·쓰기 엔드포인트에 누락돼 있던 operator 권한
+    가드를 추가. `versions` 의 `systemctl show {unit}` 원격 명령에 유효하지 않은 unit
+    이름을 통한 명령 인젝션 경로를 차단(패턴 검증).
+  - **백업 복원 데이터 유실 방지**: 마스킹된(비민감 export) 백업을 merge import 하면
+    실제 kubeconfig/비밀번호/토큰이 `NULL` 로 덮어써지던 문제를 센티널 값으로 구분해
+    수정 — 마스킹된 컬럼은 이제 갱신 대상에서 제외돼 기존 값이 보존된다. import 를
+    테이블 전체 SAVEPOINT 1개로 감싸던 구조를 행/테이블 단위 SAVEPOINT 로 바꿔, 한 행
+    실패가 이미 처리된 다른 행까지 롤백시키면서도 성공한 것처럼 응답하던 문제를 수정.
+    UUID 기본키 타입 불일치로 백업 미리보기(diff)가 항상 "전부 신규/전체 삭제후보"로
+    잘못 표시되던 문제도 함께 수정.
+  - **점검 매트릭스 디스패처 유실 방지**: 매분 디스패처가 due 한 모든 클러스터/셀
+    점검을 태스크 하나 안에서 직렬 실행해 `task_time_limit`(5분) 초과 시 SIGKILL 당하고
+    이후 클러스터 점검이 재시도 없이 유실되던 문제를 수정. 이제 디스패처는 cron 평가와
+    큐잉만 하고(수 초 내 종료), 실제 실행은 클러스터/셀 단위 개별 Celery 태스크로
+    fan-out 되어 독립된 time_limit 을 갖는다. 큐잉 시 랜덤 countdown(jitter) 을 줘 동일
+    분에 due 한 여러 클러스터가 동시에 API 를 두드리는 thundering herd 도 완화.
+  - **대형 클러스터 OOM 방지**: `pod_to_pod`/`image_pull`/`stuck_terminating`/
+    `oom_events` deep checker 가 `list_pod_for_all_namespaces` 등을 페이지네이션 없이
+    한 번에 호출해 5k+ pod 클러스터에서 워커가 OOMKill 될 수 있던 문제를 기존
+    `k8s_paging.iter_all` 페이지 스트리밍으로 전환.
+  - **오탐 healthy 판정 수정**: kubeconfig 인증 만료/RBAC 회수 등으로 노드·컴포넌트
+    조회 자체가 실패해도(`total=0/ready=0`) 클러스터가 healthy 로 보고되던 문제를
+    수정 — 조회 실패 시 최소 warning 으로 강등하고 에러 메시지를 노출한다.
+
+## [1.7.0] - 2026-07-19
+
+### Added
+- **UX/UI 디자이너 운영 체계 + 차트 색 토큰**: 디자인 감사·백로그를 운영하는 `DESIGN.md`
+  문서 체계(ux-ui-designer 에이전트/스킬)를 신설하고 1회차 감사 실행. Frontend: 테마
+  추종 categorical 차트 토큰 `--chart-1~8`(3테마) 신설, 주요 차트(칸반 요약·클러스터
+  추이·주간 타임라인·버전 그래프)를 hex → 토큰으로 이관해 다크/라이트 전환 시 차트
+  대비가 테마를 따라가도록 개선.
+
+- **Deep Checker 고도화 — UI 커스텀 점검 생성 + 정의별 실행 이력/개별 로그**: admin 이
+  코드 없이 UI 에서 새 점검을 만드는 커스텀 체커 3종(`custom_http` HTTP/TCP 프로브,
+  `custom_kubectl` 읽기전용 kubectl 명령 + 라인/숫자/정규식 파싱, `custom_promql`
+  PromQL 임계 판정)을 추가하고, Deep Check 정의 관리 화면(`/daily-check/settings`)을
+  admin 전용으로 재구성. 정의별 즉시 실행(이력 기록)·복제·검색/카테고리 필터·최근 실행
+  상태 배지와, 실행 회차별 단계(step) 타임라인/상세 JSON 을 펼쳐보는 **실행 이력 패널**을
+  신설. Backend: `GET /deep-check/definitions/{id}/results`, `POST …/run`(영속 실행),
+  `POST …/duplicate`, `POST /deep-check/definitions/preview`(저장 전 ad-hoc 실행),
+  `with_status` 목록 요약, CRUD admin·실행 operator 권한 가드, 미배선이던
+  `DeepCheckDefinition.schedule_cron` 을 check-matrix 디스패처에 배선(정의별 단독 cron,
+  최소 5분 간격, 글로벌 정의는 전 클러스터 실행).
+
+### Fixed
+- **Deep Check 정의 편집 폼 저장값 미표시 수정**: axios 응답 인터셉터가 thresholds/params
+  의 snake_case 키를 camelCase 로 바꿔 편집 폼·클러스터 필터·결과 step 타임라인이 조용히
+  깨지던 문제를 정규화 로직으로 수정 (definitions 목록 쿼리 파라미터 snake_case 변환,
+  `details._steps`→`Steps` camelize fallback 포함).
+
+## [1.6.1] - 2026-07-17
+
+### Changed
+- **디자인 컨벤션 정리 (DESIGN.md D-001~D-008)**: Settings/InfraTopology/NodeImages 의
+  수제 카드를 MacCard 로 수렴, button `sm` 라운딩을 base(`rounded-xl`)로 통일, 잔존
+  고정 팔레트(gray-*)를 status 토큰으로 치환, 아이콘 전용 버튼에 `aria-label` 병행
+  표준 적용. CLAUDE.md UI 섹션·DESIGN_SYSTEM.md 헤더를 실제 테마 체계(default/light/
+  dark 3종, radius 토큰)로 현행화.
+- **3차 문서 감사: infra README·스킬·로드맵 문서**: `k8s/README.md` 의 실제 오류 정정 —
+  kind/airgap 오버레이 네임스페이스 오기재(`k8s-monitor-dev/prod` → 실제 `k8s-monitor`),
+  airgap 환경 표(레플리카 1·HPA 전체 삭제·`DEBUG=true`·TLS 없음) 정정, observability
+  네임스페이스명(`network-observability`), superpod 네임스페이스(`k8s-monitor-agent`+
+  `devops`)·배포 절차 정정, `base/secret.yaml`/`configmap.yaml` 이 kustomization 미참조
+  고아 파일임을 명시. `.claude/skills/` 4개 스킬 정정: `add-deep-checker`(`STEP_PLANS`
+  보강), `backend-feature`(Celery 비동기 브리지 실제 패턴으로 정정), `frontend-page`
+  (`Sidebar.tsx` → 실제 `navConfig.ts`), `editor-docs`(폐기된 `whiteBg` → 실제 `defaultBg`
+  컬러 프리셋 방식, `linkSearch`/`extraTemplates`/콜아웃·토글 블록 보강). `docs/
+  AIRGAP_LLM_NEXUS.md`(사전 적재 이미지라 Nexus 수급 절차가 불필요한 경우 명시, `OLLAMA_MODEL`
+  기본값 `llama3` 주의), `docs/openlens-architecture-roadmap.md`(P5 YAML 편집이 "보류"가
+  아니라 이미 배포됐고 dry-run 등 안전장치만 미흡함을 정정, 가상화/edit 게이팅 완료 표시),
+  `docs/PROJECT_PLAN.md`·`docs/README.md` 색인(최초 기획서 보관용 배너 추가),
+  `docs/collab-tooling-borrow-report.md`(Top 7 중 이미 구현된 4.5개 항목을 완료로 갱신).
+- **docs/ 가이드 본문 2차 현행화**: 1차(README/CLAUDE.md/CODE_MAP/색인/SCREENS)에 이어 실제
+  운영 가이드 본문을 코드와 대조해 정정. `ADMIN_MANUAL.md`(제품명 PEP 전환, Deployment/라벨
+  셀렉터 실명 오류 수정, 클러스터 등록 위치를 Settings 로 정정, 09/13/18 고정 스케줄 →
+  check-matrix cron 디스패처로 재작성, 내장 백업/복구·사용자 관리/RBAC·감사 로그·VOC·배치잡
+  등 누락 관리 기능 보강), `DEPLOY_GUIDE.md`(compose kind 네트워크 선행 생성 안내, airgap
+  save 산출물 tar.gz 개수 정정, dev→kind overlay 정정, GitHub Actions 가 기본 CI/CD 임을
+  명시), `BACKUP_RESTORE_GUIDE.md`(LOG_TABLES·SENSITIVE_COLUMNS 최신 컬럼 반영),
+  `DEEP_CHECKER_GUIDE.md`/`K8S_OPS_CHECKLIST.md`(체커 카탈로그에 누락됐던 `isilon_nfs`·
+  `node_health` 반영, in_cluster 배포 산출물 `k8s/superpod/` 명시), `SERVICE_TOPOLOGY_GUIDE.md`
+  (`/cluster-graph` 엔드포인트 추가), `KNOWLEDGE_BASE_DESIGN.md`(미채택 설계안임을 명시하는
+  구현 결과 노트 추가), `JIRA_기능정리.md`(시점 스냅샷 고지 + 실제 PEP↔Jira 연동 기능인
+  Excel/붙여넣기 가져오기·v1.5.1 양방향 push 절 신설 — 기존 문서에 전혀 없던 내용).
+
+### Added
+- **Deep Check 참조 가이드 문서**: deep-check 서브시스템의 목적·아키텍처·실행 경로·API·
+  체커 카탈로그·확장 방법을 정리한 `docs/DEEP_CHECKER_GUIDE.md` 추가(AI/개발자 참조용).
+- **Deep Check 정의 관리 UX 개선**: 정의 목록 검색, 글로벌 정의를 선택 클러스터 전용으로
+  복제하는 버튼, 비활성 텍스트 배지, 동적 폼의 boolean 체크박스·list textarea(줄바꿈/콤마)
+  위젯을 추가. 운영 점검 콘솔 상세 모달에 실행 단계 타임라인을 노출하고, 실행 시작 실패 시
+  toast 로 사유를 표면화.
+  - Frontend: `DeepCheckDefinitionForm`/`DeepCheckDefinitionList`/`DeepCheckSettings`/
+    `OpsCheckConsolePage` — 잘못된 숫자 입력(NaN)을 null 로 방어, 글로벌 비활성화 시 확인 대화상자.
+
+- **문서-코드 동기화 자동 검사(docs guard)**: 기능 추가 시 문서 갱신이 누락되지 않도록
+  `scripts/docs/check_docs_sync.py` 를 추가하고 CI 에 `docs-sync` job 을 신설. App.tsx
+  라우트 ↔ `docs/SCREENS.md` 섹션, 라우터/페이지 파일 ↔ `CODE_MAP.md`, `docs/*.md` ↔
+  `docs/README.md` 인덱스, frontend/backend 버전 일치를 기계 검사하며, feat/fix PR 이
+  앱 코드를 바꾸면서 CHANGELOG/문서를 안 건드리면 실패한다(예외: PR 제목 `[skip-docs]`).
+  `.claude/skills/docs-sync` 스킬(변경 유형 → 갱신 문서 매핑)과 PR 템플릿 docs 체크 항목,
+  CLAUDE.md "문서 동기화 규칙" 절도 함께 추가.
+- **폐쇄망 LLM 아키텍처 문서**: `docs/AIRGAP_LLM_ARCHITECTURE.md` 신설 — 내부 제공
+  모델(GLM-5.2)의 vLLM(OpenAI-호환) 서빙 구성, K8s 로그 모니터링–에러 **자동 분석**(조치
+  권한 없음, 분석 전용) 파이프라인, PEP 내부 문서(작업 가이드/Q&A/업무 이력) RAG 설계와
+  단계별 구현 로드맵/운영 체크리스트를 상세화. `AIRGAP_LLM_NEXUS.md` 와 상호 링크.
+
+### Changed
+- **내부 문서 전면 현행화(v1.6.0 기준 감사)**: README(버전 배지 1.0.0→1.6.0, 핵심 기능표에
+  VOC/Jira/스프린트/온톨로지/Isilon NFS/Deep Check/서비스 카탈로그/인프라 대장/알림 등
+  누락 도메인 보강), CLAUDE.md(저장소 레이아웃·환경변수 표를 config.py 기준 재생성,
+  Celery "3회/일" → check-matrix 디스패처 체계로 정정, API/DB 도메인 인덱스 추가),
+  CODE_MAP.md(미기재 라우터 47개·페이지 48개 도메인 표 추가, `trends/` 패키지·
+  `navConfig.ts` 등 낡은 경로 정정), docs/README.md(누락 색인 6건),
+  docs/SCREENS.md(제거된 `/coroot` 섹션 정리, 검증 기준일 헤더 추가).
+
+## [1.6.0] - 2026-07-17
+
+### Added
+- **사용자 VOC 게시판 추가**: 사이드바 하단 레일의 "릴리즈 노트" 아이콘 **바로 위**에 "사용자 VOC
+  게시판" 아이콘을 추가하고, 클릭하면 릴리즈 노트와 동일한 우측 SidePane 으로 게시판이 열린다.
+  사용자가 문의/개선/불만/제안을 남기면 관리자가 답변하고 상태(접수/검토중/완료)를 관리한다.
+  전체 공개 board(모두 열람, 수정·삭제는 본인 글 또는 관리자), 👍 공감, 관리자 답변 시 작성자에게
+  인앱 알림.
+  - Backend: `VocPost` 모델 + `/api/v1/voc` 라우터(CRUD + `POST /{id}/reply` 관리자 답변/상태),
+    `user_notify.notify_voc_reply`(작성자 알림), reactions `REACTION_TARGET_TYPES` 에 `voc_post` 추가
+    (신규 테이블 자동 생성, 마이그레이션 불필요).
+  - Frontend: `VocBoardPanel`(목록/작성/상세/답변 master-detail) + `Sidebar` 레일 아이콘·SidePane,
+    `useVoc` 훅, `vocApi`, 타입. 상세에서 기존 `ReactionBar` 재사용(`voc_post`).
+- **shadcn MCP 연결 + Base UI 기준 전환**: `frontend/.mcp.json`(shadcn MCP 등록)과
+  `frontend/components.json`(shadcn CLI 설정, style `new-york`, Base UI 기본)을 추가해
+  이후 컴포넌트 추가 시 레지스트리를 실제로 조회하도록 배선. `Button`/`Card`/`Badge`/
+  `Tooltip`/`Dialog` 5종을 `frontend/src/components/ui/`에 도입(Tooltip·Dialog 는
+  `@base-ui/react`, Button 은 기존 `@radix-ui/react-slot` 재사용 — 낡은 Radix 버전은
+  그대로 두고 신규만 Base UI로 감).
+  - 대량 교체 대신 어댑터 방식으로 점진 적용: 기존 `MacCard` 는 API 그대로 두고 내부만
+    새 `Card` 위에 재구성(traffic-light dot 은 `variant="mac"` 옵션으로 보존). 대표
+    사용처로 `JiraPushDialog`(커스텀 모달 → `Dialog`+`Button`)와 업무 표의 우선순위
+    칩(`WorkItemTableRow` → `Badge` dot+텍스트)을 교체해 동작을 증명.
+- **운영레벨 커스텀 색상 — 시드 hex → 톤 자동 생성**: 운영레벨 색상이 13개 고정
+  프리셋뿐이었는데, 관리자가 임의의 hex 를 지정하면 bg/ring/band/text 4단계 톤을
+  자동 산출(`lib/colorTone.ts`, HSL 근사)해 클러스터 아이콘(SVG)과 뱃지(인라인 style)에
+  반영하도록 확장. `OperationLevelsManager` 에 커스텀 색상 피커 추가, customHex 미지정
+  시 기존 동작 그대로 유지.
+- **W3 Health Hero — Bento + Bullet Chart**: Dashboard 상단 4-col 통계 카드를 12-col
+  Asymmetric Bento(`HealthHero`)로 교체. 좌측 큰 셀에 SVG Bullet Chart(`ui/BulletChart`,
+  3-zone 배경 + 목표선 마커, `role="img"` a11y)로 전체 헬스 %를 표시하고 우측에
+  위험/경고/정상/마지막 점검 KPI 4셀 배치.
+- **Surface Container 5단계 토큰**: Material Theme Builder 의 surface-container 개념을
+  차용해 그림자 대신 톤 차이로 깊이감을 주는 5단계 토큰(`bg-surface-container-lowest`
+  ~ `-highest`) 추가 — 기존 "그림자 없는 flat 카드" 철학과 일치.
+- **W5+ Sparkline / Heat Map**: PromQL 메트릭 카드 하단에 최근 1시간 추이 Sparkline
+  (`ui/Sparkline`, 새 백엔드 range-query 엔드포인트 `/promql/query/{id}/sparkline`)을
+  추가. Dashboard 하단에 "Recent Check History" Heat Map(`CheckHistoryHeatmap`,
+  cluster×time, hover 시 Tooltip 상세)을 신설 — 이전에 빠져 있던(orphan) 히스토리
+  섹션을 대체.
+- **W4 접근성 패스**: 사이드바를 건너뛰고 바로 본문(`#main-content`)으로 이동하는
+  skip link 추가(Tab 포커스 시 노출). `jsx-a11y/control-has-associated-label` 규칙으로
+  전체 코드베이스를 스캔해 icon-only 버튼/빈 테이블 헤더/폼 컨트롤의 접근 가능한 이름
+  누락 54건을 25개 파일에서 수정하고, 회귀 방지를 위해 규칙을 상시 활성화. 신규 차트
+  컴포넌트(Sparkline)에 sr-only 데이터 표, BulletChart 에는 값이 속한 구간(위험/주의/정상)
+  까지 포함한 상세 aria-label 을 추가.
+
+### Fixed
+- **Prometheus Insights 섹션이 항상 "Loading..." 에 멈추던 버그**: `/promql/query/all`
+  라우트가 `/promql/query/{card_id}` 보다 뒤에 선언돼 있어 UUID 타입 검증이 먼저 실패해
+  422 를 반환하고 폴백되지 않았다. 라우트 선언 순서를 바로잡아 해결.
+- **`historyApi.getLogs` 의 `pageSize` 파라미터가 항상 무시되던 버그**: axios 요청
+  인터셉터의 camelCase→snake_case 변환이 body 에만 적용되고 쿼리 파라미터(`params`)에는
+  적용되지 않아, 백엔드가 기대하는 `page_size`/`cluster_id` 대신 `pageSize`/`clusterId`
+  가 그대로 전송돼 항상 기본값(20건)만 조회됐다. 파라미터명을 백엔드에 맞게 수정.
+
+### Changed
+- **브랜드/상태 raw HEX → 토큰화**: Jira 브랜드색 `#0052CC` 를 `brand.jira` 토큰
+  (`--brand-jira`)으로 옮기고 `WorkItemTableRow`/`JiraPushDialog`/`WorkItemDetailPage`
+  에서 참조. `NodeDetailPanel` 의 사용률 게이지 raw hex 도 `status.*` CSS 변수로 교체.
+- DESIGN_SYSTEM.md §6/§10, CLAUDE.md 의 styling 스택 설명을 "Base UI 기본·Radix 호환 +
+  shadcn MCP" 로 갱신하고, W1 raw-HEX DoD 에 3D/canvas/recharts/컬러픽커 화이트리스트를
+  명시.
 
 ### Added
 - **Jira SSO 자동 로그인 — 세션 쿠키 자동 캡처 (수동 복사 제거)**: 참고 프로젝트
@@ -63,6 +402,19 @@
     `/api/v1/isilon-nfs/*` 라우터(서버·명령 CRUD, 연결 테스트, `/overview`), builtin 명령 시드.
   - Frontend: `IsilonNfsPage` + 서버/명령 관리 모달, `useIsilonNfs` 훅, `isilonNfsApi`, 타입,
     사이드바 스토리지 그룹에 `NFS 모니터링` 등록.
+
+### Fixed
+- **Deep Check ingest 무인증 차단**: `SUPERPOD_INGEST_TOKEN` 미설정 시 `/deep-check/ingest`
+  를 fail-closed(503)로 거부하고, 토큰 비교를 `secrets.compare_digest`(상수시간)로 변경해
+  임의 결과 주입·타이밍 공격을 차단.
+- **Deep Check 실행/정의 권한 강화**: 정의 생성/수정/삭제/Test, `POST /deep-check/run/{id}`,
+  운영 점검 실행을 operator 이상으로 제한(컨트롤플레인 exec·파드 생성 유발 동작 보호).
+- **Deep Check 부하/안정성**: `POST /deep-check/run/{id}` 를 Celery 백그라운드로 전환(504
+  방지, worker 부재 시 동기 폴백), `deep_check_results` 리텐션 정리 태스크 추가(매일 03:10),
+  `pod_to_pod` 임시 프로브 파드 명시 삭제로 누수 방지, 결과 자동연결을 최근 회차(6h)로 제한.
+- **Deep Check 판정 정확성**: `cert_expiry` 가 연/주 단위 잔여기간(CA 인증서 등)을 놓치던
+  정규식을 duration 파서로 교체, `etcd_defrag` 파싱 실패를 warning→pending 으로 정정,
+  `pod_to_pod` 의 신뢰 불가한 밀리초 계측 제거. ingest 클라이언트 TLS 검증 옵션화.
 
 ## [1.5.0] - 2026-07-15
 

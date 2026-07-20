@@ -690,11 +690,11 @@ export function NodeSpecPage() {
                       </GridCell>
                       <td className="px-2 py-2 align-top">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => setEditTarget(r)} title="상세 수정 (모달)"
+                          <button onClick={() => setEditTarget(r)} title="상세 수정 (모달)" aria-label="상세 수정 (모달)"
                             className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => setConfirmDelete(r)} title="삭제"
+                          <button onClick={() => setConfirmDelete(r)} title="삭제" aria-label="삭제"
                             className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

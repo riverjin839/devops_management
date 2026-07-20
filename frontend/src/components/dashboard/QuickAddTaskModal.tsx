@@ -252,7 +252,7 @@ export function QuickAddTaskModal({
               />
               <datalist id={f('assignee-list')}>
                 {assignees.map((a) => (
-                  <option key={a.name} value={a.name} />
+                  <option key={a.name} value={a.name}>{a.name}</option>
                 ))}
               </datalist>
             </div>

@@ -20,7 +20,7 @@ min-h-screen bg-background p-5
 - `ClusterSidebar` 는 **항상 `iconOnly`**(폭 56px 아이콘 레일). 다중 선택은 `multiSelect`+`selectedIds`+`onMultiSelectChange`.
 - 섹션은 `MacCard`(variant 기본 'flat'). 카드 제목을 본문에서 `<h2>` 로 중복 금지.
 - 상태 표시는 `StatusBadge`/`StatusDot`(+ `statusToVariant`). 필터칩은 LakeServicesPage 의 FilterChip 패턴.
-- 둥근모서리 `rounded-2xl`(카드)/`rounded-xl`(버튼), 그림자 `.mac-shadow`, 인라인 스타일 금지.
+- 카드는 MacCard(flat 기본, `rounded-md` radius 토큰) — 직접 카드 div/`rounded-2xl` 금지. 버튼 `rounded-xl`, 인라인 스타일 금지, 고정 팔레트(`text-white`/`bg-gray-*`) 대신 테마 토큰.
 - 참고 스켈레톤: `pages/DailyCheckReview.tsx`, `pages/OpsCheckConsolePage.tsx`.
 
 ## 데이터 (api + hooks)
@@ -32,7 +32,8 @@ min-h-screen bg-background p-5
 
 ## 라우팅·메뉴
 - `src/App.tsx` 에 `<Route path="/x(/:id)" element={<XPage />} />`. 레거시 경로는 redirect 로 호환 유지.
-- `src/components/layout/Sidebar.tsx`: `NAV_MAP` 에 라벨/아이콘, `GROUPS` 의 적절한 그룹 `paths` 에 경로 추가.
+- `src/components/layout/navConfig.ts`: `NAV_MAP` 에 라벨/아이콘, `GROUPS` 의 적절한 그룹
+  `paths` 에 경로 추가 (`Sidebar.tsx` 는 이 값을 import 해서 렌더만 함 — 직접 수정 금지).
   메뉴 라벨은 `uiSettings.navLabels` 로 사용자 커스터마이즈 가능.
 
 ## 검증 (커밋 전 필수)

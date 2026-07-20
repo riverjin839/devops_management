@@ -5,17 +5,21 @@ import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
 import { useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { ServiceChip } from '@/components/services/ServiceChip';
+import { Badge } from '@/components/ui/badge';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
 import type { WorkItemColumnKey } from './workItemColumns';
 
+// 상태색은 semantic status 토큰으로 (D-011). backlog=대기→unknown, todo=정보→info,
+// in_progress=진행중→warning, done=완료→healthy. review_test 는 status 토큰이 없는
+// 장식(purple)이므로 임의 status 대신 중립 토큰(muted)으로 둔다.
 const KS_DOT: Record<string, string> = {
-  backlog: 'bg-slate-400', todo: 'bg-blue-400', in_progress: 'bg-amber-400',
-  review_test: 'bg-purple-400', done: 'bg-emerald-400',
+  backlog: 'bg-status-unknown', todo: 'bg-status-info', in_progress: 'bg-status-warning',
+  review_test: 'bg-muted-foreground', done: 'bg-status-healthy',
 };
 const KS_TEXT: Record<string, string> = {
-  backlog: 'text-slate-400', todo: 'text-blue-400', in_progress: 'text-amber-400',
-  review_test: 'text-purple-400', done: 'text-emerald-400',
+  backlog: 'text-status-unknown', todo: 'text-status-info', in_progress: 'text-status-warning',
+  review_test: 'text-muted-foreground', done: 'text-status-healthy',
 };
 const KS_LABEL: Record<string, string> = {
   backlog: 'Backlog', todo: 'To Do', in_progress: 'In Progress',
@@ -24,9 +28,9 @@ const KS_LABEL: Record<string, string> = {
 const KS_OPTIONS: KanbanStatus[] = ['backlog', 'todo', 'in_progress', 'review_test', 'done'];
 
 const PRI_STYLES: Record<string, { dot: string; text: string; label: string }> = {
-  high:   { dot: 'bg-red-500',   text: 'text-red-400',   label: 'High' },
-  medium: { dot: 'bg-amber-500', text: 'text-amber-400', label: 'Medium' },
-  low:    { dot: 'bg-sky-500',   text: 'text-sky-400',   label: 'Low' },
+  high:   { dot: 'bg-status-critical', text: 'text-status-critical', label: 'High' },
+  medium: { dot: 'bg-status-warning',  text: 'text-status-warning',  label: 'Medium' },
+  low:    { dot: 'bg-status-info',     text: 'text-status-info',     label: 'Low' },
 };
 const PRI_OPTIONS: Array<'high' | 'medium' | 'low'> = ['high', 'medium', 'low'];
 
@@ -99,9 +103,15 @@ function EditableCell({
   }
   return (
     <td
-      className={`px-4 py-1.5 select-none cursor-pointer hover:bg-primary/5 transition-colors ${className}`}
+      role="button"
+      tabIndex={0}
+      className={`px-4 py-1.5 select-none cursor-pointer hover:bg-primary/5 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors ${className}`}
       onClick={onEnter}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEnter(); }
+      }}
       title={title}
+      aria-label={title}
     >
       {children}
     </td>
@@ -269,8 +279,8 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
               </select>
             ) : (
               <span className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-slate-400'}`} />
-                <span className={`text-sm font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-slate-400'}`}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-status-unknown'}`} />
+                <span className={`text-sm font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-status-unknown'}`}>
                   {KS_LABEL[ks] ?? ks}
                 </span>
               </span>
@@ -293,10 +303,9 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
               </select>
             ) : (
-              <span className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
-                <span className={`text-sm font-medium ${pStyle.text}`}>{pStyle.label}</span>
-              </span>
+              <Badge variant="outline" dot dotClassName={pStyle.dot} className={`border-transparent px-0 py-0 text-sm font-medium ${pStyle.text}`}>
+                {pStyle.label}
+              </Badge>
             )}
           </EditableCell>
         );
@@ -315,9 +324,15 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 />
               ) : (
                 <span
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setEditing('primaryAssignee')}
-                  className="px-2 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing('primaryAssignee'); }
+                  }}
+                  className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border cursor-pointer hover:bg-secondary/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
                   title="클릭하여 수정"
+                  aria-label="정 담당자 클릭하여 수정"
                 >
                   정: {item.primaryAssignee || item.assignee || '-'}
                 </span>
@@ -332,9 +347,15 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 />
               ) : item.secondaryAssignee ? (
                 <span
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setEditing('secondaryAssignee')}
-                  className="px-2 py-0.5 text-xs rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing('secondaryAssignee'); }
+                  }}
+                  className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border cursor-pointer hover:bg-secondary/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
                   title="클릭하여 수정"
+                  aria-label="부 담당자 클릭하여 수정"
                 >
                   부: {item.secondaryAssignee}
                 </span>
@@ -412,7 +433,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-                  className="flex-shrink-0 mt-0.5 inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-[#0052CC]/10 text-[#0052CC] dark:text-blue-300 border border-[#0052CC]/20 hover:bg-[#0052CC]/20"
+                  className="flex-shrink-0 mt-0.5 inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
                 >
                   {item.jiraIssueKey}
                 </a>
@@ -520,7 +541,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 title={item.jiraUrl}
-                className="inline-flex items-center gap-1 text-sm text-[#0052CC] dark:text-blue-300 hover:underline"
+                className="inline-flex items-center gap-1 text-sm text-brand-jira dark:text-blue-300 hover:underline"
               >
                 <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
                 {item.jiraIssueKey || 'Jira'}
@@ -579,6 +600,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 onClick={(e) => { e.stopPropagation(); onEdit(item); }}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                 title="전체 수정 (리치 텍스트 / 이미지 포함)"
+                aria-label="전체 수정 (리치 텍스트 / 이미지 포함)"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
@@ -586,13 +608,15 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                 onClick={(e) => { e.stopPropagation(); onAddSubItem(item); }}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
                 title="하위 업무 추가"
+                aria-label="하위 업무 추가"
               >
                 <GitBranch className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(item); }}
-                className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
+                className="p-1.5 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical"
                 title="삭제"
+                aria-label="삭제"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -696,10 +720,12 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
       <td colSpan={colSpan} className="px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <select value={kanbanStatus} onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
+            aria-label="상태 선택"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded">
             {KS_OPTIONS.map((s) => <option key={s} value={s}>{KS_LABEL[s]}</option>)}
           </select>
           <select value={priority} onChange={(e) => setPriority(e.target.value as 'high' | 'medium' | 'low')}
+            aria-label="우선순위 선택"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded">
             {PRI_OPTIONS.map((p) => <option key={p} value={p}>{PRI_STYLES[p].label}</option>)}
           </select>
@@ -709,15 +735,18 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
             value={primaryAssignee}
             onChange={(e) => setPrimaryAssignee(e.target.value)}
             placeholder="정 담당자 (필수)"
+            aria-label="정 담당자 입력"
             className="w-32 px-2 py-1 text-sm bg-background border border-border rounded"
           />
           <select value={clusterId} onChange={(e) => setClusterId(e.target.value)}
+            aria-label="클러스터 선택"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded">
             <option value="">— 클러스터 —</option>
             {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <input type="text" value={category} onChange={(e) => setTaskCategory(e.target.value)}
             placeholder="분류 (필수)"
+            aria-label="분류 입력"
             className="w-32 px-2 py-1 text-sm bg-background border border-border rounded" />
           <input type="text" value={content} onChange={(e) => setTaskContent(e.target.value)}
             onKeyDown={(e) => {
@@ -725,14 +754,18 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
               if (e.key === 'Escape') { reset(); setOpen(false); }
             }}
             placeholder="업무 내용 (필수, Enter 저장)"
+            aria-label="업무 내용 입력"
             className="flex-1 min-w-[180px] px-2 py-1 text-sm bg-background border border-border rounded" />
           <input type="date" value={startedAt} onChange={(e) => setScheduledAt(e.target.value)}
+            aria-label="시작일 입력"
             className="px-1.5 py-1 text-sm bg-background border border-border rounded font-mono" />
           <button type="button" onClick={submit} disabled={!canSave}
+            aria-label="저장"
             className="px-2.5 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1">
             <Check className="w-3 h-3" /> 저장
           </button>
           <button type="button" onClick={() => { reset(); setOpen(false); }}
+            aria-label="취소"
             className="px-2.5 py-1 text-xs rounded-md text-muted-foreground hover:bg-secondary inline-flex items-center gap-1">
             <X className="w-3 h-3" /> 취소
           </button>

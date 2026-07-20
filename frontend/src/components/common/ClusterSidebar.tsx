@@ -409,6 +409,7 @@ export function ClusterSidebar({
               sortMode ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
             }`}
             title={sortMode ? '정렬 모드 종료' : '드래그로 순서 변경'}
+            aria-label={sortMode ? '정렬 모드 종료' : '드래그로 순서 변경'}
           >
             <ArrowDownUp className="w-3 h-3" />
             {sortMode && <span>완료</span>}

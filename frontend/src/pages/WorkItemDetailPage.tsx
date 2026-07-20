@@ -70,6 +70,7 @@ export function WorkItemDetailPage() {
             onClick={() => navigate('/tasks-mgmt')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             title="목록으로"
+            aria-label="목록으로"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -79,7 +80,7 @@ export function WorkItemDetailPage() {
             {!isEditing && item.jiraIssueKey && (
               <button
                 onClick={() => setPushOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-[#0052CC]/10 text-[#0052CC] dark:text-blue-300 hover:bg-[#0052CC]/20 border border-[#0052CC]/20 rounded-lg transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-jira/10 text-brand-jira dark:text-blue-300 hover:bg-brand-jira/20 border border-brand-jira/20 rounded-lg transition-colors disabled:opacity-50"
                 title={`편집 내용을 Jira ${item.jiraIssueKey} 에 반영`}
               >
                 <UploadCloud className="w-3.5 h-3.5" />

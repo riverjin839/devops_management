@@ -118,8 +118,8 @@ function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () =>
         <p className="text-xs text-muted-foreground/60 font-mono truncate mt-1">{link.url}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground" title="편집"><Pencil className="w-3.5 h-3.5" /></button>
-        <button onClick={onDelete} className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-500" title="삭제"><Trash2 className="w-3.5 h-3.5" /></button>
+        <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground" title="편집" aria-label="편집"><Pencil className="w-3.5 h-3.5" /></button>
+        <button onClick={onDelete} className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-500" title="삭제" aria-label="삭제"><Trash2 className="w-3.5 h-3.5" /></button>
       </div>
     </div>
   );
@@ -140,8 +140,8 @@ function CompactLinkCell({ link, onEdit, onDelete, fontClass, fsClass }: {
         {link.description && <p className="text-muted-foreground truncate leading-tight mt-0.5">{link.description}</p>}
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button onClick={onEdit}   className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"><Pencil className="w-2.5 h-2.5" /></button>
-        <button onClick={onDelete} className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-400"><Trash2 className="w-2.5 h-2.5" /></button>
+        <button onClick={onEdit}   className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground" aria-label="편집"><Pencil className="w-2.5 h-2.5" /></button>
+        <button onClick={onDelete} className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-400" aria-label="삭제"><Trash2 className="w-2.5 h-2.5" /></button>
       </div>
     </div>
   );
@@ -332,7 +332,7 @@ export function ClusterLinksPage() {
         <span className="font-semibold text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">공통 링크</span>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
         <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
-          className="ml-1 p-0.5 rounded text-emerald-600/60 dark:text-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/15 transition-colors flex-shrink-0" title="공통 링크 추가">
+          className="ml-1 p-0.5 rounded text-emerald-600/60 dark:text-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/15 transition-colors flex-shrink-0" title="공통 링크 추가" aria-label="공통 링크 추가">
           <Plus className="w-3 h-3" />
         </button>
         <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -346,7 +346,7 @@ export function ClusterLinksPage() {
           <span className={`font-semibold text-xs uppercase tracking-wider truncate ${hdrText}`}>{g.clusterName}</span>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums flex-shrink-0">({g.links.length})</span>
           <button onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommon(null); }}
-            className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted`} title="링크 추가">
+            className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted`} title="링크 추가" aria-label="링크 추가">
             <Plus className="w-3 h-3" />
           </button>
           <ColResizeHandle colId={g.clusterId} currentWidth={colW(g.clusterId)} onResize={handleColResize} onResizeDone={handleColResizeDone} />

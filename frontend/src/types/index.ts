@@ -698,6 +698,18 @@ export interface MetricQueryResult {
   error?: string | null;
 }
 
+export interface MetricSparklinePoint {
+  ts: number;
+  value: number;
+}
+
+export interface MetricSparklineResult {
+  cardId: string;
+  status: 'ok' | 'error' | 'offline';
+  points: MetricSparklinePoint[];
+  error?: string | null;
+}
+
 // ── Cluster Items (현황 관리 대시보드 '아이템' 카드) ─────────────────────
 export type ClusterItemSource = 'manual' | 'auto' | 'ai';
 export type ClusterItemCardSize = 'sm' | 'md' | 'lg';
@@ -800,10 +812,13 @@ export interface ServiceCatalogEntry {
 export interface OperationLevelItem {
   value: string;
   label: string;
-  /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted */
+  /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted.
+   *  customHex 가 있으면 fallback 으로만 쓰인다. */
   color: string;
   /** 클러스터 카드/행 앞에 표시될 이모지 1자. 비어있으면 EMOJI_OPTIONS 의 fallback 사용. */
   icon?: string;
+  /** 프리셋 13색 대신 임의의 hex(#RRGGBB) 를 시드로 bg/ring/band/text 톤을 자동 산출할 때 지정. */
+  customHex?: string | null;
 }
 
 // Workflow Board — 큰 작업을 단계별로 시각화하는 기획 게시판.
@@ -986,6 +1001,47 @@ export interface OpsNoteUpdate extends Partial<OpsNoteCreate> {}
 
 export interface OpsNoteListResponse {
   data: OpsNote[];
+  total: number;
+}
+
+// ── 사용자 VOC 게시판 ────────────────────────────────────────────────────────
+export type VocCategory = '문의' | '개선' | '불만' | '제안';
+export type VocStatus = '접수' | '검토중' | '완료';
+
+export interface VocPost {
+  id: string;
+  title: string;
+  content?: string;
+  category: VocCategory;
+  status: VocStatus;
+  author?: string;
+  createdBy?: string;
+  adminReply?: string | null;
+  adminReplyBy?: string | null;
+  adminReplyAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VocCreate {
+  title: string;
+  content?: string;
+  category: VocCategory;
+}
+
+export interface VocUpdate {
+  title?: string;
+  content?: string;
+  category?: VocCategory;
+}
+
+export interface VocReply {
+  adminReply?: string;
+  status?: VocStatus;
+}
+
+export interface VocListResponse {
+  data: VocPost[];
   total: number;
 }
 
@@ -2317,12 +2373,15 @@ export interface DeepCheckTypeSchema {
   checkType: DeepCheckType;
   displayName: string;
   description: string;
+  category?: string;
   thresholdFields: DeepCheckFieldSpec[];
   paramFields: DeepCheckFieldSpec[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultThresholds: Record<string, any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultParams: Record<string, any>;
+  /** false = admin 이 인스턴스를 직접 만드는 커스텀(템플릿형) 타입 */
+  seedDefault?: boolean;
 }
 
 export interface DeepCheckDefinition {
@@ -2338,14 +2397,35 @@ export interface DeepCheckDefinition {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params?: Record<string, any> | null;
   sortOrder: number;
+  lastRunAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  // with_status=true 조회 시에만 채워지는 최근 실행 요약
+  lastStatus?: Status | null;
+  lastCheckedAt?: string | null;
+  lastMessage?: string | null;
+  lastDurationMs?: number | null;
 }
 
 export type DeepCheckDefinitionInput = Omit<
   DeepCheckDefinition,
-  'id' | 'createdAt' | 'updatedAt'
+  | 'id' | 'createdAt' | 'updatedAt' | 'lastRunAt'
+  | 'lastStatus' | 'lastCheckedAt' | 'lastMessage' | 'lastDurationMs'
 >;
+
+export interface DeepCheckDefinitionResults {
+  total: number;
+  results: DeepCheckResult[];
+}
+
+export interface DeepCheckPreviewInput {
+  checkType: DeepCheckType;
+  clusterId?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  thresholds?: Record<string, any> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any> | null;
+}
 
 export interface DeepCheckResult {
   id: string;
@@ -2375,7 +2455,7 @@ export interface DeepCheckExecStep {
 export interface DeepCheckStepPlanItem { id: string; label: string }
 
 export interface DeepCheckTestResult {
-  definitionId: string;
+  definitionId?: string;
   checkType: DeepCheckType;
   status: Status;
   message: string;
@@ -3176,7 +3256,7 @@ export interface MetricChecklistItemT {
 }
 
 // ── 이모지 공감(리액션) — ops_note / work_item_comment / work_guide 공통 ──────────
-export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item';
+export type ReactionTargetType = 'ops_note' | 'work_item_comment' | 'work_guide' | 'work_item' | 'voc_post';
 
 // 백엔드 REACTION_EMOJIS 와 동일 순서로 유지.
 export const REACTION_EMOJIS = ['👍', '❤️', '🎉', '✅', '👀', '🙏', '🔥', '😄'] as const;

@@ -10,6 +10,7 @@ import { useWorkItems, usePatchWorkItemStatus, useUpdateWorkItem } from '@/hooks
 import { useCurrentSprint, useCreateSprint } from '@/hooks/useSprints';
 import { useAuthStore } from '@/stores/authStore';
 import { ViewModeBar, useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import type { WorkItem, KanbanStatus } from '@/types';
 
@@ -106,6 +107,7 @@ function CompleteBtn({ item, busy, onToggleDone }: Omit<ItemProps, 'onOpen'>) {
       disabled={busy}
       onClick={(e) => { e.stopPropagation(); onToggleDone(item); }}
       title={done ? '완료 취소' : '완료 처리'}
+      aria-label={done ? '완료 취소' : '완료 처리'}
       className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-emerald-500' : 'text-muted-foreground/40 hover:text-emerald-500'}`}
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
@@ -363,6 +365,7 @@ export function TodoTodayPage() {
             disabled={isFetching}
             className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
             title="새로고침"
+            aria-label="새로고침"
           >
             <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
@@ -421,7 +424,7 @@ export function TodoTodayPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {/* 스프린트 헤더 */}
-            <div className="bg-card border border-border rounded-2xl p-4">
+            <MacCard>
               <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <Rocket className="w-5 h-5 text-primary flex-shrink-0" />
@@ -453,7 +456,7 @@ export function TodoTodayPage() {
               <div className="h-2 rounded-full bg-secondary overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${sprint.pct}%` }} />
               </div>
-            </div>
+            </MacCard>
 
             {sprint.total === 0 && sprint.candidates.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-14 gap-2 text-muted-foreground">
@@ -502,7 +505,7 @@ export function TodoTodayPage() {
           </div>
         )
       ) : view === 'schedule' ? (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <MacCard bodyPadding="p-0">
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
             <CalendarDays className="w-4 h-4 text-primary flex-shrink-0" />
             <button onClick={() => setScheduleDate((d) => addDaysStr(d, -1))} className="p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="이전 날"><ChevronLeft className="w-4 h-4" /></button>
@@ -528,7 +531,7 @@ export function TodoTodayPage() {
                     <th className="text-left px-3 py-2 w-20">상태</th>
                     <th className="text-center px-2 py-2 w-12">우선</th>
                     <th className="text-left px-3 py-2 w-32">클러스터</th>
-                    <th className="w-10" />
+                    <th className="w-10"><span className="sr-only">작업</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
@@ -544,7 +547,7 @@ export function TodoTodayPage() {
                             {STATUS_META[t.kanbanStatus]?.label ?? '할일'}
                           </span>
                         </td>
-                        <td className="px-2 py-2 text-center"><span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} /></td>
+                        <td className="px-2 py-2 text-center" aria-label={`우선순위 ${t.priority}`}><span className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.medium}`} /></td>
                         <td className="px-3 py-2 text-sm text-muted-foreground truncate max-w-[140px]">{cl ?? '—'}</td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <CompleteBtn item={t} busy={busyId === t.id} onToggleDone={onToggleDone} />
@@ -556,7 +559,7 @@ export function TodoTodayPage() {
               </table>
             </div>
           )}
-        </div>
+        </MacCard>
       ) : totalOpen === 0 && buckets.doneRecent.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
           <CheckCircle2 className="w-12 h-12 opacity-30 text-emerald-500" />

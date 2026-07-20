@@ -7,6 +7,7 @@ from app.services.deep_checkers.base import (
     DeepCheckOutcome,
     DeepCheckerBase,
 )
+from app.services.k8s_paging import iter_all
 
 
 class ImagePullChecker(DeepCheckerBase):
@@ -21,12 +22,14 @@ class ImagePullChecker(DeepCheckerBase):
         log_tail = int(ctx.params.get("log_tail_lines", 20))
 
         v1 = self._v1(ctx)
-        pods = v1.list_pod_for_all_namespaces(timeout_seconds=20)
 
         pull_failures: list[dict[str, str]] = []
         crash_loops: list[dict[str, object]] = []
 
-        for pod in pods.items:
+        # 페이지 스트리밍 — 5k+ pod 대형 클러스터에서 전량을 한 번에 메모리에
+        # 올리지 않는다(단일 list_pod_for_all_namespaces 호출은 수백 MB 응답을
+        # 워커가 통째로 버퍼링·역직렬화해 OOMKill 위험).
+        for pod in iter_all(v1.list_pod_for_all_namespaces):
             statuses = (pod.status.container_statuses or []) if pod.status else []
             for cs in statuses:
                 waiting = (cs.state.waiting if cs.state else None)

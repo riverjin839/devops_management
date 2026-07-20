@@ -42,11 +42,16 @@ K8s 클러스터 없이 앱만 띄워 개발할 때는 **Docker Compose** 가 �
 ```bash
 git clone <repo-url> && cd devops_management
 cp .env.example backend/.env
+docker network create kind  # backend/celery 가 kind 네트워크(external)를 참조하므로 먼저 생성
 docker-compose up -d        # postgres + redis + backend + frontend + celery(worker/beat)
 # Frontend  http://localhost:5173   (컨테이너 80 → 호스트 5173)
 # Backend   http://localhost:8000/docs
 docker-compose down         # 정리
 ```
+
+> `docker-compose.yml` 의 `networks.kind` 는 `external: true` 다. 위 네트워크를 먼저
+> 만들지 않으면 `docker-compose up` 이 "network kind ... not found" 로 실패한다.
+> Phase 1(kind) 을 먼저 진행했다면 kind 가 이미 이 네트워크를 만들어 두므로 생략 가능.
 
 네이티브 실행(핫리로드)·Makefile 단축 명령:
 
@@ -95,7 +100,7 @@ bash scripts/kind-setup.sh up   # kind 노드 이미지 v1.34.0, 기본 CNI(kind
 | 1 | 로컬 Docker Registry 생성 (`localhost:5001`) |
 | 2 | kind 3노드 클러스터 생성 (control-plane 1 + worker 2) |
 | 3 | Backend/Frontend 이미지 빌드 & Push |
-| 4 | Kustomize로 K8s 배포 (dev overlay) |
+| 4 | Kustomize로 K8s 배포 (`k8s/overlays/kind`, namespace `k8s-monitor`) |
 | 5 | Pod 상태 대기 및 접속 URL 안내 |
 
 ### 접속 확인
@@ -232,7 +237,9 @@ helm upgrade k8s-monitor ./helm/k8s-daily-monitor \
 인터넷 되는 PC에서:
 ```bash
 bash scripts/deploy-airgap.sh save
-# → images/ 디렉토리에 tar.gz 4개 생성
+# → images/ 디렉토리에 tar.gz 약 8개 생성
+#   (앱: backend, frontend + DB: postgres, redis
+#    + 모니터링 스택: prometheus, grafana, node-exporter, kube-state-metrics)
 # USB 등으로 폐쇄망 전송
 ```
 
@@ -293,9 +300,16 @@ bash scripts/deploy-airgap.sh check    # K8s API 서버 헬스 체크
 
 ## Phase 3: CI/CD 자동화 (운영)
 
-검증 완료 후, Jenkins(CI) + ArgoCD(CD)로 자동화된 배포 파이프라인을 구성합니다.
+**기본(인터넷 연결 가능한 환경) 파이프라인은 GitHub Actions** 다 —
+`.github/workflows/ci.yml`(프론트 lint/tsc/build + 백엔드 pytest) →
+`cd.yml`(GHCR 이미지 빌드·푸시 → Kustomize 배포) → `release.yml`/`auto-release.yml`
+(SemVer 자동 태깅 + GitHub Release, 상세는 [branch-tag-strategy.md](branch-tag-strategy.md)).
+필요 GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`.
 
-### 아키텍처
+**폐쇄망/온프레미스 대안**으로 Jenkins(CI) + ArgoCD(CD) 조합을 아래에 설명한다 —
+외부 GitHub Actions 러너 접근이 불가한 환경에서 사용한다.
+
+### 아키텍처 (Jenkins + ArgoCD 대안)
 
 ```
 개발자                Jenkins (CI)                    ArgoCD (CD)

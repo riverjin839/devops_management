@@ -495,7 +495,7 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
         </div>
         <div className="ml-auto flex items-center gap-1">
           <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
-          <button onClick={() => refetch()} title="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -565,6 +565,7 @@ function IconBtn({ title, onClick, danger, children }: { title: string; onClick:
   return (
     <button
       title={title}
+      aria-label={title}
       onClick={onClick}
       className={`p-1 rounded-md ${danger ? 'text-red-500 hover:bg-red-500/10' : 'text-muted-foreground hover:bg-secondary'}`}
     >
@@ -961,7 +962,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
         <span className="text-sm text-muted-foreground">{rows.length} nodes{data && !data.metricsAvailable ? ' · metrics-server 없음(usage 생략)' : ''}</span>
         <div className="ml-auto flex items-center gap-1">
           <ColumnToggle columns={NODES_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={() => refetch()} title="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -1070,7 +1071,7 @@ function PodsPanel(p: PodsPanelProps) {
         </div>
         <div className="ml-auto flex items-center gap-1">
           <ColumnToggle columns={PODS_TOGGLE_COLS} hidden={hidden} onToggle={toggle} />
-          <button onClick={() => refetch()} title="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+          <button onClick={() => refetch()} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>

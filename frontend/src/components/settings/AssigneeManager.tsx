@@ -304,6 +304,15 @@ export function AssigneeManager() {
                         : field === 'primaryRole' ? '정 담당역할'
                         : '부담당 역할'
                       }
+                      aria-label={
+                        field === 'employeeId' ? '사번 입력'
+                        : field === 'name' ? '이름 입력'
+                        : field === 'email' ? '이메일 입력'
+                        : field === 'ip' ? 'IP 입력'
+                        : field === 'seatLocation' ? '좌석 위치 입력'
+                        : field === 'primaryRole' ? '정 담당역할 입력'
+                        : '부담당 역할 입력'
+                      }
                       autoFocus={field === 'name'}
                       className="w-full px-2 py-1 bg-background border border-emerald-500/40 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     />
@@ -311,11 +320,11 @@ export function AssigneeManager() {
                 ))}
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1">
-                    <button onClick={handleAddAssignee} disabled={!addForm.name.trim()} title="추가"
+                    <button onClick={handleAddAssignee} disabled={!addForm.name.trim()} title="추가" aria-label="추가"
                       className="p-1.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors disabled:opacity-40">
                       <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setShowAddRow(false)} title="취소"
+                    <button onClick={() => setShowAddRow(false)} title="취소" aria-label="취소"
                       className="p-1.5 rounded hover:bg-secondary text-muted-foreground transition-colors">
                       <XIcon className="w-3.5 h-3.5" />
                     </button>

@@ -34,3 +34,24 @@ def notify_work_item_comment(db, item, actor, comment) -> None:
             link=f"/tasks-mgmt/{item.id}",
             work_item_id=item.id,
         ))
+
+
+def notify_voc_reply(db, post, actor, reply_text) -> None:
+    """VOC 관리자 답변 시 작성자(created_by)에게 개인 알림 생성(작성자 본인 제외).
+
+    VOC 게시판은 라우트가 아닌 사이드바 패널이므로 link 는 두지 않는다.
+    """
+    actor_ids = {x.strip() for x in [actor.username, actor.display_name] if x}
+    author = (post.created_by or "").strip()
+    if not author or author in actor_ids:
+        return
+    who = (actor.display_name or actor.username or "관리자").strip()
+    label = (post.title or "VOC").strip()
+    snippet = (reply_text or "")[:80]
+    db.add(UserNotification(
+        recipient=author,
+        type="voc_reply",
+        title=f"{who}님이 VOC에 답변했습니다",
+        body=f"[{label}] {snippet}",
+        link=None,
+    ))

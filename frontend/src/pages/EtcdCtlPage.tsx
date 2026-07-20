@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import {
   etcdctlApi, type EtcdPreset, type EtcdMasterCandidate, type EtcdCtlRunResponse,
 } from '@/services/api';
@@ -24,7 +25,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
   return (
-    <section className="bg-card border border-border rounded-xl overflow-hidden mt-5">
+    <MacCard rootClassName="mt-5" bodyPadding="p-0">
       <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-muted/20">
         <div className="flex items-center gap-3">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
@@ -59,7 +60,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
           </div>
         )}
       </div>
-    </section>
+    </MacCard>
   );
 }
 
@@ -196,12 +197,12 @@ export function EtcdCtlPage() {
         </div>
 
         {/* 안내 */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
+        <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
           기본 가정: control-plane(master1) 서버에 <code className="font-mono text-foreground">etcd.service</code> 가 systemd 로 동작하고
           <code className="font-mono text-foreground"> /etc/etcd.env</code> 에 <code className="font-mono text-foreground">ETCDCTL_*</code> 환경변수가 정의됨.
           다르면 "env 파일" 경로를 바꾸거나 env 로드를 끄고 extra env 로 직접 지정 가능.
           SSH 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
-        </div>
+        </MacCard>
 
         {/* 탭 */}
         <div className="flex items-center gap-1 mb-5">
@@ -223,9 +224,7 @@ export function EtcdCtlPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* 좌: 타겟 + 인증 */}
-          <section className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-semibold mb-1">타겟</h2>
-
+          <MacCard title="타겟" className="space-y-4">
             <div>
               <label htmlFor={f('master')} className="block text-sm text-muted-foreground mb-1">master 노드 후보</label>
               <select
@@ -316,10 +315,10 @@ export function EtcdCtlPage() {
                 />
               </div>
             )}
-          </section>
+          </MacCard>
 
           {/* 우: 실행 구성 */}
-          <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
+          <MacCard rootClassName="lg:col-span-2" className="space-y-4">
             {tab === 'run' ? (
               <>
                 {/* 프리셋 */}
@@ -503,7 +502,7 @@ export function EtcdCtlPage() {
                 </div>
               </>
             )}
-          </section>
+          </MacCard>
         </div>
 
         {result && <ResultPanel result={result} />}

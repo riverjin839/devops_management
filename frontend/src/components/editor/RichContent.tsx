@@ -17,6 +17,44 @@ const ALLOWED_TAGS = [
 ];
 const ALLOWED_ATTR = ['href', 'title', 'alt', 'src', 'target', 'rel', 'class', 'style', 'data-checked', 'colwidth', 'colspan', 'rowspan', 'data-callout', 'open'];
 
+// style/target 값은 API 로 직접 주입 가능(다른 사용자가 저장)해서 "에디터가 안전한
+// 값만 emit 한다"는 전제가 항상 성립하진 않는다. DOMPurify 훅으로 후처리해 방어를
+// 한 겹 더 둔다 — 스크립트 실행 자체는 이미 FORBID_ATTR/FORBID_TAGS 로 막혀 있으니
+// 여기서 막는 건 (a) target=_blank 의 reverse-tabnabbing, (b) style 을 이용한
+// UI 위장(예: position:fixed 오버레이로 피싱 배너 흉내).
+const ALLOWED_STYLE_PROPS = new Set([
+  'color', 'background-color', 'background',
+  'text-align', 'font-weight', 'font-style', 'text-decoration',
+  'width', 'min-width', 'max-width', 'height',
+]);
+
+let hooksRegistered = false;
+function ensureHooks() {
+  if (hooksRegistered) return;
+  hooksRegistered = true;
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+    if (node.hasAttribute('style')) {
+      const raw = node.getAttribute('style') || '';
+      const safe = raw
+        .split(';')
+        .map((decl) => decl.trim())
+        .filter((decl) => {
+          const prop = decl.split(':')[0]?.trim().toLowerCase();
+          return prop && ALLOWED_STYLE_PROPS.has(prop);
+        })
+        .join('; ');
+      if (safe) {
+        node.setAttribute('style', safe);
+      } else {
+        node.removeAttribute('style');
+      }
+    }
+  });
+}
+
 /**
  * Renders HTML content produced by RichTextEditor — DOMPurify sanitized.
  * Falls back gracefully for plain-text legacy content.
@@ -27,11 +65,10 @@ export function RichContent({ content, className = '' }: RichContentProps) {
   const isHtml = /<[a-z][\s\S]*>/i.test(content);
 
   if (isHtml) {
+    ensureHooks();
     const sanitized = DOMPurify.sanitize(content, {
       ALLOWED_TAGS,
       ALLOWED_ATTR,
-      // 외부 링크는 새 탭 + noopener (DOMPurify hook 으로 보강 가능하나, ALLOWED_ATTR 에
-      // target/rel 허용 — RichTextEditor 가 안전한 값으로 emit 한다는 전제).
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input'],
       FORBID_ATTR: ['onerror', 'onclick', 'onload', 'onmouseover'],
     });

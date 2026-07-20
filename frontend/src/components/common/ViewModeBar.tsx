@@ -139,6 +139,7 @@ function StylePanel({ style, patchStyle }: {
             <button
               key={s.value}
               title={s.title}
+              aria-label={s.title}
               onClick={() => patchStyle({ headerTheme: s.value })}
               className={`w-[18px] h-[18px] rounded-full transition-all duration-100 ${s.color} ${
                 style.headerTheme === s.value
@@ -213,6 +214,7 @@ export function ViewModeBar({
             ref={btnRef}
             onClick={() => setOpen((v) => !v)}
             title="표 스타일 설정"
+            aria-label="표 스타일 설정"
             className={`p-[6px] rounded-lg border transition-all duration-150 ${
               open
                 ? 'border-primary/40 bg-primary/10 text-primary'
@@ -234,10 +236,7 @@ export function ViewModeBar({
                 <span className="text-xs font-semibold tracking-widest uppercase text-muted-foreground/60">
                   표 스타일
                 </span>
-                <div
-                  className="flex items-center gap-1"
-                  style={{ color: 'var(--muted-foreground)' }}
-                >
+                <div className="flex items-center gap-1 text-muted-foreground">
                   {/* live preview dot — matches active headerTheme */}
                   <div
                     className={`w-2 h-2 rounded-full ${

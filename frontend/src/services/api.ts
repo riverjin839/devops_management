@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -647,8 +647,10 @@ export const healthApi = {
 // History API
 export const historyApi = {
   getLogs: (clusterId?: string, page = 1, pageSize = 20) =>
+    // GET 쿼리 파라미터는 요청 인터셉터의 camelCase→snake_case 변환이 적용되지 않아
+    // (params 가 아니라 body 만 변환) 백엔드 파라미터명(cluster_id/page_size)을 직접 맞춘다.
     api.get<PaginatedResponse<CheckLog>>('/history', {
-      params: { clusterId, page, pageSize },
+      params: { cluster_id: clusterId, page, page_size: pageSize },
     }),
   exportCsv: (clusterId: string) =>
     api.get(`/history/${clusterId}/export`, { responseType: 'blob' }),
@@ -726,6 +728,8 @@ export const promqlApi = {
   deleteCard: (id: string) => api.delete(`/promql/cards/${id}`),
   queryCard: (id: string) =>
     api.get<MetricQueryResult>(`/promql/query/${id}`),
+  querySparkline: (id: string) =>
+    api.get<MetricSparklineResult>(`/promql/query/${id}/sparkline`),
   queryAll: () =>
     api.get<MetricQueryResult[]>('/promql/query/all'),
   testQuery: (promql: string) =>
@@ -1021,6 +1025,19 @@ export const opsNotesApi = {
   create: (data: OpsNoteCreate) => api.post<OpsNote>('/ops-notes', data),
   update: (id: string, data: OpsNoteUpdate) => api.put<OpsNote>(`/ops-notes/${id}`, data),
   delete: (id: string) => api.delete(`/ops-notes/${id}`),
+};
+
+// VOC 게시판 API
+export const vocApi = {
+  getAll: (params?: { category?: string; status?: string }) =>
+    api.get<import('@/types').VocListResponse>('/voc', { params: params || undefined }),
+  getById: (id: string) => api.get<import('@/types').VocPost>(`/voc/${id}`),
+  create: (data: import('@/types').VocCreate) => api.post<import('@/types').VocPost>('/voc', data),
+  update: (id: string, data: import('@/types').VocUpdate) =>
+    api.put<import('@/types').VocPost>(`/voc/${id}`, data),
+  reply: (id: string, data: import('@/types').VocReply) =>
+    api.post<import('@/types').VocPost>(`/voc/${id}/reply`, data),
+  delete: (id: string) => api.delete(`/voc/${id}`),
 };
 
 // Mind Map API
@@ -1605,6 +1622,8 @@ export const batchJobsApi = {
 import type {
   DeepCheckDefinition,
   DeepCheckDefinitionInput,
+  DeepCheckDefinitionResults,
+  DeepCheckPreviewInput,
   DeepCheckResult,
   DeepCheckReview,
   DeepCheckTestResult,
@@ -1651,25 +1670,46 @@ export const deepCheckApi = {
   trend: (clusterId: string, days = 7) =>
     api.get<DailyCheckTrend>(`/deep-check/trend/${clusterId}`, { params: { days } }),
   runNow: (clusterId: string) =>
-    api.post<{ status: string; checksRun: number }>(`/deep-check/run/${clusterId}`),
+    // 백그라운드(Celery) 실행 — status:'queued'(+taskId). worker 부재 시 동기 폴백(status:'ok'+checksRun).
+    api.post<{ status: string; checksRun?: number; taskId?: string | null }>(
+      `/deep-check/run/${clusterId}`,
+    ),
 };
 
 export const deepCheckDefinitionsApi = {
   listCheckTypes: () => api.get<DeepCheckTypeSchema[]>('/deep-check/check-types'),
-  list: (params?: { clusterId?: string; includeGlobal?: boolean }) =>
-    api.get<DeepCheckDefinition[]>('/deep-check/definitions', { params }),
+  list: (params?: { clusterId?: string; includeGlobal?: boolean; withStatus?: boolean }) => {
+    // Manual snake_case for query params so axios doesn't double-convert.
+    const q: Record<string, string | boolean> = {};
+    if (params?.clusterId) q.cluster_id = params.clusterId;
+    if (params?.includeGlobal !== undefined) q.include_global = params.includeGlobal;
+    if (params?.withStatus) q.with_status = true;
+    return api.get<DeepCheckDefinition[]>('/deep-check/definitions', { params: q });
+  },
   get: (id: string) => api.get<DeepCheckDefinition>(`/deep-check/definitions/${id}`),
   create: (data: DeepCheckDefinitionInput) =>
     api.post<DeepCheckDefinition>('/deep-check/definitions', data),
   update: (id: string, data: DeepCheckDefinitionInput) =>
     api.put<DeepCheckDefinition>(`/deep-check/definitions/${id}`, data),
   remove: (id: string) => api.delete(`/deep-check/definitions/${id}`),
+  duplicate: (id: string) =>
+    api.post<DeepCheckDefinition>(`/deep-check/definitions/${id}/duplicate`),
   test: (id: string, clusterId?: string) =>
     api.post<DeepCheckTestResult>(
       `/deep-check/definitions/${id}/test`,
       undefined,
       { params: clusterId ? { cluster_id: clusterId } : undefined },
     ),
+  run: (id: string, clusterId?: string) =>
+    api.post<DeepCheckTestResult>(
+      `/deep-check/definitions/${id}/run`,
+      undefined,
+      { params: clusterId ? { cluster_id: clusterId } : undefined },
+    ),
+  preview: (data: DeepCheckPreviewInput) =>
+    api.post<DeepCheckTestResult>('/deep-check/definitions/preview', data),
+  results: (id: string, params?: { limit?: number; offset?: number; status?: string }) =>
+    api.get<DeepCheckDefinitionResults>(`/deep-check/definitions/${id}/results`, { params }),
 };
 
 export const checkMatrixApi = {

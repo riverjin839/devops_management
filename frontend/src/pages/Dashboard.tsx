@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server, WifiOff } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import {
-  SummaryStats,
+  HealthHero,
+  CheckHistoryHeatmap,
   AddonGrid,
   AddClusterModal,
   AddAddonModal,
@@ -19,13 +20,14 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
-import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
+import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck, useCheckHistoryHeatmap } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { useClusterItems, useRunClusterItem, useUpdateClusterItem, useDeleteClusterItem } from '@/hooks/useClusterItems';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { healthApi } from '@/services/api';
 import { Addon, Cluster, ClusterItem, ClusterItemCardSize, MetricCard, Playbook } from '@/types';
+import { useAuthStore, hasRole } from '@/stores/authStore';
 
 // ── Cluster Overview Grid (shown when All tab is selected) ─────────────────────
 interface ClusterOverviewGridProps {
@@ -56,11 +58,11 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
         const total    = clusterAddons.length;
 
         const statusColor = {
-          healthy:  { border: 'border-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
-          warning:  { border: 'border-yellow-500/40',  bg: 'bg-yellow-500/10',  text: 'text-yellow-400',  dot: 'bg-yellow-400'  },
-          critical: { border: 'border-red-500/40',     bg: 'bg-red-500/10',     text: 'text-red-400',     dot: 'bg-red-400'     },
-          pending:  { border: 'border-slate-500/40',   bg: 'bg-slate-500/10',   text: 'text-slate-400',   dot: 'bg-slate-400'   },
-        }[cluster.status] ?? { border: 'border-border', bg: 'bg-muted/20', text: 'text-muted-foreground', dot: 'bg-slate-400' };
+          healthy:  { border: 'border-status-healthy/40',  bg: 'bg-status-healthy/10',  text: 'text-status-healthy',  dot: 'bg-status-healthy'  },
+          warning:  { border: 'border-status-warning/40',  bg: 'bg-status-warning/10',  text: 'text-status-warning',  dot: 'bg-status-warning'  },
+          critical: { border: 'border-status-critical/40', bg: 'bg-status-critical/10', text: 'text-status-critical', dot: 'bg-status-critical' },
+          pending:  { border: 'border-status-unknown/40',  bg: 'bg-status-unknown/10',  text: 'text-status-unknown',  dot: 'bg-status-unknown'  },
+        }[cluster.status] ?? { border: 'border-border', bg: 'bg-muted/20', text: 'text-muted-foreground', dot: 'bg-status-unknown' };
 
         return (
           <button
@@ -103,7 +105,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
 
             {/* Check counts — 미연결이면 stale 값 대신 안내 */}
             {cluster.status === 'pending' ? (
-              <p className="text-sm text-slate-400/80 italic">연결 불가로 점검 데이터 없음</p>
+              <p className="text-sm text-status-unknown/80 italic">연결 불가로 점검 데이터 없음</p>
             ) : total > 0 ? (
               <div className="space-y-1.5">
                 <div className="flex justify-between text-sm">
@@ -111,18 +113,18 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
                   <span className="font-medium">{total}</span>
                 </div>
                 <div className="flex gap-2">
-                  <div className="flex items-center gap-1 text-sm text-emerald-400">
+                  <div className="flex items-center gap-1 text-sm text-status-healthy">
                     <CheckCircle className="w-3 h-3" />
                     <span>{healthy}</span>
                   </div>
                   {warning > 0 && (
-                    <div className="flex items-center gap-1 text-sm text-yellow-400">
+                    <div className="flex items-center gap-1 text-sm text-status-warning">
                       <AlertTriangle className="w-3 h-3" />
                       <span>{warning}</span>
                     </div>
                   )}
                   {critical > 0 && (
-                    <div className="flex items-center gap-1 text-sm text-red-400">
+                    <div className="flex items-center gap-1 text-sm text-status-critical">
                       <XCircle className="w-3 h-3" />
                       <span>{critical}</span>
                     </div>
@@ -130,9 +132,9 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
                 </div>
                 {/* Progress bar */}
                 <div className="h-1.5 rounded-full bg-secondary overflow-hidden flex gap-px">
-                  {healthy  > 0 && <div className="bg-emerald-500 rounded-full" style={{ width: `${(healthy / total) * 100}%` }} />}
-                  {warning  > 0 && <div className="bg-yellow-500 rounded-full"  style={{ width: `${(warning / total) * 100}%` }} />}
-                  {critical > 0 && <div className="bg-red-500 rounded-full"     style={{ width: `${(critical / total) * 100}%` }} />}
+                  {healthy  > 0 && <div className="bg-status-healthy rounded-full"  style={{ width: `${(healthy / total) * 100}%` }} />}
+                  {warning  > 0 && <div className="bg-status-warning rounded-full"  style={{ width: `${(warning / total) * 100}%` }} />}
+                  {critical > 0 && <div className="bg-status-critical rounded-full" style={{ width: `${(critical / total) * 100}%` }} />}
                 </div>
               </div>
             ) : (
@@ -164,6 +166,10 @@ export function Dashboard() {
   const [editingItem, setEditingItem] = useState<ClusterItem | null>(null);
   const [runningItemIds, setRunningItemIds] = useState<Set<string>>(new Set());
   const { clusters, summary, addons, isChecking, lastCheckTime } = useClusterStore();
+  const authUser = useAuthStore((s) => s.user);
+  // 카드 생성/수정/삭제/테스트는 백엔드가 operator 이상만 허용(require_operator) —
+  // viewer 에게는 버튼 자체를 숨겨 403 을 미리 막는다.
+  const canManageMetricCards = hasRole(authUser, 'admin', 'operator');
 
   // Queries
   const { isLoading: clustersLoading } = useClusters();
@@ -172,6 +178,9 @@ export function Dashboard() {
   // 선택된 클러스터의 애드온 로드
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
   const { isLoading: addonsLoading } = useAddons(activeClusterId);
+
+  // Recent Check History — Heat Map (cluster × time)
+  const { data: historyLogs = [], isLoading: historyLoading } = useCheckHistoryHeatmap();
 
   // Health Check mutation
   const healthCheck = useHealthCheck();
@@ -291,35 +300,43 @@ export function Dashboard() {
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setShowAddCluster(true)}
-            className="px-2.5 py-1 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> Cluster
           </button>
           {clusters.length > 0 && (
             <button
               onClick={() => setShowAddAddon(true)}
-              className="px-2.5 py-1 text-sm font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border rounded-xl transition-colors flex items-center gap-1"
             >
               <Plus className="w-3 h-3" /> Check
             </button>
           )}
+          {canManageMetricCards && (
+            <button
+              onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
+              className="px-2.5 py-1 text-sm font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Metric
+            </button>
+          )}
           <button
             onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-            className="px-2.5 py-1 text-sm font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border rounded-xl transition-colors flex items-center gap-1"
           >
             <Plus className="w-3 h-3" /> Metric
           </button>
           <div className="w-px h-4 bg-border mx-0.5" />
           <button
             onClick={() => handleDailyReport('md')}
-            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1"
             title="Daily Report (markdown)"
           >
             <Download className="w-3 h-3" /> .md
           </button>
           <button
             onClick={() => handleDailyReport('csv')}
-            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
+            className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1"
             title="Daily Report (csv)"
           >
             <Download className="w-3 h-3" /> .csv
@@ -327,7 +344,7 @@ export function Dashboard() {
           {selectedClusterId && (
             <button
               onClick={() => setShowKubeconfig(true)}
-              className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+              className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
             >
               Kubeconfig
             </button>
@@ -336,7 +353,7 @@ export function Dashboard() {
           <button
             onClick={handleRunCheck}
             disabled={isChecking}
-            className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+            className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
             {isChecking ? 'Checking...' : 'Run Check'}
@@ -344,7 +361,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mx-auto px-3 py-3 flex gap-3">
+      <div className="py-3 pr-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}
@@ -357,10 +374,11 @@ export function Dashboard() {
       <main className="flex-1 min-w-0 space-y-3">
         <DebugLogPanel pageKey="dashboard" extra={{ activeClusterId, clusters: clusters.length, metricCards: metricCards.length }} />
 
-        {/* ── Summary Stats ──────────────────────────────────────────────── */}
-        <SummaryStats
+        {/* ── Health Hero (Bento) ──────────────────────────────────────────── */}
+        <HealthHero
           stats={summary ?? { totalClusters: 0, healthy: 0, warning: 0, critical: 0 }}
           isLoading={summaryLoading}
+          lastCheckTime={lastCheckTime}
         />
 
         {/* ── 현황 아이템 (클러스터에 붙는 단위 카드) ─────────────────────── */}
@@ -400,10 +418,10 @@ export function Dashboard() {
           ) : (
             <>
               {isSelectedDisconnected && (
-                <div className="mb-4 px-4 py-3 rounded-xl border border-slate-500/30 bg-slate-500/10 flex items-start gap-3">
-                  <WifiOff className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+                <div className="mb-4 px-4 py-3 rounded-xl border border-status-unknown/30 bg-status-unknown/10 flex items-start gap-3">
+                  <WifiOff className="w-5 h-5 text-status-unknown flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-300 mb-0.5">
+                    <p className="text-sm font-semibold text-status-unknown mb-0.5">
                       미연결 — 클러스터에 연결할 수 없습니다
                     </p>
                     <p className="text-sm text-muted-foreground">
@@ -437,8 +455,12 @@ export function Dashboard() {
             cards={metricCards}
             results={metricResults}
             isLoading={metricsLoading}
-            onDeleteCard={(id) => { if (confirm('Delete this metric card?')) deleteMetricCard.mutate(id); }}
-            onEditCard={(card) => { setEditingMetricCard(card); setShowAddMetric(true); }}
+            onDeleteCard={canManageMetricCards
+              ? (id) => { if (confirm('Delete this metric card?')) deleteMetricCard.mutate(id); }
+              : undefined}
+            onEditCard={canManageMetricCards
+              ? (card) => { setEditingMetricCard(card); setShowAddMetric(true); }
+              : undefined}
           />
         </MacCard>
 
@@ -491,6 +513,11 @@ export function Dashboard() {
             />
           </MacCard>
         </div>
+
+        {/* ── Recent Check History (Heat Map) ──────────────────────────── */}
+        <MacCard title="Recent Check History" bodyPadding="p-0">
+          <CheckHistoryHeatmap logs={historyLogs} isLoading={historyLoading} />
+        </MacCard>
 
       </main>
       </div>

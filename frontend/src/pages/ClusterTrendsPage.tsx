@@ -28,14 +28,15 @@ const METRIC_LABEL: Record<TrendMetricKey, string> = Object.fromEntries(
   METRICS.map((m) => [m.key, m.label]),
 ) as Record<TrendMetricKey, string>;
 
-// 지표별 라인 색 (테마 토큰 기반 — 원색 남용 회피).
+// 지표별 라인 색 (D-005: 차트 토큰 체계 — 시리즈 구분은 --chart-N,
+// networkerr 는 "에러" 의미가 있으므로 --status-critical 을 쓴다).
 const METRIC_COLOR: Record<TrendMetricKey, string> = {
-  cpu: '#0ea5e9',
-  memory: '#22c55e',
-  disk: '#f59e0b',
-  diskio: '#a855f7',
-  network: '#0369a1',
-  networkerr: '#dc2626',
+  cpu: 'hsl(var(--chart-6))',
+  memory: 'hsl(var(--chart-2))',
+  disk: 'hsl(var(--chart-3))',
+  diskio: 'hsl(var(--chart-4))',
+  network: 'hsl(var(--chart-1))',
+  networkerr: 'hsl(var(--status-critical))',
 };
 
 const COLS = [1, 5, 10, 20] as const;

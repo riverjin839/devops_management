@@ -17,6 +17,7 @@ from app.schemas.auth import (
     SelfPasswordChangeRequest,
 )
 from app.services import audit_logger
+from app.services import login_rate_limiter
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -24,8 +25,25 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    ip = login_rate_limiter.client_ip(request)
+    allowed, reason = login_rate_limiter.check_login_allowed(ip, payload.username)
+    if not allowed:
+        audit_logger.record(
+            db,
+            action="login.failure",
+            actor=None,
+            actor_username=payload.username,
+            status="failure",
+            target_type="user",
+            target_id=None,
+            details={"reason": "rate_limited"},
+            request=request,
+        )
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=reason)
+
     user = db.query(User).filter(User.username == payload.username).first()
     if not user or not user.is_active or not verify_password(payload.password, user.hashed_password):
+        login_rate_limiter.record_failure(ip, payload.username)
         audit_logger.record(
             db,
             action="login.failure",
@@ -41,6 +59,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="잘못된 사용자명 또는 비밀번호입니다.",
         )
+    login_rate_limiter.record_success(ip, payload.username)
     token = create_access_token(subject=user.username, role=user.role)
     audit_logger.record(
         db,

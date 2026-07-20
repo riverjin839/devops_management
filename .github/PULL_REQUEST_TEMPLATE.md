@@ -12,6 +12,8 @@
 <!-- 리뷰어가 검증할 방법. 건너뛴 항목은 명시. -->
 - [ ] frontend: `npm run lint` · `npx tsc --noEmit` · `npm run build`
 - [ ] backend: `pytest -v` (CI)
+- [ ] docs: `python3 scripts/docs/check_docs_sync.py` 통과 + feat/fix 면 `CHANGELOG.md` `[Unreleased]` 갱신
+      (라우트/라우터/페이지 추가 시 SCREENS.md·CODE_MAP.md — 절차는 `.claude/skills/docs-sync/`)
 - [ ]
 
 ## Notes (선택)

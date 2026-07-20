@@ -13,7 +13,7 @@ import { RoleGate } from '@/components/auth/RoleGate';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { authApi, type UserRoleApi } from '@/services/api';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 const ROLES: { value: UserRoleApi; label: string; desc: string }[] = [
   { value: 'viewer', label: 'Viewer', desc: '조회 전용' },
@@ -326,9 +326,9 @@ export function UsersPage() {
                     )}
                   </td>
                   <td className="py-2 pr-3 text-sm text-muted-foreground">
-                    {u.createdAt ? new Date(u.createdAt).toLocaleString() : '-'}
+                    {u.createdAt ? parseUTC(u.createdAt).toLocaleString() : '-'}
                   </td>
-                  <td className="py-2 pr-3 text-right">
+                  <td className="py-2 pr-3 text-right" aria-label="작업">
                     <div className="inline-flex gap-1">
                       <button
                         type="button"

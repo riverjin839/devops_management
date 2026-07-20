@@ -1,6 +1,8 @@
 import { MetricCard as MetricCardType, MetricQueryResult } from '@/types';
 import { ExternalLink, Trash2, AlertTriangle, WifiOff, Pencil, RefreshCw } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useMetricSparkline } from '@/hooks/useMetricCards';
+import { Sparkline } from '@/components/ui/Sparkline';
 
 interface MetricCardProps {
   card: MetricCardType;
@@ -39,6 +41,17 @@ function getThresholdBgColor(value: number | null | undefined, thresholds?: stri
   if (value >= t.critical) return 'bg-status-critical';
   if (value >= t.warning) return 'bg-status-warning';
   return 'bg-status-healthy';
+}
+
+/** Sparkline stroke 는 Tailwind class 가 아니라 실제 CSS color 값이 필요 — getThresholdColor 와
+ *  같은 판정 로직을 hsl(var(--status-*)) 문자열로 반환. */
+function getThresholdStrokeColor(value: number | null | undefined, thresholds?: string): string {
+  if (value == null) return 'hsl(var(--muted-foreground))';
+  const t = parseThresholds(thresholds);
+  if (!t) return 'hsl(var(--foreground))';
+  if (value >= t.critical) return 'hsl(var(--status-critical))';
+  if (value >= t.warning) return 'hsl(var(--status-warning))';
+  return 'hsl(var(--status-healthy))';
 }
 
 // ── Format value ─────────────────────────────────────────
@@ -221,6 +234,10 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
   // 사용자가 "재시도" 를 누르면 metric 결과 캐시 무효화 → 백그라운드 refetch.
   const handleRefresh = () => queryClient.invalidateQueries({ queryKey: ['metricResults'] });
 
+  // Sparkline — value/gauge 카드만, 정상 조회된 상태에서만 (list 카드/에러 카드는 의미 없음).
+  const showSparkline = !hasError && result && card.displayType !== 'list';
+  const { data: sparkline } = useMetricSparkline(card.id, showSparkline);
+
   return (
     <div className="bg-card border border-border rounded-xl p-5 hover:border-muted-foreground/30 transition-all hover:-translate-y-0.5 relative group">
       {/* Header */}
@@ -289,6 +306,13 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
           <ListDisplay results={result.results} />
         ) : (
           <ValueDisplay value={result.value} thresholds={card.thresholds} unit={card.unit} />
+        )}
+        {showSparkline && sparkline?.status === 'ok' && sparkline.points.length >= 2 && (
+          <Sparkline
+            points={sparkline.points}
+            color={getThresholdStrokeColor(result.value, card.thresholds)}
+            className="mt-2"
+          />
         )}
       </div>
 

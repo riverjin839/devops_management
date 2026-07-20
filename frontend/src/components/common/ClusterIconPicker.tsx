@@ -10,7 +10,7 @@ import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
   suggestAttribute, suggestOpTypeLabel,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor, levelLabel } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelColor, levelLabel, levelCustomHex } from '@/hooks/useOperationLevels';
 
 /** 빌더 탭에 프리필할 클러스터 속성 — 전달되면 "빌더" 탭이 노출된다. */
 export interface IconBuilderContext {
@@ -265,6 +265,7 @@ export function ClusterIconPicker({
                         key={name}
                         onClick={() => handleSelectLucide(name)}
                         title={name}
+                        aria-label={name}
                         className={`flex items-center justify-center aspect-square rounded-md transition-colors ${
                           isActive
                             ? 'bg-primary/15 text-primary ring-1 ring-primary/40'
@@ -403,10 +404,11 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
   const [shape, setShape] = useState<'square' | 'circle'>('square');
 
   const colorToken = levelColor(levels, level || undefined);
+  const customHex = levelCustomHex(levels, level || undefined);
   const opTypeLabel = suggestOpTypeLabel(levelLabel(levels, level || undefined));
   const svg = useMemo(
-    () => buildClusterIconSvg({ workName, opTypeLabel, attribute, regionAbbr, colorToken, k8sWatermark: watermark, shape }),
-    [workName, opTypeLabel, attribute, regionAbbr, colorToken, watermark, shape],
+    () => buildClusterIconSvg({ workName, opTypeLabel, attribute, regionAbbr, colorToken, customHex, k8sWatermark: watermark, shape }),
+    [workName, opTypeLabel, attribute, regionAbbr, colorToken, customHex, watermark, shape],
   );
   const previewUrl = useMemo(() => svgToDataUrl(svg), [svg]);
 

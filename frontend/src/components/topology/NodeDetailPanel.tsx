@@ -102,7 +102,11 @@ function MetricBar({ icon, label, ratio, usage, req, lim }: {
   icon: React.ReactNode; label: string; ratio: number | null; usage: string; req: string; lim: string;
 }) {
   const pct = ratio == null ? 0 : ratio * 100;
-  const color = ratio == null ? '#94a3b8' : ratio > 0.9 ? '#ef4444' : ratio > 0.7 ? '#f59e0b' : '#10b981';
+  const color = ratio == null
+    ? 'hsl(var(--status-unknown))'
+    : ratio > 0.9 ? 'hsl(var(--status-critical))'
+    : ratio > 0.7 ? 'hsl(var(--status-warning))'
+    : 'hsl(var(--status-healthy))';
   return (
     <div>
       <div className="flex items-center gap-1.5 text-xs mb-0.5">

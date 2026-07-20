@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import {
   bulkExecApi, type NodeSummary, type BulkExecResultItem, type BulkExecResponse,
 } from '@/services/api';
@@ -317,14 +318,14 @@ export function KernelParamsPage() {
             )}
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
+          <MacCard rootClassName="mb-5" className="text-sm text-muted-foreground leading-relaxed">
             노드에 SSH 로 접속해 sysctl / limits / 모듈 / 디스크 등의 상태를 조회합니다.
             수정은 하지 않으며(읽기 전용), 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
-          </div>
+          </MacCard>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* 좌: 노드 선택 */}
-            <section className="bg-card border border-border rounded-xl overflow-hidden">
+            {/* 좌: 노드 선택 — 헤더에 전체 선택 액션이 있어 title 없이 MacCard 로 감싼다 */}
+            <MacCard bodyPadding="p-0">
               <header className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">대상 노드</h2>
                 <button
@@ -344,10 +345,10 @@ export function KernelParamsPage() {
                   <NodeRow key={n.name} node={n} checked={selected.has(n.name)} onToggle={() => toggle(n.name)} />
                 ))}
               </div>
-            </section>
+            </MacCard>
 
             {/* 우: 프리셋 + 인증 */}
-            <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
+            <MacCard rootClassName="lg:col-span-2" bodyPadding="p-5" className="space-y-4">
               {/* 프리셋 */}
               <div>
                 <p className="text-sm text-muted-foreground mb-2">프리셋</p>
@@ -358,6 +359,7 @@ export function KernelParamsPage() {
                       <button
                         key={p.key}
                         onClick={() => setPresetKey(p.key)}
+                        aria-label={p.label}
                         className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-left transition-colors ${
                           active
                             ? 'bg-primary/10 border-primary/40 text-primary'
@@ -490,7 +492,7 @@ export function KernelParamsPage() {
                   </button>
                 )}
               </div>
-            </section>
+            </MacCard>
           </div>
 
           {/* 결과: 노드별 카드 */}
@@ -528,6 +530,7 @@ export function KernelParamsPage() {
                     {globalFilter && (
                       <button
                         onClick={() => setGlobalFilter('')}
+                        aria-label="필터 지우기"
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         ×

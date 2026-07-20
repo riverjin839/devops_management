@@ -17,6 +17,7 @@ export function OpsNoteFormPage() {
             onClick={() => navigate('/ops-notes')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             title="목록으로"
+            aria-label="목록으로"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>

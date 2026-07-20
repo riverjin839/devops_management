@@ -9,6 +9,7 @@ from app.services.deep_checkers.base import (
     DeepCheckOutcome,
     DeepCheckerBase,
 )
+from app.services.k8s_paging import iter_all
 
 
 class StuckTerminatingChecker(DeepCheckerBase):
@@ -20,11 +21,11 @@ class StuckTerminatingChecker(DeepCheckerBase):
         critical_minutes = int(ctx.thresholds.get("critical_minutes", 30))
 
         v1 = self._v1(ctx)
-        pods = v1.list_pod_for_all_namespaces(timeout_seconds=20)
         now = datetime.now(timezone.utc)
 
+        # 페이지 스트리밍 — 대형 클러스터에서 전량을 한 번에 메모리에 올리지 않는다.
         stuck: list[dict[str, object]] = []
-        for p in pods.items:
+        for p in iter_all(v1.list_pod_for_all_namespaces):
             meta = p.metadata
             if meta is None or meta.deletion_timestamp is None:
                 continue

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2,
+  ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2, AlertTriangle,
 } from 'lucide-react';
 import {
   useWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
@@ -9,6 +9,7 @@ import {
 import { useAssignees } from '@/hooks/useAssignees';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
+import { Button } from '@/components/ui/button';
 import { stripHtml, cn } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
@@ -54,12 +55,14 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+// D-011: 상태색은 semantic status 토큰 경유. done=완료(healthy), in_progress=warning,
+// todo=info, backlog=unknown(중립), review_test 는 의미색이 없는 구분 상태라 chart 토큰 사용.
 const STATUS_STYLE: Record<KanbanStatus, { dot: string; bar: string; tint: string }> = {
-  backlog:     { dot: 'bg-slate-400',   bar: 'bg-slate-400',   tint: 'bg-slate-500/[0.10]' },
-  todo:        { dot: 'bg-blue-400',    bar: 'bg-blue-400',    tint: 'bg-blue-500/[0.12]' },
-  in_progress: { dot: 'bg-amber-400',   bar: 'bg-amber-400',   tint: 'bg-amber-500/[0.14]' },
-  review_test: { dot: 'bg-purple-400',  bar: 'bg-purple-400',  tint: 'bg-purple-500/[0.12]' },
-  done:        { dot: 'bg-emerald-400', bar: 'bg-emerald-400', tint: 'bg-emerald-500/[0.12]' },
+  backlog:     { dot: 'bg-status-unknown', bar: 'bg-status-unknown', tint: 'bg-status-unknown/10' },
+  todo:        { dot: 'bg-status-info',    bar: 'bg-status-info',    tint: 'bg-status-info/10' },
+  in_progress: { dot: 'bg-status-warning', bar: 'bg-status-warning', tint: 'bg-status-warning/10' },
+  review_test: { dot: 'bg-chart-4',        bar: 'bg-chart-4',        tint: 'bg-chart-4/10' },
+  done:        { dot: 'bg-status-healthy', bar: 'bg-status-healthy', tint: 'bg-status-healthy/10' },
 };
 
 const ASSIGNEE_PALETTE = [
@@ -209,7 +212,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   };
   const meOnly = scope === 'individual';
 
-  const { data: workItemsData, isLoading } = useWorkItems();
+  const { data: workItemsData, isLoading, isError, refetch } = useWorkItems();
   const { data: dayBlocks = [] } = useTimeBlocksRange(viewDate, viewDate);
   const createBlock = useCreateTimeBlock();
   const updateBlock = useUpdateTimeBlock();
@@ -410,7 +413,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
       {/* header */}
       <div className="flex-none flex items-center gap-1.5 mb-2">
         <button onClick={() => setViewDate((d) => addDays(d, -1))}
-          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="이전 날">
+          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="이전 날" aria-label="이전 날">
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
         <div className="flex items-center gap-1.5 px-1">
@@ -420,12 +423,12 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
           </span>
         </div>
         <button onClick={() => setViewDate((d) => addDays(d, 1))}
-          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="다음 날">
+          className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground" title="다음 날" aria-label="다음 날">
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
         {!isToday && (
           <button onClick={() => setViewDate(todayStr)}
-            className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-primary" title="오늘로 돌아가기">
+            className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-primary" title="오늘로 돌아가기" aria-label="오늘로 돌아가기">
             <RotateCcw className="w-3 h-3" />
           </button>
         )}
@@ -445,6 +448,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             onClick={() => cycleSelectedName(-1)}
             disabled={namesList.length === 0}
             title="이전 담당자"
+            aria-label="이전 담당자"
             className="flex items-center justify-center w-6 py-1 border-r border-border hover:bg-secondary text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed">
             <ChevronLeft className="w-3 h-3" />
           </button>
@@ -459,6 +463,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
             onClick={() => cycleSelectedName(1)}
             disabled={namesList.length === 0}
             title="다음 담당자"
+            aria-label="다음 담당자"
             className="flex items-center justify-center w-6 py-1 border-l border-border hover:bg-secondary text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed">
             <ChevronRight className="w-3 h-3" />
           </button>
@@ -475,6 +480,16 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         {isLoading ? (
           <div className="space-y-2 pt-1">
             {[...Array(6)].map((_, i) => <div key={i} className="h-12 rounded-xl bg-secondary/40 animate-pulse" />)}
+          </div>
+        ) : isError ? (
+          <div className="rounded-xl border border-status-critical/40 bg-status-critical/5 py-10 mt-2 text-center text-sm text-status-critical">
+            <AlertTriangle className="w-6 h-6 mx-auto mb-2 opacity-80" />
+            일정을 불러오지 못했습니다.
+            <div>
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
+                <RotateCcw className="w-3 h-3" /> 다시 시도
+              </Button>
+            </div>
           </div>
         ) : (
           <>
@@ -622,8 +637,8 @@ function SessionBox({
             <button
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 flex-shrink-0"
-              title="이 시간 블록 삭제">
+              className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-status-critical flex-shrink-0"
+              title="이 시간 블록 삭제" aria-label="이 시간 블록 삭제">
               <Trash2 className="w-3 h-3" />
             </button>
           )}
@@ -653,7 +668,7 @@ function UnscheduledCard({ item, onOpen }: { item: WorkItem; onOpen: (id: string
   const names = assigneeNames(item);
   const label = item.title?.trim() || stripHtml(item.content) || item.category;
   return (
-    <button type="button" onClick={() => onOpen(item.id)} title={label}
+    <button type="button" onClick={() => onOpen(item.id)} title={label} aria-label={label}
       className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint)}>
       <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
       <div className="min-w-0 flex-1">
@@ -679,7 +694,7 @@ function AddBlockMenu({
         style={{ top: Math.max(0, y) }}>
         <div className="flex items-center justify-between px-1.5 py-1">
           <span className="text-xs font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
+          <button onClick={onClose} aria-label="닫기" className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
         </div>
         {candidates.length > 0 && (
           <>

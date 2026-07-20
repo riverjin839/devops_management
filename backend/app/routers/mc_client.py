@@ -23,7 +23,7 @@ from app.database import get_db
 from app.models import Cluster
 from app.models.app_setting import AppSetting
 from app.models.user import User
-from app.auth.deps import get_current_user, require_admin
+from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services.user_settings import get_user_setting, set_user_setting
 
@@ -232,7 +232,12 @@ def _build_mc_command(req: McRequest) -> str:
 
 
 @router.post("/clusters/{cluster_id}/mc/run", response_model=McResponse)
-async def run_mc(cluster_id: UUID, payload: McRequest, db: Session = Depends(get_db)):
+async def run_mc(
+    cluster_id: UUID,
+    payload: McRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """SSH 접속 후 mc 명령 실행."""
     if not payload.password and not payload.private_key:
         raise HTTPException(

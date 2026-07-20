@@ -13,8 +13,9 @@ import {
 import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
-import { formatRelativeTime, stripHtml } from '@/lib/utils';
+import { formatRelativeTime, stripHtml, parseUTC } from '@/lib/utils';
 import { ServiceSidebar } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useSprints } from '@/hooks/useSprints';
 // 허브 탭으로 임베드하는 기존 도구 페이지들 (개별 메뉴는 제거됨)
@@ -278,7 +279,7 @@ export function KnowledgeHubPage() {
     if (openOnly) list = list.filter((it) => it.kind === 'item' && it.statusLabel === '미조치');
     if (periodFilter) {
       const start = periodStart(periodFilter);
-      if (start) list = list.filter((it) => new Date(it.updatedAt) >= start);
+      if (start) list = list.filter((it) => parseUTC(it.updatedAt) >= start);
     }
     if (sprintFilter) list = list.filter((it) => it.sprintId === sprintFilter);
     if (trimmed) list = list.filter((it) => it.searchBlob.includes(trimmed));
@@ -375,7 +376,7 @@ export function KnowledgeHubPage() {
         ) : (
         <div className="px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
         {/* ── Filter / Search bar ─────────────────────────────────────── */}
-        <div className="bg-card border border-border rounded-xl p-4">
+        <MacCard>
           {hasFilters && (
             <div className="flex items-center justify-end mb-2">
               <button
@@ -493,17 +494,17 @@ export function KnowledgeHubPage() {
               )}
             </div>
           </div>
-        </div>
+        </MacCard>
 
         {/* ── Table (list) view ───────────────────────────────────────── */}
         {isLoading ? (
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <MacCard bodyPadding="p-0">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
             ))}
-          </div>
+          </MacCard>
         ) : sorted.length === 0 ? (
-          <div className="text-center py-20 bg-card border border-border rounded-xl">
+          <MacCard className="text-center" bodyPadding="py-20">
             <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
             <p className="text-muted-foreground mb-4">
               {hasFilters ? '검색 조건에 해당하는 지식 항목이 없습니다.' : '아직 등록된 지식 항목이 없습니다.'}
@@ -516,9 +517,9 @@ export function KnowledgeHubPage() {
                 필터 초기화
               </button>
             )}
-          </div>
+          </MacCard>
         ) : (
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <MacCard bodyPadding="p-0">
             <div className="overflow-x-auto">
               <table className="text-sm w-full">
                 <colgroup>
@@ -595,7 +596,7 @@ export function KnowledgeHubPage() {
             <div className="px-4 py-2 border-t border-border bg-muted/20 text-xs text-muted-foreground tabular-nums">
               총 {sorted.length}건{hasFilters && items.length !== sorted.length ? ` · 전체 ${items.length}건 중` : ''}
             </div>
-          </div>
+          </MacCard>
         )}
         </div>
         )}

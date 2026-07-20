@@ -3,6 +3,10 @@
 PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로 정리한 문서입니다.
 소스 코드(`frontend/src/pages/`, `frontend/src/services/api.ts`, `backend/app/routers/`)를 직접 읽어 생성했습니다.
 
+> 최종 검증: 2026-07-17 (v1.6.0 기준). CI 의 `docs-sync` 검사가 `App.tsx` 의 모든 라우트가
+> 이 문서에 섹션으로 존재하는지 자동 확인한다 — 새 라우트 추가 시 섹션도 함께 추가할 것
+> (헤딩에 `` `/route` `` 백틱 표기 필수).
+
 ## 사용법
 
 - 이 문서는 **여러분이 직접 편집**하는 것을 전제로 합니다. 각 화면 섹션 맨 아래 **"요청사항 (수정 요청)"** 항목에
@@ -41,7 +45,7 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 좌측 상단 홈 버튼으로 "업무 현황"(work) ↔ "플랫폼 현황"(platform) 두 모드를 토글하며, 상단 고정 스트립에는 내 할일/미해결 이슈/위험 클러스터/다음 일정 KPI 필과 업무 알람 종이 항상 노출된다.
 - **UI 구성**:
   - 공통 상단 스트립: 사용자명 + 날짜, KPI 필 4종(`내 할일`→`/todo-today`, `미해결 이슈`→`/items`, `위험 클러스터`→`/cluster-overview`, `다음 일정`→`/items`), `WorkAlarmBell`.
-  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "전체" 요약 행(본인 행보다 위), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원.
+  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다.
   - **플랫폼(platform) 모드**: `PlatformStatusMatrix` — 행(점검 항목) × 열(등록된 클러스터) 매트릭스. 첫 열은 sticky(항목명 + 위/아래 이동 버튼 + hover 시 수정/삭제 아이콘, 시스템 항목은 삭제 버튼 숨김), 클러스터 열 헤더는 이름 + cron 배지(클릭 시 팝오버로 `Cluster.check_cron_expr` 편집), 셀은 상태 dot + 값/라벨(클릭 시 `CheckMatrixCellDetailModal` — 기간별 트렌드 차트 + 변경 이력 + manual 항목이면 값 입력 폼 + core_bundle 이외 항목이면 항목×클러스터 cron 편집). 카드 헤더에 "항목 추가"(`CheckMatrixItemFormModal`) + 설정 톱니바퀴(`CheckMatrixSettingsModal`, 이력 보관 일수) 버튼. 하단 "플랫폼 도메인" 퀵 액세스(`DomainQuickAccess`)는 제거됨.
   - ClusterSidebar 미사용(홈은 특정 클러스터에 종속되지 않음).
 - **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 플랫폼 모드는 `hooks/useCheckMatrix.ts`(`useCheckMatrixGrid`/`useCheckMatrixItems`/`useReorderCheckMatrixItems`/`useDeleteCheckMatrixItem`/`usePutClusterCron`/`usePutSchedule`/`usePostManualEntry`/`useCheckMatrixCellHistory`/`useCheckMatrixSettings`). 로컬 state: `weeklyTab`.
@@ -319,27 +323,26 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### Deep Check 정의 관리 (`/daily-check/settings`)
+### Deep Check 정의 관리 (`/daily-check/settings`) — admin 전용
 
-- **파일**: `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/{DeepCheckDefinitionForm,DeepCheckDefinitionList,NotificationSettingsPanel}`)
-- **목적 / UX**: 인증서 만료, OS 파라미터, 스토리지/네트워크 등 deep-check 항목의 "정의"(check_type, 임계값, cron, params)를 CRUD 하는 화면. 클러스터별 전용 정의와 전체 클러스터 공용(글로벌, `cluster_id=NULL`) 정의를 함께 관리한다.
+- **파일**: `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/{DeepCheckDefinitionForm,DeepCheckDefinitionList,DeepCheckRunHistory,NotificationSettingsPanel}`)
+- **목적 / UX**: 인증서 만료, OS 파라미터, 스토리지/네트워크 등 deep-check 항목의 "정의"(check_type, 임계값, cron, params)를 admin 이 CRUD 하는 화면. 클러스터별 전용 정의와 전체 클러스터 공용(글로벌, `cluster_id=NULL`) 정의를 함께 관리하고, **커스텀 체커 3종(`custom_http`/`custom_kubectl`/`custom_promql`)으로 코드 없이 새 점검을 직접 만들 수 있다**. 정의별 실행 이력(개별 로그)도 이 화면에서 확인한다. 라우트는 `RequireAdmin` 가드로 보호.
 - **UI 구성**:
-  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="글로벌 + 전체"`) + 단일 선택. 선택된 클러스터로 정의 목록을 필터링(글로벌 정의는 항상 포함).
-  - 헤더 "정의 추가" 토글 버튼 → MacCard "새 정의"(`DeepCheckDefinitionForm`).
-  - 행 클릭/편집 버튼 → MacCard "편집 — {name}"(같은 폼 재사용, `initial` prop).
-  - `DeepCheckDefinitionList` — sortOrder → name 순 정렬된 정의 테이블/리스트.
+  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="글로벌 + 전체"`) + 단일 선택. 선택된 클러스터로 정의 목록을 필터링(글로벌 정의는 항상 포함). 글로벌 정의의 "즉시 실행" 대상 클러스터로도 사용.
+  - 검색 입력 + 카테고리 필터 칩(전체/K8s/OS/스토리지/네트워크/앱 — check-types 의 `category` 기준).
+  - 헤더 "정의 추가" 토글 버튼 → MacCard "새 정의"(`DeepCheckDefinitionForm`). Check Type 셀렉트는 "커스텀 (UI 에서 직접 정의)" / "내장 체커" optgroup 으로 구분(`seed_default` 플래그).
+  - 행 편집 버튼 → MacCard "편집 — {name}"(같은 폼 재사용, `initial` prop). 폼은 boolean 체크박스 / list 줄바꿈 textarea / 라벨 `(a|b)` 패턴 자동 select / cron 프리셋 + 직접 입력을 지원하고, **"미리 실행"**(저장 전 폼 값 그대로 ad-hoc 실행)과 "Test now"(저장된 값 실행) 버튼이 있다. 결과는 `ExecutionStepsTimeline` + 상세 JSON 으로 표시.
+  - `DeepCheckDefinitionList` — sortOrder → name 순 정렬. 행마다 최근 실행 상태 dot(`with_status` 요약)·최근 실행 시각/소요·즉시 실행(이력 기록)·실행 이력·복제·편집·삭제·활성 토글 버튼.
+  - `DeepCheckRunHistory` — 실행 이력 버튼으로 여는 MacCard 패널: 상태 필터 칩 + 페이지네이션 목록(상태/시각/클러스터/메시지/소요), 행 펼치면 step 타임라인(`details._steps`)과 상세 JSON. "지금 실행" 버튼 포함.
   - `NotificationSettingsPanel` 하단 배치.
-- **Frontend**: `useClusters`, `useDeepCheckDefinitions(clusterId, includeGlobal=true)`, `useCreateDefinition()`, `useUpdateDefinition()`(둘 다 성공 시 `['deepCheckDefinitions']` 전체 무효화). 로컬 state: `selectedClusterId`, `editing`, `adding`. api.ts: `deepCheckDefinitionsApi.list/create/update` (+ 컴포넌트 내부에서 `listCheckTypes`/`remove`/`test` 도 사용 가능하나 이 페이지에서 직접 delete/test 버튼은 `DeepCheckDefinitionList`/`Form` 쪽 구현 확인 필요).
-- **Backend**: `GET /api/v1/deep-check/definitions`, `POST /api/v1/deep-check/definitions`, `PUT /api/v1/deep-check/definitions/{id}`, `DELETE /api/v1/deep-check/definitions/{id}`, `POST /api/v1/deep-check/definitions/{id}/test`, `GET /api/v1/deep-check/check-types` — `backend/app/routers/deep_check_definitions.py`. `check_type` 은 `app/services/deep_checkers/REGISTRY` 화이트리스트로 검증(미등록 타입은 400). 모델: `DeepCheckDefinition`(`backend/app/models/deep_check.py`, `cluster_id` nullable = 글로벌, `thresholds`/`params` JSONB, `schedule_cron`).
+- **Frontend**: `useClusters`, `useCheckTypes`, `useDeepCheckDefinitions(clusterId, includeGlobal, withStatus=true)`, `useCreateDefinition`/`useUpdateDefinition`/`useDeleteDefinition`/`useDuplicateDefinition`/`useRunDefinition`/`useTestDefinition`/`usePreviewCheck`, `useDefinitionResults(definitionId)`. 로컬 state: `selectedClusterId`, `editing`, `adding`, `historyOf`, `search`, `category`. api.ts: `deepCheckDefinitionsApi.list(withStatus)/create/update/remove/duplicate/test/run/preview/results` — 쿼리 파라미터는 수동 snake_case, thresholds/params 는 응답 camelize 를 폼에서 필드명(snake)으로 재정규화.
+- **Backend**: `backend/app/routers/deep_check_definitions.py` — `GET/POST /api/v1/deep-check/definitions`(`with_status` 시 정의별 최신 결과 요약 포함), `PUT/DELETE /definitions/{id}`(admin, 삭제 시 이력은 `definition_id=NULL` 로 보존), `POST /definitions/{id}/duplicate`(admin, 비활성 복제), `POST /definitions/{id}/test`(operator, 무기록), `POST /definitions/{id}/run`(operator, `DeepCheckResult` 영속), `GET /definitions/{id}/results`(이력 페이지네이션 + status 필터), `POST /definitions/preview`(operator, 저장 전 ad-hoc), `GET /check-types`. `check_type` 은 `app/services/deep_checkers/REGISTRY` 화이트리스트 검증, `schedule_cron` 은 `validate_cron_min_interval`(5분 미만 거부). 모델: `DeepCheckDefinition`(+`last_run_at`), `DeepCheckResult`.
 - **핵심 기능**:
   - `cluster_id=None` 정의는 모든 클러스터에 적용되는 글로벌 정의로 취급.
-  - "Test now"(`POST /definitions/{id}/test`) — 저장 없이 즉시 1회 실행해 미리보기(`DeepCheckService.run_definition_once(persist=False)`).
-  - `check_type` 이 `REGISTRY`(add-deep-checker 스킬로 등록되는 체커: cert_expiry, OS 파라미터, 스토리지 health, 네트워크 도달성 등)에 없으면 생성/수정 모두 거부.
+  - **커스텀 점검 생성**: `custom_http`(URL/host:port 프로브 — 기대 status/본문 정규식/지연 임계), `custom_kubectl`(읽기전용 verb 화이트리스트 kubectl + lines/number/regex_count 파싱, gte/lte 임계), `custom_promql`(instant 쿼리 + max/min/sum/avg/count 집계). `seed_default=False` 라 자동 시드/체크매트릭스에서 제외되고 admin 이 인스턴스를 직접 만든다.
+  - **정의별 개별 로그**: 모든 실행(자동/수동)이 `DeepCheckResult` 로 남고 `details._steps` 에 단계별 로그 저장 → 실행 이력 패널에서 회차별 확인.
+  - **`schedule_cron` 배선됨**: 값을 주면 매분 check-matrix 디스패처가 이 정의만 due 평가해 자동 실행(글로벌 정의는 전 클러스터). 비우면 기존처럼 홈 "플랫폼 현황" 매트릭스의 `CheckMatrixSchedule` cron 만 적용(내장 체커의 기본 경로). 둘 다 최소 5분 간격.
   - `sort_order` 로 UI 표시 순서 제어.
-  - **자동 실행 스케줄은 이 화면이 아니라 홈 "플랫폼 현황"(`/`, platform 모드) 매트릭스에서 관리한다** —
-    `CheckMatrixItem(source_type=deep_check, source_ref=check_type)` 이 여기서 정의한 `check_type` 을
-    가리키고, 실제 cron(항목×클러스터)은 매트릭스 셀 상세에서 설정한다(`CheckMatrixSchedule`, 5분
-    미만 간격 거부). `schedule_cron` 필드는 미배선 상태로 남아있다(레거시, 무시됨).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -569,26 +572,9 @@ PEP 서비스로 이름·개념이 바뀌면서 사이드바에서 빠졌고(§9
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 애플리케이션 APM (Coroot) (`/coroot`)
-
-- **파일**: `frontend/src/pages/CorootApmPage.tsx` (+ `components/ui/MacCard`)
-- **목적 / UX**: 별도 배포된 Coroot APM 인스턴스를 클러스터별로 연동해, 서비스 지연·에러율·SLO 요약을 보고 개별 서비스의 trace/logs/profiling을 새 탭 또는 임베드(iframe)로 열람한다. Coroot가 배포되지 않았거나 클러스터에 project 매핑이 없으면 오프라인으로 우아하게 처리된다.
-- **UI 구성**:
-  - `ClusterSidebar` — `allowAll={false}` + `iconOnly` (단일 선택, 전체 옵션 없음)
-  - 헤더: 전역 coroot online/offline 배지, 새로고침
-  - 요약 스트립(서비스 수/정상/알림·주의 3칸, 오프라인 시 안내 배너로 대체)
-  - "Open in Coroot" 딥링크 버튼(새 탭) + "여기에 임베드" 토글
-  - 서비스 목록(`ServiceList` — 검색, 상태 dot, Trace 임베드/새 탭 버튼)
-  - 임베드 패널(iframe, CSP/X-Frame-Options 차단 가능성 안내 문구 포함)
-- **Frontend**: `useClusters()` + `useClusterStore()`. `useCorootHealth()`, `useCorootSummary(cid)`, `useCorootDeepLink(cid)`, `useCorootApplications(cid)` (`hooks/useCoroot.ts`) — 모두 fail-safe(offline 시 200 + status 필드). 개별 서비스 딥링크는 `corootApi.getApplicationDeepLink`를 직접 호출(비-hook). 호출 함수: `corootApi.{health,getSummary,getDeepLink,getApplications,getApplicationDeepLink}`.
-- **Backend**: `GET /api/v1/coroot/health`, `GET /api/v1/coroot/{cluster_id}/summary`, `GET /api/v1/coroot/{cluster_id}/deeplink`, `GET /api/v1/coroot/{cluster_id}/applications`, `GET /api/v1/coroot/{cluster_id}/application/deeplink?app_id=&view=` — `backend/app/routers/coroot.py`, 서비스 `app/services/coroot_service.py`(`CorootService`, 싱글턴 `coroot_service` + 클러스터별 `coroot_url` 오버라이드 시 별도 인스턴스). 매핑은 `Cluster.coroot_project`(필수)/`coroot_enabled`(토글)/`coroot_url`(선택, 전역 `COROOT_URL` env 오버라이드) 컬럼. 미설정/미배포 시 500 대신 `status:"offline"` 반환(PrometheusService와 동일 fail-safe 패턴).
-- **핵심 기능**:
-  - 전역 Coroot 가용성 프로브 + 클러스터별 project 매핑 요약(서비스 수/정상/알림)
-  - 서비스별 Tracing/Logs/Profiling 딥링크 — 새 탭 열기 또는 페이지 내 iframe 임베드
-  - 서비스 검색(이름/네임스페이스/ID)
-  - Coroot 미배포/미매핑 시 500 없이 오프라인 안내로 대체
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+> ℹ️ **제거된 화면 — 애플리케이션 APM (Coroot) (`/coroot` 였음)**: COROOT APM 통합은 전체
+> 제거되어 라우트/페이지/백엔드 라우터가 더 이상 존재하지 않는다
+> (`navConfig.ts` 주석 참고 — 재추가하지 않음). 과거 명세는 git 히스토리에서 확인.
 
 ---
 

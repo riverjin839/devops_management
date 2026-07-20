@@ -4,6 +4,7 @@ export { DiffPanel } from './DiffPanel';
 export { DeepCheckGrid } from './DeepCheckGrid';
 export { DeepCheckDefinitionForm } from './DeepCheckDefinitionForm';
 export { DeepCheckDefinitionList } from './DeepCheckDefinitionList';
+export { DeepCheckRunHistory } from './DeepCheckRunHistory';
 export { NotificationSettingsPanel } from './NotificationSettingsPanel';
 export { ResourceTrendChecklist } from './ResourceTrendChecklist';
 export { ExecutionStepsTimeline } from './ExecutionStepsTimeline';

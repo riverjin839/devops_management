@@ -5,6 +5,15 @@
 
 상태: **설계 합의용 초안** (구현 전). 구현은 단계(P1~)별로 별도 진행.
 
+> ⚠️ **구현 결과 노트 (v1.6.0 기준)**: 본 문서가 제안한 통합 모델(`knowledge_pages`/
+> `knowledge_page_versions`), 전용 라우터(`routers/knowledge.py`), 전용 페이지
+> (`KnowledgeBasePage`, `/knowledge`)는 **채택되지 않았다**. 실제로는 기존
+> `work_guide`/`ops_note`/`ontology`/`mindmap` 모델·라우터를 그대로 유지한 채,
+> **`KnowledgeHubPage.tsx`(`/docs`)가 이들을 하나의 허브 화면으로 집약**하는 방향으로
+> 구현됐다 (화면 명세는 `docs/SCREENS.md` "지식 허브" 절 참고). 아래 §2~§10 은 최초
+> 설계안이며, 실제 아키텍처와 다를 수 있으니 신규 작업 시 이 문서를 그대로 신뢰하지
+> 말고 현재 코드를 기준으로 판단할 것.
+
 ---
 
 ## 1. 목적 / 범위

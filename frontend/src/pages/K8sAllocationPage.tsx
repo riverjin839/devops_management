@@ -798,6 +798,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
             <button
               onClick={() => setViewStyle('table')}
               title="테이블 뷰"
+              aria-label="테이블 뷰"
               className={`p-1.5 rounded-md ${viewStyle === 'table' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <List className="w-3.5 h-3.5" />
@@ -805,6 +806,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
             <button
               onClick={() => setViewStyle('card')}
               title="카드 뷰"
+              aria-label="카드 뷰"
               className={`p-1.5 rounded-md ${viewStyle === 'card' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -861,6 +863,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
                     <button
                       onClick={() => refreshNode.mutate(n.name)}
                       title="이 노드만 새로고침"
+                      aria-label="이 노드만 새로고침"
                       className="text-muted-foreground hover:text-primary"
                     >
                       <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
@@ -905,6 +908,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
                       <button
                         onClick={() => refreshNode.mutate(n.name)}
                         title="이 노드만 새로고침"
+                        aria-label="이 노드만 새로고침"
                         className="text-muted-foreground hover:text-primary shrink-0"
                       >
                         <RefreshCw className={`w-3 h-3 ${refreshNode.isPending && refreshNode.variables === n.name ? 'animate-spin' : ''}`} />
@@ -1026,7 +1030,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
         <table className="w-full text-sm">
           <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-2 py-2 font-medium w-7" />
+              <th className="px-2 py-2 font-medium w-7"><span className="sr-only">펼치기</span></th>
               <SortableTh label="Namespace" k="namespace" sort={sort} onSort={onSort} />
               <SortableTh label="Pods" k="podCount" sort={sort} onSort={onSort} align="right" />
               <SortableTh label="Workloads" k="workloadCount" sort={sort} onSort={onSort} align="right" />
@@ -1055,6 +1059,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
                         <button
                           onClick={(e) => { e.stopPropagation(); refreshNs.mutate(ns.namespace); }}
                           title="이 네임스페이스만 새로고침"
+                          aria-label="이 네임스페이스만 새로고침"
                           className="text-muted-foreground hover:text-primary shrink-0"
                         >
                           <RefreshCw className={`w-3 h-3 ${refreshNs.isPending && refreshNs.variables === ns.namespace ? 'animate-spin' : ''}`} />
@@ -1076,7 +1081,7 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
                   </tr>
                   {open && (
                     <tr className="bg-muted/5">
-                      <td />
+                      <td aria-hidden="true" />
                       <td colSpan={6} className="px-2 py-2">
                         <WorkloadsDrill clusterId={clusterId} namespace={ns.namespace} />
                       </td>
@@ -1120,7 +1125,7 @@ function WorkloadsDrill({ clusterId, namespace }: { clusterId: string; namespace
       <table className="w-full text-sm">
         <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
           <tr>
-            <th className="px-2 py-1.5 font-medium w-7" />
+            <th className="px-2 py-1.5 font-medium w-7"><span className="sr-only">펼치기</span></th>
             <th className="px-2 py-1.5 font-medium">Workload</th>
             <th className="px-2 py-1.5 font-medium text-right">Pods</th>
             <th className="px-2 py-1.5 font-medium">CPU req/use</th>
@@ -1154,7 +1159,7 @@ function WorkloadsDrill({ clusterId, namespace }: { clusterId: string; namespace
                 </tr>
                 {open && (
                   <tr className="bg-muted/5">
-                    <td />
+                    <td aria-hidden="true" />
                     <td colSpan={5} className="px-2 py-1.5">
                       <PodsDrill clusterId={clusterId} namespace={namespace} kind={w.kind} name={w.name} />
                     </td>
@@ -1214,8 +1219,8 @@ function PodsDrill({ clusterId, namespace, kind, name }: { clusterId: string; na
                     ↳ {c.name}
                     {!c.hasRequests && <span className="ml-2 text-amber-600">req 미설정</span>}
                   </td>
-                  <td />
-                  <td />
+                  <td aria-hidden="true" />
+                  <td aria-hidden="true" />
                   <td className="px-2 py-1 text-xs tabular-nums">{fmtCores(c.cpuReqM)} / {fmtCores(c.cpuLimM)} / {c.cpuUsageM == null ? '—' : fmtCores(c.cpuUsageM)}</td>
                   <td className="px-2 py-1 text-xs tabular-nums">{fmtGi(c.memReqB)} / {fmtGi(c.memLimB)} / {c.memUsageB == null ? '—' : fmtGi(c.memUsageB)}</td>
                 </tr>

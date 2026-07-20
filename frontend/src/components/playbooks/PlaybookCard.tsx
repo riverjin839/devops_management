@@ -15,7 +15,7 @@ const statusConfig: Record<string, { color: string; bg: string; label: string }>
   warning: { color: 'text-amber-400', bg: 'bg-amber-500/15 border-amber-500/30', label: 'Changed' },
   critical: { color: 'text-red-400', bg: 'bg-red-500/15 border-red-500/30', label: 'Failed' },
   running: { color: 'text-blue-400', bg: 'bg-blue-500/15 border-blue-500/30', label: 'Running' },
-  unknown: { color: 'text-gray-400', bg: 'bg-gray-500/15 border-gray-500/30', label: 'Not Run' },
+  unknown: { color: 'text-status-unknown', bg: 'bg-status-unknown/15 border-status-unknown/30', label: 'Not Run' },
 };
 
 function formatTimeAgo(dateStr?: string): string {
@@ -78,7 +78,7 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
           <StatBadge label="Chg" value={totals.changed} color="text-amber-400" />
           <StatBadge label="Fail" value={totals.failures} color="text-red-400" />
           <StatBadge label="Unr" value={totals.unreachable} color="text-orange-400" />
-          <StatBadge label="Skip" value={totals.skipped} color="text-gray-400" />
+          <StatBadge label="Skip" value={totals.skipped} color="text-status-unknown" />
         </div>
       )}
 

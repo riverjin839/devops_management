@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -28,6 +29,7 @@ FEATURE_ACCESS_KEY = "feature_access"
 DEFAULT_FEATURE_ACCESS: dict = {}
 OPERATION_LEVELS_KEY = "operation_levels"
 DEFAULT_ASSIGNEES = []
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 DEFAULT_OPERATION_LEVELS = {
     "levels": [
         {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀"},
@@ -89,7 +91,11 @@ def get_ui_settings(db: Session = Depends(get_db)):
 
 
 @router.put("", response_model=UiSettingsResponse)
-def update_ui_settings(payload: UiSettingsUpdate, db: Session = Depends(get_db)):
+def update_ui_settings(
+    payload: UiSettingsUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     setting = _get_or_create(db, UI_SETTINGS_KEY, DEFAULT_UI_SETTINGS)
     current = setting.value or DEFAULT_UI_SETTINGS.copy()
 
@@ -154,7 +160,11 @@ def get_cluster_links(db: Session = Depends(get_db)):
 
 
 @router.put("/cluster-links", response_model=ClusterLinksResponse)
-def update_cluster_links(payload: ClusterLinksUpdate, db: Session = Depends(get_db)):
+def update_cluster_links(
+    payload: ClusterLinksUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     setting = _get_or_create(db, CLUSTER_LINKS_KEY, DEFAULT_CLUSTER_LINKS)
     next_value = {
         "common_links": [item.model_dump() for item in payload.common_links],
@@ -198,7 +208,11 @@ def get_assignees(db: Session = Depends(get_db)):
 
 
 @router.put("/assignees")
-def update_assignees(payload: dict, db: Session = Depends(get_db)):
+def update_assignees(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     raw_list = payload.get("assignees", [])
     if not isinstance(raw_list, list):
         raw_list = []
@@ -302,11 +316,13 @@ def get_operation_levels(db: Session = Depends(get_db)):
             continue
         seen.add(v)
         icon_raw = it.get("icon")
+        hex_raw = it.get("custom_hex")
         items.append(OperationLevelItem(
             value=v,
             label=str(it.get("label", v)),
             color=str(it.get("color", "slate")),
             icon=str(icon_raw) if isinstance(icon_raw, str) and icon_raw.strip() else None,
+            custom_hex=str(hex_raw) if isinstance(hex_raw, str) and _HEX_RE.match(hex_raw) else None,
         ))
     if not items:
         items = [OperationLevelItem(**x) for x in DEFAULT_OPERATION_LEVELS["levels"]]
@@ -314,7 +330,11 @@ def get_operation_levels(db: Session = Depends(get_db)):
 
 
 @router.put("/operation-levels", response_model=OperationLevelsResponse)
-def update_operation_levels(payload: OperationLevelsUpdate, db: Session = Depends(get_db)):
+def update_operation_levels(
+    payload: OperationLevelsUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
     setting = _get_or_create(db, OPERATION_LEVELS_KEY, DEFAULT_OPERATION_LEVELS)
     seen: set[str] = set()
     cleaned: list[dict] = []
@@ -324,7 +344,13 @@ def update_operation_levels(payload: OperationLevelsUpdate, db: Session = Depend
             continue
         seen.add(v)
         icon = (it.icon or "").strip() or None
-        cleaned.append({"value": v, "label": it.label.strip() or v, "color": it.color or "slate", "icon": icon})
+        custom_hex = (it.custom_hex or "").strip() or None
+        if custom_hex and not _HEX_RE.match(custom_hex):
+            custom_hex = None
+        cleaned.append({
+            "value": v, "label": it.label.strip() or v, "color": it.color or "slate",
+            "icon": icon, "custom_hex": custom_hex,
+        })
     setting.value = {"levels": cleaned}
     db.commit()
     db.refresh(setting)

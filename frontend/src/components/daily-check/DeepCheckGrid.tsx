@@ -2,6 +2,7 @@ import { CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import type { DeepCheckResult, DeepCheckExecStep, Status } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 interface Props {
   results: DeepCheckResult[];
@@ -11,7 +12,7 @@ const STATUS_ICON: Record<Status, { Icon: typeof CheckCircle2; color: string }> 
   healthy:  { Icon: CheckCircle2,  color: 'text-emerald-500' },
   warning:  { Icon: AlertTriangle, color: 'text-amber-500'   },
   critical: { Icon: XCircle,       color: 'text-red-500'     },
-  pending:  { Icon: Clock,         color: 'text-gray-400'    },
+  pending:  { Icon: Clock,         color: 'text-status-unknown' },
 };
 
 export function DeepCheckGrid({ results }: Props) {
@@ -47,12 +48,18 @@ export function DeepCheckGrid({ results }: Props) {
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{new Date(r.checkedAt).toLocaleTimeString('ko-KR')}</span>
+                <span>{parseUTC(r.checkedAt).toLocaleTimeString('ko-KR')}</span>
                 <span>{r.durationMs}ms</span>
               </div>
-              {Array.isArray(r.details?._steps) && r.details!._steps.length > 0 && (
-                <ExecutionStepsTimeline steps={r.details!._steps as DeepCheckExecStep[]} />
-              )}
+              {/* 응답 인터셉터가 _steps 키를 camelize(→ Steps) 하므로 둘 다 조회 */}
+              {(() => {
+                const steps = (r.details?._steps ?? r.details?.Steps) as
+                  | DeepCheckExecStep[]
+                  | undefined;
+                return Array.isArray(steps) && steps.length > 0 ? (
+                  <ExecutionStepsTimeline steps={steps} />
+                ) : null;
+              })()}
               {r.details && Object.keys(r.details).length > 0 && (
                 <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground">상세</summary>

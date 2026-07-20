@@ -43,6 +43,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - DEBUG=true
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -74,6 +75,7 @@ services:
     container_name: k8s_monitor_celery
     command: celery -A app.celery_app worker --loglevel=info
     environment:
+      - DEBUG=true
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -88,7 +90,12 @@ services:
 
   # kubewatch — K8s 이벤트 실시간 감시 → PEP 웹훅
   # 로컬 kind 클러스터 사용 시: kind-setup.sh up 후 ~/.kube/config 가 kind 클러스터를 가리킴.
-  # KUBEWATCH_TOKEN 은 .env 에서 설정 (미설정 시 토큰 검증 없이 수락).
+  # 주의(fail-closed): backend 는 KUBEWATCH_TOKEN 미설정 시 웹훅 수신을 503 으로
+  # 거부한다(무인증 이벤트 주입 방지). 이 kubewatch 프로필을 실제로 쓰려면 backend/.env
+  # 에 KUBEWATCH_TOKEN 을 설정하고, kubewatch 쪽에서도 웹훅 요청에
+  # "Authorization: Bearer <같은 토큰>" 헤더가 실리도록 구성해야 한다(kubewatch 버전별
+  # webhook header 설정 키는 공식 문서 참고 — 이 compose 파일의 기본 설정은 아직 헤더를
+  # 보내지 않으므로 KUBEWATCH_TOKEN 을 설정하면 이 프로필은 401 을 받게 된다).
   kubewatch:
     image: bitnami/kubewatch:latest
     container_name: pep_kubewatch
@@ -141,6 +148,7 @@ services:
     container_name: k8s_monitor_celery_beat
     command: celery -A app.celery_app beat --loglevel=info
     environment:
+      - DEBUG=true
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0

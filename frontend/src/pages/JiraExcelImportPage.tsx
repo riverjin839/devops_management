@@ -8,6 +8,7 @@ import { jiraApi } from '@/services/api';
 import type { JiraExcelImportResult, JiraExcelRow, JiraImportResult } from '@/types';
 import { formatApiError } from '@/lib/utils';
 import { ViewModeBar } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 
 type ImportMode = 'file' | 'paste';
 
@@ -167,7 +168,7 @@ export function JiraExcelImportPage() {
         )}
 
         {/* 파일 업로드 / 붙여넣기 */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-4">
+        <MacCard rootClassName="mb-4">
           {mode === 'file' ? (
             <div className="flex items-center gap-2 flex-wrap">
               <label className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg cursor-pointer">
@@ -253,11 +254,11 @@ export function JiraExcelImportPage() {
               {error}
             </div>
           )}
-        </div>
+        </MacCard>
 
         {/* 결과 테이블 */}
         {result && result.rows.length > 0 && (
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <MacCard bodyPadding="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
@@ -293,24 +294,24 @@ export function JiraExcelImportPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </MacCard>
         )}
 
         {result && result.rows.length === 0 && (
-          <div className="text-center py-16 bg-card border border-border rounded-xl text-muted-foreground text-sm">
+          <MacCard className="text-center text-muted-foreground text-sm" bodyPadding="py-16">
             가져올 항목이 없습니다.
-          </div>
+          </MacCard>
         )}
 
         {!result && !error && !loading && (
-          <div className="text-center py-16 bg-card border border-border rounded-xl">
+          <MacCard className="text-center" bodyPadding="py-16">
             <FileSpreadsheet className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">
               {mode === 'file'
                 ? 'Jira 에서 내보낸(Export) .xlsx 파일을 업로드하세요.'
                 : 'Jira 이슈 목록이나 엑셀 표를 복사해 위 칸에 붙여넣으세요.'}
             </p>
-          </div>
+          </MacCard>
         )}
       </main>
     </div>

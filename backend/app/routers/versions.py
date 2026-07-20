@@ -25,8 +25,9 @@ from kubernetes.client import ApiException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
-from app.models import Cluster, ClusterConfigSnapshot
+from app.models import Cluster, ClusterConfigSnapshot, User
 from app.services.kubeconfig import ensure_kubeconfig_file as _ensure_kubeconfig_file_for
 from app.services.ssh_runner import SSHTarget, _exec_ssh  # noqa: PLC2701 — 내부 재사용
 from app.services.config_snapshot import (
@@ -214,7 +215,11 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/{cluster_id}/collect-versions")
-def collect_versions(cluster_id: UUID, db: Session = Depends(get_db)):
+def collect_versions(
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """kubeconfig 를 이용해 현재 버전/설정 스냅샷을 수집. 변경된 항목만 저장."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
@@ -290,7 +295,9 @@ class EtcdSystemdCollectRequest(BaseModel):
     private_key: str | None = None
     use_sudo: bool = True
     connect_timeout: int = Field(default=8, ge=1, le=60)
-    unit: str = Field(default="etcd", max_length=64)
+    # systemd unit 이름만 허용 — 이 값이 그대로 원격 셸 명령(`systemctl show {unit}`)에
+    # 삽입되므로 셸 메타문자를 허용하면 명령 인젝션으로 이어진다.
+    unit: str = Field(default="etcd", max_length=64, pattern=r"^[A-Za-z0-9_.@-]+$")
     # etcd 환경변수 파일 — 기본 /etcd/etcd.env (사내 표준), 다른 배포판은 edit 가능.
     # 순서대로 존재하는 첫 파일을 읽음.
     env_files: list[str] = Field(
@@ -369,6 +376,7 @@ async def collect_etcd_systemd(
     cluster_id: UUID,
     payload: EtcdSystemdCollectRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """SSH 로 각 master 노드의 etcd (systemd unit) 상태 + env 파일 + 버전 수집.
 
@@ -577,6 +585,7 @@ async def collect_kernel_params(
     cluster_id: UUID,
     payload: KernelParamsCollectRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """노드별 sysctl 값을 병렬로 수집해 히스토리에 누적. 내용 동일시 저장 생략."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -712,6 +721,7 @@ async def collect_kubelet_config(
     cluster_id: UUID,
     payload: KubeletConfigCollectRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """kubelet 의 실제 사용중 config 파일 경로 + 내용을 SSH 로 호스트별 수집.
 
@@ -901,6 +911,7 @@ def collect_etcdctl_config(
     cluster_id: UUID,
     payload: EtcdctlConfigCollectRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """etcd 설정 (env 파일 + endpoint status) 을 수집해 histor 에 누적. dedup."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -1433,6 +1444,7 @@ async def collect_node_nics(
     cluster_id: UUID,
     payload: NodeNicsCollectRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """SSH 로 각 노드의 ip 인터페이스 정보 수집 → node_nics:{host} 스냅샷 + Cluster.node_ips 갱신."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -1962,7 +1974,11 @@ def _collect_minio_one(api_client, db: Session, cluster: Cluster, now: datetime)
 
 
 @router.post("/{cluster_id}/collect-minio")
-def collect_minio(cluster_id: UUID, db: Session = Depends(get_db)):
+def collect_minio(
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """MinIO Operator + Tenant + DirectPV 정보를 수집해 storage 카테고리 스냅샷에 저장.
 
     스냅샷 컴포넌트:

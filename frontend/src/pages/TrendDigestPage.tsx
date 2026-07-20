@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource, useCreateSource, useUpdateSource, useDeleteSource } from '@/hooks/useTrends';
+import { MacCard } from '@/components/ui/MacCard';
 import type { TrendDigest, TrendItem, TrendSource } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 // ── 카테고리 색상 ────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
@@ -55,7 +57,7 @@ function TrendItemCard({ item }: { item: TrendItem }) {
               </span>
             )}
             <span className="text-xs text-muted-foreground ml-auto">
-              {new Date(item.publishedAt).toLocaleDateString('ko-KR')}
+              {parseUTC(item.publishedAt).toLocaleDateString('ko-KR')}
             </span>
           </div>
           <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
@@ -105,7 +107,7 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
   return (
     <div className="space-y-4">
       {/* 상태 + 종합 요약 */}
-      <div className="bg-card border border-border rounded-xl p-4">
+      <MacCard>
         <div className="flex items-center gap-2 mb-3">
           <span className={`flex items-center gap-1 text-sm font-medium ${statusInfo.cls}`}>
             {statusInfo.icon} {statusInfo.label}
@@ -126,7 +128,7 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
             {digest.status === 'done' ? '종합 요약 없음' : '요약 생성 중...'}
           </p>
         )}
-      </div>
+      </MacCard>
 
       {/* 필터 */}
       <div className="flex flex-wrap gap-3">
@@ -192,7 +194,7 @@ const SOURCE_STATUS_CLS: Record<string, string> = {
 
 function formatDateTimeShort(iso?: string | null): string {
   if (!iso) return '-';
-  const d = new Date(iso);
+  const d = parseUTC(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -281,12 +283,14 @@ function SourceRow({ s }: { s: TrendSource }) {
               s.enabled ? 'bg-primary' : 'bg-secondary border border-border'
             }`}
             title="활성/비활성"
+            aria-label="활성/비활성"
           >
             <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transform transition-transform ${
               s.enabled ? 'translate-x-4' : 'translate-x-0.5'
             }`} />
           </button>
           <button onClick={() => setEditing(true)}
+            aria-label="소스 편집"
             className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground">
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -295,6 +299,7 @@ function SourceRow({ s }: { s: TrendSource }) {
               if (!confirm(`"${s.name}" 소스를 삭제하시겠습니까? 관련 아이템도 모두 삭제됩니다.`)) return;
               remove.mutate(s.id);
             }}
+            aria-label="소스 삭제"
             className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -316,7 +321,7 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
     <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-primary">새 소스 추가</p>
-        <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+        <button onClick={onClose} aria-label="닫기" className="p-1 text-muted-foreground hover:text-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>

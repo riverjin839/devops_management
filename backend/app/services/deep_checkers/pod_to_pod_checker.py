@@ -31,10 +31,18 @@ from app.services.deep_checkers.base import (
     DeepCheckOutcome,
     DeepCheckerBase,
 )
+from app.services.k8s_paging import iter_all
+
+# 후보 pod 수집 상한 — 이 체커는 targets_max(기본 8)개만 무작위 샘플링하면 되므로,
+# 5k+ pod 대형 클러스터에서 전량을 한 번에 메모리에 올릴 필요가 없다. 페이지
+# 스트리밍(iter_all)으로 이 상한까지만 훑어 OOM 을 피한다.
+_CANDIDATE_SCAN_CAP = 5000
 
 
+# MS 는 선택 — busybox sh 에서 신뢰할 만한 밀리초 계측이 어려워 기본적으로 생략하고,
+# 전체 소요시간은 safe_run 의 duration_ms(outcome 레벨)로 대신 본다.
 _RESULT_RE = re.compile(
-    r"TARGET=(?P<target>\S+)\s+RC=(?P<rc>\d+)\s+MS=(?P<ms>\d+)"
+    r"TARGET=(?P<target>\S+)\s+RC=(?P<rc>\d+)(?:\s+MS=(?P<ms>\d+))?"
 )
 
 
@@ -56,11 +64,10 @@ class PodToPodChecker(DeepCheckerBase):
         probe_namespace = ctx.params.get("probe_namespace", "devops")
         seed = ctx.params.get("seed")  # 재현용 옵션
 
-        # 1) 타깃 pod 후보 수집
+        # 1) 타깃 pod 후보 수집 — 페이지 스트리밍(대형 클러스터 OOM 방지)
         v1 = self._v1(ctx)
-        pods = v1.list_pod_for_all_namespaces(timeout_seconds=20)
         candidates: list[dict[str, Any]] = []
-        for p in pods.items:
+        for p in iter_all(v1.list_pod_for_all_namespaces, hard_cap=_CANDIDATE_SCAN_CAP):
             status = p.status
             spec = p.spec
             if not (status and spec and p.metadata):
@@ -105,27 +112,37 @@ class PodToPodChecker(DeepCheckerBase):
             "  ip_port=${tgt##*/}\n"
             "  ip=${ip_port%%:*}\n"
             "  port=${ip_port##*:}\n"
-            "  start=$(awk 'BEGIN{srand(); print systime()}')\n"
             f"  nc -z -w {per_probe_timeout} \"$ip\" \"$port\" >/dev/null 2>&1\n"
             "  rc=$?\n"
-            "  end=$(awk 'BEGIN{srand(); print systime()}')\n"
-            "  ms=$(( (end - start) * 1000 ))\n"
-            "  echo \"TARGET=$tgt RC=$rc MS=$ms\"\n"
+            "  echo \"TARGET=$tgt RC=$rc\"\n"
             "done\n"
         )
 
         probe_pod = f"pod2pod-probe-{rng.randrange(10**6):06d}"
-        proc = self._kubectl(
-            ctx,
-            "run", probe_pod,
-            "-n", probe_namespace,
-            "--rm", "-i",
-            "--restart=Never",
-            "--image", image,
-            "--quiet",
-            "--", "sh", "-c", script,
-            timeout=max(60, per_probe_timeout * len(targets) * 2 + 30),
-        )
+        try:
+            proc = self._kubectl(
+                ctx,
+                "run", probe_pod,
+                "-n", probe_namespace,
+                "--rm", "-i",
+                "--restart=Never",
+                "--image", image,
+                "--quiet",
+                "--", "sh", "-c", script,
+                timeout=max(60, per_probe_timeout * len(targets) * 2 + 30),
+            )
+        finally:
+            # ``--rm`` 은 attach 정상 종료에 의존하므로 timeout/오류 시 probe 파드가
+            # 남을 수 있다. 항상 명시 삭제(성공 시엔 --ignore-not-found 로 무해).
+            try:
+                self._kubectl(
+                    ctx, "delete", "pod", probe_pod,
+                    "-n", probe_namespace,
+                    "--ignore-not-found", "--wait=false",
+                    timeout=15,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
         if proc.returncode != 0 and not proc.stdout:
             return DeepCheckOutcome(
@@ -149,10 +166,11 @@ class PodToPodChecker(DeepCheckerBase):
                 continue
             rc = int(m.group("rc"))
             ok = rc == 0
+            ms_raw = m.group("ms")
             results.append({
                 "target": m.group("target"),
                 "rc": rc,
-                "latency_ms": int(m.group("ms")),
+                "latency_ms": int(ms_raw) if ms_raw is not None else None,
                 "ok": ok,
             })
             if ok:

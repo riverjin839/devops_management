@@ -1,8 +1,12 @@
 # CODE_MAP.md
 
-빠른 탐색용 맵. 자세한 아키텍처는 [CLAUDE.md](./CLAUDE.md) 참고.
+빠른 탐색용 맵. 자세한 아키텍처는 [CLAUDE.md](./CLAUDE.md), 화면별 명세는 [docs/SCREENS.md](docs/SCREENS.md) 참고.
 
 AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 하는 작업 레시피만 간결히.
+
+> **동기화 검사**: CI 의 `docs-sync` job 이 `scripts/docs/check_docs_sync.py` 로
+> 모든 라우터(`backend/app/routers/*.py`)와 페이지(`frontend/src/pages/*.tsx`)가
+> 이 파일에 기재되어 있는지 검사한다. 파일 추가 시 해당 도메인 표에 한 줄 추가할 것.
 
 ---
 
@@ -48,23 +52,90 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 
 | 기능 | 백엔드 | 프론트엔드 |
 |---|---|---|
-| 업무 CRUD + 상태/우선순위 + 서브업무 + CSV | `backend/app/routers/work_items.py` (`/work-items`) | 게시판: `frontend/src/pages/WorkItemBoardPage.tsx`, 등록/수정: `tasks-mgmt/new\|:id/edit` → `WorkItemForm.tsx` |
+| 업무 CRUD + 상태/우선순위 + 서브업무 + CSV | `backend/app/routers/work_items.py` (`/work-items`) | 게시판: `frontend/src/pages/WorkItemBoardPage.tsx`, 등록: `tasks-mgmt/new` → `WorkItemFormPage.tsx`(`WorkItemForm.tsx`), 상세/수정: `WorkItemDetailPage.tsx` (`:id/edit` 는 상세 `?edit=1` 로 redirect) |
 | 표 행(인라인 편집·시간옵션) / 칸반 / 캘린더 | — | `components/work-items/WorkItemTableRow.tsx` · `WorkItemKanban.tsx` · `WorkItemCalendar.tsx` |
 | 상세 보기 / 댓글·활동 | — | `WorkItemReadView.tsx` · `CommentThread.tsx` · `ActivityTimeline.tsx` |
 | 저장된 뷰(필터·정렬·보기 스냅샷, localStorage) | — | `components/work-items/SavedViews.tsx` |
 | 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
-| Jira 가져오기 | `backend/app/routers/jira.py` (`/jira`) | `JiraImportModal.tsx` |
+| Jira 가져오기/양방향 반영 | `backend/app/routers/jira.py` (`/jira`) | `JiraImportModal.tsx` · `frontend/src/pages/JiraExcelImportPage.tsx` |
 | 오늘 할일 / 멤버별 업무 | `work_items` 재사용 | `frontend/src/pages/TodoTodayPage.tsx` · `MemberBoardPage.tsx` |
 | 스프린트 / 프로젝트 | `routers/sprint.py` (`/sprints`) · `routers/projects.py` (`/projects`) | `SprintsPage.tsx` 등 |
+| 워크플로우 보드 / WBS·간트 | `backend/app/routers/workflows.py` | `frontend/src/pages/WorkflowBoardPage.tsx` · `WbsFlowPage.tsx` |
 | 데이터 훅 | — | `frontend/src/hooks/useWorkItems.ts` · `useWorkItemCustomFields.ts` |
 
-### PromQL / 메트릭 / AI Agent
+### PromQL / 메트릭 / AI Agent / 장애 분석
 | 기능 | 위치 |
 |---|---|
 | PromQL 카드 CRUD + 쿼리 | `backend/app/routers/promql.py`, `backend/app/services/prometheus_service.py` |
 | Prometheus 서비스 (fail-safe) | `backend/app/services/prometheus_service.py` |
+| 메트릭 추이 | `backend/app/routers/metric_trend.py` · `cluster_trends.py` → `frontend/src/pages/ClusterTrendsPage.tsx` |
 | Ollama AI Agent (fail-safe) | `backend/app/routers/agent.py`, `backend/app/services/agent_service.py` |
 | Agent 사이드바 UI | `frontend/src/components/agent/AgentChat.tsx` |
+| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
+| 파드 로그 스트리밍 (SSE) | `analyze.py` 의 `/logs/stream` → `frontend/src/pages/K8sLogsPage.tsx` |
+| 임베딩 (WorkItem/WorkGuide 유사 검색) | `backend/app/services/embedding_service.py` (pgvector) |
+
+### 모니터링 / 점검
+| 기능 | 위치 |
+|---|---|
+| 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` → `frontend/src/pages/HomePage.tsx` |
+| 클러스터 대시보드 | `backend/app/routers/daily_check.py` · `history.py` → `frontend/src/pages/Dashboard.tsx` (`/cluster-overview`) |
+| 일일 점검 리뷰 | `daily_check.py` → `frontend/src/pages/DailyCheckReview.tsx` |
+| Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/deep_checkers/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
+| 운영 점검 콘솔 | `backend/app/routers/ops_check.py` + `services/ops_check_service.py` → `frontend/src/pages/OpsCheckConsolePage.tsx` |
+| K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py` + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
+| Pod 병목 진단 | `backend/app/routers/bottleneck.py` + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |
+
+### K8s 운영 / 리소스
+| 기능 | 위치 |
+|---|---|
+| 리소스 탐색(읽기전용, YAML/Secret 마스킹) | `backend/app/routers/k8s_resources.py` · `k8s_helm.py` · `k8s_exec.py` → `frontend/src/pages/K8sManagePage.tsx` |
+| K8S 자원 관리(req/lim/use 랭킹) | `backend/app/routers/k8s_allocation.py` → `frontend/src/pages/K8sAllocationPage.tsx` |
+| 노드 라벨 / 노드 이미지 | `backend/app/routers/node_labels.py` · `node_images.py` → `frontend/src/pages/NodeLabelsPage.tsx` · `NodeImagesPage.tsx` |
+| 주요 명령어 모음 | `backend/app/routers/commands.py` → `frontend/src/pages/CommandsPage.tsx` · `CommandFormPage.tsx` |
+| Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/` → `frontend/src/pages/BatchJobsPage.tsx` |
+| Ansible 자산 (파일/인벤토리) | `backend/app/routers/ansible_assets.py` |
+
+### 네트워크 / 토폴로지 / 스토리지
+| 기능 | 위치 |
+|---|---|
+| Cilium BPF Trace | `backend/app/routers/cilium_trace.py` + `services/cilium_trace_service.py` · `hubble_client.py` → `frontend/src/pages/CiliumTracePage.tsx` |
+| 패킷 흐름 분석 | `backend/app/routers/topology_trace.py` + `services/tcpdump_runner.py` → `frontend/src/pages/PacketFlowPage.tsx` |
+| 서비스 토폴로지 | `backend/app/routers/service_topology.py` → `frontend/src/pages/ServiceTopologyPage.tsx` |
+| 서비스 모듈 관계도 | — → `frontend/src/pages/ArchitecturePage.tsx` |
+| 인프라 물리 토폴로지 | `backend/app/routers/infra_nodes.py` → `frontend/src/pages/InfraTopologyPage.tsx` |
+| 노드 서버스펙 자산 대장 | `backend/app/routers/node_server_specs.py` → `frontend/src/pages/NodeSpecPage.tsx` |
+| 관리 서버 대장 | `backend/app/routers/management_servers.py` |
+| Isilon NFS 모니터링 | `backend/app/routers/isilon_nfs.py` + `services/isilon_service.py` → `frontend/src/pages/IsilonNfsPage.tsx` |
+| CIDR 계산기 / 주요 링크 | — → `frontend/src/pages/CidrCalculatorPage.tsx` · `ClusterLinksPage.tsx` |
+
+### 서비스 카탈로그 (LAKE / PEP / APP)
+| 기능 | 위치 |
+|---|---|
+| LAKE 서비스 + 타입 | `backend/app/routers/lake_services.py` · `lake_service_types.py` + `services/lake_checkers/` → `frontend/src/pages/LakeServicesPage.tsx` · `LakeServiceDetailPage.tsx` |
+| 서비스 카탈로그/허브 | `backend/app/routers/service_entries.py` · `service_categories.py` → `frontend/src/pages/ServicesCatalogPage.tsx` · `ServiceHubPage.tsx` |
+| PEP / APP 서비스 | `cluster_items` 등 재사용 → `frontend/src/pages/PepServicesPage.tsx` · `AppServicesPage.tsx` |
+| 클러스터 아이템/커스텀 필드 | `backend/app/routers/cluster_items.py` · `cluster_custom_fields.py` |
+
+### 지식 / 소통
+| 기능 | 위치 |
+|---|---|
+| 지식 허브 | `backend/app/routers/work_guide.py` → `frontend/src/pages/KnowledgeHubPage.tsx` · `WorkGuidePage.tsx` |
+| DevOps Q&A / 업무 메모 | `backend/app/routers/ops_note.py` → `frontend/src/pages/OpsNotesPage.tsx` · `OpsNoteDetailPage.tsx` · `OpsNoteFormPage.tsx` |
+| 마인드맵 / 온톨로지 | `backend/app/routers/mindmap.py` · `ontology.py` → `frontend/src/pages/MindMapPage.tsx` · `OntologyPage.tsx` |
+| 트렌드 다이제스트 | `backend/app/routers/trends.py` + `backend/app/services/trends/` (github/rss 수집 + summarizer) → `frontend/src/pages/TrendDigestPage.tsx` |
+| 사용자 VOC 게시판 | `backend/app/routers/voc.py` → `VocBoardPanel` (사이드바 SidePane) |
+| 공감(리액션) | `backend/app/routers/reactions.py` → `ReactionBar` |
+| 릴리즈 노트 패널 | `backend/app/routers/release_notes.py` (CHANGELOG.md 파싱) → `ReleaseNotesPanel` |
+
+### 인증 / 사용자 / 설정
+| 기능 | 위치 |
+|---|---|
+| 로그인/JWT/사용자 관리 | `backend/app/routers/auth.py` → `frontend/src/pages/LoginPage.tsx` · `UsersPage.tsx` · `ChangePasswordPage.tsx` |
+| 시스템 설정 (admin) | `backend/app/routers/ui_settings.py` · `terminal_appearance.py` → `frontend/src/pages/SettingsPage.tsx` |
+| 감사 로그 | `backend/app/routers/audit_logs.py` + `services/audit_logger.py` (Settings 탭) |
+| 인앱 알림 | `backend/app/routers/notifications.py` + `services/user_notify.py` |
+| JSON 백업/복원 | `backend/app/routers/backup.py` + `services/backup_service.py` (Settings 탭) |
 
 ### Playbook / Ansible / 기타
 | 기능 | 위치 |
@@ -73,7 +144,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 플레이북 페이지 | `frontend/src/pages/PlaybooksPage.tsx`, `frontend/src/components/playbooks/` |
 | Ansible 플레이북 소스 | `ansible/playbooks/` |
 | 일일 점검 (Celery) | `backend/app/services/daily_checker.py`, `backend/app/celery_app.py` |
-| 트렌드 다이제스트 | `backend/app/services/trend_service.py`, `frontend/src/pages/TrendDigestPage.tsx` |
+| 트렌드 다이제스트 | `backend/app/services/trends/trend_service.py`, `frontend/src/pages/TrendDigestPage.tsx` |
 | 온톨로지 그래프 | `backend/app/routers/ontology.py` 외, `frontend/src/pages/OntologyPage.tsx` |
 
 ### 공통 UI / 인프라
@@ -81,7 +152,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 |---|---|
 | 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
-| Sidebar + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` |
+| Sidebar + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리) |
 | 라우팅 | `frontend/src/App.tsx` |
 | Axios API 클라이언트 | `frontend/src/services/api.ts` (snake_case→camelCase 자동 변환) |
 | TanStack Query 훅 | `frontend/src/hooks/use*.ts` |
@@ -100,7 +171,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 새 프론트 페이지 추가
 1. `frontend/src/pages/FooPage.tsx` 생성
 2. `frontend/src/App.tsx`에 `<Route path="/foo" element={<FooPage />} />` 추가
-3. Sidebar 메뉴 필요 시 `frontend/src/components/layout/Sidebar.tsx`의 NAV_MAP 업데이트
+3. Sidebar 메뉴 필요 시 `frontend/src/components/layout/navConfig.ts`의 NAV_MAP 업데이트
 4. 서버 데이터는 `frontend/src/hooks/use*.ts`에 TanStack Query 훅으로, 클라이언트 상태는 `frontend/src/stores/`에 Zustand로
 
 ### 새 Cluster 컬럼 추가 (DB 마이그레이션)

@@ -30,10 +30,10 @@ export function InlineEdit({ value: initial, onSave, onCancel, placeholder, inpu
         className={`flex-1 min-w-0 bg-transparent focus:outline-none ${inputClassName}`}
         autoFocus
       />
-      <button type="button" onClick={save} className="p-0.5 text-primary hover:text-primary/80 flex-shrink-0">
+      <button type="button" onClick={save} aria-label="저장" className="p-0.5 text-primary hover:text-primary/80 flex-shrink-0">
         <Check className="w-3.5 h-3.5" />
       </button>
-      <button type="button" onClick={onCancel} className="p-0.5 text-muted-foreground hover:text-foreground flex-shrink-0">
+      <button type="button" onClick={onCancel} aria-label="취소" className="p-0.5 text-muted-foreground hover:text-foreground flex-shrink-0">
         <X className="w-3.5 h-3.5" />
       </button>
     </div>

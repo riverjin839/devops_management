@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clustersApi, healthApi, historyApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { Cluster, Addon } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 // Query Keys
 export const queryKeys = {
@@ -26,7 +27,7 @@ export function useClusters() {
         const sa = a.seq ?? 1000;
         const sb = b.seq ?? 1000;
         if (sa !== sb) return sa - sb;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return parseUTC(a.createdAt).getTime() - parseUTC(b.createdAt).getTime();
       });
       setClusters(clusters);
       return clusters;
@@ -253,18 +254,19 @@ export function useAddonHealthCheck() {
   });
 }
 
-// Logs
-export function useLogs(clusterId?: string) {
-  const { setLogs } = useClusterStore();
-
+// Recent Check History — cluster × time Heat Map (DESIGN_SYSTEM §5③).
+// pageSize 는 백엔드 상한(100, history 라우터 page_size le=100)까지 최대로 잡아 heat map 이
+// "여러 클러스터 × 최근 N일" 을 최대한 커버하게 한다. 날짜 구간 필터는 백엔드에 없어
+// 컴포넌트 쪽에서 클라이언트 필터링한다.
+export function useCheckHistoryHeatmap() {
   return useQuery({
-    queryKey: queryKeys.logs(clusterId),
+    // queryKeys.logs() 와 동일한 키 — Run Check 뮤테이션이 이 키를 invalidate 하므로
+    // 점검 실행 직후 heat map 도 함께 갱신된다.
+    queryKey: queryKeys.logs(),
     queryFn: async () => {
-      const { data } = await historyApi.getLogs(clusterId);
-      const logs = data?.data ?? [];
-      setLogs(logs);
-      return data;
+      const { data } = await historyApi.getLogs(undefined, 1, 100);
+      return data?.data ?? [];
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
 }

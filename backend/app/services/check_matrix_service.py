@@ -15,6 +15,7 @@ deep_check/addon 행의 source_ref 는 "논리 키"(check_type / addon.type 문�
 from __future__ import annotations
 
 import logging
+import random
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Optional
@@ -323,7 +324,7 @@ def execute_item_for_cluster(db: Session, item: CheckMatrixItem, cluster: Cluste
     return False  # core_bundle / manual — 이 경로로 실행하지 않음
 
 
-def _run_core_bundle(db: Session, cluster: Cluster) -> None:
+def run_core_bundle(db: Session, cluster: Cluster) -> None:
     import asyncio
     from app.models import CheckScheduleType
     from app.services.daily_checker import DailyChecker
@@ -351,7 +352,22 @@ def _anchor_naive(last_run_at: Optional[datetime], now_utc: datetime, tz) -> dat
     return raw.astimezone(tz).replace(tzinfo=None)
 
 
-def dispatch_due(db: Session) -> dict[str, Any]:
+def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]:
+    """due 한 core_bundle/cell/definition 을 평가해 **개별 Celery 태스크로 큐잉**한다.
+
+    과거에는 이 함수 자체가(=디스패처 태스크 본체가) due 한 모든 점검을 동기·직렬로
+    실행했다 — 클러스터가 여러 개거나 느린 클러스터가 하나만 섞여 있어도 디스패처
+    태스크가 ``task_time_limit``(5분) 을 넘겨 SIGKILL 당하고, 그 시점 이후 클러스터의
+    점검은 재시도 없이 통째로 유실됐다(``last_run_at`` 은 실행 *전에* 커밋되므로).
+    이제 디스패처는 cron 평가 + 큐잉만 하고 수 초 내 끝나며, 실제 실행은
+    ``run_check_matrix_core_bundle_one`` / ``_cell_one`` / ``_definition_one`` 개별
+    태스크가 각자의 time_limit 안에서 담당한다 — 한 클러스터가 느려도 다른 클러스터
+    점검에 영향을 주지 않는다.
+
+    ``jitter_seconds`` 는 동일 분에 due 한 여러 클러스터가 정확히 같은 순간에
+    kubectl/K8s API 를 두드리는 thundering herd 를 완화하기 위해 큐잉 시점에 랜덤
+    countdown 을 준다(0 이면 즉시 실행).
+    """
     from datetime import timezone as _tz
 
     try:
@@ -359,14 +375,24 @@ def dispatch_due(db: Session) -> dict[str, Any]:
     except ImportError:
         return {"dispatched": 0, "reason": "croniter_missing"}
 
+    # lazy import — celery_app 이 이 모듈을 함수 내부에서 import 하는 순환 의존을 피한다.
+    from app.celery_app import (
+        run_check_matrix_cell_one,
+        run_check_matrix_core_bundle_one,
+        run_check_matrix_definition_one,
+    )
+
     tz = _resolve_tz()
     now_utc = datetime.now(_tz.utc)
     now_aware = now_utc.astimezone(tz)
     now_naive = now_aware.replace(tzinfo=None)
     check_at = now_utc.replace(tzinfo=None)
 
-    core_fired = 0
-    cell_fired = 0
+    def _countdown() -> float:
+        return random.uniform(0, jitter_seconds) if jitter_seconds > 0 else 0
+
+    core_queued = 0
+    cell_queued = 0
     errors: list[str] = []
 
     # 1) core_bundle — Cluster.check_cron_expr (Cluster.status authority 는 여기서만 갱신)
@@ -384,12 +410,13 @@ def dispatch_due(db: Session) -> dict[str, Any]:
         cluster.check_last_run_at = check_at
         db.commit()
         try:
-            _run_core_bundle(db, cluster)
-            core_fired += 1
+            run_check_matrix_core_bundle_one.apply_async(
+                args=[str(cluster.id)], countdown=_countdown(),
+            )
+            core_queued += 1
         except Exception as e:  # noqa: BLE001
-            db.rollback()
             errors.append(f"core:{cluster.name}:{str(e)[:150]}")
-            logger.exception("check-matrix core dispatch failed cluster=%s", cluster.name)
+            logger.exception("check-matrix core dispatch queue failed cluster=%s", cluster.name)
 
     # 2) deep_check / addon 행 — CheckMatrixSchedule
     schedules = (
@@ -417,18 +444,60 @@ def dispatch_due(db: Session) -> dict[str, Any]:
         if item is None or cluster is None:
             continue
         try:
-            if execute_item_for_cluster(db, item, cluster):
-                cell_fired += 1
+            run_check_matrix_cell_one.apply_async(
+                args=[str(item.id), str(cluster.id)], countdown=_countdown(),
+            )
+            cell_queued += 1
         except Exception as e:  # noqa: BLE001
-            db.rollback()
             errors.append(f"cell:{item.name}:{cluster.name}:{str(e)[:150]}")
             logger.exception(
-                "check-matrix cell dispatch failed item=%s cluster=%s", item.name, cluster.name,
+                "check-matrix cell dispatch queue failed item=%s cluster=%s", item.name, cluster.name,
             )
 
+    # 3) DeepCheckDefinition.schedule_cron — 정의별 단독 cron (custom_* 정의의 주 스케줄).
+    #    글로벌 정의(cluster_id NULL)는 전체 클러스터 대상으로 실행한다.
+    definition_queued = 0
+    due_defs = (
+        db.query(DeepCheckDefinition)
+        .filter(DeepCheckDefinition.enabled.is_(True))
+        .filter(DeepCheckDefinition.schedule_cron.isnot(None))
+        .all()
+    )
+    for d in due_defs:
+        cron_expr = (d.schedule_cron or "").strip()
+        if not cron_expr or not croniter.is_valid(cron_expr):
+            continue
+        anchor = _anchor_naive(d.last_run_at, now_utc, tz)
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            continue
+        if next_fire > now_naive:
+            continue
+        d.last_run_at = check_at
+        db.commit()
+
+        if d.cluster_id is not None:
+            targets = db.query(Cluster).filter(Cluster.id == d.cluster_id).all()
+        else:
+            targets = db.query(Cluster).all()
+        for cluster in targets:
+            try:
+                run_check_matrix_definition_one.apply_async(
+                    args=[str(d.id), str(cluster.id)], countdown=_countdown(),
+                )
+                definition_queued += 1
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"definition:{d.name}:{cluster.name}:{str(e)[:150]}")
+                logger.exception(
+                    "check-matrix definition dispatch queue failed def=%s cluster=%s", d.name, cluster.name,
+                )
+
     return {
-        "core_fired": core_fired,
-        "cell_fired": cell_fired,
+        "mode": "fan_out",
+        "core_fired": core_queued,
+        "cell_fired": cell_queued,
+        "definition_fired": definition_queued,
         "errors": errors,
         "executed_at": now_aware.isoformat(),
     }
@@ -489,6 +558,9 @@ def seed_default_items(db: Session) -> int:
 
     from app.services.deep_checkers import REGISTRY
     for check_type, (_, spec) in REGISTRY.items():
+        # custom_* 템플릿형 타입은 check_type→정의 1:1 매핑이 성립하지 않으므로 매트릭스 제외.
+        if not getattr(spec, "seed_default", True):
+            continue
         db.add(CheckMatrixItem(
             name=spec.display_name,
             description=spec.description,

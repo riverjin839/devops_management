@@ -43,6 +43,7 @@ export function LogThemeButton() {
       <button
         onClick={() => setOpen((v) => !v)}
         title="화면 색상/글꼴 (Appearance)"
+        aria-label="화면 색상/글꼴 (Appearance)"
         className={`p-1 rounded hover:bg-secondary ${open ? 'text-primary' : 'text-muted-foreground'}`}
       >
         <Palette className="w-3 h-3" />
@@ -98,6 +99,7 @@ export function LogThemeButton() {
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => patchProfile({ fontSize: Math.max(FONT_SIZE_MIN, profile.fontSize - 1) })}
+                  aria-label="글꼴 크기 줄이기"
                   className="p-1 rounded border border-border bg-secondary hover:bg-secondary/70"
                 >
                   <Minus className="w-3 h-3" />
@@ -105,6 +107,7 @@ export function LogThemeButton() {
                 <span className="w-9 text-center font-mono text-foreground">{profile.fontSize}px</span>
                 <button
                   onClick={() => patchProfile({ fontSize: Math.min(FONT_SIZE_MAX, profile.fontSize + 1) })}
+                  aria-label="글꼴 크기 키우기"
                   className="p-1 rounded border border-border bg-secondary hover:bg-secondary/70"
                 >
                   <Plus className="w-3 h-3" />

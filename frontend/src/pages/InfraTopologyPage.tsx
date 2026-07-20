@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
-  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, GitBranch, Activity, ShieldCheck,
+  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, Activity, ShieldCheck,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
 import { ClusterSidebar } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
 import type {
   InfraNode,
@@ -64,6 +65,7 @@ function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
           <button
             onClick={() => onVerify(node)}
             title="노드 추가 검증"
+            aria-label="노드 추가 검증"
             className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-500 transition-colors"
           >
             <ShieldCheck className="w-3 h-3" />
@@ -71,12 +73,14 @@ function NodeCard({ node, onEdit, onDelete, onVerify }: NodeCardProps) {
           <button
             onClick={() => onEdit(node)}
             className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="노드 편집"
           >
             <Pencil className="w-3 h-3" />
           </button>
           <button
             onClick={() => onDelete(node)}
             className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+            aria-label="노드 삭제"
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -226,7 +230,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           <h2 className="text-base font-semibold text-foreground">
             {isEdit ? '노드 수정' : '노드 추가'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -634,7 +638,7 @@ export function InfraTopologyPage() {
             {syncError && (
               <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
                 <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{syncError}
-                <button onClick={() => setSyncError('')} className="ml-auto"><X className="w-3 h-3" /></button>
+                <button onClick={() => setSyncError('')} className="ml-auto" aria-label="오류 메시지 닫기"><X className="w-3 h-3" /></button>
               </div>
             )}
 
@@ -655,7 +659,7 @@ export function InfraTopologyPage() {
                     {v.hostname}
                   </button>
                 ))}
-                <button onClick={() => setSyncSummary(null)} className="ml-auto text-muted-foreground"><X className="w-3 h-3" /></button>
+                <button onClick={() => setSyncSummary(null)} className="ml-auto text-muted-foreground" aria-label="검증 요약 닫기"><X className="w-3 h-3" /></button>
               </div>
             )}
 
@@ -685,11 +689,7 @@ export function InfraTopologyPage() {
 
             {/* Trace 패널 */}
             {activeCluster && (
-              <div className="bg-card border border-border rounded-xl p-4 mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <GitBranch className="w-4 h-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground">Pod/Service → Switch Trace</h2>
-                </div>
+              <MacCard title="Pod/Service → Switch Trace" rootClassName="mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
                   <input
                     value={traceNamespace}
@@ -759,7 +759,7 @@ export function InfraTopologyPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </MacCard>
             )}
 
             {/* 토폴로지 본문 */}

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette, FileSearch, Wand2, Boxes } from 'lucide-react';
+import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
@@ -29,7 +30,7 @@ import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
   suggestAttribute, suggestOpTypeLabel,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor, levelLabel } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelColor, levelLabel, levelCustomHex } from '@/hooks/useOperationLevels';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
@@ -481,6 +482,7 @@ export function SettingsPage() {
           attribute: suggestAttribute(c.name),
           regionAbbr: suggestRegionAbbr(c.region),
           colorToken: levelColor(opLevels, c.operationLevel),
+          customHex: levelCustomHex(opLevels, c.operationLevel),
         });
         await updateClusterMut.mutateAsync({ id: c.id, data: { icon: svgToDataUrl(svg) } });
         ok++;
@@ -600,11 +602,8 @@ export function SettingsPage() {
         {activeTab === 'screen-ui' && (
         <div className="space-y-6 mb-6">
         {/* 홈 화면 설정 */}
-        <div className="rounded-md border border-border bg-card overflow-hidden">
-          <div className="px-4 py-3 border-b border-border bg-muted/40">
-            <h3 className="text-sm font-semibold">홈 화면 설정</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">PEP 홈 페이지 표시 옵션</p>
-          </div>
+        <MacCard title="홈 화면 설정" bodyPadding="p-0">
+          <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border">PEP 홈 페이지 표시 옵션</p>
           <div className="px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-sm">업무 모드에서 클러스터 필터 표시</p>
@@ -722,7 +721,7 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </MacCard>
 
           {/* 메뉴 이름 편집 (사이드바에서 이동) */}
           <NavMenuManager />
@@ -810,7 +809,7 @@ export function SettingsPage() {
         )}
 
         {/* Cluster List */}
-        {activeTab === 'cluster' && <div className="bg-card border border-border rounded-xl mb-8">
+        {activeTab === 'cluster' && <MacCard rootClassName="mb-8" bodyPadding="p-0">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-2 flex-wrap">
             <h2 className="font-semibold">등록된 클러스터</h2>
             <div className="flex items-center gap-2">
@@ -929,6 +928,7 @@ export function SettingsPage() {
                       disabled={verifyingId === cluster.id}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
                       title="연결 확인"
+                      aria-label="연결 확인"
                     >
                       {verifyingId === cluster.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -940,6 +940,7 @@ export function SettingsPage() {
                       onClick={() => setKubeconfigCluster(cluster)}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                       title="Kubeconfig 확인/수정"
+                      aria-label="Kubeconfig 확인/수정"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
@@ -947,6 +948,7 @@ export function SettingsPage() {
                       onClick={() => setEditCluster(cluster)}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                       title="수정"
+                      aria-label="수정"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -955,6 +957,7 @@ export function SettingsPage() {
                       disabled={deletingId === cluster.id}
                       className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40"
                       title="삭제"
+                      aria-label="삭제"
                     >
                       {deletingId === cluster.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -989,10 +992,10 @@ export function SettingsPage() {
               }}
             />
           )}
-        </div>}
+        </MacCard>}
 
         {/* Management Server List */}
-        {activeTab === 'server' && <div className="bg-card border border-border rounded-xl">
+        {activeTab === 'server' && <MacCard bodyPadding="p-0">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MonitorDot className="w-4 h-4 text-primary" />
@@ -1070,6 +1073,7 @@ export function SettingsPage() {
                       disabled={pingingId === server.id}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
                       title="연결 확인 (Ping)"
+                      aria-label="연결 확인 (Ping)"
                     >
                       {pingingId === server.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
                     </button>
@@ -1077,6 +1081,7 @@ export function SettingsPage() {
                       onClick={() => { setEditServer(server); setShowServerModal(true); }}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                       title="수정"
+                      aria-label="수정"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -1085,6 +1090,7 @@ export function SettingsPage() {
                       disabled={deleteServerMutation.isPending}
                       className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40"
                       title="삭제"
+                      aria-label="삭제"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1093,21 +1099,20 @@ export function SettingsPage() {
               ))}
             </div>
           )}
-        </div>}
+        </MacCard>}
 
         {/* 담당자 관리 */}
         {activeTab === 'assignee' && <AssigneeManager />}
 
         {/* Debug 탭: 대시보드 별 상세 로그 토글 */}
         {activeTab === 'debug' && (
-          <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+          <MacCard title="Debug 모드" bodyPadding="p-6" className="space-y-5">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
                 <Bug className="w-5 h-5 text-amber-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="font-semibold text-base">Debug 모드</h2>
-                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   각 대시보드의 상세 실행 로그를 표시합니다. "전역"을 켜면 모든 API 호출
                   (요청/응답/에러)이 debug 패널에 기록되며, 개별 페이지 토글을 켜면 해당
                   페이지에 로그 패널이 나타납니다. 현재 {debugEventsCount}개 이벤트가
@@ -1157,7 +1162,7 @@ export function SettingsPage() {
                 <li>설정은 브라우저 localStorage 에 저장되며 새로고침 후에도 유지됩니다.</li>
               </ul>
             </div>
-          </div>
+          </MacCard>
         )}
 
         {/* Backup / Restore 탭 */}

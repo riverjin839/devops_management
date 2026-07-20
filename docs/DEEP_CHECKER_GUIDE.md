@@ -125,7 +125,8 @@ Context 조립 ─┘                                     │
 - **in_cluster**: 대상 클러스터 **내부**에서 실행. DB 가 없으므로 registry 의 모든 check_type 을
   기본 임계/파라미터로 1회씩 돌리고, 결과를 `SUPERPOD_INGEST_URL`(`/deep-check/ingest`)로
   Bearer 토큰(`SUPERPOD_INGEST_TOKEN`) 인증 POST. 관리 backend 가 최신 회차에 자동 연결 후
-  AI 리뷰 큐잉.
+  AI 리뷰 큐잉. 배포 산출물은 **`k8s/superpod/`**(CronJob + kustomization + secret 템플릿) —
+  Helm CronJob(`SUPERPOD_MODE=centralized`, 기본값)과는 별도의 kustomize 번들이다.
 
 ---
 
@@ -154,13 +155,13 @@ Base: `/api/v1`
 ### 결과 / 실행 (`deep_check.py`)
 | Method | Path | 설명 |
 |---|---|---|
-| POST | `/deep-check/run/{cluster_id}` | 클러스터의 enabled deep check 전체 실행(저장) + AI 리뷰 큐잉 |
+| POST | `/deep-check/run/{cluster_id}` | 클러스터의 enabled deep check 전체 실행 + AI 리뷰 큐잉. **operator 이상**, Celery 백그라운드(`status:"queued"`; worker 부재 시 동기 폴백 `status:"ok"`) |
 | GET | `/deep-check/results/{cluster_id}` | 결과 목록(페이지네이션) |
 | GET | `/deep-check/results/{cluster_id}/latest` | 최신 회차의 결과들 |
 | GET | `/deep-check/review/{daily_check_log_id}` | AI 요약 + diff + trend + 해당 회차 deep 결과 |
 | POST | `/deep-check/review/{daily_check_log_id}/regenerate` | AI 리뷰 강제 재생성 |
 | GET | `/deep-check/trend/{cluster_id}?days=7` | 최근 N일 상태 분포 |
-| POST | `/deep-check/ingest` | (별도 라우터) super pod in_cluster 결과 push — Bearer 토큰 |
+| POST | `/deep-check/ingest` | (별도 라우터) super pod in_cluster 결과 push — Bearer 토큰. **`SUPERPOD_INGEST_TOKEN` 미설정 시 503 거부(fail-closed)**, 비교는 상수시간 |
 
 ### 정의 (`deep_check_definitions.py`)
 | Method | Path | 설명 |
@@ -168,8 +169,11 @@ Base: `/api/v1`
 | GET | `/deep-check/check-types` | registry 스키마(동적 폼용): threshold/param fields + defaults |
 | GET | `/deep-check/definitions?cluster_id=&include_global=` | 정의 목록 |
 | POST | `/deep-check/definitions` | 정의 생성 (check_type 은 REGISTRY 에 있어야 함) |
-| GET/PUT/DELETE | `/deep-check/definitions/{id}` | 조회/수정/삭제 |
-| POST | `/deep-check/definitions/{id}/test` | 즉시 1회 실행, **저장 안 함** (미리보기) |
+| GET/PUT/DELETE | `/deep-check/definitions/{id}` | 조회 / 수정·삭제(**operator 이상**) |
+| POST | `/deep-check/definitions/{id}/test` | 즉시 1회 실행, **저장 안 함** (미리보기). **operator 이상** |
+
+> **인가**: 조회(GET)는 인증된 사용자면 가능하지만, **정의 생성/수정/삭제·Test·run·
+> ops-check 실행은 operator 이상**만 허용된다(컨트롤플레인 exec·파드 생성 등 강력한 동작 유발).
 
 ---
 
@@ -192,10 +196,24 @@ Base: `/api/v1`
 | `node_health` | 노드 추가 검증(기본+네트워킹) | k8s | ✅ | Ready/Pressure/Taint/Allocatable + CNI/kube-proxy 데몬셋 |
 | `kernel_param_drift` | OS 파라미터 변경 점검 | os | ❌ | `ClusterConfigSnapshot` 연속 스냅샷 sysctl 드리프트 |
 | `minio_health` | MinIO 스토리지 health | storage | ❌ | `/minio/health/cluster·live` 쿼럼/degraded |
+| `isilon_nfs` | Isilon NFS (NAS) | storage | ❌ | OneFS SSH 수집 + K8s NFS PV 매칭·쿼터 판정 |
+| `custom_http` | 커스텀 HTTP/TCP 프로브 | network | ❌ | **UI 정의형** — endpoints 프로브, 기대 status/본문 정규식/지연 임계 |
+| `custom_kubectl` | 커스텀 kubectl 점검 | k8s | ❌ | **UI 정의형** — 읽기전용 kubectl + lines/number/regex_count 파싱 |
+| `custom_promql` | 커스텀 PromQL 점검 | app | ❌ | **UI 정의형** — instant 쿼리 + max/min/sum/avg/count 집계 임계 |
 
-> `default_enabled=False`(kernel_param_drift, minio_health) 는 **위험/무겁거나 사전 준비가
-> 필요한** 점검 — 시드로 등록만 되고 운영자가 켠다. 콘솔 카탈로그에는 비활성도 노출(수동 실행
-> 가능)되지만, cron 은 `enabled=True` 만 실행한다.
+> `default_enabled=False`(kernel_param_drift, minio_health, isilon_nfs, custom_*) 는
+> **위험/무겁거나 사전 준비가 필요한** 점검 — 시드로 등록만 되고 운영자가 켠다. 콘솔
+> 카탈로그에는 비활성도 노출(수동 실행 가능)되지만, cron 은 `enabled=True` 만 실행한다.
+>
+> `custom_*` 3종은 추가로 **`seed_default=False`(템플릿형)** — 부팅 시 글로벌 정의 자동
+> 시드와 체크매트릭스 항목 시드에서 제외되고, admin 이 `/daily-check/settings` 에서 같은
+> check_type 으로 **인스턴스(정의)를 여러 개 직접 생성**한다. 자동 실행은 정의별
+> `schedule_cron`(check-matrix 디스패처가 매분 due 평가, 최소 5분 간격)으로 건다.
+| `isilon_nfs` | Isilon NFS (NAS) | storage | ❌ | `isi` 명령 SSH 수집 + K8s NFS PV 매칭, export 가용성/쿼터 |
+
+> `default_enabled=False`(kernel_param_drift, minio_health, isilon_nfs) 는 **위험/무겁거나
+> 사전 준비가 필요한** 점검 — 시드로 등록만 되고 운영자가 켠다. 콘솔 카탈로그에는 비활성도
+> 노출(수동 실행 가능)되지만, cron 은 `enabled=True` 만 실행한다.
 
 각 check_type 의 `threshold_fields`/`param_fields`/기본값은 `registry.py` 를 직접 확인
 (`GET /deep-check/check-types` 응답과 동일).
@@ -240,4 +258,11 @@ Base: `/api/v1`
   `_safe_add_column` 으로 보강하고 백업 서비스(`backup_service.py`) 호환을 점검(민감정보는
   `SENSITIVE_COLUMNS`, 대용량 로그성은 `LOG_TABLES`). CLAUDE.md 의 Backup/Restore 규칙 참조.
 - **결과는 회차로 묶인다** — `daily_check_log_id` 로 DailyCheckLog 와 연결돼야 리뷰/트렌드에
-  올바르게 집계된다. 미지정 push 는 최신 회차로 자동 연결하는 fallback 이 있다.
+  올바르게 집계된다. 미지정 push 는 최신 회차로 자동 연결하는 fallback 이 있으나, deep check 가
+  daily check 보다 먼저 도는 등으로 최신 회차가 **6시간 이상 오래됐으면 연결하지 않는다**
+  (과거 회차 오연결 방지, `_AUTO_LINK_MAX_AGE_HOURS`).
+- **리텐션** — `deep_check_results` 는 매일 03:10 KST `run_deep_check_results_purge` 가
+  check_matrix 와 동일한 보관일수(기본 90일) 초과분을 청크 삭제한다(무한 증가 방지).
+- **Ingest 보안** — `/deep-check/ingest` 는 JWT 없이 마운트되므로 `SUPERPOD_INGEST_TOKEN`
+  이 유일한 방어선이다. 미설정이면 503 으로 fail-closed. HTTPS ingest 시 in_cluster 러너에
+  `SUPERPOD_INGEST_VERIFY_TLS=true` 로 인증서 검증을 켜 토큰 노출(MITM)을 막을 수 있다.

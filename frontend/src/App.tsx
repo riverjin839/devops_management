@@ -102,6 +102,14 @@ const queryClient = new QueryClient({
 function AppShell() {
   return (
     <div className="flex min-h-screen bg-background">
+      {/* Skip link — 키보드/스크린리더 사용자가 사이드바 내비게이션을 건너뛰고
+          바로 본문(#main-content, PageStyleProvider 래퍼)으로 이동(W4 접근성 패스). */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:font-semibold focus:shadow-lg"
+      >
+        본문으로 건너뛰기
+      </a>
       <Sidebar />
       {/* 업무 알람 종은 더 이상 전역 고정하지 않는다 — HomePage(업무 현황) 상단 스트립 우측에 배치. */}
       {/* PageStyleProvider — 본문 래퍼. 라우트별 "화면 UI 설정"(폰트/크기/색/배경) 적용. */}
@@ -182,7 +190,7 @@ function AppShell() {
               <Route path="/k8s-events" element={<K8sEventsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
-              <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
+              <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />
               {/* 운영 점검 통합 콘솔 — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그 */}
               <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />
               <Route path="/ops-checks" element={<OpsCheckConsolePage />} />

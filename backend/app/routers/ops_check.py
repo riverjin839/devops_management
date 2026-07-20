@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import OpsCheckRun, OpsCheckRunItem, User
 from app.services.ops_check_service import OpsCheckService
@@ -118,7 +118,7 @@ def get_catalog(cluster_id: UUID, db: Session = Depends(get_db)):
 def start_run(
     body: RunRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ):
     if not body.items:
         raise HTTPException(status_code=400, detail="실행할 점검 항목이 없습니다.")

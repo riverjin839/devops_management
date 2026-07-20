@@ -57,6 +57,30 @@
     --status-neutral:     215 12% 55%;
     --status-neutral-bg:  215 12% 93%;
 
+    /* ── Categorical chart tokens (D-005) — Recharts/SVG 시리즈 구분 전용 ──
+       의미(성공/실패 등)가 있는 색은 --status-* 를 쓰고, 시리즈 구분용만 여기서 뽑는다.
+       색맹 안전을 위해 red-green 계열이 인접하지 않도록 배치. */
+    --chart-1: 217 70% 50%;   /* blue */
+    --chart-2: 168 60% 45%;   /* teal/green */
+    --chart-3: 38 85% 50%;    /* amber */
+    --chart-4: 262 65% 55%;   /* violet */
+    --chart-5: 340 65% 52%;   /* rose */
+    --chart-6: 192 70% 45%;   /* cyan */
+    --chart-7: 24 80% 52%;    /* orange */
+    --chart-8: 215 15% 50%;   /* slate */
+
+    /* ── Surface Container 5단계 (DESIGN_SYSTEM §2.1 확장, M3 개념 차용) ──
+       그림자 대신 톤 차이로 깊이감을 준다(--card-shadow: none 철학과 일치).
+       lowest(가장 밝음/바탕에 가까움) → highest(가장 진함/가장 도드라짐). */
+    --surface-container-lowest:  210 40% 100%;
+    --surface-container-low:     210 35% 98%;
+    --surface-container:         210 33% 96.5%;
+    --surface-container-high:    210 32% 95%;
+    --surface-container-highest: 210 30% 93%;
+
+    /* ── Brand tokens (외부 서비스 고유색. 앱 primary 와 구분) ── */
+    --brand-jira:         216 100% 40%;  /* #0052CC Atlassian/Jira blue */
+
     /* ── Motion — 모든 transition 기본값 통일 (Pre-delivery checklist 준수) ─ */
     --motion-fast: 150ms;
     --motion-base: 200ms;
@@ -115,6 +139,23 @@
     --status-info-bg:     199 50% 16%;
     --status-neutral:     215 8% 60%;
     --status-neutral-bg:  215 8% 18%;
+
+    /* Categorical chart tokens (D-005) — 다크: 명도를 55~65% 로 올려 대비 확보 */
+    --chart-1: 217 80% 62%;   /* blue */
+    --chart-2: 168 55% 55%;   /* teal/green */
+    --chart-3: 40 90% 60%;    /* amber */
+    --chart-4: 262 75% 65%;   /* violet */
+    --chart-5: 340 70% 62%;   /* rose */
+    --chart-6: 192 75% 58%;   /* cyan */
+    --chart-7: 24 85% 60%;    /* orange */
+    --chart-8: 215 15% 62%;   /* slate */
+
+    /* Dark: 어두운 배경 위에서는 밝을수록 더 "떠 있는"(elevated) 톤 — lowest 는 background 와 동일. */
+    --surface-container-lowest:  220 18% 7%;
+    --surface-container-low:     220 17% 9%;
+    --surface-container:         220 17% 11%;
+    --surface-container-high:    220 15% 14%;
+    --surface-container-highest: 220 14% 17%;
 
     --motion-fast: 150ms;
     --motion-base: 200ms;
@@ -211,6 +252,22 @@
     --status-info-bg:     199 50% 92%;
     --status-neutral:     28 10% 50%;
     --status-neutral-bg:  35 15% 90%;
+
+    /* Categorical chart tokens (D-005) — warm palette 에 맞춰 채도 약간 낮춤 */
+    --chart-1: 217 60% 48%;   /* blue */
+    --chart-2: 168 50% 45%;   /* teal/green */
+    --chart-3: 35 80% 50%;    /* amber */
+    --chart-4: 262 55% 55%;   /* violet */
+    --chart-5: 340 55% 50%;   /* rose */
+    --chart-6: 192 60% 45%;   /* cyan */
+    --chart-7: 24 70% 50%;    /* orange */
+    --chart-8: 28 12% 48%;    /* warm slate */
+
+    --surface-container-lowest:  38 50% 99%;
+    --surface-container-low:     37 42% 98%;
+    --surface-container:         36 38% 96%;
+    --surface-container-high:    35 32% 94%;
+    --surface-container-highest: 35 30% 92%;
 
     --motion-fast: 150ms;
     --motion-base: 200ms;

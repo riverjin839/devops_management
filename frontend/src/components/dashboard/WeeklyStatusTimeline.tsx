@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck, Plus,
+  ClipboardList, CalendarCheck, Plus, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useWorkItems } from '@/hooks/useWorkItems';
@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
 import { stripHtml, cn } from '@/lib/utils';
 import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
+import { Button } from '@/components/ui/button';
 
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
@@ -40,28 +41,22 @@ const KR_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 type ViewMode = 'task' | 'assignee';
 
-// ── status visual map (macOS / Claude soft gradient bars) ───────────────────────
-// from/to 는 Tailwind 팔레트와 동일한 hex — 배경 투명도(Settings → 홈 화면 설정)를
-// 사용자가 조절할 수 있도록 클래스 대신 hex 로 들고 rgba() 로 조합해 inline style 렌더.
-const STATUS_BAR: Record<KanbanStatus, { from: string; to: string; ring: string; label: string }> = {
-  done:        { from: '#34d399', to: '#10b981', ring: 'ring-emerald-500/30', label: '완료' },
-  in_progress: { from: '#38bdf8', to: '#3b82f6', ring: 'ring-blue-500/30',    label: '진행중' },
-  review_test: { from: '#a78bfa', to: '#a855f7', ring: 'ring-purple-500/30',  label: '검토' },
-  todo:        { from: '#fcd34d', to: '#fb923c', ring: 'ring-orange-500/30', label: 'Todo' },
-  backlog:     { from: '#cbd5e1', to: '#94a3b8', ring: 'ring-slate-500/30',  label: 'Backlog' },
+// ── status visual map (D-005: 차트/상태 토큰 체계) ─────────────────────────────
+// 배경 투명도(Settings → 홈 화면 설정)를 사용자가 조절할 수 있도록 토큰명을 들고
+// hsl(var(--x) / a%) 로 조합해 inline style 렌더한다 — 테마(light/dark/default) 추종.
+// done 은 "완료=성공" 의미가 있어 --status-healthy, 나머지는 시리즈 구분용 --chart-N.
+const STATUS_BAR: Record<KanbanStatus, { token: string; ring: string; label: string }> = {
+  done:        { token: '--status-healthy', ring: 'ring-status-healthy/30', label: '완료' },
+  in_progress: { token: '--chart-1',        ring: 'ring-chart-1/30',        label: '진행중' },
+  review_test: { token: '--chart-4',        ring: 'ring-chart-4/30',        label: '검토' },
+  todo:        { token: '--chart-7',        ring: 'ring-chart-7/30',        label: 'Todo' },
+  backlog:     { token: '--chart-8',        ring: 'ring-chart-8/30',        label: 'Backlog' },
 };
 
-/** #rrggbb + 0~100 투명도 → rgba() 문자열. */
-function hexToRgba(hex: string, opacityPct: number): string {
-  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-  if (!m) return hex;
-  const [r, g, b] = [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
-  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(100, opacityPct)) / 100})`;
-}
-
-/** 상태 막대 배경(그라데이션) inline style — 투명도 반영. */
-function barBackgroundStyle(sv: { from: string; to: string }, opacityPct: number): CSSProperties {
-  return { backgroundImage: `linear-gradient(to right, ${hexToRgba(sv.from, opacityPct)}, ${hexToRgba(sv.to, opacityPct)})` };
+/** 상태 막대 배경 inline style — 토큰 + 투명도(0~100) 반영. */
+function barBackgroundStyle(sv: { token: string }, opacityPct: number): CSSProperties {
+  const pct = Math.max(0, Math.min(100, opacityPct));
+  return { background: `hsl(var(${sv.token}) / ${pct}%)` };
 }
 
 function StatusGlyph({ status }: { status: KanbanStatus }) {
@@ -89,8 +84,8 @@ interface AssigneeRow {
   bars: TaskBar[];   // 이 담당자(또는 "전체")의 업무 막대 — packLanes 는 표시 시점(펼침 여부)에 따라 렌더에서 계산
 }
 
-/** 이번 주 전체 업무를 모은 요약 행 이름 — 항상 목록 최상단(본인 행보다 위)에 온다. */
-const TEAM_ROW_NAME = '전체';
+/** 파트 전체 대상 공통업무(all_attendees) 요약 행 이름 — 항상 목록 최상단(본인 행보다 위)에 온다. */
+const TEAM_ROW_NAME = '공통';
 
 // 담당자별 기본 표시 업무 수 — 넘으면 "+N건 더보기"/"접기" 토글(주간 스윔레인 뷰).
 const ASSIGNEE_ITEM_LIMIT = 5;
@@ -132,9 +127,11 @@ interface WeeklyStatusTimelineProps {
 
 export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: WeeklyStatusTimelineProps) {
   const navigate = useNavigate();
-  const { data, isLoading: queryLoading } = useWorkItems();
+  const { data, isLoading: queryLoading, isError: queryError, refetch } = useWorkItems();
   const workItems = items ?? data?.data ?? [];
   const loading = isLoading ?? queryLoading;
+  // 외부에서 items 를 주입받은 경우 내부 쿼리 상태는 무의미하므로 에러로 보지 않는다.
+  const errored = items ? false : queryError;
 
   // 막대/마일스톤 클릭 → 상세 업무 페이지로 이동.
   const openWorkItem = (id: string) => navigate(`/tasks-mgmt/${id}`);
@@ -218,8 +215,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         (b[0] === myName ? 1 : 0) - (a[0] === myName ? 1 : 0)
         || a[0].localeCompare(b[0], 'ko'))
       .map(([name, bars]) => ({ name, bars }));
-    // "전체" 요약 행 — 이번 주 모든 업무를 모아 항상 맨 위(본인 행보다도 위)에 노출.
-    return taskBars.length > 0 ? [{ name: TEAM_ROW_NAME, bars: taskBars }, ...individual] : individual;
+    // "공통" 요약 행 — 특정 담당자가 아닌 파트 전체 대상 업무(allAttendees, 예: 파트 회의)만
+    // 모아 항상 맨 위(본인 행보다도 위)에 노출한다. 전체 업무 병합이 아니다.
+    const teamBars = taskBars.filter((b) => b.item.allAttendees);
+    return teamBars.length > 0 ? [{ name: TEAM_ROW_NAME, bars: teamBars }, ...individual] : individual;
   }, [taskBars, currentUser]);
 
   // ── 담당자별 "+N건 더보기"/"접기" (기본 ASSIGNEE_ITEM_LIMIT 개만 표시) ──
@@ -303,8 +302,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-sm">
           <CalendarDays className="w-4 h-4 text-primary" />
-          <span className="font-semibold text-slate-800">{monthLabel}</span>
-          <span className="text-slate-700 text-sm font-mono">{weekStartStr} ~ {weekEndStr}</span>
+          <span className="font-semibold text-foreground">{monthLabel}</span>
+          <span className="text-muted-foreground text-sm font-mono">{weekStartStr} ~ {weekEndStr}</span>
           {!isThisWeek && (
             <button onClick={goToday}
               className="ml-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
@@ -372,8 +371,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             </button>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-sky-400 to-blue-500" />업무 {taskBars.length}</span>
-            <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />마일스톤 {milestones.length}</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-primary" />업무 {taskBars.length}</span>
+            <span className="flex items-center gap-1"><Star className="w-3 h-3 text-status-warning fill-status-warning" />마일스톤 {milestones.length}</span>
           </div>
         </div>
       </div>
@@ -403,10 +402,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               return (
                 <div key={ds}
                   className={`px-1 py-2 text-center border-l border-border/60 ${isTd ? 'bg-primary/10' : ''}`}>
-                  <div className={`text-xs ${isTd ? 'text-primary font-bold' : 'text-slate-700'}`}>
+                  <div className={`text-xs ${isTd ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
                     {KR_DAYS[d.getDay()]}
                   </div>
-                  <div className={`text-xs font-semibold ${isTd ? 'text-primary' : 'text-slate-800'}`}>
+                  <div className={`text-xs font-semibold ${isTd ? 'text-primary' : 'text-foreground'}`}>
                     {d.getMonth() + 1}/{d.getDate()}
                   </div>
                 </div>
@@ -435,6 +434,14 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               </div>
             ))}
           </div>
+        ) : errored ? (
+          <div className="py-14 flex flex-col items-center justify-center text-status-critical">
+            <AlertTriangle className="w-9 h-9 mb-2 opacity-40" />
+            <p className="text-sm">업무 정보를 불러오지 못했습니다.</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => refetch()}>
+              <RotateCcw className="w-3.5 h-3.5" /> 다시 시도
+            </Button>
+          </div>
         ) : taskBars.length === 0 && milestones.length === 0 ? (
           <div className="py-14 flex flex-col items-center justify-center text-muted-foreground">
             <CalendarDays className="w-9 h-9 mb-2 opacity-30" />
@@ -445,8 +452,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
           <div className="divide-y divide-border/60">
             {/* milestone strip */}
             {milestones.length > 0 && (
-              <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] bg-amber-500/[0.04]">
-                <div className="px-4 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-amber-600">
+              <div className="grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] bg-status-warning/5">
+                <div className="px-4 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-status-warning">
                   <Flag className="w-3.5 h-3.5" /> 마일스톤
                 </div>
                 <div className={`relative grid ${colsClass} min-h-[44px]`}>
@@ -456,11 +463,11 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                     return (
                       <button key={issue.id} type="button"
                         onClick={() => openWorkItem(issue.id)}
-                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 text-left rounded hover:bg-amber-500/10 transition-colors cursor-pointer"
+                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 text-left rounded hover:bg-status-warning/10 transition-colors cursor-pointer"
                         style={{ left: `${(dayIdx / DAY_COUNT) * 100}%`, width: `${(1 / DAY_COUNT) * 100}%` }}
                         title={stripHtml(issue.content)}>
-                        <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-emerald-500 fill-emerald-400' : 'text-amber-500 fill-amber-400'}`} />
-                        <span className={`text-xs font-medium truncate ${resolved ? 'text-emerald-600' : 'text-amber-700'}`}>
+                        <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-status-healthy fill-status-healthy' : 'text-status-warning fill-status-warning'}`} />
+                        <span className={`text-xs font-medium truncate ${resolved ? 'text-status-healthy' : 'text-status-warning'}`}>
                           {issue.title?.trim() || stripHtml(issue.content)}
                         </span>
                       </button>
@@ -515,8 +522,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             {/* ── 담당자 기준: 한 담당자 = 한 swimlane(여러 sub-lane) ──
                 라인 밀도를 낮춰(LANE_H 24px, 축소된 글씨) 한 화면에 더 많은 담당자가
                 보이게 하고, 담당자별 기본 ASSIGNEE_ITEM_LIMIT 개만 보여준 뒤
-                "+N건 더보기"/"접기" 로 펼치고 다시 접을 수 있다. "전체" 행은 이번 주
-                모든 업무를 모아 항상 맨 위(본인 행보다도 위)에 강조 표시된다. */}
+                "+N건 더보기"/"접기" 로 펼치고 다시 접을 수 있다. "공통" 행은 파트 전체
+                대상 업무(allAttendees)만 모아 항상 맨 위(본인 행보다도 위)에 강조 표시된다. */}
             {viewMode === 'assignee' && visibleAssigneeRows.map(({ name, bars }) => {
               const LANE_H = 24; // px per sub-lane (축소 — 기존 32px)
               const isTeamRow = name === TEAM_ROW_NAME;
@@ -602,8 +609,8 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             {STATUS_BAR[k].label}
           </span>
         ))}
-        <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" />미해결 이슈</span>
-        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-emerald-500" />해결 이슈</span>
+        <span className="flex items-center gap-1"><Star className="w-3 h-3 text-status-warning fill-status-warning" />미해결 이슈</span>
+        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-healthy" />해결 이슈</span>
         <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
       </div>
 

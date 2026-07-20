@@ -5,6 +5,7 @@ import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sEvents, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
 import type { K8sEvent, K8sEventSeverity } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const SEVERITY_TABS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '전체' },
@@ -37,7 +38,7 @@ function SeverityBadge({ severity }: { severity: K8sEventSeverity }) {
 
 function formatTime(iso: string) {
   try {
-    return new Date(iso).toLocaleString('ko-KR', {
+    return parseUTC(iso).toLocaleString('ko-KR', {
       month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     });
@@ -142,7 +143,7 @@ export function K8sEventsPage() {
                       <th className="text-left py-2 pr-3 font-medium w-32">네임스페이스</th>
                       <th className="text-left py-2 pr-3 font-medium w-36">Reason</th>
                       <th className="text-left py-2 font-medium">메시지</th>
-                      <th className="w-8"></th>
+                      <th className="w-8"><span className="sr-only">펼치기</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -180,6 +181,7 @@ export function K8sEventsPage() {
                                 e.stopPropagation();
                                 deleteEvent.mutate(ev.id);
                               }}
+                              aria-label="이벤트 삭제"
                               className="p-1 rounded hover:bg-red-100 hover:text-red-600 text-muted-foreground transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

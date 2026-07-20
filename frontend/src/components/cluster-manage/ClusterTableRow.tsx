@@ -6,7 +6,7 @@ import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { STATUS_STYLE } from './constants';
-import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
 import { extractInterfaceIps, extractInternalIps, groupInternalIps, parseNodeIps } from './internalIp';
 
@@ -81,6 +81,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
   const lv = cluster.operationLevel ? levelBadgeClass(levelColor(opsLevels, cluster.operationLevel)) : undefined;
+  const lvStyle = cluster.operationLevel ? levelBadgeStyle(opsLevels, cluster.operationLevel) : undefined;
   const ipBuckets = useMemo(() => {
     const entries = parseNodeIps(cluster.nodeIps);
     const internalIps = extractInternalIps(entries);
@@ -157,7 +158,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             {(opsLevels ?? []).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         ) : cluster.operationLevel ? (
-          <span className={`text-xs px-2 py-0.5 rounded-full border ${lv}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${lv}`} style={lvStyle}>
             {levelLabel(opsLevels, cluster.operationLevel)}
           </span>
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}

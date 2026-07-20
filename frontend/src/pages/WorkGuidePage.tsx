@@ -71,6 +71,7 @@ function InlineTitleInput({
         onMouseDown={(e) => { e.preventDefault(); commit(); }}
         className="p-0.5 text-primary hover:text-primary/80"
         title="저장"
+        aria-label="저장"
       >
         <Check className="w-3 h-3" />
       </button>
@@ -79,6 +80,7 @@ function InlineTitleInput({
         onMouseDown={(e) => { e.preventDefault(); committed.current = true; onCancel(); }}
         className="p-0.5 text-muted-foreground hover:text-foreground"
         title="취소"
+        aria-label="취소"
       >
         <X className="w-3 h-3" />
       </button>
@@ -144,6 +146,7 @@ function TreeNode({ guide, childGuides, allGuides, depth, selectedId, onSelect, 
                 onClick={(e) => { e.stopPropagation(); setRenaming(true); }}
                 className="p-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-secondary/80"
                 title="이름 변경"
+                aria-label="이름 변경"
               >
                 <Pencil className="w-3 h-3" />
               </button>
@@ -152,6 +155,7 @@ function TreeNode({ guide, childGuides, allGuides, depth, selectedId, onSelect, 
                 onClick={(e) => { e.stopPropagation(); setAddingChild(true); setExpanded(true); }}
                 className="p-0.5 rounded text-muted-foreground/70 hover:text-primary hover:bg-secondary/80"
                 title="하위 페이지 추가"
+                aria-label="하위 페이지 추가"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -390,6 +394,7 @@ export function WorkGuidePage() {
             onClick={() => navigate('/work-guides/new')}
             className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
             title="새 페이지"
+            aria-label="새 페이지"
           >
             <Plus className="w-4 h-4" />
           </button>
