@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2,
+  ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2, AlertTriangle,
 } from 'lucide-react';
 import {
   useWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
@@ -9,6 +9,7 @@ import {
 import { useAssignees } from '@/hooks/useAssignees';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
+import { Button } from '@/components/ui/button';
 import { stripHtml, cn } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
@@ -54,12 +55,14 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+// D-011: 상태색은 semantic status 토큰 경유. done=완료(healthy), in_progress=warning,
+// todo=info, backlog=unknown(중립), review_test 는 의미색이 없는 구분 상태라 chart 토큰 사용.
 const STATUS_STYLE: Record<KanbanStatus, { dot: string; bar: string; tint: string }> = {
-  backlog:     { dot: 'bg-slate-400',   bar: 'bg-slate-400',   tint: 'bg-slate-500/[0.10]' },
-  todo:        { dot: 'bg-blue-400',    bar: 'bg-blue-400',    tint: 'bg-blue-500/[0.12]' },
-  in_progress: { dot: 'bg-amber-400',   bar: 'bg-amber-400',   tint: 'bg-amber-500/[0.14]' },
-  review_test: { dot: 'bg-purple-400',  bar: 'bg-purple-400',  tint: 'bg-purple-500/[0.12]' },
-  done:        { dot: 'bg-emerald-400', bar: 'bg-emerald-400', tint: 'bg-emerald-500/[0.12]' },
+  backlog:     { dot: 'bg-status-unknown', bar: 'bg-status-unknown', tint: 'bg-status-unknown/10' },
+  todo:        { dot: 'bg-status-info',    bar: 'bg-status-info',    tint: 'bg-status-info/10' },
+  in_progress: { dot: 'bg-status-warning', bar: 'bg-status-warning', tint: 'bg-status-warning/10' },
+  review_test: { dot: 'bg-chart-4',        bar: 'bg-chart-4',        tint: 'bg-chart-4/10' },
+  done:        { dot: 'bg-status-healthy', bar: 'bg-status-healthy', tint: 'bg-status-healthy/10' },
 };
 
 const ASSIGNEE_PALETTE = [
@@ -209,7 +212,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   };
   const meOnly = scope === 'individual';
 
-  const { data: workItemsData, isLoading } = useWorkItems();
+  const { data: workItemsData, isLoading, isError, refetch } = useWorkItems();
   const { data: dayBlocks = [] } = useTimeBlocksRange(viewDate, viewDate);
   const createBlock = useCreateTimeBlock();
   const updateBlock = useUpdateTimeBlock();
@@ -478,6 +481,16 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
           <div className="space-y-2 pt-1">
             {[...Array(6)].map((_, i) => <div key={i} className="h-12 rounded-xl bg-secondary/40 animate-pulse" />)}
           </div>
+        ) : isError ? (
+          <div className="rounded-xl border border-status-critical/40 bg-status-critical/5 py-10 mt-2 text-center text-sm text-status-critical">
+            <AlertTriangle className="w-6 h-6 mx-auto mb-2 opacity-80" />
+            일정을 불러오지 못했습니다.
+            <div>
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
+                <RotateCcw className="w-3 h-3" /> 다시 시도
+              </Button>
+            </div>
+          </div>
         ) : (
           <>
             {/* 캘린더 그리드 */}
@@ -624,7 +637,7 @@ function SessionBox({
             <button
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 flex-shrink-0"
+              className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-status-critical flex-shrink-0"
               title="이 시간 블록 삭제" aria-label="이 시간 블록 삭제">
               <Trash2 className="w-3 h-3" />
             </button>

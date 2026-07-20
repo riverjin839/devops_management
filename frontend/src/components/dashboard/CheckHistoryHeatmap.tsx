@@ -28,7 +28,12 @@ interface CheckHistoryHeatmapProps {
 }
 
 function dayKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // 로컬(KST) 날짜 기준 YYYY-MM-DD — toISOString(UTC) 은 KST 자정~오전 9시 점검을
+  // 전날 칸으로 밀어 이력을 오배치하므로 로컬 연/월/일로 버킷팅한다.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export function CheckHistoryHeatmap({ logs, isLoading, days = 14 }: CheckHistoryHeatmapProps) {
