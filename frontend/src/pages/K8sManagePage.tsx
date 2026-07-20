@@ -12,6 +12,7 @@ import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
+import { ConfirmDialog } from '@/components/common';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
@@ -131,6 +132,13 @@ interface DetailTarget {
   editable?: boolean;
 }
 
+// 확인 다이얼로그를 통과해야 하는 위험 동작 (D-022)
+type PendingAction =
+  | { type: 'scale'; kind: string; ns: string; name: string }
+  | { type: 'restart'; kind: string; ns: string; name: string }
+  | { type: 'delete'; kind: string; ns: string; name: string }
+  | { type: 'drain'; name: string };
+
 export function K8sManagePage() {
   const { clusterId = '' } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
@@ -150,6 +158,10 @@ export function K8sManagePage() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [actionMsg, setActionMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // 위험 동작(scale/restart/delete/drain)은 native prompt/confirm 대신 테마·포커스 확보된
+  // ConfirmDialog 로 확인받는다 (D-022). scale 은 정수 입력을 다이얼로그 안에서 받는다.
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [scaleInput, setScaleInput] = useState('1');
   const [terminalPod, setTerminalPod] = useState<{ namespace: string; name: string } | null>(null);
   const [selectedCrd, setSelectedCrd] = useState<K8sCrdInfo | null>(null);
 
@@ -191,34 +203,12 @@ export function K8sManagePage() {
     queryClient.invalidateQueries({ queryKey: ['k8s-mng-list', clusterId] });
   };
 
-  // ── 쓰기 액션 핸들러 ────────────────────────────────────────────────────────
-  const doScale = async (kind: string, ns: string, name: string) => {
-    const input = window.prompt(`${name} — replicas 수를 입력하세요`, '1');
-    if (input == null) return;
-    const n = Number(input);
-    if (!Number.isInteger(n) || n < 0) { flash('err', 'replicas 는 0 이상의 정수여야 합니다.'); return; }
-    try {
-      await k8sResourcesApi.scale(clusterId, kind, ns, name, n);
-      flash('ok', `${name} → replicas ${n}`);
-      reloadList();
-    } catch (e) { flash('err', errMsg(e)); }
-  };
-  const doRestart = async (kind: string, ns: string, name: string) => {
-    if (!window.confirm(`${name} 을(를) rollout restart 하시겠습니까?`)) return;
-    try {
-      await k8sResourcesApi.restart(clusterId, kind, ns, name);
-      flash('ok', `${name} 재시작 트리거됨`);
-      reloadList();
-    } catch (e) { flash('err', errMsg(e)); }
-  };
-  const doDelete = async (kind: string, ns: string, name: string) => {
-    if (!window.confirm(`정말 삭제하시겠습니까?\n${kind}/${ns}/${name}\n\n이 동작은 kubeconfig 신원으로 실행되며 되돌릴 수 없습니다.`)) return;
-    try {
-      await k8sResourcesApi.remove(clusterId, kind, ns, name);
-      flash('ok', `${name} 삭제됨`);
-      reloadList();
-    } catch (e) { flash('err', errMsg(e)); }
-  };
+  // ── 쓰기 액션 핸들러 — 실행 대신 확인 다이얼로그를 연다 ──────────────────────
+  const doScale = (kind: string, ns: string, name: string) => { setScaleInput('1'); setPending({ type: 'scale', kind, ns, name }); };
+  const doRestart = (kind: string, ns: string, name: string) => setPending({ type: 'restart', kind, ns, name });
+  const doDelete = (kind: string, ns: string, name: string) => setPending({ type: 'delete', kind, ns, name });
+  const doDrain = (name: string) => setPending({ type: 'drain', name });
+  // cordon/uncordon 은 되돌릴 수 있는 토글이라 즉시 실행(확인 불필요)
   const doCordon = async (name: string, unschedulable: boolean) => {
     try {
       await k8sResourcesApi.cordon(clusterId, name, unschedulable);
@@ -226,12 +216,30 @@ export function K8sManagePage() {
       reloadList();
     } catch (e) { flash('err', errMsg(e)); }
   };
-  const doDrain = async (name: string) => {
-    if (!window.confirm(`${name} 을(를) drain 하시겠습니까?\ncordon 후 DaemonSet/mirror 를 제외한 파드를 eviction 합니다.`)) return;
+  // 확인 후 실제 실행
+  const executePending = async () => {
+    const p = pending;
+    if (!p) return;
+    if (p.type === 'scale') {
+      const n = Number(scaleInput);
+      if (!Number.isInteger(n) || n < 0) { flash('err', 'replicas 는 0 이상의 정수여야 합니다.'); return; } // 다이얼로그 유지
+    }
+    setPending(null);
     try {
-      const res = await k8sResourcesApi.drain(clusterId, name);
-      flash(res.data.ok ? 'ok' : 'err',
-        `drain: evicted ${res.data.evicted.length} · skipped ${res.data.skipped.length} · errors ${res.data.errors.length}`);
+      if (p.type === 'scale') {
+        await k8sResourcesApi.scale(clusterId, p.kind, p.ns, p.name, Number(scaleInput));
+        flash('ok', `${p.name} → replicas ${Number(scaleInput)}`);
+      } else if (p.type === 'restart') {
+        await k8sResourcesApi.restart(clusterId, p.kind, p.ns, p.name);
+        flash('ok', `${p.name} 재시작 트리거됨`);
+      } else if (p.type === 'delete') {
+        await k8sResourcesApi.remove(clusterId, p.kind, p.ns, p.name);
+        flash('ok', `${p.name} 삭제됨`);
+      } else {
+        const res = await k8sResourcesApi.drain(clusterId, p.name);
+        flash(res.data.ok ? 'ok' : 'err',
+          `drain: evicted ${res.data.evicted.length} · skipped ${res.data.skipped.length} · errors ${res.data.errors.length}`);
+      }
       reloadList();
     } catch (e) { flash('err', errMsg(e)); }
   };
@@ -426,6 +434,52 @@ export function K8sManagePage() {
           pod={terminalPod.name}
           onClose={() => setTerminalPod(null)}
         />
+      )}
+
+      {/* 위험 동작 확인 (scale/restart/delete/drain) */}
+      {pending && (
+        <ConfirmDialog
+          open
+          danger
+          title={
+            pending.type === 'scale' ? 'Replicas 조정'
+              : pending.type === 'restart' ? 'Rollout Restart'
+                : pending.type === 'delete' ? '리소스 삭제'
+                  : '노드 Drain'
+          }
+          description={
+            pending.type === 'scale' ? `${pending.name} 의 replicas 수를 변경합니다 — 실 클러스터에 즉시 반영됩니다.`
+              : pending.type === 'restart' ? `${pending.name} 을(를) rollout restart 합니다 — 파드가 순차 재생성됩니다.`
+                : pending.type === 'delete' ? '이 동작은 kubeconfig 신원으로 실행되며 되돌릴 수 없습니다.'
+                  : `${pending.name} 을(를) drain 합니다 — cordon 후 DaemonSet/mirror 를 제외한 파드를 eviction 합니다.`
+          }
+          confirmLabel={
+            pending.type === 'scale' ? '적용'
+              : pending.type === 'restart' ? '재시작'
+                : pending.type === 'delete' ? '삭제'
+                  : 'Drain'
+          }
+          onCancel={() => setPending(null)}
+          onConfirm={executePending}
+        >
+          <div className="mt-1 rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm font-mono break-all">
+            {pending.type === 'drain' ? pending.name : `${pending.kind}/${pending.ns}/${pending.name}`}
+          </div>
+          {pending.type === 'scale' && (
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">replicas</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={scaleInput}
+                onChange={(e) => setScaleInput(e.target.value)}
+                autoFocus
+                className="w-24 rounded-xl border border-border bg-card px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+          )}
+        </ConfirmDialog>
       )}
     </div>
   );

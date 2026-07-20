@@ -86,15 +86,15 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 
 | ID | 영역 | 문제 | 사용자 영향 | 심각도 | 상태 | 비고 |
 |---|---|---|---|---|---|---|
-| D-020 | 상태색 토큰 | **상태색 고정 팔레트가 4화면 전부 재발** — K8sManage `CELL_BG/STATUS_TEXT`(30-35)·노드점·배지, K8sAllocation `EFF_BADGE`/`UtilPct`/`MeterBar`/`GaugeRow`/QoS·`text-white` 탭·Recharts hex(712)·축/툴팁 기본색, DailyCheckReview 하위 전 컴포넌트(DeepCheckGrid/TrendChart 범례·라인 hex/DiffPanel/배지/ExecutionStepsTimeline/ResourceTrendChecklist), LAKE `HealthBadge`(고정 emerald/amber/red) | 다크/라이트 톤 어긋남, 상태 판독성 저하 | 높음 | 진행중 | `--status-*`/`--chart-*` 토큰 전환. LAKE HealthBadge 는 공용 StatusBadge 로 대체. Recharts 색 prop 은 `hsl(var(--*))` 참조 |
-| D-021 | 에러 상태 | API 실패를 정상 빈/점검 상태로 위장 — K8sManage `OverviewPanel`(578-606) isError 미처리→"노드 0·상태 점검", K8sAllocation `SummarySection`(387-398)·`PodScheduleCalc` isError 무시, DailyCheckReview review/trend isError 미처리→섹션 통째 사라짐 | 백엔드/인증 장애를 정상으로 오판 | 높음 | 진행중 | 각 섹션 isError 분기(에러 안내+재시도). 하위 뷰(NodesView 등)의 기존 패턴 준용 |
-| D-022 | 인터랙션/안전 | K8sManage 위험 동작이 브라우저 native — scale `window.prompt`(192), restart/delete/drain `window.confirm`(203/211/226). 테마·포커스·검증 UX 없음 | 되돌릴 수 없는 삭제/드레인/스케일이 무검증 native 팝업 — 오조작 위험 | 높음 | 대기 | ConfirmDialog(danger, 대상 kind/ns/name 강조)로 교체. scale 은 현재값 프리필 정수 입력. **D-014 패턴 재사용, 다음 처리 대상** |
-| D-023 | 접근성 | 클릭 요소 키보드 미접근 — K8sAllocation 확장 `<tr>`(1054/1142) role/tabIndex/onKeyDown 없음, LAKE 카드 `<button>` 안에 `<span role=button>` 중첩(LakeServiceCard 60-79), K8sManage DetailDrawer(775) Escape/포커스트랩 없음 | 키보드/스크린리더로 드릴다운·드로어 조작 불가 | 중간 | 진행중 | tr→`role=button+aria-expanded+onKeyDown`, LAKE 카드 div화+내부 정상 button, 드로어 Escape 핸들러 |
-| D-024 | 접근성 | 색 단독 상태 — K8sManage 노드 Ready 점(988)·컨테이너 색칸(1103)이 색만(상태 텍스트는 title 툴팁뿐) | 색맹 사용자가 노드/컨테이너 정상·오류 구분 불가 | 중간 | 진행중 | 아이콘/텍스트 병행(파드 phase 패턴 준용) |
-| D-025 | 반응형 | 다열 테이블 overflow-x 부재(K8sManage Pods/Nodes/Resource grid), K8sAllocation 노드 카드 그리드 고정 열수(853)로 좁은 폭 짓눌림 | 좁은 뷰포트·다컬럼 시 판독 불가 | 중간 | 대기 | grid wrapper `overflow-x-auto`+`min-w`, 카드 그리드 `auto-fill minmax(220px,1fr)` |
+| D-020 | 상태색 토큰 | **상태색 고정 팔레트가 4화면 전부 재발** — K8sManage `CELL_BG/STATUS_TEXT`(30-35)·노드점·배지, K8sAllocation `EFF_BADGE`/`UtilPct`/`MeterBar`/`GaugeRow`/QoS·`text-white` 탭·Recharts hex(712)·축/툴팁 기본색, DailyCheckReview 하위 전 컴포넌트(DeepCheckGrid/TrendChart 범례·라인 hex/DiffPanel/배지/ExecutionStepsTimeline/ResourceTrendChecklist), LAKE `HealthBadge`(고정 emerald/amber/red) | 다크/라이트 톤 어긋남, 상태 판독성 저하 | 높음 | 완료 | 4화면 전부 `--status-*`/`--chart-*` 토큰 전환(K8sManage `38c089e`, 일일점검 `680ed2b`, K8sAllocation `5eab85a`, LAKE `242583e`). LAKE HealthBadge→공용 StatusBadge 래퍼. Recharts 색·축·툴팁 토큰화 |
+| D-021 | 에러 상태 | API 실패를 정상 빈/점검 상태로 위장 — K8sManage `OverviewPanel`(578-606) isError 미처리→"노드 0·상태 점검", K8sAllocation `SummarySection`(387-398)·`PodScheduleCalc` isError 무시, DailyCheckReview review/trend isError 미처리→섹션 통째 사라짐 | 백엔드/인증 장애를 정상으로 오판 | 높음 | 완료 | K8sManage OverviewPanel·K8sAllocation SummarySection/PodScheduleCalc·DailyCheckReview review/trend 에 isError 분기 추가 — 빈/점검 위장 제거 (`38c089e`·`5eab85a`·`680ed2b`) |
+| D-022 | 인터랙션/안전 | K8sManage 위험 동작이 브라우저 native — scale `window.prompt`(192), restart/delete/drain `window.confirm`(203/211/226). 테마·포커스·검증 UX 없음 | 되돌릴 수 없는 삭제/드레인/스케일이 무검증 native 팝업 — 오조작 위험 | 높음 | 완료 | scale/restart/delete/drain 모두 ConfirmDialog(danger, 대상 kind/ns/name 강조)로 교체, scale 은 다이얼로그 내 정수 입력. cordon/uncordon 은 되돌릴 수 있는 토글이라 즉시 실행 유지 (`d2979b0` 이후 커밋) |
+| D-023 | 접근성 | 클릭 요소 키보드 미접근 — K8sAllocation 확장 `<tr>`(1054/1142) role/tabIndex/onKeyDown 없음, LAKE 카드 `<button>` 안에 `<span role=button>` 중첩(LakeServiceCard 60-79), K8sManage DetailDrawer(775) Escape/포커스트랩 없음 | 키보드/스크린리더로 드릴다운·드로어 조작 불가 | 중간 | 부분완료 | K8sAllocation 확장 tr(`role=button+aria-expanded+onKeyDown`, `5eab85a`)·LAKE 카드 div화+내부 button(`242583e`) 완료. **K8sManage 드로어 Escape 는 D-026(Sheet 전환)으로 이관** |
+| D-024 | 접근성 | 색 단독 상태 — K8sManage 노드 Ready 점(988)·컨테이너 색칸(1103)이 색만(상태 텍스트는 title 툴팁뿐) | 색맹 사용자가 노드/컨테이너 정상·오류 구분 불가 | 중간 | 완료 | 노드 Ready 점→아이콘+aria-label, 컨테이너 색칸→role=img+aria-label (`38c089e`) |
+| D-025 | 반응형 | 다열 테이블 overflow-x 부재(K8sManage Pods/Nodes/Resource grid), K8sAllocation 노드 카드 그리드 고정 열수(853)로 좁은 폭 짓눌림 | 좁은 뷰포트·다컬럼 시 판독 불가 | 중간 | 부분완료 | K8sManage Pods/Nodes/Resource 테이블 overflow-x-auto+min-w 완료(`38c089e`). **K8sAllocation 노드 카드 그리드 auto-fill 은 미처리 — 다음 라운드** |
 | D-026 | 접근성/일관성 | 자체 모달 raw `fixed inset-0`+`bg-black/40`+`rounded-2xl` — K8sManage DetailDrawer, DailyCheckReview ResourceTrendChecklist 2개 모달(D-018 과 동류) | Escape/포커스트랩/aria 부재, 테마 미적용 | 중간 | 보류 | shadcn `Dialog`/`Sheet` 로 일괄 교체(R-2 연계) — 별도 리팩터 라운드 |
 | D-027 | 로딩 상태 | 로딩이 "불러오는 중…" 텍스트뿐 — K8sManage 전 패널·DailyCheckReview 섹션. skeleton 부재로 레이아웃 점프 | 로딩→로드 시 시프트, 상태 인지 지연 | 낮음 | 대기 | 공용 Skeleton 로 헤더/행 자리표시 |
-| D-028 | 잔여(낮음) | LAKE 인라인 style 그리드(136/158)·`hover:shadow-md`(22)·버튼 `rounded-lg`(222/231), DailyCheckReview 새로고침/삭제 aria-label 누락·`checkedAt` 툴팁 UTC 원본(129), K8sAllocation hover 전용 툴팁 키보드/터치 미접근(549/582) | 소소한 정합/접근성 이탈 | 낮음 | 대기 | 각 화면 수정 시 함께 정리 |
+| D-028 | 잔여(낮음) | LAKE 인라인 style 그리드(136/158)·`hover:shadow-md`(22)·버튼 `rounded-lg`(222/231), DailyCheckReview 새로고침/삭제 aria-label 누락·`checkedAt` 툴팁 UTC 원본(129), K8sAllocation hover 전용 툴팁 키보드/터치 미접근(549/582) | 소소한 정합/접근성 이탈 | 낮음 | 부분완료 | LAKE 인라인 grid/shadow/rounded·일일점검 aria-label/KST 툴팁 완료(`242583e`·`680ed2b`). **K8sAllocation hover 툴팁 키보드화는 미처리 — 다음 라운드** |
 
 ---
 
@@ -105,7 +105,7 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | R-1 토큰 정합 완결 | DESIGN_SYSTEM.md W1 마무리 — raw hex 전수 치환(화이트리스트 외 0건) | 백로그의 hex 관련 항목 처리 | 진행 중 |
 | R-2 shadcn/ui 확산 | W2 — Button/Card/Badge/Tooltip/Dialog 5종 우선 도입, 기존 자체 컴포넌트 어댑터화 | R-1 | 진행 중 |
 | R-3 접근성 상시화 | W4 성과(jsx-a11y 룰 상시화) 위에 sr-only 데이터 표·Lighthouse 정량 측정 추가 | - | 대기 |
-| R-4 화면 단위 UX 리뷰 | docs/SCREENS.md 기준 주요 화면 순회 정성 리뷰 | 감사 1회차 완료 ✅ | 진행중 — 1차 라운드(홈·대시보드·운영점검·업무) 완료, D-011~D-019 도출·처리. 다음 라운드 대상: K8s 관리·일일점검 리뷰·LAKE·인프라 토폴로지 등 |
+| R-4 화면 단위 UX 리뷰 | docs/SCREENS.md 기준 주요 화면 순회 정성 리뷰 | 감사 1회차 완료 ✅ | 진행중 — 1차(홈·대시보드·운영점검·업무, D-011~D-019)·2차(K8s상세/자원관리·일일점검·LAKE, D-020~D-028) 완료. 다음 라운드 후보: 인프라 토폴로지·서비스 토폴로지·Pod 병목·Deep Check 정의 관리 등 |
 
 ---
 
@@ -118,3 +118,4 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | 2026-07-20 | 미진행분 2차 처리 (D-009·D-010) | 2 | 2 | ux-ui-designer | MacCard 2차 수렴 9페이지 28건 + pages aria-label 83건. 보류: 보드/캔버스형 페이지 MacCard(R-4 연계), 행 네비게이션 키보드 접근(R-3 연계). lint/tsc/build 게이트 통과 |
 | 2026-07-20 | R-4 1차 라운드 — 화면 정성 리뷰 4화면 + 처리 (D-011~D-019) | 9 | 5.5 | ux-ui-designer | 홈·대시보드·운영점검·업무 리뷰로 32건 발견→9항목 등재. **완료** D-011(상태색 토큰 4화면)·D-012(에러상태)·D-013(편집셀 a11y)·D-016(MacCard/레이아웃)·D-019(KST·삭제문구). **부분** D-015·D-017. **보류** D-014(위험실행 확인·사용자 판단 필요)·D-018(모달 리팩터). lint/tsc/build 통과. 병렬 에이전트가 공유 워킹트리에서 `git stash` 로 충돌 → stash 복구로 무손실 수습(교훈: 다중 에이전트 파일수정은 worktree 격리 필요) |
 | 2026-07-20 | D-014 처리 (사용자 결정: 모든 실행 = 운영 위험) | 0 | 1 | ux-ui-designer | 운영 점검 개별·선택 실행에 ConfirmDialog(danger, 대상·건수·소스 요약) 게이팅. lint/tsc/build 통과 |
+| 2026-07-20 | R-4 2차 라운드 — 화면 정성 리뷰 4화면 + 처리 (D-020~D-028) | 9 | 6 | ux-ui-designer | K8s상세관리·K8s자원관리·일일점검·LAKE 리뷰로 발견 9항목 등재. **완료** D-020(상태색 토큰 4화면)·D-021(에러상태)·D-022(위험동작 ConfirmDialog)·D-024(색 단독). **부분** D-023·D-025·D-028. **보류** D-026(모달→Dialog)·D-027(skeleton). git 금지 조건으로 파일 소유 분리 병렬 처리 → 1차 stash 충돌 재발 없음. lint/tsc/build 통과 |
