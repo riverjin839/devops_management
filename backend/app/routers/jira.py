@@ -465,7 +465,11 @@ async def sso_login(db: Session = Depends(get_db), actor: User = Depends(get_cur
     svc = JiraService(base_url, cookie_header, auth_type="sso", verify=verify_tls)
     verified = await svc.myself()
     if verified.get("status") != "ok":
-        return JiraSsoLoginResult(ok=False, detail=f"세션 검증 실패: {verified.get('detail', '')}")
+        return JiraSsoLoginResult(
+            ok=False,
+            detail=f"로그인은 감지됐으나 백엔드에서 세션 검증에 실패했습니다: {verified.get('detail', '')} "
+                   "(자체서명 인증서면 공통설정 'TLS 인증서 검증' 해제, 백엔드→Jira 네트워크 확인).",
+        )
 
     display = verified.get("display_name") or result.get("display_name")
     account = result.get("account") or verified.get("account")

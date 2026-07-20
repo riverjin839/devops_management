@@ -19,6 +19,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -92,6 +93,46 @@ def capture_sso_session(
     myself_url = f"{base_url}/rest/api/2/myself"
     deadline = time.monotonic() + max(30, timeout)
 
+    # 진단값 — 어디서 멈췄는지 사용자/로그에 노출.
+    diag = {"attempts": 0, "last_ctx_status": None, "last_page_status": None,
+            "cookie_count": 0, "host": host}
+
+    def _extract_account(data: dict) -> Optional[tuple]:
+        acct = data.get("name") or data.get("key") or ""
+        disp = data.get("displayName") or acct
+        return (acct, disp) if (acct or disp) else None
+
+    def _probe_ctx(context) -> Optional[tuple]:
+        """서버사이드 APIRequestContext — context 쿠키를 공유하지만 일부 httpOnly/SameSite
+        조합에서 세션이 안 실릴 수 있어 보조 신호로만 신뢰한다."""
+        try:
+            resp = context.request.get(myself_url, timeout=10_000)
+            diag["last_ctx_status"] = resp.status
+            if resp.status == 200:
+                return _extract_account(resp.json())
+        except Exception as exc:  # noqa: BLE001
+            diag["last_ctx_status"] = f"err:{str(exc)[:50]}"
+        return None
+
+    def _probe_page(page) -> Optional[tuple]:
+        """브라우저 페이지 자체의 fetch — 사용자가 보는 실제 세션(httpOnly 쿠키 포함)으로
+        호출하는 ground truth. 페이지가 Jira 오리진일 때만 same-origin 으로 동작한다."""
+        try:
+            if _cookie_host(page.url) != host:
+                return None
+            res = page.evaluate(
+                "async (u) => { try { const r = await fetch(u, {credentials:'include'});"
+                " return {s: r.status, b: r.status === 200 ? await r.text() : ''}; }"
+                " catch (e) { return {s: -1, b: ''}; } }",
+                myself_url,
+            )
+            diag["last_page_status"] = res.get("s")
+            if res.get("s") == 200 and res.get("b"):
+                return _extract_account(json.loads(res["b"]))
+        except Exception as exc:  # noqa: BLE001
+            diag["last_page_status"] = f"err:{str(exc)[:50]}"
+        return None
+
     try:
         with sync_playwright() as p:
             try:
@@ -112,32 +153,41 @@ def capture_sso_session(
                 except Exception:  # noqa: BLE001 - 초기 진입 실패해도 폴링은 계속
                     logger.info("Jira SSO initial goto slow/failed — 폴링 계속")
 
-                # 로그인 완료까지 myself 폴링.
+                # 로그인 완료까지 폴링 — 페이지 fetch(우선) + APIRequestContext(보조).
                 while time.monotonic() < deadline:
-                    try:
-                        resp = context.request.get(myself_url, timeout=10_000)
-                        if resp.status == 200:
-                            data = resp.json()
-                            name = data.get("name") or data.get("key") or ""
-                            display = data.get("displayName") or name
-                            cookies = context.cookies()
-                            header = _build_cookie_header(cookies, host)
-                            if not header:
-                                return {"status": "error", "detail": "세션 쿠키를 추출하지 못했습니다."}
+                    diag["attempts"] += 1
+                    hit = _probe_page(page) or _probe_ctx(context)
+                    if hit:
+                        acct, display = hit
+                        cookies = context.cookies()
+                        diag["cookie_count"] = len(cookies)
+                        header = _build_cookie_header(cookies, host)
+                        if not header:
                             return {
-                                "status": "ok",
-                                "cookie_header": header,
-                                "account": name,
-                                "display_name": display,
+                                "status": "error",
+                                "detail": f"로그인은 감지됐지만 세션 쿠키를 추출하지 못했습니다 "
+                                          f"(쿠키 {len(cookies)}개, host={host}).",
+                                "diag": diag,
                             }
-                    except Exception:  # noqa: BLE001 - 아직 미인증/네트워크 흔들림 → 계속
-                        pass
+                        logger.info("Jira SSO captured: acct=%s cookies=%d attempts=%d",
+                                    acct, len(cookies), diag["attempts"])
+                        return {
+                            "status": "ok", "cookie_header": header,
+                            "account": acct, "display_name": display, "diag": diag,
+                        }
                     time.sleep(_POLL_INTERVAL)
 
+                logger.warning("Jira SSO timeout — diag=%s", diag)
                 return {
                     "status": "error",
-                    "detail": f"제한 시간({timeout}s) 안에 SSO 로그인이 완료되지 않았습니다. "
-                              "브라우저 창에서 로그인을 마친 뒤 다시 시도하세요.",
+                    "detail": (
+                        f"제한 시간({timeout}s) 안에 로그인이 감지되지 않았습니다 "
+                        f"(시도 {diag['attempts']}회 · myself[ctx]={diag['last_ctx_status']} · "
+                        f"myself[page]={diag['last_page_status']}). ▸ 팝업된 그 브라우저 창에서 "
+                        "로그인을 끝까지(마지막에 Jira 화면이 뜰 때까지) 마쳤는지, 자체서명 인증서면 "
+                        "공통설정의 'TLS 인증서 검증'을 꺼야 하는지 확인하세요."
+                    ),
+                    "diag": diag,
                 }
             finally:
                 try:
@@ -146,4 +196,4 @@ def capture_sso_session(
                     pass
     except Exception as exc:  # noqa: BLE001
         logger.exception("Jira SSO capture error: %s", exc)
-        return {"status": "error", "detail": f"SSO 캡처 중 오류: {str(exc)[:180]}"}
+        return {"status": "error", "detail": f"SSO 캡처 중 오류: {str(exc)[:180]}", "diag": diag}
