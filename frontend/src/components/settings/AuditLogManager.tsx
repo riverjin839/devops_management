@@ -10,7 +10,7 @@ import { RefreshCw, Search } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { auditLogsApi } from '@/services/api';
 import type { AuditLog } from '@/types';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 const ACTIONS: string[] = [
   '',
@@ -180,7 +180,7 @@ export function AuditLogManager() {
             {data?.items.map((row) => (
               <tr key={row.id} className="border-b border-border last:border-0 align-top">
                 <td className="py-2 pr-3 whitespace-nowrap text-sm text-muted-foreground">
-                  {new Date(row.createdAt).toLocaleString()}
+                  {parseUTC(row.createdAt).toLocaleString()}
                 </td>
                 <td className="py-2 pr-3 font-medium">{row.actorUsername}</td>
                 <td className="py-2 pr-3"><code className="text-sm">{row.action}</code></td>

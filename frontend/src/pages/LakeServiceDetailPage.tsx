@@ -17,6 +17,7 @@ import {
 } from '@/hooks/useLakeServices';
 import { serviceEntriesApi } from '@/services/api';
 import type { ServiceEntry } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 interface TimelineItem {
   source: 'check' | 'entry';
@@ -175,7 +176,7 @@ export function LakeServiceDetailPage() {
               <HealthBadge status={svc.status} />
               <span className="text-muted-foreground">
                 {svc.lastCheckedAt
-                  ? `마지막 점검: ${new Date(svc.lastCheckedAt).toLocaleString('ko-KR')}`
+                  ? `마지막 점검: ${parseUTC(svc.lastCheckedAt).toLocaleString('ko-KR')}`
                   : '점검 기록 없음'}
               </span>
             </div>
@@ -232,7 +233,7 @@ export function LakeServiceDetailPage() {
                   className="flex items-start gap-2 text-sm border-b border-border/40 py-1.5 last:border-b-0"
                 >
                   <span className="text-xs font-mono text-muted-foreground w-32 flex-shrink-0">
-                    {new Date(t.at).toLocaleString('ko-KR')}
+                    {parseUTC(t.at).toLocaleString('ko-KR')}
                   </span>
                   <span
                     className={`flex-shrink-0 inline-flex items-center text-xs rounded px-1.5 py-0.5 ${

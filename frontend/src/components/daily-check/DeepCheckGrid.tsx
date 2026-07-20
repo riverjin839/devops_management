@@ -2,6 +2,7 @@ import { CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import type { DeepCheckResult, DeepCheckExecStep, Status } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 interface Props {
   results: DeepCheckResult[];
@@ -47,7 +48,7 @@ export function DeepCheckGrid({ results }: Props) {
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{new Date(r.checkedAt).toLocaleTimeString('ko-KR')}</span>
+                <span>{parseUTC(r.checkedAt).toLocaleTimeString('ko-KR')}</span>
                 <span>{r.durationMs}ms</span>
               </div>
               {/* 응답 인터셉터가 _steps 키를 camelize(→ Steps) 하므로 둘 다 조회 */}

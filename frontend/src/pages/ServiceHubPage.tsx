@@ -14,7 +14,7 @@ import { serviceEntriesApi } from '@/services/api';
 import { KIND_CATALOG, KIND_BY_KEY, colorBadgeClass } from '@/components/services/serviceCatalog';
 import { useGetServiceDef } from '@/hooks/useServiceCatalog';
 import type { ServiceEntry, ServiceEntryKind } from '@/types';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 import { ServiceEntryEditModal } from '@/components/services/ServiceEntryEditModal';
 import { RelatedWorkItemsPanel } from '@/components/services/RelatedWorkItemsPanel';
 import { RelatedOpsNotesPanel } from '@/components/services/RelatedOpsNotesPanel';
@@ -104,7 +104,7 @@ export function ServiceHubPage() {
     const md = [
       `## [${kindMeta?.label ?? e.kind}] ${e.title}`,
       e.severity ? `- 심각도: **${e.severity}**` : null,
-      e.occurredAt ? `- 발생: ${new Date(e.occurredAt).toLocaleString()}` : null,
+      e.occurredAt ? `- 발생: ${parseUTC(e.occurredAt).toLocaleString()}` : null,
       e.author ? `- 작성: ${e.author}` : null,
       (e.tags ?? []).length > 0 ? `- 태그: ${(e.tags ?? []).map((t) => `\`${t}\``).join(' ')}` : null,
       e.url ? `- 링크: ${e.url}` : null,
@@ -269,7 +269,7 @@ export function ServiceHubPage() {
                     <footer className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-border">
                       <span>{e.author ?? '-'}</span>
                       <span>·</span>
-                      <span>{new Date(e.updatedAt).toLocaleString()}</span>
+                      <span>{parseUTC(e.updatedAt).toLocaleString()}</span>
                       {e.clusterName && (
                         <>
                           <span>·</span>

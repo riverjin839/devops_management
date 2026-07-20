@@ -23,3 +23,6 @@ paramiko==3.4.0
 croniter==2.0.5
 openpyxl==3.1.2
 xlrd==2.0.1
+# Jira SSO 자동 로그인(세션 쿠키 자동 캡처)용. 설치 후 브라우저 바이너리도 받아야 함:
+#   playwright install chromium   (헤드리스 서버면 표시용 Xvfb 등 별도 필요)
+playwright==1.44.0

@@ -23,6 +23,7 @@ import {
   useDailyCheckLogs,
   useRunDailyCheckNow,
 } from '@/hooks/useDailyCheck';
+import { parseUTC } from '@/lib/utils';
 
 function errMsg(e: unknown): string {
   const ax = e as AxiosError<{ detail?: string }>;
@@ -230,7 +231,7 @@ function DailyCheckLogPicker({
           {logs.map((l) => {
             const marker = STATUS_MARKER[l.overallStatus] ?? '⚪';
             const scheduleKr = SCHEDULE_LABEL[l.scheduleType] ?? l.scheduleType;
-            const dt = new Date(l.checkedAt).toLocaleString('ko-KR');
+            const dt = parseUTC(l.checkedAt).toLocaleString('ko-KR');
             return (
               <option key={l.id} value={l.id}>
                 {marker} {dt} · {scheduleKr} · {l.overallStatus}

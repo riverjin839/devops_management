@@ -30,18 +30,24 @@ spec:
             - --appendonly
             - "yes"
             - --maxmemory
-            - "256mb"
+            - "320mb"
+            # allkeys-lru 는 메모리 압박 시 Celery 브로커 큐 키(대기 중인 태스크)까지
+            # LRU 대상으로 삼아 예약 점검/배치잡이 소리 없이 사라질 수 있다. 이 Redis 는
+            # 캐시 전용이 아니라 Celery 브로커+결과백엔드를 겸하므로 noeviction 으로
+            # 바꿔 메모리 초과 시 evict 대신 write 실패(명시적 에러)로 드러나게 한다.
             - --maxmemory-policy
-            - "allkeys-lru"
+            - "noeviction"
           volumeMounts:
             - name: redis-data
               mountPath: /data
           resources:
             requests:
-              memory: "128Mi"
+              memory: "192Mi"
               cpu: "100m"
             limits:
-              memory: "256Mi"
+              # maxmemory(320mb)보다 여유를 둬 redis 프로세스 자체 오버헤드(클라이언트
+              # 버퍼/AOF 등)로 컨테이너가 OOMKill 되기 전에 redis 자체 정책이 먼저 작동하게 함.
+              memory: "384Mi"
               cpu: "200m"
           livenessProbe:
             exec:

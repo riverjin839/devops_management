@@ -83,21 +83,33 @@ class DeepCheckerBase(ABC):
 
     # ── K8s client (lazy) ──────────────────────────────────────
     def _v1(self, ctx: DeepCheckContext) -> client.CoreV1Api:
+        """클러스터별로 격리된 ``ApiClient`` 를 만들어 반환한다.
+
+        ``config.load_kube_config()``/``load_incluster_config()`` 는 kubernetes-client
+        의 프로세스 전역 default Configuration 을 변경한다 — 수동 실행("지금 점검")과
+        디스패처 fan-out 이 같은 워커 프로세스에서 동시에 서로 다른 클러스터를 점검하면,
+        한 클러스터의 kubeconfig 로 다른 클러스터에 exec/조회가 나가는 race 가 생길 수
+        있다. ``config.new_client_from_config()`` 는 전역 상태를 건드리지 않는 별도
+        ``ApiClient`` 를 반환해 이 문제를 피한다(``daily_checker.py`` 의
+        ``_get_k8s_client`` 와 동일 패턴).
+        """
         if ctx.in_cluster:
             try:
                 config.load_incluster_config()
+                api_client = client.ApiClient()
             except config.ConfigException:
-                config.load_kube_config()
+                api_client = config.new_client_from_config()
         else:
             kc = ensure_kubeconfig_file(ctx.cluster) if ctx.cluster else None
             if kc and os.path.exists(kc):
-                config.load_kube_config(config_file=kc)
+                api_client = config.new_client_from_config(config_file=kc)
             else:
                 try:
                     config.load_incluster_config()
+                    api_client = client.ApiClient()
                 except config.ConfigException:
-                    config.load_kube_config()
-        return client.CoreV1Api()
+                    api_client = config.new_client_from_config()
+        return client.CoreV1Api(api_client)
 
     def _kubectl(self, ctx: DeepCheckContext, *args: str, timeout: int = 30) -> subprocess.CompletedProcess:
         cmd = ["kubectl"]

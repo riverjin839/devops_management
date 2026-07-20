@@ -13,7 +13,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { stripHtml } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
 
-const TEAM_ASSIGNEE = '전체';
+const TEAM_ASSIGNEE = '공통';
 
 // 인당 표시 개수 — 기본 5개, 사용자별로 localStorage 에 저장.
 const ITEM_LIMIT_KEY = 'k8s:memberToday:itemLimit';
@@ -126,9 +126,9 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
     )
     .map((x) => x.g);
 
-  // "전체" 카드 — allAttendees=true(공통업무/파트 회의 등) 항목을 담당자 그룹과 별개로 모아
+  // "공통" 카드 — allAttendees=true(공통업무/파트 회의 등) 항목을 담당자 그룹과 별개로 모아
   // 0순위(맨 앞)에 노출한다. 개별 담당자 카드(회의 주최자 등)에도 그대로 남아있을 수 있음(의도적 —
-  // TodoTodayPage 의 "내 업무 + 공통업무" 병합과 동일한 전제, 전체 카드는 가시성용 오버레이).
+  // TodoTodayPage 의 "내 업무 + 공통업무" 병합과 동일한 전제, 공통 카드는 가시성용 오버레이).
   const teamCandidates = (allAttendData?.data ?? [])
     .filter((t) => !selectedClusterId || t.clusterId === selectedClusterId);
   const teamGroup = {
@@ -143,7 +143,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
       t.kanbanStatus === 'in_progress' && (t.startedAt?.slice(0, 10) ?? '') <= viewDate),
   };
   const teamHasItems = teamGroup.overdueTasks.length + teamGroup.todayTasks.length + teamGroup.inProgressTasks.length > 0;
-  // 담당자별 집계(totals)는 원래 groups 기준으로만 계산 — "전체" 카드는 가시성용 중복 노출이라
+  // 담당자별 집계(totals)는 원래 groups 기준으로만 계산 — "공통" 카드는 가시성용 중복 노출이라
   // 상단 합계에 포함하면 과대집계된다.
   const displayGroups = teamHasItems ? [teamGroup, ...groups] : groups;
 

@@ -27,6 +27,7 @@ import { useClusterItems, useRunClusterItem, useUpdateClusterItem, useDeleteClus
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { healthApi } from '@/services/api';
 import { Addon, Cluster, ClusterItem, ClusterItemCardSize, MetricCard, Playbook } from '@/types';
+import { useAuthStore, hasRole } from '@/stores/authStore';
 
 // ── Cluster Overview Grid (shown when All tab is selected) ─────────────────────
 interface ClusterOverviewGridProps {
@@ -165,6 +166,10 @@ export function Dashboard() {
   const [editingItem, setEditingItem] = useState<ClusterItem | null>(null);
   const [runningItemIds, setRunningItemIds] = useState<Set<string>>(new Set());
   const { clusters, summary, addons, isChecking, lastCheckTime } = useClusterStore();
+  const authUser = useAuthStore((s) => s.user);
+  // 카드 생성/수정/삭제/테스트는 백엔드가 operator 이상만 허용(require_operator) —
+  // viewer 에게는 버튼 자체를 숨겨 403 을 미리 막는다.
+  const canManageMetricCards = hasRole(authUser, 'admin', 'operator');
 
   // Queries
   const { isLoading: clustersLoading } = useClusters();
@@ -307,6 +312,14 @@ export function Dashboard() {
               <Plus className="w-3 h-3" /> Check
             </button>
           )}
+          {canManageMetricCards && (
+            <button
+              onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
+              className="px-2.5 py-1 text-sm font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Metric
+            </button>
+          )}
           <button
             onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
             className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border rounded-xl transition-colors flex items-center gap-1"
@@ -442,8 +455,12 @@ export function Dashboard() {
             cards={metricCards}
             results={metricResults}
             isLoading={metricsLoading}
-            onDeleteCard={(id) => { if (confirm('Delete this metric card?')) deleteMetricCard.mutate(id); }}
-            onEditCard={(card) => { setEditingMetricCard(card); setShowAddMetric(true); }}
+            onDeleteCard={canManageMetricCards
+              ? (id) => { if (confirm('Delete this metric card?')) deleteMetricCard.mutate(id); }
+              : undefined}
+            onEditCard={canManageMetricCards
+              ? (card) => { setEditingMetricCard(card); setShowAddMetric(true); }
+              : undefined}
           />
         </MacCard>
 

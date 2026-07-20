@@ -9,6 +9,7 @@
 componentstatuses 가 K8s 1.27+ 에서 제거돼 silent fail 위험이 있었음. v2 는 BaseChecker
 family 와 동일한 SDK 경로를 사용해 패턴 일관성을 확보한다.
 """
+import asyncio
 import os
 import time
 from datetime import datetime
@@ -130,9 +131,23 @@ class DailyChecker:
 
         # AI 자동 리뷰 + 알림은 Celery 로 비동기 위임 (점검 자체에는 영향 없음).
         # broker(Redis) 가 없거나 worker 가 꺼져 있어도 silently skip.
+        #
+        # 상태 변화(healthy→warning 등) 가 있거나 현재 healthy 가 아닐 때만 큐잉한다.
+        # core_bundle 은 클러스터마다 최소 5분 간격으로 반복 실행되는데, 매번 무조건
+        # 큐잉하면 작은 워커 동시성(기본 2, replica 2 = 총 4슬롯)이 Ollama 응답(최대
+        # OLLAMA_TIMEOUT=120s) 대기로 계속 점유돼 배치잡/수동 점검이 뒤로 밀린다.
+        # "healthy 유지" 처럼 보고할 변화가 없는 리뷰는 어차피 가치가 낮다.
         try:
-            from app.celery_app import run_review_and_notify
-            run_review_and_notify.delay(str(check_log.id))
+            previous_log = (
+                self.db.query(DailyCheckLog)
+                .filter(DailyCheckLog.cluster_id == cluster.id, DailyCheckLog.id != check_log.id)
+                .order_by(DailyCheckLog.check_date.desc())
+                .first()
+            )
+            status_changed = previous_log is None or previous_log.overall_status != overall_status
+            if status_changed or overall_status != StatusEnum.healthy:
+                from app.celery_app import run_review_and_notify
+                run_review_and_notify.delay(str(check_log.id))
         except Exception:
             import logging
             logging.getLogger(__name__).debug(
@@ -212,10 +227,15 @@ class DailyChecker:
             v1 = self._get_k8s_client(cluster)
             for label, name in targets:
                 try:
-                    pods = v1.list_namespaced_pod(
+                    # 동기 SDK 호출을 스레드로 offload — 이 메서드는 async def 이지만
+                    # kubernetes-client 는 blocking I/O 라, 그냥 호출하면 FastAPI 의
+                    # 이벤트 루프 자체가 멈춰 그 시간 동안 백엔드 전체 요청이 지연된다.
+                    pods = await asyncio.to_thread(
+                        v1.list_namespaced_pod,
                         namespace="kube-system",
                         label_selector=label,
                         timeout_seconds=self.timeout,
+                        _request_timeout=self.timeout,
                     )
                 except Exception as e:
                     components[name] = {
@@ -258,7 +278,9 @@ class DailyChecker:
 
         try:
             v1 = self._get_k8s_client(cluster)
-            nodes = v1.list_node(timeout_seconds=self.timeout)
+            nodes = await asyncio.to_thread(
+                v1.list_node, timeout_seconds=self.timeout, _request_timeout=self.timeout,
+            )
             result["total"] = len(nodes.items)
 
             for node in nodes.items:
@@ -290,9 +312,11 @@ class DailyChecker:
 
         try:
             v1 = self._get_k8s_client(cluster)
-            pod_list = v1.list_namespaced_pod(
+            pod_list = await asyncio.to_thread(
+                v1.list_namespaced_pod,
                 namespace="kube-system",
                 timeout_seconds=self.timeout,
+                _request_timeout=self.timeout,
             )
             for p in pod_list.items:
                 restart_count = sum(

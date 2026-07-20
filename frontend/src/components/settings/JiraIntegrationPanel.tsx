@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie, LogIn, ShieldCheck } from 'lucide-react';
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
-  useSaveJiraCredential, useDeleteJiraCredential, useJiraTest,
+  useSaveJiraCredential, useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
 } from '@/hooks/useJira';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 import type { JiraAuthType } from '@/types';
 
 const inputCls =
@@ -23,6 +23,7 @@ export function JiraIntegrationPanel() {
   const saveCred = useSaveJiraCredential();
   const deleteCred = useDeleteJiraCredential();
   const testConn = useJiraTest();
+  const ssoLogin = useJiraSsoLogin();
 
   // 관리자 설정 폼 상태
   const [baseUrl, setBaseUrl] = useState('');
@@ -44,10 +45,26 @@ export function JiraIntegrationPanel() {
   const [token, setToken] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
 
-  // 등록된 자격의 방식을 초기 선택값으로 반영.
+  // 등록된 자격의 방식을 수동 토글 초기값으로 반영 (SSO 는 별도 버튼이라 토글엔 미반영).
   useEffect(() => {
-    if (cred?.configured && cred.authType) setAuthType(cred.authType);
+    if (cred?.configured && (cred.authType === 'pat' || cred.authType === 'cookie')) {
+      setAuthType(cred.authType);
+    }
   }, [cred?.configured, cred?.authType]);
+
+  const handleSsoLogin = async () => {
+    setTestResult(null);
+    try {
+      const { data } = await ssoLogin.mutateAsync();
+      if (data.ok) {
+        toast.success('SSO 로그인 완료', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
+      } else {
+        toast.error('SSO 로그인 실패', data.detail);
+      }
+    } catch (err) {
+      toast.error('SSO 로그인 실패', formatApiError(err));
+    }
+  };
 
   const handleSaveConfig = async () => {
     try {
@@ -159,14 +176,56 @@ export function JiraIntegrationPanel() {
         </div>
         <p className="text-sm text-muted-foreground mb-4">
           본인 Jira 계정 자격을 등록하면 <b>본인 권한</b>으로 이슈를 가져옵니다. 자격은 암호화되어 저장되며
-          화면에 다시 표시되지 않습니다. PAT 발급이 막힌 SSO 환경이면 <b>세션 쿠키</b> 방식을 사용하세요.
+          화면에 다시 표시되지 않습니다. <b>SSO 자동 로그인</b>이 가장 간편합니다 — 토큰이나 쿠키를 직접
+          복사할 필요가 없습니다.
         </p>
+
+        {/* 등록 상태 */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
+            cred?.configured
+              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+              : 'bg-secondary text-muted-foreground border-border'
+          }`}>
+            {cred?.configured
+              ? `등록됨 · ${cred.authType === 'sso' ? 'SSO' : cred.authType === 'cookie' ? '세션 쿠키' : 'PAT'}`
+              : '미등록'}
+          </span>
+          {cred?.jiraAccount && <span className="text-sm text-muted-foreground">계정: {cred.jiraAccount}</span>}
+          {cred?.lastVerifiedAt && (
+            <span className="text-sm text-muted-foreground">마지막 검증: {parseUTC(cred.lastVerifiedAt).toLocaleString()}</span>
+          )}
+        </div>
+
+        {/* SSO 자동 로그인 (권장) */}
+        <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-4 mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck className="w-4 h-4 text-primary" />
+            <h4 className="text-sm font-semibold">SSO 자동 로그인 <span className="text-xs font-normal text-primary">권장</span></h4>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+            버튼을 누르면 <b>백엔드 서버에서 브라우저가 열립니다</b>. 평소처럼 사내 SSO 로그인만 마치면
+            세션이 자동으로 캡처·저장되어 바로 가져오기·되쓰기를 할 수 있습니다(토큰/쿠키 복사 불필요).
+            세션이 만료되면 다시 로그인하세요.
+          </p>
+          <button onClick={handleSsoLogin} disabled={ssoLogin.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+            {ssoLogin.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+            {ssoLogin.isPending ? '브라우저 창에서 로그인을 완료하세요…' : cred?.authType === 'sso' ? 'SSO 다시 로그인' : '브라우저로 SSO 로그인'}
+          </button>
+        </div>
+
+        {/* 또는 수동 등록 (대체) */}
+        <details className="group">
+          <summary className="text-sm font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground mb-3">
+            또는 수동 등록 (PAT · 세션 쿠키)
+          </summary>
 
         {/* 인증 방식 선택 */}
         <div className="flex items-stretch gap-1.5 mb-3">
           {([
             { id: 'pat' as const, label: 'Personal Access Token', icon: KeyRound },
-            { id: 'cookie' as const, label: '세션 쿠키 (SSO)', icon: Cookie },
+            { id: 'cookie' as const, label: '세션 쿠키 (수동)', icon: Cookie },
           ]).map((m) => {
             const Icon = m.icon;
             return (
@@ -181,20 +240,6 @@ export function JiraIntegrationPanel() {
               </button>
             );
           })}
-        </div>
-
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
-            cred?.configured
-              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-              : 'bg-secondary text-muted-foreground border-border'
-          }`}>
-            {cred?.configured ? `등록됨 · ${cred.authType === 'cookie' ? '세션 쿠키' : 'PAT'}` : '미등록'}
-          </span>
-          {cred?.jiraAccount && <span className="text-sm text-muted-foreground">계정: {cred.jiraAccount}</span>}
-          {cred?.lastVerifiedAt && (
-            <span className="text-sm text-muted-foreground">마지막 검증: {new Date(cred.lastVerifiedAt).toLocaleString()}</span>
-          )}
         </div>
 
         {authType === 'cookie' ? (
@@ -227,8 +272,9 @@ export function JiraIntegrationPanel() {
             </button>
           </div>
         )}
+        </details>
 
-        <div className="flex items-center gap-2 mt-3">
+        <div className="flex items-center gap-2 mt-4">
           <button onClick={handleTest} disabled={testConn.isPending || !cred?.configured}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
             {testConn.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}

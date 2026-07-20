@@ -89,6 +89,14 @@ spec:
                 secretKeyRef:
                   name: k8s-monitor-secret
                   key: SECRET_KEY
+            # backend(API, HPA 2~10 replica)와 이 engine 코드를 공유하므로, 기본 풀
+            # (10+20=30/pod)을 그대로 쓰면 replica 합계가 PostgreSQL 기본
+            # max_connections(100)를 쉽게 넘는다. 워커는 API 서버만큼 동시 DB 세션이
+            # 필요 없으므로 훨씬 작게 오버라이드.
+            - name: DB_POOL_SIZE
+              value: "3"
+            - name: DB_MAX_OVERFLOW
+              value: "5"
           resources:
             requests:
               memory: "256Mi"

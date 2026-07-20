@@ -49,6 +49,14 @@ export function useDeleteJiraCredential() {
   });
 }
 
+export function useJiraSsoLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => jiraApi.ssoLogin(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.credential }),
+  });
+}
+
 export function useJiraTest() {
   const qc = useQueryClient();
   return useMutation({

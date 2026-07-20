@@ -4,6 +4,7 @@ from sqlalchemy import Column, String, DateTime, Enum, Integer, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models._crypto_types import EncryptedText
 import enum
 
 
@@ -23,7 +24,9 @@ class Cluster(Base):
     seq = Column(Integer, nullable=False, default=1000, server_default="1000", index=True)
     api_endpoint = Column(String(255), nullable=False)
     kubeconfig_path = Column(String(255), nullable=True)
-    kubeconfig_content = Column(Text, nullable=True)   # DB에 원본 YAML 보관 (컨테이너 재시작 대비)
+    # DB에 원본 YAML 보관 (컨테이너 재시작 대비) — secret_box 로 투명 암호화(EncryptedText).
+    # 저장은 항상 암호화, 조회는 기존 평문 행도 lazy migration 으로 읽힘(secret_box.py 참고).
+    kubeconfig_content = Column(EncryptedText, nullable=True)
     status = Column(Enum(StatusEnum), default=StatusEnum.healthy)
 
     # 클러스터 관리 메타데이터

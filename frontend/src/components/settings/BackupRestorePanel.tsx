@@ -7,7 +7,7 @@ import {
 import { backupApi } from '@/services/api';
 import type { BackupImportResponse } from '@/services/api';
 import { ConfirmDialog, useToast } from '@/components/common';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 type Mode = 'merge' | 'replace';
 
@@ -283,7 +283,7 @@ export function BackupRestorePanel() {
                 </span>
                 {preview.diff.createdAt && (
                   <span className="text-muted-foreground font-mono">
-                    {new Date(preview.diff.createdAt).toLocaleString()}
+                    {parseUTC(preview.diff.createdAt).toLocaleString()}
                   </span>
                 )}
                 <span className="ml-auto flex gap-2">

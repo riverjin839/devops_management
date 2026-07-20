@@ -11,6 +11,7 @@ import {
 import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import type { DailyCheckTrend } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 interface Props {
   trend: DailyCheckTrend | undefined;
@@ -47,7 +48,7 @@ export function TrendChart({ trend, days = 7, isError, error }: Props) {
   }
 
   const data = trend.points.map((p) => ({
-    time: p.checkedAt ? new Date(p.checkedAt).toLocaleString('ko-KR', {
+    time: p.checkedAt ? parseUTC(p.checkedAt).toLocaleString('ko-KR', {
       month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
     }) : '',
     errors: p.errors,
