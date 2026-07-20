@@ -120,7 +120,7 @@ export function LakeServicesPage() {
 
           {/* Error state */}
           {error && (
-            <div className="rounded-md border border-red-500/40 bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+            <div className="rounded-md border border-status-critical/40 bg-status-critical/5 p-3 flex items-start gap-2 text-sm text-status-critical">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium">LAKE 서비스 조회 실패</div>
@@ -133,7 +133,7 @@ export function LakeServicesPage() {
 
           {/* Loading state */}
           {isLoading && (
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+            <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-32 rounded-md bg-muted/30 animate-pulse" />
               ))}
@@ -153,10 +153,7 @@ export function LakeServicesPage() {
 
           {/* Cards grid */}
           {!isLoading && services.length > 0 && (
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
-            >
+            <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
               {services.map((s) => (
                 <LakeServiceCard
                   key={s.id}

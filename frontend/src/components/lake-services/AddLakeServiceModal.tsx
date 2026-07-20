@@ -209,7 +209,7 @@ export function AddLakeServiceModal({
           </label>
 
           {error && (
-            <div className="text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded p-2">
+            <div className="text-sm text-status-critical bg-status-critical/10 border border-status-critical/30 rounded p-2">
               {error}
             </div>
           )}
@@ -219,7 +219,7 @@ export function AddLakeServiceModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
+            className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl"
           >
             취소
           </button>
@@ -228,7 +228,7 @@ export function AddLakeServiceModal({
             onClick={handleSubmit}
             disabled={create.isPending}
             autoFocus
-            className="px-4 py-1.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            className="px-4 py-1.5 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             {create.isPending ? '등록 중…' : '등록'}
           </button>
