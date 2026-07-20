@@ -95,7 +95,7 @@ def capture_sso_session(
 
     # 진단값 — 어디서 멈췄는지 사용자/로그에 노출.
     diag = {"attempts": 0, "last_ctx_status": None, "last_page_status": None,
-            "cookie_count": 0, "host": host}
+            "cookie_count": 0, "host": host, "tab_hosts": []}
 
     def _extract_account(data: dict) -> Optional[tuple]:
         acct = data.get("name") or data.get("key") or ""
@@ -114,23 +114,36 @@ def capture_sso_session(
             diag["last_ctx_status"] = f"err:{str(exc)[:50]}"
         return None
 
-    def _probe_page(page) -> Optional[tuple]:
-        """브라우저 페이지 자체의 fetch — 사용자가 보는 실제 세션(httpOnly 쿠키 포함)으로
-        호출하는 ground truth. 페이지가 Jira 오리진일 때만 same-origin 으로 동작한다."""
-        try:
-            if _cookie_host(page.url) != host:
-                return None
-            res = page.evaluate(
-                "async (u) => { try { const r = await fetch(u, {credentials:'include'});"
-                " return {s: r.status, b: r.status === 200 ? await r.text() : ''}; }"
-                " catch (e) { return {s: -1, b: ''}; } }",
-                myself_url,
-            )
-            diag["last_page_status"] = res.get("s")
-            if res.get("s") == 200 and res.get("b"):
-                return _extract_account(json.loads(res["b"]))
-        except Exception as exc:  # noqa: BLE001
-            diag["last_page_status"] = f"err:{str(exc)[:50]}"
+    def _fetch_in_page(page) -> Optional[tuple]:
+        """한 페이지(탭) 안에서 fetch — 그 탭의 실제 세션(httpOnly 쿠키 포함)으로 호출하는
+        ground truth. 페이지가 Jira 오리진일 때만 same-origin 으로 동작."""
+        res = page.evaluate(
+            "async (u) => { try { const r = await fetch(u, {credentials:'include'});"
+            " return {s: r.status, b: r.status === 200 ? await r.text() : ''}; }"
+            " catch (e) { return {s: -1, b: ''}; } }",
+            myself_url,
+        )
+        diag["last_page_status"] = res.get("s")
+        if res.get("s") == 200 and res.get("b"):
+            return _extract_account(json.loads(res["b"]))
+        return None
+
+    def _probe_pages(context) -> Optional[tuple]:
+        """열려 있는 **모든 탭**을 확인한다 — SSO 가 새 탭에서 완료되거나 사용자가 다른 탭에서
+        Jira 에 로그인했을 수 있으므로(초기 탭만 보면 놓친다). Jira 오리진인 탭에서 in-page
+        fetch 로 세션을 확인한다."""
+        hosts = []
+        for pg in list(context.pages):
+            try:
+                h = _cookie_host(pg.url)
+                hosts.append(h)
+                if h == host:
+                    hit = _fetch_in_page(pg)
+                    if hit:
+                        return hit
+            except Exception as exc:  # noqa: BLE001
+                diag["last_page_status"] = f"err:{str(exc)[:50]}"
+        diag["tab_hosts"] = [h for h in hosts if h]
         return None
 
     try:
@@ -153,10 +166,10 @@ def capture_sso_session(
                 except Exception:  # noqa: BLE001 - 초기 진입 실패해도 폴링은 계속
                     logger.info("Jira SSO initial goto slow/failed — 폴링 계속")
 
-                # 로그인 완료까지 폴링 — 페이지 fetch(우선) + APIRequestContext(보조).
+                # 로그인 완료까지 폴링 — 모든 탭 fetch(우선) + APIRequestContext(보조).
                 while time.monotonic() < deadline:
                     diag["attempts"] += 1
-                    hit = _probe_page(page) or _probe_ctx(context)
+                    hit = _probe_pages(context) or _probe_ctx(context)
                     if hit:
                         acct, display = hit
                         cookies = context.cookies()
@@ -183,9 +196,9 @@ def capture_sso_session(
                     "detail": (
                         f"제한 시간({timeout}s) 안에 로그인이 감지되지 않았습니다 "
                         f"(시도 {diag['attempts']}회 · myself[ctx]={diag['last_ctx_status']} · "
-                        f"myself[page]={diag['last_page_status']}). ▸ 팝업된 그 브라우저 창에서 "
-                        "로그인을 끝까지(마지막에 Jira 화면이 뜰 때까지) 마쳤는지, 자체서명 인증서면 "
-                        "공통설정의 'TLS 인증서 검증'을 꺼야 하는지 확인하세요."
+                        f"myself[page]={diag['last_page_status']} · 열린 탭 호스트={diag['tab_hosts']} · "
+                        f"기대 호스트={host}). ▸ 로그인한 탭이 Jira 도메인({host})인지, 자체서명 "
+                        "인증서면 공통설정의 'TLS 인증서 검증'을 꺼야 하는지 확인하세요."
                     ),
                     "diag": diag,
                 }
