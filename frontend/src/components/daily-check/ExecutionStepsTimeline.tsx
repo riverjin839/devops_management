@@ -10,15 +10,15 @@ interface Props {
 type NodeStatus = 'success' | 'failed' | 'running' | 'skipped' | 'pending';
 
 const RING: Record<NodeStatus, string> = {
-  success: 'border-green-500 text-green-600 bg-green-500/10',
-  failed: 'border-red-500 text-red-500 bg-red-500/10',
-  running: 'border-amber-400 text-amber-600 bg-amber-400/10 animate-pulse',
-  skipped: 'border-zinc-300 text-muted-foreground bg-secondary/40',
+  success: 'border-status-healthy text-status-healthy bg-status-healthy-soft',
+  failed: 'border-status-critical text-status-critical bg-status-critical-soft',
+  running: 'border-status-warning text-status-warning bg-status-warning-soft animate-pulse',
+  skipped: 'border-status-unknown text-muted-foreground bg-secondary/40',
   pending: 'border-border text-muted-foreground bg-card',
 };
 const LINE: Record<NodeStatus, string> = {
-  success: 'bg-green-500', failed: 'bg-red-500', running: 'bg-amber-400',
-  skipped: 'bg-zinc-300', pending: 'bg-border',
+  success: 'bg-status-healthy', failed: 'bg-status-critical', running: 'bg-status-warning',
+  skipped: 'bg-status-unknown', pending: 'bg-border',
 };
 
 function StatusIcon({ s }: { s: NodeStatus }) {
@@ -77,7 +77,7 @@ export function ExecutionStepsTimeline({ stepPlan, steps }: Props) {
                 >
                   <StatusIcon s={st} />
                 </div>
-                <span className={`mt-1.5 text-[11px] text-center leading-tight ${st === 'failed' ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>{n.label}</span>
+                <span className={`mt-1.5 text-[11px] text-center leading-tight ${st === 'failed' ? 'text-status-critical font-medium' : 'text-muted-foreground'}`}>{n.label}</span>
                 {shown && n.detail && (
                   <span className="mt-0.5 text-[10px] text-center text-muted-foreground/80 line-clamp-2" title={n.detail}>{n.detail}</span>
                 )}

@@ -8,10 +8,10 @@ interface Props {
 }
 
 const STATUS_ICON: Record<Status, { Icon: typeof CheckCircle2; color: string }> = {
-  healthy:  { Icon: CheckCircle2,  color: 'text-emerald-500' },
-  warning:  { Icon: AlertTriangle, color: 'text-amber-500'   },
-  critical: { Icon: XCircle,       color: 'text-red-500'     },
-  pending:  { Icon: Clock,         color: 'text-status-unknown' },
+  healthy:  { Icon: CheckCircle2,  color: 'text-status-healthy'  },
+  warning:  { Icon: AlertTriangle, color: 'text-status-warning'  },
+  critical: { Icon: XCircle,       color: 'text-status-critical' },
+  pending:  { Icon: Clock,         color: 'text-status-unknown'  },
 };
 
 export function DeepCheckGrid({ results }: Props) {
