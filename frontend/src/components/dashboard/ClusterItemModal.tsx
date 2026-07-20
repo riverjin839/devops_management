@@ -2,6 +2,8 @@ import { useEffect, useId, useState } from 'react';
 import { X, Hand, Clock3, Sparkles } from 'lucide-react';
 import { ClusterItem, ClusterItemCardSize, ClusterItemSource } from '@/types';
 import { useCreateClusterItem, useUpdateClusterItem, useClusterItemTypes } from '@/hooks/useClusterItems';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 interface ClusterItemModalProps {
   isOpen: boolean;
@@ -40,6 +42,8 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
   const descId = useId();
   const unitId = useId();
 
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
   const createItem = useCreateClusterItem(clusterId);
   const updateItem = useUpdateClusterItem(clusterId);
   const { data: itemTypes = [] } = useClusterItemTypes();
@@ -88,7 +92,7 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
     setDescription(spec.description || '');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) return;
     const payload: Partial<ClusterItem> = {
       title: title.trim(),
@@ -101,12 +105,19 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
       scheduleMinute,
       cardSize,
     };
-    if (editingItem) {
-      updateItem.mutate({ id: editingItem.id, data: payload });
-    } else {
-      createItem.mutate({ ...payload, itemType, tier: itemType === 'node_count' ? 'basic' : 'advanced' });
+    setSaving(true);
+    try {
+      if (editingItem) {
+        await updateItem.mutateAsync({ id: editingItem.id, data: payload });
+      } else {
+        await createItem.mutateAsync({ ...payload, itemType, tier: itemType === 'node_count' ? 'basic' : 'advanced' });
+      }
+      onClose();
+    } catch (err) {
+      toast.error(isEdit ? '수정 실패' : '추가 실패', formatApiError(err, '저장 중 오류가 발생했습니다.'));
+    } finally {
+      setSaving(false);
     }
-    onClose();
   };
 
   return (
@@ -302,10 +313,10 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
             </button>
             <button
               onClick={handleSave}
-              disabled={!title.trim()}
+              disabled={!title.trim() || saving}
               className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-40"
             >
-              {isEdit ? '저장' : '추가'}
+              {saving ? '저장 중...' : isEdit ? '저장' : '추가'}
             </button>
           </div>
         </div>

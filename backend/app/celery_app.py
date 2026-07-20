@@ -492,8 +492,16 @@ def run_batch_job_dispatcher(self):
                     if next_fire > now_naive:
                         note = f"대기 — 다음 실행 {next_fire:%Y-%m-%d %H:%M} ({tz_name})"
                     else:
+                        # anchor(last_run_at)를 큐잉 시점에 바로 전진시킨다. 예전엔
+                        # execute_job 이 실제로 "끝난" 뒤에야 last_run_at 을 갱신했는데,
+                        # 워커가 바빠서 큐잉된 태스크가 1분 안에 시작도 못 하면 다음 분
+                        # 디스패처가 여전히 옛 anchor 를 보고 같은 잡을 또 큐잉했다
+                        # (etcd defrag 같은 잡이 중복 실행될 수 있었음). execute_job 이
+                        # 완료 후 다시 last_run_at 을 finished_at 으로 갱신하므로 anchor 는
+                        # 계속 전진만 한다(역행 없음).
                         run_batch_job.delay(str(job.id))
                         dispatched.append(str(job.id))
+                        job.last_run_at = check_at
                         note = "실행 큐잉됨"
 
             job.last_schedule_check_at = check_at

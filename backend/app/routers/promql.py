@@ -5,6 +5,7 @@ Provides a No-Code dashboard builder: users create metric cards via the UI
 with a PromQL query, and the backend executes them against Prometheus.
 """
 
+import asyncio
 import time
 from uuid import UUID
 from typing import Optional
@@ -28,6 +29,20 @@ from app.services.prometheus_service import prometheus_service
 from app.services.grafana_service import grafana_service
 
 router = APIRouter(prefix="/promql", tags=["promql"])
+
+# ── /query/all 캐시 ──────────────────────────────────────────────────
+# 대시보드 탭이 여러 개 열려 있으면 각자 30초 폴링 → 카드 수 × 탭 수만큼 실
+# Prometheus 쿼리가 나간다. 폴링 주기의 절반 정도 TTL 로 인메모리 캐시해 동시
+# 폴링을 흡수한다. 카드 CRUD 시 아래 헬퍼로 즉시 무효화해 편집 직후에는 캐시가
+# 아닌 최신 값이 보이게 한다. 프로세스(워커) 단위 캐시라 멀티 replica 에선
+# replica 마다 별도로 채워지지만, 그래도 요청 수는 replica 수준으로 줄어든다.
+_QUERY_ALL_CACHE_TTL = 15.0
+_query_all_cache: dict = {"ts": 0.0, "data": None}
+
+
+def _invalidate_query_all_cache() -> None:
+    _query_all_cache["ts"] = 0.0
+    _query_all_cache["data"] = None
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────
@@ -62,6 +77,7 @@ def create_card(body: MetricCardCreate, db: Session = Depends(get_db)):
     db.add(card)
     db.commit()
     db.refresh(card)
+    _invalidate_query_all_cache()
     return card
 
 
@@ -74,6 +90,7 @@ def update_card(card_id: UUID, body: MetricCardUpdate, db: Session = Depends(get
         setattr(card, key, value)
     db.commit()
     db.refresh(card)
+    _invalidate_query_all_cache()
     return card
 
 
@@ -84,6 +101,7 @@ def delete_card(card_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Metric card not found")
     db.delete(card)
     db.commit()
+    _invalidate_query_all_cache()
     return {"message": "Metric card deleted"}
 
 
@@ -96,17 +114,29 @@ def delete_card(card_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/query/all", response_model=list[MetricQueryResult])
 async def query_all_cards(db: Session = Depends(get_db)):
-    """Execute all enabled metric cards and return results."""
+    """Execute all enabled metric cards and return results.
+
+    카드를 병렬로 조회(과거엔 직렬 await 라 카드 하나가 느리면 응답 전체가 그만큼
+    늦어졌다) + 짧은 TTL 캐시(동시 폴링 흡수).
+    """
+    now = time.monotonic()
+    cached = _query_all_cache["data"]
+    if cached is not None and now - _query_all_cache["ts"] < _QUERY_ALL_CACHE_TTL:
+        return cached
+
     cards = (
         db.query(MetricCard)
         .filter(MetricCard.enabled == True)  # noqa: E712
         .order_by(MetricCard.sort_order, MetricCard.created_at)
         .all()
     )
-    results = []
-    for card in cards:
-        result = await prometheus_service.query(card.promql)
-        results.append(MetricQueryResult(card_id=card.id, **result))
+    raw_results = await asyncio.gather(*(prometheus_service.query(card.promql) for card in cards))
+    results = [
+        MetricQueryResult(card_id=card.id, **result)
+        for card, result in zip(cards, raw_results)
+    ]
+    _query_all_cache["ts"] = now
+    _query_all_cache["data"] = results
     return results
 
 

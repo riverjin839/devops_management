@@ -305,7 +305,7 @@ Copy `.env.example` → `.env` in the **backend** directory for local developmen
 | `CHECK_INTERVAL_MINUTES` | `5` | Health check interval |
 | `CHECK_TIMEOUT_SECONDS` | `30` | kubectl/HTTP timeout |
 | `KUBECONFIG_STORE_DIR` | `/tmp/k8s-monitor/kubeconfigs` | content 방식 kubeconfig 저장 위치 |
-| `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰 (미설정 시 검증 없음) |
+| `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰. **fail-closed** — 미설정 시 웹훅 수신 자체를 503 으로 거부(deep_check ingest 의 SUPERPOD_INGEST_TOKEN 과 동일 정책) |
 | `MGMT_NAMESPACE` | `k8s-monitor` | 관리 네임스페이스 (K8sEvent 채널) |
 | `SUPERPOD_MODE` | `centralized` | `in_cluster` \| `centralized` — deep check 실행 모드 |
 | `SUPERPOD_INGEST_URL` / `SUPERPOD_INGEST_TOKEN` | *(empty)* | in-cluster CronJob 결과 push 대상 |

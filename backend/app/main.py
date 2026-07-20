@@ -350,15 +350,19 @@ def _run_migrations():
                     "WHERE (kubeconfig_content IS NULL OR kubeconfig_content = '') "
                     "  AND kubeconfig_path IS NOT NULL AND kubeconfig_path != ''"
                 )).fetchall()
+                from app.services.secret_box import encrypt as _encrypt_kubeconfig
                 for cid, kc_path in rows:
                     if kc_path and _os.path.exists(kc_path):
                         try:
                             with open(kc_path, encoding="utf-8") as f:
                                 kc_content = f.read()
                             if kc_content.strip():
+                                # 이 UPDATE 는 raw SQL 이라 ORM 의 EncryptedText 컬럼
+                                # 타입(app/models/_crypto_types.py)을 거치지 않는다 —
+                                # 직접 암호화해서 넣는다(평문으로 새지 않도록).
                                 conn.execute(
                                     text("UPDATE clusters SET kubeconfig_content = :c WHERE id = :id"),
-                                    {"c": kc_content, "id": cid},
+                                    {"c": _encrypt_kubeconfig(kc_content), "id": cid},
                                 )
                         except Exception:
                             pass
@@ -1597,31 +1601,63 @@ async def lifespan(app: FastAPI):
         _ensure_pgvector_extension()
     except Exception as e:  # noqa: BLE001
         _startup_log.exception("pgvector extension step failed — continuing: %s", e)
+
+    # 멀티 replica(backend HPA, celery worker/beat 이미지 공용) 가 동시에 부팅하며
+    # 각자 create_all + _run_migrations + seed_* 를 실행한다. 전부 IF NOT EXISTS
+    # 기반이라 대부분 멱등이지만, 드물게 동시 CREATE TABLE/INDEX 가 카탈로그 레벨
+    # race(예: duplicate key value violates unique constraint "pg_type_typname_nsp_index")
+    # 로 실패할 수 있고, 그 replica 는 해당 단계 전체를 경고만 남기고 스킵해 다음
+    # 재시작까지 스키마 보강이 잠복될 수 있다. 세션 레벨 advisory lock 으로 replica
+    # 간 부팅 마이그레이션 시퀀스 전체를 직렬화한다 — 별도 커넥션을 부팅 동안 계속
+    # 들고 있다가(다른 replica 는 lock 대기) 끝나면 명시적으로 unlock. pgvector 확장
+    # 생성은 이미 자체 xact-lock(다른 키)이 있어 위에서 별도 처리됨.
+    _lock_conn = None
     try:
-        Base.metadata.create_all(bind=engine)
+        _lock_conn = engine.connect()
+        _lock_conn.execute(text("SELECT pg_advisory_lock(872346193)"))
     except Exception as e:  # noqa: BLE001
-        _startup_log.exception("create_all failed — continuing: %s", e)
-    for step_name, step in [
-        ("migrations", _run_migrations),
-        ("seed_metric_cards", _seed_default_metric_cards),
-        ("seed_cluster_items", _seed_cluster_items),
-        ("seed_trend_sources", _seed_default_trend_sources),
-        ("seed_playbooks", _seed_default_playbooks),
-        ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
-        ("seed_isilon_commands", _seed_default_isilon_commands),
-        ("seed_check_matrix_items", _seed_check_matrix_items),
-        ("seed_check_matrix_schedules", _seed_check_matrix_schedules),
-        ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
-        ("seed_lake_service_types", _seed_default_lake_service_types),
-        ("seed_service_categories", _seed_default_service_categories),
-        ("seed_lake_service_entries", _seed_default_lake_service_entries),
-        ("seed_initial_admin", _seed_initial_admin),
-        ("seed_assignee_users", _seed_assignee_users),
-    ]:
+        _startup_log.warning("startup migration lock 획득 실패(%s) — 락 없이 진행", e)
+        if _lock_conn is not None:
+            try:
+                _lock_conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+            _lock_conn = None
+
+    try:
         try:
-            step()
+            Base.metadata.create_all(bind=engine)
         except Exception as e:  # noqa: BLE001
-            _startup_log.exception("startup step '%s' failed — continuing: %s", step_name, e)
+            _startup_log.exception("create_all failed — continuing: %s", e)
+        for step_name, step in [
+            ("migrations", _run_migrations),
+            ("seed_metric_cards", _seed_default_metric_cards),
+            ("seed_cluster_items", _seed_cluster_items),
+            ("seed_trend_sources", _seed_default_trend_sources),
+            ("seed_playbooks", _seed_default_playbooks),
+            ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
+            ("seed_isilon_commands", _seed_default_isilon_commands),
+            ("seed_check_matrix_items", _seed_check_matrix_items),
+            ("seed_check_matrix_schedules", _seed_check_matrix_schedules),
+            ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
+            ("seed_lake_service_types", _seed_default_lake_service_types),
+            ("seed_service_categories", _seed_default_service_categories),
+            ("seed_lake_service_entries", _seed_default_lake_service_entries),
+            ("seed_initial_admin", _seed_initial_admin),
+            ("seed_assignee_users", _seed_assignee_users),
+        ]:
+            try:
+                step()
+            except Exception as e:  # noqa: BLE001
+                _startup_log.exception("startup step '%s' failed — continuing: %s", step_name, e)
+    finally:
+        if _lock_conn is not None:
+            try:
+                _lock_conn.execute(text("SELECT pg_advisory_unlock(872346193)"))
+            except Exception:  # noqa: BLE001
+                pass
+            finally:
+                _lock_conn.close()
     yield
     # Shutdown: 필요한 정리 작업
 

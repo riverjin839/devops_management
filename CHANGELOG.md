@@ -20,6 +20,36 @@
 ## [1.7.1] - 2026-07-20
 
 ### Fixed
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Medium 8건)**: Blocker/High 조치에 이어
+  Medium 등급 항목을 마저 반영.
+  - **kubewatch ingest fail-closed**: `KUBEWATCH_TOKEN` 미설정 시 무인증으로 웹훅을
+    수락하던 것을 deep_check ingest 와 동일하게 fail-closed(503)로 전환 +
+    `secrets.compare_digest` 적용.
+  - **로그인 무차별 대입 방어**: `/auth/login` 에 Redis 기반 rate limit 추가 — IP 단위
+    (창 5분/20회) + 계정 단위(창 15분/5회) 이중 방어. Redis 불가 시 로그인 자체는
+    막지 않는 fail-open(다른 외부 서비스와 동일 컨벤션).
+  - **PromQL 카드 조회 성능**: `/promql/query/all` 이 카드를 직렬 실행하고 매 호출
+    새 httpx 클라이언트를 만들던 것을 병렬 실행(`asyncio.gather`) + 클라이언트 재사용
+    + 15초 TTL 캐시로 개선 — 대시보드 탭 여러 개가 동시에 폴링해도 Prometheus 부하가
+    상수화된다.
+  - **점검 이력 N+1 + CSV 무제한 export**: `history.py` 의 `log.cluster.name`/addon
+    조회가 행마다 별도 쿼리를 날리던 것을 `joinedload` 로 묶고, CSV export 에 상한
+    (기본 5000, 최대 20000행)을 추가.
+  - **멀티 replica 마이그레이션 직렬화**: backend/celery 여러 replica 가 동시에 부팅
+    시 스키마 마이그레이션이 카탈로그 레벨 race 로 드물게 스킵될 수 있던 것을 세션
+    advisory lock 으로 부팅 시퀀스 전체를 직렬화하도록 수정(pgvector 확장 생성은 기존
+    xact-lock 그대로 유지).
+  - **배치잡 디스패처 중복 실행 방지**: cron 잡을 큐잉만 하고 워커가 늦게 시작하면
+    다음 분 디스패처가 같은 잡을 또 큐잉하던 문제를, 큐잉 시점에 바로 anchor
+    (`last_run_at`)를 전진시키도록 수정.
+  - **저장 모달 에러 처리**: `AddMetricCardModal`/`AddAddonModal`/`ClusterItemModal`
+    이 `mutate()` 를 fire-and-forget 으로 호출하고 결과와 무관하게 즉시 모달을 닫던
+    것을, `mutateAsync` + 실패 시 모달 유지 + 에러 토스트로 통일.
+  - **kubeconfig 저장 암호화**: `clusters.kubeconfig_content` 를 평문으로 저장하던
+    것을 `secret_box` 로 투명 암호화하는 SQLAlchemy 컬럼 타입(`EncryptedText`)으로
+    전환. 기존 평문 행은 복호화 실패 시 그대로 반환(lazy migration)해 별도 백필
+    없이 다음 저장 시 자동으로 암호화된다.
+
 - **상용 출시 전 보안/안정성 점검 후속 조치 (High 11건)**: Blocker 조치에 이어 High
   등급 항목을 마저 반영.
   - **인증/인가**: `ui-settings` 의 앱 설정/클러스터 링크/담당자/운영레벨 PUT 엔드포인트가
