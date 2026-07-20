@@ -23,7 +23,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'On-Premises',
     sub: 'Bare metal / VM',
     icon: <Server className="w-6 h-6" />,
-    color: 'border-blue-500/40 bg-blue-500/10 text-blue-400',
+    color: 'border-chart-1/40 bg-chart-1/10 text-chart-1',
     defaultPort: '6443',
   },
   {
@@ -31,7 +31,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'AWS EKS',
     sub: 'Amazon Elastic K8s',
     icon: <Cloud className="w-6 h-6" />,
-    color: 'border-orange-500/40 bg-orange-500/10 text-orange-400',
+    color: 'border-chart-7/40 bg-chart-7/10 text-chart-7',
     defaultPort: '443',
   },
   {
@@ -39,7 +39,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'GCP GKE',
     sub: 'Google Kubernetes Engine',
     icon: <Globe className="w-6 h-6" />,
-    color: 'border-green-500/40 bg-green-500/10 text-green-400',
+    color: 'border-chart-2/40 bg-chart-2/10 text-chart-2',
     defaultPort: '443',
   },
   {
@@ -47,7 +47,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'Azure AKS',
     sub: 'Azure Kubernetes Service',
     icon: <Layers className="w-6 h-6" />,
-    color: 'border-sky-500/40 bg-sky-500/10 text-sky-400',
+    color: 'border-chart-6/40 bg-chart-6/10 text-chart-6',
     defaultPort: '443',
   },
   {
@@ -55,7 +55,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'Rancher',
     sub: 'Rancher Managed',
     icon: <Zap className="w-6 h-6" />,
-    color: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400',
+    color: 'border-chart-8/40 bg-chart-8/10 text-chart-8',
     defaultPort: '6443',
   },
   {
@@ -63,7 +63,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'Kind / k3s',
     sub: 'Local Dev Cluster',
     icon: <Box className="w-6 h-6" />,
-    color: 'border-purple-500/40 bg-purple-500/10 text-purple-400',
+    color: 'border-chart-4/40 bg-chart-4/10 text-chart-4',
     defaultPort: '6443',
   },
   {
@@ -71,7 +71,7 @@ const PROVIDERS: ProviderOption[] = [
     label: 'OpenShift',
     sub: 'Red Hat OpenShift',
     icon: <Cpu className="w-6 h-6" />,
-    color: 'border-red-500/40 bg-red-500/10 text-red-400',
+    color: 'border-chart-5/40 bg-chart-5/10 text-chart-5',
     defaultPort: '6443',
   },
 ];
@@ -356,7 +356,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                       API Endpoint {skipConnectivity ? '' : '*'}
                     </label>
                     {skipConnectivity && (
-                      <span className="text-xs bg-amber-500/15 text-amber-400 border border-amber-500/25 px-1.5 py-0.5 rounded-full">
+                      <span className="text-xs bg-status-warning/15 text-status-warning border border-status-warning/25 px-1.5 py-0.5 rounded-full">
                         임시 등록 모드
                       </span>
                     )}
@@ -368,7 +368,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                     onChange={(e) => setApiEndpoint(e.target.value)}
                     placeholder={`https://your-cluster.example.com:${selectedProvider.defaultPort}`}
                     className={`w-full px-3 py-2.5 bg-secondary border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary ${
-                      skipConnectivity ? 'border-amber-500/30' : 'border-border'
+                      skipConnectivity ? 'border-status-warning/30' : 'border-border'
                     }`}
                   />
                   <p className="mt-1 text-xs text-muted-foreground font-mono">
@@ -396,8 +396,8 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                     onClick={() => setSkipConnectivity(!skipConnectivity)}
                     className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all text-sm font-medium ${
                       skipConnectivity
-                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
-                        : 'bg-secondary border-border text-muted-foreground hover:border-amber-500/30 hover:text-amber-300'
+                        ? 'bg-status-warning/10 border-status-warning/40 text-status-warning'
+                        : 'bg-secondary border-border text-muted-foreground hover:border-status-warning/30 hover:text-status-warning/80'
                     }`}
                   >
                     <WifiOff className="w-4 h-4 flex-shrink-0" />
@@ -544,7 +544,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               disabled={isSubmitting}
               className={`flex items-center gap-2 px-5 py-2 text-sm font-medium text-primary-foreground rounded-lg transition-colors disabled:opacity-50 ${
                 skipConnectivity
-                  ? 'bg-amber-500 hover:bg-amber-500/90'
+                  ? 'bg-status-warning hover:bg-status-warning/90'
                   : 'bg-primary hover:bg-primary/90'
               }`}
             >

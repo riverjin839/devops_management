@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ClusterItem, ClusterItemCardSize } from '@/types';
 import { formatDateTime, parseUTC } from '@/lib/utils';
 import {
@@ -32,7 +33,7 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 // 아이템 타입별 보조 정보 한 줄.
-function detailLine(item: ClusterItem): string | null {
+function detailLine(item: ClusterItem): ReactNode {
   const d = item.resultDetail || {};
   switch (item.itemType) {
     case 'node_count':
@@ -42,7 +43,9 @@ function detailLine(item: ClusterItem): string | null {
         ? `네임스페이스 ${d.namespaces}${d.pending ? ` · 대기 ${d.pending}` : ''}${d.failed ? ` · 실패 ${d.failed}` : ''}`
         : null;
     case 'k8s_version':
-      return d.skew ? '⚠ 노드 버전 불일치 (skew)' : '노드 버전 일치';
+      return d.skew
+        ? <span className="inline-flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> 노드 버전 불일치 (skew)</span>
+        : '노드 버전 일치';
     case 'cert_expiry':
       return d.not_after ? `만료 ${parseUTC(d.not_after).toLocaleDateString('ko-KR')}` : null;
     case 'ai_cluster_summary':
@@ -55,9 +58,9 @@ function detailLine(item: ClusterItem): string | null {
 // 결과 수집 방식 배지 (수동/자동/AI)
 function SourceBadge({ mode }: { mode: ClusterItem['sourceMode'] }) {
   const map = {
-    manual: { label: '수동', icon: Hand, cls: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+    manual: { label: '수동', icon: Hand, cls: 'bg-status-warning/10 text-status-warning border-status-warning/20' },
     auto: { label: '자동', icon: Clock3, cls: 'bg-primary/10 text-primary border-primary/20' },
-    ai: { label: 'AI', icon: Sparkles, cls: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
+    ai: { label: 'AI', icon: Sparkles, cls: 'bg-brand-ai/10 text-brand-ai border-brand-ai/20' },
   }[mode] ?? { label: mode, icon: Clock3, cls: 'bg-secondary text-muted-foreground border-border' };
   const Icon = map.icon;
   return (

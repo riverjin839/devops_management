@@ -80,6 +80,7 @@
 
     /* ── Brand tokens (외부 서비스 고유색. 앱 primary 와 구분) ── */
     --brand-jira:         216 100% 40%;  /* #0052CC Atlassian/Jira blue */
+    --brand-ai:           271 81% 56%;   /* #9333EA purple-600 — AI 관련 기능 배지 전용 */
 
     /* ── Motion — 모든 transition 기본값 통일 (Pre-delivery checklist 준수) ─ */
     --motion-fast: 150ms;

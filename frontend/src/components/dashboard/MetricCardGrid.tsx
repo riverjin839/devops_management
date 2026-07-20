@@ -123,7 +123,7 @@ export function MetricCardGrid({ cards, results, isLoading, onDeleteCard, onEdit
     return (
       <div className="text-center py-8">
         <p className="text-muted-foreground">
-          No metric cards yet. Click "Add Metric" to create your first PromQL card.
+          아직 메트릭 카드가 없습니다. "메트릭" 버튼을 눌러 첫 PromQL 카드를 만들어보세요.
         </p>
       </div>
     );

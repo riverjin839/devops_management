@@ -116,7 +116,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
             <BarChart data={taskData} barCategoryGap="35%">
               <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={24} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--foreground) / 0.06)' }} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]} name="건수">
                 {taskData.map((entry) => (
                   <Cell key={entry.name} fill={TASK_COLORS[entry.name] ?? 'hsl(var(--chart-8))'} />
@@ -159,7 +159,7 @@ export function KanbanSummaryCharts({ items, isLoading, selectedClusterId }: Kan
             <BarChart data={issueData} barCategoryGap="50%">
               <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={24} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--foreground) / 0.06)' }} />
               <Legend wrapperStyle={{ display: 'none' }} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]} name="건수">
                 {issueData.map((entry) => (
