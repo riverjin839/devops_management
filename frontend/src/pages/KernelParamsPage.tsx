@@ -530,6 +530,7 @@ export function KernelParamsPage() {
                     {globalFilter && (
                       <button
                         onClick={() => setGlobalFilter('')}
+                        aria-label="필터 지우기"
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         ×

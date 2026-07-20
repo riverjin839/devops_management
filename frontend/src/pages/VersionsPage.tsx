@@ -774,7 +774,7 @@ function DiffPanel({
             {formatDateTime(from.collectedAt)} → {formatDateTime(to.collectedAt)}
           </p>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-secondary text-muted-foreground">
+        <button onClick={onClose} aria-label="diff 닫기" className="p-1 rounded hover:bg-secondary text-muted-foreground">
           <X className="w-4 h-4" />
         </button>
       </div>

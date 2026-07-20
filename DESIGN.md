@@ -64,8 +64,8 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | D-005 | 시각화 토큰 | 차트·다이어그램 raw hex 130건/22파일 (`MindMapPage` 33 · `OntologyPage` 15 · `KanbanSummaryCharts` 9 등) — 허용 예외이나 색이 테마와 무관하게 고정 | 다크/라이트 전환 시 차트 대비 불균형 | 중간 | 완료 | `--chart-1~8` 토큰 신설(3테마) + Kanban/ClusterTrends/WeeklyTimeline/VersionGraph 이관, three.js 는 `chartTokenColor()` computed-style 헬퍼 (`7886815`). MindMap/Ontology/FlowGraph3D 캔버스는 허용 예외 유지 |
 | D-006 | 컴포넌트 규격 | `button.tsx:22` `sm` variant 가 `rounded-lg` (base 는 `rounded-xl`) — 소형 버튼이 시스템 차원에서 라운딩 이탈 | 소형 버튼 톤 불일치 (경미) | 낮음 | 완료 | `sm` 의 `rounded-lg` 오버라이드 제거 → base `rounded-xl` 상속으로 통일 (`6bac1cf`) |
 | D-007 | 접근성 | 아이콘 전용 버튼이 `title` 위주(718/1084) — `aria-label` 병행이 표준화돼 있지 않음 | `title` 은 스크린리더 지원 신뢰도가 낮아 보조기기 사용성 저하 | 중간 | 완료 | 규칙을 CLAUDE.md 컨벤션에 명문화 + 공용 컴포넌트 4개 폴더(common/layout/ui/dashboard) 전수 적용 — 18파일 33건 추가(기존 title 복제 21 + 신규 12). WorkCalendar 날짜 셀 `role="button"` 은 구조 리스크로 보류 기록 |
-| D-009 | 일관성 | D-004 잔여 — MacCard 미사용 페이지 2차 트랜치: NodeLabels·KernelParams·McClient·TrendDigest·TodoToday·Versions·EtcdCtl·KnowledgeHub·JiraExcelImport (9개) | 카드 스타일 페이지별 상이 | 중간 | 진행중 | 보드/캔버스형(MindMap·Workflow·Ontology·PacketFlow·WbsFlow)과 HomePage 는 구조 리스크로 보류 — 별도 정성 리뷰(R-4)에서 판단 |
-| D-010 | 접근성 | D-007 잔여 — pages/ 하위 아이콘 전용 버튼 aria-label 미병행 | 보조기기 사용성 저하 | 중간 | 진행중 | 공용 컴포넌트는 1차에서 완료 — pages 전수 스윕 |
+| D-009 | 일관성 | D-004 잔여 — MacCard 미사용 페이지 2차 트랜치: NodeLabels·KernelParams·McClient·TrendDigest·TodoToday·Versions·EtcdCtl·KnowledgeHub·JiraExcelImport (9개) | 카드 스타일 페이지별 상이 | 중간 | 완료 | 9개 페이지 섹션 카드 28건 전환 (`6b65c05`·`3d79624`·`a8256bd`). 보드/캔버스형(MindMap·Workflow·Ontology·PacketFlow·WbsFlow)과 HomePage 는 구조 리스크로 보류 — 별도 정성 리뷰(R-4)에서 판단 |
+| D-010 | 접근성 | D-007 잔여 — pages/ 하위 아이콘 전용 버튼 aria-label 미병행 | 보조기기 사용성 저하 | 중간 | 완료 | pages/ 전수 스윕 완료 — 25파일 83건 추가 (A~J 17 · K~Z 59 · 잔여 9페이지 7). `IconBtn`(K8sManage) 공용 컴포넌트에 aria-label 기본 배선. 클릭 가능한 `<tr>`/`<th>` 행 네비게이션은 키보드 접근 불가로 보고만 — R-3 후보 |
 | D-008 | 인라인 스타일 | 시각화 외 파일의 색·배경 인라인 하드코딩 혼재 (예: `MacCard.tsx:48` `style={{ background:'var(--mac-red)' }}` 류) | 토큰 우회 경로가 남아 테마 관리 어려움 | 낮음 | 완료 | MacCard 신호등 인라인 → Tailwind arbitrary 클래스, ViewModeBar 의 깨진 `color: var(--muted-foreground)` (HSL triplet 원시 사용 버그) 수정 (`6bac1cf`). 동적 좌표 계산은 허용 예외 유지 |
 
 ---
@@ -86,4 +86,5 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | 일자 | 범위 | 신규 | 해결 | 수행 | 비고 |
 |---|---|---|---|---|---|
 | 2026-07-19 | 체계 구축 + 1회차 전수 감사 (`frontend/src` grep 정량 + 구조 점검) | 8 (D-001~D-008) | 0 | ux-ui-designer | ClusterSidebar iconOnly·클러스터 select 금지 완전 준수 확인. 우선순위: D-002 → D-003 → D-004 → D-005 |
-| 2026-07-19 | 백로그 전량 처리 (D-001~D-008) | 0 | 8 | ux-ui-designer | 문서 현행화(D-001/002)·차트 토큰 신설(D-005)·MacCard 수렴 1차(D-004)·aria-label 33건(D-007) 등. D-003 은 감사 오탐 정정 후 잔존 5건 처리. lint/tsc/build 전체 게이트 통과. PR #478 |
+| 2026-07-19 | 백로그 전량 처리 (D-001~D-008) | 0 | 8 | ux-ui-designer | 문서 현행화(D-001/002)·차트 토큰 신설(D-005)·MacCard 수렴 1차(D-004)·aria-label 33건(D-007) 등. D-003 은 감사 오탐 정정 후 잔존 5건 처리. lint/tsc/build 전체 게이트 통과. PR #478 (머지, v1.7.0) |
+| 2026-07-20 | 미진행분 2차 처리 (D-009·D-010) | 2 | 2 | ux-ui-designer | MacCard 2차 수렴 9페이지 28건 + pages aria-label 83건. 보류: 보드/캔버스형 페이지 MacCard(R-4 연계), 행 네비게이션 키보드 접근(R-3 연계). lint/tsc/build 게이트 통과 |

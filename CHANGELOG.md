@@ -10,6 +10,13 @@
 
 1.7.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **디자인 컨벤션 정리 2차 (DESIGN.md D-009·D-010)**: 수제 카드 페이지 9개
+  (NodeLabels/KernelParams/McClient/TrendDigest/TodoToday/Versions/EtcdCtl/
+  KnowledgeHub/JiraExcelImport)의 섹션 카드 28건을 MacCard 로 수렴하고, pages/
+  전체 아이콘 전용 버튼에 `aria-label` 83건 병행(K8sManage 공용 IconBtn 은
+  aria-label 기본 배선) — 보드/캔버스형 페이지는 구조 리스크로 보류 기록.
+
 ## [1.7.1] - 2026-07-20
 
 ### Fixed

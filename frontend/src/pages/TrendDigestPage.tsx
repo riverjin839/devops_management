@@ -289,6 +289,7 @@ function SourceRow({ s }: { s: TrendSource }) {
             }`} />
           </button>
           <button onClick={() => setEditing(true)}
+            aria-label="소스 편집"
             className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground">
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -297,6 +298,7 @@ function SourceRow({ s }: { s: TrendSource }) {
               if (!confirm(`"${s.name}" 소스를 삭제하시겠습니까? 관련 아이템도 모두 삭제됩니다.`)) return;
               remove.mutate(s.id);
             }}
+            aria-label="소스 삭제"
             className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -318,7 +320,7 @@ function AddSourceForm({ onClose }: { onClose: () => void }) {
     <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-primary">새 소스 추가</p>
-        <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+        <button onClick={onClose} aria-label="닫기" className="p-1 text-muted-foreground hover:text-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>

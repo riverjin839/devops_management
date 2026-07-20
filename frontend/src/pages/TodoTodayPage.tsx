@@ -107,6 +107,7 @@ function CompleteBtn({ item, busy, onToggleDone }: Omit<ItemProps, 'onOpen'>) {
       disabled={busy}
       onClick={(e) => { e.stopPropagation(); onToggleDone(item); }}
       title={done ? '완료 취소' : '완료 처리'}
+      aria-label={done ? '완료 취소' : '완료 처리'}
       className={`flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${done ? 'text-emerald-500' : 'text-muted-foreground/40 hover:text-emerald-500'}`}
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
@@ -364,6 +365,7 @@ export function TodoTodayPage() {
             disabled={isFetching}
             className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
             title="새로고침"
+            aria-label="새로고침"
           >
             <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
