@@ -28,10 +28,14 @@ import type {
 
 // 셀 색상 → Tailwind 클래스
 const CELL_BG: Record<K8sCellColor, string> = {
-  green: 'bg-green-500', amber: 'bg-amber-400', red: 'bg-red-500', gray: 'bg-zinc-400',
+  green: 'bg-status-healthy', amber: 'bg-status-warning', red: 'bg-status-critical', gray: 'bg-status-unknown',
 };
 const STATUS_TEXT: Record<K8sCellColor, string> = {
-  green: 'text-green-600', amber: 'text-amber-600', red: 'text-red-500', gray: 'text-muted-foreground',
+  green: 'text-status-healthy', amber: 'text-status-warning', red: 'text-status-critical', gray: 'text-status-unknown',
+};
+// 컨테이너 색칸 접근성 라벨 (D-024)
+const CELL_LABEL: Record<K8sCellColor, string> = {
+  green: '실행/정상', amber: '대기/준비안됨', red: '오류', gray: '종료/대기',
 };
 
 // ── Lens 식 카테고리 내비 모델 ────────────────────────────────────────────────
@@ -322,12 +326,12 @@ export function K8sManagePage() {
             <RoleGate allow={['admin', 'operator']} fallback={
               <span className="text-xs rounded px-1.5 py-0.5 bg-muted text-muted-foreground">읽기 전용 (viewer)</span>
             }>
-              <span className="text-xs rounded px-1.5 py-0.5 bg-green-500/15 text-green-600">쓰기 가능 (operator)</span>
+              <span className="text-xs rounded px-1.5 py-0.5 bg-status-healthy/15 text-status-healthy">쓰기 가능 (operator)</span>
             </RoleGate>
           </div>
 
           {actionMsg && (
-            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${actionMsg.kind === 'ok' ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-600'}`}>
+            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${actionMsg.kind === 'ok' ? 'bg-status-healthy/10 text-status-healthy' : 'bg-destructive/10 text-destructive'}`}>
               {actionMsg.kind === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
               {actionMsg.text}
             </div>
@@ -501,6 +505,8 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
         </div>
       </div>
 
+      <div className="overflow-x-auto">
+      <div className="min-w-[760px]">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={{ gridTemplateColumns: gridTemplate }}>
         <span>이름</span>
         {isNamespaced && <span>네임스페이스</span>}
@@ -512,7 +518,7 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
       {isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
       ) : isError ? (
-        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">표시할 리소스가 없습니다.</div>
       ) : (
@@ -554,6 +560,8 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
           }}
         />
       )}
+      </div>
+      </div>
       <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
         {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''} · 이름 클릭 시 상세/YAML
       </div>
@@ -567,7 +575,7 @@ function IconBtn({ title, onClick, danger, children }: { title: string; onClick:
       title={title}
       aria-label={title}
       onClick={onClick}
-      className={`p-1 rounded-md ${danger ? 'text-red-500 hover:bg-red-500/10' : 'text-muted-foreground hover:bg-secondary'}`}
+      className={`p-1 rounded-md ${danger ? 'text-destructive hover:bg-destructive/10' : 'text-muted-foreground hover:bg-secondary'}`}
     >
       {children}
     </button>
@@ -596,11 +604,32 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
     </MacCard>
   );
 
+  // 조회 실패 시 — "노드 0·상태 점검" 위장 대신 명시적 에러 배너
+  if (nodes.isError || namespaces.isError) {
+    return (
+      <MacCard title="개요">
+        <div className="flex items-center gap-2 p-4 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          조회 실패: {errMsg(nodes.error ?? namespaces.error)}
+        </div>
+      </MacCard>
+    );
+  }
+  // 로딩 중 — 플레이스홀더
+  if (nodes.isLoading || namespaces.isLoading) {
+    return (
+      <MacCard title="개요">
+        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+      </MacCard>
+    );
+  }
+
+  const healthy = readyNodes === nodeItems.length && nodeItems.length > 0;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <Stat label="노드" value={nodeItems.length} sub={`Ready ${readyNodes} / ${nodeItems.length}`} />
       <Stat label="네임스페이스" value={namespaces.data?.items.length ?? '-'} />
-      <Stat label="상태" value={readyNodes === nodeItems.length && nodeItems.length > 0 ? 'Healthy' : '점검'} />
+      <Stat label="상태" value={healthy ? 'Healthy' : '점검'} />
     </div>
   );
 }
@@ -621,7 +650,7 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
       {isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
       ) : isError ? (
-        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : (data?.items.length ?? 0) === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">Helm 릴리스가 없습니다.</div>
       ) : (
@@ -689,7 +718,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
         {objects.isLoading ? (
           <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
         ) : objects.isError ? (
-          <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(objects.error)}</div>
+          <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(objects.error)}</div>
         ) : (objects.data?.items.length ?? 0) === 0 ? (
           <div className="p-10 text-center text-sm text-muted-foreground">오브젝트가 없습니다.</div>
         ) : (
@@ -719,7 +748,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
       {crds.isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
       ) : crds.isError ? (
-        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(crds.error)}</div>
+        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(crds.error)}</div>
       ) : (crds.data?.items.length ?? 0) === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">CRD 가 없습니다.</div>
       ) : (
@@ -802,7 +831,7 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
           {yamlQuery.isLoading ? (
             <div className="text-sm text-muted-foreground">불러오는 중…</div>
           ) : yamlQuery.isError ? (
-            <div className="text-sm text-red-500">조회 실패: {errMsg(yamlQuery.error)}</div>
+            <div className="text-sm text-destructive">조회 실패: {errMsg(yamlQuery.error)}</div>
           ) : (
             <Tabs.Root value={editing || (!hasSections && tab === 'summary') ? 'yaml' : tab} onValueChange={(v) => setTab(v as 'summary' | 'yaml' | 'events')}>
               <Tabs.List className="flex gap-1 mb-3 border-b border-border">
@@ -865,18 +894,18 @@ function RelatedEventsView({ loading, error, items }: { loading: boolean; error:
     return `${age(sec)} 전`;
   };
   if (loading) return <div className="text-sm text-muted-foreground">이벤트 불러오는 중…</div>;
-  if (error) return <div className="text-sm text-red-500">이벤트 조회 실패: {error}</div>;
+  if (error) return <div className="text-sm text-destructive">이벤트 조회 실패: {error}</div>;
   if (items.length === 0) return <div className="text-sm text-muted-foreground p-6 text-center">관련 이벤트 없음</div>;
   return (
     <div className="space-y-2 max-h-[80vh] overflow-auto pr-1">
       {items.map((ev, i) => (
         <div
           key={i}
-          className={`rounded-xl border p-3 text-sm ${ev.type === 'Warning' ? 'border-amber-400/50 bg-amber-500/5' : 'border-border'}`}
+          className={`rounded-xl border p-3 text-sm ${ev.type === 'Warning' ? 'border-status-warning/50 bg-status-warning/5' : 'border-border'}`}
         >
           <div className="flex items-center gap-2 mb-1">
             {ev.type === 'Warning'
-              ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              ? <AlertTriangle className="w-3.5 h-3.5 text-status-warning shrink-0" />
               : <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
             <span className="font-medium truncate">{ev.reason ?? '-'}</span>
             {(ev.count ?? 0) > 1 && <span className="text-xs text-muted-foreground">×{ev.count}</span>}
@@ -967,6 +996,8 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
           </button>
         </div>
       </div>
+      <div className="overflow-x-auto">
+      <div className="min-w-[720px]">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>
         <span>이름</span>
         {visibleCols.map((c) => <span key={c.key} className={c.key === 'age' ? 'text-right' : ''}>{c.label}</span>)}
@@ -975,7 +1006,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
       {isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
       ) : isError ? (
-        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : rows.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">노드가 없습니다.</div>
       ) : (
@@ -985,9 +1016,11 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
           return (
             <div key={n.name} className="grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 hover:bg-secondary/30 items-center" style={gridStyle}>
               <button onClick={() => onOpenDetail(n.name)} className="truncate font-medium text-left hover:text-primary flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${ready ? 'bg-green-500' : 'bg-red-500'}`} />
+                {ready
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" aria-label="Ready" />
+                  : <AlertTriangle className="w-3.5 h-3.5 text-status-critical flex-shrink-0" aria-label="NotReady" />}
                 <span className="truncate">{n.name}</span>
-                {n.unschedulable && <span className="text-[10px] rounded px-1 bg-amber-500/15 text-amber-600">cordoned</span>}
+                {n.unschedulable && <span className="text-[10px] rounded px-1 bg-status-warning/15 text-status-warning">cordoned</span>}
               </button>
               {!isHidden('roles') && <span className="truncate text-muted-foreground">{n.roles.join(', ')}</span>}
               {!isHidden('version') && <span className="truncate text-muted-foreground">{n.version ?? '-'}</span>}
@@ -996,7 +1029,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
               {!isHidden('memory') && <span className="truncate text-muted-foreground">{n.memUsage ? `${n.memUsage} / ` : ''}{n.memCapacity ?? '-'}</span>}
               {!isHidden('age') && <span className="text-right text-muted-foreground tabular-nums">{age(n.ageSeconds)}</span>}
               <div className="flex items-center justify-end gap-1">
-                {warn.length > 0 && <span className="text-[10px] text-amber-600 mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
+                {warn.length > 0 && <span className="text-[10px] text-status-warning mr-1" title={warn.join(',')}>{warn.length}⚠</span>}
                 <RoleGate allow={['admin', 'operator']}>
                   <IconBtn title={n.unschedulable ? 'uncordon' : 'cordon'} onClick={() => onCordon(n.name, !n.unschedulable)}>
                     {n.unschedulable ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
@@ -1008,6 +1041,8 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
           );
         })
       )}
+      </div>
+      </div>
     </MacCard>
   );
 }
@@ -1076,6 +1111,8 @@ function PodsPanel(p: PodsPanelProps) {
           </button>
         </div>
       </div>
+      <div className="overflow-x-auto">
+      <div className="min-w-[900px]">
       <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30" style={gridStyle}>
         <span>이름</span>
         {visibleCols.map((c) => <span key={c.key} className={c.key === 'age' ? 'text-right' : ''}>{c.label}</span>)}
@@ -1084,7 +1121,7 @@ function PodsPanel(p: PodsPanelProps) {
       {isLoading ? (
         <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
       ) : isError ? (
-        <div className="p-6 text-sm text-red-500">조회 실패: {errMsg(error)}</div>
+        <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">표시할 파드가 없습니다.</div>
       ) : (
@@ -1100,12 +1137,17 @@ function PodsPanel(p: PodsPanelProps) {
                 {!isHidden('containers') && (
                   <span className="flex items-center gap-0.5" title={r.containers.map((c) => `${c.name}: ${c.state}${c.reason ? ` (${c.reason})` : ''}`).join('\n')}>
                     {r.containers.slice(0, 12).map((c, j) => (
-                      <span key={j} className={`w-2.5 h-2.5 rounded-sm ${CELL_BG[c.color]}`} />
+                      <span
+                        key={j}
+                        role="img"
+                        aria-label={`${c.name}: ${CELL_LABEL[c.color]}${c.reason ? ` (${c.reason})` : ''}`}
+                        className={`w-2.5 h-2.5 rounded-sm ${CELL_BG[c.color]}`}
+                      />
                     ))}
                     <span className="ml-1 text-xs text-muted-foreground tabular-nums">{r.ready}</span>
                   </span>
                 )}
-                {!isHidden('restarts') && <span className={`tabular-nums ${r.restarts > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>}
+                {!isHidden('restarts') && <span className={`tabular-nums ${r.restarts > 0 ? 'text-status-warning font-medium' : 'text-muted-foreground'}`}>{r.restarts}</span>}
                 {!isHidden('cpu') && <span className="truncate text-muted-foreground tabular-nums">{r.cpuUsage ?? '-'}</span>}
                 {!isHidden('mem') && <span className="truncate text-muted-foreground tabular-nums">{r.memUsage ?? '-'}</span>}
                 {!isHidden('controlledBy') && <span className="truncate text-muted-foreground" title={r.controlledBy ?? ''}>{r.controlledBy ?? '-'}</span>}
@@ -1118,7 +1160,7 @@ function PodsPanel(p: PodsPanelProps) {
                 <div className="flex items-center justify-end gap-1">
                   {(r.warningCount ?? 0) > 0 && (
                     <span title={`Warning 이벤트 ${r.warningCount}건${r.warningReason ? ` · 최신: ${r.warningReason}` : ''}`}>
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-status-warning" />
                     </span>
                   )}
                   <IconBtn
@@ -1139,6 +1181,8 @@ function PodsPanel(p: PodsPanelProps) {
           }}
         />
       )}
+      </div>
+      </div>
       <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
         {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''}
         {data && data.metricsAvailable === false ? ' · metrics-server 없음(CPU/MEM 생략)' : ''} · 컨테이너 색칸: 초록=실행/정상, 노랑=대기/준비안됨, 빨강=오류, 회색=종료/대기
