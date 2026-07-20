@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Play, ClipboardCheck, Settings, Search, RefreshCw,
-  CheckCircle2, Loader2, Circle, X,
+  CheckCircle2, Loader2, Circle, X, AlertTriangle,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { Button } from '@/components/ui/button';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { StatusBadge, StatusDot, statusToVariant } from '@/components/common/StatusBadge';
+import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { LogViewer } from '@/components/common/LogViewer';
 import { useToast } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
@@ -39,7 +40,7 @@ export function OpsCheckConsolePage() {
 
   const cluster = clusters.find((c) => c.id === clusterId);
 
-  const { data: catalog = [], isLoading } = useOpsCheckCatalog(clusterId);
+  const { data: catalog = [], isLoading, isError, refetch } = useOpsCheckCatalog(clusterId);
   const startRun = useStartOpsRun();
   const toast = useToast();
 
@@ -212,6 +213,19 @@ export function OpsCheckConsolePage() {
             {/* list */}
             {isLoading ? (
               <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+            ) : isError ? (
+              <div className="m-4 rounded-md border border-destructive/30 bg-destructive/10 p-4">
+                <div className="flex items-start gap-2 text-sm text-destructive">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium">점검 항목을 불러오지 못했습니다.</p>
+                    <p className="text-destructive/80 mt-0.5">네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.</p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3">
+                  <RefreshCw className="w-3.5 h-3.5" /> 다시 시도
+                </Button>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="p-10 text-center text-sm text-muted-foreground">표시할 점검 항목이 없습니다.</div>
             ) : (
@@ -265,9 +279,11 @@ export function OpsCheckConsolePage() {
                               </span>
                             )
                           ) : c.lastStatus ? (
-                            <span className="inline-flex items-center gap-1">
-                              <StatusDot variant={statusToVariant(c.lastStatus)} />
-                              <span className="text-xs text-muted-foreground">{c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : ''}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <StatusBadge variant={statusToVariant(c.lastStatus)} />
+                              {c.lastRunAt && (
+                                <span className="text-xs text-muted-foreground">{new Date(c.lastRunAt).toLocaleString()}</span>
+                              )}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60">
@@ -302,7 +318,7 @@ export function OpsCheckConsolePage() {
           {activeRunId && run && (
             <MacCard title="실행 진행">
               <div className="flex items-center gap-3 mb-3 text-sm">
-                {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <CheckCircle2 className="w-4 h-4 text-status-healthy" />}
                 <span className="font-medium">{isRunning ? '실행 중…' : '완료'}</span>
                 <span className="text-sm text-muted-foreground">
                   총 {run.total} · 정상 {run.okCount} · 경고 {run.warnCount} · 위험 {run.critCount} · 실패 {run.errorCount}
