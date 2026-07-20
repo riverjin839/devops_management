@@ -14,6 +14,7 @@ from app.services.deep_checkers.base import (
     DeepCheckOutcome,
     DeepCheckerBase,
 )
+from app.services.k8s_paging import iter_all
 
 
 _TARGET_REASONS = {"OOMKilling", "Evicted", "SystemOOM"}
@@ -31,13 +32,10 @@ class OomEventsChecker(DeepCheckerBase):
         v1 = self._v1(ctx)
         cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
 
-        events = v1.list_event_for_all_namespaces(
-            timeout_seconds=20,
-            field_selector="type=Warning",
-        )
-
+        # 페이지 스트리밍 — 이벤트가 많이 쌓이는 활발한 클러스터에서도 전량을
+        # 한 번에 메모리에 올리지 않는다.
         hits: list[dict[str, Any]] = []
-        for ev in events.items:
+        for ev in iter_all(v1.list_event_for_all_namespaces, field_selector="type=Warning"):
             reason = ev.reason or ""
             if reason not in _TARGET_REASONS:
                 continue

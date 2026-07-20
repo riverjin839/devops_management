@@ -16,8 +16,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models.isilon_server import IsilonCommand, IsilonServer
+from app.models.user import User
 from app.services import isilon_service
 from app.services.isilon_service import IsiCommandRejected, validate_isi_command
 from app.services.secret_box import encrypt as encrypt_secret
@@ -129,7 +131,11 @@ def list_servers(db: Session = Depends(get_db)):
 
 
 @router.post("/servers", response_model=IsilonServerResponse, status_code=status.HTTP_201_CREATED)
-def create_server(payload: IsilonServerCreate, db: Session = Depends(get_db)):
+def create_server(
+    payload: IsilonServerCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     if db.query(IsilonServer).filter(IsilonServer.name == payload.name).first():
         raise HTTPException(status_code=400, detail="같은 이름의 Isilon 서버가 이미 존재합니다.")
     data = payload.model_dump()
@@ -157,7 +163,12 @@ def get_server(server_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/servers/{server_id}", response_model=IsilonServerResponse)
-def update_server(server_id: UUID, payload: IsilonServerUpdate, db: Session = Depends(get_db)):
+def update_server(
+    server_id: UUID,
+    payload: IsilonServerUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     server = db.query(IsilonServer).filter(IsilonServer.id == server_id).first()
     if not server:
         raise HTTPException(status_code=404, detail="Isilon 서버를 찾을 수 없습니다.")
@@ -186,7 +197,11 @@ def update_server(server_id: UUID, payload: IsilonServerUpdate, db: Session = De
 
 
 @router.delete("/servers/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_server(server_id: UUID, db: Session = Depends(get_db)):
+def delete_server(
+    server_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     server = db.query(IsilonServer).filter(IsilonServer.id == server_id).first()
     if not server:
         raise HTTPException(status_code=404, detail="Isilon 서버를 찾을 수 없습니다.")
@@ -197,7 +212,11 @@ def delete_server(server_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/servers/{server_id}/test")
-def test_server(server_id: UUID, db: Session = Depends(get_db)):
+def test_server(
+    server_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """저장된 자격증명으로 SSH 연결만 검증(명령 미실행 — 무부하)."""
     server = db.query(IsilonServer).filter(IsilonServer.id == server_id).first()
     if not server:
@@ -236,7 +255,11 @@ def list_commands(
 
 
 @router.post("/commands", response_model=IsilonCommandResponse, status_code=status.HTTP_201_CREATED)
-def create_command(payload: IsilonCommandCreate, db: Session = Depends(get_db)):
+def create_command(
+    payload: IsilonCommandCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     try:
         normalized = validate_isi_command(payload.command)
     except IsiCommandRejected as e:
@@ -255,7 +278,12 @@ def create_command(payload: IsilonCommandCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/commands/{command_id}", response_model=IsilonCommandResponse)
-def update_command(command_id: UUID, payload: IsilonCommandUpdate, db: Session = Depends(get_db)):
+def update_command(
+    command_id: UUID,
+    payload: IsilonCommandUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     cmd = db.query(IsilonCommand).filter(IsilonCommand.id == command_id).first()
     if not cmd:
         raise HTTPException(status_code=404, detail="명령을 찾을 수 없습니다.")
@@ -274,7 +302,11 @@ def update_command(command_id: UUID, payload: IsilonCommandUpdate, db: Session =
 
 
 @router.delete("/commands/{command_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_command(command_id: UUID, db: Session = Depends(get_db)):
+def delete_command(
+    command_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     cmd = db.query(IsilonCommand).filter(IsilonCommand.id == command_id).first()
     if not cmd:
         raise HTTPException(status_code=404, detail="명령을 찾을 수 없습니다.")

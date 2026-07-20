@@ -3,8 +3,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
 from app.models.cluster import Cluster
+from app.models.user import User
 from app.schemas.topology_trace import (
     HubbleFlowsRequest,
     HubbleFlowsResponse,
@@ -163,7 +165,10 @@ def hubble_flows(payload: HubbleFlowsRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/tcpdump", response_model=TcpdumpCaptureResponse)
-def tcpdump_run(payload: TcpdumpCaptureRequest):
+def tcpdump_run(
+    payload: TcpdumpCaptureRequest,
+    _: User = Depends(require_operator),
+):
     """선택한 원격 호스트(노드)에 SSH 로 붙어 tcpdump 를 1회 수행.
 
     - 자격증명은 요청에만 존재, DB 저장 안 함 (bulk-exec 와 동일 패턴).
@@ -192,7 +197,10 @@ def tcpdump_run(payload: TcpdumpCaptureRequest):
 
 
 @router.post("/tcpdump/interfaces", response_model=TcpdumpInterfacesResponse)
-def tcpdump_interfaces(payload: TcpdumpInterfacesRequest):
+def tcpdump_interfaces(
+    payload: TcpdumpInterfacesRequest,
+    _: User = Depends(require_operator),
+):
     """원격 호스트의 네트워크 인터페이스 목록 조회 (`ip -o link show`)."""
     if not payload.password and not payload.private_key:
         raise HTTPException(

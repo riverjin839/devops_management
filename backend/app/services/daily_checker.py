@@ -335,6 +335,13 @@ class DailyChecker:
         if nodes.get("ready", 0) < nodes.get("total", 0):
             return StatusEnum.warning
 
+        # 노드/컴포넌트 조회 자체가 실패한 경우(kubeconfig 인증 만료, RBAC 회수 등) —
+        # total=0/ready=0 이 되어 위 두 분기를 모두 통과해버려 "아무 점검도 못 했는데
+        # healthy" 로 보고되는 것을 막는다. API 서버 /healthz 는 보통 무인증이라
+        # 200 을 반환할 수 있으므로 api_result 만으로는 이 상태를 못 잡는다.
+        if nodes.get("error") or components.get("error"):
+            return StatusEnum.warning
+
         # API 서버가 warning이면 전체 warning
         if api_result.get("status") == StatusEnum.warning:
             return StatusEnum.warning
@@ -365,6 +372,10 @@ class DailyChecker:
                 errors.append(f"Component {name}: {data.get('message', 'Unhealthy')}")
             elif data.get("status") == "warning":
                 warnings.append(f"Component {name}: {data.get('message', 'degraded')}")
+
+        # 노드 조회 자체가 실패 (SDK 인증/RBAC 등) — total/ready 를 신뢰할 수 없는 상태.
+        if nodes.get("error"):
+            errors.append(f"Nodes check failed: {nodes['error']}")
 
         # 노드 에러
         not_ready = nodes.get("total", 0) - nodes.get("ready", 0)

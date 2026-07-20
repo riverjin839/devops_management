@@ -13,8 +13,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.database import get_db
-from app.models import BatchJob, BatchJobRun, Cluster
+from app.models import BatchJob, BatchJobRun, Cluster, User
 from app.schemas.batch_job import (
     BatchJobBulkRunItem,
     BatchJobBulkRunRequest,
@@ -123,7 +124,11 @@ def list_jobs(
 
 
 @router.post("", response_model=BatchJobResponse, status_code=status.HTTP_201_CREATED)
-def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
+def create_job(
+    payload: BatchJobCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     if not db.query(Cluster).filter(Cluster.id == payload.cluster_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
     if get_executor(payload.job_type) is None:
@@ -155,7 +160,11 @@ def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/bulk-run", response_model=BatchJobBulkRunResponse)
-def bulk_run_jobs(payload: BatchJobBulkRunRequest, db: Session = Depends(get_db)):
+def bulk_run_jobs(
+    payload: BatchJobBulkRunRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """선택한 여러 잡(여러 클러스터)을 백그라운드로 일괄 실행.
 
     저장된 자격증명을 사용하므로 자격증명이 없는 잡은 스킵한다(평문 비밀번호를 broker 로
@@ -196,7 +205,12 @@ def get_job(job_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/{job_id}", response_model=BatchJobResponse)
-def update_job(job_id: UUID, payload: BatchJobUpdate, db: Session = Depends(get_db)):
+def update_job(
+    job_id: UUID,
+    payload: BatchJobUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     try:
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
@@ -248,7 +262,11 @@ def update_job(job_id: UUID, payload: BatchJobUpdate, db: Session = Depends(get_
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_job(job_id: UUID, db: Session = Depends(get_db)):
+def delete_job(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     try:
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
@@ -263,7 +281,12 @@ def delete_job(job_id: UUID, db: Session = Depends(get_db)):
 # ── execution + run history ──────────────────────────────────────────────────
 
 @router.post("/{job_id}/run", response_model=BatchJobRunResponse)
-async def run_job(job_id: UUID, payload: BatchJobRunRequest, db: Session = Depends(get_db)):
+async def run_job(
+    job_id: UUID,
+    payload: BatchJobRunRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     try:
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
@@ -305,6 +328,7 @@ async def test_job_connection(
     job_id: UUID,
     payload: BatchJobTestConnectionRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ):
     """SSH 자격증명/네트워크만 검증. 명령은 실행하지 않고 BatchJobRun 도 생성하지 않음.
 

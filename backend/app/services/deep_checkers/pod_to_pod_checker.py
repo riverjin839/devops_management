@@ -31,6 +31,12 @@ from app.services.deep_checkers.base import (
     DeepCheckOutcome,
     DeepCheckerBase,
 )
+from app.services.k8s_paging import iter_all
+
+# 후보 pod 수집 상한 — 이 체커는 targets_max(기본 8)개만 무작위 샘플링하면 되므로,
+# 5k+ pod 대형 클러스터에서 전량을 한 번에 메모리에 올릴 필요가 없다. 페이지
+# 스트리밍(iter_all)으로 이 상한까지만 훑어 OOM 을 피한다.
+_CANDIDATE_SCAN_CAP = 5000
 
 
 # MS 는 선택 — busybox sh 에서 신뢰할 만한 밀리초 계측이 어려워 기본적으로 생략하고,
@@ -58,11 +64,10 @@ class PodToPodChecker(DeepCheckerBase):
         probe_namespace = ctx.params.get("probe_namespace", "devops")
         seed = ctx.params.get("seed")  # 재현용 옵션
 
-        # 1) 타깃 pod 후보 수집
+        # 1) 타깃 pod 후보 수집 — 페이지 스트리밍(대형 클러스터 OOM 방지)
         v1 = self._v1(ctx)
-        pods = v1.list_pod_for_all_namespaces(timeout_seconds=20)
         candidates: list[dict[str, Any]] = []
-        for p in pods.items:
+        for p in iter_all(v1.list_pod_for_all_namespaces, hard_cap=_CANDIDATE_SCAN_CAP):
             status = p.status
             spec = p.spec
             if not (status and spec and p.metadata):

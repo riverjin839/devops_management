@@ -57,6 +57,12 @@ LOG_TABLES: frozenset[str] = frozenset({
     "check_matrix_result_logs",
 })
 
+# 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와
+# "export 시 마스킹됐다"를 구분할 수 없어, 마스킹된 백업을 merge import 하면
+# 실제 kubeconfig/비밀번호/토큰이 NULL 로 덮어써진다(데이터 유실). import 쪽에서
+# 이 센티널을 만나면 해당 컬럼을 아예 갱신 대상에서 제외해 기존 값을 보존한다.
+MASKED_SENTINEL = "__pep_backup_masked_v1__"
+
 # 민감 정보 포함 — 옵션으로 마스킹
 SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "clusters": ["kubeconfig_content", "kubeconfig_path"],
@@ -132,7 +138,7 @@ def _mask_sensitive(table_name: str, row: dict, include_sensitive: bool) -> dict
     out = dict(row)
     for c in cols:
         if c in out and out[c] is not None:
-            out[c] = None
+            out[c] = MASKED_SENTINEL
     return out
 
 
@@ -239,7 +245,17 @@ def parse_backup(raw: bytes) -> dict:
 
 
 def _row_pk_values(table: Table, row: dict) -> tuple:
-    return tuple(row.get(pk.name) for pk in table.primary_key.columns)
+    """백업 JSON(문자열 PK)을 DB 네이티브 타입으로 역직렬화해 비교 가능하게 한다.
+
+    비교 대상인 ``existing_pks`` (DB 에서 직접 SELECT 한 값)는 UUID 등 네이티브
+    파이썬 타입인데, 여기서 역직렬화 없이 문자열 그대로 반환하면 UUID PK 테이블
+    전체가 항상 "일치 없음"으로 판정돼 diff 미리보기가 항상 전부 insert/전체
+    삭제후보로 잘못 표시된다.
+    """
+    return tuple(
+        _deserialize_value(row.get(pk.name), str(pk.type))
+        for pk in table.primary_key.columns
+    )
 
 
 def compute_diff(db: Session, envelope: dict, *, include_logs: bool) -> dict:
@@ -407,7 +423,10 @@ def apply_import(
     - replace: 대상 테이블 전체 DELETE 후 INSERT (FK 때문에 역순 삭제).
     - dry_run: DB 변경 없이 compute_diff 만 반환.
 
-    전체를 1개 transaction 으로 처리 — 중간 실패 시 롤백.
+    행/테이블 단위로 개별 SAVEPOINT(``db.begin_nested()``) 를 열어 처리한다 — 한
+    행(예: FK 누락, 마스킹된 PK 등)이 실패해도 그 SAVEPOINT 만 롤백되고 이미
+    처리된 다른 행/테이블은 유지된다. 응답의 inserted/updated/deleted 는 실제로
+    커밋되는 카운트와 항상 일치한다.
     """
     if mode not in ("merge", "replace"):
         raise ValueError(f"unknown mode: {mode}")
@@ -429,37 +448,54 @@ def apply_import(
     engine: Engine = db.get_bind()
     insp = inspect(engine)
 
-    with db.begin_nested():     # SAVEPOINT — 전체 실패 시 rollback
-        if mode == "replace":
-            # FK 역순 삭제
-            for t in reversed(tables):
-                try:
+    if mode == "replace":
+        # FK 역순 삭제 — 테이블 단위 SAVEPOINT 로 격리. 한 테이블이 FK 위반 등으로
+        # 실패해도 그 SAVEPOINT 만 롤백되고, 이미 삭제에 성공한 다른 테이블은 유지된다.
+        for t in reversed(tables):
+            try:
+                with db.begin_nested():
                     res = db.execute(t.delete())
                     deleted += res.rowcount or 0
-                except Exception as e:
-                    errors.append(f"{t.name} DELETE 실패 ({type(e).__name__}): {str(e)[:120]}")
+            except Exception as e:
+                errors.append(f"{t.name} DELETE 실패 ({type(e).__name__}): {str(e)[:120]}")
 
-        for t in tables:
-            rows = incoming.get(t.name, [])
-            if not rows:
+    for t in tables:
+        rows = incoming.get(t.name, [])
+        if not rows:
+            continue
+
+        col_types = {c.name: str(c.type) for c in t.columns}
+        col_names = set(col_types.keys())
+
+        for row in rows:
+            # 현재 스키마에 없는 컬럼 키는 무시(버전 차이 대응). MASKED_SENTINEL 값은
+            # export 시 마스킹된 민감 컬럼이므로 갱신 대상에서 아예 제외한다 —
+            # 그래야 merge import 시 기존 kubeconfig/비밀번호/토큰이 보존된다
+            # (신규 insert 라면 마스킹된 컬럼은 DB 기본값/NULL 로 남는다 — 원본이
+            # 없으므로 복원 불가능한 건 불가피).
+            clean: dict = {}
+            for k, v in row.items():
+                if k not in col_names:
+                    continue
+                dv = _deserialize_value(v, col_types[k])
+                if dv == MASKED_SENTINEL:
+                    continue
+                clean[k] = dv
+            if not clean:
                 continue
 
-            col_types = {c.name: str(c.type) for c in t.columns}
-            col_names = set(col_types.keys())
+            pk_cols = [pk.name for pk in t.primary_key.columns]
+            pk_vals = {k: clean.get(k) for k in pk_cols}
+            if any(v is None for v in pk_vals.values()):
+                # PK 자체가 없거나(구버전 백업) 마스킹돼 upsert 불가 — 스킵.
+                errors.append(f"{t.name} row skipped: PK missing ({pk_vals})")
+                continue
 
-            for row in rows:
-                # 현재 스키마에 없는 컬럼 키 무시 (버전 차이 대응)
-                clean: dict = {}
-                for k, v in row.items():
-                    if k in col_names:
-                        clean[k] = _deserialize_value(v, col_types[k])
-                if not clean:
-                    continue
-
-                pk_cols = [pk.name for pk in t.primary_key.columns]
-                pk_vals = {k: clean.get(k) for k in pk_cols}
-
-                try:
+            try:
+                # 행 단위 SAVEPOINT — 이 행이 실패해도(FK 위반, 타입 불일치 등)
+                # 이전에 커밋된 행들은 롤백되지 않는다. 실패 시 예외가 이 with
+                # 블록을 빠져나가면서 SAVEPOINT 만 롤백되고, 아래 except 가 잡는다.
+                with db.begin_nested():
                     if mode == "replace":
                         db.execute(t.insert().values(**clean))
                         inserted += 1
@@ -477,26 +513,29 @@ def apply_import(
                             if non_pk:
                                 db.execute(t.update().where(where).values(**non_pk))
                                 updated += 1
-                except Exception as e:
-                    errors.append(
-                        f"{t.name} row {pk_vals}: {type(e).__name__}: {str(e)[:120]}"
-                    )
+            except Exception as e:
+                errors.append(
+                    f"{t.name} row {pk_vals}: {type(e).__name__}: {str(e)[:120]}"
+                )
 
-        # 시퀀스 동기화 — PostgreSQL 전용 (serial/identity 컬럼이 있는 경우)
-        if insp.dialect.name == "postgresql":
-            for t in tables:
-                for c in t.columns:
-                    # serial / identity 컬럼 판단 — server_default 가 nextval 이거나 identity
-                    if getattr(c, "server_default", None) is None and not getattr(c, "autoincrement", False):
-                        continue
-                    try:
+    # 시퀀스 동기화 — PostgreSQL 전용 (serial/identity 컬럼이 있는 경우).
+    # 컬럼 단위 SAVEPOINT 로 격리 — setval 실패가 앞서 커밋된 insert/update 를
+    # 되돌리지 않게 한다.
+    if insp.dialect.name == "postgresql":
+        for t in tables:
+            for c in t.columns:
+                # serial / identity 컬럼 판단 — server_default 가 nextval 이거나 identity
+                if getattr(c, "server_default", None) is None and not getattr(c, "autoincrement", False):
+                    continue
+                try:
+                    with db.begin_nested():
                         db.execute(text(
                             f"SELECT setval(pg_get_serial_sequence('{t.name}', '{c.name}'), "
                             f"COALESCE((SELECT MAX({c.name}) FROM {t.name}), 1), "
                             f"(SELECT MAX({c.name}) FROM {t.name}) IS NOT NULL)"
                         ))
-                    except Exception:
-                        pass  # serial 없는 컬럼은 무시
+                except Exception:
+                    pass  # serial 없는 컬럼은 무시
 
     db.commit()
 

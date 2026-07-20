@@ -94,6 +94,115 @@ def run_check_matrix_dispatch(self):
         db.close()
 
 
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_core_bundle_one",
+    time_limit=180,
+    soft_time_limit=150,
+    ignore_result=True,
+)
+def run_check_matrix_core_bundle_one(self, cluster_id: str):
+    """디스패처가 fan-out 한 단일 클러스터 core_bundle 실행.
+
+    독립된 time_limit 을 가지므로 이 클러스터가 느리거나 멎어도 같은 분에 큐잉된
+    다른 클러스터/셀 태스크에 영향을 주지 않는다(과거엔 디스패처 태스크 하나 안에서
+    전 클러스터를 직렬 실행해 하나가 느리면 전체가 5분 SIGKILL 로 유실됐다).
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services import check_matrix_service as cms
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        cms.run_core_bundle(db, cluster)
+        return {"cluster_id": cluster_id, "ok": True}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("check-matrix core_bundle task failed cluster_id=%s: %s", cluster_id, e)
+        return {"error": str(e)[:200], "cluster_id": cluster_id}
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_cell_one",
+    time_limit=280,
+    soft_time_limit=240,
+    ignore_result=True,
+)
+def run_check_matrix_cell_one(self, item_id: str, cluster_id: str):
+    """디스패처가 fan-out 한 단일 item×cluster 셀(deep_check/addon) 실행."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster, CheckMatrixItem
+    from app.services import check_matrix_service as cms
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if item is None or cluster is None:
+            return {
+                "error": "item or cluster not found",
+                "item_id": item_id,
+                "cluster_id": cluster_id,
+            }
+        executed = cms.execute_item_for_cluster(db, item, cluster)
+        return {"item_id": item_id, "cluster_id": cluster_id, "executed": executed}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception(
+            "check-matrix cell task failed item_id=%s cluster_id=%s: %s", item_id, cluster_id, e,
+        )
+        return {"error": str(e)[:200], "item_id": item_id, "cluster_id": cluster_id}
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_definition_one",
+    time_limit=280,
+    soft_time_limit=240,
+    ignore_result=True,
+)
+def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
+    """디스패처가 fan-out 한 단일 DeepCheckDefinition×cluster 실행."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services.deep_check_service import DeepCheckService
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        DeepCheckService(db).run_definition_once(definition_id, cluster=cluster, persist=True)
+        return {"definition_id": definition_id, "cluster_id": cluster_id, "ok": True}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception(
+            "check-matrix definition task failed definition_id=%s cluster_id=%s: %s",
+            definition_id, cluster_id, e,
+        )
+        return {
+            "error": str(e)[:200],
+            "definition_id": definition_id,
+            "cluster_id": cluster_id,
+        }
+    finally:
+        db.close()
+
+
 @celery_app.task(bind=True, name="app.celery_app.run_check_matrix_log_purge")
 def run_check_matrix_log_purge(self):
     """점검 매트릭스 이력 리텐션 정리 — 매일 03:00 KST, 설정된 보관 일수 초과분 청크 삭제."""
