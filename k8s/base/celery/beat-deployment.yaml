@@ -78,6 +78,12 @@ spec:
                 secretKeyRef:
                   name: k8s-monitor-secret
                   key: SECRET_KEY
+            # beat 는 cron 평가 + 디스패치만 하는 단일 replica 라 동시 DB 세션이
+            # 거의 필요 없다 — 기본 풀(30/pod)을 그대로 쓰지 않도록 최소화.
+            - name: DB_POOL_SIZE
+              value: "2"
+            - name: DB_MAX_OVERFLOW
+              value: "3"
           resources:
             requests:
               memory: "128Mi"

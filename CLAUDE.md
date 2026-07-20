@@ -284,6 +284,8 @@ Copy `.env.example` → `.env` in the **backend** directory for local developmen
 | `APP_NAME` | `DEVOPS MANAGEMENT` | 앱 표시 이름 |
 | `DEBUG` | `false` | FastAPI debug mode |
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/k8s_monitor` | PostgreSQL connection string |
+| `DB_POOL_SIZE` | `10` | SQLAlchemy 엔진 풀 크기. backend/celery worker/beat 가 같은 engine 코드를 공유하므로, replica 합계 × (pool_size+max_overflow) 가 Postgres `max_connections` 를 넘지 않게 배포별로 오버라이드(worker/beat 는 k8s 매니페스트에서 더 작게 설정됨) |
+| `DB_MAX_OVERFLOW` | `20` | SQLAlchemy 엔진 풀의 추가 오버플로 커넥션 수 |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result store |
@@ -305,7 +307,7 @@ Copy `.env.example` → `.env` in the **backend** directory for local developmen
 | `CHECK_INTERVAL_MINUTES` | `5` | Health check interval |
 | `CHECK_TIMEOUT_SECONDS` | `30` | kubectl/HTTP timeout |
 | `KUBECONFIG_STORE_DIR` | `/tmp/k8s-monitor/kubeconfigs` | content 방식 kubeconfig 저장 위치 |
-| `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰 (미설정 시 검증 없음) |
+| `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰. **fail-closed** — 미설정 시 웹훅 수신 자체를 503 으로 거부(deep_check ingest 의 SUPERPOD_INGEST_TOKEN 과 동일 정책) |
 | `MGMT_NAMESPACE` | `k8s-monitor` | 관리 네임스페이스 (K8sEvent 채널) |
 | `SUPERPOD_MODE` | `centralized` | `in_cluster` \| `centralized` — deep check 실행 모드 |
 | `SUPERPOD_INGEST_URL` / `SUPERPOD_INGEST_TOKEN` | *(empty)* | in-cluster CronJob 결과 push 대상 |

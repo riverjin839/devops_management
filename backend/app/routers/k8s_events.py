@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
@@ -53,13 +54,27 @@ class K8sEventListResponse(BaseModel):
 # ── 웹훅 수신 (ingest_router) ─────────────────────────────────────────
 
 def _verify_kubewatch_token(authorization: str = Header(default="")) -> None:
-    """Bearer <KUBEWATCH_TOKEN> 검증. 토큰 미설정 시 경고 로그 후 통과 (개발 편의)."""
-    expected = settings.kubewatch_token
+    """Bearer <KUBEWATCH_TOKEN> 검증.
+
+    Fail-closed: 토큰 미설정 시 무인증으로 통과시키지 않고 ingest 자체를 비활성화한다
+    (deep_check ingest 의 _verify_superpod_token 과 동일 정책). 예전에는 토큰 미설정 시
+    경고 로그만 남기고 통과시켜, 배포자가 KUBEWATCH_TOKEN 설정을 빠뜨리면 인증 없이
+    위조 K8s 이벤트를 주입할 수 있었다.
+    비교는 타이밍 공격 방지를 위해 secrets.compare_digest 사용.
+    """
+    expected = (settings.kubewatch_token or "").strip()
     if not expected:
-        logger.warning("KUBEWATCH_TOKEN not set — accepting all webhook calls")
-        return
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or token != expected:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Ingest 비활성화: KUBEWATCH_TOKEN 이 설정되지 않았습니다. "
+                "관리자가 토큰을 설정해야 kubewatch 웹훅 수신이 허용됩니다."
+            ),
+        )
+    token = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(None, 1)[1].strip()
+    if not secrets.compare_digest(token, expected):
         raise HTTPException(status_code=401, detail="Invalid kubewatch token")
 
 

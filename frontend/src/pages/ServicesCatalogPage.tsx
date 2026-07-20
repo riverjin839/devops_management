@@ -6,6 +6,7 @@ import { DebugLogPanel, ViewModeBar, DoubleScrollX} from '@/components/common';
 import { serviceEntriesApi } from '@/services/api';
 import { colorBadgeClass } from '@/components/services/serviceCatalog';
 import { useServiceCatalog, useGetServiceDef } from '@/hooks/useServiceCatalog';
+import { parseUTC } from '@/lib/utils';
 
 // localStorage 캐시는 하지 않는다 — 페이지 진입 시 항상 리스트가 기본.
 // 과거 'k8s:services-catalog:viewMode' 키에 'card' 가 저장된 사용자도 잔존 캐시를 무력화하기 위해
@@ -15,7 +16,7 @@ type ViewMode = 'table' | 'card';
 
 function relTime(iso?: string | null): string {
   if (!iso) return '-';
-  const d = new Date(iso).getTime();
+  const d = parseUTC(iso).getTime();
   if (!Number.isFinite(d)) return '-';
   const diff = Date.now() - d;
   const min = Math.floor(diff / 60_000);
@@ -25,7 +26,7 @@ function relTime(iso?: string | null): string {
   if (hr < 24) return `${hr}시간 전`;
   const day = Math.floor(hr / 24);
   if (day < 30) return `${day}일 전`;
-  return new Date(iso).toLocaleDateString();
+  return parseUTC(iso).toLocaleDateString();
 }
 
 export function ServicesCatalogPage() {

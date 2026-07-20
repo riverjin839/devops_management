@@ -33,6 +33,98 @@
   수렴하고, 클러스터 대시보드 컨테이너 행의 센터링/좌측 패딩을 제거해 보조 사이드바가
   메인 사이드바에 flush 되도록 정렬 표준을 맞춤.
 
+### Fixed
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Low 5건)**: Blocker/High/Medium 조치에 이어
+  잔여 Low 등급 항목을 마저 반영.
+  - **SSH 호스트 키 무검증**: 배치잡/명령 실행이 `paramiko.AutoAddPolicy()` 로 첫 접속
+    시 호스트 키를 무조건 신뢰하고 이후에도 검증 없이 재사용하던 것을, Redis 에
+    최초 접속 시 키를 기록(TOFU, 90일 TTL)하고 이후 접속에서 paramiko 자체 검증으로
+    불일치 시 접속을 거부하도록 전환(`ssh_host_keys.py` 신규). Redis 장애 시에는
+    기존 동작으로 fail-open(재배포/Redis 재시작 시 기록된 키는 초기화됨 — 알려진
+    한계).
+  - **PromQL 카드 관리 권한 노출**: `/promql/cards` 생성/수정/삭제와 임의 PromQL 즉시
+    실행 프로브(`test_query`)가 인증만으로 접근 가능해 viewer 도 내부 Prometheus 를
+    정찰/수정할 수 있던 것을 operator 이상으로 제한(조회 계열 엔드포인트는 viewer
+    유지). 프런트 Dashboard 도 operator 미만에게 카드 추가/편집/삭제 아이콘을 숨김.
+  - **DB 커넥션 풀 크기 고정**: backend/celery worker/beat 가 동일 engine 코드를
+    공유하면서 각각 기본 풀(10+20)을 쓰면 replica 합계가 Postgres 기본
+    `max_connections`(100)를 쉽게 넘던 것을, `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`
+    환경변수로 설정 가능하게 하고 celery worker(3+5)/beat(2+3) 매니페스트에 더 작은
+    값을 오버라이드.
+  - **리치 텍스트 렌더링 방어 강화**: `RichContent` 의 DOMPurify sanitize 이후 단계에
+    후처리 훅을 추가 — `target="_blank"` 링크에 `rel="noopener noreferrer"` 를 강제해
+    reverse-tabnabbing 을 막고, `style` 속성을 색상/정렬 등 화이트리스트 속성만
+    남기도록 필터링해 `position:fixed` 오버레이 등을 이용한 UI 위장(피싱 배너 흉내)을
+    차단.
+  - **감사 로그 기록 경로 점검**: 주요 변경 작업의 audit log 기록이 실패해도 본 요청이
+    막히지 않는 fail-safe 패턴을 재확인(코드 변경 없음).
+
+- **상용 출시 전 보안/안정성 점검 후속 조치 (Medium 8건)**: Blocker/High 조치에 이어
+  Medium 등급 항목을 마저 반영.
+  - **kubewatch ingest fail-closed**: `KUBEWATCH_TOKEN` 미설정 시 무인증으로 웹훅을
+    수락하던 것을 deep_check ingest 와 동일하게 fail-closed(503)로 전환 +
+    `secrets.compare_digest` 적용.
+  - **로그인 무차별 대입 방어**: `/auth/login` 에 Redis 기반 rate limit 추가 — IP 단위
+    (창 5분/20회) + 계정 단위(창 15분/5회) 이중 방어. Redis 불가 시 로그인 자체는
+    막지 않는 fail-open(다른 외부 서비스와 동일 컨벤션).
+  - **PromQL 카드 조회 성능**: `/promql/query/all` 이 카드를 직렬 실행하고 매 호출
+    새 httpx 클라이언트를 만들던 것을 병렬 실행(`asyncio.gather`) + 클라이언트 재사용
+    + 15초 TTL 캐시로 개선 — 대시보드 탭 여러 개가 동시에 폴링해도 Prometheus 부하가
+    상수화된다.
+  - **점검 이력 N+1 + CSV 무제한 export**: `history.py` 의 `log.cluster.name`/addon
+    조회가 행마다 별도 쿼리를 날리던 것을 `joinedload` 로 묶고, CSV export 에 상한
+    (기본 5000, 최대 20000행)을 추가.
+  - **멀티 replica 마이그레이션 직렬화**: backend/celery 여러 replica 가 동시에 부팅
+    시 스키마 마이그레이션이 카탈로그 레벨 race 로 드물게 스킵될 수 있던 것을 세션
+    advisory lock 으로 부팅 시퀀스 전체를 직렬화하도록 수정(pgvector 확장 생성은 기존
+    xact-lock 그대로 유지).
+  - **배치잡 디스패처 중복 실행 방지**: cron 잡을 큐잉만 하고 워커가 늦게 시작하면
+    다음 분 디스패처가 같은 잡을 또 큐잉하던 문제를, 큐잉 시점에 바로 anchor
+    (`last_run_at`)를 전진시키도록 수정.
+  - **저장 모달 에러 처리**: `AddMetricCardModal`/`AddAddonModal`/`ClusterItemModal`
+    이 `mutate()` 를 fire-and-forget 으로 호출하고 결과와 무관하게 즉시 모달을 닫던
+    것을, `mutateAsync` + 실패 시 모달 유지 + 에러 토스트로 통일.
+  - **kubeconfig 저장 암호화**: `clusters.kubeconfig_content` 를 평문으로 저장하던
+    것을 `secret_box` 로 투명 암호화하는 SQLAlchemy 컬럼 타입(`EncryptedText`)으로
+    전환. 기존 평문 행은 복호화 실패 시 그대로 반환(lazy migration)해 별도 백필
+    없이 다음 저장 시 자동으로 암호화된다.
+
+- **상용 출시 전 보안/안정성 점검 후속 조치 (High 11건)**: Blocker 조치에 이어 High
+  등급 항목을 마저 반영.
+  - **인증/인가**: `ui-settings` 의 앱 설정/클러스터 링크/담당자/운영레벨 PUT 엔드포인트가
+    인증만으로 접근 가능하던 것을 admin 전용으로 강제(feature-access 와 동일 패턴).
+  - **클러스터 삭제 500 수정**: deep_check_results/batch_jobs(+runs)/ops_check_runs/
+    os_param_changes/ansible_inventories 를 선삭제하지 않아 FK 위반으로 실패하던
+    `DELETE /clusters/{id}` 를 수정 — deep check 가 한 번이라도 돈 클러스터는 삭제가
+    불가능했다.
+  - **멀티클러스터 점검 격리**: deep checker 가 `config.load_kube_config()`(프로세스
+    전역 상태)를 사용해 동시 실행 시 한 클러스터의 kubeconfig 로 다른 클러스터를
+    점검할 수 있던 race 를 `new_client_from_config()` 격리로 수정(daily_checker.py 와
+    동일 패턴).
+  - **배치잡 재시도 스톰 방지**: `default_host` 없이 cron 이 걸린 배치잡이 매분 실패
+    → 재큐잉을 반복하던 문제를 저장 시점 검증(운영자) + 실패 시에도 `last_run_at`
+    갱신(자가 치유)으로 이중 차단.
+  - **K8s SDK 타임아웃/이벤트 루프 블로킹**: daily checker 의 K8s SDK 호출에 클라이언트
+    타임아웃(`_request_timeout`)이 없어 무응답 클러스터가 디스패처를 무기한 붙잡던
+    문제, 그리고 `POST /daily-check/run` 이 동기 SDK 호출로 FastAPI 이벤트 루프 자체를
+    막던 문제(`asyncio.to_thread` 로 오프로드)를 수정.
+  - **Celery 안정성**: Redis 브로커의 `allkeys-lru` eviction 정책이 예약 점검/배치잡
+    큐 자체를 지울 수 있던 것을 `noeviction` + 메모리 여유로 수정, 결과를 아무도
+    조회하지 않는 매분 디스패처류 태스크 10개에 `ignore_result=True` 적용.
+  - **AI 리뷰 큐 부하 완화**: core_bundle 점검마다 무조건 Ollama 리뷰를 큐잉하던 것을
+    상태 변화가 있거나 healthy 가 아닐 때만 큐잉하도록 게이팅 — 작은 워커 동시성이
+    Ollama 대기로 계속 점유돼 배치잡/수동 점검이 밀리던 문제 완화.
+  - **로그 테이블 리텐션**: `daily_check_logs`/`check_logs`/`k8s_events`/`audit_logs`/
+    `user_notifications` 가 purge 대상이 아니어서 무기한 증가하던 것을 청크 삭제
+    리텐션(각 21~365일)으로 정리, 관련 조회 인덱스도 보강.
+  - **Pod exec/SSE 안정성**: nginx `proxy_read_timeout` 60s 로 대화형 터미널이 끊기던
+    문제를 exec/스트림 경로 전용 location(3600s)으로 수정, 파드 로그·이벤트 SSE 응답에
+    `X-Accel-Buffering: no` 를 추가해 nginx 버퍼링으로 실시간성이 사라지던 문제 수정.
+    frontend nginx 설정에 CSP 등 보안 헤더도 추가(docker-compose/k8s 두 설정 동기화).
+  - **시각 표시 오류**: `parseUTC` 유틸을 거치지 않고 `new Date()`로 API 타임스탬프를
+    직접 파싱해 9시간(KST) 어긋나게 표시되던 지점 20여 곳(감사 로그, 점검 이력, VOC,
+    트렌드, Lake 서비스, Isilon, 홈 "다음 마감" 등)을 일괄 수정.
+
 ## [1.7.1] - 2026-07-20
 
 ### Fixed

@@ -8,7 +8,7 @@ import type { CheckMatrixItem, CheckMatrixGridCluster, Status } from '@/types';
 import {
   useCheckMatrixCellHistory, usePostManualEntry, usePutSchedule,
 } from '@/hooks/useCheckMatrix';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 
 interface Props {
   item: CheckMatrixItem;
@@ -39,7 +39,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
     () => (history?.points ?? [])
       .filter((p) => p.value != null)
       .map((p) => ({
-        time: new Date(p.checkedAt).toLocaleString('ko-KR', {
+        time: parseUTC(p.checkedAt).toLocaleString('ko-KR', {
           month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
         }),
         value: p.value,
@@ -138,7 +138,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
                   <li key={i} className="flex items-center gap-2 text-sm">
                     <StatusBadge variant={c.status} size="sm" />
                     <span className="text-muted-foreground text-xs tabular-nums">
-                      {new Date(c.checkedAt).toLocaleString('ko-KR')}
+                      {parseUTC(c.checkedAt).toLocaleString('ko-KR')}
                     </span>
                     {c.message && <span className="text-xs text-muted-foreground truncate">{c.message}</span>}
                   </li>

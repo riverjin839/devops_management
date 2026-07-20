@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Copy, Check, Terminal, AlertTriangle, XCircle, CheckCircle } from 'lucide-react';
 import type { Playbook } from '@/types';
 import { DoubleScrollX } from '@/components/common';
+import { parseUTC } from '@/lib/utils';
 
 interface PlaybookLogDialogProps {
   playbook: Playbook | null;
@@ -88,7 +89,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
               <h2 className="text-sm font-semibold truncate">{playbook.name}</h2>
               <p className="text-xs text-muted-foreground truncate">
                 실행 결과 상세
-                {playbook.lastRunAt && ` · ${new Date(playbook.lastRunAt).toLocaleString('ko-KR')}`}
+                {playbook.lastRunAt && ` · ${parseUTC(playbook.lastRunAt).toLocaleString('ko-KR')}`}
                 {durationMs != null && ` · ${(durationMs / 1000).toFixed(2)}s`}
               </p>
             </div>

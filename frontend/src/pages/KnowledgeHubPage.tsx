@@ -13,7 +13,7 @@ import {
 import type {
   OpsNote, CommandEntry, WorkGuide, WorkItem, Workflow, CommandImportance,
 } from '@/types';
-import { formatRelativeTime, stripHtml } from '@/lib/utils';
+import { formatRelativeTime, stripHtml, parseUTC } from '@/lib/utils';
 import { ServiceSidebar } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -279,7 +279,7 @@ export function KnowledgeHubPage() {
     if (openOnly) list = list.filter((it) => it.kind === 'item' && it.statusLabel === '미조치');
     if (periodFilter) {
       const start = periodStart(periodFilter);
-      if (start) list = list.filter((it) => new Date(it.updatedAt) >= start);
+      if (start) list = list.filter((it) => parseUTC(it.updatedAt) >= start);
     }
     if (sprintFilter) list = list.filter((it) => it.sprintId === sprintFilter);
     if (trimmed) list = list.filter((it) => it.searchBlob.includes(trimmed));

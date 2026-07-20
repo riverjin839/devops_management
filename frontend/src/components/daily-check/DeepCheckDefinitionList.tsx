@@ -18,6 +18,7 @@ import {
   useUpdateDefinition,
 } from '@/hooks/useDeepCheckDefinitions';
 import type { DeepCheckDefinition } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 const STATUS_DOT: Record<string, string> = {
   healthy: 'bg-emerald-500',
@@ -167,7 +168,7 @@ export function DeepCheckDefinitionList({
                 )}
                 {d.lastCheckedAt && (
                   <span>
-                    최근 {new Date(d.lastCheckedAt).toLocaleString()}
+                    최근 {parseUTC(d.lastCheckedAt).toLocaleString()}
                     {d.lastDurationMs != null && ` · ${d.lastDurationMs}ms`}
                   </span>
                 )}

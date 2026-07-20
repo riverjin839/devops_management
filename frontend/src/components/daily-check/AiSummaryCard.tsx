@@ -5,6 +5,7 @@ import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { useRegenerateReview } from '@/hooks/useDeepCheck';
 import type { DeepCheckReview } from '@/types';
+import { parseUTC } from '@/lib/utils';
 
 // Ollama 응답을 Markdown 으로 렌더 — react-markdown 이 기본적으로 HTML 을 escape 하므로
 // XSS 위험 없음. remark-gfm 으로 GitHub 스타일 (table/strike/task list) 까지 지원.
@@ -59,7 +60,7 @@ export function AiSummaryCard({ review }: Props) {
             <Sparkles className="w-4 h-4 text-primary" />
             <span>
               {review.aiGeneratedAt
-                ? new Date(review.aiGeneratedAt).toLocaleString('ko-KR')
+                ? parseUTC(review.aiGeneratedAt).toLocaleString('ko-KR')
                 : '아직 생성되지 않음'}
             </span>
             {statusBadge && (

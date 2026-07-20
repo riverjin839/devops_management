@@ -6,7 +6,7 @@ import {
 } from '@/hooks/useJira';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, parseUTC } from '@/lib/utils';
 import type { JiraAuthType } from '@/types';
 
 const inputCls =
@@ -193,7 +193,7 @@ export function JiraIntegrationPanel() {
           </span>
           {cred?.jiraAccount && <span className="text-sm text-muted-foreground">계정: {cred.jiraAccount}</span>}
           {cred?.lastVerifiedAt && (
-            <span className="text-sm text-muted-foreground">마지막 검증: {new Date(cred.lastVerifiedAt).toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">마지막 검증: {parseUTC(cred.lastVerifiedAt).toLocaleString()}</span>
           )}
         </div>
 

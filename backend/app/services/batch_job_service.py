@@ -47,6 +47,14 @@ async def execute_job(
 
     target_host = host or job.default_host
     if not target_host:
+        # 스케줄 실행(trigger="schedule")에서 여기 도달하면 default_host 없이 cron 이
+        # 걸린 레거시 잡이라는 뜻 — 라우터가 저장 시점에 이 조합을 막지만, 이미 잘못된
+        # 상태로 저장된 잡이 있을 수 있다. last_run_at 을 갱신하지 않고 raise 만 하면
+        # 디스패처 anchor 가 그대로 남아 매분 재큐잉하는 retry storm 이 되므로, 실패도
+        # "실행 시도"로 기록해 최소 다음 cron 틱까지는 재시도를 미룬다.
+        job.last_status = "error"
+        job.last_run_at = datetime.utcnow()
+        db.commit()
         raise ValueError("host is required (no default_host set on the job)")
 
     # Fall back to credentials saved on the job (used by scheduled runs).
