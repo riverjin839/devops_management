@@ -11,7 +11,7 @@ import {
 // ── Nav registry ──────────────────────────────────────────────────────────────
 // 사이드바(Sidebar)와 Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)이
 // 공유하는 정적 네비게이션 정의. 컴포넌트 파일에 두면 react-refresh 가 경고하므로 분리.
-// `/services` (통합 지식/SOP) 는 운영 기준 섹션에서 제거됨 — flyout 에서 보이지 않음.
+// `/services` (통합 지식/SOP) 는 사이드바 "PEP 서비스" 그룹의 진입점 — 아래 GROUPS 참고.
 export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }>; iconColor?: string; iconSize?: string }> = {
   '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
   '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
@@ -25,7 +25,8 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/lake-services':      { defaultLabel: 'LAKE 서비스',     icon: Database },
   '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
-  '/pep-services':       { defaultLabel: 'PEP 서비스',      icon: Package },
+  '/services':           { defaultLabel: 'PEP 서비스',      icon: Package },
+  '/pep-services':       { defaultLabel: 'PEP 서비스 (LAKE, 구)', icon: Package },
   '/app-services':       { defaultLabel: 'APP 서비스',      icon: Boxes },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
@@ -75,10 +76,12 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import'], modes: ['work'] },
-  // 구 "지식/분석"(knowledge) 자리 재정의 — Runtime/Catalog/Workflow/JupyterLab 등 상위
-  // 카테고리(Settings → "서비스 카테고리"에서 추가 가능) → 하위 서비스 2단 네비게이션.
-  // 지식 허브(/docs)는 코드/데이터 그대로 유지되며 직접 URL 접근으로만 남는다(ops-notes 등과 동일).
-  { id: 'pep-services', label: 'PEP 서비스', icon: Package, paths: ['/pep-services'], modes: ['work'] },
+  // "PEP 서비스" — Settings → "PEP 서비스" 탭(ui_settings.serviceCatalog)에 등록된 서비스
+  // 카탈로그의 진입점(/services, ServicesCatalogPage). 서비스 클릭 시 노트(작업계획서/업무소개/
+  // 이슈대응/구축작업)와 연관 업무를 보여주는 /services/:service(ServiceHubPage)로 이동한다.
+  // 과거 LakeService 기반 페이지(/pep-services)는 사이드바에서 빠지고 직접 URL 접근으로만
+  // 남는다(/docs, /lake-services 와 동일 패턴) — 데이터/라우트 자체는 그대로 유지.
+  { id: 'pep-services', label: 'PEP 서비스', icon: Package, paths: ['/services'], modes: ['work'] },
   { id: 'app-services', label: 'APP 서비스', icon: Boxes,   paths: ['/app-services'], modes: ['work'] },
   { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
 ];

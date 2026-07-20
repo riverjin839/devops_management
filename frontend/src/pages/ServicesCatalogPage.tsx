@@ -69,7 +69,7 @@ export function ServicesCatalogPage() {
 
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <BookOpen className="w-6 h-6 text-primary" />
-          <h1 className="text-xl font-bold">통합지식</h1>
+          <h1 className="text-xl font-bold">PEP 서비스</h1>
           <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
             {merged.length} 서비스
           </span>
@@ -93,8 +93,8 @@ export function ServicesCatalogPage() {
         </div>
 
         <p className="text-sm text-muted-foreground mb-4">
-          서비스 기준으로 운영 가이드·트러블슈팅·변경 이력·메모·리소스 링크를 통합 관리합니다.
-          서비스 카탈로그는 <strong>Settings → 서비스</strong> 탭에서 추가/수정 가능합니다.
+          서비스 기준으로 작업 계획서·업무 소개·이슈 대응·구축 작업 노트와 연관 업무를 통합 관리합니다.
+          서비스 카탈로그는 <strong>Settings → PEP 서비스</strong> 탭에서 추가/수정 가능합니다.
         </p>
 
         {viewMode === 'table' ? (
