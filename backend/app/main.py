@@ -1731,7 +1731,6 @@ app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
     version="1.9.0",
-    version="1.8.2",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
