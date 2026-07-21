@@ -16,7 +16,7 @@ import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar, Export
 import { useClusters } from '@/hooks/useCluster';
 import {
   useAllocNodes, useAllocNamespaces, useAllocWorkloads, useAllocPods,
-  useRefreshAllocNode, useRefreshAllocNamespace, useForceAllocRefresh,
+  useRefreshAllocNode, useRefreshAllocNamespace, useForceAllocRefresh, usePodsSummary,
 } from '@/hooks/useK8sAllocation';
 import { buildCsv, downloadCsv } from '@/lib/csv';
 import type { AllocNodeRow, AllocNamespaceRow, AllocWorkloadRow } from '@/types';
@@ -355,6 +355,7 @@ export function K8sAllocationPage() {
           ) : (
             <>
               <SummarySection clusterId={clusterId} />
+              <PodCapacityStatusCards clusterId={clusterId} />
 
               <div className="inline-flex rounded-xl border border-border bg-card p-1">
                 {([
@@ -425,6 +426,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
           help={
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">CPU 할당효율 (Allocation Efficiency)</p>
+              <p className="text-primary">관점: <b>쿠버네티스 스케줄러 기준</b> — 파드를 더 배치(스케줄)할 여유가 있는지를 봅니다.</p>
               <p><b>= Request ÷ Allocatable × 100</b></p>
               <p>노드의 할당 가능 CPU 중 파드들이 <b>request로 예약</b>한 비율입니다.</p>
               <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
@@ -440,6 +442,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
           help={
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">MEM 할당효율 (Allocation Efficiency)</p>
+              <p className="text-primary">관점: <b>쿠버네티스 스케줄러 기준</b> — 파드를 더 배치(스케줄)할 여유가 있는지를 봅니다.</p>
               <p><b>= Request ÷ Allocatable × 100</b></p>
               <p>노드의 할당 가능 메모리 중 파드들이 <b>request로 예약</b>한 비율입니다.</p>
               <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
@@ -455,6 +458,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
           help={
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">CPU 사용효율 (Usage Efficiency)</p>
+              <p className="text-primary">관점: <b>노드 실사용(모니터링) 기준</b> — 예약해둔 자원을 실제로 얼마나 쓰고 있는지를 봅니다.</p>
               <p><b>= 실사용량 ÷ Request × 100</b></p>
               <p>request로 예약한 CPU 중 실제로 <b>사용 중인</b> 비율입니다.</p>
               <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
@@ -616,6 +620,74 @@ function Stat({ label, value, sub, icon, warn, help }: { label: string; value: s
       </div>
       <div className={`text-xl font-semibold leading-tight mt-0.5 ${warn ? 'text-status-warning' : ''}`}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground mt-0.5 truncate" title={sub}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Pod 용량 / 상태 카드 (pods-summary) ───────────────────────────────────────
+const POD_STATUS_META: { key: string; label: string; cls: string }[] = [
+  { key: 'running', label: 'Running', cls: 'text-status-healthy' },
+  { key: 'pending', label: 'Pending', cls: 'text-status-warning' },
+  { key: 'error', label: 'Error', cls: 'text-status-critical' },
+  { key: 'failed', label: 'Failed', cls: 'text-status-critical' },
+  { key: 'succeeded', label: 'Succeeded', cls: 'text-muted-foreground' },
+  { key: 'unknown', label: 'Unknown', cls: 'text-muted-foreground' },
+];
+// 0개여도 항상 노출하는 핵심 버킷
+const POD_STATUS_ALWAYS = ['running', 'pending', 'error'];
+
+/** 카드 헤더 + 우측 개별 새로고침 버튼 (MacCard 는 title 만 지원하므로 body 내부에 직접 구성). */
+function CardHeader({ title, onRefresh, refreshing }: { title: string; onRefresh: () => void; refreshing: boolean }) {
+  return (
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">{title}</span>
+      <button onClick={onRefresh} title="새로고침" aria-label={`${title} 새로고침`}
+        className="p-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
+        <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+      </button>
+    </div>
+  );
+}
+
+function PodCapacityStatusCards({ clusterId }: { clusterId: string }) {
+  const { data, isLoading, isFetching, isError, error, refetch } = usePodsSummary(clusterId);
+  if (isLoading) return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <MacCard bodyPadding="p-3"><Skeleton className="h-16 w-full" /></MacCard>
+      <MacCard bodyPadding="p-3"><Skeleton className="h-16 w-full" /></MacCard>
+    </div>
+  );
+  if (isError || !data) return (
+    <MacCard bodyPadding="p-3">
+      <CardHeader title="POD 용량 / 상태" onRefresh={() => refetch()} refreshing={isFetching} />
+      <EmptyState title="조회 실패" description={(error as Error)?.message ?? 'Pod 용량/상태를 불러오지 못했습니다.'} />
+    </MacCard>
+  );
+  const cap = data.capacity;
+  const counts = data.statusCounts ?? {};
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <MacCard bodyPadding="p-3">
+        <CardHeader title="POD 용량" onRefresh={() => refetch()} refreshing={isFetching} />
+        <div className="grid grid-cols-3 gap-2">
+          <Stat label="스케줄 가능 Pod" value={fmtN(cap.schedulableFreeSlots)}
+            help={<p>Ready·비cordon 노드({cap.nodesSchedulable}/{cap.nodesTotal})의 할당 가능 {fmtN(cap.schedulableAllocatablePods)}개 중 남은 슬롯(현재 파드 개수 기준, 크기 무관).</p>} />
+          <Stat label="전체 Pod" value={fmtN(data.totalPods)} />
+          <Stat label="전체 할당 가능 Pod" value={fmtN(cap.allocatablePods)}
+            help={<p>전체 노드 <code>allocatable.pods</code>(max-pods) 합계.</p>} />
+        </div>
+      </MacCard>
+      <MacCard bodyPadding="p-3">
+        <CardHeader title="POD 상태" onRefresh={() => refetch()} refreshing={isFetching} />
+        <div className="grid grid-cols-3 gap-2">
+          {POD_STATUS_META
+            .filter((m) => POD_STATUS_ALWAYS.includes(m.key) || (counts[m.key] ?? 0) > 0)
+            .map((m) => (
+              <Stat key={m.key} label={m.label} value={fmtN(counts[m.key] ?? 0)}
+                warn={m.key === 'error' && (counts[m.key] ?? 0) > 0} />
+            ))}
+        </div>
+      </MacCard>
     </div>
   );
 }

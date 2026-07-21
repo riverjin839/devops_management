@@ -10,6 +10,22 @@
 
 1.8.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8S 자원 관리 요약에 Pod 용량/상태 카드 추가 (카드별 개별 새로고침 지원)**: 클러스터
+  선택 시 `클러스터 요약` 아래에 ① **POD 용량 카드** — 스케줄 가능한 Pod 수(Ready·
+  비cordon 노드의 allocatable 남은 슬롯) / 전체 Pod 수 / 전체 할당 가능 Pod 수(노드
+  `allocatable.pods` 합계), ② **POD 상태 카드** — Running/Pending/Error(CrashLoop
+  BackOff 등 포함)/Failed/Succeeded/Unknown 종류별 수치를 상태 색 토큰으로 표시. 각
+  카드 헤더에 개별 새로고침 버튼을 둬 필요할 때만 재조회 가능.
+  - Backend: `k8s_resources` 라우터에 `GET /k8s/{id}/pods-summary`(노드+파드 병렬
+    조회, 용량·상태 버킷 집계) 추가.
+  - Frontend: `K8sAllocationPage`에 `PodCapacityStatusCards`(+카드별 `CardHeader`
+    새로고침 버튼), `usePodsSummary`(`hooks/useK8sAllocation.ts`), `k8sResourcesApi.
+    podsSummary`, `K8sPodsSummaryResponse` 타입.
+- **K8S 자원 관리 CPU 할당효율/사용효율 툴팁에 관점 설명 보강**: CPU·MEM 할당효율은
+  "쿠버네티스 스케줄러 기준(배치 여유)", CPU 사용효율은 "노드 실사용(모니터링) 기준"
+  임을 물음표 툴팁 상단에 한 줄로 먼저 안내해 두 지표의 관점 차이를 바로 이해하도록 함.
+
 ### Fixed
 - **클러스터 삭제 500 에러 (`deep_check_results.status` 컬럼 누락)**: 일부 구버전 DB에서
   `deep_check_results` 테이블이 `status` 컬럼 없이 생성돼, 클러스터 삭제 시 ORM 이 연관

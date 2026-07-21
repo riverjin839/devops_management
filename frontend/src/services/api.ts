@@ -1803,6 +1803,8 @@ export const k8sResourcesApi = {
     api.get<import('@/types').K8sNodesResponse>(`/k8s/${clusterId}/nodes`, { timeout: 60_000 }),
   richPods: (clusterId: string, namespace?: string) =>
     api.get<import('@/types').K8sPodsResponse>(`/k8s/${clusterId}/pods`, { params: namespace ? { namespace } : undefined, timeout: 120_000 }),
+  podsSummary: (clusterId: string) =>
+    api.get<import('@/types').K8sPodsSummaryResponse>(`/k8s/${clusterId}/pods-summary`, { timeout: 120_000 }),
   scale: (clusterId: string, kind: string, namespace: string, name: string, replicas: number) =>
     api.post<import('@/types').K8sWriteResult>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/scale`,
