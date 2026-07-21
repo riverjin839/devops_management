@@ -11,12 +11,20 @@
 1.8.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
-- **클러스터 삭제 500 에러 (`deep_check_results.status` 컬럼 누락)**: 일부 구버전 DB에서
-  `deep_check_results` 테이블이 `status` 컬럼 없이 생성돼, 클러스터 삭제 시 ORM 이 연관
-  결과 행의 FK 를 정리하려 컬럼을 조회하다 `UndefinedColumn` 500 에러가 발생하던 문제를
-  수정. `_run_migrations()` 에 `_safe_add_column` 으로 `status`(statusenum, 기본값
-  `healthy`) 보강을 추가.
-  - Backend: `main.py` `_run_migrations()`.
+- **클러스터 삭제 500 에러 (`deep_check_results` 컬럼 누락, `status`→`message` 순차 발견)**:
+  일부 구버전 DB에서 `deep_check_results` 테이블이 모델 대비 `status`/`message`/`details`
+  컬럼 없이 생성돼, 클러스터 삭제 시 ORM 이 연관 결과 행의 FK 를 정리하려 컬럼을
+  조회하다 `UndefinedColumn` 500 에러가 발생하던 문제를 수정. 세 컬럼 모두
+  `_run_migrations()` 에 `_safe_add_column` 으로 보강.
+  - **재발 방지 (근본 대응)**: 테이블마다 "새로 생긴 컬럼"을 사람이 직접 나열해 챙기는
+    기존 방식은 하나라도 빠지면 배포 후 조용히 있다가 그 컬럼을 건드리는 요청에서만
+    500 으로 드러난다(이번 건도 `status` 를 고치고 나니 `message` 가 또 나옴). 앞으로
+    같은 유형의 드리프트를 개별 대응하지 않도록, 부팅마다 `Base.metadata` 전체
+    테이블/컬럼을 실제 DB 스키마와 비교해 모델에는 있지만 DB에는 없는 컬럼을
+    자동으로(nullable 로) 보강하는 안전망 `_sync_missing_model_columns()` 을 추가하고
+    startup 시퀀스(`migrations` 다음 단계)에 편입.
+  - Backend: `main.py` `_run_migrations()`, `_sync_missing_model_columns()`(신규),
+    `lifespan()` startup steps.
 
 ## [1.8.0] - 2026-07-21
 
