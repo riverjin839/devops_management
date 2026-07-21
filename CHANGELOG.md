@@ -11,6 +11,20 @@
 1.7.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **Jira SSO 로컬 로그인 도우미 — K8s 배포에서도 SSO 자동 로그인 지원**: 백엔드가
+  K8s/컨테이너로 배포되면 파드에 화면이 없어 서버측 Playwright SSO 로그인이 동작할 수
+  없던 것을, 참고 프로젝트(lake-task-manager)의 "사용자 PC 에서 브라우저 실행" 패턴을
+  클라이언트 쪽으로 옮겨 해결. 설정 ▸ Jira 연동에서 도우미 스크립트
+  (`jira_sso_helper.py`)를 내려받아 본인 PC 에서 실행하면 — PEP 로그인 → 로컬 Chromium
+  창에서 평소처럼 SSO 로그인 → 완료 자동 감지(`/rest/api/2/myself` 폴링) → 캡처한 세션
+  쿠키를 PEP 자격증명 API 로 자동 등록 + 연결 테스트까지 한 번에 진행된다(토큰/쿠키
+  수동 복사 불필요). 표준 라이브러리 + playwright 만 사용.
+  - Backend: `app/resources/jira_sso_helper.py`(도우미 스크립트, 이미지 동봉),
+    `GET /jira/sso/helper`(다운로드), `PUT /jira/credential` 이 `auth_type='sso'` 허용.
+  - Frontend: `JiraIntegrationPanel` SSO 블록을 로컬 도우미(다운로드 + 실행명령 복사 +
+    안내) 중심으로 개편 — 서버측 브라우저 버튼은 화면 있는 소스 실행 배포용 접이식
+    대체 수단으로 이동.
+
 - **개성있는 웹폰트 옵션 (Outfit / Geist)**: 설정 → 화면 UI 설정 → 페이지별 화면 스타일에서
   폰트로 `Outfit`/`Geist` 를 선택할 수 있다. 두 폰트 모두 `@fontsource-variable/*` 로
   빌드 산출물에 직접 번들되어 CDN 요청 없이 동작(폐쇄망 배포 안전). 라틴 문자만

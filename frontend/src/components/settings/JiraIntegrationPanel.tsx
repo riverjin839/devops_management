@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie, LogIn, ShieldCheck } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie, LogIn, ShieldCheck, Download, Copy } from 'lucide-react';
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
   useSaveJiraCredential, useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
 } from '@/hooks/useJira';
 import { useAuthStore } from '@/stores/authStore';
+import { jiraApi } from '@/services/api';
 import { useToast } from '@/components/common';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import type { JiraAuthType } from '@/types';
@@ -63,6 +64,36 @@ export function JiraIntegrationPanel() {
       }
     } catch (err) {
       toast.error('SSO 로그인 실패', formatApiError(err));
+    }
+  };
+
+  // K8s/컨테이너 배포용 — 본인 PC 에서 실행할 로컬 SSO 도우미 스크립트.
+  const helperCmd = [
+    'pip install playwright',
+    'playwright install chromium',
+    `python jira_sso_helper.py --pep-url ${window.location.origin}`,
+  ].join('\n');
+
+  const handleDownloadHelper = async () => {
+    try {
+      const { data } = await jiraApi.downloadSsoHelper();
+      const url = URL.createObjectURL(new Blob([data], { type: 'text/x-python' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'jira_sso_helper.py';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error('다운로드 실패', formatApiError(err));
+    }
+  };
+
+  const handleCopyHelperCmd = async () => {
+    try {
+      await navigator.clipboard.writeText(helperCmd);
+      toast.success('실행 명령 복사됨', '터미널(cmd/PowerShell)에 붙여넣어 실행하세요.');
+    } catch {
+      toast.error('복사 실패', '브라우저가 클립보드 접근을 막았습니다. 화면의 명령을 직접 복사하세요.');
     }
   };
 
@@ -197,22 +228,43 @@ export function JiraIntegrationPanel() {
           )}
         </div>
 
-        {/* SSO 자동 로그인 (권장) */}
+        {/* SSO 자동 로그인 (권장) — 내 PC 에서 도우미 스크립트 실행 */}
         <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-4 mb-4">
           <div className="flex items-center gap-2 mb-1">
             <ShieldCheck className="w-4 h-4 text-primary" />
             <h4 className="text-sm font-semibold">SSO 자동 로그인 <span className="text-xs font-normal text-primary">권장</span></h4>
           </div>
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-            버튼을 누르면 <b>백엔드 서버에서 브라우저가 열립니다</b>. 평소처럼 사내 SSO 로그인만 마치면
-            세션이 자동으로 캡처·저장되어 바로 가져오기·되쓰기를 할 수 있습니다(토큰/쿠키 복사 불필요).
-            세션이 만료되면 다시 로그인하세요.
+            도우미 스크립트를 <b>내 PC 에서 실행</b>하면 브라우저가 열리고, 평소처럼 사내 SSO 로그인만
+            마치면 세션이 자동으로 캡처되어 PEP 에 등록됩니다(토큰/쿠키 복사 불필요). 백엔드가
+            K8s/컨테이너로 배포된 환경에서는 서버에 화면이 없어 이 방식만 동작합니다. 세션이 만료되면
+            다시 실행하세요.
           </p>
-          <button onClick={handleSsoLogin} disabled={ssoLogin.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-            {ssoLogin.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-            {ssoLogin.isPending ? '브라우저 창에서 로그인을 완료하세요…' : cred?.authType === 'sso' ? 'SSO 다시 로그인' : '브라우저로 SSO 로그인'}
-          </button>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <button onClick={handleDownloadHelper}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
+              <Download className="w-4 h-4" /> 도우미 스크립트 다운로드
+            </button>
+            <button onClick={handleCopyHelperCmd}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/70"
+              title="실행 명령 복사" aria-label="실행 명령 복사">
+              <Copy className="w-4 h-4" /> 실행 명령 복사
+            </button>
+          </div>
+          <div className="rounded-lg bg-secondary/50 border border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed">
+            <p className="font-medium text-foreground mb-1">실행 방법 (최초 1회 준비 포함)</p>
+            <pre className="font-mono whitespace-pre-wrap break-all text-[11px] leading-relaxed">{helperCmd}</pre>
+          </div>
+          <details className="mt-3">
+            <summary className="text-xs text-muted-foreground cursor-pointer select-none hover:text-foreground">
+              백엔드 호스트에 화면이 있는 배포(소스 실행)라면 — 서버에서 브라우저 열기
+            </summary>
+            <button onClick={handleSsoLogin} disabled={ssoLogin.isPending}
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/70 disabled:opacity-50">
+              {ssoLogin.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+              {ssoLogin.isPending ? '서버 브라우저 창에서 로그인을 완료하세요…' : cred?.authType === 'sso' ? '서버 브라우저로 다시 로그인' : '서버 브라우저로 SSO 로그인'}
+            </button>
+          </details>
         </div>
 
         {/* 또는 수동 등록 (대체) */}

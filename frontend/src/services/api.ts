@@ -866,6 +866,8 @@ export const jiraApi = {
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   // SSO 자동 로그인 — 백엔드가 브라우저를 띄워 로그인 완료를 기다리므로 타임아웃을 길게(4분).
   ssoLogin: () => api.post<import('@/types').JiraSsoLoginResult>('/jira/sso/login', undefined, { timeout: 4 * 60_000 }),
+  // K8s/컨테이너 배포용 로컬 SSO 도우미 스크립트 다운로드 (본인 PC 에서 실행).
+  downloadSsoHelper: () => api.get<Blob>('/jira/sso/helper', { responseType: 'blob' }),
   import: (data: import('@/types').JiraImportRequest) =>
     api.post<import('@/types').JiraImportResult>('/jira/import', data),
   importExcel: (file: File) => {

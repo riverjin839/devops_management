@@ -13,11 +13,13 @@ import re
 from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
+from pathlib import Path
 from typing import Optional
 
 import openpyxl
 import xlrd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -385,8 +387,10 @@ def save_credential(
     if not token:
         raise HTTPException(status_code=422, detail="인증 값을 입력하세요 (PAT 또는 세션 쿠키).")
     auth_type = (payload.auth_type or "pat").strip().lower()
-    if auth_type not in ("pat", "cookie"):
-        raise HTTPException(status_code=422, detail="auth_type 은 'pat' 또는 'cookie' 여야 합니다.")
+    # 'sso' 는 로컬 도우미(jira_sso_helper.py)가 본인 PC 에서 캡처한 세션 쿠키를 등록하는 경로 —
+    # REST 처리(JiraService)는 cookie 와 동일하고, UI 배지만 SSO 로 구분 표시된다.
+    if auth_type not in ("pat", "cookie", "sso"):
+        raise HTTPException(status_code=422, detail="auth_type 은 'pat'/'cookie'/'sso' 여야 합니다.")
     enc = secret_box.encrypt(token)
     cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
     if cred:
@@ -495,6 +499,24 @@ async def sso_login(db: Session = Depends(get_db), actor: User = Depends(get_cur
     return JiraSsoLoginResult(
         ok=True, detail="SSO 로그인 완료 — 세션이 저장되었습니다.",
         jira_account=account, display_name=display,
+    )
+
+
+# 백엔드가 K8s/컨테이너 배포라 파드에서 브라우저를 못 띄우는 환경용 — 사용자가 본인 PC 에서
+# 실행해 SSO 세션을 캡처·등록하는 도우미 스크립트(이미지에 동봉)를 내려준다.
+_SSO_HELPER_PATH = Path(__file__).resolve().parent.parent / "resources" / "jira_sso_helper.py"
+
+
+@router.get("/sso/helper")
+def download_sso_helper(_: User = Depends(get_current_user)):
+    try:
+        content = _SSO_HELPER_PATH.read_text(encoding="utf-8")
+    except OSError:
+        raise HTTPException(status_code=404, detail="도우미 스크립트가 이 배포 이미지에 포함되지 않았습니다.")
+    return PlainTextResponse(
+        content,
+        media_type="text/x-python",
+        headers={"Content-Disposition": 'attachment; filename="jira_sso_helper.py"'},
     )
 
 
