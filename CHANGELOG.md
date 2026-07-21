@@ -18,7 +18,9 @@
   비cordon 노드의 allocatable 남은 슬롯) / 전체 Pod 수 / 전체 할당 가능 Pod 수(노드
   `allocatable.pods` 합계), ② **POD 상태 카드** — Running/Pending/Error(CrashLoop
   BackOff 등 포함)/Failed/Succeeded/Unknown 종류별 수치를 상태 색 토큰으로 표시. 각
-  카드 헤더에 개별 새로고침 버튼을 둬 필요할 때만 재조회 가능.
+  카드 헤더에 개별 새로고침 버튼을 둬 필요할 때만 재조회 가능. `클러스터 요약`의
+  **파드 (활성)** 스탯도 `활성 / 전체 max-pods 합계`와 여유 스케줄 슬롯 수를 함께
+  표기하도록 보강.
   - Backend: `k8s_resources` 라우터에 `GET /k8s/{id}/pods-summary`(노드+파드 병렬
     조회, 용량·상태 버킷 집계) 추가.
   - Frontend: `K8sAllocationPage`에 `PodCapacityStatusCards`(+카드별 `CardHeader`
