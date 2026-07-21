@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { X, Download, Loader2, FileSpreadsheet } from 'lucide-react';
 import { versionsApi } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 import type { ComponentSnapshot } from '@/services/api';
 
@@ -29,6 +30,8 @@ const DETAIL_META: Record<Detail, { label: string; description: string }> = {
  */
 export function CsvExportModal({ open, clusterId, clusterName, components, onClose }: Props) {
   const toast = useToast();
+  const titleId = useId();
+  const dialogRef = useModalA11y(open, onClose);
   const [detail, setDetail] = useState<Detail>('summary');
 
   // 보유 카테고리 + 각 카테고리의 컴포넌트 개수
@@ -79,13 +82,14 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !exportMut.isPending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <FileSpreadsheet className="w-4 h-4" />
           </div>
           <div className="flex-1">
-            <h2 className="text-sm font-semibold">CSV 내보내기</h2>
+            <h2 id={titleId} className="text-sm font-semibold">CSV 내보내기</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               현재 스냅샷을 CSV 한 파일로 다운로드. 한글 호환 UTF-8 BOM 포함.
             </p>

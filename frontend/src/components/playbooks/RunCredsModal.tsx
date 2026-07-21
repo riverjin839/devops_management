@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { KeyRound, X, Play } from 'lucide-react';
 import type { PlaybookSshCreds } from '@/types';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 const SESSION_KEY = 'k8s:playbook-ssh-creds';
 
@@ -27,6 +28,8 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
   const [becomePass, setBecomePass] = useState('');
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
   const [remember, setRemember] = useState(true);
+  const titleId = useId();
+  const dialogRef = useModalA11y(open, onClose);
 
   // 세션에 저장된 값 자동 복원
   useEffect(() => {
@@ -69,11 +72,17 @@ export function RunCredsModal({ open, playbookName, onClose, onRun }: RunCredsMo
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-md mac-shadow">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-card border border-border rounded-2xl w-full max-w-md mac-shadow"
+      >
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <KeyRound className="w-4 h-4 text-primary" />
-            <h2 className="font-semibold text-sm">SSH 자격증명</h2>
+            <h2 id={titleId} className="font-semibold text-sm">SSH 자격증명</h2>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />

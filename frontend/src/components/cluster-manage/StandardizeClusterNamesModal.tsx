@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { X, Wand2, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { clustersApi } from '@/services/api';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 import { CLUSTER_NAME_OPS as OPS, parseClusterName } from '@/lib/clusterName';
 
@@ -28,6 +29,8 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
   const [edits, setEdits] = useState<Record<string, Parts>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
+  const titleId = useId();
+  const dialogRef = useModalA11y(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -63,12 +66,13 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
+        ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
           <Wand2 className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-semibold">클러스터 이름 표준화</h2>
+          <h2 id={titleId} className="text-sm font-semibold">클러스터 이름 표준화</h2>
           <span className="text-xs text-muted-foreground">현재 이름을 [업무명]-[운영타입]-[속성] 으로 정리</span>
           <button onClick={onClose} className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="닫기">
             <X className="w-4 h-4" />

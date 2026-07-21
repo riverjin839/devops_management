@@ -8,6 +8,7 @@ import { useCreateWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import type { KanbanStatus, WorkItemType } from '@/types';
 import { WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { formatApiError } from '@/lib/utils';
@@ -68,6 +69,7 @@ export function QuickAddTaskModal({
   const { data: clusters = [] } = useClusters();
   const { data: assignees = [] } = useAssignees();
   const createMut = useCreateWorkItem();
+  const dialogRef = useModalA11y(open, onClose);
 
   const [selectedType, setSelectedType] = useState<WorkItemType | null>(null);
   const [title, setTitle] = useState('');
@@ -131,6 +133,10 @@ export function QuickAddTaskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !createMut.isPending && onClose()} />
       <form
+        ref={dialogRef as unknown as React.RefObject<HTMLFormElement>}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={f('heading')}
         onSubmit={handleSubmit}
         className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-md mx-4 max-h-[92vh] overflow-y-auto"
       >
@@ -140,7 +146,7 @@ export function QuickAddTaskModal({
             <CalendarDays className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold leading-tight">업무 등록</h2>
+            <h2 id={f('heading')} className="text-base font-semibold leading-tight">업무 등록</h2>
             <p className="text-xs text-muted-foreground">{formatDateLabel(defaultDate)}</p>
           </div>
           <button

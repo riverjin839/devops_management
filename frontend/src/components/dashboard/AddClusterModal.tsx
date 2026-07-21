@@ -5,6 +5,7 @@ import {
   Cloud, Box, Layers, Cpu, Zap, Globe,
 } from 'lucide-react';
 import { useCreateCluster } from '@/hooks/useCluster';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
 // ── Provider / Environment Types ────────────────────────────────────────────
@@ -114,6 +115,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
   const apiEndpointId = useId();
   const regionId = useId();
   const kubeconfigId = useId();
+  const titleId = useId();
 
   const createCluster = useCreateCluster();
   const isSubmitting = createCluster.isPending;
@@ -160,6 +162,8 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
     onClose();
   };
 
+  const dialogRef = useModalA11y(isOpen, handleClose);
+
   const goNext = () => {
     setError('');
     if (step === 1) {
@@ -198,7 +202,8 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden"
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+           className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden"
            style={{ maxHeight: '90vh' }}>
 
         {/* ── Top bar ── */}
@@ -208,7 +213,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               {selectedProvider.icon}
             </div>
             <div>
-              <h2 className="text-base font-semibold">클러스터 등록</h2>
+              <h2 id={titleId} className="text-base font-semibold">클러스터 등록</h2>
               <p className="text-sm text-muted-foreground">{selectedProvider.label} — {STEPS[step]}</p>
             </div>
           </div>

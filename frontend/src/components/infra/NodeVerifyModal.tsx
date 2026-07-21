@@ -1,6 +1,8 @@
+import { useId } from 'react';
 import { Check, X, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import type { NodeVerifyResult, NodeHealthEntry } from '@/types';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 interface NodeVerifyModalProps {
   result: NodeVerifyResult | null;
@@ -66,19 +68,25 @@ function NodeChecklist({ entry }: { entry: NodeHealthEntry }) {
 }
 
 export function NodeVerifyModal({ result, loading, onClose }: NodeVerifyModalProps) {
+  const dialogRef = useModalA11y(true, onClose);
+  const titleId = useId();
   const style = result ? (STATUS_STYLE[result.status] ?? STATUS_STYLE.pending) : STATUS_STYLE.pending;
   const entry = result?.details?.nodes?.[0];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-card border border-border rounded-xl w-full max-w-lg max-h-[85vh] overflow-auto shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-foreground">노드 추가 검증</h3>
+            <h3 id={titleId} className="font-semibold text-foreground">노드 추가 검증</h3>
             {result && <span className="text-sm text-muted-foreground">— {result.hostname}</span>}
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">

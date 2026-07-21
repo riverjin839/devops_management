@@ -6,6 +6,7 @@ import { useToast } from '@/components/common';
 import { RichTextEditor } from '@/components/editor';
 import { KIND_CATALOG } from './serviceCatalog';
 import { formatApiError } from '@/lib/utils';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -31,6 +32,7 @@ export function ServiceEntryEditModal({
   mode, service, entry, defaultKind, defaultClusterId, clusters, onClose, onSaved,
 }: Props) {
   const toast = useToast();
+  const dialogRef = useModalA11y(true, onClose);
 
   const [form, setForm] = useState<Form>(() => {
     if (entry) return { ...entry };
@@ -45,6 +47,7 @@ export function ServiceEntryEditModal({
   const [tagsText, setTagsText] = useState((entry?.tags ?? []).join(', '));
   const [saving, setSaving] = useState(false);
 
+  const headingId = useId();
   const kindId = useId();
   const clusterScopeId = useId();
   const titleId = useId();
@@ -109,9 +112,15 @@ export function ServiceEntryEditModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !saving && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col"
+      >
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
-          <h2 className="text-sm font-semibold">
+          <h2 id={headingId} className="text-sm font-semibold">
             {mode === 'create' ? `새 항목 — ${service}` : `수정 — ${entry?.title}`}
           </h2>
           <button onClick={onClose} disabled={saving}

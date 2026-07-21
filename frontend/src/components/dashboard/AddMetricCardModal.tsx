@@ -3,6 +3,7 @@ import { X, FlaskConical, CheckCircle2, AlertTriangle, BookOpen, ChevronDown, Ch
 import { useCreateMetricCard, useTestPromql, useUpdateMetricCard } from '@/hooks/useMetricCards';
 import { MetricCard } from '@/types';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
 interface AddMetricCardModalProps {
@@ -163,6 +164,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
   const unitId = useId();
   const thresholdsId = useId();
   const grafanaUrlId = useId();
+  const titleHeadingId = useId();
 
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [testResult, setTestResult] = useState<string>('');
@@ -172,6 +174,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
   const createCard = useCreateMetricCard();
   const updateCard = useUpdateMetricCard();
   const testQuery = useTestPromql();
+  const dialogRef = useModalA11y(isOpen, onClose);
 
   const isEditMode = !!editingCard;
   const [showGuide, setShowGuide] = useState(false);
@@ -299,11 +302,15 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleHeadingId}
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
-          <h2 className="text-lg font-semibold">{isEditMode ? 'Edit Metric Card' : 'Add Metric Card'}</h2>
+          <h2 id={titleHeadingId} className="text-lg font-semibold">{isEditMode ? 'Edit Metric Card' : 'Add Metric Card'}</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>

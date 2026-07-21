@@ -3,6 +3,7 @@ import { X, Hand, Clock3, Sparkles } from 'lucide-react';
 import { ClusterItem, ClusterItemCardSize, ClusterItemSource } from '@/types';
 import { useCreateClusterItem, useUpdateClusterItem, useClusterItemTypes } from '@/hooks/useClusterItems';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
 interface ClusterItemModalProps {
@@ -41,12 +42,14 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
   const iconId = useId();
   const descId = useId();
   const unitId = useId();
+  const headingId = useId();
 
   const [saving, setSaving] = useState(false);
   const toast = useToast();
   const createItem = useCreateClusterItem(clusterId);
   const updateItem = useUpdateClusterItem(clusterId);
   const { data: itemTypes = [] } = useClusterItemTypes();
+  const dialogRef = useModalA11y(isOpen, onClose);
 
   const isEdit = !!editingItem;
 
@@ -123,11 +126,15 @@ export function ClusterItemModal({ isOpen, onClose, clusterId, editingItem }: Cl
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
-          <h2 className="text-lg font-semibold">{isEdit ? '아이템 편집' : '아이템 추가'}</h2>
+          <h2 id={headingId} className="text-lg font-semibold">{isEdit ? '아이템 편집' : '아이템 추가'}</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>

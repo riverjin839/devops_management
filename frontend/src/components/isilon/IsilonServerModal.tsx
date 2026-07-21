@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X, Loader2, Plug } from 'lucide-react';
 import type { IsilonServer } from '@/types';
 import {
@@ -7,6 +7,7 @@ import {
   useTestIsilonServer,
 } from '@/hooks/useIsilonNfs';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 interface Props {
   server?: IsilonServer | null; // null/undefined = 신규
@@ -22,6 +23,8 @@ function errMessage(e: unknown, fallback: string): string {
 
 export function IsilonServerModal({ server, onClose }: Props) {
   const isEdit = !!server;
+  const dialogRef = useModalA11y(true, onClose);
+  const titleId = useId();
   const toast = useToast();
   const createMut = useCreateIsilonServer();
   const updateMut = useUpdateIsilonServer();
@@ -84,11 +87,15 @@ export function IsilonServerModal({ server, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-card rounded-2xl border border-border mac-shadow w-full max-w-lg max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold">{isEdit ? 'Isilon 서버 편집' : 'Isilon 서버 추가'}</h3>
+          <h3 id={titleId} className="text-sm font-semibold">{isEdit ? 'Isilon 서버 편집' : 'Isilon 서버 추가'}</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>

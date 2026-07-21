@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { X, Upload, Loader2, AlertTriangle, CheckCircle2, FileSpreadsheet, Info } from 'lucide-react';
 import { nodeSpecsApi } from '@/services/api';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import type {
   NodeSpecCsvDiff, NodeSpecCsvPreviewResponse, NodeSpecCsvRow,
 } from '@/types';
@@ -149,6 +150,7 @@ function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
+  const dialogRef = useModalA11y(open, onClose);
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsedRows, setParsedRows] = useState<NodeSpecCsvRow[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
@@ -233,10 +235,10 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-csv-upload-modal-title" className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <FileSpreadsheet className="w-5 h-5 text-primary" />
-          <h2 className="text-sm font-semibold">CSV 업로드 — 노드 서버스펙</h2>
+          <h2 id="node-spec-csv-upload-modal-title" className="text-sm font-semibold">CSV 업로드 — 노드 서버스펙</h2>
           <button onClick={onClose} disabled={applying}
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />

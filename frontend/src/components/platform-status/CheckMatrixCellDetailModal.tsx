@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts';
@@ -9,6 +9,7 @@ import {
   useCheckMatrixCellHistory, usePostManualEntry, usePutSchedule,
 } from '@/hooks/useCheckMatrix';
 import { formatApiError, parseUTC } from '@/lib/utils';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 interface Props {
   item: CheckMatrixItem;
@@ -23,6 +24,8 @@ const STATUS_OPTIONS: Status[] = ['healthy', 'warning', 'critical', 'pending'];
 
 export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEnabled, onClose }: Props) {
   const toast = useToast();
+  const titleId = useId();
+  const dialogRef = useModalA11y(true, onClose);
   const [days, setDays] = useState(30);
   const { data: history, isLoading } = useCheckMatrixCellHistory(item.id, cluster.id, days);
 
@@ -76,12 +79,16 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[88vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold truncate">{item.name}</h2>
+            <h2 id={titleId} className="text-base font-semibold truncate">{item.name}</h2>
             <p className="text-xs text-muted-foreground truncate">{cluster.name}</p>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors flex-shrink-0">
