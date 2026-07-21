@@ -1,6 +1,7 @@
 {
   "name": "devops-management-frontend",
   "private": true,
+  "version": "1.9.0",
   "version": "1.8.2",
   "type": "module",
   "scripts": {
