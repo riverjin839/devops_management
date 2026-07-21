@@ -55,6 +55,7 @@ from app.routers.k8s_resources import router as k8s_resources_router
 from app.routers.k8s_allocation import router as k8s_allocation_router
 from app.routers.k8s_helm import router as k8s_helm_router
 from app.routers.k8s_exec import router as k8s_exec_router
+from app.routers.k9s_ssh import router as k9s_ssh_router
 from app.routers.metric_trend import router as metric_trend_router
 from app.routers.service_topology import router as service_topology_router
 from app.routers.cluster_items import router as cluster_items_router
@@ -68,6 +69,7 @@ __all__ = [
     "check_matrix_router",
     "ops_check_router",
     "k8s_resources_router",
+    "k9s_ssh_router",
     "k8s_allocation_router",
     "service_topology_router",
     "projects_router",

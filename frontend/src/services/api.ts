@@ -1930,6 +1930,13 @@ export const k8sStreamUrls = {
     if (token) p.set('token', token);
     return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/exec?${p.toString()}`;
   },
+  /** k9s TUI SSH WebSocket — 토큰만 query param, SSH 자격증명은 init 프레임으로 전달. */
+  k9s: (clusterId: string, token: string | null) => {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const p = new URLSearchParams();
+    if (token) p.set('token', token);
+    return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/k9s?${p.toString()}`;
+  },
 };
 
 // ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────

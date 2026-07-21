@@ -202,6 +202,23 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### k9s 콘솔 (`/k9s`, `/k9s/:clusterId`)
+
+- **파일**: `frontend/src/pages/K9sPage.tsx` + `frontend/src/components/k8s/K9sTerminal.tsx`(xterm.js 터미널) + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
+- **목적 / UX**: 각 클러스터의 control-plane(master) 서버에 **SSH 로 접속해 서버에 내장된 `k9s` TUI 를 그대로 웹 터미널로 스트리밍**한다. 별도 재구현이 아니라 실제 k9s 를 브라우저에서 조작(파드/노드/디플로이 탐색, 로그, describe 등)한다.
+- **UI 구성**:
+  - `ClusterSidebar` — `iconOnly` 단일 선택. 클러스터를 고르면 `/k9s/:clusterId` 로 이동.
+  - **접속 폼**(연결 전): `타겟` MacCard(master 노드 후보 드롭다운 — etcdctl master-candidates 재사용 · 수동 host override · 사용자 · 포트), `인증·실행` MacCard(비밀번호/Private Key 토글 · 네임스페이스(선택) · `--readonly` 토글 · 연결 버튼).
+  - **터미널**(연결 후): `K9sTerminal` — xterm.js 풀스크린 TUI(재연결/전체화면/종료 헤더). WebSocket `onopen` 직후 SSH 자격증명을 **init 프레임**(JSON)으로 전달(비밀번호가 URL/로그에 남지 않도록), 이후 stdin/resize 프레임 전송.
+- **Frontend**: `useClusters`, `etcdctlApi.masters`(master 후보), `k8sStreamUrls.k9s(clusterId, token)`(WS URL). 자격증명은 서버에 저장하지 않고 세션에서만 사용.
+- **Backend**: 라우터 `backend/app/routers/k9s_ssh.py`(prefix `/k8s`) — WebSocket `GET /k8s/{cluster_id}/k9s`. 전역 `_auth` 미적용, 핸들러가 query token 을 직접 검증(admin/operator 만) 후 accept. init 프레임의 host/자격증명으로 `ssh_runner.connect_client` → paramiko `invoke_shell`(PTY) → `exec k9s [-n ns] [--readonly]` 실행, stdout/stdin/resize 브리지. 세션 open/close 감사 로그(`k9s.ssh.open`/`k9s.ssh.close`). `PEP_K9S_SSH_ENABLED=false` 로 비활성화. 명령은 서버가 검증된 조각(네임스페이스 정규식·화이트리스트 플래그)으로만 조립.
+- **핵심 기능**:
+  - control-plane 서버 내장 k9s 를 웹에서 실시간 조작(풀스크린 TUI, tty+resize).
+  - master 노드 후보 자동 조회 + 수동 host override, 비밀번호/Private Key 인증.
+  - 네임스페이스 지정·읽기 전용(`--readonly`) 옵션, 1시간 세션 상한.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 클러스터 추이 (`/cluster-trends`, `/cluster-trends/:clusterId`)
 
 - **파일**: `frontend/src/pages/ClusterTrendsPage.tsx` (+ `components/k8s/NodeMultiSelect.tsx`, `components/common/EmptyState.tsx`, Recharts `LineChart`).
