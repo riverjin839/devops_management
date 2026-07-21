@@ -11,6 +11,18 @@
 1.9.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ## [1.9.0] - 2026-07-21
+1.8.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.8.2] - 2026-07-21
+
+### Fixed
+- **모달 접근성 공통화 (DESIGN.md R-4 D-026)**: 재사용 훅 `useModalA11y`(Escape 닫기·포커스
+  트랩·열릴 때 초점 이동·닫힐 때 복원)를 신설하고, 앱 전역 확인 다이얼로그(`ConfirmDialog`)와
+  운영 점검 상세·일일 점검(스냅샷 주기/추적 항목) 모달에 적용 — 키보드로 모달을 닫을 수 없고
+  배경으로 포커스가 새어나가던 문제를 해소하고 `role="dialog"`/`aria-modal`/`aria-labelledby`
+  를 부여. 남은 자체 모달은 이 훅으로 점진 확산 예정.
+
+## [1.8.1] - 2026-07-21
 
 ### Added
 - **K8S 자원 관리 요약에 Pod 용량/상태 카드 추가 (카드별 개별 새로고침 지원)**: 클러스터
@@ -18,7 +30,9 @@
   비cordon 노드의 allocatable 남은 슬롯) / 전체 Pod 수 / 전체 할당 가능 Pod 수(노드
   `allocatable.pods` 합계), ② **POD 상태 카드** — Running/Pending/Error(CrashLoop
   BackOff 등 포함)/Failed/Succeeded/Unknown 종류별 수치를 상태 색 토큰으로 표시. 각
-  카드 헤더에 개별 새로고침 버튼을 둬 필요할 때만 재조회 가능.
+  카드 헤더에 개별 새로고침 버튼을 둬 필요할 때만 재조회 가능. `클러스터 요약`의
+  **파드 (활성)** 스탯도 `활성 / 전체 max-pods 합계`와 여유 스케줄 슬롯 수를 함께
+  표기하도록 보강.
   - Backend: `k8s_resources` 라우터에 `GET /k8s/{id}/pods-summary`(노드+파드 병렬
     조회, 용량·상태 버킷 집계) 추가.
   - Frontend: `K8sAllocationPage`에 `PodCapacityStatusCards`(+카드별 `CardHeader`
