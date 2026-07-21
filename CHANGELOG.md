@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.9.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.10.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.10.0] - 2026-07-21
 
 ### Added
 - **k9s 콘솔 (`/k9s`)**: 클러스터 control-plane 서버에 내장된 `k9s` TUI 를 SSH 로 실행해 브라우저 웹 터미널로 그대로 스트리밍하는 화면 추가. 좌측 클러스터 사이드바에서 클러스터를 고르고 master 노드·SSH 자격증명(비밀번호/Private Key)을 입력하면 xterm.js 로 실제 k9s 를 조작할 수 있다. 네임스페이스 지정·읽기 전용(`--readonly`) 옵션 지원. Backend: 신규 WebSocket 라우터 `k9s_ssh`(paramiko PTY `invoke_shell` 브리지, admin/operator 만 허용, 세션 감사 로그, `PEP_K9S_SSH_ENABLED` 로 비활성화, 명령은 검증된 조각으로만 조립). Frontend: `K9sPage` + `K9sTerminal` 컴포넌트, `k8sStreamUrls.k9s`.
