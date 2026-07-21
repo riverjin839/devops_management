@@ -943,6 +943,44 @@ export const nodeLabelsApi = {
     ),
 };
 
+// 노드 이미지 배포(prepull) — 특정 이미지를 배포되지 않은 다른 노드로 복제
+export interface NodeImageDistributeTarget {
+  host: string;
+  name?: string;
+  clusterId?: string;
+  clusterName?: string;
+}
+
+export interface NodeImageDistributeRequest {
+  image: string;
+  targets: NodeImageDistributeTarget[];
+  runtime: 'auto' | 'crictl' | 'nerdctl' | 'ctr';
+  namespace: string;
+  sudo: boolean;
+  username: string;
+  port: number;
+  password?: string;
+  privateKey?: string;
+  mode: 'sequential' | 'parallel';
+  parallelism: number;
+  connectTimeout: number;
+  execTimeout: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface NodeImageDistributeResponse {
+  image: string;
+  command: string;
+  mode: 'sequential' | 'parallel';
+  total: number;
+  okCount: number;
+  errorCount: number;
+  totalDurationMs: number;
+  // 결과 아이템은 bulk-exec 와 동일한 형태
+  results: BulkExecResultItem[];
+}
+
 export const nodeImagesApi = {
   getNodeImages: (clusterId: string) =>
     api.get(`/clusters/${clusterId}/node-images`),
@@ -950,6 +988,19 @@ export const nodeImagesApi = {
     api.get<Blob>(`/clusters/${clusterId}/node-images/export.csv?sort=${sort}`, {
       responseType: 'blob',
     }),
+  distribute: (clusterId: string, payload: NodeImageDistributeRequest, signal?: AbortSignal) => {
+    // 이미지 pull 은 노드당 수십초~수분 소요될 수 있어 타임아웃을 넉넉히 추정.
+    const n = payload.targets?.length ?? 0;
+    const chunk = payload.chunkSize ?? 10;
+    const perChunk = (payload.connectTimeout + payload.execTimeout) * 1000 + 500;
+    const estimate = Math.ceil(n / chunk) * perChunk + 10_000;
+    const timeout = Math.max(60_000, Math.min(estimate, 60 * 60_000)); // 1분~60분 범위
+    return api.post<NodeImageDistributeResponse>(
+      `/clusters/${clusterId}/node-images/distribute`,
+      payload,
+      { signal, timeout },
+    );
+  },
 };
 
 export const clusterTrendsApi = {

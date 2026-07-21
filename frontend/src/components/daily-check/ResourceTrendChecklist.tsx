@@ -147,7 +147,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
 
 // ── 동작 주기 설정 모달 (admin) ──────────────────────────────────────────────
 function ScheduleModal({ onClose }: { onClose: () => void }) {
-  const dialogRef = useModalA11y(true, onClose);
+  const dialogRef = useModalA11y(true, onClose, { historyClose: true });
   const [enabled, setEnabled] = useState(true);
   const [mode, setMode] = useState<'daily' | 'interval' | 'cron'>('daily');
   const [time, setTime] = useState('08:00');
@@ -229,7 +229,7 @@ const KIND_OPTIONS = [
 ];
 
 function ItemsModal({ clusterId, onClose }: { clusterId: string; onClose: () => void }) {
-  const dialogRef = useModalA11y(true, onClose);
+  const dialogRef = useModalA11y(true, onClose, { historyClose: true });
   const qc = useQueryClient();
   const { data, refetch } = useQuery({
     queryKey: ['metric-items', clusterId],

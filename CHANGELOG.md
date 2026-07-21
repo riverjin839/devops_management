@@ -15,11 +15,34 @@
 
 ### Fixed
 - **버전 필드 중복 해소**: 릴리스 병합 과정에서 `frontend/package.json` 과 `backend/app/main.py` 에 `version` 필드가 중복(1.9.0/1.8.2)으로 남아 백엔드가 `SyntaxError`(keyword argument repeated)로 기동 불가하던 문제 수정 — 최신 릴리스 값 1.9.0 으로 정리.
+- **K8S 노드 이미지 배포 (다른 노드로 prepull)**: 노드 이미지 화면에서 특정 노드가 가진
+  이미지를 골라, 아직 그 이미지가 없는 다른 노드로 배포하는 기능. `노드별(Table)` /
+  `이미지별` 뷰의 각 이미지 행에 **배포** 버튼이 생기고, 대상 클러스터(출처와 동일 또는
+  다른 클러스터)를 선택하면 노드 목록에 **보유/미보유** 배지가 표시되며 기본으로 미보유
+  노드가 선택된다. 실행하면 대상 노드에 SSH 접속 후 컨테이너 런타임(crictl/nerdctl/ctr,
+  auto 감지)으로 이미지를 레지스트리에서 pull 하고 노드별 결과(stdout/stderr/exit)를 표로
+  보여준다. 대용량 tar 전송 없이 병렬로 동작한다(대상 노드가 레지스트리에 도달 가능해야 함).
+  - Backend: `node_images` 라우터에 `POST /clusters/{id}/node-images/distribute` 추가 —
+    이미지 참조 정규식 검증(shell 인젝션 차단) 후 `ssh_runner.run_bulk` 로 pull 명령
+    일괄 실행, `require_operator` 권한 + 감사 로그(`node_image.distribute`). SSH 자격증명은
+    요청에만 존재하고 저장되지 않는다.
+  - Frontend: `ImageDistributeDialog`(대상 클러스터/노드 선택 · 보유 여부 배지 · 런타임/
+    sudo/자격증명 · 결과 표), `nodeImagesApi.distribute`.
 
 ## [1.9.0] - 2026-07-21
 1.8.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ## [1.8.2] - 2026-07-21
+
+### Added
+- **전역 뒤로가기 버튼 (DESIGN.md D-029)**: 사이드바 로고 아래에 어느 화면에서나 이전
+  화면으로 돌아가는 뒤로가기 버튼을 추가. 브라우저 히스토리 기반(`navigate(-1)`)으로
+  동작하고, 딥링크로 바로 진입해 히스토리가 없을 땐 홈으로 이동하며, 홈 화면에선 숨겨진다.
+  (그동안 앱이 사이드바 내비게이션만 있어 전역 뒤로가기 수단이 없던 문제 해소)
+- **뒤로가기로 모달 닫기 (D-029 후속)**: `useModalA11y` 에 `historyClose` 옵션을 추가해
+  브라우저/폰 뒤로가기 제스처가 열린 모달만 닫고 화면은 유지하도록 연동(운영 점검 상세,
+  일일 점검 스냅샷 주기/추적 항목 모달). React Router 히스토리와 협조하는 방식이라 전역
+  뒤로가기 버튼의 히스토리 추적과 충돌하지 않는다.
 
 ### Fixed
 - **모달 접근성 공통화 (DESIGN.md R-4 D-026)**: 재사용 훅 `useModalA11y`(Escape 닫기·포커스
