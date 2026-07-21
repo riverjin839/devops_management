@@ -7,6 +7,7 @@ import { RoleGate } from '@/components/auth/RoleGate';
 import { metricTrendApi } from '@/services/api';
 import type { MetricTrendRow, MetricChecklistItemT } from '@/types';
 import { parseUTC } from '@/lib/utils';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 function errMsg(e: unknown): string {
   const ax = e as AxiosError<{ detail?: string }>;
@@ -146,6 +147,7 @@ export function ResourceTrendChecklist({ clusterId }: { clusterId: string }) {
 
 // ── 동작 주기 설정 모달 (admin) ──────────────────────────────────────────────
 function ScheduleModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useModalA11y(true, onClose);
   const [enabled, setEnabled] = useState(true);
   const [mode, setMode] = useState<'daily' | 'interval' | 'cron'>('daily');
   const [time, setTime] = useState('08:00');
@@ -181,8 +183,8 @@ function ScheduleModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-card w-full max-w-md rounded-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-3 border-b border-border font-semibold text-sm">자동 스냅샷 동작 주기</div>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-schedule-title" className="bg-card w-full max-w-md rounded-2xl border border-border overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div id="trend-schedule-title" className="px-5 py-3 border-b border-border font-semibold text-sm">자동 스냅샷 동작 주기</div>
         <div className="p-4 space-y-4 text-sm">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="w-4 h-4 accent-primary" />
@@ -227,6 +229,7 @@ const KIND_OPTIONS = [
 ];
 
 function ItemsModal({ clusterId, onClose }: { clusterId: string; onClose: () => void }) {
+  const dialogRef = useModalA11y(true, onClose);
   const qc = useQueryClient();
   const { data, refetch } = useQuery({
     queryKey: ['metric-items', clusterId],
@@ -255,10 +258,10 @@ function ItemsModal({ clusterId, onClose }: { clusterId: string; onClose: () => 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-card w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-3 border-b border-border font-semibold text-sm">추적 항목 관리</div>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="trend-items-title" className="bg-card w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div id="trend-items-title" className="px-5 py-3 border-b border-border font-semibold text-sm">추적 항목 관리</div>
         <div className="p-4 space-y-3 overflow-auto">
-          {err && <div className="text-sm text-red-500">{err}</div>}
+          {err && <div className="text-sm text-status-critical">{err}</div>}
           <div className="flex items-end gap-2 flex-wrap">
             <label className="text-xs text-muted-foreground">키<input value={form.itemKey} onChange={(e) => setForm({ ...form, itemKey: e.target.value })} placeholder="예: pods" className="block rounded-lg border border-border bg-background px-2 py-1 text-sm w-28" /></label>
             <label className="text-xs text-muted-foreground">라벨<input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="예: Pods" className="block rounded-lg border border-border bg-background px-2 py-1 text-sm w-32" /></label>

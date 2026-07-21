@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Play, ClipboardCheck, Settings, Search, RefreshCw,
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { LogViewer } from '@/components/common/LogViewer';
-import { useToast, ConfirmDialog } from '@/components/common';
+import { useToast, ConfirmDialog, useModalA11y } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { useClusters } from '@/hooks/useCluster';
@@ -51,6 +51,8 @@ export function OpsCheckConsolePage() {
   const [detail, setDetail] = useState<OpsCheckRunItem | null>(null);
   // 운영 점검 실행은 모두 운영 위험 레벨 — 실행 전 대상/건수 확인 (D-014)
   const [confirmRun, setConfirmRun] = useState<OpsCheckCatalogItem[] | null>(null);
+  const closeDetail = useCallback(() => setDetail(null), []);
+  const detailRef = useModalA11y(!!detail, closeDetail);
 
   const { data: run } = useOpsRun(activeRunId ?? undefined);
   const isRunning = !!run && (run.status === 'pending' || run.status === 'running');
@@ -384,12 +386,19 @@ export function OpsCheckConsolePage() {
       {/* item detail modal */}
       {detail && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setDetail(null)}>
-          <div className="bg-card rounded-2xl border border-border w-full max-w-3xl max-h-[85vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={detailRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ops-detail-title"
+            className="bg-card rounded-2xl border border-border w-full max-w-3xl max-h-[85vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="sticky top-0 bg-card flex items-center gap-2 px-5 py-3 border-b border-border">
               {detail.status === 'done'
                 ? <StatusBadge variant={statusToVariant(detail.resultStatus)} />
                 : <StatusBadge variant="critical" label="실패" />}
-              <h2 className="font-semibold text-sm truncate">{detail.name || detail.checkType}</h2>
+              <h2 id="ops-detail-title" className="font-semibold text-sm truncate">{detail.name || detail.checkType}</h2>
               <span className="text-xs text-muted-foreground font-mono ml-1">{detail.durationMs}ms</span>
               <button onClick={() => setDetail(null)} className="ml-auto text-muted-foreground hover:text-foreground" aria-label="닫기">
                 <X className="w-4 h-4" />
