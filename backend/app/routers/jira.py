@@ -8,16 +8,19 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import logging
 import re
 from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
+from pathlib import Path
 from typing import Optional
 
 import openpyxl
 import xlrd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -32,6 +35,7 @@ from app.services.jira_service import (
     JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY,
     PEP_PRIORITY_TO_JIRA, strip_issue_key_prefix,
 )
+from app.services.jira_sso_http import form_sso_login
 from app.services.jira_sso_service import capture_sso_session
 from app.schemas.jira import (
     JiraConfig,
@@ -39,6 +43,7 @@ from app.schemas.jira import (
     JiraCredentialStatus,
     JiraCredentialUpdate,
     JiraTestResult,
+    JiraSsoLoginRequest,
     JiraSsoLoginResult,
     JiraImportRequest,
     JiraImportResult,
@@ -372,6 +377,7 @@ def get_credential(db: Session = Depends(get_db), actor: User = Depends(get_curr
         auth_type=(getattr(cred, "auth_type", None) or "pat"),
         jira_account=cred.jira_account,
         last_verified_at=cred.last_verified_at,
+        has_sso_login=bool(getattr(cred, "sso_login_encrypted", None)),
     )
 
 
@@ -385,8 +391,10 @@ def save_credential(
     if not token:
         raise HTTPException(status_code=422, detail="인증 값을 입력하세요 (PAT 또는 세션 쿠키).")
     auth_type = (payload.auth_type or "pat").strip().lower()
-    if auth_type not in ("pat", "cookie"):
-        raise HTTPException(status_code=422, detail="auth_type 은 'pat' 또는 'cookie' 여야 합니다.")
+    # 'sso' 는 로컬 도우미(jira_sso_helper.py)가 본인 PC 에서 캡처한 세션 쿠키를 등록하는 경로 —
+    # REST 처리(JiraService)는 cookie 와 동일하고, UI 배지만 SSO 로 구분 표시된다.
+    if auth_type not in ("pat", "cookie", "sso"):
+        raise HTTPException(status_code=422, detail="auth_type 은 'pat'/'cookie'/'sso' 여야 합니다.")
     enc = secret_box.encrypt(token)
     cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
     if cred:
@@ -440,23 +448,47 @@ async def test_connection(db: Session = Depends(get_db), actor: User = Depends(g
     return JiraTestResult(ok=False, detail=res.get("detail", "연결 실패"))
 
 
-# ── SSO 자동 로그인 (Playwright 로 세션 쿠키 자동 캡처) ─────────────────────────────
+# ── SSO 자동 로그인 ────────────────────────────────────────────────────────────
+# 두 가지 실행 모드:
+#  - ID/PW 폼 로그인 (기본, K8s 배포용) — 파드 안에서 httpx 로 SSO 리다이렉트 체인을 따라가
+#    폼을 제출하고 쿠키를 캡처한다. 브라우저 불필요 (jira_sso_http.form_sso_login).
+#    save_login 옵트인 시 로그인 정보를 암호화 저장해 원클릭 재로그인 지원.
+#  - Playwright 헤디드 로그인 (레거시) — 백엔드 호스트에 화면이 있는 소스 실행 배포 전용.
 @router.post("/sso/login", response_model=JiraSsoLoginResult)
-async def sso_login(db: Session = Depends(get_db), actor: User = Depends(get_current_user)):
-    """백엔드가 브라우저를 띄워 SSO 로그인을 대신 수행하고 세션 쿠키를 자동 저장한다.
-
-    PAT/쿠키 수동 입력을 없애기 위한 경로 — 사용자는 팝업된 브라우저에서 평소처럼 SSO
-    로그인만 하면 된다. 성공 시 캡처한 쿠키가 `auth_type='sso'` 로 저장돼 가져오기·되쓰기가
-    바로 동작한다. **백엔드 호스트에 표시 가능한 디스플레이가 필요**(헤드리스면 Xvfb 등).
-    """
+async def sso_login(
+    payload: Optional[JiraSsoLoginRequest] = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    """SSO 로그인을 서버가 대신 수행하고 세션 쿠키를 자동 저장한다 (docstring 위 주석 참고)."""
     cfg = _get_config(db)
     base_url = cfg.get("base_url", "")
     if not base_url:
         return JiraSsoLoginResult(ok=False, detail="관리자가 Jira URL 을 설정하지 않았습니다.")
     verify_tls = bool(cfg.get("verify_tls", True))
 
-    # 블로킹 Playwright 로그인(헤디드 브라우저 → 사용자가 SSO 완료할 때까지 대기)을 스레드에서 실행.
-    result = await asyncio.to_thread(capture_sso_session, base_url, verify_tls=verify_tls)
+    cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
+    sso_username: Optional[str] = None
+    sso_password: Optional[str] = None
+
+    if payload and payload.use_saved:
+        if not (cred and cred.sso_login_encrypted):
+            return JiraSsoLoginResult(ok=False, detail="저장된 SSO 로그인 정보가 없습니다. 아이디/비밀번호를 입력하세요.")
+        try:
+            saved = json.loads(secret_box.decrypt(cred.sso_login_encrypted))
+            sso_username, sso_password = saved.get("username"), saved.get("password")
+        except Exception:  # noqa: BLE001 - SECRET_KEY 교체 등으로 복호 실패
+            return JiraSsoLoginResult(ok=False, detail="저장된 로그인 정보를 복호화할 수 없습니다. 다시 입력해 저장하세요.")
+    elif payload and (payload.username or payload.password):
+        if not (payload.username and payload.password):
+            return JiraSsoLoginResult(ok=False, detail="SSO 아이디와 비밀번호를 모두 입력하세요.")
+        sso_username, sso_password = payload.username.strip(), payload.password
+
+    if sso_username and sso_password:
+        result = await form_sso_login(base_url, sso_username, sso_password, verify_tls=verify_tls)
+    else:
+        # 레거시 — 블로킹 Playwright 헤디드 로그인(사용자가 서버 브라우저에서 완료할 때까지 대기).
+        result = await asyncio.to_thread(capture_sso_session, base_url, verify_tls=verify_tls)
     if result.get("status") != "ok":
         return JiraSsoLoginResult(ok=False, detail=result.get("detail", "SSO 로그인 실패"))
 
@@ -475,7 +507,6 @@ async def sso_login(db: Session = Depends(get_db), actor: User = Depends(get_cur
     account = result.get("account") or verified.get("account")
     enc = secret_box.encrypt(cookie_header)
     now = datetime.utcnow()
-    cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
     if cred:
         cred.token_encrypted = enc
         cred.auth_type = "sso"
@@ -487,14 +518,38 @@ async def sso_login(db: Session = Depends(get_db), actor: User = Depends(get_cur
             jira_account=display or account, last_verified_at=now,
         )
         db.add(cred)
+    # 옵트인 — 로그인 정보 저장(원클릭 재로그인용). 저장 없이 성공한 로그인은 기존 값을 유지.
+    if payload and payload.save_login and sso_username and sso_password:
+        cred.sso_login_encrypted = secret_box.encrypt(
+            json.dumps({"username": sso_username, "password": sso_password})
+        )
     db.commit()
     audit_logger.record(
         db, action="work_item.jira_sso_login", actor=actor,
-        target_type="user_jira_credential", target_id=None, details={"account": account},
+        target_type="user_jira_credential", target_id=None,
+        details={"account": account, "method": "form" if sso_username else "browser"},
     )
     return JiraSsoLoginResult(
         ok=True, detail="SSO 로그인 완료 — 세션이 저장되었습니다.",
         jira_account=account, display_name=display,
+    )
+
+
+# 백엔드가 K8s/컨테이너 배포라 파드에서 브라우저를 못 띄우는 환경용 — 사용자가 본인 PC 에서
+# 실행해 SSO 세션을 캡처·등록하는 도우미 스크립트(이미지에 동봉)를 내려준다.
+_SSO_HELPER_PATH = Path(__file__).resolve().parent.parent / "resources" / "jira_sso_helper.py"
+
+
+@router.get("/sso/helper")
+def download_sso_helper(_: User = Depends(get_current_user)):
+    try:
+        content = _SSO_HELPER_PATH.read_text(encoding="utf-8")
+    except OSError:
+        raise HTTPException(status_code=404, detail="도우미 스크립트가 이 배포 이미지에 포함되지 않았습니다.")
+    return PlainTextResponse(
+        content,
+        media_type="text/x-python",
+        headers={"Content-Disposition": 'attachment; filename="jira_sso_helper.py"'},
     )
 
 

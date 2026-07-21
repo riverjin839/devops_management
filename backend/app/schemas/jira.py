@@ -33,6 +33,8 @@ class JiraCredentialStatus(BaseModel):
     auth_type: JiraAuthType = "pat"
     jira_account: Optional[str] = None
     last_verified_at: Optional[datetime] = None
+    # 파드 내 SSO 폼 자동 로그인용 로그인 정보가 저장돼 있는지 (원클릭 재로그인 가능 여부).
+    has_sso_login: bool = False
 
 
 class JiraCredentialUpdate(BaseModel):
@@ -46,6 +48,20 @@ class JiraTestResult(BaseModel):
     ok: bool
     detail: str = ""
     display_name: Optional[str] = None
+
+
+class JiraSsoLoginRequest(BaseModel):
+    """파드 내 SSO 폼 자동 로그인 요청.
+
+    - username+password 지정 → 파드에서 브라우저 없이 폼 로그인(httpx) 수행.
+      save_login=True 면 로그인 정보를 암호화 저장해 다음부터 원클릭 재로그인.
+    - use_saved=True → 저장된 로그인 정보로 재로그인 (입력 불필요).
+    - 아무것도 없으면 → 기존 서버측 Playwright 헤디드 로그인(화면 있는 배포 전용).
+    """
+    username: Optional[str] = None
+    password: Optional[str] = None
+    save_login: bool = False
+    use_saved: bool = False
 
 
 class JiraSsoLoginResult(BaseModel):

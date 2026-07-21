@@ -864,8 +864,12 @@ export const jiraApi = {
     api.put<import('@/types').JiraCredentialStatus>('/jira/credential', { token, authType, jiraAccount }),
   deleteCredential: () => api.delete('/jira/credential'),
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
-  // SSO 자동 로그인 — 백엔드가 브라우저를 띄워 로그인 완료를 기다리므로 타임아웃을 길게(4분).
-  ssoLogin: () => api.post<import('@/types').JiraSsoLoginResult>('/jira/sso/login', undefined, { timeout: 4 * 60_000 }),
+  // SSO 자동 로그인 — data 지정 시 파드 내 폼 로그인(ID/PW), 생략 시 서버측 브라우저(헤디드).
+  // 헤디드 경로는 사용자가 브라우저에서 로그인을 마칠 때까지 기다리므로 타임아웃을 길게(4분).
+  ssoLogin: (data?: import('@/types').JiraSsoLoginRequest) =>
+    api.post<import('@/types').JiraSsoLoginResult>('/jira/sso/login', data, { timeout: 4 * 60_000 }),
+  // K8s/컨테이너 배포용 로컬 SSO 도우미 스크립트 다운로드 (본인 PC 에서 실행).
+  downloadSsoHelper: () => api.get<Blob>('/jira/sso/helper', { responseType: 'blob' }),
   import: (data: import('@/types').JiraImportRequest) =>
     api.post<import('@/types').JiraImportResult>('/jira/import', data),
   importExcel: (file: File) => {

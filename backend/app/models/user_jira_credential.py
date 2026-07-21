@@ -34,6 +34,10 @@ class UserJiraCredential(Base):
     # 선택 — Jira 상 displayName/name (assignee 이름 매핑 보조용).
     jira_account = Column(String(150), nullable=True)
     last_verified_at = Column(DateTime, nullable=True)    # 마지막 연결 테스트 성공 시각
+    # (선택, 옵트인) 파드 내 SSO 폼 자동 로그인용 로그인 정보 — secret_box.encrypt(JSON
+    # {"username","password"}). 세션 만료 시 원클릭 재로그인에 쓰인다. 사용자가 "로그인
+    # 정보 저장"을 체크했을 때만 채워지며 API 응답으로는 존재 여부(has_sso_login)만 노출.
+    sso_login_encrypted = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -882,6 +882,8 @@ def _run_migrations():
     # user_jira_credentials: 인증 방식 컬럼 (PAT | 세션 쿠키). 구버전 DB 는 PAT 전용이라 기본 'pat'.
     if "user_jira_credentials" in inspector.get_table_names():
         _safe_add_column("user_jira_credentials", "auth_type", "VARCHAR(16) NOT NULL DEFAULT 'pat'")
+        # 파드 내 SSO 폼 자동 로그인용 저장 로그인 정보(옵트인, secret_box 암호문).
+        _safe_add_column("user_jira_credentials", "sso_login_encrypted", "TEXT")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():

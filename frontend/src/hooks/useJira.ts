@@ -52,7 +52,7 @@ export function useDeleteJiraCredential() {
 export function useJiraSsoLogin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => jiraApi.ssoLogin(),
+    mutationFn: (data?: import('@/types').JiraSsoLoginRequest) => jiraApi.ssoLogin(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.credential }),
   });
 }

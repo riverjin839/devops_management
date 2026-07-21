@@ -11,6 +11,33 @@
 1.7.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **Jira SSO 파드 내 자동 로그인 (브라우저 불필요) — K8s 배포에서도 원클릭**: 백엔드가
+  K8s/컨테이너로 배포되면 파드에 화면이 없어 서버측 Playwright SSO 로그인이 동작할 수
+  없던 문제를, **순수 ID/PW 폼 SSO(2차 인증 없음)** 에 한해 브라우저 없이 해결. 설정 ▸
+  Jira 연동에서 사내 SSO 아이디/비밀번호를 입력하면 서버(파드)가 httpx 로 SSO 리다이렉트
+  체인을 따라가 로그인 폼을 제출하고(Keycloak/CAS/ADFS forms·Jira 자체 login.jsp 대응),
+  SAML/OIDC auto-submit 폼도 자동 제출한 뒤 세션 쿠키를 캡처해 `auth_type='sso'` 로
+  저장한다 — **playwright·브라우저·이미지 변경 전혀 불필요**(기본 Alpine 이미지 그대로).
+  "로그인 정보 저장"(옵트인)을 체크하면 로그인 정보를 암호화 저장해 세션 만료 시
+  원클릭 재로그인이 된다. JS 필수 IdP·2차 인증 환경은 아래 로컬 도우미로 폴백.
+  - Backend: `services/jira_sso_http.py`(폼 파싱 + 리다이렉트 체인 로그인, 전 예외
+    fail-safe), `POST /jira/sso/login` 이 username/password·use_saved·save_login 지원,
+    `UserJiraCredential.sso_login_encrypted` 컬럼(암호화, 백업 export 마스킹 대상) +
+    마이그레이션, `GET /jira/credential` 에 `has_sso_login` 노출.
+  - Frontend: `JiraIntegrationPanel` SSO 블록을 아이디/비밀번호 입력 + 저장 체크박스 +
+    (저장 시) 원클릭 재로그인 버튼 중심으로 개편.
+- **Jira SSO 로컬 로그인 도우미 (JS 기반 SSO·2차 인증 폴백)**: 파드 내 폼 로그인이
+  통하지 않는 환경(JS 필수 IdP 등)을 위해, 참고 프로젝트(lake-task-manager)의 "사용자
+  PC 에서 브라우저 실행" 패턴을 도우미 스크립트로 제공. 설정 ▸ Jira 연동에서
+  `jira_sso_helper.py` 를 내려받아 본인 PC 에서 실행하면 — PEP 로그인 → 로컬 Chromium
+  창에서 SSO 로그인 → 완료 자동 감지(`/rest/api/2/myself` 폴링) → 캡처한 세션 쿠키를
+  PEP 자격증명 API 로 자동 등록 + 연결 테스트까지 진행된다. 표준 라이브러리 +
+  playwright 만 사용.
+  - Backend: `app/resources/jira_sso_helper.py`(도우미 스크립트, 이미지 동봉),
+    `GET /jira/sso/helper`(다운로드), `PUT /jira/credential` 이 `auth_type='sso'` 허용.
+  - Frontend: `JiraIntegrationPanel` 의 접이식 폴백 섹션에 도우미 다운로드 + 실행명령
+    복사 + 안내, 화면 있는 소스 실행 배포용 서버측 브라우저 버튼 포함.
+
 - **개성있는 웹폰트 옵션 (Outfit / Geist)**: 설정 → 화면 UI 설정 → 페이지별 화면 스타일에서
   폰트로 `Outfit`/`Geist` 를 선택할 수 있다. 두 폰트 모두 `@fontsource-variable/*` 로
   빌드 산출물에 직접 번들되어 CDN 요청 없이 동작(폐쇄망 배포 안전). 라틴 문자만
