@@ -186,15 +186,17 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: 노드/네임스페이스/워크로드별 request 대비 실사용량(slack)을 진단해 과할당(낭비) · 과사용(위험) 파드를 찾는 용량 계획 화면. "얼마나 더 스케줄할 수 있는가", "어디서 자원이 낭비되고 있는가"를 시각화.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택.
-  - `클러스터 요약` MacCard — 노드/NS/Pod 수, CPU/MEM 할당효율·사용효율 스탯(툴팁 설명 포함), `PodScheduleCalc`(CPU/MEM 입력 → 스케줄 가능 Pod 수 계산기), 할당 가용/추정 낭비 라인.
+  - `클러스터 요약` MacCard — 노드/NS/Pod 수, CPU/MEM 할당효율·사용효율 스탯(물음표 툴팁 — 상단에 "관점" 한 줄 안내: 할당효율은 쿠버네티스 스케줄러 기준, 사용효율은 노드 실사용 기준), `PodScheduleCalc`(CPU/MEM 입력 → 스케줄 가능 Pod 수 계산기), 할당 가용/추정 낭비 라인.
+  - `PodCapacityStatusCards` — `클러스터 요약` 바로 아래 2-카드 행: **POD 용량**(스케줄 가능 Pod/전체 Pod/전체 할당 가능 Pod, 크기 무관 슬롯 기준) · **POD 상태**(running/pending/error/failed/succeeded/unknown 종류별 수치). 카드 헤더의 새로고침 버튼으로 카드별 즉시 재조회.
   - 3-탭 전환(`view`): `NodesView`(카드/테이블 뷰 토글, 정렬·검색·CSV 내보내기), `NamespacesView`(네임스페이스 → 워크로드 → 파드 드릴다운), `NsRankingView`(req vs 실사용 막대 랭킹 차트).
   - 자동갱신 셀렉트(끔/15초~5분), `ExportMenu`(화면 캡처/내보내기), 누적 집계 진행률 `SnapshotProgressBar`/`SnapshotProgressCard`(computing 상태 폴링).
-- **Frontend**: `useAllocNodes`/`useAllocNamespaces`/`useAllocWorkloads`/`useAllocPods`/`useRefreshAllocNode`/`useRefreshAllocNamespace`/`useForceAllocRefresh` (`hooks/useK8sAllocation.ts`, `HOLD_OPTS`로 자동 재페치 억제 + computing 시 1.5s 폴링). api.ts: `k8sAllocationApi.{nodes,node,namespaces,namespace,workloads,pods}`.
-- **Backend**: 라우터 `backend/app/routers/k8s_allocation.py`(prefix `/k8s`) — `GET /k8s/{id}/allocation/nodes`, `GET .../nodes/{node}`, `GET /k8s/{id}/allocation/namespaces`, `GET .../namespaces/{ns}`, `GET .../namespaces/{ns}/workloads`, `GET .../workloads/{kind}/{name}/pods`. `refresh=true` 쿼리로 강제 재집계, 미완료 시 `status: "computing"` + `processed/total/progress` 로 부분 결과 스트리밍(폴링 기반).
+- **Frontend**: `useAllocNodes`/`useAllocNamespaces`/`useAllocWorkloads`/`useAllocPods`/`useRefreshAllocNode`/`useRefreshAllocNamespace`/`useForceAllocRefresh`/`usePodsSummary` (`hooks/useK8sAllocation.ts`, `HOLD_OPTS`로 자동 재페치 억제 + computing 시 1.5s 폴링; `usePodsSummary` 는 `staleTime` 30s 의 일반 쿼리). api.ts: `k8sAllocationApi.{nodes,node,namespaces,namespace,workloads,pods}`, `k8sResourcesApi.podsSummary`.
+- **Backend**: 라우터 `backend/app/routers/k8s_allocation.py`(prefix `/k8s`) — `GET /k8s/{id}/allocation/nodes`, `GET .../nodes/{node}`, `GET /k8s/{id}/allocation/namespaces`, `GET .../namespaces/{ns}`, `GET .../namespaces/{ns}/workloads`, `GET .../workloads/{kind}/{name}/pods`. `refresh=true` 쿼리로 강제 재집계, 미완료 시 `status: "computing"` + `processed/total/progress` 로 부분 결과 스트리밍(폴링 기반). Pod 용량/상태 카드는 `backend/app/routers/k8s_resources.py` 의 `GET /k8s/{id}/pods-summary`(노드+파드 병렬 조회, allocation 라우터와 별도 — 컨테이너 상태 기반 error 분류 포함) 사용.
 - **핵심 기능**:
   - 노드별 allocatable vs request vs 실사용(메트릭 서버 있으면) 게이지/미터 바.
   - 클러스터 CPU/MEM 할당효율·사용효율 계산 및 경고 임계치(30%/50%/90%/105%).
-  - "얼마나 더 스케줄 가능한가" 계산기(노드별 CPU/MEM/max-pods 제약 반영).
+  - "얼마나 더 스케줄 가능한가" 계산기(노드별 CPU/MEM/max-pods 제약 반영) + 크기 무관 스케줄 가능/전체/할당 가능 Pod 수 카드.
+  - Pod 상태별(running/pending/error 등) 카운트 카드 — 카드별 개별 새로고침.
   - 네임스페이스별 비효율(req−use) 랭킹 차트, 네임스페이스→워크로드→파드 드릴다운.
   - 개별 노드/네임스페이스 단위 즉시 재계산, CSV 내보내기, 화면 캡처 내보내기.
 - **요청사항 (수정 요청)**:

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 
-import { k8sAllocationApi } from '@/services/api';
+import { k8sAllocationApi, k8sResourcesApi } from '@/services/api';
 import type { AllocNodeRow, AllocNodesResponse, AllocNamespaceRow, AllocNamespacesResponse } from '@/types';
 
 // 집계 중(status==='computing')에만 1.5s 폴링(누적 진행 표시). 그 외엔 멈춤 —
@@ -93,6 +93,17 @@ export function useAllocWorkloads(clusterId: string, namespace: string, enabled:
     queryKey: ['alloc-workloads', clusterId, namespace],
     queryFn: async () => (await k8sAllocationApi.workloads(clusterId, namespace)).data,
     enabled: !!clusterId && !!namespace && enabled,
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
+/** Pod 용량(스케줄 가능/전체/할당가능)·상태별(running/pending/error 등) 수 — pods-summary. */
+export function usePodsSummary(clusterId: string) {
+  return useQuery({
+    queryKey: ['alloc-pods-summary', clusterId],
+    queryFn: async () => (await k8sResourcesApi.podsSummary(clusterId)).data,
+    enabled: !!clusterId,
     staleTime: 30_000,
     retry: 1,
   });

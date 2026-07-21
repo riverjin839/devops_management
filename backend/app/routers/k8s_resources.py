@@ -1709,6 +1709,92 @@ def list_pods_rich(cluster_id: UUID, namespace: Optional[str] = None, db: Sessio
     return {"count": len(rows), "truncated": truncated, "items": rows, "metrics_available": bool(usage)}
 
 
+# ── Pods 요약 — 개요 패널 카드용 (용량/상태별 카운트) ─────────────────────────
+_TERMINAL_PHASES = ("Succeeded", "Failed")
+
+
+def _classify_pod_status(p) -> str:
+    """파드 1개 → 상태 버킷. running/pending/error/succeeded/failed/unknown 중 하나."""
+    st = p.status
+    phase = (st.phase if st else None) or "Unknown"
+    if phase in _TERMINAL_PHASES:
+        return phase.lower()
+    cells = [_container_cell(cs) for cs in ((st.container_statuses or []) if st else [])]
+    if _pod_status_color(phase, cells) == "red":
+        return "error"  # CrashLoopBackOff/ImagePull 등 — phase 는 Running/Pending 이어도 오류로 집계
+    if phase in ("Running", "Pending"):
+        return phase.lower()
+    return "unknown"
+
+
+@router.get("/{cluster_id}/pods-summary")
+def pods_summary(cluster_id: UUID, db: Session = Depends(get_db)):
+    """개요 카드용 파드 요약.
+
+    - capacity: 노드 allocatable.pods 합계(전체/스케줄 가능 노드) 및 남은 스케줄 슬롯
+      (스케줄 가능 노드 용량 − 해당 노드의 비종료 파드 수).
+    - status_counts: 파드별 단일 버킷 카운트 (running/pending/error/succeeded/failed/unknown).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+    v1 = k8s_client.CoreV1Api(client)
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_nodes = ex.submit(lambda: v1.list_node(_request_timeout=30))
+        f_pods = ex.submit(lambda: v1.list_pod_for_all_namespaces(_request_timeout=60))
+        try:
+            nodes = f_nodes.result()
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"노드 조회 실패: {str(e)[:200]}")
+        try:
+            pods = f_pods.result()
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}")
+
+    # 노드 용량 (allocatable.pods)
+    allocatable_total = 0
+    schedulable_allocatable = 0
+    schedulable_nodes: set[str] = set()
+    nodes_total = 0
+    for n in (nodes.items or []):
+        nodes_total += 1
+        try:
+            alloc = int((n.status.allocatable or {}).get("pods", 0)) if n.status else 0
+        except (ValueError, TypeError):
+            alloc = 0
+        allocatable_total += alloc
+        ready = any(c.type == "Ready" and c.status == "True" for c in ((n.status.conditions or []) if n.status else []))
+        unschedulable = bool(n.spec.unschedulable) if n.spec else False
+        if ready and not unschedulable:
+            schedulable_nodes.add(n.metadata.name)
+            schedulable_allocatable += alloc
+
+    # 파드 상태 카운트 + 스케줄 가능 노드 점유 슬롯
+    status_counts = {"running": 0, "pending": 0, "error": 0, "succeeded": 0, "failed": 0, "unknown": 0}
+    occupied_on_schedulable = 0
+    for p in (pods.items or []):
+        status_counts[_classify_pod_status(p)] += 1
+        phase = (p.status.phase if p.status else None) or ""
+        node_name = p.spec.node_name if p.spec else None
+        if phase not in _TERMINAL_PHASES and node_name in schedulable_nodes:
+            occupied_on_schedulable += 1
+
+    total_pods = len(pods.items or [])
+    return {
+        "total_pods": total_pods,
+        "status_counts": status_counts,
+        "capacity": {
+            "allocatable_pods": allocatable_total,
+            "schedulable_allocatable_pods": schedulable_allocatable,
+            "schedulable_free_slots": max(0, schedulable_allocatable - occupied_on_schedulable),
+            "nodes_total": nodes_total,
+            "nodes_schedulable": len(schedulable_nodes),
+        },
+    }
+
+
 # ── 종류 가용성 — 클러스터에 실제 존재(≥1)/지원하는 종류만 UI 노출용 ───────────
 @router.get("/{cluster_id}/kind-availability")
 def kind_availability(cluster_id: UUID, db: Session = Depends(get_db)):

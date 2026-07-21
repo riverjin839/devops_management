@@ -3079,6 +3079,20 @@ export interface K8sPodsResponse {
   metricsAvailable?: boolean;
 }
 
+// Pods 요약 (K8s 상세 관리 개요 카드 — 용량/상태별 카운트)
+export interface K8sPodsSummaryCapacity {
+  allocatablePods: number;            // 전체 노드 allocatable.pods 합계
+  schedulableAllocatablePods: number; // Ready & !unschedulable 노드 합계
+  schedulableFreeSlots: number;       // 스케줄 가능 노드의 남은 슬롯
+  nodesTotal: number;
+  nodesSchedulable: number;
+}
+export interface K8sPodsSummaryResponse {
+  totalPods: number;
+  statusCounts: Record<string, number>; // running/pending/error/succeeded/failed/unknown
+  capacity: K8sPodsSummaryCapacity;
+}
+
 // 파드 컨테이너 목록 (로그/터미널 셀렉터)
 export interface K8sPodContainerInfo {
   name: string;
