@@ -112,7 +112,7 @@ devops_management/
 │   │   │   #    app_setting, audit_log
 │   │   ├── routers/             # APIRouter 62개 — 모델과 같은 도메인 그룹 + auth, health,
 │   │   │   #  history, backup, notifications, release_notes, ui_settings,
-│   │   │   #  terminal_appearance, k8s_resources/k8s_allocation/k8s_helm/k8s_exec,
+│   │   │   #  terminal_appearance, k8s_resources/k8s_allocation/k8s_helm/k8s_exec/k9s_ssh,
 │   │   │   #  cilium_trace/topology_trace, bottleneck, etcdctl, mc_client, bulk_exec,
 │   │   │   #  commands, analyze, versions, jira, voc, promql, agent ...
 │   │   ├── schemas/             # Pydantic 스키마
@@ -614,7 +614,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 **API 는 ~60개 라우터가 `/api/v1` 아래에 마운트된다** — 아래 상세 표는 원조 코어 4개 그룹의
 대표 예시일 뿐 전체가 아니다. 전체 목록은 `backend/app/routers/__init__.py`, 라이브 스펙은
 `/docs`(Swagger) 를 본다. 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, 예외
-(비인증 마운트)는 `auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k8s_events_ingest` 다.
+(비인증 마운트)는 `auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest` 다
+(`k8s_exec`/`k9s_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증).
 
 **라우터 그룹 인덱스** (한 줄 요약):
 
@@ -622,7 +623,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup` |
 | 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |

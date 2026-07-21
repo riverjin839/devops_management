@@ -93,6 +93,16 @@ def _build_client(tgt: SSHTarget, connect_timeout: int) -> paramiko.SSHClient:
     return client
 
 
+def connect_client(tgt: SSHTarget, connect_timeout: int = 8) -> paramiko.SSHClient:
+    """연결된 paramiko SSHClient 를 반환 (TOFU host-key 정책 적용).
+
+    인터랙티브 PTY 세션(예: k9s TUI 스트리밍)처럼 `run_bulk`/`_exec_ssh` 의
+    read-to-completion 모델로는 다룰 수 없는 호출자를 위한 공개 진입점.
+    호출자가 반환된 client 로 `invoke_shell()` 등을 직접 열고, 사용 후 close 책임을 진다.
+    """
+    return _build_client(tgt, connect_timeout)
+
+
 def test_connection(tgt: SSHTarget, connect_timeout: int = 8) -> SSHResult:
     """자격증명/연결성만 검증. 명령은 실행하지 않고 연결 직후 닫는다.
 

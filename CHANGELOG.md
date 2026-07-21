@@ -11,6 +11,10 @@
 1.9.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **k9s 콘솔 (`/k9s`)**: 클러스터 control-plane 서버에 내장된 `k9s` TUI 를 SSH 로 실행해 브라우저 웹 터미널로 그대로 스트리밍하는 화면 추가. 좌측 클러스터 사이드바에서 클러스터를 고르고 master 노드·SSH 자격증명(비밀번호/Private Key)을 입력하면 xterm.js 로 실제 k9s 를 조작할 수 있다. 네임스페이스 지정·읽기 전용(`--readonly`) 옵션 지원. Backend: 신규 WebSocket 라우터 `k9s_ssh`(paramiko PTY `invoke_shell` 브리지, admin/operator 만 허용, 세션 감사 로그, `PEP_K9S_SSH_ENABLED` 로 비활성화, 명령은 검증된 조각으로만 조립). Frontend: `K9sPage` + `K9sTerminal` 컴포넌트, `k8sStreamUrls.k9s`.
+
+### Fixed
+- **버전 필드 중복 해소**: 릴리스 병합 과정에서 `frontend/package.json` 과 `backend/app/main.py` 에 `version` 필드가 중복(1.9.0/1.8.2)으로 남아 백엔드가 `SyntaxError`(keyword argument repeated)로 기동 불가하던 문제 수정 — 최신 릴리스 값 1.9.0 으로 정리.
 - **K8S 노드 이미지 배포 (다른 노드로 prepull)**: 노드 이미지 화면에서 특정 노드가 가진
   이미지를 골라, 아직 그 이미지가 없는 다른 노드로 배포하는 기능. `노드별(Table)` /
   `이미지별` 뷰의 각 이미지 행에 **배포** 버튼이 생기고, 대상 클러스터(출처와 동일 또는
