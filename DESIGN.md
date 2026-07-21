@@ -95,6 +95,7 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | D-026 | 접근성/일관성 | 자체 모달 raw `fixed inset-0`+`bg-black/40`+`rounded-2xl` (25파일/67곳) — Escape/포커스트랩/aria 부재, 테마 미적용 | 키보드로 모달 열고닫기 불가, 배경 포커스 누수 | 중간 | 부분완료 | **재사용 접근성 훅 `useModalA11y`(Escape·포커스 트랩·초점 이동/복원) 신설** + 공용 `ConfirmDialog`(앱 전역 확인 다이얼로그) 에 적용(role=dialog·aria-modal·aria-labelledby, main 과 독립 토큰화 병합)·운영점검 상세·일일점검 Schedule/Items 모달에 적용. **나머지 raw 모달 22곳은 훅으로 점진 확산 — 다음 라운드** |
 | D-027 | 로딩 상태 | 로딩이 "불러오는 중…" 텍스트뿐 — K8sManage 전 패널·DailyCheckReview 섹션. skeleton 부재로 레이아웃 점프 | 로딩→로드 시 시프트, 상태 인지 지연 | 낮음 | 대기 | 공용 Skeleton 로 헤더/행 자리표시 |
 | D-028 | 잔여(낮음) | LAKE 인라인 style 그리드(136/158)·`hover:shadow-md`(22)·버튼 `rounded-lg`(222/231), DailyCheckReview 새로고침/삭제 aria-label 누락·`checkedAt` 툴팁 UTC 원본(129), K8sAllocation hover 전용 툴팁 키보드/터치 미접근(549/582) | 소소한 정합/접근성 이탈 | 낮음 | 부분완료 | LAKE 인라인 grid/shadow/rounded·일일점검 aria-label/KST 툴팁 완료(`242583e`·`680ed2b`). **K8sAllocation hover 툴팁 키보드화는 미처리 — 다음 라운드** |
+| D-029 | 내비게이션 | **전역 뒤로가기 버튼 부재** — 앱 셸이 사이드바만 있고 공통 헤더/뒤로가기 없음. 상세·폼의 "목록으로"는 고정 경로라 진짜 back 아님, 모달은 브라우저 히스토리 미연동 | 사용자가 이전 화면으로 돌아갈 전역 수단이 없음 (AI 생성 SPA 흔한 취약) | 중간 | 부분완료 | 사이드바 로고 하단에 전역 뒤로가기 버튼 추가 — `navigate(-1)`(history.state.idx>0), 딥링크 진입 시 홈 fallback, 홈에선 숨김. **후속: 모달/드로어를 브라우저 히스토리에 연동(뒤로가기로 모달만 닫기), 목록 필터/탭 URL 저장** |
 
 ---
 
@@ -120,3 +121,4 @@ _최근 감사일: **2026-07-19** (1회차 — `frontend/src` 전수 grep 집계
 | 2026-07-20 | D-014 처리 (사용자 결정: 모든 실행 = 운영 위험) | 0 | 1 | ux-ui-designer | 운영 점검 개별·선택 실행에 ConfirmDialog(danger, 대상·건수·소스 요약) 게이팅. lint/tsc/build 통과 |
 | 2026-07-20 | R-4 2차 라운드 — 화면 정성 리뷰 4화면 + 처리 (D-020~D-028) | 9 | 6 | ux-ui-designer | K8s상세관리·K8s자원관리·일일점검·LAKE 리뷰로 발견 9항목 등재. **완료** D-020(상태색 토큰 4화면)·D-021(에러상태)·D-022(위험동작 ConfirmDialog)·D-024(색 단독). **부분** D-023·D-025·D-028. **보류** D-026(모달→Dialog)·D-027(skeleton). git 금지 조건으로 파일 소유 분리 병렬 처리 → 1차 stash 충돌 재발 없음. lint/tsc/build 통과 |
 | 2026-07-20 | 잔여 중요항목 처리 — D-026 모달 접근성 | 0 | 0.5 | ux-ui-designer | 재사용 훅 `useModalA11y`(Escape·포커스 트랩·초점 복원) 신설 후 앱 전역 `ConfirmDialog`+운영점검 상세·일일점검 Schedule/Items 모달에 적용(role/aria-modal/aria-labelledby). PR #491 머지로 브랜치를 최신 main(v1.8.1) 재시작 후 재적용 — main 이 독립적으로 진행한 ConfirmDialog 토큰화와 충돌 1건(danger 색)은 main 선택(status-critical)으로 통일. 나머지 raw 모달 22곳은 점진 확산. lint/tsc/build 통과 |
+| 2026-07-21 | 사용자 제보 — 전역 뒤로가기 부재 (D-029) | 1 | 0.5 | ux-ui-designer | 진단: 모달 히스토리 미연동(popstate 0건)·back 버튼 36개 중 navigate(-1) 2개·필터 URL 저장 10/63페이지. 1차 처리: 사이드바에 전역 뒤로가기 버튼 추가(history.state.idx 기반, 홈 fallback). 모달-히스토리 연동은 후속. lint/tsc/build 통과 |
