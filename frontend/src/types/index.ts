@@ -521,6 +521,16 @@ export interface JiraCredentialStatus {
   authType: JiraAuthType;
   jiraAccount?: string | null;
   lastVerifiedAt?: string | null;
+  /** 파드 내 SSO 폼 자동 로그인용 로그인 정보 저장 여부 (원클릭 재로그인 가능). */
+  hasSsoLogin?: boolean;
+}
+
+/** 파드 내 SSO 폼 자동 로그인 요청 — 생략 시 서버측 브라우저(헤디드) 경로. */
+export interface JiraSsoLoginRequest {
+  username?: string;
+  password?: string;
+  saveLogin?: boolean;
+  useSaved?: boolean;
 }
 
 export interface JiraTestResult {
