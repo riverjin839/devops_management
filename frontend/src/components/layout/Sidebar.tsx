@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
-  Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
+  Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
   KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
@@ -194,6 +194,15 @@ export function Sidebar() {
   const homeTooltip = location.pathname === '/'
     ? (mode === 'work' ? '업무 현황 (클릭 시 플랫폼 현황)' : '플랫폼 현황 (클릭 시 업무 현황)')
     : (mode === 'work' ? '업무 현황 홈으로' : '플랫폼 현황 홈으로');
+
+  // 전역 뒤로가기 — 브라우저 히스토리 기반(navigate(-1)). React Router 가 history.state.idx 를
+  // 기록하므로 idx>0 이면 실제 이전 화면으로, 딥링크로 바로 진입(idx=0)했으면 홈으로 fallback.
+  const historyIdx = (window.history.state?.idx as number | undefined) ?? 0;
+  const canGoBack = historyIdx > 0;
+  const handleBack = () => {
+    if (canGoBack) navigate(-1);
+    else navigate('/');
+  };
 
   // 홈 버튼 아이콘 — 홈은 2개(업무현황=메인 홈 / 플랫폼현황)뿐이다. 어느 화면이든 현재 모드를
   // 모양으로 구분(업무=ListTodo, 플랫폼=ServerCog). Settings(홈 화면 설정)에서 모드별 커스텀 가능.
@@ -393,6 +402,21 @@ export function Sidebar() {
             {renderHomeButtonIcon()}
           </button>
         </div>
+
+        {/* 전역 뒤로가기 — 홈이 아닐 때만 노출. 어느 화면에서든 이전 화면으로 돌아간다. */}
+        {location.pathname !== '/' && (
+          <div className="flex items-center justify-center py-2 border-b border-border flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleBack}
+              title={canGoBack ? '뒤로 (이전 화면)' : '홈으로'}
+              aria-label={canGoBack ? '이전 화면으로 뒤로 가기' : '홈으로'}
+              className="w-9 h-9 rounded-md flex items-center justify-center text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* 그룹 아이콘 레일 — 현재 모드에 맞는 그룹만 표시 */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
