@@ -10,6 +10,21 @@
 
 1.9.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8S 노드 이미지 배포 (다른 노드로 prepull)**: 노드 이미지 화면에서 특정 노드가 가진
+  이미지를 골라, 아직 그 이미지가 없는 다른 노드로 배포하는 기능. `노드별(Table)` /
+  `이미지별` 뷰의 각 이미지 행에 **배포** 버튼이 생기고, 대상 클러스터(출처와 동일 또는
+  다른 클러스터)를 선택하면 노드 목록에 **보유/미보유** 배지가 표시되며 기본으로 미보유
+  노드가 선택된다. 실행하면 대상 노드에 SSH 접속 후 컨테이너 런타임(crictl/nerdctl/ctr,
+  auto 감지)으로 이미지를 레지스트리에서 pull 하고 노드별 결과(stdout/stderr/exit)를 표로
+  보여준다. 대용량 tar 전송 없이 병렬로 동작한다(대상 노드가 레지스트리에 도달 가능해야 함).
+  - Backend: `node_images` 라우터에 `POST /clusters/{id}/node-images/distribute` 추가 —
+    이미지 참조 정규식 검증(shell 인젝션 차단) 후 `ssh_runner.run_bulk` 로 pull 명령
+    일괄 실행, `require_operator` 권한 + 감사 로그(`node_image.distribute`). SSH 자격증명은
+    요청에만 존재하고 저장되지 않는다.
+  - Frontend: `ImageDistributeDialog`(대상 클러스터/노드 선택 · 보유 여부 배지 · 런타임/
+    sudo/자격증명 · 결과 표), `nodeImagesApi.distribute`.
+
 ## [1.9.0] - 2026-07-21
 1.8.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
