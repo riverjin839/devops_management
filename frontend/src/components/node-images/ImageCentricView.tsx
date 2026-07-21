@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Layers, Server } from 'lucide-react';
+import { ArrowDown, ArrowUp, Layers, Server, Send } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
 import { formatBytes, pickPrimaryName } from './utils';
 import { DoubleScrollX } from '@/components/common';
@@ -7,6 +7,8 @@ import { DoubleScrollX } from '@/components/common';
 interface Props {
   nodes: NodeImagesInfo[];
   searchQuery: string;
+  /** 이미지 배포(다른 노드로 prepull) 트리거 — 있으면 각 이미지 행에 배포 버튼 노출 */
+  onDistribute?: (image: string) => void;
 }
 
 interface ImageRow {
@@ -51,7 +53,7 @@ function aggregate(nodes: NodeImagesInfo[]): ImageRow[] {
   return Array.from(map.values());
 }
 
-export function ImageCentricView({ nodes, searchQuery }: Props) {
+export function ImageCentricView({ nodes, searchQuery, onDistribute }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('nodes');
   const [sortDesc, setSortDesc] = useState(true);
 
@@ -120,6 +122,7 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
               <th className="text-right px-4 py-3 font-medium text-muted-foreground w-32">
                 <SortHeader label="Size" align="right" active={sortKey === 'size'} onClick={() => setSort('size')} icon={sortIcon('size')} />
               </th>
+              {onDistribute && <th className="text-right px-4 py-3 font-medium text-muted-foreground w-24">배포</th>}
             </tr>
           </thead>
           <tbody>
@@ -173,6 +176,19 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums align-top">{formatBytes(r.sizeBytes)}</td>
+                  {onDistribute && (
+                    <td className="px-4 py-3 text-right align-top">
+                      <button
+                        type="button"
+                        onClick={() => onDistribute(r.primary)}
+                        title={`${r.primary} 를 다른 노드로 배포`}
+                        aria-label={`${r.primary} 를 다른 노드로 배포`}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-secondary hover:bg-primary/10 hover:text-primary text-muted-foreground transition-colors"
+                      >
+                        <Send className="w-3 h-3" /> 배포
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}

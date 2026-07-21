@@ -411,17 +411,19 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### K8S 노드 이미지 (`/node-images`)
 
-- **파일**: `frontend/src/pages/NodeImagesPage.tsx` (+ `components/node-images/NodeImagesTable.tsx`, `NodeLabelGroupView.tsx`, `ImageCentricView.tsx`, `NodeImagesCsvExportMenu.tsx`, `components/common/SnapshotProgressCard`)
-- **목적 / UX**: 선택한 클러스터의 모든 노드에 캐시된 컨테이너 이미지를 노드별/라벨그룹별/이미지별 3가지 시각으로 확인해, 불필요한 이미지·중복 적재·용량을 파악한다.
+- **파일**: `frontend/src/pages/NodeImagesPage.tsx` (+ `components/node-images/NodeImagesTable.tsx`, `NodeLabelGroupView.tsx`, `ImageCentricView.tsx`, `NodeImagesCsvExportMenu.tsx`, `ImageDistributeDialog.tsx`, `components/common/SnapshotProgressCard`)
+- **목적 / UX**: 선택한 클러스터의 모든 노드에 캐시된 컨테이너 이미지를 노드별/라벨그룹별/이미지별 3가지 시각으로 확인해, 불필요한 이미지·중복 적재·용량을 파악한다. 또한 특정 노드의 이미지를 아직 없는 다른 노드(동일/타 클러스터)로 배포(prepull)할 수 있다.
 - **UI 구성**:
   - `ClusterSidebar` — 단일 선택(`iconOnly`, `allowAll` 없음)
   - 통계 요약 타일 4개(노드 수/총 이미지 슬롯/고유 이미지/총 용량)
   - 검색창 + 탭(`노드별(Table)` / `라벨 그룹(Card)` / `이미지별`)
+  - 각 이미지 행의 **배포** 버튼 → `ImageDistributeDialog`(대상 클러스터/노드 선택 · 보유/미보유 배지 · 런타임/sudo/SSH 자격증명 · 노드별 결과 표)
   - 백그라운드 집계 중이면 `SnapshotProgressCard` 진행률 표시, CSV 내보내기(`NodeImagesCsvExportMenu`) + 화면 캡처(`ExportMenu`)
-- **Frontend**: `useClusters()`, `useNodeImageList(activeClusterId)` — `status: 'computing'|'ready'`인 백그라운드 스냅샷 envelope을 폴링(computing 중 1.5s, 완료 후 60s). 로컬 state: `selectedClusterId`, `searchQuery`, `view`. 호출 함수: `nodeImagesApi.getNodeImages`, `nodeImagesApi.exportCsv`.
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-images` (백그라운드 집계 결과 or 진행 상태), `GET /api/v1/clusters/{cluster_id}/node-images/export.csv?sort=` — `backend/app/routers/node_images.py`. K8s 노드/이미지 목록을 `kubectl`/SDK로 수집해 노드당 imageCount/totalSizeBytes/images[]로 집계(스냅샷 캐시, computing/ready/stale 상태 포함).
+- **Frontend**: `useClusters()`, `useNodeImageList(activeClusterId)` — `status: 'computing'|'ready'`인 백그라운드 스냅샷 envelope을 폴링(computing 중 1.5s, 완료 후 60s). 로컬 state: `selectedClusterId`, `searchQuery`, `view`, `distributeImage`. 호출 함수: `nodeImagesApi.getNodeImages`, `nodeImagesApi.exportCsv`, `nodeImagesApi.distribute`. 배포 다이얼로그는 대상 클러스터의 `bulkExecApi.nodeList` + `useNodeImageList`(보유 여부 계산)를 사용.
+- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-images` (백그라운드 집계 결과 or 진행 상태), `GET /api/v1/clusters/{cluster_id}/node-images/export.csv?sort=`, `POST /api/v1/clusters/{cluster_id}/node-images/distribute` (이미지 참조 검증 후 `ssh_runner.run_bulk` 로 대상 노드에 pull 명령 일괄 실행, `require_operator` + 감사 로그) — `backend/app/routers/node_images.py`. K8s 노드/이미지 목록을 `kubectl`/SDK로 수집해 노드당 imageCount/totalSizeBytes/images[]로 집계(스냅샷 캐시, computing/ready/stale 상태 포함).
 - **핵심 기능**:
   - 노드별/라벨그룹별/이미지별 3-way 뷰
+  - 이미지 배포(prepull) — 특정 이미지를 미보유 노드(동일/타 클러스터)로 SSH pull, 보유/미보유 자동 선별, 노드별 실행 결과 표시
   - 백그라운드 집계 진행률 표시(대형 클러스터 대응)
   - 정렬 옵션이 있는 CSV 내보내기(`sort=default|size|lines`)
   - 검색(노드명/이미지명), 고유 이미지 dedup 카운트
