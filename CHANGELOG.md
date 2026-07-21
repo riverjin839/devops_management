@@ -10,6 +10,12 @@
 
 1.10.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **버그 픽스 로그 패널 (사이드바)**: 사이드바 하단 레일에 "버그 픽스 로그" 아이콘(벌레 아이콘)을 추가. 클릭하면 릴리즈 노트와 동일한 우측 SidePane 이 열리고, `CHANGELOG.md` 의 각 버전 `Fixed` 항목만 모아 버전·날짜별로 나열한다. "무슨 버그가 언제 고쳐졌는지"만 빠르게 훑는 용도. Frontend: `BugFixLogPanel`(release-notes API 재사용) + `Sidebar` 레일 아이콘/SidePane 배선.
+
+### Fixed
+- **노드 이미지 배포 "성공했는데 실제 배포 안 됨" 수정 (K8s 1.34 / containerd)**: 배포(prepull) 시 대상 노드에서 pull 이 exit 0 이면 실제 적재 여부와 무관하게 "완료"로 표시되던 문제를 수정. 이제 pull 직후 **런타임에서 실제 존재를 검증**(crictl `inspecti` / nerdctl `image inspect` / ctr `images ls`)해 검증까지 통과해야 성공으로 보고한다. 또한 비대화형 SSH 세션의 최소 PATH 로 `crictl`/`ctr`/`nerdctl` 를 못 찾던 문제를 **PATH 보강**(/usr/local/bin·RKE2/k3s 경로 등)으로 해소. 배포 성공 후 대상 클러스터 이미지 스냅샷을 무효화해 보유/미보유 배지를 갱신하고, K8s API `node.status.images` 는 kubelet 갱신 주기로 지연될 수 있음을 결과 화면에 안내. Backend: `node_images._build_pull_command` 재작성. Frontend: `ImageDistributeDialog` 캐시 무효화 + 안내.
+
 ## [1.10.0] - 2026-07-21
 
 ### Added

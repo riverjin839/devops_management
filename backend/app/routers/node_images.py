@@ -176,31 +176,60 @@ _NAMESPACE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def _build_pull_command(image: str, runtime: str, namespace: str, use_sudo: bool) -> str:
-    """대상 노드에서 이미지를 pull 하는 shell 명령을 생성.
+    """대상 노드에서 이미지를 pull 하고 **실제 적재를 검증**하는 shell 명령을 생성.
 
     image/namespace 는 호출 전에 정규식으로 검증되므로 shell 메타문자가 없다.
     안전을 위해 추가로 작은따옴표로 감싼다 (검증에서 작은따옴표는 이미 배제됨).
+
+    설계 포인트 (K8s 1.34 + containerd 대응, "성공했다는데 실제 배포 안 됨" 버그 수정):
+    - **PATH 보강**: 비대화형 SSH 세션은 최소 PATH 라 crictl/ctr/nerdctl(보통
+      /usr/local/bin, RKE2/k3s 경로 등)를 못 찾아 런타임 감지가 어긋날 수 있다.
+    - **pull 후 검증(inspecti / image inspect / images ls)**: pull 명령이 exit 0 을
+      반환해도 이미지가 실제로 적재됐는지 확인해야 한다. 검증까지 통과해야 성공(exit 0)으로
+      보고하므로, 결과의 성공은 "노드에 실제 존재함"을 의미한다. (K8s API 의
+      node.status.images 갱신 지연과 무관하게 즉시 확인)
     """
     sudo = "sudo " if use_sudo else ""
-    img = f"'{image}'"
     ns = f"'{namespace}'"
-    crictl = f"{sudo}crictl pull {img}"
-    nerdctl = f"{sudo}nerdctl -n {ns} pull {img}"
-    ctr = f"{sudo}ctr -n {ns} images pull {img}"
+
+    # 런타임 CLI 를 찾도록 흔한 설치 경로를 PATH 앞에 보강 (배포판/설치방식별).
+    path_prefix = (
+        'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
+        '/var/lib/rancher/rke2/bin:/var/lib/rancher/k3s/bin:/opt/bin:$PATH"; '
+    )
+    # 이미지 참조를 한 번만 변수에 담아 pull/검증에서 재사용 (정규식 검증 완료 → 안전).
+    img_assign = f"img='{image}'; "
+
+    # 런타임별 "pull → 실제 적재 검증 → 확인 메시지" 체인. 검증 실패 시 exit 비0 → 실패로 보고.
+    crictl = (
+        f'{sudo}crictl pull "$img" && {sudo}crictl inspecti "$img" >/dev/null 2>&1 '
+        f'&& echo "verified present on node via crictl: $img"'
+    )
+    nerdctl = (
+        f'{sudo}nerdctl -n {ns} pull "$img" && {sudo}nerdctl -n {ns} image inspect "$img" >/dev/null 2>&1 '
+        f'&& echo "verified present on node via nerdctl: $img"'
+    )
+    ctr = (
+        f'{sudo}ctr -n {ns} images pull "$img" && {sudo}ctr -n {ns} images ls -q | grep -qF "$img" '
+        f'&& echo "verified present on node via ctr: $img"'
+    )
 
     if runtime == "crictl":
-        return crictl
-    if runtime == "nerdctl":
-        return nerdctl
-    if runtime == "ctr":
-        return ctr
-    # auto — 노드에 존재하는 런타임 CLI 를 우선순위대로 감지해 사용.
-    return (
-        f"if command -v crictl >/dev/null 2>&1; then {crictl}; "
-        f"elif command -v nerdctl >/dev/null 2>&1; then {nerdctl}; "
-        f"elif command -v ctr >/dev/null 2>&1; then {ctr}; "
-        f"else echo 'no container runtime CLI (crictl/nerdctl/ctr) found on PATH' >&2; exit 127; fi"
-    )
+        body = crictl
+    elif runtime == "nerdctl":
+        body = nerdctl
+    elif runtime == "ctr":
+        body = ctr
+    else:
+        # auto — 노드에 존재하는 런타임 CLI 를 우선순위대로 감지해 사용 (containerd 기본 = crictl).
+        body = (
+            f"if command -v crictl >/dev/null 2>&1; then {crictl}; "
+            f"elif command -v nerdctl >/dev/null 2>&1; then {nerdctl}; "
+            f"elif command -v ctr >/dev/null 2>&1; then {ctr}; "
+            f"else echo 'no container runtime CLI (crictl/nerdctl/ctr) found on PATH' >&2; exit 127; fi"
+        )
+
+    return path_prefix + img_assign + body
 
 
 @router.post("/distribute", response_model=NodeImageDistributeResponse)

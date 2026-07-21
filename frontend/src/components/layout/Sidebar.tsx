@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
-  KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare,
+  KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -17,6 +17,7 @@ import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { ReleaseNotesPanel } from './ReleaseNotesPanel';
+import { BugFixLogPanel } from './BugFixLogPanel';
 import { VocBoardPanel } from './VocBoardPanel';
 import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
 
@@ -232,6 +233,8 @@ export function Sidebar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   // 릴리즈 노트 — 우측 슬라이드 SidePane (감사 로그가 Settings 탭으로 이동한 자리).
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
+  // 버그 픽스 로그 — 릴리즈 노트 옆 레일 아이콘 → 우측 SidePane (CHANGELOG Fixed 항목).
+  const [bugFixLogOpen, setBugFixLogOpen] = useState(false);
   // 사용자 VOC 게시판 — 릴리즈 노트 바로 위 레일 아이콘 → 우측 SidePane.
   const [vocOpen, setVocOpen] = useState(false);
 
@@ -279,6 +282,7 @@ export function Sidebar() {
     setOpenGroup(null);
     setUserMenuOpen(false);
     setReleaseNotesOpen(false);
+    setBugFixLogOpen(false);
     setVocOpen(false);
   }, [location.pathname]);
 
@@ -289,6 +293,7 @@ export function Sidebar() {
         setOpenGroup(null);
         setUserMenuOpen(false);
         setReleaseNotesOpen(false);
+        setBugFixLogOpen(false);
         setVocOpen(false);
       }
     };
@@ -503,6 +508,15 @@ export function Sidebar() {
           )}
           {currentUser && (
             <RailIconButton
+              label="버그 픽스 로그"
+              Icon={Bug}
+              highlighted={bugFixLogOpen}
+              suppressTooltip={bugFixLogOpen}
+              onClick={() => setBugFixLogOpen((v) => !v)}
+            />
+          )}
+          {currentUser && (
+            <RailIconButton
               label="로그아웃"
               Icon={LogOut}
               onClick={logout}
@@ -571,6 +585,21 @@ export function Sidebar() {
         maxWidth={1100}
       >
         <ReleaseNotesPanel open={releaseNotesOpen} />
+      </SidePane>
+
+      {/* 버그 픽스 로그 — 릴리즈 노트와 동일한 우측 슬라이드 SidePane. CHANGELOG 의 Fixed 항목만 표시. */}
+      <SidePane
+        open={bugFixLogOpen}
+        onClose={() => setBugFixLogOpen(false)}
+        title="버그 픽스 로그"
+        width="640px"
+        bodyClassName="p-0"
+        resizable
+        widthStorageKey="k8s:bugFixLogPanelWidth"
+        minWidth={420}
+        maxWidth={1100}
+      >
+        <BugFixLogPanel open={bugFixLogOpen} />
       </SidePane>
 
       {/* 사용자 VOC 게시판 — 릴리즈 노트와 동일한 우측 슬라이드 SidePane. */}

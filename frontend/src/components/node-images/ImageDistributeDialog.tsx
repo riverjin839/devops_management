@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   X, Send, Play, Loader2, Key, CheckCircle, XCircle, Clock, ShieldAlert, Wifi, ChevronDown, ChevronRight,
 } from 'lucide-react';
@@ -59,6 +59,7 @@ function computeHavingNodes(
 export function ImageDistributeDialog({
   open, onClose, image, sourceClusterId, clusters,
 }: Props) {
+  const queryClient = useQueryClient();
   const [targetClusterId, setTargetClusterId] = useState(sourceClusterId);
 
   // 다이얼로그를 새 이미지로 다시 열 때 대상 클러스터를 출처로 리셋.
@@ -151,7 +152,15 @@ export function ImageDistributeDialog({
       );
       return res.data;
     },
-    onSuccess: (d) => setResult(d),
+    onSuccess: (d) => {
+      setResult(d);
+      // 배포 성공 후 대상 클러스터의 이미지/노드 스냅샷을 무효화 → 보유/미보유 배지 갱신.
+      // (K8s API node.status.images 는 kubelet 갱신 주기로 지연될 수 있어 즉시 반영은 안 될 수 있음)
+      if (d.okCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ['node-images', targetClusterId] });
+        queryClient.invalidateQueries({ queryKey: ['image-distribute', 'nodes', targetClusterId] });
+      }
+    },
   });
 
   const canRun =
@@ -372,6 +381,10 @@ export function ImageDistributeDialog({
                 <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">실패 {result.errorCount}</span>
                 <span className="text-xs text-muted-foreground">총 {result.totalDurationMs}ms</span>
               </div>
+              <p className="px-3 py-1.5 text-xs text-muted-foreground bg-muted/10 border-b border-border">
+                성공 결과의 <span className="font-mono">verified present</span> 는 노드에서 실제 적재를 확인한 것입니다.
+                노드 이미지 목록(K8s API)의 보유 배지는 kubelet 갱신 주기로 수십 초~수 분 뒤 반영될 수 있습니다.
+              </p>
               <DoubleScrollX>
                 <table className="w-full text-sm">
                   <thead className="bg-muted/20">
