@@ -861,6 +861,10 @@ def _run_migrations():
             ("ai_remediation", "TEXT"),
             ("duration_ms", "INTEGER"),
             ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
+            # 모델 원본 컬럼이지만, statusenum 이 clusters 테이블 생성 시점에만 만들어져
+            # 일부 구버전 DB(수동 스키마 초기화 등)에는 실제로 누락된 사례가 있었다
+            # (클러스터 삭제 시 500 + "column deep_check_results.status does not exist").
+            ("status", "statusenum NOT NULL DEFAULT 'healthy'"),
         ]:
             _safe_add_column("deep_check_results", col_name, col_type)
         # check_type 이 방금 추가됐다면 기존 행 backfill (NULL → 'unknown', 모델은 NOT NULL).
