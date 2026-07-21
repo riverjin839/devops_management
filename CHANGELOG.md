@@ -10,6 +10,14 @@
 
 1.8.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **클러스터 삭제 500 에러 (`deep_check_results.status` 컬럼 누락)**: 일부 구버전 DB에서
+  `deep_check_results` 테이블이 `status` 컬럼 없이 생성돼, 클러스터 삭제 시 ORM 이 연관
+  결과 행의 FK 를 정리하려 컬럼을 조회하다 `UndefinedColumn` 500 에러가 발생하던 문제를
+  수정. `_run_migrations()` 에 `_safe_add_column` 으로 `status`(statusenum, 기본값
+  `healthy`) 보강을 추가.
+  - Backend: `main.py` `_run_migrations()`.
+
 ## [1.8.0] - 2026-07-21
 
 ### Added
