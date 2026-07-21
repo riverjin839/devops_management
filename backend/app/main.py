@@ -861,10 +861,14 @@ def _run_migrations():
             ("ai_remediation", "TEXT"),
             ("duration_ms", "INTEGER"),
             ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
-            # 모델 원본 컬럼이지만, statusenum 이 clusters 테이블 생성 시점에만 만들어져
-            # 일부 구버전 DB(수동 스키마 초기화 등)에는 실제로 누락된 사례가 있었다
-            # (클러스터 삭제 시 500 + "column deep_check_results.status does not exist").
+            # 아래 두 컬럼은 모델 원본 컬럼이지만, 일부 구버전 DB(수동 스키마 초기화 등)에는
+            # 실제로 누락된 사례가 있었다 — 클러스터 삭제 시 ORM 이 연관 deep_check_results
+            # 행을 select 하며 500 ("column deep_check_results.status/.message does not
+            # exist")로 이어짐. 앞으로 이런 개별 누락을 사람이 계속 따라잡지 않도록
+            # _sync_missing_model_columns() 안전망도 함께 추가했다 (아래 참고).
             ("status", "statusenum NOT NULL DEFAULT 'healthy'"),
+            ("message", "TEXT"),
+            ("details", "JSONB"),
         ]:
             _safe_add_column("deep_check_results", col_name, col_type)
         # check_type 이 방금 추가됐다면 기존 행 backfill (NULL → 'unknown', 모델은 NOT NULL).
@@ -965,6 +969,53 @@ def _run_migrations():
         _safe_create_index("ix_check_logs_checked_at", "check_logs", "(checked_at)")
     if "user_notifications" in inspector.get_table_names():
         _safe_create_index("ix_user_notifications_created_at", "user_notifications", "(created_at)")
+
+
+def _sync_missing_model_columns() -> None:
+    """모델에는 정의돼 있지만 실제 DB 테이블에는 없는 컬럼을 자동으로 보강하는 안전망.
+
+    위 `_run_migrations()` 는 테이블별로 "새로 생긴 컬럼"을 사람이 직접 나열해 챙기는
+    방식인데, 목록에서 하나라도 빠지면 배포 후에는 조용히 있다가 그 컬럼을 건드리는
+    요청에서만 500(UndefinedColumn)으로 드러난다 (예: deep_check_results.status/.message —
+    클러스터 삭제 시 ORM 이 연관 행을 select 하면서 발견됨). 매번 새 에러가 날 때마다
+    한 컬럼씩 추가하는 대신, 부팅마다 `Base.metadata` 의 전체 테이블/컬럼을 실제 DB와
+    비교해 빠진 컬럼을 자동으로 채운다.
+
+    - 항상 nullable 로 추가한다 — 기존 행에 대한 안전한 backfill 값을 알 수 없으므로,
+      모델이 `nullable=False` 라도 여기서는 NOT NULL 제약을 걸지 않는다. NOT NULL 이
+      필요하면 위 `_run_migrations()` 에 backfill + `_safe_exec("... SET NOT NULL")` 을
+      명시적으로 추가할 것 — 이 함수는 "부팅이 막히지 않게 하는" 안전망이지, 정합성
+      보장(NOT NULL/기본값 등)을 대체하지 않는다.
+    - 타입 컴파일에 실패하는 컬럼(커스텀 TypeDecorator 등)은 조용히 건너뛰고 경고만
+      남긴다 — 그런 컬럼은 위 `_run_migrations()` 에 수동으로 추가해야 한다.
+    """
+    ins = inspect(engine)
+    existing_tables = set(ins.get_table_names())
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue  # 신규 테이블은 create_all 이 이미 전체 컬럼과 함께 생성했다.
+        try:
+            existing_cols = {c["name"] for c in ins.get_columns(table.name)}
+        except Exception as e:  # noqa: BLE001
+            _log.warning("migration: %s 컬럼 조회 실패(%s) — 자동 보강 스킵", table.name, e)
+            continue
+        for col in table.columns:
+            if col.name in existing_cols:
+                continue
+            try:
+                type_sql = col.type.compile(dialect=engine.dialect)
+            except Exception as e:  # noqa: BLE001
+                _log.warning(
+                    "migration: %s.%s 자동 보강 실패 — 타입 컴파일 불가(%s), "
+                    "_run_migrations() 에 수동 추가 필요", table.name, col.name, e,
+                )
+                continue
+            _safe_add_column(table.name, col.name, type_sql)
+            _log.warning(
+                "migration: %s.%s 가 모델에는 있으나 DB에 없어 자동 보강함(nullable). "
+                "NOT NULL/기본값/backfill 이 필요하면 _run_migrations() 에 명시적으로 추가할 것.",
+                table.name, col.name,
+            )
 
 
 def _seed_default_metric_cards():
@@ -1643,6 +1694,7 @@ async def lifespan(app: FastAPI):
             _startup_log.exception("create_all failed — continuing: %s", e)
         for step_name, step in [
             ("migrations", _run_migrations),
+            ("sync_missing_model_columns", _sync_missing_model_columns),
             ("seed_metric_cards", _seed_default_metric_cards),
             ("seed_cluster_items", _seed_cluster_items),
             ("seed_trend_sources", _seed_default_trend_sources),
