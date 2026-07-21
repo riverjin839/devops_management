@@ -387,6 +387,8 @@ export function K8sAllocationPage() {
 // ── 클러스터 요약 ────────────────────────────────────────────────────────────
 function SummarySection({ clusterId }: { clusterId: string }) {
   const { data, isLoading, isError, error } = useAllocNamespaces(clusterId);
+  const { data: podsSummary } = usePodsSummary(clusterId);
+  const cap = podsSummary?.capacity;
   if (isLoading) return <MacCard title="클러스터 요약" bodyPadding="p-3"><Skeleton className="h-16 w-full" /></MacCard>;
   if (isError) return (
     <MacCard title="클러스터 요약" bodyPadding="p-3">
@@ -419,7 +421,20 @@ function SummarySection({ clusterId }: { clusterId: string }) {
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
         <Stat label="노드" value={fmtN(s.nodeCount)} icon={<Server className="w-3.5 h-3.5" />} />
         <Stat label="네임스페이스" value={fmtN(s.namespaceCount)} icon={<Layers className="w-3.5 h-3.5" />} />
-        <Stat label="파드 (활성)" value={fmtN(s.podCount)} icon={<Cpu className="w-3.5 h-3.5" />} />
+        <Stat label="파드 (활성)"
+          value={cap ? `${fmtN(s.podCount)} / ${fmtN(cap.allocatablePods)}` : fmtN(s.podCount)}
+          icon={<Cpu className="w-3.5 h-3.5" />}
+          sub={cap ? `여유 ${fmtN(cap.schedulableFreeSlots)}개` : undefined}
+          help={cap && (
+            <div className="space-y-1.5">
+              <p className="font-semibold text-foreground">파드 (활성)</p>
+              <p><b>{fmtN(s.podCount)}</b> = 현재 활성 파드 수, <b>{fmtN(cap.allocatablePods)}</b> = 전체 노드
+                max-pods 합계(노드별 <code>allocatable.pods</code> × 노드 수).</p>
+              <p>여유 <b>{fmtN(cap.schedulableFreeSlots)}개</b> = Ready·비cordon 노드({cap.nodesSchedulable}/{cap.nodesTotal})
+                기준 남은 스케줄 슬롯.</p>
+            </div>
+          )}
+        />
         <Stat label="CPU 할당효율" value={pctText(s.cpuReqM, s.cpuAllocM)}
           sub={`req ${fmtCores(s.cpuReqM)} / alloc ${fmtCores(s.cpuAllocM)}`}
           warn={ratio(s.cpuReqM, s.cpuAllocM) < 0.5}
