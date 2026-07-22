@@ -485,11 +485,12 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 - **파일**: `frontend/src/pages/BulkExecPage.tsx` (+ `components/common/{ConfirmDialog,LogViewer,SavedCommands,DebugLogPanel,ResizeGrip,DoubleScrollX}`)
 - **목적 / UX**: 여러 클러스터의 여러 노드를 한 번에 선택해 SSH 명령 실행 또는 SCP 파일 업로드를 병렬/순차로 수행하고, 결과를 요약/상세 뷰로 확인·필터링·내보내기(CSV/TXT/클립보드)한다. 운영자가 대규모 노드에 동일 작업을 배포할 때 쓰는 실행 콘솔.
-- **UI 구성**:
+- **UI 구성**: mc 클라이언트 콘솔처럼 **[타겟 노드 | 명령 메뉴 | 실행 결과]** 를 한 로우(`lg:grid-cols-12`, 3:4:5)에 나란히 배치. 결과 컬럼은 항상 우측 같은 자리에 고정되고(실행 전엔 플레이스홀더), 컬럼 내부에서만 스크롤된다.
   - `ClusterSidebar` — `multiSelect` + `iconOnly` (다중 선택 패턴, `selectedIds`/`onMultiSelectChange`)
-  - 좌측: 클러스터별로 묶인 노드 체크박스 목록(`ClusterNodeGroup`, 클러스터별 접기/전체선택)
-  - 우측: action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용, 타임아웃/청크 설정
-  - 실행 확인 `ConfirmDialog`, 결과 섹션(요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기)
+  - 타겟 노드(3): 클러스터별로 묶인 노드 체크박스 목록(`ClusterNodeGroup`, 클러스터별 접기/전체선택)
+  - 명령 메뉴(4): action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용, 타임아웃/청크 설정
+  - 실행 결과(5): 요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기
+  - 실행 확인 `ConfirmDialog`
 - **Frontend**: `useClusters()`, `useQueries`로 선택된 클러스터별 노드 목록 병렬 조회(`bulkExecApi.nodeList`), `useAbortableMutation`으로 `bulkExecApi.run`. 로컬 state: `clusterIds`(다중), `selected`(Set, `clusterId::nodeName` 키), 실행 옵션 다수. 호출 함수: `bulkExecApi.nodeList`, `bulkExecApi.run`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. DB 모델 관여 없음(휘발성 실행 결과).
 - **핵심 기능**:

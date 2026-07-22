@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Palette, Minus, Plus } from 'lucide-react';
 import {
   useTerminalAppearance,
@@ -17,9 +18,32 @@ import type { TerminalAppearance, TerminalEnv, TerminalMode, TerminalTemplate } 
 /** LogViewer 툴바의 빠른 Appearance 전환 버튼(기어). 전역 개인 설정을 수정한다. */
 export function LogThemeButton() {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // 패널을 document.body 로 portal 렌더(fixed)한다. LogViewer 루트가 `overflow-hidden`
+  // 이라 inline absolute 패널이 잘리던 버그를 회피 — SearchableSelect(menuPortal) 와 동일 패턴.
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const { data } = useTerminalAppearance();
   const saveMut = useUpdateTerminalAppearance();
   const currentEnv = useTerminalEnvStore((s) => s.currentEnv);
+
+  // 열릴 때 버튼 위치를 측정해 fixed 앵커링(스크롤/리사이즈 추적)
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    const update = () => {
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      // 버튼 우측 정렬 · 바로 아래에 패널을 띄운다
+      setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
 
   const appearance: TerminalAppearance = data?.appearance ?? DEFAULT_APPEARANCE;
   const shared: TerminalTemplate[] = data?.shared ?? [];
@@ -41,6 +65,7 @@ export function LogThemeButton() {
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         onClick={() => setOpen((v) => !v)}
         title="화면 색상/글꼴 (Appearance)"
         aria-label="화면 색상/글꼴 (Appearance)"
@@ -49,10 +74,13 @@ export function LogThemeButton() {
         <Palette className="w-3 h-3" />
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-7 z-50 w-64 rounded-lg border border-border bg-card shadow-lg p-3 space-y-3 text-xs">
+          <div
+            style={{ position: 'fixed', top: pos.top, right: pos.right }}
+            className="z-50 w-64 max-h-[80vh] overflow-y-auto rounded-lg border border-border bg-card shadow-lg p-3 space-y-3 text-xs"
+          >
             {/* mode */}
             <div>
               <p className="text-muted-foreground mb-1">적용 기준</p>
@@ -119,7 +147,8 @@ export function LogThemeButton() {
               세부 색상·커스텀 템플릿·공용 배포는 <span className="text-foreground">설정 → 화면 UI 설정</span> 에서.
             </p>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
