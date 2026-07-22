@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, ClipboardPaste, Loader2, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { nodeSpecsApi } from '@/services/api';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import type { NodeSpecCsvDiff, NodeSpecCsvPreviewResponse, NodeSpecCsvRow } from '@/types';
 import {
   NODE_SPEC_COLUMNS, HEADER_TO_FIELD, normalizeHeader, parseCellValue,
@@ -194,6 +195,7 @@ function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
 
 // ── 메인 모달 ─────────────────────────────────────────────────────────
 export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, initialText }: Props) {
+  const dialogRef = useModalA11y(open, onClose);
   const [text, setText] = useState('');
   const [preview, setPreview] = useState<NodeSpecCsvPreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -271,10 +273,10 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-paste-modal-title" className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <ClipboardPaste className="w-5 h-5 text-primary" />
-          <h2 className="text-sm font-semibold">엑셀 블록 붙여넣기 — 노드 서버스펙</h2>
+          <h2 id="node-spec-paste-modal-title" className="text-sm font-semibold">엑셀 블록 붙여넣기 — 노드 서버스펙</h2>
           <button onClick={onClose} disabled={applying}
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />

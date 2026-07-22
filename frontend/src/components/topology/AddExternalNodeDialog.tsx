@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X, Server, Loader2 } from 'lucide-react';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 const NODE_TYPES: { value: string; label: string }[] = [
   { value: 'database', label: '데이터베이스' },
@@ -18,14 +19,22 @@ export function AddExternalNodeDialog({ pending, onSubmit, onClose }: Props) {
   const [name, setName] = useState('');
   const [nodeType, setNodeType] = useState('database');
   const [note, setNote] = useState('');
+  const titleId = useId();
+  const dialogRef = useModalA11y(true, onClose);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !pending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-sm mx-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-sm mx-4"
+      >
         <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-border">
           <Server className="w-4 h-4 text-slate-500" />
-          <h2 className="text-sm font-semibold flex-1">외부 노드 추가</h2>
+          <h2 id={titleId} className="text-sm font-semibold flex-1">외부 노드 추가</h2>
           <button onClick={onClose} disabled={pending} className="p-1 rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>

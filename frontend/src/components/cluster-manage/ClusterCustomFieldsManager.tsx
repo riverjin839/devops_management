@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { X, Plus, Trash2, Save, Loader2, GripVertical, Settings2 } from 'lucide-react';
 import type {
   ClusterCustomField, ClusterCustomFieldType, ClusterCustomFieldCreate,
 } from '@/types';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 import {
   useClusterCustomFields, useCreateClusterCustomField,
@@ -41,6 +42,8 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
   const updateMut = useUpdateClusterCustomField();
   const deleteMut = useDeleteClusterCustomField();
   const toast = useToast();
+  const titleId = useId();
+  const dialogRef = useModalA11y(open, onClose);
 
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<ClusterCustomFieldCreate>({
@@ -123,10 +126,11 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <Settings2 className="w-5 h-5 text-primary" />
-          <h2 className="text-sm font-semibold">클러스터 커스텀 컬럼 관리</h2>
+          <h2 id={titleId} className="text-sm font-semibold">클러스터 커스텀 컬럼 관리</h2>
           <button onClick={onClose}
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground">
             <X className="w-4 h-4" />

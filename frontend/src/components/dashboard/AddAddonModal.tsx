@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { X } from 'lucide-react';
 import { Addon } from '@/types';
 import { useCreateAddon, useUpdateAddon } from '@/hooks/useCluster';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
 interface AddAddonModalProps {
@@ -59,6 +60,8 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
   const toast = useToast();
   const createAddon = useCreateAddon();
   const updateAddon = useUpdateAddon();
+  const dialogRef = useModalA11y(isOpen, onClose);
+  const titleId = useId();
 
   useEffect(() => {
     if (!isOpen) {
@@ -167,10 +170,10 @@ export function AddAddonModal({ isOpen, onClose, clusterId, editingAddon }: AddA
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl mx-4" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl mx-4" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold">
+          <h2 id={titleId} className="text-lg font-semibold">
             {editingAddon ? `Edit: ${editingAddon.name}` : selected ? selected.name : 'Add Health Check'}
           </h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 hover:bg-secondary rounded-lg transition-colors">

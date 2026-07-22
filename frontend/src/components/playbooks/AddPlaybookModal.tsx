@@ -6,6 +6,7 @@ import {
   useInventories, useCreateInventory, useUpdateInventory, useDeleteInventory,
 } from '@/hooks/useAnsibleAssets';
 import { formatApiError } from '@/lib/utils';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 export interface PlaybookFormSubmit {
   name: string;
@@ -306,6 +307,8 @@ export function AddPlaybookModal({
   const [editFileId, setEditFileId] = useState<string | null>(null);
   const [editInvId, setEditInvId] = useState<string | null>(null);
 
+  const titleId = useId();
+  const dialogRef = useModalA11y(isOpen, onClose);
   const clusterSelectId = useId();
   const nameId = useId();
   const descId = useId();
@@ -368,9 +371,15 @@ export function AddPlaybookModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">{initialData ? 'Edit Playbook' : 'Register Playbook'}</h2>
+          <h2 id={titleId} className="text-lg font-semibold">{initialData ? 'Edit Playbook' : 'Register Playbook'}</h2>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
             <X className="w-5 h-5" />
           </button>

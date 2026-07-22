@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { X, AlertTriangle, Loader2, Upload, Save, Eye, EyeOff } from 'lucide-react';
 import { useKubeconfig, useUpdateKubeconfig } from '@/hooks/useCluster';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
 interface KubeconfigEditModalProps {
@@ -28,6 +29,8 @@ export function KubeconfigEditModal({
 
   const { data: kubeconfig, isLoading, isError, error } = useKubeconfig(isOpen ? clusterId : '');
   const updateKubeconfig = useUpdateKubeconfig();
+  const dialogRef = useModalA11y(isOpen, onClose);
+  const headingId = useId();
 
   // Sync textarea with loaded content when entering edit mode
   useEffect(() => {
@@ -89,11 +92,11 @@ export function KubeconfigEditModal({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-6">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={headingId} className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-lg font-semibold">Kubeconfig 관리</h2>
+            <h2 id={headingId} className="text-lg font-semibold">Kubeconfig 관리</h2>
             <p className="text-sm text-muted-foreground mt-0.5">{clusterName}</p>
           </div>
           <button
