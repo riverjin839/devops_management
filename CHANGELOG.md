@@ -10,10 +10,14 @@
 
 1.10.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **버그 픽스 로그 패널 (사이드바)**: 사이드바 하단 레일에 "버그 픽스 로그" 아이콘(벌레 아이콘)을 추가. 클릭하면 릴리즈 노트와 동일한 우측 SidePane 이 열리고, `CHANGELOG.md` 의 각 버전 `Fixed` 항목만 모아 버전·날짜별로 나열한다. "무슨 버그가 언제 고쳐졌는지"만 빠르게 훑는 용도. Frontend: `BugFixLogPanel`(release-notes API 재사용) + `Sidebar` 레일 아이콘/SidePane 배선.
+
 ### Changed
 - **노드 일괄 실행 (`/bulk-exec`) 레이아웃 개편**: mc 클라이언트 콘솔처럼 **[타겟 노드 | 명령 메뉴 | 실행 결과]** 를 한 로우(12컬럼 3:4:5 그리드)에 나란히 배치. 실행 결과가 더 이상 아래로 흐르지 않고 항상 우측 같은 자리에 고정되며(실행 전엔 플레이스홀더), 결과 패널 내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. 카드 padding·행 간격을 줄여 공간 효율을 높였다.
 
 ### Fixed
+- **노드 이미지 배포 "성공했는데 실제 배포 안 됨" 수정 (K8s 1.34 / containerd)**: 배포(prepull) 시 대상 노드에서 pull 이 exit 0 이면 실제 적재 여부와 무관하게 "완료"로 표시되던 문제를 수정. 이제 pull 직후 **런타임에서 실제 존재를 검증**(crictl `inspecti` / nerdctl `image inspect` / ctr `images ls`)해 검증까지 통과해야 성공으로 보고한다. 기본 런타임도 K8s(containerd) 표준인 crictl 로 변경(ctr 폴백 시 namespace 불일치로 kubelet 에 안 보이는 문제 회피). 또한 비대화형 SSH 세션의 최소 PATH 로 `crictl`/`ctr`/`nerdctl` 를 못 찾던 문제를 **PATH 보강**(/usr/local/bin·RKE2/k3s 경로 등)으로 해소. 배포 성공 후 대상 클러스터 이미지 스냅샷을 무효화해 보유/미보유 배지를 갱신하고, K8s API `node.status.images` 는 kubelet 갱신 주기로 지연될 수 있음을 결과 화면에 안내. Backend: `node_images._build_pull_command` 재작성. Frontend: `ImageDistributeDialog` 캐시 무효화 + 안내.
 - **로그 뷰어 Appearance(프로파일) 팝오버 잘림**: 로그 출력 툴바의 색상/글꼴(팔레트) 버튼을 누르면 드롭다운이 `LogViewer` 의 `overflow-hidden` 컨테이너(테이블 셀 등 좁은 곳)에 의해 잘려 보이던 버그 수정. Frontend: `LogThemeButton` 의 패널을 `createPortal` 로 `document.body` 에 fixed 앵커링(스크롤/리사이즈 추적)해 클리핑을 회피 — `SearchableSelect`(menuPortal)와 동일 패턴.
 
 ## [1.10.0] - 2026-07-21
