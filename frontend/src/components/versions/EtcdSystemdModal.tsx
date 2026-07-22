@@ -6,6 +6,7 @@ import type { EtcdSystemdCollectResponse } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { DoubleScrollX } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 interface Props {
   open: boolean;
@@ -35,6 +36,8 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
   const unitId = useId();
   const envFilesId = useId();
   const parallelismId = useId();
+  const titleId = useId();
+  const dialogRef = useModalA11y(open, onClose);
 
   const nodeQ = useQuery({
     queryKey: ['etcd-systemd-nodes', clusterId],
@@ -79,13 +82,14 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <Server className="w-4 h-4" />
           </div>
           <div className="flex-1">
-            <h2 className="text-sm font-semibold">etcd (systemd) 수집</h2>
+            <h2 id={titleId} className="text-sm font-semibold">etcd (systemd) 수집</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               master 노드에 SSH 접속 → <span className="font-mono">systemctl show {unit}</span> + <span className="font-mono">etcd --version</span>
             </p>

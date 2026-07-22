@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X, Plus, Trash2, Loader2, Lock, ShieldCheck } from 'lucide-react';
 import type { IsilonCommand, IsilonCommandSection } from '@/types';
 import {
@@ -8,6 +8,7 @@ import {
   useDeleteIsilonCommand,
 } from '@/hooks/useIsilonNfs';
 import { useToast, ConfirmDialog } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 const INP = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
 
@@ -30,6 +31,8 @@ const EMPTY = {
 };
 
 export function IsilonCommandManager({ serverId, onClose }: Props) {
+  const dialogRef = useModalA11y(true, onClose);
+  const titleId = useId();
   const toast = useToast();
   const { data: commands = [], isLoading } = useIsilonCommands(serverId);
   const createMut = useCreateIsilonCommand();
@@ -91,12 +94,16 @@ export function IsilonCommandManager({ serverId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-card rounded-2xl border border-border mac-shadow w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div>
-            <h3 className="text-sm font-semibold">isi 명령 관리</h3>
+            <h3 id={titleId} className="text-sm font-semibold">isi 명령 관리</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               {serverId ? '글로벌 기본 + 이 서버 전용 명령' : '글로벌 기본 명령'} · 읽기 전용 조회 명령만 등록됩니다
             </p>

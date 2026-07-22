@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X, Search, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { Cluster } from '@/types';
 import { clustersApi } from '@/services/api';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 interface CiliumConfigModalProps {
   cluster: Cluster;
@@ -11,6 +12,8 @@ interface CiliumConfigModalProps {
 
 export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) {
   const [search, setSearch] = useState('');
+  const titleId = useId();
+  const dialogRef = useModalA11y(true, onClose);
   const { data, isLoading, error } = useQuery({
     queryKey: ['cilium-config', cluster.id],
     queryFn: () => clustersApi.getCiliumConfig(cluster.id).then(r => r.data),
@@ -27,10 +30,11 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl w-full max-w-4xl mx-4 shadow-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-xl w-full max-w-4xl mx-4 shadow-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <div>
-            <h3 className="text-base font-semibold">Cilium 설정 — {cluster.name}</h3>
+            <h3 id={titleId} className="text-base font-semibold">Cilium 설정 — {cluster.name}</h3>
             {data && (
               <p className="text-sm text-muted-foreground mt-0.5">
                 소스: {data.source === 'live' ? '🟢 kubectl 실시간' : data.source === 'stored' ? '🟡 저장된 설정' : '⚪ 없음'}

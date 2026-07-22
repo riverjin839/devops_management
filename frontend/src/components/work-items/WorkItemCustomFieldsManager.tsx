@@ -4,6 +4,7 @@ import {
   useWorkItemCustomFields, useCreateWorkItemCustomField, useDeleteWorkItemCustomField,
   sortedWorkItemFields,
 } from '@/hooks/useWorkItemCustomFields';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import type { WorkItemCustomFieldType } from '@/types';
@@ -18,6 +19,7 @@ const TYPES: { v: WorkItemCustomFieldType; label: string }[] = [
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(TYPES.map((t) => [t.v, t.label]));
 
 export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const dialogRef = useModalA11y(open, onClose);
   const { data: fieldsRaw } = useWorkItemCustomFields();
   const fields = sortedWorkItemFields(fieldsRaw);
   const create = useCreateWorkItemCustomField();
@@ -62,10 +64,10 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="work-item-custom-fields-modal-title" className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
           <Settings2 className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-semibold">업무 사용자 정의 필드</h2>
+          <h2 id="work-item-custom-fields-modal-title" className="text-sm font-semibold">업무 사용자 정의 필드</h2>
           <button onClick={onClose} className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>

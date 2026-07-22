@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Loader2, DownloadCloud, AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { useJiraImport } from '@/hooks/useJira';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import type { JiraImportResult } from '@/types';
@@ -24,6 +25,7 @@ const SCOPES: { id: Scope; label: string; hint: string }[] = [
 ];
 
 export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImportModalProps) {
+  const dialogRef = useModalA11y(open, onClose);
   const toast = useToast();
   const importMut = useJiraImport();
   const [scope, setScope] = useState<Scope>('me');
@@ -63,14 +65,14 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !busy && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-lg mx-4 max-h-[92vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="jira-import-modal-title" className="relative bg-card border border-border rounded-2xl mac-shadow w-full max-w-lg mx-4 max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <DownloadCloud className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold leading-tight">Jira 가져오기</h2>
+            <h2 id="jira-import-modal-title" className="text-base font-semibold leading-tight">Jira 가져오기</h2>
             <p className="text-xs text-muted-foreground">내 Jira 인증(PAT·세션 쿠키) 권한으로 이슈를 work item 으로 가져옵니다.</p>
           </div>
           <button type="button" onClick={onClose} disabled={busy}

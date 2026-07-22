@@ -6,6 +6,7 @@ import type { NodeNicsCollectResponse } from '@/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useToast, DoubleScrollX} from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
@@ -44,6 +45,8 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
   const usernameId = useId();
   const portId = useId();
   const parallelismId = useId();
+  const titleId = useId();
+  const dialogRef = useModalA11y(open, onClose);
 
   const nodeQ = useQuery({
     queryKey: ['node-nics-nodes', clusterId],
@@ -121,13 +124,14 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <Network className="w-4 h-4" />
           </div>
           <div className="flex-1">
-            <h2 className="text-sm font-semibold">노드 NIC / IP 수집</h2>
+            <h2 id={titleId} className="text-sm font-semibold">노드 NIC / IP 수집</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               SSH → <span className="font-mono">ip -j addr show</span> 결과를 파싱해 bond0/bond1 등 모든 인터페이스와
               public/private IP 를 분류 저장. 변경시 히스토리 누적.

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import type { Cluster, NodeServerSpec, NodeServerSpecCreate, NodeSpecStatus } from '@/types';
 import { nodeSpecsApi } from '@/services/api';
+import { useModalA11y } from '@/components/common/useModalA11y';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -33,6 +34,7 @@ function emptyForm(defaultClusterId: string | null): Form {
 }
 
 export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onClose, onSaved }: Props) {
+  const dialogRef = useModalA11y(true, onClose);
   const [form, setForm] = useState<Form>(() =>
     spec ? { ...spec } : emptyForm(defaultClusterId),
   );
@@ -100,9 +102,9 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !saving && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="node-spec-edit-modal-title" className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
-          <h2 className="text-sm font-semibold">
+          <h2 id="node-spec-edit-modal-title" className="text-sm font-semibold">
             {mode === 'create' ? '서버스펙 신규 등록' : `서버스펙 수정 — ${spec?.hostname}`}
           </h2>
           <button onClick={onClose} disabled={saving}

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { X } from 'lucide-react';
 import { useToast } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { useCheckMatrixSettings, useUpdateCheckMatrixSettings } from '@/hooks/useCheckMatrix';
 import { formatApiError } from '@/lib/utils';
 
@@ -15,6 +16,8 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
   const updateMut = useUpdateCheckMatrixSettings();
   const [retentionDays, setRetentionDays] = useState(90);
   const retentionId = useId();
+  const titleId = useId();
+  const dialogRef = useModalA11y(isOpen, onClose);
 
   useEffect(() => {
     if (isOpen && settings) setRetentionDays(settings.retentionDays);
@@ -35,11 +38,15 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-sm mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold">매트릭스 설정</h2>
+          <h2 id={titleId} className="text-lg font-semibold">매트릭스 설정</h2>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
