@@ -97,8 +97,9 @@ export function ImageDistributeDialog({
     // havingNodes 는 스냅샷 로드에 따라 바뀌므로 의존성에 포함.
   }, [open, nodes, havingNodes]);
 
-  // 실행 구성
-  const [runtime, setRuntime] = useState<'auto' | 'crictl' | 'nerdctl' | 'ctr'>('auto');
+  // 실행 구성 — K8s(containerd) 노드의 기본은 crictl(CRI). ctr 로 폴백되면 containerd
+  // 네임스페이스가 어긋나 kubelet 에 안 보일 수 있어, 기본을 crictl 로 둔다.
+  const [runtime, setRuntime] = useState<'auto' | 'crictl' | 'nerdctl' | 'ctr'>('crictl');
   const [namespace, setNamespace] = useState('k8s.io');
   const [useSudo, setUseSudo] = useState(false);
   const [username, setUsername] = useState('root');
@@ -230,8 +231,8 @@ export function ImageDistributeDialog({
                   onChange={(e) => setRuntime(e.target.value as typeof runtime)}
                   className="flex-1 px-2 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                 >
-                  <option value="auto">auto (감지)</option>
-                  <option value="crictl">crictl</option>
+                  <option value="crictl">crictl (K8s 기본 · 권장)</option>
+                  <option value="auto">auto (감지: crictl→nerdctl→ctr)</option>
                   <option value="nerdctl">nerdctl</option>
                   <option value="ctr">ctr</option>
                 </select>
@@ -248,6 +249,11 @@ export function ImageDistributeDialog({
                   placeholder="containerd namespace (예: k8s.io)"
                   className="w-full mt-2 px-2 py-1 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                 />
+              )}
+              {runtime === 'ctr' && (
+                <p className="mt-1 text-xs text-amber-500">
+                  ⚠ ctr 는 namespace 가 <span className="font-mono">k8s.io</span> 가 아니면 kubelet/K8s 에 이미지가 안 보일 수 있습니다. K8s 노드는 crictl 권장.
+                </p>
               )}
             </div>
           </div>
