@@ -10,6 +10,12 @@
 
 1.11.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **k9s 콘솔 — "연결" 터미널을 드래그 이동형 플로팅 창으로**: "연결" 로 생성되는 인라인 k9s 터미널이 페이지에 고정되지 않고, **헤더를 드래그해 원하는 위치로 옮기고 우하단 모서리로 크기를 조절할 수 있는 플로팅 창**으로 열린다("새 창으로 열기" 없이도 창 이동 가능). 페이지 본문에는 플로팅 창 사용 안내 카드가 남는다. Frontend: `K9sTerminal` 헤더 드래그 핸들(pointer capture) + CSS `resize`, `K9sPage` 세션 안내 카드.
+
+### Fixed
+- **k9s "새 창으로 열기" HTTP 접속에서 TypeError**: HTTP(NodePort 등 비보안 컨텍스트)로 접속하면 `crypto.randomUUID` 가 존재하지 않아 "새 창으로 열기" 가 `TypeError: randomUUID is not a function` 으로 실패하던 버그 수정 — 폴백(getRandomValues/Math.random) 있는 `generateUUID()` 를 사용하도록 변경. Frontend: `lib/k9sPopout.ts`.
+
 ## [1.11.0] - 2026-07-23
 
 ### Added
