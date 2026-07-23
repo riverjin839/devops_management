@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RotateCw, X, Maximize2, Minimize2 } from 'lucide-react';
+import { RotateCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -23,6 +23,10 @@ interface K9sTerminalProps {
   clusterId: string;
   params: K9sConnectParams;
   onClose: () => void;
+  /** 주어지면 헤더에 "새 창으로 빼기" 버튼 노출 (별도 브라우저 창으로 세션 이동). */
+  onPopOut?: () => void;
+  /** 뷰포트 전체를 채운다 (팝업 창 전용). true 면 pop-out/전체화면 버튼은 숨긴다. */
+  fill?: boolean;
 }
 
 /**
@@ -34,7 +38,7 @@ interface K9sTerminalProps {
  * 전달한다(비밀번호가 URL/로그에 남지 않도록). 이후 입력/리사이즈는 stdin/resize
  * 프레임으로 보낸다.
  */
-export function K9sTerminal({ clusterId, params, onClose }: K9sTerminalProps) {
+export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill }: K9sTerminalProps) {
   const [status, setStatus] = useState<Status>('connecting');
   const [fullscreen, setFullscreen] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -149,14 +153,14 @@ export function K9sTerminal({ clusterId, params, onClose }: K9sTerminalProps) {
   const statusColor =
     status === 'open' ? 'text-green-500' : status === 'error' ? 'text-red-500' : 'text-muted-foreground';
 
+  const rootClass = fill
+    ? 'bg-zinc-900 text-zinc-100 flex flex-col h-screen w-screen'
+    : fullscreen
+      ? 'fixed inset-0 z-50 bg-zinc-900 flex flex-col'
+      : 'bg-zinc-900 text-zinc-100 rounded-2xl border border-zinc-700 flex flex-col overflow-hidden shadow-lg h-[72vh]';
+
   return (
-    <div
-      className={
-        fullscreen
-          ? 'fixed inset-0 z-50 bg-zinc-900 flex flex-col'
-          : 'bg-zinc-900 text-zinc-100 rounded-2xl border border-zinc-700 flex flex-col overflow-hidden shadow-lg h-[72vh]'
-      }
-    >
+    <div className={rootClass}>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-700 bg-zinc-800 text-zinc-100">
         <span className="text-sm font-semibold text-green-400">k9s</span>
         <span className="text-xs font-mono text-zinc-400 truncate">
@@ -169,11 +173,19 @@ export function K9sTerminal({ clusterId, params, onClose }: K9sTerminalProps) {
           className="ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
           <RotateCw className="w-3.5 h-3.5" />
         </button>
-        <button onClick={() => setFullscreen((v) => !v)} title={fullscreen ? '전체화면 해제' : '전체화면'}
-          aria-label={fullscreen ? '전체화면 해제' : '전체화면'}
-          className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
-          {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-        </button>
+        {onPopOut && !fill && (
+          <button onClick={onPopOut} title="새 창으로 빼기" aria-label="새 창으로 빼기"
+            className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {!fill && (
+          <button onClick={() => setFullscreen((v) => !v)} title={fullscreen ? '전체화면 해제' : '전체화면'}
+            aria-label={fullscreen ? '전체화면 해제' : '전체화면'}
+            className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
+            {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        )}
         <button onClick={onClose} aria-label="종료" title="종료"
           className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
           <X className="w-4 h-4" />

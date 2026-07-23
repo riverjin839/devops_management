@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
@@ -52,6 +52,7 @@ import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { K9sPage } from '@/pages/K9sPage';
+import { K9sPopupPage } from '@/pages/K9sPopupPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { PepServicesPage } from '@/pages/PepServicesPage';
@@ -222,14 +223,27 @@ function AppShell() {
   );
 }
 
+/** 인증 후 최상위 — `/k9s/popup` 은 사이드바/네비 없는 전체창(별도 브라우저 창)으로
+ *  분기하고, 그 외에는 메인 셸(AppShell)을 그대로 렌더한다. AppShell 을 Route 로
+ *  감싸지 않아 기존 라우팅 컨텍스트에 영향이 없다. */
+function AuthedRoot() {
+  const location = useLocation();
+  if (location.pathname === '/k9s/popup') return <K9sPopupPage />;
+  return (
+    <>
+      <AppShell />
+      <AgentChat />
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter>
           <AuthGate>
-            <AppShell />
-            <AgentChat />
+            <AuthedRoot />
           </AuthGate>
         </BrowserRouter>
       </ToastProvider>

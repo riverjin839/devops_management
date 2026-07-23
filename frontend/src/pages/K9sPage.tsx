@@ -1,11 +1,12 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ShipWheel, Key, Play, ShieldAlert } from 'lucide-react';
+import { ShipWheel, Key, Play, ShieldAlert, ExternalLink } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, EmptyState } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { K9sTerminal, type K9sConnectParams } from '@/components/k8s';
+import { openK9sPopout } from '@/lib/k9sPopout';
 import { etcdctlApi, type EtcdMasterCandidate } from '@/services/api';
 
 /**
@@ -44,6 +45,7 @@ export function K9sPage() {
   const [namespace, setNamespace] = useState('');
   const [readonly, setReadonly] = useState(false);
   const [session, setSession] = useState<K9sConnectParams | null>(null);
+  const [popoutMsg, setPopoutMsg] = useState('');
 
   // 첫 후보 자동선택
   useEffect(() => {
@@ -72,12 +74,30 @@ export function K9sPage() {
     setPrivateKey('');
   };
 
+  const buildParams = (): K9sConnectParams => ({
+    host: effectiveHost, port, username, authMode, password, privateKey,
+    namespace: namespace.trim() || undefined, readonly,
+  });
+
   const handleConnect = () => {
     if (!canConnect) return;
-    setSession({
-      host: effectiveHost, port, username, authMode, password, privateKey,
-      namespace: namespace.trim() || undefined, readonly,
-    });
+    setPopoutMsg('');
+    setSession(buildParams());
+  };
+
+  // 폼에서 바로 별도 창으로 연결 (인라인 세션은 만들지 않음).
+  const handlePopOutFromForm = () => {
+    if (!canConnect) return;
+    const win = openK9sPopout({ clusterId, params: buildParams() });
+    setPopoutMsg(win ? '' : '팝업이 차단되었습니다. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.');
+  };
+
+  // 인라인 세션을 별도 창으로 이동 — 성공 시 메인 창 세션은 닫는다(중복 세션 방지).
+  const popOutSession = () => {
+    if (!session) return;
+    const win = openK9sPopout({ clusterId, params: session });
+    if (win) setSession(null);
+    else setPopoutMsg('팝업이 차단되었습니다. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.');
   };
 
   return (
@@ -112,13 +132,14 @@ export function K9sPage() {
               <EmptyState title="클러스터를 선택하세요" description="좌측에서 클러스터를 고르면 k9s 접속 정보를 입력할 수 있습니다." />
             </MacCard>
           ) : session ? (
-            <K9sTerminal clusterId={clusterId} params={session} onClose={() => setSession(null)} />
+            <K9sTerminal clusterId={clusterId} params={session} onClose={() => setSession(null)} onPopOut={popOutSession} />
           ) : (
             <>
               <MacCard className="text-sm text-muted-foreground leading-relaxed">
                 전제: 각 클러스터의 <b className="text-foreground">control-plane(master) 서버에 <code className="font-mono">k9s</code> 가 설치</b>되어 있고,
                 해당 계정의 기본 kubeconfig(<code className="font-mono">~/.kube/config</code>)로 클러스터에 접근 가능해야 합니다.
                 SSH 인증정보는 이 세션에만 사용되고 저장되지 않습니다. (admin/operator 권한 필요)
+                <br /><b className="text-foreground">“새 창으로 열기”</b> 를 쓰면 k9s 가 별도 브라우저 창에서 열려, 메인 화면에서는 다른 페이지로 이동하며 함께 활용할 수 있습니다.
               </MacCard>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -239,16 +260,31 @@ export function K9sPage() {
                     </label>
                   </div>
 
-                  <button
-                    onClick={handleConnect}
-                    disabled={!canConnect}
-                    className="w-full px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5"
-                  >
-                    <Play className="w-4 h-4" /> 연결
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleConnect}
+                      disabled={!canConnect}
+                      className="flex-1 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      <Play className="w-4 h-4" /> 연결
+                    </button>
+                    <button
+                      onClick={handlePopOutFromForm}
+                      disabled={!canConnect}
+                      title="별도 브라우저 창으로 열기 — 메인 화면에서 다른 페이지로 이동하며 함께 사용"
+                      className="px-3 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-secondary disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      <ExternalLink className="w-4 h-4" /> 새 창으로 열기
+                    </button>
+                  </div>
                   {!canConnect && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <ShieldAlert className="w-3 h-3" /> host 와 {authMode === 'password' ? '비밀번호' : 'private key'} 를 입력하세요.
+                    </p>
+                  )}
+                  {popoutMsg && (
+                    <p className="text-xs text-status-warning flex items-center gap-1">
+                      <ShieldAlert className="w-3 h-3" /> {popoutMsg}
                     </p>
                   )}
                 </MacCard>
