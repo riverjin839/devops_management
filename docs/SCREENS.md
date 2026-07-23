@@ -209,8 +209,9 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택. 클러스터를 고르면 `/k9s/:clusterId` 로 이동.
   - **접속 폼**(연결 전): `타겟` MacCard(master 노드 후보 드롭다운 — etcdctl master-candidates 재사용 · 수동 host override · 사용자 · 포트), `인증·실행` MacCard(비밀번호/Private Key 토글 · 네임스페이스(선택) · `--readonly` 토글 · 연결 버튼).
-  - **터미널**(연결 후): `K9sTerminal` — xterm.js 풀스크린 TUI(재연결/전체화면/종료 헤더). WebSocket `onopen` 직후 SSH 자격증명을 **init 프레임**(JSON)으로 전달(비밀번호가 URL/로그에 남지 않도록), 이후 stdin/resize 프레임 전송.
-- **Frontend**: `useClusters`, `etcdctlApi.masters`(master 후보), `k8sStreamUrls.k9s(clusterId, token)`(WS URL). 자격증명은 서버에 저장하지 않고 세션에서만 사용.
+  - **터미널**(연결 후): `K9sTerminal` — xterm.js 풀스크린 TUI(재연결/**새 창으로 빼기**/전체화면/종료 헤더). WebSocket `onopen` 직후 SSH 자격증명을 **init 프레임**(JSON)으로 전달(비밀번호가 URL/로그에 남지 않도록), 이후 stdin/resize 프레임 전송.
+  - **별도 창(팝업)**: 폼의 "새 창으로 열기" 또는 터미널 헤더의 pop-out 버튼으로 `window.open('/k9s/popup')` 별도 브라우저 창에서 k9s 를 전체창으로 실행 → 메인 화면은 다른 페이지로 이동하며 함께 사용. 접속정보는 URL 대신 `localStorage` 1회용 handoff(`lib/k9sPopout.ts`, 팝업이 읽는 즉시 삭제)로 전달. 팝업 라우트 `/k9s/popup` 은 `App.tsx` 에서 `AppShell` 바깥(사이드바/네비 없음)으로 분기, `K9sPopupPage` 렌더.
+- **Frontend**: `useClusters`, `etcdctlApi.masters`(master 후보), `k8sStreamUrls.k9s(clusterId, token)`(WS URL), `lib/k9sPopout.ts`(창 간 handoff). 자격증명은 서버에 저장하지 않고 세션에서만 사용.
 - **Backend**: 라우터 `backend/app/routers/k9s_ssh.py`(prefix `/k8s`) — WebSocket `GET /k8s/{cluster_id}/k9s`. 전역 `_auth` 미적용, 핸들러가 query token 을 직접 검증(admin/operator 만) 후 accept. init 프레임의 host/자격증명으로 `ssh_runner.connect_client` → paramiko `invoke_shell`(PTY) → `exec k9s [-n ns] [--readonly]` 실행, stdout/stdin/resize 브리지. 세션 open/close 감사 로그(`k9s.ssh.open`/`k9s.ssh.close`). `PEP_K9S_SSH_ENABLED=false` 로 비활성화. 명령은 서버가 검증된 조각(네임스페이스 정규식·화이트리스트 플래그)으로만 조립.
 - **핵심 기능**:
   - control-plane 서버 내장 k9s 를 웹에서 실시간 조작(풀스크린 TUI, tty+resize).
