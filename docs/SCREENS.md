@@ -678,6 +678,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - `ClusterSidebar`는 `allowAll={false}` + `iconOnly` 단일선택.
   - 상태 스트립(Cilium 설치여부/버전, Agent Pod 수, Hubble Relay 여부, Trace 가용성).
   - 3-tab 구조: **BPF Inspector**(kind 선택 + agent pod 검색(`SearchableSelect`) + JSON 테이블/raw 출력, ad-hoc `cilium-dbg` 명령은 `RoleGate allow={['admin','operator']}`로만 노출 + 프리셋 저장), **Cilium Monitor**(SSE 스트림, type 필터 팝오버, related-to 필터, 일시정지/비우기), **Hubble Flows**(from/to pod·namespace·protocol·verdict 필터 + datalist 자동완성, SSE 스트림).
+  - 3개 탭 모두 mc 클라이언트 콘솔과 동일한 **좌(컨트롤 4) / 우(결과·로그 6) 10컬럼 그리드** — 결과/로그 카드가 컨트롤 아래가 아닌 우측 같은 라인에 고정되고(실행 전에는 플레이스홀더), lg 이상에서 내부 스크롤 높이를 `calc(100vh-…)`로 키워 세로 공간을 활용한다.
 - **Frontend**: `useClusters`/`useClusterStore`; 로컬 `ciliumApi`(`api.get/post` 래퍼, `/cilium/{clusterId}/status|agents|bpf-inspect|exec-command`) + 자체 `startSseStream`(fetch 기반, Authorization 헤더 포함 SSE 파서, `/cilium/{clusterId}/monitor/stream`·`/hubble/stream`); `useCommands`/`useCreateCommand`(category=`cilium` 프리셋); `useAnalyzeNamespaces`/`useAnalyzePods`(Hubble 자동완성용, `analyzeApi`).
 - **Backend**: `GET /api/v1/cilium/{cluster_id}/status`, `GET .../agents`, `POST .../bpf-inspect`, `POST .../exec-command`, `GET .../monitor/stream`(SSE), `GET .../hubble/stream`(SSE) — 라우터 `backend/app/routers/cilium_trace.py`. 프리셋은 `commands.py`(`CommandEntry` 모델) 재사용. 전용 영속 모델 없음(라이브 조회/스트림).
 - **핵심 기능**:
