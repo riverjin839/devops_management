@@ -499,8 +499,8 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - `ClusterSidebar` — `multiSelect` + `iconOnly` (다중 선택 패턴, `selectedIds`/`onMultiSelectChange`)
   - 타겟 노드(3): 클러스터별로 묶인 노드 체크박스 목록(`ClusterNodeGroup`, 클러스터별 접기/전체선택)
   - 명령 메뉴(4): action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용, 타임아웃/청크 설정
-  - 실행 결과(5): 요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기
-  - 실행 확인 `ConfirmDialog`
+  - 실행 결과(5): 요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기. 상세 뷰 노드 확장 시 stdout/stderr 는 `ExecOutputTabs`(탭 + 결과 유무 dot·라인수) 로 표시.
+  - 실행 확인 `ConfirmDialog`. `useTerminalEnvSync` 로 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용(다중 선택은 하나라도 운영이면 ops).
 - **Frontend**: `useClusters()`, `useQueries`로 선택된 클러스터별 노드 목록 병렬 조회(`bulkExecApi.nodeList`), `useAbortableMutation`으로 `bulkExecApi.run`. 로컬 state: `clusterIds`(다중), `selected`(Set, `clusterId::nodeName` 키), 실행 옵션 다수. 호출 함수: `bulkExecApi.nodeList`, `bulkExecApi.run`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. DB 모델 관여 없음(휘발성 실행 결과).
 - **핵심 기능**:
@@ -521,7 +521,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 탭: `etcdctl 실행` / `etcd 서비스 로그`
   - 좌측 패널: master 후보 드롭다운(`master-candidates`) + 수동 host override, SSH 인증
   - 우측 패널: 프리셋 버튼(args 자동 채움), env file 옵션, args/timeout, 또는 로그 탭의 unit/tail/since/grep
-  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일), 결과 패널(`ResultPanel` — executed command, stdout/stderr `LogViewer`)
+  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일), 결과 패널(`ResultPanel` — executed command + `ExecOutputTabs` stdout/stderr 탭). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
 - **Frontend**: `useClusters()`, `useQuery(['etcdctl','masters',clusterId])`(`etcdctlApi.masters`), `useQuery(['etcdctl','presets',clusterId])`(`etcdctlApi.presets`), `useAbortableMutation`으로 `etcdctlApi.run` / `etcdctlApi.logs`. 호출 함수: `etcdctlApi.{presets,masters,run,logs}`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/etcdctl/presets`, `GET .../etcdctl/master-candidates`, `POST .../etcdctl/run`, `POST .../etcdctl/logs` — `backend/app/routers/etcdctl.py`. master 후보는 control-plane 라벨 노드를 K8s SDK로 조회, 실행은 SSH 러너(bulk_exec와 유사한 SSH 실행 계층)로 `etcdctl` 바이너리/env file을 원격 실행, 로그는 `journalctl -u {unit}` 실행.
 - **핵심 기능**:
@@ -679,7 +679,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - `ClusterSidebar`는 `allowAll={false}` + `iconOnly` 단일선택.
   - 상태 스트립(Cilium 설치여부/버전, Agent Pod 수, Hubble Relay 여부, Trace 가용성).
   - 3-tab 구조: **BPF Inspector**(kind 선택 + agent pod 검색(`SearchableSelect`) + JSON 테이블/raw 출력, ad-hoc `cilium-dbg` 명령은 `RoleGate allow={['admin','operator']}`로만 노출 + 프리셋 저장), **Cilium Monitor**(SSE 스트림, type 필터 팝오버, related-to 필터, 일시정지/비우기), **Hubble Flows**(from/to pod·namespace·protocol·verdict 필터 + datalist 자동완성, SSE 스트림).
-  - 3개 탭 모두 mc 클라이언트 콘솔과 동일한 **좌(컨트롤 4) / 우(결과·로그 6) 10컬럼 그리드** — 결과/로그 카드가 컨트롤 아래가 아닌 우측 같은 라인에 고정되고(실행 전에는 플레이스홀더), lg 이상에서 내부 스크롤 높이를 `calc(100vh-…)`로 키워 세로 공간을 활용한다.
+  - 3개 탭 모두 mc 클라이언트 콘솔과 동일한 **좌(컨트롤 4) / 우(결과·로그 6) 10컬럼 그리드** — 결과/로그 카드가 컨트롤 아래가 아닌 우측 같은 라인에 고정되고(실행 전에는 플레이스홀더), lg 이상에서 내부 스크롤 높이를 `calc(100vh-…)`로 키워 세로 공간을 활용한다. BPF raw/직접명령 출력은 `LogViewer`(터미널 Appearance·필터·복사 적용), `useTerminalEnvSync` 로 운영등급 → Appearance 자동 전환.
 - **Frontend**: `useClusters`/`useClusterStore`; 로컬 `ciliumApi`(`api.get/post` 래퍼, `/cilium/{clusterId}/status|agents|bpf-inspect|exec-command`) + 자체 `startSseStream`(fetch 기반, Authorization 헤더 포함 SSE 파서, `/cilium/{clusterId}/monitor/stream`·`/hubble/stream`); `useCommands`/`useCreateCommand`(category=`cilium` 프리셋); `useAnalyzeNamespaces`/`useAnalyzePods`(Hubble 자동완성용, `analyzeApi`).
 - **Backend**: `GET /api/v1/cilium/{cluster_id}/status`, `GET .../agents`, `POST .../bpf-inspect`, `POST .../exec-command`, `GET .../monitor/stream`(SSE), `GET .../hubble/stream`(SSE) — 라우터 `backend/app/routers/cilium_trace.py`. 프리셋은 `commands.py`(`CommandEntry` 모델) 재사용. 전용 영속 모델 없음(라이브 조회/스트림).
 - **핵심 기능**:
@@ -787,10 +787,10 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: MinIO `mc` CLI가 설치된 노드에 SSH로 접속해 `mc admin info`, `mc ls`, `mc mirror`, `mc policy set` 등 명령을 실행하는 스토리지 운영 콘솔. alias는 사전에 `mc alias set`으로 구성되어 있어야 하며, `{alias}` 플레이스홀더로 프리셋에서 치환.
 - **UI 구성**:
   - `ClusterSidebar`는 `iconOnly` 단일선택.
-  - 10-컬럼 그리드: 좌(2) 타겟+인증(노드 선택 select + 수동 host override, user/port, password|key), 중(3) `McPresetManager`(개인/공유 프리셋) + alias/mc경로/인자 입력(`SavedCommands`) + timeout, 우(5) 결과 패널(항상 고정 위치, executed/stdout/stderr `LogViewer`).
+  - 10-컬럼 그리드: 좌(2) 타겟+인증(노드 선택 select + 수동 host override, user/port, password|key), 중(3) `McPresetManager`(개인/공유 프리셋) + alias/mc경로/인자 입력(`SavedCommands`) + timeout, 우(5) 결과 패널(항상 고정 위치, executed + `ExecOutputTabs` stdout/stderr 탭).
   - 위험 명령(`rm`/`mirror`/`admin service stop|restart`/`policy set`/`admin user remove` 등 정규식 매칭) 감지 시 `ConfirmDialog`를 `danger` 스타일로 강조.
-  - 선택 클러스터의 `operationLevel`에 따라 터미널 테마(`useTerminalEnvStore`)가 자동 전환.
-- **Frontend**: `useClusters`; `useQuery(['bulk-exec','nodes',clusterId])` → `bulkExecApi.nodeList`(노드목록 재사용); `useMutation` → `mcApi.run`; `useAuthStore`(admin 여부로 프리셋 공유 편집 권한), `useTerminalEnvStore`.
+  - 선택 클러스터의 `operationLevel`에 따라 터미널 테마가 자동 전환(`useTerminalEnvSync` 공용 훅).
+- **Frontend**: `useClusters`; `useQuery(['bulk-exec','nodes',clusterId])` → `bulkExecApi.nodeList`(노드목록 재사용); `useMutation` → `mcApi.run`; `useAuthStore`(admin 여부로 프리셋 공유 편집 권한), `useTerminalEnvSync`.
 - **Backend**: `POST /api/v1/clusters/{cluster_id}/mc/run`, `GET /api/v1/clusters/{cluster_id}/mc/presets`, `GET/PUT /api/v1/mc/presets/personal`, `GET/PUT /api/v1/mc/presets/shared` — 라우터 `backend/app/routers/mc_client.py`. 노드 목록은 `GET /api/v1/clusters/{cluster_id}/node-list`(`bulk_exec.py` 재사용). 전용 실행결과 영속 모델 없음(온디맨드 SSH 실행).
 - **핵심 기능**:
   - SSH 기반 원격 `mc` 명령 실행(비밀번호/PEM 키 인증 선택).

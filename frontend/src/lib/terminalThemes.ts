@@ -134,10 +134,13 @@ export const DEFAULT_PROFILE: TerminalProfile = {
   templateId: '', fontSize: DEFAULT_FONT_SIZE, fontFamily: '', colors: {},
 };
 
+// 기본 Appearance — 개발(dev)은 Monokai, 운영(ops)은 기본(테마 색상)으로 시작해
+// 화면만 봐도 개발/운영 콘솔이 구분되게 한다. 사용자가 Settings 에서 프로파일별로
+// 템플릿/색/글꼴을 저장하면(개인화) 그 값이 우선한다.
 export const DEFAULT_APPEARANCE: TerminalAppearance = {
   mode: 'auto',
   profiles: {
-    dev: { ...DEFAULT_PROFILE },
+    dev: { ...DEFAULT_PROFILE, templateId: 'monokai' },
     ops: { ...DEFAULT_PROFILE },
   },
   customTemplates: [],

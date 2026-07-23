@@ -6,7 +6,8 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
@@ -282,20 +283,13 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
       {expanded && (
         <tr className="border-b border-border bg-muted/10">
           <td colSpan={6} className="px-5 py-3">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-                <LogViewer text={result.stdout} maxHeight="max-h-72"
-                  filterOverride={globalFilter || undefined}
-                  hideToolbar={!!globalFilter.trim()} />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-                <LogViewer text={result.stderr} maxHeight="max-h-72" asError
-                  filterOverride={globalFilter || undefined}
-                  hideToolbar={!!globalFilter.trim()} />
-              </div>
-            </div>
+            <ExecOutputTabs
+              stdout={result.stdout}
+              stderr={result.stderr}
+              maxHeight="max-h-72"
+              filterOverride={globalFilter || undefined}
+              hideToolbar={!!globalFilter.trim()}
+            />
             {result.error && (
               <p className="text-sm text-red-400 mt-2">⚠ {result.error}</p>
             )}
@@ -444,6 +438,8 @@ export function BulkExecPage() {
   useEffect(() => {
     if (clusterIds.length === 0 && clusters.length > 0) setClusterIds([clusters[0].id]);
   }, [clusters, clusterIds.length]);
+  // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용. 하나라도 운영이면 ops.
+  useTerminalEnvSync(clusters, clusterIds);
 
   // 선택된 클러스터별로 병렬로 노드 목록을 조회
   const nodeQueries = useQueries({

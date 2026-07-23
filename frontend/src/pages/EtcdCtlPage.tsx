@@ -6,7 +6,8 @@ import {
   ShieldAlert, Wifi, Clock, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
   etcdctlApi, type EtcdPreset, type EtcdMasterCandidate, type EtcdCtlRunResponse,
@@ -49,16 +50,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
             {result.executedCommand || '(not provided)'}
           </pre>
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-          <LogViewer text={result.stdout} maxHeight="max-h-[440px]" />
-        </div>
-        {result.stderr && (
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-            <LogViewer text={result.stderr} maxHeight="max-h-[300px]" asError />
-          </div>
-        )}
+        <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
       </div>
     </MacCard>
   );
@@ -72,6 +64,8 @@ export function EtcdCtlPage() {
   useEffect(() => {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
   }, [clusters, clusterId]);
+  // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용.
+  useTerminalEnvSync(clusters, clusterId || null);
 
   const mastersQ = useQuery({
     queryKey: ['etcdctl', 'masters', clusterId],
