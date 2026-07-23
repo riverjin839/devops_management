@@ -20,8 +20,9 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, SearchableSelect } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -181,6 +182,8 @@ export function CiliumTracePage() {
   useEffect(() => {
     if (!selectedClusterId && clusters.length > 0) setSelectedClusterId(clusters[0].id);
   }, [clusters, selectedClusterId]);
+  // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용.
+  useTerminalEnvSync(clusters, selectedClusterId);
   const [tab, setTab] = useState<TabId>('bpf');
 
   const cid = selectedClusterId ?? '';
@@ -545,7 +548,7 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               <div className="px-3 py-2 rounded-lg bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300 break-all">{adhocErr}</div>
             )}
             {adhocOut != null && (
-              <pre className="rounded-xl border border-border bg-background p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-[40vh] overflow-auto">{adhocOut}</pre>
+              <LogViewer text={adhocOut} maxHeight="max-h-[40vh]" />
             )}
           </div>
         </MacCard>
@@ -579,9 +582,9 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           <BpfJsonTable rows={data.parsed} />
         )}
         {data && (!data.isJson || !Array.isArray(data.parsed)) && data.raw && (
-          <pre className="text-xs leading-snug font-mono px-4 py-3 overflow-auto max-h-[60vh] lg:max-h-[calc(100vh-300px)] whitespace-pre-wrap break-all bg-background">
-            {data.raw}
-          </pre>
+          <div className="p-3">
+            <LogViewer text={data.raw} maxHeight="max-h-[60vh] lg:max-h-[calc(100vh-340px)]" />
+          </div>
         )}
       </MacCard>
     </div>

@@ -4,13 +4,12 @@ import {
   HardDrive, Play, Loader2, CheckCircle, XCircle, Key, ShieldAlert, Wifi, Clock, Terminal,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { McPresetManager } from '@/components/mc/McPresetManager';
 import { mcApi, bulkExecApi, type EtcdCtlRunResponse, type NodeSummary } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
-import { useTerminalEnvStore } from '@/stores/terminalEnvStore';
-import { envForOperationLevel } from '@/lib/terminalThemes';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { formatApiError } from '@/lib/utils';
 
 const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -60,16 +59,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse | null }) {
             {result.executedCommand || '(not provided)'}
           </pre>
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-          <LogViewer text={result.stdout} maxHeight="max-h-[440px]" />
-        </div>
-        {result.stderr && (
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-            <LogViewer text={result.stderr} maxHeight="max-h-[260px]" asError />
-          </div>
-        )}
+        <ExecOutputTabs stdout={result.stdout} stderr={result.stderr} maxHeight="max-h-[440px]" />
       </div>
     </MacCard>
   );
@@ -91,11 +81,7 @@ export function McClientPage() {
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 
   // 선택한 클러스터의 운영등급에 따라 터미널 Appearance 활성 프로파일(개발/운영)을 결정.
-  const setCurrentEnv = useTerminalEnvStore((s) => s.setCurrentEnv);
-  useEffect(() => {
-    const c = clusters.find((x) => x.id === clusterId);
-    setCurrentEnv(clusterId ? envForOperationLevel(c?.operationLevel) : null);
-  }, [clusterId, clusters, setCurrentEnv]);
+  useTerminalEnvSync(clusters, clusterId || null);
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;

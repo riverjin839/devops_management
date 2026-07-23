@@ -29,13 +29,14 @@ SHARED_KEY = "terminal_themes_shared"
 _VALID_MODES = {"auto", "dev", "ops"}
 
 
-# 사용자가 아무것도 설정하지 않았을 때의 기본값. template_id='' 는 프론트의
-# "기본 (테마 색상)" 템플릿을 의미한다. font_size 13px.
+# 사용자가 아무것도 설정하지 않았을 때의 기본값. 개발(dev)은 'monokai' 템플릿,
+# 운영(ops)은 template_id='' (프론트의 "기본 (테마 색상)") — 화면만 봐도 개발/운영
+# 콘솔이 구분되게 한다. 사용자가 저장한 설정(개인화)이 있으면 그 값이 그대로 쓰인다.
 def _default_appearance() -> dict:
     return {
         "mode": "auto",
         "profiles": {
-            "dev": {"template_id": "", "font_size": 13, "font_family": "", "colors": {}},
+            "dev": {"template_id": "monokai", "font_size": 13, "font_family": "", "colors": {}},
             "ops": {"template_id": "", "font_size": 13, "font_family": "", "colors": {}},
         },
         "custom_templates": [],

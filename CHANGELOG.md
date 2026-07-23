@@ -12,7 +12,11 @@
 
 ## [1.11.1] - 2026-07-23
 
+### Added
+- **콘솔 화면 stdout/stderr 탭 분리 (`ExecOutputTabs`)**: 노드 일괄 실행·mc 클라이언트·etcdctl 콘솔의 실행 결과에서 stdout 과 stderr 를 위아래로 쌓지 않고 **탭으로 전환**하도록 개선 — 세로 공간을 아끼고 스크롤을 줄인다. 탭 라벨에 **결과 유무 dot(초록=stdout/빨강=stderr)과 라인 수**가 표기되어 클릭 전에 어느 스트림에 내용이 있는지 보이고, 내용이 있는 쪽이 기본 활성 탭이 된다. Frontend: 공용 `ExecOutputTabs` 컴포넌트 신설 + 3개 화면 적용. Cilium BPF Trace 의 raw/직접명령 출력도 plain `<pre>` 에서 `LogViewer` 로 교체(Appearance·필터·복사 툴바 일괄 적용). 콘솔 화면 공통 규칙은 CLAUDE.md "콘솔 화면 표준 패턴" 섹션으로 명문화.
+
 ### Changed
+- **터미널 Appearance 클러스터 운영등급 자동 적용 확대**: 선택 클러스터가 개발이면 개발 프로파일(기본 **Monokai**), 운영(prod/dr)이면 운영 프로파일이 로그 화면에 자동 적용되도록 개선. 기존에는 mc 클라이언트만 동작하던 것을 공용 훅(`useTerminalEnvSync`)으로 묶어 노드 일괄 실행(다중 선택은 하나라도 운영이면 운영)·etcdctl·Cilium BPF Trace·커널 파라미터에도 적용, 페이지 이탈 시 초기화. 신규 사용자 기본값도 개발=Monokai / 운영=기본(테마 색상)으로 변경(백엔드 `terminal_appearance` 기본값) — Settings → 터미널 Appearance 에서 프로파일별로 저장한 개인 설정이 있으면 그 값이 우선한다.
 - **k9s 콘솔 — "연결" 터미널을 드래그 이동형 플로팅 창으로**: "연결" 로 생성되는 인라인 k9s 터미널이 페이지에 고정되지 않고, **헤더를 드래그해 원하는 위치로 옮기고 우하단 모서리로 크기를 조절할 수 있는 플로팅 창**으로 열린다("새 창으로 열기" 없이도 창 이동 가능). 페이지 본문에는 플로팅 창 사용 안내 카드가 남는다. Frontend: `K9sTerminal` 헤더 드래그 핸들(pointer capture) + CSS `resize`, `K9sPage` 세션 안내 카드.
 
 ### Fixed
