@@ -9,6 +9,7 @@ import {
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
+import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { stripHtml, toLocalDateKey } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
@@ -60,7 +61,7 @@ function fmtLabel(dateStr: string): string {
 }
 
 export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
-  const todayStr = dateKey(new Date());
+  const todayStr = useToday();  // 자정 넘기면 자동 갱신
   const [viewDate, setViewDate] = useState(todayStr);
   const isToday = viewDate === todayStr;
 

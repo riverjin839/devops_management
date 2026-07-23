@@ -13,15 +13,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
+import { useToday } from '@/hooks/useToday';
 import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
 import { cn, parseUTC, assigneeNames, toLocalDateKey } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 function fmtKoreanDate(d: Date): string {
   const week = ['일', '월', '화', '수', '목', '금', '토'];
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} (${week[d.getDay()]})`;
@@ -91,7 +88,7 @@ export function HomePage() {
   // "다음 일정" 후보 — 이슈를 제외한 일정성 업무(작업/회의/교육/기타). 당일 스케줄 보드와 대상 일치.
   const allSchedulable = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type !== 'issue'), [allWorkItems]);
 
-  const today = dateKey(new Date());
+  const today = useToday();  // 자정 넘기면 자동 갱신 (상시 대시보드)
   const myTodayTasks = useMemo(() => {
     if (!myName) return [];
     return allTasks.filter((t) => {

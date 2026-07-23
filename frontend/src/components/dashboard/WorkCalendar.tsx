@@ -6,6 +6,7 @@ import {
   Plus, CalendarPlus, X,
 } from 'lucide-react';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
+import { useToday } from '@/hooks/useToday';
 import { stripHtml } from '@/lib/utils';
 import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
@@ -61,8 +62,8 @@ function itemLabel(w: WorkItem): string {
 }
 
 export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
-  const today = useMemo(() => new Date(), []);
-  const todayKey = toDateKey(today);
+  const todayKey = useToday();  // 자정 넘기면 자동 갱신
+  const today = useMemo(() => new Date(todayKey + 'T00:00:00'), [todayKey]);
   const [cursor, setCursor] = useState<{ y: number; m: number }>({
     y: today.getFullYear(),
     m: today.getMonth(),

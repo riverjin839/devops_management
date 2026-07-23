@@ -125,6 +125,7 @@
 ### P3-2. 마일스톤(이슈)이 같은 날 여러 건이면 겹쳐 그려짐
 
 - `WeeklyStatusTimeline.tsx:461-475` — 같은 `dayIdx` 의 마일스톤이 전부 같은 좌표(수직 중앙)에 절대배치되어 서로 완전히 겹친다. 레인 분배(packLanes 류)가 없다.
+- **[상태] 완료(3차 배치)**: 절대배치 대신 요일 컬럼(grid cell) 안에 세로로 쌓아 겹침 제거(행 높이는 내용에 맞춰 늘어남).
 
 ### P3-3. 날짜 문자열 파싱 방식 혼재 (`new Date('YYYY-MM-DD')`)
 
@@ -137,6 +138,7 @@
 ### P3-5. 홈 화면의 "오늘" 기준이 마운트 시각에 고정
 
 - `DayScheduleBoard.tsx:155,408`(todayStr, now 라인), `HomePage.tsx:91,118`, `WorkCalendar.tsx:59`, `MemberTodayTodos.tsx:62` — 모두 렌더 시점 `new Date()` 고정. 홈을 상시 띄워두는 운영 대시보드 특성상 자정 이후 KPI/오늘 하이라이트/now 라인이 어긋난다. 1분 tick(now 라인) + 날짜 변경 감지 재계산 권장.
+- **[상태] 완료(3차 배치)**: 공용 `hooks/useToday()`(자정 감지, 30초 폴링 + 탭 복귀 재확인)로 HomePage·WeeklyStatusTimeline·WorkCalendar·MemberTodayTodos·DayScheduleBoard 의 '오늘' 기준을 통일. DayScheduleBoard now 라인은 30초 tick 으로 실시간 갱신.
 
 ---
 
@@ -150,7 +152,7 @@
 | I-4 | today/summary 잘못된 date 파라미터를 조용히 오늘로 대체 | `work_items.py:375-379` — 형식 오류 시 fallback 대신 422/400 이 디버깅에 유리. |
 | I-5 | 주간 막대 텍스트 색 기본 흰색 | `homeStore` 기본 `#ffffff` + 사용자가 막대 투명도를 낮추면(라이트 테마) 가독성 급락. 투명도 연동 자동 대비(또는 기본값을 토큰 기반) 검토. |
 | I-6 | KPI "내 할일" 집계 기준과 이동 대상 페이지 불일치 가능성 | KPI 는 "내 담당 + 미완료 + 시작일 도래(또는 무기한)" 인데 `/todo-today` 페이지 집계 규칙과 완전히 동일한지 보장 장치가 없다. 집계 로직을 훅으로 공용화해 KPI·페이지가 같은 숫자를 보도록 권장. |
-| I-7 | 담당자 순환(◀▶) 시작 인덱스 | `DayScheduleBoard.cycleSelectedName`(`:204-212`) — selectedName 이 목록에 없으면 0번째가 아닌 1번째부터 순환 시작(`curIdx=-1→0+dir`). 사소한 스킵. |
+| I-7 ✅ | 담당자 순환(◀▶) 시작 인덱스 | `DayScheduleBoard.cycleSelectedName` — selectedName 이 목록에 없으면 0번째가 아닌 1번째부터 순환 시작하던 스킵. **[3차 배치 완료]** curIdx<0 이면 다음=첫번째/이전=마지막으로 이동하도록 수정. |
 
 ---
 

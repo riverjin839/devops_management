@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
+import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
 import { stripHtml, cn, toLocalDateKey } from '@/lib/utils';
@@ -136,7 +137,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   // 막대/마일스톤 클릭 → 상세 업무 페이지로 이동.
   const openWorkItem = (id: string) => navigate(`/tasks-mgmt/${id}`);
 
-  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  // 자정 넘기면 자동 갱신 — 상시 대시보드에서 '오늘' 컬럼 강조가 어긋나지 않게 한다.
+  const todayKey = useToday();
+  const today = useMemo(() => new Date(todayKey + 'T00:00:00'), [todayKey]);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
 
@@ -457,21 +460,30 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                 <div className="px-4 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-status-warning">
                   <Flag className="w-3.5 h-3.5" /> 마일스톤
                 </div>
-                <div className={`relative grid ${colsClass} min-h-[44px]`}>
-                  <DayCells />
-                  {milestones.map(({ issue, dayIdx }) => {
-                    const resolved = !!issue.closedAt;
+                {/* 같은 날 마일스톤이 여러 건이면 절대배치로 겹치지 않도록, 요일 컬럼 셀 안에
+                    세로로 쌓는다(행 높이는 내용에 맞춰 늘어남). */}
+                <div className={`grid ${colsClass} min-h-[44px]`}>
+                  {days.map((d, idx) => {
+                    const isTd = fmtDate(d) === todayStr;
+                    const dayMs = milestones.filter((m) => m.dayIdx === idx);
                     return (
-                      <button key={issue.id} type="button"
-                        onClick={() => openWorkItem(issue.id)}
-                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 text-left rounded hover:bg-status-warning/10 transition-colors cursor-pointer"
-                        style={{ left: `${(dayIdx / DAY_COUNT) * 100}%`, width: `${(1 / DAY_COUNT) * 100}%` }}
-                        title={stripHtml(issue.content)}>
-                        <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-status-healthy fill-status-healthy' : 'text-status-warning fill-status-warning'}`} />
-                        <span className={`text-xs font-medium truncate ${resolved ? 'text-status-healthy' : 'text-status-warning'}`}>
-                          {issue.title?.trim() || stripHtml(issue.content)}
-                        </span>
-                      </button>
+                      <div key={fmtDate(d)}
+                        className={`border-l border-border/40 flex flex-col justify-center gap-0.5 py-1 px-1 min-w-0 ${isTd ? 'bg-primary/[0.04]' : ''}`}>
+                        {dayMs.map(({ issue }) => {
+                          const resolved = !!issue.closedAt;
+                          return (
+                            <button key={issue.id} type="button"
+                              onClick={() => openWorkItem(issue.id)}
+                              className="flex items-center gap-1 px-1 text-left rounded hover:bg-status-warning/10 transition-colors cursor-pointer min-w-0"
+                              title={stripHtml(issue.content)}>
+                              <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-status-healthy fill-status-healthy' : 'text-status-warning fill-status-warning'}`} />
+                              <span className={`text-xs font-medium truncate ${resolved ? 'text-status-healthy' : 'text-status-warning'}`}>
+                                {issue.title?.trim() || stripHtml(issue.content)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     );
                   })}
                 </div>

@@ -7,6 +7,7 @@ import {
   useHomeWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
 } from '@/hooks/useWorkItems';
 import { useAssignees } from '@/hooks/useAssignees';
+import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
 import { Button } from '@/components/ui/button';
@@ -143,9 +144,18 @@ interface DragState {
 export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const navigate = useNavigate();
   const toast = useToast();
-  const todayStr = dateKey(new Date());
+  const todayStr = useToday();  // 자정 넘기면 자동 갱신
   const [viewDate, setViewDate] = useState(todayStr);
   const isToday = viewDate === todayStr;
+
+  // 현재 시각 인디케이터(빨간 now 라인) — 30초마다 갱신해 상시 화면에서도 실제 시각을 따라간다.
+  const [nowMin, setNowMin] = useState(() => new Date().getHours() * 60 + new Date().getMinutes());
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setNowMin(new Date().getHours() * 60 + new Date().getMinutes());
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const [quickAdd, setQuickAdd] = useState<{ time: string; assignee?: string } | null>(null);
   const [addMenu, setAddMenu] = useState<{ minute: number; y: number } | null>(null);
@@ -195,7 +205,11 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const cycleSelectedName = (dir: 1 | -1) => {
     if (namesList.length === 0) return;
     const curIdx = namesList.indexOf(selectedName);
-    const nextIdx = ((curIdx >= 0 ? curIdx : 0) + dir + namesList.length) % namesList.length;
+    // 현재 선택이 목록에 없으면(-1) 첫 이동은 dir 방향의 끝(다음=첫번째 / 이전=마지막)으로 —
+    // base 0 에서 계산하면 '다음' 이 index 0 을 건너뛰던 문제 회피.
+    const nextIdx = curIdx < 0
+      ? (dir === 1 ? 0 : namesList.length - 1)
+      : (curIdx + dir + namesList.length) % namesList.length;
     const next = namesList[nextIdx];
     setSelectedName(next);
     setScope('individual');
@@ -396,7 +410,6 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     });
   };
 
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   const totalCount = sessions.length + allDay.length;
 
   return (
