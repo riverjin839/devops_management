@@ -18,6 +18,7 @@
 - **노드 일괄 실행 (`/bulk-exec`) 레이아웃 개편**: mc 클라이언트 콘솔처럼 **[타겟 노드 | 명령 메뉴 | 실행 결과]** 를 한 로우(12컬럼 3:4:5 그리드)에 나란히 배치. 실행 결과가 더 이상 아래로 흐르지 않고 항상 우측 같은 자리에 고정되며(실행 전엔 플레이스홀더), 결과 패널 내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. 카드 padding·행 간격을 줄여 공간 효율을 높였다.
 
 ### Fixed
+- **k9s 콘솔 — `e`(edit) 등 에디터 셸아웃 hang 수정**: k9s 에서 `e`(edit)/`v`(view) 는 kubectl edit 처럼 `$KUBE_EDITOR`/`$EDITOR` 로 같은 터미널에 에디터를 셸아웃하는데, 이 값이 없거나 서버에 에디터가 없어 화면이 멈춘 것처럼 보이던 문제 수정. 세션 시작 시 `TERM` 과 에디터를 보장(운영자가 지정한 `KUBE_EDITOR`/`EDITOR` 는 존중, 없으면 종료법이 화면에 보이는 `nano` 우선·없으면 `vi`). Backend: `k9s_ssh._build_k9s_command` prelude 추가.
 - **노드 이미지 배포 "성공했는데 실제 배포 안 됨" 수정 (K8s 1.34 / containerd)**: 배포(prepull) 시 대상 노드에서 pull 이 exit 0 이면 실제 적재 여부와 무관하게 "완료"로 표시되던 문제를 수정. 이제 pull 직후 **런타임에서 실제 존재를 검증**(crictl `inspecti` / nerdctl `image inspect` / ctr `images ls`)해 검증까지 통과해야 성공으로 보고한다. 기본 런타임도 K8s(containerd) 표준인 crictl 로 변경(ctr 폴백 시 namespace 불일치로 kubelet 에 안 보이는 문제 회피). 또한 비대화형 SSH 세션의 최소 PATH 로 `crictl`/`ctr`/`nerdctl` 를 못 찾던 문제를 **PATH 보강**(/usr/local/bin·RKE2/k3s 경로 등)으로 해소. 배포 성공 후 대상 클러스터 이미지 스냅샷을 무효화해 보유/미보유 배지를 갱신하고, K8s API `node.status.images` 는 kubelet 갱신 주기로 지연될 수 있음을 결과 화면에 안내. Backend: `node_images._build_pull_command` 재작성. Frontend: `ImageDistributeDialog` 캐시 무효화 + 안내.
 - **로그 뷰어 Appearance(프로파일) 팝오버 잘림**: 로그 출력 툴바의 색상/글꼴(팔레트) 버튼을 누르면 드롭다운이 `LogViewer` 의 `overflow-hidden` 컨테이너(테이블 셀 등 좁은 곳)에 의해 잘려 보이던 버그 수정. Frontend: `LogThemeButton` 의 패널을 `createPortal` 로 `document.body` 에 fixed 앵커링(스크롤/리사이즈 추적)해 클리핑을 회피 — `SearchableSelect`(menuPortal)와 동일 패턴.
 

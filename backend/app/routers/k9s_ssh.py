@@ -80,8 +80,17 @@ def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None)
     """검증된 조각으로만 k9s 실행 명령을 조립한다.
 
     `exec` 로 로그인 셸을 k9s 로 치환 → k9s 종료 시 채널도 EOF 로 닫힌다.
+
+    앞단(prelude)에서 편집 셸아웃 환경을 보장한다:
+    - k9s 의 `e`(edit)/`v`(view) 등은 kubectl edit 처럼 `$KUBE_EDITOR`/`$EDITOR`
+      로 **같은 터미널에 에디터를 셸아웃**한다. 이 값이 없거나 서버에 에디터가 없으면
+      셸아웃이 멈춰(hang) 화면이 얼어붙은 것처럼 보인다. 그래서 운영자가 이미 지정한
+      `KUBE_EDITOR`/`EDITOR` 는 존중하되, 없으면 웹 터미널에서 종료법이 화면에 보이는
+      `nano` 를 우선 선택하고(없으면 `vi`) 확정한다.
+    - `TERM` 도 명시해 에디터/풀스크린 렌더가 깨지지 않게 한다.
+    prelude 문자열은 서버가 고정한 리터럴이며 사용자 입력이 섞이지 않는다.
     """
-    parts = ["exec", "k9s"]
+    parts = ["k9s"]
     if namespace and _NS_RE.match(namespace):
         parts += ["-n", namespace]
     if readonly:
@@ -91,7 +100,13 @@ def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None)
     for tok in (extra or "").split():
         if tok in _ALLOWED_FLAGS and tok not in parts:
             parts.append(tok)
-    return " ".join(shlex.quote(p) if p not in ("exec",) else p for p in parts)
+    k9s_cmd = " ".join(shlex.quote(p) for p in parts)
+    prelude = (
+        'export TERM="${TERM:-xterm-256color}"; '
+        'export KUBE_EDITOR="${KUBE_EDITOR:-${EDITOR:-$(command -v nano || command -v vi || echo vi)}}"; '
+        'export EDITOR="$KUBE_EDITOR"; '
+    )
+    return f"{prelude}exec {k9s_cmd}"
 
 
 @router.websocket("/{cluster_id}/k9s")
