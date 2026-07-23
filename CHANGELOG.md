@@ -11,6 +11,7 @@
 1.11.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **업무 날짜 규약 KST 통일 (UTC 저장 + KST 표시)**: 정식 업무 폼(`WorkItemForm`)이 날짜/시간을 naive 로컬 문자열로 저장해, 리더가 UTC 로 간주하며 화면에 **+9시간 시프트**되던 문제와, 이른 아침(00:00~08:59 KST) 업무가 전날로 분류되던 문제를 근본 수정. 규약을 앱 canonical(UTC 저장 + KST 표시, QuickAdd·`utcnow` 자동 타임스탬프와 동일)로 일원화. Frontend: `WorkItemForm.toApiDatetime` 을 `toISOString()`(UTC) 직렬화로 변경, 공용 `toLocalDateKey()`(UTC→KST 날짜) 헬퍼로 홈 위젯의 `.slice(0,10)` 날짜 비교를 전부 교체(HomePage/WorkAlarmBell/WeeklyStatusTimeline/MemberTodayTodos). Backend: `today/summary` 의 '오늘' 경계를 KST 자정 기준(`_local_day_bounds_utc`)으로 계산. 기존 데이터 중 구 폼으로 저장된 항목은 편집 시 자동으로 UTC 로 정규화된다(대부분은 이미 정상).
 - **업무 현황(홈) 위젯 데이터 100건 잘림 완화**: 홈 KPI·업무 알람 벨·당일 스케줄·주간/월간 뷰가 `GET /work-items` 기본 상한(100건, `started_at` 내림차순)을 그대로 받아, 업무가 100건을 넘으면 가장 오래된(=지연되기 쉬운) 건부터 조용히 잘려 미해결 이슈 KPI 과소집계·지연 알람 누락·과거 달/주 공백이 생기던 문제를 완화. Frontend: 홈 위젯 공용 `useHomeWorkItems()`(상한 500) 도입해 여러 위젯이 캐시를 공유하도록 통일(근본 해법인 화면별 기간 스코프 쿼리는 후속).
 - **홈 KPI "미해결 이슈"/"다음 일정" 링크가 죽은 경로(`/items`)로 이동**: 존재하지 않는 라우트라 클릭 시 홈으로 되돌아오던 문제를 `/tasks-mgmt` 로 수정.
 - **홈 "내 할일" KPI·업무 알람이 복수 담당자 업무를 누락**: 담당자 필드에 쉼표로 여러 명("A,B")이 들어간 업무를 정확 일치로만 판정해 KPI/알람에서 빠지던 문제 수정 — 공용 `assigneeNames()` 헬퍼로 분리 매칭. Frontend: `HomePage`, `WorkAlarmBell`, `DayScheduleBoard` 가 같은 헬퍼 사용.

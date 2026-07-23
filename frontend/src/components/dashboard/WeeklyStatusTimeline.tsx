@@ -9,7 +9,7 @@ import type { WorkItem, KanbanStatus } from '@/types';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
-import { stripHtml, cn } from '@/lib/utils';
+import { stripHtml, cn, toLocalDateKey } from '@/lib/utils';
 import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 import { Button } from '@/components/ui/button';
 
@@ -163,9 +163,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
     const out: TaskBar[] = [];
     const todayD = fmtDate(today);
     for (const item of taskItems) {
-      const s = item.startedAt?.slice(0, 10);
+      const s = toLocalDateKey(item.startedAt);
       if (!s) continue;
-      const closed = item.closedAt?.slice(0, 10);
+      const closed = toLocalDateKey(item.closedAt) || undefined;
       // 완료일 미입력 + 시작이 오늘 이전/오늘 → 진행 중(성장 중)으로 본다.
       const growing = !closed && s <= todayD;
       // 완료일(closedAt)이 있으면 그날까지. 진행 중이면 "오늘"에서 끊지 않고 보이는 주의
@@ -243,7 +243,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const milestones: Milestone[] = useMemo(() => {
     const out: Milestone[] = [];
     for (const issue of issueItems) {
-      const d = issue.startedAt?.slice(0, 10);
+      const d = toLocalDateKey(issue.startedAt);
       if (!d || d < weekStartStr || d > weekEndStr) continue;
       const idx = days.findIndex(x => fmtDate(x) === d);
       if (idx >= 0) out.push({ issue, dayIdx: idx });
@@ -262,8 +262,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const { minWeek, totalWeeks } = useMemo(() => {
     const stamps: number[] = [startOfWeek(today).getTime()];
     const consider = (s?: string | null) => {
-      if (!s) return;
-      const d = startOfWeek(new Date(s.slice(0, 10) + 'T00:00:00'));
+      const key = toLocalDateKey(s);   // UTC 저장 → KST 날짜로 변환한 뒤 주 시작 계산
+      if (!key) return;
+      const d = startOfWeek(new Date(key + 'T00:00:00'));
       if (!Number.isNaN(d.getTime())) stamps.push(d.getTime());
     };
     for (const w of scoped) { consider(w.startedAt); consider(w.closedAt); }

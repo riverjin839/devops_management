@@ -15,7 +15,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
-import { cn, parseUTC, assigneeNames } from '@/lib/utils';
+import { cn, parseUTC, assigneeNames, toLocalDateKey } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function dateKey(d: Date): string {
@@ -98,7 +98,7 @@ export function HomePage() {
       if (t.kanbanStatus === 'done') return false;
       // 담당자 필드에 쉼표로 여러 명("A,B")이 들어올 수 있어 정확 일치가 아닌 분리 매칭.
       if (!assigneeNames(t).includes(myName)) return false;
-      const due = t.startedAt?.slice(0, 10);
+      const due = toLocalDateKey(t.startedAt);
       return !due || due <= today;
     });
   }, [allTasks, myName, today]);

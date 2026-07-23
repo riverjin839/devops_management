@@ -1,7 +1,8 @@
 # 업무 현황(홈 work 모드) 버그·개선사항 감사
 
 - **감사일**: 2026-07-23
-- **수정 반영(1차 배치, 2026-07-23)**: P1-1(완화), **P1-2**, **P2-2**, **P2-3**, **P2-4**, **P2-5**, **P3-1** 및 P1-3(c) WorkCalendar 이슈 버킷 일치 — 처리 완료. **P1-3(a/b) + P2-1(날짜 저장·판독 규약 통일)은 기존 naive 데이터 마이그레이션 결정이 필요해 후속 배치로 분리**. 상세는 각 항목 말미의 `[상태]` 참고.
+- **수정 반영(1차 배치, 2026-07-23)**: P1-1(완화), **P1-2**, **P2-2**, **P2-3**, **P2-4**, **P2-5**, **P3-1** 및 P1-3(c) WorkCalendar 이슈 버킷 일치 — 처리 완료.
+- **수정 반영(2차 배치 — 날짜 KST 통일, 2026-07-23)**: **P1-3(a/b) + P2-1** 처리 완료. 규약을 **"UTC canonical 저장 + KST 표시"** 로 일원화 — 유일한 이단아였던 `WorkItemForm` write 를 UTC(Z) 직렬화로 수정(QuickAdd·`utcnow` 자동 타임스탬프와 일치), 프론트의 `.slice(0,10)` 날짜 비교를 전부 KST 변환 헬퍼(`toLocalDateKey`)로 교체, 서버 `today/summary` 경계를 KST 자정 기준으로 계산. **기존 데이터**: 대부분 이미 UTC canonical(QuickAdd·created_at 등)이라 즉시 정상화되고, 구 폼으로 저장된 naive-KST 항목은 **수정 시 자동 치유**(편집 폼이 표시하던 KST 벽시계 그대로 UTC 로 재저장)된다. 미수정 상태의 구 폼 저녁(≥15:00 KST) 시작 항목만 달력에서 +1일 밀려 보일 수 있으며(원본 데이터 파악 없이 일괄 시프트하면 정상 행을 되레 깨뜨리므로 블라인드 마이그레이션은 미적용), 편집하면 해소된다. 상세는 P1-3 항목 말미 `[상태]` 참고.
 - **대상 화면**: 홈 `/` 업무 현황(work) 모드 — KPI 스트립 + 업무 알람 벨 + 당일 스케줄 + 담당자별 진행 현황(주간/월간/담당자)
 - **대상 코드**:
   - `frontend/src/pages/HomePage.tsx`
@@ -67,7 +68,11 @@
   1. `WorkItemForm.toApiDatetime` 을 QuickAdd 와 같이 `toISOString()` 기반으로 변경(기존 naive 데이터 마이그레이션 여부 결정 필요).
   2. 프론트의 `.slice(0,10)` 비교 전부를 `dateKey(parseUTC(...))` 로 교체 (`HomePage`, `WorkAlarmBell`, `WeeklyStatusTimeline`, `MemberTodayTodos`, `WorkCalendar` 이슈 버킷).
   3. 서버 `today/summary` 는 P2-1 참조.
-- **[상태] 후속(미착수)**: (a)/(b) 는 저장 규약 단일화 + 기존 naive 데이터 마이그레이션 결정이 필요해 이번 배치에서 제외. (c) 의 WorkCalendar 이슈 버킷 UTC↔로컬 불일치만 로컬 날짜 기준으로 선(先)일치 처리(P3 아래 참조). readers 의 `.slice(0,10)` 전면 교체는 저장이 UTC 로 통일된 뒤에야 안전(naive 잔존 데이터는 되레 하루 밀릴 수 있음)하므로 함께 진행.
+- **[상태] 완료(2차 배치)**: 규약을 **UTC canonical 저장 + KST 표시** 로 일원화.
+  - (b) `WorkItemForm.toApiDatetime` → `toISOString()`(UTC Z) 로 수정. 이제 QuickAdd·`utcnow` 자동 타임스탬프와 동일 규약 → +9h 시프트 해소. 편집 폼 `toDatetimeLocal` 왕복도 일관.
+  - (a) 프론트 `.slice(0,10)` 날짜 비교를 공용 `toLocalDateKey(iso)`(= `dateKeyOf(parseUTC(iso))`, KST 날짜)로 교체 — `HomePage`/`WorkAlarmBell`/`WeeklyStatusTimeline`/`MemberTodayTodos`. `MemberTodayTodos` 의 `new Date('YYYY-MM-DD')`(UTC 파싱)도 로컬 자정 파싱으로 교정.
+  - 서버 `today/summary`(P2-1) 경계를 KST 자정 → UTC-naive 로 계산(`_local_day_bounds_utc`).
+  - **마이그레이션**: 블라인드 시프트는 정상 행(이미 UTC)을 깨뜨리므로 미적용. 구 폼 naive-KST 항목은 편집 시 자동 치유. 미수정 구 폼 저녁 시작분만 달력 +1일 가능(잔여 캐비엇).
 
 ---
 
@@ -77,6 +82,7 @@
 
 - `work_items.py:375-399` — `date` 파라미터(YYYY-MM-DD)를 **UTC 자정 경계**로 비교한다. KST 사용자의 "오늘" 이른 아침 업무(UTC 로 전날 15시 이후)는 전날 그룹으로 빠진다. `BATCH_JOBS_TIMEZONE`(Asia/Seoul) 같은 기준 타임존이 이 API 에는 적용되지 않는다.
 - **권장 수정**: 경계 계산에 서비스 타임존(또는 클라이언트가 넘긴 오프셋)을 적용하거나, 프론트가 로컬 자정의 UTC 변환값으로 범위 질의하도록 API 를 `from/to` datetime 로 바꾼다.
+- **[상태] 완료(2차 배치)**: `_local_day_bounds_utc(date)` 로 KST(설정 `batch_jobs_timezone`, 기본 Asia/Seoul) 자정 → UTC-naive `[start, end)` 범위를 계산해 `started_at` 비교에 사용. end 를 배타적(다음날 자정)으로 바꿔 경계 누락도 제거.
 
 ### P2-2. `PUT /work-items/{id}` 로 done 저장 시 `closed_at` 자동 세팅 없음
 

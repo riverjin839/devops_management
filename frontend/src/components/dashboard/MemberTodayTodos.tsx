@@ -10,7 +10,7 @@ import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, toLocalDateKey } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
 
 const TEAM_ASSIGNEE = '공통';
@@ -47,13 +47,14 @@ function dateKey(d: Date): string {
 }
 
 function addDays(dateStr: string, delta: number): string {
-  const d = new Date(dateStr);
+  // 'YYYY-MM-DD' 를 로컬 자정으로 파싱 (new Date('YYYY-MM-DD') 는 UTC 해석이라 음수 오프셋에서 하루 밀림).
+  const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + delta);
   return dateKey(d);
 }
 
 function fmtLabel(dateStr: string): string {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T00:00:00');
   const week = ['일', '월', '화', '수', '목', '금', '토'];
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} (${week[d.getDay()]})`;
 }
@@ -134,13 +135,13 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
   const teamGroup = {
     assignee: TEAM_ASSIGNEE,
     overdueTasks: teamCandidates.filter((t) => {
-      const d = t.startedAt?.slice(0, 10) ?? '';
+      const d = toLocalDateKey(t.startedAt);
       return !!d && d < viewDate && t.kanbanStatus !== 'done';
     }),
     todayTasks: teamCandidates.filter((t) =>
-      (t.startedAt?.slice(0, 10) ?? '') === viewDate && t.kanbanStatus !== 'in_progress'),
+      toLocalDateKey(t.startedAt) === viewDate && t.kanbanStatus !== 'in_progress'),
     inProgressTasks: teamCandidates.filter((t) =>
-      t.kanbanStatus === 'in_progress' && (t.startedAt?.slice(0, 10) ?? '') <= viewDate),
+      t.kanbanStatus === 'in_progress' && toLocalDateKey(t.startedAt) <= viewDate),
   };
   const teamHasItems = teamGroup.overdueTasks.length + teamGroup.todayTasks.length + teamGroup.inProgressTasks.length > 0;
   // 담당자별 집계(totals)는 원래 groups 기준으로만 계산 — "공통" 카드는 가시성용 중복 노출이라

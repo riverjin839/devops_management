@@ -21,6 +21,24 @@ export function stripHtml(html?: string | null): string {
   return noTags.trim();
 }
 
+/** Date → 로컬(브라우저=KST) 기준 YYYY-MM-DD 키. */
+export function dateKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * ISO 문자열 → 로컬(KST) 날짜 키(YYYY-MM-DD).
+ * 저장은 UTC canonical 이므로 `parseUTC` 로 UTC 해석 후 로컬로 변환한 "그 날" 을 반환한다.
+ * iso 가 없거나 파싱 불가면 빈 문자열.
+ * (구 `iso.slice(0,10)` 은 UTC 앞자리라 이른 아침 KST 업무가 전날로 새던 버그의 원인 —
+ *  '어느 날' 비교·버킷팅에는 반드시 이 헬퍼를 쓴다.)
+ */
+export function toLocalDateKey(iso?: string | null): string {
+  if (!iso) return '';
+  const d = parseUTC(iso);
+  return Number.isNaN(d.getTime()) ? '' : dateKeyOf(d);
+}
+
 /**
  * 업무의 담당자 이름을 정규화해 배열로 반환.
  * primary/secondary/legacy(assignee) 필드에 쉼표로 여러 명이 들어올 수 있어("A,B")

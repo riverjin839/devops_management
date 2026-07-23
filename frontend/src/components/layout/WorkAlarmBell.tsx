@@ -6,7 +6,7 @@ import { Bell, AlertTriangle, CalendarClock, MessageSquare, X } from 'lucide-rea
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { notificationsApi } from '@/services/api';
-import { stripHtml, assigneeNames } from '@/lib/utils';
+import { stripHtml, assigneeNames, toLocalDateKey } from '@/lib/utils';
 import type { WorkItem } from '@/types';
 
 /**
@@ -40,7 +40,7 @@ function itemLabel(item: WorkItem): string {
 }
 
 function AlarmRow({ item, today, onOpen }: { item: WorkItem; today: string; onOpen: (i: WorkItem) => void }) {
-  const due = item.startedAt?.slice(0, 10) ?? '';
+  const due = toLocalDateKey(item.startedAt);
   const overdueDays = due ? daysBetween(due, today) : 0;
   return (
     <button
@@ -86,7 +86,7 @@ export function WorkAlarmBell() {
         // 담당자 필드에 쉼표로 여러 명("A,B")이 들어올 수 있어 정확 일치가 아닌 분리 매칭.
         const mine = assigneeNames(t).includes(myName);
         if (!mine) continue;
-        const due = t.startedAt?.slice(0, 10);
+        const due = toLocalDateKey(t.startedAt);
         if (!due) continue;
         if (due < today) overdueList.push(t);
         else if (due === today) todayList.push(t);
