@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.10.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.11.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.11.0] - 2026-07-23
 
 ### Added
 - **k9s 콘솔 — 별도 창(팝업) 열기**: k9s 콘솔(`/k9s`)에 "새 창으로 열기" 를 추가. 접속 폼의 버튼 또는 터미널 헤더의 pop-out 버튼으로 k9s 세션을 별도 브라우저 창(`/k9s/popup`, 사이드바/네비 없는 전체창)으로 띄워, 메인 화면에서는 다른 페이지로 전환하며 k9s 를 나란히 사용할 수 있다. 접속정보는 URL 이 아닌 `localStorage` 1회용 handoff(팝업이 읽는 즉시 삭제)로 넘긴다. Frontend: `K9sPopupPage` + `lib/k9sPopout.ts`, `K9sTerminal` 에 `onPopOut`/`fill` prop, `App.tsx` 에서 팝업 라우트를 `AppShell` 바깥으로 분기.
