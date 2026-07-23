@@ -41,6 +41,12 @@ interface K9sTerminalProps {
 export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill }: K9sTerminalProps) {
   const [status, setStatus] = useState<Status>('connecting');
   const [fullscreen, setFullscreen] = useState(false);
+  // 플로팅 창 위치 (fill/전체화면이 아닌 기본 모드) — 헤더 드래그로 이동한다.
+  const [pos, setPos] = useState(() => ({
+    x: Math.max(16, Math.round((window.innerWidth - 1000) / 2)),
+    y: Math.max(16, Math.round(window.innerHeight * 0.12)),
+  }));
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -153,15 +159,51 @@ export function K9sTerminal({ clusterId, params, onClose, onPopOut, fill }: K9sT
   const statusColor =
     status === 'open' ? 'text-green-500' : status === 'error' ? 'text-red-500' : 'text-muted-foreground';
 
+  // 기본(인라인) 모드는 드래그로 이동 가능한 플로팅 창 — 헤더가 드래그 핸들이다.
+  const floating = !fill && !fullscreen;
+
+  const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!floating) return;
+    // 헤더 위 버튼 클릭은 드래그 시작으로 취급하지 않는다.
+    if ((e.target as HTMLElement).closest('button, select, a, input')) return;
+    dragRef.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    setPos({
+      x: Math.min(Math.max(e.clientX - d.dx, 8), Math.max(8, window.innerWidth - 160)),
+      y: Math.min(Math.max(e.clientY - d.dy, 8), Math.max(8, window.innerHeight - 56)),
+    });
+  };
+  const onHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+
   const rootClass = fill
     ? 'bg-zinc-900 text-zinc-100 flex flex-col h-screen w-screen'
     : fullscreen
       ? 'fixed inset-0 z-50 bg-zinc-900 flex flex-col'
-      : 'bg-zinc-900 text-zinc-100 rounded-2xl border border-zinc-700 flex flex-col overflow-hidden shadow-lg h-[72vh]';
+      // resize(우하단 핸들)로 크기 조절 — ResizeObserver 가 xterm 을 자동 리핏한다.
+      : 'fixed z-40 bg-zinc-900 text-zinc-100 rounded-2xl border border-zinc-700 flex flex-col overflow-hidden shadow-2xl resize min-w-[420px] min-h-[300px]';
 
   return (
-    <div className={rootClass}>
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-700 bg-zinc-800 text-zinc-100">
+    <div
+      className={rootClass}
+      style={floating ? { left: pos.x, top: pos.y, width: 'min(1000px, calc(100vw - 32px))', height: '72vh' } : undefined}
+    >
+      <div
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={onHeaderPointerMove}
+        onPointerUp={onHeaderPointerUp}
+        onPointerCancel={onHeaderPointerUp}
+        title={floating ? '드래그해서 창 이동' : undefined}
+        className={`flex items-center gap-2 px-4 py-2.5 border-b border-zinc-700 bg-zinc-800 text-zinc-100 ${
+          floating ? 'cursor-move select-none touch-none' : ''
+        }`}
+      >
         <span className="text-sm font-semibold text-green-400">k9s</span>
         <span className="text-xs font-mono text-zinc-400 truncate">
           {params.username}@{params.host}:{params.port}

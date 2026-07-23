@@ -1,4 +1,5 @@
 import type { K9sConnectParams } from '@/components/k8s';
+import { generateUUID } from '@/lib/utils';
 
 // k9s 세션을 별도 브라우저 창으로 이관하기 위한 1회용 handoff.
 // SSH 자격증명을 URL 에 싣지 않기 위해 localStorage 에 랜덤 키로 저장하고,
@@ -13,7 +14,9 @@ export interface K9sPopoutPayload {
 
 /** 팝업 창으로 세션을 연다. 반환: 열린 window(성공) | null(팝업 차단/실패). */
 export function openK9sPopout(payload: K9sPopoutPayload): Window | null {
-  const key = PREFIX + crypto.randomUUID();
+  // crypto.randomUUID 는 보안 컨텍스트(HTTPS/localhost) 전용 — HTTP(NodePort 등) 접속에서
+  // TypeError 가 나므로 폴백 있는 generateUUID 를 쓴다.
+  const key = PREFIX + generateUUID();
   try {
     localStorage.setItem(key, JSON.stringify(payload));
   } catch {
