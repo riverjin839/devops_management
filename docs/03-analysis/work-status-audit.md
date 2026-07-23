@@ -1,6 +1,7 @@
 # 업무 현황(홈 work 모드) 버그·개선사항 감사
 
 - **감사일**: 2026-07-23
+- **수정 반영(1차 배치, 2026-07-23)**: P1-1(완화), **P1-2**, **P2-2**, **P2-3**, **P2-4**, **P2-5**, **P3-1** 및 P1-3(c) WorkCalendar 이슈 버킷 일치 — 처리 완료. **P1-3(a/b) + P2-1(날짜 저장·판독 규약 통일)은 기존 naive 데이터 마이그레이션 결정이 필요해 후속 배치로 분리**. 상세는 각 항목 말미의 `[상태]` 참고.
 - **대상 화면**: 홈 `/` 업무 현황(work) 모드 — KPI 스트립 + 업무 알람 벨 + 당일 스케줄 + 담당자별 진행 현황(주간/월간/담당자)
 - **대상 코드**:
   - `frontend/src/pages/HomePage.tsx`
@@ -35,11 +36,13 @@
   - 업무 알람 벨에서 오래된 지연 업무 누락 (started_at 이 오래된 것부터 잘리므로 **지연 항목이 가장 먼저 사라짐**).
   - WorkCalendar 과거 달 / WeeklyStatusTimeline 과거 주가 비어 보임.
 - **권장 수정**: 홈 소비처는 목적별 서버 필터로 좁혀 호출(예: KPI 는 `closed=false`, 주간/월간은 `startedFrom/startedTo` 범위 쿼리)하거나, 최소한 `hasMore=true` 일 때 경고 노출 + `limit` 상향. 근본적으로는 화면별 기간 스코프 쿼리가 맞다 (전체 로드는 데이터 증가에 따라 어차피 파산).
+- **[상태] 완화 완료**: 홈 위젯 공용 `useHomeWorkItems()`(상한 500, 캐시 공유) 도입 — `hooks/useWorkItems.ts`. 500 초과 시 재발하므로 근본 해법(기간 스코프)은 후속.
 
 ### P1-2. KPI 필 "미해결 이슈"/"다음 일정" 링크가 죽은 라우트 `/items`
 
 - `HomePage.tsx:153,172` 가 `to="/items"` 로 링크하지만 `App.tsx` 에 `/items` 라우트가 없다. 레거시 alias 도 `/issues`, `/tasks`, `/work-items` 뿐이며, catch-all(`App.tsx:219`)이 `/` 로 되돌린다 → **클릭해도 홈으로 리다이렉트**(아무 일도 안 일어난 것처럼 보임).
 - **권장 수정**: `/tasks-mgmt` 로 변경 (미해결 이슈는 `/tasks-mgmt?type=issue&closed=false` 류 딥링크가 이상적).
+- **[상태] 완료**: `HomePage.tsx` 두 KPI 링크를 `/tasks-mgmt` 로 변경. (딥링크 필터는 보드 페이지가 아직 URL 필터를 안 읽어 후속 — 우선 죽은 링크 해소.)
 
 ### P1-3. 날짜 저장·판독 규약이 3갈래로 갈라져 있음 (타임존 버그 계열의 근원)
 
@@ -64,6 +67,7 @@
   1. `WorkItemForm.toApiDatetime` 을 QuickAdd 와 같이 `toISOString()` 기반으로 변경(기존 naive 데이터 마이그레이션 여부 결정 필요).
   2. 프론트의 `.slice(0,10)` 비교 전부를 `dateKey(parseUTC(...))` 로 교체 (`HomePage`, `WorkAlarmBell`, `WeeklyStatusTimeline`, `MemberTodayTodos`, `WorkCalendar` 이슈 버킷).
   3. 서버 `today/summary` 는 P2-1 참조.
+- **[상태] 후속(미착수)**: (a)/(b) 는 저장 규약 단일화 + 기존 naive 데이터 마이그레이션 결정이 필요해 이번 배치에서 제외. (c) 의 WorkCalendar 이슈 버킷 UTC↔로컬 불일치만 로컬 날짜 기준으로 선(先)일치 처리(P3 아래 참조). readers 의 `.slice(0,10)` 전면 교체는 저장이 UTC 로 통일된 뒤에야 안전(naive 잔존 데이터는 되레 하루 밀릴 수 있음)하므로 함께 진행.
 
 ---
 
@@ -80,24 +84,28 @@
 - 파급: ① `HomePage.tsx:103` 미해결 이슈 KPI(`!closedAt`)에 완료 이슈가 계속 집계 ② `WeeklyStatusTimeline.tsx:170` 에서 done 인데 "진행 중(성장)" 막대로 주말까지 무한 연장 ③ `WorkCalendar.tsx:92` 완료 버킷 누락.
 - 역방향도 있음: done → 다른 상태로 되돌릴 때 `closed_at` 을 지우지 않아(PATCH/PUT 모두) 재오픈 이슈가 "해결됨"으로 남는다.
 - **권장 수정**: PUT 에서도 done 전이 시 `closed_at` 기본 세팅 + done 이탈 시 clear(또는 명시 입력 우선) 로직을 PATCH 와 공통 함수로 통일.
+- **[상태] 완료**: `update_work_item` 에 done→`closed_at` 자동 세팅 / done 이탈 시(명시 입력 없으면) 해제 로직 추가.
 
 ### P2-3. 멀티 담당자(콤마 "A,B") 판정이 화면마다 다름
 
 - 서버 summary(`split_names`)·주간 타임라인(`:204`)·DayScheduleBoard(`assigneeNames`)는 콤마 분리를 지원하는데, **HomePage 내 할일 KPI(`:96`)와 WorkAlarmBell(`:86`)은 `t.assignee === myName` 정확 일치만** 검사한다.
 - **증상**: `primary_assignee="A,B"` 인 업무는 A·B 누구의 KPI/알람에도 잡히지 않는다 → 담당자 탭에는 보이는데 알람은 안 오는 불일치.
 - **권장 수정**: `assigneeNames()` 헬퍼를 `lib` 로 승격해 공용 사용.
+- **[상태] 완료**: `lib/utils.ts` 에 `assigneeNames()` 추가, `HomePage`·`WorkAlarmBell`·`DayScheduleBoard` 가 공용 사용.
 
 ### P2-4. QuickAdd 등록 직후 "담당자" 탭이 갱신되지 않음
 
 - 담당자 탭(MemberTodayTodos)은 쿼리 키 `['items','today',viewDate]` (`:83`) 를 쓰는데, `useCreateWorkItem` 등 뮤테이션은 `['workItems']` 만 invalidate 한다 (`useWorkItems.ts:27`).
 - **증상**: 홈에서 업무 등록 → 주간/월간 탭은 즉시 반영, 담당자 탭은 최대 60초(폴링 주기) 지연.
 - **권장 수정**: 뮤테이션 성공 시 `['items','today']` prefix 도 invalidate (또는 summary 쿼리 키를 `workItemKeys` 체계로 편입).
+- **[상태] 완료**: `useWorkItems.ts` 의 생성/수정/삭제/상태변경 뮤테이션이 `['items','today']` 도 함께 무효화.
 
 ### P2-5. "다음 일정" KPI 의 의미·대상 오류
 
 - `HomePage.tsx:30-38` — 후보에 **지난 24시간 내 시작 업무를 포함**하고 오름차순 첫 건을 취해, 어제 업무가 "다음 일정"으로 표기되는 경우가 흔하다.
 - 대상이 `type==='task'` 뿐이라 QuickAdd 로 등록한 **회의/교육 일정은 KPI 에 잡히지 않는다** (당일 스케줄 보드와 대상 불일치).
 - **권장 수정**: `ms >= now` 인 미래 시작 건만 + 작업류(type !== 'issue') 전체 대상.
+- **[상태] 완료**: `HomePage.nextDueTask` 를 미래 시작(`ms >= now`) 한정으로 바꾸고, 대상을 `type !== 'issue'`(작업/회의/교육/기타)로 확장.
 
 ---
 
@@ -106,6 +114,7 @@
 ### P3-1. WorkCalendar 가 `title` 을 무시
 
 - 칩/목록/팝오버 모두 `stripHtml(t.content) || t.category` 만 사용 (`WorkCalendar.tsx:305,312,319,476,493,507`). 다른 화면 표준은 `title?.trim() || stripHtml(content)`. QuickAdd 는 content=title 로 넣어 무관하지만, 정식 폼에서 제목·본문을 다르게 쓴 항목은 월간 뷰에서만 다른 이름으로 보인다.
+- **[상태] 완료**: `WorkCalendar` 에 `itemLabel()`(제목 우선) 도입해 칩/목록/팝오버 통일.
 
 ### P3-2. 마일스톤(이슈)이 같은 날 여러 건이면 겹쳐 그려짐
 

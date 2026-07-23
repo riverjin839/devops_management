@@ -22,6 +22,26 @@ export function stripHtml(html?: string | null): string {
 }
 
 /**
+ * 업무의 담당자 이름을 정규화해 배열로 반환.
+ * primary/secondary/legacy(assignee) 필드에 쉼표로 여러 명이 들어올 수 있어("A,B")
+ * 모두 분리·트림·중복 제거한다. KPI/알람 등 "내가 담당자인가" 판정에 공용으로 쓴다.
+ */
+export function assigneeNames(item: {
+  primaryAssignee?: string | null;
+  secondaryAssignee?: string | null;
+  assignee?: string | null;
+}): string[] {
+  const raw = [item.primaryAssignee, item.secondaryAssignee, item.assignee]
+    .filter(Boolean)
+    .join(',');
+  const out: string[] = [];
+  for (const n of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
+    if (!out.includes(n)) out.push(n);
+  }
+  return out;
+}
+
+/**
  * 폐쇄망(HTTP) 및 구형 브라우저 호환 UUID v4 생성
  *
  * 우선순위:

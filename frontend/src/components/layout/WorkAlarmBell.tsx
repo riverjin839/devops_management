@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, AlertTriangle, CalendarClock, MessageSquare, X } from 'lucide-react';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { notificationsApi } from '@/services/api';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, assigneeNames } from '@/lib/utils';
 import type { WorkItem } from '@/types';
 
 /**
@@ -73,7 +73,7 @@ export function WorkAlarmBell() {
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
 
-  const { data } = useWorkItems();
+  const { data } = useHomeWorkItems();
   const items = useMemo(() => data?.data ?? [], [data]);
   const today = dateKey(new Date());
 
@@ -83,7 +83,8 @@ export function WorkAlarmBell() {
     if (myName) {
       for (const t of items) {
         if (t.kanbanStatus === 'done') continue;
-        const mine = t.assignee === myName || t.primaryAssignee === myName || t.secondaryAssignee === myName;
+        // 담당자 필드에 쉼표로 여러 명("A,B")이 들어올 수 있어 정확 일치가 아닌 분리 매칭.
+        const mine = assigneeNames(t).includes(myName);
         if (!mine) continue;
         const due = t.startedAt?.slice(0, 10);
         if (!due) continue;

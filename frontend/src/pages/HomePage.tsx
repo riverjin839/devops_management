@@ -12,10 +12,10 @@ import { WorkAlarmBell } from '@/components/layout/WorkAlarmBell';
 import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
-import { cn, parseUTC } from '@/lib/utils';
+import { cn, parseUTC, assigneeNames } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function dateKey(d: Date): string {
@@ -32,7 +32,8 @@ function nextDueTask(items: WorkItem[]): WorkItem | null {
   const candidates = items
     .filter((t) => t.startedAt && t.kanbanStatus !== 'done')
     .map((t) => ({ t, ms: parseUTC(t.startedAt as string).getTime() }))
-    .filter(({ ms }) => Number.isFinite(ms) && ms >= now - 1000 * 60 * 60 * 24)
+    // 진짜 "다음(=아직 오지 않은)" 일정만 — 지난 건은 다음 일정이 아니다.
+    .filter(({ ms }) => Number.isFinite(ms) && ms >= now)
     .sort((a, b) => a.ms - b.ms);
   return candidates[0]?.t ?? null;
 }
@@ -83,18 +84,20 @@ export function HomePage() {
   const { clusters } = useClusterStore();
   const { isLoading: clustersLoading, isError: clustersError } = useClusters();
 
-  const { data: workItemsData, isLoading: workItemsLoading, isError: workItemsError } = useWorkItems();
+  const { data: workItemsData, isLoading: workItemsLoading, isError: workItemsError } = useHomeWorkItems();
   const allWorkItems = useMemo<WorkItem[]>(() => workItemsData?.data ?? [], [workItemsData]);
   const allTasks  = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'task'), [allWorkItems]);
   const allIssues = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'issue'), [allWorkItems]);
+  // "다음 일정" 후보 — 이슈를 제외한 일정성 업무(작업/회의/교육/기타). 당일 스케줄 보드와 대상 일치.
+  const allSchedulable = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type !== 'issue'), [allWorkItems]);
 
   const today = dateKey(new Date());
   const myTodayTasks = useMemo(() => {
     if (!myName) return [];
     return allTasks.filter((t) => {
       if (t.kanbanStatus === 'done') return false;
-      const match = t.assignee === myName || t.primaryAssignee === myName || t.secondaryAssignee === myName;
-      if (!match) return false;
+      // 담당자 필드에 쉼표로 여러 명("A,B")이 들어올 수 있어 정확 일치가 아닌 분리 매칭.
+      if (!assigneeNames(t).includes(myName)) return false;
       const due = t.startedAt?.slice(0, 10);
       return !due || due <= today;
     });
@@ -102,7 +105,7 @@ export function HomePage() {
 
   const openIssueCount = useMemo(() => allIssues.filter((i) => !i.closedAt).length, [allIssues]);
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);
-  const upcomingTask = useMemo(() => nextDueTask(allTasks), [allTasks]);
+  const upcomingTask = useMemo(() => nextDueTask(allSchedulable), [allSchedulable]);
   const upcomingLabel = upcomingTask?.startedAt
     ? parseUTC(upcomingTask.startedAt).toLocaleString('ko-KR', {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -150,7 +153,7 @@ export function HomePage() {
             hint="건"
             Icon={AlertCircle}
             accent="text-status-critical"
-            to="/items"
+            to="/tasks-mgmt"
             isLoading={workItemsLoading}
             isError={workItemsError}
           />
@@ -169,7 +172,7 @@ export function HomePage() {
             value={upcomingLabel}
             Icon={CalendarClock}
             accent="text-status-info"
-            to="/items"
+            to="/tasks-mgmt"
             isLoading={workItemsLoading}
             isError={workItemsError}
           />

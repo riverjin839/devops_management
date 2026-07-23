@@ -19,13 +19,29 @@ export function useWorkItems(filters?: WorkItemFilters) {
   });
 }
 
+// 홈(업무 현황) 대시보드 위젯 전용 상한. 기본 GET /work-items 는 started_at desc +
+// limit=100 이라, 업무가 100건을 넘으면 가장 오래된(=지연되기 쉬운) 건부터 조용히 잘려
+// KPI/알람/달력이 부분 데이터 기준이 된다. 홈 위젯은 넉넉한 상한으로 조회해 이를 완화한다.
+// (근본 해법은 화면별 기간 스코프 쿼리 — 데이터가 계속 늘면 상한도 결국 부족해진다.)
+export const HOME_WORK_ITEMS_LIMIT = 500;
+
+/** 홈 위젯이 공유하는 work item 조회 — 동일 인자로 캐시를 공유한다. */
+export function useHomeWorkItems() {
+  return useWorkItems({ limit: HOME_WORK_ITEMS_LIMIT });
+}
+
+/** work item 변경 후 무효화할 쿼리 — 목록(workItems)과 담당자/오늘 요약(items/today)을 함께.
+ *  today/summary 는 별도 키 prefix(`['items','today']`)라 workItemKeys.all 무효화에 안 걸린다. */
+function invalidateWorkItemQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: workItemKeys.all });
+  queryClient.invalidateQueries({ queryKey: ['items', 'today'] });
+}
+
 export function useCreateWorkItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: WorkItemCreate) => workItemsApi.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workItemKeys.all });
-    },
+    onSuccess: () => invalidateWorkItemQueries(queryClient),
   });
 }
 
@@ -34,9 +50,7 @@ export function useUpdateWorkItem() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: WorkItemUpdate }) =>
       workItemsApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workItemKeys.all });
-    },
+    onSuccess: () => invalidateWorkItemQueries(queryClient),
   });
 }
 
@@ -44,9 +58,7 @@ export function useDeleteWorkItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => workItemsApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workItemKeys.all });
-    },
+    onSuccess: () => invalidateWorkItemQueries(queryClient),
   });
 }
 
@@ -87,9 +99,7 @@ export function usePatchWorkItemStatus() {
   return useMutation({
     mutationFn: ({ id, kanbanStatus }: { id: string; kanbanStatus: KanbanStatus }) =>
       workItemsApi.patchStatus(id, kanbanStatus),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workItemKeys.all });
-    },
+    onSuccess: () => invalidateWorkItemQueries(queryClient),
   });
 }
 

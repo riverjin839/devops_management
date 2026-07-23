@@ -6,7 +6,7 @@ import {
   ClipboardList, CalendarCheck, Plus, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
 import { stripHtml, cn } from '@/lib/utils';
@@ -127,7 +127,7 @@ interface WeeklyStatusTimelineProps {
 
 export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: WeeklyStatusTimelineProps) {
   const navigate = useNavigate();
-  const { data, isLoading: queryLoading, isError: queryError, refetch } = useWorkItems();
+  const { data, isLoading: queryLoading, isError: queryError, refetch } = useHomeWorkItems();
   const workItems = items ?? data?.data ?? [];
   const loading = isLoading ?? queryLoading;
   // 외부에서 items 를 주입받은 경우 내부 쿼리 상태는 무의미하므로 에러로 보지 않는다.

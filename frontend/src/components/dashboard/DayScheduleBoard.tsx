@@ -4,13 +4,13 @@ import {
   ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2, AlertTriangle,
 } from 'lucide-react';
 import {
-  useWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
+  useHomeWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
 } from '@/hooks/useWorkItems';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
 import { Button } from '@/components/ui/button';
-import { stripHtml, cn } from '@/lib/utils';
+import { stripHtml, cn, assigneeNames } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
 import type { WorkItem, KanbanStatus, WorkItemTimeBlock } from '@/types';
@@ -79,15 +79,6 @@ function assigneeColor(name: string): string {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return ASSIGNEE_PALETTE[h % ASSIGNEE_PALETTE.length];
 }
-function assigneeNames(w: WorkItem): string[] {
-  const raw = [w.primaryAssignee, w.secondaryAssignee, w.assignee].filter(Boolean).join(',');
-  const out: string[] = [];
-  for (const n of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
-    if (!out.includes(n)) out.push(n);
-  }
-  return out;
-}
-
 // ── grid geometry ───────────────────────────────────────────────────────────
 const HOUR_PX = 56;
 const PX_PER_MIN = HOUR_PX / 60;
@@ -212,7 +203,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   };
   const meOnly = scope === 'individual';
 
-  const { data: workItemsData, isLoading, isError, refetch } = useWorkItems();
+  const { data: workItemsData, isLoading, isError, refetch } = useHomeWorkItems();
   const { data: dayBlocks = [] } = useTimeBlocksRange(viewDate, viewDate);
   const createBlock = useCreateTimeBlock();
   const updateBlock = useUpdateTimeBlock();

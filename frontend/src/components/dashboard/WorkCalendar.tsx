@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, Clock, ShieldAlert,
   Plus, CalendarPlus, X,
 } from 'lucide-react';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { stripHtml } from '@/lib/utils';
 import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
@@ -55,6 +55,11 @@ const STATUS_LABEL: Record<KanbanStatus, string> = {
   done: '완료',
 };
 
+/** 표시 라벨 — 제목 우선, 없으면 본문(HTML 제거), 그마저 없으면 카테고리. 앱 전역 표준과 일치. */
+function itemLabel(w: WorkItem): string {
+  return w.title?.trim() || stripHtml(w.content) || w.category;
+}
+
 export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
   const today = useMemo(() => new Date(), []);
   const todayKey = toDateKey(today);
@@ -68,7 +73,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
   // null 이면 popover 닫힘.
   const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null);
 
-  const { data: workItemsData } = useWorkItems();
+  const { data: workItemsData } = useHomeWorkItems();
 
   const buckets = useMemo<Map<string, DayBucket>>(() => {
     const all = workItemsData?.data ?? [];
@@ -84,7 +89,10 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
     for (const w of all) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
       if (w.type === 'issue') {
-        if (w.startedAt) ensure(w.startedAt.slice(0, 10)).issues.push(w);
+        // 작업(아래 else)과 동일하게 로컬 날짜로 버킷팅 — 같은 컴포넌트 안에서 작업은
+        // 로컬 날짜, 이슈는 UTC 앞자리(slice)로 나뉘어 같은 날 등록분이 다른 칸에 놓이던 불일치 제거.
+        const occurred = parseDate(w.startedAt);
+        if (occurred) ensure(toDateKey(occurred)).issues.push(w);
       } else {
         // task / meeting / training / etc — 모두 scheduled 버킷으로
         const sched = parseDate(w.startedAt);
@@ -302,21 +310,21 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                         <DayChip
                           color="emerald"
                           count={b.completed.length}
-                          label={truncate(stripHtml(b.completed[0].content) || '완료')}
+                          label={truncate(itemLabel(b.completed[0]) || '완료')}
                         />
                       )}
                       {b.scheduled.length > 0 && (
                         <DayChip
                           color="blue"
                           count={b.scheduled.length}
-                          label={truncate(stripHtml(b.scheduled[0].content) || '예정')}
+                          label={truncate(itemLabel(b.scheduled[0]) || '예정')}
                         />
                       )}
                       {b.issues.length > 0 && (
                         <DayChip
                           color="amber"
                           count={b.issues.length}
-                          label={truncate(stripHtml(b.issues[0].content) || '이슈')}
+                          label={truncate(itemLabel(b.issues[0]) || '이슈')}
                         />
                       )}
                     </div>
@@ -473,7 +481,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
                 const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
                 return {
                   id: t.id,
-                  primary: stripHtml(t.content) || t.category,
+                  primary: itemLabel(t),
                   meta: `${WORK_ITEM_TYPE_CONFIG[t.type]?.label ?? t.type} · ${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
                   leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-emerald-500" /> : null,
                 };
@@ -490,7 +498,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
                 const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
                 return {
                   id: t.id,
-                  primary: stripHtml(t.content) || t.category,
+                  primary: itemLabel(t),
                   meta: `${WORK_ITEM_TYPE_CONFIG[t.type]?.label ?? t.type} · ${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
                   leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-blue-500" /> : null,
                 };
@@ -505,7 +513,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               onItemClick={onClose}
               items={bucket.issues.map((i) => ({
                 id: i.id,
-                primary: stripHtml(i.content) || i.category,
+                primary: itemLabel(i),
                 meta: `${i.assignee || '미지정'}${i.closedAt ? ' · 해결' : ''}`,
               }))}
             />

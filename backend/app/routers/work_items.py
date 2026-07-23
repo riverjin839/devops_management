@@ -647,6 +647,16 @@ def update_work_item(
     for key, value in update_data.items():
         setattr(item, key, value)
 
+    # done 전이 시 closed_at 자동 관리 — PATCH /status 규약과 통일.
+    # 정식 폼 수정으로 done 저장 시 완료일이 비면 자동 채우고(미해결 KPI/성장 막대 오탐 방지),
+    # done 에서 벗어나면(재오픈) 명시 입력이 없을 때 완료일을 해제한다.
+    if "kanban_status" in update_data:
+        if update_data["kanban_status"] == "done":
+            if not item.closed_at:
+                item.closed_at = datetime.utcnow()
+        elif "closed_at" not in update_data:
+            item.closed_at = None
+
     db.commit()
     db.refresh(item)
     # G-C5: audit log — 변경된 필드만 기록 (전체 dump 는 PII 누출 위험)
