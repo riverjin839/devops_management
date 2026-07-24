@@ -114,7 +114,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCatalogManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
 - **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·서비스 카탈로그·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그까지 플랫폼 전역 설정을 12개 탭으로 모아둔 관리자 콘솔.
 - **UI 구성**:
-  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`서비스`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시.
+  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`서비스 카테고리`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`서비스 타입`=LakeServiceType 카탈로그 / `서비스 카탈로그`=ui_settings.serviceCatalog, 구 최상위 "서비스"/"PEP 서비스" 탭이 이리로 이동)로 구성. 레거시 `?tab=service` 딥링크는 `mgmt-service`(서비스 카탈로그 서브탭)로 리다이렉트.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
@@ -1118,7 +1118,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 ## PEP 서비스 (LAKE 기반, 구) / APP 서비스
 
 > **사이드바 "PEP 서비스" 아이콘은 더 이상 이 `/pep-services` 화면을 가리키지 않는다.**
-> Settings "서비스" 탭이 "PEP 서비스" 탭으로 이름이 바뀌면서(ui_settings.serviceCatalog 편집기),
+> 서비스 카탈로그 편집기(ui_settings.serviceCatalog)는 Settings → "관리 서비스" 탭 → "서비스 카탈로그" 서브탭에 있으며,
 > 사이드바 "PEP 서비스" 그룹의 진입 경로도 `/pep-services`(LakeService 기반)에서
 > `/services`(서비스 카탈로그 / 통합지식 — [§ 서비스 카탈로그 / 통합지식](#서비스-카탈로그--통합지식-services))로
 > 변경되었다. 아래 `/pep-services` 화면은 라우트/데이터는 그대로 유지되지만 사이드바 노출은
@@ -1334,7 +1334,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 서비스명/키 검색
   - 서비스별 등록 항목 수 + kind별(가이드/트러블슈팅/변경이력/메모/링크) 분포 배지
   - 각 행/카드 클릭 시 `/services/:service` 상세 허브로 이동
-  - 서비스 카탈로그 자체의 추가/수정은 이 화면이 아닌 Settings → "PEP 서비스" 탭에서 수행함을 안내 문구로 명시
+  - 서비스 카탈로그 자체의 추가/수정은 이 화면이 아닌 Settings → "관리 서비스" 탭 → "서비스 카탈로그" 서브탭에서 수행함을 안내 문구로 명시
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
