@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { useModalA11y } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useLakeServiceTypes,
@@ -42,15 +43,8 @@ export function AddLakeServiceModal({
     setError(null);
   }, [open, defaultClusterId]);
 
-  // ESC 닫기
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅)
+  const dialogRef = useModalA11y(open, onClose);
 
   if (!open) return null;
 
@@ -92,7 +86,7 @@ export function AddLakeServiceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-label="LAKE 서비스 등록">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="LAKE 서비스 등록">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">

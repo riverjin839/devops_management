@@ -1,8 +1,9 @@
 // frontend/src/components/batch-jobs/CreateBatchJobWizard.tsx
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { BatchJob } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
 import { useBatchJobTypes, useCreateBatchJob } from '@/hooks/useBatchJobs';
+import { useModalA11y } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   EMPTY_WIZARD,
@@ -52,17 +53,9 @@ export function CreateBatchJobWizard({
     });
   }, [open, defaultClusterId, defaultJobType]);
 
-  // ESC 로 닫기.
-  const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; });
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open]);
+  // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅)
+  const dialogRef = useModalA11y(open, onClose);
+  const uid = useId();
 
   if (!open) return null;
 
@@ -136,11 +129,15 @@ export function CreateBatchJobWizard({
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${uid}-title`}
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h3 className="text-sm font-semibold">새 배치 잡 등록</h3>
+          <h3 id={`${uid}-title`} className="text-sm font-semibold">새 배치 잡 등록</h3>
           <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">
             닫기
           </button>

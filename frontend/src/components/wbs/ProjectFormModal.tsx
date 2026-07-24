@@ -1,5 +1,6 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { X, Loader2, FolderOpen } from 'lucide-react';
+import { useModalA11y } from '@/components/common';
 import type { Project, ProjectCreate } from '@/types';
 import { useCreateProject, useUpdateProject } from '@/hooks/useProjects';
 import { formatApiError } from '@/lib/utils';
@@ -34,11 +35,8 @@ export function ProjectFormModal({ initial, onClose }: Props) {
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅) — 이 모달은 마운트=열림
+  const dialogRef = useModalA11y(true, onClose);
 
   const isPending = createMut.isPending || updateMut.isPending;
 
@@ -70,7 +68,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
   const labelCls = 'block text-sm font-medium text-muted-foreground mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby={f('title')}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isPending && onClose()} />
       <form
         onSubmit={handleSubmit}
@@ -81,7 +79,7 @@ export function ProjectFormModal({ initial, onClose }: Props) {
             <FolderOpen className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-semibold">{isEdit ? '프로젝트 수정' : '새 프로젝트'}</h2>
+            <h2 id={f('title')} className="text-base font-semibold">{isEdit ? '프로젝트 수정' : '새 프로젝트'}</h2>
           </div>
           <button type="button" onClick={onClose} disabled={isPending}
             className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50">

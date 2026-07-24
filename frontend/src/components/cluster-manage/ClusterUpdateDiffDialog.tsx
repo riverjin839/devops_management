@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { X, ArrowRight, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useModalA11y } from '@/components/common';
 
 export interface DiffRow {
   field: string;
@@ -68,14 +68,8 @@ function renderValue(v: unknown, field?: string): string {
 export function ClusterUpdateDiffDialog({
   open, clusterName, diff, warnings, applying, onCancel, onConfirm,
 }: Props) {
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !applying) onCancel();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, applying, onCancel]);
+  // ESC 닫기(적용 중엔 무시) · 포커스 트랩 · 초점 복원 (공용 훅)
+  const dialogRef = useModalA11y(open, () => { if (!applying) onCancel(); });
 
   if (!open) return null;
 
@@ -83,7 +77,7 @@ export function ClusterUpdateDiffDialog({
   const unchanged = diff.filter((d) => !d.changed);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={`클러스터 정보 수집 결과 — ${clusterName}`}>
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onCancel()} />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
