@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
@@ -43,6 +43,7 @@ import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
+import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { K8sEventsPage } from '@/pages/K8sEventsPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
@@ -51,6 +52,8 @@ import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
+import { K9sPage } from '@/pages/K9sPage';
+import { K9sPopupPage } from '@/pages/K9sPopupPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { PepServicesPage } from '@/pages/PepServicesPage';
@@ -186,6 +189,7 @@ function AppShell() {
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
+              <Route path="/service-architecture" element={<ServiceArchitecturePage />} />
               <Route path="/architecture" element={<ArchitecturePage />} />
               <Route path="/k8s-events" element={<K8sEventsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
@@ -206,6 +210,9 @@ function AppShell() {
               {/* K8S 자원 관리 — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화 */}
               <Route path="/k8s-allocation/:clusterId" element={<K8sAllocationPage />} />
               <Route path="/k8s-allocation" element={<K8sAllocationPage />} />
+              {/* k9s 콘솔 — control-plane 서버 내장 k9s 를 SSH 로 웹 터미널 스트리밍 */}
+              <Route path="/k9s/:clusterId" element={<K9sPage />} />
+              <Route path="/k9s" element={<K9sPage />} />
               <Route path="/cluster-trends/:clusterId" element={<ClusterTrendsPage />} />
               <Route path="/cluster-trends" element={<ClusterTrendsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
@@ -218,14 +225,27 @@ function AppShell() {
   );
 }
 
+/** 인증 후 최상위 — `/k9s/popup` 은 사이드바/네비 없는 전체창(별도 브라우저 창)으로
+ *  분기하고, 그 외에는 메인 셸(AppShell)을 그대로 렌더한다. AppShell 을 Route 로
+ *  감싸지 않아 기존 라우팅 컨텍스트에 영향이 없다. */
+function AuthedRoot() {
+  const location = useLocation();
+  if (location.pathname === '/k9s/popup') return <K9sPopupPage />;
+  return (
+    <>
+      <AppShell />
+      <AgentChat />
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter>
           <AuthGate>
-            <AppShell />
-            <AgentChat />
+            <AuthedRoot />
           </AuthGate>
         </BrowserRouter>
       </ToastProvider>

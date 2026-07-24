@@ -88,7 +88,7 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
 ## Repository Layout
 
 전체 파일 지도(기능 → 파일 위치)는 **`CODE_MAP.md`** 를 먼저 볼 것. 아래는 도메인 단위 요약이다
-(개별 나열은 규모상 생략 — 라우터 62개 / 모델 49개 / 페이지 63개).
+(개별 나열은 규모상 생략 — 라우터 64개 / 모델 51개 / 페이지 66개).
 
 ```
 devops_management/
@@ -98,21 +98,22 @@ devops_management/
 │   │   ├── config.py            # pydantic-settings Settings class
 │   │   ├── database.py          # SQLAlchemy engine + SessionLocal + Base
 │   │   ├── celery_app.py        # Celery app + Beat (매분 check-matrix 디스패처 등 6개 스케줄, ~13개 태스크)
-│   │   ├── models/              # SQLAlchemy ORM 모델 49개 — 도메인 그룹:
+│   │   ├── models/              # SQLAlchemy ORM 모델 51개 — 도메인 그룹:
 │   │   │   #  모니터링/점검: cluster, daily_check, check_log, check_matrix, deep_check,
 │   │   │   #    ops_check, metric_card, addon, k8s_event, resource_count,
 │   │   │   #    config_snapshot, os_param_change, trend
 │   │   │   #  업무 관리: work_item(+comment/time_block/custom_field), sprint, project, workflow
 │   │   │   #  지식: ontology, mindmap, work_guide, ops_note, voc_post, command_entry, reaction
 │   │   │   #  인프라/서비스: infra_node, node_server_spec, management_server, isilon_server,
-│   │   │   #    service_entry, service_category, service_topology, topology_audit_log,
-│   │   │   #    lake_service, lake_service_type, cluster_item, cluster_custom_field
+│   │   │   #    service_entry, service_category, service_topology, service_arch_doc,
+│   │   │   #    topology_audit_log, lake_service, lake_service_type, cluster_item,
+│   │   │   #    cluster_custom_field
 │   │   │   #  플랫폼/자동화: batch_job, bottleneck_run, ansible_assets, playbook
 │   │   │   #  사용자/설정: user, user_setting, user_jira_credential, user_notification,
 │   │   │   #    app_setting, audit_log
-│   │   ├── routers/             # APIRouter 62개 — 모델과 같은 도메인 그룹 + auth, health,
+│   │   ├── routers/             # APIRouter 64개 — 모델과 같은 도메인 그룹 + auth, health,
 │   │   │   #  history, backup, notifications, release_notes, ui_settings,
-│   │   │   #  terminal_appearance, k8s_resources/k8s_allocation/k8s_helm/k8s_exec,
+│   │   │   #  terminal_appearance, k8s_resources/k8s_allocation/k8s_helm/k8s_exec/k9s_ssh,
 │   │   │   #  cilium_trace/topology_trace, bottleneck, etcdctl, mc_client, bulk_exec,
 │   │   │   #  commands, analyze, versions, jira, voc, promql, agent ...
 │   │   ├── schemas/             # Pydantic 스키마
@@ -124,7 +125,7 @@ devops_management/
 │   │       ├── lake_checkers/     # 데이터 LAKE 서비스 프로브 (airflow/spark/trino/starrocks ...)
 │   │       ├── bottleneck_probes/ # dns_latency, tcp_perf, tcp_state, endpoints
 │   │       ├── analyzers/         # 장애 분석기: claude / local_llm / rule_based + factory
-│   │       ├── batch_jobs/        # etcdctl_defrag, shell_command 실행기
+│   │       ├── batch_jobs/        # etcdctl_defrag, shell_command(SSH) + k8s_job_cleanup(non-SSH) 실행기
 │   │       └── trends/            # github/rss 수집기 + summarizer + trend_service
 │   ├── tests/                   # pytest 스위트: conftest + 테스트 모듈 13개 (API, 클러스터
 │   │                            #  등록/토폴로지/추이, 배치잡, deep check, 임베딩, 온톨로지 등)
@@ -134,7 +135,7 @@ devops_management/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx              # React Router — 페이지 63개, 라우트 ~90개 (진입점 `/` = HomePage,
+│   │   ├── App.tsx              # React Router — 페이지 66개, 라우트 ~90개 (진입점 `/` = HomePage,
 │   │   │                        #  구 대시보드는 /cluster-overview; 레거시 경로는 redirect;
 │   │   │                        #  RequireAdmin·RequireFeature 가드)
 │   │   ├── main.tsx             # Entry point
@@ -143,7 +144,7 @@ devops_management/
 │   │   ├── stores/              # Zustand 9개: authStore, clusterStore, themeStore, sidebarStore,
 │   │   │                        #  homeStore, debugStore, playbookStore, tableViewStore, terminalEnvStore
 │   │   ├── hooks/               # TanStack Query 훅 ~53개 (도메인 리소스당 1개+)
-│   │   ├── pages/               # 페이지 63개 — 화면별 명세는 docs/SCREENS.md 참고
+│   │   ├── pages/               # 페이지 66개 — 화면별 명세는 docs/SCREENS.md 참고
 │   │   ├── components/          # 기능별 그룹: common/(ClusterSidebar), ui/(MacCard, shadcn),
 │   │   │                        #  layout/(Sidebar, navConfig.ts), dashboard/, agent/, playbooks/,
 │   │   │                        #  work-items/ 등 도메인 폴더 다수
@@ -387,7 +388,7 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 ### Celery Tasks
 
 구 아침/점심/저녁(09/13/18) 하드코딩 스케줄은 **check-matrix cron 디스패처로 완전 대체**됐다.
-`celery_app.py` 의 Beat 스케줄 6개:
+`celery_app.py` 의 Beat 스케줄 7개:
 
 | Beat 엔트리 | 주기 | 역할 |
 |---|---|---|
@@ -397,11 +398,14 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 | `resource-count-snapshot-dispatcher` | 매분 | 리소스 카운트 스냅샷 디스패치 |
 | `batch-job-dispatcher` | 매분 | 등록된 배치잡 cron 평가·실행 |
 | `cluster-item-dispatcher` | 매시 :00 | 클러스터 아이템 점검 |
+| `arch-doc-sync-dispatcher` | 매분 | 서비스 아키텍처 문서 현행화 (AppSetting cron 평가 → `sync_all_architecture_docs`) |
 
-태스크는 ~13개: 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
-`dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`), 수집류(`collect_resource_counts`,
-`run_trend_collect`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`),
-AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_work_guide_embedding`) 등.
+태스크는 ~16개: 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
+`dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`,
+`dispatch_architecture_doc_sync`), 수집류(`collect_resource_counts`,
+`run_trend_collect`, `sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`),
+AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_work_guide_embedding`,
+`generate_arch_doc_llm`) 등.
 async 서비스는 `asyncio.new_event_loop()` + `loop.run_until_complete()` 로 브리지한다.
 
 ### Health Check Logic (`services/daily_checker.py`)
@@ -573,6 +577,30 @@ Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className
 - ❌ 페이지 내 dropdown 형태 클러스터 선택기 (`<select>`) — 대신 좌측 사이드바를 쓴다.
 - ❌ `onReorder` prop — iconOnly 에서는 정렬 토글이 노출되지 않으므로 사용 금지. 클러스터 정렬은 `/cluster-manage` 페이지에서만 한다.
 
+### 콘솔 화면 표준 패턴 (PEP Console Pattern) — SSH/exec 실행형 화면 공통
+
+원격 명령을 실행하고 로그(stdout/stderr)를 보여주는 화면은 모두 **같은 패턴**을 따른다.
+"콘솔 패턴 반영해줘" 류 요청이 오면 아래 목록의 화면 전부에 일괄 적용한다.
+
+**적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc-client` · etcdctl `/etcdctl` ·
+Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
+
+1. **레이아웃 — 좌(컨트롤) / 우(결과) 한 로우 고정**: 10~12컬럼 grid(`grid grid-cols-1 lg:grid-cols-10 gap-4 items-start` 등)로
+   컨트롤 카드(들)를 좌측(4~5), 결과/로그 카드를 우측(5~6)에 배치한다. 결과 카드는 **실행 전에도 같은 자리에
+   플레이스홀더**로 존재해 레이아웃이 흔들리지 않고, 스크롤은 결과 패널 내부에서만(가로 스크롤로 페이지가 늘어나면 안 됨).
+2. **stdout/stderr 는 `ExecOutputTabs`** (`components/common/ExecOutputTabs.tsx`): 두 스트림을 위아래로 쌓지 않고
+   탭으로 전환한다. 탭 라벨에 결과 유무 dot(초록=stdout/빨강=stderr)과 라인 수가 표기되고, 내용이 있는 쪽이 기본 활성
+   탭이다(stdout 우선). stdout/stderr 를 각각 `LogViewer` 로 직접 쌓는 코드는 신규 작성 금지.
+3. **로그 출력은 항상 `LogViewer`** (`components/common/LogViewer.tsx`): plain `<pre>` 금지. 포맷 자동감지(JSON/journal/table),
+   필터/복사/줄바꿈 툴바, 터미널 Appearance(색/글꼴) 가 일괄 적용된다.
+4. **터미널 Appearance 자동 적용 — `useTerminalEnvSync`** (`hooks/useTerminalEnvSync.ts`): 페이지 최상단에서
+   `useTerminalEnvSync(clusters, selectedId | selectedIds)` 를 호출한다. 선택 클러스터의 운영등급(`operationLevel`)이
+   prod/dr 계열이면 운영(ops), 아니면 개발(dev) 프로파일이 LogViewer 에 자동 적용된다(다중 선택은 하나라도 운영이면 ops,
+   페이지 이탈 시 null 초기화). **기본값: 개발=Monokai, 운영=기본(테마 색상)** — 사용자가 Settings → 터미널 Appearance 에서
+   프로파일별 템플릿/색/글꼴을 저장하면(개인화) 그 값이 우선한다(백엔드 `terminal_appearance` user_setting).
+5. **실행 상태 배지**: ok/error/timeout/auth_error/connect_error 는 `STATUS_META` 패턴(색 + 아이콘 pill)으로 표기,
+   위험 명령은 `ConfirmDialog` `danger` 확인을 거친다.
+
 ---
 
 ## Frontend Architecture Details
@@ -614,7 +642,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 **API 는 ~60개 라우터가 `/api/v1` 아래에 마운트된다** — 아래 상세 표는 원조 코어 4개 그룹의
 대표 예시일 뿐 전체가 아니다. 전체 목록은 `backend/app/routers/__init__.py`, 라이브 스펙은
 `/docs`(Swagger) 를 본다. 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, 예외
-(비인증 마운트)는 `auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k8s_events_ingest` 다.
+(비인증 마운트)는 `auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest` 다
+(`k8s_exec`/`k9s_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증).
 
 **라우터 그룹 인덱스** (한 줄 요약):
 
@@ -622,8 +651,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup` |
 | 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
-| 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
 | 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `service_entries`, `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks` |

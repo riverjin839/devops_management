@@ -6,6 +6,7 @@ import {
   ShieldAlert, Wifi, Terminal, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import {
@@ -219,6 +220,8 @@ export function KernelParamsPage() {
   useEffect(() => {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
   }, [clusters, clusterId]);
+  // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용.
+  useTerminalEnvSync(clusters, clusterId || null);
 
   const nodesQ = useQuery({
     queryKey: ['bulk-exec', 'nodes', clusterId],

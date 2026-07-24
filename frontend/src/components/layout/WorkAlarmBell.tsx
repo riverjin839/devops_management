@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, AlertTriangle, CalendarClock, MessageSquare, X } from 'lucide-react';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useAuthStore } from '@/stores/authStore';
 import { notificationsApi } from '@/services/api';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, assigneeNames, toLocalDateKey } from '@/lib/utils';
 import type { WorkItem } from '@/types';
 
 /**
@@ -40,7 +40,7 @@ function itemLabel(item: WorkItem): string {
 }
 
 function AlarmRow({ item, today, onOpen }: { item: WorkItem; today: string; onOpen: (i: WorkItem) => void }) {
-  const due = item.startedAt?.slice(0, 10) ?? '';
+  const due = toLocalDateKey(item.startedAt);
   const overdueDays = due ? daysBetween(due, today) : 0;
   return (
     <button
@@ -51,11 +51,11 @@ function AlarmRow({ item, today, onOpen }: { item: WorkItem; today: string; onOp
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-sm text-foreground/90 line-clamp-1 flex-1 min-w-0">{itemLabel(item)}</span>
         {overdueDays > 0 ? (
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 whitespace-nowrap flex-shrink-0">
+          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-status-critical/15 text-status-critical whitespace-nowrap flex-shrink-0">
             {overdueDays}일 지연
           </span>
         ) : (
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 whitespace-nowrap flex-shrink-0">
+          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning whitespace-nowrap flex-shrink-0">
             오늘
           </span>
         )}
@@ -73,7 +73,7 @@ export function WorkAlarmBell() {
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
 
-  const { data } = useWorkItems();
+  const { data } = useHomeWorkItems();
   const items = useMemo(() => data?.data ?? [], [data]);
   const today = dateKey(new Date());
 
@@ -83,9 +83,10 @@ export function WorkAlarmBell() {
     if (myName) {
       for (const t of items) {
         if (t.kanbanStatus === 'done') continue;
-        const mine = t.assignee === myName || t.primaryAssignee === myName || t.secondaryAssignee === myName;
+        // 담당자 필드에 쉼표로 여러 명("A,B")이 들어올 수 있어 정확 일치가 아닌 분리 매칭.
+        const mine = assigneeNames(t).includes(myName);
         if (!mine) continue;
-        const due = t.startedAt?.slice(0, 10);
+        const due = toLocalDateKey(t.startedAt);
         if (!due) continue;
         if (due < today) overdueList.push(t);
         else if (due === today) todayList.push(t);
@@ -172,7 +173,7 @@ export function WorkAlarmBell() {
           <span
             aria-hidden
             className={`absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full text-white text-xs font-bold leading-4 text-center pointer-events-none ${
-              overdue.length > 0 ? 'bg-red-500' : dueToday.length > 0 ? 'bg-amber-500' : 'bg-blue-500'
+              overdue.length > 0 ? 'bg-status-critical' : dueToday.length > 0 ? 'bg-status-warning' : 'bg-status-info'
             }`}
           >
             {grandTotal > 99 ? '99+' : grandTotal}
@@ -217,7 +218,7 @@ export function WorkAlarmBell() {
               <>
                 {notifications.length > 0 && (
                   <>
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-blue-500/5 text-blue-600 text-xs font-semibold sticky top-0">
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-status-info/10 text-status-info text-xs font-semibold sticky top-0">
                       <span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> 알림 {unreadNotif > 0 ? unreadNotif : ''}</span>
                       {unreadNotif > 0 && (
                         <button type="button" onClick={markAllNotif} className="text-xs underline hover:no-underline">모두 읽음</button>
@@ -228,10 +229,10 @@ export function WorkAlarmBell() {
                         key={n.id}
                         type="button"
                         onClick={() => openNotif(n)}
-                        className={`w-full text-left px-3 py-2 border-b border-border/40 hover:bg-secondary/40 transition-colors ${n.isRead ? '' : 'bg-blue-500/[0.04]'}`}
+                        className={`w-full text-left px-3 py-2 border-b border-border/40 hover:bg-secondary/40 transition-colors ${n.isRead ? '' : 'bg-status-info/[0.04]'}`}
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
-                          {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
+                          {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-status-info flex-shrink-0" />}
                           <span className="text-sm font-medium truncate">{n.title}</span>
                         </div>
                         {n.body && <p className="text-xs text-muted-foreground truncate mt-0.5">{n.body}</p>}
@@ -241,7 +242,7 @@ export function WorkAlarmBell() {
                 )}
                 {overdue.length > 0 && (
                   <>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/5 text-red-500 text-xs font-semibold sticky top-0">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-status-critical/10 text-status-critical text-xs font-semibold sticky top-0">
                       <AlertTriangle className="w-3.5 h-3.5" /> 지연 {overdue.length}
                     </div>
                     {overdue.map((it) => <AlarmRow key={it.id} item={it} today={today} onOpen={openItem} />)}
@@ -249,7 +250,7 @@ export function WorkAlarmBell() {
                 )}
                 {dueToday.length > 0 && (
                   <>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/5 text-amber-600 text-xs font-semibold sticky top-0">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-status-warning/10 text-status-warning text-xs font-semibold sticky top-0">
                       <CalendarClock className="w-3.5 h-3.5" /> 오늘 마감 {dueToday.length}
                     </div>
                     {dueToday.map((it) => <AlarmRow key={it.id} item={it} today={today} onOpen={openItem} />)}

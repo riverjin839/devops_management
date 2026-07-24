@@ -8,49 +8,60 @@ interface StepHostProps {
   types: BatchJobTypeDescriptor[];
   state: WizardState;
   onChange: (next: Partial<WizardState>) => void;
+  /** false = non-SSH(클러스터 스코프) 타입 — host/포트/사용자 입력을 숨긴다. */
+  requiresSsh?: boolean;
 }
 
-export function StepHost({ types, state, onChange }: StepHostProps) {
+export function StepHost({ types, state, onChange, requiresSsh = true }: StepHostProps) {
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
   const selectedType = types.find((t) => t.jobType === state.jobType);
   return (
     <div className="space-y-4">
-      <MasterHostPicker
-        clusterId={state.clusterId}
-        customHost={state.hostCustom}
-        selectedName={state.hostSelectedName}
-        label="기본 호스트 (master 노드 후보)"
-        onChange={({ selectedName, customHost, effectiveHost }) =>
-          onChange({
-            hostSelectedName: selectedName,
-            hostCustom: customHost,
-            defaultHost: effectiveHost,
-          })
-        }
-      />
+      {requiresSsh ? (
+        <>
+          <MasterHostPicker
+            clusterId={state.clusterId}
+            customHost={state.hostCustom}
+            selectedName={state.hostSelectedName}
+            label="기본 호스트 (master 노드 후보)"
+            onChange={({ selectedName, customHost, effectiveHost }) =>
+              onChange({
+                hostSelectedName: selectedName,
+                hostCustom: customHost,
+                defaultHost: effectiveHost,
+              })
+            }
+          />
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
-          <input
-            id={f('port')}
-            type="number"
-            value={state.defaultPort}
-            onChange={(e) => onChange({ defaultPort: Number(e.target.value) || 22 })}
-            className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
+              <input
+                id={f('port')}
+                type="number"
+                value={state.defaultPort}
+                onChange={(e) => onChange({ defaultPort: Number(e.target.value) || 22 })}
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
+              />
+            </div>
+            <div>
+              <label htmlFor={f('username')} className="block text-sm text-muted-foreground mb-1">기본 사용자</label>
+              <input
+                id={f('username')}
+                value={state.defaultUsername}
+                onChange={(e) => onChange({ defaultUsername: e.target.value })}
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="text-sm text-muted-foreground bg-secondary/30 border border-border rounded-xl px-3 py-2.5">
+          이 잡 타입은 SSH 접속이 필요 없습니다 — 클러스터에 등록된 kubeconfig 로
+          백엔드에서 직접 실행됩니다. 파라미터만 확인하면 됩니다.
         </div>
-        <div>
-          <label htmlFor={f('username')} className="block text-sm text-muted-foreground mb-1">기본 사용자</label>
-          <input
-            id={f('username')}
-            value={state.defaultUsername}
-            onChange={(e) => onChange({ defaultUsername: e.target.value })}
-            className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
-          />
-        </div>
-      </div>
+      )}
 
       <div>
         <label htmlFor={f('params')} className="block text-sm text-muted-foreground mb-1">params (JSON)</label>

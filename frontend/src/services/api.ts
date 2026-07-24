@@ -943,6 +943,44 @@ export const nodeLabelsApi = {
     ),
 };
 
+// 노드 이미지 배포(prepull) — 특정 이미지를 배포되지 않은 다른 노드로 복제
+export interface NodeImageDistributeTarget {
+  host: string;
+  name?: string;
+  clusterId?: string;
+  clusterName?: string;
+}
+
+export interface NodeImageDistributeRequest {
+  image: string;
+  targets: NodeImageDistributeTarget[];
+  runtime: 'auto' | 'crictl' | 'nerdctl' | 'ctr';
+  namespace: string;
+  sudo: boolean;
+  username: string;
+  port: number;
+  password?: string;
+  privateKey?: string;
+  mode: 'sequential' | 'parallel';
+  parallelism: number;
+  connectTimeout: number;
+  execTimeout: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface NodeImageDistributeResponse {
+  image: string;
+  command: string;
+  mode: 'sequential' | 'parallel';
+  total: number;
+  okCount: number;
+  errorCount: number;
+  totalDurationMs: number;
+  // 결과 아이템은 bulk-exec 와 동일한 형태
+  results: BulkExecResultItem[];
+}
+
 export const nodeImagesApi = {
   getNodeImages: (clusterId: string) =>
     api.get(`/clusters/${clusterId}/node-images`),
@@ -950,6 +988,19 @@ export const nodeImagesApi = {
     api.get<Blob>(`/clusters/${clusterId}/node-images/export.csv?sort=${sort}`, {
       responseType: 'blob',
     }),
+  distribute: (clusterId: string, payload: NodeImageDistributeRequest, signal?: AbortSignal) => {
+    // 이미지 pull 은 노드당 수십초~수분 소요될 수 있어 타임아웃을 넉넉히 추정.
+    const n = payload.targets?.length ?? 0;
+    const chunk = payload.chunkSize ?? 10;
+    const perChunk = (payload.connectTimeout + payload.execTimeout) * 1000 + 500;
+    const estimate = Math.ceil(n / chunk) * perChunk + 10_000;
+    const timeout = Math.max(60_000, Math.min(estimate, 60 * 60_000)); // 1분~60분 범위
+    return api.post<NodeImageDistributeResponse>(
+      `/clusters/${clusterId}/node-images/distribute`,
+      payload,
+      { signal, timeout },
+    );
+  },
 };
 
 export const clusterTrendsApi = {
@@ -1327,6 +1378,69 @@ export const serviceTopologyApi = {
   deleteExternalNode: (nodeId: string) => api.delete(`/service-topology/external-nodes/${nodeId}`),
 };
 
+// Architecture Docs API — 서비스 모듈별 아키텍처/플로우 문서 (자동 생성 + 현행화 + 수동 편집)
+export const architectureDocsApi = {
+  list: (clusterId?: string) =>
+    api.get<import('@/types').ArchDocSummary[]>('/architecture-docs', {
+      params: clusterId ? { cluster_id: clusterId } : {},
+    }),
+  get: (serviceId: string) =>
+    api.get<import('@/types').ArchDoc>(`/architecture-docs/${serviceId}`),
+  sync: (serviceId: string, opts?: { prune?: boolean }) =>
+    api.post<import('@/types').ArchDoc>(
+      `/architecture-docs/${serviceId}/sync`,
+      undefined,
+      { params: { prune: opts?.prune ?? false }, timeout: 120_000 },
+    ),
+  llmRegenerate: (serviceId: string) =>
+    api.post<import('@/types').ArchDoc>(
+      `/architecture-docs/${serviceId}/llm-regenerate`, undefined, { timeout: 180_000 },
+    ),
+  patch: (serviceId: string, data: {
+    summaryOverride?: string | null;
+    // node_id 는 값으로 전달 — 키로 쓰면 axios 키 변환에 깨진다
+    annotations?: { id: string; text: string | null }[];
+    autoSyncEnabled?: boolean;
+  }) => api.patch<import('@/types').ArchDoc>(`/architecture-docs/${serviceId}`, data),
+  patchLayout: (serviceId: string, view: import('@/types').ArchViewType,
+                positions: { id: string; x: number; y: number }[]) =>
+    api.patch<import('@/types').ArchDoc>(
+      `/architecture-docs/${serviceId}/layout`, { view, positions },
+    ),
+  createManualNode: (serviceId: string, data: {
+    label: string; kind: string; description?: string | null;
+    style?: Record<string, unknown> | null;
+  }) => api.post<import('@/types').ArchManualNode>(
+    `/architecture-docs/${serviceId}/manual-nodes`, data),
+  updateManualNode: (serviceId: string, nodePk: string, data: {
+    label?: string; kind?: string; description?: string | null;
+    style?: Record<string, unknown> | null;
+  }) => api.patch<import('@/types').ArchManualNode>(
+    `/architecture-docs/${serviceId}/manual-nodes/${nodePk}`, data),
+  deleteManualNode: (serviceId: string, nodePk: string) =>
+    api.delete(`/architecture-docs/${serviceId}/manual-nodes/${nodePk}`),
+  createManualEdge: (serviceId: string, data: {
+    sourceId: string; targetId: string; edgeType?: string;
+    label?: string | null; description?: string | null;
+    view?: import('@/types').ArchViewType | 'both'; sortOrder?: number;
+  }) => api.post<import('@/types').ArchManualEdge>(
+    `/architecture-docs/${serviceId}/manual-edges`, data),
+  updateManualEdge: (serviceId: string, edgePk: string, data: {
+    edgeType?: string; label?: string | null; description?: string | null;
+    view?: import('@/types').ArchViewType | 'both'; sortOrder?: number;
+  }) => api.patch<import('@/types').ArchManualEdge>(
+    `/architecture-docs/${serviceId}/manual-edges/${edgePk}`, data),
+  deleteManualEdge: (serviceId: string, edgePk: string) =>
+    api.delete(`/architecture-docs/${serviceId}/manual-edges/${edgePk}`),
+  audit: (serviceId: string, limit = 50) =>
+    api.get<Record<string, unknown>[]>(
+      `/architecture-docs/${serviceId}/audit`, { params: { limit } }),
+  getSchedule: () =>
+    api.get<import('@/types').ArchDocSchedule>('/architecture-docs/schedule'),
+  setSchedule: (data: { enabled: boolean; cron: string }) =>
+    api.put<import('@/types').ArchDocSchedule>('/architecture-docs/schedule', data),
+};
+
 // K8s Events API (kubewatch 웹훅 수신 이벤트 조회)
 export const k8sEventsApi = {
   list: (params?: {
@@ -1498,6 +1612,8 @@ export interface BatchJobTypeDescriptor {
   paramSchema: Record<string, { type: string; label?: string; default?: any; help?: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultParams: Record<string, any>;
+  /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요 (kubeconfig 로 실행). */
+  requiresSsh: boolean;
 }
 
 export interface BatchJob {
@@ -1521,6 +1637,8 @@ export interface BatchJob {
   updatedAt: string;
   hasSavedPassword: boolean;
   hasSavedPrivateKey: boolean;
+  /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요. 구버전 응답은 undefined(=SSH 취급). */
+  requiresSsh?: boolean;
 }
 
 export interface BatchJobCreate {
@@ -1542,13 +1660,14 @@ export interface BatchJobCreate {
 
 export interface BatchJobUpdate {
   name?: string;
-  description?: string;
-  defaultHost?: string;
+  // null = 값을 비움(clear). undefined = 변경 없음 — JSON 직렬화에서 키가 빠진다.
+  description?: string | null;
+  defaultHost?: string | null;
   defaultPort?: number;
   defaultUsername?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params?: Record<string, any>;
-  cron?: string;
+  cron?: string | null;
   enabled?: boolean;
   savedPassword?: string;
   savedPrivateKey?: string;
@@ -1929,6 +2048,13 @@ export const k8sStreamUrls = {
     if (container) p.set('container', container);
     if (token) p.set('token', token);
     return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/exec?${p.toString()}`;
+  },
+  /** k9s TUI SSH WebSocket — 토큰만 query param, SSH 자격증명은 init 프레임으로 전달. */
+  k9s: (clusterId: string, token: string | null) => {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const p = new URLSearchParams();
+    if (token) p.set('token', token);
+    return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/k9s?${p.toString()}`;
   },
 };
 

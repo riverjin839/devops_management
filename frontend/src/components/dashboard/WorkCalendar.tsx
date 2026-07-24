@@ -5,7 +5,8 @@ import {
   ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, Clock, ShieldAlert,
   Plus, CalendarPlus, X,
 } from 'lucide-react';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeWorkItems } from '@/hooks/useWorkItems';
+import { useToday } from '@/hooks/useToday';
 import { stripHtml } from '@/lib/utils';
 import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
@@ -55,9 +56,14 @@ const STATUS_LABEL: Record<KanbanStatus, string> = {
   done: '완료',
 };
 
+/** 표시 라벨 — 제목 우선, 없으면 본문(HTML 제거), 그마저 없으면 카테고리. 앱 전역 표준과 일치. */
+function itemLabel(w: WorkItem): string {
+  return w.title?.trim() || stripHtml(w.content) || w.category;
+}
+
 export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
-  const today = useMemo(() => new Date(), []);
-  const todayKey = toDateKey(today);
+  const todayKey = useToday();  // 자정 넘기면 자동 갱신
+  const today = useMemo(() => new Date(todayKey + 'T00:00:00'), [todayKey]);
   const [cursor, setCursor] = useState<{ y: number; m: number }>({
     y: today.getFullYear(),
     m: today.getMonth(),
@@ -68,7 +74,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
   // null 이면 popover 닫힘.
   const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null);
 
-  const { data: workItemsData } = useWorkItems();
+  const { data: workItemsData } = useHomeWorkItems();
 
   const buckets = useMemo<Map<string, DayBucket>>(() => {
     const all = workItemsData?.data ?? [];
@@ -84,7 +90,10 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
     for (const w of all) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
       if (w.type === 'issue') {
-        if (w.startedAt) ensure(w.startedAt.slice(0, 10)).issues.push(w);
+        // 작업(아래 else)과 동일하게 로컬 날짜로 버킷팅 — 같은 컴포넌트 안에서 작업은
+        // 로컬 날짜, 이슈는 UTC 앞자리(slice)로 나뉘어 같은 날 등록분이 다른 칸에 놓이던 불일치 제거.
+        const occurred = parseDate(w.startedAt);
+        if (occurred) ensure(toDateKey(occurred)).issues.push(w);
       } else {
         // task / meeting / training / etc — 모두 scheduled 버킷으로
         const sched = parseDate(w.startedAt);
@@ -197,13 +206,13 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               </button>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-300">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-status-info/10 text-status-info">
                 <Clock className="w-3 h-3" /> 예정 {monthTotals.scheduled}
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-status-healthy/10 text-status-healthy">
                 <CheckCircle2 className="w-3 h-3" /> 완료 {monthTotals.completed}
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-300">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-status-warning/10 text-status-warning">
                 <ShieldAlert className="w-3 h-3" /> 이슈 {monthTotals.issues}
               </span>
             </div>
@@ -215,7 +224,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               <div
                 key={w}
                 className={`text-center py-1.5 font-semibold ${
-                  i === 0 ? 'text-red-400/90' : i === 6 ? 'text-blue-400/90' : ''
+                  i === 0 ? 'text-status-critical/90' : i === 6 ? 'text-status-info/90' : ''
                 }`}
               >
                 {w}
@@ -237,9 +246,9 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               const dayNumberClr = isToday
                 ? 'text-primary'
                 : dow === 0
-                ? 'text-red-400/90'
+                ? 'text-status-critical/90'
                 : dow === 6
-                ? 'text-blue-400/90'
+                ? 'text-status-info/90'
                 : 'text-foreground/85';
 
               return (
@@ -302,21 +311,21 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                         <DayChip
                           color="emerald"
                           count={b.completed.length}
-                          label={truncate(stripHtml(b.completed[0].content) || '완료')}
+                          label={truncate(itemLabel(b.completed[0]) || '완료')}
                         />
                       )}
                       {b.scheduled.length > 0 && (
                         <DayChip
                           color="blue"
                           count={b.scheduled.length}
-                          label={truncate(stripHtml(b.scheduled[0].content) || '예정')}
+                          label={truncate(itemLabel(b.scheduled[0]) || '예정')}
                         />
                       )}
                       {b.issues.length > 0 && (
                         <DayChip
                           color="amber"
                           count={b.issues.length}
-                          label={truncate(stripHtml(b.issues[0].content) || '이슈')}
+                          label={truncate(itemLabel(b.issues[0]) || '이슈')}
                         />
                       )}
                     </div>
@@ -339,13 +348,13 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
             </div>
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" /> 완료
+                <span className="w-2 h-2 rounded-full bg-status-healthy" /> 완료
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-blue-500" /> 예정
+                <span className="w-2 h-2 rounded-full bg-status-info" /> 예정
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-amber-500" /> 이슈
+                <span className="w-2 h-2 rounded-full bg-status-warning" /> 이슈
               </span>
             </div>
           </div>
@@ -465,7 +474,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
         <div className="px-3 py-3 space-y-3 overflow-y-auto max-h-[360px]">
           {bucket.completed.length > 0 && (
             <DayList
-              icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+              icon={<CheckCircle2 className="w-3.5 h-3.5 text-status-healthy" />}
               title="완료"
               count={bucket.completed.length}
               onItemClick={onClose}
@@ -473,16 +482,16 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
                 const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
                 return {
                   id: t.id,
-                  primary: stripHtml(t.content) || t.category,
+                  primary: itemLabel(t),
                   meta: `${WORK_ITEM_TYPE_CONFIG[t.type]?.label ?? t.type} · ${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
-                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-emerald-500" /> : null,
+                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-status-healthy" /> : null,
                 };
               })}
             />
           )}
           {bucket.scheduled.length > 0 && (
             <DayList
-              icon={<Clock className="w-3.5 h-3.5 text-blue-500" />}
+              icon={<Clock className="w-3.5 h-3.5 text-status-info" />}
               title="예정"
               count={bucket.scheduled.length}
               onItemClick={onClose}
@@ -490,22 +499,22 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
                 const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
                 return {
                   id: t.id,
-                  primary: stripHtml(t.content) || t.category,
+                  primary: itemLabel(t),
                   meta: `${WORK_ITEM_TYPE_CONFIG[t.type]?.label ?? t.type} · ${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
-                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-blue-500" /> : null,
+                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-status-info" /> : null,
                 };
               })}
             />
           )}
           {bucket.issues.length > 0 && (
             <DayList
-              icon={<ShieldAlert className="w-3.5 h-3.5 text-amber-500" />}
+              icon={<ShieldAlert className="w-3.5 h-3.5 text-status-warning" />}
               title="이슈"
               count={bucket.issues.length}
               onItemClick={onClose}
               items={bucket.issues.map((i) => ({
                 id: i.id,
-                primary: stripHtml(i.content) || i.category,
+                primary: itemLabel(i),
                 meta: `${i.assignee || '미지정'}${i.closedAt ? ' · 해결' : ''}`,
               }))}
             />
@@ -553,9 +562,9 @@ interface DayChipProps {
 }
 
 const CHIP_COLOR: Record<DayChipProps['color'], string> = {
-  emerald: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-  blue:    'bg-blue-500/15    text-blue-700    dark:text-blue-300    border-blue-500/30',
-  amber:   'bg-amber-500/15   text-amber-700   dark:text-amber-300   border-amber-500/30',
+  emerald: 'bg-status-healthy/15 text-status-healthy border-status-healthy/30',
+  blue:    'bg-status-info/15 text-status-info border-status-info/30',
+  amber:   'bg-status-warning/15 text-status-warning border-status-warning/30',
 };
 
 function DayChip({ color, count, label }: DayChipProps) {

@@ -1,17 +1,27 @@
 import re
+import time
 from datetime import datetime
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.cluster import Cluster
+from app.models.user import User
+from app.auth.deps import require_operator
+from app.schemas.node_image_distribute import (
+    NodeImageDistributeRequest,
+    NodeImageDistributeResponse,
+    DistributeResultItem,
+)
+from app.services import audit_logger
 from app.services.k8s_node_image_service import NodeImageService
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.snapshot_jobs import SnapshotManager
+from app.services.ssh_runner import SSHTarget, run_bulk
 
 router = APIRouter(prefix="/clusters/{cluster_id}/node-images", tags=["node-images"])
 
@@ -154,4 +164,166 @@ def export_node_images_csv(
         content=body,
         media_type="text/csv; charset=utf-8",
         headers=headers,
+    )
+
+
+# ── 이미지 배포 (prepull) ──────────────────────────────────────────────────────
+
+# 이미지 참조에 허용할 문자만 통과 (레지스트리 host[:port]/path/name:tag@sha256:...).
+# shell 명령에 그대로 삽입되므로 메타문자(따옴표/세미콜론/$/백틱/공백 등)를 절대 허용하지 않는다.
+_IMAGE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@=+-]*$")
+_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _build_pull_command(image: str, runtime: str, namespace: str, use_sudo: bool) -> str:
+    """대상 노드에서 이미지를 pull 하고 **실제 적재를 검증**하는 shell 명령을 생성.
+
+    image/namespace 는 호출 전에 정규식으로 검증되므로 shell 메타문자가 없다.
+    안전을 위해 추가로 작은따옴표로 감싼다 (검증에서 작은따옴표는 이미 배제됨).
+
+    설계 포인트 (K8s 1.34 + containerd 대응, "성공했다는데 실제 배포 안 됨" 버그 수정):
+    - **PATH 보강**: 비대화형 SSH 세션은 최소 PATH 라 crictl/ctr/nerdctl(보통
+      /usr/local/bin, RKE2/k3s 경로 등)를 못 찾아 런타임 감지가 어긋날 수 있다.
+    - **pull 후 검증(inspecti / image inspect / images ls)**: pull 명령이 exit 0 을
+      반환해도 이미지가 실제로 적재됐는지 확인해야 한다. 검증까지 통과해야 성공(exit 0)으로
+      보고하므로, 결과의 성공은 "노드에 실제 존재함"을 의미한다. (K8s API 의
+      node.status.images 갱신 지연과 무관하게 즉시 확인)
+    """
+    sudo = "sudo " if use_sudo else ""
+    ns = f"'{namespace}'"
+
+    # 런타임 CLI 를 찾도록 흔한 설치 경로를 PATH 앞에 보강 (배포판/설치방식별).
+    path_prefix = (
+        'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
+        '/var/lib/rancher/rke2/bin:/var/lib/rancher/k3s/bin:/opt/bin:$PATH"; '
+    )
+    # 이미지 참조를 한 번만 변수에 담아 pull/검증에서 재사용 (정규식 검증 완료 → 안전).
+    img_assign = f"img='{image}'; "
+
+    # 런타임별 "pull → 실제 적재 검증 → 확인 메시지" 체인. 검증 실패 시 exit 비0 → 실패로 보고.
+    crictl = (
+        f'{sudo}crictl pull "$img" && {sudo}crictl inspecti "$img" >/dev/null 2>&1 '
+        f'&& echo "verified present on node via crictl: $img"'
+    )
+    nerdctl = (
+        f'{sudo}nerdctl -n {ns} pull "$img" && {sudo}nerdctl -n {ns} image inspect "$img" >/dev/null 2>&1 '
+        f'&& echo "verified present on node via nerdctl: $img"'
+    )
+    ctr = (
+        f'{sudo}ctr -n {ns} images pull "$img" && {sudo}ctr -n {ns} images ls -q | grep -qF "$img" '
+        f'&& echo "verified present on node via ctr: $img"'
+    )
+
+    if runtime == "crictl":
+        body = crictl
+    elif runtime == "nerdctl":
+        body = nerdctl
+    elif runtime == "ctr":
+        body = ctr
+    else:
+        # auto — 노드에 존재하는 런타임 CLI 를 우선순위대로 감지해 사용 (containerd 기본 = crictl).
+        body = (
+            f"if command -v crictl >/dev/null 2>&1; then {crictl}; "
+            f"elif command -v nerdctl >/dev/null 2>&1; then {nerdctl}; "
+            f"elif command -v ctr >/dev/null 2>&1; then {ctr}; "
+            f"else echo 'no container runtime CLI (crictl/nerdctl/ctr) found on PATH' >&2; exit 127; fi"
+        )
+
+    return path_prefix + img_assign + body
+
+
+@router.post("/distribute", response_model=NodeImageDistributeResponse)
+async def distribute_node_image(
+    cluster_id: UUID,
+    payload: NodeImageDistributeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """선택한 이미지를 대상 노드(동일/타 클러스터)로 배포(prepull).
+
+    각 대상 노드에 SSH 로 접속해 컨테이너 런타임 CLI 로 이미지를 레지스트리에서 pull 한다.
+    인증 정보는 요청에만 존재하고 저장되지 않는다. cluster_id 는 이미지를 선택한 출처
+    클러스터(감사/문맥용)이며, 실제 배포 대상은 payload.targets 가 결정한다.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    image = (payload.image or "").strip()
+    if not _IMAGE_REF_RE.match(image):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="이미지 참조 형식이 올바르지 않습니다 (허용 문자: 영숫자 . _ - / : @ = +).",
+        )
+    if not _NAMESPACE_RE.match(payload.namespace or ""):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="namespace 형식이 올바르지 않습니다.",
+        )
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+    command = _build_pull_command(image, payload.runtime, payload.namespace, payload.sudo)
+
+    audit_logger.record(
+        db,
+        action="node_image.distribute",
+        actor=actor,
+        status="success",
+        target_type="node_image",
+        target_id=str(cluster_id),
+        details={
+            "image": image,
+            "source_cluster": cluster.name,
+            "runtime": payload.runtime,
+            "target_count": len(payload.targets or []),
+        },
+        request=request,
+    )
+
+    targets = [
+        SSHTarget(
+            host=t.host,
+            port=payload.port,
+            username=payload.username,
+            password=payload.password,
+            private_key=payload.private_key,
+            name=t.name,
+            cluster_id=str(t.cluster_id) if t.cluster_id else None,
+            cluster_name=t.cluster_name,
+        )
+        for t in payload.targets
+    ]
+
+    start = time.monotonic()
+    results = await run_bulk(
+        targets,
+        action="ssh",
+        command=command,
+        mode=payload.mode,
+        connect_timeout=payload.connect_timeout,
+        exec_timeout=payload.exec_timeout,
+        parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size,
+        chunk_pause_ms=payload.chunk_pause_ms,
+    )
+    total_elapsed = int((time.monotonic() - start) * 1000)
+
+    items = [DistributeResultItem(**r.to_dict()) for r in results]
+    ok = sum(1 for r in results if r.status == "ok")
+    err = len(results) - ok
+
+    return NodeImageDistributeResponse(
+        image=image,
+        command=command,
+        mode=payload.mode,
+        total=len(results),
+        ok_count=ok,
+        error_count=err,
+        total_duration_ms=total_elapsed,
+        results=items,
     )

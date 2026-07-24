@@ -20,8 +20,9 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useClusters } from '@/hooks/useCluster';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import { useClusterStore } from '@/stores/clusterStore';
-import { ClusterSidebar, SearchableSelect } from '@/components/common';
+import { ClusterSidebar, LogViewer, SearchableSelect } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { getAuthToken } from '@/stores/authStore';
@@ -181,6 +182,8 @@ export function CiliumTracePage() {
   useEffect(() => {
     if (!selectedClusterId && clusters.length > 0) setSelectedClusterId(clusters[0].id);
   }, [clusters, selectedClusterId]);
+  // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용.
+  useTerminalEnvSync(clusters, selectedClusterId);
   const [tab, setTab] = useState<TabId>('bpf');
 
   const cid = selectedClusterId ?? '';
@@ -431,7 +434,10 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
   };
 
   return (
-    <div className="space-y-4">
+    // MC 클라이언트와 동일한 좌(컨트롤)/우(결과) 배치 — 결과 카드는 실행 전에도 같은
+    // 자리(우측)에 플레이스홀더로 고정되어 결과가 나와도 레이아웃이 흔들리지 않는다.
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
+      <div className="lg:col-span-4 min-w-0 space-y-4">
       {/* Toolbar */}
       <MacCard bodyPadding="p-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -542,15 +548,17 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
               <div className="px-3 py-2 rounded-lg bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300 break-all">{adhocErr}</div>
             )}
             {adhocOut != null && (
-              <pre className="rounded-xl border border-border bg-background p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-[40vh] overflow-auto">{adhocOut}</pre>
+              <LogViewer text={adhocOut} maxHeight="max-h-[40vh]" />
             )}
           </div>
         </MacCard>
       </RoleGate>
+      </div>
 
-      {/* Result */}
+      {/* Result — 우측 고정 (실행 전엔 플레이스홀더) */}
       <MacCard
         title={data ? `결과 · ${data.kind} · ${data.podName}` : '결과'}
+        rootClassName="lg:col-span-6 min-w-0"
         bodyPadding="p-0"
         className="overflow-hidden"
       >
@@ -574,9 +582,9 @@ function BpfInspectorTab({ clusterId, agents }: { clusterId: string; agents: Cil
           <BpfJsonTable rows={data.parsed} />
         )}
         {data && (!data.isJson || !Array.isArray(data.parsed)) && data.raw && (
-          <pre className="text-xs leading-snug font-mono px-4 py-3 overflow-auto max-h-[60vh] whitespace-pre-wrap break-all bg-background">
-            {data.raw}
-          </pre>
+          <div className="p-3">
+            <LogViewer text={data.raw} maxHeight="max-h-[60vh] lg:max-h-[calc(100vh-340px)]" />
+          </div>
         )}
       </MacCard>
     </div>
@@ -593,7 +601,7 @@ function BpfJsonTable({ rows }: { rows: Record<string, unknown>[] }) {
     return <div className="text-center py-12 text-sm text-muted-foreground">결과가 비어있습니다.</div>;
   }
   return (
-    <div className="overflow-auto max-h-[60vh]">
+    <div className="overflow-auto max-h-[60vh] lg:max-h-[calc(100vh-300px)]">
       <table className="text-sm w-full border-collapse">
         <thead className="sticky top-0 bg-card">
           <tr>
@@ -722,7 +730,10 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
   }, [events, filterText]);
 
   return (
-    <div className="space-y-4">
+    // 좌(컨트롤)/우(로그) 고정 배치 — 스트림 로그 카드가 컨트롤 아래가 아닌 우측 같은
+    // 라인에 나와 세로 공간을 온전히 쓴다 (MC 클라이언트 콘솔과 동일 패턴).
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
+      <div className="lg:col-span-4 min-w-0 space-y-4">
       <MacCard bodyPadding="p-3">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -790,9 +801,11 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
+      </div>
 
       <MacCard
         title="실시간 이벤트"
+        rootClassName="lg:col-span-6 min-w-0"
         bodyPadding="p-0"
         className="overflow-hidden"
       >
@@ -905,7 +918,7 @@ function EventList({ events }: { events: MonitorEvent[] }) {
     );
   }
   return (
-    <div ref={ref} className="overflow-auto max-h-[60vh] font-mono text-xs leading-snug bg-background">
+    <div ref={ref} className="overflow-auto max-h-[60vh] lg:max-h-[calc(100vh-360px)] font-mono text-xs leading-snug bg-background">
       {events.map((e, i) => (
         <div
           key={i}
@@ -1118,9 +1131,11 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
   }
 
   return (
-    <div className="space-y-4">
+    // 좌(필터/컨트롤)/우(flow 로그) 고정 배치 — MC 클라이언트 콘솔과 동일 패턴.
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
+      <div className="lg:col-span-4 min-w-0 space-y-4">
       <MacCard bodyPadding="p-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-2 gap-2 mb-2">
           <input
             value={filters.fromNamespace}
             onChange={(e) => setFilters((s) => ({ ...s, fromNamespace: e.target.value }))}
@@ -1235,8 +1250,9 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
           <AlertTriangle className="w-3.5 h-3.5" /> {err}
         </div>
       )}
+      </div>
 
-      <MacCard title="Hubble flows" bodyPadding="p-0" className="overflow-hidden">
+      <MacCard title="Hubble flows" rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-0" className="overflow-hidden">
         <FlowList events={events} />
       </MacCard>
     </div>
@@ -1256,7 +1272,7 @@ function FlowList({ events }: { events: HubbleFlowEvent[] }) {
     );
   }
   return (
-    <div ref={ref} className="overflow-auto max-h-[60vh] divide-y divide-border/40">
+    <div ref={ref} className="overflow-auto max-h-[60vh] lg:max-h-[calc(100vh-360px)] divide-y divide-border/40">
       {events.map((e, i) => {
         const flow = ((e.parsed?.flow as Record<string, unknown>) ?? e.parsed ?? {}) as Record<string, unknown>;
         const verdict = String(flow.verdict ?? '');

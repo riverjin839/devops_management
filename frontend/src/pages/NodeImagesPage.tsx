@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Boxes, Search, AlertTriangle, LayoutList, LayoutGrid, Layers } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeImageList } from '@/hooks/useNodeImages';
-import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu } from '@/components/node-images';
+import { NodeImagesTable, NodeLabelGroupView, ImageCentricView, NodeImagesCsvExportMenu, ImageDistributeDialog } from '@/components/node-images';
 import { ClusterSidebar, SnapshotProgressCard, ExportMenu } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
@@ -25,6 +25,8 @@ export function NodeImagesPage() {
   const [selectedClusterId, setSelectedClusterId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [view, setView] = useState<ViewMode>('node-table');
+  // 이미지 배포 다이얼로그 — 선택한 이미지를 배포되지 않은 다른 노드로 prepull
+  const [distributeImage, setDistributeImage] = useState<string | null>(null);
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
   const {
@@ -166,14 +168,24 @@ export function NodeImagesPage() {
               </div>
             </MacCard>
           ) : view === 'node-table' ? (
-            <NodeImagesTable nodes={nodes} searchQuery={searchQuery} />
+            <NodeImagesTable nodes={nodes} searchQuery={searchQuery} onDistribute={setDistributeImage} />
           ) : view === 'label-group' ? (
             <NodeLabelGroupView nodes={nodes} searchQuery={searchQuery} />
           ) : (
-            <ImageCentricView nodes={nodes} searchQuery={searchQuery} />
+            <ImageCentricView nodes={nodes} searchQuery={searchQuery} onDistribute={setDistributeImage} />
           )}
         </div>
       </main>
+
+      {distributeImage && activeClusterId && (
+        <ImageDistributeDialog
+          open={!!distributeImage}
+          onClose={() => setDistributeImage(null)}
+          image={distributeImage}
+          sourceClusterId={activeClusterId}
+          clusters={clusters.map((c) => ({ id: c.id, name: c.name }))}
+        />
+      )}
     </div>
   );
 }

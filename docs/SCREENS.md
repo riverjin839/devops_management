@@ -202,6 +202,24 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### k9s 콘솔 (`/k9s`, `/k9s/:clusterId`)
+
+- **파일**: `frontend/src/pages/K9sPage.tsx` + `frontend/src/components/k8s/K9sTerminal.tsx`(xterm.js 터미널) + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
+- **목적 / UX**: 각 클러스터의 control-plane(master) 서버에 **SSH 로 접속해 서버에 내장된 `k9s` TUI 를 그대로 웹 터미널로 스트리밍**한다. 별도 재구현이 아니라 실제 k9s 를 브라우저에서 조작(파드/노드/디플로이 탐색, 로그, describe 등)한다.
+- **UI 구성**:
+  - `ClusterSidebar` — `iconOnly` 단일 선택. 클러스터를 고르면 `/k9s/:clusterId` 로 이동.
+  - **접속 폼**(연결 전): `타겟` MacCard(master 노드 후보 드롭다운 — etcdctl master-candidates 재사용 · 수동 host override · 사용자 · 포트), `인증·실행` MacCard(비밀번호/Private Key 토글 · 네임스페이스(선택) · `--readonly` 토글 · 연결 버튼).
+  - **터미널**(연결 후): `K9sTerminal` — xterm.js 풀스크린 TUI(재연결/**새 창으로 빼기**/전체화면/종료 헤더). 기본 모드는 **드래그로 이동 가능한 플로팅 창**(헤더가 드래그 핸들, CSS `resize` 우하단 핸들로 크기 조절 — ResizeObserver 가 xterm 자동 리핏). 페이지 본문에는 플로팅 창 사용 안내 카드가 남는다. WebSocket `onopen` 직후 SSH 자격증명을 **init 프레임**(JSON)으로 전달(비밀번호가 URL/로그에 남지 않도록), 이후 stdin/resize 프레임 전송.
+  - **별도 창(팝업)**: 폼의 "새 창으로 열기" 또는 터미널 헤더의 pop-out 버튼으로 `window.open('/k9s/popup')` 별도 브라우저 창에서 k9s 를 전체창으로 실행 → 메인 화면은 다른 페이지로 이동하며 함께 사용. 접속정보는 URL 대신 `localStorage` 1회용 handoff(`lib/k9sPopout.ts`, 팝업이 읽는 즉시 삭제)로 전달. 팝업 라우트 `/k9s/popup` 은 `App.tsx` 에서 `AppShell` 바깥(사이드바/네비 없음)으로 분기, `K9sPopupPage` 렌더.
+- **Frontend**: `useClusters`, `etcdctlApi.masters`(master 후보), `k8sStreamUrls.k9s(clusterId, token)`(WS URL), `lib/k9sPopout.ts`(창 간 handoff — HTTP 접속 호환을 위해 `generateUUID` 폴백 사용). 자격증명은 서버에 저장하지 않고 세션에서만 사용.
+- **Backend**: 라우터 `backend/app/routers/k9s_ssh.py`(prefix `/k8s`) — WebSocket `GET /k8s/{cluster_id}/k9s`. 전역 `_auth` 미적용, 핸들러가 query token 을 직접 검증(admin/operator 만) 후 accept. init 프레임의 host/자격증명으로 `ssh_runner.connect_client` → paramiko `invoke_shell`(PTY) → `exec k9s [-n ns] [--readonly]` 실행, stdout/stdin/resize 브리지. 세션 open/close 감사 로그(`k9s.ssh.open`/`k9s.ssh.close`). `PEP_K9S_SSH_ENABLED=false` 로 비활성화. 명령은 서버가 검증된 조각(네임스페이스 정규식·화이트리스트 플래그)으로만 조립.
+- **핵심 기능**:
+  - control-plane 서버 내장 k9s 를 웹에서 실시간 조작(풀스크린 TUI, tty+resize).
+  - master 노드 후보 자동 조회 + 수동 host override, 비밀번호/Private Key 인증.
+  - 네임스페이스 지정·읽기 전용(`--readonly`) 옵션, 1시간 세션 상한.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 클러스터 추이 (`/cluster-trends`, `/cluster-trends/:clusterId`)
 
 - **파일**: `frontend/src/pages/ClusterTrendsPage.tsx` (+ `components/k8s/NodeMultiSelect.tsx`, `components/common/EmptyState.tsx`, Recharts `LineChart`).
@@ -411,20 +429,31 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### K8S 노드 이미지 (`/node-images`)
 
-- **파일**: `frontend/src/pages/NodeImagesPage.tsx` (+ `components/node-images/NodeImagesTable.tsx`, `NodeLabelGroupView.tsx`, `ImageCentricView.tsx`, `NodeImagesCsvExportMenu.tsx`, `components/common/SnapshotProgressCard`)
-- **목적 / UX**: 선택한 클러스터의 모든 노드에 캐시된 컨테이너 이미지를 노드별/라벨그룹별/이미지별 3가지 시각으로 확인해, 불필요한 이미지·중복 적재·용량을 파악한다.
+- **파일**: `frontend/src/pages/NodeImagesPage.tsx` (+ `components/node-images/NodeImagesTable.tsx`, `NodeLabelGroupView.tsx`, `ImageCentricView.tsx`, `NodeImagesCsvExportMenu.tsx`, `ImageDistributeDialog.tsx`, `components/common/SnapshotProgressCard`)
+- **목적 / UX**: 선택한 클러스터의 모든 노드에 캐시된 컨테이너 이미지를 노드별/라벨그룹별/이미지별 3가지 시각으로 확인해, 불필요한 이미지·중복 적재·용량을 파악한다. 또한 특정 노드의 이미지를 아직 없는 다른 노드(동일/타 클러스터)로 배포(prepull)할 수 있다.
 - **UI 구성**:
   - `ClusterSidebar` — 단일 선택(`iconOnly`, `allowAll` 없음)
   - 통계 요약 타일 4개(노드 수/총 이미지 슬롯/고유 이미지/총 용량)
   - 검색창 + 탭(`노드별(Table)` / `라벨 그룹(Card)` / `이미지별`)
+  - 각 이미지 행의 **배포** 버튼 → `ImageDistributeDialog`(대상 클러스터/노드 선택 · 보유/미보유 배지 · 런타임/sudo/SSH 자격증명 · 노드별 결과 표)
   - 백그라운드 집계 중이면 `SnapshotProgressCard` 진행률 표시, CSV 내보내기(`NodeImagesCsvExportMenu`) + 화면 캡처(`ExportMenu`)
-- **Frontend**: `useClusters()`, `useNodeImageList(activeClusterId)` — `status: 'computing'|'ready'`인 백그라운드 스냅샷 envelope을 폴링(computing 중 1.5s, 완료 후 60s). 로컬 state: `selectedClusterId`, `searchQuery`, `view`. 호출 함수: `nodeImagesApi.getNodeImages`, `nodeImagesApi.exportCsv`.
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-images` (백그라운드 집계 결과 or 진행 상태), `GET /api/v1/clusters/{cluster_id}/node-images/export.csv?sort=` — `backend/app/routers/node_images.py`. K8s 노드/이미지 목록을 `kubectl`/SDK로 수집해 노드당 imageCount/totalSizeBytes/images[]로 집계(스냅샷 캐시, computing/ready/stale 상태 포함).
+- **Frontend**: `useClusters()`, `useNodeImageList(activeClusterId)` — `status: 'computing'|'ready'`인 백그라운드 스냅샷 envelope을 폴링(computing 중 1.5s, 완료 후 60s). 로컬 state: `selectedClusterId`, `searchQuery`, `view`, `distributeImage`. 호출 함수: `nodeImagesApi.getNodeImages`, `nodeImagesApi.exportCsv`, `nodeImagesApi.distribute`. 배포 다이얼로그는 대상 클러스터의 `bulkExecApi.nodeList` + `useNodeImageList`(보유 여부 계산)를 사용.
+- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-images` (백그라운드 집계 결과 or 진행 상태), `GET /api/v1/clusters/{cluster_id}/node-images/export.csv?sort=`, `POST /api/v1/clusters/{cluster_id}/node-images/distribute` (이미지 참조 검증 후 `ssh_runner.run_bulk` 로 대상 노드에 pull 명령 일괄 실행, `require_operator` + 감사 로그) — `backend/app/routers/node_images.py`. K8s 노드/이미지 목록을 `kubectl`/SDK로 수집해 노드당 imageCount/totalSizeBytes/images[]로 집계(스냅샷 캐시, computing/ready/stale 상태 포함).
 - **핵심 기능**:
   - 노드별/라벨그룹별/이미지별 3-way 뷰
+  - 이미지 배포(prepull) — 특정 이미지를 미보유 노드(동일/타 클러스터)로 SSH pull, 보유/미보유 자동 선별, 노드별 실행 결과 표시
   - 백그라운드 집계 진행률 표시(대형 클러스터 대응)
   - 정렬 옵션이 있는 CSV 내보내기(`sort=default|size|lines`)
   - 검색(노드명/이미지명), 고유 이미지 dedup 카운트
+- **이미지 배포(prepull) 사용법**:
+  1. **뷰 선택** — `노드별(Table)` 뷰에서 소스 노드 행을 펼치거나, `이미지별` 뷰를 연다. 각 이미지 행 우측에 **배포** 버튼(종이비행기 아이콘)이 있다.
+  2. **배포** 버튼 클릭 → `이미지 배포` 다이얼로그가 열린다(상단에 배포할 이미지 참조 표시).
+  3. **대상 클러스터 선택** — 기본값은 출처(현재) 클러스터. 드롭다운에서 **다른 클러스터**로도 바꿀 수 있다. 대상 클러스터의 노드 목록과 이미지 스냅샷을 불러와 각 노드에 **보유/미보유** 배지를 표시한다(스냅샷 수집 중이면 잠시 후 반영).
+  4. **대상 노드 선택** — **미보유 노드가 자동 선택**된다. `미보유만` / `모두` / `해제` 버튼으로 조정하거나 개별 체크. NotReady·master 노드는 배지로 구분된다.
+  5. **런타임/옵션** — `auto`(crictl→nerdctl→ctr 자동 감지) 권장. 비 root 계정이면 `sudo` 체크. nerdctl/ctr 사용 시 containerd namespace(기본 `k8s.io`) 지정. `parallelism`(동시 pull 수)·`timeout`(노드당 초) 조정 가능.
+  6. **SSH 자격증명** — `비밀번호` 또는 `개인키(PEM)` 입력. **요청에만 사용되고 저장되지 않는다**(operator 이상 권한 필요, 감사 로그에 `node_image.distribute` 기록).
+  7. **배포 실행** — 선택 노드에 병렬로 pull 실행. 완료 후 노드별 결과 표(상태·exit code·소요시간)가 뜨고, 행을 펼치면 stdout/stderr 전체를 확인할 수 있다. 실행 중 **중지**로 취소 가능.
+  - ⚠️ 대상 노드가 이미지 **레지스트리에 도달 가능**해야 pull 이 성공한다(레지스트리 재-pull 방식 — 대용량 tar 전송 없음). 폐쇄망에서 레지스트리 접근이 없는 노드는 별도 방식이 필요하다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -466,11 +495,12 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 - **파일**: `frontend/src/pages/BulkExecPage.tsx` (+ `components/common/{ConfirmDialog,LogViewer,SavedCommands,DebugLogPanel,ResizeGrip,DoubleScrollX}`)
 - **목적 / UX**: 여러 클러스터의 여러 노드를 한 번에 선택해 SSH 명령 실행 또는 SCP 파일 업로드를 병렬/순차로 수행하고, 결과를 요약/상세 뷰로 확인·필터링·내보내기(CSV/TXT/클립보드)한다. 운영자가 대규모 노드에 동일 작업을 배포할 때 쓰는 실행 콘솔.
-- **UI 구성**:
+- **UI 구성**: mc 클라이언트 콘솔처럼 **[타겟 노드 | 명령 메뉴 | 실행 결과]** 를 한 로우(`lg:grid-cols-12`, 3:4:5)에 나란히 배치. 결과 컬럼은 항상 우측 같은 자리에 고정되고(실행 전엔 플레이스홀더), 컬럼 내부에서만 스크롤된다.
   - `ClusterSidebar` — `multiSelect` + `iconOnly` (다중 선택 패턴, `selectedIds`/`onMultiSelectChange`)
-  - 좌측: 클러스터별로 묶인 노드 체크박스 목록(`ClusterNodeGroup`, 클러스터별 접기/전체선택)
-  - 우측: action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용, 타임아웃/청크 설정
-  - 실행 확인 `ConfirmDialog`, 결과 섹션(요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기)
+  - 타겟 노드(3): 클러스터별로 묶인 노드 체크박스 목록(`ClusterNodeGroup`, 클러스터별 접기/전체선택)
+  - 명령 메뉴(4): action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용, 타임아웃/청크 설정
+  - 실행 결과(5): 요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기. 상세 뷰 노드 확장 시 stdout/stderr 는 `ExecOutputTabs`(탭 + 결과 유무 dot·라인수) 로 표시.
+  - 실행 확인 `ConfirmDialog`. `useTerminalEnvSync` 로 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용(다중 선택은 하나라도 운영이면 ops).
 - **Frontend**: `useClusters()`, `useQueries`로 선택된 클러스터별 노드 목록 병렬 조회(`bulkExecApi.nodeList`), `useAbortableMutation`으로 `bulkExecApi.run`. 로컬 state: `clusterIds`(다중), `selected`(Set, `clusterId::nodeName` 키), 실행 옵션 다수. 호출 함수: `bulkExecApi.nodeList`, `bulkExecApi.run`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. DB 모델 관여 없음(휘발성 실행 결과).
 - **핵심 기능**:
@@ -491,7 +521,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 탭: `etcdctl 실행` / `etcd 서비스 로그`
   - 좌측 패널: master 후보 드롭다운(`master-candidates`) + 수동 host override, SSH 인증
   - 우측 패널: 프리셋 버튼(args 자동 채움), env file 옵션, args/timeout, 또는 로그 탭의 unit/tail/since/grep
-  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일), 결과 패널(`ResultPanel` — executed command, stdout/stderr `LogViewer`)
+  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일), 결과 패널(`ResultPanel` — executed command + `ExecOutputTabs` stdout/stderr 탭). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
 - **Frontend**: `useClusters()`, `useQuery(['etcdctl','masters',clusterId])`(`etcdctlApi.masters`), `useQuery(['etcdctl','presets',clusterId])`(`etcdctlApi.presets`), `useAbortableMutation`으로 `etcdctlApi.run` / `etcdctlApi.logs`. 호출 함수: `etcdctlApi.{presets,masters,run,logs}`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/etcdctl/presets`, `GET .../etcdctl/master-candidates`, `POST .../etcdctl/run`, `POST .../etcdctl/logs` — `backend/app/routers/etcdctl.py`. master 후보는 control-plane 라벨 노드를 K8s SDK로 조회, 실행은 SSH 러너(bulk_exec와 유사한 SSH 실행 계층)로 `etcdctl` 바이너리/env file을 원격 실행, 로그는 `journalctl -u {unit}` 실행.
 - **핵심 기능**:
@@ -649,6 +679,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - `ClusterSidebar`는 `allowAll={false}` + `iconOnly` 단일선택.
   - 상태 스트립(Cilium 설치여부/버전, Agent Pod 수, Hubble Relay 여부, Trace 가용성).
   - 3-tab 구조: **BPF Inspector**(kind 선택 + agent pod 검색(`SearchableSelect`) + JSON 테이블/raw 출력, ad-hoc `cilium-dbg` 명령은 `RoleGate allow={['admin','operator']}`로만 노출 + 프리셋 저장), **Cilium Monitor**(SSE 스트림, type 필터 팝오버, related-to 필터, 일시정지/비우기), **Hubble Flows**(from/to pod·namespace·protocol·verdict 필터 + datalist 자동완성, SSE 스트림).
+  - 3개 탭 모두 mc 클라이언트 콘솔과 동일한 **좌(컨트롤 4) / 우(결과·로그 6) 10컬럼 그리드** — 결과/로그 카드가 컨트롤 아래가 아닌 우측 같은 라인에 고정되고(실행 전에는 플레이스홀더), lg 이상에서 내부 스크롤 높이를 `calc(100vh-…)`로 키워 세로 공간을 활용한다. BPF raw/직접명령 출력은 `LogViewer`(터미널 Appearance·필터·복사 적용), `useTerminalEnvSync` 로 운영등급 → Appearance 자동 전환.
 - **Frontend**: `useClusters`/`useClusterStore`; 로컬 `ciliumApi`(`api.get/post` 래퍼, `/cilium/{clusterId}/status|agents|bpf-inspect|exec-command`) + 자체 `startSseStream`(fetch 기반, Authorization 헤더 포함 SSE 파서, `/cilium/{clusterId}/monitor/stream`·`/hubble/stream`); `useCommands`/`useCreateCommand`(category=`cilium` 프리셋); `useAnalyzeNamespaces`/`useAnalyzePods`(Hubble 자동완성용, `analyzeApi`).
 - **Backend**: `GET /api/v1/cilium/{cluster_id}/status`, `GET .../agents`, `POST .../bpf-inspect`, `POST .../exec-command`, `GET .../monitor/stream`(SSE), `GET .../hubble/stream`(SSE) — 라우터 `backend/app/routers/cilium_trace.py`. 프리셋은 `commands.py`(`CommandEntry` 모델) 재사용. 전용 영속 모델 없음(라이브 조회/스트림).
 - **핵심 기능**:
@@ -675,6 +706,25 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 클러스터 전체 스캔은 백그라운드 집계(`status==='computing'`) 진행률 폴링.
   - Hubble→conntrack 기반 실트래픽 엣지 오버레이(온디맨드).
   - Prometheus 오프라인 시 requests/limits만 표시하는 경고 배지, 노드 상한 초과(truncated) 경고.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### 서비스 아키텍처 (`/service-architecture`)
+
+- **파일**: `frontend/src/pages/ServiceArchitecturePage.tsx` (+ `components/serviceArch/{ArchDocCanvas,ManualNodeDialog,ManualEdgeDialog,NodeDetailPanel,LlmSummaryPanel,exportDiagram}.tsx`)
+- **목적 / UX**: Settings 에 등록된 서비스 모듈(`LakeService` — cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램/서비스 플로우 도식을 영속 문서로 생성·현행화**하고, 자동화가 부족한 부분(외부 DB/API 연계, 주석, 배치)은 사용자가 수동 편집한다. LLM(Ollama) 이 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술한다(없어도 완전 동작).
+- **UI 구성**:
+  - `ClusterSidebar`(`iconOnly` 단일선택) + 좌측 "서비스 모듈" 목록 패널(sync 상태 dot + 드리프트 Δ 배지).
+  - 툴바: [아키텍처|서비스 플로우] 뷰 탭, 마지막 현행화 시각/드리프트 배지, 편집 모드, 수동 노드 추가, PNG/SVG 내보내기, 정리 동기화(prune), 동기화.
+  - 캔버스: `ArchDocCanvas`(커스텀 SVG, pan/zoom/드래그) — 노드 배치는 뷰별로 **DB 영속**(800ms 디바운스 bulk PATCH), stale(사라진) 노드는 점선 ghost, 수동 노드는 오렌지 점선. 플로우 뷰는 실트래픽 엣지 + LLM flow_steps 순번 뱃지.
+  - 선택 노드 `NodeDetailPanel`(AI 역할, 주석 편집, 수동 연결 목록, 수동 노드 수정/삭제), 하단 `LlmSummaryPanel`(요약 — 사용자 수정본 우선, 재생성 버튼, 오프라인 안내).
+  - 편집 모드에서 노드 2개 클릭 → `ManualEdgeDialog` 로 수동 연결(유형/뷰/순서/라벨).
+- **Frontend**: `useArchDocs`/`useArchDoc`/`useSyncArchDoc`/`useRegenerateLlm`/`usePatchArchDoc`/`useUpdateArchLayout`(디바운스 배치 저장)/수동 노드·엣지 mutations (`frontend/src/hooks/useArchDoc.ts`, `architectureDocsApi` 래핑); `useClusters`.
+- **Backend**: `GET /api/v1/architecture-docs`(모듈별 요약), `GET/PATCH /api/v1/architecture-docs/{service_id}`, `POST .../sync?prune=`, `POST .../llm-regenerate`, `PATCH .../layout`, `POST/PATCH/DELETE .../manual-nodes|manual-edges`, `GET .../audit`, `GET/PUT /api/v1/architecture-docs/schedule` — 라우터 `backend/app/routers/architecture_docs.py`, 서비스 `backend/app/services/architecture_doc_service.py`(기존 `collect_topology`/`build_traffic` 재사용), 모델 `backend/app/models/service_arch_doc.py`(`ServiceArchDoc`, `ServiceArchManualNode`, `ServiceArchManualEdge`).
+- **핵심 기능**:
+  - 자동 탐색 그래프를 아키텍처 수준으로 단순화(pods collapse, ConfigMap/Secret 제거) 후 문서로 영속화 — 요청마다 재계산하지 않음.
+  - **현행화(sync)**: 수동 "동기화" + Celery 주기(cron 은 `GET/PUT .../schedule`, beat `arch-doc-sync-dispatcher`) — 수동 편집(노드/엣지/배치/주석/요약)은 절대 덮어쓰지 않고, 사라진 리소스는 stale 마킹 후 drift 로 보고, `TopologyAuditLog`(entity_type=arch_doc) 에 이력 기록.
+  - LLM enrichment 는 fail-safe — Ollama 오프라인이면 상태만 표기하고 기존 콘텐츠 보존.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -756,10 +806,10 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: MinIO `mc` CLI가 설치된 노드에 SSH로 접속해 `mc admin info`, `mc ls`, `mc mirror`, `mc policy set` 등 명령을 실행하는 스토리지 운영 콘솔. alias는 사전에 `mc alias set`으로 구성되어 있어야 하며, `{alias}` 플레이스홀더로 프리셋에서 치환.
 - **UI 구성**:
   - `ClusterSidebar`는 `iconOnly` 단일선택.
-  - 10-컬럼 그리드: 좌(2) 타겟+인증(노드 선택 select + 수동 host override, user/port, password|key), 중(3) `McPresetManager`(개인/공유 프리셋) + alias/mc경로/인자 입력(`SavedCommands`) + timeout, 우(5) 결과 패널(항상 고정 위치, executed/stdout/stderr `LogViewer`).
+  - 10-컬럼 그리드: 좌(2) 타겟+인증(노드 선택 select + 수동 host override, user/port, password|key), 중(3) `McPresetManager`(개인/공유 프리셋) + alias/mc경로/인자 입력(`SavedCommands`) + timeout, 우(5) 결과 패널(항상 고정 위치, executed + `ExecOutputTabs` stdout/stderr 탭).
   - 위험 명령(`rm`/`mirror`/`admin service stop|restart`/`policy set`/`admin user remove` 등 정규식 매칭) 감지 시 `ConfirmDialog`를 `danger` 스타일로 강조.
-  - 선택 클러스터의 `operationLevel`에 따라 터미널 테마(`useTerminalEnvStore`)가 자동 전환.
-- **Frontend**: `useClusters`; `useQuery(['bulk-exec','nodes',clusterId])` → `bulkExecApi.nodeList`(노드목록 재사용); `useMutation` → `mcApi.run`; `useAuthStore`(admin 여부로 프리셋 공유 편집 권한), `useTerminalEnvStore`.
+  - 선택 클러스터의 `operationLevel`에 따라 터미널 테마가 자동 전환(`useTerminalEnvSync` 공용 훅).
+- **Frontend**: `useClusters`; `useQuery(['bulk-exec','nodes',clusterId])` → `bulkExecApi.nodeList`(노드목록 재사용); `useMutation` → `mcApi.run`; `useAuthStore`(admin 여부로 프리셋 공유 편집 권한), `useTerminalEnvSync`.
 - **Backend**: `POST /api/v1/clusters/{cluster_id}/mc/run`, `GET /api/v1/clusters/{cluster_id}/mc/presets`, `GET/PUT /api/v1/mc/presets/personal`, `GET/PUT /api/v1/mc/presets/shared` — 라우터 `backend/app/routers/mc_client.py`. 노드 목록은 `GET /api/v1/clusters/{cluster_id}/node-list`(`bulk_exec.py` 재사용). 전용 실행결과 영속 모델 없음(온디맨드 SSH 실행).
 - **핵심 기능**:
   - SSH 기반 원격 `mc` 명령 실행(비밀번호/PEM 키 인증 선택).
@@ -817,7 +867,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 ### Batch Jobs (`/batch-jobs`)
 
 - **파일**: `frontend/src/pages/BatchJobsPage.tsx` (+ `components/batch-jobs/BatchJobTable.tsx`, `BatchJobFilters.tsx`, `BatchJobSlideOver.tsx`(+`.EditForm`/`.RunForm`/`.RunHistory`/`.SavedCreds`), `CreateBatchJobWizard.tsx`(+`.StepType`/`.StepHost`/`.StepSchedule`), `UnregisteredTypeChips.tsx`, `StatusPill.tsx`, 공통 `ClusterSidebar`/`ConfirmDialog`/`useToast`)
-- **목적 / UX**: etcd defrag, snapshot 저장 등 클러스터별 반복적 운영 작업(batch job)을 등록하고 수동/일괄/스케줄(cron) 실행하며 실행 이력을 확인한다. SSH 대상 호스트·자격증명을 잡에 저장해두고 재사용할 수 있다.
+- **목적 / UX**: etcd defrag, snapshot 저장, K8s 완료/실패 Job 정리 등 클러스터별 반복적 운영 작업(batch job)을 등록하고 수동/일괄/스케줄(cron) 실행하며 실행 이력을 확인한다. SSH 잡은 대상 호스트·자격증명을 잡에 저장해두고 재사용하며, non-SSH(클러스터 스코프) 잡은 클러스터 kubeconfig 로 백엔드에서 직접 실행된다.
 - **UI 구성**:
   - 좌측 `ClusterSidebar` — **단일 선택 + 전체** 모드(`iconOnly` + `allowAll` + `allLabel="전체"`, `selectedId`/`onSelect`).
   - 헤더: 잡 개수/실패/실행 중 요약, "새 잡" 버튼(클러스터 미선택 시 빈 wizard, 선택 시 prefilled).
@@ -825,13 +875,15 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 우측 `BatchJobSlideOver` — 행 클릭 시 잡 상세(수정/실행/이력/자격증명), 뷰포트 <1280px에서는 overlay 모드.
   - `CreateBatchJobWizard`(3단계: 타입 → 호스트 → 스케줄), 삭제 시 `ConfirmDialog`.
 - **Frontend**: `useBatchJobTypes`, `useBatchJobs`, `useDeleteBatchJob`(+ 컴포넌트 내부에서 `useCreateBatchJob`/`useUpdateBatchJob`/`useRunBatchJob`/`useTestBatchJobConnection`/`useBatchJobRuns`, 모두 `hooks/useBatchJobs.ts`), `useClusters`. 순수 로컬 state(Zustand 스토어 없음)로 `selectedClusterId`, `statusFilter`, `search`, `sort`, `selectedJob`, `wizardCtx`, `selectedIds`(일괄 실행용), `overlayMode`(matchMedia) 관리. 일괄 실행은 훅이 아닌 `batchJobsApi.bulkRun()` 직접 호출 + `useToast`로 결과 알림.
-- **Backend**: `GET /api/v1/batch-jobs/types`(등록된 job_type 목록), `GET/POST /api/v1/batch-jobs`, `PUT/DELETE /api/v1/batch-jobs/{id}`, `POST /api/v1/batch-jobs/{id}/run`(동기, timeout 600s), `POST /api/v1/batch-jobs/bulk-run`(Celery `run_batch_job.delay()`로 비동기 큐잉, 저장된 자격증명 없으면 스킵), `GET /api/v1/batch-jobs/{id}/runs`, `GET /api/v1/batch-jobs/runs/{id}`, `POST /api/v1/batch-jobs/{id}/test-connection`(SSH 연결만 검증) — 전부 `backend/app/routers/batch_jobs.py`. 서비스: `app/services/batch_job_service.py`(`execute_job`, `get_job_or_404`), `app/services/batch_jobs/`(`@register_executor` 패턴으로 job_type별 executor 등록, `list_executors`/`get_executor`), `app/services/ssh_runner.py`(paramiko 기반 `test_connection`), `app/services/secret_box.py`(자격증명 암/복호화). 모델: `backend/app/models/batch_job.py`(`BatchJob`, `BatchJobRun` — cron·`encrypted_password`/`encrypted_private_key`·`last_schedule_check_at`/`last_schedule_note` 필드로 스케줄 진단 지원).
+- **Backend**: `GET /api/v1/batch-jobs/types`(등록된 job_type 목록), `GET/POST /api/v1/batch-jobs`, `PUT/DELETE /api/v1/batch-jobs/{id}`, `POST /api/v1/batch-jobs/{id}/run`(동기, timeout 600s), `POST /api/v1/batch-jobs/bulk-run`(Celery `run_batch_job.delay()`로 비동기 큐잉, 저장된 자격증명 없으면 스킵), `GET /api/v1/batch-jobs/{id}/runs`, `GET /api/v1/batch-jobs/runs/{id}`, `POST /api/v1/batch-jobs/{id}/test-connection`(SSH 연결만 검증) — 전부 `backend/app/routers/batch_jobs.py`. 서비스: `app/services/batch_job_service.py`(`execute_job`, `get_job_or_404`), `app/services/batch_jobs/`(`@register_executor` 패턴으로 job_type별 executor 등록, `list_executors`/`get_executor`; SSH executor `etcdctl_defrag`/`shell_command` + non-SSH(`requires_ssh=False`) executor `k8s_job_cleanup` — 클러스터 kubeconfig 로 kubectl 직접 실행, dry_run 기본), `app/services/ssh_runner.py`(paramiko 기반 `test_connection`), `app/services/secret_box.py`(자격증명 암/복호화). 모델: `backend/app/models/batch_job.py`(`BatchJob`, `BatchJobRun` — cron·`encrypted_password`/`encrypted_private_key`·`last_schedule_check_at`/`last_schedule_note` 필드로 스케줄 진단 지원).
 - **핵심 기능**:
   - 클러스터 단일 선택/전체 보기, 상태 필터(전체/실패/실행중 등) + 텍스트 검색
   - 체크박스 다중 선택 후 저장된 자격증명으로 여러 클러스터 잡을 Celery 백그라운드 일괄 실행(`bulk-run`), 큐잉/스킵 결과를 토스트로 안내
   - 잡별 슬라이드오버에서 수정/수동 실행(요청 시 자격증명 override 가능)/실행 이력(`BatchJobSlideOver.RunHistory`)/저장된 자격증명 관리(`.SavedCreds`)
-  - cron 스케줄 등록 시 자격증명 저장이 필수(422로 강제, `_require_cron_credentials`) — 백엔드가 매분 silent skip 되는 상황을 사전 차단
-  - SSH 연결 테스트(명령 미실행, `test-connection`)로 자격증명/네트워크 사전 검증
+  - cron 스케줄 등록 시 자격증명·기본 호스트 저장이 필수(422로 강제, `_require_cron_credentials`) — 백엔드가 매분 silent skip 되는 상황을 사전 차단. non-SSH 타입(`requires_ssh=False`)은 이 검증에서 제외(호스트/자격증명 불필요)
+  - **K8s Job 정리(`k8s_job_cleanup`)**: 완료/실패 Job 을 kubeconfig 로 조회·삭제하는 non-SSH 잡 — dry_run 기본, active Job 보호, `older_than_hours`/네임스페이스 제외/라벨 셀렉터 필터. 위저드/실행 폼이 호스트·자격증명 입력을 자동 생략
+  - SSH 연결 테스트(명령 미실행, `test-connection`)로 자격증명/네트워크 사전 검증 (SSH 타입 한정)
+  - 실행 이력 15초 자동 갱신 + 트리거 배지(수동/스케줄/일괄), 일괄 실행은 trigger="bulk" 로 기록
   - 미등록 job_type을 클러스터별로 안내하는 `UnregisteredTypeChips` → wizard로 바로 등록 유도
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_

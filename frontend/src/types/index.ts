@@ -2228,6 +2228,131 @@ export interface ServiceTopologyExternalNode {
   createdAt: string;
 }
 
+// ── Service Architecture Docs (서비스 모듈별 아키텍처/플로우 문서) ───────────
+export type ArchViewType = 'architecture' | 'flow';
+
+export interface ArchGraphNode {
+  id: string;
+  kind: string;
+  name: string;
+  namespace?: string | null;
+  status: string;              // healthy | warning | critical
+  detail?: string | null;
+  stale: boolean;              // 클러스터에서 사라진 노드 (ghost 렌더)
+  staleSince?: string | null;
+}
+export interface ArchGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;                // routes | exposes | owns | mounts_pvc ...
+  label: string;
+}
+export interface ArchGraph {
+  nodes: ArchGraphNode[];
+  edges: ArchGraphEdge[];
+  warnings: string[];
+  truncated: boolean;
+}
+export interface ArchTrafficEdge {
+  source: string;
+  target: string;
+  flowCount: number;
+  droppedCount: number;
+  protocols: string[];
+  ports: number[];
+}
+export interface ArchManualNode {
+  id: string;
+  nodeId: string;              // "manual:{uuid}" — 그래프 identity
+  label: string;
+  kind: string;                // external | database | queue | api | user | custom
+  description?: string | null;
+  style?: Record<string, unknown> | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ArchManualEdge {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  edgeType: string;            // flow | depends | calls | custom
+  label?: string | null;
+  description?: string | null;
+  view: ArchViewType | 'both';
+  sortOrder: number;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ArchLlmComponent {
+  nodeId: string;
+  role: string;
+}
+export interface ArchLlmFlowStep {
+  order: number;
+  source: string;
+  target: string;
+  description: string;
+}
+export interface ArchLlmContent {
+  summary: string;
+  components: ArchLlmComponent[];
+  flowSteps: ArchLlmFlowStep[];
+  model?: string;
+  generatedAt?: string;
+  rawFallback?: boolean;
+}
+export interface ArchDrift {
+  added?: string[];
+  removed?: string[];
+  changed?: string[];
+  detectedAt?: string;
+}
+export interface ArchDoc {
+  id: string;
+  serviceId: string;
+  clusterId: string;
+  namespace: string;
+  autoGraph?: ArchGraph | null;
+  trafficEdges: ArchTrafficEdge[];
+  llmContent?: ArchLlmContent | null;
+  // 뷰별 노드 배치 — node_id 키는 대문자/구분자를 포함하지만 언더스코어가 없어
+  // axios 키 변환(snake→camel)의 영향을 받지 않는다.
+  layout: Partial<Record<ArchViewType, Record<string, { x: number; y: number }>>>;
+  annotations: Record<string, string>;   // node_id → 메모 ("__doc__" = 문서 메모)
+  summaryOverride?: string | null;
+  sourceHash?: string | null;
+  drift?: ArchDrift | null;
+  lastSyncedAt?: string | null;
+  lastSyncStatus: 'pending' | 'ok' | 'partial' | 'failed';
+  syncError?: string | null;
+  autoSyncEnabled: boolean;
+  llmStatus: 'none' | 'pending' | 'ok' | 'offline' | 'failed';
+  manualNodes: ArchManualNode[];
+  manualEdges: ArchManualEdge[];
+  updatedAt: string;
+}
+export interface ArchDocSummary {
+  serviceId: string;
+  serviceName: string;
+  serviceType: string;
+  clusterId: string;
+  namespace?: string | null;
+  hasDoc: boolean;
+  lastSyncedAt?: string | null;
+  lastSyncStatus: string;
+  llmStatus: string;
+  autoSyncEnabled: boolean;
+  driftCounts?: Record<string, number> | null;
+}
+export interface ArchDocSchedule {
+  enabled: boolean;
+  cron: string;
+  lastRunAt?: string | null;
+}
+
 export interface AnalyzeNamespacesResponse {
   clusterId: string;
   clusterName: string;

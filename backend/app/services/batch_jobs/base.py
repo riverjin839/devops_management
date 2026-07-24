@@ -12,7 +12,7 @@ class ExecutionContext:
     Credentials are intentionally not persisted in the DB — they live only on
     the request and are passed straight to the executor.
     """
-    host: str
+    host: str = ""
     port: int = 22
     username: str = "root"
     password: Optional[str] = None
@@ -22,6 +22,11 @@ class ExecutionContext:
     params: dict[str, Any] = field(default_factory=dict)
 
     timeout: int = 60
+
+    # Non-SSH (cluster-scoped) executors — resolved from the job's cluster.
+    # SSH executors ignore these.
+    kubeconfig_path: Optional[str] = None
+    cluster_name: str = ""
 
 
 @dataclass
@@ -43,10 +48,17 @@ class BatchJobExecutor:
       - set `job_type` (unique key) and `label` (human readable)
       - optionally set `description`, `default_params`, `param_schema`
       - implement `async def run(self, ctx: ExecutionContext) -> ExecutionResult`
+
+    `requires_ssh = False` marks a cluster-scoped executor that runs from the
+    backend/worker itself (e.g. kubectl with the cluster's kubeconfig). Such
+    jobs need no target host and no SSH credentials — the router/dispatcher
+    skip the credential invariants and `execute_job` resolves the kubeconfig
+    into `ExecutionContext.kubeconfig_path` instead.
     """
     job_type: ClassVar[str] = ""
     label: ClassVar[str] = ""
     description: ClassVar[str] = ""
+    requires_ssh: ClassVar[bool] = True
     # JSON-schema-ish description of allowed params; surfaced to the UI.
     # Shape: {param_name: {"type": "string|int|bool", "default": ..., "label": ...}}
     param_schema: ClassVar[dict[str, dict[str, Any]]] = {}
@@ -71,6 +83,7 @@ class BatchJobExecutor:
             "description": cls.description,
             "param_schema": cls.param_schema,
             "default_params": cls.default_params,
+            "requires_ssh": cls.requires_ssh,
         }
 
 

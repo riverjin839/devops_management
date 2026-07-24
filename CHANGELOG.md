@@ -8,7 +8,94 @@
 
 ## [Unreleased]
 
-1.8.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.13.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.13.0] - 2026-07-24
+
+### Added
+- **K8s Job 정리 배치잡 (`k8s_job_cleanup`)**: 완료(Complete)/실패(Failed) 상태로 남아 리소스만 차지하는 K8s Job 을 정리하는 새 배치잡 타입. SSH 없이 클러스터에 등록된 kubeconfig 로 백엔드/워커에서 kubectl 을 직접 실행하는 **클러스터 스코프(non-SSH) 실행 모델**을 배치잡 프레임워크에 도입(`BatchJobExecutor.requires_ssh`) — 이 타입은 호스트/SSH 자격증명 없이 등록·cron 스케줄·일괄 실행이 모두 가능하다. dry_run 기본 활성(삭제 대상만 미리 확인), 실행 중(active) Job 보호, 종료 후 경과시간(`older_than_hours`)·네임스페이스 제외·라벨 셀렉터 필터 지원. Backend: `services/batch_jobs/k8s_job_cleanup.py` + 프레임워크/라우터/디스패처 non-SSH 분기. Frontend: 잡 등록 위저드·실행 폼·편집 폼이 non-SSH 타입에서 호스트/자격증명 입력을 자동 생략.
+
+### Changed
+- **Batch Jobs 실행 이력 개선**: 슬라이드오버의 실행 이력이 15초 주기로 자동 갱신되어 스케줄/일괄(백그라운드) 실행 결과가 새로고침 없이 반영되고, 이력 항목에 실행 트리거 배지(수동/스케줄/일괄)가 표시된다. 일괄 실행은 이제 trigger="bulk" 로 구분 기록.
+
+### Fixed
+- **Batch Jobs 편집 폼에서 cron/설명/기본 호스트 해제 불가**: 값을 지우고 저장해도 빈 값이 "변경 없음"으로 직렬화되어 실제로는 해제되지 않던 문제 수정 — 빈 입력을 null 로 전송해 스케줄 해제(수동 전용 전환)가 정상 동작한다.
+- **잡 등록 위저드의 cron 필수값 사전 검증 보강**: cron 을 설정했지만 기본 호스트가 비어 있으면 등록 시 백엔드 422 를 받고서야 알 수 있던 흐름을 마지막 단계에서 미리 차단·안내하고, "등록 후 추가하면 된다"는 실제 동작(등록 차단)과 모순된 자격증명 안내 문구를 바로잡음.
+
+## [1.12.0] - 2026-07-24
+
+### Added
+- **서비스 아키텍처 자동 생성·현행화 (`/service-architecture`)**: Settings 에 등록된 서비스 모듈(cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램과 서비스 플로우 도식을 영속 문서로 생성**하고, 수동 "동기화" 버튼 + Celery 주기 스케줄(cron 설정 가능)로 **현행화**한다. 사라진 리소스는 삭제 대신 stale(점선 ghost) 표시 + 드리프트(±변경) 배지로 보고하며, 수동 편집 — 외부 시스템 노드 추가, 노드 간 수동 연결(뷰/순서 지정), 노드별 주석, 드래그 배치(뷰별 영속 저장), 요약 직접 수정 — 은 현행화가 절대 덮어쓰지 않는다. LLM(Ollama) 이 연결돼 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술(오프라인이어도 기능 전체 정상 동작). PNG/SVG 내보내기 지원. Backend: `architecture_docs` 라우터 + `architecture_doc_service`(기존 `collect_topology`/`build_traffic` 재사용, `TopologyAuditLog` 감사) + `service_arch_docs` 모델 3종 + Celery `arch-doc-sync-dispatcher`. Frontend: `ServiceArchitecturePage` + `components/serviceArch/` + `useArchDoc` 훅.
+
+### Changed
+- **업무 현황 화면 색상 디자인 토큰화(테마 정합)**: 홈 업무 위젯들이 쓰던 고정 팔레트(`text-red-500`·`bg-blue-500`·emerald/amber/slate/violet 등)를 semantic status(`--status-healthy/warning/critical/info/unknown`)·categorical chart(`--chart-N`) 토큰으로 교체 — light/dark/default 테마 전환 시 톤이 어긋나던 문제 해소(CLAUDE.md 디자인 규칙 준수). 대상: WorkCalendar·MemberTodayTodos·WorkAlarmBell·QuickAddTaskModal(우선순위/필수표시/경고) 및 DayScheduleBoard 담당자 아바타 팔레트. 담당자별 진행 현황의 '메모지' 종이 질감(warm paper)은 의도된 장식이라 유지.
+- **당일 스케줄 — 완료 업무 유지(흐리게) & 지연 집계에서 backlog 제외**: 업무를 완료(done)하면 '당일 스케줄'에서 즉시 사라지던 것을, 완료일까지는 **흐림+취소선**으로 남겨 하루 회고가 가능하게 변경. 아울러 '담당자별 오늘 요약'의 **지연(overdue)** 집계에서 backlog('언젠가 할 일', 아직 착수 약정 아님)를 제외해 지연 뱃지 인플레이션을 줄였다(Backend `today/summary` + Frontend 공통 카드 동일 규칙).
+
+### Fixed
+- **'내 할일' KPI 와 오늘 할일 페이지 숫자 불일치 + 날짜 정합**: 홈 '내 할일' KPI 와 `/todo-today` 가 서로 다른 정의로 집계해 숫자가 어긋나던 문제 수정 — 공용 셀렉터(`lib/workItems.ts` 의 `isMyDueTodo`/`isAssignedTo`/`itemDateKey`)로 "내 담당 or 공통 + 미완료 + 시작일 오늘 이하" 정의를 일원화. 그 과정에서 `/todo-today` 의 날짜 버킷도 `.slice(0,10)`(UTC 앞자리) → KST 변환으로 교정(이른 아침 업무가 전날 버킷으로 새던 문제 해소), '오늘' 기준도 자정 자동 갱신(`useToday`).
+- **주간 타임라인 막대 텍스트 가독성**: 막대 투명도를 낮추거나(라이트 테마) 상태색이 밝을 때 흰색 라벨이 배경에 묻히던 문제 완화 — 사용자가 고른 텍스트 색은 그대로 두고, 밝기에 따라 반대 색 그림자를 넣어 대비를 보강.
+- **업무 현황(홈) '오늘' 상시 갱신 + 잔여 표기 버그**: 홈을 상시 띄워두면 마운트 시각에 '오늘' 이 고정돼 자정 이후 KPI·오늘 하이라이트·지연 판정·당일 스케줄 now 라인이 어긋나던 문제 수정 — 공용 `useToday()` 훅(자정 감지 자동 갱신)으로 HomePage·주간 타임라인·월간 달력·담당자 탭·당일 스케줄의 '오늘' 기준을 통일하고, 당일 스케줄 now 라인은 30초 주기로 갱신. 아울러 주간 타임라인에서 **같은 날 마일스톤이 여러 건이면 서로 겹쳐 그려지던 문제**를 요일 컬럼 안에 세로로 쌓도록 수정, 당일 스케줄 담당자 순환(◀▶)이 목록 밖 이름에서 첫 담당자를 건너뛰던 인덱스 버그도 수정.
+- **업무 날짜 규약 KST 통일 (UTC 저장 + KST 표시)**: 정식 업무 폼(`WorkItemForm`)이 날짜/시간을 naive 로컬 문자열로 저장해, 리더가 UTC 로 간주하며 화면에 **+9시간 시프트**되던 문제와, 이른 아침(00:00~08:59 KST) 업무가 전날로 분류되던 문제를 근본 수정. 규약을 앱 canonical(UTC 저장 + KST 표시, QuickAdd·`utcnow` 자동 타임스탬프와 동일)로 일원화. Frontend: `WorkItemForm.toApiDatetime` 을 `toISOString()`(UTC) 직렬화로 변경, 공용 `toLocalDateKey()`(UTC→KST 날짜) 헬퍼로 홈 위젯의 `.slice(0,10)` 날짜 비교를 전부 교체(HomePage/WorkAlarmBell/WeeklyStatusTimeline/MemberTodayTodos). Backend: `today/summary` 의 '오늘' 경계를 KST 자정 기준(`_local_day_bounds_utc`)으로 계산. 기존 데이터 중 구 폼으로 저장된 항목은 편집 시 자동으로 UTC 로 정규화된다(대부분은 이미 정상).
+- **업무 현황(홈) 위젯 데이터 100건 잘림 완화**: 홈 KPI·업무 알람 벨·당일 스케줄·주간/월간 뷰가 `GET /work-items` 기본 상한(100건, `started_at` 내림차순)을 그대로 받아, 업무가 100건을 넘으면 가장 오래된(=지연되기 쉬운) 건부터 조용히 잘려 미해결 이슈 KPI 과소집계·지연 알람 누락·과거 달/주 공백이 생기던 문제를 완화. Frontend: 홈 위젯 공용 `useHomeWorkItems()`(상한 500) 도입해 여러 위젯이 캐시를 공유하도록 통일(근본 해법인 화면별 기간 스코프 쿼리는 후속).
+- **홈 KPI "미해결 이슈"/"다음 일정" 링크가 죽은 경로(`/items`)로 이동**: 존재하지 않는 라우트라 클릭 시 홈으로 되돌아오던 문제를 `/tasks-mgmt` 로 수정.
+- **홈 "내 할일" KPI·업무 알람이 복수 담당자 업무를 누락**: 담당자 필드에 쉼표로 여러 명("A,B")이 들어간 업무를 정확 일치로만 판정해 KPI/알람에서 빠지던 문제 수정 — 공용 `assigneeNames()` 헬퍼로 분리 매칭. Frontend: `HomePage`, `WorkAlarmBell`, `DayScheduleBoard` 가 같은 헬퍼 사용.
+- **정식 폼(PUT)으로 업무를 '완료'로 저장해도 완료일이 자동 세팅되지 않음**: `PATCH /status` 만 done 이동 시 `closed_at` 을 채워, 폼 수정으로 done 저장 시 `closed_at` 이 비어 미해결 이슈 KPI 에 완료 항목이 남거나 주간 막대가 무한 연장되던 문제 수정. 재오픈(done 이탈) 시에는 명시 입력이 없으면 완료일을 해제. Backend: `work_items.update_work_item`.
+- **홈에서 업무 등록 후 담당자 탭 미갱신**: 업무 생성/수정/삭제/상태변경이 담당자·오늘 요약(`items/today`) 쿼리를 무효화하지 않아 최대 60초 지연되던 문제 수정. Frontend: 뮤테이션 성공 시 요약 쿼리도 함께 무효화.
+- **홈 "다음 일정" KPI 부정확**: 지난 24시간 내 시작 업무까지 후보에 넣어 어제 업무가 "다음 일정"으로 표기되고, 회의/교육 유형 일정은 제외되던 문제 수정 — 미래 시작(작업/회의/교육/기타) 건만 대상으로 변경.
+- **월간 달력(WorkCalendar) 표기 불일치**: 제목(`title`)을 무시하고 본문만 표기하던 것을 제목 우선으로 통일하고, 이슈를 작업과 다르게(UTC 앞자리) 버킷팅해 같은 날 등록분이 다른 칸에 놓이던 문제를 로컬 날짜 기준으로 일치시킴.
+
+## [1.11.1] - 2026-07-23
+
+### Added
+- **콘솔 화면 stdout/stderr 탭 분리 (`ExecOutputTabs`)**: 노드 일괄 실행·mc 클라이언트·etcdctl 콘솔의 실행 결과에서 stdout 과 stderr 를 위아래로 쌓지 않고 **탭으로 전환**하도록 개선 — 세로 공간을 아끼고 스크롤을 줄인다. 탭 라벨에 **결과 유무 dot(초록=stdout/빨강=stderr)과 라인 수**가 표기되어 클릭 전에 어느 스트림에 내용이 있는지 보이고, 내용이 있는 쪽이 기본 활성 탭이 된다. Frontend: 공용 `ExecOutputTabs` 컴포넌트 신설 + 3개 화면 적용. Cilium BPF Trace 의 raw/직접명령 출력도 plain `<pre>` 에서 `LogViewer` 로 교체(Appearance·필터·복사 툴바 일괄 적용). 콘솔 화면 공통 규칙은 CLAUDE.md "콘솔 화면 표준 패턴" 섹션으로 명문화.
+
+### Changed
+- **터미널 Appearance 클러스터 운영등급 자동 적용 확대**: 선택 클러스터가 개발이면 개발 프로파일(기본 **Monokai**), 운영(prod/dr)이면 운영 프로파일이 로그 화면에 자동 적용되도록 개선. 기존에는 mc 클라이언트만 동작하던 것을 공용 훅(`useTerminalEnvSync`)으로 묶어 노드 일괄 실행(다중 선택은 하나라도 운영이면 운영)·etcdctl·Cilium BPF Trace·커널 파라미터에도 적용, 페이지 이탈 시 초기화. 신규 사용자 기본값도 개발=Monokai / 운영=기본(테마 색상)으로 변경(백엔드 `terminal_appearance` 기본값) — Settings → 터미널 Appearance 에서 프로파일별로 저장한 개인 설정이 있으면 그 값이 우선한다.
+- **k9s 콘솔 — "연결" 터미널을 드래그 이동형 플로팅 창으로**: "연결" 로 생성되는 인라인 k9s 터미널이 페이지에 고정되지 않고, **헤더를 드래그해 원하는 위치로 옮기고 우하단 모서리로 크기를 조절할 수 있는 플로팅 창**으로 열린다("새 창으로 열기" 없이도 창 이동 가능). 페이지 본문에는 플로팅 창 사용 안내 카드가 남는다. Frontend: `K9sTerminal` 헤더 드래그 핸들(pointer capture) + CSS `resize`, `K9sPage` 세션 안내 카드.
+
+### Fixed
+- **k9s "새 창으로 열기" HTTP 접속에서 TypeError**: HTTP(NodePort 등 비보안 컨텍스트)로 접속하면 `crypto.randomUUID` 가 존재하지 않아 "새 창으로 열기" 가 `TypeError: randomUUID is not a function` 으로 실패하던 버그 수정 — 폴백(getRandomValues/Math.random) 있는 `generateUUID()` 를 사용하도록 변경. Frontend: `lib/k9sPopout.ts`.
+
+## [1.11.0] - 2026-07-23
+
+### Added
+- **k9s 콘솔 — 별도 창(팝업) 열기**: k9s 콘솔(`/k9s`)에 "새 창으로 열기" 를 추가. 접속 폼의 버튼 또는 터미널 헤더의 pop-out 버튼으로 k9s 세션을 별도 브라우저 창(`/k9s/popup`, 사이드바/네비 없는 전체창)으로 띄워, 메인 화면에서는 다른 페이지로 전환하며 k9s 를 나란히 사용할 수 있다. 접속정보는 URL 이 아닌 `localStorage` 1회용 handoff(팝업이 읽는 즉시 삭제)로 넘긴다. Frontend: `K9sPopupPage` + `lib/k9sPopout.ts`, `K9sTerminal` 에 `onPopOut`/`fill` prop, `App.tsx` 에서 팝업 라우트를 `AppShell` 바깥으로 분기.
+- **버그 픽스 로그 패널 (사이드바)**: 사이드바 하단 레일에 "버그 픽스 로그" 아이콘(벌레 아이콘)을 추가. 클릭하면 릴리즈 노트와 동일한 우측 SidePane 이 열리고, `CHANGELOG.md` 의 각 버전 `Fixed` 항목만 모아 버전·날짜별로 나열한다. "무슨 버그가 언제 고쳐졌는지"만 빠르게 훑는 용도. Frontend: `BugFixLogPanel`(release-notes API 재사용) + `Sidebar` 레일 아이콘/SidePane 배선.
+
+### Changed
+- **Cilium BPF Trace (`/cilium-trace`) 레이아웃 개편**: mc 클라이언트 콘솔처럼 3개 탭(BPF Inspector / Cilium Monitor / Hubble Flows) 모두 **좌(컨트롤 4) / 우(결과·로그 6)** 10컬럼 그리드로 배치. 조회 결과·스트림 로그 카드가 더 이상 컨트롤 아래로 흐르지 않고 항상 우측 같은 라인에 고정되며(실행 전엔 플레이스홀더), lg 이상에서 로그 영역 내부 스크롤 높이를 화면 높이에 맞춰 키워 세로 공간을 활용한다. Frontend: `CiliumTracePage` 탭 3곳 그리드 래핑 + Hubble 필터 그리드 반응형 조정.
+- **노드 일괄 실행 (`/bulk-exec`) 레이아웃 개편**: mc 클라이언트 콘솔처럼 **[타겟 노드 | 명령 메뉴 | 실행 결과]** 를 한 로우(12컬럼 3:4:5 그리드)에 나란히 배치. 실행 결과가 더 이상 아래로 흐르지 않고 항상 우측 같은 자리에 고정되며(실행 전엔 플레이스홀더), 결과 패널 내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. 카드 padding·행 간격을 줄여 공간 효율을 높였다.
+
+### Fixed
+- **k9s 콘솔 — `e`(edit) 셸아웃 에디터 hang·커서 안 먹힘 수정**: k9s 의 `e`(edit)/`v`(view) 는 kubectl edit 처럼 `$KUBE_EDITOR`/`$EDITOR` 로 같은 터미널에 에디터를 셸아웃한다. (1) 에디터 변수가 없거나 서버에 에디터가 없어 **멈춘 것처럼** 보이던 문제 → 세션 시작 시 에디터 보장(운영자 지정 `KUBE_EDITOR`/`EDITOR` 존중, 없으면 종료법이 화면에 보이는 `nano` 우선·없으면 `vi`). (2) 에디터에서 **방향키/커서가 안 먹히던** 문제 → k9s 자체는 tcell 내장 terminfo 로 뜨지만 셸아웃 에디터는 시스템 terminfo(ncurses)를 쓰므로 서버에 `xterm-256color` terminfo 가 없으면(최소/폐쇄망 서버) 방향키 해석 실패. PTY·`TERM` 을 거의 모든 서버에 있는 **`xterm`** 으로 고정하고 k9s 색상은 `COLORTERM=truecolor` 로 유지. Backend: `k9s_ssh._build_k9s_command` prelude + `invoke_shell(term="xterm")`.
+- **노드 이미지 배포 "성공했는데 실제 배포 안 됨" 수정 (K8s 1.34 / containerd)**: 배포(prepull) 시 대상 노드에서 pull 이 exit 0 이면 실제 적재 여부와 무관하게 "완료"로 표시되던 문제를 수정. 이제 pull 직후 **런타임에서 실제 존재를 검증**(crictl `inspecti` / nerdctl `image inspect` / ctr `images ls`)해 검증까지 통과해야 성공으로 보고한다. 기본 런타임도 K8s(containerd) 표준인 crictl 로 변경(ctr 폴백 시 namespace 불일치로 kubelet 에 안 보이는 문제 회피). 또한 비대화형 SSH 세션의 최소 PATH 로 `crictl`/`ctr`/`nerdctl` 를 못 찾던 문제를 **PATH 보강**(/usr/local/bin·RKE2/k3s 경로 등)으로 해소. 배포 성공 후 대상 클러스터 이미지 스냅샷을 무효화해 보유/미보유 배지를 갱신하고, K8s API `node.status.images` 는 kubelet 갱신 주기로 지연될 수 있음을 결과 화면에 안내. Backend: `node_images._build_pull_command` 재작성. Frontend: `ImageDistributeDialog` 캐시 무효화 + 안내.
+- **로그 뷰어 Appearance(프로파일) 팝오버 잘림**: 로그 출력 툴바의 색상/글꼴(팔레트) 버튼을 누르면 드롭다운이 `LogViewer` 의 `overflow-hidden` 컨테이너(테이블 셀 등 좁은 곳)에 의해 잘려 보이던 버그 수정. Frontend: `LogThemeButton` 의 패널을 `createPortal` 로 `document.body` 에 fixed 앵커링(스크롤/리사이즈 추적)해 클리핑을 회피 — `SearchableSelect`(menuPortal)와 동일 패턴.
+
+## [1.10.0] - 2026-07-21
+
+### Added
+- **k9s 콘솔 (`/k9s`)**: 클러스터 control-plane 서버에 내장된 `k9s` TUI 를 SSH 로 실행해 브라우저 웹 터미널로 그대로 스트리밍하는 화면 추가. 좌측 클러스터 사이드바에서 클러스터를 고르고 master 노드·SSH 자격증명(비밀번호/Private Key)을 입력하면 xterm.js 로 실제 k9s 를 조작할 수 있다. 네임스페이스 지정·읽기 전용(`--readonly`) 옵션 지원. Backend: 신규 WebSocket 라우터 `k9s_ssh`(paramiko PTY `invoke_shell` 브리지, admin/operator 만 허용, 세션 감사 로그, `PEP_K9S_SSH_ENABLED` 로 비활성화, 명령은 검증된 조각으로만 조립). Frontend: `K9sPage` + `K9sTerminal` 컴포넌트, `k8sStreamUrls.k9s`.
+
+### Fixed
+- **버전 필드 중복 해소**: 릴리스 병합 과정에서 `frontend/package.json` 과 `backend/app/main.py` 에 `version` 필드가 중복(1.9.0/1.8.2)으로 남아 백엔드가 `SyntaxError`(keyword argument repeated)로 기동 불가하던 문제 수정 — 최신 릴리스 값 1.9.0 으로 정리.
+- **K8S 노드 이미지 배포 (다른 노드로 prepull)**: 노드 이미지 화면에서 특정 노드가 가진
+  이미지를 골라, 아직 그 이미지가 없는 다른 노드로 배포하는 기능. `노드별(Table)` /
+  `이미지별` 뷰의 각 이미지 행에 **배포** 버튼이 생기고, 대상 클러스터(출처와 동일 또는
+  다른 클러스터)를 선택하면 노드 목록에 **보유/미보유** 배지가 표시되며 기본으로 미보유
+  노드가 선택된다. 실행하면 대상 노드에 SSH 접속 후 컨테이너 런타임(crictl/nerdctl/ctr,
+  auto 감지)으로 이미지를 레지스트리에서 pull 하고 노드별 결과(stdout/stderr/exit)를 표로
+  보여준다. 대용량 tar 전송 없이 병렬로 동작한다(대상 노드가 레지스트리에 도달 가능해야 함).
+  - Backend: `node_images` 라우터에 `POST /clusters/{id}/node-images/distribute` 추가 —
+    이미지 참조 정규식 검증(shell 인젝션 차단) 후 `ssh_runner.run_bulk` 로 pull 명령
+    일괄 실행, `require_operator` 권한 + 감사 로그(`node_image.distribute`). SSH 자격증명은
+    요청에만 존재하고 저장되지 않는다.
+  - Frontend: `ImageDistributeDialog`(대상 클러스터/노드 선택 · 보유 여부 배지 · 런타임/
+    sudo/자격증명 · 결과 표), `nodeImagesApi.distribute`.
+
+## [1.9.0] - 2026-07-21
+1.8.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.8.2] - 2026-07-21
 
 ### Added
 - **전역 뒤로가기 버튼 (DESIGN.md D-029)**: 사이드바 로고 아래에 어느 화면에서나 이전

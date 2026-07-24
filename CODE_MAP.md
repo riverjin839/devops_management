@@ -91,9 +91,10 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 |---|---|
 | 리소스 탐색(읽기전용, YAML/Secret 마스킹) | `backend/app/routers/k8s_resources.py` · `k8s_helm.py` · `k8s_exec.py` → `frontend/src/pages/K8sManagePage.tsx` |
 | K8S 자원 관리(req/lim/use 랭킹) | `backend/app/routers/k8s_allocation.py` → `frontend/src/pages/K8sAllocationPage.tsx` |
+| k9s 콘솔(control-plane SSH → 내장 k9s TUI 웹 스트리밍) | `backend/app/routers/k9s_ssh.py` (WebSocket, paramiko PTY) → `frontend/src/pages/K9sPage.tsx` · `frontend/src/pages/K9sPopupPage.tsx`(별도 창) · `frontend/src/components/k8s/K9sTerminal.tsx` · `frontend/src/lib/k9sPopout.ts`(창 간 handoff) |
 | 노드 라벨 / 노드 이미지 | `backend/app/routers/node_labels.py` · `node_images.py` → `frontend/src/pages/NodeLabelsPage.tsx` · `NodeImagesPage.tsx` |
 | 주요 명령어 모음 | `backend/app/routers/commands.py` → `frontend/src/pages/CommandsPage.tsx` · `CommandFormPage.tsx` |
-| Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/` → `frontend/src/pages/BatchJobsPage.tsx` |
+| Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/`(SSH: `etcdctl_defrag`/`shell_command`, non-SSH kubectl: `k8s_job_cleanup`) → `frontend/src/pages/BatchJobsPage.tsx` |
 | Ansible 자산 (파일/인벤토리) | `backend/app/routers/ansible_assets.py` |
 
 ### 네트워크 / 토폴로지 / 스토리지
@@ -102,6 +103,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Cilium BPF Trace | `backend/app/routers/cilium_trace.py` + `services/cilium_trace_service.py` · `hubble_client.py` → `frontend/src/pages/CiliumTracePage.tsx` |
 | 패킷 흐름 분석 | `backend/app/routers/topology_trace.py` + `services/tcpdump_runner.py` → `frontend/src/pages/PacketFlowPage.tsx` |
 | 서비스 토폴로지 | `backend/app/routers/service_topology.py` → `frontend/src/pages/ServiceTopologyPage.tsx` |
+| 서비스 아키텍처 문서 (자동생성·현행화) | `backend/app/routers/architecture_docs.py` + `services/architecture_doc_service.py` + `models/service_arch_doc.py` → `frontend/src/pages/ServiceArchitecturePage.tsx` + `components/serviceArch/` + `hooks/useArchDoc.ts` |
 | 서비스 모듈 관계도 | — → `frontend/src/pages/ArchitecturePage.tsx` |
 | 인프라 물리 토폴로지 | `backend/app/routers/infra_nodes.py` → `frontend/src/pages/InfraTopologyPage.tsx` |
 | 노드 서버스펙 자산 대장 | `backend/app/routers/node_server_specs.py` → `frontend/src/pages/NodeSpecPage.tsx` |

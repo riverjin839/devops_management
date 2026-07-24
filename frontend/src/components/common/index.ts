@@ -4,6 +4,7 @@ export { InlineEdit } from './InlineEdit';
 export { ConfirmDialog } from './ConfirmDialog';
 export { useModalA11y } from './useModalA11y';
 export { LogViewer } from './LogViewer';
+export { ExecOutputTabs } from './ExecOutputTabs';
 export { ClusterSidebar } from './ClusterSidebar';
 export { ServiceSidebar } from './ServiceSidebar';
 export { ClusterIconPicker } from './ClusterIconPicker';

@@ -67,8 +67,10 @@ from app.routers import (
     k8s_allocation_router,
     k8s_helm_router,
     k8s_exec_router,
+    k9s_ssh_router,
     metric_trend_router,
     service_topology_router,
+    architecture_docs_router,
     cluster_items_router,
     cluster_trends_router,
     terminal_appearance_router,
@@ -1811,7 +1813,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.8.1",
+    version="1.13.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -1912,10 +1914,13 @@ app.include_router(cluster_trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
 # pod exec 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
 app.include_router(k8s_exec_router, prefix="/api/v1")
+# k9s TUI SSH 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
+app.include_router(k9s_ssh_router, prefix="/api/v1")
 # metric-trend — 일일점검 리뷰: 리소스 수 추세 체크리스트(자동/수동 스냅샷 + 체크 + 항목 CRUD).
 app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(architecture_docs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
 # terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).
 app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_auth)
@@ -1929,7 +1934,8 @@ app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.8.1",
+        "version": "1.13.0",
+        "version": "1.8.2",
         "status": "running"
     }
 

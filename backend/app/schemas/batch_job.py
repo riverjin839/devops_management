@@ -54,6 +54,8 @@ class BatchJobResponse(BatchJobBase):
     # We never return the ciphertext; just whether something is saved.
     has_saved_password: bool = False
     has_saved_private_key: bool = False
+    # Executor 특성 — False 면 host/SSH 자격증명 없이 실행되는 클러스터 스코프 잡.
+    requires_ssh: bool = True
 
     class Config:
         from_attributes = True
@@ -146,6 +148,7 @@ class BatchJobTypeDescriptor(BaseModel):
     description: str = ""
     param_schema: dict[str, dict[str, Any]] = {}
     default_params: dict[str, Any] = {}
+    requires_ssh: bool = True
 
 
 class BatchJobTypeListResponse(BaseModel):

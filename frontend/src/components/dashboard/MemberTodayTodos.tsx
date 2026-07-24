@@ -9,8 +9,9 @@ import {
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
+import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, toLocalDateKey } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
 
 const TEAM_ASSIGNEE = '공통';
@@ -35,11 +36,11 @@ interface MemberTodayTodosProps {
 
 // 노트(메모지) 느낌의 체크박스 불릿 색상 — 상태를 색으로 유지.
 const STATUS_TEXT: Record<KanbanStatus, string> = {
-  backlog: 'text-slate-400',
-  todo: 'text-blue-400',
-  in_progress: 'text-amber-500',
-  review_test: 'text-purple-400',
-  done: 'text-emerald-500',
+  backlog: 'text-status-unknown',
+  todo: 'text-status-info',
+  in_progress: 'text-status-warning',
+  review_test: 'text-chart-4',
+  done: 'text-status-healthy',
 };
 
 function dateKey(d: Date): string {
@@ -47,19 +48,20 @@ function dateKey(d: Date): string {
 }
 
 function addDays(dateStr: string, delta: number): string {
-  const d = new Date(dateStr);
+  // 'YYYY-MM-DD' 를 로컬 자정으로 파싱 (new Date('YYYY-MM-DD') 는 UTC 해석이라 음수 오프셋에서 하루 밀림).
+  const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + delta);
   return dateKey(d);
 }
 
 function fmtLabel(dateStr: string): string {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T00:00:00');
   const week = ['일', '월', '화', '수', '목', '금', '토'];
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} (${week[d.getDay()]})`;
 }
 
 export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
-  const todayStr = dateKey(new Date());
+  const todayStr = useToday();  // 자정 넘기면 자동 갱신
   const [viewDate, setViewDate] = useState(todayStr);
   const isToday = viewDate === todayStr;
 
@@ -134,13 +136,14 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
   const teamGroup = {
     assignee: TEAM_ASSIGNEE,
     overdueTasks: teamCandidates.filter((t) => {
-      const d = t.startedAt?.slice(0, 10) ?? '';
-      return !!d && d < viewDate && t.kanbanStatus !== 'done';
+      const d = toLocalDateKey(t.startedAt);
+      // 서버 today/summary 와 동일: 진행중(별도 버킷)·backlog(미약정)는 지연에서 제외.
+      return !!d && d < viewDate && !['done', 'in_progress', 'backlog'].includes(t.kanbanStatus);
     }),
     todayTasks: teamCandidates.filter((t) =>
-      (t.startedAt?.slice(0, 10) ?? '') === viewDate && t.kanbanStatus !== 'in_progress'),
+      toLocalDateKey(t.startedAt) === viewDate && t.kanbanStatus !== 'in_progress'),
     inProgressTasks: teamCandidates.filter((t) =>
-      t.kanbanStatus === 'in_progress' && (t.startedAt?.slice(0, 10) ?? '') <= viewDate),
+      t.kanbanStatus === 'in_progress' && toLocalDateKey(t.startedAt) <= viewDate),
   };
   const teamHasItems = teamGroup.overdueTasks.length + teamGroup.todayTasks.length + teamGroup.inProgressTasks.length > 0;
   // 담당자별 집계(totals)는 원래 groups 기준으로만 계산 — "공통" 카드는 가시성용 중복 노출이라
@@ -205,11 +208,11 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
 
         <div className="flex items-center gap-3 text-xs">
           {totals.overdue > 0 && (
-            <span className="text-red-500 dark:text-red-400">지연 {totals.overdue}</span>
+            <span className="text-status-critical">지연 {totals.overdue}</span>
           )}
-          <span className="text-blue-500 dark:text-blue-400">예정 {totals.today}</span>
-          <span className="text-amber-500 dark:text-amber-400">진행 {totals.inProgress}</span>
-          <span className="text-emerald-500 dark:text-emerald-400">완료 {totals.done}</span>
+          <span className="text-status-info">예정 {totals.today}</span>
+          <span className="text-status-warning">진행 {totals.inProgress}</span>
+          <span className="text-status-healthy">완료 {totals.done}</span>
           <span className="text-primary font-semibold">{overall}%</span>
         </div>
       </div>
@@ -272,19 +275,19 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                   <span className="text-xs text-muted-foreground flex-shrink-0 tabular-nums">{done}/{total} · {pct}%</span>
                   <div className="hidden sm:flex items-center gap-1.5 text-xs flex-shrink-0">
                     {overdue.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-red-500" title="지연">
+                      <span className="inline-flex items-center gap-0.5 text-status-critical" title="지연">
                         <ShieldAlert className="w-2.5 h-2.5" />
                         {overdue.length}
                       </span>
                     )}
                     {g.todayTasks.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-blue-500">
+                      <span className="inline-flex items-center gap-0.5 text-status-info">
                         <CircleDashed className="w-2.5 h-2.5" />
                         {g.todayTasks.length}
                       </span>
                     )}
                     {g.inProgressTasks.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-amber-500">
+                      <span className="inline-flex items-center gap-0.5 text-status-warning">
                         <Clock className="w-2.5 h-2.5" />
                         {g.inProgressTasks.length}
                       </span>
@@ -311,12 +314,12 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                           title="상세 보기"
                         >
                           {isDone ? (
-                            <CheckSquare className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                            <CheckSquare className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
                           ) : (
                             <Square className={`w-3.5 h-3.5 flex-shrink-0 ${STATUS_TEXT[t.kanbanStatus]}`} />
                           )}
                           {t.type === 'issue' && (
-                            <ShieldAlert className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                            <ShieldAlert className="w-3 h-3 text-status-warning flex-shrink-0" />
                           )}
                           <span
                             className={`truncate flex-1 ${

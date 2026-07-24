@@ -10,7 +10,9 @@ export const FILTER_PREDICATES: Record<FilterKey, (j: BatchJob) => boolean> = {
   failed: (j) => FAILED_STATUSES.has(j.lastStatus),
   running: (j) => j.lastStatus === 'running',
   ok: (j) => j.lastStatus === 'ok',
-  missing_creds: (j) => !!j.cron && !j.hasSavedPassword && !j.hasSavedPrivateKey,
+  // non-SSH(클러스터 스코프) 잡은 자격증명이 필요 없으므로 제외.
+  missing_creds: (j) =>
+    j.requiresSsh !== false && !!j.cron && !j.hasSavedPassword && !j.hasSavedPrivateKey,
 };
 
 /** 페이지에서 jobs 를 필터링할 때 사용하는 헬퍼. */

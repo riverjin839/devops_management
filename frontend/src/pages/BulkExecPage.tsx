@@ -6,7 +6,8 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
@@ -282,20 +283,13 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
       {expanded && (
         <tr className="border-b border-border bg-muted/10">
           <td colSpan={6} className="px-5 py-3">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-                <LogViewer text={result.stdout} maxHeight="max-h-72"
-                  filterOverride={globalFilter || undefined}
-                  hideToolbar={!!globalFilter.trim()} />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-                <LogViewer text={result.stderr} maxHeight="max-h-72" asError
-                  filterOverride={globalFilter || undefined}
-                  hideToolbar={!!globalFilter.trim()} />
-              </div>
-            </div>
+            <ExecOutputTabs
+              stdout={result.stdout}
+              stderr={result.stderr}
+              maxHeight="max-h-72"
+              filterOverride={globalFilter || undefined}
+              hideToolbar={!!globalFilter.trim()}
+            />
             {result.error && (
               <p className="text-sm text-red-400 mt-2">⚠ {result.error}</p>
             )}
@@ -444,6 +438,8 @@ export function BulkExecPage() {
   useEffect(() => {
     if (clusterIds.length === 0 && clusters.length > 0) setClusterIds([clusters[0].id]);
   }, [clusters, clusterIds.length]);
+  // 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용. 하나라도 운영이면 ops.
+  useTerminalEnvSync(clusters, clusterIds);
 
   // 선택된 클러스터별로 병렬로 노드 목록을 조회
   const nodeQueries = useQueries({
@@ -633,7 +629,7 @@ export function BulkExecPage() {
         <div className="flex-1 min-w-0">
         <DebugLogPanel pageKey="bulk-exec" extra={{ clusters: clusterIds.length, selected: selected.size, action, mode, pending: runMutation.isPending }} />
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <Terminal className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">노드 일괄 실행 (SSH / SCP)</h1>
@@ -654,20 +650,22 @@ export function BulkExecPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* mc 콘솔처럼 한 로우에 [타겟 노드 | 명령 메뉴 | 실행 결과] 를 나란히 배치.
+            12컬럼 그리드 3:4:5 — 결과는 항상 우측 같은 자리에 고정된다. */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
           {/* 왼쪽: 노드 선택 — 클러스터별 그룹 */}
-          <section className="bg-card border border-border rounded-xl overflow-hidden">
-            <header className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
+          <section className="lg:col-span-3 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
+            <header className="px-3 py-2 border-b border-border bg-muted/20 flex items-center justify-between">
               <h2 className="text-sm font-semibold">타겟 노드</h2>
               <button
                 onClick={toggleAllAcrossClusters}
                 disabled={totalNodesShown === 0}
-                className="text-sm text-primary hover:text-primary/80 disabled:opacity-40"
+                className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
               >
                 {selected.size === totalNodesShown && totalNodesShown > 0 ? '전체 해제' : '전체 선택'}
               </button>
             </header>
-            <div className="max-h-[520px] overflow-y-auto">
+            <div className="max-h-[calc(100vh-160px)] overflow-y-auto">
               {clusterIds.length === 0 ? (
                 <EmptyState compact title="클러스터를 선택하세요"
                   description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
@@ -695,10 +693,10 @@ export function BulkExecPage() {
             </div>
           </section>
 
-          {/* 오른쪽: 실행 구성 */}
-          <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
+          {/* 가운데: 실행 구성 (명령 메뉴) */}
+          <section className="lg:col-span-4 min-w-0 bg-card border border-border rounded-xl p-4 space-y-3">
             {/* Action 토글 */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                 {(['ssh', 'scp'] as const).map((a) => (
                   <button
@@ -884,7 +882,7 @@ export function BulkExecPage() {
             )}
 
             {/* 타임아웃 */}
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-3 gap-y-2 flex-wrap text-sm text-muted-foreground">
               <label className="flex items-center gap-1.5">
                 connect timeout
                 <input
@@ -976,148 +974,160 @@ export function BulkExecPage() {
               )}
             </div>
           </section>
-        </div>
 
-        {/* 결과 */}
-        {runResponse && (
-          <section className="mt-6 bg-card border border-border rounded-xl overflow-hidden">
-            <header className="px-5 py-3 border-b border-border bg-muted/20 flex flex-wrap items-center gap-3">
-              <h2 className="text-sm font-semibold">실행 결과</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                성공 {runResponse.okCount}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
-                실패 {runResponse.errorCount}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                총 {runResponse.totalDurationMs}ms · {runResponse.mode} · {runResponse.action}
-              </span>
-
-              <div className="ml-auto flex items-center gap-2 flex-wrap">
-                {/* 뷰 모드 토글 */}
-                <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
-                  <button onClick={() => setResultView('summary')}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                      resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="모든 노드 한 줄 요약">
-                    <LayoutList className="w-3 h-3" /> 요약
-                  </button>
-                  <button onClick={() => setResultView('detail')}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                      resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="호스트별 stdout/stderr 전체">
-                    <Rows className="w-3 h-3" /> 상세
-                  </button>
+          {/* 우측: 실행 결과 — mc 콘솔처럼 항상 같은 자리에 고정, 실행 전엔 플레이스홀더.
+              내부에서만 스크롤되어 세 컬럼이 한 화면 폭 안에 들어온다. */}
+          <section className="lg:col-span-5 min-w-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col lg:h-[calc(100vh-160px)] min-h-[280px]">
+            {!runResponse ? (
+              <div className="flex-1 flex items-center justify-center p-6">
+                <div className="text-center text-sm text-muted-foreground">
+                  <Terminal className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  명령을 실행하면<br />결과가 여기에 표시됩니다.
                 </div>
+              </div>
+            ) : (
+              <>
+                <header className="px-3 py-2 border-b border-border bg-muted/20 flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-semibold">실행 결과</h2>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    성공 {runResponse.okCount}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+                    실패 {runResponse.errorCount}
+                  </span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {runResponse.totalDurationMs}ms · {runResponse.mode}
+                  </span>
 
-                {/* 공통 필터 */}
-                <div className="relative">
-                  <input
-                    value={globalFilter}
-                    onChange={(e) => setGlobalFilter(e.target.value)}
-                    placeholder="모든 노드 결과 공통 필터..."
-                    className="pl-2 pr-7 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-60"
-                  />
-                  {globalFilter && (
-                    <button
-                      onClick={() => setGlobalFilter('')}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label="필터 지우기"
-                    >×</button>
+                  <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+                    {/* 뷰 모드 토글 */}
+                    <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
+                      <button onClick={() => setResultView('summary')}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+                          resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        title="모든 노드 한 줄 요약">
+                        <LayoutList className="w-3 h-3" /> 요약
+                      </button>
+                      <button onClick={() => setResultView('detail')}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+                          resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        title="호스트별 stdout/stderr 전체">
+                        <Rows className="w-3 h-3" /> 상세
+                      </button>
+                    </div>
+
+                    {/* 공통 필터 */}
+                    <div className="relative">
+                      <input
+                        value={globalFilter}
+                        onChange={(e) => setGlobalFilter(e.target.value)}
+                        placeholder="공통 필터..."
+                        className="pl-2 pr-6 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-36"
+                      />
+                      {globalFilter && (
+                        <button
+                          onClick={() => setGlobalFilter('')}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label="필터 지우기"
+                        >×</button>
+                      )}
+                    </div>
+
+                    {/* 내보내기 */}
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => {
+                          const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+                          downloadBlob(
+                            resultsToCsv(runResponse.results, globalFilter, command),
+                            `bulk-exec-${ts}.csv`,
+                            'text/csv',
+                          );
+                        }}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                        title="필터 반영 CSV 내보내기">
+                        <Download className="w-3 h-3" /> CSV
+                      </button>
+                      <button onClick={() => {
+                          const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+                          downloadBlob(
+                            resultsToTxt(runResponse.results, globalFilter, command),
+                            `bulk-exec-${ts}.txt`,
+                            'text/plain',
+                          );
+                        }}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                        title="필터 반영 텍스트 내보내기">
+                        <Download className="w-3 h-3" /> TXT
+                      </button>
+                      <button onClick={async () => {
+                          const ok = await copyToClipboard(resultsToTxt(runResponse.results, globalFilter, command));
+                          setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
+                          setTimeout(() => setCopyToast(null), 1500);
+                        }}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                        title="필터 반영 결과 클립보드 복사">
+                        <FileText className="w-3 h-3" /> 복사
+                      </button>
+                    </div>
+                  </div>
+                </header>
+
+                {copyToast && (
+                  <div className="px-3 py-1.5 text-xs bg-primary/5 text-primary border-b border-primary/20">
+                    {copyToast}
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-auto min-h-0">
+                  {resultView === 'summary' ? (
+                    <SummaryResultsTable results={runResponse.results} globalFilter={globalFilter} />
+                  ) : (
+                    <DoubleScrollX>
+                      <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                        <colgroup>
+                          {(['expand', 'host', 'status', 'exit', 'dur', 'summary'] as const).map((k) => (
+                            <col key={k} style={{ width: `${detailColW.getWidth(k)}px` }} />
+                          ))}
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b border-border bg-muted/30 text-left">
+                            <th><span className="sr-only">펼치기</span></th>
+                            <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">호스트
+                              <ResizeGrip onMouseDown={(e) => detailColW.beginResize('host', e)} onDoubleClick={() => detailColW.autoFit('host')} />
+                            </th>
+                            <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">상태
+                              <ResizeGrip onMouseDown={(e) => detailColW.beginResize('status', e)} onDoubleClick={() => detailColW.autoFit('status')} />
+                            </th>
+                            <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">exit
+                              <ResizeGrip onMouseDown={(e) => detailColW.beginResize('exit', e)} onDoubleClick={() => detailColW.autoFit('exit')} />
+                            </th>
+                            <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">소요
+                              <ResizeGrip onMouseDown={(e) => detailColW.beginResize('dur', e)} onDoubleClick={() => detailColW.autoFit('dur')} />
+                            </th>
+                            <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">요약
+                              <ResizeGrip onMouseDown={(e) => detailColW.beginResize('summary', e)} onDoubleClick={() => detailColW.autoFit('summary')} />
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {runResponse.results.map((r, idx) => (
+                            <ResultRow
+                              key={`${r.clusterId ?? ''}|${r.host}|${idx}`}
+                              result={r}
+                              globalFilter={globalFilter}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </DoubleScrollX>
                   )}
                 </div>
-
-                {/* 내보내기 */}
-                <div className="flex items-center gap-1">
-                  <button onClick={() => {
-                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
-                      downloadBlob(
-                        resultsToCsv(runResponse.results, globalFilter, command),
-                        `bulk-exec-${ts}.csv`,
-                        'text/csv',
-                      );
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                    title="필터 반영 CSV 내보내기">
-                    <Download className="w-3 h-3" /> CSV
-                  </button>
-                  <button onClick={() => {
-                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
-                      downloadBlob(
-                        resultsToTxt(runResponse.results, globalFilter, command),
-                        `bulk-exec-${ts}.txt`,
-                        'text/plain',
-                      );
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                    title="필터 반영 텍스트 내보내기">
-                    <Download className="w-3 h-3" /> TXT
-                  </button>
-                  <button onClick={async () => {
-                      const ok = await copyToClipboard(resultsToTxt(runResponse.results, globalFilter, command));
-                      setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
-                      setTimeout(() => setCopyToast(null), 1500);
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
-                    title="필터 반영 결과 클립보드 복사">
-                    <FileText className="w-3 h-3" /> 복사
-                  </button>
-                </div>
-              </div>
-            </header>
-
-            {copyToast && (
-              <div className="px-5 py-1.5 text-xs bg-primary/5 text-primary border-b border-primary/20">
-                {copyToast}
-              </div>
-            )}
-
-            {resultView === 'summary' ? (
-              <SummaryResultsTable results={runResponse.results} globalFilter={globalFilter} />
-            ) : (
-              <DoubleScrollX>
-                <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
-                  <colgroup>
-                    {(['expand', 'host', 'status', 'exit', 'dur', 'summary'] as const).map((k) => (
-                      <col key={k} style={{ width: `${detailColW.getWidth(k)}px` }} />
-                    ))}
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30 text-left">
-                      <th><span className="sr-only">펼치기</span></th>
-                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">호스트
-                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('host', e)} onDoubleClick={() => detailColW.autoFit('host')} />
-                      </th>
-                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">상태
-                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('status', e)} onDoubleClick={() => detailColW.autoFit('status')} />
-                      </th>
-                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">exit
-                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('exit', e)} onDoubleClick={() => detailColW.autoFit('exit')} />
-                      </th>
-                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">소요
-                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('dur', e)} onDoubleClick={() => detailColW.autoFit('dur')} />
-                      </th>
-                      <th className="relative px-3 py-2 text-sm font-medium text-muted-foreground">요약
-                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('summary', e)} onDoubleClick={() => detailColW.autoFit('summary')} />
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runResponse.results.map((r, idx) => (
-                      <ResultRow
-                        key={`${r.clusterId ?? ''}|${r.host}|${idx}`}
-                        result={r}
-                        globalFilter={globalFilter}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </DoubleScrollX>
+              </>
             )}
           </section>
-        )}
+        </div>
         </div>
       </main>
 
