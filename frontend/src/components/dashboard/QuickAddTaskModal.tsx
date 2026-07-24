@@ -29,9 +29,9 @@ interface QuickAddTaskModalProps {
 }
 
 const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: string }[] = [
-  { value: 'high',   label: '높음', dot: 'bg-red-500' },
-  { value: 'medium', label: '보통', dot: 'bg-amber-500' },
-  { value: 'low',    label: '낮음', dot: 'bg-emerald-500' },
+  { value: 'high',   label: '높음', dot: 'bg-status-critical' },
+  { value: 'medium', label: '보통', dot: 'bg-status-warning' },
+  { value: 'low',    label: '낮음', dot: 'bg-status-healthy' },
 ];
 
 
@@ -164,7 +164,7 @@ export function QuickAddTaskModal({
           {/* 업무 유형 picker — 작업/이슈/회의/교육/기타. 기본값 없음. */}
           <fieldset>
             <legend className="text-sm font-medium text-muted-foreground mb-1.5 block">
-              유형 <span className="text-red-500">*</span>
+              유형 <span className="text-status-critical">*</span>
             </legend>
             <div className="flex items-stretch gap-1.5">
               {WORK_ITEM_TYPE_ORDER.map((key) => {
@@ -281,7 +281,7 @@ export function QuickAddTaskModal({
           </div>
 
           {error && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
+            <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning flex items-start gap-2">
               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
               <span className="break-all">{error}</span>
             </div>

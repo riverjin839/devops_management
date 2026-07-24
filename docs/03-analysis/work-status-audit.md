@@ -147,7 +147,7 @@
 | # | 항목 | 내용 |
 |---|---|---|
 | I-1 ✅ | 완료 업무의 당일 스케줄 잔존 | `DayScheduleBoard.spanItems` 가 done 을 즉시 제외 → 완료하면 오늘 일정에서 사라져 하루 회고가 안 됨. **[4차 배치 완료]** done 을 완료일까지 흐림+취소선으로 유지(span 은 완료일까지만). |
-| I-2 | 디자인 토큰 위반 (raw 팔레트) | `WorkCalendar`(blue/emerald/amber/red-*), `MemberTodayTodos`(STATUS_TEXT slate/blue/amber/purple/emerald), `WorkAlarmBell`(red/amber/blue-500), `QuickAddTaskModal`(PRIORITY dot), `DayScheduleBoard`(ASSIGNEE_PALETTE) — CLAUDE.md 의 "고정 팔레트 금지, semantic/status 토큰 사용" 규칙 위반. 테마(default/light/dark) 전환 시 톤이 어긋난다. DESIGN.md 백로그로 이관 권장. |
+| I-2 ✅ | 디자인 토큰 위반 (raw 팔레트) | **[4차 배치 완료]** `WorkCalendar`·`MemberTodayTodos`(STATUS_TEXT/집계/아이콘)·`WorkAlarmBell`·`QuickAddTaskModal`(우선순위/필수/경고)·`DayScheduleBoard`(ASSIGNEE_PALETTE→chart-N) 의 고정 팔레트를 status/chart 토큰으로 교체. MemberTodayTodos 의 '메모지' 종이 질감(warm paper, light 전용 장식)은 의도된 것이라 유지. |
 | I-3 ✅ | today/summary 지연 버킷에 backlog 포함 | backlog 까지 시작일이 지나면 영구 "지연" 집계 → 뱃지 인플레이션. **[4차 배치 완료]** overdue 쿼리에 `backlog` 제외 추가(서버 + MemberTodayTodos 공통 카드). in_progress 버킷의 미래 시작 포함은 사용자 결정에 따라 유지(진행 중이면 표시). WorkAlarmBell 의 지연 판정은 scope 밖이라 현행 유지(후속 검토 가능). |
 | I-4 | today/summary 잘못된 date 파라미터를 조용히 오늘로 대체 | `work_items.py:375-379` — 형식 오류 시 fallback 대신 422/400 이 디버깅에 유리. |
 | I-5 ✅ | 주간 막대 텍스트 색 기본 흰색 | 투명도 낮추면 가독성 급락. **[4차 배치 완료]** 텍스트 색은 존중하되 밝기 기반 반대 색 그림자(`readableTextShadow`)로 대비 보강. |

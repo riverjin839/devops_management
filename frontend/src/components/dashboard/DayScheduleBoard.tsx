@@ -66,14 +66,15 @@ const STATUS_STYLE: Record<KanbanStatus, { dot: string; bar: string; tint: strin
   done:        { dot: 'bg-status-healthy', bar: 'bg-status-healthy', tint: 'bg-status-healthy/10' },
 };
 
+// 담당자 구분용 categorical 색 — 의미(성공/실패)가 아닌 '사람 구분'이므로 chart-N 토큰(D-005).
 const ASSIGNEE_PALETTE = [
-  'bg-sky-500/15 text-sky-700 dark:text-sky-300',
-  'bg-violet-500/15 text-violet-700 dark:text-violet-300',
-  'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-  'bg-rose-500/15 text-rose-700 dark:text-rose-300',
-  'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
-  'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
+  'bg-chart-1/20 text-chart-1',
+  'bg-chart-2/20 text-chart-2',
+  'bg-chart-3/20 text-chart-3',
+  'bg-chart-4/20 text-chart-4',
+  'bg-chart-5/20 text-chart-5',
+  'bg-chart-6/20 text-chart-6',
+  'bg-chart-7/20 text-chart-7',
 ];
 function assigneeColor(name: string): string {
   let h = 0;

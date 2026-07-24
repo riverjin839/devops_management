@@ -36,11 +36,11 @@ interface MemberTodayTodosProps {
 
 // 노트(메모지) 느낌의 체크박스 불릿 색상 — 상태를 색으로 유지.
 const STATUS_TEXT: Record<KanbanStatus, string> = {
-  backlog: 'text-slate-400',
-  todo: 'text-blue-400',
-  in_progress: 'text-amber-500',
-  review_test: 'text-purple-400',
-  done: 'text-emerald-500',
+  backlog: 'text-status-unknown',
+  todo: 'text-status-info',
+  in_progress: 'text-status-warning',
+  review_test: 'text-chart-4',
+  done: 'text-status-healthy',
 };
 
 function dateKey(d: Date): string {
@@ -208,11 +208,11 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
 
         <div className="flex items-center gap-3 text-xs">
           {totals.overdue > 0 && (
-            <span className="text-red-500 dark:text-red-400">지연 {totals.overdue}</span>
+            <span className="text-status-critical">지연 {totals.overdue}</span>
           )}
-          <span className="text-blue-500 dark:text-blue-400">예정 {totals.today}</span>
-          <span className="text-amber-500 dark:text-amber-400">진행 {totals.inProgress}</span>
-          <span className="text-emerald-500 dark:text-emerald-400">완료 {totals.done}</span>
+          <span className="text-status-info">예정 {totals.today}</span>
+          <span className="text-status-warning">진행 {totals.inProgress}</span>
+          <span className="text-status-healthy">완료 {totals.done}</span>
           <span className="text-primary font-semibold">{overall}%</span>
         </div>
       </div>
@@ -275,19 +275,19 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                   <span className="text-xs text-muted-foreground flex-shrink-0 tabular-nums">{done}/{total} · {pct}%</span>
                   <div className="hidden sm:flex items-center gap-1.5 text-xs flex-shrink-0">
                     {overdue.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-red-500" title="지연">
+                      <span className="inline-flex items-center gap-0.5 text-status-critical" title="지연">
                         <ShieldAlert className="w-2.5 h-2.5" />
                         {overdue.length}
                       </span>
                     )}
                     {g.todayTasks.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-blue-500">
+                      <span className="inline-flex items-center gap-0.5 text-status-info">
                         <CircleDashed className="w-2.5 h-2.5" />
                         {g.todayTasks.length}
                       </span>
                     )}
                     {g.inProgressTasks.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-amber-500">
+                      <span className="inline-flex items-center gap-0.5 text-status-warning">
                         <Clock className="w-2.5 h-2.5" />
                         {g.inProgressTasks.length}
                       </span>
@@ -314,12 +314,12 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                           title="상세 보기"
                         >
                           {isDone ? (
-                            <CheckSquare className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                            <CheckSquare className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
                           ) : (
                             <Square className={`w-3.5 h-3.5 flex-shrink-0 ${STATUS_TEXT[t.kanbanStatus]}`} />
                           )}
                           {t.type === 'issue' && (
-                            <ShieldAlert className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                            <ShieldAlert className="w-3 h-3 text-status-warning flex-shrink-0" />
                           )}
                           <span
                             className={`truncate flex-1 ${

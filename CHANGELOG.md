@@ -11,6 +11,7 @@
 1.11.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Changed
+- **업무 현황 화면 색상 디자인 토큰화(테마 정합)**: 홈 업무 위젯들이 쓰던 고정 팔레트(`text-red-500`·`bg-blue-500`·emerald/amber/slate/violet 등)를 semantic status(`--status-healthy/warning/critical/info/unknown`)·categorical chart(`--chart-N`) 토큰으로 교체 — light/dark/default 테마 전환 시 톤이 어긋나던 문제 해소(CLAUDE.md 디자인 규칙 준수). 대상: WorkCalendar·MemberTodayTodos·WorkAlarmBell·QuickAddTaskModal(우선순위/필수표시/경고) 및 DayScheduleBoard 담당자 아바타 팔레트. 담당자별 진행 현황의 '메모지' 종이 질감(warm paper)은 의도된 장식이라 유지.
 - **당일 스케줄 — 완료 업무 유지(흐리게) & 지연 집계에서 backlog 제외**: 업무를 완료(done)하면 '당일 스케줄'에서 즉시 사라지던 것을, 완료일까지는 **흐림+취소선**으로 남겨 하루 회고가 가능하게 변경. 아울러 '담당자별 오늘 요약'의 **지연(overdue)** 집계에서 backlog('언젠가 할 일', 아직 착수 약정 아님)를 제외해 지연 뱃지 인플레이션을 줄였다(Backend `today/summary` + Frontend 공통 카드 동일 규칙).
 
 ### Fixed
