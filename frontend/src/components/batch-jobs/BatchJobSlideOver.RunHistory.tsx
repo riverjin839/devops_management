@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { BatchJobRun } from '@/services/api';
-import { LogViewer } from '@/components/common';
 import { StatusPill } from './StatusPill';
+import { BatchJobLogDetail } from './BatchJobLogDetail';
 
 interface RunHistoryProps {
   runs: BatchJobRun[];
@@ -24,39 +24,6 @@ const TRIGGER_LABEL: Record<string, string> = {
   schedule: '스케줄',
   bulk: '일괄',
 };
-
-function RunDetail({ run }: { run: BatchJobRun }) {
-  return (
-    <div className="mt-2 space-y-2 bg-secondary/30 rounded-lg p-2">
-      {run.executedCommand && (
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">command</p>
-          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
-            {run.executedCommand}
-          </pre>
-        </div>
-      )}
-      <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-        <LogViewer text={run.stdout} maxHeight="max-h-[200px]" />
-      </div>
-      {run.stderr && (
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-          <LogViewer text={run.stderr} maxHeight="max-h-[160px]" asError />
-        </div>
-      )}
-      {run.error && (
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">error</p>
-          <pre className="text-xs font-mono bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 rounded p-2 overflow-auto whitespace-pre-wrap">
-            {run.error}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function RunHistory({ runs, isLoading }: RunHistoryProps) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -81,7 +48,10 @@ export function RunHistory({ runs, isLoading }: RunHistoryProps) {
               className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-secondary/50 transition-colors text-left"
             >
               <StatusPill status={run.status} />
-              <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+              <span
+                className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground"
+                title={run.triggeredByUsername ? `실행자: ${run.triggeredByUsername}` : undefined}
+              >
                 {TRIGGER_LABEL[run.trigger] ?? run.trigger}
               </span>
               <span className="flex-1 min-w-0 text-xs font-mono text-muted-foreground truncate">
@@ -97,8 +67,8 @@ export function RunHistory({ runs, isLoading }: RunHistoryProps) {
               )}
             </button>
             {open && (
-              <div className="px-2.5 pb-2 border-t border-border">
-                <RunDetail run={run} />
+              <div className="px-2.5 pb-2 border-t border-border pt-2">
+                <BatchJobLogDetail run={run} maxHeight="max-h-[240px]" />
               </div>
             )}
           </div>

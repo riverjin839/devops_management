@@ -13,6 +13,7 @@ import {
 import { batchJobsApi, type BatchJob } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import {
+  BatchJobClusterGroup,
   BatchJobFilters,
   BatchJobSlideOver,
   BatchJobTable,
@@ -44,6 +45,7 @@ export function BatchJobsPage() {
   const [confirmDelete, setConfirmDelete] = useState<BatchJob | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [collapsedClusterIds, setCollapsedClusterIds] = useState<Set<string>>(new Set());
   const toast = useToast();
 
   const allJobs = allJobsQ.data ?? [];
@@ -55,6 +57,26 @@ export function BatchJobsPage() {
     : allJobs.filter((j) => j.clusterId === selectedClusterId);
 
   const visibleJobs = applyFilter(scopedJobs, statusFilter, search);
+
+  // 전체 모드에서 클러스터 단위로 그룹핑 — 잡이 하나라도 등록된 클러스터만 섹션으로
+  // 보여준다(클러스터manage 목록 순서 유지). 통계 배지는 필터와 무관하게 실제 상태를
+  // 반영하도록 클러스터별 미필터 목록도 함께 들고 있는다.
+  const clusterGroups = selectedClusterId === null
+    ? clusters
+        .map((c) => {
+          const allClusterJobs = allJobs.filter((j) => j.clusterId === c.id);
+          const jobs = visibleJobs.filter((j) => j.clusterId === c.id);
+          return { cluster: c, allClusterJobs, jobs };
+        })
+        .filter((g) => g.allClusterJobs.length > 0)
+    : [];
+
+  const toggleClusterCollapsed = (clusterId: string) =>
+    setCollapsedClusterIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(clusterId)) n.delete(clusterId); else n.add(clusterId);
+      return n;
+    });
 
   // ── 일괄 선택/실행 ──
   const toggleSelect = (id: string) =>
@@ -234,30 +256,59 @@ export function BatchJobsPage() {
                       </button>
                     </div>
                   )}
-                  <BatchJobTable
-                    jobs={visibleJobs}
-                    clusters={selectedClusterId === null ? clusters : undefined}
-                    selectedJobId={selectedJob?.id ?? null}
-                    sort={sort}
-                    onSortChange={setSort}
-                    onSelectJob={(job) => setSelectedJob(job)}
-                    selectedIds={selectedIds}
-                    onToggleSelect={toggleSelect}
-                    onToggleAll={toggleAll}
-                    emptyMessage={
-                      scopedJobs.length === 0
-                        ? selectedClusterId === null
+                  {selectedClusterId === null ? (
+                    clusterGroups.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-10 text-center">
+                        {scopedJobs.length === 0
                           ? '아직 등록된 배치 잡이 없습니다. ＋ 새 잡 으로 시작하세요.'
-                          : '이 클러스터에 등록된 잡이 없습니다.'
-                        : '필터에 일치하는 잡이 없습니다. 필터를 해제해 보세요.'
-                    }
-                  />
-                  {selectedClusterId !== null && (
-                    <UnregisteredTypeChips
-                      clusterJobs={scopedJobs}
-                      allTypes={types}
-                      onPick={openCreateFromMissingType}
-                    />
+                          : '필터에 일치하는 잡이 없습니다. 필터를 해제해 보세요.'}
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {clusterGroups.map(({ cluster, jobs, allClusterJobs }) => (
+                          <BatchJobClusterGroup
+                            key={cluster.id}
+                            cluster={cluster}
+                            jobs={jobs}
+                            allClusterJobs={allClusterJobs}
+                            allTypes={types}
+                            collapsed={collapsedClusterIds.has(cluster.id)}
+                            onToggleCollapsed={() => toggleClusterCollapsed(cluster.id)}
+                            selectedJobId={selectedJob?.id ?? null}
+                            sort={sort}
+                            onSortChange={setSort}
+                            onSelectJob={(job) => setSelectedJob(job)}
+                            selectedIds={selectedIds}
+                            onToggleSelect={toggleSelect}
+                            onToggleAll={toggleAll}
+                            onCreateForType={(jobType) => setWizardCtx({ clusterId: cluster.id, jobType })}
+                          />
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    <>
+                      <BatchJobTable
+                        jobs={visibleJobs}
+                        selectedJobId={selectedJob?.id ?? null}
+                        sort={sort}
+                        onSortChange={setSort}
+                        onSelectJob={(job) => setSelectedJob(job)}
+                        selectedIds={selectedIds}
+                        onToggleSelect={toggleSelect}
+                        onToggleAll={toggleAll}
+                        emptyMessage={
+                          scopedJobs.length === 0
+                            ? '이 클러스터에 등록된 잡이 없습니다.'
+                            : '필터에 일치하는 잡이 없습니다. 필터를 해제해 보세요.'
+                        }
+                      />
+                      <UnregisteredTypeChips
+                        clusterJobs={scopedJobs}
+                        allTypes={types}
+                        onPick={openCreateFromMissingType}
+                      />
+                    </>
                   )}
                 </div>
               )}

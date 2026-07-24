@@ -78,7 +78,13 @@ class BatchJobRun(Base):
     job_id = Column(UUID(as_uuid=True), ForeignKey("batch_jobs.id"), nullable=False)
 
     status = Column(String(20), nullable=False)  # ok / error / timeout / running
-    trigger = Column(String(20), default="manual")  # manual / schedule
+    trigger = Column(String(20), default="manual")  # manual / schedule / bulk
+
+    # 실행자 — 수동/일괄 실행 시 요청한 사용자. 스냅샷(username)이라 사용자가
+    # 나중에 삭제돼도 기록은 유지된다(audit_log.actor_username 과 동일 패턴).
+    # 스케줄(trigger="schedule") 실행은 사람이 아니므로 항상 NULL.
+    triggered_by_user_id = Column(String(36), nullable=True)
+    triggered_by_username = Column(String(64), nullable=True)
 
     host = Column(String(255), nullable=True)
     executed_command = Column(String(2000), nullable=True)
@@ -86,6 +92,11 @@ class BatchJobRun(Base):
     stdout = Column(String, nullable=True)
     stderr = Column(String, nullable=True)
     error = Column(String(1000), nullable=True)
+
+    # 이 실행에 실제로 사용된 merge 후 파라미터 스냅샷 — job.params 가 나중에
+    # 바뀌어도 "그때 어떤 설정으로 실행됐는지"(예: k8s_job_cleanup 의 dry_run
+    # 여부)를 그대로 확인할 수 있다. admin 감사/재현 목적.
+    params_snapshot = Column(JSONB, nullable=True)
 
     duration_ms = Column(Integer, default=0)
     started_at = Column(DateTime, default=datetime.utcnow)
