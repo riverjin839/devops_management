@@ -80,8 +80,21 @@ def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None)
     """검증된 조각으로만 k9s 실행 명령을 조립한다.
 
     `exec` 로 로그인 셸을 k9s 로 치환 → k9s 종료 시 채널도 EOF 로 닫힌다.
+
+    앞단(prelude)에서 편집 셸아웃 환경을 보장한다:
+    - k9s 의 `e`(edit)/`v`(view) 등은 kubectl edit 처럼 `$KUBE_EDITOR`/`$EDITOR`
+      로 **같은 터미널에 에디터를 셸아웃**한다. 이 값이 없거나 서버에 에디터가 없으면
+      셸아웃이 멈춰(hang) 화면이 얼어붙은 것처럼 보인다. 그래서 운영자가 이미 지정한
+      `KUBE_EDITOR`/`EDITOR` 는 존중하되, 없으면 웹 터미널에서 종료법이 화면에 보이는
+      `nano` 를 우선 선택하고(없으면 `vi`) 확정한다.
+    - `TERM` 을 **`xterm`** 으로 고정한다. k9s 자체는 tcell 내장 terminfo 로 잘 뜨지만,
+      셸아웃한 에디터는 **시스템 terminfo(ncurses)** 를 쓰므로 서버에 `xterm-256color`
+      terminfo 가 없으면(최소/폐쇄망 서버에서 흔함) 방향키 이스케이프를 해석 못 해
+      **에디터 커서가 안 먹는다**. `xterm` 은 거의 모든 서버에 존재해 안전하다.
+      k9s 색상은 `COLORTERM=truecolor` 로 유지된다(tcell 은 COLORTERM 으로 풀컬러 판단).
+    prelude 문자열은 서버가 고정한 리터럴이며 사용자 입력이 섞이지 않는다.
     """
-    parts = ["exec", "k9s"]
+    parts = ["k9s"]
     if namespace and _NS_RE.match(namespace):
         parts += ["-n", namespace]
     if readonly:
@@ -91,7 +104,14 @@ def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None)
     for tok in (extra or "").split():
         if tok in _ALLOWED_FLAGS and tok not in parts:
             parts.append(tok)
-    return " ".join(shlex.quote(p) if p not in ("exec",) else p for p in parts)
+    k9s_cmd = " ".join(shlex.quote(p) for p in parts)
+    prelude = (
+        'export TERM=xterm; '
+        'export COLORTERM="${COLORTERM:-truecolor}"; '
+        'export KUBE_EDITOR="${KUBE_EDITOR:-${EDITOR:-$(command -v nano || command -v vi || echo vi)}}"; '
+        'export EDITOR="$KUBE_EDITOR"; '
+    )
+    return f"{prelude}exec {k9s_cmd}"
 
 
 @router.websocket("/{cluster_id}/k9s")
@@ -164,7 +184,9 @@ async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None
             chan = await loop.run_in_executor(
                 None,
                 lambda: client.invoke_shell(
-                    term="xterm-256color", width=max(20, cols), height=max(5, rows),
+                    # PTY 단말 타입도 xterm 으로 요청 — 셸아웃 에디터의 terminfo 호환성
+                    # 확보(prelude 의 TERM=xterm 과 일치). k9s 색상은 COLORTERM 로 유지.
+                    term="xterm", width=max(20, cols), height=max(5, rows),
                 ),
             )
         except Exception as e:  # noqa: BLE001
