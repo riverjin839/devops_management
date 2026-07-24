@@ -5,7 +5,7 @@ export function AppServicesPage() {
     <ServiceDomainCatalog
       domain="app"
       title="APP 서비스"
-      description="애플리케이션 서비스 카탈로그 — Settings에서 카테고리를 추가해 시작하세요"
+      description="K8s 내부에 배포되는 사용자 서비스 카탈로그 — Runtime / Catalog / Workbench / AI Ready"
     />
   );
 }

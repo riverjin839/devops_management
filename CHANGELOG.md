@@ -37,6 +37,14 @@
   용어가 아니라 특정 활용 관점에서 붙은 이름이라 탭 라벨/ID(`lake-types`→`mgmt-service`)를
   변경. 딥링크 안내 문구(서비스 인스턴스 등록 모달)와 `docs/SCREENS.md` 도 함께 갱신.
   내부 데이터 모델(`LakeServiceType`)과 백엔드 API 는 변경하지 않음.
+- **PEP/APP 서비스 카탈로그 도메인 재편**: PEP 서비스는 DevOps 엔지니어가 운영하는 플랫폼
+  인프라(K8s/Cilium/Linux/Keycloak/Nexus/CI-CD/Prometheus/Grafana/AIStor/Network 10종,
+  카테고리 없는 평면 목록)로, APP 서비스는 K8s 내부에 배포되는 사용자 서비스(Runtime/
+  Catalog/Workbench/AI Ready 카테고리)로 재정의. 그동안 domain='pep' 로 잘못 시드되던
+  데이터 플랫폼 8종(Airflow/Spark/Trino/StarRocks/Iceberg/JupyterLab/Superset/Polaris)을
+  domain='app' 으로 재배정하고 DataHub 를 추가. Backend: `_seed_default_service_categories`
+  를 멱등 마이그레이션으로 재작성(domain='pep' 인 것만 1회 전환해 재시작 시 강제 되돌리던
+  문제 제거) + 레거시 pep 카테고리 정리.
 
 ## [1.8.1] - 2026-07-21
 

@@ -51,7 +51,7 @@ export function ServiceCategoryManager() {
         <div>
           <h2 className="text-sm font-semibold">서비스 카테고리</h2>
           <p className="text-sm text-muted-foreground">
-            PEP 서비스/APP 서비스 사이드바의 상위 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) — builtin 4개(PEP)는 비활성화만, custom 은 자유 추가/삭제
+            PEP 서비스/APP 서비스 사이드바의 상위 카테고리(APP: Runtime/Catalog/Workbench/AI Ready) — builtin 4개(APP)는 비활성화만, custom 은 자유 추가/삭제. PEP 서비스는 카테고리 없이 평면 목록으로 관리된다.
           </p>
         </div>
         <button
