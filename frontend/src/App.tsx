@@ -43,6 +43,7 @@ import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
+import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { K8sEventsPage } from '@/pages/K8sEventsPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
@@ -188,6 +189,7 @@ function AppShell() {
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/service-topology" element={<ServiceTopologyPage />} />
+              <Route path="/service-architecture" element={<ServiceArchitecturePage />} />
               <Route path="/architecture" element={<ArchitecturePage />} />
               <Route path="/k8s-events" element={<K8sEventsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />

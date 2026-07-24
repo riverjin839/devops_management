@@ -75,6 +75,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_cluster_item_dispatcher",
         "schedule": crontab(minute=0),
     },
+    # 서비스 아키텍처 문서 현행화 — 주기는 운영자 설정(AppSetting cron). 매분 디스패처 평가.
+    "arch-doc-sync-dispatcher": {
+        "task": "app.celery_app.dispatch_architecture_doc_sync",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 
@@ -337,6 +342,138 @@ def dispatch_resource_count_snapshot(self):
         collect_resource_counts.delay()
         rcs.set_schedule(db, sch["enabled"], cron_expr, last_run_at=datetime.now(_tz.utc).isoformat())
         return {"dispatched": True, "fired_at": now_aware.isoformat()}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.sync_all_architecture_docs", ignore_result=True)
+def sync_all_architecture_docs(self):
+    """auto_sync_enabled 문서 전체 현행화 — 문서 하나의 실패가 배치를 막지 않는다."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import LakeService
+    from app.models.service_arch_doc import ServiceArchDoc
+    from app.services import architecture_doc_service as ads
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    synced, failed = 0, 0
+    try:
+        docs = (
+            db.query(ServiceArchDoc)
+            .filter(ServiceArchDoc.auto_sync_enabled.is_(True))
+            .all()
+        )
+        for doc in docs:
+            service = db.query(LakeService).filter(
+                LakeService.id == doc.lake_service_id, LakeService.enabled.is_(True)
+            ).first()
+            if service is None:
+                continue
+            try:
+                res = ads.sync_doc(db, service, triggered_by="scheduled")
+                if res.last_sync_status == "failed":
+                    failed += 1
+                else:
+                    synced += 1
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                failed += 1
+                log.exception("arch doc scheduled sync 실패 service=%s: %s", doc.lake_service_id, e)
+        return {"synced": synced, "failed": failed}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.dispatch_architecture_doc_sync", ignore_result=True)
+def dispatch_architecture_doc_sync(self):
+    """운영자 설정 cron 에 맞춰 아키텍처 문서 현행화 트리거(매분 평가).
+
+    리소스 스냅샷 디스패처와 동일 — croniter + tz + last_run 앵커로 cron 틱당 최대 1회.
+    """
+    import logging
+    from datetime import datetime, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.services import architecture_doc_service as ads
+
+    log = logging.getLogger(__name__)
+    try:
+        from croniter import croniter
+    except ImportError:
+        return {"dispatched": False, "reason": "croniter_missing"}
+
+    try:
+        tz = ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        tz = ZoneInfo("Asia/Seoul")
+
+    db = SessionLocal()
+    try:
+        sch = ads.get_schedule(db)
+        if not sch.get("enabled"):
+            return {"dispatched": False, "reason": "disabled"}
+        cron_expr = (sch.get("cron") or "").strip()
+        if not croniter.is_valid(cron_expr):
+            return {"dispatched": False, "reason": "invalid_cron"}
+
+        now_aware = datetime.now(_tz.utc).astimezone(tz)
+        now_naive = now_aware.replace(tzinfo=None)
+        last = sch.get("last_run_at")
+        if last:
+            try:
+                anchor = datetime.fromisoformat(last).astimezone(tz).replace(tzinfo=None)
+            except Exception:  # noqa: BLE001
+                anchor = now_naive - timedelta(days=1)
+        else:
+            anchor = now_naive - timedelta(days=1)
+
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            return {"dispatched": False, "reason": "cron_eval_error"}
+
+        if next_fire > now_naive:
+            return {"dispatched": False, "reason": "not_due", "next_fire": next_fire.isoformat()}
+
+        sync_all_architecture_docs.delay()
+        ads.set_schedule(db, sch["enabled"], cron_expr, last_run_at=datetime.now(_tz.utc).isoformat())
+        return {"dispatched": True, "fired_at": now_aware.isoformat()}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.generate_arch_doc_llm", ignore_result=True)
+def generate_arch_doc_llm(self, doc_id: str):
+    """아키텍처 문서 LLM enrichment — 최초 sync 시 백그라운드 1회 (fail-safe)."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import LakeService
+    from app.models.service_arch_doc import ServiceArchDoc
+    from app.services import architecture_doc_service as ads
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        doc = db.query(ServiceArchDoc).filter(ServiceArchDoc.id == doc_id).first()
+        if doc is None:
+            return {"error": "doc not found", "doc_id": doc_id}
+        service = db.query(LakeService).filter(LakeService.id == doc.lake_service_id).first()
+        if service is None:
+            return {"error": "service not found", "doc_id": doc_id}
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            doc = loop.run_until_complete(ads.generate_llm_content(db, doc, service))
+        finally:
+            loop.close()
+        return {"doc_id": doc_id, "llm_status": doc.llm_status}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("generate_arch_doc_llm 실패 doc=%s: %s", doc_id, e)
+        return {"error": str(e)[:200], "doc_id": doc_id}
     finally:
         db.close()
 

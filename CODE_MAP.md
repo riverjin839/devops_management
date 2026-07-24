@@ -103,6 +103,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Cilium BPF Trace | `backend/app/routers/cilium_trace.py` + `services/cilium_trace_service.py` · `hubble_client.py` → `frontend/src/pages/CiliumTracePage.tsx` |
 | 패킷 흐름 분석 | `backend/app/routers/topology_trace.py` + `services/tcpdump_runner.py` → `frontend/src/pages/PacketFlowPage.tsx` |
 | 서비스 토폴로지 | `backend/app/routers/service_topology.py` → `frontend/src/pages/ServiceTopologyPage.tsx` |
+| 서비스 아키텍처 문서 (자동생성·현행화) | `backend/app/routers/architecture_docs.py` + `services/architecture_doc_service.py` + `models/service_arch_doc.py` → `frontend/src/pages/ServiceArchitecturePage.tsx` + `components/serviceArch/` + `hooks/useArchDoc.ts` |
 | 서비스 모듈 관계도 | — → `frontend/src/pages/ArchitecturePage.tsx` |
 | 인프라 물리 토폴로지 | `backend/app/routers/infra_nodes.py` → `frontend/src/pages/InfraTopologyPage.tsx` |
 | 노드 서버스펙 자산 대장 | `backend/app/routers/node_server_specs.py` → `frontend/src/pages/NodeSpecPage.tsx` |
