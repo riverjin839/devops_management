@@ -8,10 +8,12 @@ import {
 } from 'lucide-react';
 import { useWorkItems, usePatchWorkItemStatus, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useCurrentSprint, useCreateSprint } from '@/hooks/useSprints';
+import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { ViewModeBar, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml, formatApiError } from '@/lib/utils';
+import { isAssignedTo, itemDateKey } from '@/lib/workItems';
 import type { WorkItem, KanbanStatus } from '@/types';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -20,7 +22,9 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function dateOf(t: WorkItem): string {
-  return t.startedAt?.slice(0, 10) ?? '';
+  // 저장은 UTC canonical → 로컬(KST) 날짜로 변환해 비교. (구 slice(0,10) 은 UTC 앞자리라
+  // 이른 아침 KST 업무가 전날로 새던 버그의 원인 — 홈 KPI 와 동일 정의를 공유한다.)
+  return itemDateKey(t);
 }
 function fmtDue(t: WorkItem): string {
   const s = t.startedAt;
@@ -226,20 +230,15 @@ export function TodoTodayPage() {
   const mine = useMemo(() => {
     if (!myName) return [];
     const items = data?.data ?? [];
-    const splitNames = (s?: string | null) =>
-      s ? s.split(',').map((x) => x.trim()).filter(Boolean) : [];
-    const mineItems = items.filter((t) => {
-      // 담당자 필드(정/부/legacy)에 쉼표로 여러 명이 들어올 수 있으므로 모두 분리해 매칭.
-      const names = [...splitNames(t.assignee), ...splitNames(t.primaryAssignee), ...splitNames(t.secondaryAssignee)];
-      return names.includes(myName);
-    });
+    // 담당자 필드(정/부/legacy, 쉼표 복수)에 내 이름이 있으면 내 업무 — 공용 isAssignedTo.
+    const mineItems = items.filter((t) => isAssignedTo(t, myName));
     // 공통업무 항목 merge (id 중복 제거).
     const seen = new Set(mineItems.map((t) => t.id));
     const allAttend = (allAttendData?.data ?? []).filter((t) => !seen.has(t.id));
     return [...mineItems, ...allAttend];
   }, [data, allAttendData, myName]);
 
-  const today = todayStr();
+  const today = useToday();  // 자정 넘기면 자동 갱신
   // 일정(시간표) 뷰 — 선택한 날짜의 내 일정만, 시간순.
   const daySchedule = useMemo(
     () => mine

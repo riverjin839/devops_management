@@ -60,6 +60,21 @@ function barBackgroundStyle(sv: { token: string }, opacityPct: number): CSSPrope
   return { background: `hsl(var(${sv.token}) / ${pct}%)` };
 }
 
+/**
+ * 막대 텍스트 가독성 그림자 — 사용자가 고른 텍스트 색(barTextColor)의 밝기에 따라 반대 색
+ * 그림자를 넣어, 막대 투명도를 낮추거나(라이트 테마) 상태색이 밝아도 글씨가 묻히지 않게 한다.
+ * 색 자체는 사용자 선택을 존중하고 대비만 보강한다.
+ */
+function readableTextShadow(hex: string): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return '0 1px 2px rgba(0,0,0,0.55)';
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.5
+    ? '0 1px 2px rgba(0,0,0,0.55)'        // 밝은 글씨 → 어두운 그림자
+    : '0 1px 2px rgba(255,255,255,0.6)';  // 어두운 글씨 → 밝은 그림자
+}
+
 function StatusGlyph({ status }: { status: KanbanStatus }) {
   if (status === 'done') return <CheckCircle2 className="w-3 h-3 flex-shrink-0" />;
   if (status === 'in_progress') return <Clock className="w-3 h-3 flex-shrink-0" />;
@@ -149,6 +164,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const currentUser = useAuthStore((s) => s.user);
   const barOpacity = useHomeStore((s) => s.weeklyBarOpacity);
   const barTextColor = useHomeStore((s) => s.weeklyBarTextColor);
+  const barTextShadow = readableTextShadow(barTextColor);
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -519,7 +535,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                       <button type="button"
                         onClick={() => openWorkItem(item.id)}
                         title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
-                        style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor }}
+                        style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor, textShadow: barTextShadow }}
                         className={`w-full h-6 rounded-lg ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 overflow-hidden cursor-pointer hover:brightness-110 transition
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
@@ -589,7 +605,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                             <button type="button"
                               onClick={() => openWorkItem(item.id)}
                               title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
-                              style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor }}
+                              style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor, textShadow: barTextShadow }}
                               className={`w-full h-5 rounded-md ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-1.5 overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />

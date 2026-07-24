@@ -16,7 +16,8 @@ import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useToday } from '@/hooks/useToday';
 import { useHomeStore } from '@/stores/homeStore';
 import type { WorkItem } from '@/types';
-import { cn, parseUTC, assigneeNames, toLocalDateKey } from '@/lib/utils';
+import { cn, parseUTC } from '@/lib/utils';
+import { isMyDueTodo } from '@/lib/workItems';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function fmtKoreanDate(d: Date): string {
@@ -83,22 +84,17 @@ export function HomePage() {
 
   const { data: workItemsData, isLoading: workItemsLoading, isError: workItemsError } = useHomeWorkItems();
   const allWorkItems = useMemo<WorkItem[]>(() => workItemsData?.data ?? [], [workItemsData]);
-  const allTasks  = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'task'), [allWorkItems]);
   const allIssues = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'issue'), [allWorkItems]);
   // "다음 일정" 후보 — 이슈를 제외한 일정성 업무(작업/회의/교육/기타). 당일 스케줄 보드와 대상 일치.
   const allSchedulable = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type !== 'issue'), [allWorkItems]);
 
   const today = useToday();  // 자정 넘기면 자동 갱신 (상시 대시보드)
-  const myTodayTasks = useMemo(() => {
-    if (!myName) return [];
-    return allTasks.filter((t) => {
-      if (t.kanbanStatus === 'done') return false;
-      // 담당자 필드에 쉼표로 여러 명("A,B")이 들어올 수 있어 정확 일치가 아닌 분리 매칭.
-      if (!assigneeNames(t).includes(myName)) return false;
-      const due = toLocalDateKey(t.startedAt);
-      return !due || due <= today;
-    });
-  }, [allTasks, myName, today]);
+  // "내 할일" — /todo-today 의 지연+오늘(open) 집계와 동일 정의(공용 isMyDueTodo)를 공유해
+  // KPI 와 상세 페이지가 같은 숫자를 보이도록 한다.
+  const myTodayTasks = useMemo(
+    () => (myName ? allWorkItems.filter((t) => isMyDueTodo(t, myName, today)) : []),
+    [allWorkItems, myName, today],
+  );
 
   const openIssueCount = useMemo(() => allIssues.filter((i) => !i.closedAt).length, [allIssues]);
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);

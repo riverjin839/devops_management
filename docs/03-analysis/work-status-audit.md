@@ -150,8 +150,8 @@
 | I-2 | 디자인 토큰 위반 (raw 팔레트) | `WorkCalendar`(blue/emerald/amber/red-*), `MemberTodayTodos`(STATUS_TEXT slate/blue/amber/purple/emerald), `WorkAlarmBell`(red/amber/blue-500), `QuickAddTaskModal`(PRIORITY dot), `DayScheduleBoard`(ASSIGNEE_PALETTE) — CLAUDE.md 의 "고정 팔레트 금지, semantic/status 토큰 사용" 규칙 위반. 테마(default/light/dark) 전환 시 톤이 어긋난다. DESIGN.md 백로그로 이관 권장. |
 | I-3 ✅ | today/summary 지연 버킷에 backlog 포함 | backlog 까지 시작일이 지나면 영구 "지연" 집계 → 뱃지 인플레이션. **[4차 배치 완료]** overdue 쿼리에 `backlog` 제외 추가(서버 + MemberTodayTodos 공통 카드). in_progress 버킷의 미래 시작 포함은 사용자 결정에 따라 유지(진행 중이면 표시). WorkAlarmBell 의 지연 판정은 scope 밖이라 현행 유지(후속 검토 가능). |
 | I-4 | today/summary 잘못된 date 파라미터를 조용히 오늘로 대체 | `work_items.py:375-379` — 형식 오류 시 fallback 대신 422/400 이 디버깅에 유리. |
-| I-5 | 주간 막대 텍스트 색 기본 흰색 | `homeStore` 기본 `#ffffff` + 사용자가 막대 투명도를 낮추면(라이트 테마) 가독성 급락. 투명도 연동 자동 대비(또는 기본값을 토큰 기반) 검토. |
-| I-6 | KPI "내 할일" 집계 기준과 이동 대상 페이지 불일치 가능성 | KPI 는 "내 담당 + 미완료 + 시작일 도래(또는 무기한)" 인데 `/todo-today` 페이지 집계 규칙과 완전히 동일한지 보장 장치가 없다. 집계 로직을 훅으로 공용화해 KPI·페이지가 같은 숫자를 보도록 권장. |
+| I-5 ✅ | 주간 막대 텍스트 색 기본 흰색 | 투명도 낮추면 가독성 급락. **[4차 배치 완료]** 텍스트 색은 존중하되 밝기 기반 반대 색 그림자(`readableTextShadow`)로 대비 보강. |
+| I-6 ✅ | KPI "내 할일" 집계와 페이지 불일치 | **[4차 배치 완료]** 공용 셀렉터(`lib/workItems.ts` `isMyDueTodo`)로 홈 KPI 와 `/todo-today` 가 동일 정의 공유. `/todo-today` 의 UTC slice 날짜 버킷도 KST 로 교정. |
 | I-7 ✅ | 담당자 순환(◀▶) 시작 인덱스 | `DayScheduleBoard.cycleSelectedName` — selectedName 이 목록에 없으면 0번째가 아닌 1번째부터 순환 시작하던 스킵. **[3차 배치 완료]** curIdx<0 이면 다음=첫번째/이전=마지막으로 이동하도록 수정. |
 
 ---
