@@ -24,7 +24,7 @@ import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate } from '@/types';
 import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
 import { useHomeStore } from '@/stores/homeStore';
-import { useToast, ClusterIconPicker } from '@/components/common';
+import { useToast, ClusterIconPicker, useModalA11y } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
@@ -63,6 +63,8 @@ function EditClusterModal({
     setError('');
   }, [cluster, isOpen]);
 
+  const dialogRef = useModalA11y(isOpen, onClose);
+
   if (!isOpen || !cluster) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,8 +95,8 @@ function EditClusterModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold tracking-tight mb-1">클러스터 수정</h2>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+        <h2 id={f('title')} className="text-2xl font-bold tracking-tight mb-1">클러스터 수정</h2>
         <p className="text-sm text-muted-foreground mb-6">이름·API Endpoint·kubeconfig 경로만 변경됩니다. 자세한 설정은 클러스터 관리 페이지에서 가능합니다.</p>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -225,6 +227,8 @@ function ManagementServerModal({
     }
   }, [isOpen, server]);
 
+  const dialogRef = useModalA11y(isOpen, onClose);
+
   if (!isOpen) return null;
 
   const set = (k: keyof ManagementServerCreate, v: string | number) =>
@@ -259,8 +263,8 @@ function ManagementServerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold tracking-tight mb-1">{server ? '관리서버 수정' : '관리서버 추가'}</h2>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+        <h2 id={f('title')} className="text-2xl font-bold tracking-tight mb-1">{server ? '관리서버 수정' : '관리서버 추가'}</h2>
         <p className="text-sm text-muted-foreground mb-6">SSH 접속 정보와 라벨 / 카테고리만 등록되며, 비밀번호 / 키는 DB 에 저장하지 않습니다.</p>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-2 gap-3">

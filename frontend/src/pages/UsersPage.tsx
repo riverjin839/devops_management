@@ -10,7 +10,7 @@ import { Plus, Trash2, KeyRound, ShieldCheck, Loader2, RefreshCw } from 'lucide-
 
 import { MacCard } from '@/components/ui/MacCard';
 import { RoleGate } from '@/components/auth/RoleGate';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, useToast, useModalA11y } from '@/components/common';
 import { authApi, type UserRoleApi } from '@/services/api';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -46,6 +46,7 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [error, setError] = useState<string | null>(null);
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
+  const dialogRef = useModalA11y(open, onClose);
 
   if (!open) return null;
 
@@ -76,8 +77,8 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md bg-card border border-border rounded-2xl p-5 mac-shadow">
-        <h3 className="text-base font-bold mb-4">새 사용자</h3>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="w-full max-w-md bg-card border border-border rounded-2xl p-5 mac-shadow">
+        <h3 id={f('title')} className="text-base font-bold mb-4">새 사용자</h3>
         <div className="space-y-3">
           <div>
             <label htmlFor={f('u')} className="block text-sm mb-1">사용자명</label>
@@ -159,6 +160,8 @@ function ResetPasswordModal({
   const [newPassword, setNewPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useModalA11y(!!user, onClose);
+  const titleId = useId();
 
   if (!user) return null;
 
@@ -183,8 +186,8 @@ function ResetPasswordModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 mac-shadow">
-        <h3 className="text-base font-bold mb-2">{user.username} 비밀번호 재설정</h3>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 mac-shadow">
+        <h3 id={titleId} className="text-base font-bold mb-2">{user.username} 비밀번호 재설정</h3>
         <p className="text-sm text-muted-foreground mb-3">
           새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.
         </p>
