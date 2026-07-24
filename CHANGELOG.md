@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.12.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.13.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.13.0] - 2026-07-24
 
 ### Added
 - **K8s Job 정리 배치잡 (`k8s_job_cleanup`)**: 완료(Complete)/실패(Failed) 상태로 남아 리소스만 차지하는 K8s Job 을 정리하는 새 배치잡 타입. SSH 없이 클러스터에 등록된 kubeconfig 로 백엔드/워커에서 kubectl 을 직접 실행하는 **클러스터 스코프(non-SSH) 실행 모델**을 배치잡 프레임워크에 도입(`BatchJobExecutor.requires_ssh`) — 이 타입은 호스트/SSH 자격증명 없이 등록·cron 스케줄·일괄 실행이 모두 가능하다. dry_run 기본 활성(삭제 대상만 미리 확인), 실행 중(active) Job 보호, 종료 후 경과시간(`older_than_hours`)·네임스페이스 제외·라벨 셀렉터 필터 지원. Backend: `services/batch_jobs/k8s_job_cleanup.py` + 프레임워크/라우터/디스패처 non-SSH 분기. Frontend: 잡 등록 위저드·실행 폼·편집 폼이 non-SSH 타입에서 호스트/자격증명 입력을 자동 생략.
