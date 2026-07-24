@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -18,6 +18,7 @@ from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.models.app_setting import AppSetting
 from app.auth.deps import require_operator, get_current_user
+from app.config import settings
 from app.services import audit_logger
 from app.models.work_item_time_block import WorkItemTimeBlock
 from app.schemas.work_item import (
@@ -121,6 +122,37 @@ def _assert_ownership(item: WorkItem, user: User, *, op: str, db: Session) -> No
             "required": "admin role, creator, or self-assignee",
         },
     )
+
+
+def _local_tz():
+    """설정된 서비스 타임존(기본 Asia/Seoul). 한국은 DST 가 없어 고정 +09:00."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    try:
+        return ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        return ZoneInfo("Asia/Seoul")
+
+
+def _local_day_bounds_utc(date_str: Optional[str]):
+    """KST(서비스 타임존) 기준 '그 날' [00:00, 다음날 00:00) 을 UTC-naive 로 반환.
+
+    started_at/closed_at 은 UTC-naive 로 저장되므로(앱 canonical), '오늘' 경계도
+    KST 자정을 UTC 로 변환한 naive 값이어야 KST 사용자의 하루와 일치한다.
+    date_str 형식 오류 시 오늘(KST)로 대체. 반환: (start_utc_naive, end_utc_naive, kst_date).
+    """
+    tz = _local_tz()
+    if date_str:
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            d = datetime.now(tz).date()
+    else:
+        d = datetime.now(tz).date()
+    start_local = datetime(d.year, d.month, d.day, tzinfo=tz)
+    end_local = start_local + timedelta(days=1)
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc, d
 
 
 def _not_found(item_id: UUID) -> HTTPException:
@@ -372,15 +404,9 @@ def get_today_summary(
     그룹 키: primary_assignee + secondary_assignee 모두 (한 항목이 두 사람의 그룹에
     동시에 보임). priority 정렬은 의미순(high → medium → low → 그 외).
     """
-    if date:
-        try:
-            target = datetime.strptime(date, "%Y-%m-%d")
-        except ValueError:
-            target = datetime.utcnow()
-    else:
-        target = datetime.utcnow()
-    today_start = target.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start.replace(hour=23, minute=59, second=59)
+    # KST(서비스 타임존) 기준 하루 경계를 UTC-naive 로 계산 — 이른 아침(00:00~08:59 KST)
+    # 업무가 UTC 로 전날에 걸쳐 전날 그룹으로 빠지던 문제를 없앤다. end 는 배타적(다음날 00:00).
+    today_start, today_end, kst_date = _local_day_bounds_utc(date)
 
     # ORDER BY 알파벳순 정렬은 'high' < 'low' < 'medium' 이 되어 의미와 어긋남.
     # CASE 로 의미상 우선순위를 강제.
@@ -395,7 +421,7 @@ def get_today_summary(
         db.query(WorkItem)
         .filter(
             WorkItem.started_at >= today_start,
-            WorkItem.started_at <= today_end,
+            WorkItem.started_at < today_end,
         )
         .order_by(WorkItem.primary_assignee, priority_order)
         .all()
@@ -405,18 +431,20 @@ def get_today_summary(
         db.query(WorkItem)
         .filter(
             WorkItem.kanban_status == "in_progress",
-            ~((WorkItem.started_at >= today_start) & (WorkItem.started_at <= today_end)),
+            ~((WorkItem.started_at >= today_start) & (WorkItem.started_at < today_end)),
         )
         .order_by(WorkItem.primary_assignee, priority_order)
         .all()
     )
 
-    # 지연(overdue) — 기준일 이전 예정 + 미완료 + (진행중은 위 버킷에 포함되므로 제외).
+    # 지연(overdue) — 기준일 이전 예정 + 미완료. 진행중은 위 버킷에 포함되므로 제외하고,
+    # backlog('언젠가 할 일')는 아직 착수 약정이 아니므로 시작일이 지나도 지연으로 세지 않는다
+    # (지연 뱃지 인플레이션 방지).
     overdue_items = (
         db.query(WorkItem)
         .filter(
             WorkItem.started_at < today_start,
-            WorkItem.kanban_status.notin_(["done", "in_progress"]),
+            WorkItem.kanban_status.notin_(["done", "in_progress", "backlog"]),
         )
         .order_by(WorkItem.primary_assignee, priority_order)
         .all()
@@ -495,7 +523,7 @@ def get_today_summary(
             "overdue_tasks": [serialize(t) for t in g["overdue_tasks"]],
         })
     return {
-        "date": today_start.strftime("%Y-%m-%d"),
+        "date": kst_date.strftime("%Y-%m-%d"),
         "total_today": len(today_items),
         "total_in_progress": len(in_progress_items),
         "total_overdue": len(overdue_items),
@@ -646,6 +674,16 @@ def update_work_item(
 
     for key, value in update_data.items():
         setattr(item, key, value)
+
+    # done 전이 시 closed_at 자동 관리 — PATCH /status 규약과 통일.
+    # 정식 폼 수정으로 done 저장 시 완료일이 비면 자동 채우고(미해결 KPI/성장 막대 오탐 방지),
+    # done 에서 벗어나면(재오픈) 명시 입력이 없을 때 완료일을 해제한다.
+    if "kanban_status" in update_data:
+        if update_data["kanban_status"] == "done":
+            if not item.closed_at:
+                item.closed_at = datetime.utcnow()
+        elif "closed_at" not in update_data:
+            item.closed_at = None
 
     db.commit()
     db.refresh(item)

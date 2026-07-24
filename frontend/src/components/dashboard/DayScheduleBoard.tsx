@@ -4,13 +4,14 @@ import {
   ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2, AlertTriangle,
 } from 'lucide-react';
 import {
-  useWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
+  useHomeWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
 } from '@/hooks/useWorkItems';
 import { useAssignees } from '@/hooks/useAssignees';
+import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
 import { Button } from '@/components/ui/button';
-import { stripHtml, cn } from '@/lib/utils';
+import { stripHtml, cn, assigneeNames } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
 import type { WorkItem, KanbanStatus, WorkItemTimeBlock } from '@/types';
@@ -65,29 +66,21 @@ const STATUS_STYLE: Record<KanbanStatus, { dot: string; bar: string; tint: strin
   done:        { dot: 'bg-status-healthy', bar: 'bg-status-healthy', tint: 'bg-status-healthy/10' },
 };
 
+// 담당자 구분용 categorical 색 — 의미(성공/실패)가 아닌 '사람 구분'이므로 chart-N 토큰(D-005).
 const ASSIGNEE_PALETTE = [
-  'bg-sky-500/15 text-sky-700 dark:text-sky-300',
-  'bg-violet-500/15 text-violet-700 dark:text-violet-300',
-  'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-  'bg-rose-500/15 text-rose-700 dark:text-rose-300',
-  'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
-  'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
+  'bg-chart-1/20 text-chart-1',
+  'bg-chart-2/20 text-chart-2',
+  'bg-chart-3/20 text-chart-3',
+  'bg-chart-4/20 text-chart-4',
+  'bg-chart-5/20 text-chart-5',
+  'bg-chart-6/20 text-chart-6',
+  'bg-chart-7/20 text-chart-7',
 ];
 function assigneeColor(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return ASSIGNEE_PALETTE[h % ASSIGNEE_PALETTE.length];
 }
-function assigneeNames(w: WorkItem): string[] {
-  const raw = [w.primaryAssignee, w.secondaryAssignee, w.assignee].filter(Boolean).join(',');
-  const out: string[] = [];
-  for (const n of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
-    if (!out.includes(n)) out.push(n);
-  }
-  return out;
-}
-
 // ── grid geometry ───────────────────────────────────────────────────────────
 const HOUR_PX = 56;
 const PX_PER_MIN = HOUR_PX / 60;
@@ -152,9 +145,18 @@ interface DragState {
 export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const navigate = useNavigate();
   const toast = useToast();
-  const todayStr = dateKey(new Date());
+  const todayStr = useToday();  // 자정 넘기면 자동 갱신
   const [viewDate, setViewDate] = useState(todayStr);
   const isToday = viewDate === todayStr;
+
+  // 현재 시각 인디케이터(빨간 now 라인) — 30초마다 갱신해 상시 화면에서도 실제 시각을 따라간다.
+  const [nowMin, setNowMin] = useState(() => new Date().getHours() * 60 + new Date().getMinutes());
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setNowMin(new Date().getHours() * 60 + new Date().getMinutes());
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const [quickAdd, setQuickAdd] = useState<{ time: string; assignee?: string } | null>(null);
   const [addMenu, setAddMenu] = useState<{ minute: number; y: number } | null>(null);
@@ -204,7 +206,11 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   const cycleSelectedName = (dir: 1 | -1) => {
     if (namesList.length === 0) return;
     const curIdx = namesList.indexOf(selectedName);
-    const nextIdx = ((curIdx >= 0 ? curIdx : 0) + dir + namesList.length) % namesList.length;
+    // 현재 선택이 목록에 없으면(-1) 첫 이동은 dir 방향의 끝(다음=첫번째 / 이전=마지막)으로 —
+    // base 0 에서 계산하면 '다음' 이 index 0 을 건너뛰던 문제 회피.
+    const nextIdx = curIdx < 0
+      ? (dir === 1 ? 0 : namesList.length - 1)
+      : (curIdx + dir + namesList.length) % namesList.length;
     const next = namesList[nextIdx];
     setSelectedName(next);
     setScope('individual');
@@ -212,7 +218,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
   };
   const meOnly = scope === 'individual';
 
-  const { data: workItemsData, isLoading, isError, refetch } = useWorkItems();
+  const { data: workItemsData, isLoading, isError, refetch } = useHomeWorkItems();
   const { data: dayBlocks = [] } = useTimeBlocksRange(viewDate, viewDate);
   const createBlock = useCreateTimeBlock();
   const updateBlock = useUpdateTimeBlock();
@@ -227,12 +233,14 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     for (const w of allItems) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
       if (meOnly && (!selectedName || !assigneeNames(w).includes(selectedName))) continue;
-      if (w.kanbanStatus === 'done') continue;
+      // 완료 항목도 남긴다(흐리게 — 하루 회고용). 단 span 은 완료일까지만(레거시 완료일
+      // 미상이면 시작일 하루만) 잡아 과거 날짜에 무한정 끌리지 않게 한다.
+      const isDone = w.kanbanStatus === 'done';
       const startD = parseLocal(w.startedAt);
       if (!startD) continue;
       const startKey = dateKey(startD);
       const closedD = parseLocal(w.closedAt);
-      let endKey = closedD ? dateKey(closedD) : todayKey;
+      let endKey = closedD ? dateKey(closedD) : (isDone ? startKey : todayKey);
       if (endKey < startKey) endKey = startKey;
       const hasBlockToday = dayBlocks.some((b) => b.workItemId === w.id && b.blockDate === viewDate);
       if (hasBlockToday || (viewDate >= startKey && viewDate <= endKey)) out.push(w);
@@ -405,7 +413,6 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     });
   };
 
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   const totalCount = sessions.length + allDay.length;
 
   return (
@@ -612,6 +619,7 @@ function SessionBox({
   const { item } = session;
   const status = item.kanbanStatus ?? 'todo';
   const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
+  const isDone = status === 'done';
   const TypeIcon = WORK_ITEM_TYPE_CONFIG[item.type]?.Icon;
   const names = assigneeNames(item);
   const primary = names[0] ?? '미지정';
@@ -620,7 +628,7 @@ function SessionBox({
 
   return (
     <div
-      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/25 transition-colors', sv.tint)}
+      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/25 transition-colors', sv.tint, isDone && 'opacity-60')}
       style={{ top, height, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
     >
       {/* 상단 리사이즈 핸들 — 히트영역은 넓게(h-2), 표시는 얇은 그립 라인만 */}
@@ -632,7 +640,7 @@ function SessionBox({
         <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l', sv.bar)} />
         <div className="flex items-center gap-1 min-w-0">
           {TypeIcon && !compact && <TypeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />}
-          <span className="text-xs font-medium truncate text-foreground">{label}</span>
+          <span className={cn('text-xs font-medium truncate', isDone ? 'text-muted-foreground line-through' : 'text-foreground')}>{label}</span>
           {onDelete && (
             <button
               onMouseDown={(e) => e.stopPropagation()}
@@ -665,14 +673,15 @@ function SessionBox({
 function UnscheduledCard({ item, onOpen }: { item: WorkItem; onOpen: (id: string) => void }) {
   const status = item.kanbanStatus ?? 'todo';
   const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
+  const isDone = status === 'done';
   const names = assigneeNames(item);
   const label = item.title?.trim() || stripHtml(item.content) || item.category;
   return (
     <button type="button" onClick={() => onOpen(item.id)} title={label} aria-label={label}
-      className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint)}>
+      className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint, isDone && 'opacity-60')}>
       <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
       <div className="min-w-0 flex-1">
-        <span className="text-sm truncate text-foreground font-medium block">{label}</span>
+        <span className={cn('text-sm truncate font-medium block', isDone ? 'text-muted-foreground line-through' : 'text-foreground')}>{label}</span>
         <span className="text-xs text-muted-foreground truncate block">{names.join(', ')}{item.clusterName ? ` · ${item.clusterName}` : ''}</span>
       </div>
       <span className={cn('w-1.5 h-1.5 rounded-full flex-none', sv.dot)} />

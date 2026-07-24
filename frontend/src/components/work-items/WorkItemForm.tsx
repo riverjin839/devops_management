@@ -72,14 +72,21 @@ function nowDateOnly(): string {
 
 /**
  * 폼 값(YYYY-MM-DD 또는 YYYY-MM-DDTHH:mm)을 백엔드 datetime 으로 보정.
- * - 날짜만이면 자정(T00:00:00)으로 채워 datetime 파싱 실패를 막는다.
+ *
+ * 앱 canonical 규약 = **UTC 저장 + KST 표시**. 폼 입력은 로컬(KST) 벽시계이므로
+ * 로컬로 해석한 뒤 `toISOString()`(UTC Z)으로 직렬화한다 (QuickAddTaskModal 과 동일 규약).
+ * 이전에는 naive 로컬 문자열을 그대로 저장해, 리더가 UTC 로 간주하며 +9h 시프트되던 버그가 있었다.
+ * - 날짜만이면 자정(T00:00:00)으로 채운다.
  * - 초가 없으면 :00 을 붙인다.
+ * - 파싱 불가면 null.
  */
 function toApiDatetime(v?: string | null): string | null {
   if (!v) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T00:00:00`;
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return `${v}:00`;
-  return v;
+  let s = v;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s = `${s}T00:00:00`;
+  else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s = `${s}:00`;
+  const d = new Date(s); // 브라우저 로컬(KST) 해석
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function toDatetimeLocal(dateStr?: string | null): string {

@@ -10,6 +10,23 @@
 
 1.11.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **업무 현황 화면 색상 디자인 토큰화(테마 정합)**: 홈 업무 위젯들이 쓰던 고정 팔레트(`text-red-500`·`bg-blue-500`·emerald/amber/slate/violet 등)를 semantic status(`--status-healthy/warning/critical/info/unknown`)·categorical chart(`--chart-N`) 토큰으로 교체 — light/dark/default 테마 전환 시 톤이 어긋나던 문제 해소(CLAUDE.md 디자인 규칙 준수). 대상: WorkCalendar·MemberTodayTodos·WorkAlarmBell·QuickAddTaskModal(우선순위/필수표시/경고) 및 DayScheduleBoard 담당자 아바타 팔레트. 담당자별 진행 현황의 '메모지' 종이 질감(warm paper)은 의도된 장식이라 유지.
+- **당일 스케줄 — 완료 업무 유지(흐리게) & 지연 집계에서 backlog 제외**: 업무를 완료(done)하면 '당일 스케줄'에서 즉시 사라지던 것을, 완료일까지는 **흐림+취소선**으로 남겨 하루 회고가 가능하게 변경. 아울러 '담당자별 오늘 요약'의 **지연(overdue)** 집계에서 backlog('언젠가 할 일', 아직 착수 약정 아님)를 제외해 지연 뱃지 인플레이션을 줄였다(Backend `today/summary` + Frontend 공통 카드 동일 규칙).
+
+### Fixed
+- **'내 할일' KPI 와 오늘 할일 페이지 숫자 불일치 + 날짜 정합**: 홈 '내 할일' KPI 와 `/todo-today` 가 서로 다른 정의로 집계해 숫자가 어긋나던 문제 수정 — 공용 셀렉터(`lib/workItems.ts` 의 `isMyDueTodo`/`isAssignedTo`/`itemDateKey`)로 "내 담당 or 공통 + 미완료 + 시작일 오늘 이하" 정의를 일원화. 그 과정에서 `/todo-today` 의 날짜 버킷도 `.slice(0,10)`(UTC 앞자리) → KST 변환으로 교정(이른 아침 업무가 전날 버킷으로 새던 문제 해소), '오늘' 기준도 자정 자동 갱신(`useToday`).
+- **주간 타임라인 막대 텍스트 가독성**: 막대 투명도를 낮추거나(라이트 테마) 상태색이 밝을 때 흰색 라벨이 배경에 묻히던 문제 완화 — 사용자가 고른 텍스트 색은 그대로 두고, 밝기에 따라 반대 색 그림자를 넣어 대비를 보강.
+- **업무 현황(홈) '오늘' 상시 갱신 + 잔여 표기 버그**: 홈을 상시 띄워두면 마운트 시각에 '오늘' 이 고정돼 자정 이후 KPI·오늘 하이라이트·지연 판정·당일 스케줄 now 라인이 어긋나던 문제 수정 — 공용 `useToday()` 훅(자정 감지 자동 갱신)으로 HomePage·주간 타임라인·월간 달력·담당자 탭·당일 스케줄의 '오늘' 기준을 통일하고, 당일 스케줄 now 라인은 30초 주기로 갱신. 아울러 주간 타임라인에서 **같은 날 마일스톤이 여러 건이면 서로 겹쳐 그려지던 문제**를 요일 컬럼 안에 세로로 쌓도록 수정, 당일 스케줄 담당자 순환(◀▶)이 목록 밖 이름에서 첫 담당자를 건너뛰던 인덱스 버그도 수정.
+- **업무 날짜 규약 KST 통일 (UTC 저장 + KST 표시)**: 정식 업무 폼(`WorkItemForm`)이 날짜/시간을 naive 로컬 문자열로 저장해, 리더가 UTC 로 간주하며 화면에 **+9시간 시프트**되던 문제와, 이른 아침(00:00~08:59 KST) 업무가 전날로 분류되던 문제를 근본 수정. 규약을 앱 canonical(UTC 저장 + KST 표시, QuickAdd·`utcnow` 자동 타임스탬프와 동일)로 일원화. Frontend: `WorkItemForm.toApiDatetime` 을 `toISOString()`(UTC) 직렬화로 변경, 공용 `toLocalDateKey()`(UTC→KST 날짜) 헬퍼로 홈 위젯의 `.slice(0,10)` 날짜 비교를 전부 교체(HomePage/WorkAlarmBell/WeeklyStatusTimeline/MemberTodayTodos). Backend: `today/summary` 의 '오늘' 경계를 KST 자정 기준(`_local_day_bounds_utc`)으로 계산. 기존 데이터 중 구 폼으로 저장된 항목은 편집 시 자동으로 UTC 로 정규화된다(대부분은 이미 정상).
+- **업무 현황(홈) 위젯 데이터 100건 잘림 완화**: 홈 KPI·업무 알람 벨·당일 스케줄·주간/월간 뷰가 `GET /work-items` 기본 상한(100건, `started_at` 내림차순)을 그대로 받아, 업무가 100건을 넘으면 가장 오래된(=지연되기 쉬운) 건부터 조용히 잘려 미해결 이슈 KPI 과소집계·지연 알람 누락·과거 달/주 공백이 생기던 문제를 완화. Frontend: 홈 위젯 공용 `useHomeWorkItems()`(상한 500) 도입해 여러 위젯이 캐시를 공유하도록 통일(근본 해법인 화면별 기간 스코프 쿼리는 후속).
+- **홈 KPI "미해결 이슈"/"다음 일정" 링크가 죽은 경로(`/items`)로 이동**: 존재하지 않는 라우트라 클릭 시 홈으로 되돌아오던 문제를 `/tasks-mgmt` 로 수정.
+- **홈 "내 할일" KPI·업무 알람이 복수 담당자 업무를 누락**: 담당자 필드에 쉼표로 여러 명("A,B")이 들어간 업무를 정확 일치로만 판정해 KPI/알람에서 빠지던 문제 수정 — 공용 `assigneeNames()` 헬퍼로 분리 매칭. Frontend: `HomePage`, `WorkAlarmBell`, `DayScheduleBoard` 가 같은 헬퍼 사용.
+- **정식 폼(PUT)으로 업무를 '완료'로 저장해도 완료일이 자동 세팅되지 않음**: `PATCH /status` 만 done 이동 시 `closed_at` 을 채워, 폼 수정으로 done 저장 시 `closed_at` 이 비어 미해결 이슈 KPI 에 완료 항목이 남거나 주간 막대가 무한 연장되던 문제 수정. 재오픈(done 이탈) 시에는 명시 입력이 없으면 완료일을 해제. Backend: `work_items.update_work_item`.
+- **홈에서 업무 등록 후 담당자 탭 미갱신**: 업무 생성/수정/삭제/상태변경이 담당자·오늘 요약(`items/today`) 쿼리를 무효화하지 않아 최대 60초 지연되던 문제 수정. Frontend: 뮤테이션 성공 시 요약 쿼리도 함께 무효화.
+- **홈 "다음 일정" KPI 부정확**: 지난 24시간 내 시작 업무까지 후보에 넣어 어제 업무가 "다음 일정"으로 표기되고, 회의/교육 유형 일정은 제외되던 문제 수정 — 미래 시작(작업/회의/교육/기타) 건만 대상으로 변경.
+- **월간 달력(WorkCalendar) 표기 불일치**: 제목(`title`)을 무시하고 본문만 표기하던 것을 제목 우선으로 통일하고, 이슈를 작업과 다르게(UTC 앞자리) 버킷팅해 같은 날 등록분이 다른 칸에 놓이던 문제를 로컬 날짜 기준으로 일치시킴.
+
 ## [1.11.1] - 2026-07-23
 
 ### Added

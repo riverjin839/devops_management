@@ -6,10 +6,11 @@ import {
   ClipboardList, CalendarCheck, Plus, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
-import { useWorkItems } from '@/hooks/useWorkItems';
+import { useHomeWorkItems } from '@/hooks/useWorkItems';
+import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
-import { stripHtml, cn } from '@/lib/utils';
+import { stripHtml, cn, toLocalDateKey } from '@/lib/utils';
 import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 import { Button } from '@/components/ui/button';
 
@@ -57,6 +58,21 @@ const STATUS_BAR: Record<KanbanStatus, { token: string; ring: string; label: str
 function barBackgroundStyle(sv: { token: string }, opacityPct: number): CSSProperties {
   const pct = Math.max(0, Math.min(100, opacityPct));
   return { background: `hsl(var(${sv.token}) / ${pct}%)` };
+}
+
+/**
+ * 막대 텍스트 가독성 그림자 — 사용자가 고른 텍스트 색(barTextColor)의 밝기에 따라 반대 색
+ * 그림자를 넣어, 막대 투명도를 낮추거나(라이트 테마) 상태색이 밝아도 글씨가 묻히지 않게 한다.
+ * 색 자체는 사용자 선택을 존중하고 대비만 보강한다.
+ */
+function readableTextShadow(hex: string): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return '0 1px 2px rgba(0,0,0,0.55)';
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.5
+    ? '0 1px 2px rgba(0,0,0,0.55)'        // 밝은 글씨 → 어두운 그림자
+    : '0 1px 2px rgba(255,255,255,0.6)';  // 어두운 글씨 → 밝은 그림자
 }
 
 function StatusGlyph({ status }: { status: KanbanStatus }) {
@@ -127,7 +143,7 @@ interface WeeklyStatusTimelineProps {
 
 export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: WeeklyStatusTimelineProps) {
   const navigate = useNavigate();
-  const { data, isLoading: queryLoading, isError: queryError, refetch } = useWorkItems();
+  const { data, isLoading: queryLoading, isError: queryError, refetch } = useHomeWorkItems();
   const workItems = items ?? data?.data ?? [];
   const loading = isLoading ?? queryLoading;
   // 외부에서 items 를 주입받은 경우 내부 쿼리 상태는 무의미하므로 에러로 보지 않는다.
@@ -136,7 +152,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   // 막대/마일스톤 클릭 → 상세 업무 페이지로 이동.
   const openWorkItem = (id: string) => navigate(`/tasks-mgmt/${id}`);
 
-  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  // 자정 넘기면 자동 갱신 — 상시 대시보드에서 '오늘' 컬럼 강조가 어긋나지 않게 한다.
+  const todayKey = useToday();
+  const today = useMemo(() => new Date(todayKey + 'T00:00:00'), [todayKey]);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
 
@@ -146,6 +164,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const currentUser = useAuthStore((s) => s.user);
   const barOpacity = useHomeStore((s) => s.weeklyBarOpacity);
   const barTextColor = useHomeStore((s) => s.weeklyBarTextColor);
+  const barTextShadow = readableTextShadow(barTextColor);
 
   // 월~금 5일.
   const days = useMemo(() => Array.from({ length: DAY_COUNT }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -163,9 +182,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
     const out: TaskBar[] = [];
     const todayD = fmtDate(today);
     for (const item of taskItems) {
-      const s = item.startedAt?.slice(0, 10);
+      const s = toLocalDateKey(item.startedAt);
       if (!s) continue;
-      const closed = item.closedAt?.slice(0, 10);
+      const closed = toLocalDateKey(item.closedAt) || undefined;
       // 완료일 미입력 + 시작이 오늘 이전/오늘 → 진행 중(성장 중)으로 본다.
       const growing = !closed && s <= todayD;
       // 완료일(closedAt)이 있으면 그날까지. 진행 중이면 "오늘"에서 끊지 않고 보이는 주의
@@ -243,7 +262,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const milestones: Milestone[] = useMemo(() => {
     const out: Milestone[] = [];
     for (const issue of issueItems) {
-      const d = issue.startedAt?.slice(0, 10);
+      const d = toLocalDateKey(issue.startedAt);
       if (!d || d < weekStartStr || d > weekEndStr) continue;
       const idx = days.findIndex(x => fmtDate(x) === d);
       if (idx >= 0) out.push({ issue, dayIdx: idx });
@@ -262,8 +281,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const { minWeek, totalWeeks } = useMemo(() => {
     const stamps: number[] = [startOfWeek(today).getTime()];
     const consider = (s?: string | null) => {
-      if (!s) return;
-      const d = startOfWeek(new Date(s.slice(0, 10) + 'T00:00:00'));
+      const key = toLocalDateKey(s);   // UTC 저장 → KST 날짜로 변환한 뒤 주 시작 계산
+      if (!key) return;
+      const d = startOfWeek(new Date(key + 'T00:00:00'));
       if (!Number.isNaN(d.getTime())) stamps.push(d.getTime());
     };
     for (const w of scoped) { consider(w.startedAt); consider(w.closedAt); }
@@ -456,21 +476,30 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                 <div className="px-4 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-status-warning">
                   <Flag className="w-3.5 h-3.5" /> 마일스톤
                 </div>
-                <div className={`relative grid ${colsClass} min-h-[44px]`}>
-                  <DayCells />
-                  {milestones.map(({ issue, dayIdx }) => {
-                    const resolved = !!issue.closedAt;
+                {/* 같은 날 마일스톤이 여러 건이면 절대배치로 겹치지 않도록, 요일 컬럼 셀 안에
+                    세로로 쌓는다(행 높이는 내용에 맞춰 늘어남). */}
+                <div className={`grid ${colsClass} min-h-[44px]`}>
+                  {days.map((d, idx) => {
+                    const isTd = fmtDate(d) === todayStr;
+                    const dayMs = milestones.filter((m) => m.dayIdx === idx);
                     return (
-                      <button key={issue.id} type="button"
-                        onClick={() => openWorkItem(issue.id)}
-                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 px-1 text-left rounded hover:bg-status-warning/10 transition-colors cursor-pointer"
-                        style={{ left: `${(dayIdx / DAY_COUNT) * 100}%`, width: `${(1 / DAY_COUNT) * 100}%` }}
-                        title={stripHtml(issue.content)}>
-                        <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-status-healthy fill-status-healthy' : 'text-status-warning fill-status-warning'}`} />
-                        <span className={`text-xs font-medium truncate ${resolved ? 'text-status-healthy' : 'text-status-warning'}`}>
-                          {issue.title?.trim() || stripHtml(issue.content)}
-                        </span>
-                      </button>
+                      <div key={fmtDate(d)}
+                        className={`border-l border-border/40 flex flex-col justify-center gap-0.5 py-1 px-1 min-w-0 ${isTd ? 'bg-primary/[0.04]' : ''}`}>
+                        {dayMs.map(({ issue }) => {
+                          const resolved = !!issue.closedAt;
+                          return (
+                            <button key={issue.id} type="button"
+                              onClick={() => openWorkItem(issue.id)}
+                              className="flex items-center gap-1 px-1 text-left rounded hover:bg-status-warning/10 transition-colors cursor-pointer min-w-0"
+                              title={stripHtml(issue.content)}>
+                              <Star className={`w-3.5 h-3.5 flex-shrink-0 ${resolved ? 'text-status-healthy fill-status-healthy' : 'text-status-warning fill-status-warning'}`} />
+                              <span className={`text-xs font-medium truncate ${resolved ? 'text-status-healthy' : 'text-status-warning'}`}>
+                                {issue.title?.trim() || stripHtml(issue.content)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     );
                   })}
                 </div>
@@ -506,7 +535,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                       <button type="button"
                         onClick={() => openWorkItem(item.id)}
                         title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
-                        style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor }}
+                        style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor, textShadow: barTextShadow }}
                         className={`w-full h-6 rounded-lg ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 overflow-hidden cursor-pointer hover:brightness-110 transition
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
@@ -576,7 +605,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                             <button type="button"
                               onClick={() => openWorkItem(item.id)}
                               title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
-                              style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor }}
+                              style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor, textShadow: barTextShadow }}
                               className={`w-full h-5 rounded-md ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-1.5 overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
