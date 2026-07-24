@@ -23,6 +23,9 @@
 
 ### Added
 - **K8s Job 정리 배치잡 (`k8s_job_cleanup`)**: 완료(Complete)/실패(Failed) 상태로 남아 리소스만 차지하는 K8s Job 을 정리하는 새 배치잡 타입. SSH 없이 클러스터에 등록된 kubeconfig 로 백엔드/워커에서 kubectl 을 직접 실행하는 **클러스터 스코프(non-SSH) 실행 모델**을 배치잡 프레임워크에 도입(`BatchJobExecutor.requires_ssh`) — 이 타입은 호스트/SSH 자격증명 없이 등록·cron 스케줄·일괄 실행이 모두 가능하다. dry_run 기본 활성(삭제 대상만 미리 확인), 실행 중(active) Job 보호, 종료 후 경과시간(`older_than_hours`)·네임스페이스 제외·라벨 셀렉터 필터 지원. Backend: `services/batch_jobs/k8s_job_cleanup.py` + 프레임워크/라우터/디스패처 non-SSH 분기. Frontend: 잡 등록 위저드·실행 폼·편집 폼이 non-SSH 타입에서 호스트/자격증명 입력을 자동 생략.
+- **Batch Jobs — 클러스터 단위 그룹 뷰**: "전체" 모드에서 flat 테이블 대신 잡이 등록된 클러스터별 collapsible 섹션(클러스터명·등급·잡 통계 헤더 + 개별 테이블 + 미등록 타입 칩)으로 표시 — 클러스터가 늘어나도 어디에 무엇이 등록됐는지 한눈에 파악 가능. Frontend: `BatchJobClusterGroup` 신설.
+- **Batch Jobs — mc 대시보드 스타일 로그 상세 카드**: 잡 상세 패널에 "최근 실행 로그"를 mc 클라이언트 콘솔과 동일한 형태(상태/트리거/실행자/호스트/exit/소요시간 sticky 헤더 + 실행 명령 + `ExecOutputTabs`)로 항상 노출 — 실행 이력을 펼치지 않아도 방금 실행이 어떻게 됐는지 바로 확인 가능. 실행 폼 결과와 실행 이력 상세도 같은 컴포넌트(`BatchJobLogDetail`)로 통일해 stdout/stderr 를 stack 하지 않고 탭으로 전환(CLAUDE.md 콘솔 표준 패턴 준수).
+- **Batch Jobs — admin 실행 추적성**: "방금 실행이 정확히 어떤 방법으로 이뤄졌는지" 확인 불가능하던 문제를 해소 — `BatchJobRun` 에 실행자 스냅샷(`triggered_by_username`, 수동/일괄만 채워짐)과 그 실행에 실제로 사용된 merge 후 파라미터 스냅샷(`params_snapshot` — 예: k8s_job_cleanup 의 dry_run 여부)을 추가해 로그 상세 카드에서 확인 가능. 등록/수정/삭제/수동 실행/일괄 실행을 감사 로그(`audit_logs`, action=`batch_job.*`)에 기록해 Settings 의 감사 로그 조회(admin 전용)에서도 추적 가능.
 
 ### Changed
 - **Batch Jobs 실행 이력 개선**: 슬라이드오버의 실행 이력이 15초 주기로 자동 갱신되어 스케줄/일괄(백그라운드) 실행 결과가 새로고침 없이 반영되고, 이력 항목에 실행 트리거 배지(수동/스케줄/일괄)가 표시된다. 일괄 실행은 이제 trigger="bulk" 로 구분 기록.

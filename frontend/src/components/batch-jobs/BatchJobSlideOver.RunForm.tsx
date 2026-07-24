@@ -2,10 +2,10 @@
 import { useId, useState } from 'react';
 import { Play, Plug, ShieldCheck } from 'lucide-react';
 import type { BatchJob, BatchJobRun, BatchJobTestConnectionResponse } from '@/services/api';
-import { LogViewer, MasterHostPicker } from '@/components/common';
+import { MasterHostPicker } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useRunBatchJob, useTestBatchJobConnection } from '@/hooks/useBatchJobs';
-import { StatusPill } from './StatusPill';
+import { BatchJobLogDetail } from './BatchJobLogDetail';
 
 interface RunFormProps {
   job: BatchJob;
@@ -235,37 +235,7 @@ export function RunForm({ job }: RunFormProps) {
         </button>
       </div>
 
-      {result && (
-        <div className="border border-border rounded-xl overflow-hidden">
-          <div className="px-2.5 py-1.5 border-b border-border bg-secondary/40 flex items-center gap-2 flex-wrap">
-            <StatusPill status={result.status} />
-            {result.exitCode !== null && result.exitCode !== undefined && (
-              <span className="text-xs font-mono text-muted-foreground">exit {result.exitCode}</span>
-            )}
-            <span className="text-xs font-mono text-muted-foreground">{result.durationMs}ms</span>
-          </div>
-          <div className="p-2 space-y-2">
-            {result.executedCommand && (
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">command</p>
-                <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
-                  {result.executedCommand}
-                </pre>
-              </div>
-            )}
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-              <LogViewer text={result.stdout} maxHeight="max-h-[200px]" />
-            </div>
-            {result.stderr && (
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-                <LogViewer text={result.stderr} maxHeight="max-h-[160px]" asError />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {result && <BatchJobLogDetail run={result} maxHeight="max-h-[240px]" />}
     </div>
   );
 }

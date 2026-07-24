@@ -508,13 +508,18 @@ def run_batch_job(
     password: str | None = None,
     private_key: str | None = None,
     trigger: str = "schedule",
+    triggered_by_user_id: str | None = None,
+    triggered_by_username: str | None = None,
 ):
     """Execute a registered batch job by id.
 
     Used for scheduled runs (Celery Beat) and ad-hoc background triggers
-    (`trigger="bulk"` from the bulk-run endpoint). If `password`/
-    `private_key` are not supplied, `execute_job` falls back to the
-    encrypted credentials saved on the BatchJob row.
+    (`trigger="bulk"` from the bulk-run endpoint, which passes the
+    requesting user via `triggered_by_*` so the resulting BatchJobRun keeps
+    an admin-visible record of who queued it — pure `trigger="schedule"`
+    runs from Beat leave these None). If `password`/`private_key` are not
+    supplied, `execute_job` falls back to the encrypted credentials saved
+    on the BatchJob row.
     """
     from uuid import UUID
     from app.database import SessionLocal
@@ -536,6 +541,8 @@ def run_batch_job(
                     password=password,
                     private_key=private_key,
                     trigger=trigger,
+                    triggered_by_user_id=triggered_by_user_id,
+                    triggered_by_username=triggered_by_username,
                 )
             )
         finally:

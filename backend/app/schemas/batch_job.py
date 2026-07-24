@@ -99,12 +99,16 @@ class BatchJobRunResponse(BaseModel):
     job_id: UUID
     status: str
     trigger: str
+    # 실행자 스냅샷 — 스케줄(trigger="schedule") 실행은 사람이 아니므로 항상 None.
+    triggered_by_username: Optional[str] = None
     host: Optional[str] = None
     executed_command: Optional[str] = None
     exit_code: Optional[int] = None
     stdout: str = ""
     stderr: str = ""
     error: Optional[str] = None
+    # 이 실행에 실제로 사용된 merge 후 파라미터(예: k8s_job_cleanup 의 dry_run) — admin 감사용.
+    params_snapshot: Optional[dict[str, Any]] = None
     duration_ms: int = 0
     started_at: datetime
     finished_at: Optional[datetime] = None
