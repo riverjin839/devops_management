@@ -12,7 +12,7 @@ import {
 } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useNodeImageList } from '@/hooks/useNodeImages';
-import { DoubleScrollX } from '@/components/common';
+import { DoubleScrollX, useModalA11y } from '@/components/common';
 import { pickPrimaryName } from './utils';
 import { formatApiError } from '@/lib/utils';
 
@@ -164,6 +164,9 @@ export function ImageDistributeDialog({
     },
   });
 
+  // ESC 닫기(실행 중엔 무시) · 포커스 트랩 · 초점 복원 (공용 훅)
+  const dialogRef = useModalA11y(open, () => { if (!runMut.isPending) onClose(); });
+
   const canRun =
     selectedTargets.length > 0 &&
     (authMode === 'password' ? !!password : !!privateKey.trim());
@@ -174,7 +177,7 @@ export function ImageDistributeDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby={f('title')}>
       <div className="absolute inset-0 bg-black/60" onClick={() => !runMut.isPending && onClose()} />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[92vh] overflow-hidden flex flex-col">
         {/* 헤더 */}
@@ -183,7 +186,7 @@ export function ImageDistributeDialog({
             <Send className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-semibold">이미지 배포 (다른 노드로 prepull)</h2>
+            <h2 id={f('title')} className="text-sm font-semibold">이미지 배포 (다른 노드로 prepull)</h2>
             <p className="text-xs text-muted-foreground mt-0.5 font-mono break-all">{image}</p>
           </div>
           <button onClick={onClose} disabled={runMut.isPending}

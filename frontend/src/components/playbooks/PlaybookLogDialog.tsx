@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Copy, Check, Terminal, AlertTriangle, XCircle, CheckCircle } from 'lucide-react';
 import type { Playbook } from '@/types';
-import { DoubleScrollX } from '@/components/common';
+import { DoubleScrollX, useModalA11y } from '@/components/common';
 import { parseUTC } from '@/lib/utils';
 
 interface PlaybookLogDialogProps {
@@ -30,12 +30,8 @@ interface FailedTask {
 export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps) {
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!playbook) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [playbook, onClose]);
+  // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅) — playbook 이 있으면 열림
+  const dialogRef = useModalA11y(!!playbook, onClose);
 
   useEffect(() => {
     if (copied) {
@@ -77,7 +73,9 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
         aria-hidden
       />
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label={`${playbook.name} 실행 로그`}
         className="fixed inset-4 sm:inset-10 z-50 bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
       >

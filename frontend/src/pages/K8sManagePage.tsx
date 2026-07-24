@@ -12,7 +12,7 @@ import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, useModalA11y, Skeleton } from '@/components/common';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
@@ -121,6 +121,19 @@ function age(sec?: number | null): string {
 function errMsg(e: unknown): string {
   const ax = e as AxiosError<{ detail?: string }>;
   return ax?.response?.data?.detail || (e as Error)?.message || '알 수 없는 오류';
+}
+
+/** 테이블 패널 로딩 자리표시 — 헤더 그리드 아래 행 skeleton (px-4 정렬 일치, 레이아웃 시프트 최소화). */
+function RowsSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div aria-busy="true" aria-label="불러오는 중">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="px-4 py-1.5 border-b border-border/40">
+          <Skeleton height={12} width={`${55 + ((i * 13) % 35)}%`} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 interface DetailTarget {
@@ -570,7 +583,7 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
       </div>
 
       {isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+        <RowsSkeleton rows={8} />
       ) : isError ? (
         <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (
@@ -669,12 +682,17 @@ function OverviewPanel({ clusterId }: { clusterId: string }) {
       </MacCard>
     );
   }
-  // 로딩 중 — 플레이스홀더
+  // 로딩 중 — 실제 3-스탯 그리드 구조를 흉내낸 skeleton (레이아웃 시프트 최소화)
   if (nodes.isLoading || namespaces.isLoading) {
     return (
-      <MacCard title="개요">
-        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
-      </MacCard>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-busy="true" aria-label="개요 불러오는 중">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="rounded-md border border-border bg-card p-4 space-y-2">
+            <Skeleton height={10} width="40%" />
+            <Skeleton height={24} width="60%" />
+          </div>
+        ))}
+      </div>
     );
   }
 
@@ -702,7 +720,7 @@ function HelmPanel({ clusterId, onViewValues }: { clusterId: string; onViewValue
         <span>이름</span><span>네임스페이스</span><span>rev</span><span>차트</span><span className="text-right pr-2">values</span>
       </div>
       {isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+        <RowsSkeleton />
       ) : isError ? (
         <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : (data?.items.length ?? 0) === 0 ? (
@@ -770,7 +788,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
           <span className="text-right">Age</span>
         </div>
         {objects.isLoading ? (
-          <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+          <RowsSkeleton />
         ) : objects.isError ? (
           <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(objects.error)}</div>
         ) : (objects.data?.items.length ?? 0) === 0 ? (
@@ -800,7 +818,7 @@ function CrdPanel({ clusterId, selectedCrd, setSelectedCrd, onOpenObject }: CrdP
         <span>Kind</span><span>Group</span><span>Scope</span>
       </div>
       {crds.isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+        <RowsSkeleton />
       ) : crds.isError ? (
         <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(crds.error)}</div>
       ) : (crds.data?.items.length ?? 0) === 0 ? (
@@ -844,6 +862,8 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
   const sections = (yamlQuery.data as { sections?: ResourceDetailSection[] } | undefined)?.sections;
   const hasSections = !!(sections && sections.length);
   const [tab, setTab] = useState<'summary' | 'yaml' | 'events'>('summary');
+  // Escape 닫기·포커스 트랩·초점 복원 (D-023)
+  const drawerRef = useModalA11y(true, onClose);
 
   // 관련 이벤트 (k8s 리소스만) — 탭 활성 시 15s 라이브 갱신 (Lens 파리티)
   const hasEvents = detail.kind === 'k8s';
@@ -856,7 +876,7 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex justify-end" onClick={onClose}>
-      <div className="bg-card w-full max-w-2xl h-full overflow-auto border-l border-border" onClick={(e) => e.stopPropagation()}>
+      <div ref={drawerRef} role="dialog" aria-modal="true" aria-label="리소스 상세" className="bg-card w-full max-w-2xl h-full overflow-auto border-l border-border" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-card flex items-center gap-2 px-5 py-3 border-b border-border z-10">
           <FileCode className="w-4 h-4 text-primary" />
           <span className="font-semibold text-sm truncate">
@@ -1058,7 +1078,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
         <span className="text-right pr-2">동작</span>
       </div>
       {isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+        <RowsSkeleton />
       ) : isError ? (
         <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : rows.length === 0 ? (
@@ -1173,7 +1193,7 @@ function PodsPanel(p: PodsPanelProps) {
         <span>상태</span><span className="text-right pr-2">동작</span>
       </div>
       {isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">불러오는 중…</div>
+        <RowsSkeleton rows={8} />
       ) : isError ? (
         <div className="p-6 text-sm text-destructive">조회 실패: {errMsg(error)}</div>
       ) : filtered.length === 0 ? (

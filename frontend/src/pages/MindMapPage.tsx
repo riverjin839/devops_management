@@ -28,6 +28,7 @@ import {
   useCreateNode, useUpdateNode, useDeleteNode, useBulkUpdatePositions,
 } from '@/hooks/useMindMap';
 import type { MindMap, MindMapNode } from '@/types';
+import { useModalA11y } from '@/components/common';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const NODE_COLORS = [
@@ -350,6 +351,7 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
+  const dialogRef = useModalA11y(true, onClose);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,9 +371,9 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-lg mac-shadow max-h-[88vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-lg mac-shadow max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+          <h3 id={f('title')} className="text-sm font-semibold flex items-center gap-1.5">
             <MapIcon className="w-4 h-4 text-primary" />
             {title}
           </h3>

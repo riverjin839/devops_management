@@ -7,7 +7,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
@@ -133,6 +133,8 @@ export function NodeSpecPage() {
   const [hostList, setHostList] = useState('');
   const [useSudo, setUseSudo] = useState(false);
   const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
+  // Host Facts 수집 모달 접근성 (Escape·포커스 트랩·초점 복원). 수집 중엔 닫기 무시.
+  const hostFactsRef = useModalA11y(hostFactsOpen, () => { if (!collectingFacts) setHostFactsOpen(false); });
 
   const listQ = useQuery({
     queryKey: ['node-specs', clusterId, statusFilter, roleFilter, search],
@@ -774,7 +776,7 @@ export function NodeSpecPage() {
       {hostFactsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => !collectingFacts && setHostFactsOpen(false)} />
-          <div className="relative w-full max-w-2xl bg-card border border-border rounded-xl p-5 shadow-2xl">
+          <div ref={hostFactsRef} role="dialog" aria-modal="true" aria-label="Host Facts 수집" className="relative w-full max-w-2xl bg-card border border-border rounded-xl p-5 shadow-2xl">
             <h3 className="text-base font-semibold mb-3">Host Facts 수집 (bond/disk/vm)</h3>
             <div className="grid grid-cols-2 gap-3">
               <input value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="SSH user (root)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />

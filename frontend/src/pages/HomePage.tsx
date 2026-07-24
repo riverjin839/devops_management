@@ -189,10 +189,12 @@ export function HomePage() {
           'flex-1 min-h-0 flex flex-col px-3 py-3 gap-3 overflow-auto',
           scheduleBg === 'cream' ? 'schedule-bg-cream' : 'schedule-bg-white',
         )}>
-          <div className="flex-1 min-h-0 grid grid-cols-10 gap-3">
+          {/* xl 미만에서는 그리드를 뷰포트 높이에 가두지 않고(패널이 짓눌려 이중 스크롤 나던 문제)
+              바깥 컨테이너 하나만 스크롤시키고, 패널은 최소 높이로 자연 배치한다. xl 이상만 높이 채움. */}
+          <div className="grid grid-cols-10 gap-3 xl:flex-1 xl:min-h-0">
 
             {/* ── 당일 시간단위 스케줄 (담당자 기준) (4/10) ─────────────────── */}
-            <div className="col-span-10 xl:col-span-4 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
+            <div className="col-span-10 xl:col-span-4 flex flex-col min-h-[420px] xl:min-h-0 rounded-md border border-border bg-card overflow-hidden">
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <CalendarClock className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
@@ -205,7 +207,7 @@ export function HomePage() {
             </div>
 
             {/* ── 담당자별 진행 현황 (주간 / 월간 / 담당자) (6/10) ──────────── */}
-            <div className="col-span-10 xl:col-span-6 flex flex-col min-h-0 rounded-md border border-border bg-card overflow-hidden">
+            <div className="col-span-10 xl:col-span-6 flex flex-col min-h-[420px] xl:min-h-0 rounded-md border border-border bg-card overflow-hidden">
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   담당자별 진행 현황

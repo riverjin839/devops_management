@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Rocket, Plus, Target, Pencil, Trash2, X, Loader2, CheckCircle2,
   ArrowRightLeft, CalendarDays, Users, Clock,
 } from 'lucide-react';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, useToast, useModalA11y } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCarryOverSprint,
@@ -49,6 +49,8 @@ function SprintModal({
   onSubmit: (data: SprintCreate) => void;
   busy: boolean;
 }) {
+  const dialogRef = useModalA11y(true, onClose);
+  const titleId = useId();
   const start = initial?.startDate ?? todayStr();
   const [form, setForm] = useState<FormState>({
     name: initial?.name ?? `스프린트 ${(() => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}`; })()}`,
@@ -69,9 +71,9 @@ function SprintModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <h2 className="font-bold flex items-center gap-2"><Rocket className="w-4 h-4 text-primary" />{initial ? '스프린트 수정' : '새 스프린트'}</h2>
+          <h2 id={titleId} className="font-bold flex items-center gap-2"><Rocket className="w-4 h-4 text-primary" />{initial ? '스프린트 수정' : '새 스프린트'}</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-3">
@@ -198,13 +200,15 @@ function CarryOverModal({
   onConfirm: (toId: string) => void;
   busy: boolean;
 }) {
+  const dialogRef = useModalA11y(true, onClose);
+  const titleId = useId();
   const [toId, setToId] = useState(targets[0]?.id ?? '');
   const remaining = source.totalItems - source.doneItems;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <h2 className="font-bold flex items-center gap-2"><ArrowRightLeft className="w-4 h-4 text-primary" />미완료 이월</h2>
+          <h2 id={titleId} className="font-bold flex items-center gap-2"><ArrowRightLeft className="w-4 h-4 text-primary" />미완료 이월</h2>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg hover:bg-secondary text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-3">

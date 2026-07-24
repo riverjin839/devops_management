@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Plus, Pencil, Trash2, Lock, AlertCircle, X, Loader2 } from 'lucide-react';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, useModalA11y } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   useServiceCategories,
@@ -208,11 +208,8 @@ function CategoryFormModal({ mode, domain, row, onClose, onError }: CategoryForm
   const [sortOrder, setSortOrder] = useState(row?.sortOrder ?? 100);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅)
+  const dialogRef = useModalA11y(true, onClose);
 
   const handleSubmit = async () => {
     setLocalError(null);
@@ -242,7 +239,7 @@ function CategoryFormModal({ mode, domain, row, onClose, onError }: CategoryForm
   const pending = create.isPending || update.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-label="카테고리 폼">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="카테고리 폼">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">

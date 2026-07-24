@@ -1,8 +1,11 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.tsx
+import { useEffect, useState } from 'react';
+import { Play, History, Trash2, X, KeyRound, Pencil } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Play, History, Terminal, Trash2, X, KeyRound, Pencil } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
+import { useModalA11y } from '@/components/common';
 import { useBatchJobRuns } from '@/hooks/useBatchJobs';
 import { RunForm } from './BatchJobSlideOver.RunForm';
 import { RunHistory } from './BatchJobSlideOver.RunHistory';
@@ -31,16 +34,9 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
     setEditOpen(false);
   }, [job.id]);
 
-  // ESC 키로 닫힘. onCloseRef 패턴으로 listener 재부착 방지.
-  const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; });
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+  // overlay 모드(모달 drawer)에서만 ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅).
+  // inline sticky 패널은 모달이 아니므로 트랩 미적용.
+  const dialogRef = useModalA11y(overlayMode, onClose);
 
   const body = (
     <MacCard
@@ -159,6 +155,10 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }}
       >
         <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${job.name} 배치 잡`}
           className="absolute inset-y-0 right-0 w-[min(420px,90vw)] overflow-y-auto p-4"
           onClick={(e) => e.stopPropagation()}
         >

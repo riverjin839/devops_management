@@ -13,7 +13,7 @@ import {
   useVerifyInfraNode,
 } from '@/hooks/useInfraNodes';
 import { NodeVerifyModal } from '@/components/infra/NodeVerifyModal';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, useModalA11y } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { topologyTraceApi } from '@/services/api';
 import type {
@@ -171,6 +171,7 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
+  const dialogRef = useModalA11y(true, onClose);
 
   const [form, setForm] = useState<InfraNodeCreate>(() => {
     if (initial) {
@@ -225,9 +226,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={f('title')} className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={f('title')} className="text-base font-semibold text-foreground">
             {isEdit ? '노드 수정' : '노드 추가'}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" aria-label="닫기">
@@ -405,12 +406,13 @@ interface DeleteConfirmProps {
 }
 
 function DeleteConfirm({ node, onConfirm, onCancel, isPending }: DeleteConfirmProps) {
+  const dialogRef = useModalA11y(true, onCancel);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="노드 삭제 확인" className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-full bg-red-500/10">
-            <AlertTriangle className="w-5 h-5 text-red-400" />
+          <div className="p-2 rounded-full bg-status-critical/10">
+            <AlertTriangle className="w-5 h-5 text-status-critical" />
           </div>
           <div>
             <p className="text-sm font-semibold text-foreground">노드 삭제</p>

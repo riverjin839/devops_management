@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -16,7 +16,7 @@ import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCus
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
 import { useJiraConfig } from '@/hooks/useJira';
 import { Settings2 } from 'lucide-react';
-import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
+import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER, KANBAN_COLUMNS } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useProjects } from '@/hooks/useProjects';
@@ -389,13 +389,15 @@ export function WorkItemBoardPage() {
                   전체 {items.length}
                 </span>
                 {inProgressCount > 0 && (
-                  <span className={`text-sm px-2 py-0.5 rounded-full border ${
+                  <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
                     inProgressCount >= 2
                       ? 'bg-status-critical/15 text-status-critical border-status-critical/30'
                       : 'bg-status-warning/15 text-status-warning border-status-warning/30'
                   }`}>
                     WIP {inProgressCount}/2
-                    {inProgressCount >= 2 && ' ⚠'}
+                    {inProgressCount >= 2 && (
+                      <AlertTriangle className="w-3.5 h-3.5" aria-label="WIP 한도 초과" />
+                    )}
                   </span>
                 )}
                 {doneCount > 0 && (
@@ -591,9 +593,18 @@ export function WorkItemBoardPage() {
         {/* Kanban view */}
         {viewMode === 'kanban' && (
           isLoading ? (
-            <div className="grid grid-cols-3 gap-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-64 rounded-xl bg-muted/30 animate-pulse" />
+            // 실제 칸반 컬럼 구조(헤더 + 카드 스택)를 반영한 skeleton — 로드 시 컬럼 수/레이아웃 시프트 방지
+            <div className="flex gap-3 overflow-x-auto pb-2" aria-busy="true" aria-label="칸반 보드 불러오는 중">
+              {KANBAN_COLUMNS.map((col) => (
+                <div key={col.key} className="flex-1 min-w-[240px] flex flex-col gap-2">
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-md border ${col.headerCls}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full ${col.dotCls}`} />
+                    <span className="text-sm font-semibold">{col.label}</span>
+                  </div>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-24 rounded-md border border-border bg-muted/20 animate-pulse" />
+                  ))}
+                </div>
               ))}
             </div>
           ) : (

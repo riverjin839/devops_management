@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { ResizeHandle } from './ResizeHandle';
+import { useModalA11y } from './useModalA11y';
 
 interface SidePaneProps {
   open: boolean;
@@ -65,14 +66,9 @@ export function SidePane({
   minWidth = RESIZE_MIN_DEFAULT,
   maxWidth = RESIZE_MAX_DEFAULT,
 }: SidePaneProps) {
-  useEffect(() => {
-    if (!open || disableEscape) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, disableEscape, onClose]);
+  // Escape 닫기(disableEscape 존중) · 포커스 트랩 · 초점 이동/복원 (공용 훅).
+  // aside 는 슬라이드 transition 위해 항상 마운트되지만, 훅 내부 효과는 open 일 때만 활성.
+  const dialogRef = useModalA11y(open, () => { if (!disableEscape) onClose(); });
 
   // 드래그 폭 — resizable 일 때만 사용. 초기값은 width prop(px 파싱) → localStorage 순.
   const initialPx = parseWidthPx(width, 480);
@@ -116,6 +112,7 @@ export function SidePane({
       )}
       {/* 패널 본체 — 항상 마운트해 슬라이드 transition 가 살아남음. */}
       <aside
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-hidden={!open}
