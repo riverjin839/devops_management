@@ -39,6 +39,8 @@ async def execute_job(
     param_override: Optional[dict] = None,
     timeout: int = 60,
     trigger: str = "manual",
+    triggered_by_user_id: Optional[str] = None,
+    triggered_by_username: Optional[str] = None,
 ) -> tuple[BatchJobRun, ExecutionResult]:
     """Run a registered job and persist the result as a BatchJobRun row."""
     executor = get_executor(job.job_type)
@@ -67,7 +69,11 @@ async def execute_job(
             kubeconfig_path=kubeconfig_path,
             cluster_name=cluster_name,
         )
-        return await _run_and_record(db, job, executor, ctx, host=None, trigger=trigger)
+        return await _run_and_record(
+            db, job, executor, ctx, host=None, trigger=trigger,
+            triggered_by_user_id=triggered_by_user_id,
+            triggered_by_username=triggered_by_username,
+        )
 
     if not target_host:
         # 스케줄 실행(trigger="schedule")에서 여기 도달하면 default_host 없이 cron 이
@@ -104,7 +110,11 @@ async def execute_job(
         params=merged_params,
         timeout=timeout,
     )
-    return await _run_and_record(db, job, executor, ctx, host=target_host, trigger=trigger)
+    return await _run_and_record(
+        db, job, executor, ctx, host=target_host, trigger=trigger,
+        triggered_by_user_id=triggered_by_user_id,
+        triggered_by_username=triggered_by_username,
+    )
 
 
 async def _run_and_record(
@@ -115,6 +125,8 @@ async def _run_and_record(
     *,
     host: Optional[str],
     trigger: str,
+    triggered_by_user_id: Optional[str] = None,
+    triggered_by_username: Optional[str] = None,
 ) -> tuple[BatchJobRun, ExecutionResult]:
     """Run the executor and persist the outcome as a BatchJobRun row."""
     job.last_status = "running"
@@ -131,12 +143,17 @@ async def _run_and_record(
         job_id=job.id,
         status=result.status,
         trigger=trigger,
+        triggered_by_user_id=triggered_by_user_id,
+        triggered_by_username=triggered_by_username,
         host=host,
         executed_command=(result.executed_command or "")[:2000],
         exit_code=result.exit_code,
         stdout=result.stdout or "",
         stderr=result.stderr or "",
         error=(result.error or None) and result.error[:1000],
+        # admin 이 "이 실행이 정확히 어떤 설정으로 이뤄졌는지"(예: k8s_job_cleanup
+        # 의 dry_run) 나중에도 확인할 수 있도록 merge 후 파라미터를 그대로 남긴다.
+        params_snapshot=ctx.params or None,
         duration_ms=result.duration_ms,
         started_at=started_at,
         finished_at=finished_at,

@@ -10,12 +10,13 @@ CRUD/run endpoints work unchanged.
 """
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import BatchJob, BatchJobRun, Cluster, User
+from app.services import audit_logger
 from app.schemas.batch_job import (
     BatchJobBulkRunItem,
     BatchJobBulkRunRequest,
@@ -151,8 +152,9 @@ def list_jobs(
 @router.post("", response_model=BatchJobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(
     payload: BatchJobCreate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     if not db.query(Cluster).filter(Cluster.id == payload.cluster_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
@@ -183,20 +185,31 @@ def create_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    audit_logger.record(
+        db, action="batch_job.create", actor=actor, target_type="batch_job", target_id=job.id,
+        details={
+            "name": job.name, "job_type": job.job_type, "cluster_id": str(job.cluster_id),
+            "cron": job.cron,
+        },
+        request=request,
+    )
     return _to_response(job)
 
 
 @router.post("/bulk-run", response_model=BatchJobBulkRunResponse)
 def bulk_run_jobs(
     payload: BatchJobBulkRunRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     """선택한 여러 잡(여러 클러스터)을 백그라운드로 일괄 실행.
 
     저장된 자격증명을 사용하므로 자격증명이 없는 잡은 스킵한다(평문 비밀번호를 broker 로
     내보내지 않기 위함 — 스케줄 실행과 동일). 각 잡은 Celery 로 비동기 큐잉되며 결과는
-    Batch Job 실행 이력에서 확인.
+    Batch Job 실행 이력에서 확인. 큐잉을 요청한 사용자는 triggered_by 로 전달되어
+    각 BatchJobRun 에 남는다(admin 이 "누가 일괄 실행을 걸었는지" 추적 가능).
     """
     from app.celery_app import run_batch_job  # lazy import — celery 의존 분리
 
@@ -214,12 +227,20 @@ def bulk_run_jobs(
             results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="저장된 자격증명 없음"))
             continue
         try:
-            run_batch_job.delay(str(job.id), trigger="bulk")
+            run_batch_job.delay(
+                str(job.id), trigger="bulk",
+                triggered_by_user_id=str(actor.id), triggered_by_username=actor.username,
+            )
             queued += 1
             results.append(BatchJobBulkRunItem(job_id=jid, queued=True))
         except Exception as exc:  # noqa: BLE001 — 큐잉 실패도 결과로 반환
             results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason=f"큐잉 실패: {exc}"))
 
+    audit_logger.record(
+        db, action="batch_job.bulk_run", actor=actor, target_type="batch_job",
+        details={"job_ids": [str(j) for j in payload.job_ids], "queued": queued, "skipped": len(results) - queued},
+        request=request,
+    )
     return BatchJobBulkRunResponse(queued=queued, skipped=len(results) - queued, results=results)
 
 
@@ -235,8 +256,9 @@ def get_job(job_id: UUID, db: Session = Depends(get_db)):
 def update_job(
     job_id: UUID,
     payload: BatchJobUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     try:
         job = get_job_or_404(db, job_id)
@@ -288,23 +310,37 @@ def update_job(
 
     db.commit()
     db.refresh(job)
+
+    audit_logger.record(
+        db, action="batch_job.update", actor=actor, target_type="batch_job", target_id=job.id,
+        details={"name": job.name, "job_type": job.job_type, "changed_fields": list(update.keys())},
+        request=request,
+    )
     return _to_response(job)
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_job(
     job_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     try:
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+    job_name, job_type, cluster_id = job.name, job.job_type, job.cluster_id
     # Cascade deletes BatchJobRun rows via the relationship's
     # `cascade="all, delete-orphan"`.
     db.delete(job)
     db.commit()
+
+    audit_logger.record(
+        db, action="batch_job.delete", actor=actor, target_type="batch_job", target_id=job_id,
+        details={"name": job_name, "job_type": job_type, "cluster_id": str(cluster_id)},
+        request=request,
+    )
     return None
 
 
@@ -314,8 +350,9 @@ def delete_job(
 async def run_job(
     job_id: UUID,
     payload: BatchJobRunRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ):
     try:
         job = get_job_or_404(db, job_id)
@@ -343,6 +380,8 @@ async def run_job(
             param_override=payload.param_override,
             timeout=payload.timeout,
             trigger="manual",
+            triggered_by_user_id=str(actor.id),
+            triggered_by_username=actor.username,
         )
     except UnknownJobType as exc:
         raise HTTPException(
@@ -351,6 +390,13 @@ async def run_job(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    audit_logger.record(
+        db, action="batch_job.run", actor=actor, target_type="batch_job", target_id=job.id,
+        status="success" if run.status == "ok" else "failure",
+        details={"name": job.name, "job_type": job.job_type, "run_status": run.status, "host": run.host},
+        request=request,
+    )
     return run
 
 

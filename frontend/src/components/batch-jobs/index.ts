@@ -4,6 +4,8 @@ export { BatchJobFilters } from './BatchJobFilters';
 export { applyFilter, FILTER_PREDICATES } from './filters';
 export { BatchJobRow } from './BatchJobRow';
 export { BatchJobTable } from './BatchJobTable';
+export { BatchJobClusterGroup } from './BatchJobClusterGroup';
+export { BatchJobLogDetail } from './BatchJobLogDetail';
 export { UnregisteredTypeChips } from './UnregisteredTypeChips';
 export { BatchJobSlideOver } from './BatchJobSlideOver';
 export { CreateBatchJobWizard } from './CreateBatchJobWizard';

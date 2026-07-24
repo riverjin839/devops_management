@@ -903,6 +903,13 @@ def _run_migrations():
         _safe_add_column("batch_jobs", "last_schedule_check_at", "TIMESTAMP")
         _safe_add_column("batch_jobs", "last_schedule_note", "VARCHAR(200)")
 
+    # batch_job_runs: 실행 추적성(admin 상세 제어) — 누가 실행했는지 + 그 시점의
+    # 실제 파라미터 스냅샷(dry_run 여부 등).
+    if "batch_job_runs" in inspector.get_table_names():
+        _safe_add_column("batch_job_runs", "triggered_by_user_id", "VARCHAR(36)")
+        _safe_add_column("batch_job_runs", "triggered_by_username", "VARCHAR(64)")
+        _safe_add_column("batch_job_runs", "params_snapshot", "JSONB")
+
     # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화 + 에디터 개인 설정
     if "users" in inspector.get_table_names():
         _safe_add_column("users", "must_change_password", "BOOLEAN NOT NULL DEFAULT FALSE")
@@ -1813,7 +1820,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.13.0",
+    version="1.14.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -1934,7 +1941,7 @@ app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.13.0",
+        "version": "1.14.0",
         "version": "1.8.2",
         "status": "running"
     }

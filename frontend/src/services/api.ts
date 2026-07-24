@@ -1691,12 +1691,17 @@ export interface BatchJobRun {
   jobId: string;
   status: string;
   trigger: string;
+  /** 실행자 스냅샷 — manual/bulk 만 채워짐. schedule 실행은 null(사람이 아님). */
+  triggeredByUsername?: string | null;
   host?: string | null;
   executedCommand?: string | null;
   exitCode?: number | null;
   stdout: string;
   stderr: string;
   error?: string | null;
+  /** 이 실행에 실제로 사용된 merge 후 파라미터 스냅샷 (admin 감사용). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  paramsSnapshot?: Record<string, any> | null;
   durationMs: number;
   startedAt: string;
   finishedAt?: string | null;

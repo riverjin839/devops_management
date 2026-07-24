@@ -1,6 +1,8 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.tsx
 import { useEffect, useState } from 'react';
 import { Play, History, Trash2, X, KeyRound, Pencil } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Play, History, Terminal, Trash2, X, KeyRound, Pencil } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
 import { useModalA11y } from '@/components/common';
@@ -9,6 +11,7 @@ import { RunForm } from './BatchJobSlideOver.RunForm';
 import { RunHistory } from './BatchJobSlideOver.RunHistory';
 import { SavedCreds } from './BatchJobSlideOver.SavedCreds';
 import { EditForm } from './BatchJobSlideOver.EditForm';
+import { BatchJobLogDetail } from './BatchJobLogDetail';
 
 interface BatchJobSlideOverProps {
   job: BatchJob;
@@ -118,11 +121,23 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
         </div>
       )}
 
-      {/* 최근 이력 */}
+      {/* 최근 실행 로그 — mc 대시보드 ResultPanel 과 동일 패턴. 클릭해서 펼칠 필요 없이
+          가장 최근 실행이 항상 이 자리에 보여, "방금 뭘 어떻게 실행했는지" 바로 확인 가능. */}
+      {!runsQ.isLoading && (runsQ.data?.length ?? 0) > 0 && (
+        <div className="mb-4 pb-4 border-b border-border">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">최근 실행 로그</span>
+          </div>
+          <BatchJobLogDetail run={runsQ.data![0]} />
+        </div>
+      )}
+
+      {/* 실행 이력 */}
       <div>
         <div className="flex items-center gap-1.5 mb-2">
           <History className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">최근 실행</span>
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">실행 이력</span>
         </div>
         <RunHistory runs={runsQ.data ?? []} isLoading={runsQ.isLoading} />
       </div>
