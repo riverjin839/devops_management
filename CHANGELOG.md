@@ -32,6 +32,12 @@
   배경으로 포커스가 새어나가던 문제를 해소하고 `role="dialog"`/`aria-modal`/`aria-labelledby`
   를 부여. 남은 자체 모달은 이 훅으로 점진 확산 예정.
 
+### Changed
+- **Settings 탭 "LAKE 타입" → "관리 서비스" 개칭**: "LAKE" 는 PEP 서비스 전반에 일반적인
+  용어가 아니라 특정 활용 관점에서 붙은 이름이라 탭 라벨/ID(`lake-types`→`mgmt-service`)를
+  변경. 딥링크 안내 문구(서비스 인스턴스 등록 모달)와 `docs/SCREENS.md` 도 함께 갱신.
+  내부 데이터 모델(`LakeServiceType`)과 백엔드 API 는 변경하지 않음.
+
 ## [1.8.1] - 2026-07-21
 
 ### Added

@@ -535,7 +535,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'lake-types' | 'service-categories' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'mgmt-service' | 'service-categories' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as TabId | null);
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'cluster');
@@ -554,7 +554,7 @@ export function SettingsPage() {
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'service', label: 'PEP 서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
-    { id: 'lake-types', label: 'LAKE 타입', icon: <Database className="w-4 h-4" />, count: 0 },
+    { id: 'mgmt-service', label: '관리 서비스', icon: <Database className="w-4 h-4" />, count: 0 },
     { id: 'service-categories', label: '서비스 카테고리', icon: <Boxes className="w-4 h-4" />, count: 0 },
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
     { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
@@ -794,8 +794,9 @@ export function SettingsPage() {
           </div>
         )}
 
-        {/* LAKE 타입 카탈로그 — lake-service-type-management PDCA */}
-        {activeTab === 'lake-types' && (
+        {/* 관리 서비스(LAKE 서비스 타입) 카탈로그 — lake-service-type-management PDCA.
+            Settings 탭명은 "관리 서비스" — "LAKE" 는 PEP 서비스에 일반적인 개념이 아니라 탭 라벨에서 제외. */}
+        {activeTab === 'mgmt-service' && (
           <div className="mb-8">
             <LakeServiceTypeManager />
           </div>
