@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.11.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.12.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.12.0] - 2026-07-24
 
 ### Added
 - **서비스 아키텍처 자동 생성·현행화 (`/service-architecture`)**: Settings 에 등록된 서비스 모듈(cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램과 서비스 플로우 도식을 영속 문서로 생성**하고, 수동 "동기화" 버튼 + Celery 주기 스케줄(cron 설정 가능)로 **현행화**한다. 사라진 리소스는 삭제 대신 stale(점선 ghost) 표시 + 드리프트(±변경) 배지로 보고하며, 수동 편집 — 외부 시스템 노드 추가, 노드 간 수동 연결(뷰/순서 지정), 노드별 주석, 드래그 배치(뷰별 영속 저장), 요약 직접 수정 — 은 현행화가 절대 덮어쓰지 않는다. LLM(Ollama) 이 연결돼 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술(오프라인이어도 기능 전체 정상 동작). PNG/SVG 내보내기 지원. Backend: `architecture_docs` 라우터 + `architecture_doc_service`(기존 `collect_topology`/`build_traffic` 재사용, `TopologyAuditLog` 감사) + `service_arch_docs` 모델 3종 + Celery `arch-doc-sync-dispatcher`. Frontend: `ServiceArchitecturePage` + `components/serviceArch/` + `useArchDoc` 훅.
