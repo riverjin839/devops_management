@@ -46,6 +46,11 @@ from app.models.os_param_change import OsParamChange
 from app.models.sprint import Sprint
 from app.models.project import Project
 from app.models.service_topology import ServiceTopologyLink, ServiceTopologyExternalNode
+from app.models.service_arch_doc import (
+    ServiceArchDoc,
+    ServiceArchManualNode,
+    ServiceArchManualEdge,
+)
 from app.models.work_item_time_block import WorkItemTimeBlock
 from app.models.user_jira_credential import UserJiraCredential
 from app.models.k8s_event import K8sEvent
@@ -126,6 +131,9 @@ __all__ = [
     "Project",
     "ServiceTopologyLink",
     "ServiceTopologyExternalNode",
+    "ServiceArchDoc",
+    "ServiceArchManualNode",
+    "ServiceArchManualEdge",
     "WorkItemTimeBlock",
     "UserJiraCredential",
     "K8sEvent",

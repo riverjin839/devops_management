@@ -10,6 +10,9 @@
 
 1.11.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **서비스 아키텍처 자동 생성·현행화 (`/service-architecture`)**: Settings 에 등록된 서비스 모듈(cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램과 서비스 플로우 도식을 영속 문서로 생성**하고, 수동 "동기화" 버튼 + Celery 주기 스케줄(cron 설정 가능)로 **현행화**한다. 사라진 리소스는 삭제 대신 stale(점선 ghost) 표시 + 드리프트(±변경) 배지로 보고하며, 수동 편집 — 외부 시스템 노드 추가, 노드 간 수동 연결(뷰/순서 지정), 노드별 주석, 드래그 배치(뷰별 영속 저장), 요약 직접 수정 — 은 현행화가 절대 덮어쓰지 않는다. LLM(Ollama) 이 연결돼 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술(오프라인이어도 기능 전체 정상 동작). PNG/SVG 내보내기 지원. Backend: `architecture_docs` 라우터 + `architecture_doc_service`(기존 `collect_topology`/`build_traffic` 재사용, `TopologyAuditLog` 감사) + `service_arch_docs` 모델 3종 + Celery `arch-doc-sync-dispatcher`. Frontend: `ServiceArchitecturePage` + `components/serviceArch/` + `useArchDoc` 훅.
+
 ### Changed
 - **업무 현황 화면 색상 디자인 토큰화(테마 정합)**: 홈 업무 위젯들이 쓰던 고정 팔레트(`text-red-500`·`bg-blue-500`·emerald/amber/slate/violet 등)를 semantic status(`--status-healthy/warning/critical/info/unknown`)·categorical chart(`--chart-N`) 토큰으로 교체 — light/dark/default 테마 전환 시 톤이 어긋나던 문제 해소(CLAUDE.md 디자인 규칙 준수). 대상: WorkCalendar·MemberTodayTodos·WorkAlarmBell·QuickAddTaskModal(우선순위/필수표시/경고) 및 DayScheduleBoard 담당자 아바타 팔레트. 담당자별 진행 현황의 '메모지' 종이 질감(warm paper)은 의도된 장식이라 유지.
 - **당일 스케줄 — 완료 업무 유지(흐리게) & 지연 집계에서 backlog 제외**: 업무를 완료(done)하면 '당일 스케줄'에서 즉시 사라지던 것을, 완료일까지는 **흐림+취소선**으로 남겨 하루 회고가 가능하게 변경. 아울러 '담당자별 오늘 요약'의 **지연(overdue)** 집계에서 backlog('언젠가 할 일', 아직 착수 약정 아님)를 제외해 지연 뱃지 인플레이션을 줄였다(Backend `today/summary` + Frontend 공통 카드 동일 규칙).

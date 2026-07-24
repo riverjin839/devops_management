@@ -1378,6 +1378,69 @@ export const serviceTopologyApi = {
   deleteExternalNode: (nodeId: string) => api.delete(`/service-topology/external-nodes/${nodeId}`),
 };
 
+// Architecture Docs API — 서비스 모듈별 아키텍처/플로우 문서 (자동 생성 + 현행화 + 수동 편집)
+export const architectureDocsApi = {
+  list: (clusterId?: string) =>
+    api.get<import('@/types').ArchDocSummary[]>('/architecture-docs', {
+      params: clusterId ? { cluster_id: clusterId } : {},
+    }),
+  get: (serviceId: string) =>
+    api.get<import('@/types').ArchDoc>(`/architecture-docs/${serviceId}`),
+  sync: (serviceId: string, opts?: { prune?: boolean }) =>
+    api.post<import('@/types').ArchDoc>(
+      `/architecture-docs/${serviceId}/sync`,
+      undefined,
+      { params: { prune: opts?.prune ?? false }, timeout: 120_000 },
+    ),
+  llmRegenerate: (serviceId: string) =>
+    api.post<import('@/types').ArchDoc>(
+      `/architecture-docs/${serviceId}/llm-regenerate`, undefined, { timeout: 180_000 },
+    ),
+  patch: (serviceId: string, data: {
+    summaryOverride?: string | null;
+    // node_id 는 값으로 전달 — 키로 쓰면 axios 키 변환에 깨진다
+    annotations?: { id: string; text: string | null }[];
+    autoSyncEnabled?: boolean;
+  }) => api.patch<import('@/types').ArchDoc>(`/architecture-docs/${serviceId}`, data),
+  patchLayout: (serviceId: string, view: import('@/types').ArchViewType,
+                positions: { id: string; x: number; y: number }[]) =>
+    api.patch<import('@/types').ArchDoc>(
+      `/architecture-docs/${serviceId}/layout`, { view, positions },
+    ),
+  createManualNode: (serviceId: string, data: {
+    label: string; kind: string; description?: string | null;
+    style?: Record<string, unknown> | null;
+  }) => api.post<import('@/types').ArchManualNode>(
+    `/architecture-docs/${serviceId}/manual-nodes`, data),
+  updateManualNode: (serviceId: string, nodePk: string, data: {
+    label?: string; kind?: string; description?: string | null;
+    style?: Record<string, unknown> | null;
+  }) => api.patch<import('@/types').ArchManualNode>(
+    `/architecture-docs/${serviceId}/manual-nodes/${nodePk}`, data),
+  deleteManualNode: (serviceId: string, nodePk: string) =>
+    api.delete(`/architecture-docs/${serviceId}/manual-nodes/${nodePk}`),
+  createManualEdge: (serviceId: string, data: {
+    sourceId: string; targetId: string; edgeType?: string;
+    label?: string | null; description?: string | null;
+    view?: import('@/types').ArchViewType | 'both'; sortOrder?: number;
+  }) => api.post<import('@/types').ArchManualEdge>(
+    `/architecture-docs/${serviceId}/manual-edges`, data),
+  updateManualEdge: (serviceId: string, edgePk: string, data: {
+    edgeType?: string; label?: string | null; description?: string | null;
+    view?: import('@/types').ArchViewType | 'both'; sortOrder?: number;
+  }) => api.patch<import('@/types').ArchManualEdge>(
+    `/architecture-docs/${serviceId}/manual-edges/${edgePk}`, data),
+  deleteManualEdge: (serviceId: string, edgePk: string) =>
+    api.delete(`/architecture-docs/${serviceId}/manual-edges/${edgePk}`),
+  audit: (serviceId: string, limit = 50) =>
+    api.get<Record<string, unknown>[]>(
+      `/architecture-docs/${serviceId}/audit`, { params: { limit } }),
+  getSchedule: () =>
+    api.get<import('@/types').ArchDocSchedule>('/architecture-docs/schedule'),
+  setSchedule: (data: { enabled: boolean; cron: string }) =>
+    api.put<import('@/types').ArchDocSchedule>('/architecture-docs/schedule', data),
+};
+
 // K8s Events API (kubewatch 웹훅 수신 이벤트 조회)
 export const k8sEventsApi = {
   list: (params?: {

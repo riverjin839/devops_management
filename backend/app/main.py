@@ -70,6 +70,7 @@ from app.routers import (
     k9s_ssh_router,
     metric_trend_router,
     service_topology_router,
+    architecture_docs_router,
     cluster_items_router,
     cluster_trends_router,
     terminal_appearance_router,
@@ -1838,6 +1839,7 @@ app.include_router(k9s_ssh_router, prefix="/api/v1")
 app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
 app.include_router(service_topology_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(architecture_docs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_items_router, prefix="/api/v1", dependencies=_auth)
 # terminal-appearance — 모든 로그 화면(LogViewer) 공유 글꼴/색상 테마(개인화 + admin 공용 배포).
 app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_auth)

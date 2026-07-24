@@ -709,6 +709,25 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 서비스 아키텍처 (`/service-architecture`)
+
+- **파일**: `frontend/src/pages/ServiceArchitecturePage.tsx` (+ `components/serviceArch/{ArchDocCanvas,ManualNodeDialog,ManualEdgeDialog,NodeDetailPanel,LlmSummaryPanel,exportDiagram}.tsx`)
+- **목적 / UX**: Settings 에 등록된 서비스 모듈(`LakeService` — cluster+namespace) 단위로 K8s 리소스를 자동 탐색해 **아키텍처 다이어그램/서비스 플로우 도식을 영속 문서로 생성·현행화**하고, 자동화가 부족한 부분(외부 DB/API 연계, 주석, 배치)은 사용자가 수동 편집한다. LLM(Ollama) 이 있으면 아키텍처 요약·컴포넌트 역할·플로우 스텝을 자동 서술한다(없어도 완전 동작).
+- **UI 구성**:
+  - `ClusterSidebar`(`iconOnly` 단일선택) + 좌측 "서비스 모듈" 목록 패널(sync 상태 dot + 드리프트 Δ 배지).
+  - 툴바: [아키텍처|서비스 플로우] 뷰 탭, 마지막 현행화 시각/드리프트 배지, 편집 모드, 수동 노드 추가, PNG/SVG 내보내기, 정리 동기화(prune), 동기화.
+  - 캔버스: `ArchDocCanvas`(커스텀 SVG, pan/zoom/드래그) — 노드 배치는 뷰별로 **DB 영속**(800ms 디바운스 bulk PATCH), stale(사라진) 노드는 점선 ghost, 수동 노드는 오렌지 점선. 플로우 뷰는 실트래픽 엣지 + LLM flow_steps 순번 뱃지.
+  - 선택 노드 `NodeDetailPanel`(AI 역할, 주석 편집, 수동 연결 목록, 수동 노드 수정/삭제), 하단 `LlmSummaryPanel`(요약 — 사용자 수정본 우선, 재생성 버튼, 오프라인 안내).
+  - 편집 모드에서 노드 2개 클릭 → `ManualEdgeDialog` 로 수동 연결(유형/뷰/순서/라벨).
+- **Frontend**: `useArchDocs`/`useArchDoc`/`useSyncArchDoc`/`useRegenerateLlm`/`usePatchArchDoc`/`useUpdateArchLayout`(디바운스 배치 저장)/수동 노드·엣지 mutations (`frontend/src/hooks/useArchDoc.ts`, `architectureDocsApi` 래핑); `useClusters`.
+- **Backend**: `GET /api/v1/architecture-docs`(모듈별 요약), `GET/PATCH /api/v1/architecture-docs/{service_id}`, `POST .../sync?prune=`, `POST .../llm-regenerate`, `PATCH .../layout`, `POST/PATCH/DELETE .../manual-nodes|manual-edges`, `GET .../audit`, `GET/PUT /api/v1/architecture-docs/schedule` — 라우터 `backend/app/routers/architecture_docs.py`, 서비스 `backend/app/services/architecture_doc_service.py`(기존 `collect_topology`/`build_traffic` 재사용), 모델 `backend/app/models/service_arch_doc.py`(`ServiceArchDoc`, `ServiceArchManualNode`, `ServiceArchManualEdge`).
+- **핵심 기능**:
+  - 자동 탐색 그래프를 아키텍처 수준으로 단순화(pods collapse, ConfigMap/Secret 제거) 후 문서로 영속화 — 요청마다 재계산하지 않음.
+  - **현행화(sync)**: 수동 "동기화" + Celery 주기(cron 은 `GET/PUT .../schedule`, beat `arch-doc-sync-dispatcher`) — 수동 편집(노드/엣지/배치/주석/요약)은 절대 덮어쓰지 않고, 사라진 리소스는 stale 마킹 후 drift 로 보고, `TopologyAuditLog`(entity_type=arch_doc) 에 이력 기록.
+  - LLM enrichment 는 fail-safe — Ollama 오프라인이면 상태만 표기하고 기존 콘텐츠 보존.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 서비스 모듈 관계도 (`/architecture`)
 
 - **파일**: `frontend/src/pages/ArchitecturePage.tsx` (+ `components/architecture/{FlowDiagram,pepArchitecture}.tsx`)
