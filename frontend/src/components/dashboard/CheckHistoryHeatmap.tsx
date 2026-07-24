@@ -142,6 +142,19 @@ export function CheckHistoryHeatmap({ logs, isLoading, days = 14 }: CheckHistory
             ))}
           </tbody>
         </table>
+        {/* 상시 범례 — 색만으로 상태를 전달하지 않도록 색+라벨 병기 (D-015, 색맹 안전) */}
+        <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-muted-foreground">
+          {(['healthy', 'warning', 'critical'] as const).map((s) => (
+            <span key={s} className="inline-flex items-center gap-1.5">
+              <span className={`w-3 h-3 rounded ${STATUS_CELL_CLASS[s]}`} aria-hidden />
+              {STATUS_LABEL[s]}
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-secondary/40 border border-dashed border-border" aria-hidden />
+            데이터 없음
+          </span>
+        </div>
       </div>
     </TooltipProvider>
   );

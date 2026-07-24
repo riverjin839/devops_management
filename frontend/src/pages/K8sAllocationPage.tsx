@@ -577,12 +577,13 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
         </span>
       ) : result ? (
         <>
-          {/* 결과 + 마우스오버 시 배치 가능 노드 박스 */}
-          <span className="relative group cursor-help">
-            <span className="font-semibold tabular-nums text-status-info underline decoration-dotted">≈ {fmtN(result.total)}개</span>
+          {/* 결과 + 마우스오버/포커스 시 배치 가능 노드 박스 */}
+          <span className="relative group">
+            <button type="button" aria-label="배치 가능 노드 상세 보기"
+              className="font-semibold tabular-nums text-status-info underline decoration-dotted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">≈ {fmtN(result.total)}개</button>
             {result.per.length > 0 && (
               <div data-export-ignore
-                className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 w-72 max-h-72 overflow-auto
+                className="hidden group-hover:block group-focus-within:block absolute left-0 top-full mt-1 z-50 w-72 max-h-72 overflow-auto
                   rounded-lg border border-border bg-card shadow-lg p-2 text-xs">
                 <div className="text-muted-foreground mb-1">배치 가능 노드 (alloc−req · max-pods 기준)</div>
                 {result.per.slice(0, 30).map((p) => (
@@ -612,12 +613,17 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
 }
 
 function StatTooltip({ children }: { children: ReactNode }) {
+  // hover 뿐 아니라 키보드 포커스/터치 탭으로도 열리도록 트리거를 button 으로,
+  // 패널을 group-focus-within 으로도 노출 (D-028 접근성).
   return (
-    <span className="relative group inline-flex items-center ml-0.5 cursor-help">
-      <HelpCircle className="w-3 h-3 text-muted-foreground/60 hover:text-muted-foreground" />
+    <span className="relative group inline-flex items-center ml-0.5">
+      <button type="button" aria-label="설명 보기"
+        className="inline-flex text-muted-foreground/60 hover:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
+        <HelpCircle className="w-3 h-3" />
+      </button>
       <div
         data-export-ignore
-        className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 w-64
+        className="hidden group-hover:block group-focus-within:block absolute left-0 top-full mt-1 z-50 w-64
           rounded-lg border border-border bg-card shadow-lg p-2.5 text-xs leading-relaxed text-foreground whitespace-normal"
       >
         {children}
@@ -948,9 +954,9 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
 
       {/* 카드 뷰 */}
       {viewStyle === 'card' && rows.length > 0 && (
-        <div className="p-3">
+        <div className="p-3 overflow-x-auto">
           <div
-            style={{ display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+            style={{ display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(min(220px, 100%), 1fr))` }}
             className="gap-2"
           >
             {rows.map((n: AllocNodeRow) => (

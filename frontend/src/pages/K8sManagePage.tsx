@@ -12,7 +12,7 @@ import type { AxiosError } from 'axios';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { LogViewer } from '@/components/common/LogViewer';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, useModalA11y } from '@/components/common';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { useClusters } from '@/hooks/useCluster';
 import { k8sResourcesApi, k8sHelmApi } from '@/services/api';
@@ -844,6 +844,8 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
   const sections = (yamlQuery.data as { sections?: ResourceDetailSection[] } | undefined)?.sections;
   const hasSections = !!(sections && sections.length);
   const [tab, setTab] = useState<'summary' | 'yaml' | 'events'>('summary');
+  // Escape 닫기·포커스 트랩·초점 복원 (D-023)
+  const drawerRef = useModalA11y(true, onClose);
 
   // 관련 이벤트 (k8s 리소스만) — 탭 활성 시 15s 라이브 갱신 (Lens 파리티)
   const hasEvents = detail.kind === 'k8s';
@@ -856,7 +858,7 @@ function DetailDrawer({ clusterId, detail, editing, draft, setDraft, onStartEdit
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex justify-end" onClick={onClose}>
-      <div className="bg-card w-full max-w-2xl h-full overflow-auto border-l border-border" onClick={(e) => e.stopPropagation()}>
+      <div ref={drawerRef} role="dialog" aria-modal="true" aria-label="리소스 상세" className="bg-card w-full max-w-2xl h-full overflow-auto border-l border-border" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-card flex items-center gap-2 px-5 py-3 border-b border-border z-10">
           <FileCode className="w-4 h-4 text-primary" />
           <span className="font-semibold text-sm truncate">
