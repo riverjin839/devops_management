@@ -71,18 +71,20 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <Pencil className="w-3.5 h-3.5" />
           편집
         </button>
-        <button
-          type="button"
-          onClick={() => setCredsOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
-          aria-expanded={credsOpen}
-        >
-          <KeyRound className="w-3.5 h-3.5" />
-          자격증명
-          {Boolean(job.cron) && !job.hasSavedPassword && !job.hasSavedPrivateKey && (
-            <span className="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" aria-label="자격증명 필요" />
-          )}
-        </button>
+        {job.requiresSsh !== false && (
+          <button
+            type="button"
+            onClick={() => setCredsOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl"
+            aria-expanded={credsOpen}
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            자격증명
+            {Boolean(job.cron) && !job.hasSavedPassword && !job.hasSavedPrivateKey && (
+              <span className="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" aria-label="자격증명 필요" />
+            )}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onDelete(job)}

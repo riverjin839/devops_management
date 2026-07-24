@@ -23,6 +23,7 @@ from app.services.batch_jobs.base import (
 # Side-effect imports — registers executors via the decorator.
 from app.services.batch_jobs import etcdctl_defrag  # noqa: F401
 from app.services.batch_jobs import shell_command  # noqa: F401
+from app.services.batch_jobs import k8s_job_cleanup  # noqa: F401
 
 __all__ = [
     "BatchJobExecutor",

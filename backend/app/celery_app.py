@@ -501,12 +501,20 @@ def run_trend_collect(self):
 
 
 @celery_app.task(bind=True, name="app.celery_app.run_batch_job")
-def run_batch_job(self, job_id: str, *, password: str | None = None, private_key: str | None = None):
+def run_batch_job(
+    self,
+    job_id: str,
+    *,
+    password: str | None = None,
+    private_key: str | None = None,
+    trigger: str = "schedule",
+):
     """Execute a registered batch job by id.
 
-    Used for scheduled runs (Celery Beat) and ad-hoc background triggers.
-    If `password`/`private_key` are not supplied, `execute_job` falls
-    back to the encrypted credentials saved on the BatchJob row.
+    Used for scheduled runs (Celery Beat) and ad-hoc background triggers
+    (`trigger="bulk"` from the bulk-run endpoint). If `password`/
+    `private_key` are not supplied, `execute_job` falls back to the
+    encrypted credentials saved on the BatchJob row.
     """
     from uuid import UUID
     from app.database import SessionLocal
@@ -527,7 +535,7 @@ def run_batch_job(self, job_id: str, *, password: str | None = None, private_key
                     job,
                     password=password,
                     private_key=private_key,
-                    trigger="schedule",
+                    trigger=trigger,
                 )
             )
         finally:
@@ -565,6 +573,7 @@ def run_batch_job_dispatcher(self):
     from app.config import settings
     from app.database import SessionLocal
     from app.models import BatchJob
+    from app.services.batch_jobs import get_executor
 
     log = logging.getLogger(__name__)
 
@@ -606,10 +615,12 @@ def run_batch_job_dispatcher(self):
             cron_expr = (job.cron or "").strip()
             if not cron_expr:
                 continue
+            executor = get_executor(job.job_type)
+            job_needs_ssh = True if executor is None else executor.requires_ssh
             if not croniter.is_valid(cron_expr):
                 skipped_reasons["invalid_cron"] = skipped_reasons.get("invalid_cron", 0) + 1
                 note = "cron 표현식 오류"
-            elif not (job.encrypted_password or job.encrypted_private_key):
+            elif job_needs_ssh and not (job.encrypted_password or job.encrypted_private_key):
                 # No saved credentials → unattended run can't authenticate.
                 # (수동 실행은 요청에 비밀번호를 실어 동작하지만, 무인 스케줄은 저장 자격증명 필요)
                 skipped_reasons["no_credentials"] = skipped_reasons.get("no_credentials", 0) + 1

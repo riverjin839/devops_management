@@ -19,6 +19,12 @@ function formatShortDate(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+const TRIGGER_LABEL: Record<string, string> = {
+  manual: '수동',
+  schedule: '스케줄',
+  bulk: '일괄',
+};
+
 function RunDetail({ run }: { run: BatchJobRun }) {
   return (
     <div className="mt-2 space-y-2 bg-secondary/30 rounded-lg p-2">
@@ -75,6 +81,9 @@ export function RunHistory({ runs, isLoading }: RunHistoryProps) {
               className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-secondary/50 transition-colors text-left"
             >
               <StatusPill status={run.status} />
+              <span className="text-xs px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                {TRIGGER_LABEL[run.trigger] ?? run.trigger}
+              </span>
               <span className="flex-1 min-w-0 text-xs font-mono text-muted-foreground truncate">
                 {formatShortDate(run.startedAt)}
               </span>

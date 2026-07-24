@@ -125,7 +125,7 @@ devops_management/
 │   │       ├── lake_checkers/     # 데이터 LAKE 서비스 프로브 (airflow/spark/trino/starrocks ...)
 │   │       ├── bottleneck_probes/ # dns_latency, tcp_perf, tcp_state, endpoints
 │   │       ├── analyzers/         # 장애 분석기: claude / local_llm / rule_based + factory
-│   │       ├── batch_jobs/        # etcdctl_defrag, shell_command 실행기
+│   │       ├── batch_jobs/        # etcdctl_defrag, shell_command(SSH) + k8s_job_cleanup(non-SSH) 실행기
 │   │       └── trends/            # github/rss 수집기 + summarizer + trend_service
 │   ├── tests/                   # pytest 스위트: conftest + 테스트 모듈 13개 (API, 클러스터
 │   │                            #  등록/토폴로지/추이, 배치잡, deep check, 임베딩, 온톨로지 등)
