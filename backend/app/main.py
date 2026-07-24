@@ -1437,33 +1437,65 @@ def _seed_default_lake_service_types():
         db.close()
 
 
-# domain='pep' builtin 카테고리 4개 — key -> (label, icon, sort_order)
+# domain='app' builtin 카테고리 4개(K8s 내부에 배포되는 사용자/데이터 서비스) — key -> (label, icon, sort_order)
 # icon 은 frontend CLUSTER_ICON_OPTIONS 화이트리스트(resolveClusterIcon 공용 리졸버)의
 # lucide 컴포넌트 이름이어야 렌더된다 — 화이트리스트에 없는 이름은 텍스트로 취급됨에 주의.
-_PEP_BUILTIN_CATEGORIES: dict[str, tuple[str, str, int]] = {
-    "runtime":    ("Runtime",    "Cpu",      10),
-    "catalog":    ("Catalog",    "Database", 20),
-    "workflow":   ("Workflow",   "Workflow", 30),
-    "jupyterlab": ("JupyterLab", "Code2",    40),
+# (2026-07 재편: 기존에 domain='pep' 로 잘못 시드되던 LAKE 데이터 플랫폼 카탈로그를 domain='app' 으로
+#  이전 — Airflow/Spark/Trino/StarRocks 등은 DevOps 관리 인프라가 아니라 K8s 위에서 사용자가 쓰는
+#  애플리케이션 서비스이기 때문. "JupyterLab" 단독 카테고리는 폐지하고 Workbench 로 흡수.)
+_APP_BUILTIN_CATEGORIES: dict[str, tuple[str, str, int]] = {
+    "runtime":   ("Runtime",   "Cpu",          10),
+    "catalog":   ("Catalog",   "Database",     20),
+    "workbench": ("Workbench", "FlaskConical", 30),
+    "airready":  ("AI Ready",  "Sparkles",     40),
 }
 
-# 8 builtin LakeServiceType slug -> 소속 카테고리 key (기존 category 문자열과는 다른 재분류 —
-# PEP 서비스 사이드바용 신규 의미: Runtime=실행 엔진, Catalog=테이블/메타 카탈로그, Workflow=오케스트레이션).
-_PEP_TYPE_CATEGORY_KEY: dict[str, str] = {
-    "spark": "runtime", "starrocks": "runtime", "trino": "runtime", "superset": "runtime",
-    "iceberg": "catalog", "polaris": "catalog",
-    "airflow": "workflow",
-    "jupyterlab": "jupyterlab",
+# 기존 8 builtin LakeServiceType slug -> APP 카테고리 key (Trino 는 기존 위치인 runtime 유지).
+_APP_TYPE_CATEGORY_KEY: dict[str, str] = {
+    "spark": "runtime", "starrocks": "runtime", "trino": "runtime", "iceberg": "runtime",
+    "polaris": "catalog",
+    "airflow": "workbench", "superset": "workbench", "jupyterlab": "workbench",
 }
+
+# domain='app' 신규 custom 타입 — 기존 8종에 없던 카탈로그 항목 추가분.
+_APP_NEW_TYPES: list[dict] = [
+    {"service_type": "catalog-datahub", "label": "DataHub", "category_key": "catalog",
+     "icon": "Database", "description": "메타데이터 카탈로그 / 데이터 디스커버리"},
+]
+
+# domain='pep' — DevOps 엔지니어가 직접 운영하는 플랫폼 인프라 서비스. APP 서비스와 달리 하위
+# 모듈로 묶지 않고 평면 목록(미분류, category_id=None)으로 관리한다. is_builtin=False(custom) —
+# 아직 전용 헬스체커가 없어 GenericHealthzChecker(HTTP GET default_path) 로 동작하며, 운영자가
+# 자유롭게 수정/삭제할 수 있다.
+_PEP_NEW_TYPES: list[dict] = [
+    {"service_type": "k8s",        "label": "Kubernetes", "icon": "Server",     "description": "컨트롤 플레인 / 워크로드 / 노드"},
+    {"service_type": "cilium",     "label": "Cilium",     "icon": "Network",    "description": "CNI / eBPF / 네트워크 정책"},
+    {"service_type": "linux",      "label": "Linux",      "icon": "Cog",        "description": "OS / 커널 파라미터 / 시스템 리소스"},
+    {"service_type": "keycloak",   "label": "Keycloak",   "icon": "ShieldCheck","description": "인증 / SSO / Realm 관리"},
+    {"service_type": "nexus",      "label": "Nexus",      "icon": "Boxes",      "description": "아티팩트 / 레지스트리"},
+    {"service_type": "cicd",       "label": "CI/CD",      "icon": "Workflow",   "description": "빌드 / 배포 파이프라인"},
+    {"service_type": "prometheus", "label": "Prometheus", "icon": "Activity",   "description": "메트릭 수집 / 알람"},
+    {"service_type": "grafana",    "label": "Grafana",    "icon": "Layers",     "description": "대시보드 / 시각화"},
+    {"service_type": "aistor",     "label": "AIStor",     "icon": "HardDrive",  "description": "AI 워크로드용 오브젝트 스토리지"},
+    {"service_type": "network",    "label": "Network",    "icon": "Waypoints",  "description": "L2/L3 스위치 / 라우팅 / 방화벽"},
+]
+
+# 폐지 대상 — 과거 domain='pep' 로 잘못 시드됐던 builtin 카테고리 4개(Runtime/Catalog/Workflow/
+# JupyterLab). 마이그레이션이 8종 타입을 domain='app' 신규 카테고리로 재배정한 뒤 삭제한다.
+_LEGACY_PEP_CATEGORY_KEYS = ("runtime", "catalog", "workflow", "jupyterlab")
 
 
 def _seed_default_service_categories():
-    """PEP 서비스(domain='pep') builtin 카테고리 4개(Runtime/Catalog/Workflow/JupyterLab) 자동 등록 +
-    기존 8 builtin LakeServiceType 의 category_id 백필. APP 서비스(domain='app')는 seed 없음 —
-    운영자가 Settings 에서 직접 추가.
+    """APP 서비스(domain='app') builtin 카테고리 4개(Runtime/Catalog/Workbench/AI Ready) 시드 +
+    기존 8 builtin LakeServiceType 을 domain='app' 으로 재배정 + 과거 domain='pep' 오분류
+    카테고리 4개 정리 + PEP/APP custom 타입(신규 11종) 추가.
 
-    idempotent — 이미 있는 카테고리 key 는 skip, category_id 가 이미 설정된 type 은 건드리지 않음
-    (운영자가 재분류했을 수 있어 보존).
+    - 카테고리 시드: 이미 있는 (domain='app', key) 는 skip.
+    - 8종 재배정: `domain == 'pep'` 인 동안만(=아직 마이그레이션 전) 1회성으로 domain/category_id
+      갱신 — 재시작마다 강제 되돌리던 과거 로직을 대체. 이미 'app' 으로 넘어간 뒤에는 손대지 않아
+      운영자의 이후 재분류를 보존한다.
+    - 신규 타입(PEP 10종 + APP 1종): service_type slug 중복이면 skip.
+    - 레거시 카테고리 정리: 8종이 전부 재배정된 뒤(참조 0건)에만 안전하게 삭제.
     """
     from app.models import ServiceCategory, LakeServiceType
 
@@ -1471,14 +1503,14 @@ def _seed_default_service_categories():
     try:
         existing = {
             row[0]: row[1] for row in
-            db.query(ServiceCategory.key, ServiceCategory.id).filter(ServiceCategory.domain == "pep").all()
+            db.query(ServiceCategory.key, ServiceCategory.id).filter(ServiceCategory.domain == "app").all()
         }
         added = 0
-        for key, (label, icon, sort_order) in _PEP_BUILTIN_CATEGORIES.items():
+        for key, (label, icon, sort_order) in _APP_BUILTIN_CATEGORIES.items():
             if key in existing:
                 continue
             row = ServiceCategory(
-                domain="pep", key=key, label=label, icon=icon,
+                domain="app", key=key, label=label, icon=icon,
                 is_builtin=True, enabled=True, sort_order=sort_order,
             )
             db.add(row)
@@ -1487,24 +1519,73 @@ def _seed_default_service_categories():
             added += 1
         if added:
             db.commit()
-            _log.info("seeded %d builtin pep service categories", added)
+            _log.info("seeded %d builtin app service categories", added)
 
-        backfilled = 0
-        for slug, cat_key in _PEP_TYPE_CATEGORY_KEY.items():
+        # 기존 8 builtin type 재배정 — domain 이 아직 'pep' 인 것만(1회성, 자동 종료).
+        migrated = 0
+        for slug, cat_key in _APP_TYPE_CATEGORY_KEY.items():
             cat_id = existing.get(cat_key)
             if cat_id is None:
                 continue
             type_row = db.query(LakeServiceType).filter(
-                LakeServiceType.service_type == slug, LakeServiceType.category_id.is_(None),
+                LakeServiceType.service_type == slug, LakeServiceType.domain == "pep",
             ).first()
             if type_row is None:
                 continue
             type_row.category_id = cat_id
-            type_row.domain = "pep"
-            backfilled += 1
-        if backfilled:
+            type_row.domain = "app"
+            migrated += 1
+        if migrated:
             db.commit()
-            _log.info("backfilled category_id for %d builtin lake service types", backfilled)
+            _log.info("migrated %d builtin lake service types pep→app domain", migrated)
+
+        # 신규 custom 타입(PEP 10종 + APP 1종) — slug 중복이면 skip.
+        existing_slugs = {row[0] for row in db.query(LakeServiceType.service_type).all()}
+        new_types = 0
+        for meta in _APP_NEW_TYPES:
+            if meta["service_type"] in existing_slugs:
+                continue
+            db.add(LakeServiceType(
+                service_type=meta["service_type"], label=meta["label"], category="catalog",
+                default_path="/health", description=meta.get("description"), icon=meta.get("icon"),
+                is_builtin=False, enabled=True, sort_order=100,
+                domain="app", category_id=existing.get(meta["category_key"]),
+            ))
+            existing_slugs.add(meta["service_type"])
+            new_types += 1
+        for idx, meta in enumerate(_PEP_NEW_TYPES):
+            if meta["service_type"] in existing_slugs:
+                continue
+            db.add(LakeServiceType(
+                service_type=meta["service_type"], label=meta["label"],
+                default_path="/health", description=meta.get("description"), icon=meta.get("icon"),
+                is_builtin=False, enabled=True, sort_order=(idx + 1) * 10,
+                domain="pep", category_id=None,
+            ))
+            existing_slugs.add(meta["service_type"])
+            new_types += 1
+        if new_types:
+            db.commit()
+            _log.info("seeded %d new pep/app service types", new_types)
+
+        # 레거시 domain='pep' 카테고리 4개 정리 — 참조하는 타입이 남아있으면(마이그레이션 실패 등)
+        # 안전하게 건너뛴다(FK ondelete=SET NULL 이라 삭제해도 에러는 안 나지만, 남은 참조가 있다는
+        # 건 위 재배정이 아직 안 끝났다는 신호이므로 다음 부팅에서 재시도).
+        legacy_rows = db.query(ServiceCategory).filter(
+            ServiceCategory.domain == "pep", ServiceCategory.key.in_(_LEGACY_PEP_CATEGORY_KEYS),
+        ).all()
+        removed = 0
+        for row in legacy_rows:
+            still_referenced = db.query(LakeServiceType.id).filter(
+                LakeServiceType.category_id == row.id,
+            ).first()
+            if still_referenced is not None:
+                continue
+            db.delete(row)
+            removed += 1
+        if removed:
+            db.commit()
+            _log.info("removed %d legacy pep-domain service categories", removed)
     finally:
         db.close()
 

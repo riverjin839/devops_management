@@ -5,7 +5,7 @@ export function PepServicesPage() {
     <ServiceDomainCatalog
       domain="pep"
       title="PEP 서비스"
-      description="플랫폼 엔지니어링 서비스 카탈로그 — Runtime / Catalog / Workflow / JupyterLab"
+      description="DevOps 엔지니어가 운영하는 플랫폼 인프라 서비스 — K8s / Cilium / Linux / Keycloak / Nexus / CI-CD / Prometheus / Grafana / AIStor / Network"
     />
   );
 }

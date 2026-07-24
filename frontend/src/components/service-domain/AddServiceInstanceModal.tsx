@@ -129,7 +129,7 @@ export function AddServiceInstanceModal({
             </select>
             {types.length === 0 && (
               <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
-                등록 가능한 서비스 타입이 없습니다 — Settings → "LAKE 타입"에서 먼저 타입을 추가하세요.
+                등록 가능한 서비스 타입이 없습니다 — Settings → "관리 서비스"에서 먼저 타입을 추가하세요.
               </p>
             )}
             {selectedType && (

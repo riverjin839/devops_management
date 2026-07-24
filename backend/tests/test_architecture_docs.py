@@ -246,6 +246,11 @@ def test_build_llm_prompt_contains_graph_and_schema():
 @pytest.fixture
 def db():
     from app.database import SessionLocal, engine, Base
+    from app.main import _ensure_pgvector_extension
+    # work_guides.embedding 은 pgvector 확장 필요 — 이 파일이 확장 생성 테스트보다 먼저
+    # (알파벳순) 돌며 최초로 create_all() 을 부르는 경우 확장이 없어 실패한다.
+    # main.py lifespan / 형제 테스트(test_assignee_accounts)와 동일한 순서로 보장.
+    _ensure_pgvector_extension()
     Base.metadata.create_all(bind=engine)
     s = SessionLocal()
     try:

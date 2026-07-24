@@ -114,7 +114,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCatalogManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
 - **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·서비스 카탈로그·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그까지 플랫폼 전역 설정을 12개 탭으로 모아둔 관리자 콘솔.
 - **UI 구성**:
-  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`서비스`/`LAKE 타입`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시.
+  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`서비스`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
@@ -126,7 +126,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 클러스터 등록/수정/삭제/연결확인(Verify)/Kubeconfig 조회·수정/아이콘 설정(단건+일괄 생성).
   - 관리서버(Jump Host/Bastion 등) 등록/수정/삭제/Ping 상태 확인.
   - 홈 화면 아이콘(업무/플랫폼 모드별) 및 업무 스케줄 배경색 커스터마이즈.
-  - 담당자/운영레벨/서비스 카탈로그/LAKE 타입/접근 제어/Jira 연동/Debug 로그/백업·복구/감사 로그 등 전역 운영 설정을 탭 단위로 통합 관리.
+  - 담당자/운영레벨/서비스 카탈로그/관리 서비스/접근 제어/Jira 연동/Debug 로그/백업·복구/감사 로그 등 전역 운영 설정을 탭 단위로 통합 관리.
   - Debug 탭은 페이지별 API 호출 로그 패널 토글(localStorage 저장, 서버 상태 아님).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -1124,17 +1124,23 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 > 변경되었다. 아래 `/pep-services` 화면은 라우트/데이터는 그대로 유지되지만 사이드바 노출은
 > 종료되어(`/docs`와 동일한 성격) 직접 URL 로만 접근 가능하다.
 
-동일 구조의 "APP 서비스" 아이콘(사이드바 유지)은 그대로 `/app-services` 를 가리킨다. 두 화면
-모두 좌측 `CategoryRail`(상위 카테고리 아이콘 레일 — Runtime/Catalog/Workflow/JupyterLab 등,
-`ClusterSidebar iconOnly` 시각 컨벤션 준용)을 클릭하면 우측에 해당 카테고리 하위 서비스 인스턴스
-카드가 표시되는 2단 네비게이션이다. 백엔드 데이터는 기존 LAKE 서비스 시스템
-(`LakeService`/`LakeServiceType`)을 확장해 재사용한다(신규 `domain`: pep/app, `category_id`:
-상위 카테고리 FK).
+동일 구조의 "APP 서비스" 아이콘(사이드바 유지)은 그대로 `/app-services` 를 가리킨다. 백엔드
+데이터는 LAKE 서비스 시스템(`LakeService`/`LakeServiceType`)을 확장해 재사용한다(`domain`: pep/app,
+`category_id`: 상위 카테고리 FK).
+
+> **2026-07 재편**: 기존에 domain='pep' 로 잘못 시드되던 LAKE 데이터 플랫폼 카탈로그
+> (Airflow/Spark/Trino/StarRocks/Iceberg/JupyterLab/Superset/Polaris)는 domain='app' 으로
+> 이전했다 — K8s 위에서 사용자가 쓰는 애플리케이션 서비스이지 DevOps 관리 인프라가 아니기
+> 때문. PEP 서비스는 카테고리 없이 평면 목록(K8s/Cilium/Linux/Keycloak/Nexus/CI-CD/
+> Prometheus/Grafana/AIStor/Network 10종, custom)으로 새로 채워졌다.
 
 ### PEP 서비스 — LAKE 기반, 구 (`/pep-services`, 사이드바 노출 종료)
 
 - **파일**: `frontend/src/pages/PepServicesPage.tsx` → `components/service-domain/ServiceDomainCatalog.tsx` (`domain="pep"`) (+ `CategoryRail`, `AddServiceInstanceModal`, 기존 `LakeServiceCard`/`ServiceTypeIcon` 재사용)
-- **목적 / UX**: 플랫폼 엔지니어링 서비스 카탈로그. 좌측 카테고리 레일에 Runtime/Catalog/Workflow/JupyterLab(부팅 시 자동 시드되는 builtin 4개, 삭제 불가·label/icon/정렬은 편집 가능) + 운영자가 추가한 custom 카테고리가 표시된다. Runtime 카테고리에는 spark/starrocks/trino/superset, Catalog 에는 iceberg/polaris, Workflow 에는 airflow, JupyterLab 에는 jupyterlab 타입이 기본 배정된다(부팅 시 1회 백필, 이후 Settings 에서 재분류 가능).
+- **목적 / UX**: DevOps 엔지니어가 운영하는 플랫폼 인프라 서비스 카탈로그. `CategoryRail`(좌측
+  카테고리 레일)은 표시되지만 카테고리가 없어 "전체" 하나만 보인다 — K8s/Cilium/Linux/
+  Keycloak/Nexus/CI-CD/Prometheus/Grafana/AIStor/Network 10종(custom, `category_id=null`
+  미분류, 부팅 시 자동 시드·자유 수정/삭제 가능)이 평면 목록으로 표시된다.
 - **UI 구성**: `CategoryRail`(좌, sticky) + 헤더(제목/설명 + 클러스터 필터 select + "카테고리 관리"(Settings 딥링크) + "서비스 등록") + 카테고리 chip 요약(카운트) + 서비스 카드 그리드(카드 클릭 시 기존 `/lake-services/:id` 상세로 이동 — 도메인 무관 공용 상세 페이지).
 - **Frontend**: `useServiceCategories('pep', {enabled:true})`, `useLakeServiceTypeRows({domain:'pep', enabled:true})`, `useLakeServices({domain:'pep', limit:500})` — 카테고리/클러스터 필터는 쿼리 파라미터 대신 응답을 클라이언트에서 필터링(axios 가 multi-word 쿼리 키를 camelCase 그대로 보내 백엔드 snake_case 파라미터와 어긋나는 기존 이슈를 회피).
 - **Backend**: `GET /api/v1/service-categories?domain=pep`, `GET /api/v1/lake-service-types?domain=pep`, `GET /api/v1/lake-services?domain=pep` — 모두 기존 라우터에 `domain`/`category_id` 필터를 추가한 것.
@@ -1144,7 +1150,11 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 ### APP 서비스 (`/app-services`)
 
 - **파일**: `frontend/src/pages/AppServicesPage.tsx` → 동일 `ServiceDomainCatalog.tsx` (`domain="app"`)
-- **목적 / UX**: PEP 서비스와 동일한 구조의 애플리케이션 서비스 카탈로그. 기본 카테고리가 하나도 없는 빈 상태로 시작하며, Settings → "서비스 카테고리"에서 관리자가 카테고리를 먼저 추가하고 → Settings → "LAKE 타입"에서 해당 카테고리에 속하는 서비스 타입(custom slug)을 등록해야 이 화면에서 인스턴스 등록이 가능하다.
+- **목적 / UX**: K8s 내부에 배포되는 사용자 서비스 카탈로그. 좌측 카테고리 레일에 Runtime/
+  Catalog/Workbench/AI Ready(부팅 시 자동 시드되는 builtin 4개, 삭제 불가·label/icon/정렬은
+  편집 가능) + 운영자가 추가한 custom 카테고리가 표시된다. Runtime 에는 spark/starrocks/
+  trino/iceberg, Catalog 에는 polaris/catalog-datahub, Workbench 에는 airflow/superset/
+  jupyterlab 타입이 기본 배정되고, AI Ready 는 신규 항목 등록을 위해 빈 채로 시작한다.
 - **UI/Frontend/Backend**: PEP 서비스와 동일 컴포넌트/훅/엔드포인트를 `domain="app"`으로만 다르게 호출.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -1152,9 +1162,9 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 ### Settings — 서비스 카테고리 관리 (`/settings?tab=service-categories`)
 
 - **파일**: `frontend/src/components/settings/ServiceCategoryManager.tsx` (Settings 탭 `service-categories`)
-- **목적 / UX**: PEP/APP 서비스 상위 카테고리 CRUD. 도메인 탭(PEP/APP) 전환 + 테이블(아이콘/key/label/builtin 여부/활성/정렬) + 추가/편집 모달. PEP builtin 4개는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능.
+- **목적 / UX**: PEP/APP 서비스 상위 카테고리 CRUD. 도메인 탭(PEP/APP) 전환 + 테이블(아이콘/key/label/builtin 여부/활성/정렬) + 추가/편집 모달. APP builtin 4개(Runtime/Catalog/Workbench/AI Ready)는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능. PEP 는 builtin 카테고리가 없다(서비스 타입을 미분류 평면 목록으로 관리).
 - **Backend**: `GET/POST /api/v1/service-categories`, `PUT/DELETE /api/v1/service-categories/{id}` — `backend/app/routers/service_categories.py`, 모델 `ServiceCategory`(`backend/app/models/service_category.py`).
-- **관련**: `LakeServiceTypeManager.tsx`(Settings "LAKE 타입" 탭)에도 도메인(PEP/APP) 필터 탭과 상위 카테고리 select 가 추가되어, 서비스 타입을 특정 카테고리에 배정할 수 있다.
+- **관련**: `LakeServiceTypeManager.tsx`(Settings "관리 서비스" 탭)에도 도메인(PEP/APP) 필터 탭과 상위 카테고리 select 가 추가되어, 서비스 타입을 특정 카테고리에 배정할 수 있다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
