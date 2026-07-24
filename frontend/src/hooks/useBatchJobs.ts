@@ -45,6 +45,8 @@ export function useBatchJobRuns(jobId: string) {
       return data.data;
     },
     enabled: !!jobId,
+    // 스케줄/일괄(백그라운드) 실행 결과가 슬라이드오버에 자동 반영되도록 주기 갱신.
+    refetchInterval: 15000,
   });
 }
 

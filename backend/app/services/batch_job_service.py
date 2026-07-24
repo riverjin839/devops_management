@@ -46,6 +46,29 @@ async def execute_job(
         raise UnknownJobType(job.job_type)
 
     target_host = host or job.default_host
+    if not executor.requires_ssh:
+        # 클러스터 스코프 잡 — host/SSH 자격증명 없이 백엔드/워커에서 실행.
+        # kubeconfig 는 클러스터 등록 정보에서 재구체화(파일 유실 대비).
+        from app.services.kubeconfig import ensure_kubeconfig_file
+
+        kubeconfig_path: Optional[str] = None
+        cluster_name = ""
+        if job.cluster is not None:
+            cluster_name = job.cluster.name or ""
+            try:
+                kubeconfig_path = ensure_kubeconfig_file(job.cluster)
+            except Exception:  # noqa: BLE001 — 실패해도 executor 가 명확한 에러를 남김
+                kubeconfig_path = None
+
+        merged_params = executor.merge_params(saved=job.params, override=param_override)
+        ctx = ExecutionContext(
+            params=merged_params,
+            timeout=timeout,
+            kubeconfig_path=kubeconfig_path,
+            cluster_name=cluster_name,
+        )
+        return await _run_and_record(db, job, executor, ctx, host=None, trigger=trigger)
+
     if not target_host:
         # 스케줄 실행(trigger="schedule")에서 여기 도달하면 default_host 없이 cron 이
         # 걸린 레거시 잡이라는 뜻 — 라우터가 저장 시점에 이 조합을 막지만, 이미 잘못된
@@ -81,7 +104,19 @@ async def execute_job(
         params=merged_params,
         timeout=timeout,
     )
+    return await _run_and_record(db, job, executor, ctx, host=target_host, trigger=trigger)
 
+
+async def _run_and_record(
+    db: Session,
+    job: BatchJob,
+    executor,
+    ctx: ExecutionContext,
+    *,
+    host: Optional[str],
+    trigger: str,
+) -> tuple[BatchJobRun, ExecutionResult]:
+    """Run the executor and persist the outcome as a BatchJobRun row."""
     job.last_status = "running"
     db.commit()
 
@@ -96,7 +131,7 @@ async def execute_job(
         job_id=job.id,
         status=result.status,
         trigger=trigger,
-        host=target_host,
+        host=host,
         executed_command=(result.executed_command or "")[:2000],
         exit_code=result.exit_code,
         stdout=result.stdout or "",

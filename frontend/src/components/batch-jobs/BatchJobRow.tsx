@@ -23,7 +23,8 @@ function formatShortDate(iso: string | null | undefined): string {
 }
 
 export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked, onToggleSelect }: BatchJobRowProps) {
-  const hasMissingCreds = !!job.cron && !job.hasSavedPassword && !job.hasSavedPrivateKey;
+  const hasMissingCreds =
+    job.requiresSsh !== false && !!job.cron && !job.hasSavedPassword && !job.hasSavedPrivateKey;
   const showCluster = !!cluster;
 
   return (

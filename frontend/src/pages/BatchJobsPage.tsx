@@ -216,7 +216,7 @@ export function BatchJobsPage() {
                   {selectedIds.size > 0 && (
                     <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-sm">
                       <span className="font-medium text-primary">{selectedIds.size}개 선택됨</span>
-                      <span className="text-xs text-muted-foreground">— 같은 잡을 여러 클러스터에서 일괄 실행 (저장된 자격증명 사용)</span>
+                      <span className="text-xs text-muted-foreground">— 선택한 잡을 백그라운드로 일괄 실행 (SSH 잡은 저장된 자격증명 필요)</span>
                       <button
                         type="button"
                         onClick={runBulk}

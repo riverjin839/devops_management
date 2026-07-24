@@ -1612,6 +1612,8 @@ export interface BatchJobTypeDescriptor {
   paramSchema: Record<string, { type: string; label?: string; default?: any; help?: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultParams: Record<string, any>;
+  /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요 (kubeconfig 로 실행). */
+  requiresSsh: boolean;
 }
 
 export interface BatchJob {
@@ -1635,6 +1637,8 @@ export interface BatchJob {
   updatedAt: string;
   hasSavedPassword: boolean;
   hasSavedPrivateKey: boolean;
+  /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요. 구버전 응답은 undefined(=SSH 취급). */
+  requiresSsh?: boolean;
 }
 
 export interface BatchJobCreate {
@@ -1656,13 +1660,14 @@ export interface BatchJobCreate {
 
 export interface BatchJobUpdate {
   name?: string;
-  description?: string;
-  defaultHost?: string;
+  // null = 값을 비움(clear). undefined = 변경 없음 — JSON 직렬화에서 키가 빠진다.
+  description?: string | null;
+  defaultHost?: string | null;
   defaultPort?: number;
   defaultUsername?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params?: Record<string, any>;
-  cron?: string;
+  cron?: string | null;
   enabled?: boolean;
   savedPassword?: string;
   savedPrivateKey?: string;

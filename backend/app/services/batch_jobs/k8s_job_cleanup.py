@@ -1,0 +1,318 @@
+"""K8s Job cleanup — delete finished Jobs that only consume resources.
+
+완료(Complete)/실패(Failed) 상태로 남아 etcd 오브젝트·완료 Pod 를 차지하는
+K8s Job 을 정리하는 클러스터 스코프 배치잡. SSH 를 쓰지 않고(`requires_ssh
+= False`) 백엔드/워커에서 클러스터에 등록된 kubeconfig 로 kubectl 을 직접
+실행한다 — deep checker 들과 같은 실행 모델.
+
+안전장치:
+  - `dry_run` 기본값 True — 삭제하지 않고 대상 목록만 stdout 으로 보여준다.
+  - 아직 실행 중(active)인 Job 은 어떤 조합에서도 건드리지 않는다.
+  - `older_than_hours` 로 최근에 끝난 Job 을 보호한다 (기본 24h).
+  - `exclude_namespaces` 기본값에 kube-system 포함.
+
+CronJob 소유 Job 도 대상에 포함된다 — successfulJobsHistoryLimit 이 커서
+쌓이는 경우가 바로 이 잡의 정리 대상이기 때문. 삭제는 kubectl 기본
+cascade(Background) 라 완료 Pod 도 함께 정리된다.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import shlex
+import subprocess
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
+from app.services.batch_jobs.base import (
+    BatchJobExecutor,
+    ExecutionContext,
+    ExecutionResult,
+    register_executor,
+)
+
+
+def _parse_k8s_time(value: Optional[str]) -> Optional[datetime]:
+    """RFC3339 (`2026-07-23T14:05:00Z`) → aware datetime. 실패 시 None."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _job_state(item: dict[str, Any]) -> tuple[str, Optional[datetime]]:
+    """Job 오브젝트의 종료 상태를 판정한다.
+
+    반환: ("succeeded" | "failed" | "active", 종료 시각).
+    Complete/Failed condition 이 없으면 active 취급 — 삭제 대상에서 제외.
+    """
+    status = item.get("status") or {}
+    if status.get("active"):
+        return "active", None
+    for cond in status.get("conditions") or []:
+        if cond.get("status") != "True":
+            continue
+        finished = _parse_k8s_time(cond.get("lastTransitionTime"))
+        if cond.get("type") == "Complete":
+            return "succeeded", _parse_k8s_time(status.get("completionTime")) or finished
+        if cond.get("type") in ("Failed", "FailureTarget"):
+            return "failed", finished
+    return "active", None
+
+
+def select_cleanup_targets(
+    items: list[dict[str, Any]],
+    *,
+    delete_succeeded: bool,
+    delete_failed: bool,
+    older_than_hours: float,
+    exclude_namespaces: set[str],
+    now: Optional[datetime] = None,
+) -> list[dict[str, Any]]:
+    """삭제 대상 Job 을 고른다 — 순수 함수 (단위 테스트 대상).
+
+    반환 항목: {namespace, name, state, finished_at, age_hours}
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=max(older_than_hours, 0))
+    targets: list[dict[str, Any]] = []
+    for item in items:
+        meta = item.get("metadata") or {}
+        namespace = meta.get("namespace") or "default"
+        name = meta.get("name")
+        if not name or namespace in exclude_namespaces:
+            continue
+        state, finished_at = _job_state(item)
+        if state == "succeeded" and not delete_succeeded:
+            continue
+        if state == "failed" and not delete_failed:
+            continue
+        if state == "active":
+            continue
+        # 종료 시각을 모르는 Job(오래된 조건 포맷 등)은 보수적으로 생성 시각 기준.
+        anchor = finished_at or _parse_k8s_time(meta.get("creationTimestamp"))
+        if anchor is None or anchor > cutoff:
+            continue
+        age_hours = (now - anchor).total_seconds() / 3600.0
+        targets.append(
+            {
+                "namespace": namespace,
+                "name": name,
+                "state": state,
+                "finished_at": anchor.isoformat(),
+                "age_hours": round(age_hours, 1),
+            }
+        )
+    return targets
+
+
+def _run_kubectl(args: list[str], timeout: int) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["kubectl", *args], capture_output=True, text=True, timeout=timeout
+    )
+
+
+@register_executor
+class K8sJobCleanupExecutor(BatchJobExecutor):
+    job_type = "k8s_job_cleanup"
+    label = "K8s Job 정리"
+    requires_ssh = False
+    description = (
+        "완료/실패 상태로 남아 리소스만 차지하는 K8s Job 을 클러스터 kubeconfig 로 "
+        "조회해 일괄 삭제합니다. SSH 불필요 — 백엔드/워커에서 kubectl 로 직접 실행. "
+        "dry_run 기본값이 켜져 있어 먼저 삭제 대상만 확인할 수 있습니다."
+    )
+
+    param_schema = {
+        "namespaces": {
+            "type": "string",
+            "label": "대상 네임스페이스 (콤마 구분, 빈 값 = 전체)",
+            "default": "",
+            "help": "예: batch,etl — 비우면 모든 네임스페이스(-A)를 스캔합니다.",
+        },
+        "exclude_namespaces": {
+            "type": "string",
+            "label": "제외 네임스페이스 (콤마 구분)",
+            "default": "kube-system",
+        },
+        "delete_succeeded": {
+            "type": "bool",
+            "label": "완료(Complete) Job 삭제",
+            "default": True,
+        },
+        "delete_failed": {
+            "type": "bool",
+            "label": "실패(Failed) Job 삭제",
+            "default": False,
+            "help": "실패 Job 은 원인 분석 전 지워질 수 있으니 기본은 끔.",
+        },
+        "older_than_hours": {
+            "type": "int",
+            "label": "종료 후 경과 시간 (시간)",
+            "default": 24,
+            "help": "이 시간보다 오래 전에 끝난 Job 만 삭제합니다.",
+        },
+        "label_selector": {
+            "type": "string",
+            "label": "라벨 셀렉터 (선택)",
+            "default": "",
+            "help": "예: app=nightly-etl — 지정하면 매칭되는 Job 만 대상.",
+        },
+        "dry_run": {
+            "type": "bool",
+            "label": "Dry run (삭제 없이 대상만 표시)",
+            "default": True,
+        },
+    }
+    default_params = {
+        "namespaces": "",
+        "exclude_namespaces": "kube-system",
+        "delete_succeeded": True,
+        "delete_failed": False,
+        "older_than_hours": 24,
+        "label_selector": "",
+        "dry_run": True,
+    }
+
+    def _list_args(self, params: dict[str, Any]) -> list[list[str]]:
+        """네임스페이스 설정에 따른 `kubectl get jobs` 인자 목록(호출 단위)."""
+        selector = (params.get("label_selector") or "").strip()
+        base = ["get", "jobs", "-o", "json"]
+        if selector:
+            base += ["-l", selector]
+        namespaces = [
+            ns.strip() for ns in (params.get("namespaces") or "").split(",") if ns.strip()
+        ]
+        if not namespaces:
+            return [base + ["-A"]]
+        return [base + ["-n", ns] for ns in namespaces]
+
+    async def run(self, ctx: ExecutionContext) -> ExecutionResult:
+        params = self.merge_params(saved=None, override=ctx.params)
+        start = time.monotonic()
+
+        def _done(**kwargs: Any) -> ExecutionResult:
+            kwargs.setdefault("duration_ms", int((time.monotonic() - start) * 1000))
+            return ExecutionResult(**kwargs)
+
+        if not ctx.kubeconfig_path:
+            return _done(
+                status="error",
+                error=(
+                    "클러스터에 kubeconfig 가 등록되어 있지 않습니다 — "
+                    "/cluster-manage 에서 kubeconfig 를 먼저 등록하세요."
+                ),
+            )
+
+        kubeconfig = ["--kubeconfig", ctx.kubeconfig_path]
+        try:
+            older_than = float(params.get("older_than_hours") or 0)
+        except (TypeError, ValueError):
+            return _done(status="error", error="older_than_hours 는 숫자여야 합니다.")
+        exclude = {
+            ns.strip()
+            for ns in (params.get("exclude_namespaces") or "").split(",")
+            if ns.strip()
+        }
+        dry_run = bool(params.get("dry_run", True))
+
+        # 1) 대상 조회
+        items: list[dict[str, Any]] = []
+        executed: list[str] = []
+        for args in self._list_args(params):
+            executed.append("kubectl " + " ".join(args))
+            try:
+                proc = await asyncio.to_thread(
+                    _run_kubectl, kubeconfig + args, ctx.timeout
+                )
+            except subprocess.TimeoutExpired:
+                return _done(
+                    status="timeout",
+                    error=f"kubectl 조회 타임아웃 ({ctx.timeout}s)",
+                    executed_command="\n".join(executed),
+                )
+            except FileNotFoundError:
+                return _done(
+                    status="error",
+                    error="kubectl 을 찾을 수 없습니다 — 백엔드/워커 이미지에 kubectl 이 필요합니다.",
+                    executed_command="\n".join(executed),
+                )
+            if proc.returncode != 0:
+                return _done(
+                    status="error",
+                    exit_code=proc.returncode,
+                    stderr=proc.stderr[-4000:],
+                    error="kubectl get jobs 실패",
+                    executed_command="\n".join(executed),
+                )
+            try:
+                items.extend(json.loads(proc.stdout).get("items") or [])
+            except json.JSONDecodeError:
+                return _done(
+                    status="error",
+                    error="kubectl 출력(JSON) 파싱 실패",
+                    executed_command="\n".join(executed),
+                )
+
+        targets = select_cleanup_targets(
+            items,
+            delete_succeeded=bool(params.get("delete_succeeded", True)),
+            delete_failed=bool(params.get("delete_failed", False)),
+            older_than_hours=older_than,
+            exclude_namespaces=exclude,
+        )
+
+        state_label = {"succeeded": "완료", "failed": "실패"}
+        lines = [
+            f"스캔한 Job {len(items)}개 중 삭제 대상 {len(targets)}개"
+            + (" (dry run — 실제 삭제 없음)" if dry_run else ""),
+        ]
+        for t in targets:
+            lines.append(
+                f"  - {t['namespace']}/{t['name']} "
+                f"[{state_label.get(t['state'], t['state'])}, {t['age_hours']}h 경과]"
+            )
+
+        if dry_run or not targets:
+            return _done(
+                status="ok",
+                exit_code=0,
+                stdout="\n".join(lines),
+                executed_command="\n".join(executed),
+            )
+
+        # 2) 네임스페이스별로 묶어 삭제 (--wait=false: 종료 대기 없이 큐잉)
+        by_ns: dict[str, list[str]] = {}
+        for t in targets:
+            by_ns.setdefault(t["namespace"], []).append(t["name"])
+
+        deleted = 0
+        errors: list[str] = []
+        for ns, names in by_ns.items():
+            del_args = ["delete", "job", "-n", ns, *names, "--wait=false"]
+            executed.append("kubectl " + " ".join(shlex.quote(a) for a in del_args))
+            try:
+                proc = await asyncio.to_thread(
+                    _run_kubectl, kubeconfig + del_args, ctx.timeout
+                )
+            except subprocess.TimeoutExpired:
+                errors.append(f"{ns}: 삭제 타임아웃")
+                continue
+            if proc.returncode == 0:
+                deleted += len(names)
+                lines.append(proc.stdout.strip())
+            else:
+                errors.append(f"{ns}: {proc.stderr.strip()[:300]}")
+
+        lines.append(f"삭제 완료 {deleted}/{len(targets)}개")
+        return _done(
+            status="ok" if not errors else "error",
+            exit_code=0 if not errors else 1,
+            stdout="\n".join(lines),
+            stderr="\n".join(errors),
+            error=None if not errors else f"{len(errors)}개 네임스페이스에서 삭제 실패",
+            executed_command="\n".join(executed),
+        )

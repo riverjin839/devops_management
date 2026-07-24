@@ -45,12 +45,19 @@ from app.services.ssh_runner import SSHTarget, test_connection as ssh_test_conne
 router = APIRouter(prefix="/batch-jobs", tags=["batch-jobs"])
 
 
+def _requires_ssh(job_type: str) -> bool:
+    """job_type 의 executor 가 SSH 를 요구하는지. 미등록 타입은 보수적으로 True."""
+    executor = get_executor(job_type)
+    return True if executor is None else executor.requires_ssh
+
+
 def _require_cron_credentials(
     *,
     cron: str | None,
     has_password: bool,
     has_private_key: bool,
     default_host: str | None = None,
+    job_type: str | None = None,
 ) -> None:
     """Raise 422 if a cron schedule is set but is missing what unattended runs need.
 
@@ -67,6 +74,9 @@ def _require_cron_credentials(
     않게 한다.
     """
     if not (cron and cron.strip()):
+        return
+    if job_type is not None and not _requires_ssh(job_type):
+        # 클러스터 스코프(non-SSH) 잡 — 무인 실행에 host/자격증명이 필요 없다.
         return
     if not (has_password or has_private_key):
         raise HTTPException(
@@ -109,6 +119,7 @@ def _to_response(job: BatchJob) -> dict:
         "updated_at": job.updated_at,
         "has_saved_password": bool(job.encrypted_password),
         "has_saved_private_key": bool(job.encrypted_private_key),
+        "requires_ssh": _requires_ssh(job.job_type),
     }
 
 
@@ -157,6 +168,7 @@ def create_job(
         has_password=bool(payload.saved_password),
         has_private_key=bool(payload.saved_private_key),
         default_host=payload.default_host,
+        job_type=payload.job_type,
     )
 
     data = payload.model_dump()
@@ -198,11 +210,11 @@ def bulk_run_jobs(
         if not job.enabled:
             results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="비활성 잡"))
             continue
-        if not (job.encrypted_password or job.encrypted_private_key):
+        if _requires_ssh(job.job_type) and not (job.encrypted_password or job.encrypted_private_key):
             results.append(BatchJobBulkRunItem(job_id=jid, queued=False, reason="저장된 자격증명 없음"))
             continue
         try:
-            run_batch_job.delay(str(job.id))
+            run_batch_job.delay(str(job.id), trigger="bulk")
             queued += 1
             results.append(BatchJobBulkRunItem(job_id=jid, queued=True))
         except Exception as exc:  # noqa: BLE001 — 큐잉 실패도 결과로 반환
@@ -259,6 +271,7 @@ def update_job(
         has_password=final_has_pw,
         has_private_key=final_has_key,
         default_host=final_default_host,
+        job_type=job.job_type,
     )
 
     for field, value in update.items():
@@ -310,8 +323,9 @@ async def run_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
 
     # Either the request supplies credentials, or the job has saved ones.
+    # Non-SSH (cluster-scoped) job types need neither.
     has_saved = bool(job.encrypted_password or job.encrypted_private_key)
-    if not payload.password and not payload.private_key and not has_saved:
+    if _requires_ssh(job.job_type) and not payload.password and not payload.private_key and not has_saved:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="password 또는 private_key 중 하나는 필수입니다 (또는 잡에 저장된 자격증명 등록).",
@@ -359,6 +373,12 @@ async def test_job_connection(
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+
+    if not _requires_ssh(job.job_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="이 잡 타입은 SSH 를 사용하지 않습니다 — 연결 테스트가 필요 없습니다.",
+        )
 
     target_host = payload.host or job.default_host
     if not target_host:

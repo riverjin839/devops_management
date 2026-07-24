@@ -65,6 +65,8 @@ export function EditForm({ job, onSaved }: EditFormProps) {
     () => (typesQ.data ?? []).find((t) => t.jobType === job.jobType),
     [typesQ.data, job.jobType],
   );
+  // non-SSH(클러스터 스코프) 잡 — host/포트/사용자/자격증명 개념이 없다.
+  const isSsh = job.requiresSsh !== false;
 
   const reset = () => {
     setName(job.name);
@@ -98,14 +100,16 @@ export function EditForm({ job, onSaved }: EditFormProps) {
       }
     }
 
+    // 빈 값은 null 로 보내야 실제로 지워진다 — undefined 는 JSON 직렬화에서
+    // 키가 빠져 "변경 없음"이 되므로 cron/설명/호스트 해제가 불가능했다.
     const payload: BatchJobUpdate = {
       name: name.trim(),
-      description: description.trim() || undefined,
-      defaultHost: host.trim() || undefined,
+      description: description.trim() || null,
+      defaultHost: host.trim() || null,
       defaultPort: port,
       defaultUsername: username.trim() || 'root',
       params: parsedParams,
-      cron: cron.trim() || undefined,
+      cron: cron.trim() || null,
       enabled,
     };
 
@@ -165,40 +169,44 @@ export function EditForm({ job, onSaved }: EditFormProps) {
         />
       </div>
 
-      <MasterHostPicker
-        clusterId={job.clusterId}
-        customHost={hostCustom}
-        selectedName={hostSelectedName}
-        label="기본 호스트"
-        compact
-        onChange={({ selectedName, customHost, effectiveHost }) => {
-          setHostSelectedName(selectedName);
-          setHostCustom(customHost);
-          setHost(effectiveHost);
-        }}
-      />
+      {isSsh && (
+        <>
+          <MasterHostPicker
+            clusterId={job.clusterId}
+            customHost={hostCustom}
+            selectedName={hostSelectedName}
+            label="기본 호스트"
+            compact
+            onChange={({ selectedName, customHost, effectiveHost }) => {
+              setHostSelectedName(selectedName);
+              setHostCustom(customHost);
+              setHost(effectiveHost);
+            }}
+          />
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">기본 포트</label>
-          <input
-            id={f('port')}
-            type="number"
-            value={port}
-            onChange={(e) => setPort(Number(e.target.value) || 22)}
-            className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
-          />
-        </div>
-        <div>
-          <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">기본 사용자</label>
-          <input
-            id={f('user')}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl font-mono"
-          />
-        </div>
-      </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">기본 포트</label>
+              <input
+                id={f('port')}
+                type="number"
+                value={port}
+                onChange={(e) => setPort(Number(e.target.value) || 22)}
+                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl"
+              />
+            </div>
+            <div>
+              <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">기본 사용자</label>
+              <input
+                id={f('user')}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-xl font-mono"
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -259,7 +267,7 @@ export function EditForm({ job, onSaved }: EditFormProps) {
       {/* Design Ref: §2.4.3 — invariant guard. EditForm 은 자격증명을 직접
           다루지 않으므로 머지 후 상태 = DB 의 hasSavedPassword/PrivateKey. */}
       {(() => {
-        const credsBlocking = cronRequiresCredentials(
+        const credsBlocking = isSsh && cronRequiresCredentials(
           cron,
           job.hasSavedPassword ? 'present' : '',
           job.hasSavedPrivateKey ? 'present' : '',
@@ -287,7 +295,7 @@ export function EditForm({ job, onSaved }: EditFormProps) {
         </button>
         {(() => {
           // 머지 후 자격증명 상태 = DB 그대로 (EditForm 미수정).
-          const credsBlocking = cronRequiresCredentials(
+          const credsBlocking = isSsh && cronRequiresCredentials(
             cron,
             job.hasSavedPassword ? 'present' : '',
             job.hasSavedPrivateKey ? 'present' : '',

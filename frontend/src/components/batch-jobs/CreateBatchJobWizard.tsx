@@ -67,6 +67,9 @@ export function CreateBatchJobWizard({
   if (!open) return null;
 
   const types = typesQ.data ?? [];
+  const selectedType = types.find((t) => t.jobType === state.jobType);
+  // non-SSH(클러스터 스코프) 타입은 host/자격증명 없이 kubeconfig 로 실행된다.
+  const isSshType = selectedType ? selectedType.requiresSsh !== false : true;
 
   const update = (next: Partial<WizardState>) => setState((s) => ({ ...s, ...next }));
 
@@ -102,18 +105,19 @@ export function CreateBatchJobWizard({
       return;
     }
     try {
+      const sshType = (types.find((t) => t.jobType === state.jobType)?.requiresSsh ?? true) !== false;
       const { data } = await create.mutateAsync({
         clusterId: state.clusterId,
         name: state.name.trim(),
         description: state.description.trim() || undefined,
         jobType: state.jobType,
-        defaultHost: state.defaultHost.trim() || undefined,
+        defaultHost: sshType ? state.defaultHost.trim() || undefined : undefined,
         defaultPort: state.defaultPort,
         defaultUsername: state.defaultUsername.trim() || 'root',
         cron: state.cron.trim() || undefined,
         params,
-        savedPassword: state.savedPassword || undefined,
-        savedPrivateKey: state.savedPrivateKey || undefined,
+        savedPassword: sshType ? state.savedPassword || undefined : undefined,
+        savedPrivateKey: sshType ? state.savedPrivateKey || undefined : undefined,
       });
       onCreated(data);
       onClose();
@@ -184,8 +188,8 @@ export function CreateBatchJobWizard({
               onChange={update}
             />
           )}
-          {step === 1 && <StepHost types={types} state={state} onChange={update} />}
-          {step === 2 && <StepSchedule state={state} onChange={update} />}
+          {step === 1 && <StepHost types={types} state={state} onChange={update} requiresSsh={isSshType} />}
+          {step === 2 && <StepSchedule state={state} onChange={update} requiresSsh={isSshType} />}
 
           {error && <div role="alert" className="mt-3 text-sm text-red-500">{error}</div>}
         </div>
@@ -209,20 +213,24 @@ export function CreateBatchJobWizard({
               다음
             </button>
           ) : (() => {
-            // Design Ref: §2.4.2 — cron + creds 누락이면 등록 차단 (백엔드 422 와 동기).
-            const credsBlocking = cronRequiresCredentials(
+            // Design Ref: §2.4.2 — cron + creds/host 누락이면 등록 차단 (백엔드 422 와 동기).
+            // non-SSH 타입은 host/자격증명이 필요 없어 차단하지 않는다.
+            const credsBlocking = isSshType && cronRequiresCredentials(
               state.cron,
               state.savedPassword,
               state.savedPrivateKey,
             );
+            const hostBlocking = isSshType && !!state.cron.trim() && !state.defaultHost.trim();
             return (
               <button
                 onClick={submit}
-                disabled={create.isPending || credsBlocking}
+                disabled={create.isPending || credsBlocking || hostBlocking}
                 title={
                   credsBlocking
                     ? 'cron 을 사용하려면 비밀번호 또는 개인키 중 하나를 입력하세요'
-                    : undefined
+                    : hostBlocking
+                      ? 'cron 을 사용하려면 2단계에서 기본 호스트를 지정하세요'
+                      : undefined
                 }
                 className="px-3 py-1.5 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 mac-shadow disabled:opacity-60"
               >

@@ -94,7 +94,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | k9s 콘솔(control-plane SSH → 내장 k9s TUI 웹 스트리밍) | `backend/app/routers/k9s_ssh.py` (WebSocket, paramiko PTY) → `frontend/src/pages/K9sPage.tsx` · `frontend/src/pages/K9sPopupPage.tsx`(별도 창) · `frontend/src/components/k8s/K9sTerminal.tsx` · `frontend/src/lib/k9sPopout.ts`(창 간 handoff) |
 | 노드 라벨 / 노드 이미지 | `backend/app/routers/node_labels.py` · `node_images.py` → `frontend/src/pages/NodeLabelsPage.tsx` · `NodeImagesPage.tsx` |
 | 주요 명령어 모음 | `backend/app/routers/commands.py` → `frontend/src/pages/CommandsPage.tsx` · `CommandFormPage.tsx` |
-| Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/` → `frontend/src/pages/BatchJobsPage.tsx` |
+| Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/`(SSH: `etcdctl_defrag`/`shell_command`, non-SSH kubectl: `k8s_job_cleanup`) → `frontend/src/pages/BatchJobsPage.tsx` |
 | Ansible 자산 (파일/인벤토리) | `backend/app/routers/ansible_assets.py` |
 
 ### 네트워크 / 토폴로지 / 스토리지

@@ -867,7 +867,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 ### Batch Jobs (`/batch-jobs`)
 
 - **파일**: `frontend/src/pages/BatchJobsPage.tsx` (+ `components/batch-jobs/BatchJobTable.tsx`, `BatchJobFilters.tsx`, `BatchJobSlideOver.tsx`(+`.EditForm`/`.RunForm`/`.RunHistory`/`.SavedCreds`), `CreateBatchJobWizard.tsx`(+`.StepType`/`.StepHost`/`.StepSchedule`), `UnregisteredTypeChips.tsx`, `StatusPill.tsx`, 공통 `ClusterSidebar`/`ConfirmDialog`/`useToast`)
-- **목적 / UX**: etcd defrag, snapshot 저장 등 클러스터별 반복적 운영 작업(batch job)을 등록하고 수동/일괄/스케줄(cron) 실행하며 실행 이력을 확인한다. SSH 대상 호스트·자격증명을 잡에 저장해두고 재사용할 수 있다.
+- **목적 / UX**: etcd defrag, snapshot 저장, K8s 완료/실패 Job 정리 등 클러스터별 반복적 운영 작업(batch job)을 등록하고 수동/일괄/스케줄(cron) 실행하며 실행 이력을 확인한다. SSH 잡은 대상 호스트·자격증명을 잡에 저장해두고 재사용하며, non-SSH(클러스터 스코프) 잡은 클러스터 kubeconfig 로 백엔드에서 직접 실행된다.
 - **UI 구성**:
   - 좌측 `ClusterSidebar` — **단일 선택 + 전체** 모드(`iconOnly` + `allowAll` + `allLabel="전체"`, `selectedId`/`onSelect`).
   - 헤더: 잡 개수/실패/실행 중 요약, "새 잡" 버튼(클러스터 미선택 시 빈 wizard, 선택 시 prefilled).
@@ -875,13 +875,15 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 우측 `BatchJobSlideOver` — 행 클릭 시 잡 상세(수정/실행/이력/자격증명), 뷰포트 <1280px에서는 overlay 모드.
   - `CreateBatchJobWizard`(3단계: 타입 → 호스트 → 스케줄), 삭제 시 `ConfirmDialog`.
 - **Frontend**: `useBatchJobTypes`, `useBatchJobs`, `useDeleteBatchJob`(+ 컴포넌트 내부에서 `useCreateBatchJob`/`useUpdateBatchJob`/`useRunBatchJob`/`useTestBatchJobConnection`/`useBatchJobRuns`, 모두 `hooks/useBatchJobs.ts`), `useClusters`. 순수 로컬 state(Zustand 스토어 없음)로 `selectedClusterId`, `statusFilter`, `search`, `sort`, `selectedJob`, `wizardCtx`, `selectedIds`(일괄 실행용), `overlayMode`(matchMedia) 관리. 일괄 실행은 훅이 아닌 `batchJobsApi.bulkRun()` 직접 호출 + `useToast`로 결과 알림.
-- **Backend**: `GET /api/v1/batch-jobs/types`(등록된 job_type 목록), `GET/POST /api/v1/batch-jobs`, `PUT/DELETE /api/v1/batch-jobs/{id}`, `POST /api/v1/batch-jobs/{id}/run`(동기, timeout 600s), `POST /api/v1/batch-jobs/bulk-run`(Celery `run_batch_job.delay()`로 비동기 큐잉, 저장된 자격증명 없으면 스킵), `GET /api/v1/batch-jobs/{id}/runs`, `GET /api/v1/batch-jobs/runs/{id}`, `POST /api/v1/batch-jobs/{id}/test-connection`(SSH 연결만 검증) — 전부 `backend/app/routers/batch_jobs.py`. 서비스: `app/services/batch_job_service.py`(`execute_job`, `get_job_or_404`), `app/services/batch_jobs/`(`@register_executor` 패턴으로 job_type별 executor 등록, `list_executors`/`get_executor`), `app/services/ssh_runner.py`(paramiko 기반 `test_connection`), `app/services/secret_box.py`(자격증명 암/복호화). 모델: `backend/app/models/batch_job.py`(`BatchJob`, `BatchJobRun` — cron·`encrypted_password`/`encrypted_private_key`·`last_schedule_check_at`/`last_schedule_note` 필드로 스케줄 진단 지원).
+- **Backend**: `GET /api/v1/batch-jobs/types`(등록된 job_type 목록), `GET/POST /api/v1/batch-jobs`, `PUT/DELETE /api/v1/batch-jobs/{id}`, `POST /api/v1/batch-jobs/{id}/run`(동기, timeout 600s), `POST /api/v1/batch-jobs/bulk-run`(Celery `run_batch_job.delay()`로 비동기 큐잉, 저장된 자격증명 없으면 스킵), `GET /api/v1/batch-jobs/{id}/runs`, `GET /api/v1/batch-jobs/runs/{id}`, `POST /api/v1/batch-jobs/{id}/test-connection`(SSH 연결만 검증) — 전부 `backend/app/routers/batch_jobs.py`. 서비스: `app/services/batch_job_service.py`(`execute_job`, `get_job_or_404`), `app/services/batch_jobs/`(`@register_executor` 패턴으로 job_type별 executor 등록, `list_executors`/`get_executor`; SSH executor `etcdctl_defrag`/`shell_command` + non-SSH(`requires_ssh=False`) executor `k8s_job_cleanup` — 클러스터 kubeconfig 로 kubectl 직접 실행, dry_run 기본), `app/services/ssh_runner.py`(paramiko 기반 `test_connection`), `app/services/secret_box.py`(자격증명 암/복호화). 모델: `backend/app/models/batch_job.py`(`BatchJob`, `BatchJobRun` — cron·`encrypted_password`/`encrypted_private_key`·`last_schedule_check_at`/`last_schedule_note` 필드로 스케줄 진단 지원).
 - **핵심 기능**:
   - 클러스터 단일 선택/전체 보기, 상태 필터(전체/실패/실행중 등) + 텍스트 검색
   - 체크박스 다중 선택 후 저장된 자격증명으로 여러 클러스터 잡을 Celery 백그라운드 일괄 실행(`bulk-run`), 큐잉/스킵 결과를 토스트로 안내
   - 잡별 슬라이드오버에서 수정/수동 실행(요청 시 자격증명 override 가능)/실행 이력(`BatchJobSlideOver.RunHistory`)/저장된 자격증명 관리(`.SavedCreds`)
-  - cron 스케줄 등록 시 자격증명 저장이 필수(422로 강제, `_require_cron_credentials`) — 백엔드가 매분 silent skip 되는 상황을 사전 차단
-  - SSH 연결 테스트(명령 미실행, `test-connection`)로 자격증명/네트워크 사전 검증
+  - cron 스케줄 등록 시 자격증명·기본 호스트 저장이 필수(422로 강제, `_require_cron_credentials`) — 백엔드가 매분 silent skip 되는 상황을 사전 차단. non-SSH 타입(`requires_ssh=False`)은 이 검증에서 제외(호스트/자격증명 불필요)
+  - **K8s Job 정리(`k8s_job_cleanup`)**: 완료/실패 Job 을 kubeconfig 로 조회·삭제하는 non-SSH 잡 — dry_run 기본, active Job 보호, `older_than_hours`/네임스페이스 제외/라벨 셀렉터 필터. 위저드/실행 폼이 호스트·자격증명 입력을 자동 생략
+  - SSH 연결 테스트(명령 미실행, `test-connection`)로 자격증명/네트워크 사전 검증 (SSH 타입 한정)
+  - 실행 이력 15초 자동 갱신 + 트리거 배지(수동/스케줄/일괄), 일괄 실행은 trigger="bulk" 로 기록
   - 미등록 job_type을 클러스터별로 안내하는 `UnregisteredTypeChips` → wizard로 바로 등록 유도
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
