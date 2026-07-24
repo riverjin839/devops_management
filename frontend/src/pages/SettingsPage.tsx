@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, BookOpen, Database, ListTodo, Palette, FileSearch, Wand2, Boxes } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, ListTodo, Palette, FileSearch, Wand2, Boxes } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
@@ -535,10 +535,15 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'service' | 'mgmt-service' | 'service-categories' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'service-categories' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
   const [searchParams] = useSearchParams();
-  const initialTab = (searchParams.get('tab') as TabId | null);
+  const rawTab = searchParams.get('tab');
+  // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭은 "관리 서비스"(mgmt-service) 안의
+  // "서비스 카탈로그" 서브탭으로 이동됨 → ?tab=service 는 mgmt-service 로 리다이렉트.
+  const initialTab = (rawTab === 'service' ? 'mgmt-service' : rawTab) as TabId | null;
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'cluster');
+  // "관리 서비스" 탭 내부 서브탭: 서비스 타입(LakeServiceType) / 서비스 카탈로그(ui_settings).
+  const [mgmtView, setMgmtView] = useState<'types' | 'catalog'>(rawTab === 'service' ? 'catalog' : 'types');
 
   // Debug 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
@@ -553,7 +558,6 @@ export function SettingsPage() {
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
-    { id: 'service', label: 'PEP 서비스', icon: <BookOpen className="w-4 h-4" />, count: 0 },
     { id: 'mgmt-service', label: '관리 서비스', icon: <Database className="w-4 h-4" />, count: 0 },
     { id: 'service-categories', label: '서비스 카테고리', icon: <Boxes className="w-4 h-4" />, count: 0 },
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
@@ -787,18 +791,30 @@ export function SettingsPage() {
           </div>
         )}
 
-        {/* 서비스 카탈로그 — 통합지식 사이드바와 task/issue tag 의 출처 */}
-        {activeTab === 'service' && (
-          <div className="mb-8">
-            <ServiceCatalogManager />
-          </div>
-        )}
-
-        {/* 관리 서비스(LAKE 서비스 타입) 카탈로그 — lake-service-type-management PDCA.
-            Settings 탭명은 "관리 서비스" — "LAKE" 는 PEP 서비스에 일반적인 개념이 아니라 탭 라벨에서 제외. */}
+        {/* 관리 서비스 — "서비스 타입"(LakeServiceType 카탈로그) + "서비스 카탈로그"
+            (ui_settings.serviceCatalog, 통합지식 사이드바·task/issue tag 출처) 2개 내부 서브탭.
+            과거 최상위 "서비스"(PEP 서비스) 탭이 여기 "서비스 카탈로그" 서브탭으로 이동됨.
+            "LAKE" 는 PEP 서비스에 일반적인 개념이 아니라 탭 라벨에서 제외. */}
         {activeTab === 'mgmt-service' && (
-          <div className="mb-8">
-            <LakeServiceTypeManager />
+          <div className="mb-8 space-y-4">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
+              {([
+                { id: 'types', label: '서비스 타입' },
+                { id: 'catalog', label: '서비스 카탈로그' },
+              ] as const).map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setMgmtView(v.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    mgmtView === v.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            {mgmtView === 'types' ? <LakeServiceTypeManager /> : <ServiceCatalogManager />}
           </div>
         )}
 
