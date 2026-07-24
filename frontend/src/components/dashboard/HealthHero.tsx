@@ -50,9 +50,9 @@ export function HealthHero({ stats, isLoading, lastCheckTime }: HealthHeroProps)
   if (isLoading) {
     return (
       <div className="grid grid-cols-12 gap-3 mb-3">
-        <div className="col-span-12 lg:col-span-6 lg:row-span-2 bg-card rounded-2xl border border-border h-52 animate-pulse" />
+        <div className="col-span-12 lg:col-span-6 lg:row-span-2 bg-card rounded-md border border-border h-52 animate-pulse" />
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="col-span-6 lg:col-span-3 bg-card rounded-2xl border border-border h-24 animate-pulse" />
+          <div key={i} className="col-span-6 lg:col-span-3 bg-card rounded-md border border-border h-24 animate-pulse" />
         ))}
       </div>
     );

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock, HelpCircle } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusDot, ConfirmDialog, useToast } from '@/components/common';
+import { StatusDot, ConfirmDialog, useToast, Skeleton } from '@/components/common';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
 } from '@/hooks/useCheckMatrix';
@@ -168,7 +168,19 @@ export function PlatformStatusMatrix() {
         </div>
 
         {isLoading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">불러오는 중…</div>
+          // 실제 매트릭스 구조(항목 라벨 열 + 클러스터 셀 그리드)를 흉내낸 skeleton — 로드 전환 시 시프트 최소화
+          <div className="p-3 space-y-2" aria-busy="true" aria-label="점검 매트릭스 불러오는 중">
+            {Array.from({ length: 6 }).map((_, r) => (
+              <div key={r} className="flex items-center gap-3">
+                <Skeleton height={14} width="20%" className="flex-shrink-0" />
+                <div className="flex-1 flex gap-3">
+                  {Array.from({ length: 5 }).map((_, c) => (
+                    <Skeleton key={c} height={24} className="flex-1" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : items.length === 0 || clusters.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
             {clusters.length === 0 ? '등록된 클러스터가 없습니다.' : '점검 항목이 없습니다 — 우측 상단에서 추가하세요.'}

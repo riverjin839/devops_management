@@ -235,7 +235,8 @@ export function OpsCheckConsolePage() {
             ) : filtered.length === 0 ? (
               <div className="p-10 text-center text-sm text-muted-foreground">표시할 점검 항목이 없습니다.</div>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-border">
                     <th className="w-9 px-3 py-2"><span className="sr-only">선택</span></th>
@@ -317,6 +318,7 @@ export function OpsCheckConsolePage() {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
           </MacCard>
 

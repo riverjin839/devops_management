@@ -278,13 +278,13 @@ export function WorkItemKanban({ items, onItemClick, onEdit, onDelete }: WorkIte
                 <span className={`w-2.5 h-2.5 rounded-full ${col.dotCls}`} />
                 <span className="text-sm font-semibold">{col.label}</span>
                 {isWipCol && col.wipLimit !== undefined && (
-                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ml-auto ${
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-full ml-auto ${
                     wipOver
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                      ? 'bg-status-critical/15 text-status-critical border border-status-critical/30'
                       : 'bg-background/60 text-muted-foreground'
                   }`}>
                     {wipCount} / {col.wipLimit}
-                    {wipOver && ' ⚠'}
+                    {wipOver && <AlertTriangle className="w-3 h-3" aria-label="WIP 한도 초과" />}
                   </span>
                 )}
                 {!isWipCol && (
