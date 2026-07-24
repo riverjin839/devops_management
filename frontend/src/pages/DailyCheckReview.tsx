@@ -4,6 +4,7 @@ import type { AxiosError } from 'axios';
 import { ArrowLeft, Play, Settings, RefreshCw } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
+import { Skeleton } from '@/components/common';
 import {
   AiSummaryCard,
   TrendChart,
@@ -148,7 +149,12 @@ export function DailyCheckReviewPage() {
             <>
               {reviewLoading && (
                 <MacCard title="AI 자동 리뷰">
-                  <div className="text-sm text-muted-foreground italic">불러오는 중…</div>
+                  <div className="space-y-2" aria-busy="true" aria-label="AI 리뷰 불러오는 중">
+                    <Skeleton height={12} width="90%" />
+                    <Skeleton height={12} width="75%" />
+                    <Skeleton height={12} width="82%" />
+                    <Skeleton height={12} width="60%" />
+                  </div>
                 </MacCard>
               )}
               {!reviewLoading && reviewIsError && (
