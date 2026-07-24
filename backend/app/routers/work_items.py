@@ -437,12 +437,14 @@ def get_today_summary(
         .all()
     )
 
-    # 지연(overdue) — 기준일 이전 예정 + 미완료 + (진행중은 위 버킷에 포함되므로 제외).
+    # 지연(overdue) — 기준일 이전 예정 + 미완료. 진행중은 위 버킷에 포함되므로 제외하고,
+    # backlog('언젠가 할 일')는 아직 착수 약정이 아니므로 시작일이 지나도 지연으로 세지 않는다
+    # (지연 뱃지 인플레이션 방지).
     overdue_items = (
         db.query(WorkItem)
         .filter(
             WorkItem.started_at < today_start,
-            WorkItem.kanban_status.notin_(["done", "in_progress"]),
+            WorkItem.kanban_status.notin_(["done", "in_progress", "backlog"]),
         )
         .order_by(WorkItem.primary_assignee, priority_order)
         .all()

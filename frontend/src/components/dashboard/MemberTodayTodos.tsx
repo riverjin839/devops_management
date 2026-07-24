@@ -137,7 +137,8 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
     assignee: TEAM_ASSIGNEE,
     overdueTasks: teamCandidates.filter((t) => {
       const d = toLocalDateKey(t.startedAt);
-      return !!d && d < viewDate && t.kanbanStatus !== 'done';
+      // 서버 today/summary 와 동일: 진행중(별도 버킷)·backlog(미약정)는 지연에서 제외.
+      return !!d && d < viewDate && !['done', 'in_progress', 'backlog'].includes(t.kanbanStatus);
     }),
     todayTasks: teamCandidates.filter((t) =>
       toLocalDateKey(t.startedAt) === viewDate && t.kanbanStatus !== 'in_progress'),

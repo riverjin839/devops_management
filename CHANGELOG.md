@@ -10,6 +10,9 @@
 
 1.11.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **당일 스케줄 — 완료 업무 유지(흐리게) & 지연 집계에서 backlog 제외**: 업무를 완료(done)하면 '당일 스케줄'에서 즉시 사라지던 것을, 완료일까지는 **흐림+취소선**으로 남겨 하루 회고가 가능하게 변경. 아울러 '담당자별 오늘 요약'의 **지연(overdue)** 집계에서 backlog('언젠가 할 일', 아직 착수 약정 아님)를 제외해 지연 뱃지 인플레이션을 줄였다(Backend `today/summary` + Frontend 공통 카드 동일 규칙).
+
 ### Fixed
 - **업무 현황(홈) '오늘' 상시 갱신 + 잔여 표기 버그**: 홈을 상시 띄워두면 마운트 시각에 '오늘' 이 고정돼 자정 이후 KPI·오늘 하이라이트·지연 판정·당일 스케줄 now 라인이 어긋나던 문제 수정 — 공용 `useToday()` 훅(자정 감지 자동 갱신)으로 HomePage·주간 타임라인·월간 달력·담당자 탭·당일 스케줄의 '오늘' 기준을 통일하고, 당일 스케줄 now 라인은 30초 주기로 갱신. 아울러 주간 타임라인에서 **같은 날 마일스톤이 여러 건이면 서로 겹쳐 그려지던 문제**를 요일 컬럼 안에 세로로 쌓도록 수정, 당일 스케줄 담당자 순환(◀▶)이 목록 밖 이름에서 첫 담당자를 건너뛰던 인덱스 버그도 수정.
 - **업무 날짜 규약 KST 통일 (UTC 저장 + KST 표시)**: 정식 업무 폼(`WorkItemForm`)이 날짜/시간을 naive 로컬 문자열로 저장해, 리더가 UTC 로 간주하며 화면에 **+9시간 시프트**되던 문제와, 이른 아침(00:00~08:59 KST) 업무가 전날로 분류되던 문제를 근본 수정. 규약을 앱 canonical(UTC 저장 + KST 표시, QuickAdd·`utcnow` 자동 타임스탬프와 동일)로 일원화. Frontend: `WorkItemForm.toApiDatetime` 을 `toISOString()`(UTC) 직렬화로 변경, 공용 `toLocalDateKey()`(UTC→KST 날짜) 헬퍼로 홈 위젯의 `.slice(0,10)` 날짜 비교를 전부 교체(HomePage/WorkAlarmBell/WeeklyStatusTimeline/MemberTodayTodos). Backend: `today/summary` 의 '오늘' 경계를 KST 자정 기준(`_local_day_bounds_utc`)으로 계산. 기존 데이터 중 구 폼으로 저장된 항목은 편집 시 자동으로 UTC 로 정규화된다(대부분은 이미 정상).

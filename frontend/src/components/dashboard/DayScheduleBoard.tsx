@@ -232,12 +232,14 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     for (const w of allItems) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
       if (meOnly && (!selectedName || !assigneeNames(w).includes(selectedName))) continue;
-      if (w.kanbanStatus === 'done') continue;
+      // 완료 항목도 남긴다(흐리게 — 하루 회고용). 단 span 은 완료일까지만(레거시 완료일
+      // 미상이면 시작일 하루만) 잡아 과거 날짜에 무한정 끌리지 않게 한다.
+      const isDone = w.kanbanStatus === 'done';
       const startD = parseLocal(w.startedAt);
       if (!startD) continue;
       const startKey = dateKey(startD);
       const closedD = parseLocal(w.closedAt);
-      let endKey = closedD ? dateKey(closedD) : todayKey;
+      let endKey = closedD ? dateKey(closedD) : (isDone ? startKey : todayKey);
       if (endKey < startKey) endKey = startKey;
       const hasBlockToday = dayBlocks.some((b) => b.workItemId === w.id && b.blockDate === viewDate);
       if (hasBlockToday || (viewDate >= startKey && viewDate <= endKey)) out.push(w);
@@ -616,6 +618,7 @@ function SessionBox({
   const { item } = session;
   const status = item.kanbanStatus ?? 'todo';
   const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
+  const isDone = status === 'done';
   const TypeIcon = WORK_ITEM_TYPE_CONFIG[item.type]?.Icon;
   const names = assigneeNames(item);
   const primary = names[0] ?? '미지정';
@@ -624,7 +627,7 @@ function SessionBox({
 
   return (
     <div
-      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/25 transition-colors', sv.tint)}
+      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/25 transition-colors', sv.tint, isDone && 'opacity-60')}
       style={{ top, height, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
     >
       {/* 상단 리사이즈 핸들 — 히트영역은 넓게(h-2), 표시는 얇은 그립 라인만 */}
@@ -636,7 +639,7 @@ function SessionBox({
         <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l', sv.bar)} />
         <div className="flex items-center gap-1 min-w-0">
           {TypeIcon && !compact && <TypeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />}
-          <span className="text-xs font-medium truncate text-foreground">{label}</span>
+          <span className={cn('text-xs font-medium truncate', isDone ? 'text-muted-foreground line-through' : 'text-foreground')}>{label}</span>
           {onDelete && (
             <button
               onMouseDown={(e) => e.stopPropagation()}
@@ -669,14 +672,15 @@ function SessionBox({
 function UnscheduledCard({ item, onOpen }: { item: WorkItem; onOpen: (id: string) => void }) {
   const status = item.kanbanStatus ?? 'todo';
   const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
+  const isDone = status === 'done';
   const names = assigneeNames(item);
   const label = item.title?.trim() || stripHtml(item.content) || item.category;
   return (
     <button type="button" onClick={() => onOpen(item.id)} title={label} aria-label={label}
-      className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint)}>
+      className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint, isDone && 'opacity-60')}>
       <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
       <div className="min-w-0 flex-1">
-        <span className="text-sm truncate text-foreground font-medium block">{label}</span>
+        <span className={cn('text-sm truncate font-medium block', isDone ? 'text-muted-foreground line-through' : 'text-foreground')}>{label}</span>
         <span className="text-xs text-muted-foreground truncate block">{names.join(', ')}{item.clusterName ? ` · ${item.clusterName}` : ''}</span>
       </div>
       <span className={cn('w-1.5 h-1.5 rounded-full flex-none', sv.dot)} />
