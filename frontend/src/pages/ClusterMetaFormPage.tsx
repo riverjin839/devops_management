@@ -1,4 +1,7 @@
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect, useId, useState,
+  type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
+} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Cpu, Network, RefreshCw, Server } from 'lucide-react';
 import type { Cluster, ClusterManageUpdate } from '@/types';
@@ -8,6 +11,8 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOperationLevels } from '@/hooks/useOperationLevels';
 import { Skeleton } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
+import { Button } from '@/components/ui/button';
 import { formatApiError } from '@/lib/utils';
 
 const TABS = [
@@ -163,18 +168,12 @@ export function ClusterMetaFormPage() {
           네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.
         </p>
         <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => refetchClusters()}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-          >
+          <Button type="button" onClick={() => refetchClusters()}>
             <RefreshCw className="w-3.5 h-3.5" /> 다시 시도
-          </button>
-          <button
-            onClick={() => navigate('/cluster-manage')}
-            className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg"
-          >
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => navigate('/cluster-manage')}>
             클러스터 목록으로
-          </button>
+          </Button>
         </div>
       </div>,
     );
@@ -185,18 +184,30 @@ export function ClusterMetaFormPage() {
       <div className="text-center py-20">
         <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
         <p className="text-muted-foreground mb-4">클러스터를 찾을 수 없습니다.</p>
-        <button
-          onClick={() => navigate('/cluster-manage')}
-          className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-        >
+        <Button type="button" onClick={() => navigate('/cluster-manage')}>
           클러스터 목록으로
-        </button>
+        </Button>
       </div>,
     );
   }
 
-  const ic = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+  // 입력은 표준 라운딩 `rounded-xl` (버튼/입력 규격, CLAUDE.md UI 컨벤션) — D-035
+  const ic = 'w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary';
   const lc = 'block text-sm font-medium text-muted-foreground mb-1';
+
+  // 탭 좌우/Home/End 키 이동 — WAI-ARIA tabs 패턴 (D-036)
+  const onTabKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>, idx: number) => {
+    const n = TABS.length;
+    let next: number;
+    if (e.key === 'ArrowRight') next = (idx + 1) % n;
+    else if (e.key === 'ArrowLeft') next = (idx - 1 + n) % n;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = n - 1;
+    else return;
+    e.preventDefault();
+    setTab(TABS[next].id);
+    document.getElementById(f(`tab-${TABS[next].id}`))?.focus();
+  };
 
   // 검증 실패 필드 강조 + 인라인 사유 (D-033)
   const invalidCls = (k: string) =>
@@ -317,14 +328,16 @@ export function ClusterMetaFormPage() {
       <main className="max-w-[1200px] mx-auto px-8 py-8">
         {/* Page header */}
         <div className="flex items-center gap-3 mb-6">
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             onClick={() => navigate('/cluster-manage')}
-            className="p-2 hover:bg-secondary rounded-lg transition-colors"
             title="목록으로"
             aria-label="목록으로"
           >
             <ArrowLeft className="w-4 h-4" />
-          </button>
+          </Button>
           <Server className="w-6 h-6 text-primary" />
           <div>
             <h1 className="text-xl font-bold">클러스터 정보 수정</h1>
@@ -332,7 +345,8 @@ export function ClusterMetaFormPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl overflow-hidden">
+        <form onSubmit={handleSubmit}>
+          <MacCard title="클러스터 정보" bodyPadding="p-0">
           {/* 공통 상단 필드 */}
           <div className="px-6 pt-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-border">
             <div>
@@ -354,17 +368,24 @@ export function ClusterMetaFormPage() {
             </div>
           </div>
 
-          {/* 탭 */}
-          <div className="flex gap-1 px-6 pt-4 border-b border-border">
-            {TABS.map((t) => {
+          {/* 탭 — WAI-ARIA tabs 패턴(roving tabindex + 좌우/Home/End 이동), D-036 */}
+          <div role="tablist" aria-label="클러스터 정보 항목" className="flex gap-1 px-6 pt-4 border-b border-border">
+            {TABS.map((t, idx) => {
               const Icon = t.icon;
+              const active = tab === t.id;
               return (
                 <button
                   key={t.id}
+                  id={f(`tab-${t.id}`)}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={f(`panel-${t.id}`)}
+                  tabIndex={active ? 0 : -1}
                   onClick={() => setTab(t.id)}
+                  onKeyDown={(e) => onTabKeyDown(e, idx)}
                   className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    tab === t.id
+                    active
                       ? 'border-primary text-foreground'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
@@ -377,12 +398,19 @@ export function ClusterMetaFormPage() {
           </div>
 
           <div className="p-6 space-y-5">
+            {/* 저장 실패·검증 오류는 스크린리더에도 즉시 고지 (D-036) */}
             {error && (
-              <div className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+              <div role="alert" className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
                 {error}
               </div>
             )}
 
+            <div
+              role="tabpanel"
+              id={f(`panel-${tab}`)}
+              aria-labelledby={f(`tab-${tab}`)}
+              className="space-y-5"
+            >
             {tab === 'node' && (
               <>
                 <div>
@@ -404,7 +432,7 @@ export function ClusterMetaFormPage() {
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">NIC 정보 (ifconfig)</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
+                    <div className="space-y-3 border border-border rounded-md p-4 bg-muted/10">
                       <p className="text-sm font-semibold text-primary">bond0</p>
                       <div>
                         <label htmlFor={f('bond0Ip')} className={lc}>IP 주소</label>
@@ -421,7 +449,7 @@ export function ClusterMetaFormPage() {
                         {fieldMsg('bond0Mac')}
                       </div>
                     </div>
-                    <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
+                    <div className="space-y-3 border border-border rounded-md p-4 bg-muted/10">
                       <p className="text-sm font-semibold text-primary">bond1</p>
                       <div>
                         <label htmlFor={f('bond1Ip')} className={lc}>IP 주소</label>
@@ -444,7 +472,7 @@ export function ClusterMetaFormPage() {
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">BGP 설정</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-3 px-3 py-2.5 bg-background border border-border rounded-lg">
+                    <div className="flex items-center gap-3 px-3 py-2.5 bg-background border border-border rounded-xl">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
                           type="checkbox"
@@ -476,10 +504,12 @@ export function ClusterMetaFormPage() {
 
             {tab === 'network' && (
               <div className="space-y-5">
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 space-y-4">
+                {/* 네트워크 도메인 3종(Node/Pod/Service)은 의미색이 아니라 범주 구분이므로
+                    categorical chart 토큰을 쓴다 — 고정 팔레트는 테마 전환 시 톤이 어긋난다 (D-034) */}
+                <div className="rounded-md border border-chart-1/20 bg-chart-1/5 p-4 space-y-4">
                   <div>
-                    <p className="text-sm font-semibold text-sky-600 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
-                    <p className="text-[10.5px] text-muted-foreground mt-0.5">
+                    <p className="text-sm font-semibold text-chart-1 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       자동수집(kubectl) nodeIps &gt; 수동 IP 리스트(정규식) &gt; fallback CIDR 순으로 표시됩니다.
                     </p>
                   </div>
@@ -523,8 +553,8 @@ export function ClusterMetaFormPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
-                  <p className="text-sm font-semibold text-emerald-400 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
+                <div className="rounded-md border border-chart-2/20 bg-chart-2/5 p-4">
+                  <p className="text-sm font-semibold text-chart-2 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('podCidr')} className={lc}>Pod CIDR</label>
                       <input id={f('podCidr')} type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} aria-invalid={!!fieldErrors.podCidr} placeholder="10.244.0.0/16" className={ic + invalidCls('podCidr')} />
@@ -538,8 +568,8 @@ export function ClusterMetaFormPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
-                  <p className="text-sm font-semibold text-violet-400 uppercase tracking-wider mb-3">Service CIDR 대역</p>
+                <div className="rounded-md border border-chart-3/20 bg-chart-3/5 p-4">
+                  <p className="text-sm font-semibold text-chart-3 uppercase tracking-wider mb-3">Service CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('svcCidr')} className={lc}>Service CIDR</label>
                       <input id={f('svcCidr')} type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} aria-invalid={!!fieldErrors.svcCidr} placeholder="10.96.0.0/12" className={ic + invalidCls('svcCidr')} />
@@ -571,8 +601,8 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 {/* Cluster Trends — per-cluster Prometheus 연동 (노드 메트릭 추이) */}
-                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
-                  <p className="text-sm font-semibold text-cyan-500 uppercase tracking-wider">메트릭 추이 (Prometheus)</p>
+                <div className="rounded-md border border-chart-4/20 bg-chart-4/5 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-chart-4 uppercase tracking-wider">메트릭 추이 (Prometheus)</p>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" className="accent-primary" checked={prometheusEnabled}
                       onChange={(e) => setPrometheusEnabled(e.target.checked)} />
@@ -591,18 +621,18 @@ export function ClusterMetaFormPage() {
                 </div>
               </div>
             )}
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
-            <button type="button" onClick={() => navigate('/cluster-manage')}
-              className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">
+            <Button type="button" variant="secondary" onClick={() => navigate('/cluster-manage')}>
               취소
-            </button>
-            <button type="submit" disabled={saving}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60">
+            </Button>
+            <Button type="submit" disabled={saving}>
               {saving ? '저장 중...' : '저장'}
-            </button>
+            </Button>
           </div>
+          </MacCard>
         </form>
       </main>
     </div>
