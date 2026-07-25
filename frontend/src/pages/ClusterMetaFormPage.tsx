@@ -1,8 +1,8 @@
 import {
-  useEffect, useId, useState,
+  useEffect, useId, useMemo, useRef, useState,
   type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
 } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Cpu, Network, RefreshCw, Server } from 'lucide-react';
 import type { Cluster, ClusterManageUpdate } from '@/types';
 import { clustersApi } from '@/services/api';
@@ -10,7 +10,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOperationLevels } from '@/hooks/useOperationLevels';
-import { Skeleton } from '@/components/common';
+import { ConfirmDialog, Skeleton, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { formatApiError } from '@/lib/utils';
@@ -90,41 +90,126 @@ export function ClusterMetaFormPage() {
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
   const [fieldErrors, setFieldErrors]   = useState<Record<string, string>>({});
-  const [tab, setTab]                   = useState<TabId>('node');
-  const [hydrated, setHydrated]         = useState(false);
+  // D-039: 이전엔 boolean 이라, 라우트 재사용(`/A/edit` → `/B/edit`)시 재하이드레이션이
+  // 일어나지 않아 A 의 값으로 B 를 저장할 수 있었다. 하이드레이션한 클러스터 id 를 기억한다.
+  const [hydratedId, setHydratedId]     = useState<string | null>(null);
+  const toast = useToast();
+
+  // D-038: 활성 탭을 URL(`?tab=`)에 보존 — 새로고침·공유·저장 실패 후에도 작업 탭 유지.
+  // `replace: true` 로 써서 탭 전환이 히스토리에 쌓이지 않게 한다(전역 뒤로가기가
+  // 탭 이동을 되짚지 않도록 — D-029 연계).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : 'node';
+  const setTab = (next: TabId) => {
+    const sp = new URLSearchParams(searchParams);
+    sp.set('tab', next);
+    setSearchParams(sp, { replace: true });
+  };
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
+  // D-037: 미저장 변경 감지용 기준 스냅샷. 키 순서에 의존하지 않도록 정렬 후 직렬화.
+  const baselineRef = useRef<string | null>(null);
+  const serialize = (o: Record<string, string | boolean>) =>
+    JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
+
   useEffect(() => {
-    if (hydrated || !cluster) return;
-    setRegion(cluster.region ?? '');
-    setLevel(cluster.operationLevel ?? '');
-    setNodeCount(cluster.nodeCount?.toString() ?? '');
-    setMaxPod(cluster.maxPod?.toString() ?? '');
-    setHostname(cluster.hostname ?? '');
-    setCidr(cluster.cidr ?? '');
-    setInternalIps(cluster.internalIps ?? '');
-    setFirstHost(cluster.firstHost ?? '');
-    setLastHost(cluster.lastHost ?? '');
-    setPodCidr(cluster.podCidr ?? '');
-    setPodFirstHost(cluster.podFirstHost ?? '');
-    setPodLastHost(cluster.podLastHost ?? '');
-    setSvcCidr(cluster.svcCidr ?? '');
-    setSvcFirst(cluster.svcFirstHost ?? '');
-    setSvcLast(cluster.svcLastHost ?? '');
-    setBond0Ip(cluster.bond0Ip ?? '');
-    setBond0Mac(cluster.bond0Mac ?? '');
-    setBond1Ip(cluster.bond1Ip ?? '');
-    setBond1Mac(cluster.bond1Mac ?? '');
-    setCilium(cluster.ciliumConfig ?? '');
-    setDescription(cluster.description ?? '');
-    setBgpEnabled(cluster.bgpEnabled ?? false);
-    setAsNumber(cluster.asNumber ?? '');
-    setPrometheusUrl(cluster.prometheusUrl ?? '');
-    setPrometheusEnabled(cluster.prometheusEnabled ?? false);
-    setHydrated(true);
-  }, [cluster, hydrated]);
+    if (!cluster || hydratedId === cluster.id) return;
+    // 폼 상태와 기준 스냅샷을 같은 객체 하나에서 만들어 둘이 어긋나지 않게 한다.
+    const next = {
+      region: cluster.region ?? '',
+      operationLevel: cluster.operationLevel ?? '',
+      nodeCount: cluster.nodeCount?.toString() ?? '',
+      maxPod: cluster.maxPod?.toString() ?? '',
+      hostname: cluster.hostname ?? '',
+      cidr: cluster.cidr ?? '',
+      internalIps: cluster.internalIps ?? '',
+      firstHost: cluster.firstHost ?? '',
+      lastHost: cluster.lastHost ?? '',
+      podCidr: cluster.podCidr ?? '',
+      podFirstHost: cluster.podFirstHost ?? '',
+      podLastHost: cluster.podLastHost ?? '',
+      svcCidr: cluster.svcCidr ?? '',
+      svcFirstHost: cluster.svcFirstHost ?? '',
+      svcLastHost: cluster.svcLastHost ?? '',
+      bond0Ip: cluster.bond0Ip ?? '',
+      bond0Mac: cluster.bond0Mac ?? '',
+      bond1Ip: cluster.bond1Ip ?? '',
+      bond1Mac: cluster.bond1Mac ?? '',
+      ciliumConfig: cluster.ciliumConfig ?? '',
+      description: cluster.description ?? '',
+      bgpEnabled: cluster.bgpEnabled ?? false,
+      asNumber: cluster.asNumber ?? '',
+      prometheusUrl: cluster.prometheusUrl ?? '',
+      prometheusEnabled: cluster.prometheusEnabled ?? false,
+    };
+    setRegion(next.region);
+    setLevel(next.operationLevel);
+    setNodeCount(next.nodeCount);
+    setMaxPod(next.maxPod);
+    setHostname(next.hostname);
+    setCidr(next.cidr);
+    setInternalIps(next.internalIps);
+    setFirstHost(next.firstHost);
+    setLastHost(next.lastHost);
+    setPodCidr(next.podCidr);
+    setPodFirstHost(next.podFirstHost);
+    setPodLastHost(next.podLastHost);
+    setSvcCidr(next.svcCidr);
+    setSvcFirst(next.svcFirstHost);
+    setSvcLast(next.svcLastHost);
+    setBond0Ip(next.bond0Ip);
+    setBond0Mac(next.bond0Mac);
+    setBond1Ip(next.bond1Ip);
+    setBond1Mac(next.bond1Mac);
+    setCilium(next.ciliumConfig);
+    setDescription(next.description);
+    setBgpEnabled(next.bgpEnabled);
+    setAsNumber(next.asNumber);
+    setPrometheusUrl(next.prometheusUrl);
+    setPrometheusEnabled(next.prometheusEnabled);
+    baselineRef.current = serialize(next);
+    setFieldErrors({});
+    setError('');
+    setHydratedId(cluster.id);
+  }, [cluster, hydratedId]);
+
+  // ── D-037: 미저장 변경 감지 ────────────────────────────────────────────────
+  const snapshot = useMemo(() => ({
+    region, operationLevel, nodeCount, maxPod, hostname, cidr, internalIps,
+    firstHost, lastHost, podCidr, podFirstHost, podLastHost,
+    svcCidr, svcFirstHost, svcLastHost,
+    bond0Ip, bond0Mac, bond1Ip, bond1Mac,
+    ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
+  }), [
+    region, operationLevel, nodeCount, maxPod, hostname, cidr, internalIps,
+    firstHost, lastHost, podCidr, podFirstHost, podLastHost,
+    svcCidr, svcFirstHost, svcLastHost,
+    bond0Ip, bond0Mac, bond1Ip, bond1Mac,
+    ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
+  ]);
+  const isDirty = baselineRef.current !== null && serialize(snapshot) !== baselineRef.current;
+
+  // 새로고침·탭 닫기는 브라우저 기본 경고로 막는다. (앱 내 사이드바 이동은 선언형
+  // BrowserRouter 라 `useBlocker` 를 쓸 수 없어 차단 대상이 아니다 — DESIGN.md D-037 참고)
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
+
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  /** 목록으로 나가기 — 미저장 변경이 있으면 확인을 받는다. */
+  const requestLeave = () => {
+    if (isDirty) setLeaveOpen(true);
+    else navigate('/cluster-manage');
+  };
 
   // ── D-032: 로딩/에러/미발견 3분기 — 데이터가 확정되기 전엔 폼을 렌더하지 않는다 ──
   const shell = (children: ReactNode) => (
@@ -314,6 +399,9 @@ export function ClusterMetaFormPage() {
       };
       await clustersApi.update(cluster.id, payload as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      // 저장 성공을 명시적으로 알린다 — 이전엔 목록으로 튕기기만 해 반영 여부가 불확실했다 (D-037)
+      toast.success('클러스터 정보를 저장했습니다.', cluster.name);
+      baselineRef.current = serialize(snapshot);   // 이탈 경고가 뜨지 않도록 기준 갱신
       navigate('/cluster-manage');
     } catch (err) {
       // 실제 API 오류(422 검증 실패 등)를 그대로 노출 — 이전엔 고정 문구로 덮여 있었다.
@@ -332,7 +420,7 @@ export function ClusterMetaFormPage() {
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/cluster-manage')}
+            onClick={requestLeave}
             title="목록으로"
             aria-label="목록으로"
           >
@@ -625,7 +713,7 @@ export function ClusterMetaFormPage() {
           </div>
 
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
-            <Button type="button" variant="secondary" onClick={() => navigate('/cluster-manage')}>
+            <Button type="button" variant="secondary" onClick={requestLeave}>
               취소
             </Button>
             <Button type="submit" disabled={saving}>
@@ -634,6 +722,18 @@ export function ClusterMetaFormPage() {
           </div>
           </MacCard>
         </form>
+
+        {/* 미저장 변경 이탈 확인 (D-037) */}
+        <ConfirmDialog
+          open={leaveOpen}
+          title="저장하지 않고 나갈까요?"
+          description="입력한 내용이 저장되지 않고 사라집니다."
+          confirmLabel="나가기"
+          cancelLabel="계속 편집"
+          danger
+          onConfirm={() => { setLeaveOpen(false); navigate('/cluster-manage'); }}
+          onCancel={() => setLeaveOpen(false)}
+        />
       </main>
     </div>
   );

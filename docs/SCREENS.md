@@ -558,7 +558,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 - **파일**: `frontend/src/pages/ClusterMetaFormPage.tsx`
 - **목적 / UX**: 단일 클러스터의 수동 메타데이터(노드 스펙/NIC, N/W CIDR, BGP, Cilium 설정, Prometheus 연동 등)를 탭 폼으로 편집·저장한다. `ClusterManagePage`의 자동수집으로 채워지지 않는 값(설명 등)을 사람이 직접 입력하는 용도.
-- **UI 구성**: **ClusterSidebar 미사용** — 단일 클러스터 편집 폼 페이지(뒤로가기 헤더 + `클러스터명` 표시). 본문은 `MacCard`(`bodyPadding="p-0"`) 안에 상단 공통 필드(지역/운영레벨/호스트명) + 3개 탭(`노드 스펙/NIC`, `N/W CIDR`, `기타`) + 하단 취소/저장 푸터. 탭은 WAI-ARIA tabs 패턴(`role=tablist/tab/tabpanel`, roving tabindex, ←/→·Home/End 이동). N/W CIDR 탭의 3개 도메인 섹션(INTERNAL_IP/Pod/Service)과 Prometheus 섹션은 categorical `--chart-1~4` 토큰으로 색 구분.
+- **UI 구성**: **ClusterSidebar 미사용** — 단일 클러스터 편집 폼 페이지(뒤로가기 헤더 + `클러스터명` 표시). 본문은 `MacCard`(`bodyPadding="p-0"`) 안에 상단 공통 필드(지역/운영레벨/호스트명) + 3개 탭(`노드 스펙/NIC`, `N/W CIDR`, `기타`) + 하단 취소/저장 푸터. 탭은 WAI-ARIA tabs 패턴(`role=tablist/tab/tabpanel`, roving tabindex, ←/→·Home/End 이동)이며 활성 탭은 **`?tab=node|network|extra`** 쿼리로 영속화된다(`replace: true` — 탭 전환이 히스토리에 쌓이지 않음, 알 수 없는 값은 `node` 폴백). N/W CIDR 탭의 3개 도메인 섹션(INTERNAL_IP/Pod/Service)과 Prometheus 섹션은 categorical `--chart-1~4` 토큰으로 색 구분.
 - **Frontend**: `useClusters()`(`isLoading`/`isError`/`refetch` 사용) + `useClusterStore()`(Zustand)로 `id` 매칭 클러스터 조회, `useOperationLevels()`. **데이터 확정 전에는 폼 대신 skeleton**, 조회 실패 시 재시도 안내를 렌더한다(빈 폼 렌더 금지 — 입력 유실 방지). 폼 필드는 모두 `useState`로 개별 관리 후 `hydrated` 플래그로 최초 1회 동기화. 저장 시 **빈 입력은 `null` 로 전송**(값 해제 반영 — `undefined` 는 `exclude_unset=True` 백엔드에서 무시됨). 호출 함수: `clustersApi.update(cluster.id, payload)`.
 - **Backend**: `PUT /api/v1/clusters/{cluster_id}` — `backend/app/routers/clusters.py` (391행). `Cluster` 모델(`backend/app/models/cluster.py`)의 `region/operation_level/node_count/max_pod/hostname/cidr/internal_ips/first_host/last_host/pod_cidr/pod_first_host/pod_last_host/svc_cidr/svc_first_host/svc_last_host/bond0_ip/bond0_mac/bond1_ip/bond1_mac/cilium_config/description/bgp_enabled/as_number/prometheus_url/prometheus_enabled` 컬럼을 갱신(전부 `nullable=True` — `null` 로 해제 가능). `ClusterUpdate` 스키마는 `model_dump(exclude_unset=True)` 로 적용되므로 **미전송 필드는 기존 값 유지**.
 - **핵심 기능**:
@@ -569,6 +569,8 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - Cluster Trends Prometheus 연동(사용 토글 + URL 오버라이드)
   - **입력 형식 검증 15필드**(CIDR 3 / IPv4 6 / IP\|CIDR 2 / MAC 2 / AS Number) — 값이 있을 때만 검사하고, 실패 필드는 `aria-invalid`+인라인 사유 표시 후 해당 탭으로 자동 전환. 규칙은 `ClusterManagePage` 의 `parseCidrRange`(CIDR 겹침 검사)와 동일 형식
   - 저장 실패 시 `formatApiError` 로 백엔드 오류 사유를 그대로 노출(`role="alert"`)
+  - **미저장 변경 보호** — 기준 스냅샷 대비 dirty 추적 → 취소·뒤로가기 시 `ConfirmDialog`, 새로고침·탭 닫기 시 `beforeunload` 경고. 저장 성공 시 `toast.success`. (앱 내 링크 이동은 선언형 `BrowserRouter` 라 `useBlocker` 불가 — 미차단)
+  - 클러스터 전환 시 재하이드레이션 — `hydratedId` 로 `cluster.id` 변경을 감지(같은 id 의 30초 자동 리페치에서는 편집 중 입력을 덮어쓰지 않음)
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
