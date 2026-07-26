@@ -10,6 +10,25 @@
 
 1.14.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **Apple Silicon Vagrant 테스트 클러스터 — Mac 절전 후 복구 불능 문제**: Mac 이 절전에 들어가면
+  VirtualBox 가 VM 을 `HostSuspend` 로 일시정지하는데 Apple Silicon 빌드는 resume 이
+  `VM is paused due to host power management` 로 실패하고, 그 VM 을 붙잡은 VBoxSVC 가 교착에
+  빠져 이후 `vagrant`/`VBoxManage` 명령이 전부 무한 대기했다(→ `192.168.10.100:6443` 도달 불가로
+  PEP 클러스터 등록이 `pending` 에서 멈춤). `vagrant/up.sh` 에 자가진단·복구 단계(`vbox_doctor`)를
+  추가해 교착된 VBoxSVC/클라이언트를 정리하고 `paused`/`aborted`/`saved` VM 을 poweroff 로
+  내린 뒤 다시 부팅하도록 했다. macOS 에 없는 `timeout(1)` 대체 래퍼(`vbox_t`)로 진단 단계가
+  스스로 멈추지 않게 했고, VM 잔존 폴더 정리 경로에 실제 그룹 경로(`VirtualBox VMs/Cilium-Lab/<vm>`)를
+  추가했다.
+- **Vagrant 워커 노드가 NAT IP(10.0.2.15)로 등록되던 문제**: `k8s-w.sh` 가 kubelet NodeIP 를
+  고정하지 않아 워커가 default route 인 NAT eth0 주소로 노드 등록됐고, VirtualBox NAT 는 모든 VM 에
+  같은 `10.0.2.15` 를 주므로 워커들의 InternalIP 가 중복됐다(→ `kubectl logs/exec` 오작동, Cilium
+  native routing 의 `autoDirectNodeRoutes` 노드간 경로 실패, PEP 노드 메트릭 중복). `k8s-w.sh` /
+  `k8s-ctr.sh` 가 host-only(eth1) 주소로 `--node-ip` 을 고정하도록 수정.
+- **문서**: `vagrant/README.md` 에 "1분 진단" 3줄 + 증상별 트러블슈팅 표 + 절전 후 수동 복구 /
+  NodeIP 수동 교정 절차를 추가하고, `docs/MAC_LOCAL_TEST_GUIDE.md` 트러블슈팅 표에 절전·NodeIP
+  관련 행 5개를 보강했다.
+
 ## [1.14.0] - 2026-07-24
 
 ### Changed

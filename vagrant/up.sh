@@ -75,11 +75,76 @@ purge_vbox_orphans() {
       fi
     fi
     # ③ 디스크에 남은 VM 폴더(중단된 clone)
-    for d in ${base:+"$base/$vm"} "$HOME/VirtualBox VMs/$vm"; do
+    #    Vagrantfile 이 --groups /Cilium-Lab 를 지정하므로 실제 경로는 그룹 하위다.
+    #    (그룹 없이 만들어진 예전 잔존물도 있을 수 있어 둘 다 본다)
+    for d in ${base:+"$base/Cilium-Lab/$vm" "$base/$vm"} \
+             "$HOME/VirtualBox VMs/Cilium-Lab/$vm" "$HOME/VirtualBox VMs/$vm"; do
       if [ -e "$d" ]; then rm -rf "$d"; removed=true; fi
     done
     if $removed; then $did || warn "VirtualBox 잔존 VM/폴더 정리:"; did=true; echo "      - $vm"; fi
   done
+}
+
+# macOS 에는 timeout(1) 이 없다. VBoxSVC 가 교착이면 VBoxManage 가 무한 대기하므로
+# 진단 단계의 모든 호출은 이 래퍼로 감싼다. rc=124 = 시간초과.
+vbox_t() { # vbox_t <초> <VBoxManage 인자...>
+  local secs="$1"; shift
+  local out rc=0 p i=0
+  out="$(mktemp)"
+  VBoxManage "$@" >"$out" 2>&1 &
+  p=$!
+  while kill -0 "$p" 2>/dev/null && [ "$i" -lt "$((secs * 10))" ]; do sleep 0.1; i=$((i + 1)); done
+  if kill -0 "$p" 2>/dev/null; then kill -9 "$p" 2>/dev/null || true; rc=124; else wait "$p" || rc=$?; fi
+  cat "$out"; rm -f "$out"
+  return "$rc"
+}
+
+# Apple Silicon 필수 복구 단계 — Mac 절전(sleep) 후유증 정리.
+#
+# 왜 필요한가: Mac 이 절전에 들어가면 VirtualBox 가 VM 을 'HostSuspend' 사유로
+# 일시정지(paused)한다. 그런데 Apple Silicon 빌드에서는 깨어난 뒤 resume 이
+#   VBoxManage: error: VM is paused due to host power management (VBOX_E_INVALID_VM_STATE)
+# 로 실패한다. 이 상태의 VM 을 붙잡은 VBoxSVC 는 교착에 빠져 이후 VBoxManage /
+# vagrant 명령이 전부 무한 대기하고, 결국 192.168.10.100:6443 도달 불가 →
+# PEP 등록·헬스체크가 pending 으로 남는다. 유일한 해법은 poweroff 후 재기동이다.
+vbox_doctor() {
+  command -v VBoxManage >/dev/null 2>&1 || return 0
+  log "VirtualBox 상태 진단 (Mac 절전 후유증 점검)..."
+
+  # ① VBoxSVC 응답 확인 — 무응답이면 멈춘 클라이언트/서비스를 정리한다.
+  #    이 함수는 up.sh 가 vagrant 를 처음 호출하기 전에 돌기 때문에, 이 시점에
+  #    살아있는 vagrant/VBoxManage 프로세스는 전부 이전 세션의 잔재다.
+  if ! vbox_t 15 list vms >/dev/null 2>&1; then
+    warn "VirtualBox 서비스가 응답하지 않습니다(교착) — 멈춘 프로세스를 정리합니다."
+    pkill -9 -f 'MacOS/VBoxManage' 2>/dev/null || true
+    pkill -9 -f 'gems/vagrant-.*/bin/vagrant' 2>/dev/null || true
+    pkill -9 -f 'MacOS/VBoxHeadless' 2>/dev/null || true
+    pkill -f 'MacOS/VBoxSVC' 2>/dev/null || true
+    sleep 3
+    if vbox_t 15 list vms >/dev/null 2>&1; then
+      ok "VirtualBox 서비스 복구됨"
+    else
+      err "VirtualBox 가 여전히 응답하지 않습니다. VirtualBox.app 종료 후 Mac 재부팅이 필요할 수 있습니다."
+      exit 1
+    fi
+  fi
+
+  # ② 절전에 물려 되살릴 수 없는 VM(paused/aborted/saved) 을 poweroff 로 내린다.
+  #    poweroff 해두면 이어지는 vagrant up 이 정상적으로 다시 부팅한다.
+  local vm state did=false
+  for vm in k8s-ctr k8s-w1 k8s-w2; do
+    state="$(vbox_t 15 showvminfo "$vm" --machinereadable 2>/dev/null | sed -n 's/^VMState="\(.*\)"$/\1/p' || true)"
+    case "$state" in
+      paused|aborted|saved|stuck|aborted-saved)
+        $did || warn "되살릴 수 없는 VM 상태를 정리합니다 (Mac 절전/강제종료 흔적):"
+        did=true
+        echo "      - $vm ($state) → poweroff"
+        vbox_t 30 controlvm "$vm" poweroff >/dev/null 2>&1 || true
+        vbox_t 30 discardstate "$vm" >/dev/null 2>&1 || true
+        ;;
+    esac
+  done
+  $did && ok "정리 완료 — 아래 단계에서 다시 부팅합니다." || ok "VirtualBox 상태 정상"
 }
 
 # ---- 0) OS check ----
@@ -119,6 +184,10 @@ if vagrant plugin list 2>/dev/null | grep -q vagrant-qemu; then
     vagrant plugin uninstall vagrant-qemu >/dev/null 2>&1 && ok "vagrant-qemu 제거됨" || warn "vagrant-qemu 제거 실패(무시 가능)"
   fi
 fi
+
+# ---- 2.5) VirtualBox 상태 진단·복구 (Apple Silicon) ----
+# 이 단계가 없으면 아래 'vagrant status' 부터 무한 대기(hang)할 수 있다.
+vbox_doctor
 
 # ---- 3) 기존 VM 확인 ----
 created="$(vagrant status --machine-readable 2>/dev/null | awk -F, '$3=="state"{print $2"="$4}' | grep -v '=not_created$' || true)"
