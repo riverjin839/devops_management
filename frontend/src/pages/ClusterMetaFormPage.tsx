@@ -1,12 +1,19 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Cpu, Network, Server } from 'lucide-react';
+import {
+  useEffect, useId, useMemo, useRef, useState,
+  type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
+} from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, Cpu, Network, RefreshCw, Server } from 'lucide-react';
 import type { Cluster, ClusterManageUpdate } from '@/types';
 import { clustersApi } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOperationLevels } from '@/hooks/useOperationLevels';
+import { ConfirmDialog, Skeleton, useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
+import { Button } from '@/components/ui/button';
+import { formatApiError } from '@/lib/utils';
 
 const TABS = [
   { id: 'node',    label: '노드 스펙 / NIC', icon: Cpu },
@@ -16,12 +23,41 @@ const TABS = [
 
 type TabId = 'node' | 'network' | 'extra';
 
+// ── 입력 형식 검증 (D-033) ───────────────────────────────────────────────────
+// 전부 "값이 있을 때만" 검사한다 — 빈 값은 해제(null)로 정상 처리되므로 통과시킨다.
+const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+const MAC_RE = /^(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$/;
+
+function isIpv4(v: string): boolean {
+  return IPV4_RE.test(v) && v.split('.').every((o) => Number(o) <= 255);
+}
+function isCidr(v: string): boolean {
+  const parts = v.split('/');
+  if (parts.length !== 2) return false;
+  const [ip, prefix] = parts;
+  return /^\d{1,2}$/.test(prefix) && Number(prefix) <= 32 && isIpv4(ip);
+}
+/** bond NIC 는 `10.0.0.1` 과 `10.0.0.1/24` 를 모두 허용한다. */
+function isIpOrCidr(v: string): boolean {
+  return v.includes('/') ? isCidr(v) : isIpv4(v);
+}
+
+/** 검증 대상 필드 → 소속 탭. 오류 시 해당 탭으로 자동 전환하기 위한 맵. */
+const FIELD_TAB: Record<string, TabId> = {
+  bond0Ip: 'node', bond0Mac: 'node', bond1Ip: 'node', bond1Mac: 'node', asNumber: 'node',
+  cidr: 'network', firstHost: 'network', lastHost: 'network',
+  podCidr: 'network', podFirstHost: 'network', podLastHost: 'network',
+  svcCidr: 'network', svcFirstHost: 'network', svcLastHost: 'network',
+};
+
 export function ClusterMetaFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  useClusters();
+  // D-032: 이전엔 반환값을 버려 isLoading/isError 를 쓰지 않아, 목록이 도착하기 전에
+  // 빈 폼이 그대로 렌더되고(입력 시 hydration 이 덮어씀) 저장은 무반응이었다.
+  const { isLoading: clustersLoading, isError: clustersError, refetch: refetchClusters } = useClusters();
   const { clusters } = useClusterStore();
   const cluster: Cluster | undefined = clusters.find((c) => c.id === id);
   const { data: opsLevels = [] } = useOperationLevels();
@@ -53,102 +89,323 @@ export function ClusterMetaFormPage() {
   const [prometheusEnabled, setPrometheusEnabled] = useState(false);
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
-  const [tab, setTab]                   = useState<TabId>('node');
-  const [hydrated, setHydrated]         = useState(false);
+  const [fieldErrors, setFieldErrors]   = useState<Record<string, string>>({});
+  // D-039: 이전엔 boolean 이라, 라우트 재사용(`/A/edit` → `/B/edit`)시 재하이드레이션이
+  // 일어나지 않아 A 의 값으로 B 를 저장할 수 있었다. 하이드레이션한 클러스터 id 를 기억한다.
+  const [hydratedId, setHydratedId]     = useState<string | null>(null);
+  const toast = useToast();
+
+  // D-038: 활성 탭을 URL(`?tab=`)에 보존 — 새로고침·공유·저장 실패 후에도 작업 탭 유지.
+  // `replace: true` 로 써서 탭 전환이 히스토리에 쌓이지 않게 한다(전역 뒤로가기가
+  // 탭 이동을 되짚지 않도록 — D-029 연계).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : 'node';
+  const setTab = (next: TabId) => {
+    const sp = new URLSearchParams(searchParams);
+    sp.set('tab', next);
+    setSearchParams(sp, { replace: true });
+  };
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
-  useEffect(() => {
-    if (hydrated || !cluster) return;
-    setRegion(cluster.region ?? '');
-    setLevel(cluster.operationLevel ?? '');
-    setNodeCount(cluster.nodeCount?.toString() ?? '');
-    setMaxPod(cluster.maxPod?.toString() ?? '');
-    setHostname(cluster.hostname ?? '');
-    setCidr(cluster.cidr ?? '');
-    setInternalIps(cluster.internalIps ?? '');
-    setFirstHost(cluster.firstHost ?? '');
-    setLastHost(cluster.lastHost ?? '');
-    setPodCidr(cluster.podCidr ?? '');
-    setPodFirstHost(cluster.podFirstHost ?? '');
-    setPodLastHost(cluster.podLastHost ?? '');
-    setSvcCidr(cluster.svcCidr ?? '');
-    setSvcFirst(cluster.svcFirstHost ?? '');
-    setSvcLast(cluster.svcLastHost ?? '');
-    setBond0Ip(cluster.bond0Ip ?? '');
-    setBond0Mac(cluster.bond0Mac ?? '');
-    setBond1Ip(cluster.bond1Ip ?? '');
-    setBond1Mac(cluster.bond1Mac ?? '');
-    setCilium(cluster.ciliumConfig ?? '');
-    setDescription(cluster.description ?? '');
-    setBgpEnabled(cluster.bgpEnabled ?? false);
-    setAsNumber(cluster.asNumber ?? '');
-    setPrometheusUrl(cluster.prometheusUrl ?? '');
-    setPrometheusEnabled(cluster.prometheusEnabled ?? false);
-    setHydrated(true);
-  }, [cluster, hydrated]);
+  // D-037: 미저장 변경 감지용 기준 스냅샷. 키 순서에 의존하지 않도록 정렬 후 직렬화.
+  const baselineRef = useRef<string | null>(null);
+  const serialize = (o: Record<string, string | boolean>) =>
+    JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
 
-  if (!cluster && clusters.length > 0) {
-    return (
-      <div className="min-h-screen bg-background">
-        <main className="max-w-[1200px] mx-auto px-8 py-8">
-          <div className="text-center py-20">
-            <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">클러스터를 찾을 수 없습니다.</p>
-            <button
-              onClick={() => navigate('/cluster-manage')}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-            >
-              클러스터 목록으로
-            </button>
+  useEffect(() => {
+    if (!cluster || hydratedId === cluster.id) return;
+    // 폼 상태와 기준 스냅샷을 같은 객체 하나에서 만들어 둘이 어긋나지 않게 한다.
+    const next = {
+      region: cluster.region ?? '',
+      operationLevel: cluster.operationLevel ?? '',
+      nodeCount: cluster.nodeCount?.toString() ?? '',
+      maxPod: cluster.maxPod?.toString() ?? '',
+      hostname: cluster.hostname ?? '',
+      cidr: cluster.cidr ?? '',
+      internalIps: cluster.internalIps ?? '',
+      firstHost: cluster.firstHost ?? '',
+      lastHost: cluster.lastHost ?? '',
+      podCidr: cluster.podCidr ?? '',
+      podFirstHost: cluster.podFirstHost ?? '',
+      podLastHost: cluster.podLastHost ?? '',
+      svcCidr: cluster.svcCidr ?? '',
+      svcFirstHost: cluster.svcFirstHost ?? '',
+      svcLastHost: cluster.svcLastHost ?? '',
+      bond0Ip: cluster.bond0Ip ?? '',
+      bond0Mac: cluster.bond0Mac ?? '',
+      bond1Ip: cluster.bond1Ip ?? '',
+      bond1Mac: cluster.bond1Mac ?? '',
+      ciliumConfig: cluster.ciliumConfig ?? '',
+      description: cluster.description ?? '',
+      bgpEnabled: cluster.bgpEnabled ?? false,
+      asNumber: cluster.asNumber ?? '',
+      prometheusUrl: cluster.prometheusUrl ?? '',
+      prometheusEnabled: cluster.prometheusEnabled ?? false,
+    };
+    setRegion(next.region);
+    setLevel(next.operationLevel);
+    setNodeCount(next.nodeCount);
+    setMaxPod(next.maxPod);
+    setHostname(next.hostname);
+    setCidr(next.cidr);
+    setInternalIps(next.internalIps);
+    setFirstHost(next.firstHost);
+    setLastHost(next.lastHost);
+    setPodCidr(next.podCidr);
+    setPodFirstHost(next.podFirstHost);
+    setPodLastHost(next.podLastHost);
+    setSvcCidr(next.svcCidr);
+    setSvcFirst(next.svcFirstHost);
+    setSvcLast(next.svcLastHost);
+    setBond0Ip(next.bond0Ip);
+    setBond0Mac(next.bond0Mac);
+    setBond1Ip(next.bond1Ip);
+    setBond1Mac(next.bond1Mac);
+    setCilium(next.ciliumConfig);
+    setDescription(next.description);
+    setBgpEnabled(next.bgpEnabled);
+    setAsNumber(next.asNumber);
+    setPrometheusUrl(next.prometheusUrl);
+    setPrometheusEnabled(next.prometheusEnabled);
+    baselineRef.current = serialize(next);
+    setFieldErrors({});
+    setError('');
+    setHydratedId(cluster.id);
+  }, [cluster, hydratedId]);
+
+  // ── D-037: 미저장 변경 감지 ────────────────────────────────────────────────
+  const snapshot = useMemo(() => ({
+    region, operationLevel, nodeCount, maxPod, hostname, cidr, internalIps,
+    firstHost, lastHost, podCidr, podFirstHost, podLastHost,
+    svcCidr, svcFirstHost, svcLastHost,
+    bond0Ip, bond0Mac, bond1Ip, bond1Mac,
+    ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
+  }), [
+    region, operationLevel, nodeCount, maxPod, hostname, cidr, internalIps,
+    firstHost, lastHost, podCidr, podFirstHost, podLastHost,
+    svcCidr, svcFirstHost, svcLastHost,
+    bond0Ip, bond0Mac, bond1Ip, bond1Mac,
+    ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
+  ]);
+  const isDirty = baselineRef.current !== null && serialize(snapshot) !== baselineRef.current;
+
+  // 새로고침·탭 닫기는 브라우저 기본 경고로 막는다. (앱 내 사이드바 이동은 선언형
+  // BrowserRouter 라 `useBlocker` 를 쓸 수 없어 차단 대상이 아니다 — DESIGN.md D-037 참고)
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
+
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  /** 목록으로 나가기 — 미저장 변경이 있으면 확인을 받는다. */
+  const requestLeave = () => {
+    if (isDirty) setLeaveOpen(true);
+    else navigate('/cluster-manage');
+  };
+
+  // ── D-032: 로딩/에러/미발견 3분기 — 데이터가 확정되기 전엔 폼을 렌더하지 않는다 ──
+  const shell = (children: ReactNode) => (
+    <div className="min-h-screen bg-background">
+      <main className="max-w-[1200px] mx-auto px-8 py-8">{children}</main>
+    </div>
+  );
+
+  // `clusters.length === 0` 를 로딩 신호로 쓰면 "등록된 클러스터 0개"일 때 skeleton 이
+  // 영원히 남는다. 로딩 여부는 쿼리 상태(isLoading)만 신뢰한다.
+  if (!cluster && clustersLoading && !clustersError) {
+    // 아직 목록을 못 받은 상태. 빈 폼 대신 실제 폼 구조를 흉내낸 skeleton 을 보여 준다.
+    return shell(
+      <div aria-busy="true" aria-label="클러스터 정보 불러오는 중">
+        <div className="flex items-center gap-3 mb-6">
+          <Skeleton height={32} width={32} />
+          <div className="space-y-1.5">
+            <Skeleton height={18} width={180} />
+            <Skeleton height={12} width={120} />
           </div>
-        </main>
-      </div>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} height={38} />)}
+          </div>
+          <Skeleton height={34} width="45%" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} height={38} />)}
+          </div>
+        </div>
+      </div>,
     );
   }
 
-  const ic = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+  if (!cluster && clustersError) {
+    return shell(
+      <div className="text-center py-20">
+        <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-status-critical" />
+        <p className="font-medium mb-1">클러스터 목록을 불러오지 못했습니다.</p>
+        <p className="text-sm text-muted-foreground mb-4">
+          네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.
+        </p>
+        <div className="flex items-center justify-center gap-2">
+          <Button type="button" onClick={() => refetchClusters()}>
+            <RefreshCw className="w-3.5 h-3.5" /> 다시 시도
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => navigate('/cluster-manage')}>
+            클러스터 목록으로
+          </Button>
+        </div>
+      </div>,
+    );
+  }
+
+  if (!cluster) {
+    return shell(
+      <div className="text-center py-20">
+        <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+        <p className="text-muted-foreground mb-4">클러스터를 찾을 수 없습니다.</p>
+        <Button type="button" onClick={() => navigate('/cluster-manage')}>
+          클러스터 목록으로
+        </Button>
+      </div>,
+    );
+  }
+
+  // 입력은 표준 라운딩 `rounded-xl` (버튼/입력 규격, CLAUDE.md UI 컨벤션) — D-035
+  const ic = 'w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary';
   const lc = 'block text-sm font-medium text-muted-foreground mb-1';
+
+  // 탭 좌우/Home/End 키 이동 — WAI-ARIA tabs 패턴 (D-036)
+  const onTabKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>, idx: number) => {
+    const n = TABS.length;
+    let next: number;
+    if (e.key === 'ArrowRight') next = (idx + 1) % n;
+    else if (e.key === 'ArrowLeft') next = (idx - 1 + n) % n;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = n - 1;
+    else return;
+    e.preventDefault();
+    setTab(TABS[next].id);
+    document.getElementById(f(`tab-${TABS[next].id}`))?.focus();
+  };
+
+  // 검증 실패 필드 강조 + 인라인 사유 (D-033)
+  const invalidCls = (k: string) =>
+    fieldErrors[k] ? ' border-status-critical focus:ring-status-critical' : '';
+  const fieldMsg = (k: string) =>
+    fieldErrors[k] ? <p className="mt-1 text-xs text-status-critical">{fieldErrors[k]}</p> : null;
+
+  /** 빈 입력을 `null` 로 — 값 해제가 서버에 반영되도록 (D-031). */
+  const orNull = (v: string) => v.trim() || null;
+
+  /** 값이 있을 때만 형식 검증. 반환값이 비어 있으면 통과. (D-033) */
+  const validate = (): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    const checkAll = (
+      entries: [string, string][],
+      ok: (v: string) => boolean,
+      message: string,
+    ) => {
+      for (const [key, raw] of entries) {
+        const v = raw.trim();
+        if (v && !ok(v)) errs[key] = message;
+      }
+    };
+
+    checkAll(
+      [['cidr', cidr], ['podCidr', podCidr], ['svcCidr', svcCidr]],
+      isCidr,
+      'CIDR 형식이 아닙니다 (예: 10.244.0.0/16)',
+    );
+    checkAll(
+      [
+        ['firstHost', firstHost], ['lastHost', lastHost],
+        ['podFirstHost', podFirstHost], ['podLastHost', podLastHost],
+        ['svcFirstHost', svcFirstHost], ['svcLastHost', svcLastHost],
+      ],
+      isIpv4,
+      'IPv4 주소 형식이 아닙니다 (예: 10.244.0.1)',
+    );
+    checkAll(
+      [['bond0Ip', bond0Ip], ['bond1Ip', bond1Ip]],
+      isIpOrCidr,
+      'IPv4 주소 또는 CIDR 형식이 아닙니다 (예: 192.168.0.10 또는 192.168.0.10/24)',
+    );
+    checkAll(
+      [['bond0Mac', bond0Mac], ['bond1Mac', bond1Mac]],
+      (v) => MAC_RE.test(v),
+      'MAC 주소 형식이 아닙니다 (예: aa:bb:cc:dd:ee:ff)',
+    );
+    if (bgpEnabled) {
+      const v = asNumber.trim();
+      if (v && (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 4294967295)) {
+        errs.asNumber = 'AS Number 는 1~4294967295 사이 숫자여야 합니다';
+      }
+    }
+    return errs;
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!cluster) return;
+    if (!cluster || saving) return;
+
+    const errs = validate();
+    setFieldErrors(errs);
+    const keys = Object.keys(errs);
+    if (keys.length > 0) {
+      // 오류가 있는 첫 필드의 탭으로 이동시켜, 다른 탭에 숨은 오류로 막히지 않게 한다.
+      const firstTab = FIELD_TAB[keys[0]];
+      if (firstTab) setTab(firstTab);
+      setError(`입력값 ${keys.length}건을 확인해 주세요.`);
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
+      // 빈 값은 `null` 로 보내야 실제로 해제된다 — `undefined` 는 직렬화에서 사라지고
+      // 백엔드가 `exclude_unset=True` 라 "미전송 = 기존 값 유지"가 된다. (D-031)
       const payload: ClusterManageUpdate = {
-        region: region.trim() || undefined,
-        operationLevel: operationLevel || undefined,
-        nodeCount: nodeCount ? Number(nodeCount) : undefined,
-        maxPod: maxPod ? Number(maxPod) : undefined,
-        hostname: hostname.trim() || undefined,
-        cidr: cidr.trim() || undefined,
-        internalIps: internalIps.trim() || undefined,
-        firstHost: firstHost.trim() || undefined,
-        lastHost: lastHost.trim() || undefined,
-        podCidr: podCidr.trim() || undefined,
-        podFirstHost: podFirstHost.trim() || undefined,
-        podLastHost: podLastHost.trim() || undefined,
-        svcCidr: svcCidr.trim() || undefined,
-        svcFirstHost: svcFirstHost.trim() || undefined,
-        svcLastHost: svcLastHost.trim() || undefined,
-        bond0Ip: bond0Ip.trim() || undefined,
-        bond0Mac: bond0Mac.trim() || undefined,
-        bond1Ip: bond1Ip.trim() || undefined,
-        bond1Mac: bond1Mac.trim() || undefined,
-        ciliumConfig: ciliumConfig.trim() || undefined,
-        description: description.trim() || undefined,
+        region: orNull(region),
+        operationLevel: operationLevel || null,
+        nodeCount: nodeCount.trim() ? Number(nodeCount) : null,
+        maxPod: maxPod.trim() ? Number(maxPod) : null,
+        hostname: orNull(hostname),
+        cidr: orNull(cidr),
+        internalIps: orNull(internalIps),
+        firstHost: orNull(firstHost),
+        lastHost: orNull(lastHost),
+        podCidr: orNull(podCidr),
+        podFirstHost: orNull(podFirstHost),
+        podLastHost: orNull(podLastHost),
+        svcCidr: orNull(svcCidr),
+        svcFirstHost: orNull(svcFirstHost),
+        svcLastHost: orNull(svcLastHost),
+        bond0Ip: orNull(bond0Ip),
+        bond0Mac: orNull(bond0Mac),
+        bond1Ip: orNull(bond1Ip),
+        bond1Mac: orNull(bond1Mac),
+        ciliumConfig: orNull(ciliumConfig),
+        description: orNull(description),
         bgpEnabled,
-        asNumber: asNumber.trim() || undefined,
-        prometheusUrl: prometheusUrl.trim() || undefined,
+        asNumber: orNull(asNumber),
+        prometheusUrl: orNull(prometheusUrl),
         prometheusEnabled,
       };
       await clustersApi.update(cluster.id, payload as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      // 저장 성공을 명시적으로 알린다 — 이전엔 목록으로 튕기기만 해 반영 여부가 불확실했다 (D-037)
+      toast.success('클러스터 정보를 저장했습니다.', cluster.name);
+      baselineRef.current = serialize(snapshot);   // 이탈 경고가 뜨지 않도록 기준 갱신
       navigate('/cluster-manage');
-    } catch {
-      setError('저장에 실패했습니다. 다시 시도해 주세요.');
+    } catch (err) {
+      // 실제 API 오류(422 검증 실패 등)를 그대로 노출 — 이전엔 고정 문구로 덮여 있었다.
+      setError(formatApiError(err, '저장에 실패했습니다. 다시 시도해 주세요.'));
     } finally {
       setSaving(false);
     }
@@ -159,14 +416,16 @@ export function ClusterMetaFormPage() {
       <main className="max-w-[1200px] mx-auto px-8 py-8">
         {/* Page header */}
         <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => navigate('/cluster-manage')}
-            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={requestLeave}
             title="목록으로"
             aria-label="목록으로"
           >
             <ArrowLeft className="w-4 h-4" />
-          </button>
+          </Button>
           <Server className="w-6 h-6 text-primary" />
           <div>
             <h1 className="text-xl font-bold">클러스터 정보 수정</h1>
@@ -174,7 +433,8 @@ export function ClusterMetaFormPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl overflow-hidden">
+        <form onSubmit={handleSubmit}>
+          <MacCard title="클러스터 정보" bodyPadding="p-0">
           {/* 공통 상단 필드 */}
           <div className="px-6 pt-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-border">
             <div>
@@ -196,17 +456,24 @@ export function ClusterMetaFormPage() {
             </div>
           </div>
 
-          {/* 탭 */}
-          <div className="flex gap-1 px-6 pt-4 border-b border-border">
-            {TABS.map((t) => {
+          {/* 탭 — WAI-ARIA tabs 패턴(roving tabindex + 좌우/Home/End 이동), D-036 */}
+          <div role="tablist" aria-label="클러스터 정보 항목" className="flex gap-1 px-6 pt-4 border-b border-border">
+            {TABS.map((t, idx) => {
               const Icon = t.icon;
+              const active = tab === t.id;
               return (
                 <button
                   key={t.id}
+                  id={f(`tab-${t.id}`)}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={f(`panel-${t.id}`)}
+                  tabIndex={active ? 0 : -1}
                   onClick={() => setTab(t.id)}
+                  onKeyDown={(e) => onTabKeyDown(e, idx)}
                   className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    tab === t.id
+                    active
                       ? 'border-primary text-foreground'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
@@ -219,12 +486,19 @@ export function ClusterMetaFormPage() {
           </div>
 
           <div className="p-6 space-y-5">
+            {/* 저장 실패·검증 오류는 스크린리더에도 즉시 고지 (D-036) */}
             {error && (
-              <div className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+              <div role="alert" className="px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
                 {error}
               </div>
             )}
 
+            <div
+              role="tabpanel"
+              id={f(`panel-${tab}`)}
+              aria-labelledby={f(`tab-${tab}`)}
+              className="space-y-5"
+            >
             {tab === 'node' && (
               <>
                 <div>
@@ -246,30 +520,38 @@ export function ClusterMetaFormPage() {
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">NIC 정보 (ifconfig)</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
+                    <div className="space-y-3 border border-border rounded-md p-4 bg-muted/10">
                       <p className="text-sm font-semibold text-primary">bond0</p>
                       <div>
                         <label htmlFor={f('bond0Ip')} className={lc}>IP 주소</label>
                         <input id={f('bond0Ip')} type="text" value={bond0Ip} onChange={(e) => setBond0Ip(e.target.value)}
-                          placeholder="192.168.0.10/24" className={ic} />
+                          aria-invalid={!!fieldErrors.bond0Ip}
+                          placeholder="192.168.0.10/24" className={ic + invalidCls('bond0Ip')} />
+                        {fieldMsg('bond0Ip')}
                       </div>
                       <div>
                         <label htmlFor={f('bond0Mac')} className={lc}>MAC 주소</label>
                         <input id={f('bond0Mac')} type="text" value={bond0Mac} onChange={(e) => setBond0Mac(e.target.value)}
-                          placeholder="aa:bb:cc:dd:ee:ff" className={ic} />
+                          aria-invalid={!!fieldErrors.bond0Mac}
+                          placeholder="aa:bb:cc:dd:ee:ff" className={ic + invalidCls('bond0Mac')} />
+                        {fieldMsg('bond0Mac')}
                       </div>
                     </div>
-                    <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
+                    <div className="space-y-3 border border-border rounded-md p-4 bg-muted/10">
                       <p className="text-sm font-semibold text-primary">bond1</p>
                       <div>
                         <label htmlFor={f('bond1Ip')} className={lc}>IP 주소</label>
                         <input id={f('bond1Ip')} type="text" value={bond1Ip} onChange={(e) => setBond1Ip(e.target.value)}
-                          placeholder="172.16.0.10/24" className={ic} />
+                          aria-invalid={!!fieldErrors.bond1Ip}
+                          placeholder="172.16.0.10/24" className={ic + invalidCls('bond1Ip')} />
+                        {fieldMsg('bond1Ip')}
                       </div>
                       <div>
                         <label htmlFor={f('bond1Mac')} className={lc}>MAC 주소</label>
                         <input id={f('bond1Mac')} type="text" value={bond1Mac} onChange={(e) => setBond1Mac(e.target.value)}
-                          placeholder="aa:bb:cc:dd:ee:f0" className={ic} />
+                          aria-invalid={!!fieldErrors.bond1Mac}
+                          placeholder="aa:bb:cc:dd:ee:f0" className={ic + invalidCls('bond1Mac')} />
+                        {fieldMsg('bond1Mac')}
                       </div>
                     </div>
                   </div>
@@ -278,7 +560,7 @@ export function ClusterMetaFormPage() {
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">BGP 설정</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-3 px-3 py-2.5 bg-background border border-border rounded-lg">
+                    <div className="flex items-center gap-3 px-3 py-2.5 bg-background border border-border rounded-xl">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
                           type="checkbox"
@@ -297,9 +579,11 @@ export function ClusterMetaFormPage() {
                         value={asNumber}
                         onChange={(e) => setAsNumber(e.target.value)}
                         disabled={!bgpEnabled}
+                        aria-invalid={!!fieldErrors.asNumber}
                         placeholder="예: 64512"
-                        className={`${ic} disabled:opacity-40`}
+                        className={`${ic} disabled:opacity-40${invalidCls('asNumber')}`}
                       />
+                      {fieldMsg('asNumber')}
                     </div>
                   </div>
                 </div>
@@ -308,10 +592,12 @@ export function ClusterMetaFormPage() {
 
             {tab === 'network' && (
               <div className="space-y-5">
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 space-y-4">
+                {/* 네트워크 도메인 3종(Node/Pod/Service)은 의미색이 아니라 범주 구분이므로
+                    categorical chart 토큰을 쓴다 — 고정 팔레트는 테마 전환 시 톤이 어긋난다 (D-034) */}
+                <div className="rounded-md border border-chart-1/20 bg-chart-1/5 p-4 space-y-4">
                   <div>
-                    <p className="text-sm font-semibold text-sky-600 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
-                    <p className="text-[10.5px] text-muted-foreground mt-0.5">
+                    <p className="text-sm font-semibold text-chart-1 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       자동수집(kubectl) nodeIps &gt; 수동 IP 리스트(정규식) &gt; fallback CIDR 순으로 표시됩니다.
                     </p>
                   </div>
@@ -343,36 +629,45 @@ export function ClusterMetaFormPage() {
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div><label htmlFor={f('cidr')} className={lc}>Fallback CIDR</label>
-                        <input id={f('cidr')} type="text" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="192.168.0.0/24" className={ic} /></div>
+                        <input id={f('cidr')} type="text" value={cidr} onChange={(e) => setCidr(e.target.value)} aria-invalid={!!fieldErrors.cidr} placeholder="192.168.0.0/24" className={ic + invalidCls('cidr')} />
+                        {fieldMsg('cidr')}</div>
                       <div><label htmlFor={f('firstHost')} className={lc}>First Host</label>
-                        <input id={f('firstHost')} type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)} placeholder="192.168.0.1" className={ic} /></div>
+                        <input id={f('firstHost')} type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)} aria-invalid={!!fieldErrors.firstHost} placeholder="192.168.0.1" className={ic + invalidCls('firstHost')} />
+                        {fieldMsg('firstHost')}</div>
                       <div><label htmlFor={f('lastHost')} className={lc}>Last Host</label>
-                        <input id={f('lastHost')} type="text" value={lastHost} onChange={(e) => setLastHost(e.target.value)} placeholder="192.168.0.254" className={ic} /></div>
+                        <input id={f('lastHost')} type="text" value={lastHost} onChange={(e) => setLastHost(e.target.value)} aria-invalid={!!fieldErrors.lastHost} placeholder="192.168.0.254" className={ic + invalidCls('lastHost')} />
+                        {fieldMsg('lastHost')}</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
-                  <p className="text-sm font-semibold text-emerald-400 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
+                <div className="rounded-md border border-chart-2/20 bg-chart-2/5 p-4">
+                  <p className="text-sm font-semibold text-chart-2 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('podCidr')} className={lc}>Pod CIDR</label>
-                      <input id={f('podCidr')} type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} placeholder="10.244.0.0/16" className={ic} /></div>
+                      <input id={f('podCidr')} type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} aria-invalid={!!fieldErrors.podCidr} placeholder="10.244.0.0/16" className={ic + invalidCls('podCidr')} />
+                      {fieldMsg('podCidr')}</div>
                     <div><label htmlFor={f('podFirstHost')} className={lc}>First Host</label>
-                      <input id={f('podFirstHost')} type="text" value={podFirstHost} onChange={(e) => setPodFirstHost(e.target.value)} placeholder="10.244.0.1" className={ic} /></div>
+                      <input id={f('podFirstHost')} type="text" value={podFirstHost} onChange={(e) => setPodFirstHost(e.target.value)} aria-invalid={!!fieldErrors.podFirstHost} placeholder="10.244.0.1" className={ic + invalidCls('podFirstHost')} />
+                      {fieldMsg('podFirstHost')}</div>
                     <div><label htmlFor={f('podLastHost')} className={lc}>Last Host</label>
-                      <input id={f('podLastHost')} type="text" value={podLastHost} onChange={(e) => setPodLastHost(e.target.value)} placeholder="10.244.255.254" className={ic} /></div>
+                      <input id={f('podLastHost')} type="text" value={podLastHost} onChange={(e) => setPodLastHost(e.target.value)} aria-invalid={!!fieldErrors.podLastHost} placeholder="10.244.255.254" className={ic + invalidCls('podLastHost')} />
+                      {fieldMsg('podLastHost')}</div>
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
-                  <p className="text-sm font-semibold text-violet-400 uppercase tracking-wider mb-3">Service CIDR 대역</p>
+                <div className="rounded-md border border-chart-3/20 bg-chart-3/5 p-4">
+                  <p className="text-sm font-semibold text-chart-3 uppercase tracking-wider mb-3">Service CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div><label htmlFor={f('svcCidr')} className={lc}>Service CIDR</label>
-                      <input id={f('svcCidr')} type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} placeholder="10.96.0.0/12" className={ic} /></div>
+                      <input id={f('svcCidr')} type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} aria-invalid={!!fieldErrors.svcCidr} placeholder="10.96.0.0/12" className={ic + invalidCls('svcCidr')} />
+                      {fieldMsg('svcCidr')}</div>
                     <div><label htmlFor={f('svcFirstHost')} className={lc}>First Host</label>
-                      <input id={f('svcFirstHost')} type="text" value={svcFirstHost} onChange={(e) => setSvcFirst(e.target.value)} placeholder="10.96.0.1" className={ic} /></div>
+                      <input id={f('svcFirstHost')} type="text" value={svcFirstHost} onChange={(e) => setSvcFirst(e.target.value)} aria-invalid={!!fieldErrors.svcFirstHost} placeholder="10.96.0.1" className={ic + invalidCls('svcFirstHost')} />
+                      {fieldMsg('svcFirstHost')}</div>
                     <div><label htmlFor={f('svcLastHost')} className={lc}>Last Host</label>
-                      <input id={f('svcLastHost')} type="text" value={svcLastHost} onChange={(e) => setSvcLast(e.target.value)} placeholder="10.111.255.254" className={ic} /></div>
+                      <input id={f('svcLastHost')} type="text" value={svcLastHost} onChange={(e) => setSvcLast(e.target.value)} aria-invalid={!!fieldErrors.svcLastHost} placeholder="10.111.255.254" className={ic + invalidCls('svcLastHost')} />
+                      {fieldMsg('svcLastHost')}</div>
                   </div>
                 </div>
               </div>
@@ -394,8 +689,8 @@ export function ClusterMetaFormPage() {
                 </div>
 
                 {/* Cluster Trends — per-cluster Prometheus 연동 (노드 메트릭 추이) */}
-                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
-                  <p className="text-sm font-semibold text-cyan-500 uppercase tracking-wider">메트릭 추이 (Prometheus)</p>
+                <div className="rounded-md border border-chart-4/20 bg-chart-4/5 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-chart-4 uppercase tracking-wider">메트릭 추이 (Prometheus)</p>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" className="accent-primary" checked={prometheusEnabled}
                       onChange={(e) => setPrometheusEnabled(e.target.checked)} />
@@ -414,19 +709,31 @@ export function ClusterMetaFormPage() {
                 </div>
               </div>
             )}
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
-            <button type="button" onClick={() => navigate('/cluster-manage')}
-              className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">
+            <Button type="button" variant="secondary" onClick={requestLeave}>
               취소
-            </button>
-            <button type="submit" disabled={saving}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60">
+            </Button>
+            <Button type="submit" disabled={saving}>
               {saving ? '저장 중...' : '저장'}
-            </button>
+            </Button>
           </div>
+          </MacCard>
         </form>
+
+        {/* 미저장 변경 이탈 확인 (D-037) */}
+        <ConfirmDialog
+          open={leaveOpen}
+          title="저장하지 않고 나갈까요?"
+          description="입력한 내용이 저장되지 않고 사라집니다."
+          confirmLabel="나가기"
+          cancelLabel="계속 편집"
+          danger
+          onConfirm={() => { setLeaveOpen(false); navigate('/cluster-manage'); }}
+          onCancel={() => setLeaveOpen(false)}
+        />
       </main>
     </div>
   );
