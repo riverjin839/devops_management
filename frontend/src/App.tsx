@@ -63,6 +63,7 @@ import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
+import { IslandPage } from '@/pages/IslandPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
@@ -119,6 +120,9 @@ function AppShell() {
       <PageStyleProvider>
             <Routes>
               <Route path="/" element={<HomePage />} />
+              {/* Your Island — 사용자 커스텀 화면. islandId 없이 들어오면 마지막에 보던 것으로 리다이렉트 */}
+              <Route path="/island" element={<IslandPage />} />
+              <Route path="/island/:islandId" element={<IslandPage />} />
               <Route path="/cluster-overview" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               {/* 업무 관리 — 정식 경로 */}

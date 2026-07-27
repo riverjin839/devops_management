@@ -1,7 +1,5 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.tsx
 import { useEffect, useState } from 'react';
-import { Play, History, Trash2, X, KeyRound, Pencil } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
 import { Play, History, Terminal, Trash2, X, KeyRound, Pencil } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
