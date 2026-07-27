@@ -403,6 +403,11 @@ kind delete cluster --name test-a
 | register 스크립트가 `[2/4] 로그인` 직후 종료 / "연결할 수 없습니다" | PEP 백엔드 미기동 | 3단계 완료 후 `curl localhost:8000/health` 확인 → 재실행 |
 | register 스크립트 "로그인 실패 — 계정 확인" | 잘못된 계정 | 기본 `admin/admin`, 또는 `--user/--pass` / `PEP_USER`·`PEP_PASS` |
 | 클러스터 A 가 `pending` | backend 가 kind 네트워크 미연결 | `docker network inspect kind` 에 `k8s_monitor_backend` 가 있는지 확인. 없으면 `docker compose up -d` 재실행 |
+| **`vagrant`/`VBoxManage` 명령이 영원히 안 끝남** | **Mac 절전(sleep)** 후유증 — VM 이 `HostSuspend` 로 paused 되고 VBoxSVC 가 교착 | `cd vagrant && bash up.sh --keep` (자동 진단·복구). 상세: [vagrant/README 트러블슈팅](../vagrant/README.md#트러블슈팅) |
+| `VM is paused due to host power management` (`VBOX_E_INVALID_VM_STATE`) | 위와 동일. **Apple Silicon 에서는 resume 이 불가능** | resume 을 포기하고 poweroff 후 재부팅 — `bash up.sh --keep` |
+| `vagrant status` 가 `aborted` | VM 비정상 종료(절전/강제종료/메모리 부족) | `bash up.sh --keep`. 예방: 자리 비우기 전 `vagrant halt`, 또는 Mac 절전 끄기 |
+| 워커 노드 `INTERNAL-IP` 가 전부 `10.0.2.15` | kubelet NodeIP 미고정 → NAT eth0(모든 VM 공통 주소)로 등록. `kubectl logs/exec` 와 Cilium 노드간 라우팅이 깨짐 | 최신 `vagrant/k8s-w.sh` 가 자동 고정. 기존 VM 은 [NodeIP 수동 교정](../vagrant/README.md#nodeip-수동-교정-기존-vm) |
+| kubelet 로그 `Could not parse some node IP(s), ignoring them` | `/etc/default/kubelet` 에 문서용 플레이스홀더(`<그_노드_사설IP>`)를 문자 그대로 넣음 | 위와 동일 — 실제 IP 로 교정 |
 | `vagrant up` → provider 오류 | VirtualBox 미설치 / 구버전 | VirtualBox **7.1+**(Apple Silicon 지원) 설치 확인 (`VBoxManage --version`) |
 | `vagrant up` → `machine with the name 'k8s-ctr' already exists` | Vagrant↔VirtualBox 상태 desync(orphan VM) | `bash up.sh` 가 자동 정리. 수동: `VBoxManage unregistervm k8s-ctr --delete`(w1/w2 도) 후 재시도 |
 | Cilium 설치 시 `lookup helm.cilium.io ... i/o timeout` | VM DNS(VirtualBox NAT proxy)가 stale | 빠른 우회: `vagrant ssh k8s-ctr -c 'sudo resolvectl dns eth0 8.8.8.8 1.1.1.1 && sudo resolvectl flush-caches'` 후 재시도. durable: `git pull` 후 `vagrant reload`(Vagrantfile `natdnshostresolver1` 적용) |

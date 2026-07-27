@@ -8,6 +8,20 @@
 
 echo ">>>> K8S Controlplane config Start <<<<"
 
+echo "[TASK 0] Pin kubelet NodeIP to host-only(eth1)"
+# 워커(k8s-w.sh)와 동일하게 NodeIP 를 host-only 주소로 고정한다. 고정하지 않으면
+# kubelet 이 NAT eth0(10.0.2.15 — 모든 VM 공통)을 골라 노드를 등록할 수 있다.
+# ※ 여기에 문서용 플레이스홀더(<그_노드_사설IP> 등)를 그대로 넣으면 kubelet 이
+#    "Could not parse some node IP(s), ignoring them" 로 무시하니 주의.
+NODE_IP="$(ip -4 -o addr show eth1 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+if [ -n "$NODE_IP" ]; then
+  echo "KUBELET_EXTRA_ARGS=\"--node-ip=${NODE_IP}\"" > /etc/default/kubelet
+  echo "         NodeIP = ${NODE_IP}"
+else
+  echo "         [WARN] eth1 주소를 찾지 못해 NodeIP 고정을 건너뜁니다."
+fi
+
+
 echo "[TASK 1] Initial Kubernetes"
 kubeadm init --token 123456.1234567890123456 --token-ttl 0 --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/16 --apiserver-advertise-address=192.168.10.100 --cri-socket=unix:///run/containerd/containerd.sock >/dev/null 2>&1
 
