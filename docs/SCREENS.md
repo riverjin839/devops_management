@@ -58,6 +58,30 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### Your Island (`/island`)
+
+- **파일**: `frontend/src/pages/IslandPage.tsx` (+ `components/island/{IslandPanelHost,IslandTabBar,IslandRail,PanelPickerDialog,IslandManagerPane,panelRegistry}.tsx`)
+- **목적 / UX**: 사용자가 자주 쓰는 PEP 화면을 하나에 모아두는 **개인 커스텀 화면**. 사이드바 레일 → flyout → 페이지 이동을 매번 반복하지 않도록, 등록한 화면을 **탭 또는 좌측 아이콘 레일**로 즉시 전환한다. 패널 내용은 새로 만든 위젯이 아니라 **기존 페이지 컴포넌트를 그대로 임베드**한 것이라, 각 화면의 기능이 원본과 100% 동일하다. 라우트는 `/island`(마지막에 보던 아일랜드로 리다이렉트)와 `/island/:islandId` 두 가지. 진입점은 사이드바 최상단(홈 버튼 바로 아래) "Your Island" 레일 버튼이며, 아일랜드가 2개 이상이면 클릭 시 flyout 목록에서 고른다.
+- **UI 구성**:
+  - **상단 헤더**: 아일랜드 이름 + (공유받은 것이면) `소유자 · 읽기 전용` 배지 + 레이아웃 전환 버튼(탭↔사이드바, 소유자만) + 아일랜드 관리 버튼.
+  - **탭 모드(`layoutMode='tabs'`)**: 헤더 아래 pill 탭바(`IslandTabBar`, SettingsPage 탭바 룩). 드래그로 순서 변경, hover 시 × 로 제거, 끝에 "화면 추가".
+  - **사이드바 모드(`layoutMode='sidebar'`)**: 좌측 **iconOnly 56px 레일**(`IslandRail`)이 메인 사이드바에 **flush**(좌측 공백 0)로 붙는다 — CLAUDE.md 보조 사이드바 간격 표준 준수. hover 시 portal 툴팁으로 화면명 표시, 드래그로 순서 변경.
+  - **패널 본문**: `IslandPanelHost` 가 `.island-embed` 래퍼로 감싸 페이지를 렌더한다. 이 래퍼는 `index.css` 의 `.island-embed :is(.min-h-screen,.h-screen)` 규칙으로 페이지 루트의 전체화면 셸을 무력화하고, 스크롤을 자기가 소유해서 아일랜드 크롬(탭바/레일)이 고정되게 한다. **활성 패널 하나만 마운트**한다.
+  - **화면 추가 다이얼로그**(`PanelPickerDialog`): 검색 + 그룹별(사이드바 GROUPS 기준) 목록. 이미 담긴 화면은 체크 표시.
+  - **아일랜드 관리 SidePane**(`IslandManagerPane`): 생성 / 이름 인라인 편집 / 아이콘(`ClusterIconPicker`) / 레이아웃 토글 / 공유 토글 / 삭제, 그리고 **팀 공유 아일랜드** 목록(읽기 전용 + 복제 버튼).
+  - 아일랜드 자체는 `ClusterSidebar` 를 쓰지 않는다 — 임베드된 페이지가 필요하면 **그 페이지가 자기 것을 렌더**한다(사이드바 모드에서는 메인/아일랜드/클러스터 3개 레일이 각 56px 로 나란히 붙는다).
+- **Frontend**: `hooks/useIslands.ts`(`useIslands`/`useCreateIsland`/`useUpdateIsland`/`useDeleteIsland`/`useCloneIsland`/`useReorderIslands`) · `hooks/useNavCatalog.ts`(동적 navMap + `getLabel` + `featureAllowed` — **Sidebar.tsx 와 공유**, 관리자가 바꾼 메뉴명·숨긴 기능이 패널 카탈로그에도 그대로 반영) · `stores/islandStore.ts`(Zustand, 마지막 아일랜드/활성 패널만 localStorage `pep:lastIslandId`/`pep:islandActivePanel` — 아일랜드 정의 자체는 서버) · `services/api.ts` 의 `islandsApi`.
+- **Backend**: `island.py` 라우터(prefix `/islands`): `GET ""`(내 것 + 공유된 것), `GET/PUT/DELETE /{id}`, `POST ""`, `POST /{id}/clone`, `POST /reorder`. 모델 `backend/app/models/island.py`(`Island` — `owner_id`/`name`/`icon`/`layout_mode`/`panels(JSONB)`/`is_shared`/`sort_order`), 스키마 `backend/app/schemas/island.py`. **쓰기는 소유자만**(아니면 403), 공유된 것은 읽기 + 복제만. 저장된 `panels` 는 읽기·쓰기 양쪽에서 `_normalize_panels()` 로 방어적 정규화(형식 깨진 항목 드롭, 최대 20개).
+- **핵심 기능**:
+  - 아일랜드 다중 생성 + 이름/아이콘/설명, 탭↔사이드바 레이아웃 전환.
+  - 패널(화면) 추가·제거·드래그 순서 변경 — 순서는 서버에 저장돼 기기 간 동기화된다.
+  - 팀 공유(읽기 전용) + 복제 — 남의 아일랜드를 복제하면 내 계정의 독립 사본이 된다(`is_shared=False`).
+  - 임베드 가능 화면은 `components/island/panelRegistry.ts` 의 `PANEL_COMPONENTS` 에 등록된 것만. `ISLAND_DENYLIST`(`/k9s` 터미널, `/settings`·`/daily-check/settings` admin 전용, `/`·`/island` 자기 자신)와 라우트 파라미터가 필요한 화면(`/services/:key` 등)은 카탈로그에서 제외된다.
+  - `RequireFeature` 와 같은 권한 판정을 패널 렌더 시점에도 적용 — 공유받은 아일랜드에 권한 없는 화면이 있어도 페이지가 깨지는 대신 안내가 나온다.
+  - 활성 패널은 URL `?panel=<key>` 로 딥링크된다(`?tab=` 은 임베드된 SettingsPage 등이 이미 써서 의도적으로 피함).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 로그인 (route guard, `AuthGate`)
 
 - **파일**: `frontend/src/pages/LoginPage.tsx` (+ `frontend/src/components/auth/AuthGate.tsx`)

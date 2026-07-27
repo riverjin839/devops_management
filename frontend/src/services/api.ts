@@ -2101,4 +2101,18 @@ export const reactionsApi = {
     }),
 };
 
+// ── Your Island API (사용자 커스텀 화면) ────────────────────────────────────
+export const islandsApi = {
+  list: () => api.get<import('@/types').IslandListResponse>('/islands'),
+  get: (id: string) => api.get<import('@/types').Island>(`/islands/${id}`),
+  create: (data: import('@/types').IslandCreatePayload) =>
+    api.post<import('@/types').Island>('/islands', data),
+  update: (id: string, data: Partial<import('@/types').IslandCreatePayload>) =>
+    api.put<import('@/types').Island>(`/islands/${id}`, data),
+  remove: (id: string) => api.delete(`/islands/${id}`),
+  clone: (id: string) => api.post<import('@/types').Island>(`/islands/${id}/clone`),
+  reorder: (order: string[]) =>
+    api.post<import('@/types').IslandListResponse>('/islands/reorder', { order }),
+};
+
 export default api;

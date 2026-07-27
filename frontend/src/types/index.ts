@@ -3555,3 +3555,51 @@ export interface CheckMatrixHistory {
 export interface CheckMatrixSettings {
   retentionDays: number;
 }
+
+// ── Your Island — 사용자 커스텀 화면 ────────────────────────────────────────
+/** 아일랜드 패널 배치 방식. tabs = 상단 pill 탭바, sidebar = 좌측 아이콘 레일. */
+export type IslandLayoutMode = 'tabs' | 'sidebar';
+
+/** 아일랜드 패널 1개 — 기존 라우트 경로를 가리키고, 해당 페이지를 그대로 임베드한다. */
+export interface IslandPanel {
+  /** 아일랜드 내 고유 키. 같은 화면을 중복 추가할 수 있어 path 와 별개로 둔다. */
+  key: string;
+  /** NAV_MAP 키 = 라우트 경로 (예: '/ops-checks'). */
+  path: string;
+  /** 사용자 지정 라벨. null 이면 navLabels/NAV_MAP 기본 라벨. */
+  label?: string | null;
+  /** 사용자 지정 아이콘(lucide 이름). null 이면 NAV_MAP 아이콘. */
+  icon?: string | null;
+}
+
+export interface Island {
+  id: string;
+  ownerId: string;
+  ownerName?: string | null;
+  name: string;
+  icon?: string | null;
+  description?: string | null;
+  layoutMode: IslandLayoutMode;
+  panels: IslandPanel[];
+  isShared: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IslandListResponse {
+  /** 내가 소유한 아일랜드 (sortOrder 순). */
+  data: Island[];
+  /** 남이 공유한 아일랜드 — 읽기 전용, 복제만 가능. */
+  shared: Island[];
+  total: number;
+}
+
+export interface IslandCreatePayload {
+  name: string;
+  icon?: string | null;
+  description?: string | null;
+  layoutMode?: IslandLayoutMode;
+  panels?: IslandPanel[];
+  isShared?: boolean;
+}

@@ -7,11 +7,12 @@ import {
   KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
-import { useServiceCatalog } from '@/hooks/useServiceCatalog';
+import { useNavCatalog } from '@/hooks/useNavCatalog';
+import { useIslands } from '@/hooks/useIslands';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
-import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
+import { useIslandStore } from '@/stores/islandStore';
 import { useHomeStore } from '@/stores/homeStore';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
@@ -19,7 +20,7 @@ import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { ReleaseNotesPanel } from './ReleaseNotesPanel';
 import { BugFixLogPanel } from './BugFixLogPanel';
 import { VocBoardPanel } from './VocBoardPanel';
-import { NAV_MAP, GROUPS, type GroupId } from './navConfig';
+import { GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
@@ -176,10 +177,8 @@ export function Sidebar() {
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.clear);
   const isAdmin = currentUser?.role === 'admin';
-  // 기능별 접근 제어 — 허용되지 않은 메뉴는 숨김.
-  const { data: featureAccess } = useFeatureAccess();
-  const featureAllowed = (p: string) =>
-    p !== '/wbs' || canAccessFeature(featureAccess, 'wbs', currentUser);
+  // 동적 navMap / 라벨 오버라이드 / 기능별 접근 제어 — Your Island 패널 피커와 공유.
+  const { navMap, servicePaths, getLabel, featureAllowed } = useNavCatalog();
 
   const { mode, toggle } = useHomeStore();
 
@@ -226,6 +225,22 @@ export function Sidebar() {
       : <ListTodo className="w-5 h-5" />;
   };
 
+  // Your Island — 내 아일랜드가 2개 이상이면 레일 버튼 클릭 시 flyout 으로 고른다.
+  const { data: islandData } = useIslands();
+  const myIslands = useMemo(() => islandData?.data ?? [], [islandData?.data]);
+  const lastIslandId = useIslandStore((s) => s.lastIslandId);
+  const [islandFlyoutAnchor, setIslandFlyoutAnchor] = useState<DOMRect | null>(null);
+
+  const goToIsland = (rect?: DOMRect) => {
+    if (myIslands.length > 1) {
+      setIslandFlyoutAnchor((cur) => (cur ? null : rect ?? null));
+      return;
+    }
+    setIslandFlyoutAnchor(null);
+    const target = myIslands[0]?.id ?? lastIslandId;
+    navigate(target ? `/island/${target}` : '/island');
+  };
+
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
@@ -237,26 +252,6 @@ export function Sidebar() {
   const [bugFixLogOpen, setBugFixLogOpen] = useState(false);
   // 사용자 VOC 게시판 — 릴리즈 노트 바로 위 레일 아이콘 → 우측 SidePane.
   const [vocOpen, setVocOpen] = useState(false);
-
-  const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
-  const services = useServiceCatalog();
-
-  // 동적 NAV_MAP — 정적 위에 ui_settings 의 서비스 항목을 덧씌움.
-  const navMap = useMemo(() => {
-    const m: typeof NAV_MAP = { ...NAV_MAP };
-    for (const s of services) {
-      if (s.key === 'other') continue;
-      m[`/services/${s.key}`] = { defaultLabel: s.label, icon: s.icon };
-    }
-    return m;
-  }, [services]);
-
-  const servicePaths = useMemo(
-    () => services.filter((s) => s.key !== 'other').map((s) => `/services/${s.key}`),
-    [services],
-  );
-
-  const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
 
   // 현재 모드에서 보여줄 그룹만 필터링 (상단 레일).
   // system(Settings) 그룹은 상단이 아니라 하단 푸터에서 admin 에게만 렌더한다.
@@ -280,6 +275,7 @@ export function Sidebar() {
   // 경로 변경되면 flyout 자동 닫기 (단 사용자가 직접 클릭 후 같은 페이지인 경우는 무시)
   useEffect(() => {
     setOpenGroup(null);
+    setIslandFlyoutAnchor(null);
     setUserMenuOpen(false);
     setReleaseNotesOpen(false);
     setBugFixLogOpen(false);
@@ -291,6 +287,7 @@ export function Sidebar() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpenGroup(null);
+        setIslandFlyoutAnchor(null);
         setUserMenuOpen(false);
         setReleaseNotesOpen(false);
         setBugFixLogOpen(false);
@@ -407,6 +404,21 @@ export function Sidebar() {
             {renderHomeButtonIcon()}
           </button>
         </div>
+
+        {/* Your Island — 사용자 커스텀 화면. 홈 바로 아래 최상단 고정.
+            아일랜드가 2개 이상이면 flyout 으로 고르고, 0~1개면 바로 이동한다. */}
+        {currentUser && (
+          <div className="flex items-center justify-center py-2 border-b border-border flex-shrink-0">
+            <RailIconButton
+              label="Your Island"
+              Icon={Sparkles}
+              active={location.pathname.startsWith('/island')}
+              highlighted={!!islandFlyoutAnchor}
+              suppressTooltip={!!islandFlyoutAnchor}
+              onClick={goToIsland}
+            />
+          </div>
+        )}
 
         {/* 전역 뒤로가기 — 홈이 아닐 때만 노출. 어느 화면에서든 이전 화면으로 돌아간다. */}
         {location.pathname !== '/' && (
@@ -539,6 +551,35 @@ export function Sidebar() {
             onClose={() => setOpenGroup(null)}
           >
             {renderFlyoutBody(openGroup)}
+          </FlyoutShell>
+        </>
+      )}
+
+      {/* Your Island flyout — 아일랜드가 여러 개일 때 목록에서 고른다. */}
+      {islandFlyoutAnchor && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIslandFlyoutAnchor(null)} aria-hidden />
+          <FlyoutShell
+            title="Your Island"
+            anchorRect={islandFlyoutAnchor}
+            onClose={() => setIslandFlyoutAnchor(null)}
+          >
+            <div className="space-y-1 pb-2">
+              {myIslands.map((isl) => {
+                const resolved = resolveClusterIcon(isl.icon);
+                const IconC = resolved?.kind === 'lucide' ? resolved.Component : Sparkles;
+                return (
+                  <FlyoutLink
+                    key={isl.id}
+                    to={`/island/${isl.id}`}
+                    label={isl.name}
+                    Icon={IconC}
+                    active={location.pathname === `/island/${isl.id}`}
+                    onSelect={() => setIslandFlyoutAnchor(null)}
+                  />
+                );
+              })}
+            </div>
           </FlyoutShell>
         </>
       )}

@@ -78,6 +78,7 @@ from app.routers import (
     k8s_events_ingest_router,
     release_notes_router,
     check_matrix_router,
+    island_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -1935,6 +1936,8 @@ app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_a
 app.include_router(k8s_events_ingest_router, prefix="/api/v1")
 app.include_router(k8s_events_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
+# Your Island — 사용자 커스텀 화면(개인 소유 + 선택적 공유)
+app.include_router(island_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

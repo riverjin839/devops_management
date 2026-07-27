@@ -88,7 +88,7 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
 ## Repository Layout
 
 전체 파일 지도(기능 → 파일 위치)는 **`CODE_MAP.md`** 를 먼저 볼 것. 아래는 도메인 단위 요약이다
-(개별 나열은 규모상 생략 — 라우터 64개 / 모델 51개 / 페이지 66개).
+(개별 나열은 규모상 생략 — 라우터 65개 / 모델 52개 / 페이지 67개).
 
 ```
 devops_management/
@@ -98,7 +98,7 @@ devops_management/
 │   │   ├── config.py            # pydantic-settings Settings class
 │   │   ├── database.py          # SQLAlchemy engine + SessionLocal + Base
 │   │   ├── celery_app.py        # Celery app + Beat (매분 check-matrix 디스패처 등 6개 스케줄, ~13개 태스크)
-│   │   ├── models/              # SQLAlchemy ORM 모델 51개 — 도메인 그룹:
+│   │   ├── models/              # SQLAlchemy ORM 모델 52개 — 도메인 그룹:
 │   │   │   #  모니터링/점검: cluster, daily_check, check_log, check_matrix, deep_check,
 │   │   │   #    ops_check, metric_card, addon, k8s_event, resource_count,
 │   │   │   #    config_snapshot, os_param_change, trend
@@ -109,7 +109,7 @@ devops_management/
 │   │   │   #    topology_audit_log, lake_service, lake_service_type, cluster_item,
 │   │   │   #    cluster_custom_field
 │   │   │   #  플랫폼/자동화: batch_job, bottleneck_run, ansible_assets, playbook
-│   │   │   #  사용자/설정: user, user_setting, user_jira_credential, user_notification,
+│   │   │   #  사용자/설정: user, user_setting, user_jira_credential, user_notification, island,
 │   │   │   #    app_setting, audit_log
 │   │   ├── routers/             # APIRouter 64개 — 모델과 같은 도메인 그룹 + auth, health,
 │   │   │   #  history, backup, notifications, release_notes, ui_settings,
@@ -135,16 +135,16 @@ devops_management/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx              # React Router — 페이지 66개, 라우트 ~90개 (진입점 `/` = HomePage,
+│   │   ├── App.tsx              # React Router — 페이지 67개, 라우트 ~92개 (진입점 `/` = HomePage,
 │   │   │                        #  구 대시보드는 /cluster-overview; 레거시 경로는 redirect;
 │   │   │                        #  RequireAdmin·RequireFeature 가드)
 │   │   ├── main.tsx             # Entry point
 │   │   ├── types/index.ts       # 공용 TypeScript 인터페이스
 │   │   ├── services/api.ts      # axios 기반 API 서비스 레이어
-│   │   ├── stores/              # Zustand 9개: authStore, clusterStore, themeStore, sidebarStore,
+│   │   ├── stores/              # Zustand 10개: authStore, clusterStore, themeStore, sidebarStore, islandStore,
 │   │   │                        #  homeStore, debugStore, playbookStore, tableViewStore, terminalEnvStore
-│   │   ├── hooks/               # TanStack Query 훅 ~53개 (도메인 리소스당 1개+)
-│   │   ├── pages/               # 페이지 66개 — 화면별 명세는 docs/SCREENS.md 참고
+│   │   ├── hooks/               # TanStack Query 훅 ~55개 (도메인 리소스당 1개+)
+│   │   ├── pages/               # 페이지 67개 — 화면별 명세는 docs/SCREENS.md 참고
 │   │   ├── components/          # 기능별 그룹: common/(ClusterSidebar), ui/(MacCard, shadcn),
 │   │   │                        #  layout/(Sidebar, navConfig.ts), dashboard/, agent/, playbooks/,
 │   │   │                        #  work-items/ 등 도메인 폴더 다수
@@ -639,7 +639,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 ### Base URL
 `http://localhost:8000/api/v1` (local) or `http://<node>:30800/api/v1` (K8s NodePort)
 
-**API 는 ~60개 라우터가 `/api/v1` 아래에 마운트된다** — 아래 상세 표는 원조 코어 4개 그룹의
+**API 는 ~65개 라우터가 `/api/v1` 아래에 마운트된다** — 아래 상세 표는 원조 코어 4개 그룹의
 대표 예시일 뿐 전체가 아니다. 전체 목록은 `backend/app/routers/__init__.py`, 라이브 스펙은
 `/docs`(Swagger) 를 본다. 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, 예외
 (비인증 마운트)는 `auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest` 다
@@ -649,7 +649,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 | 그룹 | 라우터 |
 |---|---|
-| 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup` |
+| 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `island` |
 | 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `promql`, `health` |
 | K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
@@ -729,7 +729,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
 - **플랫폼/자동화**: `batch_job`, `bottleneck_run`, `ansible_assets`
-- **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`
+- **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`, `island`(Your Island 커스텀 화면)
 
 ---
 
