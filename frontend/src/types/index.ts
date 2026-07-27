@@ -112,30 +112,33 @@ export interface ClusterCustomValuesUpdate {
   values: Record<string, any>;
 }
 
+// 값 해제(빈 입력)를 서버에 반영하려면 `undefined` 가 아니라 `null` 을 보내야 한다 —
+// `undefined` 키는 JSON 직렬화에서 사라지고, 백엔드가 `model_dump(exclude_unset=True)`
+// 로 갱신하므로 "미전송 = 기존 값 유지"가 되어 영영 지워지지 않는다. (DESIGN.md D-031)
 export interface ClusterManageUpdate {
-  region?: string;
-  operationLevel?: string;
-  maxPod?: number;
-  ciliumConfig?: string;
-  cidr?: string;
-  internalIps?: string;
-  firstHost?: string;
-  lastHost?: string;
-  podCidr?: string;
-  podFirstHost?: string;
-  podLastHost?: string;
-  svcCidr?: string;
-  svcFirstHost?: string;
-  svcLastHost?: string;
-  bond0Ip?: string;
-  bond0Mac?: string;
-  bond1Ip?: string;
-  bond1Mac?: string;
-  description?: string;
-  nodeCount?: number;
-  hostname?: string;
+  region?: string | null;
+  operationLevel?: string | null;
+  maxPod?: number | null;
+  ciliumConfig?: string | null;
+  cidr?: string | null;
+  internalIps?: string | null;
+  firstHost?: string | null;
+  lastHost?: string | null;
+  podCidr?: string | null;
+  podFirstHost?: string | null;
+  podLastHost?: string | null;
+  svcCidr?: string | null;
+  svcFirstHost?: string | null;
+  svcLastHost?: string | null;
+  bond0Ip?: string | null;
+  bond0Mac?: string | null;
+  bond1Ip?: string | null;
+  bond1Mac?: string | null;
+  description?: string | null;
+  nodeCount?: number | null;
+  hostname?: string | null;
   bgpEnabled?: boolean;
-  asNumber?: string;
+  asNumber?: string | null;
   icon?: string | null;
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
