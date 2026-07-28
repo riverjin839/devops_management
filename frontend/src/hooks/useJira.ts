@@ -89,6 +89,50 @@ export function useJiraImport() {
   });
 }
 
+export function useJiraCreateIssue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import('@/types').JiraCreateRequest) => jiraApi.createIssue(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
+  });
+}
+
+export function useJiraDeleteIssue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => jiraApi.deleteIssue(key),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
+  });
+}
+
+export function useWeeklyReportPreview() {
+  return useMutation({
+    mutationFn: (data?: import('@/types').WeeklyReportRequest) => jiraApi.weeklyPreview(data),
+  });
+}
+
+export function useWeeklyReportPublish() {
+  return useMutation({
+    mutationFn: (data?: import('@/types').WeeklyPublishRequest) => jiraApi.weeklyPublish(data),
+  });
+}
+
+export function useWeeklyReportSettings() {
+  return useQuery({
+    queryKey: [...jiraKeys.config, 'weekly'] as const,
+    queryFn: async () => (await jiraApi.weeklySettings()).data,
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useUpdateWeeklyReportSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import('@/types').WeeklyReportSettings) => jiraApi.updateWeeklySettings(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...jiraKeys.config, 'weekly'] }),
+  });
+}
+
 export function useJiraPush() {
   const qc = useQueryClient();
   return useMutation({

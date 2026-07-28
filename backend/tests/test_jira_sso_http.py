@@ -879,3 +879,80 @@ async def test_sso_login_siteminder_target_correction():
                                   transport=_make_siteminder_transport())
     assert result["status"] == "ok", result
     assert "JSESSIONID=sm-1" in result["cookie_header"]
+
+
+# ── 화면 입력과 별도로 hidden 자격 사본이 있는 폼 (SiteMinder 계열) ────────────────
+HIDDEN_PASSWORD_HTML = """
+<html><body>
+<form action="/sso/am/jira/login.fcc" method="post">
+  <input type="hidden" name="SMENC" value="UTF-8"/>
+  <input type="hidden" name="SMLOCALE" value="US-EN"/>
+  <input type="text" name="USER" value=""/>
+  <input type="password" name="pwView"/>
+  <input type="hidden" name="PASSWORD" value=""/>
+  <input type="hidden" name="TARGET" value="https://jira.corp.com/"/>
+  <input type="hidden" name="SMAUTHREASON" value="-0"/>
+</form></body></html>
+"""
+
+
+def test_fill_login_form_fills_empty_hidden_password_copy():
+    """화면 입력(pwView)과 별개로 비어 있는 hidden PASSWORD 가 있으면 그것도 채운다 —
+    안 채우면 서버가 빈 비밀번호를 받아 로그인 폼을 다시 보여준다."""
+    form = find_login_form(parse_forms(HIDDEN_PASSWORD_HTML))
+    data = fill_login_form(form, "12345", "pw")
+    assert data["PASSWORD"] == "pw"     # hidden 사본
+    assert data["pwView"] == "pw"       # 화면 입력
+    assert data["USER"] == "12345"
+    # 값이 있는 상태 hidden 은 그대로 보존
+    assert data["SMENC"] == "UTF-8"
+    assert data["SMAUTHREASON"] == "-0"
+    assert data["TARGET"] == "https://jira.corp.com/"
+
+
+def test_fill_login_form_does_not_overwrite_non_empty_hidden():
+    """이미 값이 있는 hidden 은 자격 이름이어도 덮어쓰지 않는다(상태값 보존)."""
+    html = ('<form><input type="password" name="pw"/>'
+            '<input type="hidden" name="password" value="preset"/></form>')
+    form = find_login_form(parse_forms(html))
+    data = fill_login_form(form, "u", "secret")
+    assert data["password"] == "preset"
+    assert data["pw"] == "secret"
+
+
+def _make_hidden_password_transport() -> httpx.MockTransport:
+    """hidden PASSWORD 가 비어 오면 인증 실패로 폼을 다시 보여주는 IdP (실제 증상 재현)."""
+    login_url = "https://login.corp.com/sso/am/jira/login.jsp"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        has_jira = "JSESSIONID=hp-1" in request.headers.get("cookie", "")
+        if url.startswith("https://jira.corp.com/?sm="):
+            return httpx.Response(302, headers={"Location": "https://jira.corp.com/",
+                                                "Set-Cookie": "JSESSIONID=hp-1; Path=/"})
+        if url == "https://jira.corp.com/":
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            return httpx.Response(302, headers={"Location": login_url})
+        if url == login_url:
+            return httpx.Response(200, text=HIDDEN_PASSWORD_HTML, headers={"Content-Type": "text/html"})
+        if url == "https://login.corp.com/sso/am/jira/login.fcc":
+            body = parse_qs(request.content.decode())
+            # 서버는 hidden PASSWORD 만 읽는다 — 비어 있으면 로그인 화면 재표시.
+            if body.get("USER") == ["12345"] and body.get("PASSWORD") == ["pw"]:
+                return httpx.Response(302, headers={"Location": "https://jira.corp.com/?sm=ok"})
+            return httpx.Response(200, text=HIDDEN_PASSWORD_HTML)
+        if url == "https://jira.corp.com/rest/api/2/myself":
+            if has_jira:
+                return httpx.Response(200, json={"name": "12345", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+async def test_sso_login_succeeds_when_server_reads_hidden_password():
+    result = await form_sso_login("https://jira.corp.com", "12345", "pw",
+                                  transport=_make_hidden_password_transport())
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=hp-1" in result["cookie_header"]

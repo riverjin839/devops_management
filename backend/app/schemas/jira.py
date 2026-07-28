@@ -118,6 +118,10 @@ class SsoDiagnoseResult(BaseModel):
     ok: bool
     detail: str = ""
     entries: list[SsoDiagnoseEntry] = []
+    # 이 파드가 대상으로 나갈 때의 출발지 IP/호스트명 — SSO 가 클라이언트 IP 를 검사하는
+    # 구성이면 허용 목록 등록에 필요하고, 파드마다 다르면 그 자체가 문제 신호다.
+    pod_hostname: str = ""
+    pod_source_ip: str = ""
 
 
 # ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────
@@ -139,17 +143,35 @@ class ConfluenceSearchResult(BaseModel):
 
 # ── 가져오기 ──────────────────────────────────────────────────────────────────
 class JiraImportRequest(BaseModel):
-    scope: Literal["me", "project", "jql"] = "me"
+    """가져오기 조건. `scope="filter"` 면 project/labels/components/statuses 를 AND 로 묶어
+    JQL 을 조립한다(빈 항목은 무시). 기존 me/project/jql 은 그대로 유지."""
+    scope: Literal["me", "project", "jql", "filter"] = "me"
     project_key: Optional[str] = None
     jql: Optional[str] = None
+    labels: list[str] = []
+    components: list[str] = []
+    statuses: list[str] = []
+    assignee: Optional[str] = None          # Jira 계정명 (비우면 전체)
+    updated_since_days: Optional[int] = None  # 최근 N일 내 변경분만
     dry_run: bool = False
+    # dry_run 미리보기에서 사용자가 고른 Jira 키만 반영 (비우면 전체 적용).
+    only_keys: list[str] = []
+
+
+class JiraFieldChange(BaseModel):
+    """재가져오기 시 바뀌는 필드 (확인 팝업에서 그대로 보여준다)."""
+    field: str
+    label: str = ""
+    old: str = ""
+    new: str = ""
 
 
 class JiraImportItemPreview(BaseModel):
     jira_key: str
     title: str
     kanban_status: str
-    action: Literal["create", "update"]
+    action: Literal["create", "update", "unchanged"]
+    changes: list[JiraFieldChange] = []
 
 
 class JiraImportResult(BaseModel):
@@ -218,3 +240,101 @@ class JiraPushResult(BaseModel):
     field_errors: list[str] = []     # 반영 실패한 필드 사유 (예: 우선순위 이름 불일치)
     jira_status: Optional[str] = None
     available_transitions: list[str] = []
+
+
+# ── PEP → Jira 신규 생성 / 삭제 ────────────────────────────────────────────────
+class JiraCreateRequest(BaseModel):
+    """PEP 에서 Jira 이슈를 새로 만든다. work_item_id 를 주면 그 업무의 내용을 쓰고
+    생성된 키를 그 업무에 연결한다(미지정 시 아래 필드로 직접 생성)."""
+    work_item_id: Optional[str] = None
+    project_key: Optional[str] = None       # 미지정 시 공통 설정의 default_project_key
+    summary: Optional[str] = None
+    description: Optional[str] = None
+    issue_type: str = "Task"
+    priority: Optional[str] = None
+    labels: list[str] = []
+    components: list[str] = []
+
+
+class JiraCreateResult(BaseModel):
+    status: Literal["ok", "error", "offline"]
+    detail: str = ""
+    jira_key: Optional[str] = None
+    jira_url: Optional[str] = None
+    linked_work_item_id: Optional[str] = None
+
+
+class JiraDeleteResult(BaseModel):
+    status: Literal["ok", "error", "offline"]
+    detail: str = ""
+    unlinked_work_item_id: Optional[str] = None
+
+
+# ── 주간보고 ──────────────────────────────────────────────────────────────────
+class WeeklySummary(BaseModel):
+    total: int = 0
+    in_progress: int = 0
+    done: int = 0
+    delayed: int = 0
+    note: str = ""
+
+
+class WeeklyDetailRow(BaseModel):
+    component: str = ""
+    task: str = ""
+    sub_task: str = ""
+    start: str = ""
+    due: str = ""
+    closed: str = ""
+    status: str = ""
+    issue: str = ""
+    note: str = ""
+    jira_key: str = ""
+    jira_url: str = ""
+
+
+class WeeklyOwnerRow(BaseModel):
+    task: str = ""
+    assignee: str = ""
+    main_work: str = ""
+    issue_summary: str = ""
+
+
+class WeeklyReport(BaseModel):
+    period_start: str = ""
+    period_end: str = ""
+    title: str = ""
+    summary: WeeklySummary = WeeklySummary()
+    details: list[WeeklyDetailRow] = []
+    owners: list[WeeklyOwnerRow] = []
+
+
+class WeeklyReportRequest(BaseModel):
+    """미리보기/게시 요청. week_of 는 그 주(월~금)를 고른다(미지정 시 이번 주)."""
+    week_of: Optional[str] = None            # "YYYY-MM-DD"
+    project_filter: str = ""
+
+
+class WeeklyPublishRequest(WeeklyReportRequest):
+    """Confluence 게시 — 저장 위치는 매 요청마다 바꿀 수 있다."""
+    space_key: Optional[str] = None          # 미지정 시 설정값
+    parent_page_id: Optional[str] = None
+    title: Optional[str] = None              # 미지정 시 "주간보고 YYYY-MM-DD ~ YYYY-MM-DD"
+
+
+class WeeklyPublishResult(BaseModel):
+    status: Literal["ok", "error", "offline"]
+    detail: str = ""
+    action: str = ""                          # created | updated
+    page_url: Optional[str] = None
+    page_id: Optional[str] = None
+
+
+class WeeklyReportSettings(BaseModel):
+    """주간보고 기본 저장 위치/자동 생성 설정 (AppSetting)."""
+    space_key: str = ""
+    parent_page_id: str = ""
+    title_template: str = "주간보고 {start} ~ {end}"
+    auto_enabled: bool = False
+    auto_cron: str = "0 17 * * 5"             # 금요일 17:00 (UTC 기준 평가)
+    project_filter: str = ""

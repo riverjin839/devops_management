@@ -60,6 +60,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
 | Jira 가져오기/양방향 반영 | `backend/app/routers/jira.py` (`/jira`) | `JiraImportModal.tsx` · `frontend/src/pages/JiraExcelImportPage.tsx` |
 | Jira+Confluence SSO 자동 로그인 / Confluence API | `backend/app/services/jira_sso_http.py`(다중 제품 폼 SSO) · `services/confluence_service.py` · `routers/jira.py` `/jira/sso/*`·`/jira/confluence/*` (401 자동 재로그인 포함) | `components/settings/JiraIntegrationPanel.tsx` |
+| 주간보고 (월~금 집계 → 3개 표 → Confluence 게시) | `backend/app/services/weekly_report_service.py` · `routers/jira.py` `/jira/weekly-report/{preview,publish,settings}` · Celery `dispatch_weekly_report` | `frontend/src/pages/WeeklyReportPage.tsx` (`/weekly-report`) |
+| PEP → Jira 신규 생성 / 삭제 | `routers/jira.py` `POST /jira/create` · `DELETE /jira/issue/{key}` · `services/jira_service.py` `create_issue()`/`delete_issue()` | `hooks/useJira.ts` |
 | 오늘 할일 / 멤버별 업무 | `work_items` 재사용 | `frontend/src/pages/TodoTodayPage.tsx` · `MemberBoardPage.tsx` |
 | 스프린트 / 프로젝트 | `routers/sprint.py` (`/sprints`) · `routers/projects.py` (`/projects`) | `SprintsPage.tsx` 등 |
 | 워크플로우 보드 / WBS·간트 | `backend/app/routers/workflows.py` | `frontend/src/pages/WorkflowBoardPage.tsx` · `WbsFlowPage.tsx` |

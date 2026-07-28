@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, Dog,
-  TrendingUp, FileSpreadsheet, Palmtree,
+  TrendingUp, FileSpreadsheet, Palmtree, FileText,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -68,6 +68,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/workflow':           { defaultLabel: '워크플로우',     icon: GitFork },
   '/settings':           { defaultLabel: 'Settings',       icon: Settings },
   '/jira-import':        { defaultLabel: 'Jira Excel 가져오기', icon: FileSpreadsheet },
+  '/weekly-report':      { defaultLabel: '주간보고', icon: FileText },
 };
 
 // 사이드바 레일에 표시되는 그룹들
@@ -80,7 +81,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   // /coroot 는 COROOT APM 통합 전체 제거로 더 이상 존재하지 않는 라우트 — 재추가하지 않음.
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import'], modes: ['work'] },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import', '/weekly-report'], modes: ['work'] },
   // "PEP 서비스" — Settings → "관리 서비스" 탭 → "서비스 카탈로그" 서브탭(ui_settings.serviceCatalog)에 등록된 서비스
   // 카탈로그의 진입점(/services, ServicesCatalogPage). 서비스 클릭 시 노트(작업계획서/업무소개/
   // 이슈대응/구축작업)와 연관 업무를 보여주는 /services/:service(ServiceHubPage)로 이동한다.

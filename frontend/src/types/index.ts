@@ -546,6 +546,9 @@ export interface SsoDiagnoseResult {
   ok: boolean;
   detail: string;
   entries: SsoDiagnoseEntry[];
+  /** 이 파드가 대상으로 나갈 때의 출발지 IP/호스트명 (SSO 가 클라이언트 IP 를 검사할 때 필요). */
+  podHostname?: string;
+  podSourceIp?: string;
 }
 
 // 인증 방식: 'pat'(PAT → Bearer) | 'cookie'(수동 붙여넣은 세션 쿠키) | 'sso'(SSO 자동 캡처 쿠키).
@@ -587,17 +590,127 @@ export interface JiraTestResult {
 }
 
 export interface JiraImportRequest {
-  scope: 'me' | 'project' | 'jql';
+  scope: 'me' | 'project' | 'jql' | 'filter';
   projectKey?: string;
   jql?: string;
+  /** scope='filter' 조건 — 비운 항목은 무시되고 나머지가 AND 로 묶인다. */
+  labels?: string[];
+  components?: string[];
+  statuses?: string[];
+  assignee?: string;
+  updatedSinceDays?: number | null;
+  /** 미리보기에서 고른 Jira 키만 반영 (비우면 전체). */
+  onlyKeys?: string[];
   dryRun?: boolean;
+}
+
+export interface JiraFieldChange {
+  field: string;
+  label: string;
+  old: string;
+  new: string;
 }
 
 export interface JiraImportItemPreview {
   jiraKey: string;
   title: string;
   kanbanStatus: string;
-  action: 'create' | 'update';
+  action: 'create' | 'update' | 'unchanged';
+  /** 재가져오기 시 바뀌는 필드 목록 (확인 팝업용). */
+  changes?: JiraFieldChange[];
+}
+
+// ── PEP → Jira 생성/삭제 ──────────────────────────────────────────────────────
+export interface JiraCreateRequest {
+  workItemId?: string;
+  projectKey?: string;
+  summary?: string;
+  description?: string;
+  issueType?: string;
+  priority?: string;
+  labels?: string[];
+  components?: string[];
+}
+
+export interface JiraCreateResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+  linkedWorkItemId?: string | null;
+}
+
+export interface JiraDeleteResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  unlinkedWorkItemId?: string | null;
+}
+
+// ── 주간보고 ──────────────────────────────────────────────────────────────────
+export interface WeeklySummary {
+  total: number;
+  inProgress: number;
+  done: number;
+  delayed: number;
+  note: string;
+}
+
+export interface WeeklyDetailRow {
+  component: string;
+  task: string;
+  subTask: string;
+  start: string;
+  due: string;
+  closed: string;
+  status: string;
+  issue: string;
+  note: string;
+  jiraKey: string;
+  jiraUrl: string;
+}
+
+export interface WeeklyOwnerRow {
+  task: string;
+  assignee: string;
+  mainWork: string;
+  issueSummary: string;
+}
+
+export interface WeeklyReport {
+  periodStart: string;
+  periodEnd: string;
+  title: string;
+  summary: WeeklySummary;
+  details: WeeklyDetailRow[];
+  owners: WeeklyOwnerRow[];
+}
+
+export interface WeeklyReportRequest {
+  weekOf?: string;
+  projectFilter?: string;
+}
+
+export interface WeeklyPublishRequest extends WeeklyReportRequest {
+  spaceKey?: string;
+  parentPageId?: string;
+  title?: string;
+}
+
+export interface WeeklyPublishResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  action: string;
+  pageUrl?: string | null;
+  pageId?: string | null;
+}
+
+export interface WeeklyReportSettings {
+  spaceKey: string;
+  parentPageId: string;
+  titleTemplate: string;
+  autoEnabled: boolean;
+  autoCron: string;
+  projectFilter: string;
 }
 
 export interface JiraImportResult {

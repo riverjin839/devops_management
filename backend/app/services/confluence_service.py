@@ -134,6 +134,92 @@ class ConfluenceService:
             logger.exception("Confluence search error: %s", exc)
             return {"status": "offline", "items": [], "detail": str(exc)[:200]}
 
+    async def find_page(self, space_key: str, title: str) -> dict:
+        """스페이스 안에서 제목이 정확히 일치하는 페이지 찾기 — 주간보고 갱신 대상 판별용."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Confluence 미설정"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.get(
+                    f"{self.base_url}/rest/api/content",
+                    headers=self._headers(),
+                    params={"spaceKey": space_key, "title": title, "expand": "version", "limit": 5},
+                )
+                if resp.status_code == 401:
+                    return {"status": "error", "detail": "인증 실패 (401)", "auth_failed": True}
+                if resp.status_code != 200:
+                    return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+                results = resp.json().get("results", [])
+                if not results:
+                    return {"status": "ok", "found": False}
+                page = results[0]
+                return {
+                    "status": "ok", "found": True, "id": str(page.get("id", "")),
+                    "version": ((page.get("version") or {}).get("number") or 1),
+                }
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Confluence 연결 불가"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Confluence find_page error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
+    async def upsert_page(
+        self, space_key: str, title: str, body_html: str, *, parent_id: str = "",
+    ) -> dict:
+        """제목이 같은 페이지가 있으면 새 버전으로 갱신, 없으면 생성한다.
+
+        주간보고를 매주 같은 제목으로 올리면 갱신되고, 제목에 주차를 넣으면 매주 새로 생긴다
+        — 어느 쪽이든 호출부가 제목 규칙으로 결정한다."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Confluence 미설정"}
+        if not (space_key and title):
+            return {"status": "error", "detail": "스페이스 키와 제목은 필수입니다."}
+        found = await self.find_page(space_key, title)
+        if found.get("status") not in ("ok",):
+            return found
+        body = {
+            "type": "page",
+            "title": title,
+            "space": {"key": space_key},
+            "body": {"storage": {"value": body_html, "representation": "storage"}},
+        }
+        if parent_id:
+            body["ancestors"] = [{"id": str(parent_id)}]
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                if found.get("found"):
+                    page_id = found["id"]
+                    body["version"] = {"number": int(found.get("version", 1)) + 1}
+                    resp = await client.put(
+                        f"{self.base_url}/rest/api/content/{page_id}",
+                        headers={**self._headers(), "Content-Type": "application/json"},
+                        json=body,
+                    )
+                    action = "updated"
+                else:
+                    resp = await client.post(
+                        f"{self.base_url}/rest/api/content",
+                        headers={**self._headers(), "Content-Type": "application/json"},
+                        json=body,
+                    )
+                    action = "created"
+                if resp.status_code in (200, 201):
+                    data = resp.json()
+                    webui = ((data.get("_links") or {}).get("webui") or "")
+                    return {"status": "ok", "action": action, "id": str(data.get("id", "")),
+                            "url": f"{self.base_url}{webui}" if webui else ""}
+                detail = ""
+                try:
+                    detail = resp.json().get("message", "")
+                except Exception:  # noqa: BLE001
+                    detail = resp.text[:200]
+                return {"status": "error", "detail": detail or f"HTTP {resp.status_code}"}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Confluence 연결 불가"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Confluence upsert_page error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
     async def get_page(self, page_id: str) -> dict:
         """단일 페이지 조회 (`GET /rest/api/content/{id}`) — storage 본문 포함."""
         if not self.configured:

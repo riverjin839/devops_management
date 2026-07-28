@@ -421,6 +421,12 @@ export function JiraIntegrationPanel() {
                     )}
                   </div>
                 ))}
+                {(diagResult.podSourceIp || diagResult.podHostname) && (
+                  <p className="text-[11px] text-muted-foreground font-mono break-all">
+                    이 파드: {diagResult.podHostname || '-'} · 출발지 IP {diagResult.podSourceIp || '-'}
+                    <span className="font-sans"> — SSO 가 클라이언트 IP 를 검사하는 구성이면 이 IP(보통 노드/게이트웨이 IP 로 NAT 됨)를 허용해야 합니다.</span>
+                  </p>
+                )}
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   최종 URL 이 IdP 주소로 바뀌고 PW 열이 1 이상이면 정상입니다. IdP 로 안 넘어가면
                   위 공통 설정의 <b>IdP 로그인 URL</b> 에 브라우저에서 확인한 주소를 넣어보세요.

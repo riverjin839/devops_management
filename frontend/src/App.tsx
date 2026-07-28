@@ -6,6 +6,7 @@ import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
 import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
 import { WorkItemDetailPage } from '@/pages/WorkItemDetailPage';
 import { JiraExcelImportPage } from '@/pages/JiraExcelImportPage';
+import { WeeklyReportPage } from '@/pages/WeeklyReportPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SprintsPage } from '@/pages/SprintsPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
@@ -154,6 +155,7 @@ function AppShell() {
               <Route path="/sprints" element={<SprintsPage />} />
               <Route path="/members" element={<MemberBoardPage />} />
               <Route path="/jira-import" element={<JiraExcelImportPage />} />
+              <Route path="/weekly-report" element={<WeeklyReportPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/node-images" element={<NodeImagesPage />} />
