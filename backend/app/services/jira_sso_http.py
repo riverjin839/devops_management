@@ -82,6 +82,14 @@ _USERNAME_FIELD_NAMES = (
     "empnum", "empno", "emp_no", "empid", "emp_id", "employeeno", "employee_no",
     "employeenumber", "sabun",
 )
+# 자격을 담는 hidden 필드 이름 — 화면에 보이는 입력과 **별도로** hidden 사본을 두고
+# JS 가 채워 넣는 로그인 폼이 있다(SiteMinder 계열에서 흔함). 그 hidden 이 비어 있으면
+# 서버는 빈 비밀번호를 받게 되어 인증에 실패하고 로그인 폼을 다시 보여준다.
+_PASSWORD_FIELD_NAMES = (
+    "password", "passwd", "pwd", "userpassword", "user_password",
+    "j_password", "os_password", "idtoken2", "smpassword", "pass",
+)
+
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -453,7 +461,16 @@ def fill_login_form(form: dict, username: str, password: str, *, username_field_
         if t == "password":
             data[i["name"]] = password
         elif t == "hidden":
-            data[i["name"]] = i["value"]
+            # 값이 비어 있는 자격용 hidden 은 화면 입력의 사본이다 — 직접 채워준다.
+            # (값이 이미 있으면 상태값이므로 그대로 보존한다.)
+            nm = i["name"].lower()
+            if not i["value"] and nm in _PASSWORD_FIELD_NAMES:
+                data[i["name"]] = password
+            elif not i["value"] and nm in _USERNAME_FIELD_NAMES and username_field is not None \
+                    and i is not username_field:
+                data[i["name"]] = username
+            else:
+                data[i["name"]] = i["value"]
         elif t == "submit":
             if not submit_added:
                 data[i["name"]] = i["value"]
