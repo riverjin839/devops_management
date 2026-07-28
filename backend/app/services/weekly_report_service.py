@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import html
 import logging
+import re
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
@@ -76,6 +77,85 @@ def classify_status(item: WorkItem, *, today: Optional[date] = None) -> str:
     return STATUS_IN_PROGRESS
 
 
+_EPIC_KEY_RE = re.compile(r"^([A-Z][A-Z0-9_]*-\d+)\s*(.*)$")
+
+
+def split_epic(value: str) -> tuple[str, str]:
+    """Epic 표기("DL-12 인프라 고도화")를 (키, 이름)으로 나눈다.
+
+    키 형식이 아니면 전체를 이름으로 본다(Epic Name 만 저장된 인스턴스 대비)."""
+    v = (value or "").strip()
+    m = _EPIC_KEY_RE.match(v)
+    if m:
+        return m.group(1), m.group(2).strip()
+    return "", v
+
+
+def _epic_of(item: WorkItem) -> str:
+    """task(Epic) 축 — Jira 에서 수집한 Epic/상위 이슈. 없으면 미지정으로 묶는다."""
+    v = (getattr(item, "jira_epic", None) or "").strip()
+    return v or "(Epic 미지정)"
+
+
+def planned_rate(item: WorkItem, *, today: date) -> int:
+    """계획진도율(%) — 일정상 지금까지 진행됐어야 할 비율.
+
+    시작일~종료예정일 구간에서 오늘까지의 경과 비율. 종료예정일이 없으면 계획을 세울 수
+    없으므로 완료면 100, 아니면 0 으로 본다(실적과 비교 가능한 최소 기준)."""
+    start = _dt(item.started_at)
+    due = _due_of(item)
+    if not due:
+        return 100 if classify_status(item, today=today) == STATUS_DONE else 0
+    if not start or due <= start:
+        return 100 if today >= due else 0
+    if today >= due:
+        return 100
+    if today <= start:
+        return 0
+    return int(round((today - start).days / (due - start).days * 100))
+
+
+def build_progress(items: list[WorkItem], *, today: date, base_url: str = "") -> list[dict]:
+    """진척률 — category(component) × task(Epic) 로 묶은 집계.
+
+    - 계획진도율: 그룹 내 항목별 계획진도율의 평균
+    - 실적진도율: 완료 건수 / 전체 건수
+    - 달성률: 실적 / 계획 (계획이 0 이면 실적이 있을 때 100, 없으면 0)
+    """
+    groups: dict[tuple[str, str], list[WorkItem]] = {}
+    for it in items:
+        groups.setdefault((_component_of(it), _epic_of(it)), []).append(it)
+
+    rows: list[dict] = []
+    for (category, epic), members in sorted(groups.items()):
+        total = len(members)
+        statuses = [classify_status(m, today=today) for m in members]
+        done = sum(1 for st in statuses if st == STATUS_DONE)
+        # 지연도 아직 진행 중인 일이므로 '진행중'에 포함해 전체 = 완료 + 진행중 이 되게 한다.
+        in_progress = total - done
+        planned = int(round(sum(planned_rate(m, today=today) for m in members) / total)) if total else 0
+        actual = int(round(done / total * 100)) if total else 0
+        if planned > 0:
+            achievement = int(round(actual / planned * 100))
+        else:
+            achievement = 100 if actual > 0 else 0
+        epic_key, epic_name = split_epic(epic)
+        rows.append({
+            "category": category,
+            "epic": epic,
+            "epic_key": epic_key,
+            "epic_name": epic_name,
+            "planned_rate": planned,
+            "actual_rate": actual,
+            "achievement_rate": achievement,
+            "done_count": done,
+            "in_progress_count": in_progress,
+            "total_count": total,
+            "epic_url": f"{base_url}/browse/{epic_key}" if (base_url and epic_key) else "",
+        })
+    return rows
+
+
 def _component_of(item: WorkItem) -> str:
     """구분(component) — Jira component 를 저장하는 전용 컬럼이 없으므로 category/service 순."""
     for attr in ("component", "category", "service"):
@@ -102,6 +182,7 @@ def collect_items(db: Session, start: date, end: date) -> list[WorkItem]:
 
 def build_report(
     db: Session, *, anchor: Optional[date] = None, project_filter: str = "",
+    base_url: str = "",
 ) -> dict[str, Any]:
     """주간보고 데이터 구성 — 3개 표를 그대로 담은 dict."""
     start, end = week_range(anchor)
@@ -122,10 +203,16 @@ def build_report(
         status = classify_status(it, today=today)
         counts[status] = counts.get(status, 0) + 1
         title = (it.title or it.content or "").strip()
+        epic_raw = (getattr(it, "jira_epic", None) or "").strip()
+        epic_key, epic_name = split_epic(epic_raw)
         rows_detail.append({
             "component": _component_of(it),
-            "task": title[:200],
-            "sub_task": (it.resolution or "").strip()[:200],
+            # task = Jira Epic, sub task = 그 Epic 아래의 이슈(현재 행) — 사용자 매핑 기준.
+            "task": (epic_raw or "(Epic 미지정)")[:200],
+            "epic_key": epic_key,
+            "epic_name": epic_name,
+            "epic_url": f"{base_url}/browse/{epic_key}" if (base_url and epic_key) else "",
+            "sub_task": title[:200],
             "start": _fmt(_dt(it.started_at)),
             "due": _fmt(_due_of(it)),
             "closed": _fmt(_dt(it.closed_at)),
@@ -142,6 +229,7 @@ def build_report(
             "issue_summary": (it.remarks or "").strip()[:200],
         })
 
+    progress = build_progress(items, today=today, base_url=base_url)
     summary = {
         "total": len(items),
         "in_progress": counts.get(STATUS_IN_PROGRESS, 0),
@@ -154,9 +242,21 @@ def build_report(
         "period_end": _fmt(end),
         "title": f"주간보고 {_fmt(start)} ~ {_fmt(end)}",
         "summary": summary,
+        "progress": progress,
         "details": rows_detail,
         "owners": rows_owner,
     }
+
+
+def _issue_cell(row: dict) -> str:
+    """sub task 셀 — "DL-12 제목 (상태)" 한 덩어리. 표 안에서 이슈를 바로 식별하게 한다.
+
+    (HTML 링크는 `_table` 이 이스케이프하므로 여기서는 텍스트로 합친다 — Confluence 에서
+    이슈 키는 자동 링크되는 경우가 많고, 링크가 필요하면 상세 표의 Jira 열을 쓴다.)"""
+    parts = [p for p in [row.get("jira_key", ""), row.get("sub_task", "")] if p]
+    text = " ".join(parts)
+    status = row.get("status", "")
+    return f"{text} ({status})" if status else text
 
 
 def _cell(v: str) -> str:
@@ -181,10 +281,18 @@ def render_storage_html(report: dict[str, Any]) -> str:
             [[str(s.get("total", 0)), str(s.get("in_progress", 0)), str(s.get("done", 0)),
               str(s.get("delayed", 0)), s.get("note", "")]],
         ),
+        "<h2>1-1. 진척률</h2>",
+        _table(
+            ["category", "task(Epic)", "계획진도율(%)", "실적진도율(%)", "달성률(%)",
+             "완료 Task", "진행중 Task", "전체 Task"],
+            [[r["category"], r["epic"], str(r["planned_rate"]), str(r["actual_rate"]),
+              str(r["achievement_rate"]), str(r["done_count"]), str(r["in_progress_count"]),
+              str(r["total_count"])] for r in report.get("progress", [])],
+        ),
         "<h2>2. 구분별 상세</h2>",
         _table(
             ["구분", "task", "sub task", "시작일", "종료 예정일", "종료일", "상태", "이슈", "비고"],
-            [[r["component"], r["task"], r["sub_task"], r["start"], r["due"], r["closed"],
+            [[r["component"], r["task"], _issue_cell(r), r["start"], r["due"], r["closed"],
               r["status"], r["issue"], r["note"]] for r in report.get("details", [])],
         ),
         "<h2>3. 담당자별 추진 업무</h2>",

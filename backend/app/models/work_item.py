@@ -91,6 +91,12 @@ class WorkItem(Base):
     jira_synced_at = Column(DateTime, nullable=True)        # 마지막 동기화 시각
     jira_updated_at = Column(DateTime, nullable=True)       # Jira updated (충돌 감지)
     jira_watchers = Column(JSONB, nullable=True)            # list[str] — 가져온 PEP username
+    # Jira Epic (또는 상위 이슈) — 주간보고 진척률을 category × Epic 으로 묶는 기준.
+    # Server/DC 는 Epic Link 가 커스텀 필드라 설정(jira_epic_field)으로 필드 ID 를 지정한다.
+    jira_epic = Column(String(200), nullable=True)
+    # PEP 에서 업무를 만들 때 함께 생성한 Confluence 문서 (프로비저닝).
+    confluence_page_id = Column(String(50), nullable=True)
+    confluence_url = Column(Text, nullable=True)
 
     # 유사 WorkItem 검색용 임베딩(제목+본문) — Celery 비동기로 계산·저장 (동기 쓰기 경로에 없음).
     # settings.embedding_model 교체 시 차원(embedding_dim)도 함께 바뀌면 재계산 필요.

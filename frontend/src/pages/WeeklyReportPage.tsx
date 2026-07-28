@@ -3,6 +3,7 @@ import {
   Loader2, FileText, Send, Save, RefreshCw, ExternalLink, ArrowUp, ArrowDown, Search, X,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
+import { JiraIssueChip } from '@/components/work-items';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -11,7 +12,7 @@ import {
   useWeeklyReportSettings, useUpdateWeeklyReportSettings,
 } from '@/hooks/useJira';
 import type {
-  WeeklyReport, WeeklyReportSettings, WeeklyDetailRow, WeeklyOwnerRow,
+  WeeklyReport, WeeklyReportSettings, WeeklyDetailRow, WeeklyOwnerRow, WeeklyProgressRow,
 } from '@/types';
 
 const inputCls =
@@ -171,6 +172,10 @@ export function WeeklyReportPage() {
     delayed: details.filter((r) => r.status === '지연').length,
   }), [details]);
 
+  const progressRows = useMemo(() => (report?.progress ?? []).filter((r) =>
+    (!fComponent || r.category === fComponent) &&
+    matchesSearch(r.category, r.epic)), [report, fComponent, matchesSearch]);
+
   const componentOptions = useMemo(
     () => Array.from(new Set((report?.details ?? []).map((r) => r.component))).sort(),
     [report]);
@@ -182,6 +187,8 @@ export function WeeklyReportPage() {
     details as (WeeklyDetailRow & Record<string, unknown>)[], 'component');
   const ownerSort = useSort<WeeklyOwnerRow & Record<string, unknown>>(
     owners as (WeeklyOwnerRow & Record<string, unknown>)[], 'assignee');
+  const progressSort = useSort<WeeklyProgressRow & Record<string, unknown>>(
+    progressRows as (WeeklyProgressRow & Record<string, unknown>)[], 'category');
 
   const publish = async () => {
     try {
@@ -311,6 +318,64 @@ export function WeeklyReportPage() {
         </MacCard>
       )}
 
+      {tab === 'summary' && (
+        <MacCard title="진척률">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {settings?.ganttUrl ? (
+              <a href={settings.ganttUrl} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                <ExternalLink className="w-3.5 h-3.5" /> Jira WBS 간트 차트 열기
+              </a>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                간트 차트 링크가 설정되지 않았습니다 — Confluence 게시 탭의 자동 생성 설정에서 등록하세요.
+              </span>
+            )}
+            <span className="ml-auto text-[11px] text-muted-foreground">
+              계획진도율 = 일정 경과 비율 · 실적진도율 = 완료 비율 · 달성률 = 실적/계획
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <SortHeader label="category" col="category" sort={progressSort} />
+                  <SortHeader label="task(Epic)" col="epic" sort={progressSort} />
+                  <SortHeader label="계획진도율(%)" col="plannedRate" sort={progressSort} />
+                  <SortHeader label="실적진도율(%)" col="actualRate" sort={progressSort} />
+                  <SortHeader label="달성률(%)" col="achievementRate" sort={progressSort} />
+                  <SortHeader label="완료 Task" col="doneCount" sort={progressSort} />
+                  <SortHeader label="진행중 Task" col="inProgressCount" sort={progressSort} />
+                  <SortHeader label="전체 Task" col="totalCount" sort={progressSort} />
+                </tr>
+              </thead>
+              <tbody>
+                {progressSort.sorted.map((r, i) => (
+                  <tr key={`${r.category}-${r.epic}-${i}`} className="border-b border-border/40">
+                    <td className={td}>{r.category}</td>
+                    <td className={td}>
+                      <JiraIssueChip issueKey={r.epicKey} title={r.epicName || (r.epicKey ? '' : r.epic)}
+                        url={r.epicUrl} />
+                    </td>
+                    <td className={td}>{r.plannedRate}</td>
+                    <td className={td}>{r.actualRate}</td>
+                    <td className={`${td} ${r.achievementRate >= 100 ? 'text-emerald-500' : r.achievementRate < 80 ? 'text-red-500' : 'text-blue-500'}`}>
+                      {r.achievementRate}
+                    </td>
+                    <td className={`${td} text-emerald-500`}>{r.doneCount}</td>
+                    <td className={`${td} text-blue-500`}>{r.inProgressCount}</td>
+                    <td className={td}>{r.totalCount}</td>
+                  </tr>
+                ))}
+                {progressSort.sorted.length === 0 && (
+                  <tr><td className={`${td} text-muted-foreground`} colSpan={8}>표시할 진척 데이터가 없습니다.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </MacCard>
+      )}
+
       {tab === 'detail' && (
         <MacCard title="2. 구분별 상세">
           <div className="overflow-x-auto">
@@ -333,14 +398,12 @@ export function WeeklyReportPage() {
                   <tr key={`${r.jiraKey}-${i}`} className="border-b border-border/40">
                     <td className={td}>{r.component}</td>
                     <td className={td}>
-                      {r.jiraUrl ? (
-                        <a href={r.jiraUrl} target="_blank" rel="noreferrer"
-                          className="text-primary hover:underline inline-flex items-center gap-1">
-                          {r.task} <ExternalLink className="w-3 h-3" />
-                        </a>
-                      ) : r.task}
+                      <JiraIssueChip issueKey={r.epicKey} title={r.epicName || (r.epicKey ? '' : r.task)}
+                        url={r.epicUrl} />
                     </td>
-                    <td className={td}>{r.subTask}</td>
+                    <td className={td}>
+                      <JiraIssueChip issueKey={r.jiraKey} title={r.subTask} status={r.status} url={r.jiraUrl} />
+                    </td>
                     <td className={td}>{r.start}</td>
                     <td className={td}>{r.due}</td>
                     <td className={td}>{r.closed}</td>
@@ -432,6 +495,11 @@ export function WeeklyReportPage() {
                   <span className="block text-sm font-medium text-muted-foreground mb-1">기본 상위 페이지 ID</span>
                   <input className={inputCls} value={form.parentPageId}
                     onChange={(e) => setForm({ ...form, parentPageId: e.target.value })} />
+                </div>
+                <div>
+                  <span className="block text-sm font-medium text-muted-foreground mb-1">Jira WBS 간트 링크</span>
+                  <input className={inputCls} placeholder="https://jira.../secure/GanttChart.jspa?..."
+                    value={form.ganttUrl} onChange={(e) => setForm({ ...form, ganttUrl: e.target.value })} />
                 </div>
                 <div>
                   <span className="block text-sm font-medium text-muted-foreground mb-1">제목 형식</span>

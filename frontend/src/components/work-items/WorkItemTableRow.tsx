@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2 } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
@@ -218,9 +218,11 @@ interface WorkItemTableRowProps {
   onJiraPush?: (item: WorkItem) => void;
   /** 이 행에서 Jira 동기화가 진행 중인지 (버튼 스피너/중복 클릭 방지). */
   jiraBusy?: boolean;
+  /** 아직 Jira 와 연결되지 않은 업무 — Jira·Confluence 자동 생성 진입. */
+  onJiraProvision?: (item: WorkItem) => void;
 }
 
-export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, jiraBusy = false }: WorkItemTableRowProps) {
+export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, jiraBusy = false }: WorkItemTableRowProps) {
   const fmtDate = showTime ? formatDateTime : formatDate;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
@@ -609,6 +611,16 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
+              {!item.jiraIssueKey && onJiraProvision && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onJiraProvision(item); }}
+                  className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
+                  title="Jira 이슈 · Confluence 문서 자동 생성"
+                  aria-label="Jira · Confluence 자동 생성"
+                >
+                  <Rocket className="w-3.5 h-3.5" />
+                </button>
+              )}
               {item.jiraIssueKey && onJiraRefresh && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onJiraRefresh(item); }}

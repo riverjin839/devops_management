@@ -71,6 +71,9 @@ from app.schemas.jira import (
     WeeklyPublishRequest,
     WeeklyPublishResult,
     WeeklyReportSettings,
+    ProvisionDefaults,
+    ProvisionRequest,
+    ProvisionResult,
 )
 from app.services import weekly_report_service
 
@@ -92,6 +95,9 @@ DEFAULT_JIRA_SETTINGS = {
     "sso_login_url": "",
     # IdP 로그인 폼의 계정 필드명 (선택) — 자동 추정 실패 시 지정 (예: empnum).
     "sso_username_field": "",
+    # Jira Epic Link 커스텀 필드 ID (선택, 예: customfield_10008) — 주간보고 진척률의
+    # Epic 축을 채운다. Server/DC 는 Epic Link 가 커스텀 필드라 인스턴스마다 ID 가 다르다.
+    "jira_epic_field": "",
 }
 
 
@@ -404,6 +410,8 @@ def update_config(
         current["sso_login_url"] = data["sso_login_url"].strip()
     if "sso_username_field" in data and data["sso_username_field"] is not None:
         current["sso_username_field"] = data["sso_username_field"].strip()
+    if "jira_epic_field" in data and data["jira_epic_field"] is not None:
+        current["jira_epic_field"] = data["jira_epic_field"].strip()
     for k in ("enabled", "verify_tls", "default_project_key"):
         if k in data and data[k] is not None:
             current[k] = data[k]
@@ -916,11 +924,14 @@ async def refresh_work_item_from_jira(
     if svc is None:
         return JiraImportResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
 
-    got = await svc.get_issue(item.jira_issue_key, fields=ISSUE_FIELDS)
+    epic_field = (cfg.get("jira_epic_field") or "").strip()
+    got = await svc.get_issue(item.jira_issue_key,
+                              fields=ISSUE_FIELDS + ([epic_field] if epic_field else []))
     if got.get("status") != "ok":
         return JiraImportResult(status=got.get("status", "error"),
                                 detail=got.get("detail", "Jira 이슈 조회 실패"))
-    fields = map_jira_issue(got["issue"], base_url, assignee_resolver=_build_assignee_resolver(db))
+    fields = map_jira_issue(got["issue"], base_url,
+                            assignee_resolver=_build_assignee_resolver(db), epic_field=epic_field)
     changes = _diff_existing(item, fields)
     if not changes:
         item.jira_synced_at = datetime.utcnow()
@@ -939,6 +950,7 @@ async def refresh_work_item_from_jira(
     item.jira_status = fields["jira_status"]
     item.jira_url = fields["jira_url"]
     item.jira_updated_at = fields["jira_updated_at"]
+    item.jira_epic = fields.get("jira_epic") or item.jira_epic
     item.jira_synced_at = datetime.utcnow()
     if fields["closed_at"] and not item.closed_at:
         item.closed_at = fields["closed_at"]
@@ -1050,9 +1062,191 @@ async def delete_jira_issue(
     return JiraDeleteResult(status="ok", detail=f"Jira {key} 삭제됨", unlinked_work_item_id=unlinked)
 
 
+# ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
+def _default_page_body(item: WorkItem, jira_key: str = "", jira_url: str = "") -> str:
+    """업무 내용을 담은 기본 Confluence 문서(storage format).
+
+    사용자가 본문을 따로 주지 않으면 이 골격으로 만든다 — 담당자/일정/Jira 링크가 들어간
+    한 장짜리 작업 문서."""
+    rows = [
+        ("담당자", (item.primary_assignee or item.assignee or "")),
+        ("시작일", item.started_at.strftime("%Y-%m-%d") if item.started_at else ""),
+        ("구분", item.category or ""),
+        ("우선순위", item.priority or ""),
+    ]
+    if jira_key:
+        link = f'<a href="{html.escape(jira_url)}">{html.escape(jira_key)}</a>' if jira_url else html.escape(jira_key)
+        rows.append(("Jira", link))
+    meta = "".join(
+        f"<tr><th>{html.escape(k)}</th><td>{v if k == 'Jira' else html.escape(str(v))}</td></tr>"
+        for k, v in rows
+    )
+    content = html.escape((item.content or "").strip()) or "(내용 없음)"
+    return (
+        f"<table><tbody>{meta}</tbody></table>"
+        f"<h2>작업 내용</h2><p>{content}</p>"
+        "<h2>진행 경과</h2><p></p>"
+        "<h2>이슈 / 리스크</h2><p></p>"
+        "<h2>결과 / 후속 조치</h2><p></p>"
+    )
+
+
+@router.get("/provision/defaults", response_model=ProvisionDefaults)
+async def provision_defaults(
+    work_item_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    """업무 → Jira/Confluence 생성 화면의 **기본값**.
+
+    관리자 공통 설정 + 주간보고 저장 위치 + 사용자의 업무 내용에서 최대한 채워 돌려주고,
+    화면에서는 그대로 수정 가능하게 한다(강제하지 않는다)."""
+    cfg = _get_config(db)
+    weekly = _get_weekly_settings(db)
+    item = db.query(WorkItem).filter(WorkItem.id == work_item_id).first() if work_item_id else None
+
+    cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
+    missing: list[str] = []
+    if not cfg.get("base_url"):
+        missing.append("Jira URL(관리자 설정)")
+    if not cred:
+        missing.append("내 Jira 인증")
+    if not (cfg.get("confluence_base_url") or "").strip():
+        missing.append("Confluence URL(관리자 설정)")
+
+    title = (item.title if item else "") or ""
+    return ProvisionDefaults(
+        jira_enabled=bool(cfg.get("base_url") and cfg.get("enabled", False) and cred),
+        confluence_enabled=bool((cfg.get("confluence_base_url") or "").strip() and cred),
+        project_key=(cfg.get("default_project_key") or ""),
+        issue_type="Task",
+        priority=PEP_PRIORITY_TO_JIRA.get((item.priority if item else "") or "", ""),
+        labels=[],
+        components=[c for c in [(item.category if item else "")] if c],
+        summary=title,
+        description=(item.content if item else "") or "",
+        space_key=(weekly.get("space_key") or ""),
+        parent_page_id=(weekly.get("parent_page_id") or ""),
+        page_title=title,
+        reporter=(cred.jira_account if cred and cred.jira_account else actor.username),
+        detail=("바로 생성할 수 있습니다." if not missing
+                else "미설정: " + ", ".join(missing)),
+    )
+
+
+@router.post("/provision", response_model=ProvisionResult)
+async def provision_work_item(
+    payload: ProvisionRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """업무 1건을 Jira 이슈 + Confluence 문서로 만들고 둘 다 업무에 연결한다.
+
+    한쪽이 실패해도 다른 쪽 결과는 유지하고 `partial` 로 알린다(둘 다 실패면 error).
+    Confluence 문서에는 생성된 Jira 키 링크가 함께 들어간다."""
+    item = db.query(WorkItem).filter(WorkItem.id == payload.work_item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    cfg = _get_config(db)
+
+    jira_key = jira_url = ""
+    jira_detail = confluence_detail = ""
+    conf_id = conf_url = ""
+    jira_ok = conf_ok = False
+
+    # ── Jira ─────────────────────────────────────────────────────────────────
+    if payload.create_jira:
+        if item.jira_issue_key:
+            jira_detail = f"이미 {item.jira_issue_key} 와 연결돼 있어 생성을 건너뛰었습니다."
+            jira_key, jira_url = item.jira_issue_key, item.jira_url or ""
+            jira_ok = True
+        elif not cfg.get("base_url"):
+            jira_detail = "Jira URL 미설정."
+        else:
+            svc, _myself = await _jira_service_verified(db, actor, cfg)
+            project_key = (payload.project_key or cfg.get("default_project_key") or "").strip()
+            summary = (payload.summary or item.title or "").strip()
+            if svc is None:
+                jira_detail = "내 Jira 인증이 등록되지 않았습니다."
+            elif not project_key:
+                jira_detail = "프로젝트 키를 지정하세요."
+            elif not summary:
+                jira_detail = "제목(summary)이 비어 있습니다."
+            else:
+                res = await svc.create_issue(
+                    project_key, summary,
+                    description=(payload.description if payload.description is not None else item.content) or "",
+                    issue_type=payload.issue_type,
+                    priority=payload.priority or PEP_PRIORITY_TO_JIRA.get(item.priority or ""),
+                    labels=payload.labels, components=payload.components,
+                )
+                if res.get("status") == "ok":
+                    jira_ok = True
+                    jira_key, jira_url = res.get("key", ""), res.get("url", "")
+                    item.jira_issue_key = jira_key
+                    item.jira_issue_id = res.get("id") or None
+                    item.jira_url = jira_url
+                    item.jira_synced_at = datetime.utcnow()
+                else:
+                    jira_detail = res.get("detail", "Jira 이슈 생성 실패")
+
+    # ── Confluence ───────────────────────────────────────────────────────────
+    if payload.create_confluence:
+        space_key = (payload.space_key or "").strip() or (_get_weekly_settings(db).get("space_key") or "").strip()
+        page_title = (payload.page_title or item.title or "").strip()
+        if not space_key:
+            confluence_detail = "Confluence 스페이스 키를 지정하세요."
+        elif not page_title:
+            confluence_detail = "문서 제목이 비어 있습니다."
+        else:
+            svc, res = await _confluence_service_verified(db, actor, cfg)
+            if svc is None or res.get("status") != "ok":
+                confluence_detail = res.get("detail", "Confluence 세션 없음")
+            else:
+                body = payload.page_body or _default_page_body(item, jira_key, jira_url)
+                out = await svc.upsert_page(
+                    space_key, page_title, body,
+                    parent_id=(payload.parent_page_id or "").strip()
+                    or (_get_weekly_settings(db).get("parent_page_id") or ""),
+                )
+                if out.get("status") == "ok":
+                    conf_ok = True
+                    conf_id, conf_url = out.get("id", ""), out.get("url", "")
+                    item.confluence_page_id = conf_id or None
+                    item.confluence_url = conf_url or None
+                else:
+                    confluence_detail = out.get("detail", "Confluence 문서 생성 실패")
+
+    db.commit()
+    audit_logger.record(
+        db, action="work_item.provision", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"jira": jira_key or None, "confluence": conf_id or None},
+    )
+
+    wanted = [payload.create_jira, payload.create_confluence]
+    succeeded = [payload.create_jira and jira_ok, payload.create_confluence and conf_ok]
+    if not any(wanted):
+        return ProvisionResult(status="error", detail="생성할 대상을 하나 이상 선택하세요.")
+    if all(s for s, w in zip(succeeded, wanted) if w):
+        status, detail = "ok", "생성이 완료되었습니다."
+    elif any(succeeded):
+        status, detail = "partial", "일부만 생성되었습니다 — 아래 사유를 확인하세요."
+    else:
+        status, detail = "error", "생성에 실패했습니다 — 아래 사유를 확인하세요."
+    return ProvisionResult(
+        status=status, detail=detail,
+        jira_key=jira_key or None, jira_url=jira_url or None, jira_detail=jira_detail,
+        confluence_page_id=conf_id or None, confluence_url=conf_url or None,
+        confluence_detail=confluence_detail,
+    )
+
+
 # ── 주간보고 (월~금 집계 → 3개 표 → Confluence 게시) ────────────────────────────
 WEEKLY_SETTINGS_KEY = "jira_weekly_report"
 DEFAULT_WEEKLY_SETTINGS = {
+    # Jira WBS/간트 차트 링크 — 진척률 표 위에 노출한다(플러그인/보드마다 URL 이 달라 설정값).
+    "gantt_url": "",
     "space_key": "",
     "parent_page_id": "",
     "title_template": "주간보고 {start} ~ {end}",
@@ -1112,6 +1306,7 @@ def weekly_report_preview(
     report = weekly_report_service.build_report(
         db, anchor=_parse_week_of(payload.week_of),
         project_filter=payload.project_filter or settings.get("project_filter", ""),
+        base_url=_get_config(db).get("base_url", ""),
     )
     return WeeklyReport(**report)
 
@@ -1131,6 +1326,7 @@ async def weekly_report_publish(
     report = weekly_report_service.build_report(
         db, anchor=_parse_week_of(payload.week_of),
         project_filter=payload.project_filter or settings.get("project_filter", ""),
+        base_url=cfg.get("base_url", ""),
     )
     space_key = (payload.space_key or settings.get("space_key") or "").strip()
     if not space_key:
@@ -1198,7 +1394,8 @@ async def import_issues(
     svc, _myself = await _jira_service_verified(db, actor, cfg)
     if svc is None:
         return JiraImportResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동에서 등록).")
-    search = await svc.search(jql)
+    epic_field = (cfg.get("jira_epic_field") or "").strip()
+    search = await svc.search(jql, extra_fields=[epic_field] if epic_field else None)
     if search.get("status") != "ok":
         return JiraImportResult(
             status=search.get("status", "error"),
@@ -1216,12 +1413,22 @@ async def import_issues(
 
     for issue in issues:
         try:
-            fields = map_jira_issue(issue, base_url, assignee_resolver=resolver)
+            fields = map_jira_issue(issue, base_url, assignee_resolver=resolver, epic_field=epic_field)
             jid = fields.get("jira_issue_id")
             if not jid:
                 skipped += 1
                 continue
             existing = db.query(WorkItem).filter(WorkItem.jira_issue_id == jid).first()
+            if existing is None and fields.get("jira_issue_key"):
+                # id 가 없던(Excel 로 들어왔거나 잘못 저장된) 기존 행은 **키(DL-#) 기준**으로
+                # 찾아 덮어쓴다 — 중복 생성 대신 정정이 되게 한다.
+                existing = (
+                    db.query(WorkItem)
+                    .filter(WorkItem.jira_issue_key == fields["jira_issue_key"])
+                    .first()
+                )
+                if existing is not None:
+                    existing.jira_issue_id = jid
             changes = _diff_existing(existing, fields) if existing else []
             if not existing:
                 action = "create"
@@ -1262,6 +1469,7 @@ async def import_issues(
                 existing.jira_url = fields["jira_url"]
                 existing.jira_issue_key = fields["jira_issue_key"]
                 existing.jira_updated_at = fields["jira_updated_at"]
+                existing.jira_epic = fields.get("jira_epic") or existing.jira_epic
                 existing.jira_synced_at = now
                 if fields["closed_at"] and not existing.closed_at:
                     existing.closed_at = fields["closed_at"]
@@ -1291,6 +1499,7 @@ async def import_issues(
                     jira_url=fields["jira_url"],
                     jira_status=fields["jira_status"],
                     jira_updated_at=fields["jira_updated_at"],
+                    jira_epic=fields.get("jira_epic"),
                     jira_synced_at=now,
                     jira_watchers=[actor.username],
                     created_by=actor.username,

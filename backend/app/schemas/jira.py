@@ -19,6 +19,8 @@ class JiraConfig(BaseModel):
     # (선택) IdP 로그인 페이지 URL. 자동 탐색이 실패하는 배포에서 이 주소를 지정하면
     # SSO 폼 로그인이 여기부터 시작한다. 예: https://login.example.com/sso/am/jira/login.jsp
     sso_login_url: str = ""
+    # Jira Epic Link 커스텀 필드 ID (예: customfield_10008) — 진척률의 Epic 축.
+    jira_epic_field: str = ""
 
 
 class JiraConfigUpdate(BaseModel):
@@ -29,6 +31,7 @@ class JiraConfigUpdate(BaseModel):
     confluence_base_url: Optional[str] = None
     sso_login_url: Optional[str] = None
     sso_username_field: Optional[str] = None
+    jira_epic_field: Optional[str] = None
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────
@@ -283,7 +286,11 @@ class WeeklySummary(BaseModel):
 
 class WeeklyDetailRow(BaseModel):
     component: str = ""
+    # task = Jira Epic, sub_task = 그 Epic 아래 이슈(현재 행).
     task: str = ""
+    epic_key: str = ""
+    epic_name: str = ""
+    epic_url: str = ""
     sub_task: str = ""
     start: str = ""
     due: str = ""
@@ -302,11 +309,27 @@ class WeeklyOwnerRow(BaseModel):
     issue_summary: str = ""
 
 
+class WeeklyProgressRow(BaseModel):
+    """진척률 — category(Jira component) × task(Epic) 단위 집계."""
+    category: str = ""
+    epic: str = ""
+    epic_key: str = ""
+    epic_name: str = ""
+    epic_url: str = ""
+    planned_rate: int = 0        # 계획진도율(%) — 일정 경과 기준
+    actual_rate: int = 0         # 실적진도율(%) — 완료 비율
+    achievement_rate: int = 0    # 달성률(%) — 실적/계획
+    done_count: int = 0
+    in_progress_count: int = 0
+    total_count: int = 0
+
+
 class WeeklyReport(BaseModel):
     period_start: str = ""
     period_end: str = ""
     title: str = ""
     summary: WeeklySummary = WeeklySummary()
+    progress: list[WeeklyProgressRow] = []
     details: list[WeeklyDetailRow] = []
     owners: list[WeeklyOwnerRow] = []
 
@@ -334,9 +357,61 @@ class WeeklyPublishResult(BaseModel):
 
 class WeeklyReportSettings(BaseModel):
     """주간보고 기본 저장 위치/자동 생성 설정 (AppSetting)."""
+    # Jira WBS/간트 차트 링크 — 진척률 표 위에 노출.
+    gantt_url: str = ""
     space_key: str = ""
     parent_page_id: str = ""
     title_template: str = "주간보고 {start} ~ {end}"
     auto_enabled: bool = False
     auto_cron: str = "0 17 * * 5"             # 금요일 17:00 (UTC 기준 평가)
     project_filter: str = ""
+
+
+# ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
+class ProvisionDefaults(BaseModel):
+    """사용자/설정 기반 기본값 — 화면에 채워 보여주고 사용자가 수정할 수 있다."""
+    jira_enabled: bool = False
+    confluence_enabled: bool = False
+    project_key: str = ""
+    issue_type: str = "Task"
+    priority: str = ""
+    labels: list[str] = []
+    components: list[str] = []
+    summary: str = ""
+    description: str = ""
+    space_key: str = ""
+    parent_page_id: str = ""
+    page_title: str = ""
+    reporter: str = ""            # 표시용 — 내 Jira 계정
+    detail: str = ""              # 준비 상태 안내(미설정 항목 등)
+
+
+class ProvisionRequest(BaseModel):
+    """업무를 Jira 이슈 + Confluence 문서로 함께 생성한다. 항목별로 끌 수 있다."""
+    work_item_id: str
+    create_jira: bool = True
+    create_confluence: bool = True
+    # Jira
+    project_key: Optional[str] = None
+    issue_type: str = "Task"
+    priority: Optional[str] = None
+    labels: list[str] = []
+    components: list[str] = []
+    summary: Optional[str] = None
+    description: Optional[str] = None
+    # Confluence
+    space_key: Optional[str] = None
+    parent_page_id: Optional[str] = None
+    page_title: Optional[str] = None
+    page_body: Optional[str] = None   # 비우면 업무 내용으로 기본 문서를 만든다
+
+
+class ProvisionResult(BaseModel):
+    status: Literal["ok", "partial", "error", "offline"]
+    detail: str = ""
+    jira_key: Optional[str] = None
+    jira_url: Optional[str] = None
+    jira_detail: str = ""
+    confluence_page_id: Optional[str] = None
+    confluence_url: Optional[str] = None
+    confluence_detail: str = ""

@@ -9,6 +9,26 @@
 ## [Unreleased]
 
 ### Added
+- **주간보고 진척률 표**: 전체 요약 아래에 `category(component) × task(Epic)` 단위 진척률을
+  추가했다 — 계획진도율(일정 경과 기준) · 실적진도율(완료 비율) · 달성률(실적/계획) · 완료/
+  진행중/전체 Task 수. 표 위에 **Jira WBS 간트 차트 링크**(설정값)를 노출한다. Epic 수집을 위해
+  `work_items.jira_epic` 컬럼과 관리자 설정 `jira_epic_field`(Epic Link 커스텀 필드 ID)를 추가.
+- **업무 등록 시 Jira·Confluence 자동 생성**: 업무를 만들면 곧바로 Jira 이슈와 Confluence
+  문서를 함께 생성할 수 있다(`GET /jira/provision/defaults`, `POST /jira/provision`).
+  프로젝트/이슈종류/우선순위/컴포넌트/라벨과 Confluence 스페이스·상위 페이지·제목은 **사용자
+  정보와 설정으로 기본값이 채워지고 모두 수정 가능**하며, 한쪽만 만들 수도 있다. 생성된
+  Confluence 문서에는 담당자·일정·Jira 링크가 들어간 기본 골격이 들어간다. 미연결 업무는
+  게시판 행에서도 바로 생성할 수 있고, 결과는 `work_items.confluence_url` 에 연결된다.
+- **Jira 이슈 칩 표시**: 표에서 이슈를 평문 대신 **키(링크) · 제목 · 상태**가 한 덩어리인 칩으로
+  보여준다(주간보고 상세/진척률 표 적용).
+
+### Changed
+- **주간보고 task/sub task 매핑 정정**: `task` = Jira **Epic**, `sub task` = 그 Epic 아래 이슈로
+  바로잡았다(기존에는 업무 제목/조치 내용이 들어갔다).
+- **가져오기 중복 정정**: `jira_issue_id` 로 못 찾으면 **이슈 키(DL-#) 기준**으로 기존 행을 찾아
+  덮어쓴다 — Excel 등으로 먼저 들어와 ID 가 없던 잘못된 행이 중복 생성되지 않고 정정된다.
+
+### Added
 - **내 Jira 연결 카드** (`JiraConnectCard`): 개인 세션 쿠키·PAT 등록을 **가져오기 팝업에서 바로**
   할 수 있다. 자격증명은 원래 사용자별이지만 등록 UI 가 관리자 화면에만 있어 일반 사용자가
   찾지 못하던 문제를 해결한다. 저장 시 자동으로 연결 테스트까지 수행하고, 접이식 **연결 가이드**

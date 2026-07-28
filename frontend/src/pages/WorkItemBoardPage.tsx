@@ -7,7 +7,7 @@ import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal, JiraProvisionModal } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -271,6 +271,8 @@ export function WorkItemBoardPage() {
   const jiraRefresh = useJiraRefreshItem();
   const jiraPush = useJiraPush();
   const [jiraBusyId, setJiraBusyId] = useState<string | null>(null);
+  // 업무 생성 직후 Jira·Confluence 자동 생성 모달을 띄운다(연동이 켜져 있을 때만).
+  const [provisionItem, setProvisionItem] = useState<WorkItem | null>(null);
 
   const handleJiraRefresh = async (item: WorkItem) => {
     setJiraBusyId(item.id);
@@ -757,6 +759,7 @@ export function WorkItemBoardPage() {
                       onJiraRefresh={handleJiraRefresh}
                       onJiraPush={handleJiraPush}
                       jiraBusy={jiraBusyId === item.id}
+                      onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
                     />
                   ))}
                   <AddWorkItemRow
@@ -765,7 +768,11 @@ export function WorkItemBoardPage() {
                     defaultClusterId={filterClusterId || undefined}
                     defaultAssignee={filterAssignee || undefined}
                     onCreate={(data) => createTask.mutate(data, {
-                      onSuccess: () => toast.success('업무 등록됨'),
+                      onSuccess: (created) => {
+                        toast.success('업무 등록됨');
+                        // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
+                        if (jiraConfig?.enabled && created?.data) setProvisionItem(created.data);
+                      },
                       onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
                     })}
                   />
@@ -782,6 +789,7 @@ export function WorkItemBoardPage() {
       <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
+      <JiraProvisionModal open={!!provisionItem} onClose={() => setProvisionItem(null)} item={provisionItem} />
 
       <WorkItemFormModal
         open={createOpen}

@@ -89,6 +89,23 @@ export function useJiraImport() {
   });
 }
 
+export function useProvisionDefaults(workItemId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['jira', 'provision-defaults', workItemId ?? ''] as const,
+    queryFn: async () => (await jiraApi.provisionDefaults(workItemId)).data,
+    enabled,
+    staleTime: 1000 * 10,
+  });
+}
+
+export function useProvision() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import('@/types').ProvisionRequest) => jiraApi.provision(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
+  });
+}
+
 export function useJiraRefreshItem() {
   const qc = useQueryClient();
   return useMutation({

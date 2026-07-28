@@ -164,7 +164,8 @@ class JiraService:
             logger.exception("Jira myself error: %s", exc)
             return {"status": "offline", "detail": str(exc)[:200]}
 
-    async def search(self, jql: str, *, max_results: int = 100, hard_cap: int = 500) -> dict:
+    async def search(self, jql: str, *, max_results: int = 100, hard_cap: int = 500,
+                     extra_fields: Optional[list[str]] = None) -> dict:
         """JQL 검색 — 페이지네이션 루프. 구조화 dict 반환 (절대 raise 안 함)."""
         if not self.configured:
             return {"status": "offline", "issues": [], "total": 0, "detail": "Jira 미설정"}
@@ -180,7 +181,7 @@ class JiraService:
                             "jql": jql,
                             "startAt": start_at,
                             "maxResults": max_results,
-                            "fields": ISSUE_FIELDS,
+                            "fields": ISSUE_FIELDS + list(extra_fields or []),
                         },
                     )
                     if resp.status_code == 400:
@@ -436,7 +437,30 @@ KANBAN_TO_CATEGORY = {"todo": "new", "in_progress": "indeterminate", "done": "do
 
 
 
-def map_jira_issue(issue: dict, base_url: str, *, assignee_resolver=None) -> dict:
+def extract_epic(fields: dict, epic_field: str = "") -> str:
+    """이슈에서 Epic(또는 상위 이슈) 표기를 뽑는다.
+
+    Jira Server/DC 는 Epic Link 가 **커스텀 필드**(예: customfield_10008)라 필드 ID 를
+    설정으로 받는다. 값이 문자열(에픽 키)이면 그대로, dict 면 key/summary 를 쓴다.
+    설정이 없거나 값이 없으면 `parent`(서브태스크/차세대 프로젝트)로 폴백한다."""
+    if epic_field:
+        raw = fields.get(epic_field)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()[:200]
+        if isinstance(raw, dict):
+            key = raw.get("key") or ""
+            summary = ((raw.get("fields") or {}).get("summary")) or raw.get("name") or ""
+            joined = f"{key} {summary}".strip()
+            if joined:
+                return joined[:200]
+    parent = fields.get("parent") or {}
+    if isinstance(parent, dict) and parent.get("key"):
+        summary = ((parent.get("fields") or {}).get("summary")) or ""
+        return f"{parent['key']} {summary}".strip()[:200]
+    return ""
+
+
+def map_jira_issue(issue: dict, base_url: str, *, assignee_resolver=None, epic_field: str = "") -> dict:
     """단일 Jira 이슈 → work_item 필드 dict (생성/upsert 공용). 순수 함수."""
     fields = issue.get("fields", {}) or {}
     key = issue.get("key", "")
@@ -470,6 +494,7 @@ def map_jira_issue(issue: dict, base_url: str, *, assignee_resolver=None) -> dic
         "jira_url": f"{base_url.rstrip('/')}/browse/{key}" if base_url and key else None,
         "jira_status": status_name,
         "jira_updated_at": parse_jira_dt(fields.get("updated")),
+        "jira_epic": extract_epic(fields, epic_field),
     }
 
 
