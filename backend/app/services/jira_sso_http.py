@@ -102,20 +102,30 @@ _JS_REDIRECT_RES = (
 
 
 class _FormParser(HTMLParser):
-    """HTML 에서 <form> 들의 action/method/input 목록을 추출한다.
+    """HTML 에서 <form> 들의 action/method/필드 목록과 <script src> 를 추출한다.
 
-    `<button type=submit name= value=>`(ADFS 등)도 submit 입력으로 함께 수집한다."""
+    `<button type=submit>`(ADFS) 뿐 아니라 `<select>`/`<textarea>` 도 필드로 수집한다 —
+    이들을 빠뜨리면 IdP 가 필수값 누락으로 흐름을 되감아 "오답"처럼 보인다."""
 
     def __init__(self) -> None:
         super().__init__()
         self.forms: list[dict] = []
+        self.scripts: list[str] = []
+        self.links: list[dict] = []
         self._cur: dict | None = None
+        self._pending_select: dict | None = None
+        self._cur_link: dict | None = None
 
     def handle_starttag(self, tag: str, attrs) -> None:
         a = dict(attrs)
         if tag == "form":
-            self._cur = {"action": a.get("action") or "", "method": (a.get("method") or "get").lower(), "inputs": []}
+            self._cur = {"action": a.get("action") or "", "method": (a.get("method") or "get").lower(),
+                         "id": a.get("id") or a.get("name") or "", "inputs": []}
             self.forms.append(self._cur)
+        elif tag == "script":
+            src = a.get("src")
+            if src:
+                self.scripts.append(src)
         elif tag in ("input", "button") and self._cur is not None:
             default_type = "text" if tag == "input" else "submit"
             self._cur["inputs"].append({
@@ -123,19 +133,130 @@ class _FormParser(HTMLParser):
                 "value": a.get("value") or "",
                 "type": (a.get("type") or default_type).lower(),
             })
+        elif tag == "select" and self._cur is not None:
+            # 값은 첫 option(또는 selected option)으로 채운다 — handle_starttag(option) 에서 갱신.
+            self._pending_select = {"name": a.get("name") or "", "value": "", "type": "select"}
+            self._cur["inputs"].append(self._pending_select)
+        elif tag == "option" and self._pending_select is not None:
+            val = a.get("value") or ""
+            if "selected" in a or not self._pending_select["value"]:
+                self._pending_select["value"] = val
+        elif tag == "textarea" and self._cur is not None:
+            self._cur["inputs"].append({"name": a.get("name") or "", "value": "", "type": "textarea"})
+        elif tag == "a":
+            href = a.get("href") or ""
+            if href and not href.lower().startswith(("javascript:", "#", "mailto:")):
+                self._cur_link = {"href": href, "text": ""}
+                self.links.append(self._cur_link)
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "form":
             self._cur = None
+        elif tag == "select":
+            self._pending_select = None
+        elif tag == "a":
+            self._cur_link = None
+
+    def handle_data(self, data: str) -> None:
+        # 앵커 텍스트 — "확인 / 계속 / Continue" 같은 진행 링크를 찾는 데 쓴다.
+        if self._cur_link is not None:
+            self._cur_link["text"] = (self._cur_link["text"] + " " + data).strip()[:80]
 
 
-def parse_forms(html_text: str) -> list[dict]:
+def parse_page(html_text: str) -> tuple[list[dict], list[str]]:
+    """(forms, script_srcs) 추출 — 깨진 HTML 이어도 수집된 것까지 사용."""
     p = _FormParser()
     try:
         p.feed(html_text)
-    except Exception:  # noqa: BLE001 - 깨진 HTML 이어도 수집된 것까지는 사용
+    except Exception:  # noqa: BLE001
         pass
-    return p.forms
+    return p.forms, p.scripts
+
+
+def parse_forms(html_text: str) -> list[dict]:
+    return parse_page(html_text)[0]
+
+
+def parse_links(html_text: str) -> list[dict]:
+    p = _FormParser()
+    try:
+        p.feed(html_text)
+    except Exception:  # noqa: BLE001
+        pass
+    return p.links
+
+
+# 로그인 직후 끼어드는 안내 페이지("세션 유효기간 안내" 등)에서 진행을 뜻하는 문구.
+_CONTINUE_WORDS = (
+    "확인", "계속", "진행", "다음", "이동", "닫기", "동의",
+    "continue", "proceed", "next", "ok", "confirm", "agree", "go",
+)
+
+
+def find_continue_form(forms: list[dict]) -> dict | None:
+    """**진행용 폼** — 사용자가 입력할 것이 없는 폼(제출 버튼만/필드 없음).
+
+    `find_autosubmit_form` 은 hidden 이 하나 이상 있어야 매칭되는데, 로그인 후 안내
+    페이지는 hidden 없이 `확인` 버튼만 있는 경우가 있어 그때 흐름이 멈춘다."""
+    for f in forms:
+        inputs = f.get("inputs", [])
+        if any(i["type"] in ("password", "text", "email", "textarea") for i in inputs):
+            continue
+        if not f.get("action") and not inputs:
+            continue
+        return f
+    return None
+
+
+def find_continue_link(html_text: str, current_url: str, prefer_host: str = "") -> str:
+    """안내 페이지의 '확인/계속' 링크(또는 제품 도메인으로 가는 링크) 대상 URL.
+
+    링크는 로그인 흐름에서만 따라간다(자격 제출 이후) — 아무 페이지에서나 링크를 좇으면
+    엉뚱한 곳으로 새기 때문."""
+    for ln in parse_links(html_text):
+        text = (ln.get("text") or "").strip().lower()
+        if text and any(w in text for w in _CONTINUE_WORDS):
+            return urljoin(current_url, ln["href"])
+    if prefer_host:
+        for ln in parse_links(html_text):
+            target = urljoin(current_url, ln["href"])
+            if (urlparse(target).hostname or "").lower() == prefer_host:
+                return target
+    return ""
+
+
+# 로그인 페이지가 **클라이언트에서 자격을 가공**하는지 알려주는 표식.
+# 이런 구성은 평문 POST 로는 절대 인증되지 않는다 — 브라우저에서만 되는 이유가 여기 있다.
+_CRYPTO_MARKERS: tuple[tuple[str, str], ...] = (
+    ("rsa.js", "RSA 자바스크립트 암호화"),
+    ("jsbn", "RSA(jsbn) 자바스크립트 암호화"),
+    ("crypto-js", "CryptoJS 자바스크립트 암호화"),
+    ("seed.js", "SEED 국산 암호화"),
+    ("aria.js", "ARIA 국산 암호화"),
+    ("publickey", "공개키(publicKey) 기반 클라이언트 암호화"),
+    ("public_key", "공개키(public_key) 기반 클라이언트 암호화"),
+    ("rsamodulus", "RSA modulus 전달 — 클라이언트 암호화"),
+    ("keypad", "가상 키패드"),
+    ("securekeyboard", "보안 키보드 모듈"),
+    ("nppfs", "NPPFS 키보드 보안 모듈(로컬 설치 필요)"),
+    ("ahnlab", "AhnLab 보안 모듈(로컬 설치 필요)"),
+    ("veraport", "Veraport 보안 모듈(로컬 설치 필요)"),
+    ("delfino", "Delfino 보안 모듈(로컬 설치 필요)"),
+    ("initech", "INITECH 보안 모듈(로컬 설치 필요)"),
+    ("softforum", "SoftForum(XecureWeb) 보안 모듈(로컬 설치 필요)"),
+    ("xecure", "XecureWeb 보안 모듈(로컬 설치 필요)"),
+    ("wizvera", "WIZVERA 보안 모듈(로컬 설치 필요)"),
+)
+
+
+def detect_crypto_hints(html_text: str, scripts: list[str]) -> list[str]:
+    """페이지/스크립트에서 클라이언트측 자격 가공 흔적을 찾아 사람이 읽을 설명으로 반환."""
+    hay = ((html_text or "") + " " + " ".join(scripts or "")).lower()
+    out: list[str] = []
+    for marker, desc in _CRYPTO_MARKERS:
+        if marker in hay and desc not in out:
+            out.append(desc)
+    return out[:6]
 
 
 def find_login_form(forms: list[dict]) -> dict | None:
@@ -158,23 +279,46 @@ def find_autosubmit_form(forms: list[dict]) -> dict | None:
     return None
 
 
-def find_client_redirect(html_text: str, current_url: str) -> str:
+def find_client_redirect(html_text: str, current_url: str, allowed_hosts: tuple[str, ...] = ()) -> str:
     """HTTP 302 가 아닌 **클라이언트 리다이렉트**(meta refresh / JS location) 대상 URL.
 
     SSO 중계 페이지가 이 방식을 쓰면 httpx 의 follow_redirects 로는 따라갈 수 없어
-    "폼을 찾지 못함"으로 오판된다. 절대 URL 로 변환해 돌려준다(없으면 빈 문자열)."""
+    "폼을 찾지 못함"으로 오판된다. 절대 URL 로 변환해 돌려준다(없으면 빈 문자열).
+
+    단, 로그인 페이지가 **보안 에이전트 설치 안내**로 보내는 스크립트를 함께 갖고 있는
+    경우가 있어(예: `/tray/view/install.do`), 그런 대상은 건너뛰고 다음 후보를 쓴다 —
+    설치 페이지로 새면 로그인 흐름이 그대로 끊긴다. `allowed_hosts` 를 주면 그 호스트만
+    허용한다(기본은 제한 없음)."""
     text = html_text or ""
+    candidates: list[str] = []
     m = _META_REFRESH_RE.search(text)
     if m:
-        return urljoin(current_url, m.group(1).strip().strip("'\""))
-    # <script> 안의 즉시 리다이렉트 — 로그인 폼이 함께 있는 페이지는 제외(폼 우선).
+        candidates.append(urljoin(current_url, m.group(1).strip().strip("'\"")))
     for rx in _JS_REDIRECT_RES:
-        m = rx.search(text)
-        if m:
-            target = (m.group(1) or "").strip()
+        for mm in rx.finditer(text):
+            target = (mm.group(1) or "").strip()
             if target and not target.startswith("#") and "javascript:" not in target.lower():
-                return urljoin(current_url, target)
+                candidates.append(urljoin(current_url, target))
+
+    for target in candidates:
+        if is_agent_install_url(target):
+            continue
+        if allowed_hosts and (urlparse(target).hostname or "").lower() not in allowed_hosts:
+            continue
+        return target
     return ""
+
+
+# 보안 에이전트/설치 안내 페이지로 보이는 URL — 로그인 흐름에서 따라가면 안 된다.
+_AGENT_INSTALL_PATTERNS = (
+    "/install", "install.do", "/tray/", "/setup", "setup.do",
+    "/agent/", "download", ".exe", ".msi",
+)
+
+
+def is_agent_install_url(url: str) -> bool:
+    low = (url or "").lower()
+    return any(pat in low for pat in _AGENT_INSTALL_PATTERNS)
 
 
 def form_wants_base64(form: dict) -> bool:
@@ -197,6 +341,37 @@ def _b64(value: str) -> str:
 def login_form_signature(form: dict) -> str:
     """로그인 폼의 필드 구성 서명 — 같은 폼의 '재표시'와 '다음 단계'를 구분하는 데 쓴다."""
     return ",".join(sorted(i.get("name", "") for i in form.get("inputs", []) if i.get("name")))
+
+
+# 로그인 성공 후 돌아갈 위치를 담는 hidden 필드 (SiteMinder TARGET, SAML RelayState 등).
+_TARGET_FIELD_NAMES = (
+    "target", "goto", "relaystate", "returnurl", "return_url", "redirect_uri",
+    "service", "resume", "os_destination",
+)
+
+
+def fix_self_referential_target(data: dict, form: dict, current_url: str, product_url: str) -> dict:
+    """로그인 후 목적지(TARGET 등)가 **로그인 페이지 자신**이면 제품 URL 로 바꾼다.
+
+    SiteMinder 는 `TARGET` 으로 인증 후 이동할 곳을 정하는데, 로그인 페이지로 직접 진입하면
+    이 값이 로그인 페이지 자신이 되어 **인증에 성공해도 다시 로그인 화면으로 돌아온다**.
+    그러면 호출부는 '폼 재표시 = 자격 오류'로 오판한다. 값이 비었거나 현재 페이지(경로 동일)를
+    가리킬 때만 교정하며, 정상적인 RelayState/goto 는 건드리지 않는다."""
+    if not product_url:
+        return data
+    cur_path = (urlparse(current_url).path or "").rstrip("/")
+    for i in form.get("inputs", []):
+        name = i.get("name", "")
+        if not name or name.lower() not in _TARGET_FIELD_NAMES or name not in data:
+            continue
+        val = (data.get(name) or "").strip()
+        if not val:
+            data[name] = product_url + "/"
+            continue
+        val_path = (urlparse(urljoin(current_url, val)).path or "").rstrip("/")
+        if val_path == cur_path:
+            data[name] = product_url + "/"
+    return data
 
 
 _ERROR_KEYWORDS = (
@@ -345,14 +520,23 @@ def describe_page(resp: httpx.Response) -> dict:
                 hidden_fields[i["name"]] = str(i["value"])[:40]
             if len(hidden_fields) >= 12:
                 break
+    _forms2, scripts = parse_page(text)
     login_form = find_login_form(forms)
     picked = pick_username_field(login_form) if login_form else None
+    # 로그인 폼의 전체 필드 목록(type 포함) — 어떤 값을 보내야 하는지 그대로 보여준다.
+    login_fields = [
+        f"{i['name']}:{i['type']}" for i in (login_form or {}).get("inputs", []) if i.get("name")
+    ][:20]
     return {
         "final_url": str(resp.url),
         "http_status": resp.status_code,
         # 이 페이지에서 계정을 채울 필드 — 사번 칸이 아닌 다른 입력이 잡히면 여기서 드러난다.
         "username_field": (picked or {}).get("name", ""),
         "wants_base64": bool(login_form and form_wants_base64(login_form)),
+        "login_form_action": (login_form or {}).get("action", "")[:200],
+        "login_fields": login_fields,
+        "scripts": [sc.rsplit("/", 1)[-1][:60] for sc in scripts][:10],
+        "crypto_hints": detect_crypto_hints(text, scripts),
         "content_type": resp.headers.get("content-type", "")[:80],
         "title": (title_m.group(1).strip()[:80] if title_m else ""),
         "forms": len(forms),
@@ -408,7 +592,7 @@ def _form_post_headers(page_url: str) -> dict:
 
 async def _drive_form_chain(
     client: httpx.AsyncClient, start_url: str, username: str, password: str,
-    *, username_field_name: str = "",
+    *, username_field_name: str = "", product_host: str = "", product_url: str = "",
 ) -> dict:
     """진입 URL 부터 로그인/중계 폼 체인을 통과한다.
 
@@ -449,6 +633,8 @@ async def _drive_form_chain(
             used_username_field = (picked or {}).get("name", "") or used_username_field
             data = fill_login_form(login_form, username, password,
                                    username_field_name=username_field_name)
+            # 인증 후 목적지가 로그인 페이지 자신이면 제품 URL 로 교정 (SiteMinder TARGET 등).
+            data = fix_self_referential_target(data, login_form, str(r.url), product_url)
             action = urljoin(str(r.url), login_form["action"] or str(r.url))
             r = await client.post(action, data=data, headers=_form_post_headers(str(r.url)))
             submitted_forms.add(sig)
@@ -471,6 +657,22 @@ async def _drive_form_chain(
             visited.add(nxt)
             r = await client.get(nxt, headers={"Accept": _HTML_ACCEPT})
             continue
+
+        # 자격 제출 이후에만 — 로그인 직후 끼어드는 **안내 페이지**(예: "세션 유효기간 안내")를
+        # 통과한다. 입력할 것이 없는 진행용 폼이나 "확인/계속" 링크가 그것이다.
+        if creds_submitted:
+            cont = find_continue_form(forms)
+            if cont is not None:
+                data = {i["name"]: i["value"] for i in cont["inputs"] if i["name"]}
+                action = urljoin(str(r.url), cont["action"] or str(r.url))
+                r = await client.post(action, data=data, headers=_form_post_headers(str(r.url)))
+                visited.clear()
+                continue
+            link = find_continue_link(text, str(r.url), product_host)
+            if link and link not in visited:
+                visited.add(link)
+                r = await client.get(link, headers={"Accept": _HTML_ACCEPT})
+                continue
 
         break  # 더 제출할 폼도, 따라갈 리다이렉트도 없음 — 체인 종료
 
@@ -595,11 +797,19 @@ async def _login_one_product(
     # ── 전략 1: SSO 폼 체인 (진입 경로 여러 개 시도) ────────────────────────────
     for path in entry_paths:
         chain = await _drive_form_chain(client, _entry_url(base_url, path), username, password,
-                                        username_field_name=username_field_name)
+                                        username_field_name=username_field_name,
+                                        product_host=host, product_url=base_url)
         entry = {"path": path, "error": chain["error"]}
         entry.update(chain["last"] or {})
         diag["entries"].append(entry)
         if chain["auth_rejected"]:
+            # 폼이 다시 보였다고 곧 실패는 아니다 — SiteMinder 처럼 인증 후 TARGET 이 로그인
+            # 페이지를 가리키면 **성공했는데도** 로그인 화면이 다시 뜬다. 세션을 먼저 확인한다.
+            verified = await _verify_session(client, base_url, verify_path)
+            if verified["ok"]:
+                hit = _ok(verified, "sso_form")
+                if hit:
+                    return hit
             return _rejected(chain.get("idp_error", ""), chain.get("username_field", ""))
         if chain["error"]:
             diag["strategies"].append({"strategy": f"sso_form({path})", "result": chain["error"]})
@@ -611,8 +821,14 @@ async def _login_one_product(
             # 토큰 교환이 완료되며 제품 세션이 발급된다. 자격은 이미 있으니 재입력 없음.
             for retry_url in dict.fromkeys([_entry_url(base_url, path), f"{base_url}/"]):
                 back = await _drive_form_chain(client, retry_url, username, password,
-                                               username_field_name=username_field_name)
+                                               username_field_name=username_field_name,
+                                               product_host=host, product_url=base_url)
                 if back["auth_rejected"]:
+                    verified = await _verify_session(client, base_url, verify_path)
+                    if verified["ok"]:
+                        hit = _ok(verified, "sso_form")
+                        if hit:
+                            return hit
                     return _rejected(back.get("idp_error", ""), back.get("username_field", ""))
                 verified = await _verify_session(client, base_url, verify_path)
                 diag["strategies"].append({

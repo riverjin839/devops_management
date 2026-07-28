@@ -529,6 +529,11 @@ export interface SsoDiagnoseEntry {
   usernameField?: string;
   /** 자격을 base64 로 보내야 하는 폼인지 (OpenAM `encoded=true`). */
   wantsBase64?: boolean;
+  /** 로그인 폼 action / 전체 필드(name:type) / 로드 스크립트 / 클라이언트 암호화 흔적. */
+  loginFormAction?: string;
+  loginFields?: string[];
+  scripts?: string[];
+  cryptoHints?: string[];
   inputNames: string[];
   /** 폼의 hidden 상태값 (예: OpenAM `encoded=true`). */
   hiddenFields?: Record<string, string>;

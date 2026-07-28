@@ -405,6 +405,22 @@ export function JiraIntegrationPanel() {
                     </tbody>
                   </table>
                 </div>
+                {diagResult.entries.filter((e) => (e.loginFields?.length ?? 0) > 0).map((e, i) => (
+                  <div key={`f-${e.product}-${i}`} className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-[11px] space-y-1">
+                    <p className="font-medium text-foreground break-all">로그인 폼 상세 — {e.finalUrl}</p>
+                    <p className="font-mono break-all">action: {e.loginFormAction || '(현재 URL)'}</p>
+                    <p className="font-mono break-all">필드: {(e.loginFields ?? []).join(' · ')}</p>
+                    {(e.scripts?.length ?? 0) > 0 && (
+                      <p className="font-mono break-all">스크립트: {(e.scripts ?? []).join(' · ')}</p>
+                    )}
+                    {(e.cryptoHints?.length ?? 0) > 0 && (
+                      <p className="text-amber-500 leading-relaxed">
+                        ⚠ 클라이언트 암호화/보안모듈 흔적: {(e.cryptoHints ?? []).join(', ')} —
+                        이런 페이지는 서버측 폼 로그인이 원리상 불가하므로 "내 PC 도우미" 또는 PAT/세션 쿠키를 사용하세요.
+                      </p>
+                    )}
+                  </div>
+                ))}
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   최종 URL 이 IdP 주소로 바뀌고 PW 열이 1 이상이면 정상입니다. IdP 로 안 넘어가면
                   위 공통 설정의 <b>IdP 로그인 URL</b> 에 브라우저에서 확인한 주소를 넣어보세요.

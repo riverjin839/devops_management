@@ -101,6 +101,11 @@ class SsoDiagnoseEntry(BaseModel):
     # 이 페이지에서 계정을 채울 필드명 / base64 인코딩 요구 여부.
     username_field: str = ""
     wants_base64: bool = False
+    # 로그인 폼의 action / 전체 필드(name:type) / 로드하는 스크립트 / 클라이언트 암호화 흔적.
+    login_form_action: str = ""
+    login_fields: list[str] = []
+    scripts: list[str] = []
+    crypto_hints: list[str] = []
     input_names: list[str] = []
     # 폼의 hidden 상태값 (예: OpenAM `encoded=true` → 자격을 base64 로 보내야 함).
     hidden_fields: dict[str, str] = {}
