@@ -32,7 +32,7 @@ from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services import secret_box
 from app.services import audit_logger
 from app.services.jira_service import (
-    JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY,
+    ISSUE_FIELDS, JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY,
     PEP_PRIORITY_TO_JIRA, strip_issue_key_prefix,
 )
 from app.services.confluence_service import ConfluenceService
@@ -803,9 +803,13 @@ def _build_filter_jql(payload: JiraImportRequest) -> tuple[str, str]:
     빈 항목은 무시하며, 여러 값은 `IN (...)` 으로 OR 처리한다.
     반환 (jql, error) — 조건이 하나도 없으면 error 를 채운다."""
     clauses: list[str] = []
-    pk = (payload.project_key or "").strip()
-    if pk:
-        clauses.append(f'project = "{_jql_quote(pk)}"')
+    # 프로젝트도 쉼표로 여러 개 지정 가능 — 컴포넌트/라벨과 동일하게 개별·조합 모두 지원.
+    projects = [x.strip() for x in (payload.project_key or "").split(",") if x.strip()]
+    if len(projects) == 1:
+        clauses.append(f'project = "{_jql_quote(projects[0])}"')
+    elif projects:
+        joined = ", ".join(f'"{_jql_quote(x)}"' for x in projects)
+        clauses.append(f"project IN ({joined})")
     labels = [x.strip() for x in payload.labels if x and x.strip()]
     if labels:
         joined = ", ".join(f'"{_jql_quote(x)}"' for x in labels)
@@ -886,6 +890,69 @@ async def confluence_search(
         detail=found.get("detail", ""),
         total=found.get("total", 0),
         items=[ConfluenceSearchItem(**i) for i in found.get("items", [])],
+    )
+
+
+@router.post("/refresh/{item_id}", response_model=JiraImportResult)
+async def refresh_work_item_from_jira(
+    item_id: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """업무 1건을 연결된 Jira 이슈 기준으로 다시 가져온다 (게시판 행 단위 동기화).
+
+    전체 가져오기와 동일한 매핑/보존 규칙을 쓰고, 변경 내역을 `items[0].changes` 로 돌려준다."""
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    if not item.jira_issue_key:
+        return JiraImportResult(status="error", detail="Jira 와 연결되지 않은 업무입니다.")
+
+    cfg = _get_config(db)
+    base_url = cfg.get("base_url", "")
+    if not base_url:
+        return JiraImportResult(status="error", detail="Jira URL 미설정.")
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraImportResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
+
+    got = await svc.get_issue(item.jira_issue_key, fields=ISSUE_FIELDS)
+    if got.get("status") != "ok":
+        return JiraImportResult(status=got.get("status", "error"),
+                                detail=got.get("detail", "Jira 이슈 조회 실패"))
+    fields = map_jira_issue(got["issue"], base_url, assignee_resolver=_build_assignee_resolver(db))
+    changes = _diff_existing(item, fields)
+    if not changes:
+        item.jira_synced_at = datetime.utcnow()
+        db.commit()
+        return JiraImportResult(
+            status="ok", detail="변경 사항이 없습니다.", total=1, skipped=1,
+            items=[JiraImportItemPreview(
+                jira_key=item.jira_issue_key, title=fields["title"],
+                kanban_status=fields["kanban_status"], action="unchanged")],
+        )
+
+    item.title = fields["title"]
+    item.content = fields["content"]
+    item.kanban_status = fields["kanban_status"]
+    item.priority = fields["priority"]
+    item.jira_status = fields["jira_status"]
+    item.jira_url = fields["jira_url"]
+    item.jira_updated_at = fields["jira_updated_at"]
+    item.jira_synced_at = datetime.utcnow()
+    if fields["closed_at"] and not item.closed_at:
+        item.closed_at = fields["closed_at"]
+    db.commit()
+    audit_logger.record(
+        db, action="work_item.jira_refresh", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"jira_key": item.jira_issue_key, "changed": [c.field for c in changes]},
+    )
+    return JiraImportResult(
+        status="ok", detail=f"{len(changes)}개 필드가 갱신되었습니다.", total=1, updated=1,
+        items=[JiraImportItemPreview(
+            jira_key=item.jira_issue_key, title=fields["title"],
+            kanban_status=fields["kanban_status"], action="update", changes=changes)],
     )
 
 
@@ -1137,6 +1204,7 @@ async def import_issues(
             status=search.get("status", "error"),
             detail=search.get("detail", "Jira 검색 실패"),
             total=search.get("total", 0),
+            applied_jql=jql,
         )
 
     resolver = _build_assignee_resolver(db)
@@ -1247,6 +1315,7 @@ async def import_issues(
 
     return JiraImportResult(
         status="ok",
+        applied_jql=jql,
         imported=created,
         updated=updated,
         skipped=skipped,
@@ -1254,7 +1323,7 @@ async def import_issues(
         truncated=bool(search.get("truncated")),
         dry_run=payload.dry_run,
         errors=errors,
-        items=preview[:50],
+        items=preview[:200],
     )
 
 

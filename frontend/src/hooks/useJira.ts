@@ -89,6 +89,14 @@ export function useJiraImport() {
   });
 }
 
+export function useJiraRefreshItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => jiraApi.refreshItem(itemId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
+  });
+}
+
 export function useJiraCreateIssue() {
   const qc = useQueryClient();
   return useMutation({

@@ -893,6 +893,8 @@ export const jiraApi = {
     }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
+  refreshItem: (itemId: string) =>
+    api.post<import('@/types').JiraImportResult>(`/jira/refresh/${itemId}`),
   createIssue: (data: import('@/types').JiraCreateRequest) =>
     api.post<import('@/types').JiraCreateResult>('/jira/create', data),
   deleteIssue: (key: string) =>

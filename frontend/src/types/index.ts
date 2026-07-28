@@ -715,6 +715,8 @@ export interface WeeklyReportSettings {
 
 export interface JiraImportResult {
   status: 'ok' | 'offline' | 'error';
+  /** 실제로 Jira 에 보낸 JQL — 조건 반영 여부를 화면에서 확인. */
+  appliedJql?: string;
   imported: number;
   updated: number;
   skipped: number;

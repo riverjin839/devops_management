@@ -176,6 +176,8 @@ class JiraImportItemPreview(BaseModel):
 
 class JiraImportResult(BaseModel):
     status: Literal["ok", "offline", "error"]
+    # 실제로 Jira 에 보낸 JQL — 조건이 의도대로 조립됐는지 화면에서 그대로 확인한다.
+    applied_jql: str = ""
     imported: int = 0
     updated: int = 0
     skipped: int = 0
