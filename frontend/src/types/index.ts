@@ -3586,6 +3586,22 @@ export interface CheckMatrixRunbookInput {
   value: string;
 }
 
+/** 소스 설정 편집 폼용 필드 명세 — deep check spec 의 threshold/param 필드. */
+export interface CheckMatrixFieldSpec {
+  group: 'thresholds' | 'params';
+  name: string;
+  type: 'int' | 'float' | 'string' | 'boolean' | 'list';
+  label: string;
+  help?: string | null;
+}
+
+/** 소스 설정 저장 요청 1건 — 값은 문자열로 보내고 서버가 타입을 강제한다(빈 값 = 기본값 복귀). */
+export interface CheckMatrixSourceConfigEntry {
+  group: string;
+  name: string;
+  value: string;
+}
+
 /** 셀(항목 × 클러스터)의 실행 계획 — "이 점검이 내 클러스터에서 무슨 일을 하는가". */
 export interface CheckMatrixRunbook {
   itemId: string;
@@ -3598,6 +3614,16 @@ export interface CheckMatrixRunbook {
   target?: string | null;
   runnable: boolean;
   blockedReason?: string | null;
+  /** deep_check: 해석된 점검 정의 id — 소스 설정 편집 대상 */
+  definitionId?: string | null;
+  /** 'global' 이면 설정 수정이 모든 클러스터에 적용됨 (UI 경고 필요) */
+  definitionScope?: 'cluster' | 'global' | null;
+  /** addon: 해석된 애드온 인스턴스 id */
+  addonId?: string | null;
+  /** 이 화면에서 params/thresholds(또는 addon config) 수정 가능 여부 */
+  configEditable: boolean;
+  /** 편집 폼 라벨/타입/도움말 (deep_check 만) */
+  fieldSpecs: CheckMatrixFieldSpec[];
   steps: DeepCheckStepPlanItem[];
   commands: CheckMatrixRunbookCommand[];
   inputs: CheckMatrixRunbookInput[];

@@ -1689,6 +1689,10 @@ def _seed_check_matrix_items():
         added = cms.seed_default_items(db)
         if added:
             _log.info("seeded %d check matrix items", added)
+        # 단위 도입 이전에 시드된 설치본 보강 — unit 이 빈 deep_check 행만 채운다.
+        filled = cms.backfill_item_units(db)
+        if filled:
+            _log.info("backfilled unit for %d check matrix items", filled)
     finally:
         db.close()
 

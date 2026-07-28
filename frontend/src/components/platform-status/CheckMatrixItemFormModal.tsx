@@ -37,6 +37,8 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
   const createMut = useCreateCheckMatrixItem();
   const updateMut = useUpdateCheckMatrixItem();
   const isEdit = !!editingItem;
+  // 시스템 항목(core_bundle)은 이름/설명/단위/표시 여부만 수정 — 실행 소스는 잠긴다.
+  const isSystem = !!editingItem?.isSystem;
 
   const nameId = useId();
   const descId = useId();
@@ -150,6 +152,12 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
             />
           </div>
 
+          {isSystem ? (
+            <p className="text-xs text-muted-foreground rounded-lg border border-border bg-secondary/40 px-3 py-2">
+              시스템 항목입니다 — 클러스터 전체 상태 계산에 쓰이는 실행 소스(핵심 점검 번들)는
+              바꿀 수 없고, 이름/설명/단위/표시 여부만 수정할 수 있습니다.
+            </p>
+          ) : (
           <div>
             <span className="text-xs font-medium text-muted-foreground mb-1.5 block">실행 방식</span>
             <div className="space-y-1.5">
@@ -176,8 +184,9 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
               ))}
             </div>
           </div>
+          )}
 
-          {sourceType === 'deep_check' && (
+          {!isSystem && sourceType === 'deep_check' && (
             <div>
               <label htmlFor={checkTypeId} className="text-xs font-medium text-muted-foreground mb-1 block">점검 종류</label>
               <select
@@ -194,7 +203,7 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
             </div>
           )}
 
-          {sourceType === 'addon' && (
+          {!isSystem && sourceType === 'addon' && (
             <div>
               <label htmlFor={addonTypeId} className="text-xs font-medium text-muted-foreground mb-1 block">애드온 종류</label>
               <select

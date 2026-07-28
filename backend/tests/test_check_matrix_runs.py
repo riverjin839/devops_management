@@ -165,6 +165,134 @@ class TestRunbook:
         assert missing == [], f"런북 명령이 없는 addon type: {missing}"
 
 
+# ── 셀 대표값 (요건: 인증서 만료는 "정상"이 아니라 잔여일 숫자가 보여야 함) ─────────
+class TestCellValue:
+    def test_every_check_type_has_value_spec(self):
+        """새 체커를 추가하고 대표값 규칙을 빠뜨리면 여기서 걸린다."""
+        from app.services.deep_checkers.registry import CELL_VALUE_SPECS, REGISTRY
+
+        missing = [ct for ct in REGISTRY if ct not in CELL_VALUE_SPECS]
+        assert missing == [], f"셀 대표값 규칙이 없는 check_type: {missing}"
+
+    def test_cert_expiry_value_is_min_residual_days(self):
+        from app.services.deep_checkers.registry import extract_cell_value, get_cell_value_unit
+
+        assert extract_cell_value("cert_expiry", {"min_residual_days": 361}) == 361.0
+        assert get_cell_value_unit("cert_expiry") == "일"
+
+    def test_extraction_is_fail_safe(self):
+        """키 누락/타입 오류/미지정 타입은 None — 결과 기록 자체를 막으면 안 된다."""
+        from app.services.deep_checkers.registry import extract_cell_value
+
+        assert extract_cell_value("cert_expiry", {}) is None
+        assert extract_cell_value("cert_expiry", {"min_residual_days": "abc"}) is None
+        assert extract_cell_value("unknown_type", {"x": 1}) is None
+        assert extract_cell_value("cert_expiry", None) is None
+
+    def test_count_specs_distinguish_zero_from_unmeasured(self):
+        from app.services.deep_checkers.registry import extract_cell_value
+
+        # 측정됐고 0건 → 0 (정상에 0건 표시). 키 자체가 없으면 None (미측정).
+        assert extract_cell_value("pvc_health", {"pending_pvcs": [], "lost_pvcs": []}) == 0.0
+        assert extract_cell_value("pvc_health", {}) is None
+
+    def test_seed_sets_units_and_backfill_fills_legacy_rows(self, db):
+        """단위 도입 이전에 시드된 행(unit 없음)이 부팅 backfill 로 채워진다."""
+        row = CheckMatrixItem(
+            name="legacy-cert-row", source_type=CheckMatrixSourceType.deep_check,
+            source_ref="cert_expiry", unit=None,
+        )
+        db.add(row)
+        db.commit()
+        try:
+            filled = svc.backfill_item_units(db)
+            db.refresh(row)
+            assert filled >= 1
+            assert row.unit == "일"
+            # 두 번째 호출은 아무것도 바꾸지 않는다 (idempotent).
+            assert svc.backfill_item_units(db) == 0
+        finally:
+            db.delete(row)
+            db.commit()
+
+
+# ── 소스 설정 편집 (요건: 기본 등록 항목의 설정 확인·수정) ────────────────────────
+class TestSourceConfigEdit:
+    def test_deep_check_config_coerced_and_saved(self, db, fixture_ids):
+        from app.models import DeepCheckDefinition
+
+        definition = DeepCheckDefinition(
+            name="cert-def-test", check_type="cert_expiry",
+            cluster_id=fixture_ids["cluster"], enabled=True,
+            thresholds={"warning_days": 30, "critical_days": 7},
+        )
+        db.add(definition)
+        db.commit()
+        item = _get(db, CheckMatrixItem, fixture_ids["deep"])
+        cluster = _get(db, Cluster, fixture_ids["cluster"])
+        try:
+            res = svc.update_source_config(db, item, cluster, [
+                {"group": "thresholds", "name": "warning_days", "value": "45"},
+                {"group": "thresholds", "name": "critical_days", "value": ""},  # 기본값 복귀
+            ])
+            assert res["scope"] == "cluster"
+            db.refresh(definition)
+            assert definition.thresholds["warning_days"] == 45          # 문자열 → int 강제
+            assert "critical_days" not in definition.thresholds          # 빈 값 = 오버라이드 제거
+
+            # 런북에도 편집 가능 정보가 실려야 한다.
+            rb = build_runbook(db, item, cluster)
+            assert rb["config_editable"] is True
+            assert rb["definition_scope"] == "cluster"
+            assert any(f["name"] == "warning_days" for f in rb["field_specs"])
+        finally:
+            db.delete(definition)
+            db.commit()
+
+    def test_unknown_field_is_rejected(self, db, fixture_ids):
+        from app.models import DeepCheckDefinition
+
+        definition = DeepCheckDefinition(
+            name="cert-def-test2", check_type="cert_expiry",
+            cluster_id=fixture_ids["cluster"], enabled=True,
+        )
+        db.add(definition)
+        db.commit()
+        item = _get(db, CheckMatrixItem, fixture_ids["deep"])
+        cluster = _get(db, Cluster, fixture_ids["cluster"])
+        try:
+            with pytest.raises(ValueError, match="없는 thresholds 필드"):
+                svc.update_source_config(db, item, cluster, [
+                    {"group": "thresholds", "name": "warning_dayz", "value": "45"},
+                ])
+        finally:
+            db.delete(definition)
+            db.commit()
+
+    def test_addon_config_json_and_string(self, db, fixture_ids):
+        from app.models import Addon
+
+        addon = Addon(
+            cluster_id=fixture_ids["cluster"], name="test-nexus", type="etcd-leader",
+            config={"url": "http://old"},
+        )
+        db.add(addon)
+        db.commit()
+        item = _get(db, CheckMatrixItem, fixture_ids["addon"])
+        cluster = _get(db, Cluster, fixture_ids["cluster"])
+        try:
+            svc.update_source_config(db, item, cluster, [
+                {"group": "config", "name": "url", "value": "http://new"},
+                {"group": "config", "name": "retries", "value": "3"},  # JSON 파싱 → int
+            ])
+            db.refresh(addon)
+            assert addon.config["url"] == "http://new"
+            assert addon.config["retries"] == 3
+        finally:
+            db.delete(addon)
+            db.commit()
+
+
 # ── SC-2 대상 없는 셀 실행 ────────────────────────────────────────────────────
 class TestCellRun:
     def test_missing_definition_is_skipped_not_failed(self, db, fixture_ids):

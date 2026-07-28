@@ -131,7 +131,20 @@ def update_item(item_id: UUID, body: ItemIn, db: Session = Depends(get_db), _: U
     if row is None:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
     if row.is_system:
-        raise HTTPException(status_code=400, detail="시스템 항목은 이름/설명만 수정할 수 없습니다 — 소스 변경 불가.")
+        # 시스템 항목(core_bundle)도 표시 속성(이름/설명/단위/표시 여부)은 고칠 수 있어야 한다.
+        # 막는 것은 실행 소스 변경뿐 — Cluster.status 산정 경로가 바뀌면 안 되기 때문.
+        if body.source_type != row.source_type or (body.source_ref or None) != (row.source_ref or None):
+            raise HTTPException(
+                status_code=400,
+                detail="시스템 항목은 실행 소스(source_type/source_ref)를 바꿀 수 없습니다 — 이름/설명/단위/표시 여부만 수정 가능합니다.",
+            )
+        row.name = body.name
+        row.description = body.description
+        row.unit = body.unit
+        row.enabled = body.enabled
+        db.commit()
+        db.refresh(row)
+        return row
     _validate_item_body(body)
     for k, v in body.model_dump().items():
         setattr(row, k, v)
@@ -277,6 +290,42 @@ def get_cell_runbook(item_id: UUID, cluster_id: UUID, db: Session = Depends(get_
     if cluster is None:
         raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
     return build_runbook(db, item, cluster)
+
+
+class SourceConfigEntry(BaseModel):
+    group: str  # deep_check: "thresholds"|"params" / addon: "config"
+    name: str
+    value: str  # 문자열로 받아 서버가 spec 필드 타입으로 강제 (빈 문자열 = 기본값 복귀)
+
+
+class SourceConfigIn(BaseModel):
+    entries: list[SourceConfigEntry] = Field(..., min_length=1)
+
+
+@router.put("/cell/{item_id}/{cluster_id}/source-config")
+def put_source_config(
+    item_id: UUID,
+    cluster_id: UUID,
+    body: SourceConfigIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """셀 실행 소스의 설정(deep_check thresholds/params, addon config)을 매트릭스에서 직접 수정.
+
+    글로벌 정의를 수정하면 전 클러스터에 적용된다 — runbook 의 definition_scope 로 UI 가 경고한다.
+    """
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    try:
+        return svc.update_source_config(
+            db, item, cluster, [e.model_dump() for e in body.entries],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── 수동 실행 (셀 / 클러스터 열 / 항목 행) ────────────────────────────────────────
