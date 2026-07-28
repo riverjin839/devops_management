@@ -37,7 +37,8 @@ from app.services.jira_service import (
 )
 from app.services.confluence_service import ConfluenceService
 from app.services.jira_sso_http import (
-    CONFLUENCE_VERIFY_PATH, JIRA_VERIFY_PATH, diagnose_products, sso_login_products,
+    CONFLUENCE_VERIFY_PATH, JIRA_VERIFY_PATH, diagnose_products, outbound_client_info,
+    sso_login_products,
 )
 from app.services.jira_sso_service import capture_sso_session
 from app.schemas.jira import (
@@ -741,7 +742,11 @@ async def sso_diagnose(db: Session = Depends(get_db), _: User = Depends(get_curr
         detail = ("어느 진입 경로에서도 password 입력을 찾지 못했습니다. 아래 표의 final_url 이 "
                   "IdP 주소가 아니면 리다이렉트가 안 걸린 것이고, IdP 인데도 폼이 0 이면 JS 렌더링입니다. "
                   "브라우저에서 확인한 IdP 로그인 페이지 주소를 공통 설정의 'IdP 로그인 URL' 에 넣어보세요.")
-    return SsoDiagnoseResult(ok=bool(found) and not hints, detail=detail, entries=entries)
+    who = outbound_client_info(cfg.get("base_url", ""))
+    return SsoDiagnoseResult(
+        ok=bool(found) and not hints, detail=detail, entries=entries,
+        pod_hostname=who.get("hostname", ""), pod_source_ip=who.get("source_ip", ""),
+    )
 
 
 # 백엔드가 K8s/컨테이너 배포라 파드에서 브라우저를 못 띄우는 환경용 — 사용자가 본인 PC 에서

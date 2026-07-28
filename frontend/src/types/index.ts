@@ -546,6 +546,9 @@ export interface SsoDiagnoseResult {
   ok: boolean;
   detail: string;
   entries: SsoDiagnoseEntry[];
+  /** 이 파드가 대상으로 나갈 때의 출발지 IP/호스트명 (SSO 가 클라이언트 IP 를 검사할 때 필요). */
+  podHostname?: string;
+  podSourceIp?: string;
 }
 
 // 인증 방식: 'pat'(PAT → Bearer) | 'cookie'(수동 붙여넣은 세션 쿠키) | 'sso'(SSO 자동 캡처 쿠키).

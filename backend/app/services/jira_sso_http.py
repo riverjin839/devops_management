@@ -36,6 +36,7 @@ from __future__ import annotations
 import base64
 import logging
 import re
+import socket
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -972,6 +973,33 @@ async def sso_login_products(
         "strategy": primary.get("strategy", ""),
         "products": out,
     }
+
+
+def outbound_client_info(target_url: str) -> dict:
+    """이 파드가 대상 서버로 나갈 때 쓰는 **출발지 IP** 와 호스트명.
+
+    SSO/보안 에이전트가 클라이언트 IP 를 검사하는 구성이면, 허용 목록에 등록할 IP 를
+    알아야 한다. 단 K8s 는 보통 노드 IP 로 SNAT 되므로 여기서 보이는 파드 IP 와 서버가
+    보는 IP 가 다를 수 있다(노드가 여러 대면 파드마다 달라진다) — 그 자체가 중요한 단서다.
+    UDP 소켓의 라우팅 조회만 사용하므로 실제 패킷은 나가지 않는다."""
+    info = {"hostname": "", "source_ip": "", "detail": ""}
+    try:
+        info["hostname"] = socket.gethostname()
+    except Exception:  # noqa: BLE001
+        pass
+    host = (urlparse(target_url).hostname or "")
+    if not host:
+        return info
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.connect((host, 443))
+            info["source_ip"] = sock.getsockname()[0]
+        finally:
+            sock.close()
+    except Exception as exc:  # noqa: BLE001 - fail-safe
+        info["detail"] = str(exc)[:120]
+    return info
 
 
 async def diagnose_products(

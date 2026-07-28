@@ -118,6 +118,10 @@ class SsoDiagnoseResult(BaseModel):
     ok: bool
     detail: str = ""
     entries: list[SsoDiagnoseEntry] = []
+    # 이 파드가 대상으로 나갈 때의 출발지 IP/호스트명 — SSO 가 클라이언트 IP 를 검사하는
+    # 구성이면 허용 목록 등록에 필요하고, 파드마다 다르면 그 자체가 문제 신호다.
+    pod_hostname: str = ""
+    pod_source_ip: str = ""
 
 
 # ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────
