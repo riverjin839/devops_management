@@ -895,6 +895,8 @@ def _run_migrations():
         _safe_add_column("user_jira_credentials", "auth_type", "VARCHAR(16) NOT NULL DEFAULT 'pat'")
         # 파드 내 SSO 폼 자동 로그인용 저장 로그인 정보(옵트인, secret_box 암호문).
         _safe_add_column("user_jira_credentials", "sso_login_encrypted", "TEXT")
+        # SSO 폼 로그인이 Jira 와 함께 캡처하는 Confluence 세션 쿠키(secret_box 암호문).
+        _safe_add_column("user_jira_credentials", "confluence_cookie_encrypted", "TEXT")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():

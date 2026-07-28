@@ -507,6 +507,8 @@ export interface JiraConfig {
   enabled: boolean;
   verifyTls: boolean;
   defaultProjectKey?: string | null;
+  /** 같은 IdP 로 SSO 연동되는 Confluence Base URL — 설정 시 SSO 로그인이 두 세션을 한 번에 캡처. */
+  confluenceBaseUrl?: string;
 }
 
 // 인증 방식: 'pat'(PAT → Bearer) | 'cookie'(수동 붙여넣은 세션 쿠키) | 'sso'(SSO 자동 캡처 쿠키).
@@ -517,6 +519,9 @@ export interface JiraSsoLoginResult {
   detail: string;
   jiraAccount?: string | null;
   displayName?: string | null;
+  /** Confluence 동시 로그인 결과 — null/undefined 면 Confluence 미설정(시도 안 함). */
+  confluenceOk?: boolean | null;
+  confluenceDetail?: string;
 }
 
 export interface JiraCredentialStatus {
@@ -526,6 +531,8 @@ export interface JiraCredentialStatus {
   lastVerifiedAt?: string | null;
   /** 파드 내 SSO 폼 자동 로그인용 로그인 정보 저장 여부 (원클릭 재로그인 가능). */
   hasSsoLogin?: boolean;
+  /** SSO 로그인이 캡처한 Confluence 세션 저장 여부. */
+  hasConfluence?: boolean;
 }
 
 /** 파드 내 SSO 폼 자동 로그인 요청 — 생략 시 서버측 브라우저(헤디드) 경로. */

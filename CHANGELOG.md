@@ -10,6 +10,18 @@
 
 1.15.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Jira+Confluence SSO 통합 로그인 (K8s 파드 내, 브라우저 불필요)**: 관리자가 설정 ▸ 연동에
+  Confluence Base URL 을 등록하면, SSO 자동 로그인(ID/PW 폼)이 **한 번의 IdP 로그인으로 Jira 와
+  Confluence 세션을 동시에 캡처**해 저장한다. Confluence 연결 테스트 버튼과 세션 상태 배지도
+  추가. Backend: `jira_sso_http.sso_login_products()`(다중 제품 SSO 체인, Chromium/Playwright
+  불필요), 신규 `services/confluence_service.py`(fail-safe REST 클라이언트 — user/current·CQL
+  검색·페이지 조회), `POST /jira/confluence/test`·`GET /jira/confluence/search`,
+  `user_jira_credentials.confluence_cookie_encrypted`(암호화 저장·백업 마스킹 등록).
+- **Jira/Confluence 세션 만료 시 자동 재로그인**: "로그인 정보 저장" 옵트인 사용자는 API 호출
+  중 세션 만료(401)가 감지되면 저장된 SSO 로그인 정보로 **자동 재로그인 후 재시도**된다 —
+  최초 1회 로그인 후에는 세션이 끊겨도 연결 테스트/가져오기/push 가 무중단으로 이어진다.
+
 ## [1.15.1] - 2026-07-28
 
 ### Added

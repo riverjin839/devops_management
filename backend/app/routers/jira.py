@@ -35,7 +35,10 @@ from app.services.jira_service import (
     JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY,
     PEP_PRIORITY_TO_JIRA, strip_issue_key_prefix,
 )
-from app.services.jira_sso_http import form_sso_login
+from app.services.confluence_service import ConfluenceService
+from app.services.jira_sso_http import (
+    CONFLUENCE_VERIFY_PATH, JIRA_VERIFY_PATH, sso_login_products,
+)
 from app.services.jira_sso_service import capture_sso_session
 from app.schemas.jira import (
     JiraConfig,
@@ -45,6 +48,8 @@ from app.schemas.jira import (
     JiraTestResult,
     JiraSsoLoginRequest,
     JiraSsoLoginResult,
+    ConfluenceSearchItem,
+    ConfluenceSearchResult,
     JiraImportRequest,
     JiraImportResult,
     JiraImportItemPreview,
@@ -66,6 +71,9 @@ DEFAULT_JIRA_SETTINGS = {
     "enabled": False,
     "verify_tls": True,
     "default_project_key": None,
+    # 같은 IdP 로 SSO 연동되는 Confluence Base URL (선택) — 설정 시 SSO 폼 로그인이
+    # Jira 와 Confluence 세션을 한 번에 캡처한다.
+    "confluence_base_url": "",
 }
 
 
@@ -355,6 +363,8 @@ def update_config(
     data = payload.model_dump(exclude_unset=True)
     if "base_url" in data and data["base_url"] is not None:
         current["base_url"] = data["base_url"].rstrip("/")
+    if "confluence_base_url" in data and data["confluence_base_url"] is not None:
+        current["confluence_base_url"] = data["confluence_base_url"].strip().rstrip("/")
     for k in ("enabled", "verify_tls", "default_project_key"):
         if k in data and data[k] is not None:
             current[k] = data[k]
@@ -378,6 +388,7 @@ def get_credential(db: Session = Depends(get_db), actor: User = Depends(get_curr
         jira_account=cred.jira_account,
         last_verified_at=cred.last_verified_at,
         has_sso_login=bool(getattr(cred, "sso_login_encrypted", None)),
+        has_confluence=bool(getattr(cred, "confluence_cookie_encrypted", None)),
     )
 
 
@@ -432,11 +443,10 @@ async def test_connection(db: Session = Depends(get_db), actor: User = Depends(g
     cfg = _get_config(db)
     if not cfg.get("base_url"):
         return JiraTestResult(ok=False, detail="관리자가 Jira URL 을 설정하지 않았습니다.")
-    token, auth_type = _user_credential(db, actor.username)
-    if not token:
+    # 세션 만료(401) 시 저장된 SSO 로그인 정보로 자동 재로그인 포함.
+    svc, res = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
         return JiraTestResult(ok=False, detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다.")
-    svc = JiraService(cfg["base_url"], token, auth_type=auth_type, verify=bool(cfg.get("verify_tls", True)))
-    res = await svc.myself()
     if res.get("status") == "ok":
         cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
         if cred:
@@ -451,9 +461,125 @@ async def test_connection(db: Session = Depends(get_db), actor: User = Depends(g
 # ── SSO 자동 로그인 ────────────────────────────────────────────────────────────
 # 두 가지 실행 모드:
 #  - ID/PW 폼 로그인 (기본, K8s 배포용) — 파드 안에서 httpx 로 SSO 리다이렉트 체인을 따라가
-#    폼을 제출하고 쿠키를 캡처한다. 브라우저 불필요 (jira_sso_http.form_sso_login).
-#    save_login 옵트인 시 로그인 정보를 암호화 저장해 원클릭 재로그인 지원.
+#    폼을 제출하고 쿠키를 캡처한다. 브라우저 불필요 (jira_sso_http.sso_login_products).
+#    관리자가 Confluence URL 을 설정했으면 같은 IdP 세션으로 Confluence 세션까지 한 번에
+#    캡처한다. save_login 옵트인 시 로그인 정보를 암호화 저장해 원클릭/자동 재로그인 지원.
 #  - Playwright 헤디드 로그인 (레거시) — 백엔드 호스트에 화면이 있는 소스 실행 배포 전용.
+
+
+def _sso_products(cfg: dict) -> list[dict]:
+    """SSO 폼 로그인 대상 제품 목록 — 첫 항목(Jira)이 주 제품, Confluence 는 설정 시에만."""
+    products = [{
+        "key": "jira", "label": "Jira",
+        "base_url": cfg.get("base_url", ""), "verify_path": JIRA_VERIFY_PATH,
+    }]
+    conf_url = (cfg.get("confluence_base_url") or "").strip()
+    if conf_url:
+        products.append({
+            "key": "confluence", "label": "Confluence",
+            "base_url": conf_url, "verify_path": CONFLUENCE_VERIFY_PATH,
+        })
+    return products
+
+
+async def _sso_relogin(db: Session, actor: User, cfg: dict) -> Optional[str]:
+    """저장된 SSO 로그인 정보(옵트인)로 파드 내 폼 재로그인 → 새 세션 쿠키 저장(커밋 포함).
+
+    Jira 세션이 만료된 API 호출 경로에서 자동으로 불린다. Confluence 가 설정돼 있으면
+    그 세션도 함께 갱신된다. 성공 시 새 Jira Cookie 헤더, 실패/저장정보 없음이면 None."""
+    cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
+    if not (cred and getattr(cred, "sso_login_encrypted", None)):
+        return None
+    try:
+        saved = json.loads(secret_box.decrypt(cred.sso_login_encrypted))
+    except Exception:  # noqa: BLE001 - SECRET_KEY 교체 등으로 복호 실패
+        return None
+    sso_username, sso_password = saved.get("username"), saved.get("password")
+    if not (sso_username and sso_password):
+        return None
+    result = await sso_login_products(
+        _sso_products(cfg), sso_username, sso_password,
+        verify_tls=bool(cfg.get("verify_tls", True)),
+    )
+    if result.get("status") != "ok":
+        logger.info("Jira SSO auto re-login failed for %s: %s",
+                    actor.username, result.get("detail"))
+        return None
+    cred.token_encrypted = secret_box.encrypt(result["cookie_header"])
+    cred.auth_type = "sso"
+    cred.last_verified_at = datetime.utcnow()
+    if result.get("display_name") and not cred.jira_account:
+        cred.jira_account = result["display_name"]
+    conf = (result.get("products") or {}).get("confluence")
+    if conf and conf.get("status") == "ok":
+        cred.confluence_cookie_encrypted = secret_box.encrypt(conf["cookie_header"])
+    db.commit()
+    audit_logger.record(
+        db, action="work_item.jira_sso_relogin", actor=actor,
+        target_type="user_jira_credential", target_id=None,
+        details={"auto": True, "confluence": bool(conf and conf.get("status") == "ok")},
+    )
+    logger.info("Jira SSO auto re-login ok for %s", actor.username)
+    return result["cookie_header"]
+
+
+async def _jira_service_verified(db: Session, actor: User, cfg: dict) -> tuple[Optional[JiraService], dict]:
+    """사용자 자격으로 JiraService 생성 + myself 1회 검증.
+
+    세션 만료(401)이고 저장된 SSO 로그인 정보가 있으면 자동 재로그인 후 새 세션으로 재시도 —
+    사용자는 최초 1회만 로그인하면 세션이 끊겨도 무중단으로 이어진다.
+    반환 (svc, myself 결과). 인증 미등록이면 (None, error dict)."""
+    token, auth_type = _user_credential(db, actor.username)
+    if not token:
+        return None, {"status": "error",
+                      "detail": "내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다."}
+    verify = bool(cfg.get("verify_tls", True))
+    svc = JiraService(cfg["base_url"], token, auth_type=auth_type, verify=verify)
+    res = await svc.myself()
+    if res.get("auth_failed") and auth_type in ("cookie", "sso"):
+        new_cookie = await _sso_relogin(db, actor, cfg)
+        if new_cookie:
+            svc = JiraService(cfg["base_url"], new_cookie, auth_type="sso", verify=verify)
+            res = await svc.myself()
+    return svc, res
+
+
+def _user_confluence_cookie(db: Session, username: str) -> Optional[str]:
+    cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == username).first()
+    if not (cred and getattr(cred, "confluence_cookie_encrypted", None)):
+        return None
+    try:
+        return secret_box.decrypt(cred.confluence_cookie_encrypted)
+    except ValueError:
+        return None
+
+
+async def _confluence_service_verified(
+    db: Session, actor: User, cfg: dict
+) -> tuple[Optional[ConfluenceService], dict]:
+    """Confluence 세션으로 서비스 생성 + current_user 검증.
+
+    세션이 없거나 만료됐으면 저장된 SSO 로그인 정보로 자동 (재)로그인해 확보한다
+    (Jira 세션도 함께 갱신됨). 반환 (svc, current_user 결과) — 확보 실패 시 (None, error)."""
+    conf_url = (cfg.get("confluence_base_url") or "").strip()
+    if not conf_url:
+        return None, {"status": "error", "detail": "관리자가 Confluence URL 을 설정하지 않았습니다."}
+    verify = bool(cfg.get("verify_tls", True))
+    cookie = _user_confluence_cookie(db, actor.username)
+    if cookie:
+        svc = ConfluenceService(conf_url, cookie, auth_type="sso", verify=verify)
+        res = await svc.current_user()
+        if not res.get("auth_failed"):
+            return svc, res
+    if await _sso_relogin(db, actor, cfg):
+        cookie = _user_confluence_cookie(db, actor.username)
+        if cookie:
+            svc = ConfluenceService(conf_url, cookie, auth_type="sso", verify=verify)
+            return svc, await svc.current_user()
+    return None, {"status": "error",
+                  "detail": "Confluence 세션이 없습니다 — 'SSO 자동 로그인'으로 세션을 캡처하세요."}
+
+
 @router.post("/sso/login", response_model=JiraSsoLoginResult)
 async def sso_login(
     payload: Optional[JiraSsoLoginRequest] = None,
@@ -485,7 +611,10 @@ async def sso_login(
         sso_username, sso_password = payload.username.strip(), payload.password
 
     if sso_username and sso_password:
-        result = await form_sso_login(base_url, sso_username, sso_password, verify_tls=verify_tls)
+        # Jira(주 제품) + Confluence(설정 시) 를 한 IdP 세션으로 연속 로그인.
+        result = await sso_login_products(
+            _sso_products(cfg), sso_username, sso_password, verify_tls=verify_tls,
+        )
     else:
         # 레거시 — 블로킹 Playwright 헤디드 로그인(사용자가 서버 브라우저에서 완료할 때까지 대기).
         result = await asyncio.to_thread(capture_sso_session, base_url, verify_tls=verify_tls)
@@ -518,20 +647,34 @@ async def sso_login(
             jira_account=display or account, last_verified_at=now,
         )
         db.add(cred)
-    # 옵트인 — 로그인 정보 저장(원클릭 재로그인용). 저장 없이 성공한 로그인은 기존 값을 유지.
+    # 옵트인 — 로그인 정보 저장(원클릭/자동 재로그인용). 저장 없이 성공한 로그인은 기존 값을 유지.
     if payload and payload.save_login and sso_username and sso_password:
         cred.sso_login_encrypted = secret_box.encrypt(
             json.dumps({"username": sso_username, "password": sso_password})
         )
+    # Confluence 동시 로그인 결과 — 설정된 경우에만 존재. 실패해도 Jira 로그인은 유효.
+    conf = (result.get("products") or {}).get("confluence")
+    confluence_ok: Optional[bool] = None
+    confluence_detail = ""
+    if conf is not None:
+        confluence_ok = conf.get("status") == "ok"
+        if confluence_ok:
+            cred.confluence_cookie_encrypted = secret_box.encrypt(conf["cookie_header"])
+        else:
+            confluence_detail = conf.get("detail", "Confluence 로그인 실패")
     db.commit()
     audit_logger.record(
         db, action="work_item.jira_sso_login", actor=actor,
         target_type="user_jira_credential", target_id=None,
-        details={"account": account, "method": "form" if sso_username else "browser"},
+        details={"account": account, "method": "form" if sso_username else "browser",
+                 "confluence": confluence_ok},
     )
     return JiraSsoLoginResult(
-        ok=True, detail="SSO 로그인 완료 — 세션이 저장되었습니다.",
+        ok=True,
+        detail="SSO 로그인 완료 — 세션이 저장되었습니다."
+               + (" (Confluence 포함)" if confluence_ok else ""),
         jira_account=account, display_name=display,
+        confluence_ok=confluence_ok, confluence_detail=confluence_detail,
     )
 
 
@@ -553,6 +696,38 @@ def download_sso_helper(_: User = Depends(get_current_user)):
     )
 
 
+# ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────
+@router.post("/confluence/test", response_model=JiraTestResult)
+async def confluence_test(db: Session = Depends(get_db), actor: User = Depends(get_current_user)):
+    """Confluence 연결 테스트 — 세션 만료 시 저장된 SSO 로그인으로 자동 재로그인 포함."""
+    cfg = _get_config(db)
+    svc, res = await _confluence_service_verified(db, actor, cfg)
+    if svc is None or res.get("status") != "ok":
+        return JiraTestResult(ok=False, detail=res.get("detail", "Confluence 연결 실패"))
+    return JiraTestResult(ok=True, detail="연결 정상", display_name=res.get("display_name"))
+
+
+@router.get("/confluence/search", response_model=ConfluenceSearchResult)
+async def confluence_search(
+    cql: str,
+    limit: int = 25,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    """CQL 콘텐츠 검색 — SSO 로 캡처한 본인 세션(본인 권한)으로 실행."""
+    cfg = _get_config(db)
+    svc, res = await _confluence_service_verified(db, actor, cfg)
+    if svc is None or res.get("status") != "ok":
+        return ConfluenceSearchResult(status="error", detail=res.get("detail", "Confluence 세션 없음"))
+    found = await svc.search(cql, limit=limit)
+    return ConfluenceSearchResult(
+        status=found.get("status", "error"),
+        detail=found.get("detail", ""),
+        total=found.get("total", 0),
+        items=[ConfluenceSearchItem(**i) for i in found.get("items", [])],
+    )
+
+
 # ── 가져오기 (단방향, upsert by jira_issue_id) ──────────────────────────────────
 @router.post("/import", response_model=JiraImportResult)
 async def import_issues(
@@ -564,7 +739,7 @@ async def import_issues(
     base_url = cfg.get("base_url", "")
     if not base_url or not cfg.get("enabled", False):
         return JiraImportResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정 (설정에서 활성화하세요).")
-    token, auth_type = _user_credential(db, actor.username)
+    token, _auth_type = _user_credential(db, actor.username)
     if not token:
         return JiraImportResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동에서 등록).")
 
@@ -581,7 +756,10 @@ async def import_issues(
         if not jql:
             return JiraImportResult(status="error", detail="JQL 을 입력하세요.")
 
-    svc = JiraService(base_url, token, auth_type=auth_type, verify=bool(cfg.get("verify_tls", True)))
+    # 세션 만료(401) 시 저장된 SSO 로그인 정보로 자동 재로그인 포함.
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraImportResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동에서 등록).")
     search = await svc.search(jql)
     if search.get("status") != "ok":
         return JiraImportResult(
@@ -968,12 +1146,15 @@ async def push_to_jira(
     cfg = _get_config(db)
     if not cfg.get("base_url") or not cfg.get("enabled", False):
         return JiraPushResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정.")
-    token, auth_type = _user_credential(db, actor.username)
+    token, _auth_type = _user_credential(db, actor.username)
     if not token:
         return JiraPushResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동).")
 
     key = item.jira_issue_key
-    svc = JiraService(cfg["base_url"], token, auth_type=auth_type, verify=bool(cfg.get("verify_tls", True)))
+    # 세션 만료(401) 시 저장된 SSO 로그인 정보로 자동 재로그인 포함.
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraPushResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동).")
 
     # 1) 현재 Jira 상태 + updated 조회 (충돌 감지)
     got = await svc.get_issue(key, fields=["status", "updated"])
