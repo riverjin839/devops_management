@@ -7,6 +7,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [MAC_LOCAL_TEST_GUIDE.md](MAC_LOCAL_TEST_GUIDE.md) — Apple Silicon Mac 로컬 테스트(kind+Vagrant 클러스터 2대 + PEP 기동)
 - [WIN_LOCAL_TEST_GUIDE.md](WIN_LOCAL_TEST_GUIDE.md) — Windows 로컬 테스트(VirtualBox + AlmaLinux kubeadm VM **2 클러스터** = 폐쇄망 동일 SSH/서버정보 + 멀티클러스터)
 - [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md) — 로컬(Docker Compose)·3단계 배포(kind / 폐쇄망 / 프로덕션)
+- [ENVIRONMENT.md](ENVIRONMENT.md) — **환경변수 전수 레퍼런스**(`config.py` Settings 기준, 기본값·설명)
 - [AIRGAP_LLM_NEXUS.md](AIRGAP_LLM_NEXUS.md) — 폐쇄망 LLM(Ollama) 모델 수급(Nexus/오프라인)
 - [AIRGAP_LLM_ARCHITECTURE.md](AIRGAP_LLM_ARCHITECTURE.md) — 폐쇄망 LLM 아키텍처 상세(내부 모델 서빙, K8s 로그 자동 분석·조치 가이드, PEP 지식 RAG)
 - [ADMIN_MANUAL.md](ADMIN_MANUAL.md) — 관리자 매뉴얼

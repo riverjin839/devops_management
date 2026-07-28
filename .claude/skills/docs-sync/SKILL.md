@@ -22,12 +22,13 @@ python3 scripts/docs/check_docs_sync.py
 | 코드 변경 | 반드시 갱신 | 조건부 갱신 |
 |---|---|---|
 | 새 프론트 페이지 / App.tsx 라우트 | `docs/SCREENS.md` 화면 섹션, `CODE_MAP.md` | 사이드바 메뉴 신설이면 `README.md` 핵심 기능표 |
-| 새 백엔드 라우터 (`backend/app/routers/*.py`) | `CODE_MAP.md` | 주요 API 그룹이면 `CLAUDE.md` API Reference |
+| 새 백엔드 라우터 (`backend/app/routers/*.py`) | `CODE_MAP.md` | 주요 API 그룹이면 `CLAUDE.md` API Reference 그룹표 |
 | 새 모델/테이블 | `CODE_MAP.md` | 핵심 도메인이면 `CLAUDE.md` Database Schema |
-| `config.py` Settings 에 환경변수 추가 | `CLAUDE.md` 환경변수 표, `.env.example` | 배포 관련이면 `docs/DEPLOY_GUIDE.md` |
+| `config.py` Settings 에 환경변수 추가 | **`docs/ENVIRONMENT.md`**, `.env.example` | 배포 관련이면 `docs/DEPLOY_GUIDE.md` |
+| Celery `beat_schedule` 엔트리 추가 | `CLAUDE.md` §Celery Tasks 표 (전수 기재) | — |
 | 기능 추가(`feat:`) / 버그 수정(`fix:`) | `CHANGELOG.md` `[Unreleased]` | 사용자 노출 기능이면 `README.md` 핵심 기능표 |
 | `docs/` 에 새 문서 추가 | `docs/README.md` 인덱스 | — |
-| UI 컨벤션/디자인 토큰 변경 | `DESIGN_SYSTEM.md` | `CLAUDE.md` UI Design System 절 |
+| UI 컨벤션/컴포넌트 표준 변경 | **`DESIGN_SYSTEM.md` §12 구현 표준** | 불변 규칙이 바뀌면 `CLAUDE.md` UI Design System 요약 |
 | 새 스킬 추가 (`.claude/skills/`) | `.claude/skills/README.md` 수록표 | — |
 | 화면 구조가 크게 바뀐 기존 페이지 | `docs/SCREENS.md` 해당 섹션 | — |
 | 릴리스(버전업) | `scripts/release/bump_version.py` 가 자동 처리 | `/release` 스킬 참고 |
@@ -38,8 +39,13 @@ python3 scripts/docs/check_docs_sync.py
   `### 화면명 (\`/route\`)`. 기존 섹션 형식(UX/UI/Frontend/Backend/핵심 기능)을 따른다.
 - **CODE_MAP.md**: 파일명이 본문에 존재하기만 하면 검사 통과. 도메인 그룹 표에 한 줄
   (파일명 + 한 줄 설명) 추가한다. 장문 설명 금지 — 지도이지 명세서가 아니다.
-- **CLAUDE.md**: 전역 컨벤션·아키텍처만. 개별 기능 상세는 docs/ 로. 60여 개 라우터를
-  개별 나열하지 말고 도메인 그룹 요약을 유지한다.
+- **CLAUDE.md**: **매 세션 자동 로드되는 유일한 문서라 토큰 예산이 곧 비용이다.** 전역
+  컨벤션·아키텍처만 담고, 개별 기능 상세는 docs/ 로, 작업 절차는 스킬로, 파일 지도는
+  `CODE_MAP.md` 로 보낸다. 다음 3가지는 금지:
+  - **다른 문서가 원천인 내용의 재서술** — 포인터 한 줄로 대체한다.
+  - **개수 표현**("라우터 65개", "체커 16종") — 커밋마다 썩고 검사기가 잡는다. 개수 대신
+    항목 이름을 나열하거나 개수 없이 문장을 쓴다.
+  - **전수 나열**(라우터·모델·페이지 개별 파일명) — 도메인 그룹 요약만 유지한다.
 - **CHANGELOG.md**: `[Unreleased]` 아래 `### Added`/`### Fixed`/`### Changed` 에 굵은
   기능명 + 사용자 관점 요약 1~2줄 (+ `Backend:`/`Frontend:` 구현 포인트).
 - **의도된 예외**: 문서화가 불필요한 라우트/파일이면

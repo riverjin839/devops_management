@@ -21,8 +21,13 @@ Originally "K8s Daily Monitor" (DevOps Management), redefined as Platform Engine
 프론트엔드의 모든 화면(라우트)을 화면 단위로 UX/UI/Frontend/Backend/핵심 기능으로 정리한 문서가
 **`docs/SCREENS.md`** 에 있다. 사용자가 화면별 개선 요청을 그 문서에 직접 적어두고, 이후 세션에서
 "docs/SCREENS.md 의 `<화면명>` 요청사항 반영해줘" 처럼 가리켜 작업을 요청하는 용도로 관리된다.
-특정 화면을 수정하기 전에 먼저 이 문서에서 해당 화면 섹션을 확인해 현재 구조(사용 hook/컴포넌트/API
+특정 화면을 수정하기 전에 먼저 해당 화면 섹션을 확인해 현재 구조(사용 hook/컴포넌트/API
 엔드포인트)를 파악하고 시작할 것. 화면 구조가 크게 바뀌면 해당 섹션도 함께 갱신해준다.
+
+**⚠️ 읽는 방법 — 통째로 Read 하지 말 것.** 이 문서는 130KB(≈60k 토큰)라 전체를 읽으면 컨텍스트의
+1/3 이 한 번에 소모된다. 화면 섹션은 라우트가 백틱으로 박힌 `### 제목 (`/route`)` 헤딩으로
+구분돼 있고 각 20줄 내외이므로, **`grep -n '/route' docs/SCREENS.md` 로 줄번호를 찾아
+`offset`/`limit` 으로 해당 섹션만 읽는다.**
 
 ---
 
@@ -87,266 +92,98 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
 
 ## Repository Layout
 
-전체 파일 지도(기능 → 파일 위치)는 **`CODE_MAP.md`** 를 먼저 볼 것. 아래는 도메인 단위 요약이다
-(개별 나열은 규모상 생략 — 라우터 65개 / 모델 52개 / 페이지 67개).
+**기능 → 파일 매핑은 `CODE_MAP.md` 가 원천이다** (라우터·페이지 전수 나열 + 자주 하는 작업
+Recipes). 아래는 디렉터리 골격만 — 파일을 찾는 중이라면 여기가 아니라 `CODE_MAP.md` 를 본다.
 
 ```
 devops_management/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI app, lifespan, CORS, _run_migrations, 라우터 마운트
-│   │   ├── config.py            # pydantic-settings Settings class
-│   │   ├── database.py          # SQLAlchemy engine + SessionLocal + Base
-│   │   ├── celery_app.py        # Celery app + Beat (매분 check-matrix 디스패처 등 6개 스케줄, ~13개 태스크)
-│   │   ├── models/              # SQLAlchemy ORM 모델 52개 — 도메인 그룹:
-│   │   │   #  모니터링/점검: cluster, daily_check, check_log, check_matrix, deep_check,
-│   │   │   #    ops_check, metric_card, addon, k8s_event, resource_count,
-│   │   │   #    config_snapshot, os_param_change, trend
-│   │   │   #  업무 관리: work_item(+comment/time_block/custom_field), sprint, project, workflow
-│   │   │   #  지식: ontology, mindmap, work_guide, ops_note, voc_post, command_entry, reaction
-│   │   │   #  인프라/서비스: infra_node, node_server_spec, management_server, isilon_server,
-│   │   │   #    service_entry, service_category, service_topology, service_arch_doc,
-│   │   │   #    topology_audit_log, lake_service, lake_service_type, cluster_item,
-│   │   │   #    cluster_custom_field
-│   │   │   #  플랫폼/자동화: batch_job, bottleneck_run, ansible_assets, playbook
-│   │   │   #  사용자/설정: user, user_setting, user_jira_credential, user_notification, island,
-│   │   │   #    app_setting, audit_log
-│   │   ├── routers/             # APIRouter 64개 — 모델과 같은 도메인 그룹 + auth, health,
-│   │   │   #  history, backup, notifications, release_notes, ui_settings,
-│   │   │   #  terminal_appearance, k8s_resources/k8s_allocation/k8s_helm/k8s_exec/k9s_ssh,
-│   │   │   #  cilium_trace/topology_trace, bottleneck, etcdctl, mc_client, bulk_exec,
-│   │   │   #  commands, analyze, versions, jira, voc, promql, agent ...
-│   │   ├── schemas/             # Pydantic 스키마
-│   │   └── services/            # 서비스 모듈 ~40개 + 하위 패키지 7개:
-│   │       ├── checkers/          # 일일점검 컴포넌트 체커 9개 (argocd/control_plane/etcd/
-│   │       │                      #  jenkins/keycloak/nexus/node/system_pod + base)
-│   │       ├── deep_checkers/     # 심층 점검 16종 (cert_expiry, coredns, etcd_defrag,
-│   │       │                      #  isilon_nfs, oom_events, pvc_health, audit_rbac ...)
-│   │       ├── lake_checkers/     # 데이터 LAKE 서비스 프로브 (airflow/spark/trino/starrocks ...)
-│   │       ├── bottleneck_probes/ # dns_latency, tcp_perf, tcp_state, endpoints
-│   │       ├── analyzers/         # 장애 분석기: claude / local_llm / rule_based + factory
-│   │       ├── batch_jobs/        # etcdctl_defrag, shell_command(SSH) + k8s_job_cleanup(non-SSH) 실행기
-│   │       └── trends/            # github/rss 수집기 + summarizer + trend_service
-│   ├── tests/                   # pytest 스위트: conftest + 테스트 모듈 13개 (API, 클러스터
-│   │                            #  등록/토폴로지/추이, 배치잡, deep check, 임베딩, 온톨로지 등)
-│   ├── requirements.txt
-│   ├── pytest.ini               # testpaths=tests, asyncio_mode=auto
-│   └── Dockerfile
-│
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx              # React Router — 페이지 67개, 라우트 ~92개 (진입점 `/` = HomePage,
-│   │   │                        #  구 대시보드는 /cluster-overview; 레거시 경로는 redirect;
-│   │   │                        #  RequireAdmin·RequireFeature 가드)
-│   │   ├── main.tsx             # Entry point
-│   │   ├── types/index.ts       # 공용 TypeScript 인터페이스
-│   │   ├── services/api.ts      # axios 기반 API 서비스 레이어
-│   │   ├── stores/              # Zustand 10개: authStore, clusterStore, themeStore, sidebarStore, islandStore,
-│   │   │                        #  homeStore, debugStore, playbookStore, tableViewStore, terminalEnvStore
-│   │   ├── hooks/               # TanStack Query 훅 ~55개 (도메인 리소스당 1개+)
-│   │   ├── pages/               # 페이지 67개 — 화면별 명세는 docs/SCREENS.md 참고
-│   │   ├── components/          # 기능별 그룹: common/(ClusterSidebar), ui/(MacCard, shadcn),
-│   │   │                        #  layout/(Sidebar, navConfig.ts), dashboard/, agent/, playbooks/,
-│   │   │                        #  work-items/ 등 도메인 폴더 다수
-│   │   └── config/
-│   ├── package.json             # version = 릴리스 버전 소스
-│   └── Dockerfile               # nginx-based production image
-│
-├── k8s/
-│   ├── base/                    # Kustomize base (backend/frontend/postgres/redis/celery/
-│   │   │                        #  ollama.yaml, kubewatch, observability/)
-│   ├── overlays/                # dev / prod / kind / airgap (폐쇄망 registry mirror)
-│   └── superpod/                # in-cluster deep-check CronJob 매니페스트
-│
-├── helm/k8s-daily-monitor/      # Helm chart (values / values-dev / values-prod / values-airgap)
-├── scripts/                     # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
-│   │                            #  release/bump_version.py, docs/check_docs_sync.py
-├── ansible/playbooks/           # Ansible playbooks run by backend
-├── argocd/                      # ArgoCD Application + Project manifests
-├── docs/                        # 가이드 ~19개 + 하위 폴더 — 인덱스는 docs/README.md 참고
-│   │                            #  (SCREENS, DEPLOY, ADMIN_MANUAL, DEEP_CHECKER, AIRGAP_LLM_*,
-│   │                            #   BACKUP_RESTORE, K8S_OPS_CHECKLIST, branch-tag-strategy ...)
-│   ├── 01-plan/ 02-design/ 03-analysis/   # 기능별 계획/설계/분석 문서
-│   ├── archive/                 # 완료 기능 문서 아카이브
-│   └── superpowers/             # plans/specs
-├── docker/ vagrant/ windows-docker/       # 로컬 실험 환경 (Vagrant/VirtualBox, Windows)
-├── docker-compose.yml           # 로컬 개발 (postgres+redis+backend+frontend+celery(+beat)
-│                                #  +kubewatch+grafana-renderer)
-├── skaffold.yaml, Makefile, Jenkinsfile
-├── CODE_MAP.md                  # 기능 → 파일 지도 (여기부터 볼 것)
-├── DESIGN_SYSTEM.md             # UI 디자인 시스템 상세 (토큰/규격 원천)
-├── DESIGN.md                    # UX/UI 운영 문서 — 현행화·개선포인트 백로그·고도화 로드맵·점검 이력
-│                                #  (ux-ui-designer 에이전트/스킬이 관리)
-└── .env.example                 # backend 환경변수 템플릿
+├── backend/app/
+│   ├── main.py          # FastAPI app, lifespan, CORS, _run_migrations, 라우터 마운트
+│   ├── config.py        # pydantic-settings Settings (전체 변수 → docs/ENVIRONMENT.md)
+│   ├── database.py      # SQLAlchemy engine + SessionLocal + Base
+│   ├── celery_app.py    # Celery app + Beat 스케줄 + 태스크 (§Celery Tasks)
+│   ├── models/          # SQLAlchemy ORM — 도메인 그룹은 §Database Schema
+│   ├── routers/         # APIRouter — 전부 /api/v1 마운트, 그룹 인덱스는 §API Reference
+│   ├── schemas/         # Pydantic 스키마
+│   └── services/        # 서비스 모듈 + 하위 패키지:
+│       #  checkers/(일일점검 컴포넌트)  deep_checkers/(심층 점검)  lake_checkers/(LAKE 프로브)
+│       #  bottleneck_probes/  analyzers/(claude|local_llm|rule_based)  batch_jobs/  trends/
+├── backend/tests/       # pytest (pytest.ini: testpaths=tests, asyncio_mode=auto)
+├── frontend/src/
+│   ├── App.tsx          # React Router — `/` = HomePage, 구 대시보드는 /cluster-overview,
+│   │                    #   레거시 경로 redirect, RequireAdmin·RequireFeature 가드
+│   ├── services/api.ts  # axios 기반 API 레이어 — 모든 백엔드 호출의 단일 창구
+│   ├── types/index.ts   # 공용 TypeScript 인터페이스
+│   ├── stores/          # Zustand (client state)      hooks/  # TanStack Query (server state)
+│   ├── pages/           # 화면별 명세는 docs/SCREENS.md
+│   └── components/      # common/(ClusterSidebar) ui/(MacCard, shadcn)
+│                        #   layout/(Sidebar, navConfig.ts) + 도메인 폴더
+├── k8s/                 # Kustomize base + overlays(dev/prod/kind/airgap) + superpod/(CronJob)
+├── helm/k8s-daily-monitor/   # values / -dev / -prod / -airgap
+├── scripts/             # kind-setup.sh, deploy-airgap.sh, init-cluster.sh,
+│                        #   release/bump_version.py, docs/check_docs_sync.py
+├── ansible/playbooks/  argocd/  docker/ vagrant/ windows-docker/
+├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
+│                        #   archive/ superpowers/ 하위 폴더 포함)
+├── docker-compose.yml  skaffold.yaml  Makefile  Jenkinsfile
+├── CODE_MAP.md          # 기능 → 파일 지도 (여기부터 볼 것)
+├── DESIGN_SYSTEM.md     # UI 규격·구현 표준 원천 (§12 구현 표준)
+├── DESIGN.md            # UX/UI 운영 — 백로그·로드맵·점검 이력 (ux-ui-designer 가 관리)
+└── .env.example         # backend 환경변수 템플릿 (전체 목록은 docs/ENVIRONMENT.md)
 ```
+
+> 파일 개수(라우터/모델/페이지 N개)는 커밋마다 바뀌므로 이 문서에 적지 않는다. 필요하면
+> `ls backend/app/routers/*.py | wc -l` 처럼 직접 센다.
 
 ---
 
-## Development Workflows
+## Development & Tests
 
-### Local Development (Docker Compose) — Recommended for most changes
+| 목적 | 명령 | 접속 |
+|---|---|---|
+| **전체 스택 (권장)** | `docker-compose up -d` / `down` | FE `:5173` · API `:8000/docs` |
+| 네이티브 | `make install` → `make dev` | 동일 |
+| 백엔드만 | `cd backend && uvicorn app.main:app --reload --port 8000` | |
+| 프론트만 | `cd frontend && npm run dev` | |
+| kind 로컬 K8s | `bash scripts/kind-setup.sh up｜reload｜destroy` | FE `:30080` · API `:30800/docs` |
+| K8s 핫리로드 | `make skaffold-dev` | |
 
-```bash
-# Start all services (postgres, redis, backend, frontend, celery worker+beat, kubewatch, grafana-renderer)
-docker-compose up -d
+그 외 타깃은 `make help`. Compose 는 postgres+redis+backend+frontend+celery(worker/beat)
++kubewatch+grafana-renderer 를 띄운다.
 
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:8000/docs
-# Stop
-docker-compose down
-```
-
-### Local Development (native processes)
-
-```bash
-# Install dependencies
-make install
-
-# Run frontend + backend concurrently
-make dev
-# Backend: http://localhost:8000
-# Frontend: http://localhost:5173
-
-# Backend only
-cd backend && uvicorn app.main:app --reload --port 8000
-
-# Frontend only
-cd frontend && npm run dev
-```
-
-### Local Kubernetes (kind)
+**머지 전 게이트 (CI 와 동일 — 전부 통과해야 함):**
 
 ```bash
-# Create cluster, build images, deploy everything
-bash scripts/kind-setup.sh up
-
-# After code changes, rebuild and redeploy
-bash scripts/kind-setup.sh reload
-
-# Tear down
-bash scripts/kind-setup.sh destroy
-
-# URLs: http://localhost:30080 (frontend), http://localhost:30800/docs (API)
+cd frontend && npm run lint && npx tsc --noEmit && npm run build   # lint 는 --max-warnings 0
+cd backend  && pytest -v                                           # 실행 중인 PostgreSQL 필요
+python3 scripts/docs/check_docs_sync.py                            # 문서 동기화 검사
 ```
 
-### Skaffold (hot-reload on K8s)
-
-```bash
-make skaffold-dev    # watches src/, rebuilds on change
-```
-
----
-
-## Running Tests
-
-### Backend
-
-```bash
-cd backend
-pytest -v
-```
-
-Tests require a running PostgreSQL instance. In CI, one is provided as a service container. Locally you can point to the Docker Compose postgres:
-
-```bash
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/k8s_monitor_test pytest -v
-```
-
-`pytest.ini` settings: `testpaths = tests`, `asyncio_mode = auto`.
-
-`backend/tests/` 는 `conftest.py` + 테스트 모듈 ~13개로, API 엔드포인트·클러스터
-등록/토폴로지/추이·배치잡 디스패처·deep check(node health)·agent/embedding 파이프라인·
-온톨로지·자원 할당을 커버한다.
-
-### Frontend
-
-```bash
-cd frontend
-npm run lint          # ESLint (max-warnings 0 — zero tolerance)
-npx tsc --noEmit      # TypeScript type check
-npm run build         # Production build (also validates TS)
-```
-
-There are no Jest/Vitest unit tests currently. CI validates lint + type-check + build.
+- 로컬 DB 를 따로 쓰려면 `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/k8s_monitor_test pytest -v`.
+- 프론트엔드 단위 테스트(Jest/Vitest)는 없다 — CI 는 lint + type-check + build 로만 검증한다.
 
 ---
 
 ## Environment Variables
 
-Copy `.env.example` → `.env` in the **backend** directory for local development.
+로컬 개발은 `.env.example` → `backend/.env` 로 복사. pydantic-settings 가 자동 로드하며 변수명은
+대소문자를 구분하지 않는다.
 
-아래 표는 `backend/app/config.py` 의 `Settings` 클래스 기준이다 (그룹별). pydantic-settings 가
-`.env` 를 자동으로 읽고 변수명은 대소문자 무시.
+**전체 목록·기본값·설명은 `docs/ENVIRONMENT.md`, 코드상 원천은 `backend/app/config.py` 의
+`Settings` 클래스다.** 자주 건드리는 것만 추리면:
 
-**Core / DB / Celery**
-
-| Variable | Default | Description |
+| Variable | Default | Note |
 |---|---|---|
-| `APP_NAME` | `DEVOPS MANAGEMENT` | 앱 표시 이름 |
-| `DEBUG` | `false` | FastAPI debug mode |
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/k8s_monitor` | PostgreSQL connection string |
-| `DB_POOL_SIZE` | `10` | SQLAlchemy 엔진 풀 크기. backend/celery worker/beat 가 같은 engine 코드를 공유하므로, replica 합계 × (pool_size+max_overflow) 가 Postgres `max_connections` 를 넘지 않게 배포별로 오버라이드(worker/beat 는 k8s 매니페스트에서 더 작게 설정됨) |
-| `DB_MAX_OVERFLOW` | `20` | SQLAlchemy 엔진 풀의 추가 오버플로 커넥션 수 |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
-| `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker |
-| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result store |
-| `BATCH_JOBS_TIMEZONE` | `Asia/Seoul` | 배치잡 cron 해석 timezone (IANA) |
-
-**인증 (Auth)**
-
-| Variable | Default | Description |
-|---|---|---|
-| `SECRET_KEY` | *(change in production)* | JWT signing key |
-| `ALGORITHM` | `HS256` | JWT 알고리즘 |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` (24h) | 토큰 만료 |
-| `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` | `admin` / `admin` | 사용자 0명일 때 부트스트랩 관리자 |
-
-**점검 / K8s**
-
-| Variable | Default | Description |
-|---|---|---|
-| `CHECK_INTERVAL_MINUTES` | `5` | Health check interval |
-| `CHECK_TIMEOUT_SECONDS` | `30` | kubectl/HTTP timeout |
-| `KUBECONFIG_STORE_DIR` | `/tmp/k8s-monitor/kubeconfigs` | content 방식 kubeconfig 저장 위치 |
-| `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰. **fail-closed** — 미설정 시 웹훅 수신 자체를 503 으로 거부(deep_check ingest 의 SUPERPOD_INGEST_TOKEN 과 동일 정책) |
-| `MGMT_NAMESPACE` | `k8s-monitor` | 관리 네임스페이스 (K8sEvent 채널) |
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/k8s_monitor` | |
+| `SECRET_KEY` | *(운영에서 반드시 교체)* | JWT 서명키 |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `10` / `20` | replica 합계 × (pool+overflow) ≤ Postgres `max_connections` 이 되게 배포별 오버라이드 |
+| `OLLAMA_URL` / `OLLAMA_MODEL` | `http://ollama:11434` / `llama3` | 폐쇄망 overlay 는 `qwen2.5-coder:7b` |
+| `PROMETHEUS_URL` | `http://prometheus-k8s.monitoring.svc:9090` | 미도달 시 카드가 offline 표시 |
+| `KUBEWATCH_TOKEN` · `SUPERPOD_INGEST_TOKEN` | *(empty)* | **fail-closed** — 미설정 시 웹훅 수신을 503 으로 거부 |
 | `SUPERPOD_MODE` | `centralized` | `in_cluster` \| `centralized` — deep check 실행 모드 |
-| `SUPERPOD_INGEST_URL` / `SUPERPOD_INGEST_TOKEN` | *(empty)* | in-cluster CronJob 결과 push 대상 |
-| `SUPERPOD_CLUSTER_ID` | *(empty)* | in_cluster 모드에서 자기 클러스터 식별자 |
 
-**AI / LLM / Embedding**
-
-| Variable | Default | Description |
-|---|---|---|
-| `OLLAMA_URL` | `http://ollama:11434` | Ollama base URL |
-| `OLLAMA_MODEL` | `llama3` | LLM model name (airgap overlay 는 `qwen2.5-coder:7b`) |
-| `OLLAMA_TIMEOUT` | `120` | LLM request timeout (s) |
-| `EMBEDDING_MODEL` | `nomic-embed-text` | 임베딩 모델 (WorkItem/WorkGuide 유사 검색) |
-| `EMBEDDING_DIM` | `768` | 임베딩 차원 — 모델 교체 시 함께 변경(기존 벡터 재계산 필요) |
-| `EMBEDDING_TIMEOUT` | `30` | 임베딩 요청 timeout (s) |
-| `ANALYZER_BACKEND` | `rule_based` | 장애 분석기: `claude` \| `local_llm` \| `rule_based` (※ Settings 가 아닌 `os.getenv` — `services/analyzers/factory.py`) |
-
-**Prometheus / Grafana / Trends**
-
-| Variable | Default | Description |
-|---|---|---|
-| `PROMETHEUS_URL` | `http://prometheus-k8s.monitoring.svc:9090` | Prometheus endpoint |
-| `GRAFANA_URL` | `http://grafana.monitoring.svc:3000` | Grafana endpoint |
-| `GRAFANA_RENDERER_URL` | `http://grafana-renderer:8081` | 패널 이미지 렌더러 |
-| `PROMETHEUS_NODE_LABEL` | `instance` | node-exporter 노드 식별 라벨 (배포 의존) |
-| `TRENDS_MAX_NODES` | `30` | 추이 조회 최대 노드 수 |
-| `TRENDS_GITHUB_API_URL` | `https://api.github.com` | 트렌드 수집 GitHub API (폐쇄망: 내부 GHE) |
-| `TRENDS_GITHUB_TOKEN` | *(empty)* | optional — rate limit 향상 |
-| `TRENDS_COLLECT_HOUR` | `7` | 매일 자동 수집 시각 (KST) |
-
-**알림 / 기타**
-
-| Variable | Default | Description |
-|---|---|---|
-| `SLACK_WEBHOOK_URL` | *(empty)* | Slack 알림 채널 |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | port 587, TLS on | 메일 알림 |
-| `ANSIBLE_PLAYBOOK_DIR` / `ANSIBLE_INVENTORY_DIR` | `/app/ansible/...` | Ansible 자산 경로 |
-| `ALLOWED_ORIGINS` | *(empty)* | 추가 CORS origin (콤마 구분) — ※ Settings 가 아닌 `os.getenv` (`main.py`) |
+⚠️ `ANALYZER_BACKEND`(`services/analyzers/factory.py`) 와 `ALLOWED_ORIGINS`(`main.py`) 는
+`Settings` 가 아니라 `os.getenv` 로 직접 읽는다 — `config.py` 에서 찾으면 안 나온다.
 
 ---
 
@@ -388,24 +225,26 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 ### Celery Tasks
 
 구 아침/점심/저녁(09/13/18) 하드코딩 스케줄은 **check-matrix cron 디스패처로 완전 대체**됐다.
-`celery_app.py` 의 Beat 스케줄 7개:
+`celery_app.py` 의 `beat_schedule` 엔트리 (전수 — 추가 시 여기도 갱신):
 
 | Beat 엔트리 | 주기 | 역할 |
 |---|---|---|
 | `check-matrix-dispatch` | 매분 | 각 클러스터의 `check_cron_expr`(core 번들) + `CheckMatrixSchedule` cron 평가 → due 점검 실행 |
 | `check-matrix-log-purge` | 03:00 | 점검 결과 로그 정리 |
+| `deep-check-results-purge` | 03:10 | 심층 점검 결과 보존기간 초과분 정리 |
+| `log-tables-purge` | 03:20 | 대용량 로그성 테이블 정리 |
 | `daily-trend-collect` | 07:00 | 기술 트렌드(GitHub/RSS) 수집 |
 | `resource-count-snapshot-dispatcher` | 매분 | 리소스 카운트 스냅샷 디스패치 |
 | `batch-job-dispatcher` | 매분 | 등록된 배치잡 cron 평가·실행 |
 | `cluster-item-dispatcher` | 매시 :00 | 클러스터 아이템 점검 |
 | `arch-doc-sync-dispatcher` | 매분 | 서비스 아키텍처 문서 현행화 (AppSetting cron 평가 → `sync_all_architecture_docs`) |
 
-태스크는 ~16개: 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
+태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
 `dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`,
-`dispatch_architecture_doc_sync`), 수집류(`collect_resource_counts`,
-`run_trend_collect`, `sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`),
+`dispatch_architecture_doc_sync`), 수집류(`collect_resource_counts`, `run_trend_collect`,
+`sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`),
 AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_work_guide_embedding`,
-`generate_arch_doc_llm`) 등.
+`generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
 async 서비스는 `asyncio.new_event_loop()` + `loop.run_until_complete()` 로 브리지한다.
 
 ### Health Check Logic (`services/daily_checker.py`)
@@ -445,161 +284,30 @@ Both `AIAgentService` (`agent_service.py`) and `PrometheusService` (`prometheus_
 
 ## UI Design System
 
-테마 3종 + 토큰 기반 시스템이다. 토큰 실측값의 원천은 `frontend/src/index.css`, 규격 근거는
-`DESIGN_SYSTEM.md`, 운영(감사·백로그)은 `DESIGN.md`.
+테마 3종(`default` 기본 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
 
-### Theme System (`stores/themeStore.ts` — `k8s:theme`, fallback `'default'`)
+- **규격·구현 표준의 원천 = `DESIGN_SYSTEM.md` §12 구현 표준** — 테마 매트릭스, radius 토큰,
+  MacCard props, ClusterSidebar 사용 패턴 3종 + 레이아웃 규칙, 콘솔 패턴 5개 항목이 전부 거기 있다.
+- 토큰 **실측값** 은 `frontend/src/index.css` (테마별 상이), 운영(감사·백로그)은 `DESIGN.md`.
 
-| `<html>` 클래스 | 성격 | 비고 |
-|---|---|---|
-| `html.default` | **기본값** — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경, `--radius` 14px, 은은한 그림자, 코랄 accent) | 신규 사용자 첫 진입 화면. 레거시 `'claude'` 값은 자동 마이그레이션 |
-| `:root` / `html.light` | Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign |
-| `html.dark` | Databricks-leaning 다크 | DESIGN_SYSTEM.md "Ops Slate" 계열 |
-| (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 |
+아래는 **위반 시 리뷰 반려되는 불변 규칙**이다. props·예시 코드·세부 레이아웃이 필요하면
+`DESIGN_SYSTEM.md` §12 를 읽는다.
 
-핵심 원칙: **모든 색·라운딩은 테마별로 값이 달라지므로 고정값 대신 토큰을 쓴다.**
-Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단계
-(`bg-surface-container-lowest~highest`), brand(`--brand-jira`), motion(`--motion-*`) 토큰이
-`index.css` 에 3테마 모두 정의돼 있다.
-
-### 라운딩 (radius 토큰)
-
-`tailwind.config.js` 매핑: `rounded-lg` = `var(--radius)` / `rounded-md` = radius−2px /
-`rounded-sm` = radius−4px — **테마 인지(theme-aware)**. `rounded-xl`/`rounded-2xl` 은 고정값.
-
-- **카드**: `MacCard`(flat 기본, `rounded-md` 토큰) 사용 — 페이지에서 카드 div 를 직접 만들지 않는다.
-- **버튼/입력**: `rounded-xl` (`ui/button.tsx` 기준). sharp corner 금지.
-- 직접 `rounded-2xl` 카드는 레거시(mac variant·다이얼로그) — 신규 코드에서 사용하지 않는다.
-
-### MacCard Component (`frontend/src/components/ui/MacCard.tsx`)
-
-모든 주요 섹션은 `MacCard` 로 감싼다. shadcn `Card` 프리미티브의 어댑터이며 variant 2종:
-
-- **`flat` (기본)**: 평평한 표면 + 1px 보더, 좌측 정렬 소형 대문자 라벨 헤더 (`bg-surface-container-high`), 라운딩 `rounded-md` 토큰. 신규 코드는 전부 이것.
-- **`mac` (레거시 opt-in)**: 신호등 3점 + 중앙 타이틀의 구 macOS 창 스타일. 신규 사용 금지.
-
-```tsx
-import { MacCard } from '@/components/ui/MacCard';
-
-<MacCard title="Cluster Status">{/* content */}</MacCard>
-```
-
-Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className?`(body),
-`rootClassName?`, `bodyPadding?`(기본 flat `p-4` / mac `p-5`).
-신호등 CSS 변수(`--mac-red/yellow/green`)는 mac variant 전용으로만 유지된다.
-
-### Component Conventions
-
-- **카드**: `MacCard` 사용, 직접 `bg-card border` div 조합 금지 (DESIGN.md D-004).
-- **Shadows**: light/dark 는 `--card-shadow: none`(보더가 그림자 대체), default 테마만 은은한 depth —
-  `.mac-shadow` 유틸이 토큰을 따라가므로 개별 shadow 클래스를 만들지 않는다.
-- **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
-- **Colors**: JSX 내 raw hex 금지 — Tailwind 토큰(`text-primary` 등) 또는 `hsl(var(--*))`.
-  고정 팔레트(`text-white`, `bg-gray-*` 등)도 금지 — 테마 토큰(`text-foreground`,
-  `text-muted-foreground`, `bg-card`, `bg-secondary`)을 쓴다. 차트/캔버스는 `--chart-*` 토큰 우선.
-- **접근성**: 아이콘 전용 버튼은 `title` 과 함께 **`aria-label` 병행**을 표준으로 한다.
-
-### Cluster Sidebar Standard (`ClusterSidebar`) — required for all per-cluster pages
-
-**Component:** `frontend/src/components/common/ClusterSidebar.tsx`
-
-페이지에 클러스터 선택 사이드바를 표시할 때는 **항상 `iconOnly` 모드**를 사용한다. 이는 메인 사이드바와 시각 일관성을 유지하기 위한 표준이며, 폭 56px 의 아이콘 레일로 렌더되고 호버 시 클러스터 이름·region·운영등급이 툴팁으로 표시된다. 시퀀스 번호(`seq`)는 어떤 모드에서도 노출하지 않는다.
-
-**시각적 형태 (iconOnly 모드):**
-```
-┌────┐
-│ ▦  │  ← 전체 (allowAll 시) — LayoutGrid 아이콘
-├────┤
-│ ✓●│  ← 클러스터 1 (status 아이콘 + 우상단 status dot)
-│ ⚠●│  ← 클러스터 2 (warning)
-│ ✕●│  ← 클러스터 3 (critical)
-└────┘
-   ↑ 호버하면 우측에 "이름 · region · 등급" 툴팁이 portal 로 표시됨
-```
-
-**사용 패턴 (3가지):**
-
-| 시나리오 | 필수 props | 예시 페이지 |
-|---|---|---|
-| 단일 선택 (전체 옵션 X) | `iconOnly` + `selectedId` + `onSelect` | CiliumTracePage |
-| 단일 선택 + 전체 옵션 | `iconOnly` + `allowAll` + `allLabel` + `selectedId` + `onSelect` | Dashboard |
-| 다중 선택 (빈 배열 = 전체) | `iconOnly` + `multiSelect` + `selectedIds` + `onMultiSelectChange` (+ optional `allowAll` `allLabel`) | PlaybooksPage, BulkExecPage |
-
-**예시 — 단일 선택:**
-```tsx
-<ClusterSidebar
-  clusters={clusters}
-  selectedId={clusterId || null}
-  onSelect={(id) => setClusterId(id ?? '')}
-  iconOnly
-/>
-```
-
-**예시 — 단일 선택 + 전체:**
-```tsx
-<ClusterSidebar
-  clusters={clusters}
-  selectedId={selectedClusterId}
-  onSelect={setSelectedClusterId}
-  allowAll
-  allLabel="전체 현황"
-  iconOnly
-/>
-```
-
-**예시 — 다중 선택 (PlaybooksPage 패턴):**
-```tsx
-<ClusterSidebar
-  clusters={clusters}
-  selectedId={null}
-  onSelect={() => { /* multiSelect 모드라 미사용 */ }}
-  allowAll
-  allLabel="전체 클러스터"
-  iconOnly
-  multiSelect
-  selectedIds={selectedClusterIds}
-  onMultiSelectChange={setSelectedClusterIds}
-/>
-```
-
-**레이아웃 규칙:**
-- **간격 표준 (모든 per-cluster 페이지 동일)**: 보조 사이드바(클러스터/서비스)는 **메인 사이드바에 flush(좌측 공백 0)** 로 붙인다. 컨테이너 행은 좌측 패딩 없이 `py-3 pr-3 flex gap-3` (또는 `min-h-screen bg-background flex`) 로 잡는다.
-  - 메인 사이드바 ↔ 보조 사이드바 = **0px(공백 없음)**, 보조 사이드바 ↔ 본문 = `gap-3`(12px) 또는 본문의 좌측 패딩으로 띄운다.
-  - ❌ 행에 `mx-auto`/`max-w-[...]` 로 가운데 정렬하면 보조 사이드바가 우측으로 밀려 공백이 생긴다 — **행은 좌측 정렬**(센터링 금지). 가독성 max-width 가 필요하면 보조 사이드바가 아니라 **본문(`flex-1`)에만** 적용한다.
-  - ❌ 좌측 `px-3`/`px-6`/`p-3` 처럼 행 전체에 좌측 패딩을 줘서 메인 사이드바와 보조 사이드바 사이에 틈을 만들지 않는다.
-- 사이드바 옆 본문은 `<div className="flex-1 min-w-0">` 으로 감싼다.
-- 사이드바는 `sticky top-4` 로 고정되어 스크롤해도 따라온다.
-- `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
-
-**금지:**
-- ❌ 와이드 폼 (`iconOnly` 없이 사용) — 신규 페이지에서 절대 사용 금지. 기존 페이지도 모두 iconOnly 로 마이그레이션됨.
-- ❌ `seq` 번호를 별도로 표시하는 어떤 UI 도 금지 (레거시 동작).
-- ❌ 페이지 내 dropdown 형태 클러스터 선택기 (`<select>`) — 대신 좌측 사이드바를 쓴다.
-- ❌ `onReorder` prop — iconOnly 에서는 정렬 토글이 노출되지 않으므로 사용 금지. 클러스터 정렬은 `/cluster-manage` 페이지에서만 한다.
-
-### 콘솔 화면 표준 패턴 (PEP Console Pattern) — SSH/exec 실행형 화면 공통
-
-원격 명령을 실행하고 로그(stdout/stderr)를 보여주는 화면은 모두 **같은 패턴**을 따른다.
-"콘솔 패턴 반영해줘" 류 요청이 오면 아래 목록의 화면 전부에 일괄 적용한다.
-
-**적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc-client` · etcdctl `/etcdctl` ·
-Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
-
-1. **레이아웃 — 좌(컨트롤) / 우(결과) 한 로우 고정**: 10~12컬럼 grid(`grid grid-cols-1 lg:grid-cols-10 gap-4 items-start` 등)로
-   컨트롤 카드(들)를 좌측(4~5), 결과/로그 카드를 우측(5~6)에 배치한다. 결과 카드는 **실행 전에도 같은 자리에
-   플레이스홀더**로 존재해 레이아웃이 흔들리지 않고, 스크롤은 결과 패널 내부에서만(가로 스크롤로 페이지가 늘어나면 안 됨).
-2. **stdout/stderr 는 `ExecOutputTabs`** (`components/common/ExecOutputTabs.tsx`): 두 스트림을 위아래로 쌓지 않고
-   탭으로 전환한다. 탭 라벨에 결과 유무 dot(초록=stdout/빨강=stderr)과 라인 수가 표기되고, 내용이 있는 쪽이 기본 활성
-   탭이다(stdout 우선). stdout/stderr 를 각각 `LogViewer` 로 직접 쌓는 코드는 신규 작성 금지.
-3. **로그 출력은 항상 `LogViewer`** (`components/common/LogViewer.tsx`): plain `<pre>` 금지. 포맷 자동감지(JSON/journal/table),
-   필터/복사/줄바꿈 툴바, 터미널 Appearance(색/글꼴) 가 일괄 적용된다.
-4. **터미널 Appearance 자동 적용 — `useTerminalEnvSync`** (`hooks/useTerminalEnvSync.ts`): 페이지 최상단에서
-   `useTerminalEnvSync(clusters, selectedId | selectedIds)` 를 호출한다. 선택 클러스터의 운영등급(`operationLevel`)이
-   prod/dr 계열이면 운영(ops), 아니면 개발(dev) 프로파일이 LogViewer 에 자동 적용된다(다중 선택은 하나라도 운영이면 ops,
-   페이지 이탈 시 null 초기화). **기본값: 개발=Monokai, 운영=기본(테마 색상)** — 사용자가 Settings → 터미널 Appearance 에서
-   프로파일별 템플릿/색/글꼴을 저장하면(개인화) 그 값이 우선한다(백엔드 `terminal_appearance` user_setting).
-5. **실행 상태 배지**: ok/error/timeout/auth_error/connect_error 는 `STATUS_META` 패턴(색 + 아이콘 pill)으로 표기,
-   위험 명령은 `ConfirmDialog` `danger` 확인을 거친다.
+- **토큰만 쓴다.** JSX 내 raw hex 금지, 고정 팔레트(`text-white`, `bg-gray-*`) 금지 —
+  `text-foreground` / `text-muted-foreground` / `bg-card` / `bg-secondary` 등 테마 토큰을 쓴다.
+  차트·캔버스는 `--chart-*` 우선. 색과 라운딩은 테마마다 값이 달라지므로 고정값이 곧 버그다.
+- **카드는 `MacCard`(flat).** 페이지에서 `bg-card border` div 를 직접 조합하지 않는다
+  (DESIGN.md D-004). 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
+- **라운딩**: 카드 `rounded-md`(토큰) · 버튼/입력 `rounded-xl`. sharp corner 금지.
+  `rounded-lg|md|sm` 은 theme-aware, `rounded-xl|2xl` 은 고정값.
+- **per-cluster 페이지는 `ClusterSidebar` `iconOnly` 필수.** 페이지 내 `<select>` 클러스터
+  선택기 금지, `seq` 노출 금지, `onReorder` 금지. 보조 사이드바는 메인 사이드바에 flush
+  (좌측 공백 0) — 행 전체에 좌측 패딩이나 `mx-auto` 를 주지 않는다.
+- **SSH/exec 콘솔은 콘솔 패턴 필수.** 좌(컨트롤)/우(결과) 한 로우, stdout/stderr 는
+  `ExecOutputTabs`, 로그는 `LogViewer`(plain `<pre>` 금지), 최상단에서 `useTerminalEnvSync` 호출.
+  적용 화면: `/bulk-exec` `/mc-client` `/etcdctl` `/cilium-trace` `/kernel-params` (+ 신규 콘솔 전부).
+- **접근성**: 아이콘 전용 버튼은 `title` + `aria-label` 병행.
+- **Tailwind 만.** 인라인 스타일·CSS modules·styled-components 금지.
 
 ---
 
@@ -636,14 +344,15 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 ## API Reference
 
-### Base URL
-`http://localhost:8000/api/v1` (local) or `http://<node>:30800/api/v1` (K8s NodePort)
+**Base URL**: `http://localhost:8000/api/v1` (local) · `http://<node>:30800/api/v1` (K8s NodePort)
 
-**API 는 ~65개 라우터가 `/api/v1` 아래에 마운트된다** — 아래 상세 표는 원조 코어 4개 그룹의
-대표 예시일 뿐 전체가 아니다. 전체 목록은 `backend/app/routers/__init__.py`, 라이브 스펙은
-`/docs`(Swagger) 를 본다. 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, 예외
-(비인증 마운트)는 `auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest` 다
+**엔드포인트 시그니처의 원천은 `/docs`(Swagger)다** — 개별 경로·파라미터를 알아야 하면 거기서
+확인하거나 해당 라우터 파일을 읽는다. 마운트 목록은 `backend/app/routers/__init__.py`.
+
+대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
+`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest`** 다
 (`k8s_exec`/`k9s_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증).
+앱 헬스 프로브만 `/api/v1` 접두사가 없다 — `GET /health` · `/health/live` · `/health/ready`(DB 확인).
 
 **라우터 그룹 인덱스** (한 줄 요약):
 
@@ -656,50 +365,6 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
 | 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `service_entries`, `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks` |
-
-### Cluster Management
-| Method | Path | Description |
-|---|---|---|
-| GET | `/clusters/` | List all clusters |
-| POST | `/clusters/` | Create cluster |
-| GET | `/clusters/{id}` | Get cluster detail |
-| DELETE | `/clusters/{id}` | Delete cluster |
-
-### Daily Health Check
-| Method | Path | Description |
-|---|---|---|
-| POST | `/daily-check/run/{cluster_id}` | Trigger manual check |
-| GET | `/daily-check/results/{cluster_id}` | All results for cluster |
-| GET | `/daily-check/results/{cluster_id}/latest` | Latest result |
-| GET | `/daily-check/summary` | All-cluster summary |
-| PUT | `/daily-check/schedule/{cluster_id}` | Update check schedule |
-
-### PromQL Metric Cards
-| Method | Path | Description |
-|---|---|---|
-| GET | `/promql/cards` | List cards (filter: `category`, `enabled_only`) |
-| POST | `/promql/cards` | Create card |
-| PUT | `/promql/cards/{id}` | Update card |
-| DELETE | `/promql/cards/{id}` | Delete card |
-| GET | `/promql/query/{card_id}` | Execute card's PromQL |
-| GET | `/promql/query/all` | Execute all enabled cards |
-| POST | `/promql/query/test` | Test arbitrary PromQL |
-| GET | `/promql/health` | Prometheus availability probe |
-
-### AI Agent
-| Method | Path | Description |
-|---|---|---|
-| POST | `/agent/chat` | Send question to Ollama LLM |
-| GET | `/agent/health` | Ollama availability probe |
-| POST | `/agent/pull-model` | Trigger model download |
-| GET | `/agent/models` | List available models |
-
-### App Health Probes (no `/api/v1` prefix)
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Liveness |
-| GET | `/health/live` | K8s liveness probe |
-| GET | `/health/ready` | K8s readiness probe (checks DB) |
 
 ---
 
@@ -721,8 +386,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 ### Additional Model Families
 
-위 6개는 원조 모니터링 코어다. 이외 ~43개 모델이 도메인별로 존재한다 — 전체는
-`backend/app/models/__init__.py` 참고:
+위 6개는 원조 모니터링 코어다. 이외 모델은 도메인별로 아래처럼 묶인다 — 전수와 컬럼 정의는
+`backend/app/models/__init__.py` 와 각 모델 파일을 본다:
 
 - **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog), `deep_check`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
@@ -735,60 +400,16 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 ## Deployment
 
-### Phase 1 — Local (kind)
+**전체 절차는 `docs/DEPLOY_GUIDE.md`.** 3단계 요약:
 
-```bash
-bash scripts/kind-setup.sh up      # build + deploy
-bash scripts/kind-setup.sh reload  # after code changes
-bash scripts/kind-setup.sh destroy # teardown
-```
+| Phase | 대상 | 진입 명령 | 설정 |
+|---|---|---|---|
+| 1 | 로컬 kind | `bash scripts/kind-setup.sh up｜reload｜destroy` | `k8s/overlays/kind/` |
+| 2 | 폐쇄망(air-gap) | `bash scripts/deploy-airgap.sh all` (registry·CLI·인증정보 대화형 입력) | `values-airgap.yaml` · `k8s/overlays/airgap/` |
+| 3 | 프로덕션 | `helm install k8s-monitor ./helm/k8s-daily-monitor -f .../values-prod.yaml -n k8s-monitor --create-namespace` | `values-prod.yaml` · Jenkins + ArgoCD |
 
-### Phase 2 — Air-gapped / Closed Network
-
-```bash
-bash scripts/deploy-airgap.sh all  # interactive: asks for registry, CLI, credentials
-```
-
-Helm values: `helm/k8s-daily-monitor/values-airgap.yaml`
-Kustomize overlay: `k8s/overlays/airgap/`
-
-### Phase 3 — Production (Jenkins + Helm + ArgoCD)
-
-```bash
-helm install k8s-monitor ./helm/k8s-daily-monitor \
-  -f ./helm/k8s-daily-monitor/values-prod.yaml \
-  -n k8s-monitor --create-namespace
-```
-
-See `docs/DEPLOY_GUIDE.md` for full details.
-
-### Kubernetes Namespaces
-
-| Environment | Namespace |
-|---|---|
-| dev | `k8s-monitor-dev` |
-| prod | `k8s-monitor-prod` |
-
-### Makefile Quick Reference
-
-```bash
-make help             # list all targets
-make install          # pip install + npm install
-make dev              # start backend + frontend (parallel)
-make test             # pytest + npm run lint
-make build            # npm run build
-make clean            # remove build artifacts
-
-make docker-up        # docker-compose up -d
-make docker-down      # docker-compose down
-make docker-rebuild   # full rebuild
-
-make k8s-dev          # kubectl apply -k k8s/overlays/dev
-make k8s-prod         # kubectl apply -k k8s/overlays/prod
-make k8s-status       # show all k8s-monitor resources
-make k8s-logs-dev     # tail dev logs
-make skaffold-dev     # skaffold dev --profile=dev --port-forward
-```
+네임스페이스: dev = `k8s-monitor-dev`, prod = `k8s-monitor-prod`.
+Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 확인한다.
 
 ---
 
@@ -852,7 +473,9 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
 |---|---|
 | 새 페이지 / App.tsx 라우트 | `docs/SCREENS.md` (헤딩에 `` `/route` `` 포함), `CODE_MAP.md` |
 | 새 라우터 / 모델 | `CODE_MAP.md` (+ 주요 그룹이면 CLAUDE.md API/DB 인덱스) |
-| `config.py` 환경변수 | CLAUDE.md 환경변수 표, `.env.example` |
+| `config.py` 환경변수 | `docs/ENVIRONMENT.md`, `.env.example` |
+| Celery Beat 스케줄 | CLAUDE.md §Celery Tasks 표 (전수 기재 — CI 가 개수 검증) |
+| UI 구현 표준(컴포넌트·레이아웃) | `DESIGN_SYSTEM.md` §12 (CLAUDE.md 는 불변 규칙 요약만) |
 | `feat:` / `fix:` | `CHANGELOG.md` `[Unreleased]` (+ 사용자 노출 기능이면 README 핵심 기능표) |
 | `docs/` 새 문서 | `docs/README.md` 인덱스 |
 | 새 스킬 | `.claude/skills/README.md` |
@@ -882,29 +505,20 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
 - Client/UI state via Zustand stores in `src/stores/`.
 - New UI components go in `src/components/<feature>/` with a barrel `index.ts`.
 
-### Git
+### Git / PR
 
-- Commit message convention: `feat: ...`, `fix: ...`, `refactor: ...`, `docs: ...`, `chore: ...`
-- Feature branches: `feature/<short-description>`
-- PRs target `main`
+브랜치·커밋·PR 규칙의 원천은 **`CONTRIBUTING.md`** (+ 상세 전략 `docs/branch-tag-strategy.md`).
+요약: `main` 은 직접 push 금지(PR 로만 병합), 작업 브랜치는 `feat/` `fix/` `docs/` `refactor/`
+`chore/` `hotfix/`, 커밋은 Conventional Commits — 이 prefix 가 SemVer·CHANGELOG 의 근거다.
 
-### Pull Request Description (Required)
+PR 본문은 `.github/PULL_REQUEST_TEMPLATE.md` 의 **Summary / Changes / Test plan** 을 반드시
+채운다(빈 본문 금지). 사용자가 PR 을 명시적으로 요청하지 않았으면 만들지 않는다.
 
-**Every PR must include a description that summarises the actual changes** — never open a PR with an empty body. The PR body must contain at minimum:
+### 자주 하는 작업 (Recipes)
 
-1. **## Summary** — 1~5 bullets describing *what changed and why*, written from the user-visible / reviewer perspective. Reference the file/area touched (e.g., "PlaybooksPage: 사이드바로 클러스터 선택 통일") rather than the implementation tactic.
-2. **## Changes** — bullet list of concrete edits grouped by area (frontend / backend / docs / infra). One bullet per logical change. Include new files, removed files, renamed exports.
-3. **## Test plan** — markdown checklist of how a reviewer can verify the change locally (commands to run, UI flows to click). Mark anything skipped explicitly (e.g., "- [ ] ESLint — preexisting v9 config breakage, skipped").
-4. **(optional) ## Screenshots / Notes** — when UI changed or there are caveats worth flagging (preexisting issues, follow-ups, migrations).
-
-Always pass the body via a heredoc (`gh pr create --body "$(cat <<'EOF' … EOF)"` or the MCP equivalent) to keep markdown formatting intact. The body is what reviewers see first — treat it as the primary deliverable of the PR alongside the diff. If the user did not explicitly ask for a PR, do not create one — but when they do, the description above is mandatory.
-
-### Adding a New Health Checker
-
-1. Create `backend/app/services/checkers/my_checker.py` extending `base.BaseChecker`.
-2. Call it from `DailyChecker.run_daily_check()` in `daily_checker.py`.
-3. Add the result field to `DailyCheckLog` model and `_run_migrations()` if a new column is needed.
-4. Expose the result in the daily-check router response schema.
+새 엔드포인트/페이지/컬럼/체커 추가 절차는 **`CODE_MAP.md` §Recipes** 가 원천이고, 더 긴
+플레이북은 `.claude/skills/` 에 있다(`backend-feature`, `frontend-page`, `add-deep-checker`,
+`editor-docs`, `release`, `docs-sync`). 여기서 절차를 재서술하지 않는다.
 
 ### Adding a New Metric Card Category
 
