@@ -130,6 +130,14 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
             <p className="text-xs text-muted-foreground truncate">{cluster.name}</p>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {!runnable && (
+              <span
+                className="text-[11px] text-muted-foreground border border-border rounded-lg px-2 py-1"
+                title="수동 입력 항목은 자동 실행이 없습니다 — 아래 '값 입력'으로 기록하거나, 행의 연필(수정)에서 실행 방식을 Deep Check/Addon 으로 바꾸면 실행 버튼이 생깁니다."
+              >
+                수동 입력 항목 — 실행 없음
+              </span>
+            )}
             {runnable && (
               <button
                 onClick={handleRunCell}

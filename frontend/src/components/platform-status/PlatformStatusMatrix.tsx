@@ -21,6 +21,27 @@ const STATUS_LABEL: Record<Status, string> = {
   healthy: '정상', warning: '경고', critical: '위험', pending: '대기',
 };
 
+// 행이 어떻게 실행되는지 한눈에 — "왜 이 행엔 실행 버튼이 없지?"(수동 입력)의 답을 그리드에서 준다.
+const SOURCE_BADGE: Record<CheckMatrixItem['sourceType'], { label: string; hint: string }> = {
+  core_bundle: { label: '핵심', hint: '핵심 점검 번들 — 클러스터 열 cron 으로 자동 실행, Cluster 상태 산정에 사용' },
+  deep_check: { label: 'Deep', hint: 'Deep Check 자동 점검 — 셀 cron 또는 ▶ 로 실행' },
+  addon: { label: 'Addon', hint: '애드온 헬스 체크 — 셀 cron 또는 ▶ 로 실행' },
+  manual: { label: '수동', hint: '수동 입력 항목 — 자동 실행 없음. 셀을 클릭해 값을 직접 입력합니다. 자동 점검으로 바꾸려면 연필(수정)에서 실행 방식을 변경하세요.' },
+};
+
+function SourceBadge({ sourceType }: { sourceType: CheckMatrixItem['sourceType'] }) {
+  const meta = SOURCE_BADGE[sourceType];
+  if (!meta) return null;
+  return (
+    <span
+      title={meta.hint}
+      className="flex-shrink-0 px-1 py-px rounded border border-border text-[9px] font-medium text-muted-foreground select-none"
+    >
+      {meta.label}
+    </span>
+  );
+}
+
 function CellButton({
   item, cell, onClick,
 }: { item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void }) {
@@ -287,25 +308,27 @@ export function PlatformStatusMatrix() {
                         <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
                           {item.name}
                         </span>
+                        <SourceBadge sourceType={item.sourceType} />
                         {item.isSystem && (
                           <span title="시스템 항목" className="flex-shrink-0">
                             <Lock className="w-3 h-3 text-muted-foreground" />
                           </span>
                         )}
+                        {/* 실행 ▶ 는 hover 없이 항상 노출 — hover 전용이면 "버튼이 없다"고 오인된다. */}
+                        {item.sourceType !== 'manual' && (
+                          <button
+                            onClick={() => handleRunItem(item)}
+                            disabled={runningKey === `item:${item.id}`}
+                            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50 flex-shrink-0"
+                            title="모든 클러스터에서 이 항목 실행"
+                            aria-label="모든 클러스터에서 이 항목 실행"
+                          >
+                            {runningKey === `item:${item.id}`
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Play className="w-3 h-3" />}
+                          </button>
+                        )}
                         <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {item.sourceType !== 'manual' && (
-                            <button
-                              onClick={() => handleRunItem(item)}
-                              disabled={runningKey === `item:${item.id}`}
-                              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50"
-                              title="모든 클러스터에서 이 항목 실행"
-                              aria-label="모든 클러스터에서 이 항목 실행"
-                            >
-                              {runningKey === `item:${item.id}`
-                                ? <Loader2 className="w-3 h-3 animate-spin" />
-                                : <Play className="w-3 h-3" />}
-                            </button>
-                          )}
                           <button
                             onClick={() => setFormItem(item)}
                             className="p-1 rounded hover:bg-secondary text-muted-foreground"
