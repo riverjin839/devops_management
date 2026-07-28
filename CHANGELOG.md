@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- **클러스터 삭제 시 점검 수행 로그(check_matrix_runs) 때문에 삭제가 실패하던 문제**:
+  `CheckMatrixRun.cluster` 관계에 `passive_deletes=True` 가 빠져 있어, 클러스터를 삭제하면
+  ORM 이 NOT NULL 인 `check_matrix_runs.cluster_id` 를 NULL 로 UPDATE 하려다 터졌다. 형제
+  테이블(schedules/results)과 동일하게 DB 의 `ON DELETE CASCADE` 에 위임하도록 수정.
+  회귀 가드(`test_cluster_backrefs_never_nullify_not_null_fk`)가 잡아낸 CI 실패 해소.
+
 1.16.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ## [1.16.1] - 2026-07-28

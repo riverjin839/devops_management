@@ -192,7 +192,10 @@ class CheckMatrixRun(Base):
     finished_at = Column(DateTime, nullable=True)
 
     item = relationship("CheckMatrixItem", backref="runs")
-    cluster = relationship("Cluster", backref="check_matrix_runs")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막고 DB 의 ON DELETE CASCADE 에 위임한다(cluster_id 는 NOT NULL 이라 nullify 하면 터진다).
+    # 형제 테이블(schedules/results)과 동일한 정책.
+    cluster = relationship("Cluster", backref=backref("check_matrix_runs", passive_deletes=True))
 
     __table_args__ = (
         Index("ix_check_matrix_runs_cell", "item_id", "cluster_id", "queued_at"),
