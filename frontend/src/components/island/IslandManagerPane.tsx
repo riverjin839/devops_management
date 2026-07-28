@@ -8,7 +8,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  Copy, GripVertical, LayoutGrid, PanelLeft, Plus, Share2, Sparkles, Trash2, Users,
+  Copy, GripVertical, LayoutGrid, PanelLeft, Plus, Share2, Palmtree, Trash2, Users,
 } from 'lucide-react';
 import { SidePane, ConfirmDialog, ClusterIconPicker, useToast } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
@@ -38,7 +38,7 @@ function IslandIcon({ icon, className }: { icon?: string | null; className?: str
   if (resolved?.kind === 'text') {
     return <span className="text-base leading-none">{resolved.value}</span>;
   }
-  return <Sparkles className={className} />;
+  return <Palmtree className={className} />;
 }
 
 interface SortableIslandRowProps {

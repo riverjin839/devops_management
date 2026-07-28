@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, Dog,
-  TrendingUp, FileSpreadsheet,
+  TrendingUp, FileSpreadsheet, Palmtree,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -16,7 +16,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
   // Your Island — 사용자 커스텀 화면. GROUPS 에는 넣지 않는다(그룹 레일이 아니라
   // 사이드바 최상단 독립 버튼). NAV_MAP 에는 라벨 오버라이드/화면 UI 설정 대상이 되도록 등록.
-  '/island':             { defaultLabel: 'Your Island',    icon: Sparkles },
+  '/island':             { defaultLabel: 'Your Island',    icon: Palmtree },
   '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
   '/k8s-manage':         { defaultLabel: 'K8S 상세 관리',  icon: ShipWheel, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
   '/k8s-allocation':     { defaultLabel: 'K8S 자원 관리',  icon: Gauge, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
