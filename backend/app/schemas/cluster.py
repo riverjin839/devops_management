@@ -52,6 +52,10 @@ class ClusterBase(BaseModel):
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
+    # Observability 대시보드 — Alertmanager URL + 수집 모드(pull/push) + 토글.
+    alertmanager_url: Optional[str] = Field(default=None, max_length=512)
+    observability_mode: Optional[str] = Field(default=None, max_length=16)
+    observability_enabled: Optional[bool] = None
 
 
 class ClusterCreate(ClusterBase):
@@ -95,6 +99,10 @@ class ClusterUpdate(BaseModel):
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
+    # Observability 대시보드 — Alertmanager URL + 수집 모드(pull/push) + 토글.
+    alertmanager_url: Optional[str] = Field(default=None, max_length=512)
+    observability_mode: Optional[str] = Field(default=None, max_length=16)
+    observability_enabled: Optional[bool] = None
 
 
 class ClusterResponse(ClusterBase):

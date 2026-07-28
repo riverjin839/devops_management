@@ -10,6 +10,44 @@
 
 1.16.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Observability 지표 대시보드** (`/observability`): 클러스터에 깔린 관측 스택의 개별 지표를
+  **dense 리스트 테이블**로 한 화면에서 훑는다. `kube-prometheus-stack` 부터 지원하며
+  Prometheus 서버·Alertmanager·exporter·operator·알람규칙 5개 카테고리 30여 개 지표가 기본
+  등록된다. 지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람 4개 뷰를 탭으로 전환한다.
+  지표 목록·PromQL·임계값은 전부 DB 행이라 **운영자가 화면에서 직접 편집**할 수 있어,
+  배포마다 다른 job 라벨도 코드 수정 없이 맞출 수 있다(`alert-forwarder`/`opensearch-stack`/
+  `fluent-operator` 모듈도 지표를 추가하면 그대로 활성화된다). PEP 에서 클러스터 Prometheus 에
+  닿지 않는 환경을 위해 **pull(직접 조회) / push(in-cluster 수집기 스냅샷)** 두 수집 모드를
+  클러스터별로 고를 수 있고, 화면에 실시간/스냅샷 신선도를 표시한다.
+  Backend: `routers/observability.py`, `services/alertmanager_service.py`,
+  `services/observability/catalog_seed.py`, `models/observability.py`,
+  `PrometheusService.{rules,active_alerts,targets,tsdb_status}`.
+  Frontend: `pages/ObservabilityPage.tsx`, `components/observability/`.
+- **인시던트 알람 PEP 수신 + 알람 인박스** (`/alerts`): 그동안 사내 메신저(cube)로만 가던
+  인시던트 알람을 PEP 도 함께 받는다. **Alertmanager webhook 과 사내 alert-forwarder 를 모두
+  수용**하며(표준 v4 포맷 우선, 임의 JSON 은 generic 파서가 정규화), 수신 엔드포인트는
+  `ALERT_INGEST_TOKEN` Bearer 로 **fail-closed**(미설정 시 503)다. 같은 알람이 반복 수신되면
+  행이 늘지 않고 반복 수(×N)만 올라가고, firing → resolved 상태 전이도 반영된다. 화면에서는
+  심각도를 색 바·배경 그라데이션·글자 굵기로 구분하고, 확인(ack)·일괄 확인·원본 페이로드
+  열람을 제공한다. 상단의 "알람 수신 설정 방법" 안내에서 Alertmanager receiver YAML 을 그대로
+  복사해 붙여넣을 수 있다.
+  Backend: `routers/observability.py`(`ingest_router`), `services/observability/alert_ingest.py`,
+  `models/alert_event.py`. Frontend: `pages/AlertInboxPage.tsx`.
+- **알림 라우팅 규칙 + 중복 억제** (`/alerts` → 알림 규칙): 알람을 **전체 브로드캐스트 /
+  담당자 지정 / 알림 없이 인박스만** 중에서 고를 수 있고, 클러스터·알람명·네임스페이스·라벨·
+  최소 심각도 매처로 규칙을 만들어 담당자를 매핑한다. **중복 억제**로 같은 알람이 창(기본 5분)
+  안에서 쏟아져도 개인 알림은 1건만 생성되며, 요약 모드는 기존 알림 문구를 "최근 5분간 10회"로
+  갱신한다. 규칙에서 심각도 재정의도 가능하다. 전역 기본값(알림 대상·최소 심각도·억제 창·
+  보존일)은 Settings 없이 같은 화면에서 편집한다.
+  Backend: `models/alert_notify_rule.py`, `services/observability/alert_router.py`.
+
+### Fixed
+- **전체 공지 알림이 아무에게도 보이지 않던 문제**: `recipient="all"` 공유 행으로 만든 알림을
+  조회 쪽(`notifications._me_ids`)이 매칭하지 않아, critical K8s 이벤트 알림이 실제로는 누구의
+  알림 종에도 뜨지 않았다. 이제 생성 시점에 **활성 사용자별 개인 행으로 팬아웃**한다
+  (`services/user_notify.notify_broadcast`) — 읽음 처리도 개인별로 정확히 동작한다.
+
 ## [1.16.3] - 2026-07-28
 
 ### Added

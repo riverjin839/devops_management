@@ -76,6 +76,8 @@ from app.routers import (
     terminal_appearance_router,
     k8s_events_router,
     k8s_events_ingest_router,
+    observability_router,
+    observability_ingest_router,
     release_notes_router,
     check_matrix_router,
     island_router,
@@ -298,6 +300,10 @@ def _run_migrations():
             # Cluster Trends — per-cluster Prometheus URL 오버라이드 + 토글.
             ("prometheus_url", "VARCHAR(512)"),
             ("prometheus_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            # Observability 대시보드 — Alertmanager URL + 수집 모드(pull/push) 토글.
+            ("alertmanager_url", "VARCHAR(512)"),
+            ("observability_mode", "VARCHAR(16) NOT NULL DEFAULT 'pull'"),
+            ("observability_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
             # 점검 매트릭스 — core_bundle 행(DailyChecker 원자 실행) 클러스터별 cron.
             # check_schedules(구 아침/점심/저녁) 완전 대체.
             ("check_cron_expr", "VARCHAR(100)"),
@@ -974,6 +980,25 @@ def _run_migrations():
         _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
         _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
 
+    # alert_events: Alertmanager / 사내 alert-forwarder 수신 알람 — 테이블은 create_all, 인덱스 보강.
+    if "alert_events" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_alert_events_cluster_received", "alert_events", "(cluster_id, received_at DESC)")
+        _safe_create_index("ix_alert_events_status_severity", "alert_events", "(status, severity)")
+        _safe_create_index(
+            "ix_alert_events_fingerprint_starts", "alert_events", "(fingerprint, starts_at DESC)")
+
+    # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.
+    if "observability_metrics" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_observability_metrics_module_sort", "observability_metrics", "(module_key, sort_order)")
+    if "observability_snapshots" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_obs_snapshots_lookup",
+            "observability_snapshots",
+            "(cluster_id, module_key, kind, collected_at DESC)",
+        )
+
     # PEP/APP 서비스 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) — service_categories 는
     # create_all 로 신규 생성, lake_service_types/lake_services 에 domain/category_id 보강.
     if "lake_service_types" in inspector.get_table_names():
@@ -1046,6 +1071,13 @@ def _sync_missing_model_columns() -> None:
                 "NOT NULL/기본값/backfill 이 필요하면 _run_migrations() 에 명시적으로 추가할 것.",
                 table.name, col.name,
             )
+
+
+def _seed_observability_catalog():
+    """관측 모듈/지표 카탈로그 seed — 실제 기본값은 services/observability/catalog_seed.py."""
+    from app.services.observability.catalog_seed import seed_observability_catalog
+
+    seed_observability_catalog()
 
 
 def _seed_default_metric_cards():
@@ -1822,6 +1854,7 @@ async def lifespan(app: FastAPI):
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
             ("seed_lake_service_entries", _seed_default_lake_service_entries),
+            ("seed_observability_catalog", _seed_observability_catalog),
             ("seed_initial_admin", _seed_initial_admin),
             ("seed_assignee_users", _seed_assignee_users),
         ]:
@@ -1959,6 +1992,10 @@ app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_a
 # k8s_events — kubewatch 웹훅 수신(토큰 인증) + 이벤트 조회(JWT)
 app.include_router(k8s_events_ingest_router, prefix="/api/v1")
 app.include_router(k8s_events_router, prefix="/api/v1", dependencies=_auth)
+# observability — 관측 스택 지표 대시보드(JWT) + 알람/스냅샷 수신(Bearer 토큰 자체 검증).
+# ingest 라우터를 먼저 include 해야 같은 prefix 에서 무인증 경로가 우선 매칭된다.
+app.include_router(observability_ingest_router, prefix="/api/v1")
+app.include_router(observability_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 # Your Island — 사용자 커스텀 화면(개인 소유 + 선택적 공유)
 app.include_router(island_router, prefix="/api/v1", dependencies=_auth)

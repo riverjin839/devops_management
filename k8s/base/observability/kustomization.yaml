@@ -10,3 +10,7 @@ resources:
   - telegraf-snmp.yaml
   - gnmic-telemetry.yaml
   - openbmp-collector.yaml
+# pep-collector-cronjob.yaml 은 여기 넣지 않는다 — namespace(monitoring)와 PEP 주소·클러스터
+# 이름이 환경마다 달라 그대로 apply 하면 안 되고, push 모드 클러스터에서만 필요하다.
+# 배포법은 docs/OBSERVABILITY_GUIDE.md §1-2 참고:
+#   kubectl apply -f k8s/base/observability/pep-collector-cronjob.yaml

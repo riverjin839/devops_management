@@ -1935,6 +1935,95 @@ export const notificationsApi = {
   markAllRead: () => api.post('/notifications/my/read-all'),
 };
 
+// ── Observability (관측 스택 지표) + 알람 인박스 ──────────────────────────────
+// 주의: 요청 인터셉터는 **body 만** camelCase→snake_case 로 바꾼다(쿼리 파라미터는 그대로
+// 나간다). 그래서 아래 params 는 처음부터 snake_case 로 적는다.
+export const observabilityApi = {
+  modules: () => api.get<import('@/types').ObservabilityModule[]>('/observability/modules'),
+
+  metrics: (module?: string) =>
+    api.get<import('@/types').ObservabilityMetric[]>('/observability/metrics', {
+      params: module ? { module } : undefined,
+    }),
+  createMetric: (data: import('@/types').ObservabilityMetricInput) =>
+    api.post<import('@/types').ObservabilityMetric>('/observability/metrics', data),
+  updateMetric: (id: string, data: Partial<import('@/types').ObservabilityMetricInput>) =>
+    api.put<import('@/types').ObservabilityMetric>(`/observability/metrics/${id}`, data),
+  deleteMetric: (id: string) => api.delete(`/observability/metrics/${id}`),
+
+  metricValues: (module: string, clusterId?: string | null) =>
+    api.get<import('@/types').ObservabilityMetricValuesResponse>('/observability/metrics/values', {
+      params: { module, ...(clusterId ? { cluster_id: clusterId } : {}) },
+    }),
+
+  promRules: (clusterId?: string | null, state?: string, q?: string) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/rules', {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(state && state !== 'all' ? { state } : {}),
+        ...(q ? { q } : {}),
+      },
+    }),
+  promTargets: (clusterId?: string | null, health?: string) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/targets', {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(health && health !== 'all' ? { health } : {}),
+      },
+    }),
+  promActiveAlerts: (clusterId?: string | null) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/active-alerts', {
+      params: clusterId ? { cluster_id: clusterId } : undefined,
+    }),
+
+  // 알람 인박스
+  alerts: (params?: {
+    clusterId?: string | null;
+    severity?: string;
+    status?: string;
+    q?: string;
+    acked?: boolean;
+    limit?: number;
+    offset?: number;
+  }) =>
+    api.get<import('@/types').AlertEventListResponse>('/observability/alerts', {
+      params: {
+        ...(params?.clusterId ? { cluster_id: params.clusterId } : {}),
+        ...(params?.severity && params.severity !== 'all' ? { severity: params.severity } : {}),
+        ...(params?.status && params.status !== 'all' ? { status: params.status } : {}),
+        ...(params?.q ? { q: params.q } : {}),
+        ...(params?.acked !== undefined ? { acked: params.acked } : {}),
+        limit: params?.limit ?? 200,
+        offset: params?.offset ?? 0,
+      },
+    }),
+  alertStats: (clusterId?: string | null, hours = 24) =>
+    api.get<import('@/types').AlertStats>('/observability/alerts/stats', {
+      params: { hours, ...(clusterId ? { cluster_id: clusterId } : {}) },
+    }),
+  ackAlert: (id: string, acked = true) =>
+    api.post<import('@/types').AlertEvent>(`/observability/alerts/${id}/ack`, { acked }),
+  ackAllAlerts: (clusterId?: string | null, severity?: string) =>
+    api.post<{ acked: number }>('/observability/alerts/ack-all', undefined, {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(severity && severity !== 'all' ? { severity } : {}),
+      },
+    }),
+  deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+
+  // 알림 규칙 / 전역 설정
+  alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),
+  createAlertRule: (data: import('@/types').AlertNotifyRuleInput) =>
+    api.post<import('@/types').AlertNotifyRule>('/observability/alert-rules', data),
+  updateAlertRule: (id: string, data: import('@/types').AlertNotifyRuleInput) =>
+    api.put<import('@/types').AlertNotifyRule>(`/observability/alert-rules/${id}`, data),
+  deleteAlertRule: (id: string) => api.delete(`/observability/alert-rules/${id}`),
+  alertSettings: () => api.get<import('@/types').AlertSettings>('/observability/alert-settings'),
+  updateAlertSettings: (data: Partial<import('@/types').AlertSettings>) =>
+    api.put<import('@/types').AlertSettings>('/observability/alert-settings', data),
+};
+
 export const opsCheckApi = {
   catalog: (clusterId: string) =>
     api.get<OpsCheckCatalogItem[]>(`/ops-checks/catalog/${clusterId}`),

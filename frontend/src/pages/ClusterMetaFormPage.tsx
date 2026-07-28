@@ -87,6 +87,9 @@ export function ClusterMetaFormPage() {
   const [asNumber, setAsNumber]         = useState('');
   const [prometheusUrl, setPrometheusUrl] = useState('');
   const [prometheusEnabled, setPrometheusEnabled] = useState(false);
+  const [alertmanagerUrl, setAlertmanagerUrl] = useState('');
+  const [observabilityMode, setObservabilityMode] = useState<'pull' | 'push'>('pull');
+  const [observabilityEnabled, setObservabilityEnabled] = useState(false);
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
   const [fieldErrors, setFieldErrors]   = useState<Record<string, string>>({});
@@ -144,6 +147,9 @@ export function ClusterMetaFormPage() {
       asNumber: cluster.asNumber ?? '',
       prometheusUrl: cluster.prometheusUrl ?? '',
       prometheusEnabled: cluster.prometheusEnabled ?? false,
+      alertmanagerUrl: cluster.alertmanagerUrl ?? '',
+      observabilityMode: (cluster.observabilityMode ?? 'pull') as 'pull' | 'push',
+      observabilityEnabled: cluster.observabilityEnabled ?? false,
     };
     setRegion(next.region);
     setLevel(next.operationLevel);
@@ -170,6 +176,9 @@ export function ClusterMetaFormPage() {
     setAsNumber(next.asNumber);
     setPrometheusUrl(next.prometheusUrl);
     setPrometheusEnabled(next.prometheusEnabled);
+    setAlertmanagerUrl(next.alertmanagerUrl);
+    setObservabilityMode(next.observabilityMode);
+    setObservabilityEnabled(next.observabilityEnabled);
     baselineRef.current = serialize(next);
     setFieldErrors({});
     setError('');
@@ -183,12 +192,14 @@ export function ClusterMetaFormPage() {
     svcCidr, svcFirstHost, svcLastHost,
     bond0Ip, bond0Mac, bond1Ip, bond1Mac,
     ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
+    alertmanagerUrl, observabilityMode, observabilityEnabled,
   }), [
     region, operationLevel, nodeCount, maxPod, hostname, cidr, internalIps,
     firstHost, lastHost, podCidr, podFirstHost, podLastHost,
     svcCidr, svcFirstHost, svcLastHost,
     bond0Ip, bond0Mac, bond1Ip, bond1Mac,
     ciliumConfig, description, bgpEnabled, asNumber, prometheusUrl, prometheusEnabled,
+    alertmanagerUrl, observabilityMode, observabilityEnabled,
   ]);
   const isDirty = baselineRef.current !== null && serialize(snapshot) !== baselineRef.current;
 
@@ -396,6 +407,9 @@ export function ClusterMetaFormPage() {
         asNumber: orNull(asNumber),
         prometheusUrl: orNull(prometheusUrl),
         prometheusEnabled,
+        alertmanagerUrl: orNull(alertmanagerUrl),
+        observabilityMode,
+        observabilityEnabled,
       };
       await clustersApi.update(cluster.id, payload as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
@@ -706,6 +720,35 @@ export function ClusterMetaFormPage() {
                     node-exporter 메트릭의 노드 식별 라벨(<code>PROMETHEUS_NODE_LABEL</code>, 기본 <code>instance</code>)
                     값이 k8s 노드명과 일치해야 per-node 추이가 매칭됩니다.
                   </p>
+
+                  {/* Observability 대시보드(/observability) 연동 — Trends 와 독립 토글 */}
+                  <div className="pt-3 mt-3 border-t border-border space-y-3">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" className="accent-primary" checked={observabilityEnabled}
+                        onChange={(e) => setObservabilityEnabled(e.target.checked)} />
+                      이 클러스터에서 Observability 대시보드 사용
+                    </label>
+                    <div>
+                      <label htmlFor={f('alertmanagerUrl')} className={lc}>Alertmanager URL (선택 — 전역값 오버라이드)</label>
+                      <input id={f('alertmanagerUrl')} type="text" value={alertmanagerUrl}
+                        onChange={(e) => setAlertmanagerUrl(e.target.value)}
+                        placeholder="비우면 전역 ALERTMANAGER_URL 사용" className={ic} />
+                    </div>
+                    <div>
+                      <label htmlFor={f('observabilityMode')} className={lc}>수집 모드</label>
+                      <select id={f('observabilityMode')} value={observabilityMode}
+                        onChange={(e) => setObservabilityMode(e.target.value as 'pull' | 'push')}
+                        className={ic}>
+                        <option value="pull">pull — PEP 가 Prometheus/Alertmanager 를 직접 조회</option>
+                        <option value="push">push — in-cluster 수집기가 PEP 로 스냅샷 전송</option>
+                      </select>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      PEP 백엔드에서 이 클러스터의 Prometheus 에 네트워크로 닿지 않으면
+                      <code> push</code> 를 선택하고, 클러스터 안에 수집기 CronJob
+                      (<code>k8s/base/observability/pep-collector-cronjob.yaml</code>)을 배포하세요.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

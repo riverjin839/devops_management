@@ -151,6 +151,69 @@ class PrometheusService:
             logger.exception("Unexpected Prometheus range error: %s", exc)
             return self._offline_range(str(exc))
 
+    # ------------------------------------------------------------------
+    # Observability 대시보드용 조회 — 모두 같은 fail-safe 계약을 따른다.
+    # 성공: {"status": "ok", "data": <payload>, "error": None}
+    # 실패: {"status": "error"|"offline", "data": None, "error": "<사유>"}
+    # ------------------------------------------------------------------
+
+    async def _get_api(self, path: str, params: Optional[dict] = None) -> dict:
+        """Prometheus HTTP API GET 공통 래퍼 — 절대 예외를 던지지 않는다."""
+        try:
+            client = self._get_client()
+            resp = await client.get(f"{self.base_url}{path}", params=params or {})
+            resp.raise_for_status()
+            body = resp.json()
+            if body.get("status") != "success":
+                return self._api_error(body.get("error") or "Unknown Prometheus error")
+            return {"status": "ok", "data": body.get("data"), "error": None}
+
+        except httpx.ConnectError:
+            logger.warning("Prometheus connect error — unreachable at %s", self.base_url)
+            return self._api_offline("Prometheus is not reachable.")
+        except httpx.TimeoutException:
+            logger.warning("Prometheus %s timed out after %ss", path, self.timeout)
+            return self._api_offline("Prometheus request timed out.")
+        except httpx.HTTPStatusError as exc:
+            return self._api_error(f"HTTP {exc.response.status_code}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Unexpected Prometheus %s error: %s", path, exc)
+            return self._api_offline(str(exc))
+
+    async def rules(self, rule_type: Optional[str] = None) -> dict:
+        """`/api/v1/rules` — 알람/기록 규칙 그룹. rule_type: "alert" | "record"."""
+        params = {"type": rule_type} if rule_type in ("alert", "record") else None
+        return await self._get_api("/api/v1/rules", params)
+
+    async def active_alerts(self) -> dict:
+        """`/api/v1/alerts` — Prometheus 가 보고 있는 현재 발화/대기 알람."""
+        return await self._get_api("/api/v1/alerts")
+
+    async def targets(self, state: Optional[str] = None) -> dict:
+        """`/api/v1/targets` — 스크레이프 타겟. state: "active" | "dropped"."""
+        params = {"state": state} if state in ("active", "dropped") else None
+        return await self._get_api("/api/v1/targets", params)
+
+    async def tsdb_status(self) -> dict:
+        """`/api/v1/status/tsdb` — 카디널리티 상위 항목 등."""
+        return await self._get_api("/api/v1/status/tsdb")
+
+    async def runtime_info(self) -> dict:
+        """`/api/v1/status/runtimeinfo` — 기동 시각, 스토리지 보존, goroutine 수 등."""
+        return await self._get_api("/api/v1/status/runtimeinfo")
+
+    async def build_info(self) -> dict:
+        """`/api/v1/status/buildinfo` — Prometheus 버전."""
+        return await self._get_api("/api/v1/status/buildinfo")
+
+    @staticmethod
+    def _api_error(message: str) -> dict:
+        return {"status": "error", "data": None, "error": message}
+
+    @staticmethod
+    def _api_offline(message: str) -> dict:
+        return {"status": "offline", "data": None, "error": message}
+
     async def health_check(self) -> dict:
         """Quick probe — returns online/offline status."""
         try:
