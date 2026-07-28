@@ -75,8 +75,8 @@ function KpiPill({ label, value, hint, Icon, accent, to, isLoading, isError }: K
 
 // ── Your Island 진입 필 ──────────────────────────────────────────────────────
 // 사이드바 진입점은 푸터 개인 존으로 내려갔다(공용 그룹 레일과 성격이 달라서). 하단은
-// 발견성이 낮으므로, 로그인 후 첫 화면인 여기에 진입점을 하나 둔다. KPI 필과 달리
-// 지표가 아니라 "목적지"라 accent 보더로 구분한다.
+// 발견성이 낮으므로, 로그인 후 첫 화면인 여기 상단 KPI 줄 맨 앞에 진입점을 둔다.
+// KPI 필과 달리 지표가 아니라 "목적지"라 accent 보더로 구분한다.
 function IslandPill() {
   const { data } = useIslands();
   const lastIslandId = useIslandStore((s) => s.lastIslandId);
@@ -155,11 +155,10 @@ export function HomePage() {
           <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">{dateStr}</span>
         </div>
 
-        {/* Your Island — 개인 화면 진입점. 지표(KPI)가 아니라 목적지라 좌측에 따로 둔다. */}
-        <IslandPill />
-
         {/* KPI pills */}
         <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+          {/* Your Island — KPI 그룹 맨 앞(내 할일 왼쪽). 지표가 아니라 목적지라 accent 로 구분. */}
+          <IslandPill />
           <KpiPill
             label="내 할일"
             value={myName ? myTodayTasks.length : '—'}
