@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ScrollText } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
@@ -14,18 +15,16 @@ import { useClusters } from '@/hooks/useCluster';
  * K8s 관리 콘솔의 파드 목록 "로그" 버튼에서 진입 시 자동으로 스트림을 시작.
  */
 export function K8sLogsPage() {
-  const { clusterId = '' } = useParams<{ clusterId: string }>();
-  const navigate = useNavigate();
   const { data: clusters = [] } = useClusters();
+  // 클러스터 선택은 URL(`/k8s-logs/:clusterId`)에 담기지만, 아일랜드 패널로 임베드되면
+  // URL 이동이 앱 전체를 아일랜드 밖으로 끌고 나가므로 로컬 state 로 대체된다.
+  const { clusterId, selectCluster } = useClusterRouteParam('/k8s-logs', clusters);
   const [searchParams] = useSearchParams();
 
   const qsNamespace = searchParams.get('namespace') ?? '';
   const qsPod = searchParams.get('pod') ?? '';
   const qsContainer = searchParams.get('container') ?? '';
 
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) navigate(`/k8s-logs/${clusters[0].id}`, { replace: true });
-  }, [clusterId, clusters, navigate]);
 
   const cluster = clusters.find((c) => c.id === clusterId);
 
@@ -48,7 +47,7 @@ export function K8sLogsPage() {
           <ClusterSidebar
             clusters={clusters}
             selectedId={clusterId || null}
-            onSelect={(id) => { if (id) navigate(`/k8s-logs/${id}`); }}
+            onSelect={selectCluster}
             iconOnly
           />
         </div>

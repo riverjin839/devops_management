@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavCatalog, groupLabelForPath } from '@/hooks/useNavCatalog';
-import { isEmbeddable } from './panelRegistry';
+import { isEmbeddable, MAX_PANELS } from './panelRegistry';
 
 interface PanelPickerDialogProps {
   open: boolean;
@@ -44,6 +44,8 @@ export function PanelPickerDialog({ open, onClose, existingPaths, onPick }: Pane
   }, [navMap, getLabel, featureAllowed, query]);
 
   const existing = useMemo(() => new Set(existingPaths), [existingPaths]);
+  // 서버 스키마가 max 20 으로 422 를 내므로, 프론트에서 미리 막고 이유를 알려준다.
+  const atCapacity = existingPaths.length >= MAX_PANELS;
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -53,6 +55,12 @@ export function PanelPickerDialog({ open, onClose, existingPaths, onPick }: Pane
         </DialogHeader>
 
         <div className="px-5 pb-5 space-y-3">
+          {atCapacity && (
+            <p className="px-3 py-2 text-sm rounded-xl bg-status-warning-soft text-foreground">
+              패널은 아일랜드당 최대 {MAX_PANELS}개까지 담을 수 있습니다. 더 추가하려면 기존 패널을
+              제거하거나 새 아일랜드를 만드세요.
+            </p>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -86,7 +94,8 @@ export function PanelPickerDialog({ open, onClose, existingPaths, onPick }: Pane
                         key={item.path}
                         type="button"
                         onClick={() => onPick(item.path)}
-                        className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-left text-foreground hover:bg-secondary transition-colors"
+                        disabled={atCapacity}
+                        className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-left text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                       >
                         <Icon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                         <span className="flex-1 min-w-0 truncate">{item.label}</span>

@@ -7,7 +7,7 @@ import {
   SortableContext, verticalListSortingStrategy, arrayMove, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, X } from 'lucide-react';
+import { Pencil, Plus, X } from 'lucide-react';
 import type { IslandPanelView } from './IslandTabBar';
 
 interface SortableRailItemProps {
@@ -16,9 +16,10 @@ interface SortableRailItemProps {
   editable: boolean;
   onSelect: () => void;
   onRemove: () => void;
+  onEdit: () => void;
 }
 
-function SortableRailItem({ panel, active, editable, onSelect, onRemove }: SortableRailItemProps) {
+function SortableRailItem({ panel, active, editable, onSelect, onRemove, onEdit }: SortableRailItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: panel.key,
     disabled: !editable,
@@ -63,15 +64,26 @@ function SortableRailItem({ panel, active, editable, onSelect, onRemove }: Sorta
         <Icon className="w-5 h-5" />
       </button>
       {editable && (
-        <button
-          type="button"
-          onClick={onRemove}
-          title={`${panel.displayLabel} 패널 제거`}
-          aria-label={`${panel.displayLabel} 패널 제거`}
-          className="absolute -top-0.5 -right-0.5 p-0.5 rounded-full bg-card border border-border text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-foreground transition-opacity"
-        >
-          <X className="w-3 h-3" />
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={onEdit}
+            title={`${panel.displayLabel} 이름·아이콘 변경`}
+            aria-label={`${panel.displayLabel} 이름·아이콘 변경`}
+            className="absolute -bottom-0.5 -right-0.5 p-0.5 rounded-full bg-card border border-border text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-foreground transition-opacity"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            title={`${panel.displayLabel} 패널 제거`}
+            aria-label={`${panel.displayLabel} 패널 제거`}
+            className="absolute -top-0.5 -right-0.5 p-0.5 rounded-full bg-card border border-border text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-foreground transition-opacity"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </>
       )}
       {tooltipPos && createPortal(
         <span
@@ -93,8 +105,11 @@ interface IslandRailProps {
   editable: boolean;
   onSelect: (key: string) => void;
   onRemove: (key: string) => void;
+  onEdit: (key: string) => void;
   onReorder: (keys: string[]) => void;
   onAdd: () => void;
+  /** 패널 상한 도달 — '화면 추가' 를 막고 이유를 툴팁으로 알린다. */
+  atCapacity: boolean;
 }
 
 /**
@@ -102,7 +117,7 @@ interface IslandRailProps {
  * 사이드바 표준). 메인 사이드바에 flush 하게 붙고, 스크롤해도 따라오도록 sticky.
  */
 export function IslandRail({
-  panels, activeKey, editable, onSelect, onRemove, onReorder, onAdd,
+  panels, activeKey, editable, onSelect, onRemove, onEdit, onReorder, onAdd, atCapacity,
 }: IslandRailProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -131,6 +146,7 @@ export function IslandRail({
                 editable={editable}
                 onSelect={() => onSelect(p.key)}
                 onRemove={() => onRemove(p.key)}
+                onEdit={() => onEdit(p.key)}
               />
             ))}
           </SortableContext>
@@ -139,9 +155,10 @@ export function IslandRail({
           <button
             type="button"
             onClick={onAdd}
-            title="화면 추가"
-            aria-label="화면 추가"
-            className="flex items-center justify-center w-10 h-10 rounded-md text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-colors"
+            disabled={atCapacity}
+            title={atCapacity ? '패널 수가 상한에 도달했습니다' : '화면 추가'}
+            aria-label={atCapacity ? '패널 수가 상한에 도달했습니다' : '화면 추가'}
+            className="flex items-center justify-center w-10 h-10 rounded-md text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
           >
             <Plus className="w-5 h-5" />
           </button>

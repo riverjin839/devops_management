@@ -1,6 +1,7 @@
 import { AlertTriangle, Lock } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
+import { IslandEmbedContext } from '@/lib/islandEmbed';
 import { PANEL_COMPONENTS, PANEL_FEATURE_GUARD, ISLAND_DENYLIST } from './panelRegistry';
 
 interface IslandPanelHostProps {
@@ -64,7 +65,11 @@ export function IslandPanelHost({ path, label }: IslandPanelHostProps) {
 
   return (
     <div className="island-embed flex-1 min-w-0 overflow-auto">
-      <Component />
+      {/* 임베드 표식 — 클러스터 선택형 페이지가 URL 이동 대신 로컬 state 를 쓰게 한다.
+          없으면 그런 페이지들이 마운트 직후 앱 전체를 자기 라우트로 끌고 나간다. */}
+      <IslandEmbedContext.Provider value>
+        <Component />
+      </IslandEmbedContext.Provider>
     </div>
   );
 }

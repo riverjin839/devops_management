@@ -6,7 +6,7 @@ import {
   SortableContext, horizontalListSortingStrategy, arrayMove, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, X } from 'lucide-react';
+import { Pencil, Plus, X } from 'lucide-react';
 import type { IslandPanel } from '@/types';
 
 export interface IslandPanelView extends IslandPanel {
@@ -20,9 +20,10 @@ interface SortableTabProps {
   editable: boolean;
   onSelect: () => void;
   onRemove: () => void;
+  onEdit: () => void;
 }
 
-function SortableTab({ panel, active, editable, onSelect, onRemove }: SortableTabProps) {
+function SortableTab({ panel, active, editable, onSelect, onRemove, onEdit }: SortableTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: panel.key,
     disabled: !editable,
@@ -42,7 +43,7 @@ function SortableTab({ panel, active, editable, onSelect, onRemove }: SortableTa
         onClick={onSelect}
         aria-current={active ? 'page' : undefined}
         className={`flex items-center gap-1.5 pl-3 py-1.5 text-sm rounded-lg transition-colors whitespace-nowrap ${
-          editable ? 'pr-7' : 'pr-3'
+          editable ? 'pr-12' : 'pr-3'
         } ${
           active
             ? 'bg-card text-foreground font-semibold shadow-sm'
@@ -53,15 +54,26 @@ function SortableTab({ panel, active, editable, onSelect, onRemove }: SortableTa
         <span className="min-w-0">{panel.displayLabel}</span>
       </button>
       {editable && (
-        <button
-          type="button"
-          onClick={onRemove}
-          title={`${panel.displayLabel} 패널 제거`}
-          aria-label={`${panel.displayLabel} 패널 제거`}
-          className="absolute right-1.5 p-0.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-secondary hover:text-foreground transition-opacity"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        <span className="absolute right-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={onEdit}
+            title={`${panel.displayLabel} 이름·아이콘 변경`}
+            aria-label={`${panel.displayLabel} 이름·아이콘 변경`}
+            className="p-0.5 rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            title={`${panel.displayLabel} 패널 제거`}
+            aria-label={`${panel.displayLabel} 패널 제거`}
+            className="p-0.5 rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </span>
       )}
     </div>
   );
@@ -73,13 +85,16 @@ interface IslandTabBarProps {
   editable: boolean;
   onSelect: (key: string) => void;
   onRemove: (key: string) => void;
+  onEdit: (key: string) => void;
   onReorder: (keys: string[]) => void;
   onAdd: () => void;
+  /** 패널 상한 도달 — '화면 추가' 를 막고 이유를 툴팁으로 알린다. */
+  atCapacity: boolean;
 }
 
 /** 상단 pill 탭바 — SettingsPage 의 탭 바 룩을 따르고, 드래그로 순서를 바꾼다. */
 export function IslandTabBar({
-  panels, activeKey, editable, onSelect, onRemove, onReorder, onAdd,
+  panels, activeKey, editable, onSelect, onRemove, onEdit, onReorder, onAdd, atCapacity,
 }: IslandTabBarProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -104,6 +119,7 @@ export function IslandTabBar({
               editable={editable}
               onSelect={() => onSelect(p.key)}
               onRemove={() => onRemove(p.key)}
+              onEdit={() => onEdit(p.key)}
             />
           ))}
         </SortableContext>
@@ -112,9 +128,10 @@ export function IslandTabBar({
         <button
           type="button"
           onClick={onAdd}
-          title="화면 추가"
-          aria-label="화면 추가"
-          className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors whitespace-nowrap"
+          disabled={atCapacity}
+          title={atCapacity ? '패널 수가 상한에 도달했습니다' : '화면 추가'}
+          aria-label={atCapacity ? '패널 수가 상한에 도달했습니다' : '화면 추가'}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
         >
           <Plus className="w-4 h-4" />
           <span>화면 추가</span>

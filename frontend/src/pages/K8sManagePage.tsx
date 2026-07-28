@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
   ArrowLeft, Boxes, Server, Settings as SettingsIcon, Network, Database, Layers,
   ScrollText, Package, ShieldCheck, Puzzle, Trash2, RotateCw, Scaling, Terminal,
@@ -153,14 +154,12 @@ type PendingAction =
   | { type: 'drain'; name: string };
 
 export function K8sManagePage() {
-  const { clusterId = '' } = useParams<{ clusterId: string }>();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: clusters = [] } = useClusters();
+  // 클러스터 선택은 URL(`/k8s-manage/:clusterId`)에 담기지만, 아일랜드 패널로 임베드되면
+  // URL 이동이 앱 전체를 아일랜드 밖으로 끌고 나가므로 로컬 state 로 대체된다.
+  const { clusterId, selectCluster } = useClusterRouteParam('/k8s-manage', clusters);
 
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) navigate(`/k8s-manage/${clusters[0].id}`, { replace: true });
-  }, [clusterId, clusters, navigate]);
 
   const cluster = clusters.find((c) => c.id === clusterId);
 
@@ -277,7 +276,7 @@ export function K8sManagePage() {
           <ClusterSidebar
             clusters={clusters}
             selectedId={clusterId || null}
-            onSelect={(id) => { if (id) navigate(`/k8s-manage/${id}`); }}
+            onSelect={selectCluster}
             iconOnly
           />
         </div>

@@ -126,6 +126,11 @@ export const ISLAND_DENYLIST = new Set<string>([
   '/island',
 ]);
 
+/** 아일랜드 하나가 담을 수 있는 패널 수 상한.
+ *  백엔드 `app/schemas/island.py` 의 `MAX_PANELS` 와 반드시 같아야 한다 — 어긋나면 프론트가
+ *  허용한 추가가 서버에서 422 로 거절된다. */
+export const MAX_PANELS = 20;
+
 /** 해당 경로를 아일랜드 패널로 담을 수 있는가. */
 export function isEmbeddable(path: string): boolean {
   return !ISLAND_DENYLIST.has(path) && path in PANEL_COMPONENTS;

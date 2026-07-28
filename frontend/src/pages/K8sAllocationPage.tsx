@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
   ArrowLeft, Gauge, ChevronRight, ChevronDown, RefreshCw, AlertTriangle,
   Cpu, MemoryStick, Server, Layers, TrendingDown, BarChart3, PackageOpen,
@@ -268,9 +269,10 @@ function SearchInput({ value, onChange, placeholder, width = 'w-44' }: {
 type ViewMode = 'nodes' | 'namespaces' | 'ns-ranking';
 
 export function K8sAllocationPage() {
-  const { clusterId = '' } = useParams<{ clusterId: string }>();
-  const navigate = useNavigate();
   const { data: clusters = [] } = useClusters();
+  // 클러스터 선택은 URL(`/k8s-allocation/:clusterId`)에 담기지만, 아일랜드 패널로 임베드되면
+  // URL 이동이 앱 전체를 아일랜드 밖으로 끌고 나가므로 로컬 state 로 대체된다.
+  const { clusterId, selectCluster } = useClusterRouteParam('/k8s-allocation', clusters);
   const [view, setView] = useState<ViewMode>('nodes');
   const [autoMs, setAutoMs] = useState<number | false>(false);
 
@@ -284,11 +286,6 @@ export function K8sAllocationPage() {
   const clusterName = clusters.find((c) => c.id === clusterId)?.name;
   const contentRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) {
-      navigate(`/k8s-allocation/${clusters[0].id}`, { replace: true });
-    }
-  }, [clusterId, clusters, navigate]);
 
   // 자동 갱신: 켜져 있으면(autoMs) 주기마다 강제 재집계. OFF 면 완료 결과를 그대로 유지(0부터 재집계 없음).
   useEffect(() => {
@@ -304,7 +301,7 @@ export function K8sAllocationPage() {
           <ClusterSidebar
             clusters={clusters}
             selectedId={clusterId || null}
-            onSelect={(id) => { if (id) navigate(`/k8s-allocation/${id}`); }}
+            onSelect={selectCluster}
             iconOnly
           />
         </div>
