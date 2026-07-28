@@ -96,6 +96,8 @@ class SsoDiagnoseEntry(BaseModel):
     forms: int = 0
     password_inputs: int = 0
     input_names: list[str] = []
+    # 폼의 hidden 상태값 (예: OpenAM `encoded=true` → 자격을 base64 로 보내야 함).
+    hidden_fields: dict[str, str] = {}
     client_redirect: str = ""
     www_authenticate: str = ""
     error: str = ""

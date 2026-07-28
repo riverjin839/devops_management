@@ -374,6 +374,7 @@ export function JiraIntegrationPanel() {
                         <th className="text-left px-2 py-1 font-medium">최종 URL</th>
                         <th className="text-left px-2 py-1 font-medium">HTTP</th>
                         <th className="text-left px-2 py-1 font-medium">폼/PW</th>
+                        <th className="text-left px-2 py-1 font-medium">hidden 필드</th>
                         <th className="text-left px-2 py-1 font-medium">비고</th>
                       </tr>
                     </thead>
@@ -386,6 +387,9 @@ export function JiraIntegrationPanel() {
                           <td className={`px-2 py-1 align-top ${e.passwordInputs > 0 ? 'text-emerald-500' : ''}`}>
                             {e.forms}/{e.passwordInputs}
                           </td>
+                          <td className="px-2 py-1 align-top break-all max-w-[16rem]">
+                            {Object.entries(e.hiddenFields ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ') || '-'}
+                          </td>
                           <td className="px-2 py-1 align-top break-all">
                             {e.error || e.clientRedirect || e.wwwAuthenticate || e.title || '-'}
                           </td>
@@ -397,6 +401,9 @@ export function JiraIntegrationPanel() {
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   최종 URL 이 IdP 주소로 바뀌고 PW 열이 1 이상이면 정상입니다. IdP 로 안 넘어가면
                   위 공통 설정의 <b>IdP 로그인 URL</b> 에 브라우저에서 확인한 주소를 넣어보세요.
+                  로그인이 "거부"로 실패하면 <b>hidden 필드</b> 열을 확인하세요 —
+                  <code className="px-1 rounded bg-background">encoded=true</code> 면 자격을 base64 로
+                  보내야 하는 구성입니다(자동 처리됨).
                 </p>
               </div>
             )}

@@ -3,6 +3,9 @@
 DB/네트워크 불필요 — 폼 파싱은 순수 함수로, 전체 로그인 흐름은 httpx.MockTransport 로
 Keycloak 류 IdP(리다이렉트 → 로그인 폼 → 콜백 → 세션 쿠키)를 시뮬레이션해 검증한다.
 """
+import base64
+from urllib.parse import parse_qs
+
 import httpx
 
 from app.services.jira_sso_http import (
@@ -14,6 +17,7 @@ from app.services.jira_sso_http import (
     find_client_redirect,
     find_login_form,
     form_sso_login,
+    form_wants_base64,
     parse_forms,
     sso_login_products,
 )
@@ -131,7 +135,8 @@ async def test_form_sso_login_wrong_password():
         "https://jira.local", "hong", "WRONG", transport=_make_idp_transport()
     )
     assert result["status"] == "error"
-    assert "올바르지" in result["detail"]
+    # 오류 문구가 없는 IdP 면 "같은 폼 재표시" 사유로 보고된다.
+    assert "다시 표시" in result["detail"] or "거부" in result["detail"], result["detail"]
 
 
 async def test_form_sso_login_missing_inputs():
@@ -245,7 +250,7 @@ async def test_sso_login_products_primary_failure_fails_all():
     result = await sso_login_products(_products(), "hong", "WRONG",
                                       transport=_make_multi_product_transport())
     assert result["status"] == "error"
-    assert "올바르지" in result["detail"]
+    assert "다시 표시" in result["detail"] or "거부" in result["detail"], result["detail"]
 
 
 # ── 클라이언트 리다이렉트(JS/meta) 추적 ──────────────────────────────────────────
@@ -379,7 +384,7 @@ async def test_sso_login_wrong_password_stops_immediately():
     result = await form_sso_login("https://jira.local", "hong", "WRONG",
                                   transport=httpx.MockTransport(counting_handler))
     assert result["status"] == "error"
-    assert "올바르지" in result["detail"]
+    assert "다시 표시" in result["detail"] or "거부" in result["detail"], result["detail"]
     assert len(posts) == 1, f"자격 제출은 1회여야 함: {posts}"
 
 
@@ -441,3 +446,130 @@ async def test_diagnose_products_reports_login_form():
     idp = next(r for r in rows if "login.x.com" in r.get("final_url", ""))
     assert idp["password_inputs"] == 1
     assert "IDToken2" in idp["input_names"]
+    assert idp["hidden_fields"].get("goto") == "https://jira.local/"
+
+
+# ── OpenAM `encoded=true` — 자격을 base64 로 제출해야 하는 구성 ───────────────────
+ENCODED_LOGIN_HTML = """
+<html><body>
+<form action="/sso/am/UI/Login" method="post">
+  <input type="text" name="IDToken1" value=""/>
+  <input type="password" name="IDToken2"/>
+  <input type="hidden" name="encoded" value="true"/>
+  <input type="hidden" name="gx_charset" value="UTF-8"/>
+  <input type="submit" name="Login.Submit" value="Log In"/>
+</form></body></html>
+"""
+
+
+def test_form_wants_base64_and_fill_encodes():
+    form = find_login_form(parse_forms(ENCODED_LOGIN_HTML))
+    assert form_wants_base64(form) is True
+    data = fill_login_form(form, "hong", "pw123")
+    assert data["IDToken1"] == base64.b64encode(b"hong").decode()
+    assert data["IDToken2"] == base64.b64encode(b"pw123").decode()
+    assert data["encoded"] == "true"  # hidden 값은 그대로 유지
+
+    plain = find_login_form(parse_forms(KEYCLOAK_LOGIN_HTML))
+    assert form_wants_base64(plain) is False
+    assert fill_login_form(plain, "hong", "pw123")["username"] == "hong"
+
+
+def _make_encoded_idp_transport() -> httpx.MockTransport:
+    """평문 자격은 거부하고 base64 자격만 받아들이는 OpenAM 구성 — 브라우저는 되는데
+    스크립트만 '비밀번호 오답'으로 실패하던 실제 원인 재현."""
+    b64_user = base64.b64encode(b"hong").decode()
+    b64_pw = base64.b64encode(b"pw123").decode()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        has_jira = "JSESSIONID=sess-1" in request.headers.get("cookie", "")
+        # 제품이 토큰을 받아 **자기 도메인에** 세션 쿠키를 발급 (IdP 는 남의 도메인 쿠키를
+        # 설정할 수 없다 — 실제 SSO 와 동일한 제약).
+        if url.startswith("https://jira.local/?token="):
+            return httpx.Response(
+                302, headers={"Location": "https://jira.local/", "Set-Cookie": "JSESSIONID=sess-1; Path=/"},
+            )
+        if url == "https://jira.local/":
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            return httpx.Response(302, headers={"Location": "https://login.x.com/sso/am/UI/Login"})
+        if url == "https://login.x.com/sso/am/UI/Login":
+            if request.method == "POST":
+                form = parse_qs(request.content.decode())
+                if form.get("IDToken1") == [b64_user] and form.get("IDToken2") == [b64_pw]:
+                    return httpx.Response(302, headers={"Location": "https://jira.local/?token=ok"})
+                # 평문/오답 → 오류 문구와 함께 폼 재표시
+                return httpx.Response(200, text=ENCODED_LOGIN_HTML.replace(
+                    "<form", "<p class='error'>Authentication failed. Please try again.</p><form"))
+            return httpx.Response(200, text=ENCODED_LOGIN_HTML, headers={"Content-Type": "text/html"})
+        if url == "https://jira.local/rest/api/2/myself":
+            if has_jira:
+                return httpx.Response(200, json={"name": "hong", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+async def test_sso_login_openam_encoded_credentials():
+    """`encoded=true` 폼은 base64 로 제출해 로그인에 성공한다."""
+    result = await form_sso_login("https://jira.local", "hong", "pw123",
+                                  transport=_make_encoded_idp_transport())
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-1" in result["cookie_header"]
+
+
+async def test_sso_login_rejection_reports_idp_error_text():
+    """거부 시 IdP 가 화면에 쓴 오류 문구를 그대로 사유에 담는다."""
+    result = await form_sso_login("https://jira.local", "hong", "WRONG",
+                                  transport=_make_encoded_idp_transport())
+    assert result["status"] == "error"
+    assert "Authentication failed" in result["detail"], result["detail"]
+
+
+# ── 다단계 로그인 (계정 → 비밀번호 화면 분리) ────────────────────────────────────
+def _make_two_stage_transport() -> httpx.MockTransport:
+    """1단계 계정 입력 → 2단계 비밀번호 입력으로 화면이 나뉜 IdP.
+
+    필드 구성이 다른 폼이므로 '폼 재표시(오답)'로 오판하면 안 된다."""
+    stage1 = ('<html><body><form action="/idp/stage2" method="post">'
+              '<input type="text" name="username"/>'
+              '<input type="password" name="dummy_pw"/></form></body></html>')
+    stage2 = ('<html><body><form action="/idp/done" method="post">'
+              '<input type="password" name="password"/>'
+              '<input type="hidden" name="stage" value="2"/></form></body></html>')
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        has_jira = "JSESSIONID=sess-2" in request.headers.get("cookie", "")
+        if url.startswith("https://jira.local/?token="):
+            return httpx.Response(
+                302, headers={"Location": "https://jira.local/", "Set-Cookie": "JSESSIONID=sess-2; Path=/"},
+            )
+        if url == "https://jira.local/":
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            return httpx.Response(302, headers={"Location": "https://idp.local/stage1"})
+        if url == "https://idp.local/stage1":
+            return httpx.Response(200, text=stage1, headers={"Content-Type": "text/html"})
+        if url == "https://idp.local/idp/stage2":
+            return httpx.Response(200, text=stage2, headers={"Content-Type": "text/html"})
+        if url == "https://idp.local/idp/done":
+            if parse_qs(request.content.decode()).get("password") == ["pw123"]:
+                return httpx.Response(302, headers={"Location": "https://jira.local/?token=ok"})
+            return httpx.Response(200, text=stage2)
+        if url == "https://jira.local/rest/api/2/myself":
+            if has_jira:
+                return httpx.Response(200, json={"name": "hong", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+async def test_sso_login_two_stage_flow_is_not_treated_as_rejection():
+    result = await form_sso_login("https://jira.local", "hong", "pw123",
+                                  transport=_make_two_stage_transport())
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-2" in result["cookie_header"]

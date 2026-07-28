@@ -33,6 +33,7 @@ fail-safe: 절대 raise 하지 않고 {"status": "ok|error", ...} dict 를 반�
 """
 from __future__ import annotations
 
+import base64
 import logging
 import re
 from html.parser import HTMLParser
@@ -76,6 +77,7 @@ NATIVE_LOGIN_FORMS: dict[str, tuple[str, str]] = {
 _USERNAME_FIELD_NAMES = (
     "username", "j_username", "os_username", "user", "userid", "user_id",
     "login", "loginid", "email", "username_input", "identifier",
+    "idtoken1",  # OpenAM/ForgeRock (IDToken1=계정, IDToken2=비밀번호)
 )
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -85,6 +87,7 @@ _BROWSER_UA = (
 _HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+_TAG_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>|<[^>]+>", re.I | re.S)
 _META_REFRESH_RE = re.compile(
     r"""<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["']?[^"'>]*?url\s*=\s*([^"'>\s]+)""",
     re.I,
@@ -171,12 +174,49 @@ def find_client_redirect(html_text: str, current_url: str) -> str:
     return ""
 
 
+def form_wants_base64(form: dict) -> bool:
+    """OpenAM/SunAM 계열의 `<input type=hidden name=encoded value=true>` 감지.
+
+    이 값이 true 면 브라우저의 login.jsp 스크립트가 계정/비밀번호를 **base64 로 인코딩해서**
+    제출한다. 평문으로 보내면 IdP 가 인증에 실패하고 로그인 폼을 다시 보여주므로
+    "비밀번호 오답"과 구분되지 않는 실패가 난다 — 브라우저는 되는데 스크립트는 안 되는
+    전형적인 원인."""
+    for i in form.get("inputs", []):
+        if i.get("name", "").lower() == "encoded" and str(i.get("value", "")).strip().lower() == "true":
+            return True
+    return False
+
+
+def _b64(value: str) -> str:
+    return base64.b64encode((value or "").encode("utf-8")).decode("ascii")
+
+
+def login_form_signature(form: dict) -> str:
+    """로그인 폼의 필드 구성 서명 — 같은 폼의 '재표시'와 '다음 단계'를 구분하는 데 쓴다."""
+    return ",".join(sorted(i.get("name", "") for i in form.get("inputs", []) if i.get("name")))
+
+
+def extract_error_text(html_text: str) -> str:
+    """IdP 가 페이지에 표시한 오류 문구를 뽑아낸다(실패 사유를 그대로 보여주기 위함)."""
+    text = _TAG_RE.sub(" ", html_text or "")
+    text = re.sub(r"\s+", " ", text)
+    for kw in ("Authentication failed", "Invalid", "incorrect", "failed",
+               "인증", "실패", "잘못", "오류", "locked", "잠금", "expired", "만료"):
+        idx = text.lower().find(kw.lower())
+        if idx >= 0:
+            return text[max(0, idx - 40): idx + 120].strip()
+    return ""
+
+
 def fill_login_form(form: dict, username: str, password: str) -> dict[str, str]:
     """로그인 폼의 제출 데이터 구성 — hidden 값 유지, username/password 채움.
 
     username 필드는 알려진 이름 우선, 없으면 첫 visible text/email 입력. submit 버튼에
     name 이 있으면(예: Keycloak `login`) 첫 번째 것만 포함한다.
+    `encoded=true` 폼(OpenAM)은 계정/비밀번호를 base64 로 인코딩해 넣는다.
     """
+    if form_wants_base64(form):
+        username, password = _b64(username), _b64(password)
     data: dict[str, str] = {}
     submit_added = False
     username_set = False
@@ -248,12 +288,22 @@ def describe_page(resp: httpx.Response) -> dict:
         for i in f["inputs"]:
             if i["name"] and i["name"] not in input_names:
                 input_names.append(i["name"])
+    # hidden 필드는 IdP 흐름의 상태값이다 — `encoded=true`(base64 요구) 같은 결정적 단서가
+    # 여기 있어 진단에 노출한다. 값은 길이를 잘라 담는다(SAMLResponse 등 대비).
+    hidden_fields: dict[str, str] = {}
+    for f in forms:
+        for i in f["inputs"]:
+            if i["type"] == "hidden" and i["name"] and i["name"] not in hidden_fields:
+                hidden_fields[i["name"]] = str(i["value"])[:40]
+            if len(hidden_fields) >= 12:
+                break
     return {
         "final_url": str(resp.url),
         "http_status": resp.status_code,
         "content_type": resp.headers.get("content-type", "")[:80],
         "title": (title_m.group(1).strip()[:80] if title_m else ""),
         "forms": len(forms),
+        "hidden_fields": hidden_fields,
         "password_inputs": sum(
             1 for f in forms for i in f["inputs"] if i["type"] == "password"
         ),
@@ -294,6 +344,15 @@ async def probe_entry(client: httpx.AsyncClient, url: str) -> dict:
     return out
 
 
+def _form_post_headers(page_url: str) -> dict:
+    """폼 제출 헤더 — 일부 IdP 는 Referer/Origin 이 없으면 CSRF 로 간주해 흐름을 되감는다."""
+    parts = urlparse(page_url)
+    headers = {"Accept": _HTML_ACCEPT, "Referer": page_url}
+    if parts.scheme and parts.netloc:
+        headers["Origin"] = f"{parts.scheme}://{parts.netloc}"
+    return headers
+
+
 async def _drive_form_chain(
     client: httpx.AsyncClient, start_url: str, username: str, password: str
 ) -> dict:
@@ -303,6 +362,7 @@ async def _drive_form_chain(
     IdP 세션이 이미 있으면(두 번째 제품) 로그인 폼 없이 중계 폼만 타고 끝난다."""
     creds_submitted = False
     visited: set[str] = set()
+    submitted_forms: set[str] = set()
     last: dict | None = None
     try:
         r = await client.get(start_url, headers={"Accept": _HTML_ACCEPT})
@@ -317,13 +377,17 @@ async def _drive_form_chain(
 
         login_form = find_login_form(forms)
         if login_form is not None:
-            if creds_submitted:
-                # 자격 제출 후에도 password 폼이 다시 나옴 → 인증 실패 확정.
-                # 다른 전략으로 재시도하면 계정 잠금을 유발하므로 즉시 중단한다.
-                return {"creds_submitted": True, "auth_rejected": True, "last": last, "error": ""}
+            sig = login_form_signature(login_form)
+            if sig in submitted_forms:
+                # **같은 구성의** 폼이 다시 나옴 → 인증 거부로 확정. 다른 전략으로
+                # 재시도하면 계정 잠금을 유발하므로 즉시 중단한다.
+                return {"creds_submitted": True, "auth_rejected": True, "last": last,
+                        "error": "", "idp_error": extract_error_text(text)}
+            # 필드 구성이 **다른** 폼이면 거부가 아니라 다단계 로그인(계정 → 비밀번호)이다.
             data = fill_login_form(login_form, username, password)
             action = urljoin(str(r.url), login_form["action"] or str(r.url))
-            r = await client.post(action, data=data, headers={"Accept": _HTML_ACCEPT})
+            r = await client.post(action, data=data, headers=_form_post_headers(str(r.url)))
+            submitted_forms.add(sig)
             creds_submitted = True
             # 로그인으로 세션 상태가 바뀌었다 — 같은 중계 URL 을 다시 타야 토큰을 받는
             # 구성(OpenAM 류)이 있으므로 방문 기록을 비운다(무한루프는 MAX_FORM_HOPS 로 방지).
@@ -334,7 +398,7 @@ async def _drive_form_chain(
         if auto is not None:
             data = {i["name"]: i["value"] for i in auto["inputs"] if i["name"]}
             action = urljoin(str(r.url), auto["action"] or str(r.url))
-            r = await client.post(action, data=data, headers={"Accept": _HTML_ACCEPT})
+            r = await client.post(action, data=data, headers=_form_post_headers(str(r.url)))
             visited.clear()
             continue
 
@@ -346,7 +410,8 @@ async def _drive_form_chain(
 
         break  # 더 제출할 폼도, 따라갈 리다이렉트도 없음 — 체인 종료
 
-    return {"creds_submitted": creds_submitted, "auth_rejected": False, "last": last, "error": ""}
+    return {"creds_submitted": creds_submitted, "auth_rejected": False, "last": last,
+            "error": "", "idp_error": ""}
 
 
 async def _verify_session(client: httpx.AsyncClient, base_url: str, verify_path: str) -> dict:
@@ -440,11 +505,18 @@ async def _login_one_product(
             "strategy": strategy, "diag": diag,
         }
 
-    def _rejected() -> dict:
-        return {
-            "status": "error", "auth_rejected": True,
-            "detail": "SSO 아이디 또는 비밀번호가 올바르지 않습니다.", "diag": diag,
-        }
+    def _rejected(idp_error: str = "") -> dict:
+        # IdP 가 폼을 다시 보여준 것이 곧 오답은 아니다 — 흐름(추가 단계/인코딩/CSRF) 문제일
+        # 수도 있으므로 IdP 가 화면에 쓴 문구를 그대로 전달해 판단을 돕는다.
+        if idp_error:
+            detail = f'SSO 로그인이 거부되었습니다 — IdP 응답: "{idp_error}"'
+        else:
+            detail = (
+                "자격 제출 후 같은 로그인 폼이 다시 표시됐습니다 — 아이디/비밀번호가 틀렸거나, "
+                "IdP 가 추가 인증 단계를 요구하는 구성입니다(오류 문구 없음). "
+                "브라우저에서는 되는데 여기서만 실패하면 'SSO 진단' 결과의 hidden 필드를 확인하세요."
+            )
+        return {"status": "error", "auth_rejected": True, "detail": detail, "diag": diag}
 
     # 이미 유효한 세션이 있으면(다중 제품에서 IdP 쿠키 공유 등) 바로 사용.
     verified = await _verify_session(client, base_url, verify_path)
@@ -460,7 +532,7 @@ async def _login_one_product(
         entry.update(chain["last"] or {})
         diag["entries"].append(entry)
         if chain["auth_rejected"]:
-            return _rejected()
+            return _rejected(chain.get("idp_error", ""))
         if chain["error"]:
             diag["strategies"].append({"strategy": f"sso_form({path})", "result": chain["error"]})
             continue
@@ -472,7 +544,7 @@ async def _login_one_product(
             for retry_url in dict.fromkeys([_entry_url(base_url, path), f"{base_url}/"]):
                 back = await _drive_form_chain(client, retry_url, username, password)
                 if back["auth_rejected"]:
-                    return _rejected()
+                    return _rejected(back.get("idp_error", ""))
                 verified = await _verify_session(client, base_url, verify_path)
                 diag["strategies"].append({
                     "strategy": f"sso_form({path})+return({retry_url})",

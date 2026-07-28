@@ -524,6 +524,8 @@ export interface SsoDiagnoseEntry {
   forms: number;
   passwordInputs: number;
   inputNames: string[];
+  /** 폼의 hidden 상태값 (예: OpenAM `encoded=true`). */
+  hiddenFields?: Record<string, string>;
   clientRedirect: string;
   wwwAuthenticate: string;
   error: string;
