@@ -14,6 +14,9 @@ class JiraConfig(BaseModel):
     # 같은 IdP 로 SSO 연동되는 Confluence Base URL — 설정 시 SSO 폼 로그인이 Jira 와
     # Confluence 세션을 한 번에 캡처한다(빈 값이면 Jira 만).
     confluence_base_url: str = ""
+    # (선택) IdP 로그인 페이지 URL. 자동 탐색이 실패하는 배포에서 이 주소를 지정하면
+    # SSO 폼 로그인이 여기부터 시작한다. 예: https://login.example.com/sso/am/jira/login.jsp
+    sso_login_url: str = ""
 
 
 class JiraConfigUpdate(BaseModel):
@@ -22,6 +25,7 @@ class JiraConfigUpdate(BaseModel):
     verify_tls: Optional[bool] = None
     default_project_key: Optional[str] = None
     confluence_base_url: Optional[str] = None
+    sso_login_url: Optional[str] = None
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────
@@ -79,6 +83,28 @@ class JiraSsoLoginResult(BaseModel):
     # Confluence 동시 로그인 결과 — None 이면 Confluence 미설정(시도 안 함).
     confluence_ok: Optional[bool] = None
     confluence_detail: str = ""
+
+
+class SsoDiagnoseEntry(BaseModel):
+    """백엔드(파드)가 각 진입 경로에서 실제로 본 페이지 요약 — 로그인 실패 원인 판별용."""
+    product: str = ""
+    url: str = ""
+    final_url: str = ""
+    http_status: Optional[int] = None
+    content_type: str = ""
+    title: str = ""
+    forms: int = 0
+    password_inputs: int = 0
+    input_names: list[str] = []
+    client_redirect: str = ""
+    www_authenticate: str = ""
+    error: str = ""
+
+
+class SsoDiagnoseResult(BaseModel):
+    ok: bool
+    detail: str = ""
+    entries: list[SsoDiagnoseEntry] = []
 
 
 # ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────

@@ -8,8 +8,10 @@ import httpx
 from app.services.jira_sso_http import (
     CONFLUENCE_VERIFY_PATH,
     JIRA_VERIFY_PATH,
+    diagnose_products,
     fill_login_form,
     find_autosubmit_form,
+    find_client_redirect,
     find_login_form,
     form_sso_login,
     parse_forms,
@@ -244,3 +246,198 @@ async def test_sso_login_products_primary_failure_fails_all():
                                       transport=_make_multi_product_transport())
     assert result["status"] == "error"
     assert "올바르지" in result["detail"]
+
+
+# ── 클라이언트 리다이렉트(JS/meta) 추적 ──────────────────────────────────────────
+def test_find_client_redirect_meta_and_js():
+    meta = '<html><head><meta http-equiv="refresh" content="0; url=/sso/am/jira/login.jsp"></head></html>'
+    assert find_client_redirect(meta, "https://jira.local/") == "https://jira.local/sso/am/jira/login.jsp"
+
+    js = '<html><script>window.location.href = "https://login.x.com/sso/am/jira/login.jsp";</script></html>'
+    assert find_client_redirect(js, "https://jira.local/") == "https://login.x.com/sso/am/jira/login.jsp"
+
+    assert find_client_redirect("<html><body>no redirect</body></html>", "https://jira.local/") == ""
+
+
+# ── OpenAM 류: 루트는 폼 없음 + JS 훅으로 외부 IdP 로 이동 ────────────────────────
+OPENAM_LOGIN_HTML = """
+<html><body>
+<form action="/sso/am/jira/login.jsp" method="post">
+  <input type="text" name="IDToken1" value=""/>
+  <input type="password" name="IDToken2"/>
+  <input type="hidden" name="goto" value="https://jira.local/"/>
+  <button type="submit" name="Login.Submit" value="Log In">Log In</button>
+</form></body></html>
+"""
+
+
+def _make_openam_transport(anonymous_root: bool = False) -> httpx.MockTransport:
+    """사용자 환경 재현: Jira 루트가 302 가 아니라 **JS 훅**으로 외부 IdP
+    (login.x.com/sso/am/jira/login.jsp) 로 보내고, 거기 실제 ID/PW 폼이 있는 구성.
+
+    anonymous_root=True 면 루트가 익명 대시보드(폼도 리다이렉트도 없음)를 주고, 보호 자원
+    (/secure/Dashboard.jspa)에 접근해야 IdP 로 넘어간다 — 진입 경로 다중화 검증용."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        cookies = request.headers.get("cookie", "")
+        has_jira = "JSESSIONID=sess-1" in cookies
+        has_idp = "iPlanetDirectoryPro=idp-1" in cookies
+
+        # 제품이 토큰을 받아 자체 세션을 발급하는 콜백.
+        if url.startswith("https://jira.local/?token=") or url.startswith("https://jira.local/secure/Dashboard.jspa?token="):
+            return httpx.Response(
+                302, headers={"Location": "https://jira.local/", "Set-Cookie": "JSESSIONID=sess-1; Path=/"},
+            )
+        if url == "https://jira.local/":
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            if anonymous_root:  # 익명 대시보드 — 폼도 리다이렉트도 없음
+                return httpx.Response(200, text="<html><body>anonymous dashboard</body></html>")
+            return httpx.Response(200, text=(
+                '<html><script>window.location.href = '
+                '"https://login.x.com/sso/am/jira/login.jsp";</script></html>'
+            ))
+        if url.startswith("https://jira.local/secure/Dashboard.jspa"):
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            return httpx.Response(200, text=(
+                '<html><head><meta http-equiv="refresh" content="0; '
+                'url=https://login.x.com/sso/am/jira/login.jsp"></head></html>'
+            ))
+        if url.startswith("https://jira.local/login.jsp"):
+            return httpx.Response(404)
+
+        if url == "https://login.x.com/sso/am/jira/login.jsp":
+            if request.method == "POST":
+                body = request.content.decode()
+                if "IDToken1=hong" in body and "IDToken2=pw123" in body:
+                    # IdP 세션 발급 — 제품 세션은 아직 없다(제품 재진입 시 토큰 교환).
+                    return httpx.Response(
+                        302,
+                        headers={"Location": "https://jira.local/",
+                                 "Set-Cookie": "iPlanetDirectoryPro=idp-1; Path=/"},
+                    )
+                return httpx.Response(200, text=OPENAM_LOGIN_HTML)  # 오답 → 폼 재표시
+            # IdP 세션이 있으면 로그인 폼 없이 제품으로 토큰과 함께 되돌려 보낸다.
+            if has_idp:
+                return httpx.Response(302, headers={"Location": "https://jira.local/?token=ok"})
+            return httpx.Response(200, text=OPENAM_LOGIN_HTML, headers={"Content-Type": "text/html"})
+
+        if url == "https://jira.local/rest/api/2/myself":
+            if has_jira:
+                return httpx.Response(200, json={"name": "hong", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        if url == "https://jira.local/rest/auth/1/session":
+            return httpx.Response(404)  # SSO 전용 — REST 세션 경로 막힘
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+async def test_sso_login_follows_js_hook_to_external_idp():
+    """루트가 JS 훅으로 외부 IdP 로 보내는 구성 — 리다이렉트를 따라가 로그인에 성공한다."""
+    result = await form_sso_login("https://jira.local", "hong", "pw123",
+                                  transport=_make_openam_transport())
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-1" in result["cookie_header"]
+    assert result["strategy"] == "sso_form"
+    # IdP 쿠키는 다른 호스트라 Jira Cookie 헤더에 섞이지 않아야 한다.
+    assert "iPlanetDirectoryPro" not in result["cookie_header"]
+
+
+async def test_sso_login_tries_protected_path_when_root_is_anonymous():
+    """루트가 익명 대시보드라 폼이 없으면 보호 자원 진입 경로로 넘어가 SSO 를 태운다."""
+    result = await form_sso_login("https://jira.local", "hong", "pw123",
+                                  transport=_make_openam_transport(anonymous_root=True))
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-1" in result["cookie_header"]
+
+
+async def test_sso_login_custom_idp_url_entry():
+    """관리자가 IdP 로그인 URL 을 지정하면 그 주소부터 진입해 로그인한다."""
+    result = await sso_login_products(
+        [{"key": "jira", "label": "Jira", "base_url": "https://jira.local",
+          "verify_path": JIRA_VERIFY_PATH,
+          "sso_login_url": "https://login.x.com/sso/am/jira/login.jsp"}],
+        "hong", "pw123", transport=_make_openam_transport(anonymous_root=True),
+    )
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-1" in result["cookie_header"]
+
+
+async def test_sso_login_wrong_password_stops_immediately():
+    """오답이면 다른 진입 경로/전략으로 재시도하지 않는다 (AD 계정 잠금 방지)."""
+    posts: list[str] = []
+
+    base = _make_openam_transport()
+
+    def counting_handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and "IDToken2" in request.content.decode():
+            posts.append(str(request.url))
+        return base.handler(request)
+
+    result = await form_sso_login("https://jira.local", "hong", "WRONG",
+                                  transport=httpx.MockTransport(counting_handler))
+    assert result["status"] == "error"
+    assert "올바르지" in result["detail"]
+    assert len(posts) == 1, f"자격 제출은 1회여야 함: {posts}"
+
+
+# ── REST 세션 로그인 폴백 (JS 렌더링 IdP 대비) ───────────────────────────────────
+def _make_rest_session_transport() -> httpx.MockTransport:
+    """로그인 페이지가 JS 로 렌더링돼 폼을 못 찾지만, Jira REST 세션 로그인은 열린 구성."""
+    state = {"logged_in": False}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == "https://jira.local/rest/auth/1/session" and request.method == "POST":
+            body = request.content.decode()
+            if '"password": "pw123"' in body or '"password":"pw123"' in body:
+                state["logged_in"] = True
+                return httpx.Response(200, json={"session": {"name": "JSESSIONID", "value": "sess-9"}},
+                                      headers={"Set-Cookie": "JSESSIONID=sess-9; Path=/"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        if url == "https://jira.local/rest/api/2/myself":
+            if state["logged_in"]:
+                return httpx.Response(200, json={"name": "hong", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        # 모든 HTML 진입 경로는 JS 앱 셸만 반환 — 폼 없음.
+        return httpx.Response(200, text="<html><body><div id='app'></div></body></html>")
+
+    return httpx.MockTransport(handler)
+
+
+async def test_sso_login_falls_back_to_rest_session():
+    """폼을 못 찾아도 Jira REST 세션 로그인으로 세션을 얻는다."""
+    result = await form_sso_login("https://jira.local", "hong", "pw123",
+                                  transport=_make_rest_session_transport())
+    assert result["status"] == "ok", result
+    assert result["strategy"] == "rest_session"
+    assert "JSESSIONID=sess-9" in result["cookie_header"]
+
+
+async def test_sso_login_failure_detail_includes_diagnostics():
+    """모든 전략 실패 시 사유에 마지막으로 본 페이지 요약이 담긴다."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/rest/" in str(request.url):
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        return httpx.Response(200, text="<html><head><title>Jira Dashboard</title></head><body>hi</body></html>")
+
+    result = await form_sso_login("https://jira.local", "hong", "pw123",
+                                  transport=httpx.MockTransport(handler))
+    assert result["status"] == "error"
+    assert "마지막 확인 페이지" in result["detail"]
+    assert "Jira Dashboard" in result["detail"]
+
+
+# ── 진단 ───────────────────────────────────────────────────────────────────────
+async def test_diagnose_products_reports_login_form():
+    rows = await diagnose_products(
+        [{"key": "jira", "label": "Jira", "base_url": "https://jira.local",
+          "sso_login_url": "https://login.x.com/sso/am/jira/login.jsp"}],
+        transport=_make_openam_transport(),
+    )
+    assert rows, rows
+    idp = next(r for r in rows if "login.x.com" in r.get("final_url", ""))
+    assert idp["password_inputs"] == 1
+    assert "IDToken2" in idp["input_names"]

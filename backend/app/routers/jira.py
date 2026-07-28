@@ -37,7 +37,7 @@ from app.services.jira_service import (
 )
 from app.services.confluence_service import ConfluenceService
 from app.services.jira_sso_http import (
-    CONFLUENCE_VERIFY_PATH, JIRA_VERIFY_PATH, sso_login_products,
+    CONFLUENCE_VERIFY_PATH, JIRA_VERIFY_PATH, diagnose_products, sso_login_products,
 )
 from app.services.jira_sso_service import capture_sso_session
 from app.schemas.jira import (
@@ -50,6 +50,8 @@ from app.schemas.jira import (
     JiraSsoLoginResult,
     ConfluenceSearchItem,
     ConfluenceSearchResult,
+    SsoDiagnoseEntry,
+    SsoDiagnoseResult,
     JiraImportRequest,
     JiraImportResult,
     JiraImportItemPreview,
@@ -74,6 +76,9 @@ DEFAULT_JIRA_SETTINGS = {
     # 같은 IdP 로 SSO 연동되는 Confluence Base URL (선택) — 설정 시 SSO 폼 로그인이
     # Jira 와 Confluence 세션을 한 번에 캡처한다.
     "confluence_base_url": "",
+    # IdP 로그인 페이지 URL (선택) — 자동 탐색 실패 시 지정. 예:
+    # https://login.example.com/sso/am/jira/login.jsp
+    "sso_login_url": "",
 }
 
 
@@ -332,6 +337,22 @@ def _read_html_tables(raw: bytes) -> list[list[tuple]]:
     ]
 
 
+def _normalize_cookie_header(raw: str) -> str:
+    """수동 등록 세션 쿠키 입력 정규화.
+
+    사용자가 자주 틀리는 두 가지를 흡수한다:
+     - DevTools 에서 헤더째 복사해 앞에 `Cookie:` 가 붙은 경우 → 제거
+     - **값만** 붙여넣은 경우(예: `A1B2C3...`) → `Cookie: A1B2C3` 는 이름이 없어 서버가
+       무시하므로 익명 취급되어 401 이 된다. `name=value` 쌍이 하나도 없으면 Jira/Confluence
+       의 세션 쿠키 이름인 `JSESSIONID=` 를 붙여준다."""
+    s = (raw or "").strip()
+    if s.lower().startswith("cookie:"):
+        s = s.split(":", 1)[1].strip()
+    if "=" not in s:
+        return f"JSESSIONID={s}" if s else s
+    return s
+
+
 def _user_credential(db: Session, username: str) -> tuple[Optional[str], str]:
     """사용자별 Jira 자격 (복호화된 secret, auth_type) 반환. 미등록/복호화 실패 시 (None, 'pat')."""
     cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == username).first()
@@ -365,6 +386,9 @@ def update_config(
         current["base_url"] = data["base_url"].rstrip("/")
     if "confluence_base_url" in data and data["confluence_base_url"] is not None:
         current["confluence_base_url"] = data["confluence_base_url"].strip().rstrip("/")
+    if "sso_login_url" in data and data["sso_login_url"] is not None:
+        # IdP 로그인 URL 은 쿼리스트링(goto 등)을 포함할 수 있어 rstrip('/') 하지 않는다.
+        current["sso_login_url"] = data["sso_login_url"].strip()
     for k in ("enabled", "verify_tls", "default_project_key"):
         if k in data and data[k] is not None:
             current[k] = data[k]
@@ -406,6 +430,8 @@ def save_credential(
     # REST 처리(JiraService)는 cookie 와 동일하고, UI 배지만 SSO 로 구분 표시된다.
     if auth_type not in ("pat", "cookie", "sso"):
         raise HTTPException(status_code=422, detail="auth_type 은 'pat'/'cookie'/'sso' 여야 합니다.")
+    if auth_type in ("cookie", "sso"):
+        token = _normalize_cookie_header(token)
     enc = secret_box.encrypt(token)
     cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == actor.username).first()
     if cred:
@@ -468,10 +494,14 @@ async def test_connection(db: Session = Depends(get_db), actor: User = Depends(g
 
 
 def _sso_products(cfg: dict) -> list[dict]:
-    """SSO 폼 로그인 대상 제품 목록 — 첫 항목(Jira)이 주 제품, Confluence 는 설정 시에만."""
+    """SSO 폼 로그인 대상 제품 목록 — 첫 항목(Jira)이 주 제품, Confluence 는 설정 시에만.
+
+    관리자가 IdP 로그인 URL 을 지정했으면 Jira 진입점 맨 앞에 놓는다(자동 탐색 실패 대비).
+    Confluence 는 Jira 로그인으로 이미 IdP 세션이 생긴 뒤라 제품 진입만으로 통과한다."""
     products = [{
         "key": "jira", "label": "Jira",
         "base_url": cfg.get("base_url", ""), "verify_path": JIRA_VERIFY_PATH,
+        "sso_login_url": (cfg.get("sso_login_url") or "").strip(),
     }]
     conf_url = (cfg.get("confluence_base_url") or "").strip()
     if conf_url:
@@ -676,6 +706,28 @@ async def sso_login(
         jira_account=account, display_name=display,
         confluence_ok=confluence_ok, confluence_detail=confluence_detail,
     )
+
+
+@router.post("/sso/diagnose", response_model=SsoDiagnoseResult)
+async def sso_diagnose(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """SSO 진단 — 자격 없이 각 진입 경로를 GET 해 **파드가 보는 로그인 페이지**를 보고한다.
+
+    폐쇄망 IdP 는 밖에서 열어볼 수 없어 로그인 실패 원인을 추측하기 어렵다. 최종 URL(IdP 로
+    넘어갔는지), 폼/password 입력 개수(폼이 정말 없는지), client_redirect(JS·meta 중계인지),
+    www_authenticate(Negotiate/Basic 인지)를 보면 어디서 끊겼는지 바로 판별된다."""
+    cfg = _get_config(db)
+    if not cfg.get("base_url"):
+        return SsoDiagnoseResult(ok=False, detail="관리자가 Jira URL 을 설정하지 않았습니다.")
+    rows = await diagnose_products(_sso_products(cfg), verify_tls=bool(cfg.get("verify_tls", True)))
+    entries = [SsoDiagnoseEntry(**r) for r in rows]
+    found = next((e for e in entries if e.password_inputs > 0), None)
+    if found:
+        detail = f"로그인 폼 발견 — {found.final_url} (password 입력 {found.password_inputs}개). SSO 로그인을 시도해도 됩니다."
+    else:
+        detail = ("어느 진입 경로에서도 password 입력을 찾지 못했습니다. 아래 표의 final_url 이 "
+                  "IdP 주소가 아니면 리다이렉트가 안 걸린 것이고, IdP 인데도 폼이 0 이면 JS 렌더링입니다. "
+                  "브라우저에서 확인한 IdP 로그인 페이지 주소를 공통 설정의 'IdP 로그인 URL' 에 넣어보세요.")
+    return SsoDiagnoseResult(ok=bool(found), detail=detail, entries=entries)
 
 
 # 백엔드가 K8s/컨테이너 배포라 파드에서 브라우저를 못 띄우는 환경용 — 사용자가 본인 PC 에서

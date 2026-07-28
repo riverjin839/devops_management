@@ -865,6 +865,8 @@ export const jiraApi = {
   deleteCredential: () => api.delete('/jira/credential'),
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   confluenceTest: () => api.post<import('@/types').JiraTestResult>('/jira/confluence/test'),
+  ssoDiagnose: () =>
+    api.post<import('@/types').SsoDiagnoseResult>('/jira/sso/diagnose', undefined, { timeout: 90_000 }),
   // SSO 자동 로그인 — data 지정 시 파드 내 폼 로그인(ID/PW), 생략 시 서버측 브라우저(헤디드).
   // 헤디드 경로는 사용자가 브라우저에서 로그인을 마칠 때까지 기다리므로 타임아웃을 길게(4분).
   ssoLogin: (data?: import('@/types').JiraSsoLoginRequest) =>

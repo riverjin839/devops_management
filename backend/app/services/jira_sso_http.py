@@ -1,26 +1,40 @@
-"""브라우저 없이 파드 안에서 수행하는 Jira/Confluence SSO 폼 로그인 (httpx 기반).
+"""브라우저 없이 파드 안에서 수행하는 Jira/Confluence SSO 로그인 (httpx 기반).
 
-순수 ID/PW 폼 SSO(Keycloak/CAS/ADFS forms — 2차 인증 없음)는 IdP 로그인 페이지가 일반
-HTML `<form>` 이라 JS 실행이 필요 없다. 따라서 브라우저(Playwright/Chromium) 없이도:
+순수 ID/PW SSO(Keycloak/CAS/ADFS forms — 2차 인증 없음)는 IdP 로그인 페이지가 일반 HTML
+`<form>` 이라 JS 실행이 필요 없다. 따라서 브라우저(Playwright/Chromium) 없이 로그인 정보만으로
+세션을 얻을 수 있다 — **기본 이미지 그대로 동작**한다(추가 의존성 없음).
 
-  1. 제품 첫 페이지 GET → SSO 리다이렉트 체인을 따라 IdP 로그인 폼 도착
-  2. 폼 파싱(hidden 값 유지) → username/password 채워 POST
-  3. SAML/OIDC auto-submit 폼(hidden-only)은 자동 제출하며 제품으로 복귀
-  4. 쿠키 jar 에 쌓인 제품 세션 쿠키를 캡처 → verify 엔드포인트로 검증
+세션 확보는 아래 전략을 **순서대로 시도**하고, 각 전략 직후 verify 엔드포인트로 검증해
+성공하면 즉시 멈춘다(어느 전략이 통했는지는 `strategy` 로 보고):
 
-으로 세션을 얻을 수 있다 — **기본 Alpine 이미지 그대로 동작**한다(추가 의존성 없음).
-Jira 자체 로그인 폼(login.jsp, `os_username`/`os_password`)도 같은 로직으로 처리된다.
-JS 가 필수인 IdP 는 이 경로가 실패하므로 로컬 도우미(jira_sso_helper.py)를 안내한다.
+  1. `sso_form`     — 제품 진입 경로 GET → SSO 리다이렉트 체인 추적 → IdP 로그인 폼 제출 →
+                      SAML/OIDC auto-submit 중계 폼 자동 제출 → 제품 복귀
+  2. `rest_session` — Jira `POST /rest/auth/1/session` (JSON ID/PW). SSO 플러그인을 우회해
+                      내부 디렉터리(AD/LDAP)로 인증하는 경로 — 폼이 JS 라도 통하는 경우가 많다
+  3. `native_form`  — 제품 자체 로그인 폼 직접 POST (Jira `login.jsp` / Confluence `dologin.action`)
+
+**폼 탐색은 진입 경로를 여러 개 시도한다.** 루트(`/`)만 보면 놓치는 배포가 많다 — 익명 접근이
+열려 있어 루트가 대시보드를 그냥 주거나(폼 없음), SSO 리다이렉트가 보호 자원에 접근할 때만
+발생하는 구성이 흔하다. 또 IdP 중계가 HTTP 302 가 아니라 `<meta http-equiv=refresh>` 나
+`location.href=...` 로 이뤄지는 경우가 있어 그 두 가지도 따라간다.
+
+자동 탐색이 실패하는 배포를 위해 관리자가 **IdP 로그인 페이지 URL 을 직접 지정**할 수 있다
+(`sso_login_url`, 예: `https://login.example.com/sso/am/jira/login.jsp`). 지정하면 그 주소를
+첫 진입점으로 삼아 폼을 제출하고, IdP 세션이 생긴 뒤 제품으로 돌아와 SSO 왕복을 한 번 더
+태워 세션을 받는다(OpenAM/SiteMinder 처럼 IdP 에서 먼저 로그인하는 구성).
+
+**비밀번호 오답은 즉시 중단한다** — 여러 전략으로 재시도하면 AD 계정 잠금을 유발한다.
 
 **다중 제품**: Jira 와 Confluence 가 같은 IdP 를 쓰면 쿠키 jar 를 공유하는 한 클라이언트로
-제품을 순서대로 순회한다 — 첫 제품에서 IdP 로그인이 완료되면 다음 제품은 auto-submit
-체인만 통과해 **비밀번호 재입력 없이** 세션이 떨어진다(`sso_login_products`).
+제품을 순서대로 순회한다 — 첫 제품에서 IdP 로그인이 완료되면 다음 제품은 중계 폼만 통과해
+**비밀번호 재입력 없이** 세션이 떨어진다(`sso_login_products`).
 
 fail-safe: 절대 raise 하지 않고 {"status": "ok|error", ...} dict 를 반환한다.
 """
 from __future__ import annotations
 
 import logging
+import re
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -28,11 +42,36 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# 리다이렉트/폼 제출 체인 최대 횟수 — SSO 왕복(로그인 폼 1회 + auto-submit 1~2회)에 넉넉히.
-MAX_FORM_HOPS = 6
+# 리다이렉트/폼 제출 체인 최대 횟수 — SSO 왕복(로그인 폼 1회 + auto-submit 1~2회 + 클라이언트
+# 리다이렉트 몇 번)에 넉넉히.
+MAX_FORM_HOPS = 8
 # 제품별 세션 검증(로그인 성공 판정) 엔드포인트 — 200 이면 세션 유효.
 JIRA_VERIFY_PATH = "/rest/api/2/myself"
 CONFLUENCE_VERIFY_PATH = "/rest/api/user/current"
+
+# 제품별 SSO 진입 경로 후보 — 순서대로 시도한다(관리자가 지정한 `sso_login_url` 이 있으면
+# 그것이 맨 앞에 온다). 루트가 익명 대시보드를 주는 배포에서도 보호 자원/로그인 페이지로
+# 진입하면 SSO 리다이렉트가 발생한다. 항목이 `http` 로 시작하면 절대 URL 로 그대로 쓴다.
+PRODUCT_ENTRY_PATHS: dict[str, tuple[str, ...]] = {
+    "jira": (
+        "/",
+        "/login.jsp?os_destination=%2Fsecure%2FMyJiraHome.jspa",
+        "/secure/Dashboard.jspa",
+    ),
+    "confluence": (
+        "/",
+        "/login.action?os_destination=%2Findex.action",
+        "/dashboard.action",
+    ),
+}
+DEFAULT_ENTRY_PATHS: tuple[str, ...] = ("/",)
+
+# 제품 자체 로그인 폼 (SSO 플러그인이 없거나 로컬 폴백이 열려 있을 때) — (경로, 목적지 파라미터).
+NATIVE_LOGIN_FORMS: dict[str, tuple[str, str]] = {
+    "jira": ("/login.jsp", "/secure/MyJiraHome.jspa"),
+    "confluence": ("/dologin.action", "/index.action"),
+}
+
 # 일반적인 username 필드 이름(IdP 별) — 우선 매칭. Jira 자체 폼은 os_username.
 _USERNAME_FIELD_NAMES = (
     "username", "j_username", "os_username", "user", "userid", "user_id",
@@ -42,10 +81,24 @@ _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
+# 브라우저처럼 HTML 을 요구한다 — Accept: */* 면 일부 배포가 JSON/에러를 돌려준다.
+_HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+_META_REFRESH_RE = re.compile(
+    r"""<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["']?[^"'>]*?url\s*=\s*([^"'>\s]+)""",
+    re.I,
+)
+_JS_REDIRECT_RES = (
+    re.compile(r"""(?:window\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']""", re.I),
+    re.compile(r"""location\.(?:replace|assign)\s*\(\s*["']([^"']+)["']""", re.I),
+)
 
 
 class _FormParser(HTMLParser):
-    """HTML 에서 <form> 들의 action/method/input 목록을 추출한다."""
+    """HTML 에서 <form> 들의 action/method/input 목록을 추출한다.
+
+    `<button type=submit name= value=>`(ADFS 등)도 submit 입력으로 함께 수집한다."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -57,11 +110,12 @@ class _FormParser(HTMLParser):
         if tag == "form":
             self._cur = {"action": a.get("action") or "", "method": (a.get("method") or "get").lower(), "inputs": []}
             self.forms.append(self._cur)
-        elif tag == "input" and self._cur is not None:
+        elif tag in ("input", "button") and self._cur is not None:
+            default_type = "text" if tag == "input" else "submit"
             self._cur["inputs"].append({
                 "name": a.get("name") or "",
                 "value": a.get("value") or "",
-                "type": (a.get("type") or "text").lower(),
+                "type": (a.get("type") or default_type).lower(),
             })
 
     def handle_endtag(self, tag: str) -> None:
@@ -96,6 +150,25 @@ def find_autosubmit_form(forms: list[dict]) -> dict | None:
         ):
             return f
     return None
+
+
+def find_client_redirect(html_text: str, current_url: str) -> str:
+    """HTTP 302 가 아닌 **클라이언트 리다이렉트**(meta refresh / JS location) 대상 URL.
+
+    SSO 중계 페이지가 이 방식을 쓰면 httpx 의 follow_redirects 로는 따라갈 수 없어
+    "폼을 찾지 못함"으로 오판된다. 절대 URL 로 변환해 돌려준다(없으면 빈 문자열)."""
+    text = html_text or ""
+    m = _META_REFRESH_RE.search(text)
+    if m:
+        return urljoin(current_url, m.group(1).strip().strip("'\""))
+    # <script> 안의 즉시 리다이렉트 — 로그인 폼이 함께 있는 페이지는 제외(폼 우선).
+    for rx in _JS_REDIRECT_RES:
+        m = rx.search(text)
+        if m:
+            target = (m.group(1) or "").strip()
+            if target and not target.startswith("#") and "javascript:" not in target.lower():
+                return urljoin(current_url, target)
+    return ""
 
 
 def fill_login_form(form: dict, username: str, password: str) -> dict[str, str]:
@@ -165,50 +238,310 @@ def _cookie_header_for_host(client: httpx.AsyncClient, host: str) -> str:
     return "; ".join(scoped or everything)
 
 
-async def _drive_form_chain(
-    client: httpx.AsyncClient, base_url: str, username: str, password: str
-) -> dict:
-    """제품 첫 페이지부터 로그인/auto-submit 폼 체인을 통과한다.
+def describe_page(resp: httpx.Response) -> dict:
+    """응답 1건의 진단 요약 — 진단 엔드포인트와 실패 사유 메시지가 함께 쓴다."""
+    text = resp.text or ""
+    forms = parse_forms(text)
+    title_m = _TITLE_RE.search(text)
+    input_names: list[str] = []
+    for f in forms:
+        for i in f["inputs"]:
+            if i["name"] and i["name"] not in input_names:
+                input_names.append(i["name"])
+    return {
+        "final_url": str(resp.url),
+        "http_status": resp.status_code,
+        "content_type": resp.headers.get("content-type", "")[:80],
+        "title": (title_m.group(1).strip()[:80] if title_m else ""),
+        "forms": len(forms),
+        "password_inputs": sum(
+            1 for f in forms for i in f["inputs"] if i["type"] == "password"
+        ),
+        "input_names": input_names[:20],
+        "client_redirect": find_client_redirect(text, str(resp.url))[:200],
+        "www_authenticate": resp.headers.get("www-authenticate", "")[:80],
+    }
 
-    반환: {"ok": bool, "creds_submitted": bool, "detail": str}.
-    IdP 세션이 이미 있으면(두 번째 제품) 로그인 폼 없이 auto-submit 만 타고 끝난다."""
-    r = await client.get(base_url + "/")
+
+def _entry_url(base_url: str, entry: str) -> str:
+    """진입 항목 → 절대 URL. `http` 로 시작하면 외부 IdP 주소로 그대로 사용."""
+    e = (entry or "").strip()
+    if e.lower().startswith(("http://", "https://")):
+        return e
+    return f"{base_url}{e}"
+
+
+def _entry_paths_for(prod: dict) -> tuple[str, ...]:
+    """제품의 진입 경로 목록 — 관리자가 지정한 IdP 로그인 URL 이 있으면 최우선."""
+    key = prod.get("key") or "product"
+    paths: list[str] = []
+    custom = (prod.get("sso_login_url") or "").strip()
+    if custom:
+        paths.append(custom)
+    explicit = prod.get("entry_paths")
+    paths.extend(explicit or PRODUCT_ENTRY_PATHS.get(key, DEFAULT_ENTRY_PATHS))
+    return tuple(dict.fromkeys(paths))  # 중복 제거, 순서 유지
+
+
+async def probe_entry(client: httpx.AsyncClient, url: str) -> dict:
+    """진입 경로 1개를 GET 해 진단 정보를 수집한다(로그인 시도 없음)."""
+    try:
+        resp = await client.get(url, headers={"Accept": _HTML_ACCEPT})
+    except Exception as exc:  # noqa: BLE001 - fail-safe
+        return {"url": url, "error": str(exc)[:200]}
+    out = {"url": url, "error": ""}
+    out.update(describe_page(resp))
+    return out
+
+
+async def _drive_form_chain(
+    client: httpx.AsyncClient, start_url: str, username: str, password: str
+) -> dict:
+    """진입 URL 부터 로그인/중계 폼 체인을 통과한다.
+
+    반환: {"creds_submitted","auth_rejected","last": <describe_page dict|None>, "error": str}.
+    IdP 세션이 이미 있으면(두 번째 제품) 로그인 폼 없이 중계 폼만 타고 끝난다."""
     creds_submitted = False
+    visited: set[str] = set()
+    last: dict | None = None
+    try:
+        r = await client.get(start_url, headers={"Accept": _HTML_ACCEPT})
+    except Exception as exc:  # noqa: BLE001
+        return {"creds_submitted": False, "auth_rejected": False, "last": None,
+                "error": str(exc)[:200]}
+
     for _hop in range(MAX_FORM_HOPS):
-        forms = parse_forms(r.text or "")
+        last = describe_page(r)
+        text = r.text or ""
+        forms = parse_forms(text)
+
         login_form = find_login_form(forms)
         if login_form is not None:
             if creds_submitted:
-                # 자격 제출 후에도 password 폼이 다시 나옴 → 인증 실패로 판정.
-                return {"ok": False, "creds_submitted": True,
-                        "detail": "SSO 아이디 또는 비밀번호가 올바르지 않습니다."}
+                # 자격 제출 후에도 password 폼이 다시 나옴 → 인증 실패 확정.
+                # 다른 전략으로 재시도하면 계정 잠금을 유발하므로 즉시 중단한다.
+                return {"creds_submitted": True, "auth_rejected": True, "last": last, "error": ""}
             data = fill_login_form(login_form, username, password)
             action = urljoin(str(r.url), login_form["action"] or str(r.url))
-            r = await client.post(action, data=data)
+            r = await client.post(action, data=data, headers={"Accept": _HTML_ACCEPT})
             creds_submitted = True
+            # 로그인으로 세션 상태가 바뀌었다 — 같은 중계 URL 을 다시 타야 토큰을 받는
+            # 구성(OpenAM 류)이 있으므로 방문 기록을 비운다(무한루프는 MAX_FORM_HOPS 로 방지).
+            visited.clear()
             continue
+
         auto = find_autosubmit_form(forms)
         if auto is not None:
             data = {i["name"]: i["value"] for i in auto["inputs"] if i["name"]}
             action = urljoin(str(r.url), auto["action"] or str(r.url))
-            r = await client.post(action, data=data)
+            r = await client.post(action, data=data, headers={"Accept": _HTML_ACCEPT})
+            visited.clear()
             continue
-        break  # 더 제출할 폼 없음 — 체인 종료
-    return {"ok": True, "creds_submitted": creds_submitted, "detail": ""}
+
+        nxt = find_client_redirect(text, str(r.url))
+        if nxt and nxt not in visited:
+            visited.add(nxt)
+            r = await client.get(nxt, headers={"Accept": _HTML_ACCEPT})
+            continue
+
+        break  # 더 제출할 폼도, 따라갈 리다이렉트도 없음 — 체인 종료
+
+    return {"creds_submitted": creds_submitted, "auth_rejected": False, "last": last, "error": ""}
 
 
 async def _verify_session(client: httpx.AsyncClient, base_url: str, verify_path: str) -> dict:
     """세션 검증 — 200 이면 계정 정보 추출. Confluence(user/current)는 name 대신 username."""
-    probe = await client.get(f"{base_url}{verify_path}", headers={"Accept": "application/json"})
+    try:
+        probe = await client.get(f"{base_url}{verify_path}", headers={"Accept": "application/json"})
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "http_status": None, "error": str(exc)[:120]}
     if probe.status_code != 200:
         return {"ok": False, "http_status": probe.status_code}
     try:
         data = probe.json()
-    except Exception:  # noqa: BLE001 - 200 이지만 JSON 아님(프록시 오류 페이지 등)
+    except Exception:  # noqa: BLE001 - 200 이지만 JSON 아님(프록시/로그인 페이지 등)
+        return {"ok": False, "http_status": probe.status_code}
+    # Confluence 는 세션이 없어도 200 + type=anonymous 를 주는 경우가 있다.
+    if isinstance(data, dict) and (data.get("type") or "").lower() == "anonymous":
         return {"ok": False, "http_status": probe.status_code}
     account = data.get("name") or data.get("username") or data.get("key") or ""
     display = data.get("displayName") or account
     return {"ok": True, "account": account, "display_name": display}
+
+
+async def _try_rest_session(client: httpx.AsyncClient, base_url: str, username: str, password: str) -> dict:
+    """Jira `POST /rest/auth/1/session` — SSO 플러그인을 우회해 내부 디렉터리로 인증.
+
+    IdP 로그인 페이지가 JS 라도 이 경로가 열려 있으면 세션 쿠키를 받을 수 있다.
+    반환 {"tried": bool, "auth_rejected": bool, "detail": str}."""
+    try:
+        resp = await client.post(
+            f"{base_url}/rest/auth/1/session",
+            json={"username": username, "password": password},
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"tried": True, "auth_rejected": False, "detail": str(exc)[:120]}
+    if resp.status_code in (200, 201):
+        return {"tried": True, "auth_rejected": False, "detail": "ok"}
+    # 401 은 단정하지 않는다 — 자격 오답일 수도, SSO 전용이라 내부 디렉터리 인증이 막힌
+    # 것일 수도 있다. 다음 전략(native_form)까지만 진행하므로 총 시도는 2회로 제한된다.
+    return {"tried": True, "auth_rejected": False, "detail": f"HTTP {resp.status_code}"}
+
+
+async def _try_native_form(
+    client: httpx.AsyncClient, base_url: str, product_key: str, username: str, password: str
+) -> dict:
+    """제품 자체 로그인 폼을 직접 POST (Jira login.jsp / Confluence dologin.action)."""
+    spec = NATIVE_LOGIN_FORMS.get(product_key)
+    if not spec:
+        return {"tried": False, "detail": "지원 경로 없음"}
+    path, destination = spec
+    try:
+        resp = await client.post(
+            f"{base_url}{path}",
+            data={
+                "os_username": username,
+                "os_password": password,
+                "os_destination": destination,
+                "login": "Log In",
+            },
+            headers={"Accept": _HTML_ACCEPT},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"tried": True, "detail": str(exc)[:120]}
+    return {"tried": True, "detail": f"HTTP {resp.status_code}"}
+
+
+async def _login_one_product(
+    client: httpx.AsyncClient, prod: dict, username: str, password: str
+) -> dict:
+    """제품 1개에 대해 전략을 순서대로 시도하고 세션을 확보한다.
+
+    반환 성공 → {"status":"ok","cookie_header","account","display_name","strategy"}
+         실패 → {"status":"error","detail","diag"}"""
+    key = prod.get("key") or "product"
+    label = prod.get("label") or key
+    base_url = (prod.get("base_url") or "").rstrip("/")
+    verify_path = prod.get("verify_path") or JIRA_VERIFY_PATH
+    host = (urlparse(base_url).hostname or "").lower()
+    entry_paths = _entry_paths_for(prod)
+
+    diag: dict = {"entries": [], "strategies": []}
+
+    def _ok(verified: dict, strategy: str) -> dict | None:
+        cookie_header = _cookie_header_for_host(client, host)
+        if not cookie_header:
+            diag["strategies"].append({"strategy": strategy, "result": "세션은 확인됐으나 쿠키 없음"})
+            return None
+        return {
+            "status": "ok", "cookie_header": cookie_header,
+            "account": verified["account"], "display_name": verified["display_name"],
+            "strategy": strategy, "diag": diag,
+        }
+
+    def _rejected() -> dict:
+        return {
+            "status": "error", "auth_rejected": True,
+            "detail": "SSO 아이디 또는 비밀번호가 올바르지 않습니다.", "diag": diag,
+        }
+
+    # 이미 유효한 세션이 있으면(다중 제품에서 IdP 쿠키 공유 등) 바로 사용.
+    verified = await _verify_session(client, base_url, verify_path)
+    if verified["ok"]:
+        hit = _ok(verified, "existing_session")
+        if hit:
+            return hit
+
+    # ── 전략 1: SSO 폼 체인 (진입 경로 여러 개 시도) ────────────────────────────
+    for path in entry_paths:
+        chain = await _drive_form_chain(client, _entry_url(base_url, path), username, password)
+        entry = {"path": path, "error": chain["error"]}
+        entry.update(chain["last"] or {})
+        diag["entries"].append(entry)
+        if chain["auth_rejected"]:
+            return _rejected()
+        if chain["error"]:
+            diag["strategies"].append({"strategy": f"sso_form({path})", "result": chain["error"]})
+            continue
+        verified = await _verify_session(client, base_url, verify_path)
+        if not verified["ok"] and chain["creds_submitted"]:
+            # IdP 에서 로그인은 됐지만 제품 세션이 아직 없는 구성(OpenAM/SiteMinder 류) —
+            # IdP 세션이 생긴 상태로 같은 진입점(→ 실패 시 루트)을 한 번 더 태우면
+            # 토큰 교환이 완료되며 제품 세션이 발급된다. 자격은 이미 있으니 재입력 없음.
+            for retry_url in dict.fromkeys([_entry_url(base_url, path), f"{base_url}/"]):
+                back = await _drive_form_chain(client, retry_url, username, password)
+                if back["auth_rejected"]:
+                    return _rejected()
+                verified = await _verify_session(client, base_url, verify_path)
+                diag["strategies"].append({
+                    "strategy": f"sso_form({path})+return({retry_url})",
+                    "result": "ok" if verified["ok"] else f"verify {verified.get('http_status')}",
+                })
+                if verified["ok"]:
+                    break
+        else:
+            diag["strategies"].append({
+                "strategy": f"sso_form({path})",
+                "result": "ok" if verified["ok"] else f"verify {verified.get('http_status')}",
+                "creds_submitted": chain["creds_submitted"],
+            })
+        if verified["ok"]:
+            hit = _ok(verified, "sso_form")
+            if hit:
+                return hit
+
+    # ── 전략 2: Jira REST 세션 로그인 (SSO 플러그인 우회) ───────────────────────
+    if key == "jira":
+        rest = await _try_rest_session(client, base_url, username, password)
+        diag["strategies"].append({"strategy": "rest_session", "result": rest["detail"]})
+        if rest["auth_rejected"]:
+            return _rejected()
+        verified = await _verify_session(client, base_url, verify_path)
+        if verified["ok"]:
+            hit = _ok(verified, "rest_session")
+            if hit:
+                return hit
+
+    # ── 전략 3: 제품 자체 로그인 폼 직접 POST ───────────────────────────────────
+    native = await _try_native_form(client, base_url, key, username, password)
+    if native["tried"]:
+        diag["strategies"].append({"strategy": "native_form", "result": native["detail"]})
+        verified = await _verify_session(client, base_url, verify_path)
+        if verified["ok"]:
+            hit = _ok(verified, "native_form")
+            if hit:
+                return hit
+
+    # 전부 실패 — 마지막으로 본 페이지 요약을 사유에 담아 원인 파악을 돕는다.
+    last = next((e for e in reversed(diag["entries"]) if e.get("final_url")), {})
+    hint = ""
+    if last:
+        hint = (
+            f" ▸ 마지막 확인 페이지: {last.get('final_url', '')} "
+            f"(HTTP {last.get('http_status')}, 폼 {last.get('forms', 0)}개, "
+            f"password 입력 {last.get('password_inputs', 0)}개"
+            + (f", 제목 '{last.get('title')}'" if last.get("title") else "")
+            + (f", 리다이렉트 {last.get('client_redirect')}" if last.get("client_redirect") else "")
+            + (f", 인증요구 {last.get('www_authenticate')}" if last.get("www_authenticate") else "")
+            + ")"
+        )
+    return {
+        "status": "error",
+        "detail": (
+            f"{label} 세션을 얻지 못했습니다 — 로그인 폼/대체 경로가 모두 실패했습니다."
+            f"{hint} ▸ 설정의 'SSO 진단' 으로 백엔드가 보는 로그인 페이지를 확인하세요."
+        ),
+        "diag": diag,
+    }
+
+
+def _client(verify_tls: bool, timeout: float, transport) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        verify=verify_tls, follow_redirects=True, timeout=timeout,
+        headers={"User-Agent": _BROWSER_UA, "Accept": _HTML_ACCEPT},
+        transport=transport,
+    )
 
 
 async def sso_login_products(
@@ -220,12 +553,12 @@ async def sso_login_products(
     timeout: float = 30.0,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> dict:
-    """한 IdP 세션으로 여러 Atlassian 제품에 연속 SSO 폼 로그인 (파드 내, 브라우저 없음).
+    """한 IdP 세션으로 여러 Atlassian 제품에 연속 SSO 로그인 (파드 내, 브라우저 없음).
 
     products: [{"key","label","base_url","verify_path"}] — **첫 항목이 주 제품**으로 전체
     status 를 결정한다. 이후 제품 실패는 products[key] 에만 기록되고 전체는 ok 유지.
-    반환(주 제품 성공 시): {"status":"ok","cookie_header","account","display_name",
-    "products": {key: {"status","cookie_header","account","display_name"} | {"status","detail"}}}.
+    반환(주 제품 성공 시): {"status":"ok","cookie_header","account","display_name","strategy",
+    "products": {key: {...}}}.
     `transport` 는 테스트용(httpx.MockTransport) 주입 지점.
     """
     if not products:
@@ -235,77 +568,66 @@ async def sso_login_products(
 
     out: dict[str, dict] = {}
     try:
-        async with httpx.AsyncClient(
-            verify=verify_tls, follow_redirects=True, timeout=timeout,
-            headers={"User-Agent": _BROWSER_UA}, transport=transport,
-        ) as client:
+        async with _client(verify_tls, timeout, transport) as client:
             for idx, prod in enumerate(products):
                 key = prod.get("key") or f"product{idx}"
                 label = prod.get("label") or key
-                base_url = (prod.get("base_url") or "").rstrip("/")
                 is_primary = idx == 0
-                if not base_url:
-                    out[key] = {"status": "error", "detail": f"{label} Base URL 이 설정되지 않았습니다."}
-                    if is_primary:
-                        return {"status": "error", "detail": out[key]["detail"], "products": out}
-                    continue
-                host = (urlparse(base_url).hostname or "").lower()
-                try:
-                    chain = await _drive_form_chain(client, base_url, username, password)
-                    if not chain["ok"]:
-                        out[key] = {"status": "error", "detail": chain["detail"]}
-                        if is_primary:
-                            return {"status": "error", "detail": chain["detail"], "products": out}
-                        continue
-                    verified = await _verify_session(
-                        client, base_url, prod.get("verify_path") or JIRA_VERIFY_PATH
-                    )
-                except httpx.ConnectError as exc:
-                    out[key] = {"status": "error", "detail": f"{label}/IdP 에 연결할 수 없습니다: {exc}"}
-                    if is_primary:
-                        return {"status": "error", "detail": out[key]["detail"], "products": out}
-                    continue
-                if not verified["ok"]:
-                    if not chain["creds_submitted"]:
-                        detail = (
-                            f"{label} 로그인 폼을 찾지 못했습니다 — JS 기반 SSO 로 보입니다. "
-                            "'로컬 도우미' 방식으로 로그인하세요."
-                        )
-                    else:
-                        detail = (
-                            f"로그인 후에도 {label} 세션이 확인되지 않습니다 "
-                            f"(HTTP {verified['http_status']}). SSO 에 2차 인증이 있거나 "
-                            "JS 필수 IdP 면 '로컬 도우미' 방식을 사용하세요."
-                        )
+                if not (prod.get("base_url") or "").rstrip("/"):
+                    detail = f"{label} Base URL 이 설정되지 않았습니다."
                     out[key] = {"status": "error", "detail": detail}
                     if is_primary:
                         return {"status": "error", "detail": detail, "products": out}
                     continue
-                cookie_header = _cookie_header_for_host(client, host)
-                if not cookie_header:
-                    detail = f"{label} 로그인은 됐으나 캡처된 세션 쿠키가 없습니다."
-                    out[key] = {"status": "error", "detail": detail}
-                    if is_primary:
-                        return {"status": "error", "detail": detail, "products": out}
-                    continue
-                out[key] = {
-                    "status": "ok",
-                    "cookie_header": cookie_header,
-                    "account": verified["account"],
-                    "display_name": verified["display_name"],
-                }
+                res = await _login_one_product(client, prod, username, password)
+                out[key] = res
+                if res["status"] != "ok" and is_primary:
+                    return {"status": "error", "detail": res["detail"],
+                            "diag": res.get("diag"), "products": out}
     except Exception as exc:  # noqa: BLE001 - fail-safe
         logger.exception("form SSO login error: %s", exc)
         return {"status": "error", "detail": f"SSO 폼 로그인 중 오류: {exc}", "products": out}
 
     primary = out[products[0].get("key") or "product0"]
+    logger.info("SSO login ok via %s (products=%s)", primary.get("strategy"), list(out))
     return {
         "status": "ok",
         "cookie_header": primary["cookie_header"],
         "account": primary["account"],
         "display_name": primary["display_name"],
+        "strategy": primary.get("strategy", ""),
         "products": out,
     }
+
+
+async def diagnose_products(
+    products: list[dict],
+    *,
+    verify_tls: bool = True,
+    timeout: float = 20.0,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> list[dict]:
+    """자격 없이 각 제품의 진입 경로를 GET 해 **백엔드가 보는 로그인 페이지**를 보고한다.
+
+    폐쇄망 IdP 는 외부에서 열어볼 수 없으므로, 로그인 실패 원인(폼이 정말 없는지, JS
+    리다이렉트인지, 인증 방식이 Negotiate/Basic 인지)을 이 결과로 판별한다."""
+    rows: list[dict] = []
+    try:
+        async with _client(verify_tls, timeout, transport) as client:
+            for prod in products:
+                key = prod.get("key") or "product"
+                base_url = (prod.get("base_url") or "").rstrip("/")
+                if not base_url:
+                    continue
+                for path in _entry_paths_for(prod):
+                    row = await probe_entry(client, _entry_url(base_url, path))
+                    row["product"] = key
+                    row["url"] = path
+                    rows.append(row)
+    except Exception as exc:  # noqa: BLE001 - fail-safe
+        logger.exception("SSO diagnose error: %s", exc)
+        rows.append({"product": "-", "url": "-", "error": str(exc)[:200]})
+    return rows
 
 
 async def form_sso_login(
@@ -317,10 +639,7 @@ async def form_sso_login(
     timeout: float = 30.0,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> dict:
-    """Jira 단일 제품 SSO 폼 로그인 — `sso_login_products` 의 하위호환 래퍼.
-
-    반환: {"status":"ok","cookie_header","account","display_name"} 또는 {"status":"error","detail"}.
-    """
+    """Jira 단일 제품 SSO 로그인 — `sso_login_products` 의 하위호환 래퍼."""
     if not (base_url or "").rstrip("/"):
         return {"status": "error", "detail": "Jira Base URL 이 설정되지 않았습니다."}
     return await sso_login_products(

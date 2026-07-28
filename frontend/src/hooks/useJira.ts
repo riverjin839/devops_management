@@ -74,6 +74,10 @@ export function useConfluenceTest() {
   });
 }
 
+export function useSsoDiagnose() {
+  return useMutation({ mutationFn: () => jiraApi.ssoDiagnose() });
+}
+
 export function useJiraImport() {
   const qc = useQueryClient();
   return useMutation({

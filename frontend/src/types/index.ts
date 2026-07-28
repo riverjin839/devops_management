@@ -509,6 +509,30 @@ export interface JiraConfig {
   defaultProjectKey?: string | null;
   /** 같은 IdP 로 SSO 연동되는 Confluence Base URL — 설정 시 SSO 로그인이 두 세션을 한 번에 캡처. */
   confluenceBaseUrl?: string;
+  /** IdP 로그인 페이지 URL (선택) — 자동 탐색 실패 시 SSO 로그인의 진입점으로 사용. */
+  ssoLoginUrl?: string;
+}
+
+/** SSO 진단 — 백엔드(파드)가 각 진입 경로에서 실제로 본 페이지 요약. */
+export interface SsoDiagnoseEntry {
+  product: string;
+  url: string;
+  finalUrl: string;
+  httpStatus?: number | null;
+  contentType: string;
+  title: string;
+  forms: number;
+  passwordInputs: number;
+  inputNames: string[];
+  clientRedirect: string;
+  wwwAuthenticate: string;
+  error: string;
+}
+
+export interface SsoDiagnoseResult {
+  ok: boolean;
+  detail: string;
+  entries: SsoDiagnoseEntry[];
 }
 
 // 인증 방식: 'pat'(PAT → Bearer) | 'cookie'(수동 붙여넣은 세션 쿠키) | 'sso'(SSO 자동 캡처 쿠키).
