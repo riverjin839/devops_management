@@ -1,0 +1,134 @@
+# PEP Observability Collector — push 모드 수집기.
+#
+# PEP 백엔드에서 이 클러스터의 Prometheus/Alertmanager 로 HTTP 가 닿지 않는 환경
+# (폐쇄망 / 네트워크 분리)에서 사용한다. 클러스터 안에서 Prometheus HTTP API 를 긁어
+# PEP 의 `/api/v1/observability/snapshot/ingest` 로 밀어넣는다.
+#
+# PEP 쪽 준비:
+#   1) backend 환경변수 ALERT_INGEST_TOKEN 설정 (미설정 시 수신이 503 으로 닫혀 있다)
+#   2) 클러스터 관리 → 정보 수정 → 수집 모드를 `push` 로 변경
+#
+# 배포 전 반드시 고칠 것 (환경 의존):
+#   - PEP_URL          : PEP 백엔드 주소
+#   - CLUSTER_NAME     : PEP 에 등록된 클러스터 이름 (정확히 일치해야 매칭된다)
+#   - PROM_URL / AM_URL: 클러스터 안에서 본 Prometheus / Alertmanager 서비스 주소
+#   - namespace, image : 사내 레지스트리 미러 태그로 교체
+#
+# 시크릿 생성:
+#   kubectl -n monitoring create secret generic pep-ingest \
+#     --from-literal=token=<ALERT_INGEST_TOKEN>
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pep-observability-collector
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: pep-observability-collector
+    app.kubernetes.io/part-of: k8s-daily-monitor
+spec:
+  schedule: "*/5 * * * *"        # 5분마다 — /observability 폴링 주기(30초)보다 훨씬 성기다
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 240
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: pep-observability-collector
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: collector
+              # curl + jq 만 있으면 된다. 폐쇄망은 사내 미러의 검증 태그로 교체.
+              image: alpine:3.20
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: PEP_URL
+                  value: "http://backend.k8s-monitor-prod.svc:8000"
+                - name: CLUSTER_NAME
+                  value: "REPLACE_ME"           # PEP 에 등록된 클러스터 이름
+                - name: PROM_URL
+                  value: "http://prometheus-operated.monitoring.svc:9090"
+                - name: AM_URL
+                  value: "http://alertmanager-operated.monitoring.svc:9093"
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: pep-ingest
+                      key: token
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  apk add --no-cache curl jq >/dev/null
+
+                  INGEST="$PEP_URL/api/v1/observability/snapshot/ingest"
+                  NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+                  # 스냅샷 1건 전송. 개별 실패가 다음 kind 를 막지 않도록 || true 로 격리.
+                  push() {                       # push <kind> <payload-file>
+                    jq -n --arg c "$CLUSTER_NAME" --arg k "$1" --arg t "$NOW" \
+                          --slurpfile p "$2" \
+                          '{cluster:$c, module:"kube-prometheus-stack", kind:$k,
+                            collected_at:$t, payload:$p[0]}' \
+                      | curl -sS -f -X POST "$INGEST" \
+                          -H "Authorization: Bearer $INGEST_TOKEN" \
+                          -H 'Content-Type: application/json' \
+                          --data-binary @- >/dev/null \
+                      && echo "pushed: $1" \
+                      || echo "WARN: push failed: $1" >&2
+                  }
+
+                  # ── rules / targets / alerts 는 Prometheus 응답의 data 를 그대로 ──
+                  curl -sS -f "$PROM_URL/api/v1/rules"   | jq '.data' > /tmp/rules.json   || echo '{}' > /tmp/rules.json
+                  curl -sS -f "$PROM_URL/api/v1/targets?state=active" | jq '.data' > /tmp/targets.json || echo '{}' > /tmp/targets.json
+                  curl -sS -f "$PROM_URL/api/v1/alerts"  | jq '.data' > /tmp/alerts.json  || echo '{}' > /tmp/alerts.json
+                  push rules   /tmp/rules.json
+                  push targets /tmp/targets.json
+                  push alerts  /tmp/alerts.json
+
+                  # ── metrics: PEP 지표 카탈로그의 PromQL 을 실행해 {key:{value,labels}} 로 ──
+                  # 카탈로그는 인증이 필요한 조회 API 라, 여기서는 ConfigMap 으로 받은
+                  # 지표 정의(pep-observability-metrics)를 쓴다. 없으면 metrics 는 건너뛴다.
+                  if [ -f /etc/pep/metrics.json ]; then
+                    echo '{}' > /tmp/metrics.json
+                    jq -c '.[]' /etc/pep/metrics.json | while read -r m; do
+                      key=$(echo "$m" | jq -r '.key')
+                      q=$(echo "$m"   | jq -r '.promql')
+                      res=$(curl -sS -f -G "$PROM_URL/api/v1/query" --data-urlencode "query=$q" || echo '')
+                      [ -n "$res" ] || continue
+                      echo "$res" | jq --arg k "$key" --slurpfile acc /tmp/metrics.json '
+                        ($acc[0]) as $a
+                        | (.data.result[0] // null) as $r
+                        | if $r == null then $a
+                          else $a + { ($k): { value: ($r.value[1] | tonumber?), labels: ($r.metric // {}) } }
+                          end' > /tmp/metrics.next.json
+                      mv /tmp/metrics.next.json /tmp/metrics.json
+                    done
+                    push metrics /tmp/metrics.json
+                  else
+                    echo "INFO: /etc/pep/metrics.json 없음 — metrics 스냅샷 건너뜀" >&2
+                  fi
+              volumeMounts:
+                - name: metrics-catalog
+                  mountPath: /etc/pep
+                  readOnly: true
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "50m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "300m"
+          volumes:
+            # 지표 정의를 담은 ConfigMap. PEP 화면에서 지표를 바꾸면 이 ConfigMap 도 갱신한다
+            # (GET /api/v1/observability/metrics?module=kube-prometheus-stack 결과를
+            #  [{"key":..., "promql":...}, ...] 로 저장). optional 이라 없어도 Job 은 돈다.
+            - name: metrics-catalog
+              configMap:
+                name: pep-observability-metrics
+                optional: true

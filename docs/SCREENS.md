@@ -285,6 +285,46 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### Observability 지표 대시보드 (`/observability`, `/observability/:clusterId`)
+
+- **파일**: `frontend/src/pages/ObservabilityPage.tsx` (+ `components/observability/{MetricsTable,RulesTable,TargetsTable,ActiveAlertsTable,MetricEditModal,shared}`).
+- **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 카드형(`/cluster-overview` PromQL 카드)과 달리 수십 개 지표를 스캔하는 용도.
+- **UI 구성**:
+  - `ClusterSidebar` — `iconOnly` 단일 선택(클러스터별 Prometheus 를 봐야 하므로 `allowAll` 없음).
+  - 모듈 탭(`MacCard`) — 지표가 1개 이상 등록된 모듈만 활성, 나머지는 "준비중"(disabled + 툴팁).
+  - 뷰 탭 — **지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람** (kube-prometheus-stack 에서만 4종 전부).
+  - 툴바 — `SourceBadge`(실시간 vs 스냅샷 n분 전), 지표 추가(operator 이상), 새로고침.
+  - 지표 테이블 — 상태 dot · 지표 · 카테고리 · 현재값 · 임계 · 대상(라벨) · PromQL · 편집. 행 클릭 시 설명/전체 라벨/PromQL/참고문서 펼침. 상단에 정상·경고·심각·수집불가 요약 pill.
+- **Frontend**: `useObservabilityModules`, `useObservabilityMetrics`, `useMetricValues`, `usePromRules`, `usePromTargets`, `usePromActiveAlerts`(`hooks/useObservability.ts`, 30초 `refetchInterval`), `useCreateMetric`/`useUpdateMetric`/`useDeleteMetric`. `useClusterRouteParam('/observability')`. api.ts: `observabilityApi.*`.
+- **Backend**: `GET /api/v1/observability/{modules,metrics,metrics/values}`, `GET /observability/prometheus/{rules,targets,active-alerts}`, 지표 CRUD(`require_operator`) — 라우터 `backend/app/routers/observability.py`. 모델: `models/observability.py`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot`). 서비스: `services/prometheus_service.py`(rules/targets/status 확장) · `services/alertmanager_service.py`.
+- **핵심 기능**:
+  - 지표 카탈로그가 **DB 행**이라 PromQL·임계값·표시형식을 화면에서 편집(CLAUDE.md §UI-First). 새 모듈도 지표 행 추가만으로 활성화.
+  - 수집 경로 2종 — `pull`(PEP 가 직접 조회) / `push`(in-cluster 수집기 스냅샷). 클러스터의 `observability_mode` 로 결정하고 응답의 `source`/`collectedAt` 으로 신선도 표시.
+  - Prometheus/Alertmanager 미도달 시 500 이 아니라 `offline` + 안내 문구(fail-safe 계약).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### 알람 인박스 (`/alerts`)
+
+- **파일**: `frontend/src/pages/AlertInboxPage.tsx` (+ `components/observability/{AlertReceiverGuide,AlertNotifyRulesPanel}`).
+- **목적 / UX**: 사내 메신저(cube)로만 가던 인시던트 알람을 PEP 에서도 받아 쌓아두는 인박스. Alertmanager webhook 과 사내 alert-forwarder 를 모두 수용하고, 같은 알람이 반복되면 행을 늘리지 않고 반복 수(×N)만 올린다.
+- **UI 구성**:
+  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`).
+  - 접이식 "알람 수신 설정 방법" 안내 — Alertmanager `webhook_configs` YAML + curl 테스트 스니펫 복사 버튼(토큰 값은 마스킹).
+  - 메인 탭 — **알람 인박스 / 알림 규칙**.
+  - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색 + 일괄 확인 + 새로고침. 최근 24시간 요약 pill.
+  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침.
+  - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기.
+- **Frontend**: `useAlerts`, `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
+- **Backend**: 수신 `POST /api/v1/observability/alerts/ingest`(JWT 없음 — `ALERT_INGEST_TOKEN` Bearer 자체 검증, **미설정 시 503 fail-closed**), 조회 `GET /observability/alerts`·`/alerts/stats`·`/alerts/{id}`, `POST /alerts/{id}/ack`·`/alerts/ack-all`, 규칙/설정 CRUD(`require_operator`). 라우터 `backend/app/routers/observability.py`(`ingest_router` + `router`). 모델: `models/alert_event.py`, `models/alert_notify_rule.py`. 서비스: `services/observability/alert_ingest.py`(포맷 2종 파싱), `alert_router.py`(규칙 매칭·중복 억제·알림 생성).
+- **핵심 기능**:
+  - **수신 포맷 2종** — Alertmanager webhook v4 우선, 아니면 generic fallback(사내 forwarder 의 임의 JSON 을 최선노력 정규화).
+  - **중복 억제** — 같은 fingerprint 가 창(기본 5분) 안에서 반복되면 개인 알림은 1건. `summarize` 모드는 기존 알림 문구를 "최근 5분간 10회"로 갱신, `first_only` 는 억제 카운트만 올린다.
+  - **알림 라우팅** — 규칙(클러스터/알람명/네임스페이스/라벨/최소 심각도 매처)별로 전체 브로드캐스트 / 담당자 지정 / 알림 없음(인박스만)을 고르고 심각도 재정의도 가능.
+  - firing → resolved 상태 전이, 확인(ack)·일괄 확인, 보존기간 자동 정리(`log_retention_service`).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 실시간 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
 
 - **파일**: `frontend/src/pages/K8sLogsPage.tsx` (+ `components/common/{LogViewTabs,NamespaceSingleSelect,PodSingleSelect}`, `components/k8s/PodLogStream.tsx`).

@@ -179,7 +179,8 @@ python3 scripts/docs/check_docs_sync.py                            # 문서 동�
 | `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `10` / `20` | replica 합계 × (pool+overflow) ≤ Postgres `max_connections` 이 되게 배포별 오버라이드 |
 | `OLLAMA_URL` / `OLLAMA_MODEL` | `http://ollama:11434` / `llama3` | 폐쇄망 overlay 는 `qwen2.5-coder:7b` |
 | `PROMETHEUS_URL` | `http://prometheus-k8s.monitoring.svc:9090` | 미도달 시 카드가 offline 표시 |
-| `KUBEWATCH_TOKEN` · `SUPERPOD_INGEST_TOKEN` | *(empty)* | **fail-closed** — 미설정 시 웹훅 수신을 503 으로 거부 |
+| `KUBEWATCH_TOKEN` · `SUPERPOD_INGEST_TOKEN` · `ALERT_INGEST_TOKEN` | *(empty)* | **fail-closed** — 미설정 시 웹훅 수신을 503 으로 거부 |
+| `ALERTMANAGER_URL` | `http://alertmanager-operated.monitoring.svc:9093` | Observability 대시보드용. 클러스터별 `clusters.alertmanager_url` 이 우선 |
 | `SUPERPOD_MODE` | `centralized` | `in_cluster` \| `centralized` — deep check 실행 모드 |
 
 ⚠️ `ANALYZER_BACKEND`(`services/analyzers/factory.py`) 와 `ALLOWED_ORIGINS`(`main.py`) 는
@@ -351,7 +352,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 확인하거나 해당 라우터 파일을 읽는다. 마운트 목록은 `backend/app/routers/__init__.py`.
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
-`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest`** 다
+`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest`,
+`observability_ingest`** 다
 (`k8s_exec`/`k9s_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증).
 앱 헬스 프로브만 `/api/v1` 접두사가 없다 — `GET /health` · `/health/live` · `/health/ready`(DB 확인).
 
@@ -360,7 +362,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | 그룹 | 라우터 |
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `island` |
-| 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `promql`, `health` |
+| 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
 | K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
@@ -390,6 +392,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 위 6개는 원조 모니터링 코어다. 이외 모델은 도메인별로 아래처럼 묶인다 — 전수와 컬럼 정의는
 `backend/app/models/__init__.py` 와 각 모델 파일을 본다:
 
+- **관측/알람**: `observability`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot` — 지표 카탈로그는 DB 행이라 UI 편집 대상), `alert_event`(수신 알람, fingerprint 기준 upsert), `alert_notify_rule`(알림 라우팅·중복 억제 규칙)
 - **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `deep_check`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`

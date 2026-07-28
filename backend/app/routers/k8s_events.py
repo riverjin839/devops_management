@@ -111,20 +111,21 @@ def receive_kubewatch_event(
 
 
 def _create_notification(db: Session, event: K8sEvent) -> None:
-    """critical 이벤트 → 인앱 알림 생성 (전체 사용자 대상 'all')."""
-    try:
-        from app.models.user_notification import UserNotification
+    """critical 이벤트 → 인앱 알림 생성 (활성 사용자 전체에 개인 행으로 팬아웃).
 
-        title = f"[CRITICAL] {event.resource_kind}/{event.resource_name}"
-        body = event.reason or event.message or ""
-        notif = UserNotification(
-            recipient="all",
+    과거에는 `recipient="all"` 공유 행 하나를 넣었는데, 조회 쪽(`notifications._me_ids`)이
+    그 센티널을 매칭하지 않아 이 알림이 아무에게도 보이지 않았다.
+    """
+    try:
+        from app.services.user_notify import notify_broadcast
+
+        notify_broadcast(
+            db,
             type="k8s_event",
-            title=title,
-            body=body,
+            title=f"[CRITICAL] {event.resource_kind}/{event.resource_name}",
+            body=event.reason or event.message or "",
             link="/k8s-events",
         )
-        db.add(notif)
         db.commit()
     except Exception as exc:  # noqa: BLE001
         logger.warning("notification create failed: %s", exc)

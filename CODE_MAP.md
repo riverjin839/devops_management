@@ -88,6 +88,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/deep_checkers/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔 | `backend/app/routers/ops_check.py` + `services/ops_check_service.py` → `frontend/src/pages/OpsCheckConsolePage.tsx` |
 | K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py` + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
+| Observability 지표 대시보드 (kube-prometheus-stack) | `backend/app/routers/observability.py` + `services/observability/catalog_seed.py` · `services/alertmanager_service.py` · `services/prometheus_service.py`(rules/targets/status) + `models/observability.py` → `frontend/src/pages/ObservabilityPage.tsx` + `components/observability/` |
+| 인시던트 알람 수신 / 인박스 | `backend/app/routers/observability.py`(`ingest_router`) + `services/observability/alert_ingest.py`(Alertmanager v4 · generic 파서) · `alert_router.py`(라우팅·중복억제) + `models/alert_event.py` · `models/alert_notify_rule.py` → `frontend/src/pages/AlertInboxPage.tsx` |
 | Pod 병목 진단 | `backend/app/routers/bottleneck.py` + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |
 
 ### K8s 운영 / 리소스
