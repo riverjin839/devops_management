@@ -34,6 +34,7 @@ class LakeServiceTypeCreate(BaseModel):
     default_path: str = Field(default="/health", min_length=1, max_length=255)
     description: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=64)
+    color: Optional[str] = Field(None, max_length=20)
     enabled: bool = True
     sort_order: int = Field(default=100, ge=0, le=10000)
     # PEP/APP 서비스 사이드바 2단 네비게이션용 — domain(pep|app) + 상위 카테고리 FK
@@ -59,6 +60,7 @@ class LakeServiceTypeUpdate(BaseModel):
     default_path: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=64)
+    color: Optional[str] = Field(None, max_length=20)
     enabled: Optional[bool] = None
     sort_order: Optional[int] = Field(None, ge=0, le=10000)
     domain: Optional[str] = Field(None, max_length=10)
@@ -83,6 +85,7 @@ class LakeServiceTypeResponse(BaseModel):
     default_path: str
     description: Optional[str] = None
     icon: Optional[str] = None
+    color: Optional[str] = None
     is_builtin: bool
     enabled: bool
     sort_order: int

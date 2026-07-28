@@ -1,5 +1,4 @@
 import { createElement, useMemo, type ComponentType } from 'react';
-import { useUiSettings } from './useUiSettings';
 import {
   SERVICE_CATALOG as STATIC_CATALOG,
   type ServiceDef,
@@ -9,7 +8,7 @@ import {
   BookOpen, type LucideIcon,
 } from 'lucide-react';
 import { resolveClusterIcon, CLUSTER_ICON_OPTIONS } from '@/lib/clusterIcons';
-import type { ServiceCatalogEntry } from '@/types';
+import { useLakeServiceTypeRows } from './useLakeServices';
 
 /** 서비스 카탈로그의 아이콘 옵션 — cluster 와 같은 lucide 화이트리스트 사용 (재사용성). */
 export const SERVICE_ICON_OPTIONS = Object.keys(CLUSTER_ICON_OPTIONS);
@@ -52,25 +51,28 @@ export function getServiceIcon(name?: string | null): ComponentType<{ className?
 // Re-export for backwards compatibility — 기존 코드가 ``LucideIcon`` 타입을 임포트하던 경우.
 export type { LucideIcon };
 
-/** ui_settings 의 사용자 정의 서비스 카탈로그를 우선, 비어있으면 static 폴백.
- *  ServiceDef 형태로 통일해 기존 페이지/컴포넌트 호환성 유지. */
+/** PEP 서비스 타입(LakeServiceType domain='pep') 을 서비스 카탈로그로 사용. 비어있으면
+ *  static 폴백. ServiceDef 형태로 통일해 기존 페이지/컴포넌트 호환성 유지.
+ *
+ *  구 ui_settings.serviceCatalog(Settings → 관리 서비스 → "서비스 카탈로그" 서브탭) 는
+ *  PEP 서비스와 항목이 중복돼 폐지됐다 — 아이콘/색상 정의가 이제 여기 한 곳에서만 나온다. */
 export function useServiceCatalog(): ServiceDef[] {
-  const { data: settings } = useUiSettings();
+  const { data } = useLakeServiceTypeRows({ domain: 'pep', limit: 200 });
   return useMemo(() => {
-    const items: ServiceCatalogEntry[] | undefined = settings?.serviceCatalog;
-    if (!items || items.length === 0) {
-      // 기본 카탈로그 (static).
+    const rows = data?.data ?? [];
+    if (rows.length === 0) {
+      // 기본 카탈로그 (static) — 백엔드 시드 전이거나 조회 실패 시.
       return STATIC_CATALOG;
     }
-    const sorted = [...items].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const sorted = [...rows].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     return sorted.map((s) => ({
-      key: s.slug,
+      key: s.serviceType,
       label: s.label,
       icon: getServiceIcon(s.icon),
       color: s.color || 'slate',
-      description: s.description,
+      description: s.description ?? undefined,
     }));
-  }, [settings?.serviceCatalog]);
+  }, [data]);
 }
 
 /** 카탈로그 항목 + 'other' fallback 조회. */

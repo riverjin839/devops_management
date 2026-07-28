@@ -82,7 +82,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import', '/weekly-report'], modes: ['work'] },
-  // "PEP 서비스" — Settings → "관리 서비스" 탭 → "서비스 카탈로그" 서브탭(ui_settings.serviceCatalog)에 등록된 서비스
+  // "PEP 서비스" — Settings → "관리 서비스" 탭 → "PEP 서비스" 서브탭(LakeServiceType domain='pep')에 등록된 서비스
   // 카탈로그의 진입점(/services, ServicesCatalogPage). 서비스 클릭 시 노트(작업계획서/업무소개/
   // 이슈대응/구축작업)와 연관 업무를 보여주는 /services/:service(ServiceHubPage)로 이동한다.
   // 과거 LakeService 기반 페이지(/pep-services)는 사이드바에서 빠지고 직접 URL 접근으로만
