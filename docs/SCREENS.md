@@ -1120,6 +1120,29 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 주간보고 (`/weekly-report`)
+
+- **파일**: `frontend/src/pages/WeeklyReportPage.tsx`
+- **목적 / UX**: 한 주(월~금)의 업무를 자동 집계해 **정해진 3개 표**로 보여주고, 그대로 Confluence 에 게시하는 화면. 게시 위치(스페이스/상위 페이지/제목)를 매번 바꿀 수 있고, 관리자는 cron 으로 자동 생성·게시를 켤 수 있다.
+- **UI 구성**:
+  - 헤더: 기간 표시 + 주차 선택(`<input type="date">` — 그 날짜가 속한 주) + "다시 생성".
+  - `MacCard` 3개 = 요청 사양의 표 3종. ① 전체 요약(전체 task 수/진행중/완료/지연/비고) ② 구분별 상세(구분·task·sub task·시작일·종료 예정일·종료일·상태·이슈·비고, task 는 Jira 링크) ③ 담당자별(task·담당자·주요 추진업무·issue 요약). 상태는 완료=emerald / 지연=red / 진행=blue.
+  - `Confluence 게시` 카드: 스페이스 키·상위 페이지 ID·문서 제목 입력 + "Confluence 에 게시"(같은 제목이면 새 버전으로 갱신).
+  - `자동 생성 설정` 카드(admin 전용): 기본 스페이스/상위 페이지/제목 형식(`{start}`·`{end}` 치환)/cron/사용 여부.
+  - ClusterSidebar 미사용(클러스터 단위 화면 아님).
+- **Frontend**: `useWeeklyReportPreview()` / `useWeeklyReportPublish()` / `useWeeklyReportSettings()` / `useUpdateWeeklyReportSettings()` (`hooks/useJira.ts`) · 표 상태는 로컬 `useState`.
+- **Backend**: `POST /api/v1/jira/weekly-report/preview` · `POST /api/v1/jira/weekly-report/publish` · `GET/PUT /api/v1/jira/weekly-report/settings` (`routers/jira.py`) — 집계는 `services/weekly_report_service.py`(`build_report()` 순수 집계 + `render_storage_html()` Confluence storage format), 게시는 `services/confluence_service.py` `upsert_page()`(제목 일치 시 버전 up, 없으면 생성). 자동 생성은 Celery `dispatch_weekly_report`(매분 cron 평가, Confluence 세션이 저장된 사용자 권한으로 게시).
+- **핵심 기능**:
+  - 월~금 기간 자동 산출(주차 선택 가능), 주와 겹치는 업무 집계(미완료 + 해당 주 완료분)
+  - 상태 판정: 완료 우선 → 기한 초과 시 지연 → 나머지 진행
+  - 3개 표를 화면과 Confluence 문서에 동일 구성으로 렌더(HTML 이스케이프로 주입 방지)
+  - 같은 제목 페이지 갱신 / 신규 생성 자동 판별, 저장 위치 매 게시마다 변경 가능
+  - cron 기반 자동 생성·게시(기본 금 17:00)
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+---
+
 ### Jira Excel 가져오기 (`/jira-import`)
 
 - **파일**: `frontend/src/pages/JiraExcelImportPage.tsx`

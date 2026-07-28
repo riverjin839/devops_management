@@ -238,6 +238,7 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 | `batch-job-dispatcher` | 매분 | 등록된 배치잡 cron 평가·실행 |
 | `cluster-item-dispatcher` | 매시 :00 | 클러스터 아이템 점검 |
 | `arch-doc-sync-dispatcher` | 매분 | 서비스 아키텍처 문서 현행화 (AppSetting cron 평가 → `sync_all_architecture_docs`) |
+| `weekly-report-dispatcher` | 매분 | 주간보고 자동 생성·Confluence 게시 (AppSetting cron 평가, 기본 금 17:00) |
 
 태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
 `dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`,

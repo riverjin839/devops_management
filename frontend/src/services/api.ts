@@ -893,6 +893,21 @@ export const jiraApi = {
     }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
+  createIssue: (data: import('@/types').JiraCreateRequest) =>
+    api.post<import('@/types').JiraCreateResult>('/jira/create', data),
+  deleteIssue: (key: string) =>
+    api.delete<import('@/types').JiraDeleteResult>(`/jira/issue/${key}`),
+  // 주간보고
+  weeklyPreview: (data?: import('@/types').WeeklyReportRequest) =>
+    api.post<import('@/types').WeeklyReport>('/jira/weekly-report/preview', data ?? {}),
+  weeklyPublish: (data?: import('@/types').WeeklyPublishRequest) =>
+    api.post<import('@/types').WeeklyPublishResult>('/jira/weekly-report/publish', data ?? {}, {
+      timeout: 2 * 60_000,
+    }),
+  weeklySettings: () =>
+    api.get<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings'),
+  updateWeeklySettings: (data: import('@/types').WeeklyReportSettings) =>
+    api.put<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings', data),
 };
 
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).

@@ -328,6 +328,90 @@ class JiraService:
             logger.exception("Jira do_transition error: %s", exc)
             return {"status": "offline", "detail": str(exc)[:200]}
 
+    async def create_issue(
+        self, project_key: str, summary: str, *, description: str = "",
+        issue_type: str = "Task", priority: Optional[str] = None,
+        labels: Optional[list[str]] = None, components: Optional[list[str]] = None,
+    ) -> dict:
+        """새 이슈 생성 — `POST /rest/api/2/issue`. 성공 시 key/id 반환.
+
+        priority/labels/components 는 프로젝트 스킴에 없으면 400 이 나므로, 400 이면
+        해당 선택 필드를 빼고 1회 재시도한다(핵심 필드만으로라도 생성되게)."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Jira 미설정"}
+        if not (project_key and summary):
+            return {"status": "error", "detail": "프로젝트 키와 제목은 필수입니다."}
+
+        def _payload(with_optional: bool) -> dict:
+            fields: dict[str, Any] = {
+                "project": {"key": project_key},
+                "summary": summary[:255],
+                "issuetype": {"name": issue_type or "Task"},
+            }
+            if description:
+                fields["description"] = description
+            if with_optional:
+                if priority:
+                    fields["priority"] = {"name": priority}
+                if labels:
+                    fields["labels"] = labels
+                if components:
+                    fields["components"] = [{"name": c} for c in components]
+            return {"fields": fields}
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                for with_optional in (True, False):
+                    resp = await client.post(
+                        f"{self.base_url}/rest/api/2/issue",
+                        headers=self._headers(), json=_payload(with_optional),
+                    )
+                    if resp.status_code in (200, 201):
+                        data = resp.json()
+                        key = data.get("key", "")
+                        return {"status": "ok", "key": key, "id": str(data.get("id", "")),
+                                "url": self.issue_browse_url(key)}
+                    if resp.status_code != 400 or not with_optional:
+                        detail = ""
+                        try:
+                            body = resp.json()
+                            msgs = list(body.get("errorMessages", []))
+                            msgs.extend(f"{k}: {v}" for k, v in (body.get("errors", {}) or {}).items())
+                            detail = "; ".join(msgs)
+                        except Exception:  # noqa: BLE001
+                            detail = resp.text[:200]
+                        return {"status": "error", "detail": detail or f"HTTP {resp.status_code}"}
+                return {"status": "error", "detail": "이슈 생성 실패"}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Jira 연결 불가"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Jira create_issue error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
+    async def delete_issue(self, key: str, *, delete_subtasks: bool = True) -> dict:
+        """이슈 삭제 — `DELETE /rest/api/2/issue/{key}`. 권한이 없으면 403."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Jira 미설정"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.delete(
+                    f"{self.base_url}/rest/api/2/issue/{key}",
+                    headers=self._headers(),
+                    params={"deleteSubtasks": "true" if delete_subtasks else "false"},
+                )
+                if resp.status_code in (200, 204):
+                    return {"status": "ok"}
+                if resp.status_code == 403:
+                    return {"status": "error", "detail": "이슈 삭제 권한이 없습니다 (403)."}
+                if resp.status_code == 404:
+                    return {"status": "error", "detail": f"이슈 {key} 없음 (404)"}
+                return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Jira 연결 불가"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Jira delete_issue error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
     async def add_comment(self, key: str, body: str) -> dict:
         if not self.configured:
             return {"status": "offline", "detail": "Jira 미설정"}

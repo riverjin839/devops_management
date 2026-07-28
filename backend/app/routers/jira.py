@@ -56,13 +56,23 @@ from app.schemas.jira import (
     JiraImportRequest,
     JiraImportResult,
     JiraImportItemPreview,
+    JiraFieldChange,
     JiraExcelRow,
     JiraExcelImportResult,
     JiraExcelPasteRequest,
     JiraExcelSaveRequest,
     JiraPushRequest,
     JiraPushResult,
+    JiraCreateRequest,
+    JiraCreateResult,
+    JiraDeleteResult,
+    WeeklyReport,
+    WeeklyReportRequest,
+    WeeklyPublishRequest,
+    WeeklyPublishResult,
+    WeeklyReportSettings,
 )
+from app.services import weekly_report_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jira", tags=["jira"])
@@ -608,6 +618,21 @@ async def _confluence_service_verified(
         res = await svc.current_user()
         if not res.get("auth_failed"):
             return svc, res
+    # Confluence 전용 세션이 없으면 **Jira 자격으로 폴백**한다 — SiteMinder 류 SSO 는
+    # SMSESSION 을 상위 도메인에 발급하므로 같은 쿠키로 Confluence 도 통하는 경우가 많다.
+    # (수동으로 세션 쿠키만 등록한 사용자는 Confluence 쿠키가 아예 없다.)
+    jira_token, jira_auth = _user_credential(db, actor.username)
+    if jira_token and jira_auth in ("cookie", "sso"):
+        svc = ConfluenceService(conf_url, jira_token, auth_type="sso", verify=verify)
+        res = await svc.current_user()
+        if res.get("status") == "ok":
+            # 통했으면 Confluence 세션으로 승격 저장 — 다음부터 바로 쓰인다.
+            cred = db.query(UserJiraCredential).filter(
+                UserJiraCredential.username == actor.username).first()
+            if cred:
+                cred.confluence_cookie_encrypted = secret_box.encrypt(jira_token)
+                db.commit()
+            return svc, res
     if await _sso_relogin(db, actor, cfg):
         cookie = _user_confluence_cookie(db, actor.username)
         if cookie:
@@ -767,6 +792,71 @@ def download_sso_helper(_: User = Depends(get_current_user)):
     )
 
 
+def _jql_quote(v: str) -> str:
+    """JQL 문자열 리터럴 — 역슬래시/따옴표 이스케이프."""
+    return (v or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _build_filter_jql(payload: JiraImportRequest) -> tuple[str, str]:
+    """프로젝트/라벨/컴포넌트/상태/담당자/변경일 조건을 AND 로 묶어 JQL 을 조립한다.
+
+    빈 항목은 무시하며, 여러 값은 `IN (...)` 으로 OR 처리한다.
+    반환 (jql, error) — 조건이 하나도 없으면 error 를 채운다."""
+    clauses: list[str] = []
+    pk = (payload.project_key or "").strip()
+    if pk:
+        clauses.append(f'project = "{_jql_quote(pk)}"')
+    labels = [x.strip() for x in payload.labels if x and x.strip()]
+    if labels:
+        joined = ", ".join(f'"{_jql_quote(x)}"' for x in labels)
+        clauses.append(f"labels IN ({joined})")
+    comps = [x.strip() for x in payload.components if x and x.strip()]
+    if comps:
+        joined = ", ".join(f'"{_jql_quote(x)}"' for x in comps)
+        clauses.append(f"component IN ({joined})")
+    statuses = [x.strip() for x in payload.statuses if x and x.strip()]
+    if statuses:
+        joined = ", ".join(f'"{_jql_quote(x)}"' for x in statuses)
+        clauses.append(f"status IN ({joined})")
+    assignee = (payload.assignee or "").strip()
+    if assignee:
+        clauses.append(
+            "assignee = currentUser()" if assignee.lower() == "currentuser()"
+            else f'assignee = "{_jql_quote(assignee)}"'
+        )
+    days = payload.updated_since_days
+    if days and days > 0:
+        clauses.append(f"updated >= -{int(days)}d")
+    if not clauses:
+        return "", "조건을 하나 이상 지정하세요 (프로젝트/라벨/컴포넌트/상태/담당자)."
+    return " AND ".join(clauses) + " ORDER BY updated DESC", ""
+
+
+# 재가져오기 시 비교할 Jira 소유 필드 — (WorkItem 속성, 표시 라벨).
+_SYNC_FIELDS: tuple[tuple[str, str], ...] = (
+    ("title", "제목"),
+    ("content", "내용"),
+    ("kanban_status", "진행 상태"),
+    ("priority", "우선순위"),
+    ("jira_status", "Jira 상태"),
+)
+
+
+def _diff_existing(existing: WorkItem, fields: dict) -> list[JiraFieldChange]:
+    """기존 업무와 Jira 최신값의 차이 — 확인 팝업에 그대로 보여준다."""
+    out: list[JiraFieldChange] = []
+    for attr, label in _SYNC_FIELDS:
+        old = getattr(existing, attr, None)
+        new = fields.get(attr)
+        old_s = "" if old is None else str(old)
+        new_s = "" if new is None else str(new)
+        if old_s != new_s:
+            out.append(JiraFieldChange(
+                field=attr, label=label, old=old_s[:300], new=new_s[:300],
+            ))
+    return out
+
+
 # ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────
 @router.post("/confluence/test", response_model=JiraTestResult)
 async def confluence_test(db: Session = Depends(get_db), actor: User = Depends(get_current_user)):
@@ -799,6 +889,212 @@ async def confluence_search(
     )
 
 
+# ── PEP → Jira 신규 생성 / 삭제 ────────────────────────────────────────────────
+@router.post("/create", response_model=JiraCreateResult)
+async def create_jira_issue(
+    payload: JiraCreateRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """PEP 에서 Jira 이슈를 새로 만든다. work_item_id 를 주면 그 업무 내용으로 만들고
+    생성된 키/URL 을 업무에 연결해 이후 push/가져오기가 이어지게 한다."""
+    cfg = _get_config(db)
+    if not cfg.get("base_url") or not cfg.get("enabled", False):
+        return JiraCreateResult(status="error", detail="Jira 연동이 비활성화되었거나 URL 미설정.")
+
+    item: Optional[WorkItem] = None
+    if payload.work_item_id:
+        item = db.query(WorkItem).filter(WorkItem.id == payload.work_item_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+        if item.jira_issue_key:
+            return JiraCreateResult(status="error",
+                                    detail=f"이미 Jira({item.jira_issue_key})와 연결된 업무입니다.")
+
+    project_key = (payload.project_key or cfg.get("default_project_key") or "").strip()
+    if not project_key:
+        return JiraCreateResult(status="error", detail="프로젝트 키를 지정하세요 (또는 공통 설정의 기본 프로젝트).")
+    summary = (payload.summary or (item.title if item else "") or "").strip()
+    if not summary:
+        return JiraCreateResult(status="error", detail="제목(summary)을 입력하세요.")
+    description = payload.description if payload.description is not None else (item.content if item else "")
+    priority = payload.priority or (PEP_PRIORITY_TO_JIRA.get(item.priority) if item else None)
+
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraCreateResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다 (설정 > 연동).")
+    res = await svc.create_issue(
+        project_key, summary, description=description or "", issue_type=payload.issue_type,
+        priority=priority, labels=payload.labels, components=payload.components,
+    )
+    if res.get("status") != "ok":
+        return JiraCreateResult(status=res.get("status", "error"),
+                                detail=res.get("detail", "이슈 생성 실패"))
+
+    linked_id = None
+    if item:
+        item.jira_issue_key = res.get("key")
+        item.jira_url = res.get("url")
+        item.jira_issue_id = res.get("id") or None
+        item.jira_synced_at = datetime.utcnow()
+        db.commit()
+        linked_id = str(item.id)
+    audit_logger.record(
+        db, action="work_item.jira_create", actor=actor,
+        target_type="jira_issue", target_id=res.get("key"),
+        details={"project": project_key, "work_item_id": linked_id},
+    )
+    return JiraCreateResult(status="ok", detail="Jira 이슈가 생성되었습니다.",
+                            jira_key=res.get("key"), jira_url=res.get("url"),
+                            linked_work_item_id=linked_id)
+
+
+@router.delete("/issue/{key}", response_model=JiraDeleteResult)
+async def delete_jira_issue(
+    key: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """Jira 이슈 삭제 — 연결된 PEP 업무가 있으면 연결만 해제한다(업무는 보존)."""
+    cfg = _get_config(db)
+    if not cfg.get("base_url"):
+        return JiraDeleteResult(status="error", detail="Jira URL 미설정.")
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraDeleteResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
+    res = await svc.delete_issue(key)
+    if res.get("status") != "ok":
+        return JiraDeleteResult(status=res.get("status", "error"),
+                                detail=res.get("detail", "이슈 삭제 실패"))
+    unlinked = None
+    item = db.query(WorkItem).filter(WorkItem.jira_issue_key == key).first()
+    if item:
+        item.jira_issue_key = None
+        item.jira_issue_id = None
+        item.jira_url = None
+        item.jira_status = None
+        item.jira_updated_at = None
+        db.commit()
+        unlinked = str(item.id)
+    audit_logger.record(
+        db, action="work_item.jira_delete", actor=actor,
+        target_type="jira_issue", target_id=key, details={"unlinked_work_item_id": unlinked},
+    )
+    return JiraDeleteResult(status="ok", detail=f"Jira {key} 삭제됨", unlinked_work_item_id=unlinked)
+
+
+# ── 주간보고 (월~금 집계 → 3개 표 → Confluence 게시) ────────────────────────────
+WEEKLY_SETTINGS_KEY = "jira_weekly_report"
+DEFAULT_WEEKLY_SETTINGS = {
+    "space_key": "",
+    "parent_page_id": "",
+    "title_template": "주간보고 {start} ~ {end}",
+    "auto_enabled": False,
+    "auto_cron": "0 17 * * 5",
+    "project_filter": "",
+}
+
+
+def _get_weekly_settings(db: Session) -> dict:
+    row = db.query(AppSetting).filter(AppSetting.key == WEEKLY_SETTINGS_KEY).first()
+    value = dict(DEFAULT_WEEKLY_SETTINGS)
+    if row and isinstance(row.value, dict):
+        value.update(row.value)
+    return value
+
+
+def _parse_week_of(value: Optional[str]):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@router.get("/weekly-report/settings", response_model=WeeklyReportSettings)
+def get_weekly_settings(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return WeeklyReportSettings(**_get_weekly_settings(db))
+
+
+@router.put("/weekly-report/settings", response_model=WeeklyReportSettings)
+def update_weekly_settings(
+    payload: WeeklyReportSettings,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    row = db.query(AppSetting).filter(AppSetting.key == WEEKLY_SETTINGS_KEY).first()
+    value = payload.model_dump()
+    if row:
+        row.value = value
+    else:
+        db.add(AppSetting(key=WEEKLY_SETTINGS_KEY, value=value))
+    db.commit()
+    return WeeklyReportSettings(**value)
+
+
+@router.post("/weekly-report/preview", response_model=WeeklyReport)
+def weekly_report_preview(
+    payload: Optional[WeeklyReportRequest] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """주간보고 미리보기 — 게시하지 않고 표 데이터만 만든다."""
+    payload = payload or WeeklyReportRequest()
+    settings = _get_weekly_settings(db)
+    report = weekly_report_service.build_report(
+        db, anchor=_parse_week_of(payload.week_of),
+        project_filter=payload.project_filter or settings.get("project_filter", ""),
+    )
+    return WeeklyReport(**report)
+
+
+@router.post("/weekly-report/publish", response_model=WeeklyPublishResult)
+async def weekly_report_publish(
+    payload: Optional[WeeklyPublishRequest] = None,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """주간보고를 만들어 Confluence 에 게시한다(같은 제목이면 새 버전으로 갱신).
+
+    저장 위치(스페이스/부모/제목)는 요청에서 덮어쓸 수 있고, 미지정 시 설정값을 쓴다."""
+    payload = payload or WeeklyPublishRequest()
+    cfg = _get_config(db)
+    settings = _get_weekly_settings(db)
+    report = weekly_report_service.build_report(
+        db, anchor=_parse_week_of(payload.week_of),
+        project_filter=payload.project_filter or settings.get("project_filter", ""),
+    )
+    space_key = (payload.space_key or settings.get("space_key") or "").strip()
+    if not space_key:
+        return WeeklyPublishResult(status="error",
+                                   detail="Confluence 스페이스 키를 지정하세요 (주간보고 설정).")
+    title = (payload.title or "").strip() or (
+        settings.get("title_template") or "주간보고 {start} ~ {end}"
+    ).format(start=report["period_start"], end=report["period_end"])
+
+    svc, res = await _confluence_service_verified(db, actor, cfg)
+    if svc is None or res.get("status") != "ok":
+        return WeeklyPublishResult(status="error", detail=res.get("detail", "Confluence 세션 없음"))
+    body = weekly_report_service.render_storage_html(report)
+    out = await svc.upsert_page(
+        space_key, title, body,
+        parent_id=(payload.parent_page_id or settings.get("parent_page_id") or ""),
+    )
+    if out.get("status") != "ok":
+        return WeeklyPublishResult(status=out.get("status", "error"),
+                                   detail=out.get("detail", "Confluence 게시 실패"))
+    audit_logger.record(
+        db, action="work_item.weekly_report_publish", actor=actor,
+        target_type="confluence_page", target_id=out.get("id"),
+        details={"space": space_key, "title": title, "action": out.get("action")},
+    )
+    return WeeklyPublishResult(
+        status="ok", detail=f"Confluence 에 {('생성' if out.get('action') == 'created' else '갱신')}되었습니다.",
+        action=out.get("action", ""), page_url=out.get("url"), page_id=out.get("id"),
+    )
+
+
 # ── 가져오기 (단방향, upsert by jira_issue_id) ──────────────────────────────────
 @router.post("/import", response_model=JiraImportResult)
 async def import_issues(
@@ -821,7 +1117,11 @@ async def import_issues(
         pk = (payload.project_key or "").strip()
         if not pk:
             return JiraImportResult(status="error", detail="프로젝트 키를 입력하세요.")
-        jql = f'project = "{pk}" ORDER BY updated DESC'
+        jql = f'project = "{_jql_quote(pk)}" ORDER BY updated DESC'
+    elif payload.scope == "filter":
+        jql, err = _build_filter_jql(payload)
+        if err:
+            return JiraImportResult(status="error", detail=err)
     else:  # jql
         jql = (payload.jql or "").strip()
         if not jql:
@@ -854,16 +1154,34 @@ async def import_issues(
                 skipped += 1
                 continue
             existing = db.query(WorkItem).filter(WorkItem.jira_issue_id == jid).first()
-            action = "update" if existing else "create"
+            changes = _diff_existing(existing, fields) if existing else []
+            if not existing:
+                action = "create"
+            elif changes:
+                action = "update"
+            else:
+                action = "unchanged"
             preview.append(JiraImportItemPreview(
                 jira_key=fields["jira_issue_key"], title=fields["title"],
-                kanban_status=fields["kanban_status"], action=action,
+                kanban_status=fields["kanban_status"], action=action, changes=changes,
             ))
             if payload.dry_run:
-                if existing:
+                if action == "create":
+                    created += 1
+                elif action == "update":
                     updated += 1
                 else:
-                    created += 1
+                    skipped += 1
+                continue
+
+            # 사용자가 미리보기에서 고른 항목만 적용 (비우면 전체).
+            if payload.only_keys and fields["jira_issue_key"] not in payload.only_keys:
+                skipped += 1
+                continue
+            if action == "unchanged":
+                # 변경 없음 — 동기화 시각만 갱신하고 넘어간다.
+                existing.jira_synced_at = now
+                skipped += 1
                 continue
 
             if existing:
