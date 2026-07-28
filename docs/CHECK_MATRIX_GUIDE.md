@@ -214,7 +214,60 @@ NAS 콘솔, 네트워크 스위치, 외주 점검 결과처럼 PEP 가 직접 �
 
 ---
 
-## 6. 트러블슈팅
+## 6. 환경 차이 대응 (UI-First 원칙)
+
+설치 현장마다 구성이 다르다 — etcd 가 파드인지 systemd 데몬인지, env 파일 경로,
+네임스페이스, 라벨 셀렉터, 엔드포인트 주소. **PEP 는 이런 차이를 파이썬 파일 수정 없이
+화면에서 바꿀 수 있어야 한다**(프로젝트 원칙 — `CLAUDE.md` §UI-First 원칙).
+
+### 6.1 어디서 바꾸나
+
+| 바꿀 것 | 화면 |
+|---|---|
+| 점검의 임계값·파라미터 | 매트릭스 셀 ▸ **실행 방식** 탭 ▸ **설정 편집** |
+| 애드온 접속 주소·인증 (config) | 같은 자리 (애드온 행) |
+| 점검 정의 자체(이름/활성/cron) | 운영 점검(Ops Checks) 화면 |
+| 실행 주기 | 셀 상세 ▸ 추이·이력 탭 하단 cron / 클러스터 열 시계 배지 |
+
+값을 비우면 그 항목의 오버라이드가 지워져 **기본값으로 복귀**한다.
+
+### 6.2 etcd 가 파드가 아니라 데몬(systemd)인 환경
+
+kubeadm 이 아닌 구성에서는 etcd 가 master 노드의 **systemd 유닛**으로 뜨고 환경변수는
+`/etc/etcd.env` 에 있다 — `kube-system` 에 etcd 파드가 없으므로 pod exec 경로가 통하지 않는다.
+`etcd_defrag` 점검은 이 두 환경을 **파라미터로 선택**한다.
+
+| `source` | 동작 |
+|---|---|
+| `auto` (기본) | etcd 파드를 먼저 찾고, 없으면 자동으로 스냅샷 경로로 폴백 |
+| `pod` | 파드형 etcd 전용 (`kubectl exec … etcdctl endpoint status`) |
+| `snapshot` | 데몬 etcd 전용 — 수집된 `etcdctl_config` 스냅샷만 사용 |
+
+**스냅샷 경로 사용 절차** (데몬 etcd):
+
+1. **버전 / 설정 관리(`/versions`)** 화면에서 etcd 설정 수집을 실행한다. master 노드에 SSH 로
+   접속해 `/etc/etcd.env` 를 `source` 한 뒤 `etcdctl endpoint status -w json` 을 수집하고,
+   `cluster_config_snapshots` 에 `etcdctl_config:{host}` 로 저장한다.
+   - env 파일 경로가 다르면 그 화면의 `env_files` 목록에서 바꾼다.
+   - **자격증명은 저장되지 않는다** — 요청 시에만 쓰이고 DB 에 남지 않는다.
+2. 매트릭스의 etcd 행은 이 스냅샷을 읽어 단편화율을 계산한다. 수집이 `snapshot_max_age_hours`
+   (기본 24h)보다 오래되면 판정하지 않고 **대기(pending)** 로 남긴다 — 낡은 값으로 "정상"이라고
+   말하지 않기 위해서다.
+3. 알람(`alarm list`)은 스냅샷에 없다 — 파드 경로이거나 **etcdctl 콘솔(`/etcdctl`)** 에서
+   확인한다. 그 콘솔도 `/etc/etcd.env` 를 기본 env 파일로 쓰고 경로를 바꿀 수 있다.
+
+> 체커가 직접 SSH 하지 않는 이유: params 는 JSONB 라 런북·실행 로그에 그대로 노출된다.
+> 자격증명을 거기 담지 않으려고 수집(자격증명 미저장 UI 흐름)과 판정(스냅샷 읽기)을 분리했다.
+
+### 6.3 새 환경 차이가 생기면
+
+점검이 우리 환경과 안 맞는데 화면에서 바꿀 수 없다면 그건 **구현 결함**이다. 해당 값을
+`param_fields` 로 노출하도록 체커를 고치고(`.claude/skills/add-deep-checker/SKILL.md`),
+같은 커밋에서 런북 명령 목록도 갱신한다. 코드 수정 없이 운영자가 대응할 수 있는 상태가 기준이다.
+
+---
+
+## 7. 트러블슈팅
 
 | 증상 | 확인할 것 |
 |---|---|
@@ -223,12 +276,14 @@ NAS 콘솔, 네트워크 스위치, 외주 점검 결과처럼 PEP 가 직접 �
 | ▶ 를 눌렀는데 아무것도 안 바뀐다 | 일괄 실행은 큐잉이다. 열린 수행 로그 패널에서 대기열/실행 중 상태를 확인. 전부 **실패** + "Celery 워커/브로커" 문구면 워커가 죽은 것. |
 | cron 을 저장하면 422 가 뜬다 | 최소 5분 간격 제약. `*/1 * * * *` 같은 표현은 거부된다. |
 | 셀은 정상인데 클러스터 색이 위험이다 | 클러스터 상태는 `core_bundle`(DailyChecker)과 애드온 상태에서 나온다. 개별 deep_check 셀 색과 직접 연결되지 않는다. |
+| etcd 점검이 "etcd pod 를 찾지 못했습니다" | 데몬(systemd) etcd 환경이다. 설정 편집에서 `source` 를 `auto` 또는 `snapshot` 으로 두고, `/versions` 화면에서 etcd 설정 수집을 먼저 실행한다 (§6.2). |
+| deep check 실행이 500 (`daily_check_log_id` NOT NULL) | 구버전 DB 의 레거시 제약. 백엔드를 재시작하면 부팅 마이그레이션이 자동으로 푼다(`ALTER COLUMN … DROP NOT NULL`). |
 | 상태가 **대기(pending)** 로 남는다 | 연결 거부/타임아웃은 위험이 아니라 대기로 판정한다(클러스터가 죽은 것과 PEP 가 못 닿는 것을 구분하기 위함). 수행 로그의 stderr 를 본다. |
 | 자동 실행이 아예 안 돈다 | 클러스터 열 cron 이 비어 있거나(핵심 항목), 셀 cron 이 비활성이거나, `check-matrix-dispatch` Beat 가 안 도는 경우. |
 
 ---
 
-## 7. DB 구조 (Schema Audit)
+## 8. DB 구조 (Schema Audit)
 
 점검 매트릭스가 소유한 테이블 5개와 실행 시 참조하는 인접 테이블의 관계다. 모델 원천은
 `backend/app/models/check_matrix.py`, 인접 모델은 `deep_check.py` · `addon.py` · `cluster.py`.
@@ -247,7 +302,7 @@ erDiagram
     check_matrix_items }o..o| addons : "source_ref = type (논리 키, FK 아님)"
 ```
 
-### 7.1 테이블별 역할·핵심 컬럼·인덱스
+### 8.1 테이블별 역할·핵심 컬럼·인덱스
 
 | 테이블 | 역할 | 핵심 컬럼 | 인덱스/제약 |
 |---|---|---|---|
@@ -266,7 +321,7 @@ erDiagram
 | `clusters.check_cron_expr` / `check_last_run_at` | — | core_bundle 행의 cron / 디스패처 anchor |
 | `app_settings` key `check_matrix.settings` | — | 이력 보관 일수 (`retention_days`) |
 
-### 7.2 스키마 운영 특성 (audit 결과)
+### 8.2 스키마 운영 특성 (audit 결과)
 
 - **삭제 전파**: 항목/클러스터를 지우면 스케줄·결과·값 이력·수행 로그가 전부 CASCADE 로
   정리된다 — 고아 행 없음.
@@ -287,7 +342,7 @@ erDiagram
 
 ---
 
-## 8. API 요약
+## 9. API 요약
 
 모두 `/api/v1/check-matrix` 하위. 실행/변경은 operator 이상.
 

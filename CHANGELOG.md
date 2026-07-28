@@ -59,6 +59,26 @@
   바꾸는 방법을 안내한다.
 - **문서**: `docs/CHECK_MATRIX_GUIDE.md` 에 DB 구조(Schema Audit) 섹션 추가 —
   테이블 5종 관계도(ER)·인덱스/제약·enum 확장 절차·runs 테이블 용량 특성·이중 기록.
+- **Deep check 실행 500 (심각)**: 매트릭스에서 deep check 를 실행하면 전부
+  `null value in column "daily_check_log_id" violates not-null constraint` 로 실패했다.
+  일일점검 회차 없이 도는 단독 실행(매트릭스 셀/"지금 점검")은 이 컬럼이 NULL 인데,
+  초기 스키마의 NOT NULL 이 구버전 DB 에 남아 있었고 `create_all` 은 기존 컬럼 제약을
+  바꾸지 않는다. 부팅 마이그레이션에 `DROP NOT NULL` 추가(재시작만으로 복구) + 회귀 테스트.
+- **etcd 가 데몬(systemd)인 환경 지원**: `etcd_defrag` 점검이 `kube-system` 의 etcd 파드만
+  찾아서, etcd 가 master 노드 systemd 유닛으로 뜨고 env 가 `/etc/etcd.env` 인 환경에서는
+  항상 "etcd pod 를 찾지 못했습니다"로 끝났다. 실행 경로를 파라미터
+  `source`(`auto`/`pod`/`snapshot`)로 노출하고, 데몬 환경은 `버전/설정 관리(/versions)`
+  화면이 SSH 로 수집해 둔 `etcdctl_config` 스냅샷을 읽어 단편화율을 판정한다(`auto` 는
+  파드 → 스냅샷 폴백, 스냅샷이 `snapshot_max_age_hours` 보다 낡으면 대기 처리).
+  체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다.
+
+### Changed
+- **UI-First 원칙을 프로젝트 규약으로 명문화** (`CLAUDE.md` §UI-First 원칙): 환경마다
+  달라지는 값(네임스페이스·라벨·경로·엔드포인트·실행 경로)은 코드에 하드코딩하지 않고
+  `param_fields`/`threshold_fields`(또는 `Addon.config`)로 노출해 **운영자가 파이썬 파일을
+  고치지 않고 화면에서 확인·수정**할 수 있어야 한다. 자격증명은 params 에 저장 금지(런북·
+  실행 로그 노출) — 수집 화면이 남긴 스냅샷을 읽는 구조를 쓴다. `add-deep-checker` 스킬과
+  `docs/CHECK_MATRIX_GUIDE.md` §환경 차이 대응에 절차 반영.
 
 ## [1.16.0] - 2026-07-28
 

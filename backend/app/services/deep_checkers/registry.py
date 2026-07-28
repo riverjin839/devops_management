@@ -80,16 +80,27 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="etcd_defrag",
             display_name="etcd 단편화 / 알람",
-            description="etcdctl endpoint status + alarm list 로 단편화율과 alarm 점검",
+            description=(
+                "etcdctl endpoint status + alarm list 로 단편화율과 alarm 점검. "
+                "파드형 etcd 는 pod exec, 데몬(systemd) etcd 는 '버전/설정 관리' 화면에서 "
+                "수집한 etcdctl_config 스냅샷으로 점검(auto 는 pod → 스냅샷 폴백)."
+            ),
             threshold_fields=[
                 DeepCheckFieldSpec("warning_fragmentation_pct", "float", "단편화 경고 (%)", 30),
                 DeepCheckFieldSpec("critical_fragmentation_pct", "float", "단편화 심각 (%)", 50),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("source", "string", "실행 경로 (auto|pod|snapshot)", "auto",
+                                   help="auto: pod 탐색 후 없으면 수집 스냅샷 폴백 / pod: 파드형 etcd 전용 / "
+                                        "snapshot: 데몬(systemd) etcd — /versions 에서 수집한 스냅샷만 사용"),
+                DeepCheckFieldSpec("snapshot_max_age_hours", "int", "스냅샷 허용 나이 (시간)", 24,
+                                   help="수집 시각이 이보다 오래되면 판정하지 않고 대기(pending) 처리"),
             ],
             default_thresholds={
                 "warning_fragmentation_pct": 30,
                 "critical_fragmentation_pct": 50,
             },
-            default_params={},
+            default_params={"source": "auto", "snapshot_max_age_hours": 24},
         ),
     ),
     "cni_flow": (
@@ -596,6 +607,7 @@ STEP_PLANS: dict[str, list[tuple[str, str]]] = {
         ("locate_pod", "etcd 파드 탐색"),
         ("exec_status", "etcdctl endpoint status 실행"),
         ("exec_alarm", "etcdctl alarm list 실행"),
+        ("snapshot", "수집 스냅샷 폴백 (데몬 etcd)"),
         ("parse", "db size 파싱 · 단편화율 계산"),
         ("verdict", "단편화/알람 임계 비교"),
     ],
