@@ -10,6 +10,20 @@
 
 1.16.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **등록된 클러스터 삭제 실패 (`NotNullViolation: cluster_id of relation
+  check_matrix_results`)**: 연결이 안 된(pending) 클러스터를 포함해 클러스터 삭제가 500 으로
+  실패하던 문제를 고쳤다. 원인은 두 가지 — ① 자식 모델의 `backref` 기본 cascade 에 delete 가
+  없어 SQLAlchemy 가 부모 삭제 시 자식의 `cluster_id` 를 NULL 로 UPDATE(NOT NULL 컬럼이라
+  위반), ② 삭제 라우터가 정리 대상 테이블을 손으로 나열해 모델이 추가될 때마다 누락. Backend:
+  신규 `services/cluster_purge.py` 가 메타데이터에서 `cluster_id` 보유 테이블 32개를 전수
+  탐색해 FK 의존성 순서대로 정리하고(업무·서비스 카탈로그·서버 스펙은 연결만 해제),
+  Cluster 쪽 `backref` 7곳에 `passive_deletes=True` 를 적용해 nullify UPDATE 를 차단했다.
+  삭제 실패 시 원인 테이블이 담긴 에러 메시지를 반환하고, kubeconfig 파일 삭제는 DB 커밋
+  성공 후로 옮겨 실패 시 파일만 사라지는 문제도 없앴다. 다중 대상 업무의
+  `cluster_ids`/`cluster_names` 에서도 삭제된 클러스터를 제거하고 대표를 승격한다.
+  신규 회귀 테스트 `tests/test_cluster_deletion.py` 가 정리 정책 누락과 nullify 를 CI 에서 막는다.
+
 ## [1.16.0] - 2026-07-28
 
 ### Added

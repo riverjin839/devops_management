@@ -427,7 +427,9 @@ export function SettingsPage() {
   const handleDelete = async (cluster: Cluster) => {
     if (
       !confirm(
-        `클러스터 "${cluster.name}"을(를) 삭제하시겠습니까?\n관련 Addon, CheckLog, Playbook이 모두 삭제됩니다.`
+        `클러스터 "${cluster.name}"을(를) 삭제하시겠습니까?\n` +
+          '점검 결과·이벤트·스냅샷·Addon·Playbook·배치잡 등 이 클러스터에 속한 데이터가 모두 삭제됩니다.\n' +
+          '업무(Work Item)와 서비스 카탈로그는 삭제되지 않고 클러스터 연결만 해제됩니다.'
       )
     )
       return;
