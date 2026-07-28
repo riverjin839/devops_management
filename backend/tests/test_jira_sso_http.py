@@ -19,6 +19,14 @@ from app.services.jira_sso_http import (
     form_sso_login,
     form_wants_base64,
     parse_forms,
+    pick_username_field,
+    extract_error_text,
+    detect_crypto_hints,
+    parse_page,
+    find_continue_form,
+    find_continue_link,
+    fix_self_referential_target,
+    is_agent_install_url,
     sso_login_products,
 )
 
@@ -573,3 +581,301 @@ async def test_sso_login_two_stage_flow_is_not_treated_as_rejection():
                                   transport=_make_two_stage_transport())
     assert result["status"] == "ok", result
     assert "JSESSIONID=sess-2" in result["cookie_header"]
+
+
+# ── 계정 필드 선택 / 오류 문구 추출 (사번 로그인 IdP 대응) ────────────────────────
+EMPNUM_LOGIN_HTML = """
+<html><body>
+<p>비밀번호 5회 이상 입력 오류 시 계정이 잠깁니다. 사번 찾기는 인사팀 문의.</p>
+<form action="/sso/am/jira/login.jsp" method="post">
+  <input type="text" name="searchKeyword" value=""/>
+  <input type="text" name="empnum" value=""/>
+  <input type="password" name="passwd"/>
+</form></body></html>
+"""
+
+
+def test_pick_username_field_prefers_known_name_over_first_text_input():
+    """앞에 다른 text 입력(검색창)이 있어도 사번 필드(empnum)를 계정 칸으로 고른다."""
+    form = find_login_form(parse_forms(EMPNUM_LOGIN_HTML))
+    assert pick_username_field(form)["name"] == "empnum"
+    data = fill_login_form(form, "12345", "pw")
+    assert data["empnum"] == "12345"
+    assert data["searchKeyword"] == ""      # 검색창엔 계정을 넣지 않는다
+    assert data["passwd"] == "pw"
+
+
+def test_pick_username_field_respects_admin_override():
+    form = find_login_form(parse_forms(EMPNUM_LOGIN_HTML))
+    assert pick_username_field(form, "searchKeyword")["name"] == "searchKeyword"
+    data = fill_login_form(form, "12345", "pw", username_field_name="searchKeyword")
+    assert data["searchKeyword"] == "12345"
+    assert data["empnum"] == ""
+
+
+def test_extract_error_text_ignores_static_notice_via_baseline():
+    """로그인 페이지의 상시 안내문("5회 이상 입력 오류 시 ...")을 오류로 오인하지 않는다."""
+    # 제출 전후가 동일 → 새 문구 없음 → 빈 문자열(= '같은 폼 재표시'로 안내됨)
+    assert extract_error_text(EMPNUM_LOGIN_HTML, baseline_html=EMPNUM_LOGIN_HTML) == ""
+    # baseline 없이 키워드만 보면 안내문을 집어온다(과거 동작) — 회귀 방지용 대조
+    assert "5회" in extract_error_text(EMPNUM_LOGIN_HTML)
+
+
+def test_extract_error_text_picks_newly_added_message():
+    after = EMPNUM_LOGIN_HTML.replace(
+        "<form", "<div class='err'>사번 또는 비밀번호가 일치하지 않습니다.</div><form")
+    got = extract_error_text(after, baseline_html=EMPNUM_LOGIN_HTML)
+    assert got == "사번 또는 비밀번호가 일치하지 않습니다."
+
+
+def test_describe_page_reports_username_field(monkeypatch):
+    """진단이 '계정을 채울 필드'를 보고해, 잘못된 칸이 잡히면 눈에 보이게 한다."""
+    import httpx as _httpx
+    from app.services.jira_sso_http import describe_page
+    resp = _httpx.Response(200, text=EMPNUM_LOGIN_HTML,
+                           request=_httpx.Request("GET", "https://login.x.com/sso/am/jira/login.jsp"))
+    info = describe_page(resp)
+    assert info["username_field"] == "empnum"
+    assert info["password_inputs"] == 1
+    assert info["wants_base64"] is False
+
+
+# ── 폼 필드 전수 수집 / 클라이언트 암호화 탐지 ────────────────────────────────────
+SELECT_LOGIN_HTML = """
+<html><head><script src="/js/common/jsbn.js"></script><script src="/js/rsa.js"></script></head>
+<body>
+<form id="loginForm" action="/sso/am/UI/Login" method="post">
+  <select name="domain"><option value="corp">corp</option><option value="lab" selected>lab</option></select>
+  <input type="text" name="empnum"/>
+  <input type="password" name="passwd"/>
+  <textarea name="memo"></textarea>
+  <input type="hidden" name="publicKey" value="AB12"/>
+</form></body></html>
+"""
+
+
+def test_parse_page_collects_select_textarea_and_scripts():
+    """select/textarea 를 빠뜨리면 IdP 가 필수값 누락으로 흐름을 되감는다 — 전부 수집한다."""
+    forms, scripts = parse_page(SELECT_LOGIN_HTML)
+    names = {i["name"]: i["type"] for i in forms[0]["inputs"]}
+    assert names["domain"] == "select"
+    assert names["memo"] == "textarea"
+    assert names["empnum"] == "text"
+    assert names["passwd"] == "password"
+    assert any("rsa.js" in sc for sc in scripts)
+
+
+def test_fill_login_form_keeps_select_default_value():
+    form = find_login_form(parse_forms(SELECT_LOGIN_HTML))
+    data = fill_login_form(form, "12345", "pw")
+    assert data["domain"] == "lab"      # selected option 유지
+    assert data["empnum"] == "12345"
+    assert data["publicKey"] == "AB12"  # hidden 유지
+
+
+def test_detect_crypto_hints_flags_client_side_encryption():
+    forms, scripts = parse_page(SELECT_LOGIN_HTML)
+    hints = detect_crypto_hints(SELECT_LOGIN_HTML, scripts)
+    assert hints, "rsa.js/jsbn/publicKey 가 있으면 클라이언트 암호화로 표시해야 한다"
+    assert any("RSA" in h or "공개키" in h for h in hints)
+
+
+def test_detect_crypto_hints_quiet_on_plain_form():
+    forms, scripts = parse_page(KEYCLOAK_LOGIN_HTML)
+    assert detect_crypto_hints(KEYCLOAK_LOGIN_HTML, scripts) == []
+
+
+def test_describe_page_reports_login_fields_and_scripts():
+    import httpx as _httpx
+    from app.services.jira_sso_http import describe_page
+    resp = _httpx.Response(200, text=SELECT_LOGIN_HTML,
+                           request=_httpx.Request("GET", "https://login.x.com/sso/am/UI/Login"))
+    info = describe_page(resp)
+    assert "empnum:text" in info["login_fields"]
+    assert "domain:select" in info["login_fields"]
+    assert info["login_form_action"] == "/sso/am/UI/Login"
+    assert any("rsa.js" in sc for sc in info["scripts"])
+    assert info["crypto_hints"]
+
+
+# ── 로그인 직후 안내 페이지(interstitial) 통과 ───────────────────────────────────
+NOTICE_BUTTON_HTML = """
+<html><body><h3>세션 유효기간 안내</h3>
+<p>세션은 8시간 후 만료됩니다.</p>
+<form action="/sso/am/continue" method="post"><input type="submit" value="확인"/></form>
+</body></html>
+"""
+NOTICE_LINK_HTML = """
+<html><body><h3>세션 유효기간 안내</h3>
+<a href="/sso/am/continue">확인</a>
+</body></html>
+"""
+
+
+def test_find_continue_form_matches_submit_only_form():
+    """hidden 없이 확인 버튼만 있는 폼도 진행용으로 인식한다(기존 auto-submit 조건은 hidden 필수)."""
+    forms = parse_forms(NOTICE_BUTTON_HTML)
+    assert find_autosubmit_form(forms) is None      # 기존 로직으로는 못 잡음
+    cont = find_continue_form(forms)
+    assert cont is not None and cont["action"] == "/sso/am/continue"
+
+
+def test_find_continue_form_ignores_login_form():
+    """입력이 필요한 로그인 폼을 진행용으로 오인하면 안 된다."""
+    assert find_continue_form(parse_forms(KEYCLOAK_LOGIN_HTML)) is None
+
+
+def test_find_continue_link_by_text_and_by_host():
+    got = find_continue_link(NOTICE_LINK_HTML, "https://login.x.com/sso/am/notice")
+    assert got == "https://login.x.com/sso/am/continue"
+    # 문구가 없어도 제품 도메인으로 가는 링크면 따라간다.
+    html = '<html><body><a href="https://jira.local/secure/">bare</a></body></html>'
+    assert find_continue_link(html, "https://login.x.com/x", "jira.local") == "https://jira.local/secure/"
+
+
+INTERSTITIAL_LOGIN_HTML = """
+<html><body>
+<form action="/sso/am/login" method="post">
+  <input type="text" name="empnum"/>
+  <input type="password" name="passwd"/>
+</form></body></html>
+"""
+
+
+def _make_interstitial_transport(use_link: bool = False) -> httpx.MockTransport:
+    """로그인 성공 후 '세션 유효기간 안내' 페이지가 끼어드는 IdP — 확인을 눌러야 제품으로 간다."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        has_jira = "JSESSIONID=sess-3" in request.headers.get("cookie", "")
+        if url.startswith("https://jira.local/?token="):
+            return httpx.Response(302, headers={"Location": "https://jira.local/",
+                                                "Set-Cookie": "JSESSIONID=sess-3; Path=/"})
+        if url == "https://jira.local/":
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            return httpx.Response(302, headers={"Location": "https://login.x.com/sso/am/login"})
+        if url == "https://login.x.com/sso/am/login":
+            if request.method == "POST":
+                body = parse_qs(request.content.decode())
+                if body.get("empnum") == ["12345"] and body.get("passwd") == ["pw"]:
+                    return httpx.Response(200, text=(NOTICE_LINK_HTML if use_link else NOTICE_BUTTON_HTML))
+                return httpx.Response(200, text=INTERSTITIAL_LOGIN_HTML)
+            return httpx.Response(200, text=INTERSTITIAL_LOGIN_HTML, headers={"Content-Type": "text/html"})
+        if url == "https://login.x.com/sso/am/continue":
+            return httpx.Response(302, headers={"Location": "https://jira.local/?token=ok"})
+        if url == "https://jira.local/rest/api/2/myself":
+            if has_jira:
+                return httpx.Response(200, json={"name": "12345", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+async def test_sso_login_passes_notice_page_with_button():
+    """로그인 후 안내 페이지의 '확인' 폼을 자동 제출해 세션까지 도달한다."""
+    result = await form_sso_login("https://jira.local", "12345", "pw",
+                                  transport=_make_interstitial_transport())
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-3" in result["cookie_header"]
+
+
+async def test_sso_login_passes_notice_page_with_link():
+    """'확인'이 버튼이 아니라 링크인 경우에도 따라간다."""
+    result = await form_sso_login("https://jira.local", "12345", "pw",
+                                  transport=_make_interstitial_transport(use_link=True))
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-3" in result["cookie_header"]
+
+
+# ── SiteMinder (SMENC/SMLOCALE/TARGET/SMAUTHREASON) ─────────────────────────────
+SITEMINDER_LOGIN_HTML = """
+<html><body>
+<script>if (!agentInstalled) location.href='https://csam.corp.com/tray/view/install.do';</script>
+<form action="/sso/am/jira/login.fcc" method="post">
+  <input type="hidden" name="SMENC" value="UTF-8"/>
+  <input type="hidden" name="SMLOCALE" value="US-EN"/>
+  <input type="text" name="USER" value=""/>
+  <input type="password" name="PASSWORD" value=""/>
+  <input type="hidden" name="TARGET" value="https://login.corp.com/sso/am/jira/login.jsp"/>
+  <input type="hidden" name="SMAUTHREASON" value="-0"/>
+  <input type="hidden" name="TYPE" value=""/>
+</form></body></html>
+"""
+
+
+def test_is_agent_install_url_flags_tray_install():
+    assert is_agent_install_url("https://csam.corp.com/tray/view/install.do") is True
+    assert is_agent_install_url("https://login.corp.com/sso/am/jira/login.jsp") is False
+
+
+def test_client_redirect_skips_agent_install_page():
+    """로그인 페이지가 보안 에이전트 설치로 보내는 스크립트를 갖고 있어도 따라가지 않는다."""
+    got = find_client_redirect(SITEMINDER_LOGIN_HTML, "https://login.corp.com/sso/am/jira/login.jsp")
+    assert got == "", got
+
+
+def test_fix_self_referential_target_rewrites_to_product():
+    """TARGET 이 로그인 페이지 자신이면 제품 URL 로 바꾼다 — 안 그러면 인증 성공 후에도
+    로그인 화면으로 되돌아와 '자격 오류'로 오판된다."""
+    form = find_login_form(parse_forms(SITEMINDER_LOGIN_HTML))
+    data = fill_login_form(form, "12345", "pw")
+    assert data["TARGET"] == "https://login.corp.com/sso/am/jira/login.jsp"
+    fixed = fix_self_referential_target(
+        data, form, "https://login.corp.com/sso/am/jira/login.jsp", "https://jira.corp.com")
+    assert fixed["TARGET"] == "https://jira.corp.com/"
+    assert fixed["SMENC"] == "UTF-8" and fixed["SMAUTHREASON"] == "-0"   # 다른 hidden 은 보존
+
+
+def test_fix_self_referential_target_keeps_valid_relaystate():
+    """정상적인 목적지(다른 경로)는 건드리지 않는다."""
+    html = ('<form action="/sso"><input type="password" name="pw"/>'
+            '<input type="hidden" name="TARGET" value="https://jira.corp.com/browse/ABC-1"/></form>')
+    form = find_login_form(parse_forms(html))
+    data = fill_login_form(form, "u", "p")
+    fixed = fix_self_referential_target(
+        data, form, "https://login.corp.com/sso/am/jira/login.jsp", "https://jira.corp.com")
+    assert fixed["TARGET"] == "https://jira.corp.com/browse/ABC-1"
+
+
+def _make_siteminder_transport() -> httpx.MockTransport:
+    """SiteMinder 재현 — 인증은 성공하지만 TARGET 이 로그인 페이지면 로그인 화면으로 되돌아온다.
+    TARGET 을 제품 URL 로 교정해 보내야 세션이 잡힌다."""
+    login_url = "https://login.corp.com/sso/am/jira/login.jsp"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        has_jira = "JSESSIONID=sm-1" in request.headers.get("cookie", "")
+        if url.startswith("https://jira.corp.com/?smsession="):
+            return httpx.Response(302, headers={"Location": "https://jira.corp.com/",
+                                                "Set-Cookie": "JSESSIONID=sm-1; Path=/"})
+        if url == "https://jira.corp.com/":
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            return httpx.Response(302, headers={"Location": login_url})
+        if url == login_url:
+            return httpx.Response(200, text=SITEMINDER_LOGIN_HTML, headers={"Content-Type": "text/html"})
+        if url == "https://login.corp.com/sso/am/jira/login.fcc":
+            body = parse_qs(request.content.decode())
+            if body.get("USER") != ["12345"] or body.get("PASSWORD") != ["pw"]:
+                return httpx.Response(200, text=SITEMINDER_LOGIN_HTML)
+            target = (body.get("TARGET") or [""])[0]
+            # TARGET 이 로그인 페이지면 그대로 로그인 화면으로 되돌린다(교정 전 동작).
+            if target.rstrip("/") == login_url.rstrip("/"):
+                return httpx.Response(200, text=SITEMINDER_LOGIN_HTML)
+            return httpx.Response(302, headers={"Location": "https://jira.corp.com/?smsession=ok"})
+        if url == "https://jira.corp.com/rest/api/2/myself":
+            if has_jira:
+                return httpx.Response(200, json={"name": "12345", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+async def test_sso_login_siteminder_target_correction():
+    """SiteMinder TARGET 자기참조 교정으로 로그인에 성공한다."""
+    result = await form_sso_login("https://jira.corp.com", "12345", "pw",
+                                  transport=_make_siteminder_transport())
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sm-1" in result["cookie_header"]

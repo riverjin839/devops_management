@@ -511,6 +511,8 @@ export interface JiraConfig {
   confluenceBaseUrl?: string;
   /** IdP 로그인 페이지 URL (선택) — 자동 탐색 실패 시 SSO 로그인의 진입점으로 사용. */
   ssoLoginUrl?: string;
+  /** IdP 로그인 폼의 계정 필드명 (선택) — 자동 추정이 빗나갈 때 지정 (예: empnum). */
+  ssoUsernameField?: string;
 }
 
 /** SSO 진단 — 백엔드(파드)가 각 진입 경로에서 실제로 본 페이지 요약. */
@@ -523,6 +525,15 @@ export interface SsoDiagnoseEntry {
   title: string;
   forms: number;
   passwordInputs: number;
+  /** 이 페이지에서 계정을 채울 필드명. */
+  usernameField?: string;
+  /** 자격을 base64 로 보내야 하는 폼인지 (OpenAM `encoded=true`). */
+  wantsBase64?: boolean;
+  /** 로그인 폼 action / 전체 필드(name:type) / 로드 스크립트 / 클라이언트 암호화 흔적. */
+  loginFormAction?: string;
+  loginFields?: string[];
+  scripts?: string[];
+  cryptoHints?: string[];
   inputNames: string[];
   /** 폼의 hidden 상태값 (예: OpenAM `encoded=true`). */
   hiddenFields?: Record<string, string>;

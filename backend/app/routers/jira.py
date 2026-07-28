@@ -79,6 +79,8 @@ DEFAULT_JIRA_SETTINGS = {
     # IdP 로그인 페이지 URL (선택) — 자동 탐색 실패 시 지정. 예:
     # https://login.example.com/sso/am/jira/login.jsp
     "sso_login_url": "",
+    # IdP 로그인 폼의 계정 필드명 (선택) — 자동 추정 실패 시 지정 (예: empnum).
+    "sso_username_field": "",
 }
 
 
@@ -389,6 +391,8 @@ def update_config(
     if "sso_login_url" in data and data["sso_login_url"] is not None:
         # IdP 로그인 URL 은 쿼리스트링(goto 등)을 포함할 수 있어 rstrip('/') 하지 않는다.
         current["sso_login_url"] = data["sso_login_url"].strip()
+    if "sso_username_field" in data and data["sso_username_field"] is not None:
+        current["sso_username_field"] = data["sso_username_field"].strip()
     for k in ("enabled", "verify_tls", "default_project_key"):
         if k in data and data[k] is not None:
             current[k] = data[k]
@@ -502,12 +506,14 @@ def _sso_products(cfg: dict) -> list[dict]:
         "key": "jira", "label": "Jira",
         "base_url": cfg.get("base_url", ""), "verify_path": JIRA_VERIFY_PATH,
         "sso_login_url": (cfg.get("sso_login_url") or "").strip(),
+        "username_field": (cfg.get("sso_username_field") or "").strip(),
     }]
     conf_url = (cfg.get("confluence_base_url") or "").strip()
     if conf_url:
         products.append({
             "key": "confluence", "label": "Confluence",
             "base_url": conf_url, "verify_path": CONFLUENCE_VERIFY_PATH,
+            "username_field": (cfg.get("sso_username_field") or "").strip(),
         })
     return products
 
@@ -721,13 +727,21 @@ async def sso_diagnose(db: Session = Depends(get_db), _: User = Depends(get_curr
     rows = await diagnose_products(_sso_products(cfg), verify_tls=bool(cfg.get("verify_tls", True)))
     entries = [SsoDiagnoseEntry(**r) for r in rows]
     found = next((e for e in entries if e.password_inputs > 0), None)
-    if found:
+    hints = sorted({h for e in entries for h in e.crypto_hints})
+    if found and hints:
+        # 클라이언트에서 자격을 가공하는 페이지는 평문 POST 로 절대 인증되지 않는다.
+        detail = (
+            f"로그인 폼은 찾았지만({found.final_url}) 이 페이지는 **브라우저에서 자격을 가공**하는 "
+            f"것으로 보입니다: {', '.join(hints)}. 이 경우 서버측 폼 로그인은 원리상 실패하므로 "
+            "'로컬 도우미'(내 PC 브라우저) 방식이나 PAT/세션 쿠키 등록을 사용하세요."
+        )
+    elif found:
         detail = f"로그인 폼 발견 — {found.final_url} (password 입력 {found.password_inputs}개). SSO 로그인을 시도해도 됩니다."
     else:
         detail = ("어느 진입 경로에서도 password 입력을 찾지 못했습니다. 아래 표의 final_url 이 "
                   "IdP 주소가 아니면 리다이렉트가 안 걸린 것이고, IdP 인데도 폼이 0 이면 JS 렌더링입니다. "
                   "브라우저에서 확인한 IdP 로그인 페이지 주소를 공통 설정의 'IdP 로그인 URL' 에 넣어보세요.")
-    return SsoDiagnoseResult(ok=bool(found), detail=detail, entries=entries)
+    return SsoDiagnoseResult(ok=bool(found) and not hints, detail=detail, entries=entries)
 
 
 # 백엔드가 K8s/컨테이너 배포라 파드에서 브라우저를 못 띄우는 환경용 — 사용자가 본인 PC 에서

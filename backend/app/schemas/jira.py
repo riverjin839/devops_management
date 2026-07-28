@@ -14,6 +14,8 @@ class JiraConfig(BaseModel):
     # 같은 IdP 로 SSO 연동되는 Confluence Base URL — 설정 시 SSO 폼 로그인이 Jira 와
     # Confluence 세션을 한 번에 캡처한다(빈 값이면 Jira 만).
     confluence_base_url: str = ""
+    # (선택) IdP 로그인 폼의 계정 필드명 — 자동 추정이 빗나갈 때 지정(예: empnum).
+    sso_username_field: str = ""
     # (선택) IdP 로그인 페이지 URL. 자동 탐색이 실패하는 배포에서 이 주소를 지정하면
     # SSO 폼 로그인이 여기부터 시작한다. 예: https://login.example.com/sso/am/jira/login.jsp
     sso_login_url: str = ""
@@ -26,6 +28,7 @@ class JiraConfigUpdate(BaseModel):
     default_project_key: Optional[str] = None
     confluence_base_url: Optional[str] = None
     sso_login_url: Optional[str] = None
+    sso_username_field: Optional[str] = None
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────
@@ -95,6 +98,14 @@ class SsoDiagnoseEntry(BaseModel):
     title: str = ""
     forms: int = 0
     password_inputs: int = 0
+    # 이 페이지에서 계정을 채울 필드명 / base64 인코딩 요구 여부.
+    username_field: str = ""
+    wants_base64: bool = False
+    # 로그인 폼의 action / 전체 필드(name:type) / 로드하는 스크립트 / 클라이언트 암호화 흔적.
+    login_form_action: str = ""
+    login_fields: list[str] = []
+    scripts: list[str] = []
+    crypto_hints: list[str] = []
     input_names: list[str] = []
     # 폼의 hidden 상태값 (예: OpenAM `encoded=true` → 자격을 base64 로 보내야 함).
     hidden_fields: dict[str, str] = {}
