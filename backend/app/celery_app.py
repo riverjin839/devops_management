@@ -190,7 +190,7 @@ def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
     import logging
     from app.database import SessionLocal
     from app.models import Cluster
-    from app.services.deep_check_service import DeepCheckService
+    from app.services import check_matrix_service as cms
 
     log = logging.getLogger(__name__)
     db = SessionLocal()
@@ -198,8 +198,7 @@ def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None:
             return {"error": "cluster not found", "cluster_id": cluster_id}
-        DeepCheckService(db).run_definition_once(definition_id, cluster=cluster, persist=True)
-        return {"definition_id": definition_id, "cluster_id": cluster_id, "ok": True}
+        return cms.execute_definition_for_cluster(db, definition_id, cluster)
     except Exception as e:  # noqa: BLE001
         db.rollback()
         log.exception(
@@ -211,6 +210,35 @@ def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
             "definition_id": definition_id,
             "cluster_id": cluster_id,
         }
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_run_one",
+    time_limit=280,
+    soft_time_limit=240,
+    ignore_result=True,
+)
+def run_check_matrix_run_one(self, run_id: str):
+    """사용자가 트리거한 일괄 수행(클러스터 열 / 항목 행)의 개별 셀 실행.
+
+    ``CheckMatrixRun`` 이 이미 queued 로 만들어져 있고, 이 태스크는 그 레코드를
+    running → success/failed/skipped 로 진행시킨다. 셀마다 독립 태스크라 느린
+    클러스터 하나가 나머지 셀을 막지 않는다.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.services import check_matrix_service as cms
+
+    db = SessionLocal()
+    try:
+        return cms.execute_run(db, run_id)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).exception("check-matrix run task failed run_id=%s: %s", run_id, e)
+        return {"error": str(e)[:200], "run_id": run_id}
     finally:
         db.close()
 

@@ -10,6 +10,32 @@
 
 1.16.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **점검 매트릭스 — 실행 방식 공개 + 수동 실행 3단위 + 수행 로그** (홈 ▸ 플랫폼 현황):
+  - **실행 방식(런북)**: 셀을 클릭하면 그 점검이 **실제 운영 클러스터에서 수행하는 명령**을
+    순서대로 볼 수 있다. kubectl 실행 / K8s API 호출 / HTTP 프로브 / SSH / PEP DB 조회를
+    배지로 구분하고, 대상에 변경을 일으키는 명령에는 "변경" 배지가 붙는다. 이 클러스터에서
+    해석된 실제 대상(점검 정의·애드온)과 적용되는 임계값·파라미터도 함께 표시된다.
+  - **수동 실행 3단위**: 셀 1개(동기 실행, 결과 즉시), 클러스터 열 전체(K8s 단위),
+    공통 점검 항목 행 전체(전 클러스터). 일괄 실행은 셀마다 독립 작업으로 큐잉돼 느린
+    클러스터 하나가 나머지를 막지 않는다.
+  - **수행 로그**: cron 자동 실행과 수동 실행(셀/클러스터/항목/수동 입력)이 모두 개별 기록으로
+    남는다. 트리거·실행자·소요 시간, 실행 단계 타임라인, **실제로 나간 kubectl 명령과 종료
+    코드·stdout/stderr**, 그 시점의 실행 계획까지 확인할 수 있다. 실행 대상이 없는 셀은 실패가
+    아니라 "건너뜀"으로 남아 셀이 비어 있는 이유를 설명한다.
+  - **사용 매뉴얼**: 화면 내 도움말(`?`)이 기본 사용법/실행하기/점검 방식/로그·보관 4탭으로
+    확장돼 deep check·addon·수동 입력의 동작 방식과 사용법을 담는다. 상세판은
+    `docs/CHECK_MATRIX_GUIDE.md`.
+  - Backend: `models/check_matrix.py` 에 `CheckMatrixRun`(trigger/run_state/batch_id/
+    triggered_by/details) 추가, 신규 `services/check_matrix_runbook.py`, `check_matrix.py` 라우터에
+    `GET /cell/{item}/{cluster}/runbook`·`POST /cell/{item}/{cluster}/run`·
+    `POST /clusters/{id}/run`·`POST /items/{id}/run`·`GET /runs`·`GET /runs/{id}`,
+    Celery `run_check_matrix_run_one` 태스크, `DeepCheckerBase._kubectl` 의 실행 명령 계측.
+    수행 로그는 값 이력과 같은 보관 일수로 매일 정리된다.
+  - Frontend: `CheckMatrixCellDetailModal` 3탭화(추이·이력/실행 방식/수행 로그),
+    신규 `CheckMatrixRunbookPanel`·`CheckMatrixRunLog`·`CheckMatrixRunLogPanel`,
+    매트릭스 열/행 실행 버튼과 카드 헤더 "수행 로그" 진입점.
+
 ## [1.16.0] - 2026-07-28
 
 ### Added

@@ -66,7 +66,10 @@ from app.models.check_matrix import (
     CheckMatrixSchedule,
     CheckMatrixResult,
     CheckMatrixResultLog,
+    CheckMatrixRun,
+    CheckMatrixRunState,
     CheckMatrixSourceType,
+    CheckMatrixTrigger,
 )
 
 __all__ = [
@@ -144,5 +147,8 @@ __all__ = [
     "CheckMatrixSchedule",
     "CheckMatrixResult",
     "CheckMatrixResultLog",
+    "CheckMatrixRun",
+    "CheckMatrixRunState",
     "CheckMatrixSourceType",
+    "CheckMatrixTrigger",
 ]

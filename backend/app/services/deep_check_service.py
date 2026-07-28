@@ -121,8 +121,11 @@ class DeepCheckService:
             outcome = await asyncio.to_thread(self._run_one, d, cluster, in_cluster)
             _details = dict(outcome.details or {})
             _steps = getattr(outcome, "steps", []) or []
+            _commands = getattr(outcome, "commands", []) or []
             if _steps:
                 _details["_steps"] = _steps
+            if _commands:
+                _details["_commands"] = _commands
             row = DeepCheckResult(
                 cluster_id=cluster.id if cluster else d.cluster_id,
                 daily_check_log_id=log_id,
@@ -164,10 +167,13 @@ class DeepCheckService:
         outcome = self._run_one(d, cluster, in_cluster)
         from app.services.deep_checkers.registry import get_step_plan
         steps = getattr(outcome, "steps", []) or []
+        commands = getattr(outcome, "commands", []) or []
         # 실행 단계 로그를 details 에도 보존(영속화/조회 일관) — 스키마 변경 없음.
         details = dict(outcome.details or {})
         if steps:
             details["_steps"] = steps
+        if commands:
+            details["_commands"] = commands
         result = {
             "definition_id": str(d.id),
             "check_type": d.check_type,
@@ -176,6 +182,7 @@ class DeepCheckService:
             "details": details,
             "duration_ms": outcome.duration_ms,
             "steps": steps,
+            "commands": commands,
             "step_plan": get_step_plan(d.check_type),
         }
 
@@ -239,9 +246,12 @@ class DeepCheckService:
         )
         outcome = cls().safe_run(ctx)
         steps = getattr(outcome, "steps", []) or []
+        commands = getattr(outcome, "commands", []) or []
         details = dict(outcome.details or {})
         if steps:
             details["_steps"] = steps
+        if commands:
+            details["_commands"] = commands
         result = {
             "check_type": check_type,
             "status": outcome.status.value,
@@ -249,6 +259,7 @@ class DeepCheckService:
             "details": details,
             "duration_ms": outcome.duration_ms,
             "steps": steps,
+            "commands": commands,
             "step_plan": get_step_plan(check_type),
         }
         if persist and cluster is not None:
