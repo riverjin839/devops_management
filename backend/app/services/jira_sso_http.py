@@ -78,6 +78,9 @@ _USERNAME_FIELD_NAMES = (
     "username", "j_username", "os_username", "user", "userid", "user_id",
     "login", "loginid", "email", "username_input", "identifier",
     "idtoken1",  # OpenAM/ForgeRock (IDToken1=계정, IDToken2=비밀번호)
+    # 사번 로그인(사내 IdP) — empnum/empno/사원번호 계열.
+    "empnum", "empno", "emp_no", "empid", "emp_id", "employeeno", "employee_no",
+    "employeenumber", "sabun",
 )
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -196,23 +199,69 @@ def login_form_signature(form: dict) -> str:
     return ",".join(sorted(i.get("name", "") for i in form.get("inputs", []) if i.get("name")))
 
 
-def extract_error_text(html_text: str) -> str:
-    """IdP 가 페이지에 표시한 오류 문구를 뽑아낸다(실패 사유를 그대로 보여주기 위함)."""
-    text = _TAG_RE.sub(" ", html_text or "")
-    text = re.sub(r"\s+", " ", text)
-    for kw in ("Authentication failed", "Invalid", "incorrect", "failed",
-               "인증", "실패", "잘못", "오류", "locked", "잠금", "expired", "만료"):
-        idx = text.lower().find(kw.lower())
-        if idx >= 0:
-            return text[max(0, idx - 40): idx + 120].strip()
-    return ""
+_ERROR_KEYWORDS = (
+    "Authentication failed", "Invalid", "incorrect", "failed", "denied",
+    "인증", "실패", "잘못", "오류", "locked", "잠금", "expired", "만료", "일치",
+)
 
 
-def fill_login_form(form: dict, username: str, password: str) -> dict[str, str]:
+def visible_text_lines(html_text: str) -> list[str]:
+    """HTML 에서 사람이 보는 텍스트 조각들(태그/스크립트 제거, 공백 정규화)."""
+    text = _TAG_RE.sub("\n", html_text or "")
+    out: list[str] = []
+    for raw in text.splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if line:
+            out.append(line)
+    return out
+
+
+def extract_error_text(html_text: str, *, baseline_html: str = "") -> str:
+    """IdP 가 표시한 **실제 오류 문구**를 뽑아낸다.
+
+    로그인 페이지에는 "비밀번호 5회 이상 입력 오류 시 계정이 잠깁니다" 같은 **상시 안내문**이
+    있어, 단순 키워드 검색은 그것을 오류로 오인한다. 그래서 자격 제출 **직전 페이지**
+    (`baseline_html`)와 비교해 **새로 생긴 문장만** 오류 후보로 본다. 새 문장이 없으면
+    빈 문자열을 돌려줘 호출부가 "같은 폼 재표시"로 안내하게 한다."""
+    lines = visible_text_lines(html_text)
+    if baseline_html:
+        base = set(visible_text_lines(baseline_html))
+        candidates = [ln for ln in lines if ln not in base]
+    else:
+        candidates = lines
+    if not candidates:
+        return ""
+    for ln in candidates:
+        low = ln.lower()
+        if any(k.lower() in low for k in _ERROR_KEYWORDS):
+            return ln[:200]
+    # 키워드는 없지만 새로 생긴 문구가 있으면 가장 그럴듯한 것(짧은 문장) 하나를 보여준다.
+    short = [ln for ln in candidates if 4 <= len(ln) <= 200]
+    return short[0][:200] if short else ""
+
+
+def pick_username_field(form: dict, override: str = "") -> dict | None:
+    """폼에서 **계정(ID) 입력 필드**를 고른다.
+
+    override(관리자 지정 필드명)가 최우선 — 사번(empnum) 처럼 사내 고유 필드명이면
+    자동 추정이 빗나갈 수 있어 직접 지정할 수 있어야 한다. 그다음 알려진 이름,
+    마지막으로 첫 visible text/email 입력."""
+    named_inputs = [i for i in form.get("inputs", []) if i.get("name")]
+    known = {i["name"].lower(): i for i in named_inputs}
+    ov = (override or "").strip().lower()
+    if ov and ov in known:
+        return known[ov]
+    hit = next((known[n] for n in _USERNAME_FIELD_NAMES if n in known), None)
+    if hit is not None:
+        return hit
+    return next((i for i in named_inputs if i["type"] in ("text", "email", "")), None)
+
+
+def fill_login_form(form: dict, username: str, password: str, *, username_field_name: str = "") -> dict[str, str]:
     """로그인 폼의 제출 데이터 구성 — hidden 값 유지, username/password 채움.
 
-    username 필드는 알려진 이름 우선, 없으면 첫 visible text/email 입력. submit 버튼에
-    name 이 있으면(예: Keycloak `login`) 첫 번째 것만 포함한다.
+    계정 필드는 `username_field_name`(관리자 지정) → 알려진 이름 → 첫 visible text 순으로
+    고른다. submit 버튼에 name 이 있으면(예: Keycloak `login`) 첫 번째 것만 포함한다.
     `encoded=true` 폼(OpenAM)은 계정/비밀번호를 base64 로 인코딩해 넣는다.
     """
     if form_wants_base64(form):
@@ -222,8 +271,7 @@ def fill_login_form(form: dict, username: str, password: str) -> dict[str, str]:
     username_set = False
 
     named_inputs = [i for i in form["inputs"] if i["name"]]
-    known = {i["name"].lower(): i for i in named_inputs}
-    username_field = next((known[n] for n in _USERNAME_FIELD_NAMES if n in known), None)
+    username_field = pick_username_field(form, username_field_name)
 
     for i in named_inputs:
         t = i["type"]
@@ -297,9 +345,14 @@ def describe_page(resp: httpx.Response) -> dict:
                 hidden_fields[i["name"]] = str(i["value"])[:40]
             if len(hidden_fields) >= 12:
                 break
+    login_form = find_login_form(forms)
+    picked = pick_username_field(login_form) if login_form else None
     return {
         "final_url": str(resp.url),
         "http_status": resp.status_code,
+        # 이 페이지에서 계정을 채울 필드 — 사번 칸이 아닌 다른 입력이 잡히면 여기서 드러난다.
+        "username_field": (picked or {}).get("name", ""),
+        "wants_base64": bool(login_form and form_wants_base64(login_form)),
         "content_type": resp.headers.get("content-type", "")[:80],
         "title": (title_m.group(1).strip()[:80] if title_m else ""),
         "forms": len(forms),
@@ -354,21 +407,26 @@ def _form_post_headers(page_url: str) -> dict:
 
 
 async def _drive_form_chain(
-    client: httpx.AsyncClient, start_url: str, username: str, password: str
+    client: httpx.AsyncClient, start_url: str, username: str, password: str,
+    *, username_field_name: str = "",
 ) -> dict:
     """진입 URL 부터 로그인/중계 폼 체인을 통과한다.
 
-    반환: {"creds_submitted","auth_rejected","last": <describe_page dict|None>, "error": str}.
+    반환: {"creds_submitted","auth_rejected","last": <describe_page dict|None>, "error",
+    "idp_error", "username_field"}.
     IdP 세션이 이미 있으면(두 번째 제품) 로그인 폼 없이 중계 폼만 타고 끝난다."""
     creds_submitted = False
     visited: set[str] = set()
     submitted_forms: set[str] = set()
     last: dict | None = None
+    # 자격 제출 **직전** 페이지 — 거부 시 새로 생긴 문구만 골라 실제 오류를 판별하는 기준.
+    baseline_html = ""
+    used_username_field = ""
     try:
         r = await client.get(start_url, headers={"Accept": _HTML_ACCEPT})
     except Exception as exc:  # noqa: BLE001
         return {"creds_submitted": False, "auth_rejected": False, "last": None,
-                "error": str(exc)[:200]}
+                "error": str(exc)[:200], "idp_error": "", "username_field": ""}
 
     for _hop in range(MAX_FORM_HOPS):
         last = describe_page(r)
@@ -382,9 +440,15 @@ async def _drive_form_chain(
                 # **같은 구성의** 폼이 다시 나옴 → 인증 거부로 확정. 다른 전략으로
                 # 재시도하면 계정 잠금을 유발하므로 즉시 중단한다.
                 return {"creds_submitted": True, "auth_rejected": True, "last": last,
-                        "error": "", "idp_error": extract_error_text(text)}
+                        "error": "",
+                        "idp_error": extract_error_text(text, baseline_html=baseline_html),
+                        "username_field": used_username_field}
             # 필드 구성이 **다른** 폼이면 거부가 아니라 다단계 로그인(계정 → 비밀번호)이다.
-            data = fill_login_form(login_form, username, password)
+            baseline_html = text
+            picked = pick_username_field(login_form, username_field_name)
+            used_username_field = (picked or {}).get("name", "") or used_username_field
+            data = fill_login_form(login_form, username, password,
+                                   username_field_name=username_field_name)
             action = urljoin(str(r.url), login_form["action"] or str(r.url))
             r = await client.post(action, data=data, headers=_form_post_headers(str(r.url)))
             submitted_forms.add(sig)
@@ -411,7 +475,7 @@ async def _drive_form_chain(
         break  # 더 제출할 폼도, 따라갈 리다이렉트도 없음 — 체인 종료
 
     return {"creds_submitted": creds_submitted, "auth_rejected": False, "last": last,
-            "error": "", "idp_error": ""}
+            "error": "", "idp_error": "", "username_field": used_username_field}
 
 
 async def _verify_session(client: httpx.AsyncClient, base_url: str, verify_path: str) -> dict:
@@ -491,6 +555,7 @@ async def _login_one_product(
     verify_path = prod.get("verify_path") or JIRA_VERIFY_PATH
     host = (urlparse(base_url).hostname or "").lower()
     entry_paths = _entry_paths_for(prod)
+    username_field_name = (prod.get("username_field") or "").strip()
 
     diag: dict = {"entries": [], "strategies": []}
 
@@ -505,16 +570,18 @@ async def _login_one_product(
             "strategy": strategy, "diag": diag,
         }
 
-    def _rejected(idp_error: str = "") -> dict:
-        # IdP 가 폼을 다시 보여준 것이 곧 오답은 아니다 — 흐름(추가 단계/인코딩/CSRF) 문제일
-        # 수도 있으므로 IdP 가 화면에 쓴 문구를 그대로 전달해 판단을 돕는다.
+    def _rejected(idp_error: str = "", used_field: str = "") -> dict:
+        # IdP 가 폼을 다시 보여준 것이 곧 오답은 아니다 — 흐름(추가 단계/인코딩/CSRF) 이나
+        # **계정 필드 오선택**(사번 칸에 다른 값) 일 수도 있어, IdP 가 새로 표시한 문구와
+        # 우리가 채운 필드명을 함께 전달해 판단을 돕는다.
+        field_hint = f" ▸ 계정을 채운 필드: `{used_field}`" if used_field else ""
         if idp_error:
-            detail = f'SSO 로그인이 거부되었습니다 — IdP 응답: "{idp_error}"'
+            detail = f'SSO 로그인이 거부되었습니다 — IdP 응답: "{idp_error}"{field_hint}'
         else:
             detail = (
-                "자격 제출 후 같은 로그인 폼이 다시 표시됐습니다 — 아이디/비밀번호가 틀렸거나, "
-                "IdP 가 추가 인증 단계를 요구하는 구성입니다(오류 문구 없음). "
-                "브라우저에서는 되는데 여기서만 실패하면 'SSO 진단' 결과의 hidden 필드를 확인하세요."
+                "자격 제출 후 같은 로그인 폼이 다시 표시됐습니다(새 오류 문구 없음) — "
+                "아이디/비밀번호가 틀렸거나, IdP 가 추가 인증 단계를 요구하는 구성입니다."
+                f"{field_hint} ▸ 'SSO 진단' 의 계정 필드/hidden 필드를 확인하세요."
             )
         return {"status": "error", "auth_rejected": True, "detail": detail, "diag": diag}
 
@@ -527,12 +594,13 @@ async def _login_one_product(
 
     # ── 전략 1: SSO 폼 체인 (진입 경로 여러 개 시도) ────────────────────────────
     for path in entry_paths:
-        chain = await _drive_form_chain(client, _entry_url(base_url, path), username, password)
+        chain = await _drive_form_chain(client, _entry_url(base_url, path), username, password,
+                                        username_field_name=username_field_name)
         entry = {"path": path, "error": chain["error"]}
         entry.update(chain["last"] or {})
         diag["entries"].append(entry)
         if chain["auth_rejected"]:
-            return _rejected(chain.get("idp_error", ""))
+            return _rejected(chain.get("idp_error", ""), chain.get("username_field", ""))
         if chain["error"]:
             diag["strategies"].append({"strategy": f"sso_form({path})", "result": chain["error"]})
             continue
@@ -542,9 +610,10 @@ async def _login_one_product(
             # IdP 세션이 생긴 상태로 같은 진입점(→ 실패 시 루트)을 한 번 더 태우면
             # 토큰 교환이 완료되며 제품 세션이 발급된다. 자격은 이미 있으니 재입력 없음.
             for retry_url in dict.fromkeys([_entry_url(base_url, path), f"{base_url}/"]):
-                back = await _drive_form_chain(client, retry_url, username, password)
+                back = await _drive_form_chain(client, retry_url, username, password,
+                                               username_field_name=username_field_name)
                 if back["auth_rejected"]:
-                    return _rejected(back.get("idp_error", ""))
+                    return _rejected(back.get("idp_error", ""), back.get("username_field", ""))
                 verified = await _verify_session(client, base_url, verify_path)
                 diag["strategies"].append({
                     "strategy": f"sso_form({path})+return({retry_url})",

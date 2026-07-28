@@ -33,6 +33,7 @@ export function JiraIntegrationPanel() {
   const [baseUrl, setBaseUrl] = useState('');
   const [confluenceUrl, setConfluenceUrl] = useState('');
   const [ssoLoginUrl, setSsoLoginUrl] = useState('');
+  const [ssoUsernameField, setSsoUsernameField] = useState('');
   const [enabled, setEnabled] = useState(false);
   const [verifyTls, setVerifyTls] = useState(true);
   const [defaultProject, setDefaultProject] = useState('');
@@ -42,6 +43,7 @@ export function JiraIntegrationPanel() {
       setBaseUrl(config.baseUrl ?? '');
       setConfluenceUrl(config.confluenceBaseUrl ?? '');
       setSsoLoginUrl(config.ssoLoginUrl ?? '');
+      setSsoUsernameField(config.ssoUsernameField ?? '');
       setEnabled(!!config.enabled);
       setVerifyTls(config.verifyTls !== false);
       setDefaultProject(config.defaultProjectKey ?? '');
@@ -130,6 +132,7 @@ export function JiraIntegrationPanel() {
         baseUrl: baseUrl.trim(),
         confluenceBaseUrl: confluenceUrl.trim(),
         ssoLoginUrl: ssoLoginUrl.trim(),
+        ssoUsernameField: ssoUsernameField.trim(),
         enabled,
         verifyTls,
         defaultProjectKey: defaultProject.trim() || null,
@@ -374,6 +377,7 @@ export function JiraIntegrationPanel() {
                         <th className="text-left px-2 py-1 font-medium">최종 URL</th>
                         <th className="text-left px-2 py-1 font-medium">HTTP</th>
                         <th className="text-left px-2 py-1 font-medium">폼/PW</th>
+                        <th className="text-left px-2 py-1 font-medium">계정 필드</th>
                         <th className="text-left px-2 py-1 font-medium">hidden 필드</th>
                         <th className="text-left px-2 py-1 font-medium">비고</th>
                       </tr>
@@ -386,6 +390,9 @@ export function JiraIntegrationPanel() {
                           <td className="px-2 py-1 align-top">{e.httpStatus ?? '-'}</td>
                           <td className={`px-2 py-1 align-top ${e.passwordInputs > 0 ? 'text-emerald-500' : ''}`}>
                             {e.forms}/{e.passwordInputs}
+                          </td>
+                          <td className="px-2 py-1 align-top break-all">
+                            {e.usernameField || '-'}{e.wantsBase64 ? ' (base64)' : ''}
                           </td>
                           <td className="px-2 py-1 align-top break-all max-w-[16rem]">
                             {Object.entries(e.hiddenFields ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ') || '-'}

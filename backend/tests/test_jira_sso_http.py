@@ -19,6 +19,8 @@ from app.services.jira_sso_http import (
     form_sso_login,
     form_wants_base64,
     parse_forms,
+    pick_username_field,
+    extract_error_text,
     sso_login_products,
 )
 
@@ -573,3 +575,60 @@ async def test_sso_login_two_stage_flow_is_not_treated_as_rejection():
                                   transport=_make_two_stage_transport())
     assert result["status"] == "ok", result
     assert "JSESSIONID=sess-2" in result["cookie_header"]
+
+
+# ── 계정 필드 선택 / 오류 문구 추출 (사번 로그인 IdP 대응) ────────────────────────
+EMPNUM_LOGIN_HTML = """
+<html><body>
+<p>비밀번호 5회 이상 입력 오류 시 계정이 잠깁니다. 사번 찾기는 인사팀 문의.</p>
+<form action="/sso/am/jira/login.jsp" method="post">
+  <input type="text" name="searchKeyword" value=""/>
+  <input type="text" name="empnum" value=""/>
+  <input type="password" name="passwd"/>
+</form></body></html>
+"""
+
+
+def test_pick_username_field_prefers_known_name_over_first_text_input():
+    """앞에 다른 text 입력(검색창)이 있어도 사번 필드(empnum)를 계정 칸으로 고른다."""
+    form = find_login_form(parse_forms(EMPNUM_LOGIN_HTML))
+    assert pick_username_field(form)["name"] == "empnum"
+    data = fill_login_form(form, "12345", "pw")
+    assert data["empnum"] == "12345"
+    assert data["searchKeyword"] == ""      # 검색창엔 계정을 넣지 않는다
+    assert data["passwd"] == "pw"
+
+
+def test_pick_username_field_respects_admin_override():
+    form = find_login_form(parse_forms(EMPNUM_LOGIN_HTML))
+    assert pick_username_field(form, "searchKeyword")["name"] == "searchKeyword"
+    data = fill_login_form(form, "12345", "pw", username_field_name="searchKeyword")
+    assert data["searchKeyword"] == "12345"
+    assert data["empnum"] == ""
+
+
+def test_extract_error_text_ignores_static_notice_via_baseline():
+    """로그인 페이지의 상시 안내문("5회 이상 입력 오류 시 ...")을 오류로 오인하지 않는다."""
+    # 제출 전후가 동일 → 새 문구 없음 → 빈 문자열(= '같은 폼 재표시'로 안내됨)
+    assert extract_error_text(EMPNUM_LOGIN_HTML, baseline_html=EMPNUM_LOGIN_HTML) == ""
+    # baseline 없이 키워드만 보면 안내문을 집어온다(과거 동작) — 회귀 방지용 대조
+    assert "5회" in extract_error_text(EMPNUM_LOGIN_HTML)
+
+
+def test_extract_error_text_picks_newly_added_message():
+    after = EMPNUM_LOGIN_HTML.replace(
+        "<form", "<div class='err'>사번 또는 비밀번호가 일치하지 않습니다.</div><form")
+    got = extract_error_text(after, baseline_html=EMPNUM_LOGIN_HTML)
+    assert got == "사번 또는 비밀번호가 일치하지 않습니다."
+
+
+def test_describe_page_reports_username_field(monkeypatch):
+    """진단이 '계정을 채울 필드'를 보고해, 잘못된 칸이 잡히면 눈에 보이게 한다."""
+    import httpx as _httpx
+    from app.services.jira_sso_http import describe_page
+    resp = _httpx.Response(200, text=EMPNUM_LOGIN_HTML,
+                           request=_httpx.Request("GET", "https://login.x.com/sso/am/jira/login.jsp"))
+    info = describe_page(resp)
+    assert info["username_field"] == "empnum"
+    assert info["password_inputs"] == 1
+    assert info["wants_base64"] is False

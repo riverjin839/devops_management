@@ -79,6 +79,8 @@ DEFAULT_JIRA_SETTINGS = {
     # IdP 로그인 페이지 URL (선택) — 자동 탐색 실패 시 지정. 예:
     # https://login.example.com/sso/am/jira/login.jsp
     "sso_login_url": "",
+    # IdP 로그인 폼의 계정 필드명 (선택) — 자동 추정 실패 시 지정 (예: empnum).
+    "sso_username_field": "",
 }
 
 
@@ -389,6 +391,8 @@ def update_config(
     if "sso_login_url" in data and data["sso_login_url"] is not None:
         # IdP 로그인 URL 은 쿼리스트링(goto 등)을 포함할 수 있어 rstrip('/') 하지 않는다.
         current["sso_login_url"] = data["sso_login_url"].strip()
+    if "sso_username_field" in data and data["sso_username_field"] is not None:
+        current["sso_username_field"] = data["sso_username_field"].strip()
     for k in ("enabled", "verify_tls", "default_project_key"):
         if k in data and data[k] is not None:
             current[k] = data[k]
@@ -502,12 +506,14 @@ def _sso_products(cfg: dict) -> list[dict]:
         "key": "jira", "label": "Jira",
         "base_url": cfg.get("base_url", ""), "verify_path": JIRA_VERIFY_PATH,
         "sso_login_url": (cfg.get("sso_login_url") or "").strip(),
+        "username_field": (cfg.get("sso_username_field") or "").strip(),
     }]
     conf_url = (cfg.get("confluence_base_url") or "").strip()
     if conf_url:
         products.append({
             "key": "confluence", "label": "Confluence",
             "base_url": conf_url, "verify_path": CONFLUENCE_VERIFY_PATH,
+            "username_field": (cfg.get("sso_username_field") or "").strip(),
         })
     return products
 
