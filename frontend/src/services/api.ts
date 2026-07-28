@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -1872,6 +1872,30 @@ export const checkMatrixApi = {
   getSettings: () => api.get<CheckMatrixSettings>('/check-matrix/settings'),
   putSettings: (retentionDays: number) =>
     api.put<CheckMatrixSettings>('/check-matrix/settings', { retentionDays }),
+  // 실행 계획 — 이 셀이 대상 클러스터에서 무슨 명령을 도는지 (실행하지 않음)
+  getCellRunbook: (itemId: string, clusterId: string) =>
+    api.get<CheckMatrixRunbook>(`/check-matrix/cell/${itemId}/${clusterId}/runbook`),
+  // 수동 실행 — 셀은 동기(결과 즉시), 클러스터/항목은 큐잉 후 batchId 폴링
+  runCell: (itemId: string, clusterId: string) =>
+    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`),
+  runCluster: (clusterId: string) =>
+    api.post<CheckMatrixBatchResult>(`/check-matrix/clusters/${clusterId}/run`),
+  runItem: (itemId: string) =>
+    api.post<CheckMatrixBatchResult>(`/check-matrix/items/${itemId}/run`),
+  listRuns: (params: {
+    itemId?: string; clusterId?: string; batchId?: string;
+    trigger?: string; limit?: number; offset?: number;
+  }) => api.get<CheckMatrixRunList>('/check-matrix/runs', {
+    params: {
+      item_id: params.itemId,
+      cluster_id: params.clusterId,
+      batch_id: params.batchId,
+      trigger: params.trigger,
+      limit: params.limit,
+      offset: params.offset,
+    },
+  }),
+  getRun: (runId: string) => api.get<CheckMatrixRunDetail>(`/check-matrix/runs/${runId}`),
 };
 
 export const notificationsApi = {

@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock, HelpCircle } from 'lucide-react';
+import {
+  Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock, HelpCircle,
+  Play, ScrollText, Loader2,
+} from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton } from '@/components/common';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
+  useRunCheckMatrixCluster, useRunCheckMatrixItem,
 } from '@/hooks/useCheckMatrix';
 import type { CheckMatrixCell, CheckMatrixItem, CheckMatrixGridCluster, Status } from '@/types';
 import { formatApiError } from '@/lib/utils';
@@ -11,6 +15,7 @@ import { CheckMatrixCellDetailModal } from './CheckMatrixCellDetailModal';
 import { CheckMatrixItemFormModal } from './CheckMatrixItemFormModal';
 import { CheckMatrixSettingsModal } from './CheckMatrixSettingsModal';
 import { CheckMatrixHelpPanel } from './CheckMatrixHelpPanel';
+import { CheckMatrixRunLogPanel } from './CheckMatrixRunLogPanel';
 
 const STATUS_LABEL: Record<Status, string> = {
   healthy: '정상', warning: '경고', critical: '위험', pending: '대기',
@@ -104,15 +109,49 @@ export function PlatformStatusMatrix() {
   const { data: grid, isLoading } = useCheckMatrixGrid();
   const reorderMut = useReorderCheckMatrixItems();
   const deleteMut = useDeleteCheckMatrixItem();
+  const runClusterMut = useRunCheckMatrixCluster();
+  const runItemMut = useRunCheckMatrixItem();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [formItem, setFormItem] = useState<CheckMatrixItem | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<CheckMatrixItem | null>(null);
   const [cellTarget, setCellTarget] = useState<{ item: CheckMatrixItem; cluster: CheckMatrixGridCluster } | null>(null);
+  // 로그 패널은 두 가지로 쓰인다 — batch 가 있으면 방금 트리거한 일괄 수행 추적, 없으면 전체 로그.
+  const [runLog, setRunLog] = useState<{ open: boolean; batchId?: string | null; label?: string | null }>(
+    { open: false },
+  );
+  // 어느 열/행이 실행 중인지 — 버튼 스피너 표시용(mutation 은 전역 pending 만 주므로 대상 키를 따로 든다).
+  const [runningKey, setRunningKey] = useState<string | null>(null);
 
   const items = grid?.items ?? [];
   const clusters = grid?.clusters ?? [];
+
+  const handleRunCluster = async (cluster: CheckMatrixGridCluster) => {
+    setRunningKey(`cluster:${cluster.id}`);
+    try {
+      const res = await runClusterMut.mutateAsync(cluster.id);
+      toast.success(`${cluster.name} 전체 점검을 시작했습니다.`, `${res.queued}/${res.total}건 큐잉`);
+      setRunLog({ open: true, batchId: res.batchId, label: `${cluster.name} 전체 실행` });
+    } catch (e) {
+      toast.error('실행 실패', formatApiError(e));
+    } finally {
+      setRunningKey(null);
+    }
+  };
+
+  const handleRunItem = async (item: CheckMatrixItem) => {
+    setRunningKey(`item:${item.id}`);
+    try {
+      const res = await runItemMut.mutateAsync(item.id);
+      toast.success(`"${item.name}" 전 클러스터 점검을 시작했습니다.`, `${res.queued}/${res.total}건 큐잉`);
+      setRunLog({ open: true, batchId: res.batchId, label: `${item.name} · 전 클러스터` });
+    } catch (e) {
+      toast.error('실행 실패', formatApiError(e));
+    } finally {
+      setRunningKey(null);
+    }
+  };
 
   const moveItem = (index: number, dir: -1 | 1) => {
     const target = index + dir;
@@ -151,6 +190,14 @@ export function PlatformStatusMatrix() {
           </button>
           <span className="text-[11px] text-muted-foreground">항목 × 클러스터 점검 매트릭스</span>
           <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={() => setRunLog({ open: true, batchId: null })}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-secondary transition-colors"
+              title="모든 수행의 실행 로그"
+              aria-label="모든 수행의 실행 로그"
+            >
+              <ScrollText className="w-3.5 h-3.5" /> 수행 로그
+            </button>
             <button
               onClick={() => setFormItem('new')}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-secondary transition-colors"
@@ -196,7 +243,20 @@ export function PlatformStatusMatrix() {
                   {clusters.map((cluster) => (
                     <th key={cluster.id} className="border-b border-border px-3 py-2 min-w-[130px] font-medium">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="truncate max-w-[140px]">{cluster.name}</span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="truncate max-w-[120px]">{cluster.name}</span>
+                          <button
+                            onClick={() => handleRunCluster(cluster)}
+                            disabled={runningKey === `cluster:${cluster.id}`}
+                            title={`${cluster.name} 의 모든 점검 항목을 지금 실행`}
+                            aria-label={`${cluster.name} 전체 점검 실행`}
+                            className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary transition-colors disabled:opacity-50 flex-shrink-0"
+                          >
+                            {runningKey === `cluster:${cluster.id}`
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Play className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                         <ClusterCronBadge cluster={cluster} />
                       </div>
                     </th>
@@ -233,6 +293,19 @@ export function PlatformStatusMatrix() {
                           </span>
                         )}
                         <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {item.sourceType !== 'manual' && (
+                            <button
+                              onClick={() => handleRunItem(item)}
+                              disabled={runningKey === `item:${item.id}`}
+                              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50"
+                              title="모든 클러스터에서 이 항목 실행"
+                              aria-label="모든 클러스터에서 이 항목 실행"
+                            >
+                              {runningKey === `item:${item.id}`
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <Play className="w-3 h-3" />}
+                            </button>
+                          )}
                           <button
                             onClick={() => setFormItem(item)}
                             className="p-1 rounded hover:bg-secondary text-muted-foreground"
@@ -271,6 +344,12 @@ export function PlatformStatusMatrix() {
 
       <CheckMatrixSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <CheckMatrixHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <CheckMatrixRunLogPanel
+        open={runLog.open}
+        onClose={() => setRunLog({ open: false })}
+        batchId={runLog.batchId}
+        batchLabel={runLog.label}
+      />
       <CheckMatrixItemFormModal
         isOpen={formItem !== null}
         onClose={() => setFormItem(null)}

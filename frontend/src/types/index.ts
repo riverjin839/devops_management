@@ -3587,6 +3587,109 @@ export interface CheckMatrixSettings {
   retentionDays: number;
 }
 
+/** 런북 명령 1건 — 실제로 대상 클러스터에 나가는 호출. */
+export interface CheckMatrixRunbookCommand {
+  /** kubectl = 서브프로세스 · k8s_api = python SDK · http = 직접 호출 · ssh · db = PEP DB 전용 */
+  kind: 'kubectl' | 'k8s_api' | 'http' | 'ssh' | 'db';
+  command: string;
+  description: string;
+  /** false = 대상에 변경을 일으킬 수 있는 명령 */
+  readonly: boolean;
+}
+
+/**
+ * 런북에 표시할 설정값 1건.
+ *
+ * dict 가 아니라 `{name, value}` 리스트인 이유 — api.ts 응답 인터셉터가 모든 JSON **키**를
+ * camelCase 로 바꾸기 때문이다. 파라미터 이름(`label_selector` 등)은 운영자가 Ops Checks
+ * 화면에서 그대로 입력해야 하는 값이라 변환되면 안 되므로, 백엔드가 이름을 값 자리에 담아 보낸다.
+ */
+export interface CheckMatrixRunbookInput {
+  group: string;
+  name: string;
+  value: string;
+}
+
+/** 셀(항목 × 클러스터)의 실행 계획 — "이 점검이 내 클러스터에서 무슨 일을 하는가". */
+export interface CheckMatrixRunbook {
+  itemId: string;
+  itemName: string;
+  clusterId: string;
+  clusterName: string;
+  sourceType: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  /** 이 클러스터에서 해석된 실제 실행 대상(정의/애드온). 없으면 null */
+  target?: string | null;
+  runnable: boolean;
+  blockedReason?: string | null;
+  steps: DeepCheckStepPlanItem[];
+  commands: CheckMatrixRunbookCommand[];
+  inputs: CheckMatrixRunbookInput[];
+  notes: string[];
+  kubectlPrefix?: string | null;
+}
+
+export type CheckMatrixTrigger =
+  | 'cron' | 'manual_cell' | 'manual_cluster' | 'manual_item' | 'manual_entry';
+export type CheckMatrixRunState = 'queued' | 'running' | 'success' | 'failed' | 'skipped';
+
+/** 실제로 실행된 명령 1건 — 런북(설계)과 대조하는 실측값. */
+export interface CheckMatrixExecutedCommand {
+  kind: string;
+  command: string;
+  exitCode?: number | null;
+  durationMs?: number;
+  stdout?: string;
+  stderr?: string;
+  truncated?: boolean;
+}
+
+/** 수행 로그 1건. 목록 응답에는 상세(steps/commands/runbook)가 빠져 있다. */
+export interface CheckMatrixRun {
+  id: string;
+  batchId?: string | null;
+  itemId: string;
+  clusterId: string;
+  itemName?: string | null;
+  clusterName?: string | null;
+  trigger: CheckMatrixTrigger;
+  triggeredBy?: string | null;
+  runState: CheckMatrixRunState;
+  status?: Status | null;
+  value?: number | null;
+  message?: string | null;
+  error?: string | null;
+  durationMs?: number | null;
+  queuedAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface CheckMatrixRunDetail extends CheckMatrixRun {
+  steps: DeepCheckExecStep[];
+  stepPlan: DeepCheckStepPlanItem[];
+  commands: CheckMatrixExecutedCommand[];
+  runbook?: CheckMatrixRunbook | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details: Record<string, any>;
+}
+
+export interface CheckMatrixRunList {
+  total: number;
+  limit: number;
+  offset: number;
+  runs: CheckMatrixRun[];
+}
+
+/** 일괄 수행(클러스터 열 / 항목 행) 큐잉 결과. */
+export interface CheckMatrixBatchResult {
+  batchId: string;
+  total: number;
+  queued: number;
+  errors: string[];
+  runIds: string[];
+}
+
 // ── Your Island — 사용자 커스텀 화면 ────────────────────────────────────────
 /** 아일랜드 패널 배치 방식. tabs = 상단 pill 탭바, sidebar = 좌측 아이콘 레일. */
 export type IslandLayoutMode = 'tabs' | 'sidebar';

@@ -1,5 +1,5 @@
 """점검 매트릭스 — 항목 CRUD/재정렬, 그리드 조회, cron 설정(항목/클러스터), 셀 이력,
-수동 입력, 이력 보관 설정."""
+수동 입력, 실행 계획(런북) 조회, 수동 실행(셀/클러스터/항목), 실행 로그, 이력 보관 설정."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -188,7 +188,7 @@ def post_manual_entry(
     cluster_id: UUID,
     body: ManualEntryIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
 ):
     item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
     if item is None:
@@ -198,7 +198,10 @@ def post_manual_entry(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if cluster is None:
         raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
-    svc.record_manual_entry(db, item_id, cluster_id, body.status, body.value, body.message)
+    svc.record_manual_entry(
+        db, item_id, cluster_id, body.status, body.value, body.message,
+        triggered_by=_actor(user),
+    )
     return {"status": "ok"}
 
 
@@ -259,6 +262,106 @@ def put_cluster_cron(
     cluster.check_cron_expr = body.check_cron_expr
     db.commit()
     return {"cluster_id": str(cluster.id), "check_cron_expr": cluster.check_cron_expr}
+
+
+# ── 런북 (실행 계획 — 실제로 클러스터에 나가는 명령) ─────────────────────────────
+@router.get("/cell/{item_id}/{cluster_id}/runbook")
+def get_cell_runbook(item_id: UUID, cluster_id: UUID, db: Session = Depends(get_db)):
+    """이 셀이 실제 운영 클러스터에서 무슨 명령을 어떤 순서로 도는지. 실행하지 않는다."""
+    from app.services.check_matrix_runbook import build_runbook
+
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    return build_runbook(db, item, cluster)
+
+
+# ── 수동 실행 (셀 / 클러스터 열 / 항목 행) ────────────────────────────────────────
+def _actor(user: User) -> str:
+    return user.full_name or user.username
+
+
+@router.post("/cell/{item_id}/{cluster_id}/run")
+def run_cell(
+    item_id: UUID,
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """셀 1건 즉시 실행 — 동기 실행이라 응답에 결과가 그대로 담긴다."""
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    if item.source_type == CheckMatrixSourceType.manual:
+        raise HTTPException(
+            status_code=400,
+            detail="수동 입력 항목은 실행할 수 없습니다 — 셀 상세의 '값 입력'을 사용하세요.",
+        )
+    return svc.run_cell_now(db, item, cluster, triggered_by=_actor(user))
+
+
+@router.post("/clusters/{cluster_id}/run")
+def run_cluster(
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """클러스터(열) 단위 일괄 실행 — 큐잉만 하고 batch_id 를 돌려준다."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    return svc.run_cluster_now(db, cluster, triggered_by=_actor(user))
+
+
+@router.post("/items/{item_id}/run")
+def run_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """공통 점검 항목(행) 단위 일괄 실행 — 등록된 모든 클러스터 대상. 큐잉 후 batch_id 반환."""
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    if item.source_type == CheckMatrixSourceType.manual:
+        raise HTTPException(
+            status_code=400,
+            detail="수동 입력 항목은 실행할 수 없습니다 — 클러스터별로 값을 직접 입력하세요.",
+        )
+    return svc.run_item_now(db, item, triggered_by=_actor(user))
+
+
+# ── 실행 로그 ─────────────────────────────────────────────────────────────────
+@router.get("/runs")
+def list_runs(
+    item_id: Optional[UUID] = None,
+    cluster_id: Optional[UUID] = None,
+    batch_id: Optional[UUID] = None,
+    trigger: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """수행 로그 목록 — cron 자동 실행과 수동 실행(셀/클러스터/항목/수동입력)을 모두 포함."""
+    return svc.list_runs(
+        db, item_id=item_id, cluster_id=cluster_id, batch_id=batch_id,
+        trigger=trigger, limit=limit, offset=offset,
+    )
+
+
+@router.get("/runs/{run_id}")
+def get_run(run_id: UUID, db: Session = Depends(get_db)):
+    """수행 1건 상세 — 실행 단계, 실제 나간 명령과 출력, 해석된 런북까지."""
+    out = svc.get_run(db, run_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="실행 로그를 찾을 수 없습니다.")
+    return out
 
 
 # ── Settings (이력 보관 주기) ──────────────────────────────────────────────────

@@ -55,6 +55,7 @@ LOG_TABLES: frozenset[str] = frozenset({
     "metric_check_states",
     "deep_check_results",
     "check_matrix_result_logs",
+    "check_matrix_runs",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

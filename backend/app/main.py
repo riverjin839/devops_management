@@ -939,6 +939,15 @@ def _run_migrations():
         _safe_create_index("ix_ops_check_run_items_run", "ops_check_run_items", "(run_id)")
         _safe_create_index("ix_ops_check_run_items_ref", "ops_check_run_items", "(source, item_ref_id)")
 
+    # check_matrix_runs: 점검 매트릭스 수행 로그 — 테이블은 create_all 이 생성하고,
+    # 셀별 최근 로그 조회 / 배치 진행률 폴링 / 리텐션 퍼지 스캔용 인덱스만 보강한다.
+    if "check_matrix_runs" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_check_matrix_runs_cell", "check_matrix_runs", "(item_id, cluster_id, queued_at DESC)",
+        )
+        _safe_create_index("ix_check_matrix_runs_queued_at", "check_matrix_runs", "(queued_at DESC)")
+        _safe_create_index("ix_check_matrix_runs_batch", "check_matrix_runs", "(batch_id)")
+
     # os_param_changes: OS 파라미터 변경 이력 — 테이블은 create_all, 조회 인덱스 보강.
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
