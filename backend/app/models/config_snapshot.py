@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import Column, String, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.database import Base
 
@@ -38,7 +38,9 @@ class ClusterConfigSnapshot(Base):
 
     collected_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
-    cluster = relationship("Cluster", backref="config_snapshots")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("config_snapshots", passive_deletes=True))
 
     __table_args__ = (
         Index("ix_config_snap_cluster_component", "cluster_id", "component", "collected_at"),

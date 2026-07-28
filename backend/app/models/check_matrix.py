@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.database import Base
 from app.models.cluster import StatusEnum
@@ -77,7 +77,9 @@ class CheckMatrixSchedule(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     item = relationship("CheckMatrixItem", backref="schedules")
-    cluster = relationship("Cluster", backref="check_matrix_schedules")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("check_matrix_schedules", passive_deletes=True))
 
     __table_args__ = (
         UniqueConstraint("item_id", "cluster_id", name="uq_check_matrix_schedule"),
@@ -99,7 +101,9 @@ class CheckMatrixResult(Base):
     checked_at = Column(DateTime, default=datetime.utcnow)
 
     item = relationship("CheckMatrixItem", backref="latest_results")
-    cluster = relationship("Cluster", backref="check_matrix_results")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("check_matrix_results", passive_deletes=True))
 
     __table_args__ = (
         UniqueConstraint("item_id", "cluster_id", name="uq_check_matrix_result"),

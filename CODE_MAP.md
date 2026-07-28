@@ -32,6 +32,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 연결 검증 + status 반영 | `POST /clusters/{id}/verify` (clusters.py) | `clustersApi.verify` |
 | Cilium 설정 조회 | `GET /clusters/{id}/cilium-config` | `CiliumConfigModal.tsx` |
 | 클러스터 등록 위저드 (3-step) | — | `frontend/src/components/dashboard/AddClusterModal.tsx` |
+| 클러스터 삭제 시 연관 데이터 정리 | `backend/app/services/cluster_purge.py` (cluster_id 보유 테이블 전수 탐색 — 삭제/보존 정책) | `SettingsPage.tsx` 삭제 버튼 |
 | Cluster 모델 (ORM) | `backend/app/models/cluster.py` | `frontend/src/types/index.ts` (Cluster interface) |
 | 경량 마이그레이션 | `_run_migrations()` in `backend/app/main.py` | — |
 

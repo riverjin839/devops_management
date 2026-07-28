@@ -14,7 +14,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.database import Base
 
@@ -38,7 +38,9 @@ class ResourceCountSnapshot(Base):
     # users.id 가 String(36) 이므로 FK 타입을 맞춘다 (UUID 로 두면 DatatypeMismatch).
     created_by_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
-    cluster = relationship("Cluster", backref="resource_count_snapshots")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("resource_count_snapshots", passive_deletes=True))
 
     __table_args__ = (
         Index("ix_rcsnap_cluster_date", "cluster_id", "snapshot_date"),
