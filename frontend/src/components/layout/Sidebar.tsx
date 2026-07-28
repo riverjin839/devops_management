@@ -166,6 +166,13 @@ function FlyoutLink({
   );
 }
 
+/** 아일랜드 아이콘(lucide 이름/이모지/이미지) → flyout 이 기대하는 ComponentType.
+ *  lucide 가 아닌 값은 FlyoutLink 가 컴포넌트만 받으므로 기본 아이콘으로 폴백한다. */
+function islandFlyoutIcon(icon?: string | null): ComponentType<{ className?: string }> {
+  const resolved = resolveClusterIcon(icon);
+  return resolved?.kind === 'lucide' ? resolved.Component : Sparkles;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
@@ -228,16 +235,18 @@ export function Sidebar() {
   // Your Island — 내 아일랜드가 2개 이상이면 레일 버튼 클릭 시 flyout 으로 고른다.
   const { data: islandData } = useIslands();
   const myIslands = useMemo(() => islandData?.data ?? [], [islandData?.data]);
+  const sharedIslands = useMemo(() => islandData?.shared ?? [], [islandData?.shared]);
   const lastIslandId = useIslandStore((s) => s.lastIslandId);
   const [islandFlyoutAnchor, setIslandFlyoutAnchor] = useState<DOMRect | null>(null);
 
   const goToIsland = (rect?: DOMRect) => {
-    if (myIslands.length > 1) {
+    // 내 것 + 공유받은 것을 합쳐 2개 이상이면 flyout 으로 고르고, 아니면 바로 이동한다.
+    if (myIslands.length + sharedIslands.length > 1) {
       setIslandFlyoutAnchor((cur) => (cur ? null : rect ?? null));
       return;
     }
     setIslandFlyoutAnchor(null);
-    const target = myIslands[0]?.id ?? lastIslandId;
+    const target = myIslands[0]?.id ?? sharedIslands[0]?.id ?? lastIslandId;
     navigate(target ? `/island/${target}` : '/island');
   };
 
@@ -565,20 +574,36 @@ export function Sidebar() {
             onClose={() => setIslandFlyoutAnchor(null)}
           >
             <div className="space-y-1 pb-2">
-              {myIslands.map((isl) => {
-                const resolved = resolveClusterIcon(isl.icon);
-                const IconC = resolved?.kind === 'lucide' ? resolved.Component : Sparkles;
-                return (
-                  <FlyoutLink
-                    key={isl.id}
-                    to={`/island/${isl.id}`}
-                    label={isl.name}
-                    Icon={IconC}
-                    active={location.pathname === `/island/${isl.id}`}
-                    onSelect={() => setIslandFlyoutAnchor(null)}
-                  />
-                );
-              })}
+              {myIslands.map((isl) => (
+                <FlyoutLink
+                  key={isl.id}
+                  to={`/island/${isl.id}`}
+                  label={isl.name}
+                  Icon={islandFlyoutIcon(isl.icon)}
+                  active={location.pathname === `/island/${isl.id}`}
+                  onSelect={() => setIslandFlyoutAnchor(null)}
+                />
+              ))}
+              {/* 공유받은 아일랜드도 여기서 바로 열 수 있어야 한다 — 없으면 관리 패널을
+                  거쳐야만 접근된다. 읽기 전용이라는 건 아일랜드 헤더 배지가 알려준다. */}
+              {sharedIslands.length > 0 && (
+                <>
+                  <div className="mx-2 my-1 border-t border-zinc-200" />
+                  <p className="px-2.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                    팀 공유
+                  </p>
+                  {sharedIslands.map((isl) => (
+                    <FlyoutLink
+                      key={isl.id}
+                      to={`/island/${isl.id}`}
+                      label={`${isl.name} · ${isl.ownerName || '공유'}`}
+                      Icon={islandFlyoutIcon(isl.icon)}
+                      active={location.pathname === `/island/${isl.id}`}
+                      onSelect={() => setIslandFlyoutAnchor(null)}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           </FlyoutShell>
         </>

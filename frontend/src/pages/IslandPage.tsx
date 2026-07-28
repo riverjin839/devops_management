@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/common';
 import {
   IslandManagerPane, IslandPanelHost, IslandRail, IslandTabBar, PanelPickerDialog,
-  type IslandPanelView,
+  PanelEditDialog, MAX_PANELS, type IslandPanelView,
 } from '@/components/island';
 import type { Island, IslandPanel } from '@/types';
 
@@ -62,6 +62,7 @@ export function IslandPage() {
 
   const [managerOpen, setManagerOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [editingPanelKey, setEditingPanelKey] = useState<string | null>(null);
 
   const mine = useMemo(() => data?.data ?? [], [data?.data]);
   const shared = useMemo(() => data?.shared ?? [], [data?.shared]);
@@ -136,6 +137,9 @@ export function IslandPage() {
 
   const handleRemovePanel = (key: string) => savePanels(panels.filter((p) => p.key !== key));
 
+  const handleEditPanel = (key: string, patch: { label: string | null; icon: string | null }) =>
+    savePanels(panels.map((p) => (p.key === key ? { ...p, ...patch } : p)));
+
   const handleReorder = (keys: string[]) => {
     const byKey = new Map(panels.map((p) => [p.key, p]));
     savePanels(keys.map((k) => byKey.get(k)).filter((p): p is IslandPanel => !!p));
@@ -158,6 +162,8 @@ export function IslandPage() {
     })),
     [panels, getLabel, navMap],
   );
+
+  const editingPanel = panelViews.find((p) => p.key === editingPanelKey) ?? null;
 
   if (isLoading) return null;
 
@@ -228,8 +234,10 @@ export function IslandPage() {
             editable={editable}
             onSelect={handleSelect}
             onRemove={handleRemovePanel}
+            onEdit={setEditingPanelKey}
             onReorder={handleReorder}
             onAdd={() => setPickerOpen(true)}
+            atCapacity={panels.length >= MAX_PANELS}
           />
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="px-3 py-2 border-b border-border">{header}</div>
@@ -246,8 +254,10 @@ export function IslandPage() {
               editable={editable}
               onSelect={handleSelect}
               onRemove={handleRemovePanel}
+              onEdit={setEditingPanelKey}
               onReorder={handleReorder}
               onAdd={() => setPickerOpen(true)}
+              atCapacity={panels.length >= MAX_PANELS}
             />
           </div>
           {body}
@@ -259,6 +269,15 @@ export function IslandPage() {
         onClose={() => setManagerOpen(false)}
         currentId={island.id}
       />
+      {editingPanel && (
+        <PanelEditDialog
+          panel={editingPanel}
+          fallbackLabel={getLabel(editingPanel.path)}
+          onClose={() => setEditingPanelKey(null)}
+          onSave={(patch) => handleEditPanel(editingPanel.key, patch)}
+        />
+      )}
+
       {/* 닫혀 있을 땐 아예 마운트하지 않아 카탈로그 계산을 피한다. */}
       {pickerOpen && (
         <PanelPickerDialog

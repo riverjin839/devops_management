@@ -1,12 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Copy, LayoutGrid, PanelLeft, Plus, Share2, Sparkles, Trash2, Users,
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, arrayMove, useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  Copy, GripVertical, LayoutGrid, PanelLeft, Plus, Share2, Sparkles, Trash2, Users,
 } from 'lucide-react';
 import { SidePane, ConfirmDialog, ClusterIconPicker, useToast } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   useIslands, useCreateIsland, useUpdateIsland, useDeleteIsland, useCloneIsland,
+  useReorderIslands,
 } from '@/hooks/useIslands';
 import { useIslandStore } from '@/stores/islandStore';
 import type { Island } from '@/types';
@@ -33,7 +41,112 @@ function IslandIcon({ icon, className }: { icon?: string | null; className?: str
   return <Sparkles className={className} />;
 }
 
-/** 아일랜드 목록 관리 — 생성/이름·아이콘 편집/레이아웃 전환/공유/복제/삭제. */
+interface SortableIslandRowProps {
+  island: Island;
+  current: boolean;
+  onRename: (name: string) => void;
+  onDescribe: (description: string) => void;
+  onPickIcon: () => void;
+  onToggleLayout: () => void;
+  onToggleShare: () => void;
+  onDelete: () => void;
+}
+
+function SortableIslandRow({
+  island, current, onRename, onDescribe, onPickIcon, onToggleLayout, onToggleShare, onDelete,
+}: SortableIslandRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: island.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`p-2.5 rounded-xl border transition-colors ${isDragging ? 'opacity-50 z-10' : ''} ${
+        current ? 'border-primary/50 bg-primary/5' : 'border-border bg-card'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        {/* 드래그 핸들만 잡아야 입력 필드 클릭이 드래그로 먹히지 않는다. */}
+        <span
+          {...attributes}
+          {...listeners}
+          aria-label={`${island.name} 순서 변경`}
+          className="flex items-center justify-center flex-shrink-0 p-0.5 -ml-1 rounded text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="w-4 h-4" />
+        </span>
+        <button
+          type="button"
+          onClick={onPickIcon}
+          title="아이콘 변경"
+          aria-label={`${island.name} 아이콘 변경`}
+          className="flex items-center justify-center w-8 h-8 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+        >
+          <IslandIcon icon={island.icon} className="w-4 h-4" />
+        </button>
+        <input
+          type="text"
+          defaultValue={island.name}
+          aria-label={`${island.name} 이름`}
+          onBlur={(e) => {
+            const name = e.target.value.trim();
+            if (name && name !== island.name) onRename(name);
+            else e.target.value = island.name;
+          }}
+          className="flex-1 min-w-0 px-2 py-1 text-sm bg-transparent border border-transparent rounded-lg hover:border-border focus:border-border focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={onToggleLayout}
+          title={island.layoutMode === 'tabs' ? '탭 레이아웃 (클릭 시 사이드바)' : '사이드바 레이아웃 (클릭 시 탭)'}
+          aria-label="레이아웃 전환"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
+        >
+          {island.layoutMode === 'tabs'
+            ? <LayoutGrid className="w-4 h-4" />
+            : <PanelLeft className="w-4 h-4" />}
+        </button>
+        <button
+          type="button"
+          onClick={onToggleShare}
+          title={island.isShared ? '팀에 공유됨 (클릭 시 비공개)' : '비공개 (클릭 시 팀에 공유)'}
+          aria-label="공유 전환"
+          className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+            island.isShared
+              ? 'text-primary bg-primary/10'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          }`}
+        >
+          <Share2 className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          title="삭제"
+          aria-label={`${island.name} 삭제`}
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-status-critical-soft hover:text-status-critical transition-colors flex-shrink-0"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+      <input
+        type="text"
+        defaultValue={island.description ?? ''}
+        aria-label={`${island.name} 설명`}
+        placeholder="설명 (선택)"
+        onBlur={(e) => {
+          const description = e.target.value.trim();
+          if (description !== (island.description ?? '')) onDescribe(description);
+        }}
+        className="w-full mt-1 ml-8 px-2 py-1 text-xs bg-transparent border border-transparent rounded-lg text-muted-foreground hover:border-border focus:border-border focus:outline-none"
+      />
+    </div>
+  );
+}
+
+/** 아일랜드 목록 관리 — 생성/이름·설명·아이콘 편집/순서 변경/레이아웃 전환/공유/복제/삭제. */
 export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPaneProps) {
   const navigate = useNavigate();
   const toast = useToast();
@@ -42,7 +155,9 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
   const updateIsland = useUpdateIsland();
   const deleteIsland = useDeleteIsland();
   const cloneIsland = useCloneIsland();
+  const reorderIslands = useReorderIslands();
   const setLastIslandId = useIslandStore((s) => s.setLastIslandId);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [newName, setNewName] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Island | null>(null);
@@ -66,6 +181,17 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
         onError: () => toast.error('아일랜드 생성 실패'),
       },
     );
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = mine.findIndex((i) => i.id === active.id);
+    const to = mine.findIndex((i) => i.id === over.id);
+    if (from < 0 || to < 0) return;
+    reorderIslands.mutate(arrayMove(mine, from, to).map((i) => i.id), {
+      onError: () => toast.error('순서 저장 실패'),
+    });
   };
 
   const handleClone = (island: Island) => {
@@ -128,71 +254,26 @@ export function IslandManagerPane({ open, onClose, currentId }: IslandManagerPan
           {mine.length === 0 && (
             <p className="py-4 text-sm text-muted-foreground">아직 만든 아일랜드가 없습니다.</p>
           )}
-          {mine.map((island) => (
-            <div
-              key={island.id}
-              className={`flex items-center gap-2 p-2.5 rounded-xl border transition-colors ${
-                island.id === currentId ? 'border-primary/50 bg-primary/5' : 'border-border bg-card'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setIconTarget(island)}
-                title="아이콘 변경"
-                aria-label={`${island.name} 아이콘 변경`}
-                className="flex items-center justify-center w-8 h-8 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-              >
-                <IslandIcon icon={island.icon} className="w-4 h-4" />
-              </button>
-              <input
-                type="text"
-                defaultValue={island.name}
-                aria-label={`${island.name} 이름`}
-                onBlur={(e) => {
-                  const name = e.target.value.trim();
-                  if (name && name !== island.name) updateIsland.mutate({ id: island.id, name });
-                  else e.target.value = island.name;
-                }}
-                className="flex-1 min-w-0 px-2 py-1 text-sm bg-transparent border border-transparent rounded-lg hover:border-border focus:border-border focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => updateIsland.mutate({
-                  id: island.id,
-                  layoutMode: island.layoutMode === 'tabs' ? 'sidebar' : 'tabs',
-                })}
-                title={island.layoutMode === 'tabs' ? '탭 레이아웃 (클릭 시 사이드바)' : '사이드바 레이아웃 (클릭 시 탭)'}
-                aria-label="레이아웃 전환"
-                className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
-              >
-                {island.layoutMode === 'tabs'
-                  ? <LayoutGrid className="w-4 h-4" />
-                  : <PanelLeft className="w-4 h-4" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => updateIsland.mutate({ id: island.id, isShared: !island.isShared })}
-                title={island.isShared ? '팀에 공유됨 (클릭 시 비공개)' : '비공개 (클릭 시 팀에 공유)'}
-                aria-label="공유 전환"
-                className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
-                  island.isShared
-                    ? 'text-primary bg-primary/10'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                }`}
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingDelete(island)}
-                title="삭제"
-                aria-label={`${island.name} 삭제`}
-                className="p-1.5 rounded-lg text-muted-foreground hover:bg-status-critical-soft hover:text-status-critical transition-colors flex-shrink-0"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={mine.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+              {mine.map((island) => (
+                <SortableIslandRow
+                  key={island.id}
+                  island={island}
+                  current={island.id === currentId}
+                  onRename={(name) => updateIsland.mutate({ id: island.id, name })}
+                  onDescribe={(description) => updateIsland.mutate({ id: island.id, description })}
+                  onPickIcon={() => setIconTarget(island)}
+                  onToggleLayout={() => updateIsland.mutate({
+                    id: island.id,
+                    layoutMode: island.layoutMode === 'tabs' ? 'sidebar' : 'tabs',
+                  })}
+                  onToggleShare={() => updateIsland.mutate({ id: island.id, isShared: !island.isShared })}
+                  onDelete={() => setPendingDelete(island)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </div>
 
         {/* 공유된 아일랜드 — 읽기 전용, 복제만 가능 */}
