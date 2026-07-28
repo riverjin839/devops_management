@@ -72,6 +72,18 @@
   파드 → 스냅샷 폴백, 스냅샷이 `snapshot_max_age_hours` 보다 낡으면 대기 처리).
   체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다.
 
+- **스키마 드리프트로 인한 반복 500 (근본 대응)**: `daily_check_logs.ai_status`,
+  `deep_check_results.status/.message`, `deep_check_results.daily_check_log_id` 의 레거시
+  NOT NULL 처럼, 모델과 실제 DB 가 어긋나 **특정 기능에서만 500** 이 나는 문제가 반복됐다.
+  Alembic 없이 `create_all` 로 운영하는 구조상 이미 존재하는 테이블의 컬럼·제약이 자동으로
+  갱신되지 않기 때문이다. 한 컬럼씩 사후에 쫓아가는 대신 전체를 기계적으로 비교·복구한다:
+  - 부팅 안전망에 `_relax_not_null_drift` 추가 — 모델이 nullable 인데 DB 에 NOT NULL 이 남은
+    컬럼을 자동 완화(기존 `_sync_missing_model_columns` 의 누락 컬럼 보강과 짝).
+  - Settings ▸ **스키마 점검** 탭 신설 — 드리프트(테이블/컬럼 누락, 레거시 NOT NULL)를 표로
+    보여주고 **안전한 것만**(컬럼 추가는 항상 nullable, NOT NULL 해제) 복구한다. 컬럼 삭제·타입
+    변경은 하지 않으며, `실행 계획 보기`로 실행될 SQL 을 먼저 확인할 수 있다.
+    Backend: `GET /api/v1/schema-health`, `POST /api/v1/schema-health/repair`(admin).
+
 ### Changed
 - **UI-First 원칙을 프로젝트 규약으로 명문화** (`CLAUDE.md` §UI-First 원칙): 환경마다
   달라지는 값(네임스페이스·라벨·경로·엔드포인트·실행 경로)은 코드에 하드코딩하지 않고

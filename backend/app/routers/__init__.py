@@ -32,6 +32,7 @@ from app.routers.node_server_specs import router as node_server_specs_router
 from app.routers.cluster_custom_fields import router as cluster_custom_fields_router
 from app.routers.work_item_custom_fields import router as work_item_custom_fields_router
 from app.routers.backup import router as backup_router
+from app.routers.schema_health import router as schema_health_router
 from app.routers.service_entries import router as service_entries_router
 from app.routers.batch_jobs import router as batch_jobs_router
 from app.routers.commands import router as commands_router
@@ -111,6 +112,7 @@ __all__ = [
     "cluster_custom_fields_router",
     "work_item_custom_fields_router",
     "backup_router",
+    "schema_health_router",
     "service_entries_router",
     "batch_jobs_router",
     "commands_router",

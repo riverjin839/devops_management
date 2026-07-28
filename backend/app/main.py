@@ -47,6 +47,7 @@ from app.routers import (
     cluster_custom_fields_router,
     work_item_custom_fields_router,
     backup_router,
+    schema_health_router,
     service_entries_router,
     batch_jobs_router,
     commands_router,
@@ -1048,6 +1049,20 @@ def _sync_missing_model_columns() -> None:
             )
 
 
+def _relax_not_null_drift() -> None:
+    """모델 nullable ↔ DB NOT NULL 드리프트 자동 완화 (services/schema_health.py).
+
+    `_sync_missing_model_columns()` 가 누락 '컬럼'을 채운다면 이쪽은 누락된 '제약 완화'를
+    맡는다. 같은 종류의 사후 대응(에러 나면 한 컬럼씩 추가)을 반복하지 않기 위한 안전망이고,
+    운영자는 Settings ▸ 스키마 점검 화면에서 현재 드리프트를 직접 확인·복구할 수 있다.
+    """
+    from app.services.schema_health import relax_not_null_drift
+
+    relaxed = relax_not_null_drift()
+    if relaxed:
+        _log.info("migration: relaxed %d legacy NOT NULL constraint(s)", relaxed)
+
+
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
     from app.models.metric_card import MetricCard
@@ -1810,6 +1825,9 @@ async def lifespan(app: FastAPI):
         for step_name, step in [
             ("migrations", _run_migrations),
             ("sync_missing_model_columns", _sync_missing_model_columns),
+            # 누락 컬럼(위)과 짝을 이루는 제약 드리프트 안전망 — 모델이 nullable 인데
+            # DB 에 레거시 NOT NULL 이 남아 있으면 그 컬럼을 비운 저장이 전부 500 이 된다.
+            ("relax_not_null_drift", _relax_not_null_drift),
             ("seed_metric_cards", _seed_default_metric_cards),
             ("seed_cluster_items", _seed_cluster_items),
             ("seed_trend_sources", _seed_default_trend_sources),
@@ -1916,6 +1934,7 @@ app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_aut
 app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_item_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(schema_health_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(service_entries_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)
