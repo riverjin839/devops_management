@@ -120,6 +120,7 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
  */
 export const ISLAND_DENYLIST = new Set<string>([
   '/k9s',
+  '/node-ssh',
   '/settings',
   '/daily-check/settings',
   '/',

@@ -55,6 +55,8 @@ import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { K9sPage } from '@/pages/K9sPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
+import { NodeSshPage } from '@/pages/NodeSshPage';
+import { NodeSshPopupPage } from '@/pages/NodeSshPopupPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { PepServicesPage } from '@/pages/PepServicesPage';
@@ -219,6 +221,9 @@ function AppShell() {
               {/* k9s 콘솔 — control-plane 서버 내장 k9s 를 SSH 로 웹 터미널 스트리밍 */}
               <Route path="/k9s/:clusterId" element={<K9sPage />} />
               <Route path="/k9s" element={<K9sPage />} />
+              {/* 노드 SSH 터미널 — 개별 노드에 로그인 셸을 열어 웹 터미널로 스트리밍 */}
+              <Route path="/node-ssh/:clusterId" element={<NodeSshPage />} />
+              <Route path="/node-ssh" element={<NodeSshPage />} />
               <Route path="/cluster-trends/:clusterId" element={<ClusterTrendsPage />} />
               <Route path="/cluster-trends" element={<ClusterTrendsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
@@ -231,12 +236,13 @@ function AppShell() {
   );
 }
 
-/** 인증 후 최상위 — `/k9s/popup` 은 사이드바/네비 없는 전체창(별도 브라우저 창)으로
- *  분기하고, 그 외에는 메인 셸(AppShell)을 그대로 렌더한다. AppShell 을 Route 로
- *  감싸지 않아 기존 라우팅 컨텍스트에 영향이 없다. */
+/** 인증 후 최상위 — 터미널 팝업 라우트(`/k9s/popup`, `/node-ssh/popup`)는 사이드바/네비
+ *  없는 전체창(별도 브라우저 창)으로 분기하고, 그 외에는 메인 셸(AppShell)을 그대로
+ *  렌더한다. AppShell 을 Route 로 감싸지 않아 기존 라우팅 컨텍스트에 영향이 없다. */
 function AuthedRoot() {
   const location = useLocation();
   if (location.pathname === '/k9s/popup') return <K9sPopupPage />;
+  if (location.pathname === '/node-ssh/popup') return <NodeSshPopupPage />;
   return (
     <>
       <AppShell />
