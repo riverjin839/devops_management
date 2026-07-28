@@ -295,7 +295,11 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
           )}
 
           {tab === 'runbook' && (
-            <CheckMatrixRunbookPanel runbook={runbook} isLoading={runbookLoading} />
+            <CheckMatrixRunbookPanel
+              runbook={runbook}
+              isLoading={runbookLoading}
+              editTarget={{ itemId: item.id, clusterId: cluster.id }}
+            />
           )}
 
           {tab === 'runs' && (

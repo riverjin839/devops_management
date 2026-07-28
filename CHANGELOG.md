@@ -60,6 +60,18 @@
   - Frontend: `CheckMatrixCellDetailModal` 3탭화(추이·이력/실행 방식/수행 로그),
     신규 `CheckMatrixRunbookPanel`·`CheckMatrixRunLog`·`CheckMatrixRunLogPanel`,
     매트릭스 열/행 실행 버튼과 카드 헤더 "수행 로그" 진입점.
+- **점검 매트릭스 — 셀 대표값 숫자 표시 + 기본 등록 항목 설정 편집**:
+  - **셀에 대표값 숫자**: 인증서 만료가 "정상"이 아니라 **잔여일(예: 361일)** 로 표시된다.
+    프로브류는 실패율(%), 이벤트류는 건수, 노드류는 이상 노드 수 — 전 deep check 타입에
+    대표값 규칙(`deep_checkers/registry.py` `CELL_VALUE_SPECS`)을 정의했고 시드 시 항목
+    단위도 함께 채워진다(구버전 DB 는 부팅 시 자동 보강).
+  - **소스 설정 확인·수정**: 셀 상세 "실행 방식" 탭의 **설정 편집**으로 기본 등록 점검의
+    임계값·파라미터(애드온이면 config)를 매트릭스에서 바로 고칠 수 있다. 값은 필드 타입으로
+    강제되고 비우면 기본값으로 복귀하며, 글로벌 정의면 전 클러스터 적용 경고가 뜬다.
+    Backend: `PUT /check-matrix/cell/{item}/{cluster}/source-config`, 런북에
+    definition/addon 식별자·필드 명세 포함.
+  - **시스템 항목도 표시 속성 수정 가능**: 잠긴 것은 실행 소스뿐 — 이름/설명/단위/표시
+    여부는 다른 행과 똑같이 편집된다.
 
 ## [1.16.0] - 2026-07-28
 

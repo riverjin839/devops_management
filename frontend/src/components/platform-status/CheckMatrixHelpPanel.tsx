@@ -75,6 +75,9 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
                   아직 한 번도 실행되지 않은 셀
                 </li>
               </ul>
+              <p className="text-xs text-muted-foreground">상태색 옆의 <b>숫자</b>는 그 점검의 대표값입니다 —
+                인증서 만료는 잔여일(예: 361일), 프로브류는 실패율(%), 이벤트류는 건수. 숫자가 없으면
+                해당 점검이 아직 새 버전으로 실행되지 않았거나 값을 측정하지 못한 것입니다.</p>
             </Section>
 
             <Section title="셀 클릭 — 상세 보기">
@@ -165,6 +168,15 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
               <p>셀 상세의 <b>"실행 방식"</b> 탭에 이 점검이 대상 클러스터에서 실제로 수행하는 명령이 순서대로
                 나열됩니다. kubectl 실행 / K8s API 호출 / HTTP 프로브 / SSH / PEP DB 조회를 배지로 구분하고,
                 대상에 변경을 일으킬 수 있는 명령에는 <b>변경</b> 배지가 붙습니다.</p>
+            </Section>
+
+            <Section title="설정(임계값·파라미터) 바로 수정하기">
+              <p>같은 <b>"실행 방식"</b> 탭의 <b>설정 편집</b> 버튼으로, 기본 등록된 점검의 임계값과
+                파라미터(애드온이면 config)를 매트릭스에서 직접 고칠 수 있습니다. 값을 비우면 해당 항목은
+                기본값으로 돌아갑니다.</p>
+              <p className="text-xs text-muted-foreground">셀이 <b>글로벌 정의</b>를 쓰고 있으면 저장이 모든
+                클러스터에 적용된다는 경고가 뜹니다 — 클러스터별로 다르게 두려면 운영 점검(Ops Checks)
+                화면에서 클러스터 전용 정의를 만드세요.</p>
             </Section>
           </div>
         )}

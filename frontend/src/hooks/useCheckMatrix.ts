@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { checkMatrixApi } from '@/services/api';
-import type { CheckMatrixItemInput } from '@/types';
+import type { CheckMatrixItemInput, CheckMatrixSourceConfigEntry } from '@/types';
 
 export const checkMatrixKeys = {
   items: ['checkMatrixItems'] as const,
@@ -162,6 +162,22 @@ export function useCheckMatrixRunbook(
     },
     enabled: enabled && !!itemId && !!clusterId,
     staleTime: 30 * 1000,
+  });
+}
+
+/** 소스 설정(deep_check thresholds/params · addon config) 저장 — 런북과 그리드를 새로 그린다. */
+export function useUpdateSourceConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, clusterId, entries }: {
+      itemId: string; clusterId: string; entries: CheckMatrixSourceConfigEntry[];
+    }) => checkMatrixApi.putSourceConfig(itemId, clusterId, entries).then((r) => r.data),
+    onSuccess: (_, { itemId, clusterId }) => {
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.runbook(itemId, clusterId) });
+      // 글로벌 정의 수정은 다른 클러스터 셀의 런북에도 영향을 준다.
+      qc.invalidateQueries({ queryKey: ['checkMatrixRunbook'] });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+    },
   });
 }
 

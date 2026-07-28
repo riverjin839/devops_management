@@ -410,6 +410,12 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
         "target": None,          # 이 클러스터에서 해석된 실제 실행 대상
         "runnable": False,       # "지금 실행" 가능 여부
         "blocked_reason": None,  # runnable=False 인 이유
+        # 소스 설정 편집(요건: 기본 등록 항목도 설정 확인·수정 가능) — 해석된 대상의 식별자.
+        "definition_id": None,     # deep_check: 해석된 DeepCheckDefinition id
+        "definition_scope": None,  # "cluster" | "global" — 글로벌이면 수정이 전 클러스터에 적용됨
+        "addon_id": None,          # addon: 해석된 Addon id
+        "config_editable": False,  # 이 화면에서 params/thresholds(또는 addon config) 수정 가능 여부
+        "field_specs": [],         # 편집 폼 라벨/타입/도움말 — [{group,name,type,label,help}]
         "steps": [],
         "commands": [],
         "inputs": [],
@@ -452,6 +458,13 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
         )
         if spec is not None:
             out["notes"].insert(0, spec.description)
+        if spec is not None:
+            out["field_specs"] = (
+                [{"group": "thresholds", "name": f.name, "type": f.type, "label": f.label, "help": f.help}
+                 for f in spec.threshold_fields]
+                + [{"group": "params", "name": f.name, "type": f.type, "label": f.label, "help": f.help}
+                   for f in spec.param_fields]
+            )
         if definition is None:
             out["blocked_reason"] = (
                 f"이 클러스터에 `{item.source_ref}` 점검 정의가 없습니다 — 글로벌 정의도 없습니다. "
@@ -464,6 +477,9 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
                 f"{'' if definition.enabled else ' · 비활성'})"
             )
             out["runnable"] = True
+            out["definition_id"] = str(definition.id)
+            out["definition_scope"] = "cluster" if definition.cluster_id else "global"
+            out["config_editable"] = True
             if not definition.enabled:
                 out["notes"].append(
                     "이 정의는 비활성(enabled=false) 상태라 cron 자동 실행은 되지 않는다 — "
@@ -488,6 +504,8 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
         else:
             out["target"] = f"Addon «{addon.name}» (type={addon.type})"
             out["runnable"] = True
+            out["addon_id"] = str(addon.id)
+            out["config_editable"] = True
             out["inputs"] = _inputs({"config": addon.config or {}})
         return out
 
