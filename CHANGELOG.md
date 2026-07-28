@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.16.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.16.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.16.1] - 2026-07-28
 
 ### Fixed
 - **등록된 클러스터 삭제 실패 (`NotNullViolation: cluster_id of relation
