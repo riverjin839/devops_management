@@ -330,7 +330,8 @@ def put_source_config(
 
 # ── 수동 실행 (셀 / 클러스터 열 / 항목 행) ────────────────────────────────────────
 def _actor(user: User) -> str:
-    return user.full_name or user.username
+    # User 모델의 표시명 컬럼은 display_name 이다 (full_name 아님 — models/user.py).
+    return user.display_name or user.username
 
 
 @router.post("/cell/{item_id}/{cluster_id}/run")

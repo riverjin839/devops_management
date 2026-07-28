@@ -293,6 +293,17 @@ class TestSourceConfigEdit:
             db.commit()
 
 
+# ── 라우터 표시명 해석 — user.full_name 오참조로 모든 수동 실행이 500 나던 회귀 ──
+class TestActorResolution:
+    def test_actor_uses_display_name_column(self):
+        """User 모델의 표시명 컬럼은 display_name 이다 — full_name 참조는 AttributeError."""
+        from app.models.user import User
+        from app.routers.check_matrix import _actor
+
+        assert _actor(User(username="hong", display_name="홍길동")) == "홍길동"
+        assert _actor(User(username="hong", display_name=None)) == "hong"
+
+
 # ── SC-2 대상 없는 셀 실행 ────────────────────────────────────────────────────
 class TestCellRun:
     def test_missing_definition_is_skipped_not_failed(self, db, fixture_ids):
