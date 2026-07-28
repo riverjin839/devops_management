@@ -490,6 +490,36 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
 
 ## Key Conventions
 
+### UI-First 원칙 — 환경 차이는 코드가 아니라 UI 설정으로 (필수)
+
+**PEP 는 운영자가 파이썬 파일을 고치지 않고 화면 안에서 확인·수정할 수 있어야 한다.**
+현장 환경은 설치마다 다르다(etcd 가 파드냐 systemd 데몬이냐, env 파일 경로, 네임스페이스,
+라벨 셀렉터, 엔드포인트 주소…). 이 차이를 체커/서비스 코드에 하드코딩하면 운영자가 손댈 수
+없고, 반영하려면 매번 코드 수정·재배포가 필요해진다.
+
+규칙:
+
+1. **환경에 따라 달라지는 값은 전부 `params`/`thresholds`(또는 `Addon.config`)로 뺀다.**
+   체커 코드에 리터럴로 박지 않는다. 예: `namespace`, `label_selector`, `env_file`,
+   endpoint 목록, 타임아웃, 실행 경로(`source`) 등.
+   - deep checker 는 `DeepCheckTypeSpec.param_fields` / `threshold_fields` 에 선언해야
+     UI 가 폼을 그린다(선언하지 않은 값은 화면에서 편집 불가 = 규칙 위반).
+   - 필드마다 `label` 과 `help` 를 채운다 — 운영자가 무슨 값인지 화면에서 알아야 한다.
+2. **동작 방식이 갈리는 경우 분기도 파라미터로 노출한다.** 코드에 `if` 를 박아 한쪽만
+   지원하지 말고 `source: auto|pod|snapshot` 처럼 선택 가능하게 하고, `auto` 로 폴백을 준다.
+3. **자격증명은 params 에 저장하지 않는다.** params 는 JSONB 이고 런북·실행 로그에 노출된다.
+   SSH 등 인증이 필요한 수집은 기존 UI 흐름(요청 시에만 자격증명 사용, 미저장)으로
+   스냅샷을 남기고, 체커는 그 스냅샷을 읽는다 (예: `etcd_defrag` 의 snapshot 경로가
+   `/versions` 화면이 수집한 `etcdctl_config:{host}` 를 읽는 구조).
+4. **가시화가 편집보다 먼저다.** 무슨 명령이 나가는지 화면에서 볼 수 없으면 편집은 무의미하다
+   — 새 체커/실행 경로를 추가하면 `services/check_matrix_runbook.py` 의 명령 목록도 같은
+   커밋에서 갱신한다(테스트가 전 타입 커버리지를 검사한다).
+5. **편집 지점**: 점검 매트릭스 셀 → **실행 방식** 탭 → **설정 편집**, 또는 운영 점검
+   (Ops Checks) 화면의 정의 편집. 둘 다 같은 `DeepCheckDefinition` 을 고친다.
+
+> 새 기능을 넣을 때 "이건 나중에 코드에서 바꾸면 되지"라고 판단했다면 그건 규칙 위반이다.
+> 운영자 화면에 노출할 방법을 먼저 찾는다. 상세는 `docs/CHECK_MATRIX_GUIDE.md` §환경 차이 대응.
+
 ### Python
 
 - Pydantic v2 (`model_dump()`, not `.dict()`).

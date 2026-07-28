@@ -884,6 +884,15 @@ def _run_migrations():
             "UPDATE deep_check_results SET checked_at = NOW() WHERE checked_at IS NULL",
             label="deep_check_results.checked_at backfill",
         )
+        # daily_check_log_id: 초기 스키마는 NOT NULL(모든 deep 결과가 일일점검 회차에
+        # 종속)이었으나, 지금은 정의 단독 실행("지금 점검"/매트릭스 셀 실행)이 회차 없이
+        # NULL 로 저장한다 — 모델은 nullable 인데 구버전 DB 에 NOT NULL 이 남아 있으면
+        # 매트릭스 deep_check 실행이 전부 IntegrityError(500) 로 죽는다. create_all 은
+        # 기존 컬럼의 제약을 바꾸지 않으므로 여기서 명시적으로 푼다.
+        _safe_exec(
+            "ALTER TABLE deep_check_results ALTER COLUMN daily_check_log_id DROP NOT NULL",
+            label="deep_check_results.daily_check_log_id nullable",
+        )
         _safe_create_index("ix_deep_check_results_cluster", "deep_check_results", "(cluster_id)")
         _safe_create_index("ix_deep_check_results_daily_log", "deep_check_results", "(daily_check_log_id)")
         _safe_create_index("ix_deep_check_results_checked_at", "deep_check_results", "(checked_at DESC)")

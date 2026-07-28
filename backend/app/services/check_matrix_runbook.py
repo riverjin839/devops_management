@@ -122,10 +122,13 @@ def _deep_check_commands(check_type: str, params: dict[str, Any]) -> list[dict[s
                  "컨트롤 플레인 인증서 잔여일 출력을 파싱한다. exec 권한이나 kubeadm 이 없으면 대기(pending)."),
         ]
     if check_type == "etcd_defrag":
-        return [
+        source = str(_p(params, "source", "auto")).lower()
+        pod_cmds = [
             _cmd(KIND_K8S_API,
                  "list_namespaced_pod(kube-system, label_selector=component=etcd)",
-                 "Running etcd 파드 탐색 — 없으면 managed/external etcd 로 보고 대기 처리."),
+                 "Running etcd 파드 탐색"
+                 + (" — 없으면 아래 수집 스냅샷으로 폴백한다(데몬 etcd)." if source == "auto"
+                    else " — 없으면 대기(pending) 처리.")),
             _cmd(KIND_KUBECTL,
                  "kubectl -n kube-system exec <etcd-pod> -- sh -c "
                  "'ETCDCTL_API=3 … etcdctl endpoint status -w json'",
@@ -134,6 +137,19 @@ def _deep_check_commands(check_type: str, params: dict[str, Any]) -> list[dict[s
                  "kubectl -n kube-system exec <etcd-pod> -- sh -c 'ETCDCTL_API=3 … etcdctl alarm list'",
                  "NOSPACE 등 etcd 알람 유무 확인."),
         ]
+        snap_cmds = [
+            _cmd(KIND_DB,
+                 "SELECT … FROM cluster_config_snapshots WHERE component LIKE 'etcdctl_config:%'",
+                 "데몬(systemd) etcd — '버전 / 설정 관리(/versions)' 화면에서 SSH 로 수집해 둔 "
+                 "endpoint status 스냅샷(호스트별 최신)으로 단편화율을 계산한다. "
+                 f"수집 시각이 {_p(params, 'snapshot_max_age_hours', 24)}시간보다 오래되면 대기 처리. "
+                 "체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다."),
+        ]
+        if source == "pod":
+            return pod_cmds
+        if source == "snapshot":
+            return snap_cmds
+        return pod_cmds + snap_cmds
     if check_type == "cni_flow":
         return [
             _cmd(KIND_K8S_API,
