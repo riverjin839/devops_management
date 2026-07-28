@@ -47,6 +47,23 @@
   조회 쪽(`notifications._me_ids`)이 매칭하지 않아, critical K8s 이벤트 알림이 실제로는 누구의
   알림 종에도 뜨지 않았다. 이제 생성 시점에 **활성 사용자별 개인 행으로 팬아웃**한다
   (`services/user_notify.notify_broadcast`) — 읽음 처리도 개인별로 정확히 동작한다.
+### Changed
+- **Settings 서비스 설정 통합 — "서비스 카테고리" 탭 폐지, "관리 서비스"로 일원화**: 서로
+  중복되던 두 탭을 하나로 합쳤다. 최상위 "서비스 카테고리" 탭이 사라지고, "관리 서비스" 탭이
+  **PEP 서비스 / APP 서비스** 두 탭으로만 구성된다. 각 탭 안에서 해당 도메인의 카테고리와
+  서비스 타입을 한 화면에서 관리하므로, 카테고리를 만들려고 다른 탭으로 이동할 필요가 없다.
+  기존 "서비스 타입" / "서비스 카탈로그" 서브탭 구분도 제거했다. 레거시 딥링크
+  (`?tab=service`, `?tab=service-categories`)는 `?tab=mgmt-service` 로 리다이렉트된다.
+  Frontend: `ServiceCategoryManager`/`LakeServiceTypeManager` 가 `domain` prop 을 받도록 변경,
+  각 컴포넌트 내부의 도메인 탭·도메인 select 제거.
+- **서비스 카탈로그를 PEP 서비스로 머지**: 서비스 아이콘·색상 정의가 `ui_settings.serviceCatalog`
+  와 PEP 서비스 타입 두 곳으로 갈라져 있던 것을 **PEP 서비스 한 곳**으로 합쳤다. `/services`
+  지식 카탈로그와 업무/이슈의 서비스 태그가 이제 PEP 서비스의 아이콘·색상을 그대로 사용한다.
+  이름이 겹치던 서비스(Kubernetes/Keycloak/Nexus/Prometheus/Grafana/Cilium)는 PEP 서비스 쪽
+  정의로 통일하고 색상만 이어받으며, 카탈로그에만 있던 Jenkins/ArgoCD/etcd/Hubble/Ingress/
+  Storage 는 PEP 서비스에 자동 추가된다. Backend: `lake_service_types.color` 컬럼 추가,
+  부팅 시 1회성 머지(`_merge_service_catalog_into_pep_types`), `ui_settings.service_catalog`
+  필드 폐지.
 
 ## [1.16.3] - 2026-07-28
 

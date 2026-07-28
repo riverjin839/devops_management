@@ -475,7 +475,7 @@ export interface WorkItem {
   /** 종료/해결/완료 일시. issue 의 resolved_at / task 의 completed_at 통합. */
   closedAt?: string;
   remarks?: string;
-  /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
+  /** 통합지식 service tag — PEP 서비스 타입(LakeServiceType domain='pep') 의 slug 와 매칭. */
   service?: string;
   /** Phase B — service 하위 component (예: k8s→api-server). serviceCatalog.ts 의
    *  COMPONENT_BY_SERVICE 추천 enum + 직접 입력 escape hatch. service 없을 때 null. */
@@ -941,9 +941,6 @@ export interface ClusterItemType {
 export interface UiSettings {
   appTitle: string;
   navLabels: Record<string, string>;
-  /** 통합지식 메뉴와 task/issue tag 에 노출되는 서비스 카탈로그.
-   *  null/undefined 면 프론트의 SERVICE_CATALOG 기본값으로 폴백. */
-  serviceCatalog?: ServiceCatalogEntry[];
   /** 홈(좌상단) 버튼 아이콘 커스터마이즈 (모드별). 값 형식은 cluster icon 과 동일
    *  (lucide 이름 / 이모지 / base64 data URL). null/undefined 면 기본값(업무=ListTodo, 플랫폼=☸). */
   homeIcons?: HomeIcons;
@@ -967,23 +964,6 @@ export interface PageStyle {
 export interface HomeIcons {
   work?: string | null;
   platform?: string | null;
-}
-
-/** Settings 의 '서비스' 탭에서 사용자 정의되는 서비스 한 항목.
- *  ⚠ 별도의 ServiceCatalogItem (요약 카운트용) 과 혼동 주의 — 이 타입은 사이드바·태그용. */
-export interface ServiceCatalogEntry {
-  /** URL slug 및 service_entries.service 와 매칭되는 키 (예: 'k8s', 'keycloak'). */
-  slug: string;
-  /** 사이드바·드롭다운에 표시될 한글 라벨. */
-  label: string;
-  /** lucide-react 아이콘 이름 (예: 'Box', 'Key'). 비어있으면 BookOpen. */
-  icon?: string;
-  /** 카드/뱃지 색상 토큰 (예: 'sky', 'emerald'). */
-  color?: string;
-  /** 짧은 설명 (모달/툴팁용). */
-  description?: string;
-  /** 정렬 우선순위 (작을수록 위). */
-  sortOrder?: number;
 }
 
 export interface OperationLevelItem {
@@ -2942,6 +2922,8 @@ export interface LakeServiceTypeRow {
   defaultPath: string;
   description?: string | null;
   icon?: string | null;
+  /** 카드/뱃지 색상 토큰 (예: 'sky', 'emerald'). 비어있으면 slate. */
+  color?: string | null;
   isBuiltin: boolean;
   enabled: boolean;
   sortOrder: number;
@@ -2959,6 +2941,7 @@ export interface LakeServiceTypeInput {
   defaultPath?: string;
   description?: string | null;
   icon?: string | null;
+  color?: string | null;
   enabled?: boolean;
   sortOrder?: number;
   domain?: string;
@@ -2971,6 +2954,7 @@ export interface LakeServiceTypeUpdate {
   defaultPath?: string;
   description?: string | null;
   icon?: string | null;
+  color?: string | null;
   enabled?: boolean;
   sortOrder?: number;
   domain?: string;

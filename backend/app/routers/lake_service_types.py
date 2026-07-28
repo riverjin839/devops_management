@@ -125,6 +125,7 @@ def create_type(
         default_path=payload.default_path,
         description=payload.description,
         icon=payload.icon,
+        color=payload.color,
         is_builtin=False,             # 운영자는 builtin 만들 수 없음
         enabled=payload.enabled,
         sort_order=payload.sort_order,

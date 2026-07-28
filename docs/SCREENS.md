@@ -138,14 +138,14 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 시스템 설정 (`/settings`, admin)
 
-- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCatalogManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
-- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·서비스 카탈로그·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그까지 플랫폼 전역 설정을 12개 탭으로 모아둔 관리자 콘솔.
+- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
+- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그까지 플랫폼 전역 설정을 11개 탭으로 모아둔 관리자 콘솔.
 - **UI 구성**:
-  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`서비스 카테고리`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`서비스 타입`=LakeServiceType 카탈로그 / `서비스 카탈로그`=ui_settings.serviceCatalog, 구 최상위 "서비스"/"PEP 서비스" 탭이 이리로 이동)로 구성. 레거시 `?tab=service` 딥링크는 `mgmt-service`(서비스 카탈로그 서브탭)로 리다이렉트.
+  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`PEP 서비스`/`APP 서비스` — 도메인 구분)로 구성되고, 각 서브탭 본문은 `ServiceCategoryManager`(해당 도메인 카테고리) + `LakeServiceTypeManager`(해당 도메인 서비스 타입) 두 섹션을 세로로 렌더한다. 구 최상위 "서비스 카테고리" 탭과 구 "서비스 타입"/"서비스 카탈로그" 서브탭이 전부 여기로 통합됐다 — 레거시 `?tab=service`·`?tab=service-categories` 딥링크는 `mgmt-service` 로 리다이렉트.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
-  - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/담당자/접근제어/Jira/백업/감사로그).
+  - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/담당자/접근제어/Jira/백업/감사로그).
   - ClusterSidebar 미사용(전역 설정 화면이라 클러스터 단위 필터 없음).
 - **Frontend**: `useClusters()`+`useClusterStore`, `useUpdateCluster()`, `useDeleteCluster()`(`hooks/useCluster.ts`) · `useAssignees()`(담당자 카운트) · `useUiSettings()`/`useUpdateUiSettings()`(`hooks/useUiSettings.ts`) · `useOperationLevels()`(`hooks/useOperationLevels.ts`) · `useHomeStore`(`scheduleBg`) · `useDebugStore`(Debug 탭 토글, localStorage) · `useQuery(['management-servers'], managementServersApi.getAll)` + `useMutation`(`managementServersApi.delete`). 직접 호출 api 함수: `clustersApi.verify`, `managementServersApi.ping/create/update/delete`, `updateClusterMut.mutateAsync`(아이콘 저장 포함).
 - **Backend**: `GET/PUT/DELETE /api/v1/clusters`, `POST /api/v1/clusters/{id}/verify`(`clusters.py`) · `GET/POST/PUT/DELETE /api/v1/management-servers`, ping 엔드포인트(`management_servers.py`) · `GET/PATCH /api/v1/ui-settings`(홈 아이콘 등, `ui_settings.py`, `AppSetting` 모델 기반 key-value 저장: `UI_SETTINGS_KEY`/`OPERATION_LEVELS_KEY`/`ASSIGNEES_KEY`/`FEATURE_ACCESS_KEY`) · 담당자/운영레벨/서비스카탈로그/Jira/백업/감사로그는 각 하위 매니저 컴포넌트가 별도 라우터(`work_item_custom_fields.py`, `jira.py`, `backup.py`, `audit_logs.py` 등) 호출.
@@ -153,7 +153,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 클러스터 등록/수정/삭제/연결확인(Verify)/Kubeconfig 조회·수정/아이콘 설정(단건+일괄 생성).
   - 관리서버(Jump Host/Bastion 등) 등록/수정/삭제/Ping 상태 확인.
   - 홈 화면 아이콘(업무/플랫폼 모드별) 및 업무 스케줄 배경색 커스터마이즈.
-  - 담당자/운영레벨/서비스 카탈로그/관리 서비스/접근 제어/Jira·Confluence 연동(SSO 자동 로그인 — Confluence URL 설정 시 한 번의 로그인으로 두 세션 동시 캡처, 만료 시 자동 재로그인)/Debug 로그/백업·복구/감사 로그 등 전역 운영 설정을 탭 단위로 통합 관리.
+  - 담당자/운영레벨/관리 서비스(PEP·APP 카테고리+서비스 타입)/접근 제어/Jira·Confluence 연동(SSO 자동 로그인 — Confluence URL 설정 시 한 번의 로그인으로 두 세션 동시 캡처, 만료 시 자동 재로그인)/Debug 로그/백업·복구/감사 로그 등 전역 운영 설정을 탭 단위로 통합 관리.
   - Debug 탭은 페이지별 API 호출 로그 패널 토글(localStorage 저장, 서버 상태 아님).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -1254,12 +1254,14 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### Settings — 서비스 카테고리 관리 (`/settings?tab=service-categories`)
+### Settings — 관리 서비스 (`/settings?tab=mgmt-service`)
 
-- **파일**: `frontend/src/components/settings/ServiceCategoryManager.tsx` (Settings 탭 `service-categories`)
-- **목적 / UX**: PEP/APP 서비스 상위 카테고리 CRUD. 도메인 탭(PEP/APP) 전환 + 테이블(아이콘/key/label/builtin 여부/활성/정렬) + 추가/편집 모달. APP builtin 4개(Runtime/Catalog/Workbench/AI Ready)는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능. PEP 는 builtin 카테고리가 없다(서비스 타입을 미분류 평면 목록으로 관리).
-- **Backend**: `GET/POST /api/v1/service-categories`, `PUT/DELETE /api/v1/service-categories/{id}` — `backend/app/routers/service_categories.py`, 모델 `ServiceCategory`(`backend/app/models/service_category.py`).
-- **관련**: `LakeServiceTypeManager.tsx`(Settings "관리 서비스" 탭)에도 도메인(PEP/APP) 필터 탭과 상위 카테고리 select 가 추가되어, 서비스 타입을 특정 카테고리에 배정할 수 있다.
+- **파일**: `frontend/src/components/settings/ServiceCategoryManager.tsx` + `LakeServiceTypeManager.tsx` (Settings 탭 `mgmt-service`, 둘 다 `domain: 'pep' | 'app'` prop 을 받음)
+- **목적 / UX**: PEP/APP 서비스의 상위 카테고리와 서비스 타입을 도메인별로 한 화면에서 관리. 상단 서브탭(`PEP 서비스`/`APP 서비스`)이 도메인을 결정하고, 그 아래 **카테고리 섹션**(아이콘/key/label/builtin 여부/활성/정렬 테이블 + 추가·편집 모달)과 **서비스 타입 섹션**(아이콘/slug/label/카테고리/default_path/유형/활성/정렬 테이블 + 추가·편집 모달)이 세로로 놓인다. 두 컴포넌트 모두 도메인 선택 UI 를 자체적으로 갖지 않는다(상위 서브탭이 단일 출처).
+  - APP builtin 카테고리 4개(Runtime/Catalog/Workbench/AI Ready)는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능. PEP 는 builtin 카테고리 없이 평면 목록이 기본이지만 필요하면 직접 추가할 수 있다.
+  - 서비스 타입의 `icon`/`color` 는 `/services` 지식 카탈로그와 업무/이슈 서비스 태그의 표시에도 그대로 쓰인다(구 `ui_settings.serviceCatalog` 를 대체 — 아이콘 정의의 단일 출처).
+- **Backend**: `GET/POST /api/v1/service-categories`, `PUT/DELETE /api/v1/service-categories/{id}` (`service_categories.py`, 모델 `ServiceCategory`) · `GET/POST /api/v1/lake-service-types`, `PUT/PATCH/DELETE /api/v1/lake-service-types/{id}` (`lake_service_types.py`, 모델 `LakeServiceType` — `color` 컬럼 포함).
+- **마이그레이션**: 부팅 시 `_merge_service_catalog_into_pep_types()`(`main.py`)가 구 서비스 카탈로그를 1회성으로 흡수 — 이름이 겹치는 PEP 타입에 color 백필, 카탈로그에만 있던 jenkins/argocd/etcd/hubble/ingress/storage 를 PEP custom 타입으로 추가.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

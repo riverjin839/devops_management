@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, func
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
@@ -1004,6 +1004,7 @@ def _run_migrations():
     if "lake_service_types" in inspector.get_table_names():
         _safe_add_column("lake_service_types", "domain", "VARCHAR(10) NOT NULL DEFAULT 'pep'")
         _safe_add_column("lake_service_types", "category_id", "UUID")
+        _safe_add_column("lake_service_types", "color", "VARCHAR(20)")
         _safe_create_index("ix_lake_types_domain_category", "lake_service_types", "(domain, category_id)")
         _safe_add_constraint(
             "lake_service_types", "lake_service_types_category_id_fkey",
@@ -1650,6 +1651,84 @@ def _seed_default_service_categories():
         db.close()
 
 
+# 폐지 대상 — 구 "서비스 카탈로그"(Settings → 관리 서비스 → 서비스 카탈로그 서브탭,
+# ui_settings.serviceCatalog 에 저장되던 /services 지식 카탈로그·업무 태그용 아이콘/색상 정의).
+# PEP 서비스(LakeServiceType domain='pep') 로 흡수 통합하며 아이콘은 PEP 쪽 값을 우선한다 —
+# color 배지만 PEP 에 없던 필드라 카탈로그 값으로 보강한다.
+_PEP_CATALOG_COLOR_MERGE: dict[str, str] = {
+    "k8s": "sky", "keycloak": "amber", "nexus": "blue",
+    "prometheus": "red", "grafana": "orange", "cilium": "cyan",
+}
+
+# 카탈로그에만 있고 PEP 서비스 타입에는 없던 서비스 — custom 타입으로 새로 추가해 보존.
+_PEP_CATALOG_ONLY_TYPES: list[dict] = [
+    {"service_type": "jenkins", "label": "Jenkins", "icon": "Wrench", "color": "orange",
+     "description": "CI / 파이프라인"},
+    {"service_type": "argocd", "label": "ArgoCD", "icon": "GitBranch", "color": "purple",
+     "description": "GitOps / Application 동기화"},
+    {"service_type": "etcd", "label": "etcd", "icon": "Database", "color": "emerald",
+     "description": "K8s 백업 / consensus"},
+    {"service_type": "hubble", "label": "Hubble", "icon": "Eye", "color": "sky",
+     "description": "Cilium observability"},
+    {"service_type": "ingress", "label": "Ingress", "icon": "ArrowRightLeft", "color": "pink",
+     "description": "NGINX / 트래픽 진입"},
+    {"service_type": "storage", "label": "Storage", "icon": "Container", "color": "violet",
+     "description": "PV / StorageClass / 스토리지 백엔드"},
+]
+
+
+def _merge_service_catalog_into_pep_types():
+    """구 "서비스 카탈로그" 데이터를 PEP 서비스(LakeServiceType domain='pep') 로 1회성 흡수.
+
+    - 이름이 겹치는 서비스(k8s/keycloak/nexus/prometheus/grafana/cilium): 아이콘은 이미 PEP
+      쪽에 세팅돼 있으므로 건드리지 않고, color 배지만 비어있으면 카탈로그 값으로 채운다.
+    - 카탈로그에만 있던 서비스(jenkins/argocd/etcd/hubble/ingress/storage): PEP 서비스에
+      custom 타입(category_id=None, 미분류)으로 새로 추가.
+    idempotent — 이미 색이 채워졌거나 slug 가 존재하면 skip.
+    """
+    from app.models import LakeServiceType
+
+    db = SessionLocal()
+    try:
+        rows = db.query(LakeServiceType).filter(
+            LakeServiceType.domain == "pep",
+            LakeServiceType.service_type.in_(_PEP_CATALOG_COLOR_MERGE.keys()),
+        ).all()
+        updated = 0
+        for row in rows:
+            if row.color:
+                continue
+            row.color = _PEP_CATALOG_COLOR_MERGE[row.service_type]
+            updated += 1
+        if updated:
+            db.commit()
+            _log.info("merged %d legacy service-catalog colors into pep service types", updated)
+
+        existing_slugs = {row[0] for row in db.query(LakeServiceType.service_type).all()}
+        max_sort = db.query(func.max(LakeServiceType.sort_order)).filter(
+            LakeServiceType.domain == "pep",
+        ).scalar() or 0
+        added = 0
+        for idx, meta in enumerate(_PEP_CATALOG_ONLY_TYPES):
+            if meta["service_type"] in existing_slugs:
+                continue
+            db.add(LakeServiceType(
+                service_type=meta["service_type"], label=meta["label"],
+                default_path="/health", description=meta.get("description"),
+                icon=meta.get("icon"), color=meta.get("color"),
+                is_builtin=False, enabled=True,
+                sort_order=max_sort + (idx + 1) * 10,
+                domain="pep", category_id=None,
+            ))
+            existing_slugs.add(meta["service_type"])
+            added += 1
+        if added:
+            db.commit()
+            _log.info("migrated %d legacy service-catalog-only types into pep service types", added)
+    finally:
+        db.close()
+
+
 def _seed_default_lake_service_entries():
     """LAKE 8 OSS 서비스의 "기능 동작 특징" 가이드를 ServiceEntry kind=guide 로
     전역 등록. service+title 매칭으로 idempotent — 운영자가 수정하거나 삭제한
@@ -1853,6 +1932,7 @@ async def lifespan(app: FastAPI):
             ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
+            ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_lake_service_entries", _seed_default_lake_service_entries),
             ("seed_observability_catalog", _seed_observability_catalog),
             ("seed_initial_admin", _seed_initial_admin),

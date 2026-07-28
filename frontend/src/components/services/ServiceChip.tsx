@@ -3,7 +3,7 @@ import { useGetServiceDef } from '@/hooks/useServiceCatalog';
 import { colorBadgeClass } from '@/components/services/serviceCatalog';
 
 interface ServiceChipProps {
-  /** ui_settings.serviceCatalog 의 slug */
+  /** PEP 서비스 타입(LakeServiceType domain='pep') 의 slug */
   service: string;
   /** chip 클릭 시 /services/<slug> 로 이동할지. 기본 true. */
   linked?: boolean;
