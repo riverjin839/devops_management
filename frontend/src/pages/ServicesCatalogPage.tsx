@@ -95,7 +95,7 @@ export function ServicesCatalogPage() {
 
         <p className="text-sm text-muted-foreground mb-4">
           서비스 기준으로 작업 계획서·업무 소개·이슈 대응·구축 작업 노트와 연관 업무를 통합 관리합니다.
-          서비스 카탈로그는 <strong>Settings → PEP 서비스</strong> 탭에서 추가/수정 가능합니다.
+          서비스 목록은 <strong>Settings → 관리 서비스 → PEP 서비스</strong> 탭에서 추가/수정 가능합니다.
         </p>
 
         {viewMode === 'table' ? (

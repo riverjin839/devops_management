@@ -44,6 +44,8 @@ class LakeServiceType(Base):
     description = Column(Text, nullable=True)
     # lucide-react 컴포넌트 이름 (예: "Database", "Workflow"). null 이면 frontend fallback.
     icon = Column(String(64), nullable=True)
+    # 카드/뱃지 색상 토큰 (예: "sky", "emerald"). null 이면 frontend가 slate 로 폴백.
+    color = Column(String(20), nullable=True)
     # builtin (코드에서 seed) — UI 에서 영구 삭제 불가, label/category/default_path 도 readonly
     is_builtin = Column(Boolean, nullable=False, default=False, server_default="false")
     # disable 시 LakeServicesPage 등록 모달 select 에서 제외 (기존 인스턴스 영향 X)
