@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { LayoutGrid, PanelLeft, Settings2, Sparkles, Plus } from 'lucide-react';
+import { LayoutGrid, PanelLeft, Settings2, Palmtree, Plus } from 'lucide-react';
 import { useIslands, useUpdateIsland } from '@/hooks/useIslands';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useIslandStore } from '@/stores/islandStore';
@@ -23,7 +23,7 @@ function nextPanelKey(panels: IslandPanel[]): string {
 function EmptyIslandState({ onOpenManager }: { onOpenManager: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-      <Sparkles className="w-10 h-10 text-muted-foreground" />
+      <Palmtree className="w-10 h-10 text-muted-foreground" />
       <h1 className="text-lg font-semibold text-foreground">Your Island</h1>
       <p className="max-w-md text-sm text-muted-foreground">
         자주 쓰는 PEP 화면을 하나에 모아두는 개인 화면입니다. 아일랜드를 만들고 원하는 화면을
@@ -158,7 +158,7 @@ export function IslandPage() {
     () => panels.map((p) => ({
       ...p,
       displayLabel: p.label || getLabel(p.path),
-      Icon: navMap[p.path]?.icon ?? Sparkles,
+      Icon: navMap[p.path]?.icon ?? Palmtree,
     })),
     [panels, getLabel, navMap],
   );
@@ -214,7 +214,7 @@ export function IslandPage() {
     ? <IslandPanelHost path={activePanel.path} label={activePanel.label || getLabel(activePanel.path)} />
     : (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-        <Sparkles className="w-8 h-8 text-muted-foreground" />
+        <Palmtree className="w-8 h-8 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
           {editable
             ? '아직 담긴 화면이 없습니다. "화면 추가"로 자주 쓰는 화면을 담아보세요.'
