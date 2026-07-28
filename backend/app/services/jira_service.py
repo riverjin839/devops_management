@@ -141,7 +141,10 @@ class JiraService:
             async with httpx.AsyncClient(timeout=10, verify=self.verify) as client:
                 resp = await client.get(f"{self.base_url}/rest/api/2/myself", headers=self._headers())
                 if resp.status_code == 401:
-                    return {"status": "error", "detail": "인증 실패 — 토큰을 확인하세요 (401)."}
+                    # auth_failed: 세션 만료 신호 — 라우터가 저장된 SSO 로그인으로 자동
+                    # 재로그인을 시도하는 판별 키.
+                    return {"status": "error", "detail": "인증 실패 — 토큰을 확인하세요 (401).",
+                            "auth_failed": True}
                 if resp.status_code == 403:
                     return {"status": "error", "detail": "권한 없음 (403)."}
                 if resp.status_code != 200:

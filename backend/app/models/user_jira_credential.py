@@ -38,6 +38,9 @@ class UserJiraCredential(Base):
     # {"username","password"}). 세션 만료 시 원클릭 재로그인에 쓰인다. 사용자가 "로그인
     # 정보 저장"을 체크했을 때만 채워지며 API 응답으로는 존재 여부(has_sso_login)만 노출.
     sso_login_encrypted = Column(Text, nullable=True)
+    # (선택) 같은 IdP 로 SSO 연동되는 Confluence 세션 쿠키 — 파드 내 SSO 폼 로그인이 Jira 와
+    # 함께 캡처해 저장한다(관리자가 Confluence Base URL 을 설정한 경우만). secret_box 암호화.
+    confluence_cookie_encrypted = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

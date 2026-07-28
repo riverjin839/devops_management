@@ -11,6 +11,9 @@ class JiraConfig(BaseModel):
     enabled: bool = False
     verify_tls: bool = True
     default_project_key: Optional[str] = None
+    # 같은 IdP 로 SSO 연동되는 Confluence Base URL — 설정 시 SSO 폼 로그인이 Jira 와
+    # Confluence 세션을 한 번에 캡처한다(빈 값이면 Jira 만).
+    confluence_base_url: str = ""
 
 
 class JiraConfigUpdate(BaseModel):
@@ -18,6 +21,7 @@ class JiraConfigUpdate(BaseModel):
     enabled: Optional[bool] = None
     verify_tls: Optional[bool] = None
     default_project_key: Optional[str] = None
+    confluence_base_url: Optional[str] = None
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────
@@ -35,6 +39,8 @@ class JiraCredentialStatus(BaseModel):
     last_verified_at: Optional[datetime] = None
     # 파드 내 SSO 폼 자동 로그인용 로그인 정보가 저장돼 있는지 (원클릭 재로그인 가능 여부).
     has_sso_login: bool = False
+    # SSO 로그인이 캡처한 Confluence 세션이 저장돼 있는지.
+    has_confluence: bool = False
 
 
 class JiraCredentialUpdate(BaseModel):
@@ -65,11 +71,31 @@ class JiraSsoLoginRequest(BaseModel):
 
 
 class JiraSsoLoginResult(BaseModel):
-    """Playwright SSO 자동 로그인 결과 — 성공 시 세션 쿠키가 자동 저장(auth_type='sso')됐음."""
+    """SSO 자동 로그인 결과 — 성공 시 세션 쿠키가 자동 저장(auth_type='sso')됐음."""
     ok: bool
     detail: str = ""
     jira_account: Optional[str] = None
     display_name: Optional[str] = None
+    # Confluence 동시 로그인 결과 — None 이면 Confluence 미설정(시도 안 함).
+    confluence_ok: Optional[bool] = None
+    confluence_detail: str = ""
+
+
+# ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────
+class ConfluenceSearchItem(BaseModel):
+    id: str
+    title: str
+    type: str = ""
+    space_key: str = ""
+    url: str = ""
+    updated: str = ""
+
+
+class ConfluenceSearchResult(BaseModel):
+    status: Literal["ok", "offline", "error"]
+    detail: str = ""
+    total: int = 0
+    items: list[ConfluenceSearchItem] = []
 
 
 # ── 가져오기 ──────────────────────────────────────────────────────────────────

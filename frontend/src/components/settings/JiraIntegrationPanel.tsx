@@ -3,6 +3,7 @@ import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie, LogIn, S
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
   useSaveJiraCredential, useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
+  useConfluenceTest,
 } from '@/hooks/useJira';
 import { useAuthStore } from '@/stores/authStore';
 import { jiraApi } from '@/services/api';
@@ -24,10 +25,12 @@ export function JiraIntegrationPanel() {
   const saveCred = useSaveJiraCredential();
   const deleteCred = useDeleteJiraCredential();
   const testConn = useJiraTest();
+  const confluenceTest = useConfluenceTest();
   const ssoLogin = useJiraSsoLogin();
 
   // 관리자 설정 폼 상태
   const [baseUrl, setBaseUrl] = useState('');
+  const [confluenceUrl, setConfluenceUrl] = useState('');
   const [enabled, setEnabled] = useState(false);
   const [verifyTls, setVerifyTls] = useState(true);
   const [defaultProject, setDefaultProject] = useState('');
@@ -35,6 +38,7 @@ export function JiraIntegrationPanel() {
   useEffect(() => {
     if (config) {
       setBaseUrl(config.baseUrl ?? '');
+      setConfluenceUrl(config.confluenceBaseUrl ?? '');
       setEnabled(!!config.enabled);
       setVerifyTls(config.verifyTls !== false);
       setDefaultProject(config.defaultProjectKey ?? '');
@@ -45,6 +49,7 @@ export function JiraIntegrationPanel() {
   const [authType, setAuthType] = useState<JiraAuthType>('pat');
   const [token, setToken] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
+  const [confTestResult, setConfTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
 
   // 등록된 자격의 방식을 수동 토글 초기값으로 반영 (SSO 는 별도 버튼이라 토글엔 미반영).
   useEffect(() => {
@@ -65,6 +70,10 @@ export function JiraIntegrationPanel() {
       if (data.ok) {
         setSsoPw('');
         toast.success('SSO 로그인 완료', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
+        // Confluence 동시 로그인이 시도됐고 실패한 경우만 별도 안내 (Jira 는 정상).
+        if (data.confluenceOk === false) {
+          toast.error('Confluence 로그인 실패', data.confluenceDetail || 'Jira 세션은 정상 저장되었습니다.');
+        }
       } else {
         toast.error('SSO 로그인 실패', data.detail);
       }
@@ -115,6 +124,7 @@ export function JiraIntegrationPanel() {
     try {
       await updateConfig.mutateAsync({
         baseUrl: baseUrl.trim(),
+        confluenceBaseUrl: confluenceUrl.trim(),
         enabled,
         verifyTls,
         defaultProjectKey: defaultProject.trim() || null,
@@ -153,6 +163,21 @@ export function JiraIntegrationPanel() {
     }
   };
 
+  const handleConfluenceTest = async () => {
+    setConfTestResult(null);
+    try {
+      const { data } = await confluenceTest.mutateAsync();
+      setConfTestResult({
+        ok: data.ok,
+        detail: data.ok
+          ? (data.displayName ? `Confluence 연결 정상 — ${data.displayName}` : 'Confluence 연결 정상')
+          : data.detail,
+      });
+    } catch (err) {
+      setConfTestResult({ ok: false, detail: formatApiError(err) });
+    }
+  };
+
   const handleDeleteToken = async () => {
     try {
       await deleteCred.mutateAsync();
@@ -185,6 +210,16 @@ export function JiraIntegrationPanel() {
             <span className="block text-sm font-medium text-muted-foreground mb-1">Base URL</span>
             <input className={inputCls} placeholder="https://jira.internal.example.com" value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)} disabled={!isAdmin} />
+          </div>
+          <div className="md:col-span-2">
+            <span className="block text-sm font-medium text-muted-foreground mb-1">
+              Confluence Base URL (선택 — 같은 SSO 사용 시)
+            </span>
+            <input className={inputCls} placeholder="https://confluence.internal.example.com" value={confluenceUrl}
+              onChange={(e) => setConfluenceUrl(e.target.value)} disabled={!isAdmin} />
+            <p className="text-xs text-muted-foreground mt-1">
+              설정하면 SSO 자동 로그인이 같은 IdP 세션으로 Jira 와 Confluence 세션을 한 번에 캡처합니다.
+            </p>
           </div>
           <div>
             <span className="block text-sm font-medium text-muted-foreground mb-1">기본 프로젝트 키 (선택)</span>
@@ -236,6 +271,11 @@ export function JiraIntegrationPanel() {
               ? `등록됨 · ${cred.authType === 'sso' ? 'SSO' : cred.authType === 'cookie' ? '세션 쿠키' : 'PAT'}`
               : '미등록'}
           </span>
+          {cred?.hasConfluence && (
+            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+              Confluence 세션
+            </span>
+          )}
           {cred?.jiraAccount && <span className="text-sm text-muted-foreground">계정: {cred.jiraAccount}</span>}
           {cred?.lastVerifiedAt && (
             <span className="text-sm text-muted-foreground">마지막 검증: {parseUTC(cred.lastVerifiedAt).toLocaleString()}</span>
@@ -250,9 +290,11 @@ export function JiraIntegrationPanel() {
           </div>
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
             사내 SSO 아이디/비밀번호를 입력하면 <b>서버가 SSO 로그인을 대신 수행</b>해 세션을
-            캡처·등록합니다(토큰/쿠키 복사 불필요). 순수 아이디/비밀번호 SSO(2차 인증 없음) 전용이며,
-            비밀번호는 Jira/SSO 서버로만 전달됩니다 — "로그인 정보 저장"을 체크한 경우에만 암호화
-            저장되어 세션 만료 시 원클릭 재로그인에 쓰입니다.
+            캡처·등록합니다(토큰/쿠키 복사 불필요). Confluence URL 이 설정돼 있으면 <b>Jira 와
+            Confluence 세션을 한 번에</b> 캡처합니다. 순수 아이디/비밀번호 SSO(2차 인증 없음)
+            전용이며, 비밀번호는 Jira/SSO 서버로만 전달됩니다 — "로그인 정보 저장"을 체크한
+            경우에만 암호화 저장되어 세션 만료 시 <b>자동 재로그인</b>(API 호출 중 401 감지 시)과
+            원클릭 재로그인에 쓰입니다.
           </p>
           {cred?.hasSsoLogin && (
             <button onClick={() => void runSsoLogin({ useSaved: true })} disabled={ssoLogin.isPending}
@@ -379,6 +421,13 @@ export function JiraIntegrationPanel() {
             {testConn.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
             연결 테스트
           </button>
+          {!!config?.confluenceBaseUrl && (
+            <button onClick={handleConfluenceTest} disabled={confluenceTest.isPending || !cred?.configured}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
+              {confluenceTest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+              Confluence 테스트
+            </button>
+          )}
           {cred?.configured && (
             <button onClick={handleDeleteToken} disabled={deleteCred.isPending}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-red-500 hover:bg-red-500/10 disabled:opacity-50">
@@ -393,6 +442,14 @@ export function JiraIntegrationPanel() {
           }`}>
             {testResult.ok ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             {testResult.detail}
+          </div>
+        )}
+        {confTestResult && (
+          <div className={`text-sm mt-3 ml-2 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 ${
+            confTestResult.ok ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+          }`}>
+            {confTestResult.ok ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+            {confTestResult.detail}
           </div>
         )}
       </div>

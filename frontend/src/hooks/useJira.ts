@@ -65,6 +65,15 @@ export function useJiraTest() {
   });
 }
 
+export function useConfluenceTest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => jiraApi.confluenceTest(),
+    // 자동 재로그인이 세션을 갱신했을 수 있으므로 상태 재조회.
+    onSuccess: () => qc.invalidateQueries({ queryKey: jiraKeys.credential }),
+  });
+}
+
 export function useJiraImport() {
   const qc = useQueryClient();
   return useMutation({

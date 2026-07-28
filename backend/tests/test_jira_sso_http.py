@@ -6,11 +6,14 @@ Keycloak 류 IdP(리다이렉트 → 로그인 폼 → 콜백 → 세션 쿠키)
 import httpx
 
 from app.services.jira_sso_http import (
+    CONFLUENCE_VERIFY_PATH,
+    JIRA_VERIFY_PATH,
     fill_login_form,
     find_autosubmit_form,
     find_login_form,
     form_sso_login,
     parse_forms,
+    sso_login_products,
 )
 
 KEYCLOAK_LOGIN_HTML = """
@@ -132,3 +135,112 @@ async def test_form_sso_login_wrong_password():
 async def test_form_sso_login_missing_inputs():
     result = await form_sso_login("https://jira.local", "", "", transport=_make_idp_transport())
     assert result["status"] == "error"
+
+
+# ── 다중 제품 (Jira + Confluence, IdP 세션 재사용) ───────────────────────────────
+CONFLUENCE_AUTOSUBMIT_HTML = """
+<html><body onload="document.forms[0].submit()">
+<form method="post" action="https://confluence.local/plugins/servlet/samlconsumer">
+  <input type="hidden" name="SAMLResponse" value="b64payload2"/>
+</form></body></html>
+"""
+
+
+def _make_multi_product_transport() -> httpx.MockTransport:
+    """jira.local + confluence.local + idp.local — IdP 세션(IDP_SESSION) 이 생기면
+    두 번째 제품은 로그인 폼 없이 auto-submit 폼만 타고 세션이 발급되는 실제 SSO 흐름."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        cookies = request.headers.get("cookie", "")
+        has_jira = "JSESSIONID=sess-1" in cookies
+        has_conf = "CONFSESSION=conf-1" in cookies
+        has_idp = "IDP_SESSION=idp-1" in cookies
+
+        if url == "https://jira.local/":
+            if has_jira:
+                return httpx.Response(200, text="<html><body>dashboard</body></html>")
+            return httpx.Response(302, headers={"Location": "https://idp.local/auth?client=jira"})
+        if url == "https://confluence.local/":
+            if has_conf:
+                return httpx.Response(200, text="<html><body>wiki</body></html>")
+            return httpx.Response(302, headers={"Location": "https://idp.local/auth?client=confluence"})
+
+        if url.startswith("https://idp.local/auth?"):
+            if has_idp:  # 이미 IdP 로그인됨 → 제품별 auto-submit 폼으로 바로 중계
+                html = CONFLUENCE_AUTOSUBMIT_HTML if "client=confluence" in url else SAML_AUTOSUBMIT_HTML
+                return httpx.Response(200, text=html, headers={"Content-Type": "text/html"})
+            return httpx.Response(200, text=KEYCLOAK_LOGIN_HTML, headers={"Content-Type": "text/html"})
+        if "login-actions/authenticate" in url:
+            body = request.content.decode()
+            if "password=pw123" in body and "username=hong" in body:
+                # IdP 세션 발급 + 최초 클라이언트(Jira) 의 auto-submit 폼 반환
+                return httpx.Response(
+                    200, text=SAML_AUTOSUBMIT_HTML,
+                    headers={"Content-Type": "text/html", "Set-Cookie": "IDP_SESSION=idp-1; Path=/"},
+                )
+            return httpx.Response(200, text=KEYCLOAK_LOGIN_HTML, headers={"Content-Type": "text/html"})
+
+        if url == "https://jira.local/plugins/servlet/samlconsumer":
+            return httpx.Response(
+                302, headers={"Location": "https://jira.local/", "Set-Cookie": "JSESSIONID=sess-1; Path=/"},
+            )
+        if url == "https://confluence.local/plugins/servlet/samlconsumer":
+            return httpx.Response(
+                302, headers={"Location": "https://confluence.local/", "Set-Cookie": "CONFSESSION=conf-1; Path=/"},
+            )
+
+        if url == "https://jira.local/rest/api/2/myself":
+            if has_jira:
+                return httpx.Response(200, json={"name": "hong", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        if url == "https://confluence.local/rest/api/user/current":
+            if has_conf:
+                return httpx.Response(200, json={"type": "known", "username": "hong", "displayName": "홍길동"})
+            return httpx.Response(401, json={"detail": "unauthorized"})
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+def _products(confluence_url: str = "https://confluence.local"):
+    return [
+        {"key": "jira", "label": "Jira", "base_url": "https://jira.local", "verify_path": JIRA_VERIFY_PATH},
+        {"key": "confluence", "label": "Confluence", "base_url": confluence_url,
+         "verify_path": CONFLUENCE_VERIFY_PATH},
+    ]
+
+
+async def test_sso_login_products_jira_and_confluence():
+    """1회 ID/PW 로그인 → IdP 세션 재사용으로 Jira/Confluence 세션 동시 캡처."""
+    result = await sso_login_products(_products(), "hong", "pw123",
+                                      transport=_make_multi_product_transport())
+    assert result["status"] == "ok", result
+    assert "JSESSIONID=sess-1" in result["cookie_header"]      # 주 제품(Jira) 쿠키
+    jira = result["products"]["jira"]
+    conf = result["products"]["confluence"]
+    assert jira["status"] == "ok" and conf["status"] == "ok"
+    # 제품별 쿠키가 호스트별로 분리 캡처됐는지 (jar 공유에도 섞이면 안 됨)
+    assert "JSESSIONID=sess-1" in jira["cookie_header"]
+    assert "CONFSESSION" not in jira["cookie_header"]
+    assert "CONFSESSION=conf-1" in conf["cookie_header"]
+    assert "JSESSIONID" not in conf["cookie_header"]
+    assert conf["account"] == "hong"
+
+
+async def test_sso_login_products_confluence_failure_keeps_jira():
+    """Confluence 쪽 실패(미도달 등)해도 주 제품(Jira) 로그인은 ok 로 유지된다."""
+    result = await sso_login_products(
+        _products("https://down.local"), "hong", "pw123",
+        transport=_make_multi_product_transport(),
+    )
+    assert result["status"] == "ok", result
+    assert result["products"]["jira"]["status"] == "ok"
+    assert result["products"]["confluence"]["status"] == "error"
+
+
+async def test_sso_login_products_primary_failure_fails_all():
+    """주 제품(첫 항목) 로그인 실패는 전체 실패."""
+    result = await sso_login_products(_products(), "hong", "WRONG",
+                                      transport=_make_multi_product_transport())
+    assert result["status"] == "error"
+    assert "올바르지" in result["detail"]
