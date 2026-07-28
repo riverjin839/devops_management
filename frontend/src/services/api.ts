@@ -1887,8 +1887,10 @@ export const checkMatrixApi = {
       `/check-matrix/cell/${itemId}/${clusterId}/source-config`, { entries },
     ),
   // 수동 실행 — 셀은 동기(결과 즉시), 클러스터/항목은 큐잉 후 batchId 폴링
+  // 동기 실행 — 느린 점검(pod_to_pod 프로브, core_bundle 등)이 기본 30s 를 넘길 수 있어
+  // 백엔드 셀 태스크 한도(280s)에 맞춰 여유를 준다.
   runCell: (itemId: string, clusterId: string) =>
-    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`),
+    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`, undefined, { timeout: 300000 }),
   runCluster: (clusterId: string) =>
     api.post<CheckMatrixBatchResult>(`/check-matrix/clusters/${clusterId}/run`),
   runItem: (itemId: string) =>

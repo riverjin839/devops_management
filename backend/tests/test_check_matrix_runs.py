@@ -197,20 +197,38 @@ class TestCellValue:
         assert extract_cell_value("pvc_health", {}) is None
 
     def test_seed_sets_units_and_backfill_fills_legacy_rows(self, db):
-        """단위 도입 이전에 시드된 행(unit 없음)이 부팅 backfill 로 채워진다."""
+        """단위/영역/색 도입 이전에 시드된 행이 부팅 backfill 로 채워진다."""
         row = CheckMatrixItem(
             name="legacy-cert-row", source_type=CheckMatrixSourceType.deep_check,
-            source_ref="cert_expiry", unit=None,
+            source_ref="cert_expiry", unit=None, category=None, color=None,
         )
         db.add(row)
         db.commit()
         try:
-            filled = svc.backfill_item_units(db)
+            filled = svc.backfill_item_metadata(db)
             db.refresh(row)
             assert filled >= 1
             assert row.unit == "일"
+            assert row.category == "k8s"                      # spec.category 에서 보강
+            assert row.color == svc.CATEGORY_DEFAULT_COLORS["k8s"]
             # 두 번째 호출은 아무것도 바꾸지 않는다 (idempotent).
-            assert svc.backfill_item_units(db) == 0
+            assert svc.backfill_item_metadata(db) == 0
+        finally:
+            db.delete(row)
+            db.commit()
+
+    def test_backfill_respects_operator_cleared_color(self, db):
+        """운영자가 색을 지운 행(category 있음·color 없음)은 다시 칠하지 않는다."""
+        row = CheckMatrixItem(
+            name="colorless-row", source_type=CheckMatrixSourceType.deep_check,
+            source_ref="cert_expiry", unit="일", category="k8s", color=None,
+        )
+        db.add(row)
+        db.commit()
+        try:
+            svc.backfill_item_metadata(db)
+            db.refresh(row)
+            assert row.color is None
         finally:
             db.delete(row)
             db.commit()
@@ -479,6 +497,37 @@ class TestBatchRuns:
         )
         assert made and all(r.run_state == CheckMatrixRunState.failed for r in made)
         assert all("Celery" in (r.error or "") for r in made)
+
+
+# ── 고아 수행 정리 (워커 사망 등으로 queued/running 에 갇힌 run) ────────────────
+class TestStaleRunSweep:
+    def test_old_queued_run_is_failed_and_fresh_one_survives(self, db, fixture_ids):
+        from datetime import datetime, timedelta
+
+        item_id, cluster_id = fixture_ids["deep"], fixture_ids["cluster"]
+        stale = CheckMatrixRun(
+            item_id=item_id, cluster_id=cluster_id,
+            trigger=CheckMatrixTrigger.manual_cell,
+            run_state=CheckMatrixRunState.running,
+            queued_at=datetime.utcnow() - timedelta(minutes=45),
+        )
+        fresh = CheckMatrixRun(
+            item_id=item_id, cluster_id=cluster_id,
+            trigger=CheckMatrixTrigger.manual_cell,
+            run_state=CheckMatrixRunState.queued,
+            queued_at=datetime.utcnow(),
+        )
+        db.add_all([stale, fresh])
+        db.commit()
+
+        swept = svc._sweep_stale_runs(db)
+
+        db.refresh(stale)
+        db.refresh(fresh)
+        assert swept >= 1
+        assert stale.run_state == CheckMatrixRunState.failed
+        assert "완료되지 않아" in (stale.error or "")
+        assert fresh.run_state == CheckMatrixRunState.queued  # 최근 run 은 건드리지 않는다
 
 
 # ── SC-5 실행 로그 조회 ───────────────────────────────────────────────────────

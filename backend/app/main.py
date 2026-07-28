@@ -949,6 +949,12 @@ def _run_migrations():
         _safe_create_index("ix_ops_check_run_items_run", "ops_check_run_items", "(run_id)")
         _safe_create_index("ix_ops_check_run_items_ref", "ops_check_run_items", "(source, item_ref_id)")
 
+    # check_matrix_items: 영역 구분(category) + 커스텀 행 색(color, 차트 토큰 프리셋 키) —
+    # 구버전 DB 보강. 값 backfill 은 _seed_check_matrix_items 의 backfill_item_metadata 가 담당.
+    if "check_matrix_items" in inspector.get_table_names():
+        _safe_add_column("check_matrix_items", "category", "VARCHAR(50)")
+        _safe_add_column("check_matrix_items", "color", "VARCHAR(20)")
+
     # check_matrix_runs: 점검 매트릭스 수행 로그 — 테이블은 create_all 이 생성하고,
     # 셀별 최근 로그 조회 / 배치 진행률 폴링 / 리텐션 퍼지 스캔용 인덱스만 보강한다.
     if "check_matrix_runs" in inspector.get_table_names():
@@ -1713,10 +1719,10 @@ def _seed_check_matrix_items():
         added = cms.seed_default_items(db)
         if added:
             _log.info("seeded %d check matrix items", added)
-        # 단위 도입 이전에 시드된 설치본 보강 — unit 이 빈 deep_check 행만 채운다.
-        filled = cms.backfill_item_units(db)
+        # 단위/영역/기본색 도입 이전에 시드된 설치본 보강 — 빈 값만 채운다(idempotent).
+        filled = cms.backfill_item_metadata(db)
         if filled:
-            _log.info("backfilled unit for %d check matrix items", filled)
+            _log.info("backfilled metadata for %d check matrix items", filled)
     finally:
         db.close()
 
