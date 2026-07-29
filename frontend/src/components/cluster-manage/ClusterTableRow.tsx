@@ -1,9 +1,10 @@
 import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server } from 'lucide-react';
-import type { Cluster, ClusterCustomField } from '@/types';
+import type { Cluster, ClusterCustomField, ClusterManageUpdate } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
-import { InlineEdit } from '@/components/common';
+import { InlineEdit, useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { STATUS_STYLE } from './constants';
 import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor } from '@/hooks/useOperationLevels';
@@ -69,11 +70,21 @@ function EditableCell({
 
 export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
+  const toast = useToast();
   const [editingField, setEditingField] = useState<EditField>(null);
   const iconAnchorRef = useRef<HTMLSpanElement | null>(null);
 
-  const quickUpdate = (patch: Partial<Cluster>) => {
-    updateCluster.mutate({ id: cluster.id, data: patch }, { onSettled: () => setEditingField(null) });
+  // 빈 입력은 `null` 로 보내야 값 해제가 저장된다 — `undefined` 는 JSON 직렬화에서
+  // 사라져 백엔드 `exclude_unset=True` 가 기존 값을 유지한다. (D-041)
+  // 실패는 토스트로 고지 — 422/403 이어도 조용히 원복되지 않게. (D-042)
+  const quickUpdate = (patch: ClusterManageUpdate) => {
+    updateCluster.mutate(
+      { id: cluster.id, data: patch },
+      {
+        onError: (e) => toast.error('저장 실패', formatApiError(e)),
+        onSettled: () => setEditingField(null),
+      },
+    );
   };
 
   const resolvedIcon = resolveClusterIcon(cluster.icon);
@@ -133,7 +144,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {editingField === 'region' ? (
           <InlineEdit
             value={cluster.region ?? ''}
-            onSave={(v) => quickUpdate({ region: v || undefined })}
+            onSave={(v) => quickUpdate({ region: v.trim() || null })}
             onCancel={() => setEditingField(null)}
             placeholder="예: 서울"
             inputClassName="text-sm"
@@ -150,7 +161,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           <select
             autoFocus
             value={cluster.operationLevel ?? ''}
-            onChange={(e) => quickUpdate({ operationLevel: e.target.value || undefined })}
+            onChange={(e) => quickUpdate({ operationLevel: e.target.value || null })}
             onBlur={() => setEditingField(null)}
             className="text-sm bg-background border border-border rounded px-1.5 py-0.5"
           >
@@ -181,7 +192,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {editingField === 'cidr' ? (
           <InlineEdit
             value={cluster.cidr ?? ''}
-            onSave={(v) => quickUpdate({ cidr: v || undefined })}
+            onSave={(v) => quickUpdate({ cidr: v.trim() || null })}
             onCancel={() => setEditingField(null)}
             placeholder="192.168.0.0/24 (fallback)"
             inputClassName="text-sm font-mono"
@@ -273,7 +284,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {editingField === 'podCidr' ? (
           <InlineEdit
             value={cluster.podCidr ?? ''}
-            onSave={(v) => quickUpdate({ podCidr: v || undefined })}
+            onSave={(v) => quickUpdate({ podCidr: v.trim() || null })}
             onCancel={() => setEditingField(null)}
             placeholder="10.244.0.0/16"
             inputClassName="text-sm font-mono"
@@ -296,7 +307,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {editingField === 'svcCidr' ? (
           <InlineEdit
             value={cluster.svcCidr ?? ''}
-            onSave={(v) => quickUpdate({ svcCidr: v || undefined })}
+            onSave={(v) => quickUpdate({ svcCidr: v.trim() || null })}
             onCancel={() => setEditingField(null)}
             placeholder="10.96.0.0/12"
             inputClassName="text-sm font-mono"

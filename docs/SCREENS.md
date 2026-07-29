@@ -629,14 +629,15 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 테이블 뷰: 리사이즈 가능한 다열 테이블(이름/상태/지역/운영레벨/BGP/CIDR/bond0·1/Pod·Svc CIDR/Max Pods/K8s·Cilium 버전/노드 IP + 커스텀 필드), 지역/운영레벨 그룹 헤더 행
   - 카드 뷰: `dnd-kit` 드래그 정렬 가능한 `ClusterCard` 그리드(그룹 내에서만 순서 변경)
   - 행/카드 액션: 새로고침(auto-update dry-run → `ClusterUpdateDiffDialog`), NIC 수집, 수정(`/cluster-manage/:id/edit`), 삭제, Cilium 설정 보기(`CiliumConfigModal`)
-- **Frontend**: `useClusters()` + `useClusterStore()`(Zustand, 클러스터 목록 캐시), `useOperationLevels()`, `useClusterCustomFields()`. 로컬 state: 검색/필터/정렬/그룹, 다수의 진행중 ID(`deletingId`,`autoUpdatingId` 등). 호출 함수: `clustersApi.{delete,autoUpdate,reorder,update(via edit page)}`, `clusterCustomFieldsApi`(via `ClusterCustomFieldsManager`).
+- **Frontend**: `useClusters()`(`isLoading`/`isError`/`refetch` 사용 — 목록이 비어 있을 때 로딩 skeleton / 조회 실패(사유+다시 시도) / 진짜 0건 3분기, 로딩·실패를 "클러스터 없음" 으로 위장하지 않음) + `useClusterStore()`(Zustand, 클러스터 목록 캐시), `useOperationLevels()`, `useClusterCustomFields()`. 로컬 state: 검색/필터/정렬/그룹, 다수의 진행중 ID(`deletingId`,`autoUpdatingId` 등)와 확인 다이얼로그 대상(`deleteTarget`,`bulkConfirmOpen`,`bulkProgress`). 호출 함수: `clustersApi.{delete,autoUpdate,reorder,update(via edit page)}`, `clusterCustomFieldsApi`(via `ClusterCustomFieldsManager`). 표의 인라인 편집(지역/운영레벨/INTERNAL_IP/Pod·Svc CIDR)은 빈 입력을 **`null` 로 전송**해 값 해제가 저장되고(D-041), 저장 실패는 토스트로 고지(D-042).
 - **Backend**: `GET /api/v1/clusters`, `POST /api/v1/clusters/reorder`, `DELETE /api/v1/clusters/{id}`, `POST /api/v1/clusters/{id}/auto-update?dry_run=`, `GET /api/v1/clusters/{id}/cilium-config` — `backend/app/routers/clusters.py`. 커스텀 컬럼은 `GET/POST/PUT/DELETE /api/v1/cluster-custom-fields`, `PUT /api/v1/clusters/{id}/custom-values` — `backend/app/routers/cluster_custom_fields.py`, 모델 `ClusterCustomField`(`backend/app/models/cluster_custom_field.py`) + `Cluster.custom_values`(JSONB). `Cluster` 모델(`backend/app/models/cluster.py`)의 `seq`(드래그 정렬), `cidr/pod_cidr/svc_cidr`, `bond0_ip/bond1_ip`, `node_ips` 등이 테이블 컬럼 데이터 소스.
 - **핵심 기능**:
   - kubeconfig 기반 auto-update(dry-run diff 미리보기 → 적용) — K8s 버전, node IP, CIDR, Max Pods 등 자동 갱신
   - CIDR 겹침(internal/pod/svc) 자동 탐지 + 경고 배지
-  - 지역/운영레벨 그룹화, 드래그 앤 드롭 수동 정렬(`clustersApi.reorder`)
-  - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집
-  - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집
+  - 지역/운영레벨 그룹화, 드래그 앤 드롭 수동 정렬(`clustersApi.reorder`) — 전송 순서는 화면(필터된) 목록이 아니라 **전체 클러스터 기준**으로 재구성해 검색/필터 중 드래그해도 가려진 클러스터의 순서가 오염되지 않음(D-044)
+  - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집 — 편집 진입 시점의 서버 값으로 초기화(stale draft 방지), 저장 실패 시 토스트+편집 유지
+  - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집 — 일괄 수집은 실행 전 `ConfirmDialog`(대상 수·이름 미리보기·hostname/CIDR/버전까지 갱신됨을 명시) → 진행률 `n/N` 버튼 표기 → 재클릭으로 중단, 결과는 완료/중단/부분 실패/전건 실패 구분 토스트(D-048)
+  - 클러스터 삭제는 `ConfirmDialog`(danger) — Addon·Playbook·점검 이력 연쇄 삭제 범위를 명시(D-048)
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

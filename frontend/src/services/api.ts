@@ -192,7 +192,10 @@ export const clustersApi = {
   getById: (id: string) => api.get<ApiResponse<Cluster>>(`/clusters/${id}`),
   create: (data: Partial<Cluster> & { kubeconfigContent?: string; skipConnectivityCheck?: boolean }) =>
     api.post<ApiResponse<Cluster>>('/clusters', data),
-  update: (id: string, data: Partial<Cluster>) => api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
+  // 값 해제(빈 입력)는 `null` 로 보내야 저장된다 — `undefined` 는 JSON 직렬화에서 사라지고
+  // 백엔드 `exclude_unset=True` 가 "미전송 = 기존 값 유지"로 처리한다. (DESIGN.md D-031/D-041)
+  update: (id: string, data: Partial<Cluster> | import('@/types').ClusterManageUpdate) =>
+    api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
   delete: (id: string) => api.delete(`/clusters/${id}`),
   reorder: (clusterIds: string[]) =>
     api.post<{ updated: number }>('/clusters/reorder', { clusterIds }),

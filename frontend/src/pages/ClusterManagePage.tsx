@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX } from '@/components/common';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
@@ -83,15 +83,22 @@ function SortableClusterCard(
 export function ClusterManagePage() {
   const navigate = useNavigate();
   const { clusters } = useClusterStore();
-  useClusters();
+  // 로딩/조회실패를 "등록된 클러스터가 없습니다" 로 위장하지 않도록 쿼리 상태를 사용한다 (D-043).
+  const { isLoading: clustersLoading, isError: clustersError, error: clustersLoadError, refetch: refetchClusters } = useClusters();
   const queryClient = useQueryClient();
   const toast = useToast();
 
   const [deletingId, setDeletingId]       = useState<string | null>(null);
+  // 삭제는 Addon/Playbook/점검 이력까지 캐스케이드되므로 native confirm 이 아니라
+  // ConfirmDialog(danger) 로 게이팅한다 (D-048).
+  const [deleteTarget, setDeleteTarget]   = useState<Cluster | null>(null);
   const [autoUpdatingId, setAutoUpdatingId] = useState<string | null>(null);
   const [applyingId, setApplyingId]       = useState<string | null>(null);
   const [collectingNodeIpsId, setCollectingNodeIpsId] = useState<string | null>(null);
   const [bulkCollecting, setBulkCollecting] = useState(false);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkProgress, setBulkProgress]   = useState<{ done: number; total: number } | null>(null);
+  const bulkAbortRef = useRef(false);
   // SSH 기반 NIC 수집 모달 — bond0/bond1 IP/MAC 채우기 위한 진입점.
   // kubectl 자동수집(auto-update)은 인터페이스 이름을 알 수 없어 별도 SSH 수집이 필요하다.
   const [nicsClusterId, setNicsClusterId] = useState<string | null>(null);
@@ -218,17 +225,16 @@ export function ClusterManagePage() {
     const overGroup = groupedClusters.find((g) => g.clusters.some((c) => c.id === overId));
     if (!activeGroup || !overGroup || activeGroup.key !== overGroup.key) return;
 
-    const oldIdx = activeGroup.clusters.findIndex((c) => c.id === activeId);
-    const newIdx = activeGroup.clusters.findIndex((c) => c.id === overId);
-    if (oldIdx < 0 || newIdx < 0) return;
-
-    const reorderedGroup = arrayMove(activeGroup.clusters, oldIdx, newIdx);
-    // 전체 클러스터 정렬: 영향받지 않은 그룹은 그대로 + 영향받은 그룹만 새 순서.
-    const fullOrder: string[] = [];
-    for (const g of groupedClusters) {
-      const slice = g.key === activeGroup.key ? reorderedGroup : g.clusters;
-      for (const c of slice) fullOrder.push(c.id);
-    }
+    // 전송 순서는 화면(검색/필터된) 목록이 아니라 **전체 클러스터** 기준으로 만든다 —
+    // 백엔드 reorder 는 받은 id 에만 seq 를 재할당하므로, 필터로 가려진 클러스터를 빼고
+    // 보내면 그들의 옛 seq 사이로 끼어들어 전체 순서가 오염된다 (D-044).
+    // 스토어 순서 = seq 정렬(useClusters)이고, arrayMove 는 이동 대상 외 상대 순서를
+    // 보존하므로 가려진 클러스터의 자리도 그대로 유지된다.
+    const fullIds = clusters.map((c) => c.id);
+    const fromIdx = fullIds.indexOf(activeId);
+    const toIdx = fullIds.indexOf(overId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const fullOrder = arrayMove(fullIds, fromIdx, toIdx);
     try {
       await clustersApi.reorder(fullOrder);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
@@ -277,13 +283,17 @@ export function ClusterManagePage() {
 
   const overlapCount = cidrOverlapGroups.size;
 
-  const handleDelete = async (cluster: Cluster) => {
-    if (!confirm(`"${cluster.name}" 클러스터를 삭제하시겠습니까?\n연관된 Addon, Playbook, 점검 이력이 모두 삭제됩니다.`)) return;
-    setDeletingId(cluster.id);
+  const handleDelete = (cluster: Cluster) => setDeleteTarget(cluster);
+
+  const executeDelete = async () => {
+    const target = deleteTarget;
+    if (!target) return;
+    setDeleteTarget(null);
+    setDeletingId(target.id);
     try {
-      await clustersApi.delete(cluster.id);
+      await clustersApi.delete(target.id);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
-      toast.success('클러스터 삭제됨', cluster.name);
+      toast.success('클러스터 삭제됨', target.name);
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
     } finally {
@@ -336,26 +346,51 @@ export function ClusterManagePage() {
     }
   };
 
-  const handleBulkCollectNodeIps = async () => {
-    const targets = clusters.filter((c) => !c.nodeIps);
-    if (targets.length === 0) {
+  // 일괄 수집은 dryRun 없는 auto-update 를 N개 클러스터에 적용하는 위험 동작 —
+  // 확인 다이얼로그로 게이팅하고, 진행률(n/N)·중단·실패 구분 토스트를 제공한다 (D-048).
+  const bulkTargets = clusters.filter((c) => !c.nodeIps);
+
+  const handleBulkCollectNodeIps = () => {
+    if (bulkCollecting) {
+      // 수집 중 재클릭 = 중단 요청 (다음 클러스터로 넘어가기 전에 반영)
+      bulkAbortRef.current = true;
+      return;
+    }
+    if (bulkTargets.length === 0) {
       toast.success('수집 대상 없음', '모든 클러스터에 노드 IP 가 이미 채워져 있습니다.');
       return;
     }
+    setBulkConfirmOpen(true);
+  };
+
+  const executeBulkCollect = async () => {
+    setBulkConfirmOpen(false);
+    const targets = clusters.filter((c) => !c.nodeIps);
+    if (targets.length === 0) return;
     setBulkCollecting(true);
+    bulkAbortRef.current = false;
+    setBulkProgress({ done: 0, total: targets.length });
     let ok = 0;
     let fail = 0;
+    let aborted = false;
     for (const c of targets) {
+      if (bulkAbortRef.current) { aborted = true; break; }
       try {
         await clustersApi.autoUpdate(c.id);
         ok += 1;
       } catch {
         fail += 1;
       }
+      setBulkProgress({ done: ok + fail, total: targets.length });
     }
     await queryClient.refetchQueries({ queryKey: ['clusters'] });
     setBulkCollecting(false);
-    toast.success('일괄 수집 종료', `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}`);
+    setBulkProgress(null);
+    const summary = `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}${aborted ? ' · 중단됨' : ''}`;
+    if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', summary);
+    else if (fail > 0) toast.warning('일괄 수집 부분 실패', summary);
+    else if (aborted) toast.info('일괄 수집 중단됨', summary);
+    else toast.success('일괄 수집 완료', summary);
   };
 
   const handleApplyDiff = async () => {
@@ -426,14 +461,18 @@ export function ClusterManagePage() {
             </button>
             <button
               onClick={handleBulkCollectNodeIps}
-              disabled={bulkCollecting || clusters.length === 0}
+              disabled={!bulkCollecting && clusters.length === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-lg text-primary transition-colors disabled:opacity-50"
-              title="nodeIps 가 비어있는 모든 클러스터에 대해 auto-update 호출 (diff 다이얼로그 없이 즉시 반영)"
+              title={bulkCollecting
+                ? '클릭하면 다음 클러스터로 넘어가기 전에 수집을 중단합니다'
+                : 'nodeIps 가 비어있는 모든 클러스터에 대해 auto-update 호출 (실행 전 대상·범위 확인)'}
             >
               {bulkCollecting
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <Network className="w-3.5 h-3.5" />}
-              {bulkCollecting ? '수집중…' : '노드 IP 일괄 수집'}
+              {bulkCollecting
+                ? `수집중 ${bulkProgress?.done ?? 0}/${bulkProgress?.total ?? 0} — 중단`
+                : '노드 IP 일괄 수집'}
             </button>
             <button
               onClick={colW.reset}
@@ -505,8 +544,31 @@ export function ClusterManagePage() {
           </div>
         )}
 
-        {/* 클러스터 목록 */}
-        {clusters.length === 0 ? (
+        {/* 클러스터 목록 — 로딩/조회실패/0건 3분기 (D-043) */}
+        {clusters.length === 0 && clustersLoading ? (
+          <div className="rounded-xl border border-border overflow-hidden" aria-busy="true">
+            <div className="px-3 py-2.5 bg-secondary/50 border-b border-border flex gap-6">
+              {[90, 60, 70, 90, 120, 110, 80, 130].map((w, i) => <Skeleton key={i} width={w} height={12} />)}
+            </div>
+            <table className="w-full text-sm">
+              <tbody>
+                <SkeletonTable rows={6} columns={8} />
+              </tbody>
+            </table>
+          </div>
+        ) : clusters.length === 0 && clustersError ? (
+          <div className="text-center py-16">
+            <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-status-critical/60" />
+            <p className="text-foreground font-medium">클러스터 목록을 불러오지 못했습니다.</p>
+            <p className="text-sm text-muted-foreground mt-1">{formatApiError(clustersLoadError)}</p>
+            <button
+              onClick={() => refetchClusters()}
+              className="mt-4 px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : clusters.length === 0 ? (
           <div className="text-center py-20">
             <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
             <p className="text-muted-foreground">등록된 클러스터가 없습니다.</p>
@@ -669,6 +731,45 @@ export function ClusterManagePage() {
         open={customFieldsOpen}
         onClose={() => setCustomFieldsOpen(false)}
       />
+
+      {/* 클러스터 삭제 확인 — 캐스케이드 삭제 범위를 명시 (D-048) */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        danger
+        title="클러스터 삭제"
+        description={deleteTarget ? `"${deleteTarget.name}" 클러스터를 삭제합니다.` : undefined}
+        confirmLabel="삭제"
+        onConfirm={executeDelete}
+        onCancel={() => setDeleteTarget(null)}
+      >
+        <p className="text-muted-foreground">
+          이 동작은 되돌릴 수 없으며, 클러스터에 연관된{' '}
+          <strong className="text-foreground">Addon · Playbook · 점검 이력이 모두 함께 삭제</strong>됩니다.
+        </p>
+      </ConfirmDialog>
+
+      {/* 노드 IP 일괄 수집 확인 — 대상 수·갱신 범위를 명시 (D-048) */}
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title="노드 IP 일괄 수집"
+        description={`노드 IP 가 비어 있는 클러스터 ${bulkTargets.length}개에 auto-update 를 적용합니다.`}
+        confirmLabel={`${bulkTargets.length}개 수집 시작`}
+        onConfirm={executeBulkCollect}
+        onCancel={() => setBulkConfirmOpen(false)}
+      >
+        <div className="space-y-2 text-muted-foreground">
+          <p>
+            diff 미리보기 없이 kubeconfig 수집 결과가 바로 반영됩니다 — 노드 IP 외에도{' '}
+            <strong className="text-foreground">hostname · CIDR · K8s/Cilium 버전 · Max Pods</strong> 등이
+            함께 갱신될 수 있습니다.
+          </p>
+          <p className="text-xs">
+            대상: {bulkTargets.slice(0, 8).map((c) => c.name).join(', ')}
+            {bulkTargets.length > 8 && ` 외 ${bulkTargets.length - 8}개`}
+          </p>
+          <p className="text-xs">진행 중에는 버튼을 다시 눌러 언제든 중단할 수 있습니다.</p>
+        </div>
+      </ConfirmDialog>
 
       {nicsClusterId && (
         <NodeNicsCollectModal

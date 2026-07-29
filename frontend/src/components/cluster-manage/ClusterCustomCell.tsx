@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateClusterCustomValues } from '@/hooks/useClusterCustomFields';
 import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 interface Props {
   cluster: Cluster;
@@ -19,18 +20,30 @@ export function ClusterCustomCell({ cluster, field }: Props) {
   const toast = useToast();
   const current = cluster.customValues?.[field.key];
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string>(() => {
-    if (current === null || current === undefined) return '';
-    if (typeof current === 'boolean') return current ? 'true' : 'false';
-    return String(current);
-  });
+  const [draft, setDraft] = useState('');
+
+  // 편집 진입 시점의 서버 값으로 draft 를 초기화 — 마운트 1회 초기화(stale draft)는
+  // 자동수집·타 사용자 변경 이후 재편집에서 옛 값을 되살릴 수 있다. (D-042)
+  const beginEdit = () => {
+    setDraft(
+      current === null || current === undefined
+        ? ''
+        : typeof current === 'boolean' ? (current ? 'true' : 'false') : String(current),
+    );
+    setEditing(true);
+  };
 
   const commit = async (rawVal: unknown) => {
-    await mut.mutateAsync({
-      clusterId: cluster.id,
-      values: { [field.key]: rawVal === '' ? null : rawVal },
-    });
-    setEditing(false);
+    try {
+      await mut.mutateAsync({
+        clusterId: cluster.id,
+        values: { [field.key]: rawVal === '' ? null : rawVal },
+      });
+      setEditing(false);
+    } catch (e) {
+      // onBlur 경로의 unhandled rejection 방지 + 실패 고지. 편집은 유지해 재시도 가능하게.
+      toast.error(`${field.label} 저장 실패`, formatApiError(e));
+    }
   };
 
   const save = async () => {
@@ -106,7 +119,7 @@ export function ClusterCustomCell({ cluster, field }: Props) {
 
   return (
     <span
-      onDoubleClick={() => setEditing(true)}
+      onDoubleClick={beginEdit}
       className="cursor-text hover:bg-primary/5 rounded px-0.5 text-sm block min-h-[1.2em]"
       title={`더블클릭으로 편집 — ${field.label}`}
     >
