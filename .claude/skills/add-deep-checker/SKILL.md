@@ -39,3 +39,14 @@ registry 에 등록만 하면 ① cron(`run_deep_check_all`) ② 운영 점검 �
 ## 주의
 - in_cluster(superpod) 모드는 DB 가 없다 — DB 비교형 체커는 그 경우 pending 반환.
 - 카탈로그는 비활성 정의도 노출(수동 실행 가능), cron 은 enabled 만 실행.
+
+## UI-First (CLAUDE.md §UI-First 원칙 — 위반 시 리뷰 반려)
+- 환경마다 달라지는 값(네임스페이스·라벨 셀렉터·경로·엔드포인트·타임아웃·실행 경로)은
+  **코드에 리터럴로 박지 말고** `param_fields`/`threshold_fields` 에 선언한다 —
+  선언해야만 UI(매트릭스 셀 ▸ 실행 방식 ▸ 설정 편집 / Ops Checks 정의 편집)에서 고칠 수 있다.
+- 필드마다 `label` 과 `help` 를 채운다. 동작이 갈리면 `source: auto|pod|snapshot` 처럼
+  분기 자체를 파라미터로 노출하고 `auto` 폴백을 준다.
+- 자격증명은 params(JSONB — 런북/로그 노출)에 저장하지 않는다. SSH 수집이 필요하면 기존
+  수집 화면이 남긴 `ClusterConfigSnapshot` 을 읽는다(`etcd_defrag` 의 snapshot 경로 참고).
+- 체커를 추가/변경하면 같은 커밋에서 `services/check_matrix_runbook.py` 의 명령 목록과
+  `registry.py` 의 `CELL_VALUE_SPECS`(셀 대표값) 도 갱신한다 — 테스트가 전 타입 커버리지를 검사한다.

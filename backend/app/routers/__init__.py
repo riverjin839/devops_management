@@ -63,6 +63,10 @@ from app.routers.cluster_items import router as cluster_items_router
 from app.routers.cluster_trends import router as cluster_trends_router
 from app.routers.terminal_appearance import router as terminal_appearance_router
 from app.routers.k8s_events import router as k8s_events_router, ingest_router as k8s_events_ingest_router
+from app.routers.observability import (
+    router as observability_router,
+    ingest_router as observability_ingest_router,
+)
 from app.routers.release_notes import router as release_notes_router
 from app.routers.check_matrix import router as check_matrix_router
 from app.routers.island import router as island_router
@@ -131,6 +135,8 @@ __all__ = [
     "terminal_appearance_router",
     "k8s_events_router",
     "k8s_events_ingest_router",
+    "observability_router",
+    "observability_ingest_router",
     "release_notes_router",
     "island_router",
 ]

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, Lock, AlertCircle, X, Loader2 } from 'lucide-react';
 import { ConfirmDialog, useModalA11y } from '@/components/common';
-import { ServiceTypeIcon } from '@/components/lake-services';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   useLakeServiceTypeRows,
   useCreateLakeServiceType,
@@ -15,22 +15,25 @@ import type {
 } from '@/types';
 
 const CATEGORIES = ['catalog', 'runtime', 'analytics', 'other'] as const;
-const DOMAINS: { id: ServiceDomain | 'all'; label: string }[] = [
-  { id: 'all', label: '전체' },
-  { id: 'pep', label: 'PEP 서비스' },
-  { id: 'app', label: 'APP 서비스' },
+const COLOR_OPTIONS = [
+  'sky', 'amber', 'blue', 'orange', 'purple', 'red', 'cyan', 'emerald',
+  'pink', 'violet', 'slate',
 ];
 
-/** LAKE service type 카탈로그 관리 — Settings → "LAKE 타입" 탭 본문. */
-export function LakeServiceTypeManager() {
-  const [domainFilter, setDomainFilter] = useState<ServiceDomain | 'all'>('all');
-  const { data, isLoading, error } = useLakeServiceTypeRows({
-    limit: 200, domain: domainFilter === 'all' ? undefined : domainFilter,
-  });
-  const { data: pepCategoriesResp } = useServiceCategories('pep');
-  const { data: appCategoriesResp } = useServiceCategories('app');
-  const allCategories = [...(pepCategoriesResp?.data ?? []), ...(appCategoriesResp?.data ?? [])];
-  const categoryLabelMap = Object.fromEntries(allCategories.map((c) => [c.id, c.label]));
+function TypeIcon({ icon, className = 'w-4 h-4' }: { icon?: string | null; className?: string }) {
+  const resolved = resolveClusterIcon(icon);
+  if (resolved?.kind === 'lucide') { const Icon = resolved.Component; return <Icon className={className} />; }
+  if (resolved?.kind === 'text') return <span aria-hidden>{resolved.value}</span>;
+  return <span className="text-muted-foreground/50">—</span>;
+}
+
+/** 서비스 타입 카탈로그 관리 — Settings → "관리 서비스" 탭의 PEP/APP 서비스 서브탭 본문 하단
+ *  섹션. 도메인은 상위 서브탭이 결정한다. */
+export function LakeServiceTypeManager({ domain }: { domain: ServiceDomain }) {
+  const { data, isLoading, error } = useLakeServiceTypeRows({ limit: 200, domain });
+  const { data: categoriesResp } = useServiceCategories(domain);
+  const categories = categoriesResp?.data ?? [];
+  const categoryLabelMap = Object.fromEntries(categories.map((c) => [c.id, c.label]));
   const toggle = useToggleLakeServiceType();
   const del = useDeleteLakeServiceType();
   const [editing, setEditing] = useState<LakeServiceTypeRow | null>(null);
@@ -57,9 +60,11 @@ export function LakeServiceTypeManager() {
       {/* Header + Add button */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold">LAKE 서비스 타입</h2>
+          <h2 className="text-sm font-semibold">서비스 타입</h2>
           <p className="text-sm text-muted-foreground">
-            8 builtin (airflow/spark/...) 은 비활성화만 가능, 커스텀 타입은 자유 추가/삭제
+            {domain === 'app'
+              ? '8 builtin (airflow/spark/...) 은 비활성화만 가능, 커스텀 타입은 자유 추가/삭제'
+              : '커스텀 타입 자유 추가/삭제 — 아이콘/색상은 /services 지식 카탈로그·업무 태그에도 사용된다.'}
           </p>
         </div>
         <button
@@ -73,28 +78,12 @@ export function LakeServiceTypeManager() {
         </button>
       </div>
 
-      {/* Domain tabs */}
-      <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
-        {DOMAINS.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            onClick={() => setDomainFilter(d.id)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              domainFilter === d.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {d.label}
-          </button>
-        ))}
-      </div>
-
       {/* Error/loading/empty */}
       {error && (
         <div className="rounded-md border border-red-500/40 bg-red-500/5 p-3 flex items-start gap-2 text-sm text-red-500">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
-            <div className="font-medium">LAKE 타입 조회 실패</div>
+            <div className="font-medium">서비스 타입 조회 실패</div>
             <div className="text-sm text-muted-foreground mt-0.5">
               {error instanceof Error ? error.message : 'API 오류'}
             </div>
@@ -127,8 +116,7 @@ export function LakeServiceTypeManager() {
                 <th className="px-3 py-2 text-left font-medium">아이콘</th>
                 <th className="px-3 py-2 text-left font-medium">slug</th>
                 <th className="px-3 py-2 text-left font-medium">label</th>
-                <th className="px-3 py-2 text-left font-medium">category</th>
-                <th className="px-3 py-2 text-left font-medium">PEP/APP 카테고리</th>
+                <th className="px-3 py-2 text-left font-medium">카테고리</th>
                 <th className="px-3 py-2 text-left font-medium">default_path</th>
                 <th className="px-3 py-2 text-center font-medium">유형</th>
                 <th className="px-3 py-2 text-center font-medium">활성</th>
@@ -140,15 +128,11 @@ export function LakeServiceTypeManager() {
               {rows.map((r) => (
                 <tr key={r.id} className="text-sm hover:bg-secondary/40">
                   <td className="px-3 py-2">
-                    <ServiceTypeIcon serviceType={r.serviceType} className="w-4 h-4" />
+                    <TypeIcon icon={r.icon} />
                   </td>
                   <td className="px-3 py-2 font-mono">{r.serviceType}</td>
                   <td className="px-3 py-2 font-medium">{r.label}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{r.category}</td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    <span className="text-xs rounded-full px-2 py-0.5 bg-secondary border border-border mr-1">
-                      {r.domain === 'app' ? 'APP' : 'PEP'}
-                    </span>
                     {r.categoryId ? (categoryLabelMap[r.categoryId] ?? '—') : <span className="text-muted-foreground/50">미분류</span>}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.defaultPath}</td>
@@ -210,6 +194,7 @@ export function LakeServiceTypeManager() {
       {adding && (
         <TypeFormModal
           mode="create"
+          domain={domain}
           onClose={() => setAdding(false)}
           onError={setErrorMsg}
         />
@@ -219,6 +204,7 @@ export function LakeServiceTypeManager() {
       {editing && (
         <TypeFormModal
           mode="edit"
+          domain={domain}
           row={editing}
           onClose={() => setEditing(null)}
           onError={setErrorMsg}
@@ -228,10 +214,10 @@ export function LakeServiceTypeManager() {
       {/* Delete confirm */}
       <ConfirmDialog
         open={confirmDelete !== null}
-        title="LAKE 타입 삭제"
+        title="서비스 타입 삭제"
         description={
           confirmDelete
-            ? `"${confirmDelete.label}" (${confirmDelete.serviceType}) 타입을 삭제하시겠습니까? 이 타입으로 등록된 LakeService 인스턴스가 있으면 차단됩니다.`
+            ? `"${confirmDelete.label}" (${confirmDelete.serviceType}) 타입을 삭제하시겠습니까? 이 타입으로 등록된 서비스 인스턴스가 있으면 차단됩니다.`
             : ''
         }
         confirmLabel="삭제"
@@ -248,12 +234,13 @@ export function LakeServiceTypeManager() {
 
 interface TypeFormModalProps {
   mode: 'create' | 'edit';
+  domain: ServiceDomain;
   row?: LakeServiceTypeRow;
   onClose: () => void;
   onError: (msg: string) => void;
 }
 
-function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
+function TypeFormModal({ mode, domain, row, onClose, onError }: TypeFormModalProps) {
   const create = useCreateLakeServiceType();
   const update = useUpdateLakeServiceType();
 
@@ -266,9 +253,9 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
   const [defaultPath, setDefaultPath] = useState(row?.defaultPath ?? '/health');
   const [description, setDescription] = useState(row?.description ?? '');
   const [icon, setIcon] = useState(row?.icon ?? '');
+  const [color, setColor] = useState(row?.color ?? '');
   const [enabled, setEnabled] = useState(row?.enabled ?? true);
   const [sortOrder, setSortOrder] = useState(row?.sortOrder ?? 100);
-  const [domain, setDomain] = useState<ServiceDomain>((row?.domain as ServiceDomain) ?? 'pep');
   const [categoryId, setCategoryId] = useState(row?.categoryId ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -293,6 +280,7 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
           defaultPath: defaultPath.trim(),
           description: description.trim() || null,
           icon: icon.trim() || null,
+          color: color || null,
           enabled,
           sortOrder,
           domain,
@@ -301,15 +289,15 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
         await create.mutateAsync(payload);
       } else if (row) {
         const payload: LakeServiceTypeUpdate = {};
-        // builtin: enabled/sort_order/description/icon/categoryId 만 — label/category/default_path/domain readonly
+        // builtin: enabled/sort_order/description/icon/color/categoryId 만 — label/category/default_path readonly
         if (!isBuiltin) {
           if (label !== row.label) payload.label = label.trim();
           if (category !== row.category) payload.category = category;
           if (defaultPath !== row.defaultPath) payload.defaultPath = defaultPath.trim();
-          if (domain !== row.domain) payload.domain = domain;
         }
         if (description !== (row.description ?? '')) payload.description = description.trim() || null;
         if (icon !== (row.icon ?? '')) payload.icon = icon.trim() || null;
+        if (color !== (row.color ?? '')) payload.color = color || null;
         if (enabled !== row.enabled) payload.enabled = enabled;
         if (sortOrder !== row.sortOrder) payload.sortOrder = sortOrder;
         if ((categoryId || null) !== (row.categoryId ?? null)) payload.categoryId = categoryId || null;
@@ -326,12 +314,14 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
   const pending = create.isPending || update.isPending;
 
   return (
-    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="LAKE 타입 폼">
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="서비스 타입 폼">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
           <h2 className="text-sm font-semibold">
-            {mode === 'create' ? '커스텀 LAKE 타입 추가' : `LAKE 타입 편집 — ${row?.serviceType}`}
+            {mode === 'create'
+              ? `커스텀 서비스 타입 추가 (${domain === 'app' ? 'APP' : 'PEP'} 서비스)`
+              : `서비스 타입 편집 — ${row?.serviceType}`}
             {isBuiltin && <span className="ml-2 text-xs text-primary">builtin (일부 readonly)</span>}
           </h2>
           <button type="button" onClick={onClose} aria-label="닫기"
@@ -386,33 +376,19 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="PEP/APP 도메인" disabled={isBuiltin}>
-              <select
-                value={domain}
-                onChange={(e) => { setDomain(e.target.value as ServiceDomain); setCategoryId(''); }}
-                aria-label="domain"
-                disabled={isBuiltin}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-              >
-                <option value="pep">PEP 서비스</option>
-                <option value="app">APP 서비스</option>
-              </select>
-            </Field>
-            <Field label="상위 카테고리">
-              <select
-                value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-                aria-label="상위 카테고리"
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-              >
-                <option value="">— 미분류 —</option>
-                {domainCategories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">
-                PEP 서비스/APP 서비스 사이드바에서 이 타입이 속할 상위 카테고리 (Settings → "서비스 카테고리"에서 추가)
-              </p>
-            </Field>
-          </div>
+          <Field label="상위 카테고리">
+            <select
+              value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
+              aria-label="상위 카테고리"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">— 미분류 —</option>
+              {domainCategories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {domain === 'app' ? 'APP 서비스' : 'PEP 서비스'} 사이드바에서 이 타입이 속할 상위 카테고리 (위 "카테고리" 섹션에서 추가)
+            </p>
+          </Field>
 
           <Field label="Health endpoint path">
             <input
@@ -428,14 +404,25 @@ function TypeFormModal({ mode, row, onClose, onError }: TypeFormModalProps) {
             </p>
           </Field>
 
-          <Field label="Icon (lucide-react 이름)">
-            <input
-              type="text" value={icon} onChange={(e) => setIcon(e.target.value)}
-              placeholder="Database, Workflow, ..."
-              aria-label="icon"
-              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-mono"
-            />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Icon (lucide-react 이름)">
+              <input
+                type="text" value={icon} onChange={(e) => setIcon(e.target.value)}
+                placeholder="Database, Workflow, ..."
+                aria-label="icon"
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-mono"
+              />
+            </Field>
+            <Field label="색상 (뱃지)">
+              <select
+                value={color || 'slate'} onChange={(e) => setColor(e.target.value)}
+                aria-label="색상"
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              >
+                {COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+          </div>
 
           <Field label="Description">
             <textarea

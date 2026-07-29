@@ -179,7 +179,8 @@ python3 scripts/docs/check_docs_sync.py                            # 문서 동�
 | `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `10` / `20` | replica 합계 × (pool+overflow) ≤ Postgres `max_connections` 이 되게 배포별 오버라이드 |
 | `OLLAMA_URL` / `OLLAMA_MODEL` | `http://ollama:11434` / `llama3` | 폐쇄망 overlay 는 `qwen2.5-coder:7b` |
 | `PROMETHEUS_URL` | `http://prometheus-k8s.monitoring.svc:9090` | 미도달 시 카드가 offline 표시 |
-| `KUBEWATCH_TOKEN` · `SUPERPOD_INGEST_TOKEN` | *(empty)* | **fail-closed** — 미설정 시 웹훅 수신을 503 으로 거부 |
+| `KUBEWATCH_TOKEN` · `SUPERPOD_INGEST_TOKEN` · `ALERT_INGEST_TOKEN` | *(empty)* | **fail-closed** — 미설정 시 웹훅 수신을 503 으로 거부 |
+| `ALERTMANAGER_URL` | `http://alertmanager-operated.monitoring.svc:9093` | Observability 대시보드용. 클러스터별 `clusters.alertmanager_url` 이 우선 |
 | `SUPERPOD_MODE` | `centralized` | `in_cluster` \| `centralized` — deep check 실행 모드 |
 
 ⚠️ `ANALYZER_BACKEND`(`services/analyzers/factory.py`) 와 `ALLOWED_ORIGINS`(`main.py`) 는
@@ -351,7 +352,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 확인하거나 해당 라우터 파일을 읽는다. 마운트 목록은 `backend/app/routers/__init__.py`.
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
-`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest`** 다
+`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest`,
+`observability_ingest`** 다
 (`k8s_exec`/`k9s_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증).
 앱 헬스 프로브만 `/api/v1` 접두사가 없다 — `GET /health` · `/health/live` · `/health/ready`(DB 확인).
 
@@ -360,7 +362,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | 그룹 | 라우터 |
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `island` |
-| 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `promql`, `health` |
+| 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
 | K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
@@ -390,7 +392,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 위 6개는 원조 모니터링 코어다. 이외 모델은 도메인별로 아래처럼 묶인다 — 전수와 컬럼 정의는
 `backend/app/models/__init__.py` 와 각 모델 파일을 본다:
 
-- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그), `deep_check`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
+- **관측/알람**: `observability`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot` — 지표 카탈로그는 DB 행이라 UI 편집 대상), `alert_event`(수신 알람, fingerprint 기준 upsert), `alert_notify_rule`(알림 라우팅·중복 억제 규칙)
+- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `deep_check`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
@@ -489,6 +492,36 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
 ---
 
 ## Key Conventions
+
+### UI-First 원칙 — 환경 차이는 코드가 아니라 UI 설정으로 (필수)
+
+**PEP 는 운영자가 파이썬 파일을 고치지 않고 화면 안에서 확인·수정할 수 있어야 한다.**
+현장 환경은 설치마다 다르다(etcd 가 파드냐 systemd 데몬이냐, env 파일 경로, 네임스페이스,
+라벨 셀렉터, 엔드포인트 주소…). 이 차이를 체커/서비스 코드에 하드코딩하면 운영자가 손댈 수
+없고, 반영하려면 매번 코드 수정·재배포가 필요해진다.
+
+규칙:
+
+1. **환경에 따라 달라지는 값은 전부 `params`/`thresholds`(또는 `Addon.config`)로 뺀다.**
+   체커 코드에 리터럴로 박지 않는다. 예: `namespace`, `label_selector`, `env_file`,
+   endpoint 목록, 타임아웃, 실행 경로(`source`) 등.
+   - deep checker 는 `DeepCheckTypeSpec.param_fields` / `threshold_fields` 에 선언해야
+     UI 가 폼을 그린다(선언하지 않은 값은 화면에서 편집 불가 = 규칙 위반).
+   - 필드마다 `label` 과 `help` 를 채운다 — 운영자가 무슨 값인지 화면에서 알아야 한다.
+2. **동작 방식이 갈리는 경우 분기도 파라미터로 노출한다.** 코드에 `if` 를 박아 한쪽만
+   지원하지 말고 `source: auto|pod|snapshot` 처럼 선택 가능하게 하고, `auto` 로 폴백을 준다.
+3. **자격증명은 params 에 저장하지 않는다.** params 는 JSONB 이고 런북·실행 로그에 노출된다.
+   SSH 등 인증이 필요한 수집은 기존 UI 흐름(요청 시에만 자격증명 사용, 미저장)으로
+   스냅샷을 남기고, 체커는 그 스냅샷을 읽는다 (예: `etcd_defrag` 의 snapshot 경로가
+   `/versions` 화면이 수집한 `etcdctl_config:{host}` 를 읽는 구조).
+4. **가시화가 편집보다 먼저다.** 무슨 명령이 나가는지 화면에서 볼 수 없으면 편집은 무의미하다
+   — 새 체커/실행 경로를 추가하면 `services/check_matrix_runbook.py` 의 명령 목록도 같은
+   커밋에서 갱신한다(테스트가 전 타입 커버리지를 검사한다).
+5. **편집 지점**: 점검 매트릭스 셀 → **실행 방식** 탭 → **설정 편집**, 또는 운영 점검
+   (Ops Checks) 화면의 정의 편집. 둘 다 같은 `DeepCheckDefinition` 을 고친다.
+
+> 새 기능을 넣을 때 "이건 나중에 코드에서 바꾸면 되지"라고 판단했다면 그건 규칙 위반이다.
+> 운영자 화면에 노출할 방법을 먼저 찾는다. 상세는 `docs/CHECK_MATRIX_GUIDE.md` §환경 차이 대응.
 
 ### Python
 

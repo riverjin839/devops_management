@@ -293,6 +293,67 @@ class TestSourceConfigEdit:
             db.commit()
 
 
+# ── 스키마 회귀 — deep_check_results.daily_check_log_id NOT NULL ────────────────
+class TestDeepCheckResultSchema:
+    """정의 단독 실행(매트릭스 셀/지금 점검)은 일일점검 회차 없이 결과를 저장한다.
+
+    초기 스키마는 이 컬럼이 NOT NULL 이었고, create_all 은 기존 컬럼의 제약을 바꾸지
+    않으므로 구버전 DB 에서는 deep_check 실행이 전부 IntegrityError(500) 로 죽었다.
+    """
+
+    def test_insert_without_daily_check_log_succeeds(self, db, fixture_ids):
+        from app.models import DeepCheckResult
+
+        row = DeepCheckResult(
+            cluster_id=fixture_ids["cluster"],
+            daily_check_log_id=None,   # 회차 없이 단독 실행
+            definition_id=None,
+            check_type="etcd_defrag",
+            status=StatusEnum.healthy,
+            message="standalone run",
+        )
+        db.add(row)
+        db.commit()
+        try:
+            assert row.id is not None
+        finally:
+            db.delete(row)
+            db.commit()
+
+    def test_migration_drops_legacy_not_null(self, db, fixture_ids):
+        """구버전 DB 시뮬레이션 — NOT NULL 을 다시 걸고 마이그레이션이 푸는지 확인."""
+        from sqlalchemy import text
+        from app.database import engine
+        from app.main import _run_migrations
+
+        def _is_nullable() -> bool:
+            with engine.begin() as conn:
+                return conn.execute(text(
+                    "SELECT is_nullable FROM information_schema.columns "
+                    "WHERE table_name='deep_check_results' AND column_name='daily_check_log_id'"
+                )).scalar() == "YES"
+
+        db.close()  # 세션이 잡은 락이 ALTER TABLE 를 막지 않도록
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE deep_check_results ALTER COLUMN daily_check_log_id SET NOT NULL"
+            ))
+        assert not _is_nullable(), "테스트 전제 설정 실패"
+        _run_migrations()
+        assert _is_nullable(), "마이그레이션이 레거시 NOT NULL 을 풀지 못했다"
+
+
+# ── 라우터 표시명 해석 — user.full_name 오참조로 모든 수동 실행이 500 나던 회귀 ──
+class TestActorResolution:
+    def test_actor_uses_display_name_column(self):
+        """User 모델의 표시명 컬럼은 display_name 이다 — full_name 참조는 AttributeError."""
+        from app.models.user import User
+        from app.routers.check_matrix import _actor
+
+        assert _actor(User(username="hong", display_name="홍길동")) == "홍길동"
+        assert _actor(User(username="hong", display_name=None)) == "hong"
+
+
 # ── SC-2 대상 없는 셀 실행 ────────────────────────────────────────────────────
 class TestCellRun:
     def test_missing_definition_is_skipped_not_failed(self, db, fixture_ids):

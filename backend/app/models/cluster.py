@@ -80,6 +80,15 @@ class Cluster(Base):
     prometheus_url = Column(String(512), nullable=True)        # 선택 — 클러스터별 Prometheus URL 오버라이드
     prometheus_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
 
+    # Observability 대시보드(/observability) 연동.
+    #  - alertmanager_url: 비우면 전역 settings.alertmanager_url fallback.
+    #  - observability_mode: 'pull' = PEP 가 직접 Prometheus/Alertmanager 조회,
+    #    'push' = in-cluster 수집기가 /observability/snapshot/ingest 로 밀어넣은 스냅샷을 읽음.
+    #    (폐쇄망/네트워크 분리로 PEP 에서 클러스터에 도달할 수 없는 환경 대응)
+    alertmanager_url = Column(String(512), nullable=True)
+    observability_mode = Column(String(16), nullable=False, default="pull", server_default="pull")
+    observability_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+
     # 점검 매트릭스(Check Matrix) — core_bundle 행(DailyChecker 원자 실행)의 클러스터별 cron.
     # NULL 이면 미실행. check_schedules(구 아침/점심/저녁) 를 완전 대체.
     check_cron_expr = Column(String(100), nullable=True)

@@ -214,20 +214,135 @@ NAS 콘솔, 네트워크 스위치, 외주 점검 결과처럼 PEP 가 직접 �
 
 ---
 
-## 6. 트러블슈팅
+## 6. 환경 차이 대응 (UI-First 원칙)
+
+설치 현장마다 구성이 다르다 — etcd 가 파드인지 systemd 데몬인지, env 파일 경로,
+네임스페이스, 라벨 셀렉터, 엔드포인트 주소. **PEP 는 이런 차이를 파이썬 파일 수정 없이
+화면에서 바꿀 수 있어야 한다**(프로젝트 원칙 — `CLAUDE.md` §UI-First 원칙).
+
+### 6.1 어디서 바꾸나
+
+| 바꿀 것 | 화면 |
+|---|---|
+| 점검의 임계값·파라미터 | 매트릭스 셀 ▸ **실행 방식** 탭 ▸ **설정 편집** |
+| 애드온 접속 주소·인증 (config) | 같은 자리 (애드온 행) |
+| 점검 정의 자체(이름/활성/cron) | 운영 점검(Ops Checks) 화면 |
+| 실행 주기 | 셀 상세 ▸ 추이·이력 탭 하단 cron / 클러스터 열 시계 배지 |
+
+값을 비우면 그 항목의 오버라이드가 지워져 **기본값으로 복귀**한다.
+
+### 6.2 etcd 가 파드가 아니라 데몬(systemd)인 환경
+
+kubeadm 이 아닌 구성에서는 etcd 가 master 노드의 **systemd 유닛**으로 뜨고 환경변수는
+`/etc/etcd.env` 에 있다 — `kube-system` 에 etcd 파드가 없으므로 pod exec 경로가 통하지 않는다.
+`etcd_defrag` 점검은 이 두 환경을 **파라미터로 선택**한다.
+
+| `source` | 동작 |
+|---|---|
+| `auto` (기본) | etcd 파드를 먼저 찾고, 없으면 자동으로 스냅샷 경로로 폴백 |
+| `pod` | 파드형 etcd 전용 (`kubectl exec … etcdctl endpoint status`) |
+| `snapshot` | 데몬 etcd 전용 — 수집된 `etcdctl_config` 스냅샷만 사용 |
+
+**스냅샷 경로 사용 절차** (데몬 etcd):
+
+1. **버전 / 설정 관리(`/versions`)** 화면에서 etcd 설정 수집을 실행한다. master 노드에 SSH 로
+   접속해 `/etc/etcd.env` 를 `source` 한 뒤 `etcdctl endpoint status -w json` 을 수집하고,
+   `cluster_config_snapshots` 에 `etcdctl_config:{host}` 로 저장한다.
+   - env 파일 경로가 다르면 그 화면의 `env_files` 목록에서 바꾼다.
+   - **자격증명은 저장되지 않는다** — 요청 시에만 쓰이고 DB 에 남지 않는다.
+2. 매트릭스의 etcd 행은 이 스냅샷을 읽어 단편화율을 계산한다. 수집이 `snapshot_max_age_hours`
+   (기본 24h)보다 오래되면 판정하지 않고 **대기(pending)** 로 남긴다 — 낡은 값으로 "정상"이라고
+   말하지 않기 위해서다.
+3. 알람(`alarm list`)은 스냅샷에 없다 — 파드 경로이거나 **etcdctl 콘솔(`/etcdctl`)** 에서
+   확인한다. 그 콘솔도 `/etc/etcd.env` 를 기본 env 파일로 쓰고 경로를 바꿀 수 있다.
+
+> 체커가 직접 SSH 하지 않는 이유: params 는 JSONB 라 런북·실행 로그에 그대로 노출된다.
+> 자격증명을 거기 담지 않으려고 수집(자격증명 미저장 UI 흐름)과 판정(스냅샷 읽기)을 분리했다.
+
+### 6.3 새 환경 차이가 생기면
+
+점검이 우리 환경과 안 맞는데 화면에서 바꿀 수 없다면 그건 **구현 결함**이다. 해당 값을
+`param_fields` 로 노출하도록 체커를 고치고(`.claude/skills/add-deep-checker/SKILL.md`),
+같은 커밋에서 런북 명령 목록도 갱신한다. 코드 수정 없이 운영자가 대응할 수 있는 상태가 기준이다.
+
+---
+
+## 7. 트러블슈팅
 
 | 증상 | 확인할 것 |
 |---|---|
+| 행/셀에 **실행 ▶ 버튼이 없다** | 행 이름 옆 배지를 본다 — `수동` 배지면 수동 입력 항목이라 실행 버튼이 없는 게 정상이다(값 입력만 가능). 자동 점검으로 바꾸려면 행의 연필(수정)에서 실행 방식을 Deep Check/Addon 으로 변경한다. |
 | 셀이 계속 `—` 다 | 수행 로그에 **건너뜀**이 있는지 → deep_check 은 점검 정의, addon 은 애드온 등록 여부. 수동 입력 항목이면 값을 넣기 전까지 정상이다. |
 | ▶ 를 눌렀는데 아무것도 안 바뀐다 | 일괄 실행은 큐잉이다. 열린 수행 로그 패널에서 대기열/실행 중 상태를 확인. 전부 **실패** + "Celery 워커/브로커" 문구면 워커가 죽은 것. |
 | cron 을 저장하면 422 가 뜬다 | 최소 5분 간격 제약. `*/1 * * * *` 같은 표현은 거부된다. |
 | 셀은 정상인데 클러스터 색이 위험이다 | 클러스터 상태는 `core_bundle`(DailyChecker)과 애드온 상태에서 나온다. 개별 deep_check 셀 색과 직접 연결되지 않는다. |
+| etcd 점검이 "etcd pod 를 찾지 못했습니다" | 데몬(systemd) etcd 환경이다. 설정 편집에서 `source` 를 `auto` 또는 `snapshot` 으로 두고, `/versions` 화면에서 etcd 설정 수집을 먼저 실행한다 (§6.2). |
+| deep check 실행이 500 (`daily_check_log_id` NOT NULL) | 구버전 DB 의 레거시 제약. 백엔드를 재시작하면 부팅 마이그레이션이 자동으로 푼다(`ALTER COLUMN … DROP NOT NULL`). |
 | 상태가 **대기(pending)** 로 남는다 | 연결 거부/타임아웃은 위험이 아니라 대기로 판정한다(클러스터가 죽은 것과 PEP 가 못 닿는 것을 구분하기 위함). 수행 로그의 stderr 를 본다. |
 | 자동 실행이 아예 안 돈다 | 클러스터 열 cron 이 비어 있거나(핵심 항목), 셀 cron 이 비활성이거나, `check-matrix-dispatch` Beat 가 안 도는 경우. |
 
 ---
 
-## 7. API 요약
+## 8. DB 구조 (Schema Audit)
+
+점검 매트릭스가 소유한 테이블 5개와 실행 시 참조하는 인접 테이블의 관계다. 모델 원천은
+`backend/app/models/check_matrix.py`, 인접 모델은 `deep_check.py` · `addon.py` · `cluster.py`.
+
+```mermaid
+erDiagram
+    check_matrix_items ||--o{ check_matrix_schedules : "item_id (CASCADE)"
+    check_matrix_items ||--o{ check_matrix_results : "item_id (CASCADE)"
+    check_matrix_items ||--o{ check_matrix_result_logs : "item_id (CASCADE)"
+    check_matrix_items ||--o{ check_matrix_runs : "item_id (CASCADE)"
+    clusters ||--o{ check_matrix_schedules : "cluster_id (CASCADE)"
+    clusters ||--o{ check_matrix_results : "cluster_id (CASCADE)"
+    clusters ||--o{ check_matrix_result_logs : "cluster_id (CASCADE)"
+    clusters ||--o{ check_matrix_runs : "cluster_id (CASCADE)"
+    check_matrix_items }o..o| deep_check_definitions : "source_ref = check_type (논리 키, FK 아님)"
+    check_matrix_items }o..o| addons : "source_ref = type (논리 키, FK 아님)"
+```
+
+### 8.1 테이블별 역할·핵심 컬럼·인덱스
+
+| 테이블 | 역할 | 핵심 컬럼 | 인덱스/제약 |
+|---|---|---|---|
+| `check_matrix_items` | 행 카탈로그 | `source_type`(enum: core_bundle/deep_check/addon/manual) · `source_ref`(논리 키) · `unit`(셀 값 단위) · `is_system` · `enabled` · `sort_order` | PK 만 (소규모 테이블) |
+| `check_matrix_schedules` | 셀 cron | `cron_expr`(NULL=미스케줄) · `enabled` · `last_run_at`(디스패처 anchor) | `uq(item_id, cluster_id)` |
+| `check_matrix_results` | 셀 최신 스냅샷 | `status` · `value` · `message` · `details`(JSONB) · `checked_at` — **upsert**(`ON CONFLICT`) | `uq(item_id, cluster_id)` |
+| `check_matrix_result_logs` | 값 이력 (append-only) | Result 와 동일 컬럼 — 추이 차트/변경 이력의 원천 | `(item_id, cluster_id, checked_at)` + `checked_at` 단독(퍼지 스캔용) |
+| `check_matrix_runs` | **수행 로그** | `batch_id`(일괄 실행 묶음) · `trigger`(enum: cron/manual_cell/manual_cluster/manual_item/manual_entry) · `triggered_by`(표시명 — 의도적으로 FK 없음, 사용자 삭제 후에도 로그 보존) · `run_state`(enum: queued/running/success/failed/skipped) · `status`/`value`/`message`/`error` · `details`(JSONB: `_steps`/`_commands`/`_runbook`) · `queued_at`/`started_at`/`finished_at`/`duration_ms` | `(item_id, cluster_id, queued_at)` + `queued_at` + `batch_id` |
+
+인접 참조 (실행 시점 해석 — FK 없음이 설계):
+
+| 컬럼 | 참조 | 의미 |
+|---|---|---|
+| `items.source_ref` (deep_check) | `deep_check_definitions.check_type` | 클러스터 전용 정의 우선 → 글로벌 폴백. 정의가 삭제돼도 행은 남고 셀은 "건너뜀" |
+| `items.source_ref` (addon) | `addons.type` (+ cluster_id) | 그 클러스터에 애드온이 없으면 "건너뜀" |
+| `clusters.check_cron_expr` / `check_last_run_at` | — | core_bundle 행의 cron / 디스패처 anchor |
+| `app_settings` key `check_matrix.settings` | — | 이력 보관 일수 (`retention_days`) |
+
+### 8.2 스키마 운영 특성 (audit 결과)
+
+- **삭제 전파**: 항목/클러스터를 지우면 스케줄·결과·값 이력·수행 로그가 전부 CASCADE 로
+  정리된다 — 고아 행 없음.
+- **enum 3종**(`checkmatrixsourcetype`/`checkmatrixtrigger`/`checkmatrixrunstate`)은
+  `create_all` 이 생성한다. **값을 추가할 때는** 모델 enum 수정 + `main.py` 에
+  `_safe_exec("ALTER TYPE ... ADD VALUE IF NOT EXISTS ...")` 보강이 필요하다(구버전 DB).
+- **테이블/인덱스 생성 경로**: 신규 테이블은 부팅 시 `create_all`, 인덱스는 모델
+  `__table_args__` 가 원천이고 `main.py` 의 `_safe_create_index` 는 (테이블만 있고 인덱스가
+  없는 구버전 DB 를 위한) 보강 경로다 — 같은 이름이면 skip 되므로 중복 생성되지 않는다.
+- **runs.details 는 행이 크다**: 명령 출력 발췌(명령당 2000자·수행당 30건)와 런북 스냅샷을
+  담는다. 값 이력과 같은 보관 일수로 매일 03:00 퍼지되며, 보관 일수를 늘릴 때는 이 테이블
+  용량을 함께 고려한다.
+- **이중 기록(의도)**: deep_check 셀 실행은 `check_matrix_results`(+runs) 와
+  `deep_check_results` 양쪽에 남는다 — 전자는 매트릭스 화면, 후자는 심층 점검 이력 화면의
+  원천이고 보관 주기 설정을 공유한다.
+- **백업**: 값 이력·수행 로그는 `backup_service.LOG_TABLES` 에 등록돼 `include_logs=False`
+  export 에서 제외된다.
+
+---
+
+## 9. API 요약
 
 모두 `/api/v1/check-matrix` 하위. 실행/변경은 operator 이상.
 

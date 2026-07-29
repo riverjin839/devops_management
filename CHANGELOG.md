@@ -8,6 +8,67 @@
 
 ## [Unreleased]
 
+1.16.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.16.4] - 2026-07-28
+
+### Added
+- **Observability 지표 대시보드** (`/observability`): 클러스터에 깔린 관측 스택의 개별 지표를
+  **dense 리스트 테이블**로 한 화면에서 훑는다. `kube-prometheus-stack` 부터 지원하며
+  Prometheus 서버·Alertmanager·exporter·operator·알람규칙 5개 카테고리 30여 개 지표가 기본
+  등록된다. 지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람 4개 뷰를 탭으로 전환한다.
+  지표 목록·PromQL·임계값은 전부 DB 행이라 **운영자가 화면에서 직접 편집**할 수 있어,
+  배포마다 다른 job 라벨도 코드 수정 없이 맞출 수 있다(`alert-forwarder`/`opensearch-stack`/
+  `fluent-operator` 모듈도 지표를 추가하면 그대로 활성화된다). PEP 에서 클러스터 Prometheus 에
+  닿지 않는 환경을 위해 **pull(직접 조회) / push(in-cluster 수집기 스냅샷)** 두 수집 모드를
+  클러스터별로 고를 수 있고, 화면에 실시간/스냅샷 신선도를 표시한다.
+  Backend: `routers/observability.py`, `services/alertmanager_service.py`,
+  `services/observability/catalog_seed.py`, `models/observability.py`,
+  `PrometheusService.{rules,active_alerts,targets,tsdb_status}`.
+  Frontend: `pages/ObservabilityPage.tsx`, `components/observability/`.
+- **인시던트 알람 PEP 수신 + 알람 인박스** (`/alerts`): 그동안 사내 메신저(cube)로만 가던
+  인시던트 알람을 PEP 도 함께 받는다. **Alertmanager webhook 과 사내 alert-forwarder 를 모두
+  수용**하며(표준 v4 포맷 우선, 임의 JSON 은 generic 파서가 정규화), 수신 엔드포인트는
+  `ALERT_INGEST_TOKEN` Bearer 로 **fail-closed**(미설정 시 503)다. 같은 알람이 반복 수신되면
+  행이 늘지 않고 반복 수(×N)만 올라가고, firing → resolved 상태 전이도 반영된다. 화면에서는
+  심각도를 색 바·배경 그라데이션·글자 굵기로 구분하고, 확인(ack)·일괄 확인·원본 페이로드
+  열람을 제공한다. 상단의 "알람 수신 설정 방법" 안내에서 Alertmanager receiver YAML 을 그대로
+  복사해 붙여넣을 수 있다.
+  Backend: `routers/observability.py`(`ingest_router`), `services/observability/alert_ingest.py`,
+  `models/alert_event.py`. Frontend: `pages/AlertInboxPage.tsx`.
+- **알림 라우팅 규칙 + 중복 억제** (`/alerts` → 알림 규칙): 알람을 **전체 브로드캐스트 /
+  담당자 지정 / 알림 없이 인박스만** 중에서 고를 수 있고, 클러스터·알람명·네임스페이스·라벨·
+  최소 심각도 매처로 규칙을 만들어 담당자를 매핑한다. **중복 억제**로 같은 알람이 창(기본 5분)
+  안에서 쏟아져도 개인 알림은 1건만 생성되며, 요약 모드는 기존 알림 문구를 "최근 5분간 10회"로
+  갱신한다. 규칙에서 심각도 재정의도 가능하다. 전역 기본값(알림 대상·최소 심각도·억제 창·
+  보존일)은 Settings 없이 같은 화면에서 편집한다.
+  Backend: `models/alert_notify_rule.py`, `services/observability/alert_router.py`.
+
+### Fixed
+- **전체 공지 알림이 아무에게도 보이지 않던 문제**: `recipient="all"` 공유 행으로 만든 알림을
+  조회 쪽(`notifications._me_ids`)이 매칭하지 않아, critical K8s 이벤트 알림이 실제로는 누구의
+  알림 종에도 뜨지 않았다. 이제 생성 시점에 **활성 사용자별 개인 행으로 팬아웃**한다
+  (`services/user_notify.notify_broadcast`) — 읽음 처리도 개인별로 정확히 동작한다.
+### Changed
+- **Settings 서비스 설정 통합 — "서비스 카테고리" 탭 폐지, "관리 서비스"로 일원화**: 서로
+  중복되던 두 탭을 하나로 합쳤다. 최상위 "서비스 카테고리" 탭이 사라지고, "관리 서비스" 탭이
+  **PEP 서비스 / APP 서비스** 두 탭으로만 구성된다. 각 탭 안에서 해당 도메인의 카테고리와
+  서비스 타입을 한 화면에서 관리하므로, 카테고리를 만들려고 다른 탭으로 이동할 필요가 없다.
+  기존 "서비스 타입" / "서비스 카탈로그" 서브탭 구분도 제거했다. 레거시 딥링크
+  (`?tab=service`, `?tab=service-categories`)는 `?tab=mgmt-service` 로 리다이렉트된다.
+  Frontend: `ServiceCategoryManager`/`LakeServiceTypeManager` 가 `domain` prop 을 받도록 변경,
+  각 컴포넌트 내부의 도메인 탭·도메인 select 제거.
+- **서비스 카탈로그를 PEP 서비스로 머지**: 서비스 아이콘·색상 정의가 `ui_settings.serviceCatalog`
+  와 PEP 서비스 타입 두 곳으로 갈라져 있던 것을 **PEP 서비스 한 곳**으로 합쳤다. `/services`
+  지식 카탈로그와 업무/이슈의 서비스 태그가 이제 PEP 서비스의 아이콘·색상을 그대로 사용한다.
+  이름이 겹치던 서비스(Kubernetes/Keycloak/Nexus/Prometheus/Grafana/Cilium)는 PEP 서비스 쪽
+  정의로 통일하고 색상만 이어받으며, 카탈로그에만 있던 Jenkins/ArgoCD/etcd/Hubble/Ingress/
+  Storage 는 PEP 서비스에 자동 추가된다. Backend: `lake_service_types.color` 컬럼 추가,
+  부팅 시 1회성 머지(`_merge_service_catalog_into_pep_types`), `ui_settings.service_catalog`
+  필드 폐지.
+
+## [1.16.3] - 2026-07-28
+
 ### Added
 - **주간보고 진척률 표**: 전체 요약 아래에 `category(component) × task(Epic)` 단위 진척률을
   추가했다 — 계획진도율(일정 경과 기준) · 실적진도율(완료 비율) · 달성률(실적/계획) · 완료/
@@ -109,8 +170,6 @@
 - **계정 칸 앞에 다른 텍스트 입력이 있으면 엉뚱한 칸에 아이디를 넣던 문제**: 알려진 계정
   필드명(사번 계열 `empnum`/`empno`/`sabun` 등 포함)을 우선 매칭하도록 보완.
 
-1.16.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
-
 ## [1.16.2] - 2026-07-28
 
 ### Fixed
@@ -173,6 +232,38 @@
     definition/addon 식별자·필드 명세 포함.
   - **시스템 항목도 표시 속성 수정 가능**: 잠긴 것은 실행 소스뿐 — 이름/설명/단위/표시
     여부는 다른 행과 똑같이 편집된다.
+
+### Fixed
+- **점검 매트릭스 수동 실행 500 (심각)**: 셀/클러스터/항목 실행과 수동 입력이 전부
+  `AttributeError: 'User' object has no attribute 'full_name'` 으로 실패했다 — 실행자
+  표시명 해석이 User 모델에 없는 `full_name` 을 참조. `display_name or username` 으로
+  수정하고 회귀 테스트 추가.
+- **실행 버튼 발견성**: 행의 전 클러스터 실행 ▶ 가 hover 에서만 보여 "버튼이 없다"고
+  오인됐다 — 항상 노출로 변경. 행마다 실행 방식 배지(핵심/Deep/Addon/수동)를 붙이고,
+  수동 입력 항목의 셀 상세에는 실행 버튼이 없는 이유(자동 실행 없음)와 자동 점검으로
+  바꾸는 방법을 안내한다.
+- **문서**: `docs/CHECK_MATRIX_GUIDE.md` 에 DB 구조(Schema Audit) 섹션 추가 —
+  테이블 5종 관계도(ER)·인덱스/제약·enum 확장 절차·runs 테이블 용량 특성·이중 기록.
+- **Deep check 실행 500 (심각)**: 매트릭스에서 deep check 를 실행하면 전부
+  `null value in column "daily_check_log_id" violates not-null constraint` 로 실패했다.
+  일일점검 회차 없이 도는 단독 실행(매트릭스 셀/"지금 점검")은 이 컬럼이 NULL 인데,
+  초기 스키마의 NOT NULL 이 구버전 DB 에 남아 있었고 `create_all` 은 기존 컬럼 제약을
+  바꾸지 않는다. 부팅 마이그레이션에 `DROP NOT NULL` 추가(재시작만으로 복구) + 회귀 테스트.
+- **etcd 가 데몬(systemd)인 환경 지원**: `etcd_defrag` 점검이 `kube-system` 의 etcd 파드만
+  찾아서, etcd 가 master 노드 systemd 유닛으로 뜨고 env 가 `/etc/etcd.env` 인 환경에서는
+  항상 "etcd pod 를 찾지 못했습니다"로 끝났다. 실행 경로를 파라미터
+  `source`(`auto`/`pod`/`snapshot`)로 노출하고, 데몬 환경은 `버전/설정 관리(/versions)`
+  화면이 SSH 로 수집해 둔 `etcdctl_config` 스냅샷을 읽어 단편화율을 판정한다(`auto` 는
+  파드 → 스냅샷 폴백, 스냅샷이 `snapshot_max_age_hours` 보다 낡으면 대기 처리).
+  체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다.
+
+### Changed
+- **UI-First 원칙을 프로젝트 규약으로 명문화** (`CLAUDE.md` §UI-First 원칙): 환경마다
+  달라지는 값(네임스페이스·라벨·경로·엔드포인트·실행 경로)은 코드에 하드코딩하지 않고
+  `param_fields`/`threshold_fields`(또는 `Addon.config`)로 노출해 **운영자가 파이썬 파일을
+  고치지 않고 화면에서 확인·수정**할 수 있어야 한다. 자격증명은 params 에 저장 금지(런북·
+  실행 로그 노출) — 수집 화면이 남긴 스냅샷을 읽는 구조를 쓴다. `add-deep-checker` 스킬과
+  `docs/CHECK_MATRIX_GUIDE.md` §환경 차이 대응에 절차 반영.
 
 ## [1.16.0] - 2026-07-28
 

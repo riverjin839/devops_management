@@ -3,9 +3,9 @@
 ``check_matrix_result_logs``/``deep_check_results`` 는 이미 각자 도메인 서비스
 (``check_matrix_service.purge_expired_logs`` / ``deep_check_service.purge_expired_results``)
 에 청크 삭제 purge 가 있다. 이 모듈은 그 패턴을 나머지 로그성 테이블에도 동일하게
-적용한다 — ``daily_check_logs``/``check_logs``/``k8s_events``/``user_notifications`` 는
-지금까지 purge 대상이 아니어서 무기한 증가했고, ``audit_logs`` 는 감사 추적 목적상
-더 긴 기간을 둔다.
+적용한다 — ``daily_check_logs``/``check_logs``/``k8s_events``/``user_notifications``/
+``alert_events`` 는 지금까지 purge 대상이 아니어서 무기한 증가했고, ``audit_logs`` 는
+감사 추적 목적상 더 긴 기간을 둔다.
 
 보관 일수는 테이블 성격에 따라 하드코딩한다(운영자가 조정하려면 이 상수만 바꾸면
 됨) — check_matrix/deep_check 의 사용자 설정 가능한 ``retention_days`` 와는 별개다
@@ -21,19 +21,33 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditLog
 from app.models.check_log import CheckLog
 from app.models.daily_check import DailyCheckLog
+from app.models.alert_event import AlertEvent
 from app.models.k8s_event import K8sEvent
 from app.models.user_notification import UserNotification
 
 # daily_check_logs/check_logs 는 점검 이력 조회 UX 를 감안해 90일, k8s_events 는
 # 변경 이벤트라 회전이 빨라 21일, audit_logs 는 감사 추적 목적상 1년,
 # user_notifications 는 알림 배지 성격이라 90일이면 충분하다.
+# alert_events 는 인시던트 회고에 쓰이므로 90일 — AppSetting["alert_notify.settings"]
+# 의 retention_days 로 운영자가 화면에서 조정할 수 있다(아래 _alert_retention_days).
 RETENTION_DAYS: dict[str, int] = {
     "daily_check_logs": 90,
     "check_logs": 90,
     "k8s_events": 21,
     "audit_logs": 365,
     "user_notifications": 90,
+    "alert_events": 90,
 }
+
+
+def _alert_retention_days(db: Session) -> int:
+    """알람 보존기간은 UI 설정이 우선 — 읽기 실패 시 기본값으로 폴백."""
+    try:
+        from app.services.observability.alert_router import get_alert_settings
+
+        return int(get_alert_settings(db).get("retention_days") or RETENTION_DAYS["alert_events"])
+    except Exception:  # noqa: BLE001
+        return RETENTION_DAYS["alert_events"]
 
 _MAX_BATCHES = 50
 _BATCH_SIZE = 5000
@@ -117,11 +131,13 @@ def purge_all(db: Session) -> dict[str, Any]:
         ("k8s_events", K8sEvent, K8sEvent.received_at),
         ("audit_logs", AuditLog, AuditLog.created_at),
         ("user_notifications", UserNotification, UserNotification.created_at),
+        ("alert_events", AlertEvent, AlertEvent.received_at),
     ]
     for name, model, ts_column in simple_targets:
         try:
-            deleted = _purge_simple(db, model, ts_column, RETENTION_DAYS[name])
-            results[name] = {"deleted": deleted, "retention_days": RETENTION_DAYS[name]}
+            days = _alert_retention_days(db) if name == "alert_events" else RETENTION_DAYS[name]
+            deleted = _purge_simple(db, model, ts_column, days)
+            results[name] = {"deleted": deleted, "retention_days": days}
         except Exception as e:  # noqa: BLE001
             db.rollback()
             results[name] = {"error": str(e)[:200]}

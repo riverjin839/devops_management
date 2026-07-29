@@ -53,6 +53,10 @@ export interface Cluster {
   // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
+  // Observability 대시보드 — Alertmanager URL + 수집 모드(pull=직접조회 / push=수집기 스냅샷).
+  alertmanagerUrl?: string | null;
+  observabilityMode?: 'pull' | 'push' | null;
+  observabilityEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +146,9 @@ export interface ClusterManageUpdate {
   icon?: string | null;
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
+  alertmanagerUrl?: string | null;
+  observabilityMode?: 'pull' | 'push' | null;
+  observabilityEnabled?: boolean;
 }
 
 // ── Cluster Trends (per-node 메트릭 추이) ──────────────────────────────
@@ -468,7 +475,7 @@ export interface WorkItem {
   /** 종료/해결/완료 일시. issue 의 resolved_at / task 의 completed_at 통합. */
   closedAt?: string;
   remarks?: string;
-  /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
+  /** 통합지식 service tag — PEP 서비스 타입(LakeServiceType domain='pep') 의 slug 와 매칭. */
   service?: string;
   /** Phase B — service 하위 component (예: k8s→api-server). serviceCatalog.ts 의
    *  COMPONENT_BY_SERVICE 추천 enum + 직접 입력 escape hatch. service 없을 때 null. */
@@ -959,9 +966,6 @@ export interface ClusterItemType {
 export interface UiSettings {
   appTitle: string;
   navLabels: Record<string, string>;
-  /** 통합지식 메뉴와 task/issue tag 에 노출되는 서비스 카탈로그.
-   *  null/undefined 면 프론트의 SERVICE_CATALOG 기본값으로 폴백. */
-  serviceCatalog?: ServiceCatalogEntry[];
   /** 홈(좌상단) 버튼 아이콘 커스터마이즈 (모드별). 값 형식은 cluster icon 과 동일
    *  (lucide 이름 / 이모지 / base64 data URL). null/undefined 면 기본값(업무=ListTodo, 플랫폼=☸). */
   homeIcons?: HomeIcons;
@@ -985,23 +989,6 @@ export interface PageStyle {
 export interface HomeIcons {
   work?: string | null;
   platform?: string | null;
-}
-
-/** Settings 의 '서비스' 탭에서 사용자 정의되는 서비스 한 항목.
- *  ⚠ 별도의 ServiceCatalogItem (요약 카운트용) 과 혼동 주의 — 이 타입은 사이드바·태그용. */
-export interface ServiceCatalogEntry {
-  /** URL slug 및 service_entries.service 와 매칭되는 키 (예: 'k8s', 'keycloak'). */
-  slug: string;
-  /** 사이드바·드롭다운에 표시될 한글 라벨. */
-  label: string;
-  /** lucide-react 아이콘 이름 (예: 'Box', 'Key'). 비어있으면 BookOpen. */
-  icon?: string;
-  /** 카드/뱃지 색상 토큰 (예: 'sky', 'emerald'). */
-  color?: string;
-  /** 짧은 설명 (모달/툴팁용). */
-  description?: string;
-  /** 정렬 우선순위 (작을수록 위). */
-  sortOrder?: number;
 }
 
 export interface OperationLevelItem {
@@ -2960,6 +2947,8 @@ export interface LakeServiceTypeRow {
   defaultPath: string;
   description?: string | null;
   icon?: string | null;
+  /** 카드/뱃지 색상 토큰 (예: 'sky', 'emerald'). 비어있으면 slate. */
+  color?: string | null;
   isBuiltin: boolean;
   enabled: boolean;
   sortOrder: number;
@@ -2977,6 +2966,7 @@ export interface LakeServiceTypeInput {
   defaultPath?: string;
   description?: string | null;
   icon?: string | null;
+  color?: string | null;
   enabled?: boolean;
   sortOrder?: number;
   domain?: string;
@@ -2989,6 +2979,7 @@ export interface LakeServiceTypeUpdate {
   defaultPath?: string;
   description?: string | null;
   icon?: string | null;
+  color?: string | null;
   enabled?: boolean;
   sortOrder?: number;
   domain?: string;
@@ -3960,4 +3951,229 @@ export interface ProvisionResult {
   confluencePageId?: string | null;
   confluenceUrl?: string | null;
   confluenceDetail: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Observability (관측 스택 지표 대시보드) + 인시던트 알람 인박스
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 라벨 1쌍. 백엔드가 dict 대신 배열로 주는 이유는 axios 인터셉터의
+ *  snake_case→camelCase 변환이 Prometheus 라벨명(`job_name` 등)을 훼손하기 때문이다. */
+export interface LabelPair {
+  k: string;
+  v: string;
+}
+
+export type ObservabilityModuleStatus = 'active' | 'planned';
+export type MetricState = 'ok' | 'warning' | 'critical' | 'unknown';
+export type FetchStatus = 'ok' | 'error' | 'offline';
+export type DataSource = 'live' | 'snapshot' | 'offline';
+
+export interface ObservabilityModule {
+  id: string;
+  key: string;
+  label: string;
+  description?: string | null;
+  icon?: string | null;
+  status: ObservabilityModuleStatus;
+  enabled: boolean;
+  sortOrder: number;
+  metricCount: number;
+}
+
+export interface ObservabilityMetric {
+  id: string;
+  moduleKey: string;
+  key: string;
+  label: string;
+  category: string;
+  promql: string;
+  unit: string;
+  displayType: string;
+  thresholds?: string | null;
+  invert: boolean;
+  help?: string | null;
+  docUrl?: string | null;
+  sortOrder: number;
+  enabled: boolean;
+}
+
+export interface ObservabilityMetricInput {
+  moduleKey: string;
+  key: string;
+  label: string;
+  category: string;
+  promql: string;
+  unit: string;
+  displayType: string;
+  thresholds?: string | null;
+  invert: boolean;
+  help?: string | null;
+  docUrl?: string | null;
+  sortOrder: number;
+  enabled: boolean;
+}
+
+export interface ObservabilityMetricValue {
+  metricId: string;
+  key: string;
+  label: string;
+  category: string;
+  unit: string;
+  displayType: string;
+  thresholds?: string | null;
+  invert: boolean;
+  help?: string | null;
+  docUrl?: string | null;
+  promql: string;
+  state: MetricState;
+  value?: number | null;
+  labels: LabelPair[];
+  seriesCount: number;
+  status: FetchStatus;
+  error?: string | null;
+}
+
+export interface ObservabilityMetricValuesResponse {
+  module: string;
+  clusterId?: string | null;
+  source: DataSource;
+  collectedAt?: string | null;
+  detail?: string | null;
+  data: ObservabilityMetricValue[];
+}
+
+export interface PromRule {
+  group: string;
+  file?: string | null;
+  name: string;
+  type: string;
+  state?: string | null;
+  severity?: string | null;
+  duration?: number | null;
+  query: string;
+  health?: string | null;
+  lastError?: string | null;
+  evaluationTime?: number | null;
+  lastEvaluation?: string | null;
+  activeAlerts: number;
+  labels: LabelPair[];
+  annotations: LabelPair[];
+}
+
+export interface PromTarget {
+  job: string;
+  instance: string;
+  health: string;
+  scrapePool?: string | null;
+  scrapeUrl?: string | null;
+  lastScrape?: string | null;
+  lastScrapeDuration?: number | null;
+  lastError?: string | null;
+  labels: LabelPair[];
+}
+
+export interface PromActiveAlert {
+  alertname: string;
+  state: string;
+  severity?: string | null;
+  namespace?: string | null;
+  resource?: string | null;
+  summary?: string | null;
+  activeAt?: string | null;
+  value?: string | null;
+  origin: string;
+  labels: LabelPair[];
+  annotations: LabelPair[];
+}
+
+export interface PromViewResponse {
+  clusterId?: string | null;
+  source: DataSource;
+  collectedAt?: string | null;
+  detail?: string | null;
+  rules: PromRule[];
+  targets: PromTarget[];
+  alerts: PromActiveAlert[];
+}
+
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertStatus = 'firing' | 'resolved';
+
+export interface AlertEvent {
+  id: string;
+  clusterId?: string | null;
+  clusterName?: string | null;
+  source: string;
+  fingerprint: string;
+  alertname: string;
+  severity: AlertSeverity;
+  severitySource: string;
+  status: AlertStatus;
+  namespace?: string | null;
+  resource?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  generatorUrl?: string | null;
+  occurrences: number;
+  notifyCount: number;
+  suppressedCount: number;
+  lastNotifiedAt?: string | null;
+  acked: boolean;
+  ackBy?: string | null;
+  ackAt?: string | null;
+  receivedAt: string;
+  labels: LabelPair[];
+  annotations: LabelPair[];
+  rawJson?: string | null;
+}
+
+export interface AlertEventListResponse {
+  data: AlertEvent[];
+  total: number;
+}
+
+export interface AlertStats {
+  firing: number;
+  resolved: number;
+  critical: number;
+  warning: number;
+  info: number;
+  unacked: number;
+  total: number;
+}
+
+export type AlertNotifyMode = 'all' | 'users' | 'none';
+export type AlertDedupMode = 'first_only' | 'summarize';
+
+export interface AlertNotifyRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  clusterId?: string | null;
+  moduleKey?: string | null;
+  alertnamePattern?: string | null;
+  namespacePattern?: string | null;
+  labelMatchers: LabelPair[];
+  severityMin?: AlertSeverity | null;
+  notifyMode: AlertNotifyMode;
+  recipients: string[];
+  severityOverride?: AlertSeverity | null;
+  channelIds: string[];
+  dedupWindowSec: number;
+  dedupMode: AlertDedupMode;
+}
+
+export type AlertNotifyRuleInput = Omit<AlertNotifyRule, 'id'>;
+
+export interface AlertSettings {
+  defaultNotifyMode: AlertNotifyMode;
+  defaultRecipients: string[];
+  defaultSeverityMin: AlertSeverity;
+  dedupWindowSec: number;
+  dedupMode: AlertDedupMode;
+  retentionDays: number;
 }

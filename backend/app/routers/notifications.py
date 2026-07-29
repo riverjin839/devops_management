@@ -26,6 +26,14 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 # ── 개인 인앱 알림 (알림 종) ──────────────────────────────────────────────────
 def _me_ids(user: User) -> list[str]:
+    """현재 사용자로 인정할 recipient 값들.
+
+    담당자 식별자가 username / display_name 어느 쪽으로 저장됐는지 확정할 수 없어 둘 다 본다.
+    **전체 공지는 여기서 매칭하지 않는다** — `services/user_notify.notify_broadcast()` 가
+    생성 시점에 사용자별 행으로 팬아웃하므로, 읽음 처리가 개인별로 정확히 동작한다.
+    (과거에는 `recipient="all"` 공유 행을 썼는데 이 함수가 그 값을 매칭하지 않아 전체 공지가
+    아무에게도 보이지 않았다.)
+    """
     return [x.strip() for x in [user.username, user.display_name] if x and x.strip()]
 
 
