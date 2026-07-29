@@ -565,6 +565,14 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` (+ 신�
 5. **실행 상태 배지**: ok/error/timeout/auth_error/connect_error 는 `STATUS_META` 패턴(색 + 아이콘 pill)으로 표기,
    위험 명령은 `ConfirmDialog` `danger` 확인을 거친다.
 
+**예외 — PTY 웹 터미널 화면** (k9s 콘솔 `/k9s` · 노드 SSH 터미널 `/node-ssh`): 결과가 stdout/stderr 로 끊겨
+돌아오는 게 아니라 대화형 tty 라 위 1~3 항목(좌/우 로우, `ExecOutputTabs`, `LogViewer`)이 적용되지 않는다.
+대신 **공용 `SshTerminalWindow`**(`components/k8s/SshTerminalWindow.tsx`)를 쓴다 — xterm.js ↔ WebSocket 브리지,
+드래그 이동 플로팅 창 + 우하단 리사이즈, 헤더의 재연결/새 창으로 빼기/전체화면/종료, `lib/terminalPopout.ts`
+기반 별도 창 handoff 가 여기 다 들어있다. 화면은 접속 폼(`ClusterSidebar iconOnly` + `MacCard`)과 init 프레임만
+만든다. 4·5 항목은 그대로 지킨다 — `useTerminalEnvSync` 호출(터미널 색/글꼴이 `useXtermTheme` 로 xterm 에도
+적용된다), 연결 테스트 결과는 `STATUS_META` 배지. 새 SSH 터미널 화면을 xterm 부터 직접 붙이는 코드는 금지.
+
 ---
 
 ## 부록 A — 검증 출처

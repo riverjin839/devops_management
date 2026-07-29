@@ -10,6 +10,26 @@
 
 1.16.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **노드 SSH 터미널** (`/node-ssh`): 클러스터의 **개별 노드에 SSH 로 붙어 로그인 셸을 그대로**
+  웹 터미널로 쓴다. 노드 목록(이름/IP 검색·Ready·master 배지)에서 클릭으로 대상을 고르고
+  비밀번호 또는 Private Key 로 접속하며, 터미널을 열기 전 **연결 테스트**로 자격증명만 먼저
+  확인할 수 있다. 접속 후 실행할 명령(`sudo -i` 등) 지정, 드래그·리사이즈 되는 플로팅 창,
+  별도 브라우저 창으로 빼기를 지원한다. tty + resize 라 `journalctl`·`top`·`vi` 같은 인터랙티브
+  명령도 동작한다. 클러스터 밖 서버도 수동 host 입력으로 접속 가능.
+  Backend: 라우터 `node_ssh.py`(WS `/node-ssh/session` + REST `/node-ssh/test`), 감사 로그
+  `node.ssh.open`/`node.ssh.close`, `PEP_NODE_SSH_ENABLED=false` 로 비활성화.
+  Frontend: `NodeSshPage`/`NodeSshPopupPage`, 노드 목록은 mc·노드 일괄 실행과 같은
+  `node-list` 엔드포인트 재사용.
+
+### Changed
+- **SSH 웹 터미널 공용화**: k9s 콘솔과 노드 SSH 터미널이 같은 base 툴을 쓰도록 정리했다 —
+  백엔드 `services/ssh_pty.py`(WebSocket↔paramiko PTY 브리지·init 프레임·토큰 검증),
+  프론트 `components/k8s/SshTerminalWindow.tsx`(xterm 창)·`lib/terminalPopout.ts`(창 간 handoff).
+- **SSH 터미널에 터미널 Appearance 적용**: k9s·노드 SSH 터미널의 색상/글꼴이 Settings →
+  터미널 Appearance 의 활성 프로파일(개발/운영)을 따른다(기존에는 고정 팔레트). 세션이 열린
+  상태에서 프로파일을 바꿔도 즉시 반영된다.
+
 ## [1.16.4] - 2026-07-28
 
 ### Added

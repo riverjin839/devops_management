@@ -40,6 +40,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },
   '/versions':           { defaultLabel: '버전 / 설정',     icon: GitCommit },
   '/bulk-exec':          { defaultLabel: '노드 일괄 실행', icon: Terminal },
+  '/node-ssh':           { defaultLabel: '노드 SSH 터미널', icon: TerminalSquare, iconColor: 'text-sky-500' },
   '/etcdctl':            { defaultLabel: 'etcdctl 콘솔',   icon: Database },
   '/batch-jobs':         { defaultLabel: 'Batch Jobs',     icon: ListTree },
   '/mc':                 { defaultLabel: 'mc 클라이언트',  icon: HardDrive },
@@ -76,7 +77,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
 // 사이드바 레일에 표시되는 그룹들
 export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'pep-services' | 'app-services' | 'system';
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], modes: ['platform'] },

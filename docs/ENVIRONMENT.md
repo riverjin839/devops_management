@@ -83,10 +83,12 @@
 
 ## ⚠️ `Settings` 밖에서 읽는 변수
 
-아래 둘은 pydantic-settings 를 거치지 않고 `os.getenv` 로 직접 읽는다 — `config.py` 를 아무리
+아래 변수들은 pydantic-settings 를 거치지 않고 `os.getenv` 로 직접 읽는다 — `config.py` 를 아무리
 찾아도 나오지 않으니 주의.
 
 | Variable | Default | 읽는 곳 |
 |---|---|---|
 | `ANALYZER_BACKEND` | `rule_based` | `services/analyzers/factory.py` — `claude` \| `local_llm` \| `rule_based` |
 | `ALLOWED_ORIGINS` | *(empty)* | `main.py` — 추가 CORS origin (콤마 구분) |
+| `PEP_K9S_SSH_ENABLED` | `true` | `routers/k9s_ssh.py` — k9s 콘솔(SSH 웹 터미널) on/off. `false`\|`0`\|`no` 면 WS 를 4403 으로 거부 |
+| `PEP_NODE_SSH_ENABLED` | `true` | `routers/node_ssh.py` — 노드 SSH 터미널 on/off (위와 동일 규칙) |

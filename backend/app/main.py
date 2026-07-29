@@ -69,6 +69,7 @@ from app.routers import (
     k8s_helm_router,
     k8s_exec_router,
     k9s_ssh_router,
+    node_ssh_router,
     metric_trend_router,
     service_topology_router,
     architecture_docs_router,
@@ -2093,6 +2094,9 @@ app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(k8s_exec_router, prefix="/api/v1")
 # k9s TUI SSH 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
 app.include_router(k9s_ssh_router, prefix="/api/v1")
+# 개별 노드 SSH 터미널(WebSocket) — 위와 동일. REST 인 /node-ssh/test 는 엔드포인트에서
+# require_operator 를 직접 건다.
+app.include_router(node_ssh_router, prefix="/api/v1")
 # metric-trend — 일일점검 리뷰: 리소스 수 추세 체크리스트(자동/수동 스냅샷 + 체크 + 항목 CRUD).
 app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).

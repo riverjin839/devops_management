@@ -352,9 +352,10 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 확인하거나 해당 라우터 파일을 읽는다. 마운트 목록은 `backend/app/routers/__init__.py`.
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
-`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `k8s_events_ingest`,
+`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
 `observability_ingest`** 다
-(`k8s_exec`/`k9s_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증).
+(`k8s_exec`/`k9s_ssh`/`node_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증하고,
+`node_ssh` 의 REST `POST /node-ssh/test` 는 엔드포인트에 `require_operator` 를 직접 건다).
 앱 헬스 프로브만 `/api/v1` 접두사가 없다 — `GET /health` · `/health/live` · `/health/ready`(DB 확인).
 
 **라우터 그룹 인덱스** (한 줄 요약):
@@ -363,7 +364,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island` |
 | 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |

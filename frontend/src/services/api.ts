@@ -2215,6 +2215,32 @@ export const k8sStreamUrls = {
     if (token) p.set('token', token);
     return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/k9s?${p.toString()}`;
   },
+  /**
+   * 개별 노드 SSH 터미널 WebSocket — k9s 와 동일하게 토큰만 query param 이고 SSH
+   * 자격증명은 init 프레임으로 전달한다. `clusterId` 는 감사 로그 맥락용(선택).
+   */
+  nodeSsh: (token: string | null, clusterId?: string) => {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const p = new URLSearchParams();
+    if (token) p.set('token', token);
+    if (clusterId) p.set('cluster_id', clusterId);
+    return `${proto}://${window.location.host}/api/v1/node-ssh/session?${p.toString()}`;
+  },
+};
+
+// ── 개별 노드 SSH 터미널 — 접속 전 연결/자격증명 사전 검증 ────────────────────
+export interface NodeSshTestResult {
+  host: string;
+  status: 'ok' | 'error' | 'timeout' | 'auth_error' | 'connect_error';
+  durationMs: number;
+  error?: string | null;
+}
+
+export const nodeSshApi = {
+  test: (body: {
+    host: string; port: number; username: string;
+    password?: string; privateKey?: string;
+  }) => api.post<NodeSshTestResult>('/node-ssh/test', body, { timeout: 30_000 }),
 };
 
 // ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────

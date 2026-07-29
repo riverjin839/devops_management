@@ -248,6 +248,24 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 노드 SSH 터미널 (`/node-ssh`, `/node-ssh/:clusterId`)
+
+- **파일**: `frontend/src/pages/NodeSshPage.tsx` + `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창) + `frontend/src/components/k8s/{NodeSshTerminal,SshTerminalWindow}.tsx` + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
+- **목적 / UX**: 클러스터의 **개별 노드 하나에 SSH 로 붙어 로그인 셸을 그대로** 웹 터미널로 쓴다. k9s 콘솔이 control-plane 의 k9s TUI 만 띄우는 것과 달리 범용 셸이라 `journalctl`·`top`·`vi` 같은 인터랙티브 명령까지 동작한다(tty + resize). 여러 노드에 같은 명령을 돌리는 용도는 `/bulk-exec`, 리소스 TUI 탐색은 `/k9s` 로 안내한다.
+- **UI 구성**:
+  - `ClusterSidebar` — `iconOnly` 단일 선택. 클러스터를 고르면 `/node-ssh/:clusterId` 로 이동하고 대상/자격증명이 초기화된다.
+  - **접속 폼**(연결 전): `타겟 노드` MacCard(이름/IP 검색 + 노드 리스트 — Ready 점·InternalIP·master 배지, 클릭 선택 · 수동 host override(클러스터 밖 서버도 가능) · 사용자 · 포트), `인증·실행` MacCard(비밀번호/Private Key 토글 · **접속 후 실행** 명령(선택) · 연결 / 새 창으로 열기 / **테스트** 버튼 + 연결 테스트 결과 배지).
+  - **터미널**(연결 후): `NodeSshTerminal` → 공용 `SshTerminalWindow`(xterm.js). 드래그 이동 플로팅 창(헤더가 드래그 핸들, CSS `resize` 로 크기 조절 — ResizeObserver 가 자동 리핏), 헤더에 재연결/새 창으로 빼기/전체화면/종료. 색·글꼴은 Settings → 터미널 Appearance 의 활성 프로파일(`useXtermTheme`)을 따른다.
+  - **별도 창(팝업)**: `/node-ssh/popup` — `App.tsx` 가 `AppShell` 바깥으로 분기해 `NodeSshPopupPage` 를 전체창으로 렌더. 접속정보는 URL 대신 `localStorage` 1회용 handoff(`lib/terminalPopout.ts` → `lib/nodeSshPopout.ts`, 팝업이 읽는 즉시 삭제).
+- **Frontend**: `useClusters`, `bulkExecApi.nodeList`(노드 목록 — mc/bulk-exec 와 동일 엔드포인트 재사용), `nodeSshApi.test`(연결 테스트), `k8sStreamUrls.nodeSsh(token, clusterId)`(WS URL), `useTerminalEnvSync`(클러스터 운영등급 → 터미널 프로파일). 자격증명은 서버에 저장하지 않고 세션에서만 사용.
+- **Backend**: 라우터 `backend/app/routers/node_ssh.py`(prefix `/node-ssh`) — WebSocket `GET /node-ssh/session`(전역 `_auth` 미적용, 핸들러가 query token 을 직접 검증 — admin/operator 만), REST `POST /node-ssh/test`(`require_operator`, `ssh_runner.test_connection`). 세션은 공용 `services/ssh_pty.bridge_pty` 가 `ssh_runner.connect_client` → paramiko `invoke_shell`(PTY) 로 열고 stdout/stdin/resize 를 브리지한다(k9s 콘솔과 동일 코드 경로). 노드 목록은 `GET /api/v1/clusters/{id}/node-list`(`bulk_exec.py`) 재사용. 감사 로그 `node.ssh.open`/`node.ssh.close`. `PEP_NODE_SSH_ENABLED=false` 로 비활성화. 전용 DB 모델 없음(휘발성 세션).
+- **핵심 기능**:
+  - 노드 리스트에서 클릭 한 번으로 개별 노드 로그인 셸 접속(비밀번호/Private Key).
+  - 터미널을 열기 전 연결/자격증명만 확인하는 **연결 테스트**(ok/인증 실패/연결 실패/타임아웃 배지).
+  - 접속 후 실행 명령(예: `sudo -i`, `journalctl -u kubelet -f`) 지정, 별도 브라우저 창으로 빼기, 1시간 세션 상한.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 클러스터 추이 (`/cluster-trends`, `/cluster-trends/:clusterId`)
 
 - **파일**: `frontend/src/pages/ClusterTrendsPage.tsx` (+ `components/k8s/NodeMultiSelect.tsx`, `components/common/EmptyState.tsx`, Recharts `LineChart`).
