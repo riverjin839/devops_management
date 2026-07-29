@@ -103,3 +103,28 @@ def test_diff_existing_treats_none_as_empty_string():
     fields = {"title": "t", "content": "c", "kanban_status": "todo",
               "priority": "medium", "jira_status": ""}
     assert _diff_existing(existing, fields) == []
+
+
+def test_build_filter_jql_supports_multiple_projects():
+    """프로젝트도 쉼표로 여러 개 — 컴포넌트/라벨과 같은 방식(개별 또는 조합)."""
+    jql, err = _build_filter_jql(JiraImportRequest(scope="filter", project_key="OPS, INFRA"))
+    assert err == ""
+    assert 'project IN ("OPS", "INFRA")' in jql
+
+
+def test_build_filter_jql_single_project_uses_equals():
+    jql, _ = _build_filter_jql(JiraImportRequest(scope="filter", project_key="OPS"))
+    assert 'project = "OPS"' in jql
+
+
+def test_build_filter_jql_component_only_is_valid():
+    """컴포넌트만 단독으로도 가져올 수 있어야 한다."""
+    jql, err = _build_filter_jql(JiraImportRequest(scope="filter", components=["K8s"]))
+    assert err == ""
+    assert jql.startswith('component IN ("K8s")')
+
+
+def test_build_filter_jql_label_only_is_valid():
+    jql, err = _build_filter_jql(JiraImportRequest(scope="filter", labels=["infra"]))
+    assert err == ""
+    assert jql.startswith('labels IN ("infra")')

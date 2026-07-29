@@ -901,6 +901,14 @@ export const jiraApi = {
     }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
+  provisionDefaults: (workItemId?: string) =>
+    api.get<import('@/types').ProvisionDefaults>('/jira/provision/defaults', {
+      params: workItemId ? { work_item_id: workItemId } : undefined,
+    }),
+  provision: (data: import('@/types').ProvisionRequest) =>
+    api.post<import('@/types').ProvisionResult>('/jira/provision', data, { timeout: 2 * 60_000 }),
+  refreshItem: (itemId: string) =>
+    api.post<import('@/types').JiraImportResult>(`/jira/refresh/${itemId}`),
   createIssue: (data: import('@/types').JiraCreateRequest) =>
     api.post<import('@/types').JiraCreateResult>('/jira/create', data),
   deleteIssue: (key: string) =>

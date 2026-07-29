@@ -520,6 +520,8 @@ export interface JiraConfig {
   ssoLoginUrl?: string;
   /** IdP 로그인 폼의 계정 필드명 (선택) — 자동 추정이 빗나갈 때 지정 (예: empnum). */
   ssoUsernameField?: string;
+  /** Jira Epic Link 커스텀 필드 ID (예: customfield_10008) — 진척률의 Epic 축. */
+  jiraEpicField?: string;
 }
 
 /** SSO 진단 — 백엔드(파드)가 각 진입 경로에서 실제로 본 페이지 요약. */
@@ -664,7 +666,11 @@ export interface WeeklySummary {
 
 export interface WeeklyDetailRow {
   component: string;
+  /** task = Jira Epic, subTask = 그 Epic 아래 이슈(현재 행). */
   task: string;
+  epicKey?: string;
+  epicName?: string;
+  epicUrl?: string;
   subTask: string;
   start: string;
   due: string;
@@ -683,11 +689,26 @@ export interface WeeklyOwnerRow {
   issueSummary: string;
 }
 
+export interface WeeklyProgressRow {
+  category: string;
+  epic: string;
+  epicKey?: string;
+  epicName?: string;
+  epicUrl?: string;
+  plannedRate: number;
+  actualRate: number;
+  achievementRate: number;
+  doneCount: number;
+  inProgressCount: number;
+  totalCount: number;
+}
+
 export interface WeeklyReport {
   periodStart: string;
   periodEnd: string;
   title: string;
   summary: WeeklySummary;
+  progress: WeeklyProgressRow[];
   details: WeeklyDetailRow[];
   owners: WeeklyOwnerRow[];
 }
@@ -712,6 +733,8 @@ export interface WeeklyPublishResult {
 }
 
 export interface WeeklyReportSettings {
+  /** Jira WBS/간트 차트 링크 — 진척률 표 위에 노출. */
+  ganttUrl: string;
   spaceKey: string;
   parentPageId: string;
   titleTemplate: string;
@@ -722,6 +745,8 @@ export interface WeeklyReportSettings {
 
 export interface JiraImportResult {
   status: 'ok' | 'offline' | 'error';
+  /** 실제로 Jira 에 보낸 JQL — 조건 반영 여부를 화면에서 확인. */
+  appliedJql?: string;
   imported: number;
   updated: number;
   skipped: number;
@@ -3919,6 +3944,53 @@ export interface IslandCreatePayload {
   layoutMode?: IslandLayoutMode;
   panels?: IslandPanel[];
   isShared?: boolean;
+}
+
+
+// ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
+export interface ProvisionDefaults {
+  jiraEnabled: boolean;
+  confluenceEnabled: boolean;
+  projectKey: string;
+  issueType: string;
+  priority: string;
+  labels: string[];
+  components: string[];
+  summary: string;
+  description: string;
+  spaceKey: string;
+  parentPageId: string;
+  pageTitle: string;
+  reporter: string;
+  detail: string;
+}
+
+export interface ProvisionRequest {
+  workItemId: string;
+  createJira?: boolean;
+  createConfluence?: boolean;
+  projectKey?: string;
+  issueType?: string;
+  priority?: string;
+  labels?: string[];
+  components?: string[];
+  summary?: string;
+  description?: string;
+  spaceKey?: string;
+  parentPageId?: string;
+  pageTitle?: string;
+  pageBody?: string;
+}
+
+export interface ProvisionResult {
+  status: 'ok' | 'partial' | 'error' | 'offline';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+  jiraDetail: string;
+  confluencePageId?: string | null;
+  confluenceUrl?: string | null;
+  confluenceDetail: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

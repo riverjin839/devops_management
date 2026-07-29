@@ -7,14 +7,14 @@ import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal, JiraProvisionModal } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
-import { useJiraConfig } from '@/hooks/useJira';
+import { useJiraConfig, useJiraRefreshItem, useJiraPush } from '@/hooks/useJira';
 import { Settings2 } from 'lucide-react';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER, KANBAN_COLUMNS } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
@@ -24,7 +24,7 @@ import { useSprints } from '@/hooks/useSprints';
 import { useClusterStore } from '@/stores/clusterStore';
 import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
-import { WorkItem, WorkItemModule, WorkItemType } from '@/types';
+import { WorkItem, WorkItemModule, WorkItemType, JiraFieldChange } from '@/types';
 
 type ViewMode = 'table' | 'calendar' | 'kanban';
 
@@ -267,6 +267,57 @@ export function WorkItemBoardPage() {
   const deleteTask = useDeleteWorkItem();
   const createTask = useCreateWorkItem();
   const toast = useToast();
+  // Jira 연결 업무의 행 단위 동기화 — 다시 가져오기 / 수정 내용 보내기.
+  const jiraRefresh = useJiraRefreshItem();
+  const jiraPush = useJiraPush();
+  const [jiraBusyId, setJiraBusyId] = useState<string | null>(null);
+  // 업무 생성 직후 Jira·Confluence 자동 생성 모달을 띄운다(연동이 켜져 있을 때만).
+  const [provisionItem, setProvisionItem] = useState<WorkItem | null>(null);
+
+  const handleJiraRefresh = async (item: WorkItem) => {
+    setJiraBusyId(item.id);
+    try {
+      const { data } = await jiraRefresh.mutateAsync(item.id);
+      if (data.status !== 'ok') {
+        toast.error('Jira 재가져오기 실패', data.detail);
+        return;
+      }
+      const changed = data.items[0]?.changes ?? [];
+      toast.success(
+        changed.length ? `${item.jiraIssueKey} 갱신됨` : `${item.jiraIssueKey} 변경 없음`,
+        changed.length ? changed.map((c: JiraFieldChange) => c.label || c.field).join(', ') : data.detail,
+      );
+    } catch (err) {
+      toast.error('Jira 재가져오기 실패', formatApiError(err));
+    } finally {
+      setJiraBusyId(null);
+    }
+  };
+
+  const handleJiraPush = async (item: WorkItem) => {
+    setJiraBusyId(item.id);
+    try {
+      const { data } = await jiraPush.mutateAsync({ itemId: item.id, data: { pushFields: true } });
+      if (data.status === 'conflict') {
+        toast.error('Jira 쪽이 더 최신입니다', data.detail);
+        return;
+      }
+      if (data.status !== 'ok') {
+        toast.error('Jira 반영 실패', data.detail);
+        return;
+      }
+      const parts = [
+        data.fieldsUpdated.length ? `필드 ${data.fieldsUpdated.join(', ')}` : '',
+        data.transitioned ? '상태 전이' : '',
+      ].filter(Boolean);
+      toast.success(`${item.jiraIssueKey} 반영 완료`, parts.join(' · ') || data.detail);
+    } catch (err) {
+      toast.error('Jira 반영 실패', formatApiError(err));
+    } finally {
+      setJiraBusyId(null);
+    }
+  };
+
 
   const handleDelete = (item: WorkItem) => setConfirmDelete(item);
   const doDelete = () => {
@@ -705,6 +756,10 @@ export function WorkItemBoardPage() {
                       onDelete={handleDelete}
                       onAddSubItem={handleAddSubItem}
                       onOpenDetail={openTaskDetail}
+                      onJiraRefresh={handleJiraRefresh}
+                      onJiraPush={handleJiraPush}
+                      jiraBusy={jiraBusyId === item.id}
+                      onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
                     />
                   ))}
                   <AddWorkItemRow
@@ -713,7 +768,11 @@ export function WorkItemBoardPage() {
                     defaultClusterId={filterClusterId || undefined}
                     defaultAssignee={filterAssignee || undefined}
                     onCreate={(data) => createTask.mutate(data, {
-                      onSuccess: () => toast.success('업무 등록됨'),
+                      onSuccess: (created) => {
+                        toast.success('업무 등록됨');
+                        // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
+                        if (jiraConfig?.enabled && created?.data) setProvisionItem(created.data);
+                      },
                       onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
                     })}
                   />
@@ -730,6 +789,7 @@ export function WorkItemBoardPage() {
       <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
+      <JiraProvisionModal open={!!provisionItem} onClose={() => setProvisionItem(null)} item={provisionItem} />
 
       <WorkItemFormModal
         open={createOpen}

@@ -914,6 +914,13 @@ def _run_migrations():
         # SSO 폼 로그인이 Jira 와 함께 캡처하는 Confluence 세션 쿠키(secret_box 암호문).
         _safe_add_column("user_jira_credentials", "confluence_cookie_encrypted", "TEXT")
 
+    # work_items: Jira Epic(상위 이슈) — 주간보고 진척률 집계 기준.
+    if "work_items" in inspector.get_table_names():
+        _safe_add_column("work_items", "jira_epic", "VARCHAR(200)")
+        # 업무 생성 시 함께 만든 Confluence 문서 링크.
+        _safe_add_column("work_items", "confluence_page_id", "VARCHAR(50)")
+        _safe_add_column("work_items", "confluence_url", "TEXT")
+
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
         _safe_add_column("batch_jobs", "encrypted_password", "TEXT")

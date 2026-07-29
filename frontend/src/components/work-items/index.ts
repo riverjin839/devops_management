@@ -6,6 +6,8 @@ export { WorkItemReadView } from './WorkItemReadView';
 export { WorkItemTableRow, AddWorkItemRow } from './WorkItemTableRow';
 export { RelatedServiceEntriesSidebar } from './RelatedServiceEntriesSidebar';
 export { JiraPushDialog } from './JiraPushDialog';
+export { JiraProvisionModal } from './JiraProvisionModal';
+export { JiraIssueChip } from './JiraIssueChip';
 export { ColumnSettingsMenu } from './ColumnSettingsMenu';
 export {
   type WorkItemColumnKey,

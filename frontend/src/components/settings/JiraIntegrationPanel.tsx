@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie, LogIn, ShieldCheck, Download, Copy, Stethoscope } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, LogIn, ShieldCheck, Download, Copy, Stethoscope } from 'lucide-react';
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
-  useSaveJiraCredential, useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
+  useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
   useConfluenceTest, useSsoDiagnose,
 } from '@/hooks/useJira';
 import { useAuthStore } from '@/stores/authStore';
+import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
 import { useToast } from '@/components/common';
 import { formatApiError, parseUTC } from '@/lib/utils';
-import type { JiraAuthType, SsoDiagnoseResult } from '@/types';
+import type { SsoDiagnoseResult } from '@/types';
 
 const inputCls =
   'w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground ' +
@@ -22,7 +23,6 @@ export function JiraIntegrationPanel() {
   const { data: config, isLoading: cfgLoading } = useJiraConfig();
   const updateConfig = useUpdateJiraConfig();
   const { data: cred } = useJiraCredential();
-  const saveCred = useSaveJiraCredential();
   const deleteCred = useDeleteJiraCredential();
   const testConn = useJiraTest();
   const confluenceTest = useConfluenceTest();
@@ -50,19 +50,9 @@ export function JiraIntegrationPanel() {
     }
   }, [config]);
 
-  // 사용자 인증 (PAT | 세션 쿠키)
-  const [authType, setAuthType] = useState<JiraAuthType>('pat');
-  const [token, setToken] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [confTestResult, setConfTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [diagResult, setDiagResult] = useState<SsoDiagnoseResult | null>(null);
-
-  // 등록된 자격의 방식을 수동 토글 초기값으로 반영 (SSO 는 별도 버튼이라 토글엔 미반영).
-  useEffect(() => {
-    if (cred?.configured && (cred.authType === 'pat' || cred.authType === 'cookie')) {
-      setAuthType(cred.authType);
-    }
-  }, [cred?.configured, cred?.authType]);
 
   // 파드 내 SSO 폼 자동 로그인 (ID/PW — 브라우저 불필요, K8s 배포 기본 경로)
   const [ssoUser, setSsoUser] = useState('');
@@ -138,24 +128,6 @@ export function JiraIntegrationPanel() {
         defaultProjectKey: defaultProject.trim() || null,
       });
       toast.success('Jira 설정 저장됨');
-    } catch (err) {
-      toast.error('저장 실패', formatApiError(err));
-    }
-  };
-
-  const handleSaveToken = async () => {
-    if (!token.trim()) {
-      toast.error(authType === 'cookie' ? '세션 쿠키를 입력하세요' : '토큰을 입력하세요');
-      return;
-    }
-    try {
-      await saveCred.mutateAsync({ token: token.trim(), authType });
-      setToken('');
-      setTestResult(null);
-      toast.success(
-        authType === 'cookie' ? '내 세션 쿠키 저장됨' : '내 PAT 저장됨',
-        '이제 연결 테스트와 가져오기를 할 수 있습니다.',
-      );
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));
     }
@@ -471,70 +443,9 @@ export function JiraIntegrationPanel() {
           </details>
         </div>
 
-        {/* 또는 수동 등록 (대체) */}
-        <details className="group">
-          <summary className="text-sm font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground mb-3">
-            또는 수동 등록 (PAT · 세션 쿠키)
-          </summary>
+        {/* 수동 등록 — 가져오기 모달과 **같은 공용 카드**를 쓴다(동작이 갈리지 않게). */}
+        <JiraConnectCard />
 
-        {/* 인증 방식 선택 */}
-        <div className="flex items-stretch gap-1.5 mb-3">
-          {([
-            { id: 'pat' as const, label: 'Personal Access Token', icon: KeyRound },
-            { id: 'cookie' as const, label: '세션 쿠키 (수동)', icon: Cookie },
-          ]).map((m) => {
-            const Icon = m.icon;
-            return (
-              <button key={m.id} type="button" onClick={() => { setAuthType(m.id); setToken(''); setTestResult(null); }}
-                aria-pressed={authType === m.id}
-                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                  authType === m.id
-                    ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
-                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                }`}>
-                <Icon className="w-4 h-4" /> {m.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {authType === 'cookie' ? (
-          <div className="space-y-2">
-            <div className="rounded-lg bg-secondary/50 border border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed">
-              <p className="font-medium text-foreground mb-1 flex items-center gap-1.5"><Cookie className="w-3.5 h-3.5" /> 세션 쿠키 얻는 법</p>
-              <ol className="list-decimal list-inside space-y-0.5">
-                <li>사내 브라우저에서 Jira 에 SSO 로그인합니다.</li>
-                <li>개발자 도구(F12) ▸ Network 탭에서 아무 요청이나 클릭 ▸ Request Headers 의 <code className="px-1 rounded bg-background">Cookie</code> 값을 통째로 복사합니다.</li>
-                <li>아래에 붙여넣고 저장 후 <b>연결 테스트</b>로 확인하세요. 세션이 만료되면 다시 등록해야 합니다.</li>
-              </ol>
-              <p className="mt-1.5 text-amber-500 leading-relaxed">
-                ⚠ <b>값만 넣으면 안 됩니다</b> — <code className="px-1 rounded bg-background">JSESSIONID=값</code> 처럼
-                이름까지 포함한 <code className="px-1 rounded bg-background">이름=값</code> 형식이어야 합니다
-                (여러 개면 <code className="px-1 rounded bg-background">;</code> 로 연결). SSO 환경에서는
-                JSESSIONID 하나로 부족한 경우가 많아 <b>Cookie 헤더 전체를 그대로</b> 복사하는 편이 확실합니다.
-              </p>
-            </div>
-            <textarea className={`${inputCls} font-mono text-xs min-h-[76px] resize-y`}
-              placeholder="JSESSIONID=...; atlassian.xsrf.token=...; seraph.rememberme.cookie=..."
-              value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false} />
-            <button onClick={handleSaveToken} disabled={saveCred.isPending}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap">
-              {saveCred.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              세션 쿠키 저장
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input className={inputCls} type="password" placeholder="PAT 붙여넣기" value={token}
-              onChange={(e) => setToken(e.target.value)} autoComplete="off" />
-            <button onClick={handleSaveToken} disabled={saveCred.isPending}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap">
-              {saveCred.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              저장
-            </button>
-          </div>
-        )}
-        </details>
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={handleTest} disabled={testConn.isPending || !cred?.configured}
