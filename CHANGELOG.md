@@ -10,6 +10,24 @@
 
 1.15.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **화면별 노출 관리 (Settings → 접근 제어)**: admin 이 각 화면을 일반 사용자(operator·viewer)에게
+  열지 말지 체크 하나로 결정한다. 기본값은 열림. 비활성화하면 **사이드바 메뉴 숨김 + Your Island
+  화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단 + 직접 URL 접근 차단**이 동시에 적용된다
+  (admin 은 항상 예외). 목록 UI는 Your Island 화면추가 피커와 그룹·검색 렌더링을 공유하는
+  `ScreenCatalogList` 공용 컴포넌트를 재사용했다.
+  Backend: 기존 `feature_access`(`/ui-settings/feature-access`)에 `enabled` 필드를 추가하고,
+  키를 라우트 경로로 통일(레거시 `wbs` 키는 `/wbs` 로 자동 승격).
+  Frontend: `canAccessFeature` 가 모든 라우트 경로에 범용 적용되도록 일반화(기존엔 `/wbs` 하나만
+  하드코딩)했고, 전 라우트에 적용되는 `RouteAccessGate`(`App.tsx`)를 새로 추가해 메뉴에서 숨긴
+  화면을 주소로 직접 열어도 막히게 했다(기존엔 WBS 만 라우트 가드가 있었다).
+
+### Changed
+- WBS(`/wbs`)의 전용 라우트 가드(`RequireFeature`)를 제거하고 위 범용 `RouteAccessGate` 로
+  대체 — 동작은 동일하되 화면별 특수 처리가 사라졌다. Settings "접근 제어" 탭에는 기존 세부
+  역할/사용자 제한(WBS 전용) 위에 새 "화면별 노출" 섹션이 추가돼, 하나의 저장 버튼으로 두
+  설정을 함께 관리한다.
+
 ### Changed
 - **Your Island 진입점 재배치**: 사이드바 최상단(로고 바로 아래)에 있던 버튼을 **푸터 개인 존**
   (테마 아래, 사용자 아이콘 위)으로 옮겼다. 개인 커스터마이즈 기능이 조직 공용 그룹 레일과

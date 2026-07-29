@@ -1123,10 +1123,12 @@ export interface MindMapNodeCreate {
   extra?: Record<string, any>;
 }
 
-// 기능별 접근 제어 — { "<feature>": { roles, users } }
+// 기능별 접근 제어 — { "<라우트 경로>": { roles, users, enabled? } }
 export interface FeatureAccessRule {
   roles: string[];
   users: string[];   // username 또는 display_name
+  /** false 면 admin 외 전체 차단(roles/users 무관, 최우선). 미설정/true = 기본 열림. */
+  enabled?: boolean;
 }
 export type FeatureAccessMap = Record<string, FeatureAccessRule>;
 

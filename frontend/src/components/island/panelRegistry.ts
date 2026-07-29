@@ -135,8 +135,3 @@ export const MAX_PANELS = 20;
 export function isEmbeddable(path: string): boolean {
   return !ISLAND_DENYLIST.has(path) && path in PANEL_COMPONENTS;
 }
-
-/** 패널 경로별로 추가 권한 확인이 필요한 feature 키 (App.tsx 의 RequireFeature 와 동일). */
-export const PANEL_FEATURE_GUARD: Record<string, string> = {
-  '/wbs': 'wbs',
-};

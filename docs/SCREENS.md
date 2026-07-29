@@ -78,7 +78,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 패널(화면) 추가·제거·드래그 순서 변경 — 순서는 서버에 저장돼 기기 간 동기화된다.
   - 팀 공유(읽기 전용) + 복제 — 남의 아일랜드를 복제하면 내 계정의 독립 사본이 된다(`is_shared=False`).
   - 임베드 가능 화면은 `components/island/panelRegistry.ts` 의 `PANEL_COMPONENTS` 에 등록된 것만. `ISLAND_DENYLIST`(`/k9s` 터미널, `/settings`·`/daily-check/settings` admin 전용, `/`·`/island` 자기 자신)와 라우트 파라미터가 필요한 화면(`/services/:key` 등)은 카탈로그에서 제외된다.
-  - `RequireFeature` 와 같은 권한 판정을 패널 렌더 시점에도 적용 — 공유받은 아일랜드에 권한 없는 화면이 있어도 페이지가 깨지는 대신 안내가 나온다.
+  - Settings "접근 제어"(`canAccessFeature`)와 같은 권한 판정을 패널 렌더 시점에도 적용 — 공유받은 아일랜드에 권한 없는 화면이 있어도 페이지가 깨지는 대신 안내가 나온다.
   - 활성 패널은 URL `?panel=<key>` 로 딥링크된다(`?tab=` 은 임베드된 SettingsPage 등이 이미 써서 의도적으로 피함).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -143,7 +143,8 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
-  - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/담당자/접근제어/Jira/백업/감사로그).
+  - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다.
+  - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/담당자/Jira/백업/감사로그).
   - ClusterSidebar 미사용(전역 설정 화면이라 클러스터 단위 필터 없음).
 - **Frontend**: `useClusters()`+`useClusterStore`, `useUpdateCluster()`, `useDeleteCluster()`(`hooks/useCluster.ts`) · `useAssignees()`(담당자 카운트) · `useUiSettings()`/`useUpdateUiSettings()`(`hooks/useUiSettings.ts`) · `useOperationLevels()`(`hooks/useOperationLevels.ts`) · `useHomeStore`(`scheduleBg`) · `useDebugStore`(Debug 탭 토글, localStorage) · `useQuery(['management-servers'], managementServersApi.getAll)` + `useMutation`(`managementServersApi.delete`). 직접 호출 api 함수: `clustersApi.verify`, `managementServersApi.ping/create/update/delete`, `updateClusterMut.mutateAsync`(아이콘 저장 포함).
 - **Backend**: `GET/PUT/DELETE /api/v1/clusters`, `POST /api/v1/clusters/{id}/verify`(`clusters.py`) · `GET/POST/PUT/DELETE /api/v1/management-servers`, ping 엔드포인트(`management_servers.py`) · `GET/PATCH /api/v1/ui-settings`(홈 아이콘 등, `ui_settings.py`, `AppSetting` 모델 기반 key-value 저장: `UI_SETTINGS_KEY`/`OPERATION_LEVELS_KEY`/`ASSIGNEES_KEY`/`FEATURE_ACCESS_KEY`) · 담당자/운영레벨/서비스카탈로그/Jira/백업/감사로그는 각 하위 매니저 컴포넌트가 별도 라우터(`work_item_custom_fields.py`, `jira.py`, `backup.py`, `audit_logs.py` 등) 호출.
@@ -1098,17 +1099,17 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### WBS / 간트 (`/wbs`) — `RequireFeature feature="wbs"` 게이트
+### WBS / 간트 (`/wbs`) — Settings "접근 제어" 게이트
 
 - **파일**: `frontend/src/pages/WbsFlowPage.tsx` (1048줄) (+ `components/wbs/ProjectHeader.tsx`, `ProjectFormModal.tsx`)
-- **목적 / UX**: 프로젝트/작업/이슈를 기간(주/2주/월) 기준 간트 형태로 시각화해 일정 진척을 파악하는 화면. 기능 접근 제어(`RequireFeature`)로 관리자가 허용한 사용자에게만 노출된다.
+- **목적 / UX**: 프로젝트/작업/이슈를 기간(주/2주/월) 기준 간트 형태로 시각화해 일정 진척을 파악하는 화면. 접근 제어는 다른 모든 화면과 동일하게 `App.tsx` 의 `RouteAccessGate`(NAV_MAP 전체에 범용 적용)가 처리 — WBS 전용 라우트 가드는 더 이상 없다. Settings "접근 제어" 탭의 "세부 역할 제한(고급)" 섹션에서 특정 역할/사용자에게만 열어줄 수 있다(기존 유일한 사용례).
 - **UI 구성**:
   - `pageView` 3모드: `project`(프로젝트별 헤더+진척 — `ProjectHeader`), `grid`(담당자×날짜 그리드, 셀 클릭 시 상세 `SidePane`), `personal`(개인별 간트 — `PersonalGanttView`, 부모/자식 작업 들여쓰기 표시)
   - 상단: 기간 뷰 전환(주/2주/월, `ViewModeBar`), 날짜 네비게이션(이전/오늘/다음), 담당자 필터, "진행중만" 토글
   - 요약바(`SummaryBar`): 작업 총계/완료·진행·대기, 작업 진행률(%), 이슈 총계/해결·미해결, 이슈 해결률(%) — 4개 통계 카드
   - `ProjectFormModal`(신규 프로젝트 생성), `DetailModal`(그리드 셀 클릭 시 `SidePane`으로 작업/이슈 상세)
 - **Frontend**: `useProjects`(hooks/useProjects.ts), `useQuery(['wbs-work-items'], workItemsApi.getAll)`(전용 hook 없이 직접 TanStack Query) — task/issue로 클라이언트 분할 후 날짜별 그룹핑. 서버 mutation은 프로젝트 생성/수정(`useCreateProject`/`useUpdateProject`, `ProjectFormModal` 내부)만 사용.
-- **Backend**: `GET /api/v1/projects`, `POST /api/v1/projects` — `backend/app/routers/projects.py` (모델: `backend/app/models/project.py`). `GET /api/v1/work-items` — `work_items.py`. `wbs` 기능 접근권한은 `GET /api/v1/ui-settings/feature-access`(`RequireFeature` 컴포넌트가 내부에서 조회).
+- **Backend**: `GET /api/v1/projects`, `POST /api/v1/projects` — `backend/app/routers/projects.py` (모델: `backend/app/models/project.py`). `GET /api/v1/work-items` — `work_items.py`. 접근 제어는 `GET/PUT /api/v1/ui-settings/feature-access`(`ui_settings.py`, 키는 `/wbs` — 구버전의 `wbs` 키는 `_normalize_feature_access` 가 자동 승격).
 - **핵심 기능**:
   - 주/2주/월 단위 간트 그리드, 오늘 열 하이라이트, 주말 음영
   - 담당자별/프로젝트별/개인별 3가지 보기 모드 전환
