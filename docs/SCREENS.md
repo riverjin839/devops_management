@@ -1025,7 +1025,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
-- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `AddWorkItemRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemFormModal.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`)
+- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `AddWorkItemRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemFormModal.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`)
 - **목적 / UX**: 전사 업무(task/issue/meeting/training/etc)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
 - **UI 구성**:
   - 헤더: 전체/WIP/Done 카운트 배지, 뷰 전환(`ViewModeBar`: 목록/달력/칸반), Jira 가져오기 버튼(`jiraConfig.enabled`일 때만), CSV 추출, 업무 등록 버튼
@@ -1037,7 +1037,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 달력 뷰: `WorkItemCalendar`
   - 모달: `WorkItemFormModal`(신규/하위 등록), `WorkItemCustomFieldsManager`, `JiraImportModal`, `JiraProvisionModal`(Jira 이슈 + Confluence 문서 동시 생성), 삭제 `ConfirmDialog`
 - **Frontend**: `useWorkItems(filters)`, `useCreateWorkItem`, `useDeleteWorkItem`(hooks/useWorkItems.ts, TanStack Query), `useClusters`/`useClusterStore`(Zustand), `useProjects`, `useSprints`, `useJiraConfig`(hooks/useJira.ts). 로컬 state로 뷰모드·필터·정렬·show-time·only-mine(localStorage 영속) 관리. 기본 조회는 로그인 사용자(`useAuthStore` 의 displayName/username)를 담당자 필터로 넣어 **내 업무만** 보여주고, 토글을 끄면 전체가 나온다. `workItemsApi.exportCsv`(axios blob) 직접 호출.
-- **Backend**: `GET /api/v1/work-items`(목록, 필터 쿼리파라미터 snake_case 변환), `POST /api/v1/work-items`, `DELETE /api/v1/work-items/{id}`, `GET /api/v1/work-items/export/csv` — `backend/app/routers/work_items.py`. 프로젝트명/스프린트명 매핑을 위해 `GET /api/v1/projects`(`projects.py`), `GET /api/v1/sprints`(`sprint.py`)도 호출. Jira 가져오기 가능 여부는 `GET /api/v1/jira/config`(`jira.py`). 행 단위 동기화는 `POST /api/v1/jira/refresh/{id}` · `POST /api/v1/jira/push/{id}`, 연계 생성은 `GET /api/v1/jira/provision/defaults` · `POST /api/v1/jira/provision`. 모델: `backend/app/models/work_item.py` (WorkItem).
+- **Backend**: `GET /api/v1/work-items`(목록, 필터 쿼리파라미터 snake_case 변환), `POST /api/v1/work-items`, `DELETE /api/v1/work-items/{id}`, `GET /api/v1/work-items/export/csv` — `backend/app/routers/work_items.py`. 프로젝트명/스프린트명 매핑을 위해 `GET /api/v1/projects`(`projects.py`), `GET /api/v1/sprints`(`sprint.py`)도 호출. Jira 가져오기 가능 여부는 `GET /api/v1/jira/config`(`jira.py`). 행 단위 동기화는 `POST /api/v1/jira/refresh/{id}` · `POST /api/v1/jira/push/{id}`, 연계 생성은 `GET /api/v1/jira/provision/defaults` · `POST /api/v1/jira/provision`. 연결 복구는 `POST /api/v1/jira/unlink/{id}` · `POST /api/v1/jira/relink/{id}` · `POST /api/v1/jira/verify-links`. 모델: `backend/app/models/work_item.py` (WorkItem).
 - **핵심 기능**:
   - 표/달력/칸반 3뷰 전환 및 유형·담당자·분류·우선순위·모듈·스프린트·시작일 범위 복합 필터
   - 컬럼 순서/폭/표시여부 개인화(localStorage) + 헤더 드래그 정렬, 행 드래그(dnd-kit) 순서 저장
@@ -1045,6 +1045,8 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - CSV 추출, Jira 이슈 가져오기(JiraImportModal), 업무 사용자 정의 필드 관리
   - 기본 화면이 로그인 사용자 담당 업무로 필터링됨 ("내 업무" 토글로 해제, localStorage 기억)
   - 행 단위 Jira 재가져오기 / Jira 로 보내기 / Jira·Confluence 연계 생성(Epic·Sub-task 상위 이슈 지정, 기준 조건은 사용자별로 기억)
+  - **Jira 연결 관리**(`JiraLinkDialog`): 연결 해제 · 다른 이슈로 변경(서버가 존재 확인) · 연결 해제+업무 삭제. 재가져오기가 `missing` 이면 사유와 함께 자동으로 열린다. 해제하면 자동 생성(Rocket)이 다시 열려 다른 프로젝트로 재생성할 수 있다
+  - 가져오기 팝업의 **연결 점검** 탭: 내 업무의 Jira 연결 생사를 확인해 죽은 링크를 골라 일괄 해제/삭제
   - 삭제 시 403(본인 등록/담당만 삭제 가능) 등 서버 에러 메시지를 토스트로 구체 노출
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_

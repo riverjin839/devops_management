@@ -913,6 +913,17 @@ export const jiraApi = {
     api.post<import('@/types').JiraCreateResult>('/jira/create', data),
   deleteIssue: (key: string) =>
     api.delete<import('@/types').JiraDeleteResult>(`/jira/issue/${key}`),
+  // 연결 복구 — Jira 이슈는 건드리지 않고 PEP 쪽 연결만 정리/교체한다.
+  unlink: (itemId: string, data?: import('@/types').JiraUnlinkRequest) =>
+    api.post<import('@/types').JiraUnlinkResult>(`/jira/unlink/${itemId}`, data ?? {}),
+  relink: (itemId: string, data: import('@/types').JiraRelinkRequest) =>
+    api.post<import('@/types').JiraRelinkResult>(`/jira/relink/${itemId}`, data),
+  verifyLinks: (allUsers = false) =>
+    api.post<import('@/types').JiraVerifyLinksResult>('/jira/verify-links', undefined, {
+      params: { all_users: allUsers },
+      // 키마다 1콜이라 건수가 많으면 오래 걸린다.
+      timeout: 3 * 60_000,
+    }),
   // 주간보고
   weeklyPreview: (data?: import('@/types').WeeklyReportRequest) =>
     api.post<import('@/types').WeeklyReport>('/jira/weekly-report/preview', data ?? {}),

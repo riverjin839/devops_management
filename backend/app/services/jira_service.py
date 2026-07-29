@@ -281,7 +281,10 @@ class JiraService:
                     f"{self.base_url}/rest/api/2/issue/{key}", headers=self._headers(), params=params
                 )
                 if resp.status_code == 404:
-                    return {"status": "error", "detail": f"이슈 {key} 없음 (404)"}
+                    # missing: 이슈가 지워졌거나 **내 권한으로 안 보이는** 상태 — 둘을 서버가
+                    # 구분할 수 없다. 호출부가 다른 오류와 구분해 사용자 확인을 받도록
+                    # 플래그만 세워 준다(`myself()` 의 auth_failed 와 같은 패턴).
+                    return {"status": "error", "detail": f"이슈 {key} 없음 (404)", "missing": True}
                 if resp.status_code != 200:
                     return {"status": "error", "detail": f"HTTP {resp.status_code}"}
                 return {"status": "ok", "issue": resp.json()}

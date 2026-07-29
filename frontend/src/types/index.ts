@@ -667,6 +667,48 @@ export interface JiraDeleteResult {
   unlinkedWorkItemId?: string | null;
 }
 
+// ── 연결 복구 (해제 / 갈아끼우기 / 고아 점검) ──────────────────────────────────
+// Jira 이슈를 직접 지웠거나 잘못된 프로젝트에 만들었을 때, PEP 에 남은 죽은 링크를
+// 화면에서 정리하기 위한 타입들. Jira 쪽은 건드리지 않는다.
+export interface JiraUnlinkRequest {
+  /** true 면 업무 행 자체도 삭제 (권한은 업무 삭제와 동일 규칙). */
+  deleteWorkItem?: boolean;
+}
+
+export interface JiraUnlinkResult {
+  status: 'ok' | 'error';
+  detail: string;
+  workItemId?: string | null;
+  workItemDeleted: boolean;
+}
+
+export interface JiraRelinkRequest {
+  /** 이슈 키(DL-42) 또는 브라우저 URL(.../browse/DL-42). */
+  keyOrUrl: string;
+}
+
+export interface JiraRelinkResult {
+  status: 'ok' | 'error' | 'offline' | 'missing';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+}
+
+export interface JiraMissingLink {
+  workItemId: string;
+  jiraKey: string;
+  title: string;
+  detail: string;
+}
+
+export interface JiraVerifyLinksResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  checked: number;
+  missing: JiraMissingLink[];
+  truncated: boolean;
+}
+
 // ── 주간보고 ──────────────────────────────────────────────────────────────────
 export interface WeeklySummary {
   total: number;
@@ -756,7 +798,9 @@ export interface WeeklyReportSettings {
 }
 
 export interface JiraImportResult {
-  status: 'ok' | 'offline' | 'error';
+  /** missing — 연결된 이슈를 Jira 에서 찾을 수 없음(삭제됐거나 권한 없음). 자동 정리하지
+   *  않고 화면에서 연결 해제/변경을 고르게 한다. */
+  status: 'ok' | 'offline' | 'error' | 'missing';
   /** 실제로 Jira 에 보낸 JQL — 조건 반영 여부를 화면에서 확인. */
   appliedJql?: string;
   imported: number;

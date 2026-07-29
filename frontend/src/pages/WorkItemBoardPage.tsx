@@ -7,7 +7,7 @@ import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal, JiraProvisionModal } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -297,11 +297,25 @@ export function WorkItemBoardPage() {
   const [jiraBusyId, setJiraBusyId] = useState<string | null>(null);
   // 업무 생성 직후 Jira·Confluence 자동 생성 모달을 띄운다(연동이 켜져 있을 때만).
   const [provisionItem, setProvisionItem] = useState<WorkItem | null>(null);
+  // Jira 연결 관리(해제/변경/삭제) — 재가져오기가 "Jira 에 없음"으로 끝나면 사유와 함께 자동으로 연다.
+  const [linkItem, setLinkItem] = useState<WorkItem | null>(null);
+  const [linkMissingDetail, setLinkMissingDetail] = useState<string | undefined>();
+
+  const openJiraLink = (item: WorkItem, missingDetail?: string) => {
+    setLinkMissingDetail(missingDetail);
+    setLinkItem(item);
+  };
 
   const handleJiraRefresh = async (item: WorkItem) => {
     setJiraBusyId(item.id);
     try {
       const { data } = await jiraRefresh.mutateAsync(item.id);
+      if (data.status === 'missing') {
+        // 이슈가 지워졌거나 권한이 없다 — 토스트로 끝내면 사용자가 할 수 있는 게 없으므로
+        // 연결을 해제/변경할 수 있는 다이얼로그를 바로 띄운다.
+        openJiraLink(item, data.detail);
+        return;
+      }
       if (data.status !== 'ok') {
         toast.error('Jira 재가져오기 실패', data.detail);
         return;
@@ -801,6 +815,7 @@ export function WorkItemBoardPage() {
                       onJiraPush={handleJiraPush}
                       jiraBusy={jiraBusyId === item.id}
                       onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
+                      onJiraLink={(t) => openJiraLink(t)}
                     />
                   ))}
                   <AddWorkItemRow
@@ -831,6 +846,12 @@ export function WorkItemBoardPage() {
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
       <JiraProvisionModal open={!!provisionItem} onClose={() => setProvisionItem(null)} item={provisionItem} />
+      <JiraLinkDialog
+        open={!!linkItem}
+        onClose={() => { setLinkItem(null); setLinkMissingDetail(undefined); }}
+        item={linkItem}
+        missingDetail={linkMissingDetail}
+      />
 
       <WorkItemFormModal
         open={createOpen}

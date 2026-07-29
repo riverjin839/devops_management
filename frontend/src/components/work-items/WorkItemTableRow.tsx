@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket, Link2Off } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
@@ -253,9 +253,11 @@ interface WorkItemTableRowProps {
   jiraBusy?: boolean;
   /** 아직 Jira 와 연결되지 않은 업무 — Jira·Confluence 자동 생성 진입. */
   onJiraProvision?: (item: WorkItem) => void;
+  /** 연결 관리(해제/다른 이슈로 변경/업무 삭제) 다이얼로그 진입. */
+  onJiraLink?: (item: WorkItem) => void;
 }
 
-export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, jiraBusy = false }: WorkItemTableRowProps) {
+export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, onJiraLink, jiraBusy = false }: WorkItemTableRowProps) {
   const fmtDate = showTime ? formatDateTime : formatDate;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
@@ -755,6 +757,16 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                   aria-label={`Jira ${item.jiraIssueKey} 로 보내기`}
                 >
                   <Upload className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {item.jiraIssueKey && onJiraLink && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onJiraLink(item); }}
+                  className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-brand-jira"
+                  title={`Jira 연결 관리 (${item.jiraIssueKey} 해제 · 다른 이슈로 변경)`}
+                  aria-label={`Jira ${item.jiraIssueKey} 연결 관리`}
+                >
+                  <Link2Off className="w-3.5 h-3.5" />
                 </button>
               )}
               <button
