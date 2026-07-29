@@ -12,7 +12,7 @@ interface JiraImportModalProps {
   defaultProjectKey?: string | null;
 }
 
-type Scope = 'me' | 'project' | 'jql';
+type Scope = 'me' | 'project' | 'filter' | 'jql';
 
 const inputCls =
   'w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground ' +
@@ -21,6 +21,7 @@ const inputCls =
 const SCOPES: { id: Scope; label: string; hint: string }[] = [
   { id: 'me', label: '내게 할당된 이슈', hint: 'assignee = currentUser()' },
   { id: 'project', label: '프로젝트 선택', hint: '프로젝트 키로 가져오기' },
+  { id: 'filter', label: '조건 조합', hint: '프로젝트·라벨·컴포넌트·상태' },
   { id: 'jql', label: '직접 JQL', hint: '임의 JQL 입력' },
 ];
 
@@ -31,7 +32,17 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const [scope, setScope] = useState<Scope>('me');
   const [projectKey, setProjectKey] = useState(defaultProjectKey ?? '');
   const [jql, setJql] = useState('');
+  // 조건 조합 (scope='filter') — 콤마 구분 입력.
+  const [labels, setLabels] = useState('');
+  const [components, setComponents] = useState('');
+  const [statuses, setStatuses] = useState('');
+  const [assignee, setAssignee] = useState('');
+  const [sinceDays, setSinceDays] = useState('');
   const [preview, setPreview] = useState<JiraImportResult | null>(null);
+  // 미리보기에서 사용자가 제외한 Jira 키 (기본은 전부 적용).
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+
+  const csv = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
 
   if (!open) return null;
 
@@ -40,10 +51,22 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const run = async (dryRun: boolean) => {
     setPreview(null);
     try {
+      const applicable = (preview?.items ?? [])
+        .filter((it) => it.action !== 'unchanged')
+        .map((it) => it.jiraKey);
       const { data } = await importMut.mutateAsync({
         scope,
-        projectKey: scope === 'project' ? projectKey.trim() : undefined,
+        projectKey: scope === 'project' || scope === 'filter' ? projectKey.trim() : undefined,
         jql: scope === 'jql' ? jql.trim() : undefined,
+        labels: scope === 'filter' ? csv(labels) : undefined,
+        components: scope === 'filter' ? csv(components) : undefined,
+        statuses: scope === 'filter' ? csv(statuses) : undefined,
+        assignee: scope === 'filter' && assignee.trim() ? assignee.trim() : undefined,
+        updatedSinceDays: scope === 'filter' && sinceDays.trim() ? Number(sinceDays) : undefined,
+        // 확정 적용 시, 미리보기에서 제외한 항목은 빼고 보낸다.
+        onlyKeys: !dryRun && excluded.size > 0
+          ? applicable.filter((k) => !excluded.has(k))
+          : undefined,
         dryRun,
       });
       if (data.status !== 'ok') {
@@ -52,6 +75,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
         return;
       }
       setPreview(data);
+      if (dryRun) setExcluded(new Set());
       if (dryRun) {
         toast.info('미리보기 완료', `신규 ${data.imported} · 갱신 ${data.updated} · 건너뜀 ${data.skipped}`);
       } else {
@@ -101,6 +125,43 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
               <input className={inputCls} placeholder="PROJ" value={projectKey} onChange={(e) => setProjectKey(e.target.value)} />
             </div>
           )}
+          {scope === 'filter' && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground mb-1 block">프로젝트 키</span>
+                  <input className={inputCls} placeholder="PROJ" value={projectKey}
+                    onChange={(e) => setProjectKey(e.target.value)} />
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground mb-1 block">라벨 (쉼표)</span>
+                  <input className={inputCls} placeholder="infra, urgent" value={labels}
+                    onChange={(e) => setLabels(e.target.value)} />
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground mb-1 block">컴포넌트 (쉼표)</span>
+                  <input className={inputCls} placeholder="K8s, Network" value={components}
+                    onChange={(e) => setComponents(e.target.value)} />
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground mb-1 block">상태 (쉼표)</span>
+                  <input className={inputCls} placeholder="In Progress, Done" value={statuses}
+                    onChange={(e) => setStatuses(e.target.value)} />
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground mb-1 block">담당자 (선택)</span>
+                  <input className={inputCls} placeholder="jira 계정 또는 currentUser()" value={assignee}
+                    onChange={(e) => setAssignee(e.target.value)} />
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground mb-1 block">최근 N일 변경분</span>
+                  <input className={inputCls} type="number" min={1} placeholder="7" value={sinceDays}
+                    onChange={(e) => setSinceDays(e.target.value)} />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">입력한 조건은 AND 로 묶이고, 쉼표로 나열한 값은 OR 로 처리됩니다.</p>
+            </div>
+          )}
           {scope === 'jql' && (
             <div>
               <span className="text-sm font-medium text-muted-foreground mb-1 block">JQL</span>
@@ -118,16 +179,50 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                 <span className="text-muted-foreground">건너뜀 {preview.skipped}</span>
                 <span className="text-muted-foreground ml-auto">검색 {preview.total}건{preview.truncated ? '+' : ''}</span>
               </div>
-              {preview.dryRun && <p className="text-xs text-muted-foreground mt-1">미리보기 — 아직 저장되지 않았습니다.</p>}
+              {preview.dryRun && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  미리보기 — 아직 저장되지 않았습니다. 아래에서 <b>적용할 항목만 체크</b>한 뒤 "가져오기"를 누르세요.
+                  {excluded.size > 0 && <span className="text-amber-500"> ({excluded.size}건 제외됨)</span>}
+                </p>
+              )}
               {preview.items.length > 0 && (
                 <ul className="mt-2 max-h-40 overflow-y-auto divide-y divide-border/40">
                   {preview.items.map((it) => (
-                    <li key={it.jiraKey} className="py-1 flex items-center gap-2">
-                      <span className={`text-[10px] font-semibold px-1 rounded ${it.action === 'create' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-blue-500/15 text-blue-500'}`}>
-                        {it.action === 'create' ? '신규' : '갱신'}
-                      </span>
-                      <span className="font-mono text-xs text-muted-foreground">{it.jiraKey}</span>
-                      <span className="truncate flex-1">{it.title}</span>
+                    <li key={it.jiraKey} className="py-1">
+                      <div className="flex items-center gap-2">
+                        {preview.dryRun && it.action !== 'unchanged' && (
+                          <input type="checkbox" className="rounded border-border"
+                            checked={!excluded.has(it.jiraKey)}
+                            onChange={(e) => setExcluded((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.delete(it.jiraKey);
+                              else next.add(it.jiraKey);
+                              return next;
+                            })}
+                            aria-label={`${it.jiraKey} 적용 여부`} />
+                        )}
+                        <span className={`text-[10px] font-semibold px-1 rounded ${
+                          it.action === 'create' ? 'bg-emerald-500/15 text-emerald-500'
+                            : it.action === 'update' ? 'bg-blue-500/15 text-blue-500'
+                            : 'bg-secondary text-muted-foreground'
+                        }`}>
+                          {it.action === 'create' ? '신규' : it.action === 'update' ? '갱신' : '변경없음'}
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground">{it.jiraKey}</span>
+                        <span className="truncate flex-1">{it.title}</span>
+                      </div>
+                      {(it.changes?.length ?? 0) > 0 && (
+                        <ul className="ml-6 mt-0.5 space-y-0.5">
+                          {(it.changes ?? []).map((c) => (
+                            <li key={c.field} className="text-[11px] text-muted-foreground">
+                              <span className="font-medium text-foreground">{c.label || c.field}</span>{' '}
+                              <span className="line-through opacity-70">{c.old || '(없음)'}</span>
+                              {' → '}
+                              <span className="text-blue-500">{c.new || '(없음)'}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   ))}
                 </ul>

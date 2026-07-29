@@ -24,7 +24,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.database import Base
 from app.models.cluster import StatusEnum
@@ -106,7 +106,9 @@ class CheckMatrixSchedule(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     item = relationship("CheckMatrixItem", backref="schedules")
-    cluster = relationship("Cluster", backref="check_matrix_schedules")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("check_matrix_schedules", passive_deletes=True))
 
     __table_args__ = (
         UniqueConstraint("item_id", "cluster_id", name="uq_check_matrix_schedule"),
@@ -128,7 +130,9 @@ class CheckMatrixResult(Base):
     checked_at = Column(DateTime, default=datetime.utcnow)
 
     item = relationship("CheckMatrixItem", backref="latest_results")
-    cluster = relationship("Cluster", backref="check_matrix_results")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("check_matrix_results", passive_deletes=True))
 
     __table_args__ = (
         UniqueConstraint("item_id", "cluster_id", name="uq_check_matrix_result"),
@@ -195,7 +199,10 @@ class CheckMatrixRun(Base):
     finished_at = Column(DateTime, nullable=True)
 
     item = relationship("CheckMatrixItem", backref="runs")
-    cluster = relationship("Cluster", backref="check_matrix_runs")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막고 DB 의 ON DELETE CASCADE 에 위임한다(cluster_id 는 NOT NULL 이라 nullify 하면 터진다).
+    # 형제 테이블(schedules/results)과 동일한 정책.
+    cluster = relationship("Cluster", backref=backref("check_matrix_runs", passive_deletes=True))
 
     __table_args__ = (
         Index("ix_check_matrix_runs_cell", "item_id", "cluster_id", "queued_at"),

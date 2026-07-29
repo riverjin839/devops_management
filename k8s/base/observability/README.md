@@ -30,6 +30,22 @@ kubectl -n network-observability create secret generic gnmic-secret --from-liter
 - **운영 kube-prometheus-stack(operator)**: `k8s/base/monitoring/network-quality-servicemonitor.yaml` 의
   ServiceMonitor 가 `component: observability` 라벨을 셀렉트한다.
 
+## PEP Observability 수집기 (`pep-collector-cronjob.yaml`)
+
+위 3개 수집기와는 목적이 다르다 — **PEP 화면(`/observability`)에 지표를 공급하는 push 모드
+수집기**다. PEP 백엔드에서 이 클러스터의 Prometheus 로 HTTP 가 닿지 않을 때만 쓴다
+(닿으면 클러스터 설정을 `pull` 로 두고 이 CronJob 은 배포하지 않는다).
+
+```bash
+kubectl -n monitoring create secret generic pep-ingest --from-literal=token=<ALERT_INGEST_TOKEN>
+# 매니페스트의 PEP_URL / CLUSTER_NAME / PROM_URL / AM_URL 을 환경에 맞게 고친 뒤
+kubectl apply -f k8s/base/observability/pep-collector-cronjob.yaml
+```
+
+5분마다 `rules` / `targets` / `alerts` / `metrics` 스냅샷을
+`POST /api/v1/observability/snapshot/ingest` 로 보낸다. 환경 의존값이 많아 `kustomization.yaml`
+에는 넣지 않았다. 상세는 `docs/OBSERVABILITY_GUIDE.md` §1-2.
+
 ## 장비 측 설정(요약)
 - SNMP: RO 커뮤니티 + ACL 로 collector IP 만 허용.
 - gNMI: `grpc`/`telemetry` 활성 + 구독 경로(OpenConfig) 권한 계정.

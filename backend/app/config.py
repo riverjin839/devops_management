@@ -56,8 +56,16 @@ class Settings(BaseSettings):
     # Alert Channels
     slack_webhook_url: str = ""
 
+    # 인시던트 알람 수신(Alertmanager webhook / 사내 alert-forwarder) Bearer 토큰.
+    # **fail-closed** — 미설정 시 /observability/alerts/ingest 수신 자체를 503 으로 거부한다
+    # (kubewatch_token / superpod_ingest_token 과 동일 정책).
+    alert_ingest_token: str = ""
+
     # Prometheus / Grafana
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
+    # Observability 대시보드의 Alertmanager 전역 기본값. 클러스터별 오버라이드는
+    # clusters.alertmanager_url 이 우선한다.
+    alertmanager_url: str = "http://alertmanager-operated.monitoring.svc:9093"
     grafana_url: str = "http://grafana.monitoring.svc:3000"
     grafana_renderer_url: str = "http://grafana-renderer:8081"
 

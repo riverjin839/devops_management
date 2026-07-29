@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
-  ListTodo, Sparkles,
+  ListTodo, Sparkles, Palmtree,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
   KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug,
 } from 'lucide-react';
@@ -170,7 +170,7 @@ function FlyoutLink({
  *  lucide 가 아닌 값은 FlyoutLink 가 컴포넌트만 받으므로 기본 아이콘으로 폴백한다. */
 function islandFlyoutIcon(icon?: string | null): ComponentType<{ className?: string }> {
   const resolved = resolveClusterIcon(icon);
-  return resolved?.kind === 'lucide' ? resolved.Component : Sparkles;
+  return resolved?.kind === 'lucide' ? resolved.Component : Palmtree;
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -414,21 +414,6 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Your Island — 사용자 커스텀 화면. 홈 바로 아래 최상단 고정.
-            아일랜드가 2개 이상이면 flyout 으로 고르고, 0~1개면 바로 이동한다. */}
-        {currentUser && (
-          <div className="flex items-center justify-center py-2 border-b border-border flex-shrink-0">
-            <RailIconButton
-              label="Your Island"
-              Icon={Sparkles}
-              active={location.pathname.startsWith('/island')}
-              highlighted={!!islandFlyoutAnchor}
-              suppressTooltip={!!islandFlyoutAnchor}
-              onClick={goToIsland}
-            />
-          </div>
-        )}
-
         {/* 전역 뒤로가기 — 홈이 아닐 때만 노출. 어느 화면에서든 이전 화면으로 돌아간다. */}
         {location.pathname !== '/' && (
           <div className="flex items-center justify-center py-2 border-b border-border flex-shrink-0">
@@ -492,6 +477,19 @@ export function Sidebar() {
             }
             onClick={() => setTheme(THEME_CYCLE[theme])}
           />
+          {/* Your Island — 개인 커스텀 화면이라 공용 그룹 레일이 아니라 푸터 개인 존에 둔다
+              (사용자 메뉴 · VOC · 릴리즈 노트와 같은 성격). 아일랜드가 여러 개면 flyout 으로
+              고르고, 0~1개면 바로 이동한다. 발견성은 HomePage 상단 진입 필이 보완한다. */}
+          {currentUser && (
+            <RailIconButton
+              label="Your Island"
+              Icon={Palmtree}
+              active={location.pathname.startsWith('/island')}
+              highlighted={!!islandFlyoutAnchor}
+              suppressTooltip={!!islandFlyoutAnchor}
+              onClick={goToIsland}
+            />
+          )}
           {currentUser && (
             <RailIconButton
               label={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}

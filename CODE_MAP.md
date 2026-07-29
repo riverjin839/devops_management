@@ -32,6 +32,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 연결 검증 + status 반영 | `POST /clusters/{id}/verify` (clusters.py) | `clustersApi.verify` |
 | Cilium 설정 조회 | `GET /clusters/{id}/cilium-config` | `CiliumConfigModal.tsx` |
 | 클러스터 등록 위저드 (3-step) | — | `frontend/src/components/dashboard/AddClusterModal.tsx` |
+| 클러스터 삭제 시 연관 데이터 정리 | `backend/app/services/cluster_purge.py` (cluster_id 보유 테이블 전수 탐색 — 삭제/보존 정책) | `SettingsPage.tsx` 삭제 버튼 |
 | Cluster 모델 (ORM) | `backend/app/models/cluster.py` | `frontend/src/types/index.ts` (Cluster interface) |
 | 경량 마이그레이션 | `_run_migrations()` in `backend/app/main.py` | — |
 
@@ -59,6 +60,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
 | Jira 가져오기/양방향 반영 | `backend/app/routers/jira.py` (`/jira`) | `JiraImportModal.tsx` · `frontend/src/pages/JiraExcelImportPage.tsx` |
 | Jira+Confluence SSO 자동 로그인 / Confluence API | `backend/app/services/jira_sso_http.py`(다중 제품 폼 SSO) · `services/confluence_service.py` · `routers/jira.py` `/jira/sso/*`·`/jira/confluence/*` (401 자동 재로그인 포함) | `components/settings/JiraIntegrationPanel.tsx` |
+| 주간보고 (월~금 집계 → 3개 표 → Confluence 게시) | `backend/app/services/weekly_report_service.py` · `routers/jira.py` `/jira/weekly-report/{preview,publish,settings}` · Celery `dispatch_weekly_report` | `frontend/src/pages/WeeklyReportPage.tsx` (`/weekly-report`) |
+| PEP → Jira 신규 생성 / 삭제 | `routers/jira.py` `POST /jira/create` · `DELETE /jira/issue/{key}` · `services/jira_service.py` `create_issue()`/`delete_issue()` | `hooks/useJira.ts` |
 | 오늘 할일 / 멤버별 업무 | `work_items` 재사용 | `frontend/src/pages/TodoTodayPage.tsx` · `MemberBoardPage.tsx` |
 | 스프린트 / 프로젝트 | `routers/sprint.py` (`/sprints`) · `routers/projects.py` (`/projects`) | `SprintsPage.tsx` 등 |
 | 워크플로우 보드 / WBS·간트 | `backend/app/routers/workflows.py` | `frontend/src/pages/WorkflowBoardPage.tsx` · `WbsFlowPage.tsx` |
@@ -85,6 +88,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/deep_checkers/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔 | `backend/app/routers/ops_check.py` + `services/ops_check_service.py` → `frontend/src/pages/OpsCheckConsolePage.tsx` |
 | K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py` + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
+| Observability 지표 대시보드 (kube-prometheus-stack) | `backend/app/routers/observability.py` + `services/observability/catalog_seed.py` · `services/alertmanager_service.py` · `services/prometheus_service.py`(rules/targets/status) + `models/observability.py` → `frontend/src/pages/ObservabilityPage.tsx` + `components/observability/` |
+| 인시던트 알람 수신 / 인박스 | `backend/app/routers/observability.py`(`ingest_router`) + `services/observability/alert_ingest.py`(Alertmanager v4 · generic 파서) · `alert_router.py`(라우팅·중복억제) + `models/alert_event.py` · `models/alert_notify_rule.py` → `frontend/src/pages/AlertInboxPage.tsx` |
 | Pod 병목 진단 | `backend/app/routers/bottleneck.py` + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |
 
 ### K8s 운영 / 리소스
@@ -116,8 +121,9 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 기능 | 위치 |
 |---|---|
 | LAKE 서비스 + 타입 | `backend/app/routers/lake_services.py` · `lake_service_types.py` + `services/lake_checkers/` → `frontend/src/pages/LakeServicesPage.tsx` · `LakeServiceDetailPage.tsx` |
-| 서비스 카탈로그/허브 | `backend/app/routers/service_entries.py` · `service_categories.py` → `frontend/src/pages/ServicesCatalogPage.tsx` · `ServiceHubPage.tsx` |
+| 서비스 카탈로그/허브 | `backend/app/routers/service_entries.py` · `service_categories.py` → `frontend/src/pages/ServicesCatalogPage.tsx` · `ServiceHubPage.tsx` · 아이콘/색상 출처는 PEP 서비스 타입(`hooks/useServiceCatalog.ts`) |
 | PEP / APP 서비스 | `cluster_items` 등 재사용 → `frontend/src/pages/PepServicesPage.tsx` · `AppServicesPage.tsx` |
+| 관리 서비스 설정 (admin) | Settings `?tab=mgmt-service` → `frontend/src/components/settings/ServiceCategoryManager.tsx`(카테고리) · `LakeServiceTypeManager.tsx`(서비스 타입), 둘 다 `domain` prop |
 | 클러스터 아이템/커스텀 필드 | `backend/app/routers/cluster_items.py` · `cluster_custom_fields.py` |
 
 ### 지식 / 소통

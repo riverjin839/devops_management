@@ -873,6 +873,8 @@ export const jiraApi = {
   deleteCredential: () => api.delete('/jira/credential'),
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   confluenceTest: () => api.post<import('@/types').JiraTestResult>('/jira/confluence/test'),
+  ssoDiagnose: () =>
+    api.post<import('@/types').SsoDiagnoseResult>('/jira/sso/diagnose', undefined, { timeout: 90_000 }),
   // SSO 자동 로그인 — data 지정 시 파드 내 폼 로그인(ID/PW), 생략 시 서버측 브라우저(헤디드).
   // 헤디드 경로는 사용자가 브라우저에서 로그인을 마칠 때까지 기다리므로 타임아웃을 길게(4분).
   ssoLogin: (data?: import('@/types').JiraSsoLoginRequest) =>
@@ -899,6 +901,21 @@ export const jiraApi = {
     }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
+  createIssue: (data: import('@/types').JiraCreateRequest) =>
+    api.post<import('@/types').JiraCreateResult>('/jira/create', data),
+  deleteIssue: (key: string) =>
+    api.delete<import('@/types').JiraDeleteResult>(`/jira/issue/${key}`),
+  // 주간보고
+  weeklyPreview: (data?: import('@/types').WeeklyReportRequest) =>
+    api.post<import('@/types').WeeklyReport>('/jira/weekly-report/preview', data ?? {}),
+  weeklyPublish: (data?: import('@/types').WeeklyPublishRequest) =>
+    api.post<import('@/types').WeeklyPublishResult>('/jira/weekly-report/publish', data ?? {}, {
+      timeout: 2 * 60_000,
+    }),
+  weeklySettings: () =>
+    api.get<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings'),
+  updateWeeklySettings: (data: import('@/types').WeeklyReportSettings) =>
+    api.put<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings', data),
 };
 
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).
@@ -1926,6 +1943,95 @@ export const notificationsApi = {
     api.get<{ data: import('@/types').UserNotification[]; unread: number }>('/notifications/my', { params: { limit } }),
   markRead: (id: string) => api.post(`/notifications/my/${id}/read`),
   markAllRead: () => api.post('/notifications/my/read-all'),
+};
+
+// ── Observability (관측 스택 지표) + 알람 인박스 ──────────────────────────────
+// 주의: 요청 인터셉터는 **body 만** camelCase→snake_case 로 바꾼다(쿼리 파라미터는 그대로
+// 나간다). 그래서 아래 params 는 처음부터 snake_case 로 적는다.
+export const observabilityApi = {
+  modules: () => api.get<import('@/types').ObservabilityModule[]>('/observability/modules'),
+
+  metrics: (module?: string) =>
+    api.get<import('@/types').ObservabilityMetric[]>('/observability/metrics', {
+      params: module ? { module } : undefined,
+    }),
+  createMetric: (data: import('@/types').ObservabilityMetricInput) =>
+    api.post<import('@/types').ObservabilityMetric>('/observability/metrics', data),
+  updateMetric: (id: string, data: Partial<import('@/types').ObservabilityMetricInput>) =>
+    api.put<import('@/types').ObservabilityMetric>(`/observability/metrics/${id}`, data),
+  deleteMetric: (id: string) => api.delete(`/observability/metrics/${id}`),
+
+  metricValues: (module: string, clusterId?: string | null) =>
+    api.get<import('@/types').ObservabilityMetricValuesResponse>('/observability/metrics/values', {
+      params: { module, ...(clusterId ? { cluster_id: clusterId } : {}) },
+    }),
+
+  promRules: (clusterId?: string | null, state?: string, q?: string) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/rules', {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(state && state !== 'all' ? { state } : {}),
+        ...(q ? { q } : {}),
+      },
+    }),
+  promTargets: (clusterId?: string | null, health?: string) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/targets', {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(health && health !== 'all' ? { health } : {}),
+      },
+    }),
+  promActiveAlerts: (clusterId?: string | null) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/active-alerts', {
+      params: clusterId ? { cluster_id: clusterId } : undefined,
+    }),
+
+  // 알람 인박스
+  alerts: (params?: {
+    clusterId?: string | null;
+    severity?: string;
+    status?: string;
+    q?: string;
+    acked?: boolean;
+    limit?: number;
+    offset?: number;
+  }) =>
+    api.get<import('@/types').AlertEventListResponse>('/observability/alerts', {
+      params: {
+        ...(params?.clusterId ? { cluster_id: params.clusterId } : {}),
+        ...(params?.severity && params.severity !== 'all' ? { severity: params.severity } : {}),
+        ...(params?.status && params.status !== 'all' ? { status: params.status } : {}),
+        ...(params?.q ? { q: params.q } : {}),
+        ...(params?.acked !== undefined ? { acked: params.acked } : {}),
+        limit: params?.limit ?? 200,
+        offset: params?.offset ?? 0,
+      },
+    }),
+  alertStats: (clusterId?: string | null, hours = 24) =>
+    api.get<import('@/types').AlertStats>('/observability/alerts/stats', {
+      params: { hours, ...(clusterId ? { cluster_id: clusterId } : {}) },
+    }),
+  ackAlert: (id: string, acked = true) =>
+    api.post<import('@/types').AlertEvent>(`/observability/alerts/${id}/ack`, { acked }),
+  ackAllAlerts: (clusterId?: string | null, severity?: string) =>
+    api.post<{ acked: number }>('/observability/alerts/ack-all', undefined, {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(severity && severity !== 'all' ? { severity } : {}),
+      },
+    }),
+  deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+
+  // 알림 규칙 / 전역 설정
+  alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),
+  createAlertRule: (data: import('@/types').AlertNotifyRuleInput) =>
+    api.post<import('@/types').AlertNotifyRule>('/observability/alert-rules', data),
+  updateAlertRule: (id: string, data: import('@/types').AlertNotifyRuleInput) =>
+    api.put<import('@/types').AlertNotifyRule>(`/observability/alert-rules/${id}`, data),
+  deleteAlertRule: (id: string) => api.delete(`/observability/alert-rules/${id}`),
+  alertSettings: () => api.get<import('@/types').AlertSettings>('/observability/alert-settings'),
+  updateAlertSettings: (data: Partial<import('@/types').AlertSettings>) =>
+    api.put<import('@/types').AlertSettings>('/observability/alert-settings', data),
 };
 
 export const opsCheckApi = {

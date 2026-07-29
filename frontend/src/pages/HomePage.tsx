@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Sun, ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle,
+  Sun, ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
 } from 'lucide-react';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
@@ -15,6 +15,8 @@ import { useClusters } from '@/hooks/useCluster';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useToday } from '@/hooks/useToday';
 import { useHomeStore } from '@/stores/homeStore';
+import { useIslands } from '@/hooks/useIslands';
+import { useIslandStore } from '@/stores/islandStore';
 import type { WorkItem } from '@/types';
 import { cn, parseUTC } from '@/lib/utils';
 import { isMyDueTodo } from '@/lib/workItems';
@@ -69,6 +71,31 @@ function KpiPill({ label, value, hint, Icon, accent, to, isLoading, isError }: K
     </div>
   );
   return to ? <Link to={to}>{body}</Link> : body;
+}
+
+// ── Your Island 진입 필 ──────────────────────────────────────────────────────
+// 사이드바 진입점은 푸터 개인 존으로 내려갔다(공용 그룹 레일과 성격이 달라서). 하단은
+// 발견성이 낮으므로, 로그인 후 첫 화면인 여기 상단 KPI 줄 맨 앞에 진입점을 둔다.
+// KPI 필과 달리 지표가 아니라 "목적지"라 accent 보더로 구분한다.
+function IslandPill() {
+  const { data } = useIslands();
+  const lastIslandId = useIslandStore((s) => s.lastIslandId);
+
+  const mine = data?.data ?? [];
+  const target = mine.find((i) => i.id === lastIslandId) ?? mine[0] ?? null;
+  const to = target ? `/island/${target.id}` : '/island';
+
+  return (
+    <Link to={to} className="flex-shrink-0">
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/5 border border-primary/30 hover:border-primary/60 transition-colors text-xs whitespace-nowrap">
+        <Palmtree className="w-3 h-3 flex-shrink-0 text-primary" />
+        <span className="font-semibold text-primary">
+          {target ? target.name : 'Your Island'}
+        </span>
+        {!target && <span className="text-muted-foreground">만들기</span>}
+      </div>
+    </Link>
+  );
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -130,6 +157,8 @@ export function HomePage() {
 
         {/* KPI pills */}
         <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+          {/* Your Island — KPI 그룹 맨 앞(내 할일 왼쪽). 지표가 아니라 목적지라 accent 로 구분. */}
+          <IslandPill />
           <KpiPill
             label="내 할일"
             value={myName ? myTodayTasks.length : '—'}

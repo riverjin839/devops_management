@@ -8,7 +8,150 @@
 
 ## [Unreleased]
 
-1.16.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.16.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.16.4] - 2026-07-28
+
+### Added
+- **Observability 지표 대시보드** (`/observability`): 클러스터에 깔린 관측 스택의 개별 지표를
+  **dense 리스트 테이블**로 한 화면에서 훑는다. `kube-prometheus-stack` 부터 지원하며
+  Prometheus 서버·Alertmanager·exporter·operator·알람규칙 5개 카테고리 30여 개 지표가 기본
+  등록된다. 지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람 4개 뷰를 탭으로 전환한다.
+  지표 목록·PromQL·임계값은 전부 DB 행이라 **운영자가 화면에서 직접 편집**할 수 있어,
+  배포마다 다른 job 라벨도 코드 수정 없이 맞출 수 있다(`alert-forwarder`/`opensearch-stack`/
+  `fluent-operator` 모듈도 지표를 추가하면 그대로 활성화된다). PEP 에서 클러스터 Prometheus 에
+  닿지 않는 환경을 위해 **pull(직접 조회) / push(in-cluster 수집기 스냅샷)** 두 수집 모드를
+  클러스터별로 고를 수 있고, 화면에 실시간/스냅샷 신선도를 표시한다.
+  Backend: `routers/observability.py`, `services/alertmanager_service.py`,
+  `services/observability/catalog_seed.py`, `models/observability.py`,
+  `PrometheusService.{rules,active_alerts,targets,tsdb_status}`.
+  Frontend: `pages/ObservabilityPage.tsx`, `components/observability/`.
+- **인시던트 알람 PEP 수신 + 알람 인박스** (`/alerts`): 그동안 사내 메신저(cube)로만 가던
+  인시던트 알람을 PEP 도 함께 받는다. **Alertmanager webhook 과 사내 alert-forwarder 를 모두
+  수용**하며(표준 v4 포맷 우선, 임의 JSON 은 generic 파서가 정규화), 수신 엔드포인트는
+  `ALERT_INGEST_TOKEN` Bearer 로 **fail-closed**(미설정 시 503)다. 같은 알람이 반복 수신되면
+  행이 늘지 않고 반복 수(×N)만 올라가고, firing → resolved 상태 전이도 반영된다. 화면에서는
+  심각도를 색 바·배경 그라데이션·글자 굵기로 구분하고, 확인(ack)·일괄 확인·원본 페이로드
+  열람을 제공한다. 상단의 "알람 수신 설정 방법" 안내에서 Alertmanager receiver YAML 을 그대로
+  복사해 붙여넣을 수 있다.
+  Backend: `routers/observability.py`(`ingest_router`), `services/observability/alert_ingest.py`,
+  `models/alert_event.py`. Frontend: `pages/AlertInboxPage.tsx`.
+- **알림 라우팅 규칙 + 중복 억제** (`/alerts` → 알림 규칙): 알람을 **전체 브로드캐스트 /
+  담당자 지정 / 알림 없이 인박스만** 중에서 고를 수 있고, 클러스터·알람명·네임스페이스·라벨·
+  최소 심각도 매처로 규칙을 만들어 담당자를 매핑한다. **중복 억제**로 같은 알람이 창(기본 5분)
+  안에서 쏟아져도 개인 알림은 1건만 생성되며, 요약 모드는 기존 알림 문구를 "최근 5분간 10회"로
+  갱신한다. 규칙에서 심각도 재정의도 가능하다. 전역 기본값(알림 대상·최소 심각도·억제 창·
+  보존일)은 Settings 없이 같은 화면에서 편집한다.
+  Backend: `models/alert_notify_rule.py`, `services/observability/alert_router.py`.
+
+### Fixed
+- **전체 공지 알림이 아무에게도 보이지 않던 문제**: `recipient="all"` 공유 행으로 만든 알림을
+  조회 쪽(`notifications._me_ids`)이 매칭하지 않아, critical K8s 이벤트 알림이 실제로는 누구의
+  알림 종에도 뜨지 않았다. 이제 생성 시점에 **활성 사용자별 개인 행으로 팬아웃**한다
+  (`services/user_notify.notify_broadcast`) — 읽음 처리도 개인별로 정확히 동작한다.
+### Changed
+- **Settings 서비스 설정 통합 — "서비스 카테고리" 탭 폐지, "관리 서비스"로 일원화**: 서로
+  중복되던 두 탭을 하나로 합쳤다. 최상위 "서비스 카테고리" 탭이 사라지고, "관리 서비스" 탭이
+  **PEP 서비스 / APP 서비스** 두 탭으로만 구성된다. 각 탭 안에서 해당 도메인의 카테고리와
+  서비스 타입을 한 화면에서 관리하므로, 카테고리를 만들려고 다른 탭으로 이동할 필요가 없다.
+  기존 "서비스 타입" / "서비스 카탈로그" 서브탭 구분도 제거했다. 레거시 딥링크
+  (`?tab=service`, `?tab=service-categories`)는 `?tab=mgmt-service` 로 리다이렉트된다.
+  Frontend: `ServiceCategoryManager`/`LakeServiceTypeManager` 가 `domain` prop 을 받도록 변경,
+  각 컴포넌트 내부의 도메인 탭·도메인 select 제거.
+- **서비스 카탈로그를 PEP 서비스로 머지**: 서비스 아이콘·색상 정의가 `ui_settings.serviceCatalog`
+  와 PEP 서비스 타입 두 곳으로 갈라져 있던 것을 **PEP 서비스 한 곳**으로 합쳤다. `/services`
+  지식 카탈로그와 업무/이슈의 서비스 태그가 이제 PEP 서비스의 아이콘·색상을 그대로 사용한다.
+  이름이 겹치던 서비스(Kubernetes/Keycloak/Nexus/Prometheus/Grafana/Cilium)는 PEP 서비스 쪽
+  정의로 통일하고 색상만 이어받으며, 카탈로그에만 있던 Jenkins/ArgoCD/etcd/Hubble/Ingress/
+  Storage 는 PEP 서비스에 자동 추가된다. Backend: `lake_service_types.color` 컬럼 추가,
+  부팅 시 1회성 머지(`_merge_service_catalog_into_pep_types`), `ui_settings.service_catalog`
+  필드 폐지.
+
+## [1.16.3] - 2026-07-28
+
+### Added
+- **주간보고 자동 생성 + Confluence 게시** (`/weekly-report`): 한 주(월~금)의 업무를 집계해
+  ① 전체 요약(전체/진행중/완료/지연/비고) ② 구분별 상세(구분·task·sub task·시작일·종료
+  예정일·종료일·상태·이슈·비고) ③ 담당자별(task·담당자·주요 추진업무·issue 요약) **3개 표**로
+  보여주고, 그대로 Confluence 페이지로 게시한다. 저장 위치(스페이스·상위 페이지·제목)는 게시
+  때마다 바꿀 수 있고, 같은 제목이면 새 버전으로 갱신된다. 관리자는 cron(기본 금 17:00)으로
+  **자동 생성·게시**를 켤 수 있다. Backend: `services/weekly_report_service.py`,
+  `POST /jira/weekly-report/{preview,publish}`, `GET/PUT /jira/weekly-report/settings`,
+  Confluence `upsert_page()`, Celery `weekly-report-dispatcher`.
+- **Jira 다중 조건 가져오기**: 프로젝트 키에 더해 **라벨 · 컴포넌트 · 상태 · 담당자 · 최근 N일
+  변경분**을 조합해 가져올 수 있다(입력한 조건은 AND, 쉼표로 나열한 값은 OR). 가져오기 모달에
+  "조건 조합" 범위가 추가됐다.
+- **재가져오기 변경 확인**: 미리보기가 Jira 기준으로 **바뀌는 필드만 old → new 로** 보여주고,
+  변경 없는 항목은 "변경없음"으로 구분한다. 체크박스로 **적용할 항목만 선택**해 반영할 수 있다.
+- **PEP → Jira 신규 생성 / 삭제**: 업무를 Jira 이슈로 생성해 자동 연결하고(`POST /jira/create`),
+  Jira 이슈를 삭제하면 PEP 업무는 보존한 채 연결만 해제한다(`DELETE /jira/issue/{key}`).
+
+### Fixed
+- **수동 등록 세션 쿠키로는 Confluence 가 인증되지 않던 문제**: Confluence 는 SSO 로그인이 따로
+  캡처한 쿠키만 보고 있어, 세션 쿠키를 수동 등록한 사용자는 Confluence 테스트가 항상 실패했다.
+  이제 Confluence 전용 세션이 없으면 **Jira 자격으로 폴백**하고(SiteMinder 류는 SMSESSION 이
+  상위 도메인 공용), 통하면 Confluence 세션으로 승격 저장한다.
+
+### Added
+- **SSO 진단에 파드 출발지 IP 표시**: SSO/보안 에이전트가 클라이언트 IP 를 검사하는 구성인지
+  판단하고 허용 목록에 등록할 IP 를 확인할 수 있도록, 진단 결과에 이 파드의 호스트명과
+  대상 서버로 나갈 때의 출발지 IP 를 함께 보여준다(K8s 는 보통 노드 IP 로 NAT 되므로 노드가
+  여러 대면 파드마다 달라질 수 있다는 점이 중요한 단서다).
+- **CA SiteMinder 계열 SSO 지원**: `SMENC`/`SMLOCALE`/`TARGET`/`SMAUTHREASON` 필드를 쓰는
+  SiteMinder(Layer7) 로그인 폼에서, 인증 후 목적지(`TARGET`)가 **로그인 페이지 자신**을
+  가리키면 제품 URL 로 교정한다 — 교정 전에는 인증에 성공해도 로그인 화면으로 되돌아와
+  "자격 오류"로 오판됐다.
+- **로그인 직후 안내 페이지 통과**: "세션 유효기간 안내"처럼 로그인 뒤 끼어드는 페이지의
+  `확인/계속` 버튼(hidden 없는 폼)과 링크를 자동으로 따라간다.
+- **SSO 계정 필드명 지정** (공통 설정): 사번(empnum) 로그인처럼 IdP 로그인 폼의 계정 칸
+  이름이 특수한 경우, 자동 추정 대신 필드명을 직접 지정할 수 있다. SSO 진단 표에도
+  **계정 필드** 열이 추가되어 백엔드가 어느 칸에 아이디를 넣는지 확인할 수 있다.
+
+### Fixed
+- **비밀번호가 빈 값으로 전송되던 문제 (SiteMinder 계열)**: 로그인 폼이 화면 입력과 **별개로
+  비어 있는 hidden 자격 필드**(`PASSWORD` 등)를 두고 브라우저 JS 가 그것을 채우는 구성이 있다.
+  서버가 hidden 쪽을 읽으면 우리는 빈 비밀번호를 보낸 셈이 되어, 오류 문구 없이 로그인 폼만
+  다시 표시됐다. 이제 값이 비어 있는 자격용 hidden 필드도 함께 채운다(값이 있는 상태 hidden 은
+  그대로 보존).
+- **보안 에이전트 설치 페이지로 새면서 로그인이 끊기던 문제**: 로그인 페이지가 에이전트
+  미설치 시 설치 안내(`/tray/view/install.do` 등)로 보내는 스크립트를 함께 갖고 있으면
+  그쪽을 따라가 흐름이 끝났다. 이제 설치/다운로드성 URL 은 건너뛰고 다음 후보를 쓴다.
+- **인증에 성공했는데도 실패로 처리하던 문제**: 로그인 폼이 다시 보이면 즉시 거부로 단정했으나,
+  이제 **세션을 먼저 확인**해 실제로 로그인됐으면 성공으로 처리한다.
+- **`<select>`/`<textarea>` 필드를 제출에서 빠뜨리던 문제**: 폼 파서가 `<input>`/`<button>` 만
+  수집해, 도메인 선택 같은 필수 값이 누락되면 IdP 가 흐름을 되감았다.
+- **SSO 로그인 실패 사유에 로그인 페이지의 상시 안내문이 오류로 표시되던 문제**: "비밀번호
+  5회 이상 입력 오류 시 계정이 잠깁니다" 같은 **정적 안내 문구**를 IdP 오류 메시지로 오인해
+  보고했다. 이제 자격 제출 **직전 페이지와 비교해 새로 생긴 문구만** 오류로 판단하며, 새
+  문구가 없으면 "같은 로그인 폼이 다시 표시됨(새 오류 문구 없음)"으로 구분해 안내한다.
+  실패 메시지에 **계정을 채운 필드명**도 함께 표시해 필드 오선택을 바로 확인할 수 있다.
+- **계정 칸 앞에 다른 텍스트 입력이 있으면 엉뚱한 칸에 아이디를 넣던 문제**: 알려진 계정
+  필드명(사번 계열 `empnum`/`empno`/`sabun` 등 포함)을 우선 매칭하도록 보완.
+
+## [1.16.2] - 2026-07-28
+
+### Fixed
+- **클러스터 삭제 시 점검 수행 로그(check_matrix_runs) 때문에 삭제가 실패하던 문제**:
+  `CheckMatrixRun.cluster` 관계에 `passive_deletes=True` 가 빠져 있어, 클러스터를 삭제하면
+  ORM 이 NOT NULL 인 `check_matrix_runs.cluster_id` 를 NULL 로 UPDATE 하려다 터졌다. 형제
+  테이블(schedules/results)과 동일하게 DB 의 `ON DELETE CASCADE` 에 위임하도록 수정.
+  회귀 가드(`test_cluster_backrefs_never_nullify_not_null_fk`)가 잡아낸 CI 실패 해소.
+
+## [1.16.1] - 2026-07-28
+
+### Fixed
+- **등록된 클러스터 삭제 실패 (`NotNullViolation: cluster_id of relation
+  check_matrix_results`)**: 연결이 안 된(pending) 클러스터를 포함해 클러스터 삭제가 500 으로
+  실패하던 문제를 고쳤다. 원인은 두 가지 — ① 자식 모델의 `backref` 기본 cascade 에 delete 가
+  없어 SQLAlchemy 가 부모 삭제 시 자식의 `cluster_id` 를 NULL 로 UPDATE(NOT NULL 컬럼이라
+  위반), ② 삭제 라우터가 정리 대상 테이블을 손으로 나열해 모델이 추가될 때마다 누락. Backend:
+  신규 `services/cluster_purge.py` 가 메타데이터에서 `cluster_id` 보유 테이블 32개를 전수
+  탐색해 FK 의존성 순서대로 정리하고(업무·서비스 카탈로그·서버 스펙은 연결만 해제),
+  Cluster 쪽 `backref` 7곳에 `passive_deletes=True` 를 적용해 nullify UPDATE 를 차단했다.
+  삭제 실패 시 원인 테이블이 담긴 에러 메시지를 반환하고, kubeconfig 파일 삭제는 DB 커밋
+  성공 후로 옮겨 실패 시 파일만 사라지는 문제도 없앴다. 다중 대상 업무의
+  `cluster_ids`/`cluster_names` 에서도 삭제된 클러스터를 제거하고 대표를 승격한다.
+  신규 회귀 테스트 `tests/test_cluster_deletion.py` 가 정리 정책 누락과 nullify 를 CI 에서 막는다.
 
 ### Added
 - **점검 매트릭스 — 실행 방식 공개 + 수동 실행 3단위 + 수행 로그** (홈 ▸ 플랫폼 현황):
@@ -124,8 +267,51 @@
 - **Jira/Confluence 세션 만료 시 자동 재로그인**: "로그인 정보 저장" 옵트인 사용자는 API 호출
   중 세션 만료(401)가 감지되면 저장된 SSO 로그인 정보로 **자동 재로그인 후 재시도**된다 —
   최초 1회 로그인 후에는 세션이 끊겨도 연결 테스트/가져오기/push 가 무중단으로 이어진다.
+- **SSO 진단** (`POST /jira/sso/diagnose`): 로그인이 실패할 때 **백엔드 파드가 실제로 보는
+  로그인 페이지**(최종 URL·HTTP 상태·폼/password 입력 개수·JS·meta 리다이렉트 대상·
+  WWW-Authenticate)를 표로 보여준다. 폐쇄망 IdP 는 외부에서 열어볼 수 없어 원인 추정이
+  어렵던 문제를 해결한다. 설정 ▸ 연동에 "SSO 진단" 버튼 추가.
+- **IdP 로그인 URL 직접 지정** (공통 설정): 자동 탐색이 실패하는 SSO 구성을 위해 브라우저에서
+  확인한 IdP 로그인 페이지 주소(예: `https://login.example.com/sso/am/jira/login.jsp`)를
+  지정하면 SSO 로그인이 그 주소부터 진입한다.
+
+### Fixed
+- **SSO 자동 로그인이 "로그인 폼을 찾지 못했습니다"로 실패하던 문제**: 기존 구현은 Jira
+  루트(`/`) 한 곳만 확인해, ① 익명 접근이 열려 루트가 대시보드를 주는 배포 ② IdP 중계가
+  HTTP 302 가 아니라 `<meta refresh>`/`location.href` 같은 **클라이언트 리다이렉트**로
+  이뤄지는 배포(사내 SSO 게이트웨이 hook)에서 IdP 로그인 페이지에 도달하지 못했다. 이제
+  **여러 진입 경로**(루트·로그인 페이지·보호 자원)를 시도하고 **JS/meta 리다이렉트를
+  추적**하며, IdP 에서 먼저 로그인하는 구성(OpenAM/SiteMinder 류)을 위해 로그인 후 제품
+  재진입으로 토큰 교환까지 마친다. 폼 탐색이 모두 실패하면 **Jira REST 세션 로그인**
+  (`/rest/auth/1/session`)과 **제품 자체 로그인 폼** POST 로 폴백한다. 비밀번호 오답은
+  즉시 중단해 AD 계정 잠금을 방지한다. `<button type=submit>` 폼과 `Accept: text/html`
+  요청 헤더도 함께 보완.
+- **OpenAM 계열 SSO 에서 올바른 계정인데 "비밀번호가 올바르지 않습니다"로 실패하던 문제**:
+  로그인 폼에 `encoded=true` hidden 필드가 있으면 브라우저 스크립트가 계정/비밀번호를
+  **base64 로 인코딩해 제출**한다. 평문으로 보내면 IdP 가 로그인 폼을 다시 표시해 오답과
+  구분되지 않았다. 이제 해당 폼은 자동으로 base64 인코딩해 제출한다. 함께 보완: 폼 제출 시
+  `Referer`/`Origin` 헤더 전송(CSRF 방어로 흐름이 되감기던 배포 대응), `IDToken1` 을 계정
+  필드로 인식, **다단계 로그인**(계정 화면 → 비밀번호 화면)을 폼 재표시로 오판하지 않도록
+  폼 필드 구성 비교로 구분.
+- **로그인 실패 사유가 항상 "아이디 또는 비밀번호가 올바르지 않습니다"로 뭉개지던 문제**:
+  이제 IdP 가 화면에 표시한 오류 문구를 그대로 전달하고, 오류 문구가 없으면 "같은 로그인
+  폼이 다시 표시됨 — 자격 오류이거나 추가 인증 단계 요구"로 구분해 안내한다. SSO 진단에도
+  폼의 hidden 필드 목록을 노출해 `encoded=true` 같은 단서를 확인할 수 있다.
+- **수동 세션 쿠키 등록 시 값만 붙여넣으면 인증되지 않던 문제**: `JSESSIONID=<값>` 이 아니라
+  값만 넣으면 `Cookie` 헤더에 이름이 없어 서버가 익명으로 취급해 401 이 됐다. 이제 이름이
+  없는 입력은 `JSESSIONID=` 를 자동으로 붙이고, 앞에 붙은 `Cookie:` 접두어도 제거한다.
+  입력 안내 문구에도 형식 경고를 추가.
 
 ## [1.15.1] - 2026-07-28
+
+### Changed
+- **Your Island 진입점 재배치**: 사이드바 최상단(로고 바로 아래)에 있던 버튼을 **푸터 개인 존**
+  (테마 아래, 사용자 아이콘 위)으로 옮겼다. 개인 커스터마이즈 기능이 조직 공용 그룹 레일과
+  같은 줄기로 읽히던 문제를 없애고, 사용자 메뉴·VOC·릴리즈 노트와 같은 성격끼리 묶었다.
+  푸터는 발견성이 낮으므로 **홈 상단 KPI 필 그룹 맨 앞("내 할일" 바로 왼쪽)에 진입 필**을
+  추가해 보완한다(마지막에 보던 아일랜드로 이동, 없으면 "만들기"). 아이콘은 `Sparkles` →
+  `Palmtree` — 기본 테마의 테마 토글 아이콘이 `Sparkles` 라 푸터에서 나란히 놓이면
+  구분되지 않았다.
 
 ### Added
 - **Your Island 편집 기능 보강**: 관리 패널에서 **아일랜드 순서를 드래그로 변경**할 수 있고

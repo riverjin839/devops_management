@@ -24,7 +24,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.database import Base
 from app.models.cluster import StatusEnum
@@ -69,7 +69,9 @@ class DeepCheckDefinition(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    cluster = relationship("Cluster", backref="deep_check_definitions")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("deep_check_definitions", passive_deletes=True))
 
     def __repr__(self) -> str:
         return f"<DeepCheckDefinition(name={self.name}, type={self.check_type})>"
@@ -109,7 +111,9 @@ class DeepCheckResult(Base):
 
     checked_at = Column(DateTime, default=datetime.utcnow)
 
-    cluster = relationship("Cluster", backref="deep_check_results")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("deep_check_results", passive_deletes=True))
 
     def __repr__(self) -> str:
         return (

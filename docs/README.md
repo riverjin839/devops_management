@@ -14,6 +14,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) — 데이터 백업·복구(JSON export/import, merge/replace)
 - [DEEP_CHECKER_GUIDE.md](DEEP_CHECKER_GUIDE.md) — Deep Check 점검 프레임워크(체커 16종, in-cluster CronJob) 가이드
 - [CHECK_MATRIX_GUIDE.md](CHECK_MATRIX_GUIDE.md) — **점검 매트릭스 운영 매뉴얼**(홈 ▸ 플랫폼 현황): deep check/addon/수동입력 구현 방식, 셀·클러스터·항목 단위 실행, 수행 로그·런북
+- [OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md) — **관측 스택 대시보드 · 인시던트 알람 수신**(Alertmanager receiver 설정, pull/push 수집 모드, 알림 라우팅·중복 억제, 모듈 확장법)
 - [K8S_OPS_CHECKLIST.md](K8S_OPS_CHECKLIST.md) — K8s 운영 점검 체크리스트
 - [PROJECT_FLOW_GUIDE.md](PROJECT_FLOW_GUIDE.md) — 요청/작업 흐름
 - [SERVICE_TOPOLOGY_GUIDE.md](SERVICE_TOPOLOGY_GUIDE.md) — 서비스 토폴로지(서비스 디스커버리) 사용 가이드

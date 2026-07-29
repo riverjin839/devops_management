@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 from app.database import Base
 from app.models.cluster import StatusEnum
 import enum
@@ -69,7 +69,9 @@ class DailyCheckLog(Base):
     ai_generated_at = Column(DateTime, nullable=True)
 
     # Relationships
-    cluster = relationship("Cluster", backref="daily_check_logs")
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("daily_check_logs", passive_deletes=True))
 
     def __repr__(self):
         return f"<DailyCheckLog(cluster_id={self.cluster_id}, schedule={self.schedule_type}, status={self.overall_status})>"
