@@ -221,3 +221,57 @@ export function themeToCss(
   if (fontFamily) style.fontFamily = fontFamily;
   return style;
 }
+
+// ── xterm.js (SSH 웹 터미널) 연동 ────────────────────────────────────────────
+// LogViewer 는 CSS 변수를 그대로 쓸 수 있지만 xterm.js 는 캔버스에 직접 그리므로
+// **리터럴 색상만** 받는다. 기본 팔레트의 bg/fg 는 빈 문자열(테마 클래스에 위임),
+// muted 는 `hsl(var(--muted-foreground))` 같은 CSS 변수라 그대로 넘기면 xterm 이
+// 파싱에 실패한다 — 리터럴이 아니면 아래 폴백 색으로 대체한다.
+
+/** xterm 은 다크 배경을 전제로 렌더하므로 팔레트가 bg/fg 를 비워두면 이 값을 쓴다. */
+export const XTERM_FALLBACK_BG = '#18181b';
+export const XTERM_FALLBACK_FG = '#e4e4e7';
+const XTERM_FALLBACK_MUTED = '#71717a';
+
+/** `#rgb` / `rgb()` / 색상 키워드처럼 xterm 이 해석 가능한 리터럴인가 (CSS 변수 배제). */
+function literalColor(value: string | undefined, fallback: string): string {
+  const v = (value || '').trim();
+  if (!v || v.includes('var(')) return fallback;
+  return v;
+}
+
+/** 팔레트 → xterm.js `ITheme` 형태의 색상 맵. */
+export function paletteToXtermTheme(palette: TerminalPalette): Record<string, string> {
+  const bg = literalColor(palette.bg, XTERM_FALLBACK_BG);
+  const fg = literalColor(palette.fg, XTERM_FALLBACK_FG);
+  const muted = literalColor(palette.muted, XTERM_FALLBACK_MUTED);
+  const red = literalColor(palette.red, '#ef4444');
+  const green = literalColor(palette.green, '#10b981');
+  const amber = literalColor(palette.amber, '#f59e0b');
+  const sky = literalColor(palette.sky, '#0ea5e9');
+  const purple = literalColor(palette.purple, '#c084fc');
+  const cyan = literalColor(palette.cyan, '#06b6d4');
+  return {
+    background: bg,
+    foreground: fg,
+    cursor: fg,
+    cursorAccent: bg,
+    selectionBackground: sky,
+    black: bg,
+    red,
+    green,
+    yellow: amber,
+    blue: sky,
+    magenta: purple,
+    cyan,
+    white: fg,
+    brightBlack: muted,
+    brightRed: red,
+    brightGreen: green,
+    brightYellow: amber,
+    brightBlue: sky,
+    brightMagenta: purple,
+    brightCyan: cyan,
+    brightWhite: fg,
+  };
+}

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { checkMatrixApi } from '@/services/api';
-import type { CheckMatrixItemInput } from '@/types';
+import type { CheckMatrixItemInput, CheckMatrixSourceConfigEntry } from '@/types';
 
 export const checkMatrixKeys = {
   items: ['checkMatrixItems'] as const,
@@ -8,7 +8,20 @@ export const checkMatrixKeys = {
   history: (itemId: string, clusterId: string, days: number) =>
     ['checkMatrixHistory', itemId, clusterId, days] as const,
   settings: ['checkMatrixSettings'] as const,
+  runbook: (itemId: string, clusterId: string) =>
+    ['checkMatrixRunbook', itemId, clusterId] as const,
+  runs: (filter: CheckMatrixRunFilter) => ['checkMatrixRuns', filter] as const,
+  run: (runId: string) => ['checkMatrixRun', runId] as const,
 };
+
+export interface CheckMatrixRunFilter {
+  itemId?: string;
+  clusterId?: string;
+  batchId?: string;
+  trigger?: string;
+  limit?: number;
+  offset?: number;
+}
 
 export function useCheckMatrixItems() {
   return useQuery({
@@ -130,5 +143,98 @@ export function useUpdateCheckMatrixSettings() {
   return useMutation({
     mutationFn: (retentionDays: number) => checkMatrixApi.putSettings(retentionDays),
     onSuccess: () => qc.invalidateQueries({ queryKey: checkMatrixKeys.settings }),
+  });
+}
+
+// ── 실행 계획(런북) ─────────────────────────────────────────────────────────
+/** 셀이 대상 클러스터에서 실제로 도는 명령·단계. 정의/애드온 등록 상태에 따라 바뀌므로
+ *  모달을 열 때마다 새로 받되, 열려 있는 동안은 캐시를 재사용한다. */
+export function useCheckMatrixRunbook(
+  itemId: string | undefined,
+  clusterId: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: checkMatrixKeys.runbook(itemId || '', clusterId || ''),
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.getCellRunbook(itemId!, clusterId!);
+      return data;
+    },
+    enabled: enabled && !!itemId && !!clusterId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/** 소스 설정(deep_check thresholds/params · addon config) 저장 — 런북과 그리드를 새로 그린다. */
+export function useUpdateSourceConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, clusterId, entries }: {
+      itemId: string; clusterId: string; entries: CheckMatrixSourceConfigEntry[];
+    }) => checkMatrixApi.putSourceConfig(itemId, clusterId, entries).then((r) => r.data),
+    onSuccess: (_, { itemId, clusterId }) => {
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.runbook(itemId, clusterId) });
+      // 글로벌 정의 수정은 다른 클러스터 셀의 런북에도 영향을 준다.
+      qc.invalidateQueries({ queryKey: ['checkMatrixRunbook'] });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+    },
+  });
+}
+
+// ── 수동 실행 ──────────────────────────────────────────────────────────────
+/** 셀 1건 동기 실행 — 응답에 결과가 담겨 오므로 성공 즉시 그리드를 무효화한다. */
+export function useRunCheckMatrixCell() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, clusterId }: { itemId: string; clusterId: string }) =>
+      checkMatrixApi.runCell(itemId, clusterId).then((r) => r.data),
+    onSuccess: (_, { itemId, clusterId }) => {
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+      qc.invalidateQueries({ queryKey: ['checkMatrixHistory', itemId, clusterId] });
+      qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] });
+    },
+  });
+}
+
+/** 클러스터(열) 일괄 실행 — 큐잉만 하므로 결과는 batchId 로 폴링한다. */
+export function useRunCheckMatrixCluster() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (clusterId: string) => checkMatrixApi.runCluster(clusterId).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] }),
+  });
+}
+
+/** 공통 점검 항목(행) 일괄 실행 — 등록된 모든 클러스터 대상. */
+export function useRunCheckMatrixItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => checkMatrixApi.runItem(itemId).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] }),
+  });
+}
+
+// ── 실행 로그 ──────────────────────────────────────────────────────────────
+/** 수행 로그 목록. `live` 면 실행 중인 배치를 따라가도록 짧은 주기로 폴링한다. */
+export function useCheckMatrixRuns(filter: CheckMatrixRunFilter, enabled = true, live = false) {
+  return useQuery({
+    queryKey: checkMatrixKeys.runs(filter),
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.listRuns(filter);
+      return data;
+    },
+    enabled,
+    refetchInterval: live ? 3000 : false,
+  });
+}
+
+export function useCheckMatrixRun(runId: string | undefined) {
+  return useQuery({
+    queryKey: checkMatrixKeys.run(runId || ''),
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.getRun(runId!);
+      return data;
+    },
+    enabled: !!runId,
   });
 }

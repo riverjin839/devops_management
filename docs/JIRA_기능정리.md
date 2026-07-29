@@ -219,6 +219,9 @@ ConfigSnapshot · AppSetting · User
 | 붙여넣기 가져오기 | 표를 복사-붙여넣기로도 동일하게 가져오기 | `POST /jira/import/paste` |
 | 가져오기 결과 저장 | 미리보기 후 확정 저장 | `POST /jira/import/excel/save` |
 | 사용자별 Jira 자격증명 | 개인 API 토큰 등록/조회 (암호화 저장) | `routers/jira.py` `/config`, `/credential`, `models/user_jira_credential.py` |
+| **SSO 자동 로그인** — 파드 내 폼 로그인 | 브라우저(Chromium/Playwright) 없이 httpx 로 SSO 리다이렉트/폼 체인을 수행해 세션 쿠키를 캡처·저장. 진입 경로 다중 시도 + JS/meta 리다이렉트 추적 + REST 세션·네이티브 폼 폴백. Confluence URL 설정 시 **한 번의 IdP 로그인으로 Jira+Confluence 세션 동시 캡처**. 세션 만료(401) 시 저장된 로그인 정보(옵트인)로 자동 재로그인 | `POST /jira/sso/login`, `services/jira_sso_http.py` `sso_login_products()` |
+| **SSO 진단** | 자격 없이 각 진입 경로를 GET 해 파드가 보는 로그인 페이지(최종 URL·폼/password 입력 수·리다이렉트 방식·WWW-Authenticate)를 보고 — 폐쇄망 SSO 실패 원인 판별 | `POST /jira/sso/diagnose`, `jira_sso_http.diagnose_products()` |
+| **Confluence 연동** | SSO 로 캡처한 세션으로 Confluence REST 호출 (연결 테스트, CQL 검색, 페이지 조회) | `POST /jira/confluence/test`, `GET /jira/confluence/search`, `services/confluence_service.py` |
 | **양방향 반영(push)** — v1.5.1 추가 | PEP 에서 편집한 업무를 연결된 Jira 이슈에 되쓰기: 칸반 상태 transition + 코멘트 + **제목(summary)·설명(description)·우선순위(priority)** 를 `PUT /rest/api/2/issue/{key}` 로 반영 | `POST /jira/push/{item_id}`, `services/jira_service.py` `update_issue()`, UI `components/work-items/JiraPushDialog.tsx` |
 | 동기화 메타데이터 | 연결 상태·최근 동기화 시각을 업무에 저장 | `WorkItem` 컬럼: `jira_issue_id`, `jira_issue_key`, `jira_url`, `jira_status`, `jira_synced_at`, `jira_updated_at`, `jira_watchers` |
 

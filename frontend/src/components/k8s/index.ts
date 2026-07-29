@@ -1,6 +1,10 @@
 export { PodTerminal } from './PodTerminal';
+export { SshTerminalWindow } from './SshTerminalWindow';
+export type { SshTerminalWindowProps, SshTerminalStatus } from './SshTerminalWindow';
 export { K9sTerminal } from './K9sTerminal';
 export type { K9sConnectParams } from './K9sTerminal';
+export { NodeSshTerminal } from './NodeSshTerminal';
+export type { NodeSshConnectParams } from './NodeSshTerminal';
 export { EventsStream } from './EventsStream';
 export { NamespaceMultiSelect } from './NamespaceMultiSelect';
 export { PodLogStream } from './PodLogStream';

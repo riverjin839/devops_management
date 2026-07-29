@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, Cookie, LogIn, ShieldCheck, Download, Copy } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Trash2, Save, KeyRound, Globe, LogIn, ShieldCheck, Download, Copy, Stethoscope } from 'lucide-react';
 import {
   useJiraConfig, useUpdateJiraConfig, useJiraCredential,
-  useSaveJiraCredential, useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
+  useDeleteJiraCredential, useJiraTest, useJiraSsoLogin,
+  useConfluenceTest, useSsoDiagnose,
 } from '@/hooks/useJira';
 import { useAuthStore } from '@/stores/authStore';
+import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
 import { useToast } from '@/components/common';
 import { formatApiError, parseUTC } from '@/lib/utils';
-import type { JiraAuthType } from '@/types';
+import type { SsoDiagnoseResult } from '@/types';
 
 const inputCls =
   'w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground ' +
@@ -21,13 +23,17 @@ export function JiraIntegrationPanel() {
   const { data: config, isLoading: cfgLoading } = useJiraConfig();
   const updateConfig = useUpdateJiraConfig();
   const { data: cred } = useJiraCredential();
-  const saveCred = useSaveJiraCredential();
   const deleteCred = useDeleteJiraCredential();
   const testConn = useJiraTest();
+  const confluenceTest = useConfluenceTest();
+  const ssoDiagnose = useSsoDiagnose();
   const ssoLogin = useJiraSsoLogin();
 
   // 관리자 설정 폼 상태
   const [baseUrl, setBaseUrl] = useState('');
+  const [confluenceUrl, setConfluenceUrl] = useState('');
+  const [ssoLoginUrl, setSsoLoginUrl] = useState('');
+  const [ssoUsernameField, setSsoUsernameField] = useState('');
   const [enabled, setEnabled] = useState(false);
   const [verifyTls, setVerifyTls] = useState(true);
   const [defaultProject, setDefaultProject] = useState('');
@@ -35,23 +41,18 @@ export function JiraIntegrationPanel() {
   useEffect(() => {
     if (config) {
       setBaseUrl(config.baseUrl ?? '');
+      setConfluenceUrl(config.confluenceBaseUrl ?? '');
+      setSsoLoginUrl(config.ssoLoginUrl ?? '');
+      setSsoUsernameField(config.ssoUsernameField ?? '');
       setEnabled(!!config.enabled);
       setVerifyTls(config.verifyTls !== false);
       setDefaultProject(config.defaultProjectKey ?? '');
     }
   }, [config]);
 
-  // 사용자 인증 (PAT | 세션 쿠키)
-  const [authType, setAuthType] = useState<JiraAuthType>('pat');
-  const [token, setToken] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
-
-  // 등록된 자격의 방식을 수동 토글 초기값으로 반영 (SSO 는 별도 버튼이라 토글엔 미반영).
-  useEffect(() => {
-    if (cred?.configured && (cred.authType === 'pat' || cred.authType === 'cookie')) {
-      setAuthType(cred.authType);
-    }
-  }, [cred?.configured, cred?.authType]);
+  const [confTestResult, setConfTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
+  const [diagResult, setDiagResult] = useState<SsoDiagnoseResult | null>(null);
 
   // 파드 내 SSO 폼 자동 로그인 (ID/PW — 브라우저 불필요, K8s 배포 기본 경로)
   const [ssoUser, setSsoUser] = useState('');
@@ -65,6 +66,10 @@ export function JiraIntegrationPanel() {
       if (data.ok) {
         setSsoPw('');
         toast.success('SSO 로그인 완료', data.displayName ? `${data.displayName} 세션이 저장되었습니다.` : data.detail);
+        // Confluence 동시 로그인이 시도됐고 실패한 경우만 별도 안내 (Jira 는 정상).
+        if (data.confluenceOk === false) {
+          toast.error('Confluence 로그인 실패', data.confluenceDetail || 'Jira 세션은 정상 저장되었습니다.');
+        }
       } else {
         toast.error('SSO 로그인 실패', data.detail);
       }
@@ -115,29 +120,14 @@ export function JiraIntegrationPanel() {
     try {
       await updateConfig.mutateAsync({
         baseUrl: baseUrl.trim(),
+        confluenceBaseUrl: confluenceUrl.trim(),
+        ssoLoginUrl: ssoLoginUrl.trim(),
+        ssoUsernameField: ssoUsernameField.trim(),
         enabled,
         verifyTls,
         defaultProjectKey: defaultProject.trim() || null,
       });
       toast.success('Jira 설정 저장됨');
-    } catch (err) {
-      toast.error('저장 실패', formatApiError(err));
-    }
-  };
-
-  const handleSaveToken = async () => {
-    if (!token.trim()) {
-      toast.error(authType === 'cookie' ? '세션 쿠키를 입력하세요' : '토큰을 입력하세요');
-      return;
-    }
-    try {
-      await saveCred.mutateAsync({ token: token.trim(), authType });
-      setToken('');
-      setTestResult(null);
-      toast.success(
-        authType === 'cookie' ? '내 세션 쿠키 저장됨' : '내 PAT 저장됨',
-        '이제 연결 테스트와 가져오기를 할 수 있습니다.',
-      );
     } catch (err) {
       toast.error('저장 실패', formatApiError(err));
     }
@@ -150,6 +140,31 @@ export function JiraIntegrationPanel() {
       setTestResult({ ok: data.ok, detail: data.ok ? (data.displayName ? `연결 정상 — ${data.displayName}` : '연결 정상') : data.detail });
     } catch (err) {
       setTestResult({ ok: false, detail: formatApiError(err) });
+    }
+  };
+
+  const handleSsoDiagnose = async () => {
+    setDiagResult(null);
+    try {
+      const { data } = await ssoDiagnose.mutateAsync();
+      setDiagResult(data);
+    } catch (err) {
+      toast.error('SSO 진단 실패', formatApiError(err));
+    }
+  };
+
+  const handleConfluenceTest = async () => {
+    setConfTestResult(null);
+    try {
+      const { data } = await confluenceTest.mutateAsync();
+      setConfTestResult({
+        ok: data.ok,
+        detail: data.ok
+          ? (data.displayName ? `Confluence 연결 정상 — ${data.displayName}` : 'Confluence 연결 정상')
+          : data.detail,
+      });
+    } catch (err) {
+      setConfTestResult({ ok: false, detail: formatApiError(err) });
     }
   };
 
@@ -185,6 +200,27 @@ export function JiraIntegrationPanel() {
             <span className="block text-sm font-medium text-muted-foreground mb-1">Base URL</span>
             <input className={inputCls} placeholder="https://jira.internal.example.com" value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)} disabled={!isAdmin} />
+          </div>
+          <div className="md:col-span-2">
+            <span className="block text-sm font-medium text-muted-foreground mb-1">
+              Confluence Base URL (선택 — 같은 SSO 사용 시)
+            </span>
+            <input className={inputCls} placeholder="https://confluence.internal.example.com" value={confluenceUrl}
+              onChange={(e) => setConfluenceUrl(e.target.value)} disabled={!isAdmin} />
+            <p className="text-xs text-muted-foreground mt-1">
+              설정하면 SSO 자동 로그인이 같은 IdP 세션으로 Jira 와 Confluence 세션을 한 번에 캡처합니다.
+            </p>
+          </div>
+          <div className="md:col-span-2">
+            <span className="block text-sm font-medium text-muted-foreground mb-1">
+              IdP 로그인 URL (선택 — 자동 탐색 실패 시)
+            </span>
+            <input className={inputCls} placeholder="https://login.example.com/sso/am/jira/login.jsp"
+              value={ssoLoginUrl} onChange={(e) => setSsoLoginUrl(e.target.value)} disabled={!isAdmin} />
+            <p className="text-xs text-muted-foreground mt-1">
+              브라우저로 Jira 접속 시 거쳐가는 <b>SSO 로그인 페이지 주소</b>. 백엔드가 로그인 폼을
+              스스로 찾지 못할 때 이 주소를 진입점으로 사용합니다 (아래 "내 Jira 인증"의 SSO 진단으로 확인).
+            </p>
           </div>
           <div>
             <span className="block text-sm font-medium text-muted-foreground mb-1">기본 프로젝트 키 (선택)</span>
@@ -236,6 +272,11 @@ export function JiraIntegrationPanel() {
               ? `등록됨 · ${cred.authType === 'sso' ? 'SSO' : cred.authType === 'cookie' ? '세션 쿠키' : 'PAT'}`
               : '미등록'}
           </span>
+          {cred?.hasConfluence && (
+            <span className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+              Confluence 세션
+            </span>
+          )}
           {cred?.jiraAccount && <span className="text-sm text-muted-foreground">계정: {cred.jiraAccount}</span>}
           {cred?.lastVerifiedAt && (
             <span className="text-sm text-muted-foreground">마지막 검증: {parseUTC(cred.lastVerifiedAt).toLocaleString()}</span>
@@ -250,9 +291,11 @@ export function JiraIntegrationPanel() {
           </div>
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
             사내 SSO 아이디/비밀번호를 입력하면 <b>서버가 SSO 로그인을 대신 수행</b>해 세션을
-            캡처·등록합니다(토큰/쿠키 복사 불필요). 순수 아이디/비밀번호 SSO(2차 인증 없음) 전용이며,
-            비밀번호는 Jira/SSO 서버로만 전달됩니다 — "로그인 정보 저장"을 체크한 경우에만 암호화
-            저장되어 세션 만료 시 원클릭 재로그인에 쓰입니다.
+            캡처·등록합니다(토큰/쿠키 복사 불필요). Confluence URL 이 설정돼 있으면 <b>Jira 와
+            Confluence 세션을 한 번에</b> 캡처합니다. 순수 아이디/비밀번호 SSO(2차 인증 없음)
+            전용이며, 비밀번호는 Jira/SSO 서버로만 전달됩니다 — "로그인 정보 저장"을 체크한
+            경우에만 암호화 저장되어 세션 만료 시 <b>자동 재로그인</b>(API 호출 중 401 감지 시)과
+            원클릭 재로그인에 쓰입니다.
           </p>
           {cred?.hasSsoLogin && (
             <button onClick={() => void runSsoLogin({ useSaved: true })} disabled={ssoLogin.isPending}
@@ -279,6 +322,92 @@ export function JiraIntegrationPanel() {
                 className="rounded border-border" />
               로그인 정보 저장 (세션 만료 시 원클릭 재로그인)
             </label>
+          </div>
+
+          {/* SSO 진단 — 파드가 실제로 보는 로그인 페이지를 확인 (폐쇄망 IdP 원인 판별) */}
+          <div className="mt-3 pt-3 border-t border-border/60">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={handleSsoDiagnose} disabled={ssoDiagnose.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/70 disabled:opacity-50">
+                {ssoDiagnose.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Stethoscope className="w-4 h-4" />}
+                SSO 진단
+              </button>
+              <span className="text-xs text-muted-foreground">
+                로그인 실패 시 — 백엔드가 어느 페이지까지 도달하는지 확인합니다 (자격 불필요).
+              </span>
+            </div>
+            {diagResult && (
+              <div className="mt-2 space-y-2">
+                <p className={`text-xs leading-relaxed ${diagResult.ok ? 'text-emerald-500' : 'text-amber-500'}`}>
+                  {diagResult.detail}
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px] border border-border rounded-lg">
+                    <thead className="bg-secondary/60 text-muted-foreground">
+                      <tr>
+                        <th className="text-left px-2 py-1 font-medium">진입 경로</th>
+                        <th className="text-left px-2 py-1 font-medium">최종 URL</th>
+                        <th className="text-left px-2 py-1 font-medium">HTTP</th>
+                        <th className="text-left px-2 py-1 font-medium">폼/PW</th>
+                        <th className="text-left px-2 py-1 font-medium">계정 필드</th>
+                        <th className="text-left px-2 py-1 font-medium">hidden 필드</th>
+                        <th className="text-left px-2 py-1 font-medium">비고</th>
+                      </tr>
+                    </thead>
+                    <tbody className="font-mono">
+                      {diagResult.entries.map((e, i) => (
+                        <tr key={`${e.product}-${e.url}-${i}`} className="border-t border-border">
+                          <td className="px-2 py-1 align-top break-all">{e.product} {e.url}</td>
+                          <td className="px-2 py-1 align-top break-all">{e.finalUrl || '-'}</td>
+                          <td className="px-2 py-1 align-top">{e.httpStatus ?? '-'}</td>
+                          <td className={`px-2 py-1 align-top ${e.passwordInputs > 0 ? 'text-emerald-500' : ''}`}>
+                            {e.forms}/{e.passwordInputs}
+                          </td>
+                          <td className="px-2 py-1 align-top break-all">
+                            {e.usernameField || '-'}{e.wantsBase64 ? ' (base64)' : ''}
+                          </td>
+                          <td className="px-2 py-1 align-top break-all max-w-[16rem]">
+                            {Object.entries(e.hiddenFields ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ') || '-'}
+                          </td>
+                          <td className="px-2 py-1 align-top break-all">
+                            {e.error || e.clientRedirect || e.wwwAuthenticate || e.title || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {diagResult.entries.filter((e) => (e.loginFields?.length ?? 0) > 0).map((e, i) => (
+                  <div key={`f-${e.product}-${i}`} className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-[11px] space-y-1">
+                    <p className="font-medium text-foreground break-all">로그인 폼 상세 — {e.finalUrl}</p>
+                    <p className="font-mono break-all">action: {e.loginFormAction || '(현재 URL)'}</p>
+                    <p className="font-mono break-all">필드: {(e.loginFields ?? []).join(' · ')}</p>
+                    {(e.scripts?.length ?? 0) > 0 && (
+                      <p className="font-mono break-all">스크립트: {(e.scripts ?? []).join(' · ')}</p>
+                    )}
+                    {(e.cryptoHints?.length ?? 0) > 0 && (
+                      <p className="text-amber-500 leading-relaxed">
+                        ⚠ 클라이언트 암호화/보안모듈 흔적: {(e.cryptoHints ?? []).join(', ')} —
+                        이런 페이지는 서버측 폼 로그인이 원리상 불가하므로 "내 PC 도우미" 또는 PAT/세션 쿠키를 사용하세요.
+                      </p>
+                    )}
+                  </div>
+                ))}
+                {(diagResult.podSourceIp || diagResult.podHostname) && (
+                  <p className="text-[11px] text-muted-foreground font-mono break-all">
+                    이 파드: {diagResult.podHostname || '-'} · 출발지 IP {diagResult.podSourceIp || '-'}
+                    <span className="font-sans"> — SSO 가 클라이언트 IP 를 검사하는 구성이면 이 IP(보통 노드/게이트웨이 IP 로 NAT 됨)를 허용해야 합니다.</span>
+                  </p>
+                )}
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  최종 URL 이 IdP 주소로 바뀌고 PW 열이 1 이상이면 정상입니다. IdP 로 안 넘어가면
+                  위 공통 설정의 <b>IdP 로그인 URL</b> 에 브라우저에서 확인한 주소를 넣어보세요.
+                  로그인이 "거부"로 실패하면 <b>hidden 필드</b> 열을 확인하세요 —
+                  <code className="px-1 rounded bg-background">encoded=true</code> 면 자격을 base64 로
+                  보내야 하는 구성입니다(자동 처리됨).
+                </p>
+              </div>
+            )}
           </div>
 
           <details className="mt-3">
@@ -314,64 +443,9 @@ export function JiraIntegrationPanel() {
           </details>
         </div>
 
-        {/* 또는 수동 등록 (대체) */}
-        <details className="group">
-          <summary className="text-sm font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground mb-3">
-            또는 수동 등록 (PAT · 세션 쿠키)
-          </summary>
+        {/* 수동 등록 — 가져오기 모달과 **같은 공용 카드**를 쓴다(동작이 갈리지 않게). */}
+        <JiraConnectCard />
 
-        {/* 인증 방식 선택 */}
-        <div className="flex items-stretch gap-1.5 mb-3">
-          {([
-            { id: 'pat' as const, label: 'Personal Access Token', icon: KeyRound },
-            { id: 'cookie' as const, label: '세션 쿠키 (수동)', icon: Cookie },
-          ]).map((m) => {
-            const Icon = m.icon;
-            return (
-              <button key={m.id} type="button" onClick={() => { setAuthType(m.id); setToken(''); setTestResult(null); }}
-                aria-pressed={authType === m.id}
-                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                  authType === m.id
-                    ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
-                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                }`}>
-                <Icon className="w-4 h-4" /> {m.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {authType === 'cookie' ? (
-          <div className="space-y-2">
-            <div className="rounded-lg bg-secondary/50 border border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed">
-              <p className="font-medium text-foreground mb-1 flex items-center gap-1.5"><Cookie className="w-3.5 h-3.5" /> 세션 쿠키 얻는 법</p>
-              <ol className="list-decimal list-inside space-y-0.5">
-                <li>사내 브라우저에서 Jira 에 SSO 로그인합니다.</li>
-                <li>개발자 도구(F12) ▸ Network 탭에서 아무 요청이나 클릭 ▸ Request Headers 의 <code className="px-1 rounded bg-background">Cookie</code> 값을 통째로 복사합니다.</li>
-                <li>아래에 붙여넣고 저장 후 <b>연결 테스트</b>로 확인하세요. 세션이 만료되면 다시 등록해야 합니다.</li>
-              </ol>
-            </div>
-            <textarea className={`${inputCls} font-mono text-xs min-h-[76px] resize-y`}
-              placeholder="JSESSIONID=...; atlassian.xsrf.token=...; seraph.rememberme.cookie=..."
-              value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false} />
-            <button onClick={handleSaveToken} disabled={saveCred.isPending}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap">
-              {saveCred.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              세션 쿠키 저장
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input className={inputCls} type="password" placeholder="PAT 붙여넣기" value={token}
-              onChange={(e) => setToken(e.target.value)} autoComplete="off" />
-            <button onClick={handleSaveToken} disabled={saveCred.isPending}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap">
-              {saveCred.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              저장
-            </button>
-          </div>
-        )}
-        </details>
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={handleTest} disabled={testConn.isPending || !cred?.configured}
@@ -379,6 +453,13 @@ export function JiraIntegrationPanel() {
             {testConn.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
             연결 테스트
           </button>
+          {!!config?.confluenceBaseUrl && (
+            <button onClick={handleConfluenceTest} disabled={confluenceTest.isPending || !cred?.configured}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
+              {confluenceTest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+              Confluence 테스트
+            </button>
+          )}
           {cred?.configured && (
             <button onClick={handleDeleteToken} disabled={deleteCred.isPending}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-red-500 hover:bg-red-500/10 disabled:opacity-50">
@@ -393,6 +474,14 @@ export function JiraIntegrationPanel() {
           }`}>
             {testResult.ok ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             {testResult.detail}
+          </div>
+        )}
+        {confTestResult && (
+          <div className={`text-sm mt-3 ml-2 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 ${
+            confTestResult.ok ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+          }`}>
+            {confTestResult.ok ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+            {confTestResult.detail}
           </div>
         )}
       </div>

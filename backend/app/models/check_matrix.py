@@ -9,7 +9,11 @@ core_bundle 행(예: API 응답시간)만 Cluster.check_cron_expr 로 스케줄�
 - CheckMatrixItem       — 행 카탈로그(사용자 CRUD).
 - CheckMatrixSchedule   — item × cluster cron (core_bundle 행 제외).
 - CheckMatrixResult     — 셀의 최신 스냅샷(upsert).
-- CheckMatrixResultLog  — 셀의 append-only 이력(트렌드 차트 + 변경 이력, 리텐션 정리 대상).
+- CheckMatrixResultLog  — 셀의 append-only 값 이력(트렌드 차트 + 변경 이력, 리텐션 정리 대상).
+- CheckMatrixRun        — **수행 1건**의 실행 로그(누가/무엇으로 트리거했고 어떤 명령이
+                          어떤 출력과 함께 돌았는지). ResultLog 가 "값의 역사"라면 Run 은
+                          "실행의 역사"다 — queued/running 같은 판정 이전 상태와 skipped
+                          (대상 미존재)까지 남기므로 트렌드 차트를 오염시키지 않는다.
 """
 import enum
 import uuid
@@ -20,7 +24,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from app.database import Base
 from app.models.cluster import StatusEnum
@@ -31,6 +35,24 @@ class CheckMatrixSourceType(str, enum.Enum):
     deep_check = "deep_check"    # deep_checkers.REGISTRY 의 check_type 실행
     addon = "addon"              # Addon.type 매칭 실행 (HealthChecker)
     manual = "manual"            # 자동 실행 없음 — 사용자가 값을 직접 입력
+
+
+class CheckMatrixTrigger(str, enum.Enum):
+    """수행을 일으킨 주체 — 실행 로그 필터/집계용."""
+    cron = "cron"                      # Celery Beat cron 디스패치(자동)
+    manual_cell = "manual_cell"        # 셀 1개 개별 수행
+    manual_cluster = "manual_cluster"  # 클러스터(열) 단위 일괄 수행
+    manual_item = "manual_item"        # 공통 점검 항목(행) 단위 일괄 수행
+    manual_entry = "manual_entry"      # 수동 입력(manual 항목 값 기입)
+
+
+class CheckMatrixRunState(str, enum.Enum):
+    """수행 자체의 생명주기 — 점검 판정(StatusEnum)과 별개."""
+    queued = "queued"
+    running = "running"
+    success = "success"
+    failed = "failed"
+    skipped = "skipped"  # 이 클러스터에 실행 대상(정의/애드온)이 없어 수행하지 않음
 
 
 class CheckMatrixItem(Base):
@@ -46,6 +68,13 @@ class CheckMatrixItem(Base):
     # 논리 키 — deep_check: check_type / addon: Addon.type 문자열 / core_bundle·manual: NULL.
     # 클러스터별 실제 인스턴스(DeepCheckDefinition, Addon)는 실행/조회 시점에 이 키로 해석한다.
     source_ref = Column(String(80), nullable=True)
+
+    # 영역 구분 — 행이 어느 도메인 점검인지 (k8s | network | storage | os | app | 자유 문자열).
+    # deep check 는 spec.category 에서 시드/보강되고, 사용자가 화면에서 바꿀 수 있다.
+    category = Column(String(50), nullable=True)
+    # 행 배경 커스텀 색 — 테마 대응을 위해 hex 가 아니라 차트 토큰 프리셋 키('chart-1'..'chart-8')를
+    # 저장한다. NULL = 무색. 실측값은 frontend index.css 의 --chart-* 가 원천.
+    color = Column(String(20), nullable=True)
 
     # core_bundle 행은 삭제 불가(Cluster.status 계산에 필요한 DailyChecker 실행은 행 존재와
     # 무관하게 계속 돌아야 함) — 라우터에서 이 플래그로 삭제를 막고 "그리드에서 숨기기"만 허용.
@@ -76,8 +105,12 @@ class CheckMatrixSchedule(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    item = relationship("CheckMatrixItem", backref="schedules")
-    cluster = relationship("Cluster", backref="check_matrix_schedules")
+    # passive_deletes=True — 항목 삭제 시 ORM 이 item_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이라 NotNullViolation). 정리는 DB 의 ON DELETE CASCADE 가 담당.
+    item = relationship("CheckMatrixItem", backref=backref("schedules", passive_deletes=True))
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("check_matrix_schedules", passive_deletes=True))
 
     __table_args__ = (
         UniqueConstraint("item_id", "cluster_id", name="uq_check_matrix_schedule"),
@@ -98,8 +131,11 @@ class CheckMatrixResult(Base):
     details = Column(JSONB, nullable=True)
     checked_at = Column(DateTime, default=datetime.utcnow)
 
-    item = relationship("CheckMatrixItem", backref="latest_results")
-    cluster = relationship("Cluster", backref="check_matrix_results")
+    # passive_deletes=True — 항목 삭제 시 ORM 의 item_id NULL UPDATE 방지 (위와 동일).
+    item = relationship("CheckMatrixItem", backref=backref("latest_results", passive_deletes=True))
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
+    cluster = relationship("Cluster", backref=backref("check_matrix_results", passive_deletes=True))
 
     __table_args__ = (
         UniqueConstraint("item_id", "cluster_id", name="uq_check_matrix_result"),
@@ -128,3 +164,55 @@ class CheckMatrixResultLog(Base):
 
     def __repr__(self) -> str:
         return f"<CheckMatrixResultLog(item_id={self.item_id}, cluster_id={self.cluster_id}, status={self.status})>"
+
+
+class CheckMatrixRun(Base):
+    """수행 1건의 실행 로그 — cron 자동 실행과 수동 실행(셀/클러스터/항목)을 모두 남긴다.
+
+    ``details`` 에는 체커가 돌려준 원본 details 에 더해 실행 관찰값이 들어간다:
+      - ``_steps``    : 체커의 단계 트레이스(ExecutionStep) — 실행 단계 타임라인 렌더용.
+      - ``_commands`` : 실제로 대상 클러스터에 나간 명령 목록(kubectl/HTTP)과 종료 코드·
+                        stdout/stderr 발췌. "PEP 가 내 클러스터에 무슨 명령을 쐈나"의 근거.
+      - ``_runbook``  : 실행 시점에 해석된 실행 계획(대상 정의/애드온·파라미터).
+    """
+    __tablename__ = "check_matrix_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # 클러스터/항목 단위 일괄 수행 1회를 묶는 키. 셀 단독 수행이면 자기 자신만 묶인다.
+    batch_id = Column(UUID(as_uuid=True), nullable=True)
+
+    item_id = Column(UUID(as_uuid=True), ForeignKey("check_matrix_items.id", ondelete="CASCADE"), nullable=False)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
+
+    trigger = Column(Enum(CheckMatrixTrigger), nullable=False, default=CheckMatrixTrigger.cron)
+    # 사용자 삭제 후에도 로그는 남아야 하므로 FK 를 걸지 않고 표시용 이름만 보존한다.
+    triggered_by = Column(String(100), nullable=True)
+
+    run_state = Column(Enum(CheckMatrixRunState), nullable=False, default=CheckMatrixRunState.queued)
+    # 점검 판정 결과 — queued/running/skipped 이면 NULL.
+    status = Column(Enum(StatusEnum), nullable=True)
+    value = Column(Float, nullable=True)
+    message = Column(Text, nullable=True)
+    details = Column(JSONB, nullable=True)
+    error = Column(Text, nullable=True)
+
+    duration_ms = Column(Integer, nullable=True)
+    queued_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+
+    # passive_deletes=True — 항목 삭제 시 ORM 의 item_id NULL UPDATE 방지 (위와 동일).
+    item = relationship("CheckMatrixItem", backref=backref("runs", passive_deletes=True))
+    # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
+    # 막고 DB 의 ON DELETE CASCADE 에 위임한다(cluster_id 는 NOT NULL 이라 nullify 하면 터진다).
+    # 형제 테이블(schedules/results)과 동일한 정책.
+    cluster = relationship("Cluster", backref=backref("check_matrix_runs", passive_deletes=True))
+
+    __table_args__ = (
+        Index("ix_check_matrix_runs_cell", "item_id", "cluster_id", "queued_at"),
+        Index("ix_check_matrix_runs_queued_at", "queued_at"),
+        Index("ix_check_matrix_runs_batch", "batch_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<CheckMatrixRun(item_id={self.item_id}, cluster_id={self.cluster_id}, state={self.run_state})>"

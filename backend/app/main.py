@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, func
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
@@ -47,6 +47,7 @@ from app.routers import (
     cluster_custom_fields_router,
     work_item_custom_fields_router,
     backup_router,
+    schema_health_router,
     service_entries_router,
     batch_jobs_router,
     commands_router,
@@ -68,6 +69,7 @@ from app.routers import (
     k8s_helm_router,
     k8s_exec_router,
     k9s_ssh_router,
+    node_ssh_router,
     metric_trend_router,
     service_topology_router,
     architecture_docs_router,
@@ -76,6 +78,8 @@ from app.routers import (
     terminal_appearance_router,
     k8s_events_router,
     k8s_events_ingest_router,
+    observability_router,
+    observability_ingest_router,
     release_notes_router,
     check_matrix_router,
     island_router,
@@ -298,6 +302,10 @@ def _run_migrations():
             # Cluster Trends — per-cluster Prometheus URL 오버라이드 + 토글.
             ("prometheus_url", "VARCHAR(512)"),
             ("prometheus_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            # Observability 대시보드 — Alertmanager URL + 수집 모드(pull/push) 토글.
+            ("alertmanager_url", "VARCHAR(512)"),
+            ("observability_mode", "VARCHAR(16) NOT NULL DEFAULT 'pull'"),
+            ("observability_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
             # 점검 매트릭스 — core_bundle 행(DailyChecker 원자 실행) 클러스터별 cron.
             # check_schedules(구 아침/점심/저녁) 완전 대체.
             ("check_cron_expr", "VARCHAR(100)"),
@@ -884,6 +892,15 @@ def _run_migrations():
             "UPDATE deep_check_results SET checked_at = NOW() WHERE checked_at IS NULL",
             label="deep_check_results.checked_at backfill",
         )
+        # daily_check_log_id: 초기 스키마는 NOT NULL(모든 deep 결과가 일일점검 회차에
+        # 종속)이었으나, 지금은 정의 단독 실행("지금 점검"/매트릭스 셀 실행)이 회차 없이
+        # NULL 로 저장한다 — 모델은 nullable 인데 구버전 DB 에 NOT NULL 이 남아 있으면
+        # 매트릭스 deep_check 실행이 전부 IntegrityError(500) 로 죽는다. create_all 은
+        # 기존 컬럼의 제약을 바꾸지 않으므로 여기서 명시적으로 푼다.
+        _safe_exec(
+            "ALTER TABLE deep_check_results ALTER COLUMN daily_check_log_id DROP NOT NULL",
+            label="deep_check_results.daily_check_log_id nullable",
+        )
         _safe_create_index("ix_deep_check_results_cluster", "deep_check_results", "(cluster_id)")
         _safe_create_index("ix_deep_check_results_daily_log", "deep_check_results", "(daily_check_log_id)")
         _safe_create_index("ix_deep_check_results_checked_at", "deep_check_results", "(checked_at DESC)")
@@ -895,6 +912,29 @@ def _run_migrations():
         _safe_add_column("user_jira_credentials", "auth_type", "VARCHAR(16) NOT NULL DEFAULT 'pat'")
         # 파드 내 SSO 폼 자동 로그인용 저장 로그인 정보(옵트인, secret_box 암호문).
         _safe_add_column("user_jira_credentials", "sso_login_encrypted", "TEXT")
+        # SSO 폼 로그인이 Jira 와 함께 캡처하는 Confluence 세션 쿠키(secret_box 암호문).
+        _safe_add_column("user_jira_credentials", "confluence_cookie_encrypted", "TEXT")
+
+    # work_items: Jira Epic(상위 이슈) — 주간보고 진척률 집계 기준.
+    if "work_items" in inspector.get_table_names():
+        _safe_add_column("work_items", "jira_epic", "VARCHAR(200)")
+        # 업무 생성 시 함께 만든 Confluence 문서 링크.
+        _safe_add_column("work_items", "confluence_page_id", "VARCHAR(50)")
+        _safe_add_column("work_items", "confluence_url", "TEXT")
+        # Jira 원본 항목 동기화 — Epic / Sub-task / 컴포넌트 / 라벨 / 상태 카테고리.
+        # 게시판 표를 Jira 와 같은 축으로 보여주기 위해 축약 매핑(type/type_label) 과 별도로
+        # 원본 값을 보관한다.
+        _safe_add_column("work_items", "jira_epic_key", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_epic_summary", "VARCHAR(200)")
+        _safe_add_column("work_items", "jira_issue_type", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_parent_key", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_parent_summary", "VARCHAR(200)")
+        _safe_add_column("work_items", "jira_status_category", "VARCHAR(20)")
+        _safe_add_column("work_items", "jira_components", "JSONB")
+        _safe_add_column("work_items", "jira_labels", "JSONB")
+        _safe_create_index("ix_work_items_jira_epic_key", "work_items", "(jira_epic_key)")
+        _safe_create_index("ix_work_items_jira_parent_key", "work_items", "(jira_parent_key)")
+        _safe_create_index("ix_work_items_jira_issue_type", "work_items", "(jira_issue_type)")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
@@ -937,6 +977,21 @@ def _run_migrations():
         _safe_create_index("ix_ops_check_run_items_run", "ops_check_run_items", "(run_id)")
         _safe_create_index("ix_ops_check_run_items_ref", "ops_check_run_items", "(source, item_ref_id)")
 
+    # check_matrix_items: 영역 구분(category) + 커스텀 행 색(color, 차트 토큰 프리셋 키) —
+    # 구버전 DB 보강. 값 backfill 은 _seed_check_matrix_items 의 backfill_item_metadata 가 담당.
+    if "check_matrix_items" in inspector.get_table_names():
+        _safe_add_column("check_matrix_items", "category", "VARCHAR(50)")
+        _safe_add_column("check_matrix_items", "color", "VARCHAR(20)")
+
+    # check_matrix_runs: 점검 매트릭스 수행 로그 — 테이블은 create_all 이 생성하고,
+    # 셀별 최근 로그 조회 / 배치 진행률 폴링 / 리텐션 퍼지 스캔용 인덱스만 보강한다.
+    if "check_matrix_runs" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_check_matrix_runs_cell", "check_matrix_runs", "(item_id, cluster_id, queued_at DESC)",
+        )
+        _safe_create_index("ix_check_matrix_runs_queued_at", "check_matrix_runs", "(queued_at DESC)")
+        _safe_create_index("ix_check_matrix_runs_batch", "check_matrix_runs", "(batch_id)")
+
     # os_param_changes: OS 파라미터 변경 이력 — 테이블은 create_all, 조회 인덱스 보강.
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
@@ -954,11 +1009,31 @@ def _run_migrations():
         _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
         _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
 
+    # alert_events: Alertmanager / 사내 alert-forwarder 수신 알람 — 테이블은 create_all, 인덱스 보강.
+    if "alert_events" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_alert_events_cluster_received", "alert_events", "(cluster_id, received_at DESC)")
+        _safe_create_index("ix_alert_events_status_severity", "alert_events", "(status, severity)")
+        _safe_create_index(
+            "ix_alert_events_fingerprint_starts", "alert_events", "(fingerprint, starts_at DESC)")
+
+    # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.
+    if "observability_metrics" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_observability_metrics_module_sort", "observability_metrics", "(module_key, sort_order)")
+    if "observability_snapshots" in inspector.get_table_names():
+        _safe_create_index(
+            "ix_obs_snapshots_lookup",
+            "observability_snapshots",
+            "(cluster_id, module_key, kind, collected_at DESC)",
+        )
+
     # PEP/APP 서비스 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) — service_categories 는
     # create_all 로 신규 생성, lake_service_types/lake_services 에 domain/category_id 보강.
     if "lake_service_types" in inspector.get_table_names():
         _safe_add_column("lake_service_types", "domain", "VARCHAR(10) NOT NULL DEFAULT 'pep'")
         _safe_add_column("lake_service_types", "category_id", "UUID")
+        _safe_add_column("lake_service_types", "color", "VARCHAR(20)")
         _safe_create_index("ix_lake_types_domain_category", "lake_service_types", "(domain, category_id)")
         _safe_add_constraint(
             "lake_service_types", "lake_service_types_category_id_fkey",
@@ -1026,6 +1101,27 @@ def _sync_missing_model_columns() -> None:
                 "NOT NULL/기본값/backfill 이 필요하면 _run_migrations() 에 명시적으로 추가할 것.",
                 table.name, col.name,
             )
+
+
+def _relax_not_null_drift() -> None:
+    """모델 nullable ↔ DB NOT NULL 드리프트 자동 완화 (services/schema_health.py).
+
+    `_sync_missing_model_columns()` 가 누락 '컬럼'을 채운다면 이쪽은 누락된 '제약 완화'를
+    맡는다. 같은 종류의 사후 대응(에러 나면 한 컬럼씩 추가)을 반복하지 않기 위한 안전망이고,
+    운영자는 Settings ▸ 스키마 점검 화면에서 현재 드리프트를 직접 확인·복구할 수 있다.
+    """
+    from app.services.schema_health import relax_not_null_drift
+
+    relaxed = relax_not_null_drift()
+    if relaxed:
+        _log.info("migration: relaxed %d legacy NOT NULL constraint(s)", relaxed)
+
+
+def _seed_observability_catalog():
+    """관측 모듈/지표 카탈로그 seed — 실제 기본값은 services/observability/catalog_seed.py."""
+    from app.services.observability.catalog_seed import seed_observability_catalog
+
+    seed_observability_catalog()
 
 
 def _seed_default_metric_cards():
@@ -1598,6 +1694,84 @@ def _seed_default_service_categories():
         db.close()
 
 
+# 폐지 대상 — 구 "서비스 카탈로그"(Settings → 관리 서비스 → 서비스 카탈로그 서브탭,
+# ui_settings.serviceCatalog 에 저장되던 /services 지식 카탈로그·업무 태그용 아이콘/색상 정의).
+# PEP 서비스(LakeServiceType domain='pep') 로 흡수 통합하며 아이콘은 PEP 쪽 값을 우선한다 —
+# color 배지만 PEP 에 없던 필드라 카탈로그 값으로 보강한다.
+_PEP_CATALOG_COLOR_MERGE: dict[str, str] = {
+    "k8s": "sky", "keycloak": "amber", "nexus": "blue",
+    "prometheus": "red", "grafana": "orange", "cilium": "cyan",
+}
+
+# 카탈로그에만 있고 PEP 서비스 타입에는 없던 서비스 — custom 타입으로 새로 추가해 보존.
+_PEP_CATALOG_ONLY_TYPES: list[dict] = [
+    {"service_type": "jenkins", "label": "Jenkins", "icon": "Wrench", "color": "orange",
+     "description": "CI / 파이프라인"},
+    {"service_type": "argocd", "label": "ArgoCD", "icon": "GitBranch", "color": "purple",
+     "description": "GitOps / Application 동기화"},
+    {"service_type": "etcd", "label": "etcd", "icon": "Database", "color": "emerald",
+     "description": "K8s 백업 / consensus"},
+    {"service_type": "hubble", "label": "Hubble", "icon": "Eye", "color": "sky",
+     "description": "Cilium observability"},
+    {"service_type": "ingress", "label": "Ingress", "icon": "ArrowRightLeft", "color": "pink",
+     "description": "NGINX / 트래픽 진입"},
+    {"service_type": "storage", "label": "Storage", "icon": "Container", "color": "violet",
+     "description": "PV / StorageClass / 스토리지 백엔드"},
+]
+
+
+def _merge_service_catalog_into_pep_types():
+    """구 "서비스 카탈로그" 데이터를 PEP 서비스(LakeServiceType domain='pep') 로 1회성 흡수.
+
+    - 이름이 겹치는 서비스(k8s/keycloak/nexus/prometheus/grafana/cilium): 아이콘은 이미 PEP
+      쪽에 세팅돼 있으므로 건드리지 않고, color 배지만 비어있으면 카탈로그 값으로 채운다.
+    - 카탈로그에만 있던 서비스(jenkins/argocd/etcd/hubble/ingress/storage): PEP 서비스에
+      custom 타입(category_id=None, 미분류)으로 새로 추가.
+    idempotent — 이미 색이 채워졌거나 slug 가 존재하면 skip.
+    """
+    from app.models import LakeServiceType
+
+    db = SessionLocal()
+    try:
+        rows = db.query(LakeServiceType).filter(
+            LakeServiceType.domain == "pep",
+            LakeServiceType.service_type.in_(_PEP_CATALOG_COLOR_MERGE.keys()),
+        ).all()
+        updated = 0
+        for row in rows:
+            if row.color:
+                continue
+            row.color = _PEP_CATALOG_COLOR_MERGE[row.service_type]
+            updated += 1
+        if updated:
+            db.commit()
+            _log.info("merged %d legacy service-catalog colors into pep service types", updated)
+
+        existing_slugs = {row[0] for row in db.query(LakeServiceType.service_type).all()}
+        max_sort = db.query(func.max(LakeServiceType.sort_order)).filter(
+            LakeServiceType.domain == "pep",
+        ).scalar() or 0
+        added = 0
+        for idx, meta in enumerate(_PEP_CATALOG_ONLY_TYPES):
+            if meta["service_type"] in existing_slugs:
+                continue
+            db.add(LakeServiceType(
+                service_type=meta["service_type"], label=meta["label"],
+                default_path="/health", description=meta.get("description"),
+                icon=meta.get("icon"), color=meta.get("color"),
+                is_builtin=False, enabled=True,
+                sort_order=max_sort + (idx + 1) * 10,
+                domain="pep", category_id=None,
+            ))
+            existing_slugs.add(meta["service_type"])
+            added += 1
+        if added:
+            db.commit()
+            _log.info("migrated %d legacy service-catalog-only types into pep service types", added)
+    finally:
+        db.close()
+
+
 def _seed_default_lake_service_entries():
     """LAKE 8 OSS 서비스의 "기능 동작 특징" 가이드를 ServiceEntry kind=guide 로
     전역 등록. service+title 매칭으로 idempotent — 운영자가 수정하거나 삭제한
@@ -1678,6 +1852,10 @@ def _seed_check_matrix_items():
         added = cms.seed_default_items(db)
         if added:
             _log.info("seeded %d check matrix items", added)
+        # 단위/영역/기본색 도입 이전에 시드된 설치본 보강 — 빈 값만 채운다(idempotent).
+        filled = cms.backfill_item_metadata(db)
+        if filled:
+            _log.info("backfilled metadata for %d check matrix items", filled)
     finally:
         db.close()
 
@@ -1786,6 +1964,9 @@ async def lifespan(app: FastAPI):
         for step_name, step in [
             ("migrations", _run_migrations),
             ("sync_missing_model_columns", _sync_missing_model_columns),
+            # 누락 컬럼(위)과 짝을 이루는 제약 드리프트 안전망 — 모델이 nullable 인데
+            # DB 에 레거시 NOT NULL 이 남아 있으면 그 컬럼을 비운 저장이 전부 500 이 된다.
+            ("relax_not_null_drift", _relax_not_null_drift),
             ("seed_metric_cards", _seed_default_metric_cards),
             ("seed_cluster_items", _seed_cluster_items),
             ("seed_trend_sources", _seed_default_trend_sources),
@@ -1797,7 +1978,9 @@ async def lifespan(app: FastAPI):
             ("seed_metric_checklist_items", _seed_default_metric_checklist_items),
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
+            ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_lake_service_entries", _seed_default_lake_service_entries),
+            ("seed_observability_catalog", _seed_observability_catalog),
             ("seed_initial_admin", _seed_initial_admin),
             ("seed_assignee_users", _seed_assignee_users),
         ]:
@@ -1821,7 +2004,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.15.0",
+    version="1.17.1",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -1892,6 +2075,7 @@ app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_aut
 app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_item_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(schema_health_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(service_entries_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)
@@ -1924,6 +2108,9 @@ app.include_router(k8s_helm_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(k8s_exec_router, prefix="/api/v1")
 # k9s TUI SSH 터미널(WebSocket) — 전역 _auth 미적용, 핸들러 내부에서 토큰 직접 검증.
 app.include_router(k9s_ssh_router, prefix="/api/v1")
+# 개별 노드 SSH 터미널(WebSocket) — 위와 동일. REST 인 /node-ssh/test 는 엔드포인트에서
+# require_operator 를 직접 건다.
+app.include_router(node_ssh_router, prefix="/api/v1")
 # metric-trend — 일일점검 리뷰: 리소스 수 추세 체크리스트(자동/수동 스냅샷 + 체크 + 항목 CRUD).
 app.include_router(metric_trend_router, prefix="/api/v1", dependencies=_auth)
 # service-topology — 서비스 동작 플로우 가시화(자동 그래프 + 수동 연계 + 실트래픽).
@@ -1935,6 +2122,10 @@ app.include_router(terminal_appearance_router, prefix="/api/v1", dependencies=_a
 # k8s_events — kubewatch 웹훅 수신(토큰 인증) + 이벤트 조회(JWT)
 app.include_router(k8s_events_ingest_router, prefix="/api/v1")
 app.include_router(k8s_events_router, prefix="/api/v1", dependencies=_auth)
+# observability — 관측 스택 지표 대시보드(JWT) + 알람/스냅샷 수신(Bearer 토큰 자체 검증).
+# ingest 라우터를 먼저 include 해야 같은 prefix 에서 무인증 경로가 우선 매칭된다.
+app.include_router(observability_ingest_router, prefix="/api/v1")
+app.include_router(observability_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 # Your Island — 사용자 커스텀 화면(개인 소유 + 선택적 공유)
 app.include_router(island_router, prefix="/api/v1", dependencies=_auth)
@@ -1944,7 +2135,7 @@ app.include_router(island_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.15.0",
+        "version": "1.17.1",
         "version": "1.8.2",
         "status": "running"
     }

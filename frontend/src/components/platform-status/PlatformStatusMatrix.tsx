@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock, HelpCircle } from 'lucide-react';
+import {
+  Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
+  Play, ScrollText, Loader2,
+} from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton } from '@/components/common';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
+  useRunCheckMatrixCluster, useRunCheckMatrixItem,
 } from '@/hooks/useCheckMatrix';
 import type { CheckMatrixCell, CheckMatrixItem, CheckMatrixGridCluster, Status } from '@/types';
 import { formatApiError } from '@/lib/utils';
@@ -11,10 +15,33 @@ import { CheckMatrixCellDetailModal } from './CheckMatrixCellDetailModal';
 import { CheckMatrixItemFormModal } from './CheckMatrixItemFormModal';
 import { CheckMatrixSettingsModal } from './CheckMatrixSettingsModal';
 import { CheckMatrixHelpPanel } from './CheckMatrixHelpPanel';
+import { CheckMatrixRunLogPanel } from './CheckMatrixRunLogPanel';
+import { rowColor } from './rowColors';
 
 const STATUS_LABEL: Record<Status, string> = {
   healthy: '정상', warning: '경고', critical: '위험', pending: '대기',
 };
+
+// 행이 어떻게 실행되는지 한눈에 — "왜 이 행엔 실행 버튼이 없지?"(수동 입력)의 답을 그리드에서 준다.
+const SOURCE_BADGE: Record<CheckMatrixItem['sourceType'], { label: string; hint: string }> = {
+  core_bundle: { label: '핵심', hint: '핵심 점검 번들 — 클러스터 열 cron 으로 자동 실행, Cluster 상태 산정에 사용' },
+  deep_check: { label: 'Deep', hint: 'Deep Check 자동 점검 — 셀 cron 또는 ▶ 로 실행' },
+  addon: { label: 'Addon', hint: '애드온 헬스 체크 — 셀 cron 또는 ▶ 로 실행' },
+  manual: { label: '수동', hint: '수동 입력 항목 — 자동 실행 없음. 셀을 클릭해 값을 직접 입력합니다. 자동 점검으로 바꾸려면 연필(수정)에서 실행 방식을 변경하세요.' },
+};
+
+function SourceBadge({ sourceType }: { sourceType: CheckMatrixItem['sourceType'] }) {
+  const meta = SOURCE_BADGE[sourceType];
+  if (!meta) return null;
+  return (
+    <span
+      title={meta.hint}
+      className="flex-shrink-0 px-1 py-px rounded border border-border text-[9px] font-medium text-muted-foreground select-none"
+    >
+      {meta.label}
+    </span>
+  );
+}
 
 function CellButton({
   item, cell, onClick,
@@ -68,26 +95,26 @@ function ClusterCronBadge({ cluster }: { cluster: CheckMatrixGridCluster }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-56 bg-card border border-border rounded-lg shadow-xl p-3 space-y-2">
+          <div className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-56 bg-card border border-border rounded-md shadow-xl p-3 space-y-2">
             <p className="text-[11px] text-muted-foreground">핵심 점검(API 응답시간 등) cron. 5분 미만 간격 불가.</p>
             <input
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="0 9,13,18 * * *"
-              className="w-full text-xs font-mono border border-border rounded-md px-2 py-1 bg-background"
+              className="w-full text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background"
             />
             <div className="flex justify-end gap-1.5">
               <button
                 onClick={() => setOpen(false)}
-                className="px-2 py-1 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                className="px-2 py-1 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-xl"
               >
                 취소
               </button>
               <button
                 onClick={handleSave}
                 disabled={mutation.isPending}
-                className="px-2 py-1 text-xs font-semibold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                className="px-2 py-1 text-xs font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
               >
                 저장
               </button>
@@ -104,22 +131,62 @@ export function PlatformStatusMatrix() {
   const { data: grid, isLoading } = useCheckMatrixGrid();
   const reorderMut = useReorderCheckMatrixItems();
   const deleteMut = useDeleteCheckMatrixItem();
+  const runClusterMut = useRunCheckMatrixCluster();
+  const runItemMut = useRunCheckMatrixItem();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [formItem, setFormItem] = useState<CheckMatrixItem | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<CheckMatrixItem | null>(null);
   const [cellTarget, setCellTarget] = useState<{ item: CheckMatrixItem; cluster: CheckMatrixGridCluster } | null>(null);
+  // 로그 패널은 두 가지로 쓰인다 — batch 가 있으면 방금 트리거한 일괄 수행 추적, 없으면 전체 로그.
+  const [runLog, setRunLog] = useState<{ open: boolean; batchId?: string | null; label?: string | null }>(
+    { open: false },
+  );
+  // 어느 열/행이 실행 중인지 — 버튼 스피너 표시용(mutation 은 전역 pending 만 주므로 대상 키를 따로 든다).
+  const [runningKey, setRunningKey] = useState<string | null>(null);
 
   const items = grid?.items ?? [];
   const clusters = grid?.clusters ?? [];
 
-  const moveItem = (index: number, dir: -1 | 1) => {
-    const target = index + dir;
-    if (target < 0 || target >= items.length) return;
+  const handleRunCluster = async (cluster: CheckMatrixGridCluster) => {
+    setRunningKey(`cluster:${cluster.id}`);
+    try {
+      const res = await runClusterMut.mutateAsync(cluster.id);
+      toast.success(`${cluster.name} 전체 점검을 시작했습니다.`, `${res.queued}/${res.total}건 큐잉`);
+      setRunLog({ open: true, batchId: res.batchId, label: `${cluster.name} 전체 실행` });
+    } catch (e) {
+      toast.error('실행 실패', formatApiError(e));
+    } finally {
+      setRunningKey(null);
+    }
+  };
+
+  const handleRunItem = async (item: CheckMatrixItem) => {
+    setRunningKey(`item:${item.id}`);
+    try {
+      const res = await runItemMut.mutateAsync(item.id);
+      toast.success(`"${item.name}" 전 클러스터 점검을 시작했습니다.`, `${res.queued}/${res.total}건 큐잉`);
+      setRunLog({ open: true, batchId: res.batchId, label: `${item.name} · 전 클러스터` });
+    } catch (e) {
+      toast.error('실행 실패', formatApiError(e));
+    } finally {
+      setRunningKey(null);
+    }
+  };
+
+  // 행 드래그 정렬 — HTML5 DnD. 그립 핸들에서 시작하고 행 위로 드롭한다.
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const endDrag = () => { setDragIdx(null); setOverIdx(null); };
+  const handleDrop = (targetIdx: number) => {
+    if (dragIdx === null || dragIdx === targetIdx) { endDrag(); return; }
     const reordered = [...items];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
     reorderMut.mutate(reordered.map((i) => i.id));
+    endDrag();
   };
 
   const handleDelete = async () => {
@@ -152,15 +219,24 @@ export function PlatformStatusMatrix() {
           <span className="text-[11px] text-muted-foreground">항목 × 클러스터 점검 매트릭스</span>
           <div className="ml-auto flex items-center gap-1.5">
             <button
+              onClick={() => setRunLog({ open: true, batchId: null })}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
+              title="모든 수행의 실행 로그"
+              aria-label="모든 수행의 실행 로그"
+            >
+              <ScrollText className="w-3.5 h-3.5" /> 수행 로그
+            </button>
+            <button
               onClick={() => setFormItem('new')}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-secondary transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> 항목 추가
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground"
+              className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground"
               title="매트릭스 설정"
+              aria-label="매트릭스 설정"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -196,7 +272,20 @@ export function PlatformStatusMatrix() {
                   {clusters.map((cluster) => (
                     <th key={cluster.id} className="border-b border-border px-3 py-2 min-w-[130px] font-medium">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="truncate max-w-[140px]">{cluster.name}</span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="truncate max-w-[120px]">{cluster.name}</span>
+                          <button
+                            onClick={() => handleRunCluster(cluster)}
+                            disabled={runningKey === `cluster:${cluster.id}`}
+                            title={`${cluster.name} 의 모든 점검 항목을 지금 실행`}
+                            aria-label={`${cluster.name} 전체 점검 실행`}
+                            className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary transition-colors disabled:opacity-50 flex-shrink-0"
+                          >
+                            {runningKey === `cluster:${cluster.id}`
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Play className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                         <ClusterCronBadge cluster={cluster} />
                       </div>
                     </th>
@@ -204,47 +293,82 @@ export function PlatformStatusMatrix() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr key={item.id} className="group hover:bg-muted/30">
-                    <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-3 py-1.5">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className="flex flex-col -my-1 flex-shrink-0">
-                          <button
-                            onClick={() => moveItem(idx, -1)}
-                            disabled={idx === 0}
-                            className="text-muted-foreground hover:text-foreground disabled:opacity-20"
-                          >
-                            <ChevronUp className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => moveItem(idx, 1)}
-                            disabled={idx === items.length - 1}
-                            className="text-muted-foreground hover:text-foreground disabled:opacity-20"
-                          >
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        </div>
+                {items.map((item, idx) => {
+                  const color = rowColor(item.color);
+                  return (
+                  <tr
+                    key={item.id}
+                    onDragOver={(e) => { if (dragIdx !== null) { e.preventDefault(); setOverIdx(idx); } }}
+                    onDrop={() => handleDrop(idx)}
+                    className={`group hover:bg-muted/30 ${
+                      dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'bg-primary/5' : ''
+                    } ${dragIdx === idx ? 'opacity-50' : ''}`}
+                  >
+                    <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-2 py-1.5">
+                      <div
+                        className={`flex items-center gap-1.5 min-w-0 rounded-md px-1.5 py-0.5 border-l-2 ${
+                          color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
+                        }`}
+                      >
+                        <button
+                          draggable
+                          onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                          onDragEnd={endDrag}
+                          disabled={reorderMut.isPending}
+                          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
+                          title="드래그해서 순서 변경"
+                          aria-label={`${item.name} 순서 변경 (드래그)`}
+                        >
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </button>
                         <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
                           {item.name}
                         </span>
+                        {item.category && (
+                          <span
+                            title={`영역: ${item.category}`}
+                            className={`flex-shrink-0 px-1.5 py-px rounded border text-[9px] font-medium select-none ${
+                              color ? color.chip : 'border-border text-muted-foreground'
+                            }`}
+                          >
+                            {item.category}
+                          </span>
+                        )}
+                        <SourceBadge sourceType={item.sourceType} />
                         {item.isSystem && (
                           <span title="시스템 항목" className="flex-shrink-0">
                             <Lock className="w-3 h-3 text-muted-foreground" />
                           </span>
+                        )}
+                        {/* 실행 ▶ 는 hover 없이 항상 노출 — hover 전용이면 "버튼이 없다"고 오인된다. */}
+                        {item.sourceType !== 'manual' && (
+                          <button
+                            onClick={() => handleRunItem(item)}
+                            disabled={runningKey === `item:${item.id}`}
+                            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50 flex-shrink-0"
+                            title="모든 클러스터에서 이 항목 실행"
+                            aria-label="모든 클러스터에서 이 항목 실행"
+                          >
+                            {runningKey === `item:${item.id}`
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Play className="w-3 h-3" />}
+                          </button>
                         )}
                         <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => setFormItem(item)}
                             className="p-1 rounded hover:bg-secondary text-muted-foreground"
                             title="수정"
+                            aria-label={`${item.name} 수정`}
                           >
                             <Pencil className="w-3 h-3" />
                           </button>
                           {!item.isSystem && (
                             <button
                               onClick={() => setDeleteTarget(item)}
-                              className="p-1 rounded hover:bg-secondary text-red-500"
+                              className="p-1 rounded hover:bg-secondary text-status-critical"
                               title="삭제"
+                              aria-label={`${item.name} 삭제`}
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -262,7 +386,8 @@ export function PlatformStatusMatrix() {
                       </td>
                     ))}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -271,6 +396,12 @@ export function PlatformStatusMatrix() {
 
       <CheckMatrixSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <CheckMatrixHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <CheckMatrixRunLogPanel
+        open={runLog.open}
+        onClose={() => setRunLog({ open: false })}
+        batchId={runLog.batchId}
+        batchLabel={runLog.label}
+      />
       <CheckMatrixItemFormModal
         isOpen={formItem !== null}
         onClose={() => setFormItem(null)}

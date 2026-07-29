@@ -8,27 +8,22 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.client import ApiException
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.config import settings
 from app.database import get_db
 from app.models import (
-    AnsibleInventory,
-    BatchJob,
-    BatchJobRun,
     Cluster,
     Addon,
-    DeepCheckResult,
-    OpsCheckRun,
-    OsParamChange,
 )
 from app.models.cluster import StatusEnum
-from app.models.daily_check import DailyCheckLog
 from app.models.work_item import WorkItem
 from app.models.user import User
 from app.auth.deps import require_operator
 from app.services.health_checker import HealthChecker
+from app.services.cluster_purge import purge_cluster_references
 from app.services.config_snapshot import record_cluster_meta_snapshots
 from app.services import audit_logger
 from app.schemas import (
@@ -454,6 +449,31 @@ def update_cluster(
     return cluster
 
 
+def _detach_cluster_from_work_items(db: Session, cluster_id: UUID) -> None:
+    """다중 대상 업무의 `cluster_ids`/`cluster_names` 에서 삭제된 클러스터를 제거한다.
+
+    대표 필드(`cluster_id`)는 cluster_purge 가 NULL 로 끊지만, JSONB 배열에 남은 UUID 는
+    이름을 잃은 유령 항목이 되므로 같이 정리한다. 다른 대상 클러스터가 남아 있으면 그중
+    첫 번째를 대표로 승격해 "cluster_id = cluster_ids[0]" 불변식을 유지한다.
+    """
+    cid = str(cluster_id)
+    rows = db.query(WorkItem).filter(WorkItem.cluster_ids.contains([cid])).all()
+    for item in rows:
+        ids = item.cluster_ids if isinstance(item.cluster_ids, list) else []
+        names = item.cluster_names if isinstance(item.cluster_names, list) else []
+        pairs = [
+            (x, names[i] if i < len(names) else "")
+            for i, x in enumerate(ids)
+            if str(x) != cid
+        ]
+        item.cluster_ids = [x for x, _ in pairs]
+        item.cluster_names = [n for _, n in pairs]
+        # 대표가 방금 삭제된 클러스터였다면 남은 첫 대상으로 승격 (없으면 NULL 유지)
+        if item.cluster_id is None or str(item.cluster_id) == cid:
+            item.cluster_id = UUID(str(pairs[0][0])) if pairs else None
+            item.cluster_name = pairs[0][1] if pairs else None
+
+
 @router.delete("/{cluster_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_cluster(
     cluster_id: UUID,
@@ -465,9 +485,27 @@ def delete_cluster(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    snapshot = {"name": cluster.name}
+    snapshot: dict[str, object] = {"name": cluster.name}
 
-    # 저장된 kubeconfig 파일 삭제
+    # FK 제약 때문에 Cluster 삭제 전 연관 데이터 처리.
+    # 테이블을 손으로 나열하면 모델이 추가될 때마다 누락돼 삭제가 깨진다(실제로
+    # check_matrix_results 에서 NotNullViolation 재발). cluster_purge 가 메타데이터에서
+    # cluster_id 보유 테이블을 전수 탐색해 정리하므로 여기서는 호출만 한다 — 정책/사유는
+    # app/services/cluster_purge.py 참고.
+    try:
+        purge = purge_cluster_references(db, cluster_id)
+        _detach_cluster_from_work_items(db, cluster_id)
+        db.delete(cluster)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"클러스터 삭제 중 연관 데이터 정리에 실패했습니다: {getattr(exc, 'orig', exc)}",
+        ) from exc
+
+    # 저장된 kubeconfig 파일 삭제 — DB 삭제가 커밋된 뒤에만. (커밋 전에 지우면 삭제가
+    # 실패했을 때 클러스터는 남아 있는데 kubeconfig 파일만 사라진 상태가 된다.)
     stored_path = _kubeconfig_store_path(cluster_id)
     if os.path.exists(stored_path):
         try:
@@ -475,38 +513,9 @@ def delete_cluster(
         except OSError:
             pass
 
-    # FK 제약 때문에 Cluster 삭제 전 연관 데이터 처리.
-    # addons/check_logs/playbooks/infra_nodes/items 는 Cluster 모델의 ORM
-    # relationship(cascade="all, delete-orphan")로 db.delete(cluster) 시 자동 정리된다.
-    # 아래는 cluster_id NOT NULL 이면서 ORM cascade 가 없는(=FK 위반으로 500 이 나는)
-    # 테이블들을 bulk delete 로 선행 정리한다.
-    # - DeepCheckResult: cluster_id NOT NULL. daily_check_log_id 도 FK(ondelete 없음)라
-    #   DailyCheckLog 보다 먼저 지워야 그쪽 FK 도 안전하다.
-    db.query(DeepCheckResult).filter(DeepCheckResult.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - DailyCheckLog: cluster_id NOT NULL → 먼저 삭제
-    db.query(DailyCheckLog).filter(DailyCheckLog.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - BatchJobRun: BatchJob.id FK(ondelete 없음). BatchJob.runs 의 ORM cascade 는
-    #   session.delete() 경로에서만 발동하므로, bulk delete 로는 먼저 명시 삭제해야 한다.
-    db.query(BatchJobRun).filter(
-        BatchJobRun.job_id.in_(
-            db.query(BatchJob.id).filter(BatchJob.cluster_id == cluster_id)
-        )
-    ).delete(synchronize_session=False)
-    db.query(BatchJob).filter(BatchJob.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - OpsCheckRun: cluster_id NOT NULL. OpsCheckRunItem 은 run_id FK 가 DB 레벨
-    #   ondelete=CASCADE 라 별도 처리 불필요.
-    db.query(OpsCheckRun).filter(OpsCheckRun.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - OsParamChange: cluster_id NOT NULL
-    db.query(OsParamChange).filter(OsParamChange.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - AnsibleInventory: cluster_id NOT NULL
-    db.query(AnsibleInventory).filter(AnsibleInventory.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - WorkItem (issue / task 통합): cluster_id nullable → NULL 처리 (레코드 보관)
-    db.query(WorkItem).filter(WorkItem.cluster_id == cluster_id).update(
-        {"cluster_id": None}, synchronize_session=False
-    )
-
-    db.delete(cluster)
-    db.commit()
+    if purge["errors"]:
+        # 삭제 자체는 성공했지만 일부 테이블 정리가 실패한 경우 — 조용히 넘기지 않고 남긴다.
+        snapshot["purge_errors"] = purge["errors"]
     audit_logger.record(
         db,
         action="cluster.delete",

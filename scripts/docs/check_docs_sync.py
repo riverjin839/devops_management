@@ -10,6 +10,9 @@ CI 를 실패시켜 "기능은 추가됐는데 문서는 안 고친" 드리프�
   3. frontend/src/pages/*.tsx 가 CODE_MAP.md 에 언급되는가
   4. docs/ 최상위 *.md 가 docs/README.md 인덱스에 링크되어 있는가
   5. frontend/package.json 과 backend/app/main.py 의 버전이 일치하는가
+  6. celery_app.py 의 beat_schedule 엔트리가 CLAUDE.md 표에 전수 기재됐는가
+  7. config.py 의 Settings 필드가 docs/ENVIRONMENT.md 에 전수 기재됐는가
+  8. CLAUDE.md 에 썩기 쉬운 개수 표현("라우터 65개" 등)이 되살아나지 않았는가
 
 새 라우트/라우터/페이지를 추가하면 해당 문서도 같이 갱신해야 이 검사가 통과한다.
 의도적으로 문서화를 미루는 항목은 아래 EXEMPT_* 목록에 사유와 함께 추가한다.
@@ -94,12 +97,83 @@ def check_versions(errors: list[str]) -> None:
         )
 
 
+def check_celery_beat(errors: list[str]) -> None:
+    """beat_schedule 엔트리가 CLAUDE.md 의 Celery Tasks 표에 전수 기재됐는지.
+
+    과거 CLAUDE.md 가 "Beat 스케줄 6개"/"7개" 라고 서로 다르게 적어둔 채 실제 9개로
+    늘어난 적이 있다 — 개수 대신 엔트리 이름 자체를 대조해 드리프트를 막는다.
+    """
+    celery = (ROOT / "backend/app/celery_app.py").read_text(encoding="utf-8")
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    start = celery.find("beat_schedule")
+    if start == -1:
+        return
+    entries = re.findall(r'^\s{4}["\']([\w-]+)["\']:\s*\{', celery[start:], re.M)
+    for e in entries:
+        if f"`{e}`" not in claude:
+            errors.append(
+                f"CLAUDE.md: Celery Beat 엔트리 `{e}` 미기재 (celery_app.py 에 존재). "
+                "§Celery Tasks 표에 주기·역할과 함께 추가할 것."
+            )
+
+
+def check_env_vars(errors: list[str]) -> None:
+    """config.py 의 Settings 필드가 docs/ENVIRONMENT.md 에 전수 기재됐는지."""
+    config = (ROOT / "backend/app/config.py").read_text(encoding="utf-8")
+    env_doc = (ROOT / "docs/ENVIRONMENT.md").read_text(encoding="utf-8")
+    m = re.search(r"class Settings\(BaseSettings\):(.*?)(?:\nclass |\Z)", config, re.S)
+    if not m:
+        return
+    fields = re.findall(r"^\s{4}([a-z][a-z0-9_]*)\s*:", m.group(1), re.M)
+    for f in fields:
+        if f.upper() not in env_doc:
+            errors.append(
+                f"docs/ENVIRONMENT.md: 환경변수 `{f.upper()}` 미기재 (config.py Settings 에 존재). "
+                "표에 기본값·설명과 함께 추가하고 .env.example 도 함께 확인할 것."
+            )
+
+
+# 커밋마다 썩는 개수 표현 — 문서에 두지 않는다(직접 세면 되는 정보).
+# 과거 라우터 64/65, 태스크 13/16, 체커 16, 테스트 13 처럼 파일 안에서 서로 모순된 채
+# 방치돼 에이전트가 어느 쪽도 신뢰하지 못하는 상태가 됐다.
+STALE_COUNT_PATTERNS = [
+    r"라우터\s*~?\d+\s*개",
+    r"모델\s*~?\d+\s*개",
+    r"페이지\s*~?\d+\s*개",
+    r"라우트\s*~?\d+\s*개",
+    r"훅\s*~?\d+\s*개",
+    r"테스트\s*모듈\s*~?\d+\s*개",
+    r"태스크는?\s*~?\d+\s*개",
+    r"스케줄\s*~?\d+\s*개",
+    r"체커\s*~?\d+\s*[개종]",
+    r"점검\s*~?\d+\s*종",
+    r"APIRouter\s*~?\d+\s*개",
+]
+
+
+def check_stale_counts(errors: list[str]) -> None:
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8").split("\n")
+    for lineno, line in enumerate(claude, 1):
+        if line.lstrip().startswith(">"):
+            continue  # 규칙을 설명하는 인용 블록 자체는 예외
+        for pat in STALE_COUNT_PATTERNS:
+            hit = re.search(pat, line)
+            if hit:
+                errors.append(
+                    f"CLAUDE.md:{lineno}: 개수 표현 \"{hit.group(0)}\" — 커밋마다 썩는다. "
+                    "개수 대신 항목 이름을 나열하거나 문장을 개수 없이 다시 쓸 것."
+                )
+
+
 def main() -> int:
     errors: list[str] = []
     check_screens(errors)
     check_code_map(errors)
     check_docs_index(errors)
     check_versions(errors)
+    check_celery_beat(errors)
+    check_env_vars(errors)
+    check_stale_counts(errors)
     if errors:
         print(f"[docs-sync] 실패 — {len(errors)}건의 문서-코드 드리프트:")
         fail(errors)

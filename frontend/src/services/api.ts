@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -242,6 +242,14 @@ export interface BackupImportResponse {
   inserted: number; updated: number; deleted: number;
   errors: string[]; diff: BackupImportDiff;
 }
+
+export const schemaHealthApi = {
+  // 모델 vs 실제 DB 드리프트 점검 (admin)
+  get: () => api.get<SchemaHealthReport>('/schema-health'),
+  // 안전한 드리프트만 복구 — dryRun 이면 실행할 SQL 만 확인
+  repair: (dryRun = false) =>
+    api.post<SchemaRepairResult>('/schema-health/repair', undefined, { params: { dry_run: dryRun } }),
+};
 
 export const backupApi = {
   meta: () => api.get<BackupMetaResponse>('/backup/meta'),
@@ -864,6 +872,9 @@ export const jiraApi = {
     api.put<import('@/types').JiraCredentialStatus>('/jira/credential', { token, authType, jiraAccount }),
   deleteCredential: () => api.delete('/jira/credential'),
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
+  confluenceTest: () => api.post<import('@/types').JiraTestResult>('/jira/confluence/test'),
+  ssoDiagnose: () =>
+    api.post<import('@/types').SsoDiagnoseResult>('/jira/sso/diagnose', undefined, { timeout: 90_000 }),
   // SSO 자동 로그인 — data 지정 시 파드 내 폼 로그인(ID/PW), 생략 시 서버측 브라우저(헤디드).
   // 헤디드 경로는 사용자가 브라우저에서 로그인을 마칠 때까지 기다리므로 타임아웃을 길게(4분).
   ssoLogin: (data?: import('@/types').JiraSsoLoginRequest) =>
@@ -890,6 +901,40 @@ export const jiraApi = {
     }),
   push: (itemId: string, data: import('@/types').JiraPushRequest) =>
     api.post<import('@/types').JiraPushResult>(`/jira/push/${itemId}`, data),
+  provisionDefaults: (workItemId?: string) =>
+    api.get<import('@/types').ProvisionDefaults>('/jira/provision/defaults', {
+      params: workItemId ? { work_item_id: workItemId } : undefined,
+    }),
+  provision: (data: import('@/types').ProvisionRequest) =>
+    api.post<import('@/types').ProvisionResult>('/jira/provision', data, { timeout: 2 * 60_000 }),
+  refreshItem: (itemId: string) =>
+    api.post<import('@/types').JiraImportResult>(`/jira/refresh/${itemId}`),
+  createIssue: (data: import('@/types').JiraCreateRequest) =>
+    api.post<import('@/types').JiraCreateResult>('/jira/create', data),
+  deleteIssue: (key: string) =>
+    api.delete<import('@/types').JiraDeleteResult>(`/jira/issue/${key}`),
+  // 연결 복구 — Jira 이슈는 건드리지 않고 PEP 쪽 연결만 정리/교체한다.
+  unlink: (itemId: string, data?: import('@/types').JiraUnlinkRequest) =>
+    api.post<import('@/types').JiraUnlinkResult>(`/jira/unlink/${itemId}`, data ?? {}),
+  relink: (itemId: string, data: import('@/types').JiraRelinkRequest) =>
+    api.post<import('@/types').JiraRelinkResult>(`/jira/relink/${itemId}`, data),
+  verifyLinks: (allUsers = false) =>
+    api.post<import('@/types').JiraVerifyLinksResult>('/jira/verify-links', undefined, {
+      params: { all_users: allUsers },
+      // 키마다 1콜이라 건수가 많으면 오래 걸린다.
+      timeout: 3 * 60_000,
+    }),
+  // 주간보고
+  weeklyPreview: (data?: import('@/types').WeeklyReportRequest) =>
+    api.post<import('@/types').WeeklyReport>('/jira/weekly-report/preview', data ?? {}),
+  weeklyPublish: (data?: import('@/types').WeeklyPublishRequest) =>
+    api.post<import('@/types').WeeklyPublishResult>('/jira/weekly-report/publish', data ?? {}, {
+      timeout: 2 * 60_000,
+    }),
+  weeklySettings: () =>
+    api.get<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings'),
+  updateWeeklySettings: (data: import('@/types').WeeklyReportSettings) =>
+    api.put<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings', data),
 };
 
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).
@@ -1869,6 +1914,37 @@ export const checkMatrixApi = {
   getSettings: () => api.get<CheckMatrixSettings>('/check-matrix/settings'),
   putSettings: (retentionDays: number) =>
     api.put<CheckMatrixSettings>('/check-matrix/settings', { retentionDays }),
+  // 실행 계획 — 이 셀이 대상 클러스터에서 무슨 명령을 도는지 (실행하지 않음)
+  getCellRunbook: (itemId: string, clusterId: string) =>
+    api.get<CheckMatrixRunbook>(`/check-matrix/cell/${itemId}/${clusterId}/runbook`),
+  // 소스 설정 편집 — deep_check thresholds/params 또는 addon config
+  putSourceConfig: (itemId: string, clusterId: string, entries: CheckMatrixSourceConfigEntry[]) =>
+    api.put<{ updated: string; scope: 'cluster' | 'global' }>(
+      `/check-matrix/cell/${itemId}/${clusterId}/source-config`, { entries },
+    ),
+  // 수동 실행 — 셀은 동기(결과 즉시), 클러스터/항목은 큐잉 후 batchId 폴링
+  // 동기 실행 — 느린 점검(pod_to_pod 프로브, core_bundle 등)이 기본 30s 를 넘길 수 있어
+  // 백엔드 셀 태스크 한도(280s)에 맞춰 여유를 준다.
+  runCell: (itemId: string, clusterId: string) =>
+    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`, undefined, { timeout: 300000 }),
+  runCluster: (clusterId: string) =>
+    api.post<CheckMatrixBatchResult>(`/check-matrix/clusters/${clusterId}/run`),
+  runItem: (itemId: string) =>
+    api.post<CheckMatrixBatchResult>(`/check-matrix/items/${itemId}/run`),
+  listRuns: (params: {
+    itemId?: string; clusterId?: string; batchId?: string;
+    trigger?: string; limit?: number; offset?: number;
+  }) => api.get<CheckMatrixRunList>('/check-matrix/runs', {
+    params: {
+      item_id: params.itemId,
+      cluster_id: params.clusterId,
+      batch_id: params.batchId,
+      trigger: params.trigger,
+      limit: params.limit,
+      offset: params.offset,
+    },
+  }),
+  getRun: (runId: string) => api.get<CheckMatrixRunDetail>(`/check-matrix/runs/${runId}`),
 };
 
 export const notificationsApi = {
@@ -1886,6 +1962,95 @@ export const notificationsApi = {
     api.get<{ data: import('@/types').UserNotification[]; unread: number }>('/notifications/my', { params: { limit } }),
   markRead: (id: string) => api.post(`/notifications/my/${id}/read`),
   markAllRead: () => api.post('/notifications/my/read-all'),
+};
+
+// ── Observability (관측 스택 지표) + 알람 인박스 ──────────────────────────────
+// 주의: 요청 인터셉터는 **body 만** camelCase→snake_case 로 바꾼다(쿼리 파라미터는 그대로
+// 나간다). 그래서 아래 params 는 처음부터 snake_case 로 적는다.
+export const observabilityApi = {
+  modules: () => api.get<import('@/types').ObservabilityModule[]>('/observability/modules'),
+
+  metrics: (module?: string) =>
+    api.get<import('@/types').ObservabilityMetric[]>('/observability/metrics', {
+      params: module ? { module } : undefined,
+    }),
+  createMetric: (data: import('@/types').ObservabilityMetricInput) =>
+    api.post<import('@/types').ObservabilityMetric>('/observability/metrics', data),
+  updateMetric: (id: string, data: Partial<import('@/types').ObservabilityMetricInput>) =>
+    api.put<import('@/types').ObservabilityMetric>(`/observability/metrics/${id}`, data),
+  deleteMetric: (id: string) => api.delete(`/observability/metrics/${id}`),
+
+  metricValues: (module: string, clusterId?: string | null) =>
+    api.get<import('@/types').ObservabilityMetricValuesResponse>('/observability/metrics/values', {
+      params: { module, ...(clusterId ? { cluster_id: clusterId } : {}) },
+    }),
+
+  promRules: (clusterId?: string | null, state?: string, q?: string) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/rules', {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(state && state !== 'all' ? { state } : {}),
+        ...(q ? { q } : {}),
+      },
+    }),
+  promTargets: (clusterId?: string | null, health?: string) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/targets', {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(health && health !== 'all' ? { health } : {}),
+      },
+    }),
+  promActiveAlerts: (clusterId?: string | null) =>
+    api.get<import('@/types').PromViewResponse>('/observability/prometheus/active-alerts', {
+      params: clusterId ? { cluster_id: clusterId } : undefined,
+    }),
+
+  // 알람 인박스
+  alerts: (params?: {
+    clusterId?: string | null;
+    severity?: string;
+    status?: string;
+    q?: string;
+    acked?: boolean;
+    limit?: number;
+    offset?: number;
+  }) =>
+    api.get<import('@/types').AlertEventListResponse>('/observability/alerts', {
+      params: {
+        ...(params?.clusterId ? { cluster_id: params.clusterId } : {}),
+        ...(params?.severity && params.severity !== 'all' ? { severity: params.severity } : {}),
+        ...(params?.status && params.status !== 'all' ? { status: params.status } : {}),
+        ...(params?.q ? { q: params.q } : {}),
+        ...(params?.acked !== undefined ? { acked: params.acked } : {}),
+        limit: params?.limit ?? 200,
+        offset: params?.offset ?? 0,
+      },
+    }),
+  alertStats: (clusterId?: string | null, hours = 24) =>
+    api.get<import('@/types').AlertStats>('/observability/alerts/stats', {
+      params: { hours, ...(clusterId ? { cluster_id: clusterId } : {}) },
+    }),
+  ackAlert: (id: string, acked = true) =>
+    api.post<import('@/types').AlertEvent>(`/observability/alerts/${id}/ack`, { acked }),
+  ackAllAlerts: (clusterId?: string | null, severity?: string) =>
+    api.post<{ acked: number }>('/observability/alerts/ack-all', undefined, {
+      params: {
+        ...(clusterId ? { cluster_id: clusterId } : {}),
+        ...(severity && severity !== 'all' ? { severity } : {}),
+      },
+    }),
+  deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+
+  // 알림 규칙 / 전역 설정
+  alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),
+  createAlertRule: (data: import('@/types').AlertNotifyRuleInput) =>
+    api.post<import('@/types').AlertNotifyRule>('/observability/alert-rules', data),
+  updateAlertRule: (id: string, data: import('@/types').AlertNotifyRuleInput) =>
+    api.put<import('@/types').AlertNotifyRule>(`/observability/alert-rules/${id}`, data),
+  deleteAlertRule: (id: string) => api.delete(`/observability/alert-rules/${id}`),
+  alertSettings: () => api.get<import('@/types').AlertSettings>('/observability/alert-settings'),
+  updateAlertSettings: (data: Partial<import('@/types').AlertSettings>) =>
+    api.put<import('@/types').AlertSettings>('/observability/alert-settings', data),
 };
 
 export const opsCheckApi = {
@@ -2061,6 +2226,32 @@ export const k8sStreamUrls = {
     if (token) p.set('token', token);
     return `${proto}://${window.location.host}/api/v1/k8s/${clusterId}/k9s?${p.toString()}`;
   },
+  /**
+   * 개별 노드 SSH 터미널 WebSocket — k9s 와 동일하게 토큰만 query param 이고 SSH
+   * 자격증명은 init 프레임으로 전달한다. `clusterId` 는 감사 로그 맥락용(선택).
+   */
+  nodeSsh: (token: string | null, clusterId?: string) => {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const p = new URLSearchParams();
+    if (token) p.set('token', token);
+    if (clusterId) p.set('cluster_id', clusterId);
+    return `${proto}://${window.location.host}/api/v1/node-ssh/session?${p.toString()}`;
+  },
+};
+
+// ── 개별 노드 SSH 터미널 — 접속 전 연결/자격증명 사전 검증 ────────────────────
+export interface NodeSshTestResult {
+  host: string;
+  status: 'ok' | 'error' | 'timeout' | 'auth_error' | 'connect_error';
+  durationMs: number;
+  error?: string | null;
+}
+
+export const nodeSshApi = {
+  test: (body: {
+    host: string; port: number; username: string;
+    password?: string; privateKey?: string;
+  }) => api.post<NodeSshTestResult>('/node-ssh/test', body, { timeout: 30_000 }),
 };
 
 // ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────

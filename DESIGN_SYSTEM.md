@@ -407,6 +407,174 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 
 ---
 
+## 12. 구현 표준 (Implementation Standards)
+
+> 이 장이 **컴포넌트/레이아웃 구현 규칙의 원천**이다. `CLAUDE.md` 에는 위반 시 리뷰 반려되는
+> 불변 규칙만 요약돼 있고, props·예시 코드·레이아웃 세부는 여기를 본다.
+
+### 12.1 테마 시스템 (`stores/themeStore.ts` — `k8s:theme`, fallback `'default'`)
+
+| `<html>` 클래스 | 성격 | 비고 |
+|---|---|---|
+| `html.default` | **기본값** — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경, `--radius` 14px, 은은한 그림자, 코랄 accent) | 신규 사용자 첫 진입 화면. 레거시 `'claude'` 값은 자동 마이그레이션 |
+| `:root` / `html.light` | Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign |
+| `html.dark` | Databricks-leaning 다크 | 위 §2 "Ops Slate" 계열 |
+| (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 |
+
+핵심 원칙: **모든 색·라운딩은 테마별로 값이 달라지므로 고정값 대신 토큰을 쓴다.**
+Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단계
+(`bg-surface-container-lowest~highest`), brand(`--brand-jira`), motion(`--motion-*`) 토큰이
+`index.css` 에 3테마 모두 정의돼 있다.
+
+### 12.2 라운딩 (radius 토큰)
+
+`tailwind.config.js` 매핑: `rounded-lg` = `var(--radius)` / `rounded-md` = radius−2px /
+`rounded-sm` = radius−4px — **테마 인지(theme-aware)**. `rounded-xl`/`rounded-2xl` 은 고정값.
+
+- **카드**: `MacCard`(flat 기본, `rounded-md` 토큰) 사용 — 페이지에서 카드 div 를 직접 만들지 않는다.
+- **버튼/입력**: `rounded-xl` (`ui/button.tsx` 기준). sharp corner 금지.
+- 직접 `rounded-2xl` 카드는 레거시(mac variant·다이얼로그) — 신규 코드에서 사용하지 않는다.
+
+### 12.3 MacCard (`frontend/src/components/ui/MacCard.tsx`)
+
+모든 주요 섹션은 `MacCard` 로 감싼다. shadcn `Card` 프리미티브의 어댑터이며 variant 2종:
+
+- **`flat` (기본)**: 평평한 표면 + 1px 보더, 좌측 정렬 소형 대문자 라벨 헤더 (`bg-surface-container-high`), 라운딩 `rounded-md` 토큰. 신규 코드는 전부 이것.
+- **`mac` (레거시 opt-in)**: 신호등 3점 + 중앙 타이틀의 구 macOS 창 스타일. 신규 사용 금지.
+
+```tsx
+import { MacCard } from '@/components/ui/MacCard';
+
+<MacCard title="Cluster Status">{/* content */}</MacCard>
+```
+
+Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className?`(body),
+`rootClassName?`, `bodyPadding?`(기본 flat `p-4` / mac `p-5`).
+신호등 CSS 변수(`--mac-red/yellow/green`)는 mac variant 전용으로만 유지된다.
+
+### 12.4 컴포넌트 컨벤션
+
+- **카드**: `MacCard` 사용, 직접 `bg-card border` div 조합 금지 (DESIGN.md D-004).
+- **Shadows**: light/dark 는 `--card-shadow: none`(보더가 그림자 대체), default 테마만 은은한 depth —
+  `.mac-shadow` 유틸이 토큰을 따라가므로 개별 shadow 클래스를 만들지 않는다.
+- **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
+- **Colors**: JSX 내 raw hex 금지 — Tailwind 토큰(`text-primary` 등) 또는 `hsl(var(--*))`.
+  고정 팔레트(`text-white`, `bg-gray-*` 등)도 금지 — 테마 토큰(`text-foreground`,
+  `text-muted-foreground`, `bg-card`, `bg-secondary`)을 쓴다. 차트/캔버스는 `--chart-*` 토큰 우선.
+- **접근성**: 아이콘 전용 버튼은 `title` 과 함께 **`aria-label` 병행**을 표준으로 한다.
+
+### 12.5 Cluster Sidebar 표준 (`ClusterSidebar`) — 모든 per-cluster 페이지 필수
+
+**Component:** `frontend/src/components/common/ClusterSidebar.tsx`
+
+페이지에 클러스터 선택 사이드바를 표시할 때는 **항상 `iconOnly` 모드**를 사용한다. 이는 메인 사이드바와 시각 일관성을 유지하기 위한 표준이며, 폭 56px 의 아이콘 레일로 렌더되고 호버 시 클러스터 이름·region·운영등급이 툴팁으로 표시된다. 시퀀스 번호(`seq`)는 어떤 모드에서도 노출하지 않는다.
+
+**시각적 형태 (iconOnly 모드):**
+```
+┌────┐
+│ ▦  │  ← 전체 (allowAll 시) — LayoutGrid 아이콘
+├────┤
+│ ✓●│  ← 클러스터 1 (status 아이콘 + 우상단 status dot)
+│ ⚠●│  ← 클러스터 2 (warning)
+│ ✕●│  ← 클러스터 3 (critical)
+└────┘
+   ↑ 호버하면 우측에 "이름 · region · 등급" 툴팁이 portal 로 표시됨
+```
+
+**사용 패턴 (3가지):**
+
+| 시나리오 | 필수 props | 예시 페이지 |
+|---|---|---|
+| 단일 선택 (전체 옵션 X) | `iconOnly` + `selectedId` + `onSelect` | CiliumTracePage |
+| 단일 선택 + 전체 옵션 | `iconOnly` + `allowAll` + `allLabel` + `selectedId` + `onSelect` | Dashboard |
+| 다중 선택 (빈 배열 = 전체) | `iconOnly` + `multiSelect` + `selectedIds` + `onMultiSelectChange` (+ optional `allowAll` `allLabel`) | PlaybooksPage, BulkExecPage |
+
+**예시 — 단일 선택:**
+```tsx
+<ClusterSidebar
+  clusters={clusters}
+  selectedId={clusterId || null}
+  onSelect={(id) => setClusterId(id ?? '')}
+  iconOnly
+/>
+```
+
+**예시 — 단일 선택 + 전체:**
+```tsx
+<ClusterSidebar
+  clusters={clusters}
+  selectedId={selectedClusterId}
+  onSelect={setSelectedClusterId}
+  allowAll
+  allLabel="전체 현황"
+  iconOnly
+/>
+```
+
+**예시 — 다중 선택 (PlaybooksPage 패턴):**
+```tsx
+<ClusterSidebar
+  clusters={clusters}
+  selectedId={null}
+  onSelect={() => { /* multiSelect 모드라 미사용 */ }}
+  allowAll
+  allLabel="전체 클러스터"
+  iconOnly
+  multiSelect
+  selectedIds={selectedClusterIds}
+  onMultiSelectChange={setSelectedClusterIds}
+/>
+```
+
+**레이아웃 규칙:**
+- **간격 표준 (모든 per-cluster 페이지 동일)**: 보조 사이드바(클러스터/서비스)는 **메인 사이드바에 flush(좌측 공백 0)** 로 붙인다. 컨테이너 행은 좌측 패딩 없이 `py-3 pr-3 flex gap-3` (또는 `min-h-screen bg-background flex`) 로 잡는다.
+  - 메인 사이드바 ↔ 보조 사이드바 = **0px(공백 없음)**, 보조 사이드바 ↔ 본문 = `gap-3`(12px) 또는 본문의 좌측 패딩으로 띄운다.
+  - ❌ 행에 `mx-auto`/`max-w-[...]` 로 가운데 정렬하면 보조 사이드바가 우측으로 밀려 공백이 생긴다 — **행은 좌측 정렬**(센터링 금지). 가독성 max-width 가 필요하면 보조 사이드바가 아니라 **본문(`flex-1`)에만** 적용한다.
+  - ❌ 좌측 `px-3`/`px-6`/`p-3` 처럼 행 전체에 좌측 패딩을 줘서 메인 사이드바와 보조 사이드바 사이에 틈을 만들지 않는다.
+- 사이드바 옆 본문은 `<div className="flex-1 min-w-0">` 으로 감싼다.
+- 사이드바는 `sticky top-4` 로 고정되어 스크롤해도 따라온다.
+- `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
+
+**금지:**
+- ❌ 와이드 폼 (`iconOnly` 없이 사용) — 신규 페이지에서 절대 사용 금지. 기존 페이지도 모두 iconOnly 로 마이그레이션됨.
+- ❌ `seq` 번호를 별도로 표시하는 어떤 UI 도 금지 (레거시 동작).
+- ❌ 페이지 내 dropdown 형태 클러스터 선택기 (`<select>`) — 대신 좌측 사이드바를 쓴다.
+- ❌ `onReorder` prop — iconOnly 에서는 정렬 토글이 노출되지 않으므로 사용 금지. 클러스터 정렬은 `/cluster-manage` 페이지에서만 한다.
+
+### 12.6 콘솔 화면 표준 패턴 (PEP Console Pattern) — SSH/exec 실행형 화면 공통
+
+원격 명령을 실행하고 로그(stdout/stderr)를 보여주는 화면은 모두 **같은 패턴**을 따른다.
+"콘솔 패턴 반영해줘" 류 요청이 오면 아래 목록의 화면 전부에 일괄 적용한다.
+
+**적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc-client` · etcdctl `/etcdctl` ·
+Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
+
+1. **레이아웃 — 좌(컨트롤) / 우(결과) 한 로우 고정**: 10~12컬럼 grid(`grid grid-cols-1 lg:grid-cols-10 gap-4 items-start` 등)로
+   컨트롤 카드(들)를 좌측(4~5), 결과/로그 카드를 우측(5~6)에 배치한다. 결과 카드는 **실행 전에도 같은 자리에
+   플레이스홀더**로 존재해 레이아웃이 흔들리지 않고, 스크롤은 결과 패널 내부에서만(가로 스크롤로 페이지가 늘어나면 안 됨).
+2. **stdout/stderr 는 `ExecOutputTabs`** (`components/common/ExecOutputTabs.tsx`): 두 스트림을 위아래로 쌓지 않고
+   탭으로 전환한다. 탭 라벨에 결과 유무 dot(초록=stdout/빨강=stderr)과 라인 수가 표기되고, 내용이 있는 쪽이 기본 활성
+   탭이다(stdout 우선). stdout/stderr 를 각각 `LogViewer` 로 직접 쌓는 코드는 신규 작성 금지.
+3. **로그 출력은 항상 `LogViewer`** (`components/common/LogViewer.tsx`): plain `<pre>` 금지. 포맷 자동감지(JSON/journal/table),
+   필터/복사/줄바꿈 툴바, 터미널 Appearance(색/글꼴) 가 일괄 적용된다.
+4. **터미널 Appearance 자동 적용 — `useTerminalEnvSync`** (`hooks/useTerminalEnvSync.ts`): 페이지 최상단에서
+   `useTerminalEnvSync(clusters, selectedId | selectedIds)` 를 호출한다. 선택 클러스터의 운영등급(`operationLevel`)이
+   prod/dr 계열이면 운영(ops), 아니면 개발(dev) 프로파일이 LogViewer 에 자동 적용된다(다중 선택은 하나라도 운영이면 ops,
+   페이지 이탈 시 null 초기화). **기본값: 개발=Monokai, 운영=기본(테마 색상)** — 사용자가 Settings → 터미널 Appearance 에서
+   프로파일별 템플릿/색/글꼴을 저장하면(개인화) 그 값이 우선한다(백엔드 `terminal_appearance` user_setting).
+5. **실행 상태 배지**: ok/error/timeout/auth_error/connect_error 는 `STATUS_META` 패턴(색 + 아이콘 pill)으로 표기,
+   위험 명령은 `ConfirmDialog` `danger` 확인을 거친다.
+
+**예외 — PTY 웹 터미널 화면** (k9s 콘솔 `/k9s` · 노드 SSH 터미널 `/node-ssh`): 결과가 stdout/stderr 로 끊겨
+돌아오는 게 아니라 대화형 tty 라 위 1~3 항목(좌/우 로우, `ExecOutputTabs`, `LogViewer`)이 적용되지 않는다.
+대신 **공용 `SshTerminalWindow`**(`components/k8s/SshTerminalWindow.tsx`)를 쓴다 — xterm.js ↔ WebSocket 브리지,
+드래그 이동 플로팅 창 + 우하단 리사이즈, 헤더의 재연결/새 창으로 빼기/전체화면/종료, `lib/terminalPopout.ts`
+기반 별도 창 handoff 가 여기 다 들어있다. 화면은 접속 폼(`ClusterSidebar iconOnly` + `MacCard`)과 init 프레임만
+만든다. 4·5 항목은 그대로 지킨다 — `useTerminalEnvSync` 호출(터미널 색/글꼴이 `useXtermTheme` 로 xterm 에도
+적용된다), 연결 테스트 결과는 `STATUS_META` 배지. 새 SSH 터미널 화면을 xterm 부터 직접 붙이는 코드는 금지.
+
+---
+
 ## 부록 A — 검증 출처
 
 | 항목 | ui-ux-pro-max 출처 |

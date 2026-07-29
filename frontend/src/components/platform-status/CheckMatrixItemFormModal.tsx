@@ -6,6 +6,7 @@ import { useCreateCheckMatrixItem, useUpdateCheckMatrixItem } from '@/hooks/useC
 import type { CheckMatrixItem, CheckMatrixSourceType } from '@/types';
 import { formatApiError } from '@/lib/utils';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { ROW_COLOR_PRESETS, CATEGORY_SUGGESTIONS } from './rowColors';
 
 interface Props {
   isOpen: boolean;
@@ -37,10 +38,14 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
   const createMut = useCreateCheckMatrixItem();
   const updateMut = useUpdateCheckMatrixItem();
   const isEdit = !!editingItem;
+  // 시스템 항목(core_bundle)은 이름/설명/단위/표시 여부만 수정 — 실행 소스는 잠긴다.
+  const isSystem = !!editingItem?.isSystem;
 
   const nameId = useId();
   const descId = useId();
   const unitId = useId();
+  const categoryId = useId();
+  const categoryListId = useId();
   const checkTypeId = useId();
   const addonTypeId = useId();
   const titleId = useId();
@@ -51,6 +56,8 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
   const [unit, setUnit] = useState('');
   const [sourceType, setSourceType] = useState<CheckMatrixSourceType>('manual');
   const [sourceRef, setSourceRef] = useState('');
+  const [category, setCategory] = useState('');
+  const [color, setColor] = useState('');
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
@@ -60,6 +67,8 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
     setUnit(editingItem?.unit ?? '');
     setSourceType(editingItem?.sourceType ?? 'manual');
     setSourceRef(editingItem?.sourceRef ?? '');
+    setCategory(editingItem?.category ?? '');
+    setColor(editingItem?.color ?? '');
     setEnabled(editingItem?.enabled ?? true);
   }, [isOpen, editingItem]);
 
@@ -80,6 +89,8 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
       unit: unit.trim() || null,
       sourceType,
       sourceRef: sourceType === 'manual' ? null : sourceRef,
+      category: category.trim() || null,
+      color: color || null,
       enabled,
     };
     try {
@@ -124,7 +135,7 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="예: N/W 스위치"
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+              className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
             />
           </div>
 
@@ -135,7 +146,7 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+              className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
             />
           </div>
 
@@ -146,10 +157,64 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
               type="text"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+              className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
             />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor={categoryId} className="text-xs font-medium text-muted-foreground mb-1 block">
+                영역 (선택 — 행 구분용)
+              </label>
+              <input
+                id={categoryId}
+                type="text"
+                list={categoryListId}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="예: k8s, network, storage"
+                className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
+              />
+              <datalist id={categoryListId}>
+                {CATEGORY_SUGGESTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </datalist>
+            </div>
+            <div>
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">행 배경 색 (선택)</span>
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setColor('')}
+                  title="무색"
+                  aria-label="행 배경 색 없음"
+                  className={`w-6 h-6 rounded-full border text-[10px] text-muted-foreground flex items-center justify-center ${
+                    color === '' ? 'border-primary ring-2 ring-primary/40' : 'border-border'
+                  }`}
+                >
+                  ×
+                </button>
+                {ROW_COLOR_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setColor(p.key)}
+                    title={p.label}
+                    aria-label={`행 배경 색 ${p.label}`}
+                    className={`w-6 h-6 rounded-full ${p.swatch} ${
+                      color === p.key ? 'ring-2 ring-primary ring-offset-2 ring-offset-card' : ''
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {isSystem ? (
+            <p className="text-xs text-muted-foreground rounded-lg border border-border bg-secondary/40 px-3 py-2">
+              시스템 항목입니다 — 클러스터 전체 상태 계산에 쓰이는 실행 소스(핵심 점검 번들)는
+              바꿀 수 없고, 이름/설명/단위/표시 여부만 수정할 수 있습니다.
+            </p>
+          ) : (
           <div>
             <span className="text-xs font-medium text-muted-foreground mb-1.5 block">실행 방식</span>
             <div className="space-y-1.5">
@@ -176,15 +241,16 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
               ))}
             </div>
           </div>
+          )}
 
-          {sourceType === 'deep_check' && (
+          {!isSystem && sourceType === 'deep_check' && (
             <div>
               <label htmlFor={checkTypeId} className="text-xs font-medium text-muted-foreground mb-1 block">점검 종류</label>
               <select
                 id={checkTypeId}
                 value={sourceRef}
                 onChange={(e) => setSourceRef(e.target.value)}
-                className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
               >
                 <option value="">선택하세요</option>
                 {(checkTypes ?? []).map((ct) => (
@@ -194,14 +260,14 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
             </div>
           )}
 
-          {sourceType === 'addon' && (
+          {!isSystem && sourceType === 'addon' && (
             <div>
               <label htmlFor={addonTypeId} className="text-xs font-medium text-muted-foreground mb-1 block">애드온 종류</label>
               <select
                 id={addonTypeId}
                 value={sourceRef}
                 onChange={(e) => setSourceRef(e.target.value)}
-                className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-background"
               >
                 <option value="">선택하세요</option>
                 {ADDON_TYPE_OPTIONS.map((opt) => (
@@ -218,13 +284,13 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-border">
-          <button onClick={onClose} className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+          <button onClick={onClose} className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl">
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+            className="px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
           >
             {isEdit ? '저장' : '추가'}
           </button>

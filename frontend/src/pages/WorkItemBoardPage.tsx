@@ -3,18 +3,18 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange, UserRound } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
-import { useJiraConfig } from '@/hooks/useJira';
+import { useJiraConfig, useJiraRefreshItem, useJiraPush } from '@/hooks/useJira';
 import { Settings2 } from 'lucide-react';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER, KANBAN_COLUMNS } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
@@ -24,7 +24,8 @@ import { useSprints } from '@/hooks/useSprints';
 import { useClusterStore } from '@/stores/clusterStore';
 import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
-import { WorkItem, WorkItemModule, WorkItemType } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import { WorkItem, WorkItemModule, WorkItemType, JiraFieldChange } from '@/types';
 
 type ViewMode = 'table' | 'calendar' | 'kanban';
 
@@ -164,6 +165,18 @@ export function WorkItemBoardPage() {
   const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') ?? '');
   const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // 기본 화면은 **내 업무**만 — 전사 업무가 통째로 뜨면 매번 담당자를 직접 입력해야 한다.
+  // 끈 상태는 localStorage 로 기억한다(팀 전체를 보는 사용자가 매번 다시 끄지 않도록).
+  const [onlyMine, setOnlyMine] = useState<boolean>(() => {
+    try { return localStorage.getItem('k8s:item-board:only-mine') !== '0'; } catch { return true; }
+  });
+  const toggleOnlyMine = () => setOnlyMine((v) => {
+    const next = !v;
+    try { localStorage.setItem('k8s:item-board:only-mine', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
+  const currentUser = useAuthStore((s) => s.user);
+  const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
   // 시작일/완료일 시간 표시 토글 (기본 off = 날짜만). localStorage 영속.
   const [showTime, setShowTime] = useState<boolean>(() => {
     try { return localStorage.getItem('k8s:item-board:show-time') === '1'; } catch { return false; }
@@ -206,10 +219,13 @@ export function WorkItemBoardPage() {
     [sprintList],
   );
 
+  // 담당자 입력칸에 직접 값을 넣으면 그쪽이 우선 — "내 업무" 는 비어 있을 때의 기본값이다.
+  const effectiveAssignee = filterAssignee || (onlyMine && myName ? myName : '');
+
   const filters = {
     type: typeFilter === 'all' ? undefined : typeFilter,
     clusterId: filterClusterId || undefined,
-    assignee: filterAssignee || undefined,
+    assignee: effectiveAssignee || undefined,
     category: filterCategory || undefined,
     priority: filterPriority || undefined,
     module: filterModule || undefined,
@@ -259,6 +275,14 @@ export function WorkItemBoardPage() {
           cmp = a.startedAt.localeCompare(b.startedAt);
         } else if (sortKey === 'closedAt') {
           cmp = (a.closedAt ?? '').localeCompare(b.closedAt ?? '');
+        } else if (sortKey === 'jiraEpic') {
+          // Epic 이 없으면 상위 이슈로 대체 — 표에 보이는 값과 같은 기준으로 정렬한다.
+          const epic = (t: WorkItem) => t.jiraEpicKey || t.jiraParentKey || t.jiraEpic || '';
+          cmp = epic(a).localeCompare(epic(b));
+        } else if (sortKey === 'jiraType') {
+          cmp = (a.jiraIssueType ?? '').localeCompare(b.jiraIssueType ?? '');
+        } else if (sortKey === 'jiraStatus') {
+          cmp = (a.jiraStatus ?? '').localeCompare(b.jiraStatus ?? '');
         }
         return sortDir === 'asc' ? cmp : -cmp;
       })
@@ -267,6 +291,71 @@ export function WorkItemBoardPage() {
   const deleteTask = useDeleteWorkItem();
   const createTask = useCreateWorkItem();
   const toast = useToast();
+  // Jira 연결 업무의 행 단위 동기화 — 다시 가져오기 / 수정 내용 보내기.
+  const jiraRefresh = useJiraRefreshItem();
+  const jiraPush = useJiraPush();
+  const [jiraBusyId, setJiraBusyId] = useState<string | null>(null);
+  // 업무 생성 직후 Jira·Confluence 자동 생성 모달을 띄운다(연동이 켜져 있을 때만).
+  const [provisionItem, setProvisionItem] = useState<WorkItem | null>(null);
+  // Jira 연결 관리(해제/변경/삭제) — 재가져오기가 "Jira 에 없음"으로 끝나면 사유와 함께 자동으로 연다.
+  const [linkItem, setLinkItem] = useState<WorkItem | null>(null);
+  const [linkMissingDetail, setLinkMissingDetail] = useState<string | undefined>();
+
+  const openJiraLink = (item: WorkItem, missingDetail?: string) => {
+    setLinkMissingDetail(missingDetail);
+    setLinkItem(item);
+  };
+
+  const handleJiraRefresh = async (item: WorkItem) => {
+    setJiraBusyId(item.id);
+    try {
+      const { data } = await jiraRefresh.mutateAsync(item.id);
+      if (data.status === 'missing') {
+        // 이슈가 지워졌거나 권한이 없다 — 토스트로 끝내면 사용자가 할 수 있는 게 없으므로
+        // 연결을 해제/변경할 수 있는 다이얼로그를 바로 띄운다.
+        openJiraLink(item, data.detail);
+        return;
+      }
+      if (data.status !== 'ok') {
+        toast.error('Jira 재가져오기 실패', data.detail);
+        return;
+      }
+      const changed = data.items[0]?.changes ?? [];
+      toast.success(
+        changed.length ? `${item.jiraIssueKey} 갱신됨` : `${item.jiraIssueKey} 변경 없음`,
+        changed.length ? changed.map((c: JiraFieldChange) => c.label || c.field).join(', ') : data.detail,
+      );
+    } catch (err) {
+      toast.error('Jira 재가져오기 실패', formatApiError(err));
+    } finally {
+      setJiraBusyId(null);
+    }
+  };
+
+  const handleJiraPush = async (item: WorkItem) => {
+    setJiraBusyId(item.id);
+    try {
+      const { data } = await jiraPush.mutateAsync({ itemId: item.id, data: { pushFields: true } });
+      if (data.status === 'conflict') {
+        toast.error('Jira 쪽이 더 최신입니다', data.detail);
+        return;
+      }
+      if (data.status !== 'ok') {
+        toast.error('Jira 반영 실패', data.detail);
+        return;
+      }
+      const parts = [
+        data.fieldsUpdated.length ? `필드 ${data.fieldsUpdated.join(', ')}` : '',
+        data.transitioned ? '상태 전이' : '',
+      ].filter(Boolean);
+      toast.success(`${item.jiraIssueKey} 반영 완료`, parts.join(' · ') || data.detail);
+    } catch (err) {
+      toast.error('Jira 반영 실패', formatApiError(err));
+    } finally {
+      setJiraBusyId(null);
+    }
+  };
+
 
   const handleDelete = (item: WorkItem) => setConfirmDelete(item);
   const doDelete = () => {
@@ -369,7 +458,9 @@ export function WorkItemBoardPage() {
     setFilterTo('');
   };
 
-  const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterSprintId || filterFrom || filterTo;
+  // "내 업무"(기본값)는 초기화 대상이 아니다 — 빈 목록이 떴을 때 안내 문구를 고르는 데만 쓴다.
+  const hasFilters = !!(filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterSprintId || filterFrom || filterTo);
+  const isFilteredView = hasFilters || (onlyMine && !!myName);
 
   const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
   const doneCount = items.filter((t) => t.kanbanStatus === 'done').length;
@@ -459,11 +550,24 @@ export function WorkItemBoardPage() {
 
           {/* 검색 컨트롤 — 라인 패턴(rounded-lg · bg-secondary · border)으로 통일. 모듈 필터도 여기 드롭다운으로 통합(2줄→1줄) */}
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {myName && (
+              <button
+                type="button"
+                onClick={toggleOnlyMine}
+                aria-pressed={onlyMine}
+                title={onlyMine ? `내 업무(${myName})만 보는 중 — 눌러서 전체 보기` : '내 업무만 보기'}
+                className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
+                  onlyMine ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <UserRound className="w-3.5 h-3.5" /> 내 업무
+              </button>
+            )}
             <input
               type="text"
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
-              placeholder="담당자"
+              placeholder={onlyMine && myName ? myName : '담당자'}
               aria-label="담당자 필터"
               className="w-24 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             />
@@ -640,9 +744,11 @@ export function WorkItemBoardPage() {
           <div className="text-center py-20">
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
             <p className="text-muted-foreground mb-4">
-              {hasFilters ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
+              {onlyMine && myName && !hasFilters
+                ? `${myName} 담당 업무가 없습니다 — "내 업무" 를 끄면 전체를 볼 수 있습니다.`
+                : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
             </p>
-            {!hasFilters && (
+            {!isFilteredView && (
               <button
                 onClick={handleCreateNew}
                 className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
@@ -705,15 +811,24 @@ export function WorkItemBoardPage() {
                       onDelete={handleDelete}
                       onAddSubItem={handleAddSubItem}
                       onOpenDetail={openTaskDetail}
+                      onJiraRefresh={handleJiraRefresh}
+                      onJiraPush={handleJiraPush}
+                      jiraBusy={jiraBusyId === item.id}
+                      onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
+                      onJiraLink={(t) => openJiraLink(t)}
                     />
                   ))}
                   <AddWorkItemRow
                     clusters={clusters}
                     colSpan={visibleCols.length + 1}
                     defaultClusterId={filterClusterId || undefined}
-                    defaultAssignee={filterAssignee || undefined}
+                    defaultAssignee={effectiveAssignee || undefined}
                     onCreate={(data) => createTask.mutate(data, {
-                      onSuccess: () => toast.success('업무 등록됨'),
+                      onSuccess: (created) => {
+                        toast.success('업무 등록됨');
+                        // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
+                        if (jiraConfig?.enabled && created?.data) setProvisionItem(created.data);
+                      },
                       onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
                     })}
                   />
@@ -730,6 +845,13 @@ export function WorkItemBoardPage() {
       <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
+      <JiraProvisionModal open={!!provisionItem} onClose={() => setProvisionItem(null)} item={provisionItem} />
+      <JiraLinkDialog
+        open={!!linkItem}
+        onClose={() => { setLinkItem(null); setLinkMissingDetail(undefined); }}
+        item={linkItem}
+        missingDetail={linkMissingDetail}
+      />
 
       <WorkItemFormModal
         open={createOpen}

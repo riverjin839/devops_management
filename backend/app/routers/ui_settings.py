@@ -84,7 +84,6 @@ def get_ui_settings(db: Session = Depends(get_db)):
     return UiSettingsResponse(
         app_title=stored_title,
         nav_labels=value.get("nav_labels", {}),
-        service_catalog=value.get("service_catalog"),
         home_icons=value.get("home_icons"),
         page_styles=value.get("page_styles"),
     )
@@ -103,20 +102,6 @@ def update_ui_settings(
         "app_title": payload.app_title if payload.app_title is not None else current.get("app_title", DEFAULT_UI_SETTINGS["app_title"]),
         "nav_labels": payload.nav_labels if payload.nav_labels is not None else current.get("nav_labels", {}),
     }
-    if payload.service_catalog is not None:
-        # 빈 슬러그 배제 + slug 기준 dedupe (먼저 들어온 항목 우선)
-        seen: set[str] = set()
-        cleaned: list[dict] = []
-        for it in payload.service_catalog:
-            slug = it.slug.strip()
-            if not slug or slug in seen:
-                continue
-            seen.add(slug)
-            cleaned.append(it.model_dump(exclude_none=False))
-        next_value["service_catalog"] = cleaned
-    elif "service_catalog" in current:
-        next_value["service_catalog"] = current["service_catalog"]
-
     # 홈 버튼 아이콘 — 프론트가 항상 work/platform 전체를 보내므로 통째로 저장.
     if payload.home_icons is not None:
         next_value["home_icons"] = payload.home_icons.model_dump(exclude_none=False)
@@ -142,7 +127,6 @@ def update_ui_settings(
     return UiSettingsResponse(
         app_title=next_value["app_title"],
         nav_labels=next_value["nav_labels"],
-        service_catalog=next_value.get("service_catalog"),
         home_icons=next_value.get("home_icons"),
         page_styles=next_value.get("page_styles"),
     )

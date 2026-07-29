@@ -80,16 +80,27 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="etcd_defrag",
             display_name="etcd 단편화 / 알람",
-            description="etcdctl endpoint status + alarm list 로 단편화율과 alarm 점검",
+            description=(
+                "etcdctl endpoint status + alarm list 로 단편화율과 alarm 점검. "
+                "파드형 etcd 는 pod exec, 데몬(systemd) etcd 는 '버전/설정 관리' 화면에서 "
+                "수집한 etcdctl_config 스냅샷으로 점검(auto 는 pod → 스냅샷 폴백)."
+            ),
             threshold_fields=[
                 DeepCheckFieldSpec("warning_fragmentation_pct", "float", "단편화 경고 (%)", 30),
                 DeepCheckFieldSpec("critical_fragmentation_pct", "float", "단편화 심각 (%)", 50),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("source", "string", "실행 경로 (auto|pod|snapshot)", "auto",
+                                   help="auto: pod 탐색 후 없으면 수집 스냅샷 폴백 / pod: 파드형 etcd 전용 / "
+                                        "snapshot: 데몬(systemd) etcd — /versions 에서 수집한 스냅샷만 사용"),
+                DeepCheckFieldSpec("snapshot_max_age_hours", "int", "스냅샷 허용 나이 (시간)", 24,
+                                   help="수집 시각이 이보다 오래되면 판정하지 않고 대기(pending) 처리"),
             ],
             default_thresholds={
                 "warning_fragmentation_pct": 30,
                 "critical_fragmentation_pct": 50,
             },
-            default_params={},
+            default_params={"source": "auto", "snapshot_max_age_hours": 24},
         ),
     ),
     "cni_flow": (
@@ -596,6 +607,7 @@ STEP_PLANS: dict[str, list[tuple[str, str]]] = {
         ("locate_pod", "etcd 파드 탐색"),
         ("exec_status", "etcdctl endpoint status 실행"),
         ("exec_alarm", "etcdctl alarm list 실행"),
+        ("snapshot", "수집 스냅샷 폴백 (데몬 etcd)"),
         ("parse", "db size 파싱 · 단편화율 계산"),
         ("verdict", "단편화/알람 임계 비교"),
     ],
@@ -656,3 +668,71 @@ STEP_PLANS: dict[str, list[tuple[str, str]]] = {
 def get_step_plan(check_type: str) -> list[dict[str, str]]:
     """check_type 의 단계 plan(메커니즘). 미정의면 빈 리스트."""
     return [{"id": sid, "label": lbl} for sid, lbl in STEP_PLANS.get(check_type, [])]
+
+
+# ── 셀 대표값 (매트릭스 숫자 표시) ──────────────────────────────────────────────
+# 각 check_type 결과(details)에서 매트릭스 셀에 숫자로 보여줄 대표값을 뽑는 규칙.
+# 예: 인증서 만료는 "정상"이 아니라 "361일" 이 보여야 한다 — 상태색은 판정,
+# 숫자는 여유(잔여일/실패율/건수)를 즉시 읽게 해 준다.
+#
+# 체커가 details 키를 바꾸면 여기도 같은 커밋에서 바꾼다.
+# tests/test_check_matrix_runs.py 가 전 check_type 의 규칙 존재 여부를 검사한다.
+
+def _num(v: Any) -> float | None:
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _len_sum(d: dict, *keys: str) -> float | None:
+    """리스트 키들의 길이 합. 키가 하나도 없으면 None (0건과 미측정을 구분)."""
+    found = False
+    total = 0
+    for k in keys:
+        v = d.get(k)
+        if isinstance(v, list):
+            found = True
+            total += len(v)
+    return float(total) if found else None
+
+
+# check_type → (단위, details → 대표값). 단위는 seed 시 CheckMatrixItem.unit 에도 들어간다.
+CELL_VALUE_SPECS: dict[str, tuple[str, Any]] = {
+    "cert_expiry": ("일", lambda d: _num(d.get("min_residual_days"))),
+    "etcd_defrag": ("%", lambda d: _num(d.get("fragmentation_pct"))),
+    "cni_flow": ("%", lambda d: _num(d.get("drop_pct"))),
+    "pvc_health": ("건", lambda d: _len_sum(d, "pending_pvcs", "lost_pvcs")),
+    "image_pull": ("건", lambda d: _len_sum(d, "pull_failures", "crash_loops")),
+    "audit_rbac": ("명", lambda d: _num(d.get("cluster_admin_count"))),
+    "node_pressure": ("대", lambda d: _len_sum(d, "not_ready_nodes", "pressured")),
+    "coredns_health": ("%", lambda d: _num(d.get("error_rate_pct"))),
+    "stuck_terminating": ("건", lambda d: _len_sum(d, "stuck_pods")),
+    "oom_events": ("건", lambda d: _num(d.get("total_count"))),
+    "external_to_pod": ("%", lambda d: _num(d.get("failure_pct"))),
+    "pod_to_pod": ("%", lambda d: _num(d.get("failure_pct"))),
+    "kernel_param_drift": ("건", lambda d: _num(d.get("recent_changes"))),
+    "minio_health": ("%", lambda d: _num(d.get("failure_pct"))),
+    "isilon_nfs": ("%", lambda d: _num(d.get("quota_max_pct"))),
+    "node_health": ("대", lambda d: _num(d.get("unhealthy_count"))),
+    "custom_http": ("%", lambda d: _num(d.get("failure_pct"))),
+    # 커스텀 측정형 — 단위는 정의마다 다르므로 비워 둔다(항목 unit 을 직접 설정).
+    "custom_kubectl": ("", lambda d: _num(d.get("value"))),
+    "custom_promql": ("", lambda d: _num(d.get("value"))),
+}
+
+
+def get_cell_value_unit(check_type: str) -> str | None:
+    entry = CELL_VALUE_SPECS.get(check_type)
+    return (entry[0] or None) if entry else None
+
+
+def extract_cell_value(check_type: str, details: dict[str, Any] | None) -> float | None:
+    """결과 details 에서 셀 대표값 추출 — 규칙이 없거나 키가 비면 None(값 미표시)."""
+    entry = CELL_VALUE_SPECS.get(check_type)
+    if entry is None or not isinstance(details, dict):
+        return None
+    try:
+        return entry[1](details)
+    except Exception:  # noqa: BLE001 — 값 추출 실패가 점검 결과 기록을 막으면 안 된다
+        return None

@@ -1,12 +1,12 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, ListTodo, Palette, FileSearch, Wand2, Boxes } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, ListTodo, Palette, FileSearch, Wand2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
+import { SchemaHealthPanel } from '@/components/settings/SchemaHealthPanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
-import { ServiceCatalogManager } from '@/components/settings/ServiceCatalogManager';
 import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
 import { ServiceCategoryManager } from '@/components/settings/ServiceCategoryManager';
 import { NavMenuManager } from '@/components/settings/NavMenuManager';
@@ -21,7 +21,7 @@ import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
-import { Cluster, ManagementServer, ManagementServerCreate } from '@/types';
+import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from '@/types';
 import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
 import { useHomeStore } from '@/stores/homeStore';
 import { useToast, ClusterIconPicker, useModalA11y } from '@/components/common';
@@ -427,7 +427,9 @@ export function SettingsPage() {
   const handleDelete = async (cluster: Cluster) => {
     if (
       !confirm(
-        `클러스터 "${cluster.name}"을(를) 삭제하시겠습니까?\n관련 Addon, CheckLog, Playbook이 모두 삭제됩니다.`
+        `클러스터 "${cluster.name}"을(를) 삭제하시겠습니까?\n` +
+          '점검 결과·이벤트·스냅샷·Addon·Playbook·배치잡 등 이 클러스터에 속한 데이터가 모두 삭제됩니다.\n' +
+          '업무(Work Item)와 서비스 카탈로그는 삭제되지 않고 클러스터 연결만 해제됩니다.'
       )
     )
       return;
@@ -539,15 +541,17 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'service-categories' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log' | 'schema';
   const [searchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
-  // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭은 "관리 서비스"(mgmt-service) 안의
-  // "서비스 카탈로그" 서브탭으로 이동됨 → ?tab=service 는 mgmt-service 로 리다이렉트.
-  const initialTab = (rawTab === 'service' ? 'mgmt-service' : rawTab) as TabId | null;
+  // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭과 "서비스 카테고리"(service-categories)
+  // 탭은 "관리 서비스"(mgmt-service) 로 통합됐다 → 둘 다 mgmt-service 로 리다이렉트.
+  const LEGACY_MGMT_TABS = ['service', 'service-categories'];
+  const initialTab = (LEGACY_MGMT_TABS.includes(rawTab ?? '') ? 'mgmt-service' : rawTab) as TabId | null;
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'cluster');
-  // "관리 서비스" 탭 내부 서브탭: 서비스 타입(LakeServiceType) / 서비스 카탈로그(ui_settings).
-  const [mgmtView, setMgmtView] = useState<'types' | 'catalog'>(rawTab === 'service' ? 'catalog' : 'types');
+  // "관리 서비스" 탭 내부 서브탭 — PEP 서비스 / APP 서비스 도메인 구분. 각 서브탭은
+  // 해당 도메인의 카테고리 + 서비스 타입을 한 화면에서 관리한다.
+  const [mgmtDomain, setMgmtDomain] = useState<ServiceDomain>('pep');
 
   // Debug 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
@@ -563,13 +567,13 @@ export function SettingsPage() {
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'mgmt-service', label: '관리 서비스', icon: <Database className="w-4 h-4" />, count: 0 },
-    { id: 'service-categories', label: '서비스 카테고리', icon: <Boxes className="w-4 h-4" />, count: 0 },
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
     { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'jira', label: '연동 (Jira)', icon: <Globe className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
     { id: 'audit-log', label: '감사 로그', icon: <FileSearch className="w-4 h-4" />, count: 0 },
+    { id: 'schema', label: '스키마 점검', icon: <Database className="w-4 h-4" />, count: 0 },
   ];
 
   return (
@@ -795,37 +799,31 @@ export function SettingsPage() {
           </div>
         )}
 
-        {/* 관리 서비스 — "서비스 타입"(LakeServiceType 카탈로그) + "서비스 카탈로그"
-            (ui_settings.serviceCatalog, 통합지식 사이드바·task/issue tag 출처) 2개 내부 서브탭.
-            과거 최상위 "서비스"(PEP 서비스) 탭이 여기 "서비스 카탈로그" 서브탭으로 이동됨.
-            "LAKE" 는 PEP 서비스에 일반적인 개념이 아니라 탭 라벨에서 제외. */}
+        {/* 관리 서비스 — PEP 서비스 / APP 서비스 도메인 서브탭 2개. 각 서브탭 안에서 해당
+            도메인의 상위 카테고리와 서비스 타입을 함께 관리한다. 구 "서비스 카테고리" 최상위
+            탭과 구 "서비스 카탈로그" 서브탭(ui_settings.serviceCatalog)이 여기로 통합됐다 —
+            /services 지식 카탈로그와 업무 태그도 PEP 서비스 타입의 아이콘/색상을 쓴다. */}
         {activeTab === 'mgmt-service' && (
           <div className="mb-8 space-y-4">
             <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
               {([
-                { id: 'types', label: '서비스 타입' },
-                { id: 'catalog', label: '서비스 카탈로그' },
+                { id: 'pep', label: 'PEP 서비스' },
+                { id: 'app', label: 'APP 서비스' },
               ] as const).map((v) => (
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => setMgmtView(v.id)}
+                  onClick={() => setMgmtDomain(v.id)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    mgmtView === v.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                    mgmtDomain === v.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {v.label}
                 </button>
               ))}
             </div>
-            {mgmtView === 'types' ? <LakeServiceTypeManager /> : <ServiceCatalogManager />}
-          </div>
-        )}
-
-        {/* PEP/APP 서비스 상위 카테고리 — service-category-catalog PDCA */}
-        {activeTab === 'service-categories' && (
-          <div className="mb-8">
-            <ServiceCategoryManager />
+            <ServiceCategoryManager domain={mgmtDomain} />
+            <LakeServiceTypeManager domain={mgmtDomain} />
           </div>
         )}
 
@@ -1190,6 +1188,7 @@ export function SettingsPage() {
         {activeTab === 'access' && <FeatureAccessManager />}
 
         {activeTab === 'backup' && <BackupRestorePanel />}
+        {activeTab === 'schema' && <SchemaHealthPanel />}
 
         {activeTab === 'jira' && <JiraIntegrationPanel />}
 

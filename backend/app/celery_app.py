@@ -80,6 +80,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_architecture_doc_sync",
         "schedule": crontab(minute="*"),
     },
+    # 주간보고 자동 생성 — 설정 cron(기본 금 17:00) 평가 후 Confluence 게시.
+    "weekly-report-dispatcher": {
+        "task": "app.celery_app.dispatch_weekly_report",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 
@@ -190,7 +195,7 @@ def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
     import logging
     from app.database import SessionLocal
     from app.models import Cluster
-    from app.services.deep_check_service import DeepCheckService
+    from app.services import check_matrix_service as cms
 
     log = logging.getLogger(__name__)
     db = SessionLocal()
@@ -198,8 +203,7 @@ def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None:
             return {"error": "cluster not found", "cluster_id": cluster_id}
-        DeepCheckService(db).run_definition_once(definition_id, cluster=cluster, persist=True)
-        return {"definition_id": definition_id, "cluster_id": cluster_id, "ok": True}
+        return cms.execute_definition_for_cluster(db, definition_id, cluster)
     except Exception as e:  # noqa: BLE001
         db.rollback()
         log.exception(
@@ -211,6 +215,35 @@ def run_check_matrix_definition_one(self, definition_id: str, cluster_id: str):
             "definition_id": definition_id,
             "cluster_id": cluster_id,
         }
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="app.celery_app.run_check_matrix_run_one",
+    time_limit=280,
+    soft_time_limit=240,
+    ignore_result=True,
+)
+def run_check_matrix_run_one(self, run_id: str):
+    """사용자가 트리거한 일괄 수행(클러스터 열 / 항목 행)의 개별 셀 실행.
+
+    ``CheckMatrixRun`` 이 이미 queued 로 만들어져 있고, 이 태스크는 그 레코드를
+    running → success/failed/skipped 로 진행시킨다. 셀마다 독립 태스크라 느린
+    클러스터 하나가 나머지 셀을 막지 않는다.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.services import check_matrix_service as cms
+
+    db = SessionLocal()
+    try:
+        return cms.execute_run(db, run_id)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).exception("check-matrix run task failed run_id=%s: %s", run_id, e)
+        return {"error": str(e)[:200], "run_id": run_id}
     finally:
         db.close()
 
@@ -965,5 +998,115 @@ def compute_work_guide_embedding(self, work_guide_id: str):
         db.rollback()
         log.exception("compute_work_guide_embedding failed (%s): %s", work_guide_id, e)
         return {"work_guide_id": work_guide_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.dispatch_weekly_report", ignore_result=True)
+def dispatch_weekly_report(self):
+    """주간보고 자동 생성·게시 디스패처 — 설정 cron 을 매분 평가해 tick 당 최대 1회 실행.
+
+    아키텍처 문서 디스패처와 동일한 croniter + tz + last_run 앵커 패턴. 게시는 사용자
+    세션이 필요하므로, **마지막으로 Confluence 세션이 확인된 사용자**의 자격으로 수행한다
+    (없으면 건너뛴다 — 자동 게시는 세션 없이는 불가능하다)."""
+    import asyncio
+    import logging
+    from datetime import datetime, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.config import settings
+    from app.database import SessionLocal
+
+    log = logging.getLogger(__name__)
+    try:
+        from croniter import croniter
+    except ImportError:
+        return {"dispatched": False, "reason": "croniter_missing"}
+
+    try:
+        tz = ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        tz = ZoneInfo("Asia/Seoul")
+
+    db = SessionLocal()
+    try:
+        from app.models.app_setting import AppSetting
+        from app.models.user import User
+        from app.models.user_jira_credential import UserJiraCredential
+        from app.routers.jira import (
+            WEEKLY_SETTINGS_KEY, DEFAULT_WEEKLY_SETTINGS, _get_config,
+            _confluence_service_verified,
+        )
+        from app.services import weekly_report_service
+
+        row = db.query(AppSetting).filter(AppSetting.key == WEEKLY_SETTINGS_KEY).first()
+        sch = dict(DEFAULT_WEEKLY_SETTINGS)
+        if row and isinstance(row.value, dict):
+            sch.update(row.value)
+        if not sch.get("auto_enabled"):
+            return {"dispatched": False, "reason": "disabled"}
+        cron_expr = (sch.get("auto_cron") or "").strip()
+        if not croniter.is_valid(cron_expr):
+            return {"dispatched": False, "reason": "invalid_cron"}
+
+        now_aware = datetime.now(_tz.utc).astimezone(tz)
+        now_naive = now_aware.replace(tzinfo=None)
+        last = sch.get("last_run_at")
+        try:
+            anchor = (datetime.fromisoformat(last).astimezone(tz).replace(tzinfo=None)
+                      if last else now_naive - timedelta(days=7))
+        except Exception:  # noqa: BLE001
+            anchor = now_naive - timedelta(days=7)
+        try:
+            next_fire = croniter(cron_expr, anchor).get_next(datetime)
+        except Exception:  # noqa: BLE001
+            return {"dispatched": False, "reason": "cron_eval_error"}
+        if next_fire > now_naive:
+            return {"dispatched": False, "reason": "not_due"}
+
+        # 게시 주체 — Confluence 세션이 저장된 사용자 중 가장 최근 검증된 사람.
+        cred = (
+            db.query(UserJiraCredential)
+            .filter(UserJiraCredential.confluence_cookie_encrypted.isnot(None))
+            .order_by(UserJiraCredential.last_verified_at.desc().nullslast())
+            .first()
+        )
+        if not cred:
+            return {"dispatched": False, "reason": "no_confluence_session"}
+        actor = db.query(User).filter(User.username == cred.username).first()
+        if not actor:
+            return {"dispatched": False, "reason": "actor_missing"}
+
+        cfg = _get_config(db)
+        report = weekly_report_service.build_report(
+            db, project_filter=sch.get("project_filter", ""))
+        space_key = (sch.get("space_key") or "").strip()
+        if not space_key:
+            return {"dispatched": False, "reason": "no_space_key"}
+        title = (sch.get("title_template") or "주간보고 {start} ~ {end}").format(
+            start=report["period_start"], end=report["period_end"])
+        body = weekly_report_service.render_storage_html(report)
+
+        loop = asyncio.new_event_loop()
+        try:
+            svc, res = loop.run_until_complete(_confluence_service_verified(db, actor, cfg))
+            if svc is None or res.get("status") != "ok":
+                return {"dispatched": False, "reason": "confluence_unavailable"}
+            out = loop.run_until_complete(svc.upsert_page(
+                space_key, title, body, parent_id=(sch.get("parent_page_id") or "")))
+        finally:
+            loop.close()
+
+        sch["last_run_at"] = datetime.now(_tz.utc).isoformat()
+        if row:
+            row.value = sch
+        else:
+            db.add(AppSetting(key=WEEKLY_SETTINGS_KEY, value=sch))
+        db.commit()
+        log.info("weekly report auto-publish: %s", out.get("status"))
+        return {"dispatched": True, "result": out.get("status"), "action": out.get("action")}
+    except Exception as exc:  # noqa: BLE001 - 디스패처는 절대 죽지 않는다
+        log.warning("weekly report dispatcher failed: %s", exc)
+        return {"dispatched": False, "reason": "error"}
     finally:
         db.close()

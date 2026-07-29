@@ -3,17 +3,9 @@
 전제:
 - 각 클러스터의 control-plane(master) 서버에 `k9s` 바이너리가 설치되어 있고, 해당
   서버 계정의 기본 kubeconfig(`~/.kube/config`) 로 클러스터에 접근 가능하다.
-- 브라우저(xterm.js) ↔ FastAPI WebSocket ↔ paramiko PTY(invoke_shell) 를 브리지한다.
-  paramiko 채널은 동기/블로킹이므로 블로킹 recv 를 executor 로 오프로드한다.
-
-프로토콜:
-- 클라이언트는 `?token=<jwt>` 로 연결한다(WS 는 Authorization 헤더 불가).
-- accept 직후 클라이언트가 **init 프레임** 을 1회 보낸다:
-    {"type":"init","host":"10.0.0.11","port":22,"username":"root",
-     "password":"...","privateKey":"...","cols":120,"rows":40,
-     "namespace":"kube-system","readonly":false}
-  password/privateKey 는 URL 이 아닌 이 프레임으로만 받는다(로그/히스토리 노출 방지).
-- 이후 프레임: {"type":"stdin","data":"..."} / {"type":"resize","cols":..,"rows":..}
+- 브라우저(xterm.js) ↔ FastAPI WebSocket ↔ paramiko PTY 브리지는 공용 유틸
+  `services/ssh_pty` 가 담당한다(노드 SSH 터미널 `node_ssh.py` 와 공유).
+  프로토콜(init/stdin/resize 프레임)과 보안 정책 상세는 그 모듈의 docstring 참고.
 
 보안:
 - WS 는 전역 `_auth` 가 적용되지 않으므로 핸들러 내부에서 직접 토큰을 검증하고,
@@ -25,55 +17,38 @@
 """
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-import os
 import re
 import shlex
-import socket
-import time
 from uuid import UUID
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 
-from app.auth.security import decode_access_token
 from app.database import SessionLocal
 from app.models import Cluster
 from app.models.user import User
 from app.services import audit_logger
-from app.services.ssh_runner import SSHTarget, connect_client
+from app.services.ssh_pty import (
+    CLOSE_DISABLED,
+    CLOSE_NOT_FOUND,
+    CLOSE_UNAUTHORIZED,
+    PtyInitError,
+    bridge_pty,
+    env_flag_enabled,
+    receive_init,
+    reject_init,
+    resolve_ws_user,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/k8s", tags=["k9s-ssh"])
 
-_ALLOWED_ROLES = {"admin", "operator"}
-_MAX_SESSION_SECONDS = 60 * 60  # 1시간 상한 — 좀비 세션 방지
 _NS_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,62}$")  # k8s 네임스페이스 형식
 
 
 def _k9s_enabled() -> bool:
-    return os.getenv("PEP_K9S_SSH_ENABLED", "true").lower() not in ("false", "0", "no")
-
-
-def _resolve_user(token: str | None, db) -> User | None:
-    """query param 토큰 → User. 실패/비활성/역할부족이면 None."""
-    if not token:
-        return None
-    payload = decode_access_token(token)
-    if not payload:
-        return None
-    username = payload.get("sub")
-    if not username:
-        return None
-    user = db.query(User).filter(User.username == username).first()
-    if not user or not user.is_active:
-        return None
-    effective_role = "viewer" if user.role == "user" else user.role
-    if effective_role not in _ALLOWED_ROLES:
-        return None
-    return user
+    return env_flag_enabled("PEP_K9S_SSH_ENABLED", default=True)
 
 
 def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None) -> str:
@@ -117,172 +92,60 @@ def _build_k9s_command(namespace: str | None, readonly: bool, extra: str | None)
 @router.websocket("/{cluster_id}/k9s")
 async def k9s_terminal(websocket: WebSocket, cluster_id: UUID, token: str | None = None):
     db = SessionLocal()
-    client = None
-    chan = None
     user: User | None = None
-    started = 0.0
+    duration: float | None = None
     host_label = ""
     try:
         if not _k9s_enabled():
-            await websocket.close(code=4403)
+            await websocket.close(code=CLOSE_DISABLED)
             return
-        user = _resolve_user(token, db)
+        user = resolve_ws_user(token, db)
         if user is None:
-            await websocket.close(code=4401)  # unauthorized
+            await websocket.close(code=CLOSE_UNAUTHORIZED)
             return
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if cluster is None:
-            await websocket.close(code=4404)
+            await websocket.close(code=CLOSE_NOT_FOUND)
             return
 
         await websocket.accept()
 
-        # ── init 프레임 수신 (SSH 자격증명 + 터미널 크기) ──────────────────────
         try:
-            raw = await asyncio.wait_for(websocket.receive_text(), timeout=60)
-            init = json.loads(raw)
-        except (asyncio.TimeoutError, ValueError, TypeError):
-            await websocket.send_text("\r\n[init 프레임 없음 — 종료]\r\n")
-            await websocket.close(code=1008)
-            return
-        if init.get("type") != "init":
-            await websocket.send_text("\r\n[잘못된 init 프레임]\r\n")
-            await websocket.close(code=1008)
+            init = await receive_init(websocket)
+        except PtyInitError as e:
+            await reject_init(websocket, str(e))
             return
 
-        host = str(init.get("host") or "").strip()
-        if not host:
-            await websocket.send_text("\r\n[host 미지정]\r\n")
-            await websocket.close(code=1008)
-            return
-        port = int(init.get("port") or 22)
-        username = str(init.get("username") or "root").strip() or "root"
-        password = init.get("password") or None
-        private_key = init.get("privateKey") or init.get("private_key") or None
-        if not password and not private_key:
-            await websocket.send_text("\r\n[password 또는 private_key 필요]\r\n")
-            await websocket.close(code=1008)
-            return
-        cols = int(init.get("cols") or 120)
-        rows = int(init.get("rows") or 40)
-        namespace = init.get("namespace") or None
-        readonly = bool(init.get("readonly") or False)
-        run_cmd = _build_k9s_command(namespace, readonly, init.get("extraFlags"))
-        host_label = f"{username}@{host}:{port}"
+        host_label = init.label
+        namespace = init.raw.get("namespace") or None
+        readonly = bool(init.raw.get("readonly") or False)
+        run_cmd = _build_k9s_command(namespace, readonly, init.raw.get("extraFlags"))
 
-        target = SSHTarget(
-            host=host, port=port, username=username,
-            password=password, private_key=private_key,
-        )
-
-        loop = asyncio.get_event_loop()
-        await websocket.send_text(f"\r\n\x1b[36m[{host_label} 접속 중…]\x1b[0m\r\n")
-
-        # ── SSH 연결 + PTY 셸 오픈 (블로킹 → executor) ─────────────────────────
-        try:
-            client = await loop.run_in_executor(None, connect_client, target, 12)
-            chan = await loop.run_in_executor(
-                None,
-                lambda: client.invoke_shell(
-                    # PTY 단말 타입도 xterm 으로 요청 — 셸아웃 에디터의 terminfo 호환성
-                    # 확보(prelude 의 TERM=xterm 과 일치). k9s 색상은 COLORTERM 로 유지.
-                    term="xterm", width=max(20, cols), height=max(5, rows),
-                ),
+        def _log_open() -> None:
+            audit_logger.record(
+                db, action="k9s.ssh.open", actor=user, status="success",
+                target_type="cluster", target_id=str(cluster_id),
+                details={"cluster": cluster.name, "host": host_label,
+                         "namespace": namespace, "readonly": readonly},
             )
-        except Exception as e:  # noqa: BLE001
-            await websocket.send_text(f"\r\n\x1b[31m[SSH 접속 실패] {str(e)[:200]}\x1b[0m\r\n")
-            await websocket.close(code=1011)
-            return
 
-        chan.settimeout(0.1)
-        # k9s 실행 — exec 로 셸을 치환. 실패(미설치) 시 원격 셸의 에러가 그대로 흐른다.
-        chan.send(f"{run_cmd}\n")
-
-        started = time.time()
-        audit_logger.record(
-            db, action="k9s.ssh.open", actor=user, status="success",
-            target_type="cluster", target_id=str(cluster_id),
-            details={"cluster": cluster.name, "host": host_label,
-                     "namespace": namespace, "readonly": readonly},
+        duration = await bridge_pty(
+            websocket,
+            init,
+            command=run_cmd,
+            target_meta={
+                "cluster_id": str(cluster_id),
+                "cluster_name": cluster.name,
+            },
+            on_open=_log_open,
         )
-
-        def _read_chunk() -> str | None:
-            """블로킹(0.1s) — 채널에서 읽어 반환. EOF/에러면 None, 데이터 없으면 ''."""
-            try:
-                data = chan.recv(65536)
-            except socket.timeout:
-                return ""
-            except Exception:  # noqa: BLE001
-                return None
-            if not data:
-                return None  # EOF — 원격 k9s 종료
-            return data.decode("utf-8", errors="replace")
-
-        async def _pump_input():
-            """브라우저 → PTY stdin / resize."""
-            try:
-                while True:
-                    msg = await websocket.receive_text()
-                    data: str | None = msg
-                    if msg[:1] == "{":
-                        try:
-                            obj = json.loads(msg)
-                            mtype = obj.get("type")
-                            if mtype == "stdin":
-                                data = obj.get("data", "")
-                            elif mtype == "resize":
-                                c = int(obj.get("cols") or 0)
-                                r = int(obj.get("rows") or 0)
-                                if c > 0 and r > 0:
-                                    await loop.run_in_executor(
-                                        None, lambda: chan.resize_pty(width=c, height=r))
-                                data = None
-                        except (ValueError, TypeError):
-                            data = msg
-                    if data:
-                        await loop.run_in_executor(None, chan.send, data)
-            except WebSocketDisconnect:
-                pass
-            except Exception:  # noqa: BLE001
-                pass
-
-        input_task = asyncio.create_task(_pump_input())
-        try:
-            while True:
-                if time.time() - started > _MAX_SESSION_SECONDS:
-                    await websocket.send_text("\r\n[세션 시간 초과 — 종료]\r\n")
-                    break
-                chunk = await loop.run_in_executor(None, _read_chunk)
-                if chunk is None:
-                    break  # 채널 종료
-                if chunk:
-                    await websocket.send_text(chunk)
-                else:
-                    await asyncio.sleep(0.02)  # busy-loop 방지
-        except WebSocketDisconnect:
-            pass
-        except Exception as e:  # noqa: BLE001
-            logger.warning("k9s stream error: %s", e)
-        finally:
-            input_task.cancel()
     finally:
-        if chan is not None:
-            try:
-                chan.close()
-            except Exception:  # noqa: BLE001
-                pass
-        if client is not None:
-            try:
-                client.close()
-            except Exception:  # noqa: BLE001
-                pass
-        if user is not None and started:
+        if user is not None and duration is not None:
             try:
                 audit_logger.record(
                     db, action="k9s.ssh.close", actor=user, status="success",
                     target_type="cluster", target_id=str(cluster_id),
-                    details={"host": host_label,
-                             "duration_seconds": round(time.time() - started, 1)},
+                    details={"host": host_label, "duration_seconds": duration},
                 )
             except Exception:  # noqa: BLE001
                 pass

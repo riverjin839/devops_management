@@ -32,6 +32,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 연결 검증 + status 반영 | `POST /clusters/{id}/verify` (clusters.py) | `clustersApi.verify` |
 | Cilium 설정 조회 | `GET /clusters/{id}/cilium-config` | `CiliumConfigModal.tsx` |
 | 클러스터 등록 위저드 (3-step) | — | `frontend/src/components/dashboard/AddClusterModal.tsx` |
+| 클러스터 삭제 시 연관 데이터 정리 | `backend/app/services/cluster_purge.py` (cluster_id 보유 테이블 전수 탐색 — 삭제/보존 정책) | `SettingsPage.tsx` 삭제 버튼 |
 | Cluster 모델 (ORM) | `backend/app/models/cluster.py` | `frontend/src/types/index.ts` (Cluster interface) |
 | 경량 마이그레이션 | `_run_migrations()` in `backend/app/main.py` | — |
 
@@ -58,6 +59,12 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 저장된 뷰(필터·정렬·보기 스냅샷, localStorage) | — | `components/work-items/SavedViews.tsx` |
 | 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
 | Jira 가져오기/양방향 반영 | `backend/app/routers/jira.py` (`/jira`) | `JiraImportModal.tsx` · `frontend/src/pages/JiraExcelImportPage.tsx` |
+| Jira 원본 항목 매핑(Epic·Sub-task·component·label·상태) + 보존 규칙 | `services/jira_service.py` `map_jira_issue()`/`extract_epic_parts()`/`extract_confluence_url()` · `routers/jira.py` `_jira_sync_values()`/`_apply_jira_fields()` | `components/work-items/workItemColumns.ts` · `WorkItemTableRow.tsx` · `JiraIssueChip.tsx` · `DocLinkChip.tsx`(제목 옆 Confluence 링크 박스, 인라인 편집) |
+| 업무 → Jira 이슈 + Confluence 문서 연계 생성 (Epic/Sub-task, 사용자별 조건 프리셋) | `routers/jira.py` `GET/POST /jira/provision*` (`user_settings` key=`jira_provision_preset`) | `components/work-items/JiraProvisionModal.tsx` |
+| Jira+Confluence SSO 자동 로그인 / Confluence API | `backend/app/services/jira_sso_http.py`(다중 제품 폼 SSO) · `services/confluence_service.py` · `routers/jira.py` `/jira/sso/*`·`/jira/confluence/*` (401 자동 재로그인 포함) | `components/settings/JiraIntegrationPanel.tsx` |
+| 주간보고 (월~금 집계 → 3개 표 → Confluence 게시) | `backend/app/services/weekly_report_service.py` · `routers/jira.py` `/jira/weekly-report/{preview,publish,settings}` · Celery `dispatch_weekly_report` | `frontend/src/pages/WeeklyReportPage.tsx` (`/weekly-report`) |
+| PEP → Jira 신규 생성 / 삭제 | `routers/jira.py` `POST /jira/create` · `DELETE /jira/issue/{key}` · `services/jira_service.py` `create_issue()`/`delete_issue()` | `hooks/useJira.ts` |
+| Jira 연결 복구 (해제·다른 이슈로 변경·죽은 링크 점검) | `routers/jira.py` `POST /jira/{unlink,relink,verify-links}/…` · `_clear_jira_link()`/`_parse_issue_key()` · `services/jira_service.py` `get_issue()` 404 `missing` 플래그 | `components/work-items/JiraLinkDialog.tsx` · `JiraImportModal.tsx`(연결 점검 탭) |
 | 오늘 할일 / 멤버별 업무 | `work_items` 재사용 | `frontend/src/pages/TodoTodayPage.tsx` · `MemberBoardPage.tsx` |
 | 스프린트 / 프로젝트 | `routers/sprint.py` (`/sprints`) · `routers/projects.py` (`/projects`) | `SprintsPage.tsx` 등 |
 | 워크플로우 보드 / WBS·간트 | `backend/app/routers/workflows.py` | `frontend/src/pages/WorkflowBoardPage.tsx` · `WbsFlowPage.tsx` |
@@ -78,12 +85,14 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 모니터링 / 점검
 | 기능 | 위치 |
 |---|---|
-| 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` → `frontend/src/pages/HomePage.tsx` |
+| 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` + `services/check_matrix_service.py`(그리드/실행/수행로그) · `services/check_matrix_runbook.py`(셀별 실행 계획 — 실제 나가는 명령) + `models/check_matrix.py`(`CheckMatrixRun` 수행 로그 포함) → `frontend/src/pages/HomePage.tsx` + `components/platform-status/` (매뉴얼: `docs/CHECK_MATRIX_GUIDE.md`) |
 | 클러스터 대시보드 | `backend/app/routers/daily_check.py` · `history.py` → `frontend/src/pages/Dashboard.tsx` (`/cluster-overview`) |
 | 일일 점검 리뷰 | `daily_check.py` → `frontend/src/pages/DailyCheckReview.tsx` |
 | Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/deep_checkers/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔 | `backend/app/routers/ops_check.py` + `services/ops_check_service.py` → `frontend/src/pages/OpsCheckConsolePage.tsx` |
 | K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py` + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
+| Observability 지표 대시보드 (kube-prometheus-stack) | `backend/app/routers/observability.py` + `services/observability/catalog_seed.py` · `services/alertmanager_service.py` · `services/prometheus_service.py`(rules/targets/status) + `models/observability.py` → `frontend/src/pages/ObservabilityPage.tsx` + `components/observability/` |
+| 인시던트 알람 수신 / 인박스 | `backend/app/routers/observability.py`(`ingest_router`) + `services/observability/alert_ingest.py`(Alertmanager v4 · generic 파서) · `alert_router.py`(라우팅·중복억제) + `models/alert_event.py` · `models/alert_notify_rule.py` → `frontend/src/pages/AlertInboxPage.tsx` |
 | Pod 병목 진단 | `backend/app/routers/bottleneck.py` + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |
 
 ### K8s 운영 / 리소스
@@ -91,7 +100,9 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 |---|---|
 | 리소스 탐색(읽기전용, YAML/Secret 마스킹) | `backend/app/routers/k8s_resources.py` · `k8s_helm.py` · `k8s_exec.py` → `frontend/src/pages/K8sManagePage.tsx` |
 | K8S 자원 관리(req/lim/use 랭킹) | `backend/app/routers/k8s_allocation.py` → `frontend/src/pages/K8sAllocationPage.tsx` |
-| k9s 콘솔(control-plane SSH → 내장 k9s TUI 웹 스트리밍) | `backend/app/routers/k9s_ssh.py` (WebSocket, paramiko PTY) → `frontend/src/pages/K9sPage.tsx` · `frontend/src/pages/K9sPopupPage.tsx`(별도 창) · `frontend/src/components/k8s/K9sTerminal.tsx` · `frontend/src/lib/k9sPopout.ts`(창 간 handoff) |
+| k9s 콘솔(control-plane SSH → 내장 k9s TUI 웹 스트리밍) | `backend/app/routers/k9s_ssh.py` (WebSocket) → `frontend/src/pages/K9sPage.tsx` · `frontend/src/pages/K9sPopupPage.tsx`(별도 창) · `frontend/src/components/k8s/K9sTerminal.tsx` · `frontend/src/lib/k9sPopout.ts`(창 간 handoff) |
+| 노드 SSH 터미널(개별 노드 로그인 셸 웹 터미널) | `backend/app/routers/node_ssh.py` (WebSocket `/node-ssh/session` + REST `/node-ssh/test`) → `frontend/src/pages/NodeSshPage.tsx` · `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창) · `frontend/src/components/k8s/NodeSshTerminal.tsx` · `frontend/src/lib/nodeSshPopout.ts` |
+| ↑ 두 SSH 콘솔 공용 base 툴 | `backend/app/services/ssh_pty.py`(WS↔paramiko PTY 브리지·init 프레임·토큰 검증) + `ssh_runner.py`(TOFU 연결) → `frontend/src/components/k8s/SshTerminalWindow.tsx`(xterm 창) · `frontend/src/lib/terminalPopout.ts`(창 간 handoff) · `hooks/useTerminalAppearance.ts`(`useXtermTheme`) |
 | 노드 라벨 / 노드 이미지 | `backend/app/routers/node_labels.py` · `node_images.py` → `frontend/src/pages/NodeLabelsPage.tsx` · `NodeImagesPage.tsx` |
 | 주요 명령어 모음 | `backend/app/routers/commands.py` → `frontend/src/pages/CommandsPage.tsx` · `CommandFormPage.tsx` |
 | Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/`(SSH: `etcdctl_defrag`/`shell_command`, non-SSH kubectl: `k8s_job_cleanup`) → `frontend/src/pages/BatchJobsPage.tsx` |
@@ -115,8 +126,9 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 기능 | 위치 |
 |---|---|
 | LAKE 서비스 + 타입 | `backend/app/routers/lake_services.py` · `lake_service_types.py` + `services/lake_checkers/` → `frontend/src/pages/LakeServicesPage.tsx` · `LakeServiceDetailPage.tsx` |
-| 서비스 카탈로그/허브 | `backend/app/routers/service_entries.py` · `service_categories.py` → `frontend/src/pages/ServicesCatalogPage.tsx` · `ServiceHubPage.tsx` |
+| 서비스 카탈로그/허브 | `backend/app/routers/service_entries.py` · `service_categories.py` → `frontend/src/pages/ServicesCatalogPage.tsx` · `ServiceHubPage.tsx` · 아이콘/색상 출처는 PEP 서비스 타입(`hooks/useServiceCatalog.ts`) |
 | PEP / APP 서비스 | `cluster_items` 등 재사용 → `frontend/src/pages/PepServicesPage.tsx` · `AppServicesPage.tsx` |
+| 관리 서비스 설정 (admin) | Settings `?tab=mgmt-service` → `frontend/src/components/settings/ServiceCategoryManager.tsx`(카테고리) · `LakeServiceTypeManager.tsx`(서비스 타입), 둘 다 `domain` prop |
 | 클러스터 아이템/커스텀 필드 | `backend/app/routers/cluster_items.py` · `cluster_custom_fields.py` |
 
 ### 지식 / 소통
@@ -138,6 +150,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 감사 로그 | `backend/app/routers/audit_logs.py` + `services/audit_logger.py` (Settings 탭) |
 | 인앱 알림 | `backend/app/routers/notifications.py` + `services/user_notify.py` |
 | JSON 백업/복원 | `backend/app/routers/backup.py` + `services/backup_service.py` (Settings 탭) |
+| 스키마 점검/복구 (모델↔DB 드리프트) | `backend/app/routers/schema_health.py` + `services/schema_health.py` → `frontend/src/components/settings/SchemaHealthPanel.tsx` (Settings ▸ 스키마 점검 탭). 부팅 안전망은 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼) + `_relax_not_null_drift`(레거시 NOT NULL) |
 | Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts` + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
 
 ### Playbook / Ansible / 기타

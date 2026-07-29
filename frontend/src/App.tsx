@@ -7,6 +7,7 @@ import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
 import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
 import { WorkItemDetailPage } from '@/pages/WorkItemDetailPage';
 import { JiraExcelImportPage } from '@/pages/JiraExcelImportPage';
+import { WeeklyReportPage } from '@/pages/WeeklyReportPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SprintsPage } from '@/pages/SprintsPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
@@ -47,6 +48,8 @@ import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { K8sEventsPage } from '@/pages/K8sEventsPage';
+import { ObservabilityPage } from '@/pages/ObservabilityPage';
+import { AlertInboxPage } from '@/pages/AlertInboxPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
@@ -55,6 +58,8 @@ import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { K9sPage } from '@/pages/K9sPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
+import { NodeSshPage } from '@/pages/NodeSshPage';
+import { NodeSshPopupPage } from '@/pages/NodeSshPopupPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { PepServicesPage } from '@/pages/PepServicesPage';
@@ -179,6 +184,7 @@ function AppShell() {
               <Route path="/sprints" element={<SprintsPage />} />
               <Route path="/members" element={<MemberBoardPage />} />
               <Route path="/jira-import" element={<JiraExcelImportPage />} />
+              <Route path="/weekly-report" element={<WeeklyReportPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/node-images" element={<NodeImagesPage />} />
@@ -223,6 +229,11 @@ function AppShell() {
               <Route path="/service-architecture" element={<ServiceArchitecturePage />} />
               <Route path="/architecture" element={<ArchitecturePage />} />
               <Route path="/k8s-events" element={<K8sEventsPage />} />
+              {/* Observability — 관측 스택(kube-prometheus-stack 등) 개별 지표 dense 대시보드 */}
+              <Route path="/observability/:clusterId" element={<ObservabilityPage />} />
+              <Route path="/observability" element={<ObservabilityPage />} />
+              {/* 알람 인박스 — Alertmanager / alert-forwarder 수신 인시던트 알람 */}
+              <Route path="/alerts" element={<AlertInboxPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />
@@ -244,6 +255,9 @@ function AppShell() {
               {/* k9s 콘솔 — control-plane 서버 내장 k9s 를 SSH 로 웹 터미널 스트리밍 */}
               <Route path="/k9s/:clusterId" element={<K9sPage />} />
               <Route path="/k9s" element={<K9sPage />} />
+              {/* 노드 SSH 터미널 — 개별 노드에 로그인 셸을 열어 웹 터미널로 스트리밍 */}
+              <Route path="/node-ssh/:clusterId" element={<NodeSshPage />} />
+              <Route path="/node-ssh" element={<NodeSshPage />} />
               <Route path="/cluster-trends/:clusterId" element={<ClusterTrendsPage />} />
               <Route path="/cluster-trends" element={<ClusterTrendsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
@@ -256,12 +270,13 @@ function AppShell() {
   );
 }
 
-/** 인증 후 최상위 — `/k9s/popup` 은 사이드바/네비 없는 전체창(별도 브라우저 창)으로
- *  분기하고, 그 외에는 메인 셸(AppShell)을 그대로 렌더한다. AppShell 을 Route 로
- *  감싸지 않아 기존 라우팅 컨텍스트에 영향이 없다. */
+/** 인증 후 최상위 — 터미널 팝업 라우트(`/k9s/popup`, `/node-ssh/popup`)는 사이드바/네비
+ *  없는 전체창(별도 브라우저 창)으로 분기하고, 그 외에는 메인 셸(AppShell)을 그대로
+ *  렌더한다. AppShell 을 Route 로 감싸지 않아 기존 라우팅 컨텍스트에 영향이 없다. */
 function AuthedRoot() {
   const location = useLocation();
   if (location.pathname === '/k9s/popup') return <K9sPopupPage />;
+  if (location.pathname === '/node-ssh/popup') return <NodeSshPopupPage />;
   return (
     <>
       <AppShell />

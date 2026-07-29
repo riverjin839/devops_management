@@ -53,6 +53,10 @@ export interface Cluster {
   // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
+  // Observability 대시보드 — Alertmanager URL + 수집 모드(pull=직접조회 / push=수집기 스냅샷).
+  alertmanagerUrl?: string | null;
+  observabilityMode?: 'pull' | 'push' | null;
+  observabilityEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +146,9 @@ export interface ClusterManageUpdate {
   icon?: string | null;
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
+  alertmanagerUrl?: string | null;
+  observabilityMode?: 'pull' | 'push' | null;
+  observabilityEnabled?: boolean;
 }
 
 // ── Cluster Trends (per-node 메트릭 추이) ──────────────────────────────
@@ -468,7 +475,7 @@ export interface WorkItem {
   /** 종료/해결/완료 일시. issue 의 resolved_at / task 의 completed_at 통합. */
   closedAt?: string;
   remarks?: string;
-  /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
+  /** 통합지식 service tag — PEP 서비스 타입(LakeServiceType domain='pep') 의 slug 와 매칭. */
   service?: string;
   /** Phase B — service 하위 component (예: k8s→api-server). serviceCatalog.ts 의
    *  COMPONENT_BY_SERVICE 추천 enum + 직접 입력 escape hatch. service 없을 때 null. */
@@ -497,6 +504,18 @@ export interface WorkItem {
   jiraStatus?: string | null;
   jiraSyncedAt?: string | null;
   jiraWatchers?: string[] | null;
+  /** Jira 원본 항목 — 게시판 표를 Jira 와 같은 축으로 보여주기 위한 읽기 전용 필드.
+   *  task = Epic, sub task = Epic 아래 이슈 매핑 기준. */
+  jiraIssueType?: string | null;
+  /** status.statusCategory.key — new | indeterminate | done (상태 배지 색 기준). */
+  jiraStatusCategory?: string | null;
+  jiraEpic?: string | null;
+  jiraEpicKey?: string | null;
+  jiraEpicSummary?: string | null;
+  jiraParentKey?: string | null;
+  jiraParentSummary?: string | null;
+  jiraComponents?: string[] | null;
+  jiraLabels?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -507,6 +526,50 @@ export interface JiraConfig {
   enabled: boolean;
   verifyTls: boolean;
   defaultProjectKey?: string | null;
+  /** 같은 IdP 로 SSO 연동되는 Confluence Base URL — 설정 시 SSO 로그인이 두 세션을 한 번에 캡처. */
+  confluenceBaseUrl?: string;
+  /** IdP 로그인 페이지 URL (선택) — 자동 탐색 실패 시 SSO 로그인의 진입점으로 사용. */
+  ssoLoginUrl?: string;
+  /** IdP 로그인 폼의 계정 필드명 (선택) — 자동 추정이 빗나갈 때 지정 (예: empnum). */
+  ssoUsernameField?: string;
+  /** Jira Epic Link 커스텀 필드 ID (예: customfield_10008) — 진척률의 Epic 축. */
+  jiraEpicField?: string;
+}
+
+/** SSO 진단 — 백엔드(파드)가 각 진입 경로에서 실제로 본 페이지 요약. */
+export interface SsoDiagnoseEntry {
+  product: string;
+  url: string;
+  finalUrl: string;
+  httpStatus?: number | null;
+  contentType: string;
+  title: string;
+  forms: number;
+  passwordInputs: number;
+  /** 이 페이지에서 계정을 채울 필드명. */
+  usernameField?: string;
+  /** 자격을 base64 로 보내야 하는 폼인지 (OpenAM `encoded=true`). */
+  wantsBase64?: boolean;
+  /** 로그인 폼 action / 전체 필드(name:type) / 로드 스크립트 / 클라이언트 암호화 흔적. */
+  loginFormAction?: string;
+  loginFields?: string[];
+  scripts?: string[];
+  cryptoHints?: string[];
+  inputNames: string[];
+  /** 폼의 hidden 상태값 (예: OpenAM `encoded=true`). */
+  hiddenFields?: Record<string, string>;
+  clientRedirect: string;
+  wwwAuthenticate: string;
+  error: string;
+}
+
+export interface SsoDiagnoseResult {
+  ok: boolean;
+  detail: string;
+  entries: SsoDiagnoseEntry[];
+  /** 이 파드가 대상으로 나갈 때의 출발지 IP/호스트명 (SSO 가 클라이언트 IP 를 검사할 때 필요). */
+  podHostname?: string;
+  podSourceIp?: string;
 }
 
 // 인증 방식: 'pat'(PAT → Bearer) | 'cookie'(수동 붙여넣은 세션 쿠키) | 'sso'(SSO 자동 캡처 쿠키).
@@ -517,6 +580,9 @@ export interface JiraSsoLoginResult {
   detail: string;
   jiraAccount?: string | null;
   displayName?: string | null;
+  /** Confluence 동시 로그인 결과 — null/undefined 면 Confluence 미설정(시도 안 함). */
+  confluenceOk?: boolean | null;
+  confluenceDetail?: string;
 }
 
 export interface JiraCredentialStatus {
@@ -526,6 +592,8 @@ export interface JiraCredentialStatus {
   lastVerifiedAt?: string | null;
   /** 파드 내 SSO 폼 자동 로그인용 로그인 정보 저장 여부 (원클릭 재로그인 가능). */
   hasSsoLogin?: boolean;
+  /** SSO 로그인이 캡처한 Confluence 세션 저장 여부. */
+  hasConfluence?: boolean;
 }
 
 /** 파드 내 SSO 폼 자동 로그인 요청 — 생략 시 서버측 브라우저(헤디드) 경로. */
@@ -543,21 +611,198 @@ export interface JiraTestResult {
 }
 
 export interface JiraImportRequest {
-  scope: 'me' | 'project' | 'jql';
+  scope: 'me' | 'project' | 'jql' | 'filter';
   projectKey?: string;
   jql?: string;
+  /** scope='filter' 조건 — 비운 항목은 무시되고 나머지가 AND 로 묶인다. */
+  labels?: string[];
+  components?: string[];
+  statuses?: string[];
+  assignee?: string;
+  updatedSinceDays?: number | null;
+  /** 미리보기에서 고른 Jira 키만 반영 (비우면 전체). */
+  onlyKeys?: string[];
   dryRun?: boolean;
+}
+
+export interface JiraFieldChange {
+  field: string;
+  label: string;
+  old: string;
+  new: string;
 }
 
 export interface JiraImportItemPreview {
   jiraKey: string;
   title: string;
   kanbanStatus: string;
-  action: 'create' | 'update';
+  action: 'create' | 'update' | 'unchanged';
+  /** 재가져오기 시 바뀌는 필드 목록 (확인 팝업용). */
+  changes?: JiraFieldChange[];
+}
+
+// ── PEP → Jira 생성/삭제 ──────────────────────────────────────────────────────
+export interface JiraCreateRequest {
+  workItemId?: string;
+  projectKey?: string;
+  summary?: string;
+  description?: string;
+  issueType?: string;
+  priority?: string;
+  labels?: string[];
+  components?: string[];
+}
+
+export interface JiraCreateResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+  linkedWorkItemId?: string | null;
+}
+
+export interface JiraDeleteResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  unlinkedWorkItemId?: string | null;
+}
+
+// ── 연결 복구 (해제 / 갈아끼우기 / 고아 점검) ──────────────────────────────────
+// Jira 이슈를 직접 지웠거나 잘못된 프로젝트에 만들었을 때, PEP 에 남은 죽은 링크를
+// 화면에서 정리하기 위한 타입들. Jira 쪽은 건드리지 않는다.
+export interface JiraUnlinkRequest {
+  /** true 면 업무 행 자체도 삭제 (권한은 업무 삭제와 동일 규칙). */
+  deleteWorkItem?: boolean;
+}
+
+export interface JiraUnlinkResult {
+  status: 'ok' | 'error';
+  detail: string;
+  workItemId?: string | null;
+  workItemDeleted: boolean;
+}
+
+export interface JiraRelinkRequest {
+  /** 이슈 키(DL-42) 또는 브라우저 URL(.../browse/DL-42). */
+  keyOrUrl: string;
+}
+
+export interface JiraRelinkResult {
+  status: 'ok' | 'error' | 'offline' | 'missing';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+}
+
+export interface JiraMissingLink {
+  workItemId: string;
+  jiraKey: string;
+  title: string;
+  detail: string;
+}
+
+export interface JiraVerifyLinksResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  checked: number;
+  missing: JiraMissingLink[];
+  truncated: boolean;
+}
+
+// ── 주간보고 ──────────────────────────────────────────────────────────────────
+export interface WeeklySummary {
+  total: number;
+  inProgress: number;
+  done: number;
+  delayed: number;
+  note: string;
+}
+
+export interface WeeklyDetailRow {
+  component: string;
+  /** task = Jira Epic, subTask = 그 Epic 아래 이슈(현재 행). */
+  task: string;
+  epicKey?: string;
+  epicName?: string;
+  epicUrl?: string;
+  subTask: string;
+  start: string;
+  due: string;
+  closed: string;
+  status: string;
+  issue: string;
+  note: string;
+  jiraKey: string;
+  jiraUrl: string;
+}
+
+export interface WeeklyOwnerRow {
+  task: string;
+  assignee: string;
+  mainWork: string;
+  issueSummary: string;
+}
+
+export interface WeeklyProgressRow {
+  category: string;
+  epic: string;
+  epicKey?: string;
+  epicName?: string;
+  epicUrl?: string;
+  plannedRate: number;
+  actualRate: number;
+  achievementRate: number;
+  doneCount: number;
+  inProgressCount: number;
+  totalCount: number;
+}
+
+export interface WeeklyReport {
+  periodStart: string;
+  periodEnd: string;
+  title: string;
+  summary: WeeklySummary;
+  progress: WeeklyProgressRow[];
+  details: WeeklyDetailRow[];
+  owners: WeeklyOwnerRow[];
+}
+
+export interface WeeklyReportRequest {
+  weekOf?: string;
+  projectFilter?: string;
+}
+
+export interface WeeklyPublishRequest extends WeeklyReportRequest {
+  spaceKey?: string;
+  parentPageId?: string;
+  title?: string;
+}
+
+export interface WeeklyPublishResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  action: string;
+  pageUrl?: string | null;
+  pageId?: string | null;
+}
+
+export interface WeeklyReportSettings {
+  /** Jira WBS/간트 차트 링크 — 진척률 표 위에 노출. */
+  ganttUrl: string;
+  spaceKey: string;
+  parentPageId: string;
+  titleTemplate: string;
+  autoEnabled: boolean;
+  autoCron: string;
+  projectFilter: string;
 }
 
 export interface JiraImportResult {
-  status: 'ok' | 'offline' | 'error';
+  /** missing — 연결된 이슈를 Jira 에서 찾을 수 없음(삭제됐거나 권한 없음). 자동 정리하지
+   *  않고 화면에서 연결 해제/변경을 고르게 한다. */
+  status: 'ok' | 'offline' | 'error' | 'missing';
+  /** 실제로 Jira 에 보낸 JQL — 조건 반영 여부를 화면에서 확인. */
+  appliedJql?: string;
   imported: number;
   updated: number;
   skipped: number;
@@ -672,7 +917,8 @@ export interface WorkItemCreate {
   remarks?: string;
   service?: string;
   component?: string;
-  confluenceUrl?: string;
+  /** null 을 명시적으로 보내면 링크 해제 (백엔드는 exclude_unset 이라 undefined 는 무변경). */
+  confluenceUrl?: string | null;
   jiraUrl?: string;
   priority?: string;
   kanbanStatus?: KanbanStatus;
@@ -777,9 +1023,6 @@ export interface ClusterItemType {
 export interface UiSettings {
   appTitle: string;
   navLabels: Record<string, string>;
-  /** 통합지식 메뉴와 task/issue tag 에 노출되는 서비스 카탈로그.
-   *  null/undefined 면 프론트의 SERVICE_CATALOG 기본값으로 폴백. */
-  serviceCatalog?: ServiceCatalogEntry[];
   /** 홈(좌상단) 버튼 아이콘 커스터마이즈 (모드별). 값 형식은 cluster icon 과 동일
    *  (lucide 이름 / 이모지 / base64 data URL). null/undefined 면 기본값(업무=ListTodo, 플랫폼=☸). */
   homeIcons?: HomeIcons;
@@ -803,23 +1046,6 @@ export interface PageStyle {
 export interface HomeIcons {
   work?: string | null;
   platform?: string | null;
-}
-
-/** Settings 의 '서비스' 탭에서 사용자 정의되는 서비스 한 항목.
- *  ⚠ 별도의 ServiceCatalogItem (요약 카운트용) 과 혼동 주의 — 이 타입은 사이드바·태그용. */
-export interface ServiceCatalogEntry {
-  /** URL slug 및 service_entries.service 와 매칭되는 키 (예: 'k8s', 'keycloak'). */
-  slug: string;
-  /** 사이드바·드롭다운에 표시될 한글 라벨. */
-  label: string;
-  /** lucide-react 아이콘 이름 (예: 'Box', 'Key'). 비어있으면 BookOpen. */
-  icon?: string;
-  /** 카드/뱃지 색상 토큰 (예: 'sky', 'emerald'). */
-  color?: string;
-  /** 짧은 설명 (모달/툴팁용). */
-  description?: string;
-  /** 정렬 우선순위 (작을수록 위). */
-  sortOrder?: number;
 }
 
 export interface OperationLevelItem {
@@ -2780,6 +3006,8 @@ export interface LakeServiceTypeRow {
   defaultPath: string;
   description?: string | null;
   icon?: string | null;
+  /** 카드/뱃지 색상 토큰 (예: 'sky', 'emerald'). 비어있으면 slate. */
+  color?: string | null;
   isBuiltin: boolean;
   enabled: boolean;
   sortOrder: number;
@@ -2797,6 +3025,7 @@ export interface LakeServiceTypeInput {
   defaultPath?: string;
   description?: string | null;
   icon?: string | null;
+  color?: string | null;
   enabled?: boolean;
   sortOrder?: number;
   domain?: string;
@@ -2809,6 +3038,7 @@ export interface LakeServiceTypeUpdate {
   defaultPath?: string;
   description?: string | null;
   icon?: string | null;
+  color?: string | null;
   enabled?: boolean;
   sortOrder?: number;
   domain?: string;
@@ -3500,6 +3730,10 @@ export interface CheckMatrixItem {
   unit?: string | null;
   sourceType: CheckMatrixSourceType;
   sourceRef?: string | null;
+  /** 영역 구분 (k8s | network | storage | os | app | 자유 문자열) */
+  category?: string | null;
+  /** 행 배경 색 — 차트 토큰 프리셋 키('chart-1'..'chart-8'), null = 무색 */
+  color?: string | null;
   /** true = 시스템 항목(core_bundle) — 삭제 불가, Cluster.status 산정에 사용 */
   isSystem: boolean;
   /** false = 그리드에서 숨김(자동 실행은 계속됨) */
@@ -3558,6 +3792,183 @@ export interface CheckMatrixSettings {
   retentionDays: number;
 }
 
+/** 런북 명령 1건 — 실제로 대상 클러스터에 나가는 호출. */
+export interface CheckMatrixRunbookCommand {
+  /** kubectl = 서브프로세스 · k8s_api = python SDK · http = 직접 호출 · ssh · db = PEP DB 전용 */
+  kind: 'kubectl' | 'k8s_api' | 'http' | 'ssh' | 'db';
+  command: string;
+  description: string;
+  /** false = 대상에 변경을 일으킬 수 있는 명령 */
+  readonly: boolean;
+}
+
+/**
+ * 런북에 표시할 설정값 1건.
+ *
+ * dict 가 아니라 `{name, value}` 리스트인 이유 — api.ts 응답 인터셉터가 모든 JSON **키**를
+ * camelCase 로 바꾸기 때문이다. 파라미터 이름(`label_selector` 등)은 운영자가 Ops Checks
+ * 화면에서 그대로 입력해야 하는 값이라 변환되면 안 되므로, 백엔드가 이름을 값 자리에 담아 보낸다.
+ */
+export interface CheckMatrixRunbookInput {
+  group: string;
+  name: string;
+  value: string;
+}
+
+/** 소스 설정 편집 폼용 필드 명세 — deep check spec 의 threshold/param 필드. */
+export interface CheckMatrixFieldSpec {
+  group: 'thresholds' | 'params';
+  name: string;
+  type: 'int' | 'float' | 'string' | 'boolean' | 'list';
+  label: string;
+  help?: string | null;
+}
+
+/** 소스 설정 저장 요청 1건 — 값은 문자열로 보내고 서버가 타입을 강제한다(빈 값 = 기본값 복귀). */
+export interface CheckMatrixSourceConfigEntry {
+  group: string;
+  name: string;
+  value: string;
+}
+
+/** 셀(항목 × 클러스터)의 실행 계획 — "이 점검이 내 클러스터에서 무슨 일을 하는가". */
+export interface CheckMatrixRunbook {
+  itemId: string;
+  itemName: string;
+  clusterId: string;
+  clusterName: string;
+  sourceType: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  /** 이 클러스터에서 해석된 실제 실행 대상(정의/애드온). 없으면 null */
+  target?: string | null;
+  runnable: boolean;
+  blockedReason?: string | null;
+  /** deep_check: 해석된 점검 정의 id — 소스 설정 편집 대상 */
+  definitionId?: string | null;
+  /** 'global' 이면 설정 수정이 모든 클러스터에 적용됨 (UI 경고 필요) */
+  definitionScope?: 'cluster' | 'global' | null;
+  /** addon: 해석된 애드온 인스턴스 id */
+  addonId?: string | null;
+  /** 이 화면에서 params/thresholds(또는 addon config) 수정 가능 여부 */
+  configEditable: boolean;
+  /** 편집 폼 라벨/타입/도움말 (deep_check 만) */
+  fieldSpecs: CheckMatrixFieldSpec[];
+  steps: DeepCheckStepPlanItem[];
+  commands: CheckMatrixRunbookCommand[];
+  inputs: CheckMatrixRunbookInput[];
+  notes: string[];
+  kubectlPrefix?: string | null;
+}
+
+export type CheckMatrixTrigger =
+  | 'cron' | 'manual_cell' | 'manual_cluster' | 'manual_item' | 'manual_entry';
+export type CheckMatrixRunState = 'queued' | 'running' | 'success' | 'failed' | 'skipped';
+
+/** 실제로 실행된 명령 1건 — 런북(설계)과 대조하는 실측값. */
+export interface CheckMatrixExecutedCommand {
+  kind: string;
+  command: string;
+  exitCode?: number | null;
+  durationMs?: number;
+  stdout?: string;
+  stderr?: string;
+  truncated?: boolean;
+}
+
+/** 수행 로그 1건. 목록 응답에는 상세(steps/commands/runbook)가 빠져 있다. */
+export interface CheckMatrixRun {
+  id: string;
+  batchId?: string | null;
+  itemId: string;
+  clusterId: string;
+  itemName?: string | null;
+  clusterName?: string | null;
+  trigger: CheckMatrixTrigger;
+  triggeredBy?: string | null;
+  runState: CheckMatrixRunState;
+  status?: Status | null;
+  value?: number | null;
+  message?: string | null;
+  error?: string | null;
+  durationMs?: number | null;
+  queuedAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface CheckMatrixRunDetail extends CheckMatrixRun {
+  steps: DeepCheckExecStep[];
+  stepPlan: DeepCheckStepPlanItem[];
+  commands: CheckMatrixExecutedCommand[];
+  runbook?: CheckMatrixRunbook | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details: Record<string, any>;
+}
+
+export interface CheckMatrixRunList {
+  total: number;
+  limit: number;
+  offset: number;
+  runs: CheckMatrixRun[];
+}
+
+/** 일괄 수행(클러스터 열 / 항목 행) 큐잉 결과. */
+export interface CheckMatrixBatchResult {
+  batchId: string;
+  total: number;
+  queued: number;
+  errors: string[];
+  runIds: string[];
+}
+
+// ── 스키마 점검 (모델 vs 실제 DB 드리프트) ──────────────────────────────────
+/** 드리프트 1건. repairable=false 면 자동 복구 대상이 아니라 사람이 판단해야 한다. */
+export interface SchemaDriftIssue {
+  /** missing_table = 테이블 없음 · missing_column = 컬럼 없음 · not_null_drift = 레거시 NOT NULL */
+  kind: 'missing_table' | 'missing_column' | 'not_null_drift' | 'inspect_failed';
+  table: string;
+  column?: string | null;
+  detail: string;
+  repairable: boolean;
+}
+
+/** 부팅 시 자동 복구(NOT NULL 완화)가 실제로 돌았는지 — 로그 없이 확인하기 위한 것. */
+export interface SchemaBootRepair {
+  ran: boolean;
+  /** 감지된 대상 ("table.column") */
+  detected?: string[];
+  /** 실제로 완화된 건수 */
+  relaxed?: number;
+  /** 락 경합 등으로 실패한 항목 */
+  failures?: { target: string; error: string }[];
+}
+
+export interface SchemaHealthReport {
+  healthy: boolean;
+  checkedTables: number;
+  checkedColumns: number;
+  issueCount: number;
+  issues: SchemaDriftIssue[];
+  bootRepair?: SchemaBootRepair;
+}
+
+export interface SchemaRepairAction extends SchemaDriftIssue {
+  sql?: string;
+  executed?: boolean;
+  reason?: string;
+  error?: string;
+}
+
+export interface SchemaRepairResult {
+  dryRun: boolean;
+  detected: number;
+  applied: SchemaRepairAction[];
+  skipped: SchemaRepairAction[];
+  errors: SchemaRepairAction[];
+  /** 복구 후 남은 드리프트 수. dryRun 이면 null. */
+  remaining: number | null;
+}
+
 // ── Your Island — 사용자 커스텀 화면 ────────────────────────────────────────
 /** 아일랜드 패널 배치 방식. tabs = 상단 pill 탭바, sidebar = 좌측 아이콘 레일. */
 export type IslandLayoutMode = 'tabs' | 'sidebar';
@@ -3604,4 +4015,285 @@ export interface IslandCreatePayload {
   layoutMode?: IslandLayoutMode;
   panels?: IslandPanel[];
   isShared?: boolean;
+}
+
+
+// ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
+export interface ProvisionDefaults {
+  jiraEnabled: boolean;
+  confluenceEnabled: boolean;
+  projectKey: string;
+  issueType: string;
+  priority: string;
+  labels: string[];
+  components: string[];
+  summary: string;
+  description: string;
+  spaceKey: string;
+  parentPageId: string;
+  pageTitle: string;
+  reporter: string;
+  detail: string;
+  /** Jira 계층 — epicKey = Epic Link, parentKey = Sub-task 의 상위 이슈. */
+  epicKey: string;
+  parentKey: string;
+  /** 기본값 출처 — 'user' 면 지난번 내가 쓴 조건을 불러온 것. */
+  presetSource: 'none' | 'settings' | 'user';
+}
+
+export interface ProvisionRequest {
+  workItemId: string;
+  createJira?: boolean;
+  createConfluence?: boolean;
+  projectKey?: string;
+  issueType?: string;
+  priority?: string;
+  labels?: string[];
+  components?: string[];
+  summary?: string;
+  description?: string;
+  epicKey?: string;
+  parentKey?: string;
+  spaceKey?: string;
+  parentPageId?: string;
+  pageTitle?: string;
+  pageBody?: string;
+  /** 이번에 쓴 기준 조건을 내 기본값으로 저장할지 (다음 등록에서 자동 채움). */
+  rememberPreset?: boolean;
+}
+
+export interface ProvisionResult {
+  status: 'ok' | 'partial' | 'error' | 'offline';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+  jiraDetail: string;
+  confluencePageId?: string | null;
+  confluenceUrl?: string | null;
+  confluenceDetail: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Observability (관측 스택 지표 대시보드) + 인시던트 알람 인박스
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 라벨 1쌍. 백엔드가 dict 대신 배열로 주는 이유는 axios 인터셉터의
+ *  snake_case→camelCase 변환이 Prometheus 라벨명(`job_name` 등)을 훼손하기 때문이다. */
+export interface LabelPair {
+  k: string;
+  v: string;
+}
+
+export type ObservabilityModuleStatus = 'active' | 'planned';
+export type MetricState = 'ok' | 'warning' | 'critical' | 'unknown';
+export type FetchStatus = 'ok' | 'error' | 'offline';
+export type DataSource = 'live' | 'snapshot' | 'offline';
+
+export interface ObservabilityModule {
+  id: string;
+  key: string;
+  label: string;
+  description?: string | null;
+  icon?: string | null;
+  status: ObservabilityModuleStatus;
+  enabled: boolean;
+  sortOrder: number;
+  metricCount: number;
+}
+
+export interface ObservabilityMetric {
+  id: string;
+  moduleKey: string;
+  key: string;
+  label: string;
+  category: string;
+  promql: string;
+  unit: string;
+  displayType: string;
+  thresholds?: string | null;
+  invert: boolean;
+  help?: string | null;
+  docUrl?: string | null;
+  sortOrder: number;
+  enabled: boolean;
+}
+
+export interface ObservabilityMetricInput {
+  moduleKey: string;
+  key: string;
+  label: string;
+  category: string;
+  promql: string;
+  unit: string;
+  displayType: string;
+  thresholds?: string | null;
+  invert: boolean;
+  help?: string | null;
+  docUrl?: string | null;
+  sortOrder: number;
+  enabled: boolean;
+}
+
+export interface ObservabilityMetricValue {
+  metricId: string;
+  key: string;
+  label: string;
+  category: string;
+  unit: string;
+  displayType: string;
+  thresholds?: string | null;
+  invert: boolean;
+  help?: string | null;
+  docUrl?: string | null;
+  promql: string;
+  state: MetricState;
+  value?: number | null;
+  labels: LabelPair[];
+  seriesCount: number;
+  status: FetchStatus;
+  error?: string | null;
+}
+
+export interface ObservabilityMetricValuesResponse {
+  module: string;
+  clusterId?: string | null;
+  source: DataSource;
+  collectedAt?: string | null;
+  detail?: string | null;
+  data: ObservabilityMetricValue[];
+}
+
+export interface PromRule {
+  group: string;
+  file?: string | null;
+  name: string;
+  type: string;
+  state?: string | null;
+  severity?: string | null;
+  duration?: number | null;
+  query: string;
+  health?: string | null;
+  lastError?: string | null;
+  evaluationTime?: number | null;
+  lastEvaluation?: string | null;
+  activeAlerts: number;
+  labels: LabelPair[];
+  annotations: LabelPair[];
+}
+
+export interface PromTarget {
+  job: string;
+  instance: string;
+  health: string;
+  scrapePool?: string | null;
+  scrapeUrl?: string | null;
+  lastScrape?: string | null;
+  lastScrapeDuration?: number | null;
+  lastError?: string | null;
+  labels: LabelPair[];
+}
+
+export interface PromActiveAlert {
+  alertname: string;
+  state: string;
+  severity?: string | null;
+  namespace?: string | null;
+  resource?: string | null;
+  summary?: string | null;
+  activeAt?: string | null;
+  value?: string | null;
+  origin: string;
+  labels: LabelPair[];
+  annotations: LabelPair[];
+}
+
+export interface PromViewResponse {
+  clusterId?: string | null;
+  source: DataSource;
+  collectedAt?: string | null;
+  detail?: string | null;
+  rules: PromRule[];
+  targets: PromTarget[];
+  alerts: PromActiveAlert[];
+}
+
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertStatus = 'firing' | 'resolved';
+
+export interface AlertEvent {
+  id: string;
+  clusterId?: string | null;
+  clusterName?: string | null;
+  source: string;
+  fingerprint: string;
+  alertname: string;
+  severity: AlertSeverity;
+  severitySource: string;
+  status: AlertStatus;
+  namespace?: string | null;
+  resource?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  generatorUrl?: string | null;
+  occurrences: number;
+  notifyCount: number;
+  suppressedCount: number;
+  lastNotifiedAt?: string | null;
+  acked: boolean;
+  ackBy?: string | null;
+  ackAt?: string | null;
+  receivedAt: string;
+  labels: LabelPair[];
+  annotations: LabelPair[];
+  rawJson?: string | null;
+}
+
+export interface AlertEventListResponse {
+  data: AlertEvent[];
+  total: number;
+}
+
+export interface AlertStats {
+  firing: number;
+  resolved: number;
+  critical: number;
+  warning: number;
+  info: number;
+  unacked: number;
+  total: number;
+}
+
+export type AlertNotifyMode = 'all' | 'users' | 'none';
+export type AlertDedupMode = 'first_only' | 'summarize';
+
+export interface AlertNotifyRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  clusterId?: string | null;
+  moduleKey?: string | null;
+  alertnamePattern?: string | null;
+  namespacePattern?: string | null;
+  labelMatchers: LabelPair[];
+  severityMin?: AlertSeverity | null;
+  notifyMode: AlertNotifyMode;
+  recipients: string[];
+  severityOverride?: AlertSeverity | null;
+  channelIds: string[];
+  dedupWindowSec: number;
+  dedupMode: AlertDedupMode;
+}
+
+export type AlertNotifyRuleInput = Omit<AlertNotifyRule, 'id'>;
+
+export interface AlertSettings {
+  defaultNotifyMode: AlertNotifyMode;
+  defaultRecipients: string[];
+  defaultSeverityMin: AlertSeverity;
+  dedupWindowSec: number;
+  dedupMode: AlertDedupMode;
+  retentionDays: number;
 }

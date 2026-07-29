@@ -505,6 +505,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             value={startedAt}
             onChange={setScheduledAt}
             placeholder="시작일 선택"
+            size="sm"
             clearable={false}
           />
         </div>
@@ -516,6 +517,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             value={closedAt}
             onChange={setCompletedAt}
             placeholder="완료 시 입력"
+            size="sm"
           />
         </div>
         {/* 공통업무 — 옵션. 특정 개인 담당자 업무가 아니라 파트 전체가 함께 하는 업무(회의 등).
@@ -523,18 +525,20 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             "전체 참석" 이라는 문구는 마치 전원이 반드시 참석해야 하는 것처럼 읽혀 의미가
             좁게 오해될 수 있어 "공통업무" 로 표기 — 실제 의미(특정 담당자 개인 업무가 아닌
             파트 공통 업무)에 더 가깝다. 필드명(allAttendees)/데이터는 그대로 유지, 표시 문구만 변경. */}
-        <div className="md:col-span-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+        {/* 설명은 툴팁으로 — 한 줄 그리드에서 긴 문구가 두 칸을 잡아먹어 다른 필드가
+            밀려나던 문제를 없앤다(의미는 title 로 그대로 남는다). */}
+        <div className="flex items-end">
+          <label
+            className="flex items-center gap-2 text-sm cursor-pointer select-none h-7"
+            title="파트 회의 등 특정 담당자 개인 업무가 아닌 공통 업무 — 홈 '담당자별 진행 현황' 의 '공통' 요약에도 노출됩니다."
+          >
             <input
               type="checkbox"
               checked={allAttendees}
               onChange={(e) => setAllAttendees(e.target.checked)}
               className="accent-primary"
             />
-            <span className="font-medium">👥 공통업무</span>
-            <span className="text-xs text-muted-foreground">
-              (파트 회의 등 특정 담당자 개인 업무가 아닌 공통 업무 — 홈 "담당자별 진행 현황" 의 "공통" 요약에도 노출)
-            </span>
+            <span className="font-medium whitespace-nowrap">👥 공통업무</span>
           </label>
         </div>
         {/* Confluence 링크 — 옵션 */}
@@ -547,17 +551,32 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             showHint={false}
           />
         </div>
-        {/* Jira 링크 — 옵션 */}
+        {/* Jira 링크 — 옵션. 가져오기/프로비저닝으로 **연결된** 업무는 이 URL 만 고쳐도
+            실제 연결(jira_issue_key/id)이 바뀌지 않아 아무 일도 일어나지 않는다.
+            그래서 연결된 경우엔 읽기 전용으로 두고 연결 관리(게시판 행의 🔗 버튼)로 보낸다. */}
         <div className="md:col-span-2">
-          <ConfluenceUrlInput
-            id={f('jiraUrl')}
-            label="Jira 링크"
-            value={jiraUrl}
-            onChange={setJiraUrl}
-            inline
-            showHint={false}
-            placeholder="https://jira.example.com/browse/..."
-          />
+          {initial?.jiraIssueKey ? (
+            <>
+              <span className={labelClass}>Jira 링크</span>
+              <div className={`${inputClass} flex items-center gap-1.5 bg-secondary/50 text-muted-foreground`}>
+                <span className="font-mono text-xs text-brand-jira dark:text-blue-300">{initial.jiraIssueKey}</span>
+                <span className="truncate">{jiraUrl || '—'}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                연결된 업무입니다 — 연결 해제/변경은 게시판 행의 <b>Jira 연결 관리</b>에서 하세요.
+              </p>
+            </>
+          ) : (
+            <ConfluenceUrlInput
+              id={f('jiraUrl')}
+              label="Jira 링크"
+              value={jiraUrl}
+              onChange={setJiraUrl}
+              inline
+              showHint={false}
+              placeholder="https://jira.example.com/browse/..."
+            />
+          )}
         </div>
       </div>
 

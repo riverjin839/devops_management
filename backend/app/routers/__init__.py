@@ -32,6 +32,7 @@ from app.routers.node_server_specs import router as node_server_specs_router
 from app.routers.cluster_custom_fields import router as cluster_custom_fields_router
 from app.routers.work_item_custom_fields import router as work_item_custom_fields_router
 from app.routers.backup import router as backup_router
+from app.routers.schema_health import router as schema_health_router
 from app.routers.service_entries import router as service_entries_router
 from app.routers.batch_jobs import router as batch_jobs_router
 from app.routers.commands import router as commands_router
@@ -56,6 +57,7 @@ from app.routers.k8s_allocation import router as k8s_allocation_router
 from app.routers.k8s_helm import router as k8s_helm_router
 from app.routers.k8s_exec import router as k8s_exec_router
 from app.routers.k9s_ssh import router as k9s_ssh_router
+from app.routers.node_ssh import router as node_ssh_router
 from app.routers.metric_trend import router as metric_trend_router
 from app.routers.service_topology import router as service_topology_router
 from app.routers.architecture_docs import router as architecture_docs_router
@@ -63,6 +65,10 @@ from app.routers.cluster_items import router as cluster_items_router
 from app.routers.cluster_trends import router as cluster_trends_router
 from app.routers.terminal_appearance import router as terminal_appearance_router
 from app.routers.k8s_events import router as k8s_events_router, ingest_router as k8s_events_ingest_router
+from app.routers.observability import (
+    router as observability_router,
+    ingest_router as observability_ingest_router,
+)
 from app.routers.release_notes import router as release_notes_router
 from app.routers.check_matrix import router as check_matrix_router
 from app.routers.island import router as island_router
@@ -72,6 +78,7 @@ __all__ = [
     "ops_check_router",
     "k8s_resources_router",
     "k9s_ssh_router",
+    "node_ssh_router",
     "k8s_allocation_router",
     "service_topology_router",
     "architecture_docs_router",
@@ -111,6 +118,7 @@ __all__ = [
     "cluster_custom_fields_router",
     "work_item_custom_fields_router",
     "backup_router",
+    "schema_health_router",
     "service_entries_router",
     "batch_jobs_router",
     "commands_router",
@@ -131,6 +139,8 @@ __all__ = [
     "terminal_appearance_router",
     "k8s_events_router",
     "k8s_events_ingest_router",
+    "observability_router",
+    "observability_ingest_router",
     "release_notes_router",
     "island_router",
 ]

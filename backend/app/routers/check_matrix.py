@@ -1,5 +1,5 @@
 """점검 매트릭스 — 항목 CRUD/재정렬, 그리드 조회, cron 설정(항목/클러스터), 셀 이력,
-수동 입력, 이력 보관 설정."""
+수동 입력, 실행 계획(런북) 조회, 수동 실행(셀/클러스터/항목), 실행 로그, 이력 보관 설정."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -26,12 +26,18 @@ router = APIRouter(prefix="/check-matrix", tags=["Check Matrix"])
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
+# 행 색은 테마 대응을 위해 차트 토큰 프리셋 키만 허용 (frontend --chart-1..8).
+_ALLOWED_ROW_COLORS = {f"chart-{i}" for i in range(1, 9)}
+
+
 class ItemIn(BaseModel):
     name: str
     description: Optional[str] = None
     unit: Optional[str] = None
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None
+    category: Optional[str] = None
+    color: Optional[str] = None
     enabled: bool = True
 
 
@@ -42,6 +48,8 @@ class ItemOut(BaseModel):
     unit: Optional[str] = None
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None
+    category: Optional[str] = None
+    color: Optional[str] = None
     is_system: bool
     enabled: bool
     sort_order: int
@@ -87,6 +95,11 @@ class SettingsIn(BaseModel):
 
 
 def _validate_item_body(body: ItemIn) -> None:
+    if body.color and body.color not in _ALLOWED_ROW_COLORS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"color 는 chart-1..chart-8 프리셋 키만 허용됩니다: {body.color}",
+        )
     if body.source_type == CheckMatrixSourceType.core_bundle:
         raise HTTPException(status_code=400, detail="core_bundle 항목은 시스템에서만 생성/관리됩니다.")
     if body.source_type == CheckMatrixSourceType.deep_check:
@@ -131,7 +144,24 @@ def update_item(item_id: UUID, body: ItemIn, db: Session = Depends(get_db), _: U
     if row is None:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
     if row.is_system:
-        raise HTTPException(status_code=400, detail="시스템 항목은 이름/설명만 수정할 수 없습니다 — 소스 변경 불가.")
+        # 시스템 항목(core_bundle)도 표시 속성(이름/설명/단위/표시 여부)은 고칠 수 있어야 한다.
+        # 막는 것은 실행 소스 변경뿐 — Cluster.status 산정 경로가 바뀌면 안 되기 때문.
+        if body.source_type != row.source_type or (body.source_ref or None) != (row.source_ref or None):
+            raise HTTPException(
+                status_code=400,
+                detail="시스템 항목은 실행 소스(source_type/source_ref)를 바꿀 수 없습니다 — 이름/설명/단위/표시 여부만 수정 가능합니다.",
+            )
+        if body.color and body.color not in _ALLOWED_ROW_COLORS:
+            raise HTTPException(status_code=422, detail=f"color 는 chart-1..chart-8 만 허용: {body.color}")
+        row.name = body.name
+        row.description = body.description
+        row.unit = body.unit
+        row.category = body.category
+        row.color = body.color
+        row.enabled = body.enabled
+        db.commit()
+        db.refresh(row)
+        return row
     _validate_item_body(body)
     for k, v in body.model_dump().items():
         setattr(row, k, v)
@@ -188,7 +218,7 @@ def post_manual_entry(
     cluster_id: UUID,
     body: ManualEntryIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    user: User = Depends(require_operator),
 ):
     item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
     if item is None:
@@ -198,7 +228,10 @@ def post_manual_entry(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if cluster is None:
         raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
-    svc.record_manual_entry(db, item_id, cluster_id, body.status, body.value, body.message)
+    svc.record_manual_entry(
+        db, item_id, cluster_id, body.status, body.value, body.message,
+        triggered_by=_actor(user),
+    )
     return {"status": "ok"}
 
 
@@ -259,6 +292,143 @@ def put_cluster_cron(
     cluster.check_cron_expr = body.check_cron_expr
     db.commit()
     return {"cluster_id": str(cluster.id), "check_cron_expr": cluster.check_cron_expr}
+
+
+# ── 런북 (실행 계획 — 실제로 클러스터에 나가는 명령) ─────────────────────────────
+@router.get("/cell/{item_id}/{cluster_id}/runbook")
+def get_cell_runbook(item_id: UUID, cluster_id: UUID, db: Session = Depends(get_db)):
+    """이 셀이 실제 운영 클러스터에서 무슨 명령을 어떤 순서로 도는지. 실행하지 않는다."""
+    from app.services.check_matrix_runbook import build_runbook
+
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    return build_runbook(db, item, cluster)
+
+
+class SourceConfigEntry(BaseModel):
+    group: str  # deep_check: "thresholds"|"params" / addon: "config"
+    name: str
+    value: str  # 문자열로 받아 서버가 spec 필드 타입으로 강제 (빈 문자열 = 기본값 복귀)
+
+
+class SourceConfigIn(BaseModel):
+    entries: list[SourceConfigEntry] = Field(..., min_length=1)
+
+
+@router.put("/cell/{item_id}/{cluster_id}/source-config")
+def put_source_config(
+    item_id: UUID,
+    cluster_id: UUID,
+    body: SourceConfigIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """셀 실행 소스의 설정(deep_check thresholds/params, addon config)을 매트릭스에서 직접 수정.
+
+    글로벌 정의를 수정하면 전 클러스터에 적용된다 — runbook 의 definition_scope 로 UI 가 경고한다.
+    """
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    try:
+        return svc.update_source_config(
+            db, item, cluster, [e.model_dump() for e in body.entries],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── 수동 실행 (셀 / 클러스터 열 / 항목 행) ────────────────────────────────────────
+def _actor(user: User) -> str:
+    # User 모델의 표시명 컬럼은 display_name 이다 (full_name 아님 — models/user.py).
+    return user.display_name or user.username
+
+
+@router.post("/cell/{item_id}/{cluster_id}/run")
+def run_cell(
+    item_id: UUID,
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """셀 1건 즉시 실행 — 동기 실행이라 응답에 결과가 그대로 담긴다."""
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    if item.source_type == CheckMatrixSourceType.manual:
+        raise HTTPException(
+            status_code=400,
+            detail="수동 입력 항목은 실행할 수 없습니다 — 셀 상세의 '값 입력'을 사용하세요.",
+        )
+    return svc.run_cell_now(db, item, cluster, triggered_by=_actor(user))
+
+
+@router.post("/clusters/{cluster_id}/run")
+def run_cluster(
+    cluster_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """클러스터(열) 단위 일괄 실행 — 큐잉만 하고 batch_id 를 돌려준다."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    return svc.run_cluster_now(db, cluster, triggered_by=_actor(user))
+
+
+@router.post("/items/{item_id}/run")
+def run_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """공통 점검 항목(행) 단위 일괄 실행 — 등록된 모든 클러스터 대상. 큐잉 후 batch_id 반환."""
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    if item.source_type == CheckMatrixSourceType.manual:
+        raise HTTPException(
+            status_code=400,
+            detail="수동 입력 항목은 실행할 수 없습니다 — 클러스터별로 값을 직접 입력하세요.",
+        )
+    return svc.run_item_now(db, item, triggered_by=_actor(user))
+
+
+# ── 실행 로그 ─────────────────────────────────────────────────────────────────
+@router.get("/runs")
+def list_runs(
+    item_id: Optional[UUID] = None,
+    cluster_id: Optional[UUID] = None,
+    batch_id: Optional[UUID] = None,
+    trigger: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """수행 로그 목록 — cron 자동 실행과 수동 실행(셀/클러스터/항목/수동입력)을 모두 포함."""
+    return svc.list_runs(
+        db, item_id=item_id, cluster_id=cluster_id, batch_id=batch_id,
+        trigger=trigger, limit=limit, offset=offset,
+    )
+
+
+@router.get("/runs/{run_id}")
+def get_run(run_id: UUID, db: Session = Depends(get_db)):
+    """수행 1건 상세 — 실행 단계, 실제 나간 명령과 출력, 해석된 런북까지."""
+    out = svc.get_run(db, run_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="실행 로그를 찾을 수 없습니다.")
+    return out
 
 
 # ── Settings (이력 보관 주기) ──────────────────────────────────────────────────

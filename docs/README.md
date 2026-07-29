@@ -7,11 +7,14 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [MAC_LOCAL_TEST_GUIDE.md](MAC_LOCAL_TEST_GUIDE.md) — Apple Silicon Mac 로컬 테스트(kind+Vagrant 클러스터 2대 + PEP 기동)
 - [WIN_LOCAL_TEST_GUIDE.md](WIN_LOCAL_TEST_GUIDE.md) — Windows 로컬 테스트(VirtualBox + AlmaLinux kubeadm VM **2 클러스터** = 폐쇄망 동일 SSH/서버정보 + 멀티클러스터)
 - [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md) — 로컬(Docker Compose)·3단계 배포(kind / 폐쇄망 / 프로덕션)
+- [ENVIRONMENT.md](ENVIRONMENT.md) — **환경변수 전수 레퍼런스**(`config.py` Settings 기준, 기본값·설명)
 - [AIRGAP_LLM_NEXUS.md](AIRGAP_LLM_NEXUS.md) — 폐쇄망 LLM(Ollama) 모델 수급(Nexus/오프라인)
 - [AIRGAP_LLM_ARCHITECTURE.md](AIRGAP_LLM_ARCHITECTURE.md) — 폐쇄망 LLM 아키텍처 상세(내부 모델 서빙, K8s 로그 자동 분석·조치 가이드, PEP 지식 RAG)
 - [ADMIN_MANUAL.md](ADMIN_MANUAL.md) — 관리자 매뉴얼
 - [BACKUP_RESTORE_GUIDE.md](BACKUP_RESTORE_GUIDE.md) — 데이터 백업·복구(JSON export/import, merge/replace)
 - [DEEP_CHECKER_GUIDE.md](DEEP_CHECKER_GUIDE.md) — Deep Check 점검 프레임워크(체커 16종, in-cluster CronJob) 가이드
+- [CHECK_MATRIX_GUIDE.md](CHECK_MATRIX_GUIDE.md) — **점검 매트릭스 운영 매뉴얼**(홈 ▸ 플랫폼 현황): deep check/addon/수동입력 구현 방식, 셀·클러스터·항목 단위 실행, 수행 로그·런북
+- [OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md) — **관측 스택 대시보드 · 인시던트 알람 수신**(Alertmanager receiver 설정, pull/push 수집 모드, 알림 라우팅·중복 억제, 모듈 확장법)
 - [K8S_OPS_CHECKLIST.md](K8S_OPS_CHECKLIST.md) — K8s 운영 점검 체크리스트
 - [PROJECT_FLOW_GUIDE.md](PROJECT_FLOW_GUIDE.md) — 요청/작업 흐름
 - [SERVICE_TOPOLOGY_GUIDE.md](SERVICE_TOPOLOGY_GUIDE.md) — 서비스 토폴로지(서비스 디스커버리) 사용 가이드

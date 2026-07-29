@@ -23,6 +23,10 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 logger = logging.getLogger(__name__)
 
 
+# 실행 로그(JSONB)가 무한정 커지지 않도록 명령 출력·건수를 제한한다.
+_OUTPUT_EXCERPT_CHARS = 2000
+_MAX_RECORDED_COMMANDS = 30
+
 _CONNECTION_ERROR_HINTS = (
     "connection refused",
     "no route to host",
@@ -69,6 +73,8 @@ class DeepCheckOutcome:
     details: dict[str, Any] = field(default_factory=dict)
     duration_ms: int = 0
     steps: list[dict[str, Any]] = field(default_factory=list)  # 실시간 실행 단계(직렬화 dict)
+    # 실제로 대상 클러스터에 나간 명령(kubectl) 기록 — 런북(설계)과 대조하는 실측값.
+    commands: list[dict[str, Any]] = field(default_factory=list)
 
 
 class DeepCheckerBase(ABC):
@@ -120,7 +126,60 @@ class DeepCheckerBase(ABC):
             if ctx.cluster.api_endpoint:
                 cmd.extend(["--server", ctx.cluster.api_endpoint])
         cmd.extend(args)
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        t0 = time.time()
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except Exception as e:  # noqa: BLE001
+            self._record_command(cmd, t0, exit_code=None, stdout="", stderr=str(e)[:_OUTPUT_EXCERPT_CHARS])
+            raise
+        self._record_command(
+            cmd, t0, exit_code=proc.returncode, stdout=proc.stdout or "", stderr=proc.stderr or "",
+        )
+        return proc
+
+    # ── 실제 실행된 명령 수집 (런북 "설계" 대비 "실측") ─────────────
+    def _record_command(
+        self,
+        cmd: list[str],
+        started: float,
+        *,
+        exit_code: Optional[int],
+        stdout: str,
+        stderr: str,
+    ) -> None:
+        """대상 클러스터에 실제로 나간 명령 1건을 기록한다.
+
+        kubeconfig 경로는 서버 내부 경로라 마스킹하고, 출력은 발췌만 남긴다
+        (전체를 담으면 JSONB 가 무한정 커진다).
+        """
+        if not hasattr(self, "_commands"):
+            self._commands = []
+        if len(self._commands) >= _MAX_RECORDED_COMMANDS:
+            return
+        display: list[str] = []
+        skip_next = False
+        for tok in cmd:
+            if skip_next:
+                display.append("<kubeconfig>")
+                skip_next = False
+                continue
+            if tok == "--kubeconfig":
+                display.append(tok)
+                skip_next = True
+                continue
+            display.append(tok)
+        self._commands.append({
+            "kind": "kubectl",
+            "command": " ".join(display),
+            "exit_code": exit_code,
+            "duration_ms": int((time.time() - started) * 1000),
+            "stdout": (stdout or "")[:_OUTPUT_EXCERPT_CHARS],
+            "stderr": (stderr or "")[:_OUTPUT_EXCERPT_CHARS],
+            "truncated": len(stdout or "") > _OUTPUT_EXCERPT_CHARS,
+        })
+
+    def _collected_commands(self) -> list[dict[str, Any]]:
+        return list(getattr(self, "_commands", []))
 
     # ── 단계 트레이스 (로그 + 애니메이션) ──────────────────────────
     @contextmanager
@@ -158,12 +217,15 @@ class DeepCheckerBase(ABC):
     def safe_run(self, ctx: DeepCheckContext) -> DeepCheckOutcome:
         start = time.time()
         self._steps = []
+        self._commands = []
         self._run_start = start
         try:
             outcome = self.run(ctx)
             outcome.duration_ms = int((time.time() - start) * 1000)
             if not outcome.steps:
                 outcome.steps = self._collected_steps()
+            if not outcome.commands:
+                outcome.commands = self._collected_commands()
             return outcome
         except FileNotFoundError as e:
             return DeepCheckOutcome(
@@ -172,6 +234,7 @@ class DeepCheckerBase(ABC):
                 details={"error": str(e)[:500]},
                 duration_ms=int((time.time() - start) * 1000),
                 steps=self._collected_steps(),
+                commands=self._collected_commands(),
             )
         except Exception as e:
             msg = str(e).lower()
@@ -187,4 +250,5 @@ class DeepCheckerBase(ABC):
                 details={"error": str(e)[:1000]},
                 duration_ms=int((time.time() - start) * 1000),
                 steps=self._collected_steps(),
+                commands=self._collected_commands(),
             )

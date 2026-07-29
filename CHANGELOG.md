@@ -8,7 +8,434 @@
 
 ## [Unreleased]
 
-1.15.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.17.1] - 2026-07-29
+
+### Fixed
+- **점검 항목 삭제 실패 (심각)**: 항목을 지우면
+  `null value in column "item_id" of relation "check_matrix_runs"` 로 실패했다.
+  `CheckMatrixSchedule`/`Result`/`Run` 의 `item` 관계에 `passive_deletes=True` 가 빠져 있어,
+  SQLAlchemy 가 DB 의 `ON DELETE CASCADE` 를 쓰지 않고 자식 행의 `item_id` 를 NULL 로
+  UPDATE 하려 한 것이 원인(코드베이스가 `cluster` 쪽에는 이미 적용해 둔 패턴인데 `item`
+  쪽만 누락). 세 관계 모두 수정 — 이제 자식 정리는 DB CASCADE 가 담당한다. 회귀 테스트 추가.
+- **스키마 자동 복구가 조용히 실패하던 문제**: NOT NULL 완화 DDL 은 ACCESS EXCLUSIVE 락이
+  필요한데, 운영 중에는 Celery 워커/API 가 같은 테이블을 쓰고 있어 락을 못 잡을 수 있다.
+  기존에는 무제한 대기(부팅 정지 위험)하거나 실패해도 로그 한 줄만 남아 운영자가 알 수
+  없었다. `lock_timeout` + 재시도를 걸고, **부팅 자동 복구 결과(감지 대상·완화 건수·실패
+  사유)를 Settings ▸ 스키마 점검 화면 상단에 노출**한다 — "재시작하면 자동으로 고쳐진다"가
+  실제로 지켜졌는지 로그 없이 확인할 수 있다.
+
+### Added
+- **업무 게시판 Jira 기준 레이아웃** (`/tasks-mgmt`): 가져온 이슈를 Jira 에서 보던 것과 같은
+  축으로 표에 펼친다 — **Epic · 이슈 종류(Epic/Story/Task/Sub-task/Bug) · Jira 원본 상태 ·
+  컴포넌트 · 라벨** 컬럼이 추가됐고(기본 숨김, 컬럼 설정에서 켠다), Jira 연결 업무의 상태
+  셀은 칸반 5단계로 축약하지 않고 **Jira 상태명 그대로** 보여준다(점 색은 `statusCategory`
+  기준이라 커스텀 워크플로에서도 의미가 유지된다). Epic 셀은 `DL-12 제목` 박스로 렌더되고
+  키가 Jira 로 링크된다. 가져오기가 Jira component 를 업무 분류로 매핑해 주간보고 진척률의
+  `category × Epic` 축도 제대로 잡힌다(이전에는 전부 "Jira" 로 들어갔다).
+  Backend: `models/work_item.py`(jira_epic_key/epic_summary/issue_type/parent_key/
+  parent_summary/status_category/components/labels), `services/jira_service.py`,
+  `routers/jira.py`(`_jira_sync_values`). Frontend: `workItemColumns.ts`, `WorkItemTableRow.tsx`.
+- **제목 옆 Confluence 문서 박스**: Jira 키 박스 옆에 문서 링크 박스(`DocLinkChip`)가 붙는다.
+  링크가 없으면 점선 `＋문서` 버튼이 되고 클릭하면 그 자리에서 URL 을 입력·저장한다(상세
+  화면까지 들어갈 필요 없음). Jira 가져오기는 이슈 본문에서 설정된 Confluence Base URL 로
+  시작하는 링크를 찾아 자동으로 채우고(행 단위 재가져오기는 원격 링크도 조회), **사용자가
+  직접 넣은 링크는 덮어쓰지 않는다**.
+- **업무 등록 → Jira·Confluence 연계 생성 확장**: 생성 조건에 **Epic 키**와 **상위 이슈
+  (Sub-task)** 가 추가돼 task = Epic, sub task = Epic 아래 이슈로 만들 수 있다. 프로젝트 ·
+  이슈 종류 · 우선순위 · 라벨 · 컴포넌트 · Epic · 저장 위치는 **사용자별로 기억**되어 다음
+  등록에서 자동으로 채워진다(모달에서 언제든 수정, 체크박스로 저장 해제 가능).
+  Backend: `routers/jira.py`(`user_settings` 의 `jira_provision_preset`).
+- **게시판 기본 필터 = 로그인 사용자**: 처음 들어오면 내 담당 업무만 보인다. 상단 "내 업무"
+  토글로 전체 보기로 바꿀 수 있고 그 선택은 브라우저에 기억된다.
+
+- **Jira 연결 복구 — 해제 · 변경 · 연결 점검**: Jira 에서 이슈를 직접 지웠거나 잘못된
+  프로젝트에 만들었을 때, PEP 에 남는 죽은 링크를 화면에서 정리할 수 있다. 게시판 행의
+  **Jira 연결 관리** 버튼에서 (1) 연결만 해제 (2) 다른 이슈로 연결 변경 (3) 연결 해제 +
+  업무 삭제 를 고를 수 있고, 다시 가져오기가 "Jira 에 없음"으로 끝나면 이 창이 사유와 함께
+  자동으로 열린다. 가져오기 팝업의 **연결 점검** 탭은 내 업무의 Jira 연결을 한 번에 확인해
+  죽은 링크를 골라 일괄 정리한다.
+  - 연결을 해제하면 `jira_issue_key` 가 비어 **Jira·Confluence 자동 생성이 다시 열린다** —
+    잘못된 프로젝트에 만든 이슈를 지우고 올바른 곳에 재생성하는 흐름이 이걸로 완성된다.
+  - 연결 변경은 **Jira 에서 실제로 조회해 존재를 확인한 뒤에만** 반영한다(또 다른 죽은 링크
+    방지). 이미 다른 업무가 쓰는 키는 거절한다.
+  - 이슈를 못 찾아도 **자동으로 정리하지 않는다** — 조회 권한이 없어도 Jira 는 똑같이 404 를
+    주므로, 삭제인지 권한 문제인지는 사용자가 판단한다.
+  Backend: `routers/jira.py` `POST /jira/{unlink,relink,verify-links}` ·
+  `_clear_jira_link()`/`_parse_issue_key()` · `services/jira_service.py`(404 에 `missing` 플래그).
+  Frontend: `components/work-items/JiraLinkDialog.tsx`, `JiraImportModal.tsx`.
+
+### Fixed
+- **Jira 링크를 수동으로 고쳐도 아무 일이 없던 문제**: 업무 수정 폼의 "Jira 링크"는 표시용
+  URL 일 뿐이고 실제 연결은 `jira_issue_key`/`jira_issue_id` 가 쥐고 있어서, URL 만 바꿔도
+  칩·재가져오기·중복 판정이 모두 예전 이슈를 계속 봤다. 연결된 업무는 이 입력을 읽기 전용으로
+  바꾸고 연결 관리로 안내한다(실제 변경은 검증을 거치는 연결 변경으로만).
+- **연결 해제 시 Jira 필드가 일부만 지워지던 문제**: `DELETE /jira/issue/{key}` 가 5개 필드만
+  비워 Epic·컴포넌트·라벨 잔재가 남았다. `_clear_jira_link()` 로 모아 전부 정리한다.
+- **업무 등록 팝업 레이아웃**: 시작일/완료일 입력 버튼이 옆 select/input 보다 커서 한 줄
+  그리드가 어긋나던 문제 수정(`DateTimePicker` 에 `size="sm"` 추가, 지우기 버튼 자리를
+  값 유무와 무관하게 유지해 폭이 밀리지 않게 함). 공통업무 체크박스 옆 긴 설명 문구는
+  툴팁으로 옮겨 두 칸을 잡아먹지 않게 했다.
+- **`work_items.confluence_url` 중복 선언 제거**: 같은 컬럼이 모델에 두 번 정의돼 있었다.
+
+## [1.17.0] - 2026-07-29
+
+### Added
+- **노드 SSH 터미널** (`/node-ssh`): 클러스터의 **개별 노드에 SSH 로 붙어 로그인 셸을 그대로**
+  웹 터미널로 쓴다. 노드 목록(이름/IP 검색·Ready·master 배지)에서 클릭으로 대상을 고르고
+  비밀번호 또는 Private Key 로 접속하며, 터미널을 열기 전 **연결 테스트**로 자격증명만 먼저
+  확인할 수 있다. 접속 후 실행할 명령(`sudo -i` 등) 지정, 드래그·리사이즈 되는 플로팅 창,
+  별도 브라우저 창으로 빼기를 지원한다. tty + resize 라 `journalctl`·`top`·`vi` 같은 인터랙티브
+  명령도 동작한다. 클러스터 밖 서버도 수동 host 입력으로 접속 가능.
+  Backend: 라우터 `node_ssh.py`(WS `/node-ssh/session` + REST `/node-ssh/test`), 감사 로그
+  `node.ssh.open`/`node.ssh.close`, `PEP_NODE_SSH_ENABLED=false` 로 비활성화.
+  Frontend: `NodeSshPage`/`NodeSshPopupPage`, 노드 목록은 mc·노드 일괄 실행과 같은
+  `node-list` 엔드포인트 재사용.
+
+### Changed
+- **SSH 웹 터미널 공용화**: k9s 콘솔과 노드 SSH 터미널이 같은 base 툴을 쓰도록 정리했다 —
+  백엔드 `services/ssh_pty.py`(WebSocket↔paramiko PTY 브리지·init 프레임·토큰 검증),
+  프론트 `components/k8s/SshTerminalWindow.tsx`(xterm 창)·`lib/terminalPopout.ts`(창 간 handoff).
+- **SSH 터미널에 터미널 Appearance 적용**: k9s·노드 SSH 터미널의 색상/글꼴이 Settings →
+  터미널 Appearance 의 활성 프로파일(개발/운영)을 따른다(기존에는 고정 팔레트). 세션이 열린
+  상태에서 프로파일을 바꿔도 즉시 반영된다.
+
+## [1.16.4] - 2026-07-28
+
+### Added
+- **Observability 지표 대시보드** (`/observability`): 클러스터에 깔린 관측 스택의 개별 지표를
+  **dense 리스트 테이블**로 한 화면에서 훑는다. `kube-prometheus-stack` 부터 지원하며
+  Prometheus 서버·Alertmanager·exporter·operator·알람규칙 5개 카테고리 30여 개 지표가 기본
+  등록된다. 지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람 4개 뷰를 탭으로 전환한다.
+  지표 목록·PromQL·임계값은 전부 DB 행이라 **운영자가 화면에서 직접 편집**할 수 있어,
+  배포마다 다른 job 라벨도 코드 수정 없이 맞출 수 있다(`alert-forwarder`/`opensearch-stack`/
+  `fluent-operator` 모듈도 지표를 추가하면 그대로 활성화된다). PEP 에서 클러스터 Prometheus 에
+  닿지 않는 환경을 위해 **pull(직접 조회) / push(in-cluster 수집기 스냅샷)** 두 수집 모드를
+  클러스터별로 고를 수 있고, 화면에 실시간/스냅샷 신선도를 표시한다.
+  Backend: `routers/observability.py`, `services/alertmanager_service.py`,
+  `services/observability/catalog_seed.py`, `models/observability.py`,
+  `PrometheusService.{rules,active_alerts,targets,tsdb_status}`.
+  Frontend: `pages/ObservabilityPage.tsx`, `components/observability/`.
+- **인시던트 알람 PEP 수신 + 알람 인박스** (`/alerts`): 그동안 사내 메신저(cube)로만 가던
+  인시던트 알람을 PEP 도 함께 받는다. **Alertmanager webhook 과 사내 alert-forwarder 를 모두
+  수용**하며(표준 v4 포맷 우선, 임의 JSON 은 generic 파서가 정규화), 수신 엔드포인트는
+  `ALERT_INGEST_TOKEN` Bearer 로 **fail-closed**(미설정 시 503)다. 같은 알람이 반복 수신되면
+  행이 늘지 않고 반복 수(×N)만 올라가고, firing → resolved 상태 전이도 반영된다. 화면에서는
+  심각도를 색 바·배경 그라데이션·글자 굵기로 구분하고, 확인(ack)·일괄 확인·원본 페이로드
+  열람을 제공한다. 상단의 "알람 수신 설정 방법" 안내에서 Alertmanager receiver YAML 을 그대로
+  복사해 붙여넣을 수 있다.
+  Backend: `routers/observability.py`(`ingest_router`), `services/observability/alert_ingest.py`,
+  `models/alert_event.py`. Frontend: `pages/AlertInboxPage.tsx`.
+- **알림 라우팅 규칙 + 중복 억제** (`/alerts` → 알림 규칙): 알람을 **전체 브로드캐스트 /
+  담당자 지정 / 알림 없이 인박스만** 중에서 고를 수 있고, 클러스터·알람명·네임스페이스·라벨·
+  최소 심각도 매처로 규칙을 만들어 담당자를 매핑한다. **중복 억제**로 같은 알람이 창(기본 5분)
+  안에서 쏟아져도 개인 알림은 1건만 생성되며, 요약 모드는 기존 알림 문구를 "최근 5분간 10회"로
+  갱신한다. 규칙에서 심각도 재정의도 가능하다. 전역 기본값(알림 대상·최소 심각도·억제 창·
+  보존일)은 Settings 없이 같은 화면에서 편집한다.
+  Backend: `models/alert_notify_rule.py`, `services/observability/alert_router.py`.
+
+### Fixed
+- **전체 공지 알림이 아무에게도 보이지 않던 문제**: `recipient="all"` 공유 행으로 만든 알림을
+  조회 쪽(`notifications._me_ids`)이 매칭하지 않아, critical K8s 이벤트 알림이 실제로는 누구의
+  알림 종에도 뜨지 않았다. 이제 생성 시점에 **활성 사용자별 개인 행으로 팬아웃**한다
+  (`services/user_notify.notify_broadcast`) — 읽음 처리도 개인별로 정확히 동작한다.
+### Changed
+- **Settings 서비스 설정 통합 — "서비스 카테고리" 탭 폐지, "관리 서비스"로 일원화**: 서로
+  중복되던 두 탭을 하나로 합쳤다. 최상위 "서비스 카테고리" 탭이 사라지고, "관리 서비스" 탭이
+  **PEP 서비스 / APP 서비스** 두 탭으로만 구성된다. 각 탭 안에서 해당 도메인의 카테고리와
+  서비스 타입을 한 화면에서 관리하므로, 카테고리를 만들려고 다른 탭으로 이동할 필요가 없다.
+  기존 "서비스 타입" / "서비스 카탈로그" 서브탭 구분도 제거했다. 레거시 딥링크
+  (`?tab=service`, `?tab=service-categories`)는 `?tab=mgmt-service` 로 리다이렉트된다.
+  Frontend: `ServiceCategoryManager`/`LakeServiceTypeManager` 가 `domain` prop 을 받도록 변경,
+  각 컴포넌트 내부의 도메인 탭·도메인 select 제거.
+- **서비스 카탈로그를 PEP 서비스로 머지**: 서비스 아이콘·색상 정의가 `ui_settings.serviceCatalog`
+  와 PEP 서비스 타입 두 곳으로 갈라져 있던 것을 **PEP 서비스 한 곳**으로 합쳤다. `/services`
+  지식 카탈로그와 업무/이슈의 서비스 태그가 이제 PEP 서비스의 아이콘·색상을 그대로 사용한다.
+  이름이 겹치던 서비스(Kubernetes/Keycloak/Nexus/Prometheus/Grafana/Cilium)는 PEP 서비스 쪽
+  정의로 통일하고 색상만 이어받으며, 카탈로그에만 있던 Jenkins/ArgoCD/etcd/Hubble/Ingress/
+  Storage 는 PEP 서비스에 자동 추가된다. Backend: `lake_service_types.color` 컬럼 추가,
+  부팅 시 1회성 머지(`_merge_service_catalog_into_pep_types`), `ui_settings.service_catalog`
+  필드 폐지.
+
+## [1.16.3] - 2026-07-28
+
+### Added
+- **주간보고 진척률 표**: 전체 요약 아래에 `category(component) × task(Epic)` 단위 진척률을
+  추가했다 — 계획진도율(일정 경과 기준) · 실적진도율(완료 비율) · 달성률(실적/계획) · 완료/
+  진행중/전체 Task 수. 표 위에 **Jira WBS 간트 차트 링크**(설정값)를 노출한다. Epic 수집을 위해
+  `work_items.jira_epic` 컬럼과 관리자 설정 `jira_epic_field`(Epic Link 커스텀 필드 ID)를 추가.
+- **업무 등록 시 Jira·Confluence 자동 생성**: 업무를 만들면 곧바로 Jira 이슈와 Confluence
+  문서를 함께 생성할 수 있다(`GET /jira/provision/defaults`, `POST /jira/provision`).
+  프로젝트/이슈종류/우선순위/컴포넌트/라벨과 Confluence 스페이스·상위 페이지·제목은 **사용자
+  정보와 설정으로 기본값이 채워지고 모두 수정 가능**하며, 한쪽만 만들 수도 있다. 생성된
+  Confluence 문서에는 담당자·일정·Jira 링크가 들어간 기본 골격이 들어간다. 미연결 업무는
+  게시판 행에서도 바로 생성할 수 있고, 결과는 `work_items.confluence_url` 에 연결된다.
+- **Jira 이슈 칩 표시**: 표에서 이슈를 평문 대신 **키(링크) · 제목 · 상태**가 한 덩어리인 칩으로
+  보여준다(주간보고 상세/진척률 표 적용).
+
+### Changed
+- **주간보고 task/sub task 매핑 정정**: `task` = Jira **Epic**, `sub task` = 그 Epic 아래 이슈로
+  바로잡았다(기존에는 업무 제목/조치 내용이 들어갔다).
+- **가져오기 중복 정정**: `jira_issue_id` 로 못 찾으면 **이슈 키(DL-#) 기준**으로 기존 행을 찾아
+  덮어쓴다 — Excel 등으로 먼저 들어와 ID 가 없던 잘못된 행이 중복 생성되지 않고 정정된다.
+
+### Added
+- **내 Jira 연결 카드** (`JiraConnectCard`): 개인 세션 쿠키·PAT 등록을 **가져오기 팝업에서 바로**
+  할 수 있다. 자격증명은 원래 사용자별이지만 등록 UI 가 관리자 화면에만 있어 일반 사용자가
+  찾지 못하던 문제를 해결한다. 저장 시 자동으로 연결 테스트까지 수행하고, 접이식 **연결 가이드**
+  (F12 ▸ Network ▸ Cookie 헤더 전체 복사, `이름=값` 형식 경고, PAT 발급 안내)를 포함한다.
+  Settings 의 수동 등록 영역도 같은 컴포넌트를 쓰도록 바꿔 동작이 갈리지 않는다.
+- **가져오기 조건에 프로젝트 다중 지정**: 프로젝트도 쉼표로 여러 개 지정할 수 있어 프로젝트·
+  컴포넌트·라벨을 **개별 또는 조합**으로 쓸 수 있다.
+- **실행된 JQL 노출**: 가져오기 결과·미리보기에 실제로 Jira 에 보낸 JQL 을 표시해 조건이
+  의도대로 적용됐는지 화면에서 바로 확인할 수 있다.
+- **업무 게시판 행 단위 Jira 동기화**: 각 행에서 **Jira 에서 다시 가져오기**(`POST /jira/refresh/{item_id}`,
+  변경 필드만 갱신하고 결과를 토스트로 안내)와 **수정 내용 Jira 로 보내기**를 바로 실행할 수 있다.
+- **주간보고 화면 개편**: 표 3종을 세로 스크롤 대신 **탭**으로 분리하고, 필터바에 구분(component)·
+  담당자·상태·검색을 추가했다(요약 숫자도 필터 결과 기준으로 재계산). 상세/담당자 표는 **컬럼
+  헤더 클릭 정렬**을 지원한다.
+- **Jira Excel·붙여넣기 가져오기를 가져오기 팝업에 통합**하고 사이드바 메뉴에서 제거했다
+  (전용 페이지는 "전체 표로 자세히 보기" 링크로 유지).
+
+### Changed
+- **가져오기 완료 후 UI**: 확정 가져오기가 끝나면 입력 폼 대신 **결과 요약만** 보여주고
+  `다시 가져오기` / `닫기` 버튼으로 전환한다.
+
+### Added
+- **주간보고 자동 생성 + Confluence 게시** (`/weekly-report`): 한 주(월~금)의 업무를 집계해
+  ① 전체 요약(전체/진행중/완료/지연/비고) ② 구분별 상세(구분·task·sub task·시작일·종료
+  예정일·종료일·상태·이슈·비고) ③ 담당자별(task·담당자·주요 추진업무·issue 요약) **3개 표**로
+  보여주고, 그대로 Confluence 페이지로 게시한다. 저장 위치(스페이스·상위 페이지·제목)는 게시
+  때마다 바꿀 수 있고, 같은 제목이면 새 버전으로 갱신된다. 관리자는 cron(기본 금 17:00)으로
+  **자동 생성·게시**를 켤 수 있다. Backend: `services/weekly_report_service.py`,
+  `POST /jira/weekly-report/{preview,publish}`, `GET/PUT /jira/weekly-report/settings`,
+  Confluence `upsert_page()`, Celery `weekly-report-dispatcher`.
+- **Jira 다중 조건 가져오기**: 프로젝트 키에 더해 **라벨 · 컴포넌트 · 상태 · 담당자 · 최근 N일
+  변경분**을 조합해 가져올 수 있다(입력한 조건은 AND, 쉼표로 나열한 값은 OR). 가져오기 모달에
+  "조건 조합" 범위가 추가됐다.
+- **재가져오기 변경 확인**: 미리보기가 Jira 기준으로 **바뀌는 필드만 old → new 로** 보여주고,
+  변경 없는 항목은 "변경없음"으로 구분한다. 체크박스로 **적용할 항목만 선택**해 반영할 수 있다.
+- **PEP → Jira 신규 생성 / 삭제**: 업무를 Jira 이슈로 생성해 자동 연결하고(`POST /jira/create`),
+  Jira 이슈를 삭제하면 PEP 업무는 보존한 채 연결만 해제한다(`DELETE /jira/issue/{key}`).
+
+### Fixed
+- **수동 등록 세션 쿠키로는 Confluence 가 인증되지 않던 문제**: Confluence 는 SSO 로그인이 따로
+  캡처한 쿠키만 보고 있어, 세션 쿠키를 수동 등록한 사용자는 Confluence 테스트가 항상 실패했다.
+  이제 Confluence 전용 세션이 없으면 **Jira 자격으로 폴백**하고(SiteMinder 류는 SMSESSION 이
+  상위 도메인 공용), 통하면 Confluence 세션으로 승격 저장한다.
+
+### Added
+- **SSO 진단에 파드 출발지 IP 표시**: SSO/보안 에이전트가 클라이언트 IP 를 검사하는 구성인지
+  판단하고 허용 목록에 등록할 IP 를 확인할 수 있도록, 진단 결과에 이 파드의 호스트명과
+  대상 서버로 나갈 때의 출발지 IP 를 함께 보여준다(K8s 는 보통 노드 IP 로 NAT 되므로 노드가
+  여러 대면 파드마다 달라질 수 있다는 점이 중요한 단서다).
+- **CA SiteMinder 계열 SSO 지원**: `SMENC`/`SMLOCALE`/`TARGET`/`SMAUTHREASON` 필드를 쓰는
+  SiteMinder(Layer7) 로그인 폼에서, 인증 후 목적지(`TARGET`)가 **로그인 페이지 자신**을
+  가리키면 제품 URL 로 교정한다 — 교정 전에는 인증에 성공해도 로그인 화면으로 되돌아와
+  "자격 오류"로 오판됐다.
+- **로그인 직후 안내 페이지 통과**: "세션 유효기간 안내"처럼 로그인 뒤 끼어드는 페이지의
+  `확인/계속` 버튼(hidden 없는 폼)과 링크를 자동으로 따라간다.
+- **SSO 계정 필드명 지정** (공통 설정): 사번(empnum) 로그인처럼 IdP 로그인 폼의 계정 칸
+  이름이 특수한 경우, 자동 추정 대신 필드명을 직접 지정할 수 있다. SSO 진단 표에도
+  **계정 필드** 열이 추가되어 백엔드가 어느 칸에 아이디를 넣는지 확인할 수 있다.
+
+### Fixed
+- **비밀번호가 빈 값으로 전송되던 문제 (SiteMinder 계열)**: 로그인 폼이 화면 입력과 **별개로
+  비어 있는 hidden 자격 필드**(`PASSWORD` 등)를 두고 브라우저 JS 가 그것을 채우는 구성이 있다.
+  서버가 hidden 쪽을 읽으면 우리는 빈 비밀번호를 보낸 셈이 되어, 오류 문구 없이 로그인 폼만
+  다시 표시됐다. 이제 값이 비어 있는 자격용 hidden 필드도 함께 채운다(값이 있는 상태 hidden 은
+  그대로 보존).
+- **보안 에이전트 설치 페이지로 새면서 로그인이 끊기던 문제**: 로그인 페이지가 에이전트
+  미설치 시 설치 안내(`/tray/view/install.do` 등)로 보내는 스크립트를 함께 갖고 있으면
+  그쪽을 따라가 흐름이 끝났다. 이제 설치/다운로드성 URL 은 건너뛰고 다음 후보를 쓴다.
+- **인증에 성공했는데도 실패로 처리하던 문제**: 로그인 폼이 다시 보이면 즉시 거부로 단정했으나,
+  이제 **세션을 먼저 확인**해 실제로 로그인됐으면 성공으로 처리한다.
+- **`<select>`/`<textarea>` 필드를 제출에서 빠뜨리던 문제**: 폼 파서가 `<input>`/`<button>` 만
+  수집해, 도메인 선택 같은 필수 값이 누락되면 IdP 가 흐름을 되감았다.
+- **SSO 로그인 실패 사유에 로그인 페이지의 상시 안내문이 오류로 표시되던 문제**: "비밀번호
+  5회 이상 입력 오류 시 계정이 잠깁니다" 같은 **정적 안내 문구**를 IdP 오류 메시지로 오인해
+  보고했다. 이제 자격 제출 **직전 페이지와 비교해 새로 생긴 문구만** 오류로 판단하며, 새
+  문구가 없으면 "같은 로그인 폼이 다시 표시됨(새 오류 문구 없음)"으로 구분해 안내한다.
+  실패 메시지에 **계정을 채운 필드명**도 함께 표시해 필드 오선택을 바로 확인할 수 있다.
+- **계정 칸 앞에 다른 텍스트 입력이 있으면 엉뚱한 칸에 아이디를 넣던 문제**: 알려진 계정
+  필드명(사번 계열 `empnum`/`empno`/`sabun` 등 포함)을 우선 매칭하도록 보완.
+
+## [1.16.2] - 2026-07-28
+
+### Fixed
+- **클러스터 삭제 시 점검 수행 로그(check_matrix_runs) 때문에 삭제가 실패하던 문제**:
+  `CheckMatrixRun.cluster` 관계에 `passive_deletes=True` 가 빠져 있어, 클러스터를 삭제하면
+  ORM 이 NOT NULL 인 `check_matrix_runs.cluster_id` 를 NULL 로 UPDATE 하려다 터졌다. 형제
+  테이블(schedules/results)과 동일하게 DB 의 `ON DELETE CASCADE` 에 위임하도록 수정.
+  회귀 가드(`test_cluster_backrefs_never_nullify_not_null_fk`)가 잡아낸 CI 실패 해소.
+
+## [1.16.1] - 2026-07-28
+
+### Fixed
+- **등록된 클러스터 삭제 실패 (`NotNullViolation: cluster_id of relation
+  check_matrix_results`)**: 연결이 안 된(pending) 클러스터를 포함해 클러스터 삭제가 500 으로
+  실패하던 문제를 고쳤다. 원인은 두 가지 — ① 자식 모델의 `backref` 기본 cascade 에 delete 가
+  없어 SQLAlchemy 가 부모 삭제 시 자식의 `cluster_id` 를 NULL 로 UPDATE(NOT NULL 컬럼이라
+  위반), ② 삭제 라우터가 정리 대상 테이블을 손으로 나열해 모델이 추가될 때마다 누락. Backend:
+  신규 `services/cluster_purge.py` 가 메타데이터에서 `cluster_id` 보유 테이블 32개를 전수
+  탐색해 FK 의존성 순서대로 정리하고(업무·서비스 카탈로그·서버 스펙은 연결만 해제),
+  Cluster 쪽 `backref` 7곳에 `passive_deletes=True` 를 적용해 nullify UPDATE 를 차단했다.
+  삭제 실패 시 원인 테이블이 담긴 에러 메시지를 반환하고, kubeconfig 파일 삭제는 DB 커밋
+  성공 후로 옮겨 실패 시 파일만 사라지는 문제도 없앴다. 다중 대상 업무의
+  `cluster_ids`/`cluster_names` 에서도 삭제된 클러스터를 제거하고 대표를 승격한다.
+  신규 회귀 테스트 `tests/test_cluster_deletion.py` 가 정리 정책 누락과 nullify 를 CI 에서 막는다.
+
+### Added
+- **점검 매트릭스 — 실행 방식 공개 + 수동 실행 3단위 + 수행 로그** (홈 ▸ 플랫폼 현황):
+  - **실행 방식(런북)**: 셀을 클릭하면 그 점검이 **실제 운영 클러스터에서 수행하는 명령**을
+    순서대로 볼 수 있다. kubectl 실행 / K8s API 호출 / HTTP 프로브 / SSH / PEP DB 조회를
+    배지로 구분하고, 대상에 변경을 일으키는 명령에는 "변경" 배지가 붙는다. 이 클러스터에서
+    해석된 실제 대상(점검 정의·애드온)과 적용되는 임계값·파라미터도 함께 표시된다.
+  - **수동 실행 3단위**: 셀 1개(동기 실행, 결과 즉시), 클러스터 열 전체(K8s 단위),
+    공통 점검 항목 행 전체(전 클러스터). 일괄 실행은 셀마다 독립 작업으로 큐잉돼 느린
+    클러스터 하나가 나머지를 막지 않는다.
+  - **수행 로그**: cron 자동 실행과 수동 실행(셀/클러스터/항목/수동 입력)이 모두 개별 기록으로
+    남는다. 트리거·실행자·소요 시간, 실행 단계 타임라인, **실제로 나간 kubectl 명령과 종료
+    코드·stdout/stderr**, 그 시점의 실행 계획까지 확인할 수 있다. 실행 대상이 없는 셀은 실패가
+    아니라 "건너뜀"으로 남아 셀이 비어 있는 이유를 설명한다.
+  - **사용 매뉴얼**: 화면 내 도움말(`?`)이 기본 사용법/실행하기/점검 방식/로그·보관 4탭으로
+    확장돼 deep check·addon·수동 입력의 동작 방식과 사용법을 담는다. 상세판은
+    `docs/CHECK_MATRIX_GUIDE.md`.
+  - Backend: `models/check_matrix.py` 에 `CheckMatrixRun`(trigger/run_state/batch_id/
+    triggered_by/details) 추가, 신규 `services/check_matrix_runbook.py`, `check_matrix.py` 라우터에
+    `GET /cell/{item}/{cluster}/runbook`·`POST /cell/{item}/{cluster}/run`·
+    `POST /clusters/{id}/run`·`POST /items/{id}/run`·`GET /runs`·`GET /runs/{id}`,
+    Celery `run_check_matrix_run_one` 태스크, `DeepCheckerBase._kubectl` 의 실행 명령 계측.
+    수행 로그는 값 이력과 같은 보관 일수로 매일 정리된다.
+  - Frontend: `CheckMatrixCellDetailModal` 3탭화(추이·이력/실행 방식/수행 로그),
+    신규 `CheckMatrixRunbookPanel`·`CheckMatrixRunLog`·`CheckMatrixRunLogPanel`,
+    매트릭스 열/행 실행 버튼과 카드 헤더 "수행 로그" 진입점.
+- **점검 매트릭스 — 셀 대표값 숫자 표시 + 기본 등록 항목 설정 편집**:
+  - **셀에 대표값 숫자**: 인증서 만료가 "정상"이 아니라 **잔여일(예: 361일)** 로 표시된다.
+    프로브류는 실패율(%), 이벤트류는 건수, 노드류는 이상 노드 수 — 전 deep check 타입에
+    대표값 규칙(`deep_checkers/registry.py` `CELL_VALUE_SPECS`)을 정의했고 시드 시 항목
+    단위도 함께 채워진다(구버전 DB 는 부팅 시 자동 보강).
+  - **소스 설정 확인·수정**: 셀 상세 "실행 방식" 탭의 **설정 편집**으로 기본 등록 점검의
+    임계값·파라미터(애드온이면 config)를 매트릭스에서 바로 고칠 수 있다. 값은 필드 타입으로
+    강제되고 비우면 기본값으로 복귀하며, 글로벌 정의면 전 클러스터 적용 경고가 뜬다.
+    Backend: `PUT /check-matrix/cell/{item}/{cluster}/source-config`, 런북에
+    definition/addon 식별자·필드 명세 포함.
+  - **시스템 항목도 표시 속성 수정 가능**: 잠긴 것은 실행 소스뿐 — 이름/설명/단위/표시
+    여부는 다른 행과 똑같이 편집된다.
+
+- **점검 매트릭스 — 영역 구분·행 색 커스텀·드래그 정렬**: 행마다 **영역(category)**
+  (k8s/network/storage/os/app 또는 자유 입력)과 **배경 색**(8색 프리셋)을 지정할 수 있다 —
+  행에 색 띠·배경 틴트와 영역 칩이 표시돼 어떤 영역 점검인지 한눈에 구분된다. 기본 등록
+  항목은 체커 도메인에서 영역·기본 색이 자동으로 채워진다(구버전 DB 부팅 시 보강). 색은
+  hex 가 아니라 테마 대응 차트 토큰 프리셋(`chart-1..8`)으로 저장돼 다크/라이트를 자동으로
+  따른다. 행 순서는 위/아래 화살표 대신 **그립(⋮⋮) 드래그**로 바꾼다.
+  Backend: `check_matrix_items.category/color` + 마이그레이션·시드·backfill,
+  Frontend: `rowColors.ts` 프리셋 + 항목 폼 색 피커 + 매트릭스 DnD.
+
+### Fixed
+- **점검 매트릭스 대시보드 audit (디버그·UI)**:
+  - 셀 동기 실행이 axios 기본 30초에 잘려 느린 점검(pod_to_pod·핵심 번들)이 성공하고도
+    실패로 보이던 문제 — 셀 실행만 300초로 확대(백엔드 태스크 한도 280초에 정합).
+  - 워커가 죽으면 수행이 "대기열/실행 중"에 영원히 갇히던 문제 — 매분 디스패처가 30분
+    초과 수행을 실패로 마감하는 고아 수행 스위퍼 추가.
+  - 일괄 실행 완료 후에도 3초 폴링이 계속되고 매트릭스 셀은 최대 60초 늦게 갱신되던 문제 —
+    배치 종료 감지 시 폴링 중단 + 그리드 즉시 1회 갱신.
+  - UI 규칙 위반 수정: `text-red-500`(고정 팔레트) → 상태 토큰, 버튼/입력 라운딩을
+    디자인 시스템 규격(`rounded-xl`)으로 정리, 아이콘 전용 버튼(수정/삭제/설정)에
+    `aria-label` 보강.
+- **점검 매트릭스 수동 실행 500 (심각)**: 셀/클러스터/항목 실행과 수동 입력이 전부
+  `AttributeError: 'User' object has no attribute 'full_name'` 으로 실패했다 — 실행자
+  표시명 해석이 User 모델에 없는 `full_name` 을 참조. `display_name or username` 으로
+  수정하고 회귀 테스트 추가.
+- **실행 버튼 발견성**: 행의 전 클러스터 실행 ▶ 가 hover 에서만 보여 "버튼이 없다"고
+  오인됐다 — 항상 노출로 변경. 행마다 실행 방식 배지(핵심/Deep/Addon/수동)를 붙이고,
+  수동 입력 항목의 셀 상세에는 실행 버튼이 없는 이유(자동 실행 없음)와 자동 점검으로
+  바꾸는 방법을 안내한다.
+- **문서**: `docs/CHECK_MATRIX_GUIDE.md` 에 DB 구조(Schema Audit) 섹션 추가 —
+  테이블 5종 관계도(ER)·인덱스/제약·enum 확장 절차·runs 테이블 용량 특성·이중 기록.
+- **Deep check 실행 500 (심각)**: 매트릭스에서 deep check 를 실행하면 전부
+  `null value in column "daily_check_log_id" violates not-null constraint` 로 실패했다.
+  일일점검 회차 없이 도는 단독 실행(매트릭스 셀/"지금 점검")은 이 컬럼이 NULL 인데,
+  초기 스키마의 NOT NULL 이 구버전 DB 에 남아 있었고 `create_all` 은 기존 컬럼 제약을
+  바꾸지 않는다. 부팅 마이그레이션에 `DROP NOT NULL` 추가(재시작만으로 복구) + 회귀 테스트.
+- **etcd 가 데몬(systemd)인 환경 지원**: `etcd_defrag` 점검이 `kube-system` 의 etcd 파드만
+  찾아서, etcd 가 master 노드 systemd 유닛으로 뜨고 env 가 `/etc/etcd.env` 인 환경에서는
+  항상 "etcd pod 를 찾지 못했습니다"로 끝났다. 실행 경로를 파라미터
+  `source`(`auto`/`pod`/`snapshot`)로 노출하고, 데몬 환경은 `버전/설정 관리(/versions)`
+  화면이 SSH 로 수집해 둔 `etcdctl_config` 스냅샷을 읽어 단편화율을 판정한다(`auto` 는
+  파드 → 스냅샷 폴백, 스냅샷이 `snapshot_max_age_hours` 보다 낡으면 대기 처리).
+  체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다.
+
+- **스키마 드리프트로 인한 반복 500 (근본 대응)**: `daily_check_logs.ai_status`,
+  `deep_check_results.status/.message`, `deep_check_results.daily_check_log_id` 의 레거시
+  NOT NULL 처럼, 모델과 실제 DB 가 어긋나 **특정 기능에서만 500** 이 나는 문제가 반복됐다.
+  Alembic 없이 `create_all` 로 운영하는 구조상 이미 존재하는 테이블의 컬럼·제약이 자동으로
+  갱신되지 않기 때문이다. 한 컬럼씩 사후에 쫓아가는 대신 전체를 기계적으로 비교·복구한다:
+  - 부팅 안전망에 `_relax_not_null_drift` 추가 — 모델이 nullable 인데 DB 에 NOT NULL 이 남은
+    컬럼을 자동 완화(기존 `_sync_missing_model_columns` 의 누락 컬럼 보강과 짝).
+  - Settings ▸ **스키마 점검** 탭 신설 — 드리프트(테이블/컬럼 누락, 레거시 NOT NULL)를 표로
+    보여주고 **안전한 것만**(컬럼 추가는 항상 nullable, NOT NULL 해제) 복구한다. 컬럼 삭제·타입
+    변경은 하지 않으며, `실행 계획 보기`로 실행될 SQL 을 먼저 확인할 수 있다.
+    Backend: `GET /api/v1/schema-health`, `POST /api/v1/schema-health/repair`(admin).
+
+### Changed
+- **UI-First 원칙을 프로젝트 규약으로 명문화** (`CLAUDE.md` §UI-First 원칙): 환경마다
+  달라지는 값(네임스페이스·라벨·경로·엔드포인트·실행 경로)은 코드에 하드코딩하지 않고
+  `param_fields`/`threshold_fields`(또는 `Addon.config`)로 노출해 **운영자가 파이썬 파일을
+  고치지 않고 화면에서 확인·수정**할 수 있어야 한다. 자격증명은 params 에 저장 금지(런북·
+  실행 로그 노출) — 수집 화면이 남긴 스냅샷을 읽는 구조를 쓴다. `add-deep-checker` 스킬과
+  `docs/CHECK_MATRIX_GUIDE.md` §환경 차이 대응에 절차 반영.
+
+## [1.16.0] - 2026-07-28
+
+### Added
+- **Jira+Confluence SSO 통합 로그인 (K8s 파드 내, 브라우저 불필요)**: 관리자가 설정 ▸ 연동에
+  Confluence Base URL 을 등록하면, SSO 자동 로그인(ID/PW 폼)이 **한 번의 IdP 로그인으로 Jira 와
+  Confluence 세션을 동시에 캡처**해 저장한다. Confluence 연결 테스트 버튼과 세션 상태 배지도
+  추가. Backend: `jira_sso_http.sso_login_products()`(다중 제품 SSO 체인, Chromium/Playwright
+  불필요), 신규 `services/confluence_service.py`(fail-safe REST 클라이언트 — user/current·CQL
+  검색·페이지 조회), `POST /jira/confluence/test`·`GET /jira/confluence/search`,
+  `user_jira_credentials.confluence_cookie_encrypted`(암호화 저장·백업 마스킹 등록).
+- **Jira/Confluence 세션 만료 시 자동 재로그인**: "로그인 정보 저장" 옵트인 사용자는 API 호출
+  중 세션 만료(401)가 감지되면 저장된 SSO 로그인 정보로 **자동 재로그인 후 재시도**된다 —
+  최초 1회 로그인 후에는 세션이 끊겨도 연결 테스트/가져오기/push 가 무중단으로 이어진다.
+- **SSO 진단** (`POST /jira/sso/diagnose`): 로그인이 실패할 때 **백엔드 파드가 실제로 보는
+  로그인 페이지**(최종 URL·HTTP 상태·폼/password 입력 개수·JS·meta 리다이렉트 대상·
+  WWW-Authenticate)를 표로 보여준다. 폐쇄망 IdP 는 외부에서 열어볼 수 없어 원인 추정이
+  어렵던 문제를 해결한다. 설정 ▸ 연동에 "SSO 진단" 버튼 추가.
+- **IdP 로그인 URL 직접 지정** (공통 설정): 자동 탐색이 실패하는 SSO 구성을 위해 브라우저에서
+  확인한 IdP 로그인 페이지 주소(예: `https://login.example.com/sso/am/jira/login.jsp`)를
+  지정하면 SSO 로그인이 그 주소부터 진입한다.
+
+### Fixed
+- **SSO 자동 로그인이 "로그인 폼을 찾지 못했습니다"로 실패하던 문제**: 기존 구현은 Jira
+  루트(`/`) 한 곳만 확인해, ① 익명 접근이 열려 루트가 대시보드를 주는 배포 ② IdP 중계가
+  HTTP 302 가 아니라 `<meta refresh>`/`location.href` 같은 **클라이언트 리다이렉트**로
+  이뤄지는 배포(사내 SSO 게이트웨이 hook)에서 IdP 로그인 페이지에 도달하지 못했다. 이제
+  **여러 진입 경로**(루트·로그인 페이지·보호 자원)를 시도하고 **JS/meta 리다이렉트를
+  추적**하며, IdP 에서 먼저 로그인하는 구성(OpenAM/SiteMinder 류)을 위해 로그인 후 제품
+  재진입으로 토큰 교환까지 마친다. 폼 탐색이 모두 실패하면 **Jira REST 세션 로그인**
+  (`/rest/auth/1/session`)과 **제품 자체 로그인 폼** POST 로 폴백한다. 비밀번호 오답은
+  즉시 중단해 AD 계정 잠금을 방지한다. `<button type=submit>` 폼과 `Accept: text/html`
+  요청 헤더도 함께 보완.
+- **OpenAM 계열 SSO 에서 올바른 계정인데 "비밀번호가 올바르지 않습니다"로 실패하던 문제**:
+  로그인 폼에 `encoded=true` hidden 필드가 있으면 브라우저 스크립트가 계정/비밀번호를
+  **base64 로 인코딩해 제출**한다. 평문으로 보내면 IdP 가 로그인 폼을 다시 표시해 오답과
+  구분되지 않았다. 이제 해당 폼은 자동으로 base64 인코딩해 제출한다. 함께 보완: 폼 제출 시
+  `Referer`/`Origin` 헤더 전송(CSRF 방어로 흐름이 되감기던 배포 대응), `IDToken1` 을 계정
+  필드로 인식, **다단계 로그인**(계정 화면 → 비밀번호 화면)을 폼 재표시로 오판하지 않도록
+  폼 필드 구성 비교로 구분.
+- **로그인 실패 사유가 항상 "아이디 또는 비밀번호가 올바르지 않습니다"로 뭉개지던 문제**:
+  이제 IdP 가 화면에 표시한 오류 문구를 그대로 전달하고, 오류 문구가 없으면 "같은 로그인
+  폼이 다시 표시됨 — 자격 오류이거나 추가 인증 단계 요구"로 구분해 안내한다. SSO 진단에도
+  폼의 hidden 필드 목록을 노출해 `encoded=true` 같은 단서를 확인할 수 있다.
+- **수동 세션 쿠키 등록 시 값만 붙여넣으면 인증되지 않던 문제**: `JSESSIONID=<값>` 이 아니라
+  값만 넣으면 `Cookie` 헤더에 이름이 없어 서버가 익명으로 취급해 401 이 됐다. 이제 이름이
+  없는 입력은 `JSESSIONID=` 를 자동으로 붙이고, 앞에 붙은 `Cookie:` 접두어도 제거한다.
+  입력 안내 문구에도 형식 경고를 추가.
+
+## [1.15.1] - 2026-07-28
 
 ### Added
 - **화면별 노출 관리 (Settings → 접근 제어)**: admin 이 각 화면을 일반 사용자(operator·viewer)에게
