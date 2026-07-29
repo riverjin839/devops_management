@@ -10,6 +10,13 @@
 
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Comfort 테마**: 기존 기본/라이트/다크/시스템에 더해 크림 배경 + 딥그린 액센트 +
+  화이트 카드 + 큰 라운딩(16px)의 부드러운 대시보드 톤 테마를 추가했다. 사이드바 하단
+  테마 토글로 순환 선택(기본 → 컴포트 → 라이트 → 다크 → 시스템).
+  Frontend: `index.css`(`html.comfort` 토큰 블록 + 소프트 카드 섀도), `stores/themeStore.ts`,
+  `components/layout/Sidebar.tsx`.
+
 ## [1.17.1] - 2026-07-29
 
 ### Fixed

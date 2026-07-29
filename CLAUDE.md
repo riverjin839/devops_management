@@ -286,7 +286,7 @@ Both `AIAgentService` (`agent_service.py`) and `PrometheusService` (`prometheus_
 
 ## UI Design System
 
-테마 3종(`default` 기본 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
+테마 4종(`default` 기본 / `comfort` 크림+딥그린 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
 
 - **규격·구현 표준의 원천 = `DESIGN_SYSTEM.md` §12 구현 표준** — 테마 매트릭스, radius 토큰,
   MacCard props, ClusterSidebar 사용 패턴 3종 + 레이아웃 규칙, 콘솔 패턴 5개 항목이 전부 거기 있다.
