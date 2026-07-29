@@ -28,6 +28,14 @@ celery_app.conf.update(
     task_time_limit=300,  # 5분 타임아웃
 )
 
+# LLM 자동 분석은 전용 `llm` 큐로 라우팅한다 — 점검/배치잡이 쓰는 기본(celery) 큐의
+# 2-slot 워커 풀을 LLM 대기(최대 120s+)로 점유하지 않도록 격리. 소비자는
+# `celery -A app.celery_app worker -Q llm --concurrency=1` 로 따로 띄운다
+# (k8s/base/celery/worker-llm.yaml · docker-compose `celery-worker-llm`).
+celery_app.conf.task_routes = {
+    "app.celery_app.run_auto_incident_analysis": {"queue": "llm"},
+}
+
 # Beat 스케줄 설정
 celery_app.conf.beat_schedule = {
     # 점검 매트릭스 디스패처 — 매분 Cluster.check_cron_expr(core_bundle) +
@@ -1108,5 +1116,103 @@ def dispatch_weekly_report(self):
     except Exception as exc:  # noqa: BLE001 - 디스패처는 절대 죽지 않는다
         log.warning("weekly report dispatcher failed: %s", exc)
         return {"dispatched": False, "reason": "error"}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_auto_incident_analysis",
+                 ignore_result=True, time_limit=240)
+def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = None,
+                               include_logs: bool = False, notify_analysis: bool = False):
+    """알람 1건에 대한 AI 자동 분석 — 전용 `llm` 큐에서 실행.
+
+    `services/observability/analysis_hook.maybe_enqueue_analysis` 가 scope 매칭·
+    디바운스·레이트 검사를 통과시킨 알람만 여기 도착한다 (수동 실행은
+    `POST /observability/alerts/{id}/analyze`). 분석은 **읽기 전용**이다 —
+    결과는 사람이 읽는 조치 가이드일 뿐 어떤 실행 경로도 없다.
+    실패해도 알람 자체에는 영향이 없다 (analysis_status=failed 로만 기록).
+    """
+    import logging
+    import time as _time
+    import uuid as _uuid
+    from datetime import datetime as _dt
+
+    from app.database import SessionLocal
+    from app.models import AlertEvent, IncidentAnalysis
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        try:
+            event_uuid = _uuid.UUID(str(alert_event_id))
+        except ValueError:
+            return {"ok": False, "reason": "bad_id"}
+        event = db.query(AlertEvent).filter(AlertEvent.id == event_uuid).first()
+        if event is None:
+            return {"ok": False, "reason": "alert_not_found"}
+
+        analysis = IncidentAnalysis(
+            alert_event_id=event.id,
+            cluster_id=event.cluster_id,
+            namespace=event.namespace,
+            resource=event.resource,
+            trigger="alert" if rule_id else "manual",
+            status="running",
+            matched_rule_id=rule_id,
+        )
+        db.add(analysis)
+        db.flush()
+        event.analysis_id = analysis.id
+        event.analysis_status = "running"
+        db.commit()
+        db.refresh(analysis)
+
+        started = _time.monotonic()
+        try:
+            from app.services.analyzers.factory import get_analyzer
+            from app.services.incident_context_builder import build_context_from_alert
+
+            ctx = build_context_from_alert(db, event, include_logs=include_logs)
+            analyzer = get_analyzer(db)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(analyzer.analyze(ctx))
+            finally:
+                loop.close()
+
+            analysis.severity = result.severity
+            analysis.root_cause = result.root_cause
+            analysis.suggested_actions = list(result.suggested_actions or [])
+            analysis.related_runbooks = list(result.related_runbooks or [])
+            analysis.confidence = result.confidence
+            analysis.analyzed_by = result.analyzed_by
+            analysis.status = "done"
+        except Exception as exc:  # noqa: BLE001
+            log.warning("auto incident analysis failed (alert=%s): %s", alert_event_id, exc)
+            analysis.status = "failed"
+            analysis.error = str(exc)[:500]
+        analysis.duration_ms = int((_time.monotonic() - started) * 1000)
+        analysis.finished_at = _dt.utcnow()
+        event.analysis_status = analysis.status
+        db.commit()
+
+        # 후속 알림은 best-effort — 실패해도 분석 결과는 남는다.
+        if notify_analysis and analysis.status == "done":
+            try:
+                from app.services.user_notify import notify_broadcast
+                summary = (analysis.root_cause or "")[:200]
+                notify_broadcast(
+                    db,
+                    type="alert",
+                    title=f"[AI 분석] {event.alertname}",
+                    body=f"원인 분석: {summary}",
+                    link=f"/alerts?id={event.id}",
+                )
+                db.commit()
+            except Exception:  # noqa: BLE001
+                log.exception("analysis notify failed")
+
+        return {"ok": True, "analysis_id": str(analysis.id), "status": analysis.status}
     finally:
         db.close()

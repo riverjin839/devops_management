@@ -4248,6 +4248,8 @@ export interface AlertEvent {
   labels: LabelPair[];
   annotations: LabelPair[];
   rawJson?: string | null;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface AlertEventListResponse {
@@ -4299,26 +4301,29 @@ export interface AlertSettings {
 }
 
 // ── LLM 게이트웨이 설정 (Settings → AI/LLM) ───────────────────────────
+// 주의: axios 인터셉터가 응답 키를 snake→camel 로 변환하므로 여기 타입은 camelCase.
+// routing 의 purpose 키도 응답에서는 camelCase 가 된다 (요청 시 자동 역변환).
 
 export type LlmProviderType = 'ollama' | 'openai_compat';
 
+/** camelCase purpose 키 (백엔드 snake_case 와 인터셉터로 상호 변환됨) */
 export type LlmPurpose =
   | 'chat'
-  | 'incident_analysis'
-  | 'review_summary'
-  | 'arch_doc'
+  | 'incidentAnalysis'
+  | 'reviewSummary'
+  | 'archDoc'
   | 'trends'
   | 'embedding';
 
 export interface LlmProfile {
   name: string;
   provider: LlmProviderType;
-  base_url: string;
+  baseUrl: string;
   model: string;
   /** "credential:<name>" | "env:<VAR>" | "" — 키 원문은 절대 오가지 않는다 */
-  api_key_ref: string;
-  timeout_seconds: number;
-  max_concurrency: number;
+  apiKeyRef: string;
+  timeoutSeconds: number;
+  maxConcurrency: number;
   enabled: boolean;
 }
 
@@ -4329,8 +4334,8 @@ export interface LlmRoute {
 
 export interface LlmSettings {
   language: 'ko' | 'en';
-  analyzer_backend: 'claude' | 'local_llm' | 'rule_based';
-  embedding_model: string;
+  analyzerBackend: 'claude' | 'local_llm' | 'rule_based';
+  embeddingModel: string;
   profiles: LlmProfile[];
   routing: Record<string, LlmRoute>;
 }
@@ -4339,25 +4344,25 @@ export interface LlmHealthEntry {
   profile: string;
   provider: LlmProviderType;
   enabled: boolean;
-  base_url: string;
+  baseUrl: string;
   status: 'online' | 'offline';
   model: string;
   detail: string;
-  latency_ms: number;
+  latencyMs: number;
 }
 
 export interface LlmTestResult {
   status: string;
-  latency_ms: number;
+  latencyMs: number;
   model: string;
-  answer_preview: string;
+  answerPreview: string;
   error: string | null;
 }
 
 export interface LlmCredentialSummary {
   name: string;
   hint: string;
-  created_at: string | null;
+  createdAt: string | null;
 }
 
 export interface LlmUsageBucket {
@@ -4366,7 +4371,51 @@ export interface LlmUsageBucket {
   bucket: string; // YYYYMMDDHH (UTC)
   count: number;
   errors: number;
-  avg_latency_ms: number;
-  prompt_tokens: number;
-  completion_tokens: number;
+  avgLatencyMs: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+// ── 알람 AI 자동 분석 (Phase 2) ───────────────────────────────────────
+
+export interface LlmAnalysisScopeRule {
+  id: string;
+  priority: number;
+  enabled: boolean;
+  clusterId: string | null;
+  namespacePattern: string;
+  alertnamePattern: string;
+  severityMin: 'info' | 'warning' | 'critical';
+  maxPerHour: number;
+  notifyAnalysis: boolean;
+  includeLogs: boolean;
+}
+
+export interface LlmAnalysisScope {
+  enabled: boolean;
+  debounceSeconds: number;
+  globalMaxPerHour: number;
+  rules: LlmAnalysisScopeRule[];
+}
+
+export interface AlertIncidentAnalysis {
+  id: string;
+  alertEventId: string | null;
+  clusterId: string | null;
+  namespace: string | null;
+  resource: string | null;
+  trigger: 'alert' | 'manual';
+  status: 'queued' | 'running' | 'done' | 'failed' | 'skipped';
+  severity: string | null;
+  rootCause: string | null;
+  suggestedActions: string[];
+  relatedRunbooks: string[];
+  confidence: number | null;
+  citations: Record<string, unknown>[];
+  analyzedBy: string | null;
+  matchedRuleId: string | null;
+  durationMs: number | null;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
 }

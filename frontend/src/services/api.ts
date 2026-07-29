@@ -744,9 +744,13 @@ export const llmApi = {
   listCredentials: () =>
     api.get<{ data: LlmCredentialSummary[] }>('/llm/credentials'),
   createCredential: (name: string, apiKey: string) =>
-    api.post<{ data: { name: string; hint: string }; updated: boolean }>('/llm/credentials', { name, api_key: apiKey }),
+    api.post<{ data: { name: string; hint: string }; updated: boolean }>('/llm/credentials', { name, apiKey }),
   deleteCredential: (name: string) =>
     api.delete<{ ok: boolean }>(`/llm/credentials/${encodeURIComponent(name)}`),
+  getAnalysisScope: () =>
+    api.get<{ data: import('@/types').LlmAnalysisScope }>('/llm/analysis-scope'),
+  updateAnalysisScope: (data: import('@/types').LlmAnalysisScope) =>
+    api.put<{ data: import('@/types').LlmAnalysisScope; warnings: string[] }>('/llm/analysis-scope', data),
 };
 
 // PromQL Metric Cards API
@@ -2062,6 +2066,10 @@ export const observabilityApi = {
       },
     }),
   deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+  getAlertAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/observability/alerts/${id}/analysis`),
+  triggerAlertAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/observability/alerts/${id}/analyze`),
 
   // 알림 규칙 / 전역 설정
   alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),

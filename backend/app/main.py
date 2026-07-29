@@ -1017,6 +1017,9 @@ def _run_migrations():
         _safe_create_index("ix_alert_events_status_severity", "alert_events", "(status, severity)")
         _safe_create_index(
             "ix_alert_events_fingerprint_starts", "alert_events", "(fingerprint, starts_at DESC)")
+        # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
+        _safe_add_column("alert_events", "analysis_id", "UUID")
+        _safe_add_column("alert_events", "analysis_status", "VARCHAR(16)")
 
     # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.
     if "observability_metrics" in inspector.get_table_names():

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bot, Plus, Trash2, Pencil, Loader2, PlugZap, KeyRound, RefreshCw,
-  AlertTriangle, Activity,
+  AlertTriangle, Activity, Radar,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { useToast, ConfirmDialog } from '@/components/common';
@@ -10,15 +10,20 @@ import { formatApiError } from '@/lib/utils';
 import {
   useLlmSettings, useUpdateLlmSettings, useLlmHealth, useLlmUsage,
   useLlmCredentials, useCreateLlmCredential, useDeleteLlmCredential,
-  useLlmProfileModels,
+  useLlmProfileModels, useLlmAnalysisScope, useUpdateLlmAnalysisScope,
 } from '@/hooks/useLlmSettings';
-import type { LlmProfile, LlmSettings, LlmTestResult } from '@/types';
+import { useClusters } from '@/hooks/useCluster';
+import type {
+  LlmAnalysisScope, LlmAnalysisScopeRule, LlmProfile, LlmSettings, LlmTestResult,
+} from '@/types';
 
+// axios 인터셉터가 응답 키를 camelCase 로 변환하므로 purpose 키도 camelCase 로 다룬다
+// (요청 시 자동으로 snake_case 로 역변환되어 백엔드 PURPOSES 와 일치).
 const PURPOSE_LABELS: Record<string, string> = {
   chat: 'AI 챗봇',
-  incident_analysis: '장애 분석',
-  review_summary: '점검 리뷰/요약',
-  arch_doc: '아키텍처 문서',
+  incidentAnalysis: '장애 분석',
+  reviewSummary: '점검 리뷰/요약',
+  archDoc: '아키텍처 문서',
   trends: '기술 트렌드 요약',
   embedding: '임베딩 (유사 검색)',
 };
@@ -32,18 +37,18 @@ const ANALYZER_LABELS: Record<string, string> = {
 const EMPTY_PROFILE: LlmProfile = {
   name: '',
   provider: 'openai_compat',
-  base_url: '',
+  baseUrl: '',
   model: '',
-  api_key_ref: '',
-  timeout_seconds: 120,
-  max_concurrency: 2,
+  apiKeyRef: '',
+  timeoutSeconds: 120,
+  maxConcurrency: 2,
   enabled: true,
 };
 
 /**
  * Settings → AI/LLM 탭 — 폐쇄망 LLM 이중 운용(사내 LLM + 인클러스터 Ollama)의
  * 운영자 편집 화면. 프로필(엔드포인트) CRUD, 용도별 라우팅, 분석기 선택,
- * API 키(암호화 저장) 관리, 프로필 health/사용량 가시화를 담당한다.
+ * API 키(암호화 저장) 관리, 알람 자동 분석 범위, health/사용량 가시화를 담당한다.
  */
 export function LlmSettingsTab() {
   const toast = useToast();
@@ -65,14 +70,14 @@ export function LlmSettingsTab() {
   const [credName, setCredName] = useState('');
   const [credKey, setCredKey] = useState('');
 
-  const purposes = settingsResp?.purposes ?? Object.keys(PURPOSE_LABELS);
+  const purposes = Object.keys(PURPOSE_LABELS);
 
   useEffect(() => {
     if (settingsResp?.data && draft === null) setDraft(settingsResp.data);
   }, [settingsResp, draft]);
 
   const healthByProfile = useMemo(() => {
-    const map: Record<string, { status: string; detail: string; latency_ms: number }> = {};
+    const map: Record<string, { status: string; detail: string; latencyMs: number }> = {};
     (health ?? []).forEach((h) => { map[h.profile] = h; });
     return map;
   }, [health]);
@@ -84,8 +89,8 @@ export function LlmSettingsTab() {
       const cur = agg[key] ?? { count: 0, errors: 0, latencySum: 0, tokens: 0 };
       cur.count += u.count;
       cur.errors += u.errors;
-      cur.latencySum += u.avg_latency_ms * u.count;
-      cur.tokens += u.prompt_tokens + u.completion_tokens;
+      cur.latencySum += u.avgLatencyMs * u.count;
+      cur.tokens += u.promptTokens + u.completionTokens;
       agg[key] = cur;
     });
     return Object.entries(agg)
@@ -125,7 +130,7 @@ export function LlmSettingsTab() {
 
   const upsertProfile = (profile: LlmProfile) => {
     const name = profile.name.trim();
-    if (!name || !profile.base_url.trim()) {
+    if (!name || !profile.baseUrl.trim()) {
       toast.error('입력 오류', '프로필 이름과 엔드포인트 URL 은 필수입니다.');
       return;
     }
@@ -182,7 +187,7 @@ export function LlmSettingsTab() {
       const res = await llmApi.testProfile(name);
       setTestResult({ profile: name, result: res.data });
       if (res.data.status === 'ok') {
-        toast.success('연결 확인 완료', `${name}: ${res.data.latency_ms}ms`);
+        toast.success('연결 확인 완료', `${name}: ${res.data.latencyMs}ms`);
       } else {
         toast.error('연결 실패', `${name}: ${res.data.error ?? res.data.status}`);
       }
@@ -212,7 +217,7 @@ export function LlmSettingsTab() {
       return <span className="px-2 py-0.5 text-xs rounded-full bg-status-warning/15 text-status-warning" title={h.detail}>모델 미준비</span>;
     }
     if (h.status === 'online') {
-      return <span className="px-2 py-0.5 text-xs rounded-full bg-status-healthy/15 text-status-healthy">온라인 · {h.latency_ms}ms</span>;
+      return <span className="px-2 py-0.5 text-xs rounded-full bg-status-healthy/15 text-status-healthy">온라인 · {h.latencyMs}ms</span>;
     }
     return <span className="px-2 py-0.5 text-xs rounded-full bg-status-critical/15 text-status-critical" title={h.detail}>오프라인</span>;
   };
@@ -246,8 +251,8 @@ export function LlmSettingsTab() {
                   {statusPill(p.name, p.enabled)}
                 </div>
                 <p className="text-xs text-muted-foreground truncate">
-                  {p.base_url} · 모델 {p.model || '(미지정)'} · 동시 {p.max_concurrency} · {p.timeout_seconds}s
-                  {p.api_key_ref ? ` · 키 ${p.api_key_ref}` : ''}
+                  {p.baseUrl} · 모델 {p.model || '(미지정)'} · 동시 {p.maxConcurrency} · {p.timeoutSeconds}s
+                  {p.apiKeyRef ? ` · 키 ${p.apiKeyRef}` : ''}
                 </p>
               </div>
               <button
@@ -286,7 +291,7 @@ export function LlmSettingsTab() {
             <span className="font-medium">{testResult.profile}</span>{' '}
             {testResult.result.status === 'ok' ? (
               <span className="text-status-healthy">
-                응답 {testResult.result.latency_ms}ms — “{testResult.result.answer_preview}”
+                응답 {testResult.result.latencyMs}ms — “{testResult.result.answerPreview}”
               </span>
             ) : (
               <span className="text-status-critical">
@@ -363,12 +368,12 @@ export function LlmSettingsTab() {
             <div>
               <p className="text-sm">장애 분석 백엔드</p>
               <p className="text-xs text-muted-foreground">
-                AI 장애 분석(/incident-analysis)이 사용할 분석기. LLM 분석을 켜기 전에 프로필 연결을 먼저 확인하세요.
+                AI 장애 분석(수동 + 알람 자동 분석)이 사용할 분석기. LLM 분석을 켜기 전에 프로필 연결을 먼저 확인하세요.
               </p>
             </div>
             <select
-              value={draft.analyzer_backend}
-              onChange={(e) => setDraft({ ...draft, analyzer_backend: e.target.value as LlmSettings['analyzer_backend'] })}
+              value={draft.analyzerBackend}
+              onChange={(e) => setDraft({ ...draft, analyzerBackend: e.target.value as LlmSettings['analyzerBackend'] })}
               aria-label="장애 분석 백엔드"
               className="bg-secondary border border-border rounded-xl px-2 py-1.5 text-sm"
             >
@@ -399,13 +404,13 @@ export function LlmSettingsTab() {
                 <p className="text-xs text-muted-foreground">유사 업무/가이드 검색용 임베딩 모델 (768차원)</p>
               </div>
               <input
-                value={draft.embedding_model}
-                onChange={(e) => setDraft({ ...draft, embedding_model: e.target.value })}
+                value={draft.embeddingModel}
+                onChange={(e) => setDraft({ ...draft, embeddingModel: e.target.value })}
                 aria-label="임베딩 모델"
                 className="bg-secondary border border-border rounded-xl px-3 py-1.5 text-sm w-56"
               />
             </div>
-            {settingsResp?.data.embedding_model !== draft.embedding_model && (
+            {settingsResp?.data.embeddingModel !== draft.embeddingModel && (
               <p className="mt-2 text-xs text-status-warning flex items-center gap-1">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 임베딩 모델을 바꾸면 기존 저장 임베딩과 비교할 수 없어 전체 재계산이 필요합니다.
@@ -425,6 +430,9 @@ export function LlmSettingsTab() {
           </button>
         </div>
       </MacCard>
+
+      {/* ── 알람 자동 분석 범위 ── */}
+      <AnalysisScopePanel />
 
       {/* ── API 키 (자격증명) ── */}
       <MacCard title="API 키 (자격증명)" bodyPadding="p-0">
@@ -595,6 +603,248 @@ export function LlmSettingsTab() {
   );
 }
 
+// ── 알람 자동 분석 범위 패널 ────────────────────────────────────────────
+
+const EMPTY_RULE: Omit<LlmAnalysisScopeRule, 'id'> = {
+  priority: 100,
+  enabled: true,
+  clusterId: null,
+  namespacePattern: '*',
+  alertnamePattern: '*',
+  severityMin: 'warning',
+  maxPerHour: 10,
+  notifyAnalysis: false,
+  includeLogs: false,
+};
+
+function AnalysisScopePanel() {
+  const toast = useToast();
+  const { data: scope } = useLlmAnalysisScope();
+  const updateMut = useUpdateLlmAnalysisScope();
+  const { data: clusters } = useClusters();
+  const [draft, setDraft] = useState<LlmAnalysisScope | null>(null);
+
+  useEffect(() => {
+    if (scope && draft === null) setDraft(scope);
+  }, [scope, draft]);
+
+  if (!draft) {
+    return (
+      <MacCard title="알람 자동 분석 범위" bodyPadding="p-4">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중…
+        </div>
+      </MacCard>
+    );
+  }
+
+  const save = async (next: LlmAnalysisScope) => {
+    try {
+      const res = await updateMut.mutateAsync(next);
+      setDraft(res.data);
+      if (res.warnings?.length) {
+        res.warnings.forEach((w) => toast.warning('저장됨 (주의)', w));
+      } else {
+        toast.success('저장 완료', '자동 분석 범위가 저장되었습니다. (반영까지 최대 1분)');
+      }
+    } catch (e) {
+      toast.error('저장 실패', formatApiError(e));
+    }
+  };
+
+  const setRule = (idx: number, patch: Partial<LlmAnalysisScopeRule>) => {
+    const rules = draft.rules.map((r, i) => (i === idx ? { ...r, ...patch } : r));
+    setDraft({ ...draft, rules });
+  };
+
+  return (
+    <MacCard title="알람 자동 분석 범위" bodyPadding="p-0">
+      <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border flex items-center justify-between gap-3">
+        <span>
+          알람 수신 시 규칙(클러스터/네임스페이스/알람명/심각도)에 매칭되면 AI 분석을 자동 실행합니다.
+          규칙은 priority 오름차순 first-match. 시간당 상한·디바운스로 부하를 제한하며, 아래 사용량 표를 보면서 점진적으로 넓히세요.
+        </span>
+        <label className="flex items-center gap-2 text-sm shrink-0">
+          <input
+            type="checkbox"
+            checked={draft.enabled}
+            onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
+            className="rounded"
+          />
+          자동 분석 활성화
+        </label>
+      </div>
+
+      <div className="px-4 py-3 flex flex-wrap items-center gap-4 border-b border-border text-sm">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          디바운스(초)
+          <input
+            type="number" min={0} max={86400}
+            value={draft.debounceSeconds}
+            onChange={(e) => setDraft({ ...draft, debounceSeconds: Number(e.target.value) || 0 })}
+            className="w-24 bg-secondary border border-border rounded-xl px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          전역 시간당 최대 분석
+          <input
+            type="number" min={1} max={1000}
+            value={draft.globalMaxPerHour}
+            onChange={(e) => setDraft({ ...draft, globalMaxPerHour: Number(e.target.value) || 1 })}
+            className="w-24 bg-secondary border border-border rounded-xl px-2 py-1.5 text-sm"
+          />
+        </label>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setDraft({
+            ...draft,
+            rules: [...draft.rules, { ...EMPTY_RULE, id: `r${Date.now().toString(36)}` }],
+          })}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium bg-secondary border border-border hover:bg-muted"
+        >
+          <Plus className="w-3.5 h-3.5" /> 규칙 추가
+        </button>
+      </div>
+
+      {draft.rules.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-muted-foreground flex items-center gap-2">
+          <Radar className="w-4 h-4" /> 규칙이 없습니다 — 활성화해도 아무 알람도 분석되지 않습니다.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b border-border">
+                <th className="text-left px-3 py-2 font-medium">on</th>
+                <th className="text-left px-3 py-2 font-medium">우선순위</th>
+                <th className="text-left px-3 py-2 font-medium">클러스터</th>
+                <th className="text-left px-3 py-2 font-medium">네임스페이스</th>
+                <th className="text-left px-3 py-2 font-medium">알람명 패턴</th>
+                <th className="text-left px-3 py-2 font-medium">심각도≥</th>
+                <th className="text-left px-3 py-2 font-medium">시간당</th>
+                <th className="text-left px-3 py-2 font-medium">로그</th>
+                <th className="text-left px-3 py-2 font-medium">알림</th>
+                <th className="px-3 py-2">
+                  <span className="sr-only">삭제</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {draft.rules.map((rule, idx) => (
+                <tr key={rule.id}>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox" checked={rule.enabled}
+                      onChange={(e) => setRule(idx, { enabled: e.target.checked })}
+                      aria-label="규칙 활성화" className="rounded"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number" value={rule.priority}
+                      onChange={(e) => setRule(idx, { priority: Number(e.target.value) || 100 })}
+                      aria-label="우선순위"
+                      className="w-16 bg-secondary border border-border rounded-xl px-2 py-1 text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={rule.clusterId ?? ''}
+                      onChange={(e) => setRule(idx, { clusterId: e.target.value || null })}
+                      aria-label="클러스터"
+                      className="bg-secondary border border-border rounded-xl px-2 py-1 text-sm max-w-[140px]"
+                    >
+                      <option value="">(전체)</option>
+                      {(clusters ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={rule.namespacePattern}
+                      onChange={(e) => setRule(idx, { namespacePattern: e.target.value })}
+                      aria-label="네임스페이스 패턴" placeholder="prod-*"
+                      className="w-24 bg-secondary border border-border rounded-xl px-2 py-1 text-sm font-mono"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={rule.alertnamePattern}
+                      onChange={(e) => setRule(idx, { alertnamePattern: e.target.value })}
+                      aria-label="알람명 패턴" placeholder="KubePod*"
+                      className="w-28 bg-secondary border border-border rounded-xl px-2 py-1 text-sm font-mono"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={rule.severityMin}
+                      onChange={(e) => setRule(idx, { severityMin: e.target.value as LlmAnalysisScopeRule['severityMin'] })}
+                      aria-label="최소 심각도"
+                      className="bg-secondary border border-border rounded-xl px-2 py-1 text-sm"
+                    >
+                      <option value="info">info</option>
+                      <option value="warning">warning</option>
+                      <option value="critical">critical</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number" min={1} value={rule.maxPerHour}
+                      onChange={(e) => setRule(idx, { maxPerHour: Number(e.target.value) || 1 })}
+                      aria-label="시간당 최대"
+                      className="w-16 bg-secondary border border-border rounded-xl px-2 py-1 text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox" checked={rule.includeLogs}
+                      onChange={(e) => setRule(idx, { includeLogs: e.target.checked })}
+                      aria-label="파드 로그 포함" title="분석 시 파드 로그 수집 (read-only)"
+                      className="rounded"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox" checked={rule.notifyAnalysis}
+                      onChange={(e) => setRule(idx, { notifyAnalysis: e.target.checked })}
+                      aria-label="분석 완료 알림" title="분석 완료 시 인앱 알림 발송"
+                      className="rounded"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setDraft({ ...draft, rules: draft.rules.filter((_, i) => i !== idx) })}
+                      title="규칙 삭제" aria-label="규칙 삭제"
+                      className="p-1 rounded-xl hover:bg-secondary text-muted-foreground hover:text-status-critical"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="px-4 py-3 border-t border-border flex justify-end">
+        <button
+          type="button"
+          onClick={() => save(draft)}
+          disabled={updateMut.isPending}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          {updateMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          분석 범위 저장
+        </button>
+      </div>
+    </MacCard>
+  );
+}
+
 // ── 프로필 편집 모달 ────────────────────────────────────────────────────
 
 function ProfileEditModal({
@@ -612,9 +862,9 @@ function ProfileEditModal({
     isNew ? '' : profile.name, modelListOpen,
   );
 
-  const keyRefKind = form.api_key_ref.startsWith('credential:')
+  const keyRefKind = form.apiKeyRef.startsWith('credential:')
     ? 'credential'
-    : form.api_key_ref.startsWith('env:') ? 'env' : 'none';
+    : form.apiKeyRef.startsWith('env:') ? 'env' : 'none';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="LLM 프로필 편집">
@@ -647,8 +897,8 @@ function ProfileEditModal({
           <label className="block text-xs text-muted-foreground col-span-2">
             엔드포인트 URL
             <input
-              value={form.base_url}
-              onChange={(e) => setForm({ ...form, base_url: e.target.value })}
+              value={form.baseUrl}
+              onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
               placeholder={form.provider === 'ollama' ? 'http://ollama:11434' : 'http://llm-gw.corp.internal:8000'}
               className="mt-1 w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-mono"
             />
@@ -704,7 +954,7 @@ function ProfileEditModal({
                   const kind = e.target.value;
                   setForm({
                     ...form,
-                    api_key_ref: kind === 'none' ? ''
+                    apiKeyRef: kind === 'none' ? ''
                       : kind === 'env' ? 'env:LLM_API_KEY'
                         : `credential:${credentials[0] ?? ''}`,
                   });
@@ -718,8 +968,8 @@ function ProfileEditModal({
               </select>
               {keyRefKind === 'credential' && (
                 <select
-                  value={form.api_key_ref.slice('credential:'.length)}
-                  onChange={(e) => setForm({ ...form, api_key_ref: `credential:${e.target.value}` })}
+                  value={form.apiKeyRef.slice('credential:'.length)}
+                  onChange={(e) => setForm({ ...form, apiKeyRef: `credential:${e.target.value}` })}
                   aria-label="자격증명 선택"
                   className="flex-1 bg-secondary border border-border rounded-xl px-2 py-2 text-sm"
                 >
@@ -729,8 +979,8 @@ function ProfileEditModal({
               )}
               {keyRefKind === 'env' && (
                 <input
-                  value={form.api_key_ref.slice('env:'.length)}
-                  onChange={(e) => setForm({ ...form, api_key_ref: `env:${e.target.value}` })}
+                  value={form.apiKeyRef.slice('env:'.length)}
+                  onChange={(e) => setForm({ ...form, apiKeyRef: `env:${e.target.value}` })}
                   aria-label="환경변수 이름"
                   placeholder="LLM_API_KEY"
                   className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-mono"
@@ -743,8 +993,8 @@ function ProfileEditModal({
             타임아웃 (초)
             <input
               type="number" min={5} max={600}
-              value={form.timeout_seconds}
-              onChange={(e) => setForm({ ...form, timeout_seconds: Number(e.target.value) || 120 })}
+              value={form.timeoutSeconds}
+              onChange={(e) => setForm({ ...form, timeoutSeconds: Number(e.target.value) || 120 })}
               className="mt-1 w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm"
             />
           </label>
@@ -752,8 +1002,8 @@ function ProfileEditModal({
             최대 동시 호출
             <input
               type="number" min={1} max={32}
-              value={form.max_concurrency}
-              onChange={(e) => setForm({ ...form, max_concurrency: Number(e.target.value) || 1 })}
+              value={form.maxConcurrency}
+              onChange={(e) => setForm({ ...form, maxConcurrency: Number(e.target.value) || 1 })}
               className="mt-1 w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm"
             />
           </label>

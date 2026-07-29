@@ -46,7 +46,9 @@ class AnalysisResult:
     root_cause: str
     suggested_actions: list[str]
     confidence: float
-    analyzed_by: Literal["claude", "local_llm", "rule_based"]
+    # "rule_based" | "claude" | "local_llm[:<profile>:<model>]" — 어느 백엔드/프로필이
+    # 분석했는지 UI 에 투명하게 표기하기 위한 자유 문자열.
+    analyzed_by: str
     analyzed_at: str
     related_runbooks: list[str] = field(default_factory=list)
 

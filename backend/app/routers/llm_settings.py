@@ -182,6 +182,43 @@ def llm_usage(_: Session = Depends(get_db)):
     return {"data": llm_service.usage_stats()}
 
 
+# ── 자동 분석 범위 (scope) ────────────────────────────────────────────
+
+@router.get("/analysis-scope")
+def get_llm_analysis_scope(db: Session = Depends(get_db)):
+    """알람 → AI 자동 분석 범위 규칙 (AppSetting `llm_analysis_scope`)."""
+    from app.services.observability.analysis_hook import get_analysis_scope
+    return {"data": get_analysis_scope(db, use_cache=False)}
+
+
+@router.put("/analysis-scope")
+def update_llm_analysis_scope(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """자동 분석 범위 저장. 활성화 시 llm 큐 소비자(전용 워커) 존재를 검사해 경고한다."""
+    from app.services.observability.analysis_hook import set_analysis_scope
+    scope = set_analysis_scope(db, payload if isinstance(payload, dict) else {})
+    warnings: list[str] = []
+    if scope["enabled"]:
+        try:
+            from app.celery_app import celery_app
+            active = celery_app.control.inspect(timeout=1.0).active_queues() or {}
+            has_llm = any(
+                q.get("name") == "llm"
+                for queues in active.values() for q in (queues or [])
+            )
+            if not has_llm:
+                warnings.append(
+                    "llm 큐를 소비하는 워커가 감지되지 않았습니다 — 분석 요청이 큐에 쌓이기만 합니다. "
+                    "celery-worker-llm (`celery -A app.celery_app worker -Q llm`) 배포를 확인하세요."
+                )
+        except Exception:  # noqa: BLE001
+            warnings.append("llm 큐 워커 상태를 확인하지 못했습니다 (브로커 응답 없음).")
+    return {"data": scope, "warnings": warnings}
+
+
 # ── Credentials ───────────────────────────────────────────────────────
 
 def _mask_key(key: str) -> str:

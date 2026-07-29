@@ -22,6 +22,7 @@ from app.models.audit_log import AuditLog
 from app.models.check_log import CheckLog
 from app.models.daily_check import DailyCheckLog
 from app.models.alert_event import AlertEvent
+from app.models.incident_analysis import IncidentAnalysis
 from app.models.k8s_event import K8sEvent
 from app.models.user_notification import UserNotification
 
@@ -37,6 +38,8 @@ RETENTION_DAYS: dict[str, int] = {
     "audit_logs": 365,
     "user_notifications": 90,
     "alert_events": 90,
+    # AI 자동 분석 이력 — 알람과 같은 회고 목적이라 동일 90일.
+    "incident_analyses": 90,
 }
 
 
@@ -132,6 +135,7 @@ def purge_all(db: Session) -> dict[str, Any]:
         ("audit_logs", AuditLog, AuditLog.created_at),
         ("user_notifications", UserNotification, UserNotification.created_at),
         ("alert_events", AlertEvent, AlertEvent.received_at),
+        ("incident_analyses", IncidentAnalysis, IncidentAnalysis.created_at),
     ]
     for name, model, ts_column in simple_targets:
         try:

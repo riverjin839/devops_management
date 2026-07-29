@@ -11,6 +11,16 @@
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **알람 AI 자동 분석 — 범위 지정 점진 롤아웃 (Phase 2)**: 알람(`/alerts`) 수신 시
+  운영자가 정의한 범위 규칙(클러스터/네임스페이스/알람명 패턴/최소 심각도, priority
+  first-match)에 매칭되면 AI 장애 분석을 자동 실행하고 결과를 알람 행 확장에 표시한다
+  (원인 분석·조치 가이드 — **실행 권한 없음, 사람이 수행**). 부하 제어: 전용 Celery
+  `llm` 큐(워커 분리, concurrency 1)·Redis 디바운스·규칙별/전역 시간당 상한, 기본
+  전부 꺼짐(운영자가 사용량 대시보드를 보며 점진 확대). 수동 분석/재분석 버튼(operator+),
+  분석 백엔드·프로필(analyzed_by) 투명 표기. Backend: `incident_analyses` 테이블,
+  `alert_events.analysis_id/analysis_status`, `analysis_hook`(scope 매칭)·
+  `incident_context_builder`, `run_auto_incident_analysis` 태스크, retention/backup 등록.
+  Frontend: `AlertAnalysisPanel`, Settings AI/LLM 탭에 분석 범위 규칙 편집기.
 - **폐쇄망 LLM 이중 운용 — 프로필 × 용도 라우팅 게이트웨이 (Phase 1)**: 사내 OpenAI-호환
   LLM 서비스와 인클러스터 Ollama 를 동시에 등록하고, 기능별(챗봇/장애분석/점검리뷰/
   아키텍처문서/트렌드/임베딩)로 어느 LLM 을 쓸지 UI 에서 라우팅한다(primary 실패 시
