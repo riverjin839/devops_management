@@ -4,7 +4,7 @@ import {
   CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
-  ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, Dog,
+  ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, BellRing, Dog,
   TrendingUp, FileSpreadsheet, Palmtree, FileText,
 } from 'lucide-react';
 
@@ -53,6 +53,8 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/node-images':        { defaultLabel: 'K8S 노드 이미지', icon: Boxes },
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/k8s-events':         { defaultLabel: 'K8s 실시간 이벤트', icon: Bell, iconColor: 'text-orange-500' },
+  '/observability':      { defaultLabel: 'Observability',   icon: Activity, iconColor: 'text-emerald-500' },
+  '/alerts':             { defaultLabel: '알람 인박스',      icon: BellRing, iconColor: 'text-red-500' },
   '/incident-analysis':  { defaultLabel: 'K8s 로그 (분석·실시간)', icon: Zap },
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
   '/cilium-trace':       { defaultLabel: 'Cilium BPF Trace', icon: Waves },
@@ -75,7 +77,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
 // 사이드바 레일에 표시되는 그룹들
 export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'pep-services' | 'app-services' | 'system';
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], modes: ['platform'] },
@@ -83,7 +85,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/jira-import', '/weekly-report'], modes: ['work'] },
-  // "PEP 서비스" — Settings → "관리 서비스" 탭 → "서비스 카탈로그" 서브탭(ui_settings.serviceCatalog)에 등록된 서비스
+  // "PEP 서비스" — Settings → "관리 서비스" 탭 → "PEP 서비스" 서브탭(LakeServiceType domain='pep')에 등록된 서비스
   // 카탈로그의 진입점(/services, ServicesCatalogPage). 서비스 클릭 시 노트(작업계획서/업무소개/
   // 이슈대응/구축작업)와 연관 업무를 보여주는 /services/:service(ServiceHubPage)로 이동한다.
   // 과거 LakeService 기반 페이지(/pep-services)는 사이드바에서 빠지고 직접 URL 접근으로만

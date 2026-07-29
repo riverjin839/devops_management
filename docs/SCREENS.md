@@ -138,14 +138,14 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 시스템 설정 (`/settings`, admin)
 
-- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCatalogManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
-- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·서비스 카탈로그·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그까지 플랫폼 전역 설정을 12개 탭으로 모아둔 관리자 콘솔.
+- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
+- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그까지 플랫폼 전역 설정을 11개 탭으로 모아둔 관리자 콘솔.
 - **UI 구성**:
-  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`서비스 카테고리`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`서비스 타입`=LakeServiceType 카탈로그 / `서비스 카탈로그`=ui_settings.serviceCatalog, 구 최상위 "서비스"/"PEP 서비스" 탭이 이리로 이동)로 구성. 레거시 `?tab=service` 딥링크는 `mgmt-service`(서비스 카탈로그 서브탭)로 리다이렉트.
+  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`PEP 서비스`/`APP 서비스` — 도메인 구분)로 구성되고, 각 서브탭 본문은 `ServiceCategoryManager`(해당 도메인 카테고리) + `LakeServiceTypeManager`(해당 도메인 서비스 타입) 두 섹션을 세로로 렌더한다. 구 최상위 "서비스 카테고리" 탭과 구 "서비스 타입"/"서비스 카탈로그" 서브탭이 전부 여기로 통합됐다 — 레거시 `?tab=service`·`?tab=service-categories` 딥링크는 `mgmt-service` 로 리다이렉트.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
-  - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/담당자/접근제어/Jira/백업/감사로그).
+  - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/담당자/접근제어/Jira/백업/감사로그).
   - ClusterSidebar 미사용(전역 설정 화면이라 클러스터 단위 필터 없음).
 - **Frontend**: `useClusters()`+`useClusterStore`, `useUpdateCluster()`, `useDeleteCluster()`(`hooks/useCluster.ts`) · `useAssignees()`(담당자 카운트) · `useUiSettings()`/`useUpdateUiSettings()`(`hooks/useUiSettings.ts`) · `useOperationLevels()`(`hooks/useOperationLevels.ts`) · `useHomeStore`(`scheduleBg`) · `useDebugStore`(Debug 탭 토글, localStorage) · `useQuery(['management-servers'], managementServersApi.getAll)` + `useMutation`(`managementServersApi.delete`). 직접 호출 api 함수: `clustersApi.verify`, `managementServersApi.ping/create/update/delete`, `updateClusterMut.mutateAsync`(아이콘 저장 포함).
 - **Backend**: `GET/PUT/DELETE /api/v1/clusters`, `POST /api/v1/clusters/{id}/verify`(`clusters.py`) · `GET/POST/PUT/DELETE /api/v1/management-servers`, ping 엔드포인트(`management_servers.py`) · `GET/PATCH /api/v1/ui-settings`(홈 아이콘 등, `ui_settings.py`, `AppSetting` 모델 기반 key-value 저장: `UI_SETTINGS_KEY`/`OPERATION_LEVELS_KEY`/`ASSIGNEES_KEY`/`FEATURE_ACCESS_KEY`) · 담당자/운영레벨/서비스카탈로그/Jira/백업/감사로그는 각 하위 매니저 컴포넌트가 별도 라우터(`work_item_custom_fields.py`, `jira.py`, `backup.py`, `audit_logs.py` 등) 호출.
@@ -153,7 +153,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 클러스터 등록/수정/삭제/연결확인(Verify)/Kubeconfig 조회·수정/아이콘 설정(단건+일괄 생성).
   - 관리서버(Jump Host/Bastion 등) 등록/수정/삭제/Ping 상태 확인.
   - 홈 화면 아이콘(업무/플랫폼 모드별) 및 업무 스케줄 배경색 커스터마이즈.
-  - 담당자/운영레벨/서비스 카탈로그/관리 서비스/접근 제어/Jira·Confluence 연동(SSO 자동 로그인 — Confluence URL 설정 시 한 번의 로그인으로 두 세션 동시 캡처, 만료 시 자동 재로그인)/Debug 로그/백업·복구/감사 로그 등 전역 운영 설정을 탭 단위로 통합 관리.
+  - 담당자/운영레벨/관리 서비스(PEP·APP 카테고리+서비스 타입)/접근 제어/Jira·Confluence 연동(SSO 자동 로그인 — Confluence URL 설정 시 한 번의 로그인으로 두 세션 동시 캡처, 만료 시 자동 재로그인)/Debug 로그/백업·복구/감사 로그 등 전역 운영 설정을 탭 단위로 통합 관리.
   - Debug 탭은 페이지별 API 호출 로그 패널 토글(localStorage 저장, 서버 상태 아님).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -300,6 +300,46 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 30초 주기 자동 새로고침 + 수동 새로고침.
   - 이벤트 상세(raw JSON) 인라인 펼침.
   - 이벤트 개별 삭제.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### Observability 지표 대시보드 (`/observability`, `/observability/:clusterId`)
+
+- **파일**: `frontend/src/pages/ObservabilityPage.tsx` (+ `components/observability/{MetricsTable,RulesTable,TargetsTable,ActiveAlertsTable,MetricEditModal,shared}`).
+- **목적 / UX**: 클러스터에 깔린 관측 스택(`kube-prometheus-stack`, 이후 `alert-forwarder`/`opensearch-stack`/`fluent-operator`)의 **개별 지표를 dense 리스트 테이블**로 한 화면에서 훑는다. 카드형(`/cluster-overview` PromQL 카드)과 달리 수십 개 지표를 스캔하는 용도.
+- **UI 구성**:
+  - `ClusterSidebar` — `iconOnly` 단일 선택(클러스터별 Prometheus 를 봐야 하므로 `allowAll` 없음).
+  - 모듈 탭(`MacCard`) — 지표가 1개 이상 등록된 모듈만 활성, 나머지는 "준비중"(disabled + 툴팁).
+  - 뷰 탭 — **지표 / 알람 규칙 / 스크레이프 타겟 / 발화중 알람** (kube-prometheus-stack 에서만 4종 전부).
+  - 툴바 — `SourceBadge`(실시간 vs 스냅샷 n분 전), 지표 추가(operator 이상), 새로고침.
+  - 지표 테이블 — 상태 dot · 지표 · 카테고리 · 현재값 · 임계 · 대상(라벨) · PromQL · 편집. 행 클릭 시 설명/전체 라벨/PromQL/참고문서 펼침. 상단에 정상·경고·심각·수집불가 요약 pill.
+- **Frontend**: `useObservabilityModules`, `useObservabilityMetrics`, `useMetricValues`, `usePromRules`, `usePromTargets`, `usePromActiveAlerts`(`hooks/useObservability.ts`, 30초 `refetchInterval`), `useCreateMetric`/`useUpdateMetric`/`useDeleteMetric`. `useClusterRouteParam('/observability')`. api.ts: `observabilityApi.*`.
+- **Backend**: `GET /api/v1/observability/{modules,metrics,metrics/values}`, `GET /observability/prometheus/{rules,targets,active-alerts}`, 지표 CRUD(`require_operator`) — 라우터 `backend/app/routers/observability.py`. 모델: `models/observability.py`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot`). 서비스: `services/prometheus_service.py`(rules/targets/status 확장) · `services/alertmanager_service.py`.
+- **핵심 기능**:
+  - 지표 카탈로그가 **DB 행**이라 PromQL·임계값·표시형식을 화면에서 편집(CLAUDE.md §UI-First). 새 모듈도 지표 행 추가만으로 활성화.
+  - 수집 경로 2종 — `pull`(PEP 가 직접 조회) / `push`(in-cluster 수집기 스냅샷). 클러스터의 `observability_mode` 로 결정하고 응답의 `source`/`collectedAt` 으로 신선도 표시.
+  - Prometheus/Alertmanager 미도달 시 500 이 아니라 `offline` + 안내 문구(fail-safe 계약).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### 알람 인박스 (`/alerts`)
+
+- **파일**: `frontend/src/pages/AlertInboxPage.tsx` (+ `components/observability/{AlertReceiverGuide,AlertNotifyRulesPanel}`).
+- **목적 / UX**: 사내 메신저(cube)로만 가던 인시던트 알람을 PEP 에서도 받아 쌓아두는 인박스. Alertmanager webhook 과 사내 alert-forwarder 를 모두 수용하고, 같은 알람이 반복되면 행을 늘리지 않고 반복 수(×N)만 올린다.
+- **UI 구성**:
+  - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`).
+  - 접이식 "알람 수신 설정 방법" 안내 — Alertmanager `webhook_configs` YAML + curl 테스트 스니펫 복사 버튼(토큰 값은 마스킹).
+  - 메인 탭 — **알람 인박스 / 알림 규칙**.
+  - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색 + 일괄 확인 + 새로고침. 최근 24시간 요약 pill.
+  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침.
+  - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기.
+- **Frontend**: `useAlerts`, `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
+- **Backend**: 수신 `POST /api/v1/observability/alerts/ingest`(JWT 없음 — `ALERT_INGEST_TOKEN` Bearer 자체 검증, **미설정 시 503 fail-closed**), 조회 `GET /observability/alerts`·`/alerts/stats`·`/alerts/{id}`, `POST /alerts/{id}/ack`·`/alerts/ack-all`, 규칙/설정 CRUD(`require_operator`). 라우터 `backend/app/routers/observability.py`(`ingest_router` + `router`). 모델: `models/alert_event.py`, `models/alert_notify_rule.py`. 서비스: `services/observability/alert_ingest.py`(포맷 2종 파싱), `alert_router.py`(규칙 매칭·중복 억제·알림 생성).
+- **핵심 기능**:
+  - **수신 포맷 2종** — Alertmanager webhook v4 우선, 아니면 generic fallback(사내 forwarder 의 임의 JSON 을 최선노력 정규화).
+  - **중복 억제** — 같은 fingerprint 가 창(기본 5분) 안에서 반복되면 개인 알림은 1건. `summarize` 모드는 기존 알림 문구를 "최근 5분간 10회"로 갱신, `first_only` 는 억제 카운트만 올린다.
+  - **알림 라우팅** — 규칙(클러스터/알람명/네임스페이스/라벨/최소 심각도 매처)별로 전체 브로드캐스트 / 담당자 지정 / 알림 없음(인박스만)을 고르고 심각도 재정의도 가능.
+  - firing → resolved 상태 전이, 확인(ack)·일괄 확인, 보존기간 자동 정리(`log_retention_service`).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1232,12 +1272,14 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### Settings — 서비스 카테고리 관리 (`/settings?tab=service-categories`)
+### Settings — 관리 서비스 (`/settings?tab=mgmt-service`)
 
-- **파일**: `frontend/src/components/settings/ServiceCategoryManager.tsx` (Settings 탭 `service-categories`)
-- **목적 / UX**: PEP/APP 서비스 상위 카테고리 CRUD. 도메인 탭(PEP/APP) 전환 + 테이블(아이콘/key/label/builtin 여부/활성/정렬) + 추가/편집 모달. APP builtin 4개(Runtime/Catalog/Workbench/AI Ready)는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능. PEP 는 builtin 카테고리가 없다(서비스 타입을 미분류 평면 목록으로 관리).
-- **Backend**: `GET/POST /api/v1/service-categories`, `PUT/DELETE /api/v1/service-categories/{id}` — `backend/app/routers/service_categories.py`, 모델 `ServiceCategory`(`backend/app/models/service_category.py`).
-- **관련**: `LakeServiceTypeManager.tsx`(Settings "관리 서비스" 탭)에도 도메인(PEP/APP) 필터 탭과 상위 카테고리 select 가 추가되어, 서비스 타입을 특정 카테고리에 배정할 수 있다.
+- **파일**: `frontend/src/components/settings/ServiceCategoryManager.tsx` + `LakeServiceTypeManager.tsx` (Settings 탭 `mgmt-service`, 둘 다 `domain: 'pep' | 'app'` prop 을 받음)
+- **목적 / UX**: PEP/APP 서비스의 상위 카테고리와 서비스 타입을 도메인별로 한 화면에서 관리. 상단 서브탭(`PEP 서비스`/`APP 서비스`)이 도메인을 결정하고, 그 아래 **카테고리 섹션**(아이콘/key/label/builtin 여부/활성/정렬 테이블 + 추가·편집 모달)과 **서비스 타입 섹션**(아이콘/slug/label/카테고리/default_path/유형/활성/정렬 테이블 + 추가·편집 모달)이 세로로 놓인다. 두 컴포넌트 모두 도메인 선택 UI 를 자체적으로 갖지 않는다(상위 서브탭이 단일 출처).
+  - APP builtin 카테고리 4개(Runtime/Catalog/Workbench/AI Ready)는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능. PEP 는 builtin 카테고리 없이 평면 목록이 기본이지만 필요하면 직접 추가할 수 있다.
+  - 서비스 타입의 `icon`/`color` 는 `/services` 지식 카탈로그와 업무/이슈 서비스 태그의 표시에도 그대로 쓰인다(구 `ui_settings.serviceCatalog` 를 대체 — 아이콘 정의의 단일 출처).
+- **Backend**: `GET/POST /api/v1/service-categories`, `PUT/DELETE /api/v1/service-categories/{id}` (`service_categories.py`, 모델 `ServiceCategory`) · `GET/POST /api/v1/lake-service-types`, `PUT/PATCH/DELETE /api/v1/lake-service-types/{id}` (`lake_service_types.py`, 모델 `LakeServiceType` — `color` 컬럼 포함).
+- **마이그레이션**: 부팅 시 `_merge_service_catalog_into_pep_types()`(`main.py`)가 구 서비스 카탈로그를 1회성으로 흡수 — 이름이 겹치는 PEP 타입에 color 백필, 카탈로그에만 있던 jenkins/argocd/etcd/hubble/ingress/storage 를 PEP custom 타입으로 추가.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

@@ -40,6 +40,7 @@
 | `CHECK_TIMEOUT_SECONDS` | `30` | kubectl/HTTP timeout |
 | `KUBECONFIG_STORE_DIR` | `/tmp/k8s-monitor/kubeconfigs` | content 방식 kubeconfig 저장 위치 |
 | `KUBEWATCH_TOKEN` | *(empty)* | kubewatch 웹훅 Bearer 토큰. **fail-closed** — 미설정 시 웹훅 수신 자체를 503 으로 거부(deep_check ingest 의 `SUPERPOD_INGEST_TOKEN` 과 동일 정책) |
+| `ALERT_INGEST_TOKEN` | *(empty)* | 인시던트 알람 수신(Alertmanager webhook · 사내 alert-forwarder) Bearer 토큰. **fail-closed** — 미설정 시 `POST /observability/alerts/ingest` 및 `/observability/snapshot/ingest` 를 503 으로 거부 |
 | `MGMT_NAMESPACE` | `k8s-monitor` | 관리 네임스페이스 (K8sEvent 채널) |
 | `SUPERPOD_MODE` | `centralized` | `in_cluster` \| `centralized` — deep check 실행 모드 |
 | `SUPERPOD_INGEST_URL` / `SUPERPOD_INGEST_TOKEN` | *(empty)* | in-cluster CronJob 결과 push 대상. 토큰은 fail-closed |
@@ -61,6 +62,7 @@
 | Variable | Default | Description |
 |---|---|---|
 | `PROMETHEUS_URL` | `http://prometheus-k8s.monitoring.svc:9090` | Prometheus endpoint |
+| `ALERTMANAGER_URL` | `http://alertmanager-operated.monitoring.svc:9093` | Alertmanager endpoint (Observability 대시보드 전역 기본값 — 클러스터별 `clusters.alertmanager_url` 이 우선) |
 | `GRAFANA_URL` | `http://grafana.monitoring.svc:3000` | Grafana endpoint |
 | `GRAFANA_RENDERER_URL` | `http://grafana-renderer:8081` | 패널 이미지 렌더러 |
 | `PROMETHEUS_NODE_LABEL` | `instance` | node-exporter 노드 식별 라벨 (배포 의존) |

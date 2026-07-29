@@ -17,7 +17,7 @@ interface ServiceDomainCatalogProps {
 
 /** PEP 서비스 / APP 서비스 공용 카탈로그 화면 — 좌측 카테고리 레일(Runtime/Catalog/Workflow/
  *  JupyterLab 등) 클릭 시 우측에 해당 카테고리 하위 서비스 인스턴스가 표시된다.
- *  카테고리 자체의 추가/편집은 Settings → "서비스 카테고리"에서 관리한다. */
+ *  카테고리 자체의 추가/편집은 Settings → "관리 서비스" 탭의 PEP/APP 서브탭에서 관리한다. */
 export function ServiceDomainCatalog({ domain, title, description }: ServiceDomainCatalogProps) {
   const navigate = useNavigate();
   const { data: clusters = [] } = useClusters();
@@ -95,7 +95,7 @@ export function ServiceDomainCatalog({ domain, title, description }: ServiceDoma
               {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <Link
-              to="/settings?tab=service-categories"
+              to="/settings?tab=mgmt-service"
               className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary"
             >
               <Settings2 className="w-3.5 h-3.5" />
@@ -158,7 +158,7 @@ export function ServiceDomainCatalog({ domain, title, description }: ServiceDoma
               <Settings2 className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
               <p className="mb-2">등록된 카테고리가 없습니다.</p>
               <p className="text-sm text-muted-foreground/70">
-                <Link to="/settings?tab=service-categories" className="text-primary hover:underline">
+                <Link to="/settings?tab=mgmt-service" className="text-primary hover:underline">
                   카테고리 관리
                 </Link>
                 에서 Runtime/Catalog 같은 상위 카테고리를 먼저 추가하세요.

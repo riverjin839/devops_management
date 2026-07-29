@@ -47,6 +47,8 @@ import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { K8sEventsPage } from '@/pages/K8sEventsPage';
+import { ObservabilityPage } from '@/pages/ObservabilityPage';
+import { AlertInboxPage } from '@/pages/AlertInboxPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
@@ -200,6 +202,11 @@ function AppShell() {
               <Route path="/service-architecture" element={<ServiceArchitecturePage />} />
               <Route path="/architecture" element={<ArchitecturePage />} />
               <Route path="/k8s-events" element={<K8sEventsPage />} />
+              {/* Observability — 관측 스택(kube-prometheus-stack 등) 개별 지표 dense 대시보드 */}
+              <Route path="/observability/:clusterId" element={<ObservabilityPage />} />
+              <Route path="/observability" element={<ObservabilityPage />} />
+              {/* 알람 인박스 — Alertmanager / alert-forwarder 수신 인시던트 알람 */}
+              <Route path="/alerts" element={<AlertInboxPage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />

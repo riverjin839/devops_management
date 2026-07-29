@@ -10,11 +10,6 @@ import {
 } from '@/hooks/useServiceCategories';
 import type { ServiceCategory, ServiceCategoryInput, ServiceCategoryUpdate, ServiceDomain } from '@/types';
 
-const DOMAINS: { id: ServiceDomain; label: string }[] = [
-  { id: 'pep', label: 'PEP 서비스' },
-  { id: 'app', label: 'APP 서비스' },
-];
-
 function CategoryIcon({ icon, className = 'w-4 h-4' }: { icon?: string | null; className?: string }) {
   const resolved = resolveClusterIcon(icon);
   if (resolved?.kind === 'lucide') { const Icon = resolved.Component; return <Icon className={className} />; }
@@ -22,9 +17,9 @@ function CategoryIcon({ icon, className = 'w-4 h-4' }: { icon?: string | null; c
   return <span className="text-muted-foreground/50">—</span>;
 }
 
-/** PEP/APP 서비스 상위 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) 관리 — Settings → "서비스 카테고리" 탭 본문. */
-export function ServiceCategoryManager() {
-  const [domain, setDomain] = useState<ServiceDomain>('pep');
+/** PEP/APP 서비스 상위 카테고리(Runtime/Catalog/Workflow/JupyterLab 등) 관리 — Settings →
+ *  "관리 서비스" 탭의 PEP/APP 서비스 서브탭 본문 상단 섹션. 도메인은 상위 서브탭이 결정한다. */
+export function ServiceCategoryManager({ domain }: { domain: ServiceDomain }) {
   const { data, isLoading, error } = useServiceCategories(domain);
   const del = useDeleteServiceCategory();
   const [editing, setEditing] = useState<ServiceCategory | null>(null);
@@ -49,9 +44,11 @@ export function ServiceCategoryManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold">서비스 카테고리</h2>
+          <h2 className="text-sm font-semibold">카테고리</h2>
           <p className="text-sm text-muted-foreground">
-            PEP 서비스/APP 서비스 사이드바의 상위 카테고리(APP: Runtime/Catalog/Workbench/AI Ready) — builtin 4개(APP)는 비활성화만, custom 은 자유 추가/삭제. PEP 서비스는 카테고리 없이 평면 목록으로 관리된다.
+            {domain === 'app'
+              ? 'APP 서비스 사이드바의 상위 카테고리(Runtime/Catalog/Workbench/AI Ready) — builtin 4개는 비활성화만, custom 은 자유 추가/삭제.'
+              : 'PEP 서비스는 기본적으로 카테고리 없이 평면 목록으로 관리된다 — 필요하면 상위 카테고리를 직접 추가할 수 있다.'}
           </p>
         </div>
         <button
@@ -63,22 +60,6 @@ export function ServiceCategoryManager() {
           <Plus className="w-3.5 h-3.5" />
           카테고리 추가
         </button>
-      </div>
-
-      {/* Domain tabs */}
-      <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
-        {DOMAINS.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            onClick={() => setDomain(d.id)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              domain === d.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {d.label}
-          </button>
-        ))}
       </div>
 
       {error && (
