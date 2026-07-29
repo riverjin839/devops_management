@@ -42,6 +42,14 @@ class WorkGuideResponse(BaseModel):
     author: Optional[str] = None
     sort_order: int = 0
     confluence_url: Optional[str] = None
+    # Confluence 동기화 메타 (routers/confluence.py 가 관리)
+    source: Optional[str] = 'pep'
+    confluence_page_id: Optional[str] = None
+    confluence_space_key: Optional[str] = None
+    confluence_version: Optional[int] = None
+    confluence_synced_at: Optional[datetime] = None
+    confluence_sync_status: Optional[str] = None
+    confluence_sync_error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

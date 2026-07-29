@@ -28,6 +28,7 @@ import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
+import { DocumentsPage } from '@/pages/DocumentsPage';
 import { CommandsPage } from '@/pages/CommandsPage';
 import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -205,6 +206,7 @@ function AppShell() {
               <Route path="/services/:service" element={<ServiceHubPage />} />
               <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />
               <Route path="/work-guides/new" element={<WorkGuidePage />} />
               <Route path="/work-guides/:id" element={<WorkGuidePage />} />

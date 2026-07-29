@@ -1100,6 +1100,29 @@ export const workGuidesApi = {
   create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
   update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
   delete: (id: string) => api.delete(`/work-guides/${id}`),
+  /** 문서 검색 — 임베딩 시맨틱 우선, 불가 시 ILIKE 폴백 (embeddingAvailable 로 구분) */
+  search: (q: string, limit = 10) =>
+    api.get<import('@/types').GuideSearchResult>('/work-guides/search', { params: { q, limit } }),
+};
+
+// Confluence 문서 가져오기/내보내기 API (routers/confluence.py)
+export const confluenceDocsApi = {
+  search: (data: import('@/types').ConfluenceDocSearchRequest) =>
+    api.post<import('@/types').ConfluenceDocSearchResult>('/confluence/docs/search', data),
+  import: (data: import('@/types').ConfluenceDocImportRequest) =>
+    api.post<import('@/types').ConfluenceDocImportResult>('/confluence/docs/import', data, {
+      timeout: 2 * 60_000, // 페이지별 조회+변환 — 기본 30s 로는 부족
+    }),
+  export: (guideId: string, data?: import('@/types').ConfluenceDocExportRequest) =>
+    api.post<import('@/types').ConfluenceDocExportResult>(
+      `/confluence/docs/export/${guideId}`, data ?? {}, { timeout: 2 * 60_000 }),
+  pull: (guideId: string) =>
+    api.post<import('@/types').ConfluenceDocPullResult>(
+      `/confluence/docs/pull/${guideId}`, {}, { timeout: 2 * 60_000 }),
+  settings: () =>
+    api.get<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings'),
+  updateSettings: (data: import('@/types').ConfluenceDocsSettings) =>
+    api.put<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings', data),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)

@@ -1163,6 +1163,17 @@ export interface WorkGuide {
   sortOrder: number;
   /** Confluence 문서 링크 */
   confluenceUrl?: string;
+  /** 최초 생성 출처 — pep | confluence */
+  source?: string;
+  /** 연결된 Confluence 페이지 ID (import/export 매칭 키) */
+  confluencePageId?: string | null;
+  confluenceSpaceKey?: string | null;
+  /** 마지막 동기화 시점의 Confluence 페이지 버전 */
+  confluenceVersion?: number | null;
+  confluenceSyncedAt?: string | null;
+  /** synced(동일) / modified(PEP 수정 후 미게시) / error(동기화 실패) — 미연결이면 null */
+  confluenceSyncStatus?: 'synced' | 'modified' | 'error' | null;
+  confluenceSyncError?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1184,6 +1195,122 @@ export interface WorkGuideUpdate extends Partial<WorkGuideCreate> {}
 
 export interface WorkGuideListResponse {
   data: WorkGuide[];
+}
+
+// ── Confluence 문서 가져오기/내보내기 (routers/confluence.py) ──
+export interface ConfluenceDocSearchRequest {
+  cql?: string;
+  spaceKey?: string;
+  text?: string;
+  limit?: number;
+}
+
+export interface ConfluenceDocSearchItem {
+  id: string;
+  title: string;
+  spaceKey: string;
+  url: string;
+  updated: string;
+  /** 이미 work_guides 에 연결된 페이지인지 */
+  linked: boolean;
+  linkedGuideId?: string | null;
+}
+
+export interface ConfluenceDocSearchResult {
+  status: string;
+  detail: string;
+  total: number;
+  items: ConfluenceDocSearchItem[];
+}
+
+export interface ConfluenceDocImportRequest {
+  pageIds: string[];
+  dryRun?: boolean;
+  onlyPageIds?: string[];
+  parentGuideId?: string | null;
+  category?: string;
+  guideStatus?: string;
+  inlineImages?: boolean;
+}
+
+export interface ConfluenceDocFieldChange {
+  field: string;
+  old?: string | null;
+  new?: string | null;
+}
+
+export interface ConfluenceDocImportPreview {
+  pageId: string;
+  title: string;
+  spaceKey: string;
+  version?: number | null;
+  action: 'create' | 'update' | 'unchanged' | 'error';
+  detail: string;
+  warnings: string[];
+  changes: ConfluenceDocFieldChange[];
+}
+
+export interface ConfluenceDocImportResult {
+  status: string;
+  detail: string;
+  dryRun: boolean;
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  warnings: string[];
+  items: ConfluenceDocImportPreview[];
+}
+
+export interface ConfluenceDocExportRequest {
+  spaceKey?: string;
+  parentPageId?: string;
+  title?: string;
+}
+
+export interface ConfluenceDocExportResult {
+  status: string;
+  detail: string;
+  action: string;
+  pageId?: string | null;
+  pageUrl?: string | null;
+  version?: number | null;
+  warnings: string[];
+}
+
+export interface ConfluenceDocPullResult {
+  status: string;
+  detail: string;
+  guideId?: string | null;
+  version?: number | null;
+  warnings: string[];
+}
+
+export interface ConfluenceDocsSettings {
+  spaceKey: string;
+  parentPageId: string;
+  defaultCategory: string;
+  titlePrefix: string;
+}
+
+export interface GuideSearchItem {
+  id: string;
+  title: string;
+  category?: string | null;
+  status: string;
+  author?: string | null;
+  source: string;
+  confluenceUrl?: string | null;
+  updatedAt: string;
+  /** 시맨틱 검색일 때만 존재 (0~1) */
+  similarity?: number | null;
+  snippet: string;
+}
+
+export interface GuideSearchResult {
+  items: GuideSearchItem[];
+  /** false = 시맨틱 미준비(Ollama/pgvector) — ILIKE 폴백 결과 */
+  embeddingAvailable: boolean;
 }
 
 export interface ClusterLink {

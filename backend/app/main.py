@@ -22,6 +22,7 @@ from app.routers import (
     promql_router,
     work_items_router,
     jira_router,
+    confluence_router,
     projects_router,
     sprints_router,
     ui_settings_router,
@@ -759,6 +760,21 @@ def _run_migrations():
         _safe_add_column("work_guides", "sort_order", "INTEGER NOT NULL DEFAULT 0")
         # 유사 문서 검색용 임베딩(제목+본문) — pgvector 확장 필요 (_ensure_pgvector_extension).
         _safe_add_column("work_guides", "embedding", f"VECTOR({settings.embedding_dim})")
+        # Confluence 문서 동기화 메타 (routers/confluence.py — import/export)
+        _safe_add_column("work_guides", "source", "VARCHAR(20) DEFAULT 'pep'")
+        _safe_add_column("work_guides", "confluence_page_id", "VARCHAR(50)")
+        _safe_add_column("work_guides", "confluence_space_key", "VARCHAR(50)")
+        _safe_add_column("work_guides", "confluence_version", "INTEGER")
+        _safe_add_column("work_guides", "confluence_synced_at", "TIMESTAMP")
+        _safe_add_column("work_guides", "confluence_sync_status", "VARCHAR(20)")
+        _safe_add_column("work_guides", "confluence_sync_error", "TEXT")
+        _safe_create_index("ix_work_guides_confluence_page_id", "work_guides", "(confluence_page_id)")
+        # 시맨틱 검색용 HNSW 인덱스 — pgvector 미설치 환경이면 로깅만 하고 계속 (fail-open).
+        _safe_exec(
+            "CREATE INDEX IF NOT EXISTS ix_work_guides_embedding_hnsw "
+            "ON work_guides USING hnsw (embedding vector_cosine_ops)",
+            label="work_guides embedding hnsw index",
+        )
 
     # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
     # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
@@ -2048,6 +2064,7 @@ app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(confluence_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(sprints_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)

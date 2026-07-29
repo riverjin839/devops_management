@@ -2,11 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi } from '@/services/api';
 import type { WorkGuideCreate, WorkGuideUpdate } from '@/types';
 
-const guideKeys = {
+export const workGuideKeys = {
   all: ['work-guides'] as const,
   filtered: (params: Record<string, string | undefined>) => ['work-guides', params] as const,
   detail: (id: string) => ['work-guides', id] as const,
 };
+
+const guideKeys = workGuideKeys;
 
 export function useWorkGuides(params?: { category?: string; status?: string; priority?: string }) {
   return useQuery({

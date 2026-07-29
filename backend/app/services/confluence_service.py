@@ -220,6 +220,117 @@ class ConfluenceService:
             logger.exception("Confluence upsert_page error: %s", exc)
             return {"status": "offline", "detail": str(exc)[:200]}
 
+    async def update_page(
+        self, page_id: str, title: str, body_html: str, *, version: int,
+    ) -> dict:
+        """page_id 로 지정한 페이지를 새 버전으로 직접 갱신한다.
+
+        upsert_page 의 제목 기반 find 를 거치지 않으므로, 이미 연결된 문서의 재게시
+        (제목이 바뀌어도 같은 페이지 유지)에 쓴다. version 은 **새** 버전 번호."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Confluence 미설정"}
+        if not (page_id and title):
+            return {"status": "error", "detail": "페이지 ID 와 제목은 필수입니다."}
+        body = {
+            "type": "page",
+            "title": title,
+            "body": {"storage": {"value": body_html, "representation": "storage"}},
+            "version": {"number": int(version)},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.put(
+                    f"{self.base_url}/rest/api/content/{page_id}",
+                    headers={**self._headers(), "Content-Type": "application/json"},
+                    json=body,
+                )
+                if resp.status_code == 401:
+                    return {"status": "error", "detail": "인증 실패 (401)", "auth_failed": True}
+                if resp.status_code == 404:
+                    return {"status": "error", "detail": f"페이지 {page_id} 없음 (404)"}
+                if resp.status_code == 409:
+                    return {"status": "error",
+                            "detail": "버전 충돌 (409) — 페이지가 다른 곳에서 수정됐습니다. 다시 가져온 뒤 게시하세요."}
+                if resp.status_code != 200:
+                    detail = ""
+                    try:
+                        detail = resp.json().get("message", "")
+                    except Exception:  # noqa: BLE001
+                        detail = resp.text[:200]
+                    return {"status": "error", "detail": detail or f"HTTP {resp.status_code}"}
+                data = resp.json()
+                webui = ((data.get("_links") or {}).get("webui") or "")
+                return {
+                    "status": "ok", "action": "updated", "id": str(data.get("id", "")),
+                    "version": ((data.get("version") or {}).get("number")),
+                    "url": f"{self.base_url}{webui}" if webui else "",
+                }
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Confluence 연결 불가"}
+        except httpx.TimeoutException:
+            return {"status": "offline", "detail": "Confluence 응답 시간 초과"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Confluence update_page error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
+    async def upload_attachment(
+        self, page_id: str, filename: str, content: bytes, mime: str = "application/octet-stream",
+    ) -> dict:
+        """페이지 첨부 업로드/갱신 (`PUT /rest/api/content/{id}/child/attachment`).
+
+        같은 파일명이 있으면 새 버전으로 갱신된다(멱등) — export 재게시에 안전."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Confluence 미설정"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.put(
+                    f"{self.base_url}/rest/api/content/{page_id}/child/attachment",
+                    headers=self._headers(),  # X-Atlassian-Token: no-check 포함 (sso/cookie)
+                    files={"file": (filename, content, mime)},
+                    data={"minorEdit": "true"},
+                )
+                if resp.status_code == 401:
+                    return {"status": "error", "detail": "인증 실패 (401)", "auth_failed": True}
+                if resp.status_code not in (200, 201):
+                    return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+                return {"status": "ok", "filename": filename}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Confluence 연결 불가"}
+        except httpx.TimeoutException:
+            return {"status": "offline", "detail": "Confluence 응답 시간 초과"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Confluence upload_attachment error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
+    async def get_attachment(self, page_id: str, filename: str) -> dict:
+        """페이지 첨부 파일 다운로드 — import 시 이미지 인라인 변환용."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Confluence 미설정"}
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                resp = await client.get(
+                    f"{self.base_url}/download/attachments/{page_id}/{filename}",
+                    headers=self._headers(),
+                )
+                if resp.status_code == 401:
+                    return {"status": "error", "detail": "인증 실패 (401)", "auth_failed": True}
+                if resp.status_code != 200:
+                    return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+                return {
+                    "status": "ok",
+                    "content": resp.content,
+                    "mime": resp.headers.get("Content-Type", "application/octet-stream"),
+                }
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Confluence 연결 불가"}
+        except httpx.TimeoutException:
+            return {"status": "offline", "detail": "Confluence 응답 시간 초과"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Confluence get_attachment error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
     async def get_page(self, page_id: str) -> dict:
         """단일 페이지 조회 (`GET /rest/api/content/{id}`) — storage 본문 포함."""
         if not self.configured:

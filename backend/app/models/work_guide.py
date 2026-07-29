@@ -22,6 +22,15 @@ class WorkGuide(Base):
     author = Column(String(100), nullable=True)
     sort_order = Column(Integer, default=0)          # 동일 레벨 내 정렬 순서
     confluence_url = Column(Text, nullable=True)     # Confluence 문서 링크
+    # ── Confluence 동기화 메타 (routers/confluence.py — import/export 공용) ──
+    source = Column(String(20), default='pep')       # pep / confluence — 최초 생성 출처
+    confluence_page_id = Column(String(50), nullable=True, index=True)  # 연결 페이지 ID (매칭 키)
+    confluence_space_key = Column(String(50), nullable=True)
+    confluence_version = Column(Integer, nullable=True)   # 마지막 동기화 시점 페이지 버전
+    confluence_synced_at = Column(DateTime, nullable=True)
+    # synced(동일) / modified(PEP 수정 후 미게시) / error(마지막 동기화 실패) — 미연결이면 NULL
+    confluence_sync_status = Column(String(20), nullable=True)
+    confluence_sync_error = Column(Text, nullable=True)
     # 유사 문서 검색용 임베딩(제목+본문) — Celery 비동기로 계산·저장 (동기 쓰기 경로에 없음).
     # deferred() — 기본 SELECT 에 포함되지 않도록 지연 로딩 (work_item.py 의 동일 컬럼 참고).
     embedding = deferred(Column(Vector(settings.embedding_dim), nullable=True))
