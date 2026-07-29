@@ -1,10 +1,33 @@
-# 폐쇄망 LLM 아키텍처 상세 — 내부 모델(GLM-5.2) + K8s 로그 자동 분석 + PEP 지식 RAG
+# 폐쇄망 LLM 아키텍처 상세 — 사내 LLM + 자체 LLM 병행 운용 + K8s 로그 자동 분석 + PEP 지식 RAG
 
 > 모델 파일/이미지의 **반입 절차**(Nexus)는 [AIRGAP_LLM_NEXUS.md](AIRGAP_LLM_NEXUS.md) 참고.
-> 이 문서는 그 위에서의 **아키텍처/기능 설계**를 다룬다: 내부 제공 모델(GLM-5.2)로의 전환,
-> K8s 로그 모니터링–에러 자동 분석 파이프라인, PEP 에 등록된 내부 문서를 활용한 RAG.
+> 이 문서는 그 위에서의 **아키텍처/기능 설계**를 다룬다.
 >
-> 작성 기준: v1.6.0 (2026-07-17). 코드 참조는 당시 기준.
+> **v2 (2026-07-29) — 프레임 전환: "마이그레이션" → "프로필 × 용도 라우팅 병행 운용".**
+> v1 은 Ollama → vLLM(GLM) *전환*을 전제로 썼지만, 실제 요구는 **사내 제공 LLM 서비스
+> (OpenAI-호환)와 인클러스터 자체 LLM(Ollama, ghcr.io 이미지 반입)을 동시에** 쓰는 것이다.
+> 이에 따라 Phase 1 이 다음과 같이 **구현 완료**됐다:
+>
+> - `backend/app/services/llm/` — 모든 LLM 호출의 단일 게이트웨이.
+>   **프로필**(provider `ollama`|`openai_compat` + base_url + model + api_key_ref +
+>   timeout + max_concurrency) 여러 개를 등록하고, **용도**(`chat` / `incident_analysis` /
+>   `review_summary` / `arch_doc` / `trends` / `embedding`)별로 primary/fallback 프로필을
+>   라우팅한다. 예: 챗봇 → 사내 LLM, 임베딩/카드 요약 → Ollama.
+> - 설정 원천은 AppSetting `llm_settings` (**Settings → AI/LLM 탭**, UI-First) — env
+>   (`OLLAMA_URL`/`LLM_API_BASE`/…)는 행이 없을 때의 bootstrap 폴백.
+> - API 키는 `llm_credentials` 테이블(EncryptedText 암호화)에 저장하고 프로필은
+>   `credential:<name>` / `env:<VAR>` 참조 문자열만 갖는다.
+> - `ANALYZER_BACKEND` raw env → `llm_settings.analyzer_backend` 로 이동 (§2.2 해소).
+> - 시스템 프롬프트 한국어 기본(`services/llm/prompts.py`, `llm_settings.language`).
+> - 호출량/오류/지연/토큰 통계를 Redis 시간버킷으로 적재 → `GET /llm/usage` (부하를
+>   보면서 범위를 넓히는 점진 롤아웃의 데이터 소스).
+>
+> 갭 현황: **G1 해소** (OpenAI-호환 + 병행 운용). G2(알람 자동 분석)/G3(RAG)/G4(임베딩
+> 확대)/G5(GPU 매니페스트)는 후속 Phase 에서 진행. 아래 v1 본문의 "GLM 전환" 서술은
+> "openai_compat 프로필 추가"로 읽으면 된다 — vLLM 자체 서빙도, 사내 LLM 게이트웨이도
+> 같은 프로필 형태로 붙는다.
+>
+> 작성 기준: v1.6.0 (2026-07-17), v2 개정 2026-07-29. 코드 참조는 각 기준.
 
 ---
 

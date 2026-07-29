@@ -1,6 +1,9 @@
 """
-Local LLM analyzer — delegates to the existing Ollama endpoint.
-Reuses the same prompt structure as the Claude analyzer.
+Local LLM analyzer — ``services/llm`` 게이트웨이 경유 (purpose="incident_analysis").
+
+직접 Ollama 를 호출하던 구현은 게이트웨이로 이관됐다 — 프로필 라우팅 덕분에
+사내 OpenAI-호환 LLM / 인클러스터 Ollama 어느 쪽으로도 분석을 보낼 수 있다.
+시스템 프롬프트(JSON-only, 한국어 값)는 ``services/llm/prompts.py`` 가 원천이다.
 """
 
 import json
@@ -8,21 +11,12 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-import httpx
-
-from app.config import settings
 from app.services.analyzers.base import (
     AnalysisResult,
     BaseAnalyzer,
     IncidentContext,
 )
-
-_SYSTEM = (
-    "You are a Kubernetes SRE. Analyze incidents and respond ONLY with a JSON object "
-    "containing: severity (critical|warning|info), root_cause (string), "
-    "suggested_actions (array of strings), related_runbooks (array of strings), "
-    "confidence (float 0-1)."
-)
+from app.services.llm import llm_service
 
 
 def _build_prompt(ctx: IncidentContext) -> str:
@@ -49,34 +43,31 @@ def _parse(text: str) -> dict[str, Any]:
 
 
 class LocalLLMAnalyzer(BaseAnalyzer):
-    def __init__(self) -> None:
-        self._base_url = str(settings.ollama_url).rstrip("/")
-        self._model = settings.ollama_model
-        self._timeout = getattr(settings, "ollama_timeout", 120)
-
     async def analyze(self, context: IncidentContext) -> AnalysisResult:
         prompt = _build_prompt(context)
-        payload = {
-            "model": self._model,
-            "system": _SYSTEM,
-            "prompt": prompt,
-            "stream": False,
-        }
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(f"{self._base_url}/api/generate", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
+        result = await llm_service.chat_for_purpose("incident_analysis", prompt)
 
-        raw = data.get("response", "")
+        if result.status != "ok":
+            return AnalysisResult(
+                severity="info",
+                root_cause=f"LLM 분석 불가 ({result.error or result.status}) — 수동 확인이 필요합니다.",
+                suggested_actions=["파드 로그를 수동으로 확인하세요.",
+                                   "Settings → AI/LLM 에서 LLM 연결 상태를 확인하세요."],
+                confidence=0.0,
+                analyzed_by=f"local_llm:{result.profile or 'unknown'}",
+                analyzed_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        analyzed_by = f"local_llm:{result.profile}:{result.model}"
         try:
-            parsed = _parse(raw)
+            parsed = _parse(result.text)
         except Exception:
             return AnalysisResult(
                 severity="info",
-                root_cause="Local LLM returned unparseable response",
-                suggested_actions=["Review pod logs manually"],
+                root_cause="LLM 이 해석 불가능한 응답을 반환했습니다.",
+                suggested_actions=["파드 로그를 수동으로 확인하세요."],
                 confidence=0.1,
-                analyzed_by="local_llm",
+                analyzed_by=analyzed_by,
                 analyzed_at=datetime.now(timezone.utc).isoformat(),
             )
 
@@ -86,14 +77,10 @@ class LocalLLMAnalyzer(BaseAnalyzer):
             suggested_actions=parsed.get("suggested_actions", []),
             related_runbooks=parsed.get("related_runbooks", []),
             confidence=float(parsed.get("confidence", 0.4)),
-            analyzed_by="local_llm",
+            analyzed_by=analyzed_by,
             analyzed_at=datetime.now(timezone.utc).isoformat(),
         )
 
     async def health_check(self) -> bool:
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self._base_url}/api/tags")
-                return resp.status_code == 200
-        except Exception:
-            return False
+        h = await llm_service.health_for_purpose("incident_analysis")
+        return h.get("status") == "online"

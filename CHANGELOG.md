@@ -10,6 +10,19 @@
 
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **폐쇄망 LLM 이중 운용 — 프로필 × 용도 라우팅 게이트웨이 (Phase 1)**: 사내 OpenAI-호환
+  LLM 서비스와 인클러스터 Ollama 를 동시에 등록하고, 기능별(챗봇/장애분석/점검리뷰/
+  아키텍처문서/트렌드/임베딩)로 어느 LLM 을 쓸지 UI 에서 라우팅한다(primary 실패 시
+  fallback 자동 전환). Settings 에 **AI / LLM 탭** 신설 — 프로필 CRUD·연결 테스트·용도별
+  라우팅·분석기 백엔드 선택·API 키 암호화 저장(`llm_credentials`)·최근 24h 사용량
+  (호출/오류/지연/토큰) 가시화. 시스템 프롬프트 한국어 기본화.
+  Backend: `services/llm/` 게이트웨이 신설, 기존 5개 Ollama 하드코딩 호출부
+  (`agent_service`/`local_llm_analyzer`/`embedding_service`/`trends summarizer`/
+  `architecture_doc_service`) 이관, `ANALYZER_BACKEND` raw env → AppSetting
+  `llm_settings` 로 이동(UI-First), `routers/llm_settings.py` 신설.
+  Frontend: `LlmSettingsTab.tsx`, `useLlmSettings.ts`, `llmApi`.
+
 ## [1.17.1] - 2026-07-29
 
 ### Fixed

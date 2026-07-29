@@ -194,7 +194,8 @@ async def analyze_incident(body: IncidentContextSchema):
 @router.get("/health", response_model=HealthResponse)
 async def analyzer_health():
     """Check whether the configured analyzer backend is reachable."""
-    backend = os.getenv("ANALYZER_BACKEND", "rule_based")
+    from app.services.analyzers.factory import get_analyzer_backend
+    backend = get_analyzer_backend()
     analyzer = get_analyzer()
     available = await analyzer.health_check()
     return HealthResponse(backend=backend, available=available)

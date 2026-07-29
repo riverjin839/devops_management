@@ -4297,3 +4297,76 @@ export interface AlertSettings {
   dedupMode: AlertDedupMode;
   retentionDays: number;
 }
+
+// ── LLM 게이트웨이 설정 (Settings → AI/LLM) ───────────────────────────
+
+export type LlmProviderType = 'ollama' | 'openai_compat';
+
+export type LlmPurpose =
+  | 'chat'
+  | 'incident_analysis'
+  | 'review_summary'
+  | 'arch_doc'
+  | 'trends'
+  | 'embedding';
+
+export interface LlmProfile {
+  name: string;
+  provider: LlmProviderType;
+  base_url: string;
+  model: string;
+  /** "credential:<name>" | "env:<VAR>" | "" — 키 원문은 절대 오가지 않는다 */
+  api_key_ref: string;
+  timeout_seconds: number;
+  max_concurrency: number;
+  enabled: boolean;
+}
+
+export interface LlmRoute {
+  primary: string;
+  fallback: string | null;
+}
+
+export interface LlmSettings {
+  language: 'ko' | 'en';
+  analyzer_backend: 'claude' | 'local_llm' | 'rule_based';
+  embedding_model: string;
+  profiles: LlmProfile[];
+  routing: Record<string, LlmRoute>;
+}
+
+export interface LlmHealthEntry {
+  profile: string;
+  provider: LlmProviderType;
+  enabled: boolean;
+  base_url: string;
+  status: 'online' | 'offline';
+  model: string;
+  detail: string;
+  latency_ms: number;
+}
+
+export interface LlmTestResult {
+  status: string;
+  latency_ms: number;
+  model: string;
+  answer_preview: string;
+  error: string | null;
+}
+
+export interface LlmCredentialSummary {
+  name: string;
+  hint: string;
+  created_at: string | null;
+}
+
+export interface LlmUsageBucket {
+  profile: string;
+  purpose: string;
+  bucket: string; // YYYYMMDDHH (UTC)
+  count: number;
+  errors: number;
+  avg_latency_ms: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}

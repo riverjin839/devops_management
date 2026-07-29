@@ -83,6 +83,7 @@ from app.routers import (
     release_notes_router,
     check_matrix_router,
     island_router,
+    llm_settings_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -2045,6 +2046,7 @@ app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(llm_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
