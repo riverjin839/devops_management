@@ -92,7 +92,14 @@ def split_epic(value: str) -> tuple[str, str]:
 
 
 def _epic_of(item: WorkItem) -> str:
-    """task(Epic) 축 — Jira 에서 수집한 Epic/상위 이슈. 없으면 미지정으로 묶는다."""
+    """task(Epic) 축 — Jira 에서 수집한 Epic/상위 이슈. 없으면 미지정으로 묶는다.
+
+    키/제목이 분리 저장된 신규 데이터는 그것으로 합본을 만들고(파싱 왕복을 피한다),
+    구버전 행은 합본 컬럼(`jira_epic`)을 그대로 쓴다."""
+    key = (getattr(item, "jira_epic_key", None) or "").strip()
+    summary = (getattr(item, "jira_epic_summary", None) or "").strip()
+    if key or summary:
+        return f"{key} {summary}".strip()
     v = (getattr(item, "jira_epic", None) or "").strip()
     return v or "(Epic 미지정)"
 
@@ -157,7 +164,12 @@ def build_progress(items: list[WorkItem], *, today: date, base_url: str = "") ->
 
 
 def _component_of(item: WorkItem) -> str:
-    """구분(component) — Jira component 를 저장하는 전용 컬럼이 없으므로 category/service 순."""
+    """구분(component) — Jira component 원본이 있으면 그것을 쓰고, 없으면 PEP 필드로 폴백."""
+    jira_components = getattr(item, "jira_components", None) or []
+    if jira_components:
+        first = str(jira_components[0]).strip()
+        if first:
+            return first
     for attr in ("component", "category", "service"):
         v = (getattr(item, attr, None) or "").strip()
         if v:

@@ -1,16 +1,16 @@
 import { useRef, useState } from 'react';
 import {
   X, Loader2, DownloadCloud, AlertTriangle, CheckCircle2, ExternalLink,
-  FileSpreadsheet, ClipboardPaste, RotateCcw, Upload,
+  FileSpreadsheet, ClipboardPaste, RotateCcw, Upload, Link2Off, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useJiraImport, useJiraCredential } from '@/hooks/useJira';
+import { useJiraImport, useJiraCredential, useJiraVerifyLinks, useJiraUnlink } from '@/hooks/useJira';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import type { JiraImportResult, JiraExcelImportResult } from '@/types';
+import type { JiraImportResult, JiraExcelImportResult, JiraVerifyLinksResult } from '@/types';
 
 interface JiraImportModalProps {
   open: boolean;
@@ -19,7 +19,7 @@ interface JiraImportModalProps {
 }
 
 /** 상단 소스 — Jira 검색으로 가져오기 vs Excel·붙여넣기(구 전용 페이지 기능 통합). */
-type Source = 'jql' | 'excel';
+type Source = 'jql' | 'excel' | 'verify';
 type Scope = 'me' | 'project' | 'filter' | 'jql';
 
 const inputCls =
@@ -61,14 +61,68 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const [pasteText, setPasteText] = useState('');
   const [excelError, setExcelError] = useState<string | null>(null);
 
+  // 연결 점검 — Jira 에서 지워졌거나 안 보이는 이슈에 붙어 있는 죽은 링크를 찾아 정리한다.
+  const verifyMut = useJiraVerifyLinks();
+  const unlinkMut = useJiraUnlink();
+  const [verifyResult, setVerifyResult] = useState<JiraVerifyLinksResult | null>(null);
+  const [pickedMissing, setPickedMissing] = useState<Set<string>>(new Set());
+  const [cleaning, setCleaning] = useState(false);
+
   if (!open) return null;
 
-  const busy = importMut.isPending || excelBusy;
+  const busy = importMut.isPending || excelBusy || verifyMut.isPending || cleaning;
   const csv = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
 
   const resetAll = () => {
     setPreview(null); setDone(null); setExcluded(new Set());
     setExcelRows(null); setExcelError(null); setPasteText('');
+    setVerifyResult(null); setPickedMissing(new Set());
+  };
+
+  const runVerify = async () => {
+    setVerifyResult(null);
+    setPickedMissing(new Set());
+    try {
+      const { data } = await verifyMut.mutateAsync(false);
+      if (data.status !== 'ok') {
+        toast.error('연결 점검 실패', data.detail);
+        return;
+      }
+      setVerifyResult(data);
+      // 찾지 못한 연결은 기본으로 전부 선택 — 대개 그대로 정리하려는 흐름이다.
+      setPickedMissing(new Set(data.missing.map((m) => m.workItemId)));
+      toast.info('연결 점검 완료', data.detail);
+    } catch (err) {
+      toast.error('연결 점검 실패', formatApiError(err));
+    }
+  };
+
+  /** 고른 죽은 링크를 일괄 정리. deleteWorkItem=true 면 업무 행까지 삭제한다. */
+  const cleanMissing = async (deleteWorkItem: boolean) => {
+    const ids = [...pickedMissing];
+    if (!ids.length) return;
+    setCleaning(true);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const id of ids) {
+      try {
+        const { data } = await unlinkMut.mutateAsync({ itemId: id, data: { deleteWorkItem } });
+        if (data.status === 'ok') ok += 1;
+        else failed.push(data.detail);
+      } catch (err) {
+        failed.push(formatApiError(err));
+      }
+    }
+    setCleaning(false);
+    if (ok) {
+      toast.success(deleteWorkItem ? '업무 삭제 완료' : '연결 해제 완료', `${ok}건 처리했습니다.`);
+      setVerifyResult((prev) => prev && {
+        ...prev,
+        missing: prev.missing.filter((m) => !pickedMissing.has(m.workItemId)),
+      });
+      setPickedMissing(new Set());
+    }
+    if (failed.length) toast.error('일부 실패', failed.slice(0, 3).join(' / '));
   };
 
   const run = async (dryRun: boolean) => {
@@ -218,6 +272,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                 {([
                   { id: 'jql' as const, label: 'Jira 에서 검색', icon: DownloadCloud },
                   { id: 'excel' as const, label: 'Excel · 붙여넣기', icon: FileSpreadsheet },
+                  { id: 'verify' as const, label: '연결 점검', icon: ShieldCheck },
                 ]).map((m) => {
                   const Icon = m.icon;
                   return (
@@ -462,6 +517,82 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                         className="ml-auto px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground">닫기</button>
                     </div>
                   )}
+                </>
+              )}
+
+              {source === 'verify' && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    연결된 업무의 Jira 이슈가 아직 살아 있는지 확인합니다. Jira 에서 이슈를 직접
+                    지웠다면 PEP 에는 죽은 링크가 남는데, 여기서 찾아 정리할 수 있습니다.
+                    <b className="text-foreground"> 찾지 못한 것이 항상 삭제된 것은 아닙니다</b> —
+                    조회 권한이 없어도 똑같이 안 보이므로 확인 후 처리하세요.
+                  </p>
+
+                  <button type="button" onClick={() => void runVerify()} disabled={busy}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                    {verifyMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                    내 업무의 Jira 연결 점검
+                  </button>
+
+                  {verifyResult && (
+                    <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm">
+                      <div className="flex items-center gap-3 font-medium">
+                        <span>확인 {verifyResult.checked}건</span>
+                        <span className={verifyResult.missing.length ? 'text-amber-500' : 'text-emerald-500'}>
+                          미확인 {verifyResult.missing.length}건
+                        </span>
+                        {verifyResult.truncated && (
+                          <span className="text-xs text-muted-foreground">(상한 초과 — 일부만 검사)</span>
+                        )}
+                      </div>
+
+                      {verifyResult.missing.length > 0 ? (
+                        <>
+                          <ul className="mt-2 max-h-48 overflow-y-auto divide-y divide-border/40">
+                            {verifyResult.missing.map((m) => (
+                              <li key={m.workItemId} className="py-1.5 flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-border"
+                                  checked={pickedMissing.has(m.workItemId)}
+                                  onChange={(e) => setPickedMissing((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(m.workItemId);
+                                    else next.delete(m.workItemId);
+                                    return next;
+                                  })}
+                                  aria-label={`${m.jiraKey} 선택`}
+                                />
+                                <span className="font-mono text-xs text-brand-jira dark:text-blue-300">{m.jiraKey}</span>
+                                <span className="truncate flex-1">{m.title}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="flex items-center gap-2 mt-3">
+                            <button type="button" onClick={() => void cleanMissing(false)}
+                              disabled={busy || pickedMissing.size === 0}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
+                              {cleaning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2Off className="w-4 h-4" />}
+                              연결만 해제 ({pickedMissing.size})
+                            </button>
+                            <button type="button" onClick={() => void cleanMissing(true)}
+                              disabled={busy || pickedMissing.size === 0}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-status-critical/30 text-status-critical text-sm hover:bg-status-critical/10 disabled:opacity-50">
+                              <Trash2 className="w-4 h-4" /> 업무까지 삭제 ({pickedMissing.size})
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="mt-2 text-muted-foreground">{verifyResult.detail}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button type="button" onClick={onClose} disabled={busy}
+                      className="ml-auto px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground">닫기</button>
+                  </div>
                 </>
               )}
             </>

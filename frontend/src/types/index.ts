@@ -504,6 +504,18 @@ export interface WorkItem {
   jiraStatus?: string | null;
   jiraSyncedAt?: string | null;
   jiraWatchers?: string[] | null;
+  /** Jira 원본 항목 — 게시판 표를 Jira 와 같은 축으로 보여주기 위한 읽기 전용 필드.
+   *  task = Epic, sub task = Epic 아래 이슈 매핑 기준. */
+  jiraIssueType?: string | null;
+  /** status.statusCategory.key — new | indeterminate | done (상태 배지 색 기준). */
+  jiraStatusCategory?: string | null;
+  jiraEpic?: string | null;
+  jiraEpicKey?: string | null;
+  jiraEpicSummary?: string | null;
+  jiraParentKey?: string | null;
+  jiraParentSummary?: string | null;
+  jiraComponents?: string[] | null;
+  jiraLabels?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -655,6 +667,48 @@ export interface JiraDeleteResult {
   unlinkedWorkItemId?: string | null;
 }
 
+// ── 연결 복구 (해제 / 갈아끼우기 / 고아 점검) ──────────────────────────────────
+// Jira 이슈를 직접 지웠거나 잘못된 프로젝트에 만들었을 때, PEP 에 남은 죽은 링크를
+// 화면에서 정리하기 위한 타입들. Jira 쪽은 건드리지 않는다.
+export interface JiraUnlinkRequest {
+  /** true 면 업무 행 자체도 삭제 (권한은 업무 삭제와 동일 규칙). */
+  deleteWorkItem?: boolean;
+}
+
+export interface JiraUnlinkResult {
+  status: 'ok' | 'error';
+  detail: string;
+  workItemId?: string | null;
+  workItemDeleted: boolean;
+}
+
+export interface JiraRelinkRequest {
+  /** 이슈 키(DL-42) 또는 브라우저 URL(.../browse/DL-42). */
+  keyOrUrl: string;
+}
+
+export interface JiraRelinkResult {
+  status: 'ok' | 'error' | 'offline' | 'missing';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+}
+
+export interface JiraMissingLink {
+  workItemId: string;
+  jiraKey: string;
+  title: string;
+  detail: string;
+}
+
+export interface JiraVerifyLinksResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  checked: number;
+  missing: JiraMissingLink[];
+  truncated: boolean;
+}
+
 // ── 주간보고 ──────────────────────────────────────────────────────────────────
 export interface WeeklySummary {
   total: number;
@@ -744,7 +798,9 @@ export interface WeeklyReportSettings {
 }
 
 export interface JiraImportResult {
-  status: 'ok' | 'offline' | 'error';
+  /** missing — 연결된 이슈를 Jira 에서 찾을 수 없음(삭제됐거나 권한 없음). 자동 정리하지
+   *  않고 화면에서 연결 해제/변경을 고르게 한다. */
+  status: 'ok' | 'offline' | 'error' | 'missing';
   /** 실제로 Jira 에 보낸 JQL — 조건 반영 여부를 화면에서 확인. */
   appliedJql?: string;
   imported: number;
@@ -861,7 +917,8 @@ export interface WorkItemCreate {
   remarks?: string;
   service?: string;
   component?: string;
-  confluenceUrl?: string;
+  /** null 을 명시적으로 보내면 링크 해제 (백엔드는 exclude_unset 이라 undefined 는 무변경). */
+  confluenceUrl?: string | null;
   jiraUrl?: string;
   priority?: string;
   kanbanStatus?: KanbanStatus;
@@ -3975,6 +4032,11 @@ export interface ProvisionDefaults {
   pageTitle: string;
   reporter: string;
   detail: string;
+  /** Jira 계층 — epicKey = Epic Link, parentKey = Sub-task 의 상위 이슈. */
+  epicKey: string;
+  parentKey: string;
+  /** 기본값 출처 — 'user' 면 지난번 내가 쓴 조건을 불러온 것. */
+  presetSource: 'none' | 'settings' | 'user';
 }
 
 export interface ProvisionRequest {
@@ -3988,10 +4050,14 @@ export interface ProvisionRequest {
   components?: string[];
   summary?: string;
   description?: string;
+  epicKey?: string;
+  parentKey?: string;
   spaceKey?: string;
   parentPageId?: string;
   pageTitle?: string;
   pageBody?: string;
+  /** 이번에 쓴 기준 조건을 내 기본값으로 저장할지 (다음 등록에서 자동 채움). */
+  rememberPreset?: boolean;
 }
 
 export interface ProvisionResult {

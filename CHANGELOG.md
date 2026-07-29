@@ -26,6 +26,59 @@
   사유)를 Settings ▸ 스키마 점검 화면 상단에 노출**한다 — "재시작하면 자동으로 고쳐진다"가
   실제로 지켜졌는지 로그 없이 확인할 수 있다.
 
+### Added
+- **업무 게시판 Jira 기준 레이아웃** (`/tasks-mgmt`): 가져온 이슈를 Jira 에서 보던 것과 같은
+  축으로 표에 펼친다 — **Epic · 이슈 종류(Epic/Story/Task/Sub-task/Bug) · Jira 원본 상태 ·
+  컴포넌트 · 라벨** 컬럼이 추가됐고(기본 숨김, 컬럼 설정에서 켠다), Jira 연결 업무의 상태
+  셀은 칸반 5단계로 축약하지 않고 **Jira 상태명 그대로** 보여준다(점 색은 `statusCategory`
+  기준이라 커스텀 워크플로에서도 의미가 유지된다). Epic 셀은 `DL-12 제목` 박스로 렌더되고
+  키가 Jira 로 링크된다. 가져오기가 Jira component 를 업무 분류로 매핑해 주간보고 진척률의
+  `category × Epic` 축도 제대로 잡힌다(이전에는 전부 "Jira" 로 들어갔다).
+  Backend: `models/work_item.py`(jira_epic_key/epic_summary/issue_type/parent_key/
+  parent_summary/status_category/components/labels), `services/jira_service.py`,
+  `routers/jira.py`(`_jira_sync_values`). Frontend: `workItemColumns.ts`, `WorkItemTableRow.tsx`.
+- **제목 옆 Confluence 문서 박스**: Jira 키 박스 옆에 문서 링크 박스(`DocLinkChip`)가 붙는다.
+  링크가 없으면 점선 `＋문서` 버튼이 되고 클릭하면 그 자리에서 URL 을 입력·저장한다(상세
+  화면까지 들어갈 필요 없음). Jira 가져오기는 이슈 본문에서 설정된 Confluence Base URL 로
+  시작하는 링크를 찾아 자동으로 채우고(행 단위 재가져오기는 원격 링크도 조회), **사용자가
+  직접 넣은 링크는 덮어쓰지 않는다**.
+- **업무 등록 → Jira·Confluence 연계 생성 확장**: 생성 조건에 **Epic 키**와 **상위 이슈
+  (Sub-task)** 가 추가돼 task = Epic, sub task = Epic 아래 이슈로 만들 수 있다. 프로젝트 ·
+  이슈 종류 · 우선순위 · 라벨 · 컴포넌트 · Epic · 저장 위치는 **사용자별로 기억**되어 다음
+  등록에서 자동으로 채워진다(모달에서 언제든 수정, 체크박스로 저장 해제 가능).
+  Backend: `routers/jira.py`(`user_settings` 의 `jira_provision_preset`).
+- **게시판 기본 필터 = 로그인 사용자**: 처음 들어오면 내 담당 업무만 보인다. 상단 "내 업무"
+  토글로 전체 보기로 바꿀 수 있고 그 선택은 브라우저에 기억된다.
+
+- **Jira 연결 복구 — 해제 · 변경 · 연결 점검**: Jira 에서 이슈를 직접 지웠거나 잘못된
+  프로젝트에 만들었을 때, PEP 에 남는 죽은 링크를 화면에서 정리할 수 있다. 게시판 행의
+  **Jira 연결 관리** 버튼에서 (1) 연결만 해제 (2) 다른 이슈로 연결 변경 (3) 연결 해제 +
+  업무 삭제 를 고를 수 있고, 다시 가져오기가 "Jira 에 없음"으로 끝나면 이 창이 사유와 함께
+  자동으로 열린다. 가져오기 팝업의 **연결 점검** 탭은 내 업무의 Jira 연결을 한 번에 확인해
+  죽은 링크를 골라 일괄 정리한다.
+  - 연결을 해제하면 `jira_issue_key` 가 비어 **Jira·Confluence 자동 생성이 다시 열린다** —
+    잘못된 프로젝트에 만든 이슈를 지우고 올바른 곳에 재생성하는 흐름이 이걸로 완성된다.
+  - 연결 변경은 **Jira 에서 실제로 조회해 존재를 확인한 뒤에만** 반영한다(또 다른 죽은 링크
+    방지). 이미 다른 업무가 쓰는 키는 거절한다.
+  - 이슈를 못 찾아도 **자동으로 정리하지 않는다** — 조회 권한이 없어도 Jira 는 똑같이 404 를
+    주므로, 삭제인지 권한 문제인지는 사용자가 판단한다.
+  Backend: `routers/jira.py` `POST /jira/{unlink,relink,verify-links}` ·
+  `_clear_jira_link()`/`_parse_issue_key()` · `services/jira_service.py`(404 에 `missing` 플래그).
+  Frontend: `components/work-items/JiraLinkDialog.tsx`, `JiraImportModal.tsx`.
+
+### Fixed
+- **Jira 링크를 수동으로 고쳐도 아무 일이 없던 문제**: 업무 수정 폼의 "Jira 링크"는 표시용
+  URL 일 뿐이고 실제 연결은 `jira_issue_key`/`jira_issue_id` 가 쥐고 있어서, URL 만 바꿔도
+  칩·재가져오기·중복 판정이 모두 예전 이슈를 계속 봤다. 연결된 업무는 이 입력을 읽기 전용으로
+  바꾸고 연결 관리로 안내한다(실제 변경은 검증을 거치는 연결 변경으로만).
+- **연결 해제 시 Jira 필드가 일부만 지워지던 문제**: `DELETE /jira/issue/{key}` 가 5개 필드만
+  비워 Epic·컴포넌트·라벨 잔재가 남았다. `_clear_jira_link()` 로 모아 전부 정리한다.
+- **업무 등록 팝업 레이아웃**: 시작일/완료일 입력 버튼이 옆 select/input 보다 커서 한 줄
+  그리드가 어긋나던 문제 수정(`DateTimePicker` 에 `size="sm"` 추가, 지우기 버튼 자리를
+  값 유무와 무관하게 유지해 폭이 밀리지 않게 함). 공통업무 체크박스 옆 긴 설명 문구는
+  툴팁으로 옮겨 두 칸을 잡아먹지 않게 했다.
+- **`work_items.confluence_url` 중복 선언 제거**: 같은 컬럼이 모델에 두 번 정의돼 있었다.
+
 ## [1.17.0] - 2026-07-29
 
 ### Added

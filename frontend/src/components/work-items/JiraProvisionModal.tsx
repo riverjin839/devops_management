@@ -39,9 +39,12 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const [components, setComponents] = useState('');
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
+  const [epicKey, setEpicKey] = useState('');
+  const [parentKey, setParentKey] = useState('');
   const [spaceKey, setSpaceKey] = useState('');
   const [parentPageId, setParentPageId] = useState('');
   const [pageTitle, setPageTitle] = useState('');
+  const [rememberPreset, setRememberPreset] = useState(true);
   const [result, setResult] = useState<ProvisionResult | null>(null);
 
   // 서버가 준 기본값으로 폼을 채운다 — 이후 사용자가 자유롭게 수정.
@@ -56,9 +59,12 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     setComponents(defaults.components.join(', '));
     setSummary(defaults.summary);
     setDescription(defaults.description);
+    setEpicKey(defaults.epicKey ?? '');
+    setParentKey(defaults.parentKey ?? '');
     setSpaceKey(defaults.spaceKey);
     setParentPageId(defaults.parentPageId);
     setPageTitle(defaults.pageTitle);
+    setRememberPreset(true);
     setResult(null);
   }, [defaults]);
 
@@ -81,9 +87,12 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
         labels: csv(labels), components: csv(components),
         summary: summary.trim() || undefined,
         description: description || undefined,
+        epicKey: epicKey.trim() || undefined,
+        parentKey: parentKey.trim() || undefined,
         spaceKey: spaceKey.trim() || undefined,
         parentPageId: parentPageId.trim() || undefined,
         pageTitle: pageTitle.trim() || undefined,
+        rememberPreset,
       });
       setResult(data);
       if (data.status === 'ok') toast.success('생성 완료', data.detail);
@@ -130,6 +139,9 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                 ? 'bg-secondary text-muted-foreground' : 'bg-amber-500/10 text-amber-500'
             }`}>
               {defaults.detail}
+              {defaults.presetSource === 'user' && (
+                <span className="ml-2">· 지난번에 쓴 조건을 불러왔습니다 (수정 가능)</span>
+              )}
               {defaults.reporter && <span className="ml-2">· 보고자: {defaults.reporter}</span>}
             </div>
           )}
@@ -222,6 +234,23 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                       <span className="text-xs font-medium text-muted-foreground mb-1 block">제목(summary)</span>
                       <input className={inputCls} value={summary} onChange={(e) => setSummary(e.target.value)} />
                     </div>
+                    {/* Jira 계층 — task = Epic, sub task = Epic 아래 이슈. */}
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Epic 키 (선택)
+                      </span>
+                      <input className={inputCls} placeholder="DL-7" value={epicKey}
+                        title="이 이슈를 묶을 상위 Epic. 관리자 설정의 Epic Link 필드 ID 가 있어야 반영됩니다."
+                        onChange={(e) => setEpicKey(e.target.value)} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground mb-1 block">
+                        상위 이슈 (Sub-task 일 때)
+                      </span>
+                      <input className={inputCls} placeholder="DL-10" value={parentKey}
+                        title="이슈 종류를 Sub-task 로 만들 때 필수인 상위 이슈 키."
+                        onChange={(e) => setParentKey(e.target.value)} />
+                    </div>
                     <div className="col-span-2">
                       <span className="text-xs font-medium text-muted-foreground mb-1 block">설명</span>
                       <textarea className={`${inputCls} min-h-[64px] resize-y`} value={description}
@@ -264,6 +293,17 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                   </>
                 )}
               </div>
+
+              {/* 기준 조건 재사용 — 매 등록마다 프로젝트/컴포넌트/라벨/Epic/스페이스를
+                  다시 입력하지 않도록 마지막에 쓴 값을 내 기본값으로 기억한다. */}
+              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input type="checkbox" className="rounded border-border" checked={rememberPreset}
+                  onChange={(e) => setRememberPreset(e.target.checked)} />
+                <span>이 조건을 내 기본값으로 기억</span>
+                <span className="text-xs text-muted-foreground">
+                  (프로젝트 · 종류 · 라벨 · 컴포넌트 · Epic · 저장 위치)
+                </span>
+              </label>
 
               <div className="flex items-center gap-2 pt-1">
                 <button type="button" onClick={() => void submit()} disabled={busy}
