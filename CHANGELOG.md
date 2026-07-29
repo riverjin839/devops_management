@@ -10,6 +10,21 @@
 
 1.17.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **점검 항목 삭제 실패 (심각)**: 항목을 지우면
+  `null value in column "item_id" of relation "check_matrix_runs"` 로 실패했다.
+  `CheckMatrixSchedule`/`Result`/`Run` 의 `item` 관계에 `passive_deletes=True` 가 빠져 있어,
+  SQLAlchemy 가 DB 의 `ON DELETE CASCADE` 를 쓰지 않고 자식 행의 `item_id` 를 NULL 로
+  UPDATE 하려 한 것이 원인(코드베이스가 `cluster` 쪽에는 이미 적용해 둔 패턴인데 `item`
+  쪽만 누락). 세 관계 모두 수정 — 이제 자식 정리는 DB CASCADE 가 담당한다. 회귀 테스트 추가.
+- **스키마 자동 복구가 조용히 실패하던 문제**: NOT NULL 완화 DDL 은 ACCESS EXCLUSIVE 락이
+  필요한데, 운영 중에는 Celery 워커/API 가 같은 테이블을 쓰고 있어 락을 못 잡을 수 있다.
+  기존에는 무제한 대기(부팅 정지 위험)하거나 실패해도 로그 한 줄만 남아 운영자가 알 수
+  없었다. `lock_timeout` + 재시도를 걸고, **부팅 자동 복구 결과(감지 대상·완화 건수·실패
+  사유)를 Settings ▸ 스키마 점검 화면 상단에 노출**한다 — "재시작하면 자동으로 고쳐진다"가
+  실제로 지켜졌는지 로그 없이 확인할 수 있다.
+
+
 ## [1.17.0] - 2026-07-29
 
 ### Added
