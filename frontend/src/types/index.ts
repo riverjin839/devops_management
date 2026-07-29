@@ -338,6 +338,42 @@ export interface AgentChatResponse {
   status: 'ok' | 'offline';
   answer: string;
   model: string;
+  conversationId?: string | null;
+  citations?: RagCitation[];
+  requests?: AgentInfoRequest[];
+}
+
+/** RAG 근거 인용 — 백엔드 rag_service.Citation */
+export interface RagCitation {
+  title: string;
+  sourceType: 'work_guide' | 'work_item' | 'ops_note';
+  refId: string;
+  route: string;
+  snippet: string;
+  similarity: number;
+}
+
+/** AI 의 추가 정보 요청 (운영자가 제공 — 자율 실행 아님) */
+export interface AgentInfoRequest {
+  kind: 'github_code' | 'troubleshooting_history' | 'logs' | 'config';
+  detail: string;
+}
+
+export interface AgentConversationSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentMessageOut {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  citations: RagCitation[];
+  requests: AgentInfoRequest[];
+  model: string | null;
+  createdAt: string;
 }
 
 export interface AgentHealthResponse {
@@ -4411,7 +4447,7 @@ export interface AlertIncidentAnalysis {
   suggestedActions: string[];
   relatedRunbooks: string[];
   confidence: number | null;
-  citations: Record<string, unknown>[];
+  citations: RagCitation[];
   analyzedBy: string | null;
   matchedRuleId: string | null;
   durationMs: number | null;

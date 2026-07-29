@@ -63,6 +63,9 @@ LOG_TABLES: frozenset[str] = frozenset({
     "k8s_events",
     # AI 자동 분석 이력 — 알람과 함께 무한 증가하는 로그성 테이블.
     "incident_analyses",
+    # AI 챗봇 대화 이력 — 로그성.
+    "agent_conversations",
+    "agent_messages",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

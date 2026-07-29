@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { observabilityApi } from '@/services/api';
-import { useToast } from '@/components/common';
+import { useToast, CitationList } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import type { AlertEvent } from '@/types';
 
@@ -108,6 +108,9 @@ export function AlertAnalysisPanel({ alert }: { alert: AlertEvent }) {
                 ))}
               </ul>
             </div>
+          )}
+          {analysis.citations.length > 0 && (
+            <CitationList citations={analysis.citations} />
           )}
           {analysis.relatedRunbooks.length > 0 && (
             <div className="flex flex-wrap gap-1">

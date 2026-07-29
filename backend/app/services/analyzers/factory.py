@@ -28,7 +28,7 @@ def get_analyzer(db=None) -> BaseAnalyzer:
 
     if backend == "local_llm":
         from app.services.analyzers.local_llm_analyzer import LocalLLMAnalyzer
-        return LocalLLMAnalyzer()
+        return LocalLLMAnalyzer(db=db)   # db 가 있으면 RAG 근거 인용 활성
 
     from app.services.analyzers.rule_based_analyzer import RuleBasedAnalyzer
     return RuleBasedAnalyzer()

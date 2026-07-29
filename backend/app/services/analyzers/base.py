@@ -51,6 +51,9 @@ class AnalysisResult:
     analyzed_by: str
     analyzed_at: str
     related_runbooks: list[str] = field(default_factory=list)
+    # RAG 근거 인용 — {"title","source_type","ref_id","route","snippet","similarity"}[]
+    # (rag_service.retrieve 가 공급, 프론트가 딥링크로 렌더)
+    citations: list[dict] = field(default_factory=list)
 
 
 class BaseAnalyzer(ABC):

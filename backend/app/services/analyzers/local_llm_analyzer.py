@@ -43,8 +43,30 @@ def _parse(text: str) -> dict[str, Any]:
 
 
 class LocalLLMAnalyzer(BaseAnalyzer):
+    def __init__(self, db=None) -> None:
+        # db 를 주면 RAG(사내 문서 근거 인용)를 프롬프트에 주입한다 (없으면 생략).
+        self._db = db
+
+    async def _retrieve_citations(self, prompt: str) -> list[dict]:
+        if self._db is None:
+            return []
+        try:
+            from app.services import rag_service
+            return await rag_service.retrieve(self._db, prompt, k=4)
+        except Exception:  # noqa: BLE001  (RAG 실패가 분석을 막지 않게)
+            return []
+
     async def analyze(self, context: IncidentContext) -> AnalysisResult:
         prompt = _build_prompt(context)
+        citations = await self._retrieve_citations(prompt)
+        if citations:
+            from app.services.rag_service import build_reference_block
+            prompt = (
+                build_reference_block(citations)
+                + "\n\n위 참고자료에 근거한 판단에는 related_runbooks 또는 root_cause 에 "
+                  "[번호] 를 붙여 출처를 밝혀라. 참고자료에 없는 내용은 '(추정)' 을 명시하라.\n\n"
+                + prompt
+            )
         result = await llm_service.chat_for_purpose("incident_analysis", prompt)
 
         if result.status != "ok":
@@ -79,6 +101,7 @@ class LocalLLMAnalyzer(BaseAnalyzer):
             confidence=float(parsed.get("confidence", 0.4)),
             analyzed_by=analyzed_by,
             analyzed_at=datetime.now(timezone.utc).isoformat(),
+            citations=citations,
         )
 
     async def health_check(self) -> bool:

@@ -1,26 +1,46 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Send, Bot, Loader2, WifiOff } from 'lucide-react';
+import { X, Send, Bot, Loader2, WifiOff, History, Plus, Trash2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { agentApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
-import type { AgentChatResponse } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
+import { CitationList } from '@/components/common/CitationList';
+import { InfoRequestChips } from '@/components/agent/InfoRequestChips';
+import type { AgentInfoRequest, RagCitation } from '@/types';
 import { generateUUID } from '@/lib/utils';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  citations?: RagCitation[];
+  requests?: AgentInfoRequest[];
   timestamp: Date;
 }
 
+// feature_access 게이트 키 — 라우트는 아니지만 화면별 접근 제어 규칙과 동일한 키 체계.
+const FEATURE_KEY = '/agent-chat';
+
+/**
+ * 전역 AI 챗봇 (우하단 FAB) — 한국어 우선, 멀티턴 대화 지속(서버 저장),
+ * RAG 근거 인용(사내 문서 딥링크), AI 정보요청 칩(운영자 매개 — 자율 실행 없음).
+ */
 export function AgentChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean | null>(null); // null = unknown
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [conversations, setConversations] = useState<{ id: string; title: string; updatedAt: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { clusters, addons } = useClusterStore();
+  const user = useAuthStore((s) => s.user);
+  const { data: featureAccess } = useFeatureAccess();
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -34,7 +54,6 @@ export function AgentChat() {
     }
   }, [isOpen]);
 
-  // Check Ollama health when chat opens
   const checkHealth = useCallback(async () => {
     try {
       const { data } = await agentApi.health();
@@ -50,6 +69,11 @@ export function AgentChat() {
     }
   }, [isOpen, checkHealth]);
 
+  // 화면별 접근 제어 — 규칙에서 차단되면 FAB 자체를 렌더하지 않는다.
+  if (!canAccessFeature(featureAccess, FEATURE_KEY, user)) {
+    return null;
+  }
+
   const buildContext = (): Record<string, unknown> | undefined => {
     if (clusters.length === 0) return undefined;
     const clusterSummaries = clusters.map((c) => `${c.name}: ${c.status}`).join(', ');
@@ -60,46 +84,99 @@ export function AgentChat() {
 
     return {
       cluster_name: clusterSummaries,
-      cluster_status: `${clusters.length} cluster(s)`,
-      extra: addonSummaries ? `Addons: ${addonSummaries}` : undefined,
+      cluster_status: `${clusters.length}개 클러스터`,
+      extra: addonSummaries ? `애드온: ${addonSummaries}` : undefined,
     };
   };
 
-  const addMessage = (role: ChatMessage['role'], content: string) => {
+  const addMessage = (
+    role: ChatMessage['role'],
+    content: string,
+    extra?: Pick<ChatMessage, 'citations' | 'requests'>,
+  ) => {
     setMessages((prev) => [
       ...prev,
-      { id: generateUUID(), role, content, timestamp: new Date() },
+      { id: generateUUID(), role, content, timestamp: new Date(), ...extra },
     ]);
+  };
+
+  const sendQuery = async (query: string) => {
+    if (!query || isLoading) return;
+    addMessage('user', query);
+    setIsLoading(true);
+    try {
+      const { data } = await agentApi.chat({
+        query,
+        context: buildContext(),
+        conversationId,
+      });
+      if (data.conversationId) setConversationId(data.conversationId);
+      if (data.status === 'offline') {
+        setIsOnline(false);
+        addMessage('system', data.answer);
+      } else {
+        setIsOnline(true);
+        addMessage('assistant', data.answer, {
+          citations: data.citations ?? [],
+          requests: data.requests ?? [],
+        });
+      }
+    } catch {
+      setIsOnline(false);
+      addMessage('system', 'AI 서버가 응답하지 않습니다. Settings → AI/LLM 에서 연결 상태를 확인하세요.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSend = async () => {
     const query = input.trim();
-    if (!query || isLoading) return;
-
+    if (!query) return;
     setInput('');
-    addMessage('user', query);
-    setIsLoading(true);
+    await sendQuery(query);
+  };
 
+  const startNewConversation = () => {
+    setConversationId(null);
+    setMessages([]);
+    setDrawerOpen(false);
+  };
+
+  const openDrawer = async () => {
+    setDrawerOpen(true);
     try {
-      const { data } = await agentApi.chat({ query, context: buildContext() });
-      const resp = data as unknown as AgentChatResponse;
-
-      if (resp.status === 'offline') {
-        setIsOnline(false);
-        addMessage('system', resp.answer);
-      } else {
-        setIsOnline(true);
-        addMessage('assistant', resp.answer);
-      }
+      const res = await agentApi.conversations();
+      setConversations(res.data.data);
     } catch {
-      // Network error / backend unreachable — dashboard keeps working
-      setIsOnline(false);
-      addMessage(
-        'system',
-        'AI Server is not responding. Please check the Ollama connection.',
-      );
-    } finally {
-      setIsLoading(false);
+      setConversations([]);
+    }
+  };
+
+  const loadConversation = async (id: string) => {
+    try {
+      const res = await agentApi.messages(id);
+      setConversationId(id);
+      setMessages(res.data.data.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        citations: m.citations,
+        requests: m.requests,
+        timestamp: new Date(m.createdAt),
+      })));
+      setDrawerOpen(false);
+    } catch {
+      // 조회 실패 — 현재 대화 유지
+    }
+  };
+
+  const deleteConversation = async (id: string) => {
+    try {
+      await agentApi.deleteConversation(id);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (conversationId === id) startNewConversation();
+    } catch {
+      // 삭제 실패 무시 (목록 새로고침으로 복구)
     }
   };
 
@@ -118,44 +195,97 @@ export function AgentChat() {
       <button
         onClick={() => setIsOpen((v) => !v)}
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all flex items-center justify-center hover:scale-105 active:scale-95"
-        aria-label="Toggle AI Agent"
+        title="AI 어시스턴트"
+        aria-label="AI 어시스턴트 열기/닫기"
       >
         {isOpen ? <X className="w-6 h-6" /> : <Bot className="w-6 h-6" />}
       </button>
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-[400px] h-[520px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed bottom-24 right-6 z-50 w-[420px] h-[560px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
           <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-card">
             <div className="flex items-center gap-2">
               <Bot className="w-5 h-5 text-primary" />
-              <span className="font-semibold text-sm">AI Agent</span>
+              <span className="font-semibold text-sm">AI 어시스턴트</span>
               {isOnline === true && (
-                <span className="w-2 h-2 rounded-full bg-green-500" title="Online" />
+                <span className="w-2 h-2 rounded-full bg-status-healthy" title="온라인" />
               )}
               {isOnline === false && (
-                <span className="flex items-center gap-1 text-sm text-orange-400">
-                  <WifiOff className="w-3 h-3" /> Offline
+                <span className="flex items-center gap-1 text-sm text-status-warning">
+                  <WifiOff className="w-3 h-3" /> 오프라인
                 </span>
               )}
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={startNewConversation}
+                title="새 대화"
+                aria-label="새 대화"
+                className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => (drawerOpen ? setDrawerOpen(false) : void openDrawer())}
+                title="대화 목록"
+                aria-label="대화 목록"
+                className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <History className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                title="닫기"
+                aria-label="닫기"
+                className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
+
+          {/* 대화 목록 드로어 */}
+          {drawerOpen && (
+            <div className="border-b border-border max-h-48 overflow-y-auto bg-secondary/30">
+              {conversations.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-muted-foreground">저장된 대화가 없습니다.</p>
+              ) : (
+                conversations.map((c) => (
+                  <div key={c.id} className="px-3 py-1.5 flex items-center gap-2 hover:bg-secondary/60">
+                    <button
+                      onClick={() => void loadConversation(c.id)}
+                      className="flex-1 text-left text-xs truncate hover:text-primary"
+                      title={c.title}
+                    >
+                      {c.title}
+                    </button>
+                    <button
+                      onClick={() => void deleteConversation(c.id)}
+                      title="대화 삭제"
+                      aria-label={`대화 '${c.title}' 삭제`}
+                      className="p-1 rounded text-muted-foreground hover:text-status-critical"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
               <div className="text-center text-muted-foreground text-sm py-12">
                 <Bot className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>Ask me about your Kubernetes clusters.</p>
+                <p>클러스터 운영에 대해 무엇이든 물어보세요.</p>
                 <p className="text-sm mt-1 opacity-70">
-                  e.g. &quot;Why is my pod CrashLooping?&quot;
+                  예: &quot;파드가 CrashLoop 인 이유가 뭐야?&quot;
+                </p>
+                <p className="text-xs mt-2 opacity-60">
+                  답변에는 사내 문서 근거가 인용되며, AI 는 분석·조언만 하고 아무것도 직접 실행하지 않습니다.
                 </p>
               </div>
             )}
@@ -166,15 +296,32 @@ export function AgentChat() {
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] px-3 py-2 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`max-w-[90%] px-3 py-2 rounded-xl text-sm leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground rounded-br-sm'
+                      ? 'bg-primary text-primary-foreground rounded-br-sm whitespace-pre-wrap'
                       : msg.role === 'system'
-                        ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20 rounded-bl-sm'
+                        ? 'bg-status-warning/15 text-status-warning border border-status-warning/20 rounded-bl-sm whitespace-pre-wrap'
                         : 'bg-secondary text-foreground rounded-bl-sm'
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === 'assistant' ? (
+                    <div className="space-y-2">
+                      <div className="prose prose-sm dark:prose-invert max-w-none [&_pre]:overflow-x-auto [&_pre]:text-xs">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      </div>
+                      {msg.citations && msg.citations.length > 0 && (
+                        <CitationList citations={msg.citations} />
+                      )}
+                      {msg.requests && msg.requests.length > 0 && (
+                        <InfoRequestChips
+                          requests={msg.requests}
+                          onProvide={(text) => void sendQuery(text)}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))}
@@ -183,7 +330,7 @@ export function AgentChat() {
               <div className="flex justify-start">
                 <div className="bg-secondary text-muted-foreground px-3 py-2 rounded-xl rounded-bl-sm text-sm flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Thinking...
+                  생각 중…
                 </div>
               </div>
             )}
@@ -200,13 +347,15 @@ export function AgentChat() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isOnline === false ? 'AI Agent offline...' : 'Ask about your clusters...'}
+                placeholder={isOnline === false ? 'AI 오프라인 — Settings → AI/LLM 확인' : '클러스터에 대해 질문하세요…'}
                 disabled={isLoading}
                 className="flex-1 bg-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 placeholder:text-muted-foreground"
               />
               <button
                 onClick={handleSend}
                 disabled={isLoading || !input.trim()}
+                title="보내기"
+                aria-label="질문 보내기"
                 className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />

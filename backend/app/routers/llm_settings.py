@@ -182,6 +182,32 @@ def llm_usage(_: Session = Depends(get_db)):
     return {"data": llm_service.usage_stats()}
 
 
+# ── RAG (근거 검색) ───────────────────────────────────────────────────
+
+@router.get("/rag-search")
+async def rag_search(
+    q: str,
+    k: int = 5,
+    db: Session = Depends(get_db),
+):
+    """사내 지식(작업 가이드/업무 이력/운영 노트) 유사 검색 — 정보요청 칩의
+    '트러블슈팅 이력 첨부' 모달 + 근거 탐색용. fail-safe (실패 시 빈 목록)."""
+    from app.services import rag_service
+    citations = await rag_service.retrieve(db, q, k=min(max(k, 1), 20))
+    return {"data": citations}
+
+
+@router.post("/backfill-embeddings")
+def backfill_embeddings_endpoint(_: User = Depends(require_admin)):
+    """embedding 이 NULL 인 지식 문서 전수 백필 — 전용 llm 큐에서 실행 (admin)."""
+    try:
+        from app.celery_app import backfill_embeddings
+        backfill_embeddings.apply_async(queue="llm")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"백필 큐잉 실패: {e}")
+    return {"ok": True, "detail": "백필이 llm 큐에서 실행됩니다. 시간이 걸릴 수 있습니다."}
+
+
 # ── 자동 분석 범위 (scope) ────────────────────────────────────────────
 
 @router.get("/analysis-scope")

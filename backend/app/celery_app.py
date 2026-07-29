@@ -34,6 +34,7 @@ celery_app.conf.update(
 # (k8s/base/celery/worker-llm.yaml · docker-compose `celery-worker-llm`).
 celery_app.conf.task_routes = {
     "app.celery_app.run_auto_incident_analysis": {"queue": "llm"},
+    "app.celery_app.backfill_embeddings": {"queue": "llm"},
 }
 
 # Beat 스케줄 설정
@@ -1185,6 +1186,7 @@ def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = 
             analysis.root_cause = result.root_cause
             analysis.suggested_actions = list(result.suggested_actions or [])
             analysis.related_runbooks = list(result.related_runbooks or [])
+            analysis.citations = list(getattr(result, "citations", None) or [])
             analysis.confidence = result.confidence
             analysis.analyzed_by = result.analyzed_by
             analysis.status = "done"
@@ -1214,5 +1216,105 @@ def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = 
                 log.exception("analysis notify failed")
 
         return {"ok": True, "analysis_id": str(analysis.id), "status": analysis.status}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.compute_ops_note_embedding")
+def compute_ops_note_embedding(self, ops_note_id: str):
+    """OpsNote 제목+앞뒤면 임베딩을 비동기로 계산·저장 (RAG 근거 인용용).
+
+    ops_note 라우터의 create/update 가 커밋 직후 .delay() 로 큐잉한다(best-effort —
+    compute_work_item_embedding 과 동일 패턴).
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models.ops_note import OpsNote
+    from app.services.embedding_service import build_embedding_text, embedding_service
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        note = db.query(OpsNote).filter(OpsNote.id == ops_note_id).first()
+        if note is None:
+            return {"ops_note_id": ops_note_id, "skipped": True, "reason": "not found"}
+
+        body = "\n\n".join(p for p in (note.content, note.back_content) if p)
+        text = build_embedding_text(note.title, body)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            vector = loop.run_until_complete(embedding_service.embed(text))
+        finally:
+            loop.close()
+
+        if vector is None:
+            return {"ops_note_id": ops_note_id, "skipped": True, "reason": "embedding unavailable"}
+
+        note.embedding = vector
+        db.commit()
+        return {"ops_note_id": ops_note_id, "dim": len(vector)}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("compute_ops_note_embedding failed (%s): %s", ops_note_id, e)
+        return {"ops_note_id": ops_note_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.backfill_embeddings", ignore_result=True,
+                 time_limit=3600, soft_time_limit=3500)
+def backfill_embeddings(self):
+    """embedding 이 NULL 인 행 전수 백필 — RAG 도입/모델 교체 시 1회성 수동 실행.
+
+    `POST /llm/backfill-embeddings` (admin) 가 전용 llm 큐로 큐잉한다.
+    행 단위 실패는 건너뛰고 계속 진행한다.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.services.embedding_service import build_embedding_text, embedding_service
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    stats = {"work_items": 0, "work_guides": 0, "ops_notes": 0, "errors": 0}
+
+    def _embed_sync(text: str):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(embedding_service.embed(text))
+        finally:
+            loop.close()
+
+    try:
+        from app.models.work_item import WorkItem
+        from app.models.work_guide import WorkGuide
+        from app.models.ops_note import OpsNote
+
+        targets = [
+            ("work_items", WorkItem, lambda r: build_embedding_text(r.title, r.content)),
+            ("work_guides", WorkGuide, lambda r: build_embedding_text(r.title, r.content)),
+            ("ops_notes", OpsNote, lambda r: build_embedding_text(
+                r.title, "\n\n".join(p for p in (r.content, r.back_content) if p))),
+        ]
+        for key, model, text_fn in targets:
+            try:
+                rows = db.query(model).filter(model.embedding.is_(None)).limit(2000).all()
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                log.warning("backfill: %s 조회 실패 — 건너뜀 (%s)", key, e)
+                continue
+            for row in rows:
+                try:
+                    vector = _embed_sync(text_fn(row))
+                    if vector is None:
+                        continue
+                    row.embedding = vector
+                    db.commit()
+                    stats[key] += 1
+                except Exception:  # noqa: BLE001
+                    db.rollback()
+                    stats["errors"] += 1
+        return stats
     finally:
         db.close()

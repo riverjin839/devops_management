@@ -721,10 +721,16 @@ export const ansibleAssetsApi = {
 
 // Agent API (AI Mode — fail-safe)
 export const agentApi = {
-  chat: (data: AgentChatRequest) =>
+  chat: (data: AgentChatRequest & { conversationId?: string | null }) =>
     api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
   health: () =>
     api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
+  conversations: () =>
+    api.get<{ data: import('@/types').AgentConversationSummary[] }>('/agent/conversations'),
+  messages: (conversationId: string) =>
+    api.get<{ data: import('@/types').AgentMessageOut[] }>(`/agent/conversations/${conversationId}/messages`),
+  deleteConversation: (conversationId: string) =>
+    api.delete<{ ok: boolean }>(`/agent/conversations/${conversationId}`),
 };
 
 // LLM 게이트웨이 설정 API (Settings → AI/LLM 탭)
@@ -747,6 +753,10 @@ export const llmApi = {
     api.post<{ data: { name: string; hint: string }; updated: boolean }>('/llm/credentials', { name, apiKey }),
   deleteCredential: (name: string) =>
     api.delete<{ ok: boolean }>(`/llm/credentials/${encodeURIComponent(name)}`),
+  ragSearch: (q: string, k = 5) =>
+    api.get<{ data: import('@/types').RagCitation[] }>('/llm/rag-search', { params: { q, k }, timeout: 30000 }),
+  backfillEmbeddings: () =>
+    api.post<{ ok: boolean; detail: string }>('/llm/backfill-embeddings'),
   getAnalysisScope: () =>
     api.get<{ data: import('@/types').LlmAnalysisScope }>('/llm/analysis-scope'),
   updateAnalysisScope: (data: import('@/types').LlmAnalysisScope) =>

@@ -246,7 +246,7 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 `dispatch_architecture_doc_sync`), 수집류(`collect_resource_counts`, `run_trend_collect`,
 `sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`, `run_auto_incident_analysis` — 전용 `llm` 큐),
 AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_work_guide_embedding`,
-`generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
+`compute_ops_note_embedding`, `backfill_embeddings`, `generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
 async 서비스는 `asyncio.new_event_loop()` + `loop.run_until_complete()` 로 브리지한다.
 
 ### Health Check Logic (`services/daily_checker.py`)

@@ -11,6 +11,17 @@
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **AI 근거 인용(RAG) + 정보요청 루프 + 대화 지속 챗봇 (Phase 3)**: AI 분석·챗봇
+  답변에 사내 지식(작업 가이드·업무 이력·운영 노트) 근거를 pgvector 유사 검색으로
+  인용한다 — 클릭 가능한 딥링크 + 유사도 표시, 근거 없는 내용은 '(추정)' 표기 지시.
+  컨텍스트가 부족하면 AI 가 구조화된 정보요청(코드/이력/로그/설정)을 보내고,
+  **운영자가 칩 UI 로 직접 제공** 한다(자율 실행 없음 — 무실행 보증 유지;
+  트러블슈팅 이력은 `GET /llm/rag-search` 사내 검색 모달로 첨부). 챗봇은 한국어
+  UI 로 전면 개편 — 마크다운 렌더, 서버 저장 멀티턴 대화(목록/이어가기/삭제),
+  화면별 접근 제어 게이트 적용. Backend: `rag_service`, `ops_notes.embedding`
+  (+`compute_ops_note_embedding`/`backfill_embeddings` — llm 큐), `response_parser`,
+  `agent_conversations`/`agent_messages` 테이블(보존 180일), 분석 결과 `citations`.
+  Frontend: `CitationList`, `InfoRequestChips`, `AgentChat` 개편.
 - **알람 AI 자동 분석 — 범위 지정 점진 롤아웃 (Phase 2)**: 알람(`/alerts`) 수신 시
   운영자가 정의한 범위 규칙(클러스터/네임스페이스/알람명 패턴/최소 심각도, priority
   first-match)에 매칭되면 AI 장애 분석을 자동 실행하고 결과를 알람 행 확장에 표시한다
