@@ -3646,6 +3646,10 @@ export interface CheckMatrixItem {
   unit?: string | null;
   sourceType: CheckMatrixSourceType;
   sourceRef?: string | null;
+  /** 영역 구분 (k8s | network | storage | os | app | 자유 문자열) */
+  category?: string | null;
+  /** 행 배경 색 — 차트 토큰 프리셋 키('chart-1'..'chart-8'), null = 무색 */
+  color?: string | null;
   /** true = 시스템 항목(core_bundle) — 삭제 불가, Cluster.status 산정에 사용 */
   isSystem: boolean;
   /** false = 그리드에서 숨김(자동 실행은 계속됨) */
@@ -3831,6 +3835,42 @@ export interface CheckMatrixBatchResult {
   queued: number;
   errors: string[];
   runIds: string[];
+}
+
+// ── 스키마 점검 (모델 vs 실제 DB 드리프트) ──────────────────────────────────
+/** 드리프트 1건. repairable=false 면 자동 복구 대상이 아니라 사람이 판단해야 한다. */
+export interface SchemaDriftIssue {
+  /** missing_table = 테이블 없음 · missing_column = 컬럼 없음 · not_null_drift = 레거시 NOT NULL */
+  kind: 'missing_table' | 'missing_column' | 'not_null_drift' | 'inspect_failed';
+  table: string;
+  column?: string | null;
+  detail: string;
+  repairable: boolean;
+}
+
+export interface SchemaHealthReport {
+  healthy: boolean;
+  checkedTables: number;
+  checkedColumns: number;
+  issueCount: number;
+  issues: SchemaDriftIssue[];
+}
+
+export interface SchemaRepairAction extends SchemaDriftIssue {
+  sql?: string;
+  executed?: boolean;
+  reason?: string;
+  error?: string;
+}
+
+export interface SchemaRepairResult {
+  dryRun: boolean;
+  detected: number;
+  applied: SchemaRepairAction[];
+  skipped: SchemaRepairAction[];
+  errors: SchemaRepairAction[];
+  /** 복구 후 남은 드리프트 수. dryRun 이면 null. */
+  remaining: number | null;
 }
 
 // ── Your Island — 사용자 커스텀 화면 ────────────────────────────────────────

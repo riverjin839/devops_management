@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, ListTodo, Palette, FileSearch, Wand2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
+import { SchemaHealthPanel } from '@/components/settings/SchemaHealthPanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
@@ -540,7 +541,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log' | 'schema';
   const [searchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
   // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭과 "서비스 카테고리"(service-categories)
@@ -572,6 +573,7 @@ export function SettingsPage() {
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
     { id: 'audit-log', label: '감사 로그', icon: <FileSearch className="w-4 h-4" />, count: 0 },
+    { id: 'schema', label: '스키마 점검', icon: <Database className="w-4 h-4" />, count: 0 },
   ];
 
   return (
@@ -1186,6 +1188,7 @@ export function SettingsPage() {
         {activeTab === 'access' && <FeatureAccessManager />}
 
         {activeTab === 'backup' && <BackupRestorePanel />}
+        {activeTab === 'schema' && <SchemaHealthPanel />}
 
         {activeTab === 'jira' && <JiraIntegrationPanel />}
 

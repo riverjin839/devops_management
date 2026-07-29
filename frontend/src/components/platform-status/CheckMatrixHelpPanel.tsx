@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { SidePane } from '@/components/common';
 import { StatusDot } from '@/components/common';
 import {
-  Plus, Pencil, Trash2, Lock, Clock, Settings, ChevronUp, ChevronDown, Play, ScrollText,
+  Plus, Pencil, Trash2, Lock, Clock, Settings, GripVertical, Palette, Play, ScrollText,
 } from 'lucide-react';
 
 interface Props {
@@ -110,10 +110,14 @@ export function CheckMatrixHelpPanel({ open, onClose }: Props) {
                     쓰이는 시스템 항목이라 삭제할 수 없습니다.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="flex flex-col -my-0.5 flex-shrink-0 text-muted-foreground">
-                    <ChevronUp className="w-3 h-3" /><ChevronDown className="w-3 h-3" />
-                  </span>
-                  <span>행 이름 옆 위/아래 화살표로 순서를 바꿉니다.</span>
+                  <GripVertical className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                  <span>행 이름 왼쪽 그립(⋮⋮)을 <b>드래그</b>해서 원하는 위치에 놓으면 순서가 바뀝니다.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Palette className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                  <span>항목 수정에서 <b>영역</b>(k8s/network/storage/os/app 또는 자유 입력)과
+                    <b> 행 배경 색</b>(8색 프리셋)을 지정하면 행에 색 띠와 영역 칩이 표시돼 어떤
+                    영역 점검인지 한눈에 구분됩니다. 기본 등록 항목에는 영역별 기본 색이 채워져 있습니다.</span>
                 </li>
               </ul>
             </Section>

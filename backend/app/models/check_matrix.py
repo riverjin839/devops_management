@@ -69,6 +69,13 @@ class CheckMatrixItem(Base):
     # 클러스터별 실제 인스턴스(DeepCheckDefinition, Addon)는 실행/조회 시점에 이 키로 해석한다.
     source_ref = Column(String(80), nullable=True)
 
+    # 영역 구분 — 행이 어느 도메인 점검인지 (k8s | network | storage | os | app | 자유 문자열).
+    # deep check 는 spec.category 에서 시드/보강되고, 사용자가 화면에서 바꿀 수 있다.
+    category = Column(String(50), nullable=True)
+    # 행 배경 커스텀 색 — 테마 대응을 위해 hex 가 아니라 차트 토큰 프리셋 키('chart-1'..'chart-8')를
+    # 저장한다. NULL = 무색. 실측값은 frontend index.css 의 --chart-* 가 원천.
+    color = Column(String(20), nullable=True)
+
     # core_bundle 행은 삭제 불가(Cluster.status 계산에 필요한 DailyChecker 실행은 행 존재와
     # 무관하게 계속 돌아야 함) — 라우터에서 이 플래그로 삭제를 막고 "그리드에서 숨기기"만 허용.
     is_system = Column(Boolean, nullable=False, default=False)

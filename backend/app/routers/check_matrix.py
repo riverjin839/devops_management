@@ -26,12 +26,18 @@ router = APIRouter(prefix="/check-matrix", tags=["Check Matrix"])
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
+# 행 색은 테마 대응을 위해 차트 토큰 프리셋 키만 허용 (frontend --chart-1..8).
+_ALLOWED_ROW_COLORS = {f"chart-{i}" for i in range(1, 9)}
+
+
 class ItemIn(BaseModel):
     name: str
     description: Optional[str] = None
     unit: Optional[str] = None
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None
+    category: Optional[str] = None
+    color: Optional[str] = None
     enabled: bool = True
 
 
@@ -42,6 +48,8 @@ class ItemOut(BaseModel):
     unit: Optional[str] = None
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None
+    category: Optional[str] = None
+    color: Optional[str] = None
     is_system: bool
     enabled: bool
     sort_order: int
@@ -87,6 +95,11 @@ class SettingsIn(BaseModel):
 
 
 def _validate_item_body(body: ItemIn) -> None:
+    if body.color and body.color not in _ALLOWED_ROW_COLORS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"color 는 chart-1..chart-8 프리셋 키만 허용됩니다: {body.color}",
+        )
     if body.source_type == CheckMatrixSourceType.core_bundle:
         raise HTTPException(status_code=400, detail="core_bundle 항목은 시스템에서만 생성/관리됩니다.")
     if body.source_type == CheckMatrixSourceType.deep_check:
@@ -138,9 +151,13 @@ def update_item(item_id: UUID, body: ItemIn, db: Session = Depends(get_db), _: U
                 status_code=400,
                 detail="시스템 항목은 실행 소스(source_type/source_ref)를 바꿀 수 없습니다 — 이름/설명/단위/표시 여부만 수정 가능합니다.",
             )
+        if body.color and body.color not in _ALLOWED_ROW_COLORS:
+            raise HTTPException(status_code=422, detail=f"color 는 chart-1..chart-8 만 허용: {body.color}")
         row.name = body.name
         row.description = body.description
         row.unit = body.unit
+        row.category = body.category
+        row.color = body.color
         row.enabled = body.enabled
         db.commit()
         db.refresh(row)

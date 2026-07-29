@@ -47,6 +47,7 @@ from app.routers import (
     cluster_custom_fields_router,
     work_item_custom_fields_router,
     backup_router,
+    schema_health_router,
     service_entries_router,
     batch_jobs_router,
     commands_router,
@@ -954,6 +955,12 @@ def _run_migrations():
         _safe_create_index("ix_ops_check_run_items_run", "ops_check_run_items", "(run_id)")
         _safe_create_index("ix_ops_check_run_items_ref", "ops_check_run_items", "(source, item_ref_id)")
 
+    # check_matrix_items: 영역 구분(category) + 커스텀 행 색(color, 차트 토큰 프리셋 키) —
+    # 구버전 DB 보강. 값 backfill 은 _seed_check_matrix_items 의 backfill_item_metadata 가 담당.
+    if "check_matrix_items" in inspector.get_table_names():
+        _safe_add_column("check_matrix_items", "category", "VARCHAR(50)")
+        _safe_add_column("check_matrix_items", "color", "VARCHAR(20)")
+
     # check_matrix_runs: 점검 매트릭스 수행 로그 — 테이블은 create_all 이 생성하고,
     # 셀별 최근 로그 조회 / 배치 진행률 폴링 / 리텐션 퍼지 스캔용 인덱스만 보강한다.
     if "check_matrix_runs" in inspector.get_table_names():
@@ -1072,6 +1079,20 @@ def _sync_missing_model_columns() -> None:
                 "NOT NULL/기본값/backfill 이 필요하면 _run_migrations() 에 명시적으로 추가할 것.",
                 table.name, col.name,
             )
+
+
+def _relax_not_null_drift() -> None:
+    """모델 nullable ↔ DB NOT NULL 드리프트 자동 완화 (services/schema_health.py).
+
+    `_sync_missing_model_columns()` 가 누락 '컬럼'을 채운다면 이쪽은 누락된 '제약 완화'를
+    맡는다. 같은 종류의 사후 대응(에러 나면 한 컬럼씩 추가)을 반복하지 않기 위한 안전망이고,
+    운영자는 Settings ▸ 스키마 점검 화면에서 현재 드리프트를 직접 확인·복구할 수 있다.
+    """
+    from app.services.schema_health import relax_not_null_drift
+
+    relaxed = relax_not_null_drift()
+    if relaxed:
+        _log.info("migration: relaxed %d legacy NOT NULL constraint(s)", relaxed)
 
 
 def _seed_observability_catalog():
@@ -1809,10 +1830,10 @@ def _seed_check_matrix_items():
         added = cms.seed_default_items(db)
         if added:
             _log.info("seeded %d check matrix items", added)
-        # 단위 도입 이전에 시드된 설치본 보강 — unit 이 빈 deep_check 행만 채운다.
-        filled = cms.backfill_item_units(db)
+        # 단위/영역/기본색 도입 이전에 시드된 설치본 보강 — 빈 값만 채운다(idempotent).
+        filled = cms.backfill_item_metadata(db)
         if filled:
-            _log.info("backfilled unit for %d check matrix items", filled)
+            _log.info("backfilled metadata for %d check matrix items", filled)
     finally:
         db.close()
 
@@ -1921,6 +1942,9 @@ async def lifespan(app: FastAPI):
         for step_name, step in [
             ("migrations", _run_migrations),
             ("sync_missing_model_columns", _sync_missing_model_columns),
+            # 누락 컬럼(위)과 짝을 이루는 제약 드리프트 안전망 — 모델이 nullable 인데
+            # DB 에 레거시 NOT NULL 이 남아 있으면 그 컬럼을 비운 저장이 전부 500 이 된다.
+            ("relax_not_null_drift", _relax_not_null_drift),
             ("seed_metric_cards", _seed_default_metric_cards),
             ("seed_cluster_items", _seed_cluster_items),
             ("seed_trend_sources", _seed_default_trend_sources),
@@ -2029,6 +2053,7 @@ app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_aut
 app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_item_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(schema_health_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(service_entries_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)

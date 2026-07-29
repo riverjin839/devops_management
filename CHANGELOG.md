@@ -191,7 +191,26 @@
   - **시스템 항목도 표시 속성 수정 가능**: 잠긴 것은 실행 소스뿐 — 이름/설명/단위/표시
     여부는 다른 행과 똑같이 편집된다.
 
+- **점검 매트릭스 — 영역 구분·행 색 커스텀·드래그 정렬**: 행마다 **영역(category)**
+  (k8s/network/storage/os/app 또는 자유 입력)과 **배경 색**(8색 프리셋)을 지정할 수 있다 —
+  행에 색 띠·배경 틴트와 영역 칩이 표시돼 어떤 영역 점검인지 한눈에 구분된다. 기본 등록
+  항목은 체커 도메인에서 영역·기본 색이 자동으로 채워진다(구버전 DB 부팅 시 보강). 색은
+  hex 가 아니라 테마 대응 차트 토큰 프리셋(`chart-1..8`)으로 저장돼 다크/라이트를 자동으로
+  따른다. 행 순서는 위/아래 화살표 대신 **그립(⋮⋮) 드래그**로 바꾼다.
+  Backend: `check_matrix_items.category/color` + 마이그레이션·시드·backfill,
+  Frontend: `rowColors.ts` 프리셋 + 항목 폼 색 피커 + 매트릭스 DnD.
+
 ### Fixed
+- **점검 매트릭스 대시보드 audit (디버그·UI)**:
+  - 셀 동기 실행이 axios 기본 30초에 잘려 느린 점검(pod_to_pod·핵심 번들)이 성공하고도
+    실패로 보이던 문제 — 셀 실행만 300초로 확대(백엔드 태스크 한도 280초에 정합).
+  - 워커가 죽으면 수행이 "대기열/실행 중"에 영원히 갇히던 문제 — 매분 디스패처가 30분
+    초과 수행을 실패로 마감하는 고아 수행 스위퍼 추가.
+  - 일괄 실행 완료 후에도 3초 폴링이 계속되고 매트릭스 셀은 최대 60초 늦게 갱신되던 문제 —
+    배치 종료 감지 시 폴링 중단 + 그리드 즉시 1회 갱신.
+  - UI 규칙 위반 수정: `text-red-500`(고정 팔레트) → 상태 토큰, 버튼/입력 라운딩을
+    디자인 시스템 규격(`rounded-xl`)으로 정리, 아이콘 전용 버튼(수정/삭제/설정)에
+    `aria-label` 보강.
 - **점검 매트릭스 수동 실행 500 (심각)**: 셀/클러스터/항목 실행과 수동 입력이 전부
   `AttributeError: 'User' object has no attribute 'full_name'` 으로 실패했다 — 실행자
   표시명 해석이 User 모델에 없는 `full_name` 을 참조. `display_name or username` 으로
@@ -214,6 +233,18 @@
   화면이 SSH 로 수집해 둔 `etcdctl_config` 스냅샷을 읽어 단편화율을 판정한다(`auto` 는
   파드 → 스냅샷 폴백, 스냅샷이 `snapshot_max_age_hours` 보다 낡으면 대기 처리).
   체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다.
+
+- **스키마 드리프트로 인한 반복 500 (근본 대응)**: `daily_check_logs.ai_status`,
+  `deep_check_results.status/.message`, `deep_check_results.daily_check_log_id` 의 레거시
+  NOT NULL 처럼, 모델과 실제 DB 가 어긋나 **특정 기능에서만 500** 이 나는 문제가 반복됐다.
+  Alembic 없이 `create_all` 로 운영하는 구조상 이미 존재하는 테이블의 컬럼·제약이 자동으로
+  갱신되지 않기 때문이다. 한 컬럼씩 사후에 쫓아가는 대신 전체를 기계적으로 비교·복구한다:
+  - 부팅 안전망에 `_relax_not_null_drift` 추가 — 모델이 nullable 인데 DB 에 NOT NULL 이 남은
+    컬럼을 자동 완화(기존 `_sync_missing_model_columns` 의 누락 컬럼 보강과 짝).
+  - Settings ▸ **스키마 점검** 탭 신설 — 드리프트(테이블/컬럼 누락, 레거시 NOT NULL)를 표로
+    보여주고 **안전한 것만**(컬럼 추가는 항상 nullable, NOT NULL 해제) 복구한다. 컬럼 삭제·타입
+    변경은 하지 않으며, `실행 계획 보기`로 실행될 SQL 을 먼저 확인할 수 있다.
+    Backend: `GET /api/v1/schema-health`, `POST /api/v1/schema-health/repair`(admin).
 
 ### Changed
 - **UI-First 원칙을 프로젝트 규약으로 명문화** (`CLAUDE.md` §UI-First 원칙): 환경마다

@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -242,6 +242,14 @@ export interface BackupImportResponse {
   inserted: number; updated: number; deleted: number;
   errors: string[]; diff: BackupImportDiff;
 }
+
+export const schemaHealthApi = {
+  // 모델 vs 실제 DB 드리프트 점검 (admin)
+  get: () => api.get<SchemaHealthReport>('/schema-health'),
+  // 안전한 드리프트만 복구 — dryRun 이면 실행할 SQL 만 확인
+  repair: (dryRun = false) =>
+    api.post<SchemaRepairResult>('/schema-health/repair', undefined, { params: { dry_run: dryRun } }),
+};
 
 export const backupApi = {
   meta: () => api.get<BackupMetaResponse>('/backup/meta'),
@@ -1896,8 +1904,10 @@ export const checkMatrixApi = {
       `/check-matrix/cell/${itemId}/${clusterId}/source-config`, { entries },
     ),
   // 수동 실행 — 셀은 동기(결과 즉시), 클러스터/항목은 큐잉 후 batchId 폴링
+  // 동기 실행 — 느린 점검(pod_to_pod 프로브, core_bundle 등)이 기본 30s 를 넘길 수 있어
+  // 백엔드 셀 태스크 한도(280s)에 맞춰 여유를 준다.
   runCell: (itemId: string, clusterId: string) =>
-    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`),
+    api.post<CheckMatrixRun>(`/check-matrix/cell/${itemId}/${clusterId}/run`, undefined, { timeout: 300000 }),
   runCluster: (clusterId: string) =>
     api.post<CheckMatrixBatchResult>(`/check-matrix/clusters/${clusterId}/run`),
   runItem: (itemId: string) =>

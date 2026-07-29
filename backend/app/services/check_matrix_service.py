@@ -48,6 +48,27 @@ RETENTION_SETTINGS_KEY = "check_matrix.settings"
 DEFAULT_RETENTION_DAYS = 90
 CORE_BUNDLE_ITEM_NAME = "K8S API-SERVER 응답시간"
 
+# 영역(category)별 기본 행 색 — 값은 차트 토큰 프리셋 키(테마 대응, frontend --chart-*).
+CATEGORY_DEFAULT_COLORS: dict[str, str] = {
+    "k8s": "chart-1",      # blue
+    "network": "chart-6",  # cyan
+    "storage": "chart-3",  # amber
+    "os": "chart-7",       # orange
+    "app": "chart-4",      # violet
+}
+
+# addon 타입 → 영역. K8s 코어 컴포넌트류와 외부 플랫폼 앱을 구분한다.
+_ADDON_CATEGORIES: dict[str, str] = {
+    "etcd-leader": "k8s",
+    "node-check": "k8s",
+    "control-plane": "k8s",
+    "system-pod": "k8s",
+    "nexus": "app",
+    "jenkins": "app",
+    "argocd": "app",
+    "keycloak": "app",
+}
+
 _ADDON_LABELS: dict[str, str] = {
     "etcd-leader": "ETCD Leader",
     "node-check": "노드 상태",
@@ -112,6 +133,8 @@ def _item_to_dict(item: CheckMatrixItem) -> dict[str, Any]:
         "unit": item.unit,
         "source_type": item.source_type.value,
         "source_ref": item.source_ref,
+        "category": item.category,
+        "color": item.color,
         "is_system": item.is_system,
         "enabled": item.enabled,
         "sort_order": item.sort_order,
@@ -1049,14 +1072,57 @@ def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]
                     "check-matrix definition dispatch queue failed def=%s cluster=%s", d.name, cluster.name,
                 )
 
+    # 4) 고아 수행 정리 — 워커가 실행 중 죽으면 run 이 queued/running 으로 영원히 남아
+    #    UI 에 "실행 중"이 계속 떠 있게 된다. 개별 태스크 time_limit(280s)를 훨씬 넘긴
+    #    수행은 실패로 마감한다. 디스패처가 매분 돌므로 자연스러운 스위퍼 자리다.
+    stale_swept = _sweep_stale_runs(db)
+
     return {
         "mode": "fan_out",
         "core_fired": core_queued,
         "cell_fired": cell_queued,
         "definition_fired": definition_queued,
+        "stale_swept": stale_swept,
         "errors": errors,
         "executed_at": now_aware.isoformat(),
     }
+
+
+_STALE_RUN_MINUTES = 30  # 개별 태스크 time_limit(280s) 대비 충분한 여유
+
+
+def _sweep_stale_runs(db: Session) -> int:
+    """queued/running 인 채 30분을 넘긴 수행을 실패로 마감한다 (워커 사망 등)."""
+    cutoff = datetime.utcnow() - timedelta(minutes=_STALE_RUN_MINUTES)
+    try:
+        swept = (
+            db.query(CheckMatrixRun)
+            .filter(
+                CheckMatrixRun.run_state.in_(
+                    [CheckMatrixRunState.queued, CheckMatrixRunState.running],
+                ),
+                CheckMatrixRun.queued_at < cutoff,
+            )
+            .update(
+                {
+                    CheckMatrixRun.run_state: CheckMatrixRunState.failed,
+                    CheckMatrixRun.error: (
+                        f"{_STALE_RUN_MINUTES}분 넘게 완료되지 않아 실패로 마감했습니다 — "
+                        "Celery 워커가 재시작됐거나 태스크가 유실됐을 수 있습니다."
+                    ),
+                    CheckMatrixRun.finished_at: datetime.utcnow(),
+                },
+                synchronize_session=False,
+            )
+        )
+        if swept:
+            db.commit()
+            logger.warning("check-matrix: swept %d stale run(s)", swept)
+        return swept
+    except Exception:  # noqa: BLE001 — 스위퍼 실패가 디스패치를 막으면 안 된다
+        db.rollback()
+        logger.exception("check-matrix stale run sweep failed")
+        return 0
 
 
 # ──────────────────────────────────────────────────────────────
@@ -1112,6 +1178,8 @@ def seed_default_items(db: Session) -> int:
         unit="ms",
         source_type=CheckMatrixSourceType.core_bundle,
         source_ref=None,
+        category="k8s",
+        color=CATEGORY_DEFAULT_COLORS.get("k8s"),
         is_system=True,
         sort_order=sort_order,
     ))
@@ -1130,6 +1198,8 @@ def seed_default_items(db: Session) -> int:
             unit=get_cell_value_unit(check_type),
             source_type=CheckMatrixSourceType.deep_check,
             source_ref=check_type,
+            category=spec.category,
+            color=CATEGORY_DEFAULT_COLORS.get(spec.category),
             is_system=False,
             sort_order=sort_order,
         ))
@@ -1138,10 +1208,13 @@ def seed_default_items(db: Session) -> int:
 
     addon_types = sorted({row[0] for row in db.query(Addon.type).distinct().all() if row[0]})
     for addon_type in addon_types:
+        category = _ADDON_CATEGORIES.get(addon_type)
         db.add(CheckMatrixItem(
             name=_ADDON_LABELS.get(addon_type, addon_type),
             source_type=CheckMatrixSourceType.addon,
             source_ref=addon_type,
+            category=category,
+            color=CATEGORY_DEFAULT_COLORS.get(category or ""),
             is_system=False,
             sort_order=sort_order,
         ))
@@ -1152,31 +1225,49 @@ def seed_default_items(db: Session) -> int:
     return added
 
 
-def backfill_item_units(db: Session) -> int:
-    """기존 DB 의 deep_check 행에 셀 값 단위를 보강한다 (idempotent — unit 이 빈 행만).
+def backfill_item_metadata(db: Session) -> int:
+    """기존 DB 행에 셀 값 단위·영역(category)·기본 색을 보강한다 (idempotent — 빈 값만).
 
-    seed 는 테이블이 비어 있을 때만 돌기 때문에, 단위 도입 이전에 시드된 설치본은
-    unit 없이 남아 값이 `361` 처럼 단위 없이 표시된다. 매 부팅 시 호출해도 안전하다.
-    운영자가 unit 을 직접 지운 행까지 다시 채우지는 않는다 — NULL/'' 만 대상.
+    seed 는 테이블이 비어 있을 때만 돌기 때문에, 이 필드들이 도입되기 전에 시드된
+    설치본은 값 없이 남는다. 매 부팅 시 호출해도 안전하며, 운영자가 직접 지운 값을
+    다시 채우지는 않는다 — NULL/'' 만 대상. (색은 category 가 방금 채워진 행에만 부여.)
     """
+    from app.services.deep_checkers import REGISTRY
     from app.services.deep_checkers.registry import CELL_VALUE_SPECS
 
     updated = 0
-    rows = (
-        db.query(CheckMatrixItem)
-        .filter(CheckMatrixItem.source_type == CheckMatrixSourceType.deep_check)
-        .all()
-    )
-    for row in rows:
-        if row.unit:
-            continue
-        entry = CELL_VALUE_SPECS.get(row.source_ref or "")
-        if entry and entry[0]:
-            row.unit = entry[0]
+    for row in db.query(CheckMatrixItem).all():
+        touched = False
+        if row.source_type == CheckMatrixSourceType.deep_check:
+            entry = CELL_VALUE_SPECS.get(row.source_ref or "")
+            if not row.unit and entry and entry[0]:
+                row.unit = entry[0]
+                touched = True
+            if not row.category:
+                reg = REGISTRY.get(row.source_ref or "")
+                if reg:
+                    row.category = reg[1].category
+                    touched = True
+        elif row.source_type == CheckMatrixSourceType.core_bundle and not row.category:
+            row.category = "k8s"
+            touched = True
+        elif row.source_type == CheckMatrixSourceType.addon and not row.category:
+            cat = _ADDON_CATEGORIES.get(row.source_ref or "")
+            if cat:
+                row.category = cat
+                touched = True
+        # 색은 category 를 방금 얻었고 색이 비어 있을 때만 기본값 부여.
+        if touched and row.category and not row.color:
+            row.color = CATEGORY_DEFAULT_COLORS.get(row.category)
+        if touched:
             updated += 1
     if updated:
         db.commit()
     return updated
+
+
+# 하위 호환 별칭 — 기존 호출부/테스트가 단위 backfill 이름으로 부른다.
+backfill_item_units = backfill_item_metadata
 
 
 def seed_default_schedules(db: Session) -> int:

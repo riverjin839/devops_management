@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Plus, Settings, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Lock, HelpCircle,
+  Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
   Play, ScrollText, Loader2,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
@@ -16,6 +16,7 @@ import { CheckMatrixItemFormModal } from './CheckMatrixItemFormModal';
 import { CheckMatrixSettingsModal } from './CheckMatrixSettingsModal';
 import { CheckMatrixHelpPanel } from './CheckMatrixHelpPanel';
 import { CheckMatrixRunLogPanel } from './CheckMatrixRunLogPanel';
+import { rowColor } from './rowColors';
 
 const STATUS_LABEL: Record<Status, string> = {
   healthy: '정상', warning: '경고', critical: '위험', pending: '대기',
@@ -94,26 +95,26 @@ function ClusterCronBadge({ cluster }: { cluster: CheckMatrixGridCluster }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-56 bg-card border border-border rounded-lg shadow-xl p-3 space-y-2">
+          <div className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-56 bg-card border border-border rounded-md shadow-xl p-3 space-y-2">
             <p className="text-[11px] text-muted-foreground">핵심 점검(API 응답시간 등) cron. 5분 미만 간격 불가.</p>
             <input
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="0 9,13,18 * * *"
-              className="w-full text-xs font-mono border border-border rounded-md px-2 py-1 bg-background"
+              className="w-full text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background"
             />
             <div className="flex justify-end gap-1.5">
               <button
                 onClick={() => setOpen(false)}
-                className="px-2 py-1 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                className="px-2 py-1 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-xl"
               >
                 취소
               </button>
               <button
                 onClick={handleSave}
                 disabled={mutation.isPending}
-                className="px-2 py-1 text-xs font-semibold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                className="px-2 py-1 text-xs font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
               >
                 저장
               </button>
@@ -174,12 +175,18 @@ export function PlatformStatusMatrix() {
     }
   };
 
-  const moveItem = (index: number, dir: -1 | 1) => {
-    const target = index + dir;
-    if (target < 0 || target >= items.length) return;
+  // 행 드래그 정렬 — HTML5 DnD. 그립 핸들에서 시작하고 행 위로 드롭한다.
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const endDrag = () => { setDragIdx(null); setOverIdx(null); };
+  const handleDrop = (targetIdx: number) => {
+    if (dragIdx === null || dragIdx === targetIdx) { endDrag(); return; }
     const reordered = [...items];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
     reorderMut.mutate(reordered.map((i) => i.id));
+    endDrag();
   };
 
   const handleDelete = async () => {
@@ -213,7 +220,7 @@ export function PlatformStatusMatrix() {
           <div className="ml-auto flex items-center gap-1.5">
             <button
               onClick={() => setRunLog({ open: true, batchId: null })}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-secondary transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
               title="모든 수행의 실행 로그"
               aria-label="모든 수행의 실행 로그"
             >
@@ -221,14 +228,15 @@ export function PlatformStatusMatrix() {
             </button>
             <button
               onClick={() => setFormItem('new')}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-secondary transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> 항목 추가
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground"
+              className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground"
               title="매트릭스 설정"
+              aria-label="매트릭스 설정"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -285,29 +293,47 @@ export function PlatformStatusMatrix() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr key={item.id} className="group hover:bg-muted/30">
-                    <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-3 py-1.5">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className="flex flex-col -my-1 flex-shrink-0">
-                          <button
-                            onClick={() => moveItem(idx, -1)}
-                            disabled={idx === 0}
-                            className="text-muted-foreground hover:text-foreground disabled:opacity-20"
-                          >
-                            <ChevronUp className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => moveItem(idx, 1)}
-                            disabled={idx === items.length - 1}
-                            className="text-muted-foreground hover:text-foreground disabled:opacity-20"
-                          >
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        </div>
+                {items.map((item, idx) => {
+                  const color = rowColor(item.color);
+                  return (
+                  <tr
+                    key={item.id}
+                    onDragOver={(e) => { if (dragIdx !== null) { e.preventDefault(); setOverIdx(idx); } }}
+                    onDrop={() => handleDrop(idx)}
+                    className={`group hover:bg-muted/30 ${
+                      dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'bg-primary/5' : ''
+                    } ${dragIdx === idx ? 'opacity-50' : ''}`}
+                  >
+                    <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-2 py-1.5">
+                      <div
+                        className={`flex items-center gap-1.5 min-w-0 rounded-md px-1.5 py-0.5 border-l-2 ${
+                          color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
+                        }`}
+                      >
+                        <button
+                          draggable
+                          onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                          onDragEnd={endDrag}
+                          disabled={reorderMut.isPending}
+                          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
+                          title="드래그해서 순서 변경"
+                          aria-label={`${item.name} 순서 변경 (드래그)`}
+                        >
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </button>
                         <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
                           {item.name}
                         </span>
+                        {item.category && (
+                          <span
+                            title={`영역: ${item.category}`}
+                            className={`flex-shrink-0 px-1.5 py-px rounded border text-[9px] font-medium select-none ${
+                              color ? color.chip : 'border-border text-muted-foreground'
+                            }`}
+                          >
+                            {item.category}
+                          </span>
+                        )}
                         <SourceBadge sourceType={item.sourceType} />
                         {item.isSystem && (
                           <span title="시스템 항목" className="flex-shrink-0">
@@ -333,14 +359,16 @@ export function PlatformStatusMatrix() {
                             onClick={() => setFormItem(item)}
                             className="p-1 rounded hover:bg-secondary text-muted-foreground"
                             title="수정"
+                            aria-label={`${item.name} 수정`}
                           >
                             <Pencil className="w-3 h-3" />
                           </button>
                           {!item.isSystem && (
                             <button
                               onClick={() => setDeleteTarget(item)}
-                              className="p-1 rounded hover:bg-secondary text-red-500"
+                              className="p-1 rounded hover:bg-secondary text-status-critical"
                               title="삭제"
+                              aria-label={`${item.name} 삭제`}
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -358,7 +386,8 @@ export function PlatformStatusMatrix() {
                       </td>
                     ))}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

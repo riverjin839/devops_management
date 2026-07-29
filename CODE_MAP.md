@@ -145,6 +145,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 감사 로그 | `backend/app/routers/audit_logs.py` + `services/audit_logger.py` (Settings 탭) |
 | 인앱 알림 | `backend/app/routers/notifications.py` + `services/user_notify.py` |
 | JSON 백업/복원 | `backend/app/routers/backup.py` + `services/backup_service.py` (Settings 탭) |
+| 스키마 점검/복구 (모델↔DB 드리프트) | `backend/app/routers/schema_health.py` + `services/schema_health.py` → `frontend/src/components/settings/SchemaHealthPanel.tsx` (Settings ▸ 스키마 점검 탭). 부팅 안전망은 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼) + `_relax_not_null_drift`(레거시 NOT NULL) |
 | Your Island (사용자 커스텀 화면) | `backend/app/routers/island.py` + `models/island.py` → `frontend/src/pages/IslandPage.tsx` · `components/island/` (`panelRegistry.ts` = 임베드 가능 화면 등록부) · `hooks/useIslands.ts` · `hooks/useNavCatalog.ts` · `hooks/useClusterRouteParam.ts` + `lib/islandEmbed.ts` (임베드 시 URL 이동 억제) |
 
 ### Playbook / Ansible / 기타
