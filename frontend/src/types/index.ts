@@ -504,6 +504,18 @@ export interface WorkItem {
   jiraStatus?: string | null;
   jiraSyncedAt?: string | null;
   jiraWatchers?: string[] | null;
+  /** Jira 원본 항목 — 게시판 표를 Jira 와 같은 축으로 보여주기 위한 읽기 전용 필드.
+   *  task = Epic, sub task = Epic 아래 이슈 매핑 기준. */
+  jiraIssueType?: string | null;
+  /** status.statusCategory.key — new | indeterminate | done (상태 배지 색 기준). */
+  jiraStatusCategory?: string | null;
+  jiraEpic?: string | null;
+  jiraEpicKey?: string | null;
+  jiraEpicSummary?: string | null;
+  jiraParentKey?: string | null;
+  jiraParentSummary?: string | null;
+  jiraComponents?: string[] | null;
+  jiraLabels?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -861,7 +873,8 @@ export interface WorkItemCreate {
   remarks?: string;
   service?: string;
   component?: string;
-  confluenceUrl?: string;
+  /** null 을 명시적으로 보내면 링크 해제 (백엔드는 exclude_unset 이라 undefined 는 무변경). */
+  confluenceUrl?: string | null;
   jiraUrl?: string;
   priority?: string;
   kanbanStatus?: KanbanStatus;
@@ -3963,6 +3976,11 @@ export interface ProvisionDefaults {
   pageTitle: string;
   reporter: string;
   detail: string;
+  /** Jira 계층 — epicKey = Epic Link, parentKey = Sub-task 의 상위 이슈. */
+  epicKey: string;
+  parentKey: string;
+  /** 기본값 출처 — 'user' 면 지난번 내가 쓴 조건을 불러온 것. */
+  presetSource: 'none' | 'settings' | 'user';
 }
 
 export interface ProvisionRequest {
@@ -3976,10 +3994,14 @@ export interface ProvisionRequest {
   components?: string[];
   summary?: string;
   description?: string;
+  epicKey?: string;
+  parentKey?: string;
   spaceKey?: string;
   parentPageId?: string;
   pageTitle?: string;
   pageBody?: string;
+  /** 이번에 쓴 기준 조건을 내 기본값으로 저장할지 (다음 등록에서 자동 채움). */
+  rememberPreset?: boolean;
 }
 
 export interface ProvisionResult {

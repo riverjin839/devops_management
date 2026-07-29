@@ -384,6 +384,13 @@ class ProvisionDefaults(BaseModel):
     page_title: str = ""
     reporter: str = ""            # 표시용 — 내 Jira 계정
     detail: str = ""              # 준비 상태 안내(미설정 항목 등)
+    # Jira 계층 — task = Epic, sub task = Epic 아래 이슈. epic_key 는 Epic Link,
+    # parent_key 는 Sub-task 의 상위 이슈(둘 중 하나만 쓰는 게 보통이다).
+    epic_key: str = ""
+    parent_key: str = ""
+    # 이 기본값이 **내가 지난번에 쓴 조건**(user preset)에서 왔는지, 관리자 공통 설정에서
+    # 왔는지 — 화면에서 "저장된 조건을 불러왔습니다" 안내를 띄우는 데 쓴다.
+    preset_source: Literal["none", "settings", "user"] = "settings"
 
 
 class ProvisionRequest(BaseModel):
@@ -399,11 +406,17 @@ class ProvisionRequest(BaseModel):
     components: list[str] = []
     summary: Optional[str] = None
     description: Optional[str] = None
+    # Jira 계층 — Epic Link(epic_key) 또는 Sub-task 상위 이슈(parent_key).
+    epic_key: Optional[str] = None
+    parent_key: Optional[str] = None
     # Confluence
     space_key: Optional[str] = None
     parent_page_id: Optional[str] = None
     page_title: Optional[str] = None
     page_body: Optional[str] = None   # 비우면 업무 내용으로 기본 문서를 만든다
+    # 이번에 쓴 기준 조건(프로젝트/종류/라벨/컴포넌트/Epic/스페이스)을 내 기본값으로
+    # 저장할지. 켜두면 다음 업무 등록 때 자동으로 채워진다(화면에서 언제든 수정 가능).
+    remember_preset: bool = True
 
 
 class ProvisionResult(BaseModel):

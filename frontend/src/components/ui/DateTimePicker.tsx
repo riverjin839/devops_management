@@ -30,6 +30,9 @@ interface DateTimePickerProps {
   placeholder?: string;
   /** Allow clearing to an empty string. Default true. */
   clearable?: boolean;
+  /** Trigger 크기. 'sm' 은 폼의 일반 input/select(`px-2 py-1`)와 높이를 맞춘다 —
+   *  기본값('md')은 단독 배치용이라 한 줄 그리드에 섞이면 이웃보다 커 보인다. */
+  size?: 'sm' | 'md';
   className?: string;
 }
 
@@ -97,6 +100,7 @@ export function DateTimePicker({
   disabled,
   placeholder = '날짜 선택',
   clearable = true,
+  size = 'md',
   className = '',
 }: DateTimePickerProps) {
   const auto = useId();
@@ -235,24 +239,31 @@ export function DateTimePicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center gap-2 px-2.5 py-1.5 bg-background border rounded-md text-sm text-left transition-colors ${
+        className={`w-full flex items-center gap-2 ${
+          size === 'sm' ? 'px-2 py-1' : 'px-2.5 py-1.5'
+        } bg-background border rounded-md text-sm text-left transition-colors ${
           open ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-border'
         } focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <Calendar className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-        <span className={`flex-1 ${display ? '' : 'text-muted-foreground/60'}`}>
+        <span className={`flex-1 truncate ${display ? '' : 'text-muted-foreground/60'}`}>
           {display || placeholder}
         </span>
-        {clearable && display && !disabled && (
+        {/* 지우기 자리는 값이 없어도 유지한다 — 값이 생길 때마다 폭이 밀려
+            옆 필드와 어긋나 보이는 문제를 막는다. */}
+        {clearable && !disabled && (
           <span
             role="button"
             tabIndex={-1}
             aria-label="지우기"
+            aria-hidden={!display}
             onClick={(e) => {
               e.stopPropagation();
-              clear();
+              if (display) clear();
             }}
-            className="p-0.5 text-muted-foreground hover:text-foreground rounded"
+            className={`p-0.5 rounded flex-shrink-0 ${
+              display ? 'text-muted-foreground hover:text-foreground' : 'invisible'
+            }`}
           >
             <X className="w-3 h-3" />
           </span>

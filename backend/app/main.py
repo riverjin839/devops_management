@@ -921,6 +921,20 @@ def _run_migrations():
         # 업무 생성 시 함께 만든 Confluence 문서 링크.
         _safe_add_column("work_items", "confluence_page_id", "VARCHAR(50)")
         _safe_add_column("work_items", "confluence_url", "TEXT")
+        # Jira 원본 항목 동기화 — Epic / Sub-task / 컴포넌트 / 라벨 / 상태 카테고리.
+        # 게시판 표를 Jira 와 같은 축으로 보여주기 위해 축약 매핑(type/type_label) 과 별도로
+        # 원본 값을 보관한다.
+        _safe_add_column("work_items", "jira_epic_key", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_epic_summary", "VARCHAR(200)")
+        _safe_add_column("work_items", "jira_issue_type", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_parent_key", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_parent_summary", "VARCHAR(200)")
+        _safe_add_column("work_items", "jira_status_category", "VARCHAR(20)")
+        _safe_add_column("work_items", "jira_components", "JSONB")
+        _safe_add_column("work_items", "jira_labels", "JSONB")
+        _safe_create_index("ix_work_items_jira_epic_key", "work_items", "(jira_epic_key)")
+        _safe_create_index("ix_work_items_jira_parent_key", "work_items", "(jira_parent_key)")
+        _safe_create_index("ix_work_items_jira_issue_type", "work_items", "(jira_issue_type)")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():

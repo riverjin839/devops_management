@@ -18,7 +18,13 @@ export type WorkItemColumnKey =
   | 'result'
   | 'remarks'
   | 'jiraLink'
-  | 'confluenceLink';
+  | 'confluenceLink'
+  // ── Jira 원본 축 — 가져온 이슈를 Jira 에서 보던 것과 같은 항목으로 보여준다.
+  | 'jiraEpic'
+  | 'jiraType'
+  | 'jiraStatus'
+  | 'jiraComponents'
+  | 'jiraLabels';
 
 /** 클릭-정렬 가능한 컬럼이 매핑하는 정렬 키. */
 export type WorkItemSortKey =
@@ -28,7 +34,10 @@ export type WorkItemSortKey =
   | 'clusterName'
   | 'category'
   | 'startedAt'
-  | 'closedAt';
+  | 'closedAt'
+  | 'jiraEpic'
+  | 'jiraType'
+  | 'jiraStatus';
 
 export interface WorkItemColumnMeta {
   label: string;
@@ -59,6 +68,12 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
   remarks:   { label: '비고',          defaultWidth: 160, defaultVisible: false, hideable: true },
   jiraLink:       { label: 'Jira 링크',        defaultWidth: 110, defaultVisible: false, hideable: true },
   confluenceLink: { label: 'Confl. 링크',      defaultWidth: 110, defaultVisible: false, hideable: true },
+  // Jira 원본 축 — 가져오기를 쓰는 팀만 켜면 되므로 기본 숨김.
+  jiraEpic:       { label: 'Epic',             defaultWidth: 220, defaultVisible: false, hideable: true, sortKey: 'jiraEpic' },
+  jiraType:       { label: '이슈 종류',        defaultWidth: 100, defaultVisible: false, hideable: true, sortKey: 'jiraType' },
+  jiraStatus:     { label: 'Jira 상태',        defaultWidth: 120, defaultVisible: false, hideable: true, sortKey: 'jiraStatus' },
+  jiraComponents: { label: '컴포넌트',         defaultWidth: 160, defaultVisible: false, hideable: true },
+  jiraLabels:     { label: '라벨',             defaultWidth: 160, defaultVisible: false, hideable: true },
 };
 
 /** 기본 컬럼 순서 (사용자 요청: 프로젝트명·상태·담당자·작업분류·제목·시작일·완료일·작업,
@@ -66,6 +81,7 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
 export const DEFAULT_COLUMN_ORDER: WorkItemColumnKey[] = [
   'project', 'sprint', 'status', 'assignee', 'category', 'title', 'startedAt', 'closedAt', 'actions',
   'priority', 'cluster', 'content', 'result', 'remarks', 'jiraLink', 'confluenceLink',
+  'jiraEpic', 'jiraType', 'jiraStatus', 'jiraComponents', 'jiraLabels',
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: WorkItemColumnKey[] = (

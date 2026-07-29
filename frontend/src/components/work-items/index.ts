@@ -8,6 +8,7 @@ export { RelatedServiceEntriesSidebar } from './RelatedServiceEntriesSidebar';
 export { JiraPushDialog } from './JiraPushDialog';
 export { JiraProvisionModal } from './JiraProvisionModal';
 export { JiraIssueChip } from './JiraIssueChip';
+export { DocLinkChip } from './DocLinkChip';
 export { ColumnSettingsMenu } from './ColumnSettingsMenu';
 export {
   type WorkItemColumnKey,

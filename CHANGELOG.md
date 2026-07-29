@@ -10,6 +10,37 @@
 
 1.17.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무 게시판 Jira 기준 레이아웃** (`/tasks-mgmt`): 가져온 이슈를 Jira 에서 보던 것과 같은
+  축으로 표에 펼친다 — **Epic · 이슈 종류(Epic/Story/Task/Sub-task/Bug) · Jira 원본 상태 ·
+  컴포넌트 · 라벨** 컬럼이 추가됐고(기본 숨김, 컬럼 설정에서 켠다), Jira 연결 업무의 상태
+  셀은 칸반 5단계로 축약하지 않고 **Jira 상태명 그대로** 보여준다(점 색은 `statusCategory`
+  기준이라 커스텀 워크플로에서도 의미가 유지된다). Epic 셀은 `DL-12 제목` 박스로 렌더되고
+  키가 Jira 로 링크된다. 가져오기가 Jira component 를 업무 분류로 매핑해 주간보고 진척률의
+  `category × Epic` 축도 제대로 잡힌다(이전에는 전부 "Jira" 로 들어갔다).
+  Backend: `models/work_item.py`(jira_epic_key/epic_summary/issue_type/parent_key/
+  parent_summary/status_category/components/labels), `services/jira_service.py`,
+  `routers/jira.py`(`_jira_sync_values`). Frontend: `workItemColumns.ts`, `WorkItemTableRow.tsx`.
+- **제목 옆 Confluence 문서 박스**: Jira 키 박스 옆에 문서 링크 박스(`DocLinkChip`)가 붙는다.
+  링크가 없으면 점선 `＋문서` 버튼이 되고 클릭하면 그 자리에서 URL 을 입력·저장한다(상세
+  화면까지 들어갈 필요 없음). Jira 가져오기는 이슈 본문에서 설정된 Confluence Base URL 로
+  시작하는 링크를 찾아 자동으로 채우고(행 단위 재가져오기는 원격 링크도 조회), **사용자가
+  직접 넣은 링크는 덮어쓰지 않는다**.
+- **업무 등록 → Jira·Confluence 연계 생성 확장**: 생성 조건에 **Epic 키**와 **상위 이슈
+  (Sub-task)** 가 추가돼 task = Epic, sub task = Epic 아래 이슈로 만들 수 있다. 프로젝트 ·
+  이슈 종류 · 우선순위 · 라벨 · 컴포넌트 · Epic · 저장 위치는 **사용자별로 기억**되어 다음
+  등록에서 자동으로 채워진다(모달에서 언제든 수정, 체크박스로 저장 해제 가능).
+  Backend: `routers/jira.py`(`user_settings` 의 `jira_provision_preset`).
+- **게시판 기본 필터 = 로그인 사용자**: 처음 들어오면 내 담당 업무만 보인다. 상단 "내 업무"
+  토글로 전체 보기로 바꿀 수 있고 그 선택은 브라우저에 기억된다.
+
+### Fixed
+- **업무 등록 팝업 레이아웃**: 시작일/완료일 입력 버튼이 옆 select/input 보다 커서 한 줄
+  그리드가 어긋나던 문제 수정(`DateTimePicker` 에 `size="sm"` 추가, 지우기 버튼 자리를
+  값 유무와 무관하게 유지해 폭이 밀리지 않게 함). 공통업무 체크박스 옆 긴 설명 문구는
+  툴팁으로 옮겨 두 칸을 잡아먹지 않게 했다.
+- **`work_items.confluence_url` 중복 선언 제거**: 같은 컬럼이 모델에 두 번 정의돼 있었다.
+
 ## [1.17.0] - 2026-07-29
 
 ### Added
