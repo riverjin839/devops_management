@@ -23,8 +23,14 @@ export function useUpdateFeatureAccess() {
 /**
  * 접근 가능 여부 판정 (백엔드 규칙과 동일).
  *  - admin 은 항상 허용.
- *  - 해당 feature 설정이 없거나 roles/users 가 모두 비면 전체 허용(기본 open).
- *  - 설정이 있으면 role ∈ roles 또는 본인(username/displayName) ∈ users 일 때만.
+ *  - `enabled === false` 면 admin 외 전체 차단(roles/users 무관, 최우선) — Settings
+ *    "접근 제어"의 화면별 비활성화 체크박스가 이 값을 쓴다.
+ *  - 그 외 해당 feature 설정이 없거나 roles/users 가 모두 비면 전체 허용(기본 open).
+ *  - 설정이 있으면 role ∈ roles 또는 본인(username/displayName) ∈ users 일 때만(세부 제한).
+ *
+ * `feature` 인자에는 라우트 경로를 그대로 넘긴다(예: '/wbs') — 화면별 접근 제어는
+ * NAV_MAP 키와 feature_access 맵 키를 동일하게 맞춰, 별도 매핑 없이 모든 화면에
+ * 균일하게 적용되도록 한다.
  */
 export function canAccessFeature(
   map: FeatureAccessMap | undefined,
@@ -34,7 +40,9 @@ export function canAccessFeature(
   if (!user) return false;
   if (user.role === 'admin') return true;
   const rule = map?.[feature];
-  if (!rule || (!rule.roles.length && !rule.users.length)) return true;
+  if (!rule) return true;
+  if (rule.enabled === false) return false;
+  if (!rule.roles.length && !rule.users.length) return true;
   if (rule.roles.includes(user.role)) return true;
   const ids = [user.username, user.displayName].filter(Boolean) as string[];
   return rule.users.some((u) => ids.includes(u));
