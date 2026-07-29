@@ -1,10 +1,11 @@
 import { Fragment, useId, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable } from '@/components/common';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
-  LayoutList, LayoutGrid, Network, Loader2, GripVertical,
+  LayoutList, LayoutGrid, Network, Loader2, GripVertical, Globe, Tag,
 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
@@ -39,6 +40,10 @@ function cidrIpToNum(ip: string): number {
 function parseCidrRange(cidr: string): { start: number; end: number } | null {
   const m = cidr.trim().match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/);
   if (!m) return null;
+  // 정규식은 `999.1.1.1` 도 통과시키므로 옥텟 범위를 따로 본다 — 잘못된 값이 겹침
+  // 판정에 참여하면 있지도 않은 충돌을 경고하게 된다 (D-053).
+  const octets = m[1].split('.').map((o) => parseInt(o, 10));
+  if (octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return null;
   const prefix = parseInt(m[2], 10);
   if (prefix < 0 || prefix > 32) return null;
   const ipNum = cidrIpToNum(m[1]);
@@ -114,13 +119,34 @@ export function ClusterManagePage() {
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
-  const [search, setSearch]               = useState('');
-  const [filterLevel, setFilterLevel]     = useState('');
-  const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level' | 'manual'>('manual');
-  const [groupBy, setGroupBy]             = useState<GroupByMode>('none');
-  const [showFilter, setShowFilter]       = useState(false);
+  // 검색/필터/정렬/그룹/뷰모드를 URL 에 영속화 — 새로고침·공유·뒤로가기에서 유지된다
+  // (D-029 후속 "목록 필터 URL 저장", D-038 의 `?tab=` 패턴 준용: `replace: true` 라
+  //  필터 조작이 히스토리에 쌓이지 않아 전역 뒤로가기를 되짚지 않는다). (D-053)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const setParam = (key: string, value: string, defaultValue: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === defaultValue) next.delete(key);
+      else next.set(key, value);
+      return next;
+    }, { replace: true });
+  };
+  const search      = searchParams.get('q') ?? '';
+  const filterLevel = searchParams.get('level') ?? '';
+  const sortParam   = searchParams.get('sort');
+  const sortBy: 'name' | 'status' | 'level' | 'manual' =
+    sortParam === 'name' || sortParam === 'status' || sortParam === 'level' ? sortParam : 'manual';
+  const groupParam  = searchParams.get('group');
+  const groupBy: GroupByMode = groupParam === 'region' || groupParam === 'level' ? groupParam : 'none';
+  const viewMode: 'table' | 'card' = searchParams.get('view') === 'card' ? 'card' : 'table';
+  const setSearch      = (v: string) => setParam('q', v, '');
+  const setFilterLevel = (v: string) => setParam('level', v, '');
+  const setSortBy      = (v: 'name' | 'status' | 'level' | 'manual') => setParam('sort', v, 'manual');
+  const setGroupBy     = (v: GroupByMode) => setParam('group', v, 'none');
+  const setViewMode    = (v: 'table' | 'card') => setParam('view', v, 'table');
+  // 필터가 URL 에 있으면 패널을 펼친 상태로 시작 (딥링크 진입 시 조건이 보이게)
+  const [showFilter, setShowFilter]       = useState(() => !!(search || filterLevel));
   const [standardizeOpen, setStandardizeOpen] = useState(false);
-  const [viewMode, setViewMode]           = useState<'table' | 'card'>('table');
   const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
 
   // Diff 팝업 상태 — 열려 있는 대상을 ref 로도 추적해, 다른 클러스터의 늦은 응답이
@@ -235,6 +261,11 @@ export function ClusterManagePage() {
       clusters: list,
     }));
   }, [filteredClusters, groupBy, opsLevels]);
+
+  // 그룹 헤더 표식 — 이모지 단독(🌐/🏷️)은 스크린리더/폰트에 따라 의미가 전달되지 않아
+  // lucide 아이콘(aria-hidden) + 텍스트 라벨 조합으로 대체 (D-052).
+  const GroupIcon = groupBy === 'region' ? Globe : Tag;
+  const groupLabelPrefix = groupBy === 'region' ? '지역' : '운영레벨';
 
   // ── 드래그 순서 변경 ─────────────────────────────────────────────────────
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -452,24 +483,28 @@ export function ClusterManagePage() {
       <main className="max-w-[2400px] mx-auto px-4 py-6">
         <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdating: [...autoUpdatingIds].join(','), diffRowsCount: diffRows.length }} />
 
-        {/* 페이지 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+        {/* 페이지 헤더 — 액션이 많아 좁은 폭에서 줄바꿈 허용 (D-051) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex flex-wrap items-center gap-3">
             <Server className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">클러스터 관리</h1>
             {clusters.length > 0 && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                 {filteredClusters.length} / {clusters.length}
               </span>
             )}
             {overlapCount > 0 && (
-              <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                <AlertTriangle className="w-3 h-3" />
-                CIDR 겹침 {overlapCount}건
+              <span
+                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30"
+                title="INTERNAL_IP / Pod / Service CIDR 이 다른 클러스터와 겹치는 클러스터 수"
+              >
+                <AlertTriangle className="w-3 h-3" aria-hidden />
+                {/* 쌍(pair) 수가 아니라 겹침에 연루된 클러스터 수 — 문구를 실제 값에 맞춤 (D-053) */}
+                CIDR 겹침 클러스터 {overlapCount}개
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ViewModeBar
               modes={[
                 { id: 'table', label: '테이블', icon: <LayoutList className="w-3.5 h-3.5" /> },
@@ -528,9 +563,9 @@ export function ClusterManagePage() {
           </div>
         </div>
 
-        {/* 검색 / 필터 패널 */}
+        {/* 검색 / 필터 패널 — 수제 카드 div 대신 MacCard (D-050) */}
         {showFilter && (
-          <div className="mb-5 p-4 bg-card border border-border rounded-xl flex flex-wrap items-end gap-3">
+          <MacCard title="검색 / 필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
               <label htmlFor={f('search')} className="block text-sm text-muted-foreground mb-1">검색</label>
               <div className="relative">
@@ -574,84 +609,91 @@ export function ClusterManagePage() {
             </div>
             {(search || filterLevel) && (
               <button onClick={() => { setSearch(''); setFilterLevel(''); }}
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary border border-border rounded-lg transition-colors">
+                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary border border-border rounded-xl transition-colors">
                 초기화
               </button>
             )}
-          </div>
+          </MacCard>
         )}
 
         {/* 클러스터 목록 — 로딩/조회실패/0건 3분기 (D-043) */}
         {clusters.length === 0 && clustersLoading ? (
-          <div className="rounded-xl border border-border overflow-hidden" aria-busy="true">
-            <div className="px-3 py-2.5 bg-secondary/50 border-b border-border flex gap-6">
-              {[90, 60, 70, 90, 120, 110, 80, 130].map((w, i) => <Skeleton key={i} width={w} height={12} />)}
+          <MacCard bodyPadding="p-0">
+            <div aria-busy="true">
+              <div className="px-3 py-2.5 bg-secondary border-b border-border flex gap-6">
+                {[90, 60, 70, 90, 120, 110, 80, 130].map((w, i) => <Skeleton key={i} width={w} height={12} />)}
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  <SkeletonTable rows={6} columns={8} />
+                </tbody>
+              </table>
             </div>
-            <table className="w-full text-sm">
-              <tbody>
-                <SkeletonTable rows={6} columns={8} />
-              </tbody>
-            </table>
-          </div>
+          </MacCard>
         ) : clusters.length === 0 && clustersError ? (
-          <div className="text-center py-16">
-            <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-status-critical/60" />
-            <p className="text-foreground font-medium">클러스터 목록을 불러오지 못했습니다.</p>
-            <p className="text-sm text-muted-foreground mt-1">{formatApiError(clustersLoadError)}</p>
-            <button
-              onClick={() => refetchClusters()}
-              className="mt-4 px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
-            >
-              다시 시도
-            </button>
-          </div>
+          <EmptyState
+            icon={AlertTriangle}
+            title="클러스터 목록을 불러오지 못했습니다."
+            description={formatApiError(clustersLoadError)}
+            action={{ label: '다시 시도', onClick: () => { void refetchClusters(); }, variant: 'secondary' }}
+          />
         ) : clusters.length === 0 ? (
-          <div className="text-center py-20">
-            <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground">등록된 클러스터가 없습니다.</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Settings 페이지에서 클러스터를 먼저 등록하세요.</p>
-          </div>
+          <EmptyState
+            icon={Server}
+            title="등록된 클러스터가 없습니다."
+            description="클러스터 등록과 API/kubeconfig 설정은 Settings → 클러스터 탭에서 할 수 있습니다."
+            action={{ label: 'Settings 에서 클러스터 등록', onClick: () => navigate('/settings?tab=clusters') }}
+          />
         ) : filteredClusters.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground">
-            <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>검색 결과가 없습니다.</p>
-          </div>
+          <EmptyState
+            icon={Search}
+            title="검색 결과가 없습니다."
+            description="검색어나 운영레벨 필터를 바꿔 보세요."
+            action={(search || filterLevel)
+              ? { label: '필터 초기화', onClick: () => { setSearch(''); setFilterLevel(''); }, variant: 'secondary' }
+              : undefined}
+          />
         ) : viewMode === 'table' ? (
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="rounded-xl border border-border overflow-hidden">
-            <DoubleScrollX>
+          {/* 수제 카드 div → MacCard (D-050). 본문에 max-h 를 줘 세로 스크롤을 만들고
+              thead 를 sticky 로 고정 — 13열+커스텀열 표에서 헤더가 사라지지 않게 (D-051) */}
+          <MacCard bodyPadding="p-0">
+            <DoubleScrollX bodyClassName="max-h-[calc(100vh-16rem)]">
               <table className="text-sm border-collapse" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
                   {COLUMNS.map((c) => <col key={c.key} style={{ width: `${colW.getWidth(c.key)}px` }} />)}
                   {customFields.map((f) => <col key={`custom_${f.id}`} style={{ width: `${colW.getWidth(`custom_${f.id}`)}px` }} />)}
                   <col style={{ width: `${colW.getWidth('actions')}px` }} />
                 </colgroup>
-                <thead className="bg-secondary/50">
-                  <tr className="border-b border-border">
+                {/* sticky 헤더 — border-collapse 에서는 sticky 셀의 border 가 사라지므로
+                    구분선은 inset box-shadow 로 그린다. 배경은 반투명이면 행이 비쳐 보여 solid. */}
+                <thead className="sticky top-0 z-10 bg-secondary">
+                  <tr>
                     {COLUMNS.map((c) => (
                       <th key={c.key}
                         title={c.tip}
-                        className={`relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground ${c.center ? 'text-center' : ''}`}>
+                        className={`relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))] ${c.center ? 'text-center' : ''}`}>
                         <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
                           {c.label}
-                          <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
+                          <span className="text-[10px] text-muted-foreground/50" aria-hidden>ⓘ</span>
                         </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(c.key, e)} onDoubleClick={() => colW.autoFit(c.key)} />
                       </th>
                     ))}
                     {customFields.map((f) => (
                       <th key={f.id}
-                        className="relative px-3 py-2.5 text-left text-sm font-semibold text-primary/80 border-l border-primary/10"
-                        title={f.description ?? ''}>
+                        className="relative px-3 py-2.5 text-left text-sm font-semibold text-primary/80 border-l border-primary/10 shadow-[inset_0_-1px_0_hsl(var(--border))]"
+                        // 설명이 없으면 빈 title 대신 필드명을 안내 (빈 title 은 툴팁만 깜빡임)
+                        title={f.description?.trim() || `커스텀 컬럼: ${f.label}`}>
                         <span className="truncate inline-block max-w-full align-middle">{f.label}</span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(`custom_${f.id}`, e)} onDoubleClick={() => colW.autoFit(`custom_${f.id}`)} />
                       </th>
                     ))}
-                    <th className="relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground"
+                    <th className="relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]"
                       title="행 단위 동작 — 새로고침(자동수집 → diff 미리보기), 수정, 삭제. (Cilium 설정은 K8s/Cilium 셀 클릭으로 이동)">
                       <span className="inline-flex items-center gap-1 cursor-help">
                         편집
-                        <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
+                        <span className="text-[10px] text-muted-foreground/50" aria-hidden>ⓘ</span>
                       </span>
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
                     </th>
@@ -664,7 +706,10 @@ export function ClusterManagePage() {
                         <tr className="bg-primary/5 border-y border-primary/20">
                           <td colSpan={COLUMNS.length + customFields.length + 1}
                             className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary">
-                            {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
+                            <span className="inline-flex items-center gap-1.5 align-middle">
+                              <GroupIcon className="w-3 h-3" aria-hidden />
+                              {groupLabelPrefix} {group.label}
+                            </span>
                             <span className="ml-2 text-muted-foreground font-normal normal-case tracking-normal">
                               {group.clusters.length}개
                             </span>
@@ -696,7 +741,7 @@ export function ClusterManagePage() {
                 </tbody>
               </table>
             </DoubleScrollX>
-          </div>
+          </MacCard>
           </DndContext>
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -705,8 +750,9 @@ export function ClusterManagePage() {
                 <div key={group.key}>
                   {group.label && (
                     <div className="flex items-baseline gap-2 mb-2 px-1 border-l-2 border-primary pl-3">
-                      <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                        {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+                        <GroupIcon className="w-3 h-3" aria-hidden />
+                        {groupLabelPrefix} {group.label}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {group.clusters.length}개
@@ -714,7 +760,8 @@ export function ClusterManagePage() {
                     </div>
                   )}
                   <SortableContext items={group.clusters.map((c) => c.id)} strategy={rectSortingStrategy}>
-                    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                    {/* 좁은 폭에서 가로 오버플로가 나지 않게 min() 패턴 (D-025·D-051) */}
+                    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))' }}>
                       {group.clusters.map((cluster) => (
                         <SortableClusterCard
                           key={cluster.id}

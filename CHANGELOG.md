@@ -32,6 +32,21 @@
   미리보기를 덮어쓰지 않음(토스트 안내). Frontend: `ClusterManagePage`,
   `ClusterTableRow`(행 `useSortable`), `ClusterCard`, `StandardizeClusterNamesModal`.
 
+### Changed
+- **클러스터 관리 목록 디자인·접근성 정비** (`/cluster-manage`, DESIGN.md D-049~D-053):
+  ①고정 팔레트 115곳을 테마 토큰으로 전환(상태색 `status-*`, 범주색 `chart-*`) — 특히
+  bond0/bond1 IP 가 다크 테마에서, 상태 배지가 라이트 테마에서 저대비로 보이던 문제 해소
+  ②검색/필터 패널·표 컨테이너를 `MacCard` 로 통일 ③**표 헤더 고정(sticky)** 과 셀 클리핑
+  추가 — 13열 이상 표를 스크롤해도 헤더가 남고, 컬럼을 좁혀도 내용이 옆 칸으로 넘치지 않음.
+  페이지 헤더는 좁은 폭에서 줄바꿈, 카드 그리드는 좁은 폭 가로 오버플로 제거
+  ④인라인 편집·순서 변경 진입점이 키보드 포커스에서 보이고, 아이콘 버튼에 클러스터명이 담긴
+  `aria-label` 부여, 그룹 헤더 이모지를 아이콘+텍스트로 교체 ⑤**검색/필터/정렬/그룹/뷰모드가
+  URL 에 저장**돼 새로고침·공유·뒤로가기에서 유지되고, 빈 상태·조회 실패·검색 무결과가 공용
+  `EmptyState` + 실행 버튼(클러스터 등록/다시 시도/필터 초기화)으로 통일. CIDR 겹침 판정의
+  옥텟 검증(`999.x` 같은 잘못된 값 배제)과 배지 문구("겹침 클러스터 N개")도 정정.
+  Frontend: `ClusterManagePage`, `cluster-manage/*`, `versions/NodeNicsCollectModal`,
+  공용 `DoubleScrollX`(`bodyClassName` prop 추가).
+
 ## [1.17.0] - 2026-07-29
 
 ### Added

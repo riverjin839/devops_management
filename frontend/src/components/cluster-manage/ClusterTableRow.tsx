@@ -47,11 +47,11 @@ function EditableCell({
   className?: string;
 }) {
   if (isEditing) {
-    return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
+    return <td className={`px-3 py-2.5 overflow-hidden ${className}`}>{children}</td>;
   }
   return (
     <td
-      className={`px-3 py-2.5 select-none cursor-pointer relative group hover:bg-primary/5 transition-colors ${className}`}
+      className={`px-3 py-2.5 overflow-hidden select-none cursor-pointer relative group hover:bg-primary/5 focus-within:bg-primary/5 transition-colors ${className}`}
       onDoubleClick={(e) => { e.preventDefault(); onEnter(); }}
       onClick={(e) => {
         // 더블클릭 안전망 — detail===2 가 dblclick 보다 먼저 들어오므로 무시
@@ -63,7 +63,7 @@ function EditableCell({
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onEnter(); }}
-        className="absolute top-1 right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary hover:bg-secondary/80 transition-opacity"
+        className="absolute top-1 right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-primary text-muted-foreground hover:text-primary hover:bg-secondary/80 transition-opacity"
         title="이 셀 수정"
         aria-label="수정"
       >
@@ -120,7 +120,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
       className="border-b border-border hover:bg-secondary/20 transition-colors group/row"
     >
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 overflow-hidden">
         <div className="flex items-center gap-2">
           {sortable && (
             <button
@@ -149,13 +149,13 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                   ? <resolvedIcon.Component className="w-4 h-4" />
                   : <FallbackIcon className="w-4 h-4 opacity-50" />}
           </span>
-          <span className="font-medium text-sm text-foreground">{cluster.name}</span>
+          <span className="font-medium text-sm text-foreground truncate" title={cluster.name}>{cluster.name}</span>
         </div>
         {cluster.hostname && (
-          <p className="text-xs font-mono text-muted-foreground mt-0.5 ml-4">{cluster.hostname}</p>
+          <p className="text-xs font-mono text-muted-foreground mt-0.5 ml-4 truncate" title={cluster.hostname}>{cluster.hostname}</p>
         )}
       </td>
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 overflow-hidden">
         <span className={`text-xs px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
       </td>
 
@@ -199,10 +199,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
 
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 overflow-hidden">
         {cluster.bgpEnabled ? (
           <div>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">BGP</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-chart-6/15 text-chart-6 border border-chart-6/30">BGP</span>
             {cluster.asNumber && <p className="text-xs font-mono text-muted-foreground mt-0.5">AS{cluster.asNumber}</p>}
           </div>
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}
@@ -256,7 +256,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             )}
             <div className="flex items-center gap-1 mt-1">
               {overlapGroupIdx !== undefined && (
-                <span className="text-xs text-amber-600 inline-flex items-center gap-0.5">
+                <span className="text-xs text-status-warning inline-flex items-center gap-0.5">
                   <AlertTriangle className="w-2.5 h-2.5" />겹침
                 </span>
               )}
@@ -277,11 +277,11 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </EditableCell>
 
       {/* bond0 — 모든 노드 bond0 IP 들 정규식/Glob 그룹화 */}
-      <td className="px-3 py-2.5 align-top">
+      <td className="px-3 py-2.5 align-top overflow-hidden">
         {ipBuckets.bond0.groups.length > 0 ? (
           <div>
             {ipBuckets.bond0.groups.map((g, i) => (
-              <p key={i} className="text-sm font-mono text-cyan-700 tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
+              <p key={i} className="text-sm font-mono text-chart-6 tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
             ))}
             <p className="text-xs text-muted-foreground/80 mt-0.5">{ipBuckets.bond0.ips.length}개 IP</p>
           </div>
@@ -289,11 +289,11 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </td>
 
       {/* bond1 */}
-      <td className="px-3 py-2.5 align-top">
+      <td className="px-3 py-2.5 align-top overflow-hidden">
         {ipBuckets.bond1.groups.length > 0 ? (
           <div>
             {ipBuckets.bond1.groups.map((g, i) => (
-              <p key={i} className="text-sm font-mono text-amber-700 tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
+              <p key={i} className="text-sm font-mono text-chart-3 tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
             ))}
             <p className="text-xs text-muted-foreground/80 mt-0.5">{ipBuckets.bond1.ips.length}개 IP</p>
           </div>
@@ -346,16 +346,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
 
-      <td className="px-3 py-2.5 text-sm text-center">
+      <td className="px-3 py-2.5 text-sm text-center overflow-hidden">
         {cluster.maxPod
           ? <span className="font-mono text-foreground">{cluster.maxPod}</span>
           : <span className="text-muted-foreground/60 text-sm">-</span>}
       </td>
       {/* K8s / Cilium 버전 */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 overflow-hidden">
         <div className="flex flex-col gap-1">
           {cluster.k8sVersion ? (
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20 w-fit">
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/20 w-fit">
               k8s {cluster.k8sVersion}
             </span>
           ) : (
@@ -367,9 +367,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             title={cluster.ciliumVersion
               ? `Cilium ${cluster.ciliumVersion} — 클릭 시 설정 보기`
               : 'Cilium 버전 미수집 — 클릭 시 cilium-config ConfigMap 으로 조회/설정'}
+            aria-label={`${cluster.name} Cilium 설정 보기`}
             className={`text-xs font-mono px-1.5 py-0.5 rounded-full border w-fit transition-colors ${
               cluster.ciliumVersion
-                ? 'bg-cyan-500/10 text-cyan-500 border-cyan-500/30 hover:bg-cyan-500/20'
+                ? 'bg-chart-6/10 text-chart-6 border-chart-6/30 hover:bg-chart-6/20'
                 : 'bg-secondary text-muted-foreground border-border hover:bg-secondary/80 hover:text-foreground'
             }`}
           >
@@ -379,7 +380,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </td>
 
       {/* 노드 IP 목록 — 노드당 여러 IP (bond0/bond1) + public/private 스코프 표시 */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 overflow-hidden">
         {(() => {
           if (!cluster.nodeIps) {
             const isCollecting = collectingNodeIpsId === cluster.id;
@@ -446,8 +447,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                                   <span key={ip}
                                     className={`text-xs px-1 rounded ${
                                       isPub
-                                        ? 'bg-amber-500/10 text-amber-500'
-                                        : 'bg-sky-500/10 text-sky-500'
+                                        ? 'bg-status-warning/10 text-status-warning'
+                                        : 'bg-chart-1/10 text-chart-1'
                                     }`}
                                     title={isPub ? 'public' : sc}>
                                     {ip}
@@ -487,7 +488,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                     </span>
                   )}
                   {pubCount > 0 && (
-                    <span className="text-xs text-amber-500/80" title="public IP 보유 NIC 수">
+                    <span className="text-xs text-status-warning/80" title="public IP 보유 NIC 수">
                       public {pubCount}건
                     </span>
                   )}
@@ -506,22 +507,23 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </td>
 
       {customFields.map((f) => (
-        <td key={f.id} className="px-3 py-2.5 border-l border-primary/10 align-top" style={f.width ? { width: f.width } : undefined}>
+        <td key={f.id} className="px-3 py-2.5 border-l border-primary/10 align-top overflow-hidden">
           <ClusterCustomCell cluster={cluster} field={f} />
         </td>
       ))}
 
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2.5 overflow-hidden">
         <div className="flex items-center gap-1">
           <button onClick={() => onAutoUpdate(cluster)}
             className={`p-1.5 rounded transition-colors ${
               autoUpdating
-                ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
                 : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
             }`}
             title={autoUpdating
               ? '수집 중지'
-              : '재수집(diff 미리보기) — kubeconfig 로 노드 / 버전 / CIDR 등 다시 조회 후 변경분 확인'}>
+              : '재수집(diff 미리보기) — kubeconfig 로 노드 / 버전 / CIDR 등 다시 조회 후 변경분 확인'}
+            aria-label={autoUpdating ? `${cluster.name} 수집 중지` : `${cluster.name} 재수집`}>
             {autoUpdating
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <RefreshCw className="w-3.5 h-3.5" />}
@@ -529,18 +531,21 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           {onCollectNics && (
             <button onClick={() => onCollectNics(cluster)}
               className="p-1.5 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary transition-colors"
-              title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움. kubectl 만으로는 인터페이스 이름을 알 수 없어 별도 SSH 수집 필요">
+              title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움. kubectl 만으로는 인터페이스 이름을 알 수 없어 별도 SSH 수집 필요"
+              aria-label={`${cluster.name} NIC 수집`}>
               <Cable className="w-3.5 h-3.5" />
             </button>
           )}
           <button onClick={() => onEdit(cluster)}
             className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors"
-            title="전체 수정 — 이름/지역/운영레벨/메타데이터 등 폼 페이지로 이동">
+            title="전체 수정 — 이름/지역/운영레벨/메타데이터 등 폼 페이지로 이동"
+            aria-label={`${cluster.name} 전체 수정`}>
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id}
-            className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-400 disabled:opacity-40 transition-colors"
-            title="삭제 — 클러스터와 연관된 Addon/Playbook/점검 이력이 함께 제거됩니다">
+            className="p-1.5 hover:bg-status-critical/10 rounded text-muted-foreground hover:text-status-critical disabled:opacity-40 transition-colors"
+            title="삭제 — 클러스터와 연관된 Addon/Playbook/점검 이력이 함께 제거됩니다"
+            aria-label={`${cluster.name} 삭제`}>
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>

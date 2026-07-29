@@ -106,7 +106,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
                       <span className="font-mono font-semibold text-primary truncate">{next}</span>
                     </>
                   )}
-                  {done && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-1" />}
+                  {done && <CheckCircle2 className="w-3.5 h-3.5 text-status-healthy ml-1" />}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <input

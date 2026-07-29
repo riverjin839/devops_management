@@ -60,7 +60,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
   const hasNetworkData = !!(cluster.cidr || cluster.podCidr || cluster.svcCidr || cluster.nodeIps);
 
   return (
-    <div className={`bg-card border border-border border-l-4 ${st.border} rounded-xl flex flex-col shadow-sm hover:shadow-md transition-shadow`}>
+    <div className={`bg-card border border-border border-l-4 ${st.border} rounded-md flex flex-col mac-shadow`}>
       {/* 카드 헤더 */}
       <div className="px-4 pt-4 pb-3 border-b border-border/50">
         <div className="flex items-start justify-between gap-2">
@@ -71,6 +71,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
                 <span
                   className="text-lg leading-none flex-shrink-0"
                   title={`운영레벨: ${levelLabel(opsLevels, cluster.operationLevel)}`}
+                  aria-hidden
                 >
                   {levelIcon(opsLevels, cluster.operationLevel)}
                 </span>
@@ -99,10 +100,11 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             <button onClick={() => onAutoUpdate(cluster)}
               className={`p-1.5 rounded-md transition-colors ${
                 autoUpdating
-                  ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                  ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
                   : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
               }`}
-              title={autoUpdating ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}>
+              title={autoUpdating ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}
+              aria-label={autoUpdating ? `${cluster.name} 수집 중지` : `${cluster.name} 정보 수집`}>
               {autoUpdating
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <RefreshCw className="w-3.5 h-3.5" />}
@@ -110,16 +112,19 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             {onCollectNics && (
               <button onClick={() => onCollectNics(cluster)}
                 className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary"
-                title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움">
+                title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움"
+                aria-label={`${cluster.name} NIC 수집`}>
                 <Cable className="w-3.5 h-3.5" />
               </button>
             )}
             <button onClick={() => onEdit(cluster)}
-              className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground" title="수정">
+              className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
+              title="수정" aria-label={`${cluster.name} 수정`}>
               <Pencil className="w-3.5 h-3.5" />
             </button>
             <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id}
-              className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40" title="삭제">
+              className="p-1.5 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical disabled:opacity-40"
+              title="삭제" aria-label={`${cluster.name} 삭제`}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -143,7 +148,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             tab === 'network' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
           }`}>
           <Network className="w-3 h-3" />N/W CIDR
-          {overlapColor && <AlertTriangle className="w-3 h-3 text-amber-400" />}
+          {overlapColor && <AlertTriangle className="w-3 h-3 text-status-warning" />}
           {hasNetworkData && tab !== 'network' && !overlapColor && <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />}
         </button>
       </div>
@@ -207,10 +212,10 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               <BondIpRow cluster={cluster} bond="bond1" />
             </div>
             <CidrRow label="Pod CIDR" cidr={cluster.podCidr} first={cluster.podFirstHost} last={cluster.podLastHost}
-              color={{ bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-600', label: 'text-emerald-600' }}
+              color={{ bg: 'bg-chart-2/5', border: 'border-chart-2/20', text: 'text-chart-2', label: 'text-chart-2' }}
               overlapColor={cluster.podCidr ? overlapColor : null} />
             <CidrRow label="Service CIDR" cidr={cluster.svcCidr} first={cluster.svcFirstHost} last={cluster.svcLastHost}
-              color={{ bg: 'bg-violet-500/5', border: 'border-violet-500/20', text: 'text-violet-600', label: 'text-violet-600' }}
+              color={{ bg: 'bg-chart-4/5', border: 'border-chart-4/20', text: 'text-chart-4', label: 'text-chart-4' }}
               overlapColor={cluster.svcCidr ? overlapColor : null} />
             {cluster.ciliumConfig && (
               <div className="mt-1 pt-2 border-t border-border/40">

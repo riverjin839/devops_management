@@ -102,7 +102,7 @@ export function ClusterCustomCell({ cluster, field }: Props) {
           commit(next);
         }}
         className={`font-mono text-sm px-1 rounded hover:bg-primary/10 ${
-          current === true ? 'text-emerald-500 font-bold'
+          current === true ? 'text-status-healthy font-bold'
           : current === false ? 'text-muted-foreground/60'
           : 'text-muted-foreground/30'
         }`}

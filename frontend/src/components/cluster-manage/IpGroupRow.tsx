@@ -3,15 +3,17 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowUpRight, Check, Copy } from 'lucide-react';
 import type { OverlapColor } from './constants';
 
-/** Tailwind 색상 prefix — bg/border/text 토큰을 한꺼번에 적용. */
+/** 도메인(INTERNAL_IP/bond0/bond1/Pod/Svc) 구분용 범주색 — 의미색이 아니라 시리즈
+ *  구분이므로 categorical `chart-*` 토큰을 쓴다. 고정 팔레트는 테마별로 대비가
+ *  깨지므로 금지 (D-049). accent 이름은 호출부 호환을 위해 유지. */
 export type IpGroupAccent = 'sky' | 'cyan' | 'amber' | 'emerald' | 'violet';
 
 const ACCENT: Record<IpGroupAccent, { surface: string; label: string }> = {
-  sky:     { surface: 'bg-sky-500/5 border-sky-500/20',     label: 'text-sky-600' },
-  cyan:    { surface: 'bg-cyan-500/5 border-cyan-500/20',   label: 'text-cyan-600' },
-  amber:   { surface: 'bg-amber-500/5 border-amber-500/20', label: 'text-amber-600' },
-  emerald: { surface: 'bg-emerald-500/5 border-emerald-500/20', label: 'text-emerald-600' },
-  violet:  { surface: 'bg-violet-500/5 border-violet-500/20', label: 'text-violet-600' },
+  sky:     { surface: 'bg-chart-1/5 border-chart-1/20', label: 'text-chart-1' },
+  cyan:    { surface: 'bg-chart-6/5 border-chart-6/20', label: 'text-chart-6' },
+  amber:   { surface: 'bg-chart-3/5 border-chart-3/20', label: 'text-chart-3' },
+  emerald: { surface: 'bg-chart-2/5 border-chart-2/20', label: 'text-chart-2' },
+  violet:  { surface: 'bg-chart-4/5 border-chart-4/20', label: 'text-chart-4' },
 };
 
 interface IpGroupRowProps {
@@ -126,7 +128,7 @@ function CopyChip({ value }: { value: string }) {
       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary rounded transition-colors"
       title="줄바꿈으로 구분해 복사"
     >
-      {copied ? <Check className="w-2.5 h-2.5 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
+      {copied ? <Check className="w-2.5 h-2.5 text-status-healthy" /> : <Copy className="w-2.5 h-2.5" />}
       {copied ? 'OK' : '복사'}
     </button>
   );
