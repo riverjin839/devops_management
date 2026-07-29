@@ -3873,12 +3873,24 @@ export interface SchemaDriftIssue {
   repairable: boolean;
 }
 
+/** 부팅 시 자동 복구(NOT NULL 완화)가 실제로 돌았는지 — 로그 없이 확인하기 위한 것. */
+export interface SchemaBootRepair {
+  ran: boolean;
+  /** 감지된 대상 ("table.column") */
+  detected?: string[];
+  /** 실제로 완화된 건수 */
+  relaxed?: number;
+  /** 락 경합 등으로 실패한 항목 */
+  failures?: { target: string; error: string }[];
+}
+
 export interface SchemaHealthReport {
   healthy: boolean;
   checkedTables: number;
   checkedColumns: number;
   issueCount: number;
   issues: SchemaDriftIssue[];
+  bootRepair?: SchemaBootRepair;
 }
 
 export interface SchemaRepairAction extends SchemaDriftIssue {

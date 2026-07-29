@@ -361,6 +361,44 @@ class TestDeepCheckResultSchema:
         assert _is_nullable(), "마이그레이션이 레거시 NOT NULL 을 풀지 못했다"
 
 
+# ── 항목 삭제 — ORM 이 자식 FK 를 NULL 로 UPDATE 하던 회귀 ────────────────────
+class TestItemDeletion:
+    """`db.delete(item)` 시 SQLAlchemy 가 자식 행의 item_id 를 NULL 로 UPDATE 하려다
+    NotNullViolation 이 나던 버그. FK 에 ON DELETE CASCADE 가 걸려 있으므로 정리는 DB 가
+    해야 하고, 관계에는 `passive_deletes=True` 가 필요하다(코드베이스가 cluster 쪽에는
+    이미 적용해 둔 패턴 — item 쪽만 빠져 있었다).
+    """
+
+    def test_delete_item_with_children_cascades(self, db, fixture_ids):
+        from app.models import CheckMatrixResult, CheckMatrixSchedule
+
+        cluster_id = fixture_ids["cluster"]
+        item = CheckMatrixItem(
+            name="deletable-row", source_type=CheckMatrixSourceType.deep_check,
+            source_ref="cert_expiry",
+        )
+        db.add(item)
+        db.commit()
+        item_id = item.id
+
+        # 세 자식 테이블을 모두 채운 상태에서 삭제해야 회귀를 제대로 잡는다.
+        db.add(CheckMatrixRun(
+            item_id=item_id, cluster_id=cluster_id,
+            trigger=CheckMatrixTrigger.manual_cell, run_state=CheckMatrixRunState.success,
+        ))
+        db.add(CheckMatrixResult(item_id=item_id, cluster_id=cluster_id, status=StatusEnum.healthy))
+        db.add(CheckMatrixSchedule(item_id=item_id, cluster_id=cluster_id, cron_expr="15 9 * * *"))
+        db.commit()
+
+        db.delete(item)
+        db.commit()  # 회귀 시 NotNullViolation
+
+        for model in (CheckMatrixRun, CheckMatrixResult, CheckMatrixSchedule):
+            assert db.query(model).filter(model.item_id == item_id).count() == 0, (
+                f"{model.__tablename__} 이 DB CASCADE 로 정리되지 않았다"
+            )
+
+
 # ── 라우터 표시명 해석 — user.full_name 오참조로 모든 수동 실행이 500 나던 회귀 ──
 class TestActorResolution:
     def test_actor_uses_display_name_column(self):

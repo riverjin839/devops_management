@@ -126,6 +126,32 @@ export function SchemaHealthPanel() {
               </div>
             </div>
 
+            {/* 부팅 자동 복구 결과 — "재시작하면 자동으로 고쳐진다"가 실제로 지켜졌는지.
+                실패했다면(주로 DDL 락 경합) 조용히 넘어가지 않고 여기서 사유를 보여준다. */}
+            {data.bootRepair?.ran && (
+              <div className="mb-3 text-xs">
+                {(data.bootRepair.failures?.length ?? 0) > 0 ? (
+                  <div className="rounded-md border border-status-critical/40 bg-status-critical-soft p-2.5 space-y-1">
+                    <p className="font-medium text-status-critical">
+                      부팅 시 자동 복구가 일부 실패했습니다 — 아래 &quot;복구&quot; 버튼으로 다시 시도하세요.
+                    </p>
+                    {data.bootRepair.failures!.map((f) => (
+                      <p key={f.target} className="text-muted-foreground break-all">
+                        <span className="font-mono">{f.target}</span> — {f.error}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">
+                    최근 부팅 시 자동 복구 완료 — NOT NULL {data.bootRepair.relaxed ?? 0}건 완화
+                    {(data.bootRepair.detected?.length ?? 0) > 0 && (
+                      <span className="font-mono"> ({data.bootRepair.detected!.join(', ')})</span>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
             {data.issues.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm border-collapse">

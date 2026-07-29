@@ -44,6 +44,38 @@ def _compile_type(col) -> str | None:
         return None
 
 
+# 부팅 자동 복구의 마지막 결과 — "자동으로 고쳐진다"는 말이 실제로 지켜졌는지 화면에서
+# 확인할 수 있어야 한다(로그를 뒤지게 하지 않는다). 프로세스 로컬이라 replica 별 값이다.
+LAST_BOOT_REPAIR: dict[str, Any] = {"ran": False}
+
+# DDL 은 ACCESS EXCLUSIVE 락이 필요하다. 운영 중에는 Celery 워커/API 가 같은 테이블을
+# 계속 읽고 쓰므로 락을 못 잡을 수 있는데, 기본값(무제한 대기)이면 부팅이 통째로 멈춘다.
+# 짧게 끊고 재시도하되, 끝내 못 잡으면 "조용히 넘어가지 않고" 사유를 남긴다.
+_LOCK_TIMEOUT = "3s"
+_DDL_ATTEMPTS = 3
+
+
+def _exec_ddl(sql: str) -> None:
+    """스키마 변경 1문장 실행 — lock_timeout 을 걸고 짧게 재시도. 실패 시 예외를 올린다."""
+    last_error: Exception | None = None
+    for attempt in range(1, _DDL_ATTEMPTS + 1):
+        try:
+            with engine.begin() as conn:
+                # SET LOCAL — 이 트랜잭션에서만 적용되고 커넥션 풀에 남지 않는다.
+                conn.execute(text(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT}'"))
+                conn.execute(text(sql))
+            return
+        except Exception as e:  # noqa: BLE001
+            last_error = e
+            if attempt < _DDL_ATTEMPTS:
+                logger.info(
+                    "schema_health: DDL 재시도 %d/%d (락 대기 등) — %s",
+                    attempt, _DDL_ATTEMPTS, str(e)[:120],
+                )
+    assert last_error is not None
+    raise last_error
+
+
 def inspect_drift() -> dict[str, Any]:
     """모델과 실제 DB 를 비교해 드리프트 목록을 만든다 (읽기 전용)."""
     ins = inspect(engine)
@@ -112,6 +144,8 @@ def inspect_drift() -> dict[str, Any]:
         "checked_columns": checked_columns,
         "issue_count": len(issues),
         "issues": issues,
+        # 부팅 시 자동 복구가 실제로 돌았는지 / 무엇을 실패했는지 — 로그 없이 확인 가능하게.
+        "boot_repair": dict(LAST_BOOT_REPAIR),
     }
 
 
@@ -159,8 +193,7 @@ def repair_drift(*, dry_run: bool = False) -> dict[str, Any]:
             applied.append({**issue, "sql": sql, "executed": False})
             continue
         try:
-            with engine.begin() as conn:
-                conn.execute(text(sql))
+            _exec_ddl(sql)
             applied.append({**issue, "sql": sql, "executed": True})
             logger.info("schema_health: repaired %s.%s (%s)", table, column, issue["kind"])
         except Exception as e:  # noqa: BLE001
@@ -187,25 +220,34 @@ def relax_not_null_drift() -> int:
     반대 방향(모델 NOT NULL)은 backfill 판단이 필요해 건드리지 않는다.
     """
     relaxed = 0
+    targets: list[str] = []
+    failures: list[dict[str, str]] = []
     for issue in inspect_drift()["issues"]:
         if issue["kind"] != "not_null_drift":
             continue
+        target = f"{issue['table']}.{issue['column']}"
+        targets.append(target)
         sql = (
             f"ALTER TABLE {issue['table']} "
             f"ALTER COLUMN {issue['column']} DROP NOT NULL"
         )
         try:
-            with engine.begin() as conn:
-                conn.execute(text(sql))
+            _exec_ddl(sql)
             relaxed += 1
             logger.warning(
-                "migration: %s.%s 의 레거시 NOT NULL 을 해제함 (모델은 nullable). "
-                "이 제약이 필요하다면 모델을 nullable=False 로 바꿀 것.",
-                issue["table"], issue["column"],
+                "migration: %s 의 레거시 NOT NULL 을 해제함 (모델은 nullable). "
+                "이 제약이 필요하다면 모델을 nullable=False 로 바꿀 것.", target,
             )
         except Exception as e:  # noqa: BLE001
-            logger.warning(
-                "migration: %s.%s NOT NULL 해제 실패 (%s) — 계속 진행",
-                issue["table"], issue["column"], e,
+            # 조용히 넘어가면 "자동으로 고쳐진다"는 약속이 깨진 걸 아무도 모른다 —
+            # 사유를 남겨 Settings ▸ 스키마 점검 화면에서 그대로 보이게 한다.
+            failures.append({"target": target, "error": str(e)[:300]})
+            logger.error(
+                "migration: %s NOT NULL 해제 실패 — %s. "
+                "Settings ▸ 스키마 점검에서 수동 복구가 필요합니다.", target, str(e)[:200],
             )
+    LAST_BOOT_REPAIR.clear()
+    LAST_BOOT_REPAIR.update({
+        "ran": True, "detected": targets, "relaxed": relaxed, "failures": failures,
+    })
     return relaxed
