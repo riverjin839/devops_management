@@ -22,6 +22,15 @@
   게이팅하고, 노드 IP 일괄 수집에 실행 전 확인(대상 수·갱신 범위)+진행률(n/N)+중단 버튼+
   실패 구분 토스트를 추가. Frontend: `ClusterManagePage`, `ClusterTableRow`,
   `ClusterCustomCell`, `useCluster`/`api` 타입에 null 해제 반영.
+- **클러스터 관리 목록 인터랙션 버그 수정** (`/cluster-manage`, DESIGN.md D-045~D-047):
+  ①드래그 순서 변경을 수동 정렬 모드에서만 활성화(이름/상태순에서는 드롭이 즉시 재정렬돼
+  되돌아간 것처럼 보였음)하고, **테이블 뷰에도 행 드래그를 추가**(수동 정렬 시 이름 셀
+  좌측 그립) — 카드 뷰에서만 가능하던 수동 정렬 수단이 양쪽 뷰에서 동작 ②이름 표준화
+  모달이 30초 자동 리페치마다 입력·완료 표시를 초기화하던 문제 수정(열려 있는 동안 편집
+  보존) ③클러스터 정보 수집(auto-update)을 여러 클러스터에서 동시에 실행 가능 —
+  클러스터별 스피너/중지가 독립 동작하고, 다른 클러스터의 늦은 응답이 열려 있는 변경
+  미리보기를 덮어쓰지 않음(토스트 안내). Frontend: `ClusterManagePage`,
+  `ClusterTableRow`(행 `useSortable`), `ClusterCard`, `StandardizeClusterNamesModal`.
 
 ## [1.17.0] - 2026-07-29
 

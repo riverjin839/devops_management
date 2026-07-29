@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { Fragment, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
@@ -27,7 +27,7 @@ import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFi
 import { Settings2, Wand2 } from 'lucide-react';
 import { StandardizeClusterNamesModal } from '@/components/cluster-manage/StandardizeClusterNamesModal';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 type GroupByMode = 'none' | 'region' | 'level';
@@ -55,10 +55,13 @@ function cidrsOverlap(a: string, b: string): boolean {
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, pending: 3 };
 
 // ── 드래그 가능한 ClusterCard 래퍼 ────────────────────────────────────────────
+// sortEnabled=false(수동 정렬 아님)면 useSortable 을 비활성하고 핸들을 숨긴다 —
+// 이름/상태순에서는 드롭 직후 재정렬돼 되돌아간 것처럼 보이기 때문 (D-045).
 function SortableClusterCard(
-  props: Parameters<typeof ClusterCard>[0],
+  { sortEnabled, ...props }: Parameters<typeof ClusterCard>[0] & { sortEnabled: boolean },
 ) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.cluster.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.cluster.id, disabled: !sortEnabled });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -66,14 +69,16 @@ function SortableClusterCard(
   };
   return (
     <div ref={setNodeRef} style={style} className="relative group/card">
-      <button
-        {...attributes} {...listeners}
-        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
-        title="드래그하여 순서 변경"
-        aria-label="순서 변경 핸들"
-      >
-        <GripVertical className="w-4 h-4" />
-      </button>
+      {sortEnabled && (
+        <button
+          {...attributes} {...listeners}
+          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+          title="드래그하여 순서 변경 (정렬: 수동 모드)"
+          aria-label="순서 변경 핸들"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      )}
       <ClusterCard {...props} />
     </div>
   );
@@ -92,7 +97,10 @@ export function ClusterManagePage() {
   // 삭제는 Addon/Playbook/점검 이력까지 캐스케이드되므로 native confirm 이 아니라
   // ConfirmDialog(danger) 로 게이팅한다 (D-048).
   const [deleteTarget, setDeleteTarget]   = useState<Cluster | null>(null);
-  const [autoUpdatingId, setAutoUpdatingId] = useState<string | null>(null);
+  // auto-update 는 클러스터별로 동시에 돌 수 있으므로 진행 상태·중단 컨트롤러를
+  // 단일 슬롯이 아니라 per-cluster 로 관리한다 (D-047).
+  const [autoUpdatingIds, setAutoUpdatingIds] = useState<Set<string>>(new Set());
+  const autoUpdateAbortsRef = useRef<Map<string, AbortController>>(new Map());
   const [applyingId, setApplyingId]       = useState<string | null>(null);
   const [collectingNodeIpsId, setCollectingNodeIpsId] = useState<string | null>(null);
   const [bulkCollecting, setBulkCollecting] = useState(false);
@@ -115,11 +123,25 @@ export function ClusterManagePage() {
   const [viewMode, setViewMode]           = useState<'table' | 'card'>('table');
   const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
 
-  // Diff 팝업 상태
+  // Diff 팝업 상태 — 열려 있는 대상을 ref 로도 추적해, 다른 클러스터의 늦은 응답이
+  // 열린 다이얼로그를 소리 없이 덮어쓰지 않게 한다 (D-047).
   const [diffCluster, setDiffCluster] = useState<Cluster | null>(null);
   const [diffRows, setDiffRows]       = useState<DiffRow[]>([]);
   const [diffWarnings, setDiffWarnings] = useState<string[]>([]);
-  const autoUpdateAbortRef = useRef<AbortController | null>(null);
+  const diffClusterRef = useRef<Cluster | null>(null);
+
+  const openDiff = (cluster: Cluster, rows: DiffRow[], warnings: string[]) => {
+    diffClusterRef.current = cluster;
+    setDiffCluster(cluster);
+    setDiffRows(rows);
+    setDiffWarnings(warnings);
+  };
+  const closeDiff = () => {
+    diffClusterRef.current = null;
+    setDiffCluster(null);
+    setDiffRows([]);
+    setDiffWarnings([]);
+  };
 
   // 커스텀 필드
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
@@ -177,7 +199,9 @@ export function ClusterManagePage() {
     list.sort((a, b) => {
       if (sortBy === 'status') return (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
       if (sortBy === 'level')  return (a.operationLevel ?? '').localeCompare(b.operationLevel ?? '');
-      if (sortBy === 'manual') return (a.seq ?? 0) - (b.seq ?? 0);
+      // seq 미할당 fallback 은 useClusters 의 정렬(?? 1000)과 동일하게 — 두 기준이
+      // 다르면 미할당 클러스터의 위치가 화면마다 반대로 나온다 (D-045).
+      if (sortBy === 'manual') return (a.seq ?? 1000) - (b.seq ?? 1000);
       return a.name.localeCompare(b.name);
     });
     return list;
@@ -214,8 +238,12 @@ export function ClusterManagePage() {
 
   // ── 드래그 순서 변경 ─────────────────────────────────────────────────────
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // 드래그는 수동 정렬 모드에서만 — 이름/상태순에서는 드롭 직후 재정렬돼 되돌아간
+  // 것처럼 보이고 seq 만 바뀐다 (D-045). 핸들 노출·useSortable 활성도 이 값을 따른다.
+  const sortEnabled = sortBy === 'manual';
 
   const handleDragEnd = async (e: DragEndEvent) => {
+    if (!sortEnabled) return;
     if (!e.over || e.active.id === e.over.id) return;
     const activeId = String(e.active.id);
     const overId = String(e.over.id);
@@ -302,29 +330,40 @@ export function ClusterManagePage() {
   };
 
   const handleAutoUpdate = async (cluster: Cluster) => {
-    // 이미 수집 중인 클러스터면 중지
-    if (autoUpdatingId === cluster.id && autoUpdateAbortRef.current) {
-      autoUpdateAbortRef.current.abort();
+    const aborts = autoUpdateAbortsRef.current;
+    // 이미 수집 중인 클러스터면 중지 — 다른 클러스터의 진행에는 영향 없음 (D-047)
+    const existing = aborts.get(cluster.id);
+    if (existing) {
+      existing.abort();
       return;
     }
-    setAutoUpdatingId(cluster.id);
-    autoUpdateAbortRef.current = new AbortController();
+    const ctrl = new AbortController();
+    aborts.set(cluster.id, ctrl);
+    setAutoUpdatingIds((prev) => new Set(prev).add(cluster.id));
     try {
       const { data } = await clustersApi.autoUpdate(cluster.id, {
         dryRun: true,
-        signal: autoUpdateAbortRef.current.signal,
+        signal: ctrl.signal,
       });
-      setDiffCluster(cluster);
-      setDiffRows((data.diff ?? []) as DiffRow[]);
-      setDiffWarnings(data.warnings ?? []);
+      const open = diffClusterRef.current;
+      if (open && open.id !== cluster.id) {
+        // 다른 클러스터의 diff 가 열려 있음 — 덮어쓰면 사용자가 엉뚱한 대상에 적용할 수 있다.
+        toast.info(`${cluster.name} 수집 완료`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
+      } else {
+        openDiff(cluster, (data.diff ?? []) as DiffRow[], data.warnings ?? []);
+      }
     } catch (e: unknown) {
       const err = e as { name?: string; code?: string };
       if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
-        toast.error('클러스터 정보 수집 실패', formatApiError(e));
+        toast.error('클러스터 정보 수집 실패', `${cluster.name}: ${formatApiError(e)}`);
       }
     } finally {
-      setAutoUpdatingId(null);
-      autoUpdateAbortRef.current = null;
+      aborts.delete(cluster.id);
+      setAutoUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cluster.id);
+        return next;
+      });
     }
   };
 
@@ -400,9 +439,7 @@ export function ClusterManagePage() {
       await clustersApi.autoUpdate(diffCluster.id);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
       toast.success('클러스터 정보 갱신됨', diffCluster.name);
-      setDiffCluster(null);
-      setDiffRows([]);
-      setDiffWarnings([]);
+      closeDiff();
     } catch (e: unknown) {
       toast.error('적용 실패', formatApiError(e));
     } finally {
@@ -413,7 +450,7 @@ export function ClusterManagePage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-[2400px] mx-auto px-4 py-6">
-        <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdatingId, diffRowsCount: diffRows.length }} />
+        <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdating: [...autoUpdatingIds].join(','), diffRowsCount: diffRows.length }} />
 
         {/* 페이지 헤더 */}
         <div className="flex items-center justify-between mb-6">
@@ -580,6 +617,7 @@ export function ClusterManagePage() {
             <p>검색 결과가 없습니다.</p>
           </div>
         ) : viewMode === 'table' ? (
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="rounded-xl border border-border overflow-hidden">
             <DoubleScrollX>
               <table className="text-sm border-collapse" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
@@ -620,11 +658,10 @@ export function ClusterManagePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {groupedClusters.flatMap((group) => {
-                    const rows: React.ReactNode[] = [];
-                    if (group.label) {
-                      rows.push(
-                        <tr key={`hdr-${group.key}`} className="bg-primary/5 border-y border-primary/20">
+                  {groupedClusters.map((group) => (
+                    <Fragment key={group.key}>
+                      {group.label && (
+                        <tr className="bg-primary/5 border-y border-primary/20">
                           <td colSpan={COLUMNS.length + customFields.length + 1}
                             className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary">
                             {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
@@ -632,34 +669,35 @@ export function ClusterManagePage() {
                               {group.clusters.length}개
                             </span>
                           </td>
-                        </tr>,
-                      );
-                    }
-                    for (const cluster of group.clusters) {
-                      rows.push(
-                        <ClusterTableRow
-                          key={cluster.id}
-                          cluster={cluster}
-                          onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
-                          onDelete={handleDelete}
-                          deletingId={deletingId}
-                          overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
-                          onCilium={c => setCiliumCluster(c)}
-                          onAutoUpdate={handleAutoUpdate}
-                          autoUpdatingId={autoUpdatingId}
-                          customFields={customFields}
-                          onCollectNodeIps={collectNodeIps}
-                          collectingNodeIpsId={collectingNodeIpsId}
-                          onCollectNics={(c) => setNicsClusterId(c.id)}
-                        />,
-                      );
-                    }
-                    return rows;
-                  })}
+                        </tr>
+                      )}
+                      <SortableContext items={group.clusters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                        {group.clusters.map((cluster) => (
+                          <ClusterTableRow
+                            key={cluster.id}
+                            cluster={cluster}
+                            onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
+                            onDelete={handleDelete}
+                            deletingId={deletingId}
+                            overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                            onCilium={c => setCiliumCluster(c)}
+                            onAutoUpdate={handleAutoUpdate}
+                            autoUpdating={autoUpdatingIds.has(cluster.id)}
+                            customFields={customFields}
+                            onCollectNodeIps={collectNodeIps}
+                            collectingNodeIpsId={collectingNodeIpsId}
+                            onCollectNics={(c) => setNicsClusterId(c.id)}
+                            sortable={sortEnabled}
+                          />
+                        ))}
+                      </SortableContext>
+                    </Fragment>
+                  ))}
                 </tbody>
               </table>
             </DoubleScrollX>
           </div>
+          </DndContext>
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="space-y-5">
@@ -686,8 +724,9 @@ export function ClusterManagePage() {
                           deletingId={deletingId}
                           overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
                           onAutoUpdate={handleAutoUpdate}
-                          autoUpdatingId={autoUpdatingId}
+                          autoUpdating={autoUpdatingIds.has(cluster.id)}
                           onCollectNics={(c) => setNicsClusterId(c.id)}
+                          sortEnabled={sortEnabled}
                         />
                       ))}
                     </div>
@@ -723,7 +762,7 @@ export function ClusterManagePage() {
         diff={diffRows}
         warnings={diffWarnings}
         applying={applyingId === diffCluster?.id}
-        onCancel={() => { if (!applyingId) { setDiffCluster(null); setDiffRows([]); setDiffWarnings([]); } }}
+        onCancel={() => { if (!applyingId) closeDiff(); }}
         onConfirm={handleApplyDiff}
       />
 

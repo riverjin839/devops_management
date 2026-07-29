@@ -19,12 +19,13 @@ interface ClusterCardProps {
   deletingId: string | null;
   overlapGroupIdx: number | undefined;
   onAutoUpdate: (c: Cluster) => void;
-  autoUpdatingId: string | null;
+  /** 이 클러스터의 auto-update 진행 여부 — per-cluster 동시 진행 지원 (D-047) */
+  autoUpdating: boolean;
   /** SSH 기반 NIC 수집(bond0/bond1 채움) 모달 열기 */
   onCollectNics?: (c: Cluster) => void;
 }
 
-export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdatingId, onCollectNics }: ClusterCardProps) {
+export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdating, onCollectNics }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
@@ -97,12 +98,12 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
           <div className="flex items-center gap-1 flex-shrink-0">
             <button onClick={() => onAutoUpdate(cluster)}
               className={`p-1.5 rounded-md transition-colors ${
-                autoUpdatingId === cluster.id
+                autoUpdating
                   ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
                   : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
               }`}
-              title={autoUpdatingId === cluster.id ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}>
-              {autoUpdatingId === cluster.id
+              title={autoUpdating ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}>
+              {autoUpdating
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <RefreshCw className="w-3.5 h-3.5" />}
             </button>

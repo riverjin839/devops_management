@@ -32,12 +32,20 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
   const titleId = useId();
   const dialogRef = useModalA11y(open, onClose);
 
+  // 30초 폴링이 `clusters` 참조를 매번 갈아끼우므로, 참조 변경마다 통째로 초기화하면
+  // 모달이 열린 동안 입력·완료 표시가 주기적으로 날아간다 (D-046). 닫힐 때 비우고,
+  // 열려 있는 동안의 재실행(리페치)은 사용자가 만진 항목을 보존한 채 새 항목만 채운다.
   useEffect(() => {
-    if (!open) return;
-    const init: Record<string, Parts> = {};
-    clusters.forEach((c) => { init[c.id] = parseName(c.name); });
-    setEdits(init);
-    setDoneIds(new Set());
+    if (!open) {
+      setEdits({});
+      setDoneIds(new Set());
+      return;
+    }
+    setEdits((prev) => {
+      const next: Record<string, Parts> = {};
+      clusters.forEach((c) => { next[c.id] = prev[c.id] ?? parseName(c.name); });
+      return next;
+    });
   }, [open, clusters]);
 
   if (!open) return null;

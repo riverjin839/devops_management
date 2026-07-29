@@ -1,6 +1,8 @@
 import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server, GripVertical } from 'lucide-react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, ClusterCustomField, ClusterManageUpdate } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit, useToast } from '@/components/common';
@@ -19,8 +21,11 @@ interface ClusterTableRowProps {
   overlapGroupIdx: number | undefined;
   onCilium: (c: Cluster) => void;
   onAutoUpdate: (c: Cluster) => void;
-  autoUpdatingId: string | null;
+  /** 이 클러스터의 auto-update 진행 여부 — per-cluster 동시 진행 지원 (D-047) */
+  autoUpdating: boolean;
   customFields?: ClusterCustomField[];
+  /** 수동 정렬 모드에서 행 드래그 허용 — 이름 셀 좌측에 그립 노출 (D-045) */
+  sortable?: boolean;
   /** 노드 IP 만 수집 (diff 다이얼로그 없이 즉시 적용) */
   onCollectNodeIps?: (c: Cluster) => void;
   collectingNodeIpsId?: string | null;
@@ -68,8 +73,12 @@ function EditableCell({
   );
 }
 
-export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics }: ClusterTableRowProps) {
+export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdating, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics, sortable = false }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
+  // 테이블 뷰 행 드래그 — 페이지의 DndContext/SortableContext 안에서만 렌더된다.
+  // sortable=false(수동 정렬 아님)면 비활성 + 그립 미노출 (D-045).
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: cluster.id, disabled: !sortable });
   const toast = useToast();
   const [editingField, setEditingField] = useState<EditField>(null);
   const iconAnchorRef = useRef<HTMLSpanElement | null>(null);
@@ -106,9 +115,24 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
   }, [cluster.nodeIps]);
 
   return (
-    <tr className="border-b border-border hover:bg-secondary/20 transition-colors">
+    <tr
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      className="border-b border-border hover:bg-secondary/20 transition-colors group/row"
+    >
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2">
+          {sortable && (
+            <button
+              type="button"
+              {...attributes} {...listeners}
+              className="p-0.5 -ml-1 rounded cursor-grab active:cursor-grabbing text-muted-foreground/30 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all flex-shrink-0"
+              title="드래그하여 순서 변경 (정렬: 수동 모드)"
+              aria-label="순서 변경 핸들"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
+          )}
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
           {/* 현재 아이콘 표시 (읽기 전용) — 변경은 시스템 → Settings → 클러스터 탭에서 */}
           <span
@@ -491,14 +515,14 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         <div className="flex items-center gap-1">
           <button onClick={() => onAutoUpdate(cluster)}
             className={`p-1.5 rounded transition-colors ${
-              autoUpdatingId === cluster.id
+              autoUpdating
                 ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
                 : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
             }`}
-            title={autoUpdatingId === cluster.id
+            title={autoUpdating
               ? '수집 중지'
               : '재수집(diff 미리보기) — kubeconfig 로 노드 / 버전 / CIDR 등 다시 조회 후 변경분 확인'}>
-            {autoUpdatingId === cluster.id
+            {autoUpdating
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <RefreshCw className="w-3.5 h-3.5" />}
           </button>
