@@ -1425,6 +1425,25 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 문서 관리 (`/documents`)
+
+- **파일**: `frontend/src/pages/DocumentsPage.tsx` (+ `frontend/src/components/documents/` 의 `ConfluenceImportModal`, `ConfluenceExportDialog`, `ConfluenceDocsSettingsDialog`, `SyncStatusBadge`)
+- **목적 / UX**: 파트 문서(WorkGuide)를 한 화면의 테이블로 관리하고 Confluence 가져오기/게시/재동기화를 실행하는 대시보드. 사이드바 work 모드의 신규 "문서 관리" 그룹 진입점이며, 같은 그룹에 2026-07 개편 때 고아가 됐던 지식 화면들(`/work-guides` `/docs` `/ops-notes` `/mindmap` `/ontology` `/trends`)이 복귀했다. 문서 편집 자체는 기존 `/work-guides/:id` 화면을 그대로 쓴다.
+- **UI 구성**:
+  - 요약 타일 4개(전체/PEP 작성/Confluence 연동/동기화 필요 — 클릭 시 출처 필터 적용)
+  - 검색창 + "AI 검색" 토글(임베딩 시맨틱 검색, Ollama 미기동 시 ILIKE 폴백 안내) + 분류/상태/출처 필터
+  - 문서 테이블: 제목·분류·상태·작성자·출처(PEP/Confluence 배지)·동기화(`SyncStatusBadge` — synced/modified/error + 버전)·수정일, 행 hover 액션(게시/다시 가져오기/편집), 행 클릭 → `/work-guides/:id`
+  - 툴바: 새 문서(`/work-guides/new`), Confluence 가져오기(위저드 모달), 동기화 설정(admin)
+  - 가져오기 위저드: 간편(스페이스+검색어)/CQL 검색 → dry-run 미리보기(create/update/unchanged 배지 + changes/경고 펼침, 행 선택) → 커밋 결과(신규/갱신/건너뜀/경고)
+- **Backend**: `backend/app/routers/confluence.py` (`/confluence/docs/{search,import,export,pull,settings}`) — 세션은 `routers/jira.py` 의 `_confluence_service_verified` 재사용(SSO 자동 재로그인 포함), storage-format ↔ 에디터 HTML 변환은 `services/confluence_storage.py`, 시맨틱 검색은 `GET /work-guides/search` (`services/knowledge_search.py`). 가져오기 커밋 시 문서별 임베딩 재계산(Celery `compute_work_guide_embedding`)이 큐잉된다.
+- **핵심 기능**:
+  - Confluence 페이지 → WorkGuide 가져오기 (dry-run 프리뷰, `confluence_page_id` 기준 upsert, 버전 동일 시 unchanged 스킵, 매크로 변환 경고 노출)
+  - PEP 문서 → Confluence 게시 (연결 문서는 같은 페이지 새 버전, base64 이미지는 첨부 업로드 후 `ri:attachment` 치환)
+  - 동기화 상태 추적: PEP 에서 수정 시 `modified`(재게시 필요) 전이, 실패 시 `error`+사유
+  - 가져온 문서는 임베딩 계산 후 AI 검색·내부 LLM 학습(RAG) 소스로 편입
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 작업 가이드 (`/work-guides`, `/work-guides/new`, `/work-guides/:id`, `/work-guides/:id/edit`)
 
 - **파일**: `frontend/src/pages/WorkGuidePage.tsx` (+ `frontend/src/components/work-guides` 의 `GuideForm`, `GuidePageView`; 리치텍스트는 TipTap `RichTextEditor`/`RichContent` 사용)
@@ -1432,6 +1451,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **UI 구성**:
   - 좌측 사이드바: 페이지 트리(부모-자식, 폴더/파일 아이콘, 상태 배지, 인라인 이름변경·하위 페이지 추가), "새 페이지" 버튼
   - 우측 본문: 모드별로 `GuideForm`(작성/수정) 또는 `GuidePageView`(읽기, 수정/하위추가/워크플로 추가/삭제 액션 포함) 또는 빈 상태 안내
+  - 읽기 헤더에 Confluence 동기화 배지(`SyncStatusBadge`) + "게시" 버튼(`ConfluenceExportDialog`) + 연결 문서면 "다시 가져오기"(pull) 버튼 — `/documents` 화면 명세 참조
   - "워크플로에 노드로 추가" 모달(`AddToWorkflowModal`, `SidePane`) — 가이드를 기존 워크플로 스텝으로 연결
 - **Frontend**: `useQuery(['work-guides'], workGuidesApi.getAll)`로 전체 트리 로드 후 `parentId` 기준 클라이언트 필터링. 워크플로 연결 시 `workflowsApi.getAll` + `workflowsApi.createStep`. 이름변경/삭제/자식생성은 `workGuidesApi.update`/`delete`/`create` 직접 호출 후 `invalidateQueries(['work-guides'])`.
 - **Backend**: `GET/POST /api/v1/work-guides`, `GET/PUT/DELETE /api/v1/work-guides/{guide_id}` — `backend/app/routers/work_guide.py`. 모델은 `backend/app/models/work_guide.py`의 `WorkGuide`(`parent_id`로 계층, `status` draft/active/archived, `embedding` — pgvector 컬럼으로 유사 문서 검색용, 제목/본문 변경 시 `compute_work_guide_embedding` Celery 태스크로 비동기 재계산). 워크플로 스텝 연결은 workflows 라우터의 `createStep` 사용.

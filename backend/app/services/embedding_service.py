@@ -70,8 +70,15 @@ class EmbeddingService:
 
 
 def build_embedding_text(title: Optional[str], content: Optional[str]) -> str:
-    """제목 + 본문을 하나의 임베딩 입력 텍스트로 합친다 (WorkItem/WorkGuide 공용)."""
-    parts = [p.strip() for p in (title, content) if p and p.strip()]
+    """제목 + 본문을 하나의 임베딩 입력 텍스트로 합친다 (WorkItem/WorkGuide 공용).
+
+    본문은 TipTap HTML 로 저장되므로 태그를 벗겨 평문만 임베딩한다 — raw HTML 을
+    그대로 임베딩하면 태그 토큰이 의미 신호를 희석시킨다."""
+    from app.services.knowledge_search import strip_html_text
+    parts = [p for p in (
+        (title or "").strip(),
+        strip_html_text(content),
+    ) if p]
     return "\n\n".join(parts)
 
 

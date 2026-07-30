@@ -72,10 +72,11 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/settings':           { defaultLabel: 'Settings',       icon: Settings },
   '/jira-import':        { defaultLabel: 'Jira Excel 가져오기', icon: FileSpreadsheet },
   '/weekly-report':      { defaultLabel: '주간보고', icon: FileText },
+  '/documents':          { defaultLabel: '문서 관리',      icon: FileText },
 };
 
 // 사이드바 레일에 표시되는 그룹들
-export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'pep-services' | 'app-services' | 'system';
+export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'documents' | 'pep-services' | 'app-services' | 'system';
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
   { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
@@ -85,6 +86,10 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report'], modes: ['work'] },
+  // "문서 관리" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
+  // 개편 때 그룹을 잃고 URL 전용으로 남았던 지식 화면들(/work-guides, /docs, /ops-notes,
+  // /mindmap, /ontology, /trends)을 이 그룹으로 복귀시킨다.
+  { id: 'documents', label: '문서 관리',  icon: Library,   paths: ['/documents', '/work-guides', '/docs', '/ops-notes', '/mindmap', '/ontology', '/trends'], modes: ['work'] },
   // "PEP 서비스" — Settings → "관리 서비스" 탭 → "PEP 서비스" 서브탭(LakeServiceType domain='pep')에 등록된 서비스
   // 카탈로그의 진입점(/services, ServicesCatalogPage). 서비스 클릭 시 노트(작업계획서/업무소개/
   // 이슈대응/구축작업)와 연관 업무를 보여주는 /services/:service(ServiceHubPage)로 이동한다.

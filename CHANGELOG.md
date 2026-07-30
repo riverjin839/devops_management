@@ -19,6 +19,19 @@
   Frontend: `index.css`(`html.comfort` 토큰 블록 + 소프트 카드 섀도), `stores/themeStore.ts`,
   `components/layout/Sidebar.tsx`.
 
+### Added
+- **Confluence 문서 가져오기/내보내기 + 문서 관리 대시보드** (`/documents`): Jira 연동과 같은
+  dry-run 프리뷰 → 선택 커밋 방식으로 Confluence 페이지를 문서(WorkGuide)로 가져오고, PEP 에서
+  작성/수정한 문서를 같은 페이지의 새 버전으로 게시한다. 문서 테이블(출처·동기화 상태 배지)과
+  "AI 검색"(임베딩 시맨틱, 미기동 시 일반 검색 폴백)을 갖춘 대시보드가 사이드바 work 모드의
+  신규 "문서 관리" 그룹으로 추가됐고, 기존 지식 화면들(`/work-guides` `/docs` `/ops-notes`
+  `/mindmap` `/ontology` `/trends`)도 이 그룹으로 사이드바에 복귀.
+  Backend: `routers/confluence.py`(`/confluence/docs/*`), storage-format ↔ 에디터 HTML 변환기
+  `services/confluence_storage.py`(code/info/warning/expand 매크로 ↔ 코드블록/Callout/토글),
+  `GET /work-guides/search` 시맨틱 검색 + HNSW 인덱스, 가져온 문서 임베딩 자동 계산(LLM 학습
+  소스 편입). Frontend: `DocumentsPage` + `components/documents/`, 문서 읽기 화면 게시/재가져오기
+  버튼.
+
 ## [1.17.1] - 2026-07-29
 
 ### Fixed
