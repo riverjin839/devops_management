@@ -13,9 +13,11 @@ from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_operator
 from app.config import settings
 from app.database import get_db
 from app.models.k8s_event import K8sEvent
+from app.models.user import User
 from app.services.k8s_event_classifier import parse_kubewatch_payload
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,9 @@ class K8sEventOut(BaseModel):
     severity: str
     raw: Optional[dict[str, Any]] = None
     received_at: datetime
+    # AI 자동 분석 연결 — null(미대상) | queued | running | done | failed | skipped
+    analysis_id: Optional[UUID] = None
+    analysis_status: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -102,6 +107,16 @@ def receive_kubewatch_event(
 
         if fields["severity"] == "critical":
             _create_notification(db, event)
+
+        # AI 자동 분석 훅 — scope 매칭 시 전용 llm 큐로 enqueue. 어떤 실패도
+        # 이벤트 수신을 막지 않는다 (maybe_enqueue_analysis_for_k8s_event 자체가
+        # 절대 raise 안 함 — alert 파이프라인과 동일한 fail-safe 계약).
+        try:
+            from app.services.observability.analysis_hook import maybe_enqueue_analysis_for_k8s_event
+            maybe_enqueue_analysis_for_k8s_event(db, event)
+            db.commit()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("k8s_event 자동 분석 훅 실패 — 무시 (%s)", exc)
 
         return {"id": str(event.id), "severity": event.severity}
     except Exception as exc:  # noqa: BLE001
@@ -170,3 +185,63 @@ def delete_k8s_event(event_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Event not found")
     db.delete(event)
     db.commit()
+
+
+@router.get("/{event_id}/analysis")
+def get_k8s_event_analysis(event_id: UUID, db: Session = Depends(get_db)):
+    """이벤트에 연결된 AI 분석 결과 조회 (최신 1건)."""
+    from app.models.incident_analysis import IncidentAnalysis
+    from app.schemas.observability import IncidentAnalysisOut
+
+    row = (
+        db.query(IncidentAnalysis)
+        .filter(IncidentAnalysis.k8s_event_id == event_id)
+        .order_by(IncidentAnalysis.created_at.desc())
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="이 이벤트에 대한 AI 분석이 없습니다.")
+    return {"data": IncidentAnalysisOut(
+        id=row.id,
+        alert_event_id=row.alert_event_id,
+        k8s_event_id=row.k8s_event_id,
+        cluster_id=row.cluster_id,
+        namespace=row.namespace,
+        resource=row.resource,
+        trigger=row.trigger,
+        status=row.status,
+        severity=row.severity,
+        root_cause=row.root_cause,
+        suggested_actions=list(row.suggested_actions or []),
+        related_runbooks=list(row.related_runbooks or []),
+        confidence=row.confidence,
+        citations=list(row.citations or []),
+        analyzed_by=row.analyzed_by,
+        matched_rule_id=row.matched_rule_id,
+        duration_ms=row.duration_ms,
+        error=row.error,
+        created_at=row.created_at,
+        finished_at=row.finished_at,
+    )}
+
+
+@router.post("/{event_id}/analyze")
+def trigger_k8s_event_analysis(
+    event_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """수동 AI 분석 실행 — scope 규칙과 무관하게 즉시 llm 큐로 보낸다 (operator+)."""
+    event = db.query(K8sEvent).filter(K8sEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.analysis_status in ("queued", "running"):
+        return {"ok": True, "status": event.analysis_status, "detail": "이미 분석이 진행 중입니다."}
+    try:
+        from app.celery_app import run_auto_incident_analysis_k8s_event
+        run_auto_incident_analysis_k8s_event.apply_async(args=[str(event.id)], queue="llm")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"분석 큐잉 실패: {e}")
+    event.analysis_status = "queued"
+    db.commit()
+    return {"ok": True, "status": "queued"}

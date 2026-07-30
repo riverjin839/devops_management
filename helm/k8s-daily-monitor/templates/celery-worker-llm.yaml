@@ -1,0 +1,67 @@
+{{- if .Values.celery.llmWorker.enabled }}
+# LLM 전용 Celery 워커 — `llm` 큐만 소비 (알람 자동 분석·임베딩 백필).
+# 기본 워커와 격리해 LLM 대기(120s+)가 점검/배치잡을 밀어내지 않게 한다.
+# LLM 부하 상한 = 이 워커의 concurrency (k8s/base/celery/worker-llm-deployment.yaml 과 동일 설계).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-llm
+  labels:
+    app.kubernetes.io/name: celery-worker-llm
+    app.kubernetes.io/component: worker
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: celery-worker-llm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: celery-worker-llm
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: k8s-daily-monitor
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-redis
+          image: {{ include "k8s-daily-monitor.image" (dict "global" .Values.global "repository" .Values.redis.image.repository "tag" .Values.redis.image.tag) }}
+          command: ["sh", "-c", "until redis-cli -h redis ping; do echo 'Waiting for redis...'; sleep 2; done"]
+      containers:
+        - name: celery-worker-llm
+          image: {{ include "k8s-daily-monitor.image" (dict "global" .Values.global "repository" .Values.backend.image.repository "tag" .Values.backend.image.tag) }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: [celery, -A, app.celery_app, worker, --loglevel=info, "--concurrency={{ .Values.celery.llmWorker.concurrency }}", -Q, llm]
+          envFrom:
+            - configMapRef:
+                name: k8s-monitor-config
+            - secretRef:
+                name: k8s-monitor-secret
+          env:
+            # LLM 워커는 동시성이 낮아 DB 세션도 최소로 (커넥션 예산: config.py 주석)
+            - name: DB_POOL_SIZE
+              value: "2"
+            - name: DB_MAX_OVERFLOW
+              value: "2"
+          resources:
+            {{- toYaml .Values.celery.llmWorker.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: [celery, -A, app.celery_app, inspect, ping, --timeout, "10"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig-secret
+            optional: true
+{{- end }}

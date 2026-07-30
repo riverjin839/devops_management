@@ -1,16 +1,49 @@
 # 폐쇄망 LLM 셋업 가이드 — Ollama 모델을 Nexus 로 수급하기
 
-> 대시보드의 **AI 클러스터 상태 요약** 아이템(`ai_cluster_summary`)은 사내 **Ollama** LLM 을
-> 호출해 최근 점검 데이터를 요약하고 위험도를 산출합니다. 폐쇄망에서는 인터넷
-> (`registry.ollama.ai`)에 직접 접근할 수 없으므로, **Nexus** 를 통해 모델을 수급합니다.
+> PEP 의 LLM 게이트웨이(`services/llm/`)는 **사내 LLM 서비스(OpenAI-호환)** 와
+> **인클러스터 자체 LLM(Ollama)** 을 프로필로 등록해 동시에(병행) 쓸 수 있다 —
+> 자세한 라우팅 모델은 [AIRGAP_LLM_ARCHITECTURE.md](AIRGAP_LLM_ARCHITECTURE.md) 참고.
+> 이 문서는 그중 **자체 LLM(Ollama) 경로**의 배포·모델 수급 절차를 다룬다.
+> **사내 LLM 서비스를 이미 갖고 있다면** §1~2(Ollama 배포/모델 수급)는 건너뛰고
+> 바로 **§1.5 사내 LLM 서비스 연결(신규)** 로 가면 된다 — 별도 반입 작업이 없다.
+>
+> 대시보드의 **AI 클러스터 상태 요약** 아이템(`ai_cluster_summary`)을 포함해 챗봇·
+> 장애분석·알람 자동분석 등 모든 LLM 기능은 이 문서의 어느 경로로 붙인 LLM 이든
+> **Settings → AI/LLM 탭의 용도별 라우팅**에서 지정한 프로필을 사용한다. 폐쇄망에서는
+> 인터넷(`registry.ollama.ai`)에 직접 접근할 수 없으므로, 자체 LLM 을 쓸 경우 **Nexus**
+> 를 통해 모델을 수급한다.
 >
 > 이 문서는 Ollama 배포 → Nexus 로 모델 수급 → 백엔드 연동 → AI 아이템 사용까지의
 > 전체 절차를 다룹니다.
 >
-> **아키텍처/기능 설계** — 내부 제공 모델(GLM-5.2)로의 전환, vLLM(OpenAI-호환) 서빙,
-> K8s 로그 자동 분석(분석 전용), PEP 내부 문서 RAG 는
-> [AIRGAP_LLM_ARCHITECTURE.md](AIRGAP_LLM_ARCHITECTURE.md) 를 참고하세요.
-> (GLM 가중치/vLLM 이미지 반입도 본 문서의 방식 B(raw-hosted)를 그대로 적용합니다.)
+> **아키텍처/기능 설계** — 프로필×용도 라우팅, K8s 로그 자동 분석(분석 전용),
+> PEP 내부 문서 RAG 는 [AIRGAP_LLM_ARCHITECTURE.md](AIRGAP_LLM_ARCHITECTURE.md) 를
+> 참고하세요. GPU 서빙(vLLM) 이미지/가중치 반입도 본 문서의 방식 B(raw-hosted)를 그대로
+> 적용합니다.
+
+---
+
+## 1.5 사내 LLM 서비스 연결 (OpenAI-호환) — Nexus/모델 반입 불필요
+
+사내에서 이미 LLM 서비스(vLLM, LiteLLM, 사내 게이트웨이 등 OpenAI `/v1/chat/completions`
+호환 API)를 운영 중이라면, PEP 는 별도 이미지 반입 없이 **프로필 등록만으로** 연결한다:
+
+1. **Settings → AI/LLM 탭 → LLM 엔드포인트 프로필 → 프로필 추가**
+   - Provider: `OpenAI 호환 (사내 LLM 서비스 / vLLM)`
+   - 엔드포인트 URL: `http://<사내-LLM-게이트웨이>:<포트>` (예: `http://llm-gw.corp.internal:8000`)
+   - 모델: 사내 서비스가 제공하는 모델명 (편집 화면의 "목록 조회" 버튼으로 `/v1/models` 조회 가능)
+   - API 키가 필요하면 같은 화면의 **API 키 등록**으로 암호화 저장 후 프로필에서 참조
+   - "연결 테스트"로 짧은 한국어 프롬프트 1회 호출 확인
+2. **용도별 라우팅** 테이블에서 원하는 기능(챗봇/장애분석/…)의 primary 를 방금 등록한
+   프로필로 지정한다. 인클러스터 Ollama 를 fallback 으로 남겨두면, 사내 LLM 서비스 장애
+   시 자동으로 Ollama 로 전환된다(병행 운용).
+3. 부트스트랩(최초 배포) 시 UI 접근 전에 미리 값을 넣고 싶다면 `LLM_API_BASE`/
+   `LLM_API_KEY`/`LLM_MODEL` 환경변수로 기본 프로필을 자동 합성할 수 있다 —
+   `docs/ENVIRONMENT.md` 참고. 운영 중 변경은 항상 UI 가 원천이다.
+
+사내 LLM 서비스의 응답 형태가 OpenAI 표준과 미세하게 다르면(예: `choices[0].message.content`
+가 비거나 다른 필드명), 게이트웨이가 방어적으로 파싱하되 실패 시 오류를 그대로 노출한다 —
+"연결 테스트"로 실제 응답을 먼저 확인하는 것을 권장한다.
 
 ---
 
@@ -39,8 +72,11 @@
                               └────────────────────────┘
 ```
 
-핵심: **백엔드는 Ollama 만 바라봅니다(`OLLAMA_URL`)**. Nexus 는 "Ollama 서버가 모델을
-어디서 받아오는가"의 문제이지, 백엔드 호출 경로와는 무관합니다.
+핵심: 이 다이어그램은 **자체 LLM(Ollama) 경로**만 그린 것이다. Nexus 는 "Ollama 서버가
+모델을 어디서 받아오는가"의 문제이지, 백엔드 호출 경로와는 무관하다. 백엔드
+(`services/llm/` 게이트웨이)는 여기 그려진 Ollama 프로필과, §1.5 의 사내 LLM 서비스
+프로필을 **동시에** 바라볼 수 있다 — 어느 프로필을 쓸지는 Settings → AI/LLM 의 용도별
+라우팅이 결정한다.
 
 ---
 
@@ -136,6 +172,12 @@ Ollama 모델은 OCI 와 유사한 레지스트리 포맷으로 배포됩니다.
 > **Helm 폐쇄망 차트(`values-airgap.yaml`)** 는 모델을 **사전 적재한 커스텀 Ollama 이미지**를 쓰며
 > 기본 `OLLAMA_MODEL=qwen2.5-coder:7b` 로 설정돼 있다. 이 이미지를 그대로 쓰면 위 2장(모델 수급)
 > 절차가 필요 없다. 다른 모델을 쓰려면 `OLLAMA_MODEL` 을 바꾸고 2장 절차로 적재한다.
+
+위 세 변수는 **최초 배포 시 bootstrap 폴백**일 뿐이다 — 행이 비어 있을 때만 기본
+프로필(`local-ollama`) 합성에 쓰이고, 운영 중 프로필/모델/타임아웃 변경은 항상
+Settings → AI/LLM 탭이 원천이다(변경 후 최대 1분 내 반영). 사내 LLM 서비스용
+bootstrap 변수(`LLM_API_BASE`/`LLM_API_KEY`/`LLM_MODEL`)는 §1.5 및
+`docs/ENVIRONMENT.md` 를 참고.
 
 ---
 

@@ -1,0 +1,7 @@
+# Opt-in component — GPU 노드가 있는 오버레이에만 추가한다 (base 무변경).
+# 사용법은 vllm-deployment.yaml 상단 주석 참고.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - vllm-deployment.yaml

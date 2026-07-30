@@ -10,8 +10,10 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from app.services.llm import ollama_provider as ollama_provider_module
 from app.services.llm import openai_provider as openai_provider_module
-from app.services.llm.base import LLMProfile, LLMResult
+from app.services.llm.base import LLMProfile, LLMResult, LLMStreamChunk
+from app.services.llm.ollama_provider import OllamaProvider
 from app.services.llm.openai_provider import OpenAICompatProvider
 from app.services.llm.service import (
     LLMService,
@@ -302,3 +304,218 @@ async def test_openai_provider_sends_bearer_header(monkeypatch):
     assert captured["headers"]["Authorization"] == "Bearer sk-secret"
     assert captured["json"]["messages"][0] == {"role": "system", "content": "시스템"}
     assert captured["json"]["messages"][1] == {"role": "user", "content": "질문"}
+
+
+# ── 스트리밍 provider (SSE 챗) ────────────────────────────────────────────
+
+class _FakeStreamResponse:
+    def __init__(self, lines, status_code=200):
+        self._lines = lines
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            request = httpx.Request("POST", "http://x")
+            response = httpx.Response(self.status_code, request=request, text="err")
+            raise httpx.HTTPStatusError(str(self.status_code), request=request, response=response)
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            yield line
+
+
+class _FakeStreamCtx:
+    def __init__(self, lines, status_code=200, raise_exc=None):
+        self._lines = lines
+        self._status_code = status_code
+        self._raise_exc = raise_exc
+
+    async def __aenter__(self):
+        if self._raise_exc:
+            raise self._raise_exc
+        return _FakeStreamResponse(self._lines, self._status_code)
+
+    async def __aexit__(self, *a):
+        return False
+
+
+class _FakeStreamClient:
+    def __init__(self, lines, status_code=200, raise_exc=None):
+        self._lines = lines
+        self._status_code = status_code
+        self._raise_exc = raise_exc
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    def stream(self, method, url, **kwargs):
+        return _FakeStreamCtx(self._lines, self._status_code, self._raise_exc)
+
+
+def _patch_ollama_stream(monkeypatch, lines=None, status_code=200, raise_exc=None):
+    monkeypatch.setattr(
+        ollama_provider_module.httpx, "AsyncClient",
+        lambda *a, **k: _FakeStreamClient(lines or [], status_code, raise_exc),
+    )
+
+
+def _patch_openai_stream(monkeypatch, lines=None, status_code=200, raise_exc=None):
+    monkeypatch.setattr(
+        openai_provider_module.httpx, "AsyncClient",
+        lambda *a, **k: _FakeStreamClient(lines or [], status_code, raise_exc),
+    )
+
+
+async def _collect(agen):
+    return [c async for c in agen]
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_yields_deltas_then_done(monkeypatch):
+    lines = [
+        '{"model":"qwen2.5-coder:7b","response":"안","done":false}',
+        '{"model":"qwen2.5-coder:7b","response":"녕","done":false}',
+        '{"model":"qwen2.5-coder:7b","done":true,"prompt_eval_count":5,"eval_count":2}',
+    ]
+    _patch_ollama_stream(monkeypatch, lines=lines)
+    chunks = await _collect(OllamaProvider(_profile_with(provider="ollama")).chat_stream("q"))
+    deltas = [c.delta for c in chunks if not c.done]
+    assert deltas == ["안", "녕"]
+    assert chunks[-1].done is True
+    assert chunks[-1].status == "ok"
+    assert chunks[-1].prompt_tokens == 5
+    assert chunks[-1].completion_tokens == 2
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_connect_error_yields_single_offline_chunk(monkeypatch):
+    _patch_ollama_stream(monkeypatch, raise_exc=httpx.ConnectError("refused"))
+    chunks = await _collect(OllamaProvider(_profile_with(provider="ollama")).chat_stream("q"))
+    assert len(chunks) == 1
+    assert chunks[0].done is True
+    assert chunks[0].status == "offline"
+    assert chunks[0].error == "connect_error"
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_malformed_lines_are_skipped(monkeypatch):
+    lines = ["not json", '{"response":"ok","done":false}', '{"done":true}']
+    _patch_ollama_stream(monkeypatch, lines=lines)
+    chunks = await _collect(OllamaProvider(_profile_with(provider="ollama")).chat_stream("q"))
+    deltas = [c.delta for c in chunks if not c.done]
+    assert deltas == ["ok"]
+    assert chunks[-1].status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_openai_stream_parses_sse_delta_and_done(monkeypatch):
+    lines = [
+        'data: {"model":"corp-model","choices":[{"delta":{"content":"안"}}]}',
+        "",
+        'data: {"model":"corp-model","choices":[{"delta":{"content":"녕"}}]}',
+        "",
+        "data: [DONE]",
+    ]
+    _patch_openai_stream(monkeypatch, lines=lines)
+    chunks = await _collect(OpenAICompatProvider(_profile()).chat_stream("q"))
+    deltas = [c.delta for c in chunks if not c.done]
+    assert deltas == ["안", "녕"]
+    assert chunks[-1].done is True
+    assert chunks[-1].status == "ok"
+    assert chunks[-1].model == "corp-model"
+
+
+@pytest.mark.asyncio
+async def test_openai_stream_no_content_is_error(monkeypatch):
+    lines = ["data: [DONE]"]
+    _patch_openai_stream(monkeypatch, lines=lines)
+    chunks = await _collect(OpenAICompatProvider(_profile()).chat_stream("q"))
+    assert len(chunks) == 1
+    assert chunks[0].status == "error"
+    assert chunks[0].error == "empty_or_unexpected_response"
+
+
+@pytest.mark.asyncio
+async def test_openai_stream_auth_failure(monkeypatch):
+    _patch_openai_stream(monkeypatch, status_code=401,
+                         raise_exc=None, lines=[])
+    # raise_for_status is called inside __aenter__'s response object, triggered on first access.
+    chunks = await _collect(OpenAICompatProvider(_profile()).chat_stream("q"))
+    assert chunks[0].status == "error"
+    assert chunks[0].error == "auth_failed_http_401"
+
+
+def _profile_with(provider="ollama") -> LLMProfile:
+    return LLMProfile(name="local", provider=provider, base_url="http://ollama:11434", model="qwen2.5-coder:7b")
+
+
+# ── LLMService.chat_stream_for_purpose — fallback 시맨틱 ──────────────────
+
+class _FakeStreamProvider:
+    def __init__(self, profile, chunks):
+        self.profile = profile
+        self._chunks = chunks
+
+    async def chat_stream(self, prompt, *, system=None, options=None):
+        for c in self._chunks:
+            yield c
+
+
+def _stream_service_with(monkeypatch, cfg: dict, chunks_by_profile: dict) -> LLMService:
+    svc = LLMService()
+    monkeypatch.setattr(svc, "resolve_settings", lambda db=None: merge_llm_settings(cfg))
+    monkeypatch.setattr(
+        svc, "build_provider",
+        lambda profile: _FakeStreamProvider(profile, chunks_by_profile[profile.name]),
+    )
+    return svc
+
+
+@pytest.mark.asyncio
+async def test_stream_falls_back_when_primary_fails_before_any_delta(monkeypatch):
+    svc = _stream_service_with(monkeypatch, _TWO_PROFILE_CFG, {
+        "corp": [LLMStreamChunk(done=True, status="offline", profile="corp", error="connect_error")],
+        "local": [
+            LLMStreamChunk(delta="안녕", profile="local"),
+            LLMStreamChunk(done=True, status="ok", profile="local", model="m2"),
+        ],
+    })
+    chunks = await _collect(svc.chat_stream_for_purpose("chat", "q"))
+    deltas = [c.delta for c in chunks if not c.done]
+    assert deltas == ["안녕"]
+    assert chunks[-1].profile == "local"
+    assert chunks[-1].status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_stream_does_not_fallback_after_partial_delta(monkeypatch):
+    """primary 가 델타를 일부 보낸 뒤 실패하면, fallback 으로 다시 시작하지 않고
+    그 자리에서 오류로 끝난다 (앞뒤 안 맞는 이어붙이기 방지)."""
+    svc = _stream_service_with(monkeypatch, _TWO_PROFILE_CFG, {
+        "corp": [
+            LLMStreamChunk(delta="일부 응답", profile="corp"),
+            LLMStreamChunk(done=True, status="error", profile="corp", error="http_500"),
+        ],
+        "local": [LLMStreamChunk(delta="이건 안 보여야 함", profile="local")],
+    })
+    chunks = await _collect(svc.chat_stream_for_purpose("chat", "q"))
+    deltas = [c.delta for c in chunks if not c.done]
+    assert deltas == ["일부 응답"]
+    assert chunks[-1].profile == "corp"
+    assert chunks[-1].status == "error"
+
+
+@pytest.mark.asyncio
+async def test_stream_all_fail_yields_final_offline(monkeypatch):
+    svc = _stream_service_with(monkeypatch, _TWO_PROFILE_CFG, {
+        "corp": [LLMStreamChunk(done=True, status="offline", profile="corp", error="connect_error")],
+        "local": [LLMStreamChunk(done=True, status="offline", profile="local", error="connect_error")],
+    })
+    chunks = await _collect(svc.chat_stream_for_purpose("chat", "q"))
+    assert len(chunks) == 1
+    assert chunks[0].done is True
+    assert chunks[0].status == "offline"
+    assert chunks[0].profile == "local"

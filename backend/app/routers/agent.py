@@ -6,11 +6,13 @@ a structured response (never a 500) so the main dashboard keeps working.
 분석/조언 전용 — 응답에는 실행 가능한 필드가 없다.
 """
 
+import json
 import logging
 import uuid as _uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,7 @@ from app.database import get_db
 from app.models.agent_conversation import AgentConversation, AgentMessage
 from app.models.user import User
 from app.services.agent_service import agent_service
+from app.services.llm import llm_service
 from app.services.llm.response_parser import extract_info_requests
 
 logger = logging.getLogger(__name__)
@@ -130,6 +133,72 @@ async def _retrieve_citations(db: Session, query: str) -> list[dict]:
         return []
 
 
+def _resolve_conversation(db: Session, conversation_id: Optional[str], query: str, user: User) -> Optional[AgentConversation]:
+    """대화 확보(지속성) — DB 장애 시에도 챗 자체는 동작해야 하므로 방어적으로."""
+    try:
+        if conversation_id:
+            return _get_owned_conversation(db, conversation_id, user)
+        conv = AgentConversation(username=user.username, title=query.strip()[:40] or "새 대화")
+        db.add(conv)
+        db.flush()
+        return conv
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("대화 저장 불가 — 무기록 모드로 진행: %s", exc)
+        return None
+
+
+async def _build_chat_prompt(
+    db: Session, conv: Optional[AgentConversation], query: str, context: Optional[dict],
+) -> tuple[str, list[dict]]:
+    """히스토리 + RAG 참고자료 + 컨텍스트 + 질문을 하나의 프롬프트로 조립.
+
+    반환: (prompt, citations) — citations 는 그대로 응답/저장에 재사용한다.
+    """
+    parts: list[str] = []
+    if conv is not None:
+        try:
+            history = _history_block(db, conv)
+            if history:
+                parts.append(history)
+        except Exception:  # noqa: BLE001
+            pass
+    citations = await _retrieve_citations(db, query)
+    if citations:
+        from app.services.rag_service import build_reference_block
+        parts.append(build_reference_block(citations))
+        parts.append(
+            "참고자료에 근거한 내용에는 [번호] 로 출처를 표기하고, "
+            "참고자료에 없는 내용은 일반 지식임을 밝혀라."
+        )
+    parts.append(agent_service._build_prompt(query, context))
+    return "\n\n".join(parts), citations
+
+
+def _persist_turn(
+    db: Session, conv: Optional[AgentConversation], query: str, answer: str,
+    citations: list[dict], requests: list[dict], model: str,
+) -> Optional[str]:
+    """사용자 질문 + 어시스턴트 응답을 메시지로 저장 (best-effort)."""
+    if conv is None:
+        return None
+    try:
+        db.add(AgentMessage(conversation_id=conv.id, role="user", content=query))
+        db.add(AgentMessage(
+            conversation_id=conv.id, role="assistant", content=answer,
+            citations=citations or None, requests=requests or None, model=model or None,
+        ))
+        from datetime import datetime as _dt
+        conv.updated_at = _dt.utcnow()
+        db.commit()
+        return str(conv.id)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.warning("대화 메시지 저장 실패 — 응답은 정상 반환: %s", exc)
+        return None
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────
 
 @router.post("/chat", response_model=AgentChatResponse)
@@ -145,69 +214,15 @@ async def agent_chat(
     - ``status: "ok"``      → LLM answered successfully
     - ``status: "offline"`` → LLM unreachable; ``answer`` contains a friendly message
     """
-    # 대화 확보 (지속성) — DB 장애 시에도 챗 자체는 동작해야 하므로 방어적으로.
-    conv: Optional[AgentConversation] = None
-    try:
-        if body.conversation_id:
-            conv = _get_owned_conversation(db, body.conversation_id, user)
-        else:
-            conv = AgentConversation(
-                username=user.username,
-                title=body.query.strip()[:40] or "새 대화",
-            )
-            db.add(conv)
-            db.flush()
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("대화 저장 불가 — 무기록 모드로 진행: %s", exc)
-        conv = None
-
-    # 프롬프트 조립: 히스토리 + 사내 참고자료(RAG) + 컨텍스트 + 질문
-    parts: list[str] = []
-    if conv is not None:
-        try:
-            history = _history_block(db, conv)
-            if history:
-                parts.append(history)
-        except Exception:  # noqa: BLE001
-            pass
-    citations = await _retrieve_citations(db, body.query)
-    if citations:
-        from app.services.rag_service import build_reference_block
-        parts.append(build_reference_block(citations))
-        parts.append(
-            "참고자료에 근거한 내용에는 [번호] 로 출처를 표기하고, "
-            "참고자료에 없는 내용은 일반 지식임을 밝혀라."
-        )
-    parts.append(agent_service._build_prompt(body.query, body.context))
-    prompt = "\n\n".join(parts)
+    conv = _resolve_conversation(db, body.conversation_id, body.query, user)
+    prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context)
 
     result = await agent_service._call_llm(prompt, purpose="chat")
     answer, requests = extract_info_requests(result.get("answer", ""))
     if not answer:
         answer = result.get("answer", "")
 
-    # 메시지 저장 (best-effort)
-    conversation_id: Optional[str] = None
-    if conv is not None:
-        try:
-            db.add(AgentMessage(conversation_id=conv.id, role="user", content=body.query))
-            db.add(AgentMessage(
-                conversation_id=conv.id,
-                role="assistant",
-                content=answer,
-                citations=citations or None,
-                requests=requests or None,
-                model=result.get("model") or None,
-            ))
-            from datetime import datetime as _dt
-            conv.updated_at = _dt.utcnow()
-            db.commit()
-            conversation_id = str(conv.id)
-        except Exception as exc:  # noqa: BLE001
-            db.rollback()
-            logger.warning("대화 메시지 저장 실패 — 응답은 정상 반환: %s", exc)
+    conversation_id = _persist_turn(db, conv, body.query, answer, citations, requests, result.get("model", ""))
 
     return AgentChatResponse(
         status=result.get("status", "offline"),
@@ -216,6 +231,78 @@ async def agent_chat(
         conversation_id=conversation_id,
         citations=citations if result.get("status") == "ok" else [],
         requests=requests,
+    )
+
+
+@router.post("/chat/stream")
+async def agent_chat_stream(
+    body: AgentChatRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """``/chat`` 의 SSE 스트리밍 버전 — 토큰 단위로 ``data: {"delta": "..."}`` 를 보내고,
+    마지막에 ``data: {"done": true, ...}`` (상태/모델/대화id/인용/정보요청 포함)로 끝난다.
+
+    대화 조회·RAG 검색은 스트림 시작 전에 미리 끝낸다 — 스트리밍 도중 DB 세션을
+    오래 들고 있지 않기 위함. 메시지 저장은 전체 텍스트가 모인 뒤 스트림 끝에서
+    한 번 수행한다(best-effort — 실패해도 이미 보낸 응답에는 영향 없음).
+    """
+    conv = _resolve_conversation(db, body.conversation_id, body.query, user)
+    prompt, citations = await _build_chat_prompt(db, conv, body.query, body.context)
+    conversation_id = str(conv.id) if conv is not None else None
+
+    async def _gen():
+        collected: list[str] = []
+        final_status = "offline"
+        final_model = ""
+        final_error: Optional[str] = None
+        try:
+            async for chunk in llm_service.chat_stream_for_purpose("chat", prompt):
+                if not chunk.done:
+                    if chunk.delta:
+                        collected.append(chunk.delta)
+                        yield f"data: {json.dumps({'delta': chunk.delta}, ensure_ascii=False)}\n\n"
+                    continue
+                final_status = chunk.status
+                final_model = chunk.model
+                final_error = chunk.error
+        except Exception as exc:  # noqa: BLE001  (게이트웨이는 원래 raise 안 하지만 방어적으로)
+            logger.exception("chat stream 예외: %s", exc)
+            final_status = "error"
+            final_error = str(exc)[:200]
+
+        raw_answer = "".join(collected)
+        answer, requests = extract_info_requests(raw_answer)
+        if not answer:
+            answer = raw_answer
+
+        if final_status != "ok" and not answer:
+            answer = (
+                "AI 어시스턴트에 연결할 수 없습니다. Settings → AI/LLM 에서 LLM 연결 상태를 확인하세요."
+                if final_status == "offline" else
+                "AI 어시스턴트에 일시적인 오류가 발생했습니다."
+            )
+            yield f"data: {json.dumps({'delta': answer}, ensure_ascii=False)}\n\n"
+
+        saved_id = _persist_turn(db, conv, body.query, answer, citations, requests, final_model)
+        # 이 SSE 바디는 axios 인터셉터를 거치지 않는(수동 fetch+reader 소비) 원문 JSON 이라
+        # snake_case 그대로 보낸다 — /agent/chat 의 camelCase 응답과는 별개 규약.
+        done_payload = {
+            "done": True, "status": final_status, "model": final_model,
+            "conversation_id": saved_id or conversation_id,
+            "citations": citations if final_status == "ok" else [],
+            "requests": requests, "error": final_error,
+        }
+        yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 

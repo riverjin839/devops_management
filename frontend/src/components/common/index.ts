@@ -3,6 +3,7 @@ export type { ViewModeOption } from './ViewModeBar';
 export { InlineEdit } from './InlineEdit';
 export { ConfirmDialog } from './ConfirmDialog';
 export { CitationList } from './CitationList';
+export { IncidentAnalysisPanel } from './IncidentAnalysisPanel';
 export { useModalA11y } from './useModalA11y';
 export { LogViewer } from './LogViewer';
 export { ExecOutputTabs } from './ExecOutputTabs';
