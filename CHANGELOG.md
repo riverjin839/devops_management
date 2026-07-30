@@ -32,6 +32,40 @@
   소스 편입). Frontend: `DocumentsPage` + `components/documents/`, 문서 읽기 화면 게시/재가져오기
   버튼.
 
+### Added
+- **AI 근거 인용(RAG) + 정보요청 루프 + 대화 지속 챗봇 (Phase 3)**: AI 분석·챗봇
+  답변에 사내 지식(작업 가이드·업무 이력·운영 노트) 근거를 pgvector 유사 검색으로
+  인용한다 — 클릭 가능한 딥링크 + 유사도 표시, 근거 없는 내용은 '(추정)' 표기 지시.
+  컨텍스트가 부족하면 AI 가 구조화된 정보요청(코드/이력/로그/설정)을 보내고,
+  **운영자가 칩 UI 로 직접 제공** 한다(자율 실행 없음 — 무실행 보증 유지;
+  트러블슈팅 이력은 `GET /llm/rag-search` 사내 검색 모달로 첨부). 챗봇은 한국어
+  UI 로 전면 개편 — 마크다운 렌더, 서버 저장 멀티턴 대화(목록/이어가기/삭제),
+  화면별 접근 제어 게이트 적용. Backend: `rag_service`, `ops_notes.embedding`
+  (+`compute_ops_note_embedding`/`backfill_embeddings` — llm 큐), `response_parser`,
+  `agent_conversations`/`agent_messages` 테이블(보존 180일), 분석 결과 `citations`.
+  Frontend: `CitationList`, `InfoRequestChips`, `AgentChat` 개편.
+- **알람 AI 자동 분석 — 범위 지정 점진 롤아웃 (Phase 2)**: 알람(`/alerts`) 수신 시
+  운영자가 정의한 범위 규칙(클러스터/네임스페이스/알람명 패턴/최소 심각도, priority
+  first-match)에 매칭되면 AI 장애 분석을 자동 실행하고 결과를 알람 행 확장에 표시한다
+  (원인 분석·조치 가이드 — **실행 권한 없음, 사람이 수행**). 부하 제어: 전용 Celery
+  `llm` 큐(워커 분리, concurrency 1)·Redis 디바운스·규칙별/전역 시간당 상한, 기본
+  전부 꺼짐(운영자가 사용량 대시보드를 보며 점진 확대). 수동 분석/재분석 버튼(operator+),
+  분석 백엔드·프로필(analyzed_by) 투명 표기. Backend: `incident_analyses` 테이블,
+  `alert_events.analysis_id/analysis_status`, `analysis_hook`(scope 매칭)·
+  `incident_context_builder`, `run_auto_incident_analysis` 태스크, retention/backup 등록.
+  Frontend: `AlertAnalysisPanel`, Settings AI/LLM 탭에 분석 범위 규칙 편집기.
+- **폐쇄망 LLM 이중 운용 — 프로필 × 용도 라우팅 게이트웨이 (Phase 1)**: 사내 OpenAI-호환
+  LLM 서비스와 인클러스터 Ollama 를 동시에 등록하고, 기능별(챗봇/장애분석/점검리뷰/
+  아키텍처문서/트렌드/임베딩)로 어느 LLM 을 쓸지 UI 에서 라우팅한다(primary 실패 시
+  fallback 자동 전환). Settings 에 **AI / LLM 탭** 신설 — 프로필 CRUD·연결 테스트·용도별
+  라우팅·분석기 백엔드 선택·API 키 암호화 저장(`llm_credentials`)·최근 24h 사용량
+  (호출/오류/지연/토큰) 가시화. 시스템 프롬프트 한국어 기본화.
+  Backend: `services/llm/` 게이트웨이 신설, 기존 5개 Ollama 하드코딩 호출부
+  (`agent_service`/`local_llm_analyzer`/`embedding_service`/`trends summarizer`/
+  `architecture_doc_service`) 이관, `ANALYZER_BACKEND` raw env → AppSetting
+  `llm_settings` 로 이동(UI-First), `routers/llm_settings.py` 신설.
+  Frontend: `LlmSettingsTab.tsx`, `useLlmSettings.ts`, `llmApi`.
+
 ## [1.17.1] - 2026-07-29
 
 ### Fixed

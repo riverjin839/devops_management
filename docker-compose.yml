@@ -88,6 +88,26 @@ services:
     volumes:
       - ./ansible:/app/ansible:ro
 
+  # LLM 전용 워커 — 알람 자동 분석(llm 큐)만 소비. 기본 워커와 격리해
+  # LLM 대기(120s+)가 점검/배치잡을 밀어내지 않게 한다.
+  celery-worker-llm:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: k8s_monitor_celery_llm
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=1 -Q llm
+    environment:
+      - DEBUG=true
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # kubewatch — K8s 이벤트 실시간 감시 → PEP 웹훅
   # 로컬 kind 클러스터 사용 시: kind-setup.sh up 후 ~/.kube/config 가 kind 클러스터를 가리킴.
   # 주의(fail-closed): backend 는 KUBEWATCH_TOKEN 미설정 시 웹훅 수신을 503 으로

@@ -403,6 +403,15 @@ def route_and_notify(
     if outcome == "created":
         _fanout_channels(db, event, policy.get("channel_ids") or [])
 
+    # AI 자동 분석 훅 — scope 매칭 시 전용 llm 큐로 enqueue. 어떤 실패도
+    # 알람 수신을 막지 않는다 (maybe_enqueue_analysis 자체가 절대 raise 안 함).
+    try:
+        from app.services.observability.analysis_hook import maybe_enqueue_analysis
+        analysis_outcome = maybe_enqueue_analysis(db, event)
+    except Exception as e:  # noqa: BLE001
+        _log.warning("alert route: 자동 분석 훅 실패 — 무시 (%s)", e)
+        analysis_outcome = "error"
+
     return {
         "id": str(event.id),
         "alertname": event.alertname,
@@ -412,4 +421,5 @@ def route_and_notify(
         "occurrences": event.occurrences,
         "notify": outcome,
         "rule": rule.name if rule else None,
+        "analysis": analysis_outcome,
     }

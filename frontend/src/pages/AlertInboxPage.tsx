@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { BellOff, Check, ExternalLink, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
+import { AlertAnalysisPanel } from '@/components/observability/AlertAnalysisPanel';
 import { useToast } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -350,6 +351,7 @@ export function AlertInboxPage() {
                                 {alert.description ? (
                                   <p className="text-xs whitespace-pre-wrap">{alert.description}</p>
                                 ) : null}
+                                <AlertAnalysisPanel alert={alert} />
                                 <div className="grid gap-4 md:grid-cols-2">
                                   <LabelTable title="라벨" pairs={alert.labels} />
                                   <LabelTable title="어노테이션" pairs={alert.annotations} />

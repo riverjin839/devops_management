@@ -1,0 +1,131 @@
+# LLM 전용 Celery 워커 — `llm` 큐만 소비한다.
+#
+# 알람 자동 분석(run_auto_incident_analysis)은 LLM 응답 대기(최대 120s+)가 길어
+# 기본(celery) 큐의 2-slot 워커 풀에 섞이면 점검/배치잡이 뒤로 밀린다.
+# 전용 워커(concurrency=1)로 격리해 "LLM 부하 상한 = 이 워커의 동시성"이 되게 한다
+# — 운영자는 Settings → AI/LLM 의 사용량 대시보드를 보며 분석 범위를 점진 확대한다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-llm
+  namespace: k8s-monitor
+  labels:
+    app.kubernetes.io/name: celery-worker-llm
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: k8s-daily-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: celery-worker-llm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: celery-worker-llm
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: k8s-daily-monitor
+    spec:
+      serviceAccountName: k8s-monitor-sa
+      initContainers:
+        - name: wait-for-redis
+          image: redis:7-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until redis-cli -h redis ping; do
+                echo "Waiting for redis..."
+                sleep 2
+              done
+              echo "Redis is ready!"
+      containers:
+        - name: celery-worker-llm
+          image: k8s-daily-monitor/backend:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - app.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=1
+            - -Q
+            - llm
+          env:
+            - name: DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-monitor-config
+                  key: DEBUG
+            - name: OLLAMA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-monitor-config
+                  key: OLLAMA_URL
+                  optional: true
+            - name: OLLAMA_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-monitor-config
+                  key: OLLAMA_MODEL
+                  optional: true
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-secret
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-secret
+                  key: REDIS_URL
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-secret
+                  key: CELERY_BROKER_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-secret
+                  key: CELERY_RESULT_BACKEND
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-secret
+                  key: SECRET_KEY
+            # LLM 워커는 동시성 1 — DB 세션도 최소로 (커넥션 예산: config.py 주석 참고)
+            - name: DB_POOL_SIZE
+              value: "2"
+            - name: DB_MAX_OVERFLOW
+              value: "2"
+          resources:
+            requests:
+              memory: "192Mi"
+              cpu: "100m"
+            limits:
+              memory: "384Mi"
+              cpu: "300m"
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - app.celery_app
+                - inspect
+                - ping
+                - --timeout
+                - "10"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig-secret
+            optional: true

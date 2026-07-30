@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -721,10 +721,46 @@ export const ansibleAssetsApi = {
 
 // Agent API (AI Mode — fail-safe)
 export const agentApi = {
-  chat: (data: AgentChatRequest) =>
+  chat: (data: AgentChatRequest & { conversationId?: string | null }) =>
     api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
   health: () =>
     api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
+  conversations: () =>
+    api.get<{ data: import('@/types').AgentConversationSummary[] }>('/agent/conversations'),
+  messages: (conversationId: string) =>
+    api.get<{ data: import('@/types').AgentMessageOut[] }>(`/agent/conversations/${conversationId}/messages`),
+  deleteConversation: (conversationId: string) =>
+    api.delete<{ ok: boolean }>(`/agent/conversations/${conversationId}`),
+};
+
+// LLM 게이트웨이 설정 API (Settings → AI/LLM 탭)
+export const llmApi = {
+  getSettings: () =>
+    api.get<{ data: LlmSettings; purposes: string[] }>('/llm/settings'),
+  updateSettings: (data: LlmSettings) =>
+    api.put<{ data: LlmSettings; warnings: string[] }>('/llm/settings', data),
+  health: () =>
+    api.get<{ data: LlmHealthEntry[] }>('/llm/health', { timeout: 15000 }),
+  profileModels: (name: string) =>
+    api.get<{ data: string[] }>(`/llm/profiles/${encodeURIComponent(name)}/models`, { timeout: 10000 }),
+  testProfile: (profile: string, prompt?: string) =>
+    api.post<LlmTestResult>('/llm/test', { profile, ...(prompt ? { prompt } : {}) }, { timeout: 120000 }),
+  usage: () =>
+    api.get<{ data: LlmUsageBucket[] }>('/llm/usage'),
+  listCredentials: () =>
+    api.get<{ data: LlmCredentialSummary[] }>('/llm/credentials'),
+  createCredential: (name: string, apiKey: string) =>
+    api.post<{ data: { name: string; hint: string }; updated: boolean }>('/llm/credentials', { name, apiKey }),
+  deleteCredential: (name: string) =>
+    api.delete<{ ok: boolean }>(`/llm/credentials/${encodeURIComponent(name)}`),
+  ragSearch: (q: string, k = 5) =>
+    api.get<{ data: import('@/types').RagCitation[] }>('/llm/rag-search', { params: { q, k }, timeout: 30000 }),
+  backfillEmbeddings: () =>
+    api.post<{ ok: boolean; detail: string }>('/llm/backfill-embeddings'),
+  getAnalysisScope: () =>
+    api.get<{ data: import('@/types').LlmAnalysisScope }>('/llm/analysis-scope'),
+  updateAnalysisScope: (data: import('@/types').LlmAnalysisScope) =>
+    api.put<{ data: import('@/types').LlmAnalysisScope; warnings: string[] }>('/llm/analysis-scope', data),
 };
 
 // PromQL Metric Cards API
@@ -2063,6 +2099,10 @@ export const observabilityApi = {
       },
     }),
   deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+  getAlertAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/observability/alerts/${id}/analysis`),
+  triggerAlertAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/observability/alerts/${id}/analyze`),
 
   // 알림 규칙 / 전역 설정
   alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),

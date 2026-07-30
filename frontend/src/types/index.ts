@@ -338,6 +338,42 @@ export interface AgentChatResponse {
   status: 'ok' | 'offline';
   answer: string;
   model: string;
+  conversationId?: string | null;
+  citations?: RagCitation[];
+  requests?: AgentInfoRequest[];
+}
+
+/** RAG 근거 인용 — 백엔드 rag_service.Citation */
+export interface RagCitation {
+  title: string;
+  sourceType: 'work_guide' | 'work_item' | 'ops_note';
+  refId: string;
+  route: string;
+  snippet: string;
+  similarity: number;
+}
+
+/** AI 의 추가 정보 요청 (운영자가 제공 — 자율 실행 아님) */
+export interface AgentInfoRequest {
+  kind: 'github_code' | 'troubleshooting_history' | 'logs' | 'config';
+  detail: string;
+}
+
+export interface AgentConversationSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentMessageOut {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  citations: RagCitation[];
+  requests: AgentInfoRequest[];
+  model: string | null;
+  createdAt: string;
 }
 
 export interface AgentHealthResponse {
@@ -4375,6 +4411,8 @@ export interface AlertEvent {
   labels: LabelPair[];
   annotations: LabelPair[];
   rawJson?: string | null;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface AlertEventListResponse {
@@ -4423,4 +4461,124 @@ export interface AlertSettings {
   dedupWindowSec: number;
   dedupMode: AlertDedupMode;
   retentionDays: number;
+}
+
+// ── LLM 게이트웨이 설정 (Settings → AI/LLM) ───────────────────────────
+// 주의: axios 인터셉터가 응답 키를 snake→camel 로 변환하므로 여기 타입은 camelCase.
+// routing 의 purpose 키도 응답에서는 camelCase 가 된다 (요청 시 자동 역변환).
+
+export type LlmProviderType = 'ollama' | 'openai_compat';
+
+/** camelCase purpose 키 (백엔드 snake_case 와 인터셉터로 상호 변환됨) */
+export type LlmPurpose =
+  | 'chat'
+  | 'incidentAnalysis'
+  | 'reviewSummary'
+  | 'archDoc'
+  | 'trends'
+  | 'embedding';
+
+export interface LlmProfile {
+  name: string;
+  provider: LlmProviderType;
+  baseUrl: string;
+  model: string;
+  /** "credential:<name>" | "env:<VAR>" | "" — 키 원문은 절대 오가지 않는다 */
+  apiKeyRef: string;
+  timeoutSeconds: number;
+  maxConcurrency: number;
+  enabled: boolean;
+}
+
+export interface LlmRoute {
+  primary: string;
+  fallback: string | null;
+}
+
+export interface LlmSettings {
+  language: 'ko' | 'en';
+  analyzerBackend: 'claude' | 'local_llm' | 'rule_based';
+  embeddingModel: string;
+  profiles: LlmProfile[];
+  routing: Record<string, LlmRoute>;
+}
+
+export interface LlmHealthEntry {
+  profile: string;
+  provider: LlmProviderType;
+  enabled: boolean;
+  baseUrl: string;
+  status: 'online' | 'offline';
+  model: string;
+  detail: string;
+  latencyMs: number;
+}
+
+export interface LlmTestResult {
+  status: string;
+  latencyMs: number;
+  model: string;
+  answerPreview: string;
+  error: string | null;
+}
+
+export interface LlmCredentialSummary {
+  name: string;
+  hint: string;
+  createdAt: string | null;
+}
+
+export interface LlmUsageBucket {
+  profile: string;
+  purpose: string;
+  bucket: string; // YYYYMMDDHH (UTC)
+  count: number;
+  errors: number;
+  avgLatencyMs: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+// ── 알람 AI 자동 분석 (Phase 2) ───────────────────────────────────────
+
+export interface LlmAnalysisScopeRule {
+  id: string;
+  priority: number;
+  enabled: boolean;
+  clusterId: string | null;
+  namespacePattern: string;
+  alertnamePattern: string;
+  severityMin: 'info' | 'warning' | 'critical';
+  maxPerHour: number;
+  notifyAnalysis: boolean;
+  includeLogs: boolean;
+}
+
+export interface LlmAnalysisScope {
+  enabled: boolean;
+  debounceSeconds: number;
+  globalMaxPerHour: number;
+  rules: LlmAnalysisScopeRule[];
+}
+
+export interface AlertIncidentAnalysis {
+  id: string;
+  alertEventId: string | null;
+  clusterId: string | null;
+  namespace: string | null;
+  resource: string | null;
+  trigger: 'alert' | 'manual';
+  status: 'queued' | 'running' | 'done' | 'failed' | 'skipped';
+  severity: string | null;
+  rootCause: string | null;
+  suggestedActions: string[];
+  relatedRunbooks: string[];
+  confidence: number | null;
+  citations: RagCitation[];
+  analyzedBy: string | null;
+  matchedRuleId: string | null;
+  durationMs: number | null;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
 }

@@ -138,15 +138,16 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 시스템 설정 (`/settings`, admin)
 
-- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `SchemaHealthPanel.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
-- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그·스키마 점검까지 플랫폼 전역 설정을 12개 탭으로 모아둔 관리자 콘솔.
+- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `SchemaHealthPanel.tsx`, `LlmSettingsTab.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
+- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그·스키마 점검까지 플랫폼 전역 설정을 13개 탭으로 모아둔 관리자 콘솔 (AI/LLM 탭 포함).
 - **UI 구성**:
-  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`/`스키마 점검`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`PEP 서비스`/`APP 서비스` — 도메인 구분)로 구성되고, 각 서브탭 본문은 `ServiceCategoryManager`(해당 도메인 카테고리) + `LakeServiceTypeManager`(해당 도메인 서비스 타입) 두 섹션을 세로로 렌더한다. 구 최상위 "서비스 카테고리" 탭과 구 "서비스 타입"/"서비스 카탈로그" 서브탭이 전부 여기로 통합됐다 — 레거시 `?tab=service`·`?tab=service-categories` 딥링크는 `mgmt-service` 로 리다이렉트.
+  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`AI / LLM`/`Debug`/`백업 / 복구`/`감사 로그`/`스키마 점검`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`PEP 서비스`/`APP 서비스` — 도메인 구분)로 구성되고, 각 서브탭 본문은 `ServiceCategoryManager`(해당 도메인 카테고리) + `LakeServiceTypeManager`(해당 도메인 서비스 타입) 두 섹션을 세로로 렌더한다. 구 최상위 "서비스 카테고리" 탭과 구 "서비스 타입"/"서비스 카탈로그" 서브탭이 전부 여기로 통합됐다 — 레거시 `?tab=service`·`?tab=service-categories` 딥링크는 `mgmt-service` 로 리다이렉트.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다.
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/담당자/Jira/백업/감사로그).
+  - `AI / LLM` 탭(`LlmSettingsTab`): 폐쇄망 LLM 이중 운용 설정 — ① LLM 엔드포인트 프로필 목록(사내 OpenAI-호환 서비스 / 인클러스터 Ollama, 상태 pill·연결 테스트·편집/삭제, `ProfileEditModal` 에서 provider/URL/모델(엔드포인트 목록 조회)/API 키 참조(credential·env)/타임아웃/동시성 편집) ② 용도별 라우팅 테이블(챗봇/장애분석/점검리뷰/아키텍처문서/트렌드/임베딩 × primary/fallback) ③ 분석기 백엔드(rule_based/local_llm/claude)·응답 언어(ko/en)·임베딩 모델(변경 시 재계산 경고) ④ API 키 등록(암호화 저장 `llm_credentials`, 원문 재표시 없음) ⑤ **알람 자동 분석 범위**(전역 on/off + 디바운스/전역 시간당 상한 + 규칙 테이블: 클러스터/네임스페이스·알람명 패턴/최소 심각도/시간당 상한/로그 포함/완료 알림 — priority first-match, 저장 시 llm 큐 워커 부재 경고) ⑥ 최근 24h 사용량(프로필×용도 호출/오류/지연/토큰 — 분석 범위 확대 전 부하 확인용). Backend: `GET/PUT /api/v1/llm/settings`, `GET /llm/health`, `GET /llm/profiles/{name}/models`, `POST /llm/test`, `GET /llm/usage`, `GET/PUT /llm/analysis-scope`, `GET/POST/DELETE /llm/credentials`(`llm_settings.py` — AppSetting `llm_settings`/`llm_analysis_scope` + `services/llm/` 게이트웨이). Frontend hooks: `useLlmSettings.ts`.
   - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/담당자/접근제어/Jira/백업/감사로그).
   - ClusterSidebar 미사용(전역 설정 화면이라 클러스터 단위 필터 없음).
@@ -327,14 +328,14 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 알람 인박스 (`/alerts`)
 
-- **파일**: `frontend/src/pages/AlertInboxPage.tsx` (+ `components/observability/{AlertReceiverGuide,AlertNotifyRulesPanel}`).
+- **파일**: `frontend/src/pages/AlertInboxPage.tsx` (+ `components/observability/{AlertReceiverGuide,AlertNotifyRulesPanel,AlertAnalysisPanel}`).
 - **목적 / UX**: 사내 메신저(cube)로만 가던 인시던트 알람을 PEP 에서도 받아 쌓아두는 인박스. Alertmanager webhook 과 사내 alert-forwarder 를 모두 수용하고, 같은 알람이 반복되면 행을 늘리지 않고 반복 수(×N)만 올린다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`).
   - 접이식 "알람 수신 설정 방법" 안내 — Alertmanager `webhook_configs` YAML + curl 테스트 스니펫 복사 버튼(토큰 값은 마스킹).
   - 메인 탭 — **알람 인박스 / 알림 규칙**.
   - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색 + 일괄 확인 + 새로고침. 최근 24시간 요약 pill.
-  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침.
+  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침 + **AI 분석 패널**(`AlertAnalysisPanel`) — 자동 분석 상태 배지(대기/분석 중/완료/실패/건너뜀), 원인 분석·조치 가이드(실행 없음 — 사람이 수행), analyzed_by(규칙 기반/LLM 프로필) 투명 표기, 수동 'AI 분석 실행/재분석' 버튼(operator+, `POST /observability/alerts/{id}/analyze` → 전용 llm Celery 큐). 자동 분석 범위는 Settings → AI/LLM 의 '알람 자동 분석 범위'(AppSetting `llm_analysis_scope`)에서 규칙(클러스터/네임스페이스/알람명/심각도, 시간당 상한·디바운스)으로 관리.
   - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기.
 - **Frontend**: `useAlerts`, `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
 - **Backend**: 수신 `POST /api/v1/observability/alerts/ingest`(JWT 없음 — `ALERT_INGEST_TOKEN` Bearer 자체 검증, **미설정 시 503 fail-closed**), 조회 `GET /observability/alerts`·`/alerts/stats`·`/alerts/{id}`, `POST /alerts/{id}/ack`·`/alerts/ack-all`, 규칙/설정 CRUD(`require_operator`). 라우터 `backend/app/routers/observability.py`(`ingest_router` + `router`). 모델: `models/alert_event.py`, `models/alert_notify_rule.py`. 서비스: `services/observability/alert_ingest.py`(포맷 2종 파싱), `alert_router.py`(규칙 매칭·중복 억제·알림 생성).

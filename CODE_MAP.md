@@ -77,11 +77,17 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | PromQL 카드 CRUD + 쿼리 | `backend/app/routers/promql.py`, `backend/app/services/prometheus_service.py` |
 | Prometheus 서비스 (fail-safe) | `backend/app/services/prometheus_service.py` |
 | 메트릭 추이 | `backend/app/routers/metric_trend.py` · `cluster_trends.py` → `frontend/src/pages/ClusterTrendsPage.tsx` |
-| Ollama AI Agent (fail-safe) | `backend/app/routers/agent.py`, `backend/app/services/agent_service.py` |
-| Agent 사이드바 UI | `frontend/src/components/agent/AgentChat.tsx` |
-| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
+| **LLM 게이트웨이 (프로필 × 용도 라우팅)** | `backend/app/services/llm/` (`service.py` 게이트웨이 · `ollama_provider.py` · `openai_provider.py` · `prompts.py` 한국어 시스템 프롬프트) — 모든 LLM 호출의 단일 진입점, 사내 OpenAI-호환 LLM + 인클러스터 Ollama 병행 운용 |
+| LLM 설정 (Settings → AI/LLM 탭) | `backend/app/routers/llm_settings.py` (AppSetting `llm_settings`) · `backend/app/models/llm_credential.py` (API 키 암호화 저장) → `frontend/src/components/settings/LlmSettingsTab.tsx` + `frontend/src/hooks/useLlmSettings.ts` |
+| AI Agent (fail-safe, 게이트웨이 파사드) | `backend/app/routers/agent.py`, `backend/app/services/agent_service.py` |
+| Agent 챗봇 UI (한국어·멀티턴·인용·정보요청) | `frontend/src/components/agent/AgentChat.tsx` · `InfoRequestChips.tsx` · `frontend/src/components/common/CitationList.tsx` |
+| 챗 대화 지속성 | `backend/app/models/agent_conversation.py` + `routers/agent.py` `/agent/conversations*` |
+| RAG 근거 인용 (사내 지식 pgvector 검색) | `backend/app/services/rag_service.py` (`GET /llm/rag-search`, `POST /llm/backfill-embeddings`) — work_guides/work_items/ops_notes 임베딩 |
+| LLM 정보요청 파서 (need_more_info) | `backend/app/services/llm/response_parser.py` |
+| 알람 AI 자동 분석 (scope·디바운스·llm 큐) | `backend/app/services/observability/analysis_hook.py` + `services/incident_context_builder.py` + `models/incident_analysis.py` + `celery_app.run_auto_incident_analysis`(전용 `llm` 큐, `k8s/base/celery/worker-llm-deployment.yaml`) → `frontend/src/components/observability/AlertAnalysisPanel.tsx` |
+| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based — 백엔드 선택은 `llm_settings.analyzer_backend`) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
 | 파드 로그 스트리밍 (SSE) | `analyze.py` 의 `/logs/stream` → `frontend/src/pages/K8sLogsPage.tsx` |
-| 임베딩 (WorkItem/WorkGuide 유사 검색) | `backend/app/services/embedding_service.py` (pgvector) |
+| 임베딩 (WorkItem/WorkGuide 유사 검색) | `backend/app/services/embedding_service.py` (pgvector, llm 게이트웨이 위임) |
 
 ### 모니터링 / 점검
 | 기능 | 위치 |

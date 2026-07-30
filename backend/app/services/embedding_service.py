@@ -1,5 +1,5 @@
 """
-Embedding Service — Fail-Safe wrapper around Ollama's ``/api/embeddings``.
+Embedding Service — ``services/llm`` 게이트웨이 위임 (purpose="embedding").
 
 Same fail-safe convention as ``agent_service.AIAgentService``: every exception
 is caught and ``None`` is returned instead of raising, so a missing/offline
@@ -7,20 +7,22 @@ embedding model never breaks a WorkItem/WorkGuide write — embedding
 computation always runs out-of-band via a Celery task (see
 ``app.celery_app.compute_work_item_embedding`` / ``compute_work_guide_embedding``),
 never on the synchronous request path.
+
+주의: 임베딩 모델(기본 nomic-embed-text, 768차원)은 pgvector 컬럼 차원과 결합돼
+있다 — 모델을 바꾸면 기존 저장 임베딩과 비교 불가(전체 재계산 필요).
 """
 
 import logging
 from typing import Optional
 
-import httpx
-
 from app.config import settings
+from app.services.llm import llm_service
 
 logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """Resilient proxy to a local Ollama embedding model."""
+    """Resilient proxy — 실제 호출은 llm_service (routing.embedding 프로필) 가 한다."""
 
     def __init__(
         self,
@@ -28,6 +30,7 @@ class EmbeddingService:
         model: Optional[str] = None,
         timeout: Optional[int] = None,
     ):
+        # 레거시 호환 필드 (표시용) — 실제 라우팅은 llm_settings 가 결정한다.
         self.base_url = (base_url or settings.ollama_url).rstrip("/")
         self.model = model or settings.embedding_model
         self.timeout = timeout or settings.embedding_timeout
@@ -40,32 +43,9 @@ class EmbeddingService:
         if not text or not text.strip():
             return None
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/embeddings",
-                    json={"model": self.model, "prompt": text},
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                embedding = data.get("embedding")
-                if not embedding:
-                    logger.warning("Ollama embeddings response missing 'embedding' field")
-                    return None
-                return embedding
-        except httpx.ConnectError:
-            logger.warning("Ollama connect error — embedding model may not be deployed.")
-            return None
-        except httpx.TimeoutException:
-            logger.warning("Ollama embeddings request timed out after %ss.", self.timeout)
-            return None
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "Ollama embeddings returned HTTP %s: %s",
-                exc.response.status_code, exc.response.text[:200],
-            )
-            return None
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Unexpected error calling Ollama embeddings: %s", exc)
+            return await llm_service.embed(text)
+        except Exception as exc:  # noqa: BLE001  (방어 — 게이트웨이는 원래 raise 하지 않음)
+            logger.exception("Unexpected error calling embedding gateway: %s", exc)
             return None
 
 

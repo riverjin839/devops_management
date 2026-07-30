@@ -444,7 +444,7 @@ async def generate_llm_content(
     db.commit()
 
     try:
-        resp = await agent_service._call_llm(build_llm_prompt(doc, service))
+        resp = await agent_service._call_llm(build_llm_prompt(doc, service), purpose="arch_doc")
     except Exception as e:  # noqa: BLE001  (방어 — _call_llm 은 원래 raise 하지 않음)
         logger.exception("arch doc LLM 호출 실패: %s", e)
         resp = {"status": "offline", "answer": "", "model": ""}

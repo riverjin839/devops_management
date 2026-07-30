@@ -84,6 +84,7 @@ from app.routers import (
     release_notes_router,
     check_matrix_router,
     island_router,
+    llm_settings_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -776,6 +777,10 @@ def _run_migrations():
             label="work_guides embedding hnsw index",
         )
 
+    # ops_notes: RAG(근거 인용) 검색용 임베딩 — 구버전 DB 호환 보강.
+    if "ops_notes" in inspector.get_table_names():
+        _safe_add_column("ops_notes", "embedding", f"VECTOR({settings.embedding_dim})")
+
     # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
     # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
     for _kb_table in ("knowledge_presence", "knowledge_page_versions", "knowledge_pages"):
@@ -1032,6 +1037,9 @@ def _run_migrations():
         _safe_create_index("ix_alert_events_status_severity", "alert_events", "(status, severity)")
         _safe_create_index(
             "ix_alert_events_fingerprint_starts", "alert_events", "(fingerprint, starts_at DESC)")
+        # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
+        _safe_add_column("alert_events", "analysis_id", "UUID")
+        _safe_add_column("alert_events", "analysis_status", "VARCHAR(16)")
 
     # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.
     if "observability_metrics" in inspector.get_table_names():
@@ -2061,6 +2069,7 @@ app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(llm_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
