@@ -76,7 +76,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | PromQL 카드 CRUD + 쿼리 | `backend/app/routers/promql.py`, `backend/app/services/prometheus_service.py` |
 | Prometheus 서비스 (fail-safe) | `backend/app/services/prometheus_service.py` |
 | 메트릭 추이 | `backend/app/routers/metric_trend.py` · `cluster_trends.py` → `frontend/src/pages/ClusterTrendsPage.tsx` |
-| **LLM 게이트웨이 (프로필 × 용도 라우팅)** | `backend/app/services/llm/` (`service.py` 게이트웨이 · `ollama_provider.py` · `openai_provider.py` · `prompts.py` 한국어 시스템 프롬프트) — 모든 LLM 호출의 단일 진입점, 사내 OpenAI-호환 LLM + 인클러스터 Ollama 병행 운용 |
+| **LLM 게이트웨이 (프로필 × 용도 라우팅)** | `backend/app/services/llm/` (`service.py` 게이트웨이 · `ollama_provider.py` · `openai_provider.py` · `prompts.py` 한국어 시스템 프롬프트 · `masking.py` 시크릿 마스킹) — 모든 LLM 호출의 단일 진입점, 사내 OpenAI-호환 LLM + 인클러스터 Ollama 병행 운용 |
+| 무실행(No-Execution) 회귀 가드 | `backend/tests/test_no_execution_guard.py` — LLM 계열 ↔ 실행 계열(SSH/exec/playbook) 모듈 상호 import 금지 AST 검사 + `AnalysisResult` 필드 계약 |
 | LLM 설정 (Settings → AI/LLM 탭) | `backend/app/routers/llm_settings.py` (AppSetting `llm_settings`) · `backend/app/models/llm_credential.py` (API 키 암호화 저장) → `frontend/src/components/settings/LlmSettingsTab.tsx` + `frontend/src/hooks/useLlmSettings.ts` |
 | AI Agent (fail-safe, 게이트웨이 파사드) | `backend/app/routers/agent.py`, `backend/app/services/agent_service.py` |
 | Agent 챗봇 UI (한국어·멀티턴·인용·정보요청) | `frontend/src/components/agent/AgentChat.tsx` · `InfoRequestChips.tsx` · `frontend/src/components/common/CitationList.tsx` |

@@ -280,6 +280,9 @@ class LLMService:
         cfg = self.resolve_settings(db)
         if system is None:
             system = get_system_prompt(purpose, cfg.get("language", "ko"))
+        # 시크릿 마스킹 — 게이트웨이 진입점에서 일괄 적용 (호출부 누락 방지).
+        from app.services.llm.masking import mask_secrets
+        prompt = mask_secrets(prompt)
         route = cfg["routing"].get(purpose) or cfg["routing"]["chat"]
         candidates = [route.get("primary"), route.get("fallback")]
         last: Optional[LLMResult] = None

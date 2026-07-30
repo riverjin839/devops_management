@@ -71,15 +71,21 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
   └─ claude: 클라우드 (폐쇄망 비활성)
 ```
 
-**핵심 갭 (이 문서가 채우는 것):**
+**핵심 갭 (이 문서가 채우는 것) — 현황 (2026-07-30, Phase 1~4 반영):**
 
-| # | 갭 | 위치 |
-|---|---|---|
-| G1 | GLM 계열/OpenAI-호환 서빙 미지원 — 코드가 Ollama API 에만 결합 | `agent_service.py`, `local_llm_analyzer.py` |
-| G2 | 에러 발생 시 **자동** 분석이 없음 — IncidentAnalysisPage 에서 사람이 수동 실행 | `k8s_events.py` ↔ `analyze.py` 미연결 |
-| G3 | RAG 부재 — 검색(`/work-items/{id}/similar`)과 생성(analyzer)이 분리돼 있고, 검색 결과가 프롬프트에 주입되지 않음 | `embedding_service.py` |
-| G4 | 임베딩 대상이 WorkItem/WorkGuide 뿐 — OpsNote·Ontology 미색인, WorkGuide 는 검색 엔드포인트도 없음 | `models/ops_note.py` 등 |
-| G5 | GPU 서빙 매니페스트 없음 — `ollama.yaml` 은 CPU 전용 | `k8s/base/`, `k8s/overlays/airgap/` |
+| # | 갭 | 위치 | 상태 |
+|---|---|---|---|
+| G1 | GLM 계열/OpenAI-호환 서빙 미지원 — 코드가 Ollama API 에만 결합 | `agent_service.py`, `local_llm_analyzer.py` | ✅ **해소** — `services/llm/` 게이트웨이(프로필×용도 라우팅), `openai_provider.py` |
+| G2 | 에러 발생 시 **자동** 분석이 없음 — IncidentAnalysisPage 에서 사람이 수동 실행 | `k8s_events.py` ↔ `analyze.py` 미연결 | ✅ **해소(알람 경로)** — `services/observability/analysis_hook.py` + `AlertNotifyRule`/`llm_analysis_scope` 매칭 → 전용 `llm` 큐. K8s 이벤트(kubewatch) 직접 트리거는 미연결로 남음(알람 파이프라인을 통해서만 자동화됨) |
+| G3 | RAG 부재 — 검색(`/work-items/{id}/similar`)과 생성(analyzer)이 분리돼 있고, 검색 결과가 프롬프트에 주입되지 않음 | `embedding_service.py` | ✅ **해소** — `services/rag_service.py`, `AnalysisResult.citations`, 챗봇 응답 `citations`, 프롬프트에 참고자료 블록 주입 |
+| G4 | 임베딩 대상이 WorkItem/WorkGuide 뿐 — OpsNote·Ontology 미색인, WorkGuide 는 검색 엔드포인트도 없음 | `models/ops_note.py` 등 | 🟡 **부분 해소** — OpsNote 임베딩 추가(`compute_ops_note_embedding`) + `GET /llm/rag-search` 검색 엔드포인트 신설. Ontology 는 여전히 미색인(범위 외) |
+| G5 | GPU 서빙 매니페스트 없음 — `ollama.yaml` 은 CPU 전용 | `k8s/base/`, `k8s/overlays/airgap/` | 🟡 **부분 해소** — opt-in kustomize component `k8s/components/vllm-gpu/`(nvidia.com/gpu + PVC) 추가, base 는 여전히 CPU 전용(의도적 — GPU 는 오버레이 opt-in) |
+
+추가로 이번 구현에서 해소된 갭(당초 목록에 없었으나 진단에서 발견):
+- **부하 제어 부재** → `llm_analysis_scope`(전역 기본 꺼짐, 디바운스+레이트) + 전용 `llm` Celery 큐 + 사용량 대시보드(`GET /llm/usage`)
+- **UI-First 위반**(LLM 설정이 env 전용) → Settings → AI/LLM 탭 + AppSetting `llm_settings`
+- **무실행 보증이 관례뿐** → `tests/test_no_execution_guard.py`(AST import 그래프) + `services/llm/masking.py`(프롬프트 진입점 일괄 시크릿 마스킹)
+- **한국어 불일치** → `services/llm/prompts.py` 한국어 기본 시스템 프롬프트, `AgentChat.tsx` 전면 한국어화
 
 ---
 

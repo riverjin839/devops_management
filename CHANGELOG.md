@@ -11,6 +11,18 @@
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **무실행 보증 강화 + 배포/폐쇄망 반입 (Phase 4)**: LLM 파이프라인이 실행 경로(SSH/
+  kubectl exec/플레이북/일괄 실행)와 구조적으로 격리돼 있음을 CI 회귀 테스트로 고정
+  (`test_no_execution_guard.py` — AST import 그래프 + `AnalysisResult` 필드 계약).
+  프롬프트로 나가는 로그/컨텍스트에서 Bearer 토큰·비밀번호·AWS 키·PEM·kubeconfig
+  JWT 등을 게이트웨이 진입점에서 일괄 마스킹(`services/llm/masking.py`, 과잉 마스킹
+  회귀 테스트 포함). 배포: Helm 차트에 Ollama Deployment/Service(+선택적 PVC)와
+  LLM 전용 Celery 워커 템플릿 추가(이전엔 values 만 있고 실제 배포 안 됨), configmap/
+  secret 에 `OLLAMA_*`/`LLM_API_BASE`/`LLM_API_KEY` 방출, 기본 모델을 pre-baked
+  이미지와 일치하는 `qwen2.5-coder:7b` 로 수정. `deploy-airgap.sh` 가 Ollama 이미지도
+  미러링(이전엔 backend/frontend 만 다뤄 수동 반입 필요했음). GPU 서빙(vLLM) 과 Ollama
+  모델 영속화(PVC)는 opt-in kustomize component(`k8s/components/{vllm-gpu,ollama-pvc}`)
+  로 제공 — base 오버레이는 무변경.
 - **AI 근거 인용(RAG) + 정보요청 루프 + 대화 지속 챗봇 (Phase 3)**: AI 분석·챗봇
   답변에 사내 지식(작업 가이드·업무 이력·운영 노트) 근거를 pgvector 유사 검색으로
   인용한다 — 클릭 가능한 딥링크 + 유사도 표시, 근거 없는 내용은 '(추정)' 표기 지시.
