@@ -100,8 +100,8 @@ export function ClusterUpdateDiffDialog({
 
         <div className="max-h-[520px] overflow-y-auto">
           {warnings.length > 0 && (
-            <div className="px-5 py-3 border-b border-border bg-amber-500/5">
-              <p className="text-sm font-medium text-amber-400 mb-1 flex items-center gap-1">
+            <div className="px-5 py-3 border-b border-border bg-status-warning/5">
+              <p className="text-sm font-medium text-status-warning mb-1 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" /> 경고 {warnings.length}건
               </p>
               <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">

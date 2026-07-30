@@ -628,18 +628,24 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: 등록된 전체 클러스터를 테이블/카드 뷰로 관리 — 검색/필터/정렬/그룹화(지역·운영레벨), CIDR 겹침 감지, kubeconfig 기반 자동 정보 수집(diff 미리보기 후 적용), 커스텀 컬럼 추가, 드래그 정렬. `/cluster-manage/:id/edit`으로 이동해 상세 메타를 편집한다.
 - **UI 구성**:
   - 이 페이지 자체는 **ClusterSidebar를 사용하지 않음** — 전체 클러스터를 관리하는 목록/테이블 화면이라 별도 좌측 사이드바 없이 본문 전체가 테이블/카드
-  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 이름 표준화, 컬럼 관리(커스텀 필드), 노드 IP 일괄 수집, 컬럼너비 리셋, 검색/필터 패널
-  - 테이블 뷰: 리사이즈 가능한 다열 테이블(이름/상태/지역/운영레벨/BGP/CIDR/bond0·1/Pod·Svc CIDR/Max Pods/K8s·Cilium 버전/노드 IP + 커스텀 필드), 지역/운영레벨 그룹 헤더 행
+  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 이름 표준화, 컬럼 관리(커스텀 필드), 노드 IP 일괄 수집, 컬럼너비 리셋, 검색/필터 패널. 액션이 많아 좁은 폭에서는 줄바꿈(`flex-wrap`)
+  - 검색/필터 패널과 표 컨테이너는 `MacCard`(표는 `bodyPadding="p-0"`), 표 본문은 `DoubleScrollX bodyClassName="max-h-…"` 안에서 세로 스크롤되며 **`thead` 가 sticky 로 고정**된다. 셀은 `overflow-hidden`+`truncate`(툴팁 병행)이라 컬럼을 좁혀도 이웃 열로 넘치지 않는다
+  - 색은 전부 테마 토큰 — 상태 `status-*`, 범주(BGP·bond0/1·버전·CIDR 겹침 그룹) categorical `chart-*` (고정 팔레트 0건)
+  - 상태 표시는 3분기: 로딩=표 skeleton / 조회 실패=`EmptyState`+사유+다시 시도 / 0건·검색 무결과=`EmptyState`+CTA(Settings 등록·필터 초기화)
+  - **검색/필터/정렬/그룹/뷰모드는 URL 쿼리(`?q=&level=&sort=&group=&view=`)에 영속화**(기본값 생략, `replace: true` 로 히스토리 미적재) — 새로고침·공유·뒤로가기에서 유지
+  - 테이블 뷰: 리사이즈 가능한 다열 테이블(이름/상태/지역/운영레벨/BGP/CIDR/bond0·1/Pod·Svc CIDR/Max Pods/K8s·Cilium 버전/노드 IP + 커스텀 필드), 지역/운영레벨 그룹 헤더 행. **수동 정렬 모드에서 행 드래그 지원**(이름 셀 좌측 그립, `DndContext`+그룹별 `SortableContext`)
   - 카드 뷰: `dnd-kit` 드래그 정렬 가능한 `ClusterCard` 그리드(그룹 내에서만 순서 변경)
+  - 드래그 정렬(테이블/카드 공통)은 **정렬이 `수동(드래그)` 일 때만 활성** — 이름/상태/운영레벨순에서는 핸들이 노출되지 않음(D-045). 정보 수집(auto-update)은 클러스터별로 동시 실행·개별 중지 가능(D-047)
   - 행/카드 액션: 새로고침(auto-update dry-run → `ClusterUpdateDiffDialog`), NIC 수집, 수정(`/cluster-manage/:id/edit`), 삭제, Cilium 설정 보기(`CiliumConfigModal`)
-- **Frontend**: `useClusters()` + `useClusterStore()`(Zustand, 클러스터 목록 캐시), `useOperationLevels()`, `useClusterCustomFields()`. 로컬 state: 검색/필터/정렬/그룹, 다수의 진행중 ID(`deletingId`,`autoUpdatingId` 등). 호출 함수: `clustersApi.{delete,autoUpdate,reorder,update(via edit page)}`, `clusterCustomFieldsApi`(via `ClusterCustomFieldsManager`).
+- **Frontend**: `useClusters()`(`isLoading`/`isError`/`refetch` 사용 — 목록이 비어 있을 때 로딩 skeleton / 조회 실패(사유+다시 시도) / 진짜 0건 3분기, 로딩·실패를 "클러스터 없음" 으로 위장하지 않음) + `useClusterStore()`(Zustand, 클러스터 목록 캐시), `useOperationLevels()`, `useClusterCustomFields()`. 로컬 state: 검색/필터/정렬/그룹, 다수의 진행중 ID(`deletingId`,`autoUpdatingId` 등)와 확인 다이얼로그 대상(`deleteTarget`,`bulkConfirmOpen`,`bulkProgress`). 호출 함수: `clustersApi.{delete,autoUpdate,reorder,update(via edit page)}`, `clusterCustomFieldsApi`(via `ClusterCustomFieldsManager`). 표의 인라인 편집(지역/운영레벨/INTERNAL_IP/Pod·Svc CIDR)은 빈 입력을 **`null` 로 전송**해 값 해제가 저장되고(D-041), 저장 실패는 토스트로 고지(D-042).
 - **Backend**: `GET /api/v1/clusters`, `POST /api/v1/clusters/reorder`, `DELETE /api/v1/clusters/{id}`, `POST /api/v1/clusters/{id}/auto-update?dry_run=`, `GET /api/v1/clusters/{id}/cilium-config` — `backend/app/routers/clusters.py`. 커스텀 컬럼은 `GET/POST/PUT/DELETE /api/v1/cluster-custom-fields`, `PUT /api/v1/clusters/{id}/custom-values` — `backend/app/routers/cluster_custom_fields.py`, 모델 `ClusterCustomField`(`backend/app/models/cluster_custom_field.py`) + `Cluster.custom_values`(JSONB). `Cluster` 모델(`backend/app/models/cluster.py`)의 `seq`(드래그 정렬), `cidr/pod_cidr/svc_cidr`, `bond0_ip/bond1_ip`, `node_ips` 등이 테이블 컬럼 데이터 소스.
 - **핵심 기능**:
   - kubeconfig 기반 auto-update(dry-run diff 미리보기 → 적용) — K8s 버전, node IP, CIDR, Max Pods 등 자동 갱신
   - CIDR 겹침(internal/pod/svc) 자동 탐지 + 경고 배지
-  - 지역/운영레벨 그룹화, 드래그 앤 드롭 수동 정렬(`clustersApi.reorder`)
-  - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집
-  - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집
+  - 지역/운영레벨 그룹화, 드래그 앤 드롭 수동 정렬(`clustersApi.reorder`) — 전송 순서는 화면(필터된) 목록이 아니라 **전체 클러스터 기준**으로 재구성해 검색/필터 중 드래그해도 가려진 클러스터의 순서가 오염되지 않음(D-044)
+  - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집 — 편집 진입 시점의 서버 값으로 초기화(stale draft 방지), 저장 실패 시 토스트+편집 유지
+  - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집 — 일괄 수집은 실행 전 `ConfirmDialog`(대상 수·이름 미리보기·hostname/CIDR/버전까지 갱신됨을 명시) → 진행률 `n/N` 버튼 표기 → 재클릭으로 중단, 결과는 완료/중단/부분 실패/전건 실패 구분 토스트(D-048)
+  - 클러스터 삭제는 `ConfirmDialog`(danger) — Addon·Playbook·점검 이력 연쇄 삭제 범위를 명시(D-048)
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
