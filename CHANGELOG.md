@@ -21,7 +21,8 @@
   `services/confluence_storage.py`(code/info/warning/expand 매크로 ↔ 코드블록/Callout/토글),
   `GET /work-guides/search` 시맨틱 검색 + HNSW 인덱스, 가져온 문서 임베딩 자동 계산(LLM 학습
   소스 편입). Frontend: `DocumentsPage` + `components/documents/`, 문서 읽기 화면 게시/재가져오기
-  버튼.
+  버튼. 가져오기 검색은 Jira 조건 조합처럼 **기여자(contributor)·라벨·최근 수정 기간**으로
+  세부 필터링할 수 있고, 기본값은 "본인이 기여한 문서"(`contributor = currentUser()`)다.
 
 ## [1.17.1] - 2026-07-29
 

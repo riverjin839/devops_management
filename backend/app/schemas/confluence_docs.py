@@ -10,10 +10,19 @@ from pydantic import BaseModel, Field
 
 # ── 검색 ────────────────────────────────────────────────────────────────────
 class ConfluenceDocSearchRequest(BaseModel):
-    """CQL 직접 입력 또는 간편 검색(space_key + text) — cql 이 있으면 우선."""
+    """CQL 직접 입력 또는 조건 조합(space/contributor/label/기간/text) 검색 — cql 이 있으면 우선.
+
+    조건 조합은 `_build_confluence_cql()` (routers/confluence.py) 이 조립한다 — Jira 가져오기의
+    `_build_filter_jql` 과 동일 패턴."""
     cql: Optional[str] = None
     space_key: Optional[str] = Field(None, max_length=50)
     text: Optional[str] = Field(None, max_length=200)
+    # 기여자(Confluence CQL `contributor` 필드) — me: 본인(기본값) · user: contributor 값 사용
+    # (콤마로 여러 명) · any: 조건 없음.
+    contributor_mode: str = Field("me", pattern="^(me|user|any)$")
+    contributor: Optional[str] = Field(None, max_length=300)
+    labels: List[str] = Field(default_factory=list)
+    updated_since_days: Optional[int] = Field(None, ge=1, le=365)
     limit: int = Field(25, ge=1, le=100)
 
 
