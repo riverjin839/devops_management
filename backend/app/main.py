@@ -765,6 +765,10 @@ def _run_migrations():
     if "ops_notes" in inspector.get_table_names():
         _safe_add_column("ops_notes", "embedding", f"VECTOR({settings.embedding_dim})")
 
+    # ontology_events: RAG(근거 인용) 검색용 임베딩 — 구버전 DB 호환 보강.
+    if "ontology_events" in inspector.get_table_names():
+        _safe_add_column("ontology_events", "embedding", f"VECTOR({settings.embedding_dim})")
+
     # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
     # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
     for _kb_table in ("knowledge_presence", "knowledge_page_versions", "knowledge_pages"):

@@ -22,12 +22,14 @@
 > - 호출량/오류/지연/토큰 통계를 Redis 시간버킷으로 적재 → `GET /llm/usage` (부하를
 >   보면서 범위를 넓히는 점진 롤아웃의 데이터 소스).
 >
-> 갭 현황: **G1 해소** (OpenAI-호환 + 병행 운용). G2(알람 자동 분석)/G3(RAG)/G4(임베딩
-> 확대)/G5(GPU 매니페스트)는 후속 Phase 에서 진행. 아래 v1 본문의 "GLM 전환" 서술은
+> 갭 현황: **G1~G4 해소** (OpenAI-호환 병행 운용 / 알람·K8s 이벤트 양쪽 자동 분석 /
+> RAG 근거 인용 / 임베딩 4종 색인 완료 — §1 갭 표 참고). G5(GPU 매니페스트)는 opt-in
+> kustomize component 로 부분 해소. 아래 v1 본문의 "GLM 전환" 서술은
 > "openai_compat 프로필 추가"로 읽으면 된다 — vLLM 자체 서빙도, 사내 LLM 게이트웨이도
 > 같은 프로필 형태로 붙는다.
 >
-> 작성 기준: v1.6.0 (2026-07-17), v2 개정 2026-07-29. 코드 참조는 각 기준.
+> 작성 기준: v1.6.0 (2026-07-17), v2 개정 2026-07-29, K8s 이벤트 직접 트리거·Ontology
+> RAG 확장 반영 2026-07-30. 코드 참조는 각 기준.
 
 ---
 
@@ -76,9 +78,9 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
 | # | 갭 | 위치 | 상태 |
 |---|---|---|---|
 | G1 | GLM 계열/OpenAI-호환 서빙 미지원 — 코드가 Ollama API 에만 결합 | `agent_service.py`, `local_llm_analyzer.py` | ✅ **해소** — `services/llm/` 게이트웨이(프로필×용도 라우팅), `openai_provider.py` |
-| G2 | 에러 발생 시 **자동** 분석이 없음 — IncidentAnalysisPage 에서 사람이 수동 실행 | `k8s_events.py` ↔ `analyze.py` 미연결 | ✅ **해소(알람 경로)** — `services/observability/analysis_hook.py` + `AlertNotifyRule`/`llm_analysis_scope` 매칭 → 전용 `llm` 큐. K8s 이벤트(kubewatch) 직접 트리거는 미연결로 남음(알람 파이프라인을 통해서만 자동화됨) |
+| G2 | 에러 발생 시 **자동** 분석이 없음 — IncidentAnalysisPage 에서 사람이 수동 실행 | `k8s_events.py` ↔ `analyze.py` 미연결 | ✅ **해소** — `services/observability/analysis_hook.py` + `AlertNotifyRule`/`llm_analysis_scope` 매칭 → 전용 `llm` 큐. 규칙마다 `sources`(알람/K8s 이벤트) 로 적용 파이프라인 선택 — kubewatch 로 수신된 K8s 이벤트도 알람을 거치지 않고 직접 트리거(`maybe_enqueue_analysis_for_k8s_event`, `run_auto_incident_analysis_k8s_event`), 같은 대상은 공유 디바운스 키로 중복 방지 |
 | G3 | RAG 부재 — 검색(`/work-items/{id}/similar`)과 생성(analyzer)이 분리돼 있고, 검색 결과가 프롬프트에 주입되지 않음 | `embedding_service.py` | ✅ **해소** — `services/rag_service.py`, `AnalysisResult.citations`, 챗봇 응답 `citations`, 프롬프트에 참고자료 블록 주입 |
-| G4 | 임베딩 대상이 WorkItem/WorkGuide 뿐 — OpsNote·Ontology 미색인, WorkGuide 는 검색 엔드포인트도 없음 | `models/ops_note.py` 등 | 🟡 **부분 해소** — OpsNote 임베딩 추가(`compute_ops_note_embedding`) + `GET /llm/rag-search` 검색 엔드포인트 신설. Ontology 는 여전히 미색인(범위 외) |
+| G4 | 임베딩 대상이 WorkItem/WorkGuide 뿐 — OpsNote·Ontology 미색인, WorkGuide 는 검색 엔드포인트도 없음 | `models/ops_note.py` 등 | ✅ **해소** — OpsNote 임베딩 추가(`compute_ops_note_embedding`) + `GET /llm/rag-search` 검색 엔드포인트 신설 + Ontology(`OntologyEvent`, 구성변경 영향분석 이력) 임베딩 추가(`compute_ontology_event_embedding`, `POST /ontology/impact` 커밋 직후 큐잉) — RAG 소스 4종(work_guide/work_item/ops_note/ontology_event) 전부 색인 |
 | G5 | GPU 서빙 매니페스트 없음 — `ollama.yaml` 은 CPU 전용 | `k8s/base/`, `k8s/overlays/airgap/` | 🟡 **부분 해소** — opt-in kustomize component `k8s/components/vllm-gpu/`(nvidia.com/gpu + PVC) 추가, base 는 여전히 CPU 전용(의도적 — GPU 는 오버레이 opt-in) |
 
 추가로 이번 구현에서 해소된 갭(당초 목록에 없었으나 진단에서 발견):
@@ -106,8 +108,9 @@ Ollama (k8s/base/ollama.yaml — CPU 전용, 모델 pre-baked 이미지)
                            │                           │ top-k 검색
 ┌─────────────┐   ┌────────┴───────────┐   ┌───────────┴────────────┐
 │ kubewatch    │──▶│ 자동 분석 트리거      │──▶│ RAG 컨텍스트 조립         │
-│ (이벤트 push) │   │ (critical 이벤트)    │   │ work_guides/ops_notes/ │
-└─────────────┘   │ + IncidentContext  │   │ work_items 유사 문서    │
+│ (이벤트 push) │   │ (알람 경유 또는      │   │ work_guides/ops_notes/ │
+└─────────────┘   │  K8s 이벤트 직접)    │   │ work_items/ontology_   │
+                  │ + IncidentContext  │   │ events 유사 문서        │
                   │   자동 수집(read-only)│   └───────────┬────────────┘
                   └────────────────────┘               │
                                           ┌────────────▼────────────┐
@@ -238,9 +241,10 @@ kubewatch → /events/kubewatch (severity=critical: OOMKilling, CrashLoopBackOff
 
 | 소스 | 테이블 | 현재 | 조치 |
 |---|---|---|---|
-| 작업 가이드 (지식 허브) | `work_guides` | 임베딩 O, 검색 API X | `/work-guides/search?q=` 유사 검색 엔드포인트 추가 |
-| DevOps Q&A / 업무 메모 | `ops_notes` | 임베딩 X | `embedding` 컬럼(pgvector) + Celery 재계산 태스크 추가 |
+| 작업 가이드 (지식 허브) | `work_guides` | 임베딩 O, 검색 API O | `GET /llm/rag-search?q=` 공용 검색 엔드포인트로 해소 |
+| DevOps Q&A / 업무 메모 | `ops_notes` | 임베딩 O | `embedding` 컬럼(pgvector) + `compute_ops_note_embedding` Celery 재계산 태스크 |
 | 업무 이력 | `work_items` | 임베딩 O, `/similar` O | 그대로 활용 |
+| 구성변경 영향분석 이력 | `ontology_events` | 임베딩 O | `embedding` 컬럼(pgvector) + `compute_ontology_event_embedding` — `POST /ontology/impact` 커밋 직후 큐잉 |
 | LAKE 서비스 지식 | `service_entries` 등 | 임베딩 X | 2차 확장 대상 |
 
 색인은 기존 패턴 그대로: 저장/수정 커밋 후 `compute_*_embedding` Celery 태스크로
@@ -248,13 +252,14 @@ kubewatch → /events/kubewatch (severity=critical: OOMKilling, CrashLoopBackOff
 
 ### 4.2 검색→프롬프트 주입 (G3 해소)
 
-신규 서비스 `rag_service.py` (설계):
+`rag_service.py`:
 
 ```
-retrieve(context_text, k=4) →
-  1. embedding_service.embed(에러 reason + 로그 요약 상위 N줄)
-  2. work_guides / ops_notes / work_items 에서 cosine_distance top-k (테이블별 상한)
-  3. [{title, source_type, url(내부 라우트), snippet, similarity}] 반환
+retrieve(db, query_text, k=4) →
+  1. embedding_service.embed(query_text)
+  2. work_guides / work_items / ops_notes / ontology_events 에서 cosine_distance top-k (테이블별 상한)
+  3. [{title, source_type, ref_id, route(내부 라우트), snippet, similarity}] 반환,
+     유사도 < MIN_SIMILARITY(0.35) 는 근거로 채택하지 않음
 ```
 
 analyzer 프롬프트에 주입:

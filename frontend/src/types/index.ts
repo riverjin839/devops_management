@@ -348,7 +348,7 @@ export interface AgentChatResponse {
 /** RAG 근거 인용 — 백엔드 rag_service.Citation */
 export interface RagCitation {
   title: string;
-  sourceType: 'work_guide' | 'work_item' | 'ops_note';
+  sourceType: 'work_guide' | 'work_item' | 'ops_note' | 'ontology_event';
   refId: string;
   route: string;
   snippet: string;

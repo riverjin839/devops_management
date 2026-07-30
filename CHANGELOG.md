@@ -11,6 +11,14 @@
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **Ontology RAG 확장**: AI 분석·챗봇의 근거 인용(RAG) 대상에 구성변경 영향분석 이력
+  (`ontology_events` — `POST /ontology/impact` 로 생성되는, 특정 설정 변경이 온톨로지
+  그래프 상에서 얼마나 넓게 영향을 미치는지 계산한 기록)을 추가했다. "과거 이런 구성
+  변경이 이런 영향을 미쳤다"는 사내 이력이 이제 네 번째 근거 소스(work_guide/work_item/
+  ops_note/ontology_event)로 검색·인용된다. Backend: `OntologyEvent.embedding`
+  컬럼(pgvector) + `compute_ontology_event_embedding` Celery 태스크(영향분석 생성 커밋
+  직후 큐잉) + `backfill_embeddings` 확장. Frontend: `RagCitation.sourceType` 에
+  `ontology_event` 추가, `CitationList` 에 전용 아이콘/라벨(구성변경 영향분석) 표시.
 - **K8s 이벤트(kubewatch) 직접 트리거 AI 자동분석**: 지금까지는 알람 파이프라인을
   거친 경우만 자동 분석됐는데, kubewatch 로 수신되는 K8s 이벤트도 알람과 동일한
   범위(scope) 규칙·디바운스·레이트 제한을 거쳐 전용 `llm` 큐로 직접 분석 요청할 수

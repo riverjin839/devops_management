@@ -21,6 +21,18 @@ from app.services.ontology_service import Edge, calculate_blast_radius
 router = APIRouter(prefix="/ontology", tags=["ontology"])
 
 
+def _queue_embedding_recompute(ontology_event_id) -> None:
+    """RAG 검색용 임베딩 계산 큐잉 — best-effort (ops_note.py 의 동일 헬퍼 패턴)."""
+    try:
+        from app.celery_app import compute_ontology_event_embedding
+        compute_ontology_event_embedding.delay(str(ontology_event_id))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Failed to queue embedding recompute for ontology_event %s", ontology_event_id
+        )
+
+
 @router.post("/entities", response_model=OntologyEntityRead)
 def create_entity(payload: OntologyEntityCreate, db: Session = Depends(get_db)):
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
@@ -130,6 +142,8 @@ def analyze_config_change_impact(payload: ConfigChangeImpactRequest, db: Session
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    _queue_embedding_recompute(event.id)
 
     entity_name_map = {
         e.id: e.name

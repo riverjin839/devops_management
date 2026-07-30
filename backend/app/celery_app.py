@@ -1360,6 +1360,48 @@ def compute_ops_note_embedding(self, ops_note_id: str):
         db.close()
 
 
+@celery_app.task(bind=True, name="app.celery_app.compute_ontology_event_embedding")
+def compute_ontology_event_embedding(self, ontology_event_id: str):
+    """OntologyEvent(구성변경 영향분석 이벤트) 제목+설명 임베딩을 비동기로 계산·저장.
+
+    ontology 라우터의 `analyze_config_change_impact` 가 이벤트 커밋 직후 .delay() 로
+    큐잉한다(best-effort — compute_ops_note_embedding 과 동일 패턴). RAG 근거 인용에서
+    "과거 이런 구성 변경이 이런 영향을 미쳤다"는 사내 이력으로 검색된다.
+    """
+    import logging
+    from app.database import SessionLocal
+    from app.models.ontology import OntologyEvent
+    from app.services.embedding_service import build_embedding_text, embedding_service
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        event = db.query(OntologyEvent).filter(OntologyEvent.id == ontology_event_id).first()
+        if event is None:
+            return {"ontology_event_id": ontology_event_id, "skipped": True, "reason": "not found"}
+
+        text = build_embedding_text(event.title, event.description)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            vector = loop.run_until_complete(embedding_service.embed(text))
+        finally:
+            loop.close()
+
+        if vector is None:
+            return {"ontology_event_id": ontology_event_id, "skipped": True, "reason": "embedding unavailable"}
+
+        event.embedding = vector
+        db.commit()
+        return {"ontology_event_id": ontology_event_id, "dim": len(vector)}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.exception("compute_ontology_event_embedding failed (%s): %s", ontology_event_id, e)
+        return {"ontology_event_id": ontology_event_id, "error": str(e)[:200]}
+    finally:
+        db.close()
+
+
 @celery_app.task(bind=True, name="app.celery_app.backfill_embeddings", ignore_result=True,
                  time_limit=3600, soft_time_limit=3500)
 def backfill_embeddings(self):
@@ -1374,7 +1416,7 @@ def backfill_embeddings(self):
 
     log = logging.getLogger(__name__)
     db = SessionLocal()
-    stats = {"work_items": 0, "work_guides": 0, "ops_notes": 0, "errors": 0}
+    stats = {"work_items": 0, "work_guides": 0, "ops_notes": 0, "ontology_events": 0, "errors": 0}
 
     def _embed_sync(text: str):
         loop = asyncio.new_event_loop()
@@ -1388,12 +1430,14 @@ def backfill_embeddings(self):
         from app.models.work_item import WorkItem
         from app.models.work_guide import WorkGuide
         from app.models.ops_note import OpsNote
+        from app.models.ontology import OntologyEvent
 
         targets = [
             ("work_items", WorkItem, lambda r: build_embedding_text(r.title, r.content)),
             ("work_guides", WorkGuide, lambda r: build_embedding_text(r.title, r.content)),
             ("ops_notes", OpsNote, lambda r: build_embedding_text(
                 r.title, "\n\n".join(p for p in (r.content, r.back_content) if p))),
+            ("ontology_events", OntologyEvent, lambda r: build_embedding_text(r.title, r.description)),
         ]
         for key, model, text_fn in targets:
             try:
