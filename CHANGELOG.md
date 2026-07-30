@@ -10,6 +10,22 @@
 
 1.18.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **K8S 자원 관리(`/k8s-allocation`) 정확성/안정성 감사 수정**: request/slack 집계가
+  네이티브 사이드카(Istio/Linkerd 등 init `restartPolicy: Always`)·init 컨테이너·
+  `RuntimeClass` overhead 를 누락해 메시 주입 클러스터에서 여유(slack)가 과대평가되던
+  문제를 수정했다. 이 외에 apiserver 5xx/`_continue` 토큰 만료로 절단된 스냅샷이 24시간
+  캐시로 확정 데이터처럼 서빙되던 문제(짧은 partial TTL 로 자동 재집계), 행업된 백그라운드
+  집계가 새로고침으로도 복구되지 않던 문제(stuck timeout 재시작), 과할당 노드의 음수
+  여유(slack)가 초록색 "여유 -8192Mi"로 표시되던 문제, 사용률 배지·%R 색상 판정 기준이
+  반올림 vs 원시 비율로 서로 어긋나던 문제, 네임스페이스 비효율 랭킹 정렬이 데이터에
+  따라 순서가 흔들리던 문제(비추이적 comparator), 실제 K8s pod-template-hash 알파벳과
+  안 맞아 워크로드 개수가 부풀려지던 ReplicaSet 이름 매칭, 한글 클러스터명이 CSV 파일명에서
+  전부 `-` 로 뭉개지던 문제, nanocores 서브밀리코어 usage 가 절삭으로 소실되던 문제를 고쳤다.
+  Backend: `routers/k8s_allocation.py`(`_pod_effective_resources`, `_strip_hash`, ApiClient
+  누수 정리), `services/snapshot_jobs.py`(partial/stuck TTL), `services/k8s_paging.py`(절단 로깅).
+  Frontend: `pages/K8sAllocationPage.tsx`(단위 표기·임계값·정렬·CSV·새로고침 스피너/에러 표시).
+
 ## [1.18.0] - 2026-07-29
 
 ### Added

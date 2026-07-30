@@ -65,7 +65,7 @@ def patched(monkeypatch):
 
 
 def test_overview_ns_usage_by_namespace(patched):
-    ov = ka._build_overview(object(), "cid", Progress())
+    ov = ka._build_overview(object(), Progress())
     per_ns = ov["per_ns"]
     assert set(per_ns) == {"ns1", "ns2"}
     # NS usage 가 namespace 단위로 합산됨(대규모에서도 랭킹 실사용 표시)
@@ -99,5 +99,5 @@ def test_progress_partial_published(patched, monkeypatch):
     # 매 pod 마다 publish 되도록 간격 0 으로
     monkeypatch.setattr(ka, "_PARTIAL_PUBLISH_INTERVAL", 0.0)
     prog = Progress()
-    ka._build_overview(object(), "cid", prog)
+    ka._build_overview(object(), prog)
     assert prog.processed == 3
