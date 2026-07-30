@@ -6,9 +6,12 @@ etcd compaction)를 graceful 하게 partial 처리한다.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def _envf(name: str, default: float) -> float:
@@ -75,6 +78,9 @@ def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = Non
             # 이후 페이지 실패(예: continue 토큰 만료 410 Gone)는 항상 graceful partial.
             if seen == 0 and not is_timeout_error(e):
                 raise
+            # 절단은 조용히 삼키지 않는다 — partial 스냅샷이 왜 생겼는지 운영 로그로 추적 가능해야 함.
+            logger.warning("K8s LIST 절단(graceful partial): seen=%d, cause=%s",
+                           seen, str(e)[:200])
             if report is not None:
                 report.append(True)
             break

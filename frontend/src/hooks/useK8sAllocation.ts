@@ -41,20 +41,31 @@ export function useAllocNamespaces(clusterId: string) {
   });
 }
 
-/** 명시적 새로고침/주기 갱신 — refresh=1 로 강제 재집계 시작 후, computing 폴링이 누적 완성. */
+/** 명시적 새로고침/주기 갱신 — refresh=1 로 강제 재집계 시작 후, computing 폴링이 누적 완성.
+ * isPending/error 를 노출해 버튼 스피너·실패 피드백에 쓸 수 있게 한다(과거엔 실패가 완전히
+ * 무시돼 사용자가 새로고침이 됐는지 알 수 없었다). */
 export function useForceAllocRefresh(clusterId: string) {
   const qc = useQueryClient();
-  return useCallback(async () => {
-    if (!clusterId) return;
-    try {
+  const mutation = useMutation({
+    mutationFn: async () => {
       const [n, ns] = await Promise.all([
         k8sAllocationApi.nodes(clusterId, true),
         k8sAllocationApi.namespaces(clusterId, true),
       ]);
-      qc.setQueryData(['alloc-nodes', clusterId], n.data);
-      qc.setQueryData(['alloc-namespaces', clusterId], ns.data);
-    } catch { /* best-effort */ }
-  }, [qc, clusterId]);
+      return { n: n.data, ns: ns.data };
+    },
+    onSuccess: ({ n, ns }) => {
+      qc.setQueryData(['alloc-nodes', clusterId], n);
+      qc.setQueryData(['alloc-namespaces', clusterId], ns);
+    },
+  });
+  const refresh = useCallback(async () => {
+    if (!clusterId || mutation.isPending) return;
+    try {
+      await mutation.mutateAsync();
+    } catch { /* onError 없이도 mutation.isError/error 로 조회 가능 — 호출부에서 처리 */ }
+  }, [clusterId, mutation]);
+  return { refresh, isPending: mutation.isPending, isError: mutation.isError, error: mutation.error };
 }
 
 /** 단일 노드 즉시 재계산(개별 REFRESH) → alloc-nodes 캐시의 해당 행만 patch. */
