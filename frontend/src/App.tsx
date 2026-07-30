@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
@@ -27,6 +28,7 @@ import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
+import { DocumentsPage } from '@/pages/DocumentsPage';
 import { CommandsPage } from '@/pages/CommandsPage';
 import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -77,6 +79,7 @@ import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
+import { NAV_MAP } from '@/components/layout/navConfig';
 
 function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
   const { id } = useParams<{ id: string }>();
@@ -90,13 +93,35 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** 기능별 접근 제어 가드 — feature_access 설정에 따라 허용된 사용자만. */
-function RequireFeature({ feature, children }: { feature: string; children: React.ReactNode }) {
-  const { data, isLoading } = useFeatureAccess();
+/**
+ * 화면별 접근 제어(Settings "접근 제어") 전역 가드 — 사이드바 메뉴는 이미 `featureAllowed`
+ * 로 숨기지만, 주소를 알면 그냥 들어가진다. 라우트 하나하나를 감싸는 대신 모든 라우트 전환을
+ * 지켜보다가 현재 경로에 해당하는 NAV_MAP 항목이 막혀 있으면 홈으로 돌려보낸다.
+ *
+ * NAV_MAP 키 중 현재 경로와 정확히 같거나 그 하위 경로(`/base/...`)인 것 중 **가장 긴 것**을
+ * 매치로 쓴다 — `/daily-check/review` 와 `/daily-check/settings` 처럼 접두어를 공유하는
+ * 경로끼리 서로 잘못 매치되지 않도록. RequireAdmin 이 이미 막는 admin 전용 라우트
+ * (`/settings`, `/daily-check/settings`)는 feature_access 규칙이 없으면 그대로 통과되므로
+ * 서로 간섭하지 않는다.
+ */
+function RouteAccessGate() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { data: featureAccess, isLoading } = useFeatureAccess();
   const user = useAuthStore((s) => s.user);
-  if (isLoading) return null;
-  if (!canAccessFeature(data, feature, user)) return <Navigate to="/" replace />;
-  return <>{children}</>;
+
+  useEffect(() => {
+    if (isLoading || !user) return;
+    const path = location.pathname;
+    const match = Object.keys(NAV_MAP)
+      .filter((p) => p !== '/' && (path === p || path.startsWith(`${p}/`)))
+      .sort((a, b) => b.length - a.length)[0];
+    if (match && !canAccessFeature(featureAccess, match, user)) {
+      navigate('/', { replace: true });
+    }
+  }, [location.pathname, featureAccess, isLoading, user, navigate]);
+
+  return null;
 }
 
 const queryClient = new QueryClient({
@@ -111,6 +136,7 @@ const queryClient = new QueryClient({
 function AppShell() {
   return (
     <div className="flex min-h-screen bg-background">
+      <RouteAccessGate />
       {/* Skip link — 키보드/스크린리더 사용자가 사이드바 내비게이션을 건너뛰고
           바로 본문(#main-content, PageStyleProvider 래퍼)으로 이동(W4 접근성 패스). */}
       <a
@@ -180,6 +206,7 @@ function AppShell() {
               <Route path="/services/:service" element={<ServiceHubPage />} />
               <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />
               <Route path="/work-guides/new" element={<WorkGuidePage />} />
               <Route path="/work-guides/:id" element={<WorkGuidePage />} />
@@ -192,7 +219,9 @@ function AppShell() {
               <Route path="/ops-notes/:id" element={<OpsNoteDetailPage />} />
               <Route path="/ops-notes/:id/edit" element={<OpsNoteDetailPage />} />
               <Route path="/mindmap" element={<MindMapPage />} />
-              <Route path="/wbs" element={<RequireFeature feature="wbs"><WbsFlowPage /></RequireFeature>} />
+              {/* /wbs 의 접근 제어는 더 이상 라우트별 개별 가드가 아니라 RouteAccessGate 가
+                  NAV_MAP 을 통해 범용으로 처리한다(Settings "접근 제어"). */}
+              <Route path="/wbs" element={<WbsFlowPage />} />
               <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />
               <Route path="/packet-flow" element={<PacketFlowPage />} />
               <Route path="/ontology" element={<OntologyPage />} />

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Check, Search } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
+import { Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useNavCatalog, groupLabelForPath } from '@/hooks/useNavCatalog';
+import { ScreenCatalogList } from '@/components/common';
 import { isEmbeddable, MAX_PANELS } from './panelRegistry';
 
 interface PanelPickerDialogProps {
@@ -12,40 +12,21 @@ interface PanelPickerDialogProps {
   onPick: (path: string) => void;
 }
 
-const UNGROUPED_LABEL = '기타';
-
 /**
  * 아일랜드에 담을 화면을 고르는 다이얼로그.
  *
- * 카탈로그는 사이드바와 **같은** 소스를 쓴다(`useNavCatalog`) — 관리자가 바꾼 메뉴 라벨과
- * 숨긴 기능이 그대로 반영되도록. 여기에 더해 `panelRegistry` 에 등록돼 임베드 가능한
- * 화면만 남긴다.
+ * 목록 자체는 `ScreenCatalogList`(공용 — Settings 의 화면별 노출 관리자와 공유)를 쓰고,
+ * 여기서는 `panelRegistry` 에 등록돼 임베드 가능한 화면만 남기는 필터와 "이미 추가됨"
+ * 체크마크만 얹는다.
  */
 export function PanelPickerDialog({ open, onClose, existingPaths, onPick }: PanelPickerDialogProps) {
-  const { navMap, getLabel, featureAllowed } = useNavCatalog();
-  const [query, setQuery] = useState('');
-
-  const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const buckets = new Map<string, { path: string; label: string }[]>();
-    for (const path of Object.keys(navMap)) {
-      if (!isEmbeddable(path) || !featureAllowed(path)) continue;
-      const label = getLabel(path);
-      if (q && !label.toLowerCase().includes(q) && !path.toLowerCase().includes(q)) continue;
-      const groupLabel = groupLabelForPath(path)?.label ?? UNGROUPED_LABEL;
-      const list = buckets.get(groupLabel) ?? [];
-      list.push({ path, label });
-      buckets.set(groupLabel, list);
-    }
-    return [...buckets.entries()].map(([label, items]) => ({
-      label,
-      items: items.sort((a, b) => a.label.localeCompare(b.label, 'ko')),
-    }));
-  }, [navMap, getLabel, featureAllowed, query]);
-
   const existing = useMemo(() => new Set(existingPaths), [existingPaths]);
   // 서버 스키마가 max 20 으로 422 를 내므로, 프론트에서 미리 막고 이유를 알려준다.
   const atCapacity = existingPaths.length >= MAX_PANELS;
+
+  const handlePick = useCallback((path: string) => {
+    onPick(path);
+  }, [onPick]);
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -61,54 +42,15 @@ export function PanelPickerDialog({ open, onClose, existingPaths, onPick }: Pane
               제거하거나 새 아일랜드를 만드세요.
             </p>
           )}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="화면 이름으로 검색"
-              aria-label="화면 검색"
-              autoFocus
-              className="w-full pl-9 pr-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
-
-          <div className="max-h-[55vh] overflow-y-auto space-y-4 pr-1">
-            {grouped.length === 0 && (
-              <p className="py-10 text-center text-sm text-muted-foreground">
-                조건에 맞는 화면이 없습니다.
-              </p>
+          <ScreenCatalogList
+            filter={isEmbeddable}
+            onSelect={handlePick}
+            autoFocusSearch
+            isRowDisabled={() => atCapacity}
+            renderTrailing={(path) => existing.has(path) && (
+              <Check className="w-3.5 h-3.5 flex-shrink-0 text-primary" aria-label="이미 추가됨" />
             )}
-            {grouped.map((group) => (
-              <div key={group.label}>
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.label}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                  {group.items.map((item) => {
-                    const Icon = navMap[item.path].icon;
-                    const already = existing.has(item.path);
-                    return (
-                      <button
-                        key={item.path}
-                        type="button"
-                        onClick={() => onPick(item.path)}
-                        disabled={atCapacity}
-                        className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-left text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-                      >
-                        <Icon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-                        <span className="flex-1 min-w-0 truncate">{item.label}</span>
-                        {already && (
-                          <Check className="w-3.5 h-3.5 flex-shrink-0 text-primary" aria-label="이미 추가됨" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+          />
         </div>
       </DialogContent>
     </Dialog>

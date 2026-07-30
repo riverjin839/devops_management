@@ -22,6 +22,7 @@ from app.routers import (
     promql_router,
     work_items_router,
     jira_router,
+    confluence_router,
     projects_router,
     sprints_router,
     ui_settings_router,
@@ -83,6 +84,7 @@ from app.routers import (
     release_notes_router,
     check_matrix_router,
     island_router,
+    llm_settings_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -759,6 +761,29 @@ def _run_migrations():
         _safe_add_column("work_guides", "sort_order", "INTEGER NOT NULL DEFAULT 0")
         # 유사 문서 검색용 임베딩(제목+본문) — pgvector 확장 필요 (_ensure_pgvector_extension).
         _safe_add_column("work_guides", "embedding", f"VECTOR({settings.embedding_dim})")
+        # Confluence 문서 동기화 메타 (routers/confluence.py — import/export)
+        _safe_add_column("work_guides", "source", "VARCHAR(20) DEFAULT 'pep'")
+        _safe_add_column("work_guides", "confluence_page_id", "VARCHAR(50)")
+        _safe_add_column("work_guides", "confluence_space_key", "VARCHAR(50)")
+        _safe_add_column("work_guides", "confluence_version", "INTEGER")
+        _safe_add_column("work_guides", "confluence_synced_at", "TIMESTAMP")
+        _safe_add_column("work_guides", "confluence_sync_status", "VARCHAR(20)")
+        _safe_add_column("work_guides", "confluence_sync_error", "TEXT")
+        _safe_create_index("ix_work_guides_confluence_page_id", "work_guides", "(confluence_page_id)")
+        # 시맨틱 검색용 HNSW 인덱스 — pgvector 미설치 환경이면 로깅만 하고 계속 (fail-open).
+        _safe_exec(
+            "CREATE INDEX IF NOT EXISTS ix_work_guides_embedding_hnsw "
+            "ON work_guides USING hnsw (embedding vector_cosine_ops)",
+            label="work_guides embedding hnsw index",
+        )
+
+    # ops_notes: RAG(근거 인용) 검색용 임베딩 — 구버전 DB 호환 보강.
+    if "ops_notes" in inspector.get_table_names():
+        _safe_add_column("ops_notes", "embedding", f"VECTOR({settings.embedding_dim})")
+
+    # ontology_events: RAG(근거 인용) 검색용 임베딩 — 구버전 DB 호환 보강.
+    if "ontology_events" in inspector.get_table_names():
+        _safe_add_column("ontology_events", "embedding", f"VECTOR({settings.embedding_dim})")
 
     # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
     # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
@@ -921,6 +946,20 @@ def _run_migrations():
         # 업무 생성 시 함께 만든 Confluence 문서 링크.
         _safe_add_column("work_items", "confluence_page_id", "VARCHAR(50)")
         _safe_add_column("work_items", "confluence_url", "TEXT")
+        # Jira 원본 항목 동기화 — Epic / Sub-task / 컴포넌트 / 라벨 / 상태 카테고리.
+        # 게시판 표를 Jira 와 같은 축으로 보여주기 위해 축약 매핑(type/type_label) 과 별도로
+        # 원본 값을 보관한다.
+        _safe_add_column("work_items", "jira_epic_key", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_epic_summary", "VARCHAR(200)")
+        _safe_add_column("work_items", "jira_issue_type", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_parent_key", "VARCHAR(50)")
+        _safe_add_column("work_items", "jira_parent_summary", "VARCHAR(200)")
+        _safe_add_column("work_items", "jira_status_category", "VARCHAR(20)")
+        _safe_add_column("work_items", "jira_components", "JSONB")
+        _safe_add_column("work_items", "jira_labels", "JSONB")
+        _safe_create_index("ix_work_items_jira_epic_key", "work_items", "(jira_epic_key)")
+        _safe_create_index("ix_work_items_jira_parent_key", "work_items", "(jira_parent_key)")
+        _safe_create_index("ix_work_items_jira_issue_type", "work_items", "(jira_issue_type)")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
@@ -994,6 +1033,9 @@ def _run_migrations():
         _safe_create_index("ix_k8s_events_received_at", "k8s_events", "(received_at DESC)")
         _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
         _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
+        # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
+        _safe_add_column("k8s_events", "analysis_id", "UUID")
+        _safe_add_column("k8s_events", "analysis_status", "VARCHAR(16)")
 
     # alert_events: Alertmanager / 사내 alert-forwarder 수신 알람 — 테이블은 create_all, 인덱스 보강.
     if "alert_events" in inspector.get_table_names():
@@ -1002,6 +1044,13 @@ def _run_migrations():
         _safe_create_index("ix_alert_events_status_severity", "alert_events", "(status, severity)")
         _safe_create_index(
             "ix_alert_events_fingerprint_starts", "alert_events", "(fingerprint, starts_at DESC)")
+        # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
+        _safe_add_column("alert_events", "analysis_id", "UUID")
+        _safe_add_column("alert_events", "analysis_status", "VARCHAR(16)")
+    # incident_analyses: alert 트리거로 처음 생성됐던 테이블에 k8s_event 트리거 지원 추가.
+    if "incident_analyses" in inspector.get_table_names():
+        _safe_add_column("incident_analyses", "k8s_event_id", "UUID")
+        _safe_create_index("ix_incident_analyses_k8s_event", "incident_analyses", "(k8s_event_id)")
 
     # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.
     if "observability_metrics" in inspector.get_table_names():
@@ -1990,7 +2039,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.17.0",
+    version="1.18.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2031,9 +2080,11 @@ app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(llm_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(confluence_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(sprints_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)
@@ -2121,7 +2172,7 @@ app.include_router(island_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.17.0",
+        "version": "1.18.0",
         "version": "1.8.2",
         "status": "running"
     }

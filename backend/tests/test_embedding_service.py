@@ -1,13 +1,15 @@
-"""EmbeddingService(Ollama /api/embeddings) 단위 테스트 — fail-safe 회귀.
+"""EmbeddingService 단위 테스트 — fail-safe 회귀.
 
 test_agent_service_pipeline.py 와 동일한 httpx.AsyncClient monkeypatch 패턴.
+임베딩 호출이 services/llm 게이트웨이로 위임된 뒤에는 기본 라우팅(local-ollama)
+의 HTTP 계층인 ``ollama_provider.httpx`` 를 patch 한다.
 """
 from unittest.mock import MagicMock
 
 import httpx
 import pytest
 
-from app.services import embedding_service as embedding_service_module
+from app.services.llm import ollama_provider as ollama_provider_module
 from app.services.embedding_service import EmbeddingService, build_embedding_text
 
 
@@ -27,7 +29,7 @@ class _FakeAsyncClient:
 
 def _patch_client(monkeypatch, behavior):
     monkeypatch.setattr(
-        embedding_service_module.httpx, "AsyncClient",
+        ollama_provider_module.httpx, "AsyncClient",
         lambda *a, **k: _FakeAsyncClient(behavior),
     )
 

@@ -1,0 +1,123 @@
+# GPU 서빙 옵션 — vLLM 으로 OpenAI-호환 엔드포인트를 인클러스터에 띄운다.
+# CPU 전용 Ollama(k8s/base/ollama.yaml) 보다 처리량이 필요할 때(예: 알람 자동 분석
+# 범위를 넓혀 부하가 커진 경우) 선택적으로 추가한다. base 는 무변경 — 이 컴포넌트를
+# GPU 노드가 있는 오버레이에만 opt-in 으로 추가한다:
+#
+#   # k8s/overlays/<env>/kustomization.yaml
+#   components:
+#     - ../../components/vllm-gpu
+#
+# 배포 후 Settings → AI/LLM 탭에서 provider=openai_compat, base_url=http://vllm:8000
+# 로 프로필을 등록하면 게이트웨이(services/llm)가 즉시 라우팅할 수 있다.
+# 모델 가중치 반입 절차는 docs/AIRGAP_LLM_NEXUS.md 참고 — 이 매니페스트는 PVC 로
+# /models 를 마운트할 뿐, 가중치를 담는 것은 별도 반입 작업이다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: k8s-monitor
+  labels:
+    app: vllm
+    component: llm-gpu
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+        component: llm-gpu
+    spec:
+      # GPU 노드에만 스케줄 — 클러스터의 GPU 노드 라벨링 규칙에 맞게 오버레이에서 조정.
+      nodeSelector:
+        gpu: "true"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: vllm
+          # 폐쇄망 반입 이미지로 교체 (vllm/vllm-openai 등 — 사내 레지스트리 미러 경로).
+          image: vllm/vllm-openai:latest
+          args:
+            - "--model=/models/current"
+            - "--served-model-name=internal-llm"
+            - "--max-model-len=32768"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            requests:
+              cpu: "4"
+              memory: 24Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: 32Gi
+              nvidia.com/gpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+          volumeMounts:
+            - name: model-weights
+              mountPath: /models
+              readOnly: true
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: model-weights
+          persistentVolumeClaim:
+            claimName: vllm-model-weights
+        # vLLM 은 텐서 병렬화 시 대용량 공유 메모리가 필요 — emptyDir(Memory) 로 확보.
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+  namespace: k8s-monitor
+  labels:
+    app: vllm
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-weights
+  namespace: k8s-monitor
+  labels:
+    app: vllm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # 9B급 BF16 모델 기준 최소치 — 큰 모델/여러 버전을 보관하려면 오버레이에서 상향.
+      storage: 60Gi
+  # storageClassName 은 오버레이에서 patch 로 지정 (GPU 노드가 붙은 스토리지 클래스).

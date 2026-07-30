@@ -22,18 +22,31 @@ const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: st
   connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
 };
 
-function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
+// 타겟/실행 구성 옆(우측)에 고정 위치로 배치 — mc 클라이언트 콘솔과 동일한 패턴이다.
+// 실행 전에도 같은 자리에 플레이스홀더를 보여줘 결과가 나와도 레이아웃이 흔들리지 않는다.
+// 카드 자체는 화면 높이에 맞춰 세로 스크롤만 허용(overflow-y-auto)하고 가로 스크롤은
+// 막는다(overflow-x-hidden) — 좁은 카드 폭 안에 긴 로그가 들어와도 페이지가 옆으로 늘어나지 않는다.
+function ResultPanel({ result, tab }: { result: EtcdCtlRunResponse | null; tab: Tab }) {
+  if (!result) {
+    return (
+      <MacCard rootClassName="lg:col-span-5 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-260px)]">
+        <p className="text-sm text-muted-foreground text-center">
+          {tab === 'run' ? 'etcdctl 명령을 실행하면' : '로그를 가져오면'}<br />결과가 여기에 표시됩니다.
+        </p>
+      </MacCard>
+    );
+  }
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
   return (
-    <MacCard rootClassName="mt-5" bodyPadding="p-0">
-      <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-muted/20">
-        <div className="flex items-center gap-3">
+    <MacCard rootClassName="lg:col-span-5 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-260px)]" bodyPadding="p-0">
+      <header className="sticky top-0 z-10 px-5 py-3 border-b border-border flex items-center justify-between bg-muted/90 backdrop-blur-sm">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
             {meta.label}
           </span>
-          <span className="text-sm font-mono text-muted-foreground">{result.host}</span>
+          <span className="text-sm font-mono text-muted-foreground truncate">{result.host}</span>
           {result.exitCode !== null && result.exitCode !== undefined && (
             <span className="text-sm font-mono text-muted-foreground">exit {result.exitCode}</span>
           )}
@@ -46,7 +59,7 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
       <div className="px-5 py-3 space-y-3">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">executed</p>
-          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap text-foreground/80">
+          <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all text-foreground/80">
             {result.executedCommand || '(not provided)'}
           </pre>
         </div>
@@ -169,7 +182,7 @@ export function EtcdCtlPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-6 py-6 flex gap-5">
+      <main className="pr-6 py-6 flex gap-5">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -216,9 +229,12 @@ export function EtcdCtlPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* 타겟 2 : 실행 구성 3 : 결과 5 비율 (10 컬럼 그리드) — mc 클라이언트 콘솔과 동일.
+            결과는 항상 같은 자리(우측)에 고정되고 내부에서만 세로 스크롤되어(가로 스크롤 없음)
+            컨트롤과 로그가 한 화면 폭 안에 나란히 들어온다. */}
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 items-start">
           {/* 좌: 타겟 + 인증 */}
-          <MacCard title="타겟" className="space-y-4">
+          <MacCard title="타겟" rootClassName="lg:col-span-2 min-w-0" bodyPadding="p-5" className="space-y-4">
             <div>
               <label htmlFor={f('master')} className="block text-sm text-muted-foreground mb-1">master 노드 후보</label>
               <select
@@ -311,8 +327,8 @@ export function EtcdCtlPage() {
             )}
           </MacCard>
 
-          {/* 우: 실행 구성 */}
-          <MacCard rootClassName="lg:col-span-2" className="space-y-4">
+          {/* 중: 실행 구성 */}
+          <MacCard rootClassName="lg:col-span-3 min-w-0" bodyPadding="p-5" className="space-y-4">
             {tab === 'run' ? (
               <>
                 {/* 프리셋 */}
@@ -497,9 +513,10 @@ export function EtcdCtlPage() {
               </>
             )}
           </MacCard>
-        </div>
 
-        {result && <ResultPanel result={result} />}
+          {/* 우: 결과 — 항상 같은 위치(우측)에 고정, 실행 전엔 플레이스홀더 */}
+          <ResultPanel result={result} tab={tab} />
+        </div>
         </div>
       </main>
 

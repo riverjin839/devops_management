@@ -27,6 +27,7 @@ resources:
 
   # Celery Workers
   - celery/worker-deployment.yaml
+  - celery/worker-llm-deployment.yaml
   - celery/beat-deployment.yaml
 
   # Frontend

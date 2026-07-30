@@ -50,12 +50,21 @@
 
 | Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_URL` | `http://ollama:11434` | Ollama base URL |
+| `OLLAMA_URL` | `http://ollama:11434` | Ollama base URL (bootstrap 기본 프로필 `local-ollama` 합성용) |
 | `OLLAMA_MODEL` | `llama3` | LLM model name (airgap overlay 는 `qwen2.5-coder:7b`) |
 | `OLLAMA_TIMEOUT` | `120` | LLM request timeout (s) |
+| `LLM_API_BASE` | *(empty)* | 사내 OpenAI-호환 LLM 서비스 base URL. 설정 시 `internal-llm` 프로필이 bootstrap 합성됨 |
+| `LLM_API_KEY` | *(empty)* | 사내 LLM API 키 — 프로필 `api_key_ref: "env:LLM_API_KEY"` 로만 참조 (AppSetting 저장 금지) |
+| `LLM_MODEL` | *(empty)* | `internal-llm` 프로필 기본 모델명 |
+| `LLM_TIMEOUT` | `120` | 사내 LLM request timeout (s) |
+| `ANALYZER_BACKEND` | *(empty→`rule_based`)* | 장애 분석 백엔드 bootstrap 폴백 — **운영 설정은 Settings → AI/LLM 탭(AppSetting `llm_settings`)이 우선** |
 | `EMBEDDING_MODEL` | `nomic-embed-text` | 임베딩 모델 (WorkItem/WorkGuide 유사 검색) |
 | `EMBEDDING_DIM` | `768` | 임베딩 차원 — 모델 교체 시 함께 변경(기존 벡터 재계산 필요) |
 | `EMBEDDING_TIMEOUT` | `30` | 임베딩 요청 timeout (s) |
+
+> **LLM 운영 설정의 원천은 UI 다.** 프로필(사내 LLM/Ollama 병행)·용도별 라우팅·분석기 선택은
+> AppSetting `llm_settings` (Settings → AI/LLM 탭) 에서 관리하고, 위 env 는 행이 없을 때의
+> bootstrap 폴백이다. 구조는 `docs/AIRGAP_LLM_ARCHITECTURE.md` 참고.
 
 ## Prometheus / Grafana / Trends
 
@@ -88,7 +97,6 @@
 
 | Variable | Default | 읽는 곳 |
 |---|---|---|
-| `ANALYZER_BACKEND` | `rule_based` | `services/analyzers/factory.py` — `claude` \| `local_llm` \| `rule_based` |
 | `ALLOWED_ORIGINS` | *(empty)* | `main.py` — 추가 CORS origin (콤마 구분) |
 | `PEP_K9S_SSH_ENABLED` | `true` | `routers/k9s_ssh.py` — k9s 콘솔(SSH 웹 터미널) on/off. `false`\|`0`\|`no` 면 WS 를 4403 으로 거부 |
 | `PEP_NODE_SSH_ENABLED` | `true` | `routers/node_ssh.py` — 노드 SSH 터미널 on/off (위와 동일 규칙) |

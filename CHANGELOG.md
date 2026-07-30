@@ -8,7 +8,191 @@
 
 ## [Unreleased]
 
-1.17.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.18.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.18.0] - 2026-07-29
+
+### Added
+- **Comfort 테마**: 기존 기본/라이트/다크/시스템에 더해 크림 배경 + 딥그린 액센트 +
+  화이트 카드 + 큰 라운딩(16px)의 부드러운 대시보드 톤 테마를 추가했다. 사이드바 하단
+  테마 토글로 순환 선택(기본 → 컴포트 → 라이트 → 다크 → 시스템).
+  Frontend: `index.css`(`html.comfort` 토큰 블록 + 소프트 카드 섀도), `stores/themeStore.ts`,
+  `components/layout/Sidebar.tsx`.
+
+### Added
+- **Confluence 문서 가져오기/내보내기 + 문서 관리 대시보드** (`/documents`): Jira 연동과 같은
+  dry-run 프리뷰 → 선택 커밋 방식으로 Confluence 페이지를 문서(WorkGuide)로 가져오고, PEP 에서
+  작성/수정한 문서를 같은 페이지의 새 버전으로 게시한다. 문서 테이블(출처·동기화 상태 배지)과
+  "AI 검색"(임베딩 시맨틱, 미기동 시 일반 검색 폴백)을 갖춘 대시보드가 사이드바 work 모드의
+  신규 "문서 관리" 그룹으로 추가됐고, 기존 지식 화면들(`/work-guides` `/docs` `/ops-notes`
+  `/mindmap` `/ontology` `/trends`)도 이 그룹으로 사이드바에 복귀.
+  Backend: `routers/confluence.py`(`/confluence/docs/*`), storage-format ↔ 에디터 HTML 변환기
+  `services/confluence_storage.py`(code/info/warning/expand 매크로 ↔ 코드블록/Callout/토글),
+  `GET /work-guides/search` 시맨틱 검색 + HNSW 인덱스, 가져온 문서 임베딩 자동 계산(LLM 학습
+  소스 편입). Frontend: `DocumentsPage` + `components/documents/`, 문서 읽기 화면 게시/재가져오기
+  버튼. 가져오기 검색은 Jira 조건 조합처럼 **기여자(contributor)·라벨·최근 수정 기간**으로
+  세부 필터링할 수 있고, 기본값은 "본인이 기여한 문서"(`contributor = currentUser()`)다.
+- **업무 등록 시 Jira·Confluence 자동 생성 모달 — 전체 등록 경로로 확장**: 목록 하단 인라인
+  추가에만 연결돼 있던 자동 생성 흐름을 우측 상단 "업무 등록" 버튼(팝업 등록)에도 연결했다.
+  인라인 추가 행은 스크롤 없이 바로 쓸 수 있도록 표 맨 아래에서 **헤더 바로 아래(목록 최상단)로
+  이동**.
+
+### Changed
+- **업무 관리 게시판 컬럼 정리**: "상태"와 "Jira 상태"가 같은 정보(Jira 연결 업무는 "상태" 셀이
+  이미 Jira 원본 상태명을 보여줌)라 별도 "Jira 상태" 컬럼을 없애고 "상태" 하나로 병합.
+
+### Added
+- **Ontology RAG 확장**: AI 분석·챗봇의 근거 인용(RAG) 대상에 구성변경 영향분석 이력
+  (`ontology_events` — `POST /ontology/impact` 로 생성되는, 특정 설정 변경이 온톨로지
+  그래프 상에서 얼마나 넓게 영향을 미치는지 계산한 기록)을 추가했다. "과거 이런 구성
+  변경이 이런 영향을 미쳤다"는 사내 이력이 이제 네 번째 근거 소스(work_guide/work_item/
+  ops_note/ontology_event)로 검색·인용된다. Backend: `OntologyEvent.embedding`
+  컬럼(pgvector) + `compute_ontology_event_embedding` Celery 태스크(영향분석 생성 커밋
+  직후 큐잉) + `backfill_embeddings` 확장. Frontend: `RagCitation.sourceType` 에
+  `ontology_event` 추가, `CitationList` 에 전용 아이콘/라벨(구성변경 영향분석) 표시.
+- **K8s 이벤트(kubewatch) 직접 트리거 AI 자동분석**: 지금까지는 알람 파이프라인을
+  거친 경우만 자동 분석됐는데, kubewatch 로 수신되는 K8s 이벤트도 알람과 동일한
+  범위(scope) 규칙·디바운스·레이트 제한을 거쳐 전용 `llm` 큐로 직접 분석 요청할 수
+  있다. Backend: `IncidentAnalysis`/`K8sEvent` 에 `k8s_event_id`/`analysis_id`·
+  `analysis_status` 연결 컬럼 추가, 범위 매칭 로직을 `_MatchFields` 로 일반화해 알람/
+  K8s 이벤트 양쪽에 공용 적용하고 규칙마다 `sources`(알람/K8s 이벤트 부분집합) 로
+  적용 파이프라인을 고를 수 있게 함(레거시 규칙은 필드 없으면 둘 다 적용 — 하위 호환).
+  같은 (클러스터,네임스페이스,리소스) 는 두 파이프라인이 공유하는 디바운스 키를 써서
+  어느 쪽이 먼저 들어와도 중복 분석되지 않는다. `run_auto_incident_analysis_k8s_event`
+  Celery 태스크 + `GET/POST /events/{id}/analysis`,`/analyze` 신설. Frontend: 알람
+  인박스와 K8s 이벤트 화면이 공용 `IncidentAnalysisPanel` 컴포넌트를 공유하도록 리팩터링
+  (`AlertAnalysisPanel`/`K8sEventAnalysisPanel` 은 얇은 래퍼), K8s 이벤트 목록의 펼침
+  행에 AI 분석 패널을 부착. Settings → AI/LLM 의 자동 분석 범위 규칙 테이블에 소스
+  선택(알람/K8s 이벤트) 체크박스 열 추가.
+- **AI 챗봇 SSE 토큰 스트리밍**: `/agent/chat/stream` 신설 — 답변을 토큰 단위로
+  실시간 전송해 챗봇 응답 체감 속도를 개선한다. 게이트웨이에 `chat_stream_for_purpose`
+  추가(Ollama NDJSON / OpenAI-호환 SSE 델타 파싱, 마스킹·사용량 통계 재사용). fallback
+  규칙: 델타가 아직 하나도 안 나간 상태에서 primary 가 실패하면 다음 프로필로 넘어가고,
+  이미 일부를 보낸 뒤 끊기면 그 자리에서 종료한다(중간에 다른 LLM 으로 갈아타 앞뒤가
+  안 맞는 답변이 되는 것을 방지). `AgentChat.tsx` 는 인증 fetch+reader 로 SSE 를 소비하고
+  (PodLogStream.tsx 와 동일 패턴), 스트림 시작 자체가 실패하면 기존 비스트리밍
+  `/agent/chat` 으로 자동 폴백한다. 대화 저장·RAG 인용·정보요청 파싱은 기존 로직 재사용.
+- **무실행 보증 강화 + 배포/폐쇄망 반입 (Phase 4)**: LLM 파이프라인이 실행 경로(SSH/
+  kubectl exec/플레이북/일괄 실행)와 구조적으로 격리돼 있음을 CI 회귀 테스트로 고정
+  (`test_no_execution_guard.py` — AST import 그래프 + `AnalysisResult` 필드 계약).
+  프롬프트로 나가는 로그/컨텍스트에서 Bearer 토큰·비밀번호·AWS 키·PEM·kubeconfig
+  JWT 등을 게이트웨이 진입점에서 일괄 마스킹(`services/llm/masking.py`, 과잉 마스킹
+  회귀 테스트 포함). 배포: Helm 차트에 Ollama Deployment/Service(+선택적 PVC)와
+  LLM 전용 Celery 워커 템플릿 추가(이전엔 values 만 있고 실제 배포 안 됨), configmap/
+  secret 에 `OLLAMA_*`/`LLM_API_BASE`/`LLM_API_KEY` 방출, 기본 모델을 pre-baked
+  이미지와 일치하는 `qwen2.5-coder:7b` 로 수정. `deploy-airgap.sh` 가 Ollama 이미지도
+  미러링(이전엔 backend/frontend 만 다뤄 수동 반입 필요했음). GPU 서빙(vLLM) 과 Ollama
+  모델 영속화(PVC)는 opt-in kustomize component(`k8s/components/{vllm-gpu,ollama-pvc}`)
+  로 제공 — base 오버레이는 무변경.
+- **AI 근거 인용(RAG) + 정보요청 루프 + 대화 지속 챗봇 (Phase 3)**: AI 분석·챗봇
+  답변에 사내 지식(작업 가이드·업무 이력·운영 노트) 근거를 pgvector 유사 검색으로
+  인용한다 — 클릭 가능한 딥링크 + 유사도 표시, 근거 없는 내용은 '(추정)' 표기 지시.
+  컨텍스트가 부족하면 AI 가 구조화된 정보요청(코드/이력/로그/설정)을 보내고,
+  **운영자가 칩 UI 로 직접 제공** 한다(자율 실행 없음 — 무실행 보증 유지;
+  트러블슈팅 이력은 `GET /llm/rag-search` 사내 검색 모달로 첨부). 챗봇은 한국어
+  UI 로 전면 개편 — 마크다운 렌더, 서버 저장 멀티턴 대화(목록/이어가기/삭제),
+  화면별 접근 제어 게이트 적용. Backend: `rag_service`, `ops_notes.embedding`
+  (+`compute_ops_note_embedding`/`backfill_embeddings` — llm 큐), `response_parser`,
+  `agent_conversations`/`agent_messages` 테이블(보존 180일), 분석 결과 `citations`.
+  Frontend: `CitationList`, `InfoRequestChips`, `AgentChat` 개편.
+- **알람 AI 자동 분석 — 범위 지정 점진 롤아웃 (Phase 2)**: 알람(`/alerts`) 수신 시
+  운영자가 정의한 범위 규칙(클러스터/네임스페이스/알람명 패턴/최소 심각도, priority
+  first-match)에 매칭되면 AI 장애 분석을 자동 실행하고 결과를 알람 행 확장에 표시한다
+  (원인 분석·조치 가이드 — **실행 권한 없음, 사람이 수행**). 부하 제어: 전용 Celery
+  `llm` 큐(워커 분리, concurrency 1)·Redis 디바운스·규칙별/전역 시간당 상한, 기본
+  전부 꺼짐(운영자가 사용량 대시보드를 보며 점진 확대). 수동 분석/재분석 버튼(operator+),
+  분석 백엔드·프로필(analyzed_by) 투명 표기. Backend: `incident_analyses` 테이블,
+  `alert_events.analysis_id/analysis_status`, `analysis_hook`(scope 매칭)·
+  `incident_context_builder`, `run_auto_incident_analysis` 태스크, retention/backup 등록.
+  Frontend: `AlertAnalysisPanel`, Settings AI/LLM 탭에 분석 범위 규칙 편집기.
+- **폐쇄망 LLM 이중 운용 — 프로필 × 용도 라우팅 게이트웨이 (Phase 1)**: 사내 OpenAI-호환
+  LLM 서비스와 인클러스터 Ollama 를 동시에 등록하고, 기능별(챗봇/장애분석/점검리뷰/
+  아키텍처문서/트렌드/임베딩)로 어느 LLM 을 쓸지 UI 에서 라우팅한다(primary 실패 시
+  fallback 자동 전환). Settings 에 **AI / LLM 탭** 신설 — 프로필 CRUD·연결 테스트·용도별
+  라우팅·분석기 백엔드 선택·API 키 암호화 저장(`llm_credentials`)·최근 24h 사용량
+  (호출/오류/지연/토큰) 가시화. 시스템 프롬프트 한국어 기본화.
+  Backend: `services/llm/` 게이트웨이 신설, 기존 5개 Ollama 하드코딩 호출부
+  (`agent_service`/`local_llm_analyzer`/`embedding_service`/`trends summarizer`/
+  `architecture_doc_service`) 이관, `ANALYZER_BACKEND` raw env → AppSetting
+  `llm_settings` 로 이동(UI-First), `routers/llm_settings.py` 신설.
+  Frontend: `LlmSettingsTab.tsx`, `useLlmSettings.ts`, `llmApi`.
+
+## [1.17.1] - 2026-07-29
+
+### Fixed
+- **점검 항목 삭제 실패 (심각)**: 항목을 지우면
+  `null value in column "item_id" of relation "check_matrix_runs"` 로 실패했다.
+  `CheckMatrixSchedule`/`Result`/`Run` 의 `item` 관계에 `passive_deletes=True` 가 빠져 있어,
+  SQLAlchemy 가 DB 의 `ON DELETE CASCADE` 를 쓰지 않고 자식 행의 `item_id` 를 NULL 로
+  UPDATE 하려 한 것이 원인(코드베이스가 `cluster` 쪽에는 이미 적용해 둔 패턴인데 `item`
+  쪽만 누락). 세 관계 모두 수정 — 이제 자식 정리는 DB CASCADE 가 담당한다. 회귀 테스트 추가.
+- **스키마 자동 복구가 조용히 실패하던 문제**: NOT NULL 완화 DDL 은 ACCESS EXCLUSIVE 락이
+  필요한데, 운영 중에는 Celery 워커/API 가 같은 테이블을 쓰고 있어 락을 못 잡을 수 있다.
+  기존에는 무제한 대기(부팅 정지 위험)하거나 실패해도 로그 한 줄만 남아 운영자가 알 수
+  없었다. `lock_timeout` + 재시도를 걸고, **부팅 자동 복구 결과(감지 대상·완화 건수·실패
+  사유)를 Settings ▸ 스키마 점검 화면 상단에 노출**한다 — "재시작하면 자동으로 고쳐진다"가
+  실제로 지켜졌는지 로그 없이 확인할 수 있다.
+
+### Added
+- **업무 게시판 Jira 기준 레이아웃** (`/tasks-mgmt`): 가져온 이슈를 Jira 에서 보던 것과 같은
+  축으로 표에 펼친다 — **Epic · 이슈 종류(Epic/Story/Task/Sub-task/Bug) · Jira 원본 상태 ·
+  컴포넌트 · 라벨** 컬럼이 추가됐고(기본 숨김, 컬럼 설정에서 켠다), Jira 연결 업무의 상태
+  셀은 칸반 5단계로 축약하지 않고 **Jira 상태명 그대로** 보여준다(점 색은 `statusCategory`
+  기준이라 커스텀 워크플로에서도 의미가 유지된다). Epic 셀은 `DL-12 제목` 박스로 렌더되고
+  키가 Jira 로 링크된다. 가져오기가 Jira component 를 업무 분류로 매핑해 주간보고 진척률의
+  `category × Epic` 축도 제대로 잡힌다(이전에는 전부 "Jira" 로 들어갔다).
+  Backend: `models/work_item.py`(jira_epic_key/epic_summary/issue_type/parent_key/
+  parent_summary/status_category/components/labels), `services/jira_service.py`,
+  `routers/jira.py`(`_jira_sync_values`). Frontend: `workItemColumns.ts`, `WorkItemTableRow.tsx`.
+- **제목 옆 Confluence 문서 박스**: Jira 키 박스 옆에 문서 링크 박스(`DocLinkChip`)가 붙는다.
+  링크가 없으면 점선 `＋문서` 버튼이 되고 클릭하면 그 자리에서 URL 을 입력·저장한다(상세
+  화면까지 들어갈 필요 없음). Jira 가져오기는 이슈 본문에서 설정된 Confluence Base URL 로
+  시작하는 링크를 찾아 자동으로 채우고(행 단위 재가져오기는 원격 링크도 조회), **사용자가
+  직접 넣은 링크는 덮어쓰지 않는다**.
+- **업무 등록 → Jira·Confluence 연계 생성 확장**: 생성 조건에 **Epic 키**와 **상위 이슈
+  (Sub-task)** 가 추가돼 task = Epic, sub task = Epic 아래 이슈로 만들 수 있다. 프로젝트 ·
+  이슈 종류 · 우선순위 · 라벨 · 컴포넌트 · Epic · 저장 위치는 **사용자별로 기억**되어 다음
+  등록에서 자동으로 채워진다(모달에서 언제든 수정, 체크박스로 저장 해제 가능).
+  Backend: `routers/jira.py`(`user_settings` 의 `jira_provision_preset`).
+- **게시판 기본 필터 = 로그인 사용자**: 처음 들어오면 내 담당 업무만 보인다. 상단 "내 업무"
+  토글로 전체 보기로 바꿀 수 있고 그 선택은 브라우저에 기억된다.
+
+- **Jira 연결 복구 — 해제 · 변경 · 연결 점검**: Jira 에서 이슈를 직접 지웠거나 잘못된
+  프로젝트에 만들었을 때, PEP 에 남는 죽은 링크를 화면에서 정리할 수 있다. 게시판 행의
+  **Jira 연결 관리** 버튼에서 (1) 연결만 해제 (2) 다른 이슈로 연결 변경 (3) 연결 해제 +
+  업무 삭제 를 고를 수 있고, 다시 가져오기가 "Jira 에 없음"으로 끝나면 이 창이 사유와 함께
+  자동으로 열린다. 가져오기 팝업의 **연결 점검** 탭은 내 업무의 Jira 연결을 한 번에 확인해
+  죽은 링크를 골라 일괄 정리한다.
+  - 연결을 해제하면 `jira_issue_key` 가 비어 **Jira·Confluence 자동 생성이 다시 열린다** —
+    잘못된 프로젝트에 만든 이슈를 지우고 올바른 곳에 재생성하는 흐름이 이걸로 완성된다.
+  - 연결 변경은 **Jira 에서 실제로 조회해 존재를 확인한 뒤에만** 반영한다(또 다른 죽은 링크
+    방지). 이미 다른 업무가 쓰는 키는 거절한다.
+  - 이슈를 못 찾아도 **자동으로 정리하지 않는다** — 조회 권한이 없어도 Jira 는 똑같이 404 를
+    주므로, 삭제인지 권한 문제인지는 사용자가 판단한다.
+  Backend: `routers/jira.py` `POST /jira/{unlink,relink,verify-links}` ·
+  `_clear_jira_link()`/`_parse_issue_key()` · `services/jira_service.py`(404 에 `missing` 플래그).
+  Frontend: `components/work-items/JiraLinkDialog.tsx`, `JiraImportModal.tsx`.
+
+### Fixed
+- **Jira 링크를 수동으로 고쳐도 아무 일이 없던 문제**: 업무 수정 폼의 "Jira 링크"는 표시용
+  URL 일 뿐이고 실제 연결은 `jira_issue_key`/`jira_issue_id` 가 쥐고 있어서, URL 만 바꿔도
+  칩·재가져오기·중복 판정이 모두 예전 이슈를 계속 봤다. 연결된 업무는 이 입력을 읽기 전용으로
+  바꾸고 연결 관리로 안내한다(실제 변경은 검증을 거치는 연결 변경으로만).
+- **연결 해제 시 Jira 필드가 일부만 지워지던 문제**: `DELETE /jira/issue/{key}` 가 5개 필드만
+  비워 Epic·컴포넌트·라벨 잔재가 남았다. `_clear_jira_link()` 로 모아 전부 정리한다.
+- **업무 등록 팝업 레이아웃**: 시작일/완료일 입력 버튼이 옆 select/input 보다 커서 한 줄
+  그리드가 어긋나던 문제 수정(`DateTimePicker` 에 `size="sm"` 추가, 지우기 버튼 자리를
+  값 유무와 무관하게 유지해 폭이 밀리지 않게 함). 공통업무 체크박스 옆 긴 설명 문구는
+  툴팁으로 옮겨 두 칸을 잡아먹지 않게 했다.
+- **`work_items.confluence_url` 중복 선언 제거**: 같은 컬럼이 모델에 두 번 정의돼 있었다.
+
+### Changed
+- **etcdctl 콘솔 레이아웃을 mc 클라이언트와 통일** (`/etcdctl`): 실행 결과가 화면 **아래로**
+  붙던 것을 **우측 컬럼으로** 옮겼다. 타겟(2) : 실행 구성(3) : 결과(5) 10-컬럼 그리드로,
+  컨트롤과 로그를 한 화면에서 나란히 보며 인자를 고쳐가며 반복 실행할 수 있다. 결과 패널은
+  실행 전에도 같은 자리에 플레이스홀더로 있어 레이아웃이 흔들리지 않고, 스크롤은 패널
+  내부에서만 일어난다(상태 배지 헤더는 sticky). 좌측 `ClusterSidebar` 여백도 mc 와 동일하게
+  flush 로 맞췄다.
 
 ### Fixed
 - **클러스터 관리 목록 기능 버그 일괄 수정** (`/cluster-manage`, DESIGN.md D-041~D-044·D-048):
@@ -404,6 +588,24 @@
   입력 안내 문구에도 형식 경고를 추가.
 
 ## [1.15.1] - 2026-07-28
+
+### Added
+- **화면별 노출 관리 (Settings → 접근 제어)**: admin 이 각 화면을 일반 사용자(operator·viewer)에게
+  열지 말지 체크 하나로 결정한다. 기본값은 열림. 비활성화하면 **사이드바 메뉴 숨김 + Your Island
+  화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단 + 직접 URL 접근 차단**이 동시에 적용된다
+  (admin 은 항상 예외). 목록 UI는 Your Island 화면추가 피커와 그룹·검색 렌더링을 공유하는
+  `ScreenCatalogList` 공용 컴포넌트를 재사용했다.
+  Backend: 기존 `feature_access`(`/ui-settings/feature-access`)에 `enabled` 필드를 추가하고,
+  키를 라우트 경로로 통일(레거시 `wbs` 키는 `/wbs` 로 자동 승격).
+  Frontend: `canAccessFeature` 가 모든 라우트 경로에 범용 적용되도록 일반화(기존엔 `/wbs` 하나만
+  하드코딩)했고, 전 라우트에 적용되는 `RouteAccessGate`(`App.tsx`)를 새로 추가해 메뉴에서 숨긴
+  화면을 주소로 직접 열어도 막히게 했다(기존엔 WBS 만 라우트 가드가 있었다).
+
+### Changed
+- WBS(`/wbs`)의 전용 라우트 가드(`RequireFeature`)를 제거하고 위 범용 `RouteAccessGate` 로
+  대체 — 동작은 동일하되 화면별 특수 처리가 사라졌다. Settings "접근 제어" 탭에는 기존 세부
+  역할/사용자 제한(WBS 전용) 위에 새 "화면별 노출" 섹션이 추가돼, 하나의 저장 버튼으로 두
+  설정을 함께 관리한다.
 
 ### Changed
 - **Your Island 진입점 재배치**: 사이드바 최상단(로고 바로 아래)에 있던 버튼을 **푸터 개인 존**

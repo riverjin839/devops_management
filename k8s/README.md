@@ -107,7 +107,13 @@ NGINX Ingress Controller 기반 라우팅 규칙입니다. `/api/*` 는 backend 
 backend / frontend / celery-worker 세 Deployment 에 대해 CPU 70% 임계값 기준 HPA 를 정의합니다.
 
 #### `ollama.yaml`
-로컬 LLM(Ollama) 서버를 클러스터 내에서 실행할 때 사용합니다. GPU 노드 어피니티 및 볼륨 마운트가 포함되어 있으며, AI 기능이 필요 없을 경우 kustomization 에서 제외할 수 있습니다.
+인클러스터 자체 LLM(Ollama, CPU 전용) 서버를 실행할 때 사용합니다. 모델이 이미지에
+pre-baked 되어 있어 볼륨 마운트가 기본적으로 없습니다(재시작해도 이미지 안 모델은
+유지됨) — 추가로 pull 한 모델을 영속화하려면 `k8s/components/ollama-pvc/` 컴포넌트를
+오버레이에 추가하세요. GPU 어피니티는 포함돼 있지 않습니다 — GPU 기반 서빙(vLLM)이
+필요하면 `k8s/components/vllm-gpu/` 를 참고하세요. 사내 LLM 서비스(OpenAI-호환)에
+연결하는 경우 이 파일 자체가 필요 없습니다 — Settings → AI/LLM 탭에서 프로필로 등록하면
+됩니다. AI 기능이 전혀 필요 없을 경우 kustomization 에서 제외할 수 있습니다.
 
 ---
 

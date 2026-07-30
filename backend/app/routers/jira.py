@@ -15,7 +15,7 @@ from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import openpyxl
 import xlrd
@@ -66,6 +66,12 @@ from app.schemas.jira import (
     JiraCreateRequest,
     JiraCreateResult,
     JiraDeleteResult,
+    JiraUnlinkRequest,
+    JiraUnlinkResult,
+    JiraRelinkRequest,
+    JiraRelinkResult,
+    JiraMissingLink,
+    JiraVerifyLinksResult,
     WeeklyReport,
     WeeklyReportRequest,
     WeeklyPublishRequest,
@@ -76,6 +82,9 @@ from app.schemas.jira import (
     ProvisionResult,
 )
 from app.services import weekly_report_service
+from app.services.user_settings import get_user_setting, set_user_setting
+# 업무 삭제 권한 규칙(등록자/담당자/admin)을 게시판과 동일하게 적용하기 위해 재사용.
+from app.routers.work_items import _assert_ownership as _assert_work_item_ownership
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jira", tags=["jira"])
@@ -851,15 +860,56 @@ _SYNC_FIELDS: tuple[tuple[str, str], ...] = (
     ("kanban_status", "진행 상태"),
     ("priority", "우선순위"),
     ("jira_status", "Jira 상태"),
+    ("category", "업무 분류"),
+    ("jira_issue_type", "이슈 종류"),
+    ("jira_epic", "Epic"),
+    ("jira_parent_key", "상위 이슈"),
+    ("jira_components", "컴포넌트"),
+    ("jira_labels", "라벨"),
+    ("confluence_url", "Confluence 링크"),
 )
+
+
+# Jira 가 소유하는 필드 — 가져올 때마다 무조건 덮어쓴다.
+_JIRA_OWNED_ATTRS: tuple[str, ...] = (
+    "title", "content", "kanban_status", "priority",
+    "jira_issue_key", "jira_url", "jira_status", "jira_status_category",
+    "jira_updated_at", "jira_issue_type", "jira_parent_key", "jira_parent_summary",
+    "jira_components", "jira_labels",
+)
+
+
+def _jira_sync_values(existing: Optional[WorkItem], fields: dict) -> dict:
+    """Jira 최신값 → **실제로 업무에 쓸 값** 만 추린 dict.
+
+    보존 규칙(비었으면 기존 값 유지 / 로컬 편집 존중)을 이 함수 한 곳에만 두고
+    변경 diff(`_diff_existing`)와 적용(`_apply_jira_fields`)이 똑같은 결과를 보게 한다.
+    두 쪽이 어긋나면 "덮어쓰지 않는 필드"가 매번 변경으로 잡혀 `unchanged` 판정이
+    영원히 나오지 않는다(재가져오기 때마다 update 로 집계되는 버그)."""
+    out: dict[str, Any] = {a: fields[a] for a in _JIRA_OWNED_ATTRS if a in fields}
+    # Epic 은 값이 있을 때만 — `jira_epic_field` 미설정 배포에서 기존 Epic 이 날아가지 않게.
+    for attr in ("jira_epic", "jira_epic_key", "jira_epic_summary"):
+        if fields.get(attr):
+            out[attr] = fields[attr]
+    # 업무 분류는 Jira component 를 찾았을 때만 갱신 — component 없는 이슈가 사용자가
+    # 정해둔 분류를 폴백값("Jira")으로 되돌리지 않도록 한다.
+    if fields.get("jira_components") and fields.get("category"):
+        out["category"] = fields["category"]
+    # Confluence 링크는 **비어 있을 때만** 채운다 — 사용자가 직접 넣은 링크를 덮지 않는다.
+    if fields.get("confluence_url") and not (getattr(existing, "confluence_url", "") or "").strip():
+        out["confluence_url"] = fields["confluence_url"]
+    return out
 
 
 def _diff_existing(existing: WorkItem, fields: dict) -> list[JiraFieldChange]:
     """기존 업무와 Jira 최신값의 차이 — 확인 팝업에 그대로 보여준다."""
+    values = _jira_sync_values(existing, fields)
     out: list[JiraFieldChange] = []
     for attr, label in _SYNC_FIELDS:
+        if attr not in values:
+            continue
         old = getattr(existing, attr, None)
-        new = fields.get(attr)
+        new = values[attr]
         old_s = "" if old is None else str(old)
         new_s = "" if new is None else str(new)
         if old_s != new_s:
@@ -867,6 +917,55 @@ def _diff_existing(existing: WorkItem, fields: dict) -> list[JiraFieldChange]:
                 field=attr, label=label, old=old_s[:300], new=new_s[:300],
             ))
     return out
+
+
+# 연결 해제 시 비워야 할 Jira 유래 컬럼 전부. 하나라도 빠뜨리면 Epic/컴포넌트 같은 잔재가
+# 남아 "연결을 끊었는데 Jira 값이 보이는" 상태가 된다.
+_JIRA_LINK_ATTRS: tuple[str, ...] = (
+    "jira_issue_id", "jira_issue_key", "jira_url", "jira_status", "jira_status_category",
+    "jira_updated_at", "jira_synced_at", "jira_epic", "jira_epic_key", "jira_epic_summary",
+    "jira_issue_type", "jira_parent_key", "jira_parent_summary",
+    "jira_components", "jira_labels",
+)
+
+_ISSUE_KEY_RE = re.compile(r"([A-Za-z][A-Za-z0-9_]*-\d+)")
+
+
+def _clear_jira_link(item: WorkItem) -> None:
+    """업무에서 Jira 연결 흔적을 모두 지운다 (Jira 쪽은 건드리지 않는다).
+
+    `jira_issue_key` 가 비면 프로비저닝이 다시 열리므로, 잘못된 프로젝트에 만들어진 이슈를
+    지우고 올바른 곳에 재생성하는 복구 경로가 성립한다."""
+    for attr in _JIRA_LINK_ATTRS:
+        setattr(item, attr, None)
+
+
+def _parse_issue_key(raw: str) -> str:
+    """`DL-42` · `https://jira/browse/DL-42?x=1` · 공백/소문자 입력에서 이슈 키를 뽑는다.
+
+    사용자가 브라우저 주소창을 그대로 붙여넣는 경우가 대부분이라 URL 을 먼저 받아준다.
+    키 형태가 아니면 빈 문자열 — 호출부가 거절한다."""
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    # URL 이면 `/browse/<key>` 뒤쪽을 우선 본다(쿼리스트링에 다른 키가 섞여도 오인하지 않게).
+    browse = re.search(r"/browse/([A-Za-z][A-Za-z0-9_]*-\d+)", text)
+    if browse:
+        return browse.group(1).upper()
+    m = _ISSUE_KEY_RE.fullmatch(text) or _ISSUE_KEY_RE.search(text)
+    return m.group(1).upper() if m else ""
+
+
+def _apply_jira_fields(item: WorkItem, fields: dict, *, now: datetime) -> None:
+    """`_jira_sync_values` 결과를 업무에 반영. 담당자/완료일은 비어 있을 때만 채운다."""
+    for attr, val in _jira_sync_values(item, fields).items():
+        setattr(item, attr, val)
+    item.jira_synced_at = now
+    if fields.get("closed_at") and not item.closed_at:
+        item.closed_at = fields["closed_at"]
+    if not (item.primary_assignee or "").strip() or item.primary_assignee == "(미할당)":
+        item.primary_assignee = fields["primary_assignee"]
+        item.assignee = fields["primary_assignee"]
 
 
 # ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────
@@ -927,11 +1026,29 @@ async def refresh_work_item_from_jira(
     epic_field = (cfg.get("jira_epic_field") or "").strip()
     got = await svc.get_issue(item.jira_issue_key,
                               fields=ISSUE_FIELDS + ([epic_field] if epic_field else []))
+    if got.get("missing"):
+        # 삭제됐거나 내 권한으로 안 보이거나 — 서버는 구분할 수 없다. 연결을 자동으로
+        # 끊지 않고 상태만 알려, 화면에서 사용자가 해제/삭제를 고르게 한다.
+        return JiraImportResult(
+            status="missing", total=1,
+            detail=(f"Jira 에서 {item.jira_issue_key} 를 찾을 수 없습니다 — "
+                    "삭제됐거나 조회 권한이 없습니다. 연결을 해제하거나 다른 이슈로 바꿀 수 있습니다."),
+        )
     if got.get("status") != "ok":
         return JiraImportResult(status=got.get("status", "error"),
                                 detail=got.get("detail", "Jira 이슈 조회 실패"))
+    confluence_base = (cfg.get("confluence_base_url") or "").strip()
     fields = map_jira_issue(got["issue"], base_url,
-                            assignee_resolver=_build_assignee_resolver(db), epic_field=epic_field)
+                            assignee_resolver=_build_assignee_resolver(db), epic_field=epic_field,
+                            confluence_base_url=confluence_base)
+    # 행 단위라 이슈 1건 — 본문에 없더라도 원격 링크에 붙은 Confluence 문서를 찾아본다
+    # (대량 가져오기는 이슈마다 1콜이 되어 N+1 이므로 본문 스캔만 한다).
+    if confluence_base and not fields.get("confluence_url"):
+        linked = await svc.remote_links(item.jira_issue_key)
+        for link in linked.get("links", []):
+            if link["url"].rstrip("/").startswith(confluence_base.rstrip("/")):
+                fields["confluence_url"] = link["url"][:500]
+                break
     changes = _diff_existing(item, fields)
     if not changes:
         item.jira_synced_at = datetime.utcnow()
@@ -943,17 +1060,7 @@ async def refresh_work_item_from_jira(
                 kanban_status=fields["kanban_status"], action="unchanged")],
         )
 
-    item.title = fields["title"]
-    item.content = fields["content"]
-    item.kanban_status = fields["kanban_status"]
-    item.priority = fields["priority"]
-    item.jira_status = fields["jira_status"]
-    item.jira_url = fields["jira_url"]
-    item.jira_updated_at = fields["jira_updated_at"]
-    item.jira_epic = fields.get("jira_epic") or item.jira_epic
-    item.jira_synced_at = datetime.utcnow()
-    if fields["closed_at"] and not item.closed_at:
-        item.closed_at = fields["closed_at"]
+    _apply_jira_fields(item, fields, now=datetime.utcnow())
     db.commit()
     audit_logger.record(
         db, action="work_item.jira_refresh", actor=actor,
@@ -1048,11 +1155,7 @@ async def delete_jira_issue(
     unlinked = None
     item = db.query(WorkItem).filter(WorkItem.jira_issue_key == key).first()
     if item:
-        item.jira_issue_key = None
-        item.jira_issue_id = None
-        item.jira_url = None
-        item.jira_status = None
-        item.jira_updated_at = None
+        _clear_jira_link(item)
         db.commit()
         unlinked = str(item.id)
     audit_logger.record(
@@ -1062,7 +1165,239 @@ async def delete_jira_issue(
     return JiraDeleteResult(status="ok", detail=f"Jira {key} 삭제됨", unlinked_work_item_id=unlinked)
 
 
+# ── 연결 복구 (Jira 쪽은 건드리지 않고 PEP 연결만 정리/교체) ─────────────────────
+@router.post("/unlink/{item_id}", response_model=JiraUnlinkResult)
+def unlink_work_item(
+    item_id: str,
+    payload: JiraUnlinkRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """업무의 Jira 연결을 끊는다 (선택적으로 업무 행까지 삭제).
+
+    Jira 에서 이슈를 **이미 직접 지운** 뒤 PEP 에 남은 죽은 링크를 정리하는 경로다.
+    `DELETE /jira/issue/{key}` 는 Jira 에서 먼저 지우는 흐름이라, 이미 없는 이슈에는
+    Jira 가 404 를 돌려줘 해제까지 도달하지 못한다 — 그래서 별도 엔드포인트가 필요하다.
+
+    연결을 끊으면 `jira_issue_key` 가 비어 프로비저닝이 다시 열리므로, 잘못된 프로젝트에
+    만들어진 이슈를 지우고 올바른 곳에 재생성하는 복구가 가능해진다."""
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+
+    prev_key = item.jira_issue_key or ""
+    if payload.delete_work_item:
+        # 업무 삭제 권한은 업무 관리와 동일 규칙(등록자/담당자/admin)을 그대로 쓴다.
+        _assert_work_item_ownership(item, actor, op="삭제", db=db)
+        wid = str(item.id)
+        db.delete(item)
+        db.commit()
+        audit_logger.record(
+            db, action="work_item.jira_unlink", actor=actor,
+            target_type="work_item", target_id=wid,
+            details={"jira_key": prev_key or None, "deleted": True},
+        )
+        return JiraUnlinkResult(
+            status="ok", work_item_id=wid, work_item_deleted=True,
+            detail=(f"{prev_key} 연결을 끊고 업무를 삭제했습니다." if prev_key
+                    else "업무를 삭제했습니다."),
+        )
+
+    if not prev_key:
+        return JiraUnlinkResult(status="ok", work_item_id=str(item.id),
+                                detail="이미 Jira 와 연결돼 있지 않습니다.")
+    _clear_jira_link(item)
+    db.commit()
+    audit_logger.record(
+        db, action="work_item.jira_unlink", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"jira_key": prev_key, "deleted": False},
+    )
+    return JiraUnlinkResult(
+        status="ok", work_item_id=str(item.id),
+        detail=f"{prev_key} 연결을 해제했습니다 — 이제 Jira·Confluence 자동 생성을 다시 할 수 있습니다.",
+    )
+
+
+@router.post("/relink/{item_id}", response_model=JiraRelinkResult)
+async def relink_work_item(
+    item_id: str,
+    payload: JiraRelinkRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """연결을 다른 Jira 이슈로 갈아끼운다 (이슈 키 또는 브라우저 URL 입력).
+
+    **Jira 에서 실제로 조회해 존재를 확인한 뒤에만** 연결한다 — 검증 없이 키를 받으면
+    또 다른 죽은 링크가 생기고, 그게 애초에 이 기능이 필요해진 이유다."""
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+
+    key = _parse_issue_key(payload.key_or_url)
+    if not key:
+        return JiraRelinkResult(status="error",
+                                detail="이슈 키를 찾을 수 없습니다 (예: DL-42 또는 .../browse/DL-42).")
+
+    dup = (
+        db.query(WorkItem)
+        .filter(WorkItem.jira_issue_key == key, WorkItem.id != item.id)
+        .first()
+    )
+    if dup:
+        return JiraRelinkResult(
+            status="error",
+            detail=f"{key} 는 이미 다른 업무({dup.title or dup.category})에 연결돼 있습니다.",
+        )
+
+    cfg = _get_config(db)
+    base_url = cfg.get("base_url", "")
+    if not base_url:
+        return JiraRelinkResult(status="error", detail="Jira URL 미설정.")
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraRelinkResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
+
+    epic_field = (cfg.get("jira_epic_field") or "").strip()
+    got = await svc.get_issue(key, fields=ISSUE_FIELDS + ([epic_field] if epic_field else []))
+    if got.get("missing"):
+        return JiraRelinkResult(
+            status="missing",
+            detail=f"Jira 에서 {key} 를 찾을 수 없습니다 (삭제됐거나 조회 권한이 없습니다).",
+        )
+    if got.get("status") != "ok":
+        return JiraRelinkResult(status=got.get("status", "error"),
+                                detail=got.get("detail", "Jira 이슈 조회 실패"))
+
+    prev_key = item.jira_issue_key or ""
+    # 이전 연결의 잔재(Epic/컴포넌트 등)를 먼저 비우고 새 이슈 값으로 채운다.
+    _clear_jira_link(item)
+    fields = map_jira_issue(
+        got["issue"], base_url, assignee_resolver=_build_assignee_resolver(db),
+        epic_field=epic_field, confluence_base_url=(cfg.get("confluence_base_url") or "").strip(),
+    )
+    item.jira_issue_id = fields.get("jira_issue_id") or None
+    _apply_jira_fields(item, fields, now=datetime.utcnow())
+    db.commit()
+    audit_logger.record(
+        db, action="work_item.jira_relink", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"from": prev_key or None, "to": key},
+    )
+    return JiraRelinkResult(status="ok", jira_key=key, jira_url=item.jira_url,
+                            detail=f"{key} 로 연결했습니다.")
+
+
+# 고아 점검 상한 — 키마다 1콜이라 무한정 돌지 않게 자른다(초과분은 truncated 로 알림).
+_VERIFY_LINKS_MAX = 200
+
+
+@router.post("/verify-links", response_model=JiraVerifyLinksResult)
+async def verify_links(
+    all_users: bool = False,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """연결된 업무들의 Jira 이슈가 아직 살아 있는지 확인해 **죽은 링크 목록**을 돌려준다.
+
+    확인은 키마다 `GET /issue/{key}` 개별 호출로 한다. `issuekey in (...)` 벌크 JQL 은
+    존재하지 않는 키가 하나만 섞여도 Jira 가 쿼리 전체를 400 으로 거절해서 — 정확히
+    우리가 찾으려는 그 상황에서 — 쓸 수 없다.
+
+    삭제와 권한없음을 구분할 수 없으므로 여기서 정리하지 않는다. 사용자가 목록에서
+    골라 `POST /jira/unlink/{item_id}` 로 처리한다."""
+    cfg = _get_config(db)
+    if not cfg.get("base_url"):
+        return JiraVerifyLinksResult(status="error", detail="Jira URL 미설정.")
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraVerifyLinksResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
+
+    q = db.query(WorkItem).filter(WorkItem.jira_issue_key.isnot(None))
+    if not all_users:
+        # 기본은 내가 담당이거나 내가 가져온(watcher) 업무만 — 남의 업무까지 훑지 않는다.
+        name = (actor.display_name or actor.username or "").strip()
+        q = q.filter(
+            WorkItem.jira_watchers.contains([actor.username])
+            | WorkItem.primary_assignee.ilike(f"%{name}%")
+            | WorkItem.secondary_assignee.ilike(f"%{name}%")
+        )
+    rows = q.order_by(WorkItem.updated_at.desc()).limit(_VERIFY_LINKS_MAX + 1).all()
+    truncated = len(rows) > _VERIFY_LINKS_MAX
+    rows = rows[:_VERIFY_LINKS_MAX]
+    if not rows:
+        return JiraVerifyLinksResult(status="ok", detail="확인할 Jira 연결이 없습니다.")
+
+    sem = asyncio.Semaphore(5)
+
+    async def _check(item: WorkItem):
+        async with sem:
+            return item, await svc.get_issue(item.jira_issue_key, fields=["summary"])
+
+    missing: list[JiraMissingLink] = []
+    for item, res in await asyncio.gather(*(_check(r) for r in rows)):
+        if res.get("missing"):
+            missing.append(JiraMissingLink(
+                work_item_id=str(item.id), jira_key=item.jira_issue_key or "",
+                title=item.title or item.category or "",
+                detail=res.get("detail", ""),
+            ))
+
+    detail = (f"{len(rows)}건 중 {len(missing)}건이 Jira 에서 확인되지 않습니다."
+              if missing else f"{len(rows)}건 모두 정상입니다.")
+    return JiraVerifyLinksResult(status="ok", detail=detail, checked=len(rows),
+                                 missing=missing, truncated=truncated)
+
+
 # ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
+# 사용자별 "기준 조건" 프리셋 (user_settings). 매 등록마다 프로젝트/컴포넌트/라벨/Epic/
+# 스페이스를 다시 입력하지 않도록, 마지막에 성공한 조건을 이 키에 저장해 다음 등록의
+# 기본값으로 쓴다. 관리자 공통 설정보다 우선하되 화면에서 언제든 수정 가능하다.
+PROVISION_PRESET_KEY = "jira_provision_preset"
+_PRESET_FIELDS = (
+    "project_key", "issue_type", "priority", "labels", "components",
+    "epic_key", "parent_key", "space_key", "parent_page_id",
+)
+
+
+def _load_provision_preset(db: Session, user_id: str) -> dict:
+    """저장된 프리셋 — 형식이 깨진 값은 무시하고 빈 dict 로 폴백(개인 설정은 best-effort)."""
+    raw = get_user_setting(db, user_id, PROVISION_PRESET_KEY, {}) or {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    for key in _PRESET_FIELDS:
+        val = raw.get(key)
+        if key in ("labels", "components"):
+            if isinstance(val, list):
+                cleaned = [str(v).strip() for v in val if str(v).strip()]
+                if cleaned:
+                    out[key] = cleaned
+        elif isinstance(val, str) and val.strip():
+            out[key] = val.strip()
+    return out
+
+
+def _save_provision_preset(db: Session, user_id: str, payload: "ProvisionRequest") -> None:
+    """이번에 쓴 조건을 프리셋으로 저장. 저장 실패가 생성 결과를 뒤집지 않도록 예외를 삼킨다."""
+    preset = {
+        "project_key": (payload.project_key or "").strip(),
+        "issue_type": (payload.issue_type or "").strip(),
+        "priority": (payload.priority or "").strip(),
+        "labels": [x.strip() for x in payload.labels if x.strip()],
+        "components": [x.strip() for x in payload.components if x.strip()],
+        "epic_key": (payload.epic_key or "").strip(),
+        "parent_key": (payload.parent_key or "").strip(),
+        "space_key": (payload.space_key or "").strip(),
+        "parent_page_id": (payload.parent_page_id or "").strip(),
+    }
+    try:
+        set_user_setting(db, user_id, PROVISION_PRESET_KEY, preset)
+    except Exception as exc:  # noqa: BLE001 — 개인 기본값 저장은 부가 기능
+        db.rollback()
+        logger.warning("프로비저닝 프리셋 저장 실패 (%s): %s", user_id, exc)
+
+
 def _default_page_body(item: WorkItem, jira_key: str = "", jira_url: str = "") -> str:
     """업무 내용을 담은 기본 Confluence 문서(storage format).
 
@@ -1115,22 +1450,39 @@ async def provision_defaults(
         missing.append("Confluence URL(관리자 설정)")
 
     title = (item.title if item else "") or ""
+    # 공통 설정/업무 내용에서 만든 기본값 위에 **내 프리셋**을 덮어쓴다 —
+    # "처음 입력한 조건을 다음부터 재사용" 이 여기서 성립한다.
+    base = {
+        "project_key": (cfg.get("default_project_key") or ""),
+        "issue_type": "Task",
+        "priority": PEP_PRIORITY_TO_JIRA.get((item.priority if item else "") or "", ""),
+        "labels": [],
+        "components": [c for c in [(item.category if item else "")] if c],
+        "epic_key": "",
+        "parent_key": "",
+        "space_key": (weekly.get("space_key") or ""),
+        "parent_page_id": (weekly.get("parent_page_id") or ""),
+    }
+    preset = _load_provision_preset(db, actor.id)
+    base.update(preset)
+    # 가져온 업무라면 Jira 가 알려준 실제 계층/컴포넌트가 프리셋보다 정확하다.
+    if item is not None:
+        if item.jira_epic_key:
+            base["epic_key"] = item.jira_epic_key
+        if item.jira_components:
+            base["components"] = list(item.jira_components)
+
     return ProvisionDefaults(
         jira_enabled=bool(cfg.get("base_url") and cfg.get("enabled", False) and cred),
         confluence_enabled=bool((cfg.get("confluence_base_url") or "").strip() and cred),
-        project_key=(cfg.get("default_project_key") or ""),
-        issue_type="Task",
-        priority=PEP_PRIORITY_TO_JIRA.get((item.priority if item else "") or "", ""),
-        labels=[],
-        components=[c for c in [(item.category if item else "")] if c],
         summary=title,
         description=(item.content if item else "") or "",
-        space_key=(weekly.get("space_key") or ""),
-        parent_page_id=(weekly.get("parent_page_id") or ""),
         page_title=title,
         reporter=(cred.jira_account if cred and cred.jira_account else actor.username),
+        preset_source="user" if preset else "settings",
         detail=("바로 생성할 수 있습니다." if not missing
                 else "미설정: " + ", ".join(missing)),
+        **base,
     )
 
 
@@ -1157,7 +1509,8 @@ async def provision_work_item(
     # ── Jira ─────────────────────────────────────────────────────────────────
     if payload.create_jira:
         if item.jira_issue_key:
-            jira_detail = f"이미 {item.jira_issue_key} 와 연결돼 있어 생성을 건너뛰었습니다."
+            jira_detail = (f"이미 {item.jira_issue_key} 와 연결돼 있어 생성을 건너뛰었습니다 — "
+                           "다른 프로젝트로 다시 만들려면 먼저 Jira 연결을 해제하세요.")
             jira_key, jira_url = item.jira_issue_key, item.jira_url or ""
             jira_ok = True
         elif not cfg.get("base_url"):
@@ -1173,12 +1526,16 @@ async def provision_work_item(
             elif not summary:
                 jira_detail = "제목(summary)이 비어 있습니다."
             else:
+                epic_key = (payload.epic_key or "").strip()
+                parent_key = (payload.parent_key or "").strip()
                 res = await svc.create_issue(
                     project_key, summary,
                     description=(payload.description if payload.description is not None else item.content) or "",
                     issue_type=payload.issue_type,
                     priority=payload.priority or PEP_PRIORITY_TO_JIRA.get(item.priority or ""),
                     labels=payload.labels, components=payload.components,
+                    epic_key=epic_key, epic_field=(cfg.get("jira_epic_field") or "").strip(),
+                    parent_key=parent_key,
                 )
                 if res.get("status") == "ok":
                     jira_ok = True
@@ -1186,6 +1543,14 @@ async def provision_work_item(
                     item.jira_issue_key = jira_key
                     item.jira_issue_id = res.get("id") or None
                     item.jira_url = jira_url
+                    item.jira_issue_type = payload.issue_type or None
+                    item.jira_components = payload.components or None
+                    item.jira_labels = payload.labels or None
+                    if epic_key:
+                        item.jira_epic_key = epic_key
+                        item.jira_epic = (item.jira_epic or epic_key)
+                    if parent_key:
+                        item.jira_parent_key = parent_key
                     item.jira_synced_at = datetime.utcnow()
                 else:
                     jira_detail = res.get("detail", "Jira 이슈 생성 실패")
@@ -1223,6 +1588,9 @@ async def provision_work_item(
         target_type="work_item", target_id=str(item.id),
         details={"jira": jira_key or None, "confluence": conf_id or None},
     )
+    # 하나라도 성공했으면 이번 조건을 내 기본값으로 기억한다(다음 등록에서 자동 채움).
+    if payload.remember_preset and (jira_ok or conf_ok):
+        _save_provision_preset(db, actor.id, payload)
 
     wanted = [payload.create_jira, payload.create_confluence]
     succeeded = [payload.create_jira and jira_ok, payload.create_confluence and conf_ok]
@@ -1405,6 +1773,7 @@ async def import_issues(
         )
 
     resolver = _build_assignee_resolver(db)
+    confluence_base = (cfg.get("confluence_base_url") or "").strip()
     issues = search.get("issues", [])
     created = updated = skipped = 0
     errors: list[str] = []
@@ -1413,7 +1782,8 @@ async def import_issues(
 
     for issue in issues:
         try:
-            fields = map_jira_issue(issue, base_url, assignee_resolver=resolver, epic_field=epic_field)
+            fields = map_jira_issue(issue, base_url, assignee_resolver=resolver,
+                                    epic_field=epic_field, confluence_base_url=confluence_base)
             jid = fields.get("jira_issue_id")
             if not jid:
                 skipped += 1
@@ -1461,21 +1831,7 @@ async def import_issues(
 
             if existing:
                 # Jira-소유 필드만 갱신 (PEP 로컬 편집 보존). 담당자는 비어있을 때만 채움.
-                existing.title = fields["title"]
-                existing.content = fields["content"]
-                existing.kanban_status = fields["kanban_status"]
-                existing.priority = fields["priority"]
-                existing.jira_status = fields["jira_status"]
-                existing.jira_url = fields["jira_url"]
-                existing.jira_issue_key = fields["jira_issue_key"]
-                existing.jira_updated_at = fields["jira_updated_at"]
-                existing.jira_epic = fields.get("jira_epic") or existing.jira_epic
-                existing.jira_synced_at = now
-                if fields["closed_at"] and not existing.closed_at:
-                    existing.closed_at = fields["closed_at"]
-                if not (existing.primary_assignee or "").strip() or existing.primary_assignee == "(미할당)":
-                    existing.primary_assignee = fields["primary_assignee"]
-                    existing.assignee = fields["primary_assignee"]
+                _apply_jira_fields(existing, fields, now=now)
                 watchers = list(existing.jira_watchers or [])
                 if actor.username not in watchers:
                     watchers.append(actor.username)
@@ -1498,8 +1854,17 @@ async def import_issues(
                     jira_issue_key=fields["jira_issue_key"],
                     jira_url=fields["jira_url"],
                     jira_status=fields["jira_status"],
+                    jira_status_category=fields.get("jira_status_category"),
                     jira_updated_at=fields["jira_updated_at"],
                     jira_epic=fields.get("jira_epic"),
+                    jira_epic_key=fields.get("jira_epic_key"),
+                    jira_epic_summary=fields.get("jira_epic_summary"),
+                    jira_issue_type=fields.get("jira_issue_type"),
+                    jira_parent_key=fields.get("jira_parent_key"),
+                    jira_parent_summary=fields.get("jira_parent_summary"),
+                    jira_components=fields.get("jira_components"),
+                    jira_labels=fields.get("jira_labels"),
+                    confluence_url=fields.get("confluence_url"),
                     jira_synced_at=now,
                     jira_watchers=[actor.username],
                     created_by=actor.username,

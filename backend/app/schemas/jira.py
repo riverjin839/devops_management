@@ -178,7 +178,9 @@ class JiraImportItemPreview(BaseModel):
 
 
 class JiraImportResult(BaseModel):
-    status: Literal["ok", "offline", "error"]
+    # missing — 연결된 이슈를 Jira 에서 찾을 수 없음(삭제됐거나 내 권한으로 안 보임).
+    # 서버가 둘을 구분할 수 없으므로 자동 정리하지 않고 이 상태로 알리기만 한다.
+    status: Literal["ok", "offline", "error", "missing"]
     # 실제로 Jira 에 보낸 JQL — 조건이 의도대로 조립됐는지 화면에서 그대로 확인한다.
     applied_jql: str = ""
     imported: int = 0
@@ -384,6 +386,13 @@ class ProvisionDefaults(BaseModel):
     page_title: str = ""
     reporter: str = ""            # 표시용 — 내 Jira 계정
     detail: str = ""              # 준비 상태 안내(미설정 항목 등)
+    # Jira 계층 — task = Epic, sub task = Epic 아래 이슈. epic_key 는 Epic Link,
+    # parent_key 는 Sub-task 의 상위 이슈(둘 중 하나만 쓰는 게 보통이다).
+    epic_key: str = ""
+    parent_key: str = ""
+    # 이 기본값이 **내가 지난번에 쓴 조건**(user preset)에서 왔는지, 관리자 공통 설정에서
+    # 왔는지 — 화면에서 "저장된 조건을 불러왔습니다" 안내를 띄우는 데 쓴다.
+    preset_source: Literal["none", "settings", "user"] = "settings"
 
 
 class ProvisionRequest(BaseModel):
@@ -399,11 +408,17 @@ class ProvisionRequest(BaseModel):
     components: list[str] = []
     summary: Optional[str] = None
     description: Optional[str] = None
+    # Jira 계층 — Epic Link(epic_key) 또는 Sub-task 상위 이슈(parent_key).
+    epic_key: Optional[str] = None
+    parent_key: Optional[str] = None
     # Confluence
     space_key: Optional[str] = None
     parent_page_id: Optional[str] = None
     page_title: Optional[str] = None
     page_body: Optional[str] = None   # 비우면 업무 내용으로 기본 문서를 만든다
+    # 이번에 쓴 기준 조건(프로젝트/종류/라벨/컴포넌트/Epic/스페이스)을 내 기본값으로
+    # 저장할지. 켜두면 다음 업무 등록 때 자동으로 채워진다(화면에서 언제든 수정 가능).
+    remember_preset: bool = True
 
 
 class ProvisionResult(BaseModel):
@@ -415,3 +430,48 @@ class ProvisionResult(BaseModel):
     confluence_page_id: Optional[str] = None
     confluence_url: Optional[str] = None
     confluence_detail: str = ""
+
+
+# ── 연결 복구 (해제 / 갈아끼우기 / 고아 점검) ──────────────────────────────────
+class JiraUnlinkRequest(BaseModel):
+    """PEP 업무의 Jira 연결만 끊는다 — **Jira 이슈는 건드리지 않는다**
+    (Jira 에서 지우는 것은 `DELETE /jira/issue/{key}`)."""
+    # true 면 업무 행 자체도 삭제. Jira 에서 이미 지운 이슈의 잔재 행을 정리하는 용도라
+    # 삭제 권한은 업무 삭제와 동일 규칙(등록자/담당자/admin)을 따른다.
+    delete_work_item: bool = False
+
+
+class JiraUnlinkResult(BaseModel):
+    status: Literal["ok", "error"]
+    detail: str = ""
+    work_item_id: Optional[str] = None
+    work_item_deleted: bool = False
+
+
+class JiraRelinkRequest(BaseModel):
+    """연결을 다른 이슈로 갈아끼운다. 이슈 키 또는 브라우저 URL 을 그대로 받는다."""
+    key_or_url: str
+
+
+class JiraRelinkResult(BaseModel):
+    status: Literal["ok", "error", "offline", "missing"]
+    detail: str = ""
+    jira_key: Optional[str] = None
+    jira_url: Optional[str] = None
+
+
+class JiraMissingLink(BaseModel):
+    work_item_id: str
+    jira_key: str
+    title: str = ""
+    detail: str = ""
+
+
+class JiraVerifyLinksResult(BaseModel):
+    status: Literal["ok", "error", "offline"]
+    detail: str = ""
+    checked: int = 0
+    # Jira 에서 찾지 못한 연결. 삭제됐을 수도, 내 권한으로 안 보일 수도 있어
+    # 자동 정리하지 않고 사용자가 골라 처리하게 한다.
+    missing: list[JiraMissingLink] = []
+    truncated: bool = False

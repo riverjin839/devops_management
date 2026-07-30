@@ -45,6 +45,21 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3"
     ollama_timeout: int = 120
 
+    # ─── LLM 게이트웨이 (services/llm) — bootstrap fallback 전용 ─────
+    # 운영 설정의 원천은 AppSetting `llm_settings` (Settings → AI/LLM 탭).
+    # 아래 값들은 AppSetting 행이 없을 때 기본 프로필을 합성하는 용도다.
+    # LLM_API_BASE 설정 시 사내 OpenAI-호환 서비스용 `internal-llm` 프로필이 생긴다.
+    llm_api_base: str = ""
+    # API 키는 AppSetting JSONB 에 저장하지 않는다 — 프로필의 api_key_ref 가
+    # "env:LLM_API_KEY"(이 변수) 또는 "credential:<name>"(llm_credentials 암호화
+    # 테이블)을 참조한다.
+    llm_api_key: str = ""
+    llm_model: str = ""
+    llm_timeout: int = 120
+    # 장애 분석기 선택 (claude|local_llm|rule_based). AppSetting 값이 우선하고,
+    # 이 env 는 레거시/bootstrap 폴백이다 (구 raw os.getenv 흡수).
+    analyzer_backend: str = ""
+
     # Embedding (Ollama /api/embeddings) — WorkItem / WorkGuide 유사 검색용.
     # 폐쇄망 로컬 추론 전제 — Nexus 로 반입 (docs/AIRGAP_LLM_NEXUS.md 참고).
     # nomic-embed-text 기준 차원(768). 모델 교체 시 embedding_dim 도 함께 맞춰야 한다

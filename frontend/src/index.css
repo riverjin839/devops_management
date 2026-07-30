@@ -275,6 +275,84 @@
     --motion-slow: 300ms;
     --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+
+  /* ── Comfort theme — 크림 배경 + 딥그린 액센트 (Donezo-inspired) ─────────
+     따뜻한 크림/오프화이트 바탕 + 딥그린(#1D5E3F 계열) primary + 민트 서페이스 +
+     큰 radius(16px) 로 부드럽고 편안한 대시보드 톤. 사이드바는 본문과 같은 라이트
+     크림, 활성 항목만 딥그린 필(pill) + 흰 텍스트. */
+  html.comfort {
+    --background: 60 20% 96%;          /* #F6F6F0 — warm cream */
+    --foreground: 160 20% 12%;         /* #182520 — green-tinted near-black */
+    --card: 0 0% 100%;                 /* pure white card */
+    --card-foreground: 160 20% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 20% 12%;
+    --primary: 150 45% 24%;            /* #22593D — deep green */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 140 25% 93%;          /* #E9F2EC — mint cream surface */
+    --secondary-foreground: 160 20% 12%;
+    --muted: 70 15% 95%;
+    --muted-foreground: 150 8% 40%;    /* #5E6E66 — muted green-gray */
+    --accent: 145 40% 90%;             /* light mint hover */
+    --accent-foreground: 150 45% 20%;
+    --destructive: 0 70% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 70 12% 87%;              /* #E0E1D8 — soft cream border */
+    --input: 70 12% 87%;
+    --ring: 150 45% 30%;
+    --radius: 1rem;                    /* 16px — 부드러운 라운딩 */
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: 0 1px 3px rgba(24, 37, 32, 0.04), 0 6px 20px -8px rgba(24, 37, 32, 0.08);
+
+    /* Sidebar — 본문과 같은 라이트 크림, 활성 항목만 딥그린 필 */
+    --sidebar:                  60 22% 97%;     /* #F8F8F3 */
+    --sidebar-foreground:       160 20% 14%;
+    --sidebar-muted-foreground: 150 8% 42%;
+    --sidebar-accent:           150 45% 24%;    /* deep green active pill */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           70 12% 88%;
+    --sidebar-primary:          150 45% 30%;
+
+    /* Status — semantic 유지, healthy 는 테마 그린과 정렬 */
+    --status-healthy:     150 55% 32%;
+    --status-healthy-bg:  145 45% 90%;
+    --status-warning:     38 92% 48%;
+    --status-warning-bg:  40 75% 90%;
+    --status-critical:    0 70% 48%;
+    --status-critical-bg: 0 60% 93%;
+    --status-unknown:     150 6% 45%;
+    --status-unknown-bg:  90 10% 90%;
+    --status-pending:     150 6% 45%;
+    --status-pending-bg:  90 10% 90%;
+    --status-info:        199 75% 40%;
+    --status-info-bg:     199 55% 91%;
+    --status-neutral:     150 6% 48%;
+    --status-neutral-bg:  90 10% 91%;
+
+    /* Categorical chart tokens (D-005) — 그린 우선 배치, red-green 비인접 유지 */
+    --chart-1: 150 45% 32%;   /* deep green */
+    --chart-2: 217 60% 50%;   /* blue */
+    --chart-3: 38 85% 50%;    /* amber */
+    --chart-4: 262 55% 55%;   /* violet */
+    --chart-5: 340 55% 52%;   /* rose */
+    --chart-6: 192 65% 42%;   /* cyan */
+    --chart-7: 24 75% 50%;    /* orange */
+    --chart-8: 150 8% 45%;    /* green-gray slate */
+
+    /* Surface Container — 크림 스케일 (lowest=white → highest=deep cream) */
+    --surface-container-lowest:  0 0% 100%;
+    --surface-container-low:     75 20% 98%;
+    --surface-container:         70 18% 96%;
+    --surface-container-high:    72 16% 94%;
+    --surface-container-highest: 70 14% 92%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
 }
 
 /* default 모드 한정 — 약한 입체감
@@ -301,15 +379,32 @@ html.default {
     inset 0 2px 4px rgba(46, 38, 32, 0.10);
 }
 
+/* comfort 모드 — Donezo 풍 "살짝 떠 있는" 화이트 카드. default 와 같은 적용 규칙을
+   공유하되 그림자 틴트만 그린-그레이. 버튼 글로우·grain 은 default 전용으로 둔다. */
+html.comfort {
+  --card-shadow:
+    0 1px 2px rgba(24, 37, 32, 0.04),
+    0 8px 24px -10px rgba(24, 37, 32, 0.08);
+  --card-shadow-hover:
+    0 2px 4px rgba(24, 37, 32, 0.05),
+    0 14px 32px -12px rgba(24, 37, 32, 0.14);
+}
+
 html.default .mac-shadow,
 html.default [class*="rounded-2xl"][class*="bg-card"],
-html.default [class*="rounded-xl"][class*="bg-card"] {
+html.default [class*="rounded-xl"][class*="bg-card"],
+html.comfort .mac-shadow,
+html.comfort [class*="rounded-2xl"][class*="bg-card"],
+html.comfort [class*="rounded-xl"][class*="bg-card"] {
   box-shadow: var(--card-shadow);
   transition: box-shadow var(--motion-base) var(--motion-ease);
 }
 html.default .mac-shadow:hover,
 html.default [class*="rounded-2xl"][class*="bg-card"]:hover,
-html.default [class*="rounded-xl"][class*="bg-card"]:hover {
+html.default [class*="rounded-xl"][class*="bg-card"]:hover,
+html.comfort .mac-shadow:hover,
+html.comfort [class*="rounded-2xl"][class*="bg-card"]:hover,
+html.comfort [class*="rounded-xl"][class*="bg-card"]:hover {
   box-shadow: var(--card-shadow-hover);
 }
 

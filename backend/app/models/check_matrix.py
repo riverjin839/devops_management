@@ -105,7 +105,9 @@ class CheckMatrixSchedule(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    item = relationship("CheckMatrixItem", backref="schedules")
+    # passive_deletes=True — 항목 삭제 시 ORM 이 item_id 를 NULL 로 UPDATE 하는 것을
+    # 막는다(NOT NULL 이라 NotNullViolation). 정리는 DB 의 ON DELETE CASCADE 가 담당.
+    item = relationship("CheckMatrixItem", backref=backref("schedules", passive_deletes=True))
     # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
     # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
     cluster = relationship("Cluster", backref=backref("check_matrix_schedules", passive_deletes=True))
@@ -129,7 +131,8 @@ class CheckMatrixResult(Base):
     details = Column(JSONB, nullable=True)
     checked_at = Column(DateTime, default=datetime.utcnow)
 
-    item = relationship("CheckMatrixItem", backref="latest_results")
+    # passive_deletes=True — 항목 삭제 시 ORM 의 item_id NULL UPDATE 방지 (위와 동일).
+    item = relationship("CheckMatrixItem", backref=backref("latest_results", passive_deletes=True))
     # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
     # 막는다(NOT NULL 이면 NotNullViolation). 정리는 services/cluster_purge.py 담당.
     cluster = relationship("Cluster", backref=backref("check_matrix_results", passive_deletes=True))
@@ -198,7 +201,8 @@ class CheckMatrixRun(Base):
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
 
-    item = relationship("CheckMatrixItem", backref="runs")
+    # passive_deletes=True — 항목 삭제 시 ORM 의 item_id NULL UPDATE 방지 (위와 동일).
+    item = relationship("CheckMatrixItem", backref=backref("runs", passive_deletes=True))
     # passive_deletes=True — Cluster 삭제 시 ORM 이 cluster_id 를 NULL 로 UPDATE 하는 것을
     # 막고 DB 의 ON DELETE CASCADE 에 위임한다(cluster_id 는 NOT NULL 이라 nullify 하면 터진다).
     # 형제 테이블(schedules/results)과 동일한 정책.

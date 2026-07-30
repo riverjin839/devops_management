@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -724,10 +724,46 @@ export const ansibleAssetsApi = {
 
 // Agent API (AI Mode — fail-safe)
 export const agentApi = {
-  chat: (data: AgentChatRequest) =>
+  chat: (data: AgentChatRequest & { conversationId?: string | null }) =>
     api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
   health: () =>
     api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
+  conversations: () =>
+    api.get<{ data: import('@/types').AgentConversationSummary[] }>('/agent/conversations'),
+  messages: (conversationId: string) =>
+    api.get<{ data: import('@/types').AgentMessageOut[] }>(`/agent/conversations/${conversationId}/messages`),
+  deleteConversation: (conversationId: string) =>
+    api.delete<{ ok: boolean }>(`/agent/conversations/${conversationId}`),
+};
+
+// LLM 게이트웨이 설정 API (Settings → AI/LLM 탭)
+export const llmApi = {
+  getSettings: () =>
+    api.get<{ data: LlmSettings; purposes: string[] }>('/llm/settings'),
+  updateSettings: (data: LlmSettings) =>
+    api.put<{ data: LlmSettings; warnings: string[] }>('/llm/settings', data),
+  health: () =>
+    api.get<{ data: LlmHealthEntry[] }>('/llm/health', { timeout: 15000 }),
+  profileModels: (name: string) =>
+    api.get<{ data: string[] }>(`/llm/profiles/${encodeURIComponent(name)}/models`, { timeout: 10000 }),
+  testProfile: (profile: string, prompt?: string) =>
+    api.post<LlmTestResult>('/llm/test', { profile, ...(prompt ? { prompt } : {}) }, { timeout: 120000 }),
+  usage: () =>
+    api.get<{ data: LlmUsageBucket[] }>('/llm/usage'),
+  listCredentials: () =>
+    api.get<{ data: LlmCredentialSummary[] }>('/llm/credentials'),
+  createCredential: (name: string, apiKey: string) =>
+    api.post<{ data: { name: string; hint: string }; updated: boolean }>('/llm/credentials', { name, apiKey }),
+  deleteCredential: (name: string) =>
+    api.delete<{ ok: boolean }>(`/llm/credentials/${encodeURIComponent(name)}`),
+  ragSearch: (q: string, k = 5) =>
+    api.get<{ data: import('@/types').RagCitation[] }>('/llm/rag-search', { params: { q, k }, timeout: 30000 }),
+  backfillEmbeddings: () =>
+    api.post<{ ok: boolean; detail: string }>('/llm/backfill-embeddings'),
+  getAnalysisScope: () =>
+    api.get<{ data: import('@/types').LlmAnalysisScope }>('/llm/analysis-scope'),
+  updateAnalysisScope: (data: import('@/types').LlmAnalysisScope) =>
+    api.put<{ data: import('@/types').LlmAnalysisScope; warnings: string[] }>('/llm/analysis-scope', data),
 };
 
 // PromQL Metric Cards API
@@ -916,6 +952,17 @@ export const jiraApi = {
     api.post<import('@/types').JiraCreateResult>('/jira/create', data),
   deleteIssue: (key: string) =>
     api.delete<import('@/types').JiraDeleteResult>(`/jira/issue/${key}`),
+  // 연결 복구 — Jira 이슈는 건드리지 않고 PEP 쪽 연결만 정리/교체한다.
+  unlink: (itemId: string, data?: import('@/types').JiraUnlinkRequest) =>
+    api.post<import('@/types').JiraUnlinkResult>(`/jira/unlink/${itemId}`, data ?? {}),
+  relink: (itemId: string, data: import('@/types').JiraRelinkRequest) =>
+    api.post<import('@/types').JiraRelinkResult>(`/jira/relink/${itemId}`, data),
+  verifyLinks: (allUsers = false) =>
+    api.post<import('@/types').JiraVerifyLinksResult>('/jira/verify-links', undefined, {
+      params: { all_users: allUsers },
+      // 키마다 1콜이라 건수가 많으면 오래 걸린다.
+      timeout: 3 * 60_000,
+    }),
   // 주간보고
   weeklyPreview: (data?: import('@/types').WeeklyReportRequest) =>
     api.post<import('@/types').WeeklyReport>('/jira/weekly-report/preview', data ?? {}),
@@ -1092,6 +1139,29 @@ export const workGuidesApi = {
   create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
   update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
   delete: (id: string) => api.delete(`/work-guides/${id}`),
+  /** 문서 검색 — 임베딩 시맨틱 우선, 불가 시 ILIKE 폴백 (embeddingAvailable 로 구분) */
+  search: (q: string, limit = 10) =>
+    api.get<import('@/types').GuideSearchResult>('/work-guides/search', { params: { q, limit } }),
+};
+
+// Confluence 문서 가져오기/내보내기 API (routers/confluence.py)
+export const confluenceDocsApi = {
+  search: (data: import('@/types').ConfluenceDocSearchRequest) =>
+    api.post<import('@/types').ConfluenceDocSearchResult>('/confluence/docs/search', data),
+  import: (data: import('@/types').ConfluenceDocImportRequest) =>
+    api.post<import('@/types').ConfluenceDocImportResult>('/confluence/docs/import', data, {
+      timeout: 2 * 60_000, // 페이지별 조회+변환 — 기본 30s 로는 부족
+    }),
+  export: (guideId: string, data?: import('@/types').ConfluenceDocExportRequest) =>
+    api.post<import('@/types').ConfluenceDocExportResult>(
+      `/confluence/docs/export/${guideId}`, data ?? {}, { timeout: 2 * 60_000 }),
+  pull: (guideId: string) =>
+    api.post<import('@/types').ConfluenceDocPullResult>(
+      `/confluence/docs/pull/${guideId}`, {}, { timeout: 2 * 60_000 }),
+  settings: () =>
+    api.get<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings'),
+  updateSettings: (data: import('@/types').ConfluenceDocsSettings) =>
+    api.put<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings', data),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
@@ -1489,6 +1559,10 @@ export const k8sEventsApi = {
   }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
   get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
   delete: (id: string) => api.delete(`/events/${id}`),
+  getAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/events/${id}/analysis`),
+  triggerAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/events/${id}/analyze`),
 };
 
 // Trend Digest API
@@ -2032,6 +2106,10 @@ export const observabilityApi = {
       },
     }),
   deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+  getAlertAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/observability/alerts/${id}/analysis`),
+  triggerAlertAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/observability/alerts/${id}/analyze`),
 
   // 알림 규칙 / 전역 설정
   alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),

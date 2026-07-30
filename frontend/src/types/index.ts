@@ -212,6 +212,8 @@ export interface K8sEvent {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw?: Record<string, any> | null;
   receivedAt: string;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface K8sEventListResponse {
@@ -338,6 +340,42 @@ export interface AgentChatResponse {
   status: 'ok' | 'offline';
   answer: string;
   model: string;
+  conversationId?: string | null;
+  citations?: RagCitation[];
+  requests?: AgentInfoRequest[];
+}
+
+/** RAG 근거 인용 — 백엔드 rag_service.Citation */
+export interface RagCitation {
+  title: string;
+  sourceType: 'work_guide' | 'work_item' | 'ops_note' | 'ontology_event';
+  refId: string;
+  route: string;
+  snippet: string;
+  similarity: number;
+}
+
+/** AI 의 추가 정보 요청 (운영자가 제공 — 자율 실행 아님) */
+export interface AgentInfoRequest {
+  kind: 'github_code' | 'troubleshooting_history' | 'logs' | 'config';
+  detail: string;
+}
+
+export interface AgentConversationSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentMessageOut {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  citations: RagCitation[];
+  requests: AgentInfoRequest[];
+  model: string | null;
+  createdAt: string;
 }
 
 export interface AgentHealthResponse {
@@ -504,6 +542,18 @@ export interface WorkItem {
   jiraStatus?: string | null;
   jiraSyncedAt?: string | null;
   jiraWatchers?: string[] | null;
+  /** Jira 원본 항목 — 게시판 표를 Jira 와 같은 축으로 보여주기 위한 읽기 전용 필드.
+   *  task = Epic, sub task = Epic 아래 이슈 매핑 기준. */
+  jiraIssueType?: string | null;
+  /** status.statusCategory.key — new | indeterminate | done (상태 배지 색 기준). */
+  jiraStatusCategory?: string | null;
+  jiraEpic?: string | null;
+  jiraEpicKey?: string | null;
+  jiraEpicSummary?: string | null;
+  jiraParentKey?: string | null;
+  jiraParentSummary?: string | null;
+  jiraComponents?: string[] | null;
+  jiraLabels?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -655,6 +705,48 @@ export interface JiraDeleteResult {
   unlinkedWorkItemId?: string | null;
 }
 
+// ── 연결 복구 (해제 / 갈아끼우기 / 고아 점검) ──────────────────────────────────
+// Jira 이슈를 직접 지웠거나 잘못된 프로젝트에 만들었을 때, PEP 에 남은 죽은 링크를
+// 화면에서 정리하기 위한 타입들. Jira 쪽은 건드리지 않는다.
+export interface JiraUnlinkRequest {
+  /** true 면 업무 행 자체도 삭제 (권한은 업무 삭제와 동일 규칙). */
+  deleteWorkItem?: boolean;
+}
+
+export interface JiraUnlinkResult {
+  status: 'ok' | 'error';
+  detail: string;
+  workItemId?: string | null;
+  workItemDeleted: boolean;
+}
+
+export interface JiraRelinkRequest {
+  /** 이슈 키(DL-42) 또는 브라우저 URL(.../browse/DL-42). */
+  keyOrUrl: string;
+}
+
+export interface JiraRelinkResult {
+  status: 'ok' | 'error' | 'offline' | 'missing';
+  detail: string;
+  jiraKey?: string | null;
+  jiraUrl?: string | null;
+}
+
+export interface JiraMissingLink {
+  workItemId: string;
+  jiraKey: string;
+  title: string;
+  detail: string;
+}
+
+export interface JiraVerifyLinksResult {
+  status: 'ok' | 'error' | 'offline';
+  detail: string;
+  checked: number;
+  missing: JiraMissingLink[];
+  truncated: boolean;
+}
+
 // ── 주간보고 ──────────────────────────────────────────────────────────────────
 export interface WeeklySummary {
   total: number;
@@ -744,7 +836,9 @@ export interface WeeklyReportSettings {
 }
 
 export interface JiraImportResult {
-  status: 'ok' | 'offline' | 'error';
+  /** missing — 연결된 이슈를 Jira 에서 찾을 수 없음(삭제됐거나 권한 없음). 자동 정리하지
+   *  않고 화면에서 연결 해제/변경을 고르게 한다. */
+  status: 'ok' | 'offline' | 'error' | 'missing';
   /** 실제로 Jira 에 보낸 JQL — 조건 반영 여부를 화면에서 확인. */
   appliedJql?: string;
   imported: number;
@@ -861,7 +955,8 @@ export interface WorkItemCreate {
   remarks?: string;
   service?: string;
   component?: string;
-  confluenceUrl?: string;
+  /** null 을 명시적으로 보내면 링크 해제 (백엔드는 exclude_unset 이라 undefined 는 무변경). */
+  confluenceUrl?: string | null;
   jiraUrl?: string;
   priority?: string;
   kanbanStatus?: KanbanStatus;
@@ -1106,6 +1201,17 @@ export interface WorkGuide {
   sortOrder: number;
   /** Confluence 문서 링크 */
   confluenceUrl?: string;
+  /** 최초 생성 출처 — pep | confluence */
+  source?: string;
+  /** 연결된 Confluence 페이지 ID (import/export 매칭 키) */
+  confluencePageId?: string | null;
+  confluenceSpaceKey?: string | null;
+  /** 마지막 동기화 시점의 Confluence 페이지 버전 */
+  confluenceVersion?: number | null;
+  confluenceSyncedAt?: string | null;
+  /** synced(동일) / modified(PEP 수정 후 미게시) / error(동기화 실패) — 미연결이면 null */
+  confluenceSyncStatus?: 'synced' | 'modified' | 'error' | null;
+  confluenceSyncError?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1127,6 +1233,127 @@ export interface WorkGuideUpdate extends Partial<WorkGuideCreate> {}
 
 export interface WorkGuideListResponse {
   data: WorkGuide[];
+}
+
+// ── Confluence 문서 가져오기/내보내기 (routers/confluence.py) ──
+export interface ConfluenceDocSearchRequest {
+  cql?: string;
+  spaceKey?: string;
+  text?: string;
+  /** 기여자 조건 — me: 본인(기본값) · user: contributor 값 사용(콤마로 여러 명) · any: 조건 없음 */
+  contributorMode?: 'me' | 'user' | 'any';
+  contributor?: string;
+  labels?: string[];
+  updatedSinceDays?: number;
+  limit?: number;
+}
+
+export interface ConfluenceDocSearchItem {
+  id: string;
+  title: string;
+  spaceKey: string;
+  url: string;
+  updated: string;
+  /** 이미 work_guides 에 연결된 페이지인지 */
+  linked: boolean;
+  linkedGuideId?: string | null;
+}
+
+export interface ConfluenceDocSearchResult {
+  status: string;
+  detail: string;
+  total: number;
+  items: ConfluenceDocSearchItem[];
+}
+
+export interface ConfluenceDocImportRequest {
+  pageIds: string[];
+  dryRun?: boolean;
+  onlyPageIds?: string[];
+  parentGuideId?: string | null;
+  category?: string;
+  guideStatus?: string;
+  inlineImages?: boolean;
+}
+
+export interface ConfluenceDocFieldChange {
+  field: string;
+  old?: string | null;
+  new?: string | null;
+}
+
+export interface ConfluenceDocImportPreview {
+  pageId: string;
+  title: string;
+  spaceKey: string;
+  version?: number | null;
+  action: 'create' | 'update' | 'unchanged' | 'error';
+  detail: string;
+  warnings: string[];
+  changes: ConfluenceDocFieldChange[];
+}
+
+export interface ConfluenceDocImportResult {
+  status: string;
+  detail: string;
+  dryRun: boolean;
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  warnings: string[];
+  items: ConfluenceDocImportPreview[];
+}
+
+export interface ConfluenceDocExportRequest {
+  spaceKey?: string;
+  parentPageId?: string;
+  title?: string;
+}
+
+export interface ConfluenceDocExportResult {
+  status: string;
+  detail: string;
+  action: string;
+  pageId?: string | null;
+  pageUrl?: string | null;
+  version?: number | null;
+  warnings: string[];
+}
+
+export interface ConfluenceDocPullResult {
+  status: string;
+  detail: string;
+  guideId?: string | null;
+  version?: number | null;
+  warnings: string[];
+}
+
+export interface ConfluenceDocsSettings {
+  spaceKey: string;
+  parentPageId: string;
+  defaultCategory: string;
+  titlePrefix: string;
+}
+
+export interface GuideSearchItem {
+  id: string;
+  title: string;
+  category?: string | null;
+  status: string;
+  author?: string | null;
+  source: string;
+  confluenceUrl?: string | null;
+  updatedAt: string;
+  /** 시맨틱 검색일 때만 존재 (0~1) */
+  similarity?: number | null;
+  snippet: string;
+}
+
+export interface GuideSearchResult {
+  items: GuideSearchItem[];
+  /** false = 시맨틱 미준비(Ollama/pgvector) — ILIKE 폴백 결과 */
+  embeddingAvailable: boolean;
 }
 
 export interface ClusterLink {
@@ -1292,10 +1519,12 @@ export interface MindMapNodeCreate {
   extra?: Record<string, any>;
 }
 
-// 기능별 접근 제어 — { "<feature>": { roles, users } }
+// 기능별 접근 제어 — { "<라우트 경로>": { roles, users, enabled? } }
 export interface FeatureAccessRule {
   roles: string[];
   users: string[];   // username 또는 display_name
+  /** false 면 admin 외 전체 차단(roles/users 무관, 최우선). 미설정/true = 기본 열림. */
+  enabled?: boolean;
 }
 export type FeatureAccessMap = Record<string, FeatureAccessRule>;
 
@@ -3873,12 +4102,24 @@ export interface SchemaDriftIssue {
   repairable: boolean;
 }
 
+/** 부팅 시 자동 복구(NOT NULL 완화)가 실제로 돌았는지 — 로그 없이 확인하기 위한 것. */
+export interface SchemaBootRepair {
+  ran: boolean;
+  /** 감지된 대상 ("table.column") */
+  detected?: string[];
+  /** 실제로 완화된 건수 */
+  relaxed?: number;
+  /** 락 경합 등으로 실패한 항목 */
+  failures?: { target: string; error: string }[];
+}
+
 export interface SchemaHealthReport {
   healthy: boolean;
   checkedTables: number;
   checkedColumns: number;
   issueCount: number;
   issues: SchemaDriftIssue[];
+  bootRepair?: SchemaBootRepair;
 }
 
 export interface SchemaRepairAction extends SchemaDriftIssue {
@@ -3963,6 +4204,11 @@ export interface ProvisionDefaults {
   pageTitle: string;
   reporter: string;
   detail: string;
+  /** Jira 계층 — epicKey = Epic Link, parentKey = Sub-task 의 상위 이슈. */
+  epicKey: string;
+  parentKey: string;
+  /** 기본값 출처 — 'user' 면 지난번 내가 쓴 조건을 불러온 것. */
+  presetSource: 'none' | 'settings' | 'user';
 }
 
 export interface ProvisionRequest {
@@ -3976,10 +4222,14 @@ export interface ProvisionRequest {
   components?: string[];
   summary?: string;
   description?: string;
+  epicKey?: string;
+  parentKey?: string;
   spaceKey?: string;
   parentPageId?: string;
   pageTitle?: string;
   pageBody?: string;
+  /** 이번에 쓴 기준 조건을 내 기본값으로 저장할지 (다음 등록에서 자동 채움). */
+  rememberPreset?: boolean;
 }
 
 export interface ProvisionResult {
@@ -4168,6 +4418,8 @@ export interface AlertEvent {
   labels: LabelPair[];
   annotations: LabelPair[];
   rawJson?: string | null;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface AlertEventListResponse {
@@ -4216,4 +4468,126 @@ export interface AlertSettings {
   dedupWindowSec: number;
   dedupMode: AlertDedupMode;
   retentionDays: number;
+}
+
+// ── LLM 게이트웨이 설정 (Settings → AI/LLM) ───────────────────────────
+// 주의: axios 인터셉터가 응답 키를 snake→camel 로 변환하므로 여기 타입은 camelCase.
+// routing 의 purpose 키도 응답에서는 camelCase 가 된다 (요청 시 자동 역변환).
+
+export type LlmProviderType = 'ollama' | 'openai_compat';
+
+/** camelCase purpose 키 (백엔드 snake_case 와 인터셉터로 상호 변환됨) */
+export type LlmPurpose =
+  | 'chat'
+  | 'incidentAnalysis'
+  | 'reviewSummary'
+  | 'archDoc'
+  | 'trends'
+  | 'embedding';
+
+export interface LlmProfile {
+  name: string;
+  provider: LlmProviderType;
+  baseUrl: string;
+  model: string;
+  /** "credential:<name>" | "env:<VAR>" | "" — 키 원문은 절대 오가지 않는다 */
+  apiKeyRef: string;
+  timeoutSeconds: number;
+  maxConcurrency: number;
+  enabled: boolean;
+}
+
+export interface LlmRoute {
+  primary: string;
+  fallback: string | null;
+}
+
+export interface LlmSettings {
+  language: 'ko' | 'en';
+  analyzerBackend: 'claude' | 'local_llm' | 'rule_based';
+  embeddingModel: string;
+  profiles: LlmProfile[];
+  routing: Record<string, LlmRoute>;
+}
+
+export interface LlmHealthEntry {
+  profile: string;
+  provider: LlmProviderType;
+  enabled: boolean;
+  baseUrl: string;
+  status: 'online' | 'offline';
+  model: string;
+  detail: string;
+  latencyMs: number;
+}
+
+export interface LlmTestResult {
+  status: string;
+  latencyMs: number;
+  model: string;
+  answerPreview: string;
+  error: string | null;
+}
+
+export interface LlmCredentialSummary {
+  name: string;
+  hint: string;
+  createdAt: string | null;
+}
+
+export interface LlmUsageBucket {
+  profile: string;
+  purpose: string;
+  bucket: string; // YYYYMMDDHH (UTC)
+  count: number;
+  errors: number;
+  avgLatencyMs: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+// ── 알람 AI 자동 분석 (Phase 2) ───────────────────────────────────────
+
+export interface LlmAnalysisScopeRule {
+  id: string;
+  priority: number;
+  enabled: boolean;
+  sources: Array<'alert' | 'k8s_event'>;
+  clusterId: string | null;
+  namespacePattern: string;
+  alertnamePattern: string;
+  severityMin: 'info' | 'warning' | 'critical';
+  maxPerHour: number;
+  notifyAnalysis: boolean;
+  includeLogs: boolean;
+}
+
+export interface LlmAnalysisScope {
+  enabled: boolean;
+  debounceSeconds: number;
+  globalMaxPerHour: number;
+  rules: LlmAnalysisScopeRule[];
+}
+
+export interface AlertIncidentAnalysis {
+  id: string;
+  alertEventId: string | null;
+  k8sEventId: string | null;
+  clusterId: string | null;
+  namespace: string | null;
+  resource: string | null;
+  trigger: 'alert' | 'k8s_event' | 'manual';
+  status: 'queued' | 'running' | 'done' | 'failed' | 'skipped';
+  severity: string | null;
+  rootCause: string | null;
+  suggestedActions: string[];
+  relatedRunbooks: string[];
+  confidence: number | null;
+  citations: RagCitation[];
+  analyzedBy: string | null;
+  matchedRuleId: string | null;
+  durationMs: number | null;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
 }

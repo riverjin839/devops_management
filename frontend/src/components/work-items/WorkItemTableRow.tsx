@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket, Link2Off } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
@@ -8,6 +8,8 @@ import { ServiceChip } from '@/components/services/ServiceChip';
 import { Badge } from '@/components/ui/badge';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
+import { DocLinkChip } from './DocLinkChip';
+import { JiraIssueChip } from './JiraIssueChip';
 import type { WorkItemColumnKey } from './workItemColumns';
 
 // 상태색은 semantic status 토큰으로 (D-011). backlog=대기→unknown, todo=정보→info,
@@ -33,6 +35,37 @@ const PRI_STYLES: Record<string, { dot: string; text: string; label: string }> =
   low:    { dot: 'bg-status-info',     text: 'text-status-info',     label: 'Low' },
 };
 const PRI_OPTIONS: Array<'high' | 'medium' | 'low'> = ['high', 'medium', 'low'];
+
+/** Jira statusCategory.key → 점 색. 프로젝트마다 상태명이 달라도 색은 일관되게 간다. */
+const JIRA_CAT_DOT: Record<string, string> = {
+  new: 'bg-status-info', indeterminate: 'bg-status-warning', done: 'bg-status-healthy',
+};
+const JIRA_CAT_TEXT: Record<string, string> = {
+  new: 'text-status-info', indeterminate: 'text-status-warning', done: 'text-status-healthy',
+};
+
+/** Jira 이슈 종류 배지 색 — Epic/Sub-task 를 눈으로 바로 구분할 수 있게. */
+function jiraTypeClass(type: string): string {
+  const t = type.toLowerCase();
+  if (t === 'epic') return 'bg-purple-500/15 text-purple-500 border-purple-500/30';
+  if (t.includes('sub')) return 'bg-sky-500/15 text-sky-500 border-sky-500/30';
+  if (t === 'bug' || t === '버그' || t === '결함') return 'bg-status-critical/15 text-status-critical border-status-critical/30';
+  return 'bg-secondary text-muted-foreground border-border';
+}
+
+/** 컴포넌트/라벨 같은 문자열 목록을 작은 칩으로. 비면 '-'. */
+function ChipList({ values, className = '' }: { values?: string[] | null; className?: string }) {
+  if (!values || values.length === 0) return <span className="text-muted-foreground/50">-</span>;
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {values.map((v) => (
+        <span key={v} className={`px-1.5 py-0.5 text-[11px] rounded border border-border bg-secondary/60 whitespace-nowrap ${className}`}>
+          {v}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function formatDateTime(dateStr?: string | null): string {
   if (!dateStr) return '-';
@@ -220,9 +253,11 @@ interface WorkItemTableRowProps {
   jiraBusy?: boolean;
   /** 아직 Jira 와 연결되지 않은 업무 — Jira·Confluence 자동 생성 진입. */
   onJiraProvision?: (item: WorkItem) => void;
+  /** 연결 관리(해제/다른 이슈로 변경/업무 삭제) 다이얼로그 진입. */
+  onJiraLink?: (item: WorkItem) => void;
 }
 
-export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, jiraBusy = false }: WorkItemTableRowProps) {
+export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, onJiraLink, jiraBusy = false }: WorkItemTableRowProps) {
   const fmtDate = showTime ? formatDateTime : formatDate;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
@@ -284,6 +319,20 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
               >
                 {KS_OPTIONS.map((s) => <option key={s} value={s}>{KS_LABEL[s]}</option>)}
               </select>
+            ) : item.jiraStatus ? (
+              // Jira 연결 업무는 **Jira 원본 상태명**을 그대로 보여준다 — 칸반 5단계로
+              // 축약해 표시하면 화면과 Jira 가 달라 보여 혼란이 생긴다. 점 색은
+              // statusCategory 기준이라 커스텀 워크플로에서도 의미가 유지된다.
+              <span className="flex items-center gap-1.5" title={`Jira 상태: ${item.jiraStatus} (클릭하면 PEP 진행 상태 변경)`}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  JIRA_CAT_DOT[item.jiraStatusCategory ?? ''] ?? KS_DOT[ks] ?? 'bg-status-unknown'
+                }`} />
+                <span className={`text-sm font-medium whitespace-nowrap ${
+                  JIRA_CAT_TEXT[item.jiraStatusCategory ?? ''] ?? KS_TEXT[ks] ?? 'text-status-unknown'
+                }`}>
+                  {item.jiraStatus}
+                </span>
+              </span>
             ) : (
               <span className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-status-unknown'}`} />
@@ -445,6 +494,11 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                   {item.jiraIssueKey}
                 </a>
               )}
+              {/* Jira 키 박스 옆의 Confluence 문서 박스 — 없으면 그 자리에서 링크를 붙인다. */}
+              <DocLinkChip
+                url={item.confluenceUrl}
+                onSave={(url) => save({ confluenceUrl: url || null })}
+              />
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
@@ -580,6 +634,52 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
           </td>
         );
 
+      case 'jiraEpic':
+        // task = Jira Epic. Epic 이 없는 Sub-task 는 상위 이슈(parent)를 대신 보여준다.
+        return (
+          <td key="jiraEpic" className="px-4 py-1.5 max-w-xs">
+            {(() => {
+              const key = item.jiraEpicKey || item.jiraParentKey;
+              const summary = item.jiraEpicKey ? item.jiraEpicSummary : item.jiraParentSummary;
+              if (!key && !item.jiraEpic) return <span className="text-muted-foreground/50">-</span>;
+              return (
+                <JiraIssueChip
+                  issueKey={key ?? undefined}
+                  title={summary ?? (key ? undefined : item.jiraEpic ?? undefined)}
+                  url={key && item.jiraUrl ? item.jiraUrl.replace(/\/browse\/.*$/, `/browse/${key}`) : undefined}
+                />
+              );
+            })()}
+          </td>
+        );
+
+      case 'jiraType':
+        return (
+          <td key="jiraType" className="px-4 py-1.5 whitespace-nowrap">
+            {item.jiraIssueType ? (
+              <span className={`inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
+                {item.jiraIssueType}
+              </span>
+            ) : (
+              <span className="text-muted-foreground/50">-</span>
+            )}
+          </td>
+        );
+
+      case 'jiraComponents':
+        return (
+          <td key="jiraComponents" className="px-4 py-1.5">
+            <ChipList values={item.jiraComponents} />
+          </td>
+        );
+
+      case 'jiraLabels':
+        return (
+          <td key="jiraLabels" className="px-4 py-1.5">
+            <ChipList values={item.jiraLabels} className="text-primary border-primary/20 bg-primary/10" />
+          </td>
+        );
+
       case 'remarks':
         return (
           <EditableCell key="remarks" isEditing={editing === 'remarks'} onEnter={() => setEditing('remarks')} className="max-w-[120px]">
@@ -643,6 +743,16 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                   <Upload className="w-3.5 h-3.5" />
                 </button>
               )}
+              {item.jiraIssueKey && onJiraLink && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onJiraLink(item); }}
+                  className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-brand-jira"
+                  title={`Jira 연결 관리 (${item.jiraIssueKey} 해제 · 다른 이슈로 변경)`}
+                  aria-label={`Jira ${item.jiraIssueKey} 연결 관리`}
+                >
+                  <Link2Off className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onAddSubItem(item); }}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
@@ -682,7 +792,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
   );
 }
 
-/** 인라인 행 추가 — 테이블 꼬리. 필수: category + content + startedAt + primaryAssignee.
+/** 인라인 행 추가 — 헤더 바로 아래(목록 최상단). 필수: category + content + startedAt + primaryAssignee.
  *  컬럼 개인화(순서/숨김)와 무관하게 동작하도록 colSpan 한 줄 폼으로 렌더한다. */
 interface AddWorkItemRowProps {
   clusters: Cluster[];
@@ -739,7 +849,8 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
 
   if (!open) {
     return (
-      <tr className="border-t border-border bg-muted/10">
+      // 헤더 바로 아래(목록 최상단)에 배치되므로 아래쪽 경계선으로 다음 행과 구분한다.
+      <tr className="border-b border-border bg-muted/10">
         <td colSpan={colSpan}>
           <button
             type="button"
@@ -755,7 +866,7 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
 
   // 컬럼 표시/순서와 독립적인 한 줄 폼 — 필수 입력(분류·내용·시작일·정담당)을 항상 노출.
   return (
-    <tr className="border-t border-border bg-primary/[0.04]">
+    <tr className="border-b border-border bg-primary/[0.04]">
       <td colSpan={colSpan} className="px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <select value={kanbanStatus} onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}

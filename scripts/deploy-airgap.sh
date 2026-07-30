@@ -13,6 +13,14 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NAMESPACE="${NAMESPACE:-k8s-monitor}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
+# 인클러스터 자체 LLM(Ollama) 이미지 — 모델이 pre-baked 된 커스텀 이미지.
+# helm/k8s-daily-monitor/values.yaml 의 ollama.image 기본값과 반드시 일치시킬 것.
+# SKIP_OLLAMA=1 로 이 이미지의 미러링/저장 단계를 건너뛸 수 있다(사내 LLM 프로필만
+# 쓰거나, docs/AIRGAP_LLM_NEXUS.md 의 다른 방법으로 이미 반입한 경우).
+OLLAMA_IMAGE="${OLLAMA_IMAGE:-ghcr.io/riverjin839/ollama-qwen2.5-coder}"
+OLLAMA_TAG="${OLLAMA_TAG:-7b}"
+SKIP_OLLAMA="${SKIP_OLLAMA:-}"
+
 # 폐쇄망 Nexus 프록시 설정 (선택, backend+frontend 모두 Alpine 기반)
 # ALPINE_MIRROR_URL - Alpine apk 미러 (예: http://nexus:8081/repository/alpine-proxy)
 # PIP_INDEX_URL     - PyPI 프록시 (예: http://nexus:8081/repository/pypi-proxy/simple)
@@ -174,7 +182,34 @@ print_config() {
     if [ -n "${NPM_REGISTRY}" ]; then
         echo -e "  NPM Registry  : ${YELLOW}${NPM_REGISTRY}${NC}"
     fi
+    if [ -n "${SKIP_OLLAMA}" ]; then
+        echo -e "  Ollama 이미지 : ${YELLOW}건너뜀 (SKIP_OLLAMA=1)${NC}"
+    else
+        echo -e "  Ollama 이미지 : ${YELLOW}${OLLAMA_IMAGE}:${OLLAMA_TAG}${NC}"
+    fi
     echo ""
+}
+
+# ============================================
+# Ollama(자체 LLM) 이미지 미러링 — build 가 아니라 pull+retag.
+# 모델이 이미 이미지에 구워져 있으므로 backend/frontend 처럼 빌드하지 않는다.
+# 이 함수를 호출하는 쪽(build_images/save_images)이 각자의 흐름에 맞게 pull 시점을
+# 정한다 — 여기서는 pull 성공 여부만 판단해 이후 tag 를 건다.
+# ============================================
+_ollama_pull_ok=""
+pull_ollama_image() {
+    if [ -n "${SKIP_OLLAMA}" ]; then
+        echo -e "  ${YELLOW}Ollama 이미지 미러링 건너뜀 (SKIP_OLLAMA=1)${NC}"
+        return
+    fi
+    echo -e "  → Ollama 이미지 pull 중 (${OLLAMA_IMAGE}:${OLLAMA_TAG})..."
+    if ${CTR_CLI} pull "${OLLAMA_IMAGE}:${OLLAMA_TAG}"; then
+        ${CTR_CLI} tag "${OLLAMA_IMAGE}:${OLLAMA_TAG}" "${REGISTRY}/ollama-qwen2.5-coder:${OLLAMA_TAG}"
+        _ollama_pull_ok=1
+    else
+        echo -e "  ${YELLOW}⚠ Ollama 이미지 pull 실패 — 이 빌드 네트워크에서 ghcr.io 에 접근할 수 없다면${NC}"
+        echo -e "  ${YELLOW}  docs/AIRGAP_LLM_NEXUS.md 의 Nexus 경유 방법을 사용하거나 SKIP_OLLAMA=1 로 건너뛰세요.${NC}"
+    fi
 }
 
 # ============================================
@@ -220,6 +255,10 @@ build_images() {
         "${PROJECT_ROOT}/frontend"
 
     echo ""
+    echo -e "  → Ollama(자체 LLM) 이미지 미러링 중..."
+    pull_ollama_image
+
+    echo ""
     echo -e "${GREEN}✓ 이미지 빌드 완료${NC}"
     echo ""
 }
@@ -237,6 +276,17 @@ push_images() {
     for img in prom/prometheus:v2.51.0 grafana/grafana:10.4.0 kube-state-metrics/kube-state-metrics:v2.12.0 prom/node-exporter:v1.7.0; do
         ${CTR_CLI} push "${REGISTRY}/${img}" 2>/dev/null || true
     done
+
+    # Ollama(자체 LLM) — build 단계에서 미러링된 태그가 있을 때만 푸시.
+    # 없으면(SKIP_OLLAMA 또는 pull 실패) 조용히 건너뛴다: 사내 LLM 프로필만 쓰는
+    # 배포도 유효한 구성이라 이 단계 실패로 전체 push 를 막지 않는다.
+    if [ -z "${SKIP_OLLAMA}" ]; then
+        if ${CTR_CLI} push "${REGISTRY}/ollama-qwen2.5-coder:${OLLAMA_TAG}" 2>/dev/null; then
+            echo -e "  ${GREEN}✓ Ollama 이미지 푸시 완료${NC}"
+        else
+            echo -e "  ${YELLOW}⚠ Ollama 이미지 푸시 건너뜀 (로컬에 미러링된 태그 없음 — 먼저 'build' 를 실행했는지 확인)${NC}"
+        fi
+    fi
 
     echo -e "${GREEN}✓ 이미지 푸시 완료${NC}"
     echo ""
@@ -268,6 +318,17 @@ save_images() {
     done
     ${CTR_CLI} pull registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0 2>/dev/null || true
     ${CTR_CLI} save registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0 | gzip > "${img_dir}/kube-state-metrics.tar.gz"
+
+    # Ollama(자체 LLM) — build_images() 가 이미 pull_ollama_image() 로 미러링했다.
+    # 수 GB 크기라 오프라인 전송 매체 용량을 확인할 것.
+    if [ -z "${SKIP_OLLAMA}" ]; then
+        if ${CTR_CLI} image inspect "${REGISTRY}/ollama-qwen2.5-coder:${OLLAMA_TAG}" &>/dev/null; then
+            echo -e "  → Ollama 이미지 저장 중 (수 GB — 시간이 걸릴 수 있습니다)..."
+            ${CTR_CLI} save "${REGISTRY}/ollama-qwen2.5-coder:${OLLAMA_TAG}" | gzip > "${img_dir}/ollama.tar.gz"
+        else
+            echo -e "  ${YELLOW}⚠ Ollama 이미지가 로컬에 없어 저장을 건너뜁니다.${NC}"
+        fi
+    fi
 
     echo -e "${GREEN}✓ 이미지 저장 완료 (${img_dir}/)${NC}"
     echo ""
@@ -309,8 +370,13 @@ update_kustomization() {
         kustomize edit set image \
             "k8s-daily-monitor/backend=${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}" \
             "k8s-daily-monitor/frontend=${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}"
+        if [ -z "${SKIP_OLLAMA}" ]; then
+            kustomize edit set image \
+                "${OLLAMA_IMAGE}=${REGISTRY}/ollama-qwen2.5-coder:${OLLAMA_TAG}"
+        fi
     else
         echo -e "${YELLOW}kustomize CLI 없음 - kustomization.yaml 직접 확인 필요${NC}"
+        echo -e "${YELLOW}  (images: 블록의 backend/frontend/ollama newName 을 REGISTRY=${REGISTRY} 에 맞게 수동 확인)${NC}"
     fi
 
     cd "${PROJECT_ROOT}"
