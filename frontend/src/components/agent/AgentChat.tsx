@@ -3,6 +3,7 @@ import { X, Send, Bot, Loader2, WifiOff, History, Plus, Trash2 } from 'lucide-re
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { agentApi } from '@/services/api';
+import { getAuthToken } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
@@ -17,7 +18,69 @@ interface ChatMessage {
   content: string;
   citations?: RagCitation[];
   requests?: AgentInfoRequest[];
+  /** 스트리밍 중인 메시지 — 완료 전까지 커서/로딩 표시, 완료 후 마크다운 렌더 전환 */
+  streaming?: boolean;
   timestamp: Date;
+}
+
+interface StreamDonePayload {
+  done: true;
+  status: 'ok' | 'offline' | 'error';
+  model: string;
+  conversation_id: string | null;
+  citations: RagCitation[];
+  requests: AgentInfoRequest[];
+  error: string | null;
+}
+
+/**
+ * ``/agent/chat/stream`` SSE 소비 — 인증 fetch 기반(EventSource 는 Authorization
+ * 헤더를 못 보내므로 PodLogStream.tsx 와 동일한 fetch+reader 패턴을 쓴다).
+ * 서버가 초기 응답조차 못 주면(네트워크 오류·비2xx) reject 하여 호출부가
+ * 비스트리밍 ``/agent/chat`` 으로 폴백할 수 있게 한다.
+ */
+async function streamChat(
+  body: { query: string; context?: Record<string, unknown>; conversation_id: string | null },
+  onDelta: (text: string) => void,
+  onDone: (payload: StreamDonePayload) => void,
+): Promise<void> {
+  const token = getAuthToken();
+  const resp = await fetch('/api/v1/agent/chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok || !resp.body) {
+    throw new Error(`stream unavailable (HTTP ${resp.status})`);
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const block = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const ln of block.split('\n')) {
+        if (!ln.startsWith('data:')) continue;
+        const raw = ln.slice(5).replace(/^ /, '');
+        let payload: { delta?: string } & Partial<StreamDonePayload>;
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+        if (payload.done) onDone(payload as StreamDonePayload);
+        else if (typeof payload.delta === 'string') onDelta(payload.delta);
+      }
+    }
+  }
 }
 
 // feature_access 게이트 키 — 라우트는 아니지만 화면별 접근 제어 규칙과 동일한 키 체계.
@@ -100,30 +163,81 @@ export function AgentChat() {
     ]);
   };
 
+  const sendQueryNonStreaming = async (query: string) => {
+    const { data } = await agentApi.chat({
+      query,
+      context: buildContext(),
+      conversationId,
+    });
+    if (data.conversationId) setConversationId(data.conversationId);
+    if (data.status === 'offline') {
+      setIsOnline(false);
+      addMessage('system', data.answer);
+    } else {
+      setIsOnline(true);
+      addMessage('assistant', data.answer, {
+        citations: data.citations ?? [],
+        requests: data.requests ?? [],
+      });
+    }
+  };
+
   const sendQuery = async (query: string) => {
     if (!query || isLoading) return;
     addMessage('user', query);
     setIsLoading(true);
+
+    const assistantId = generateUUID();
+    let streamStarted = false;
     try {
-      const { data } = await agentApi.chat({
-        query,
-        context: buildContext(),
-        conversationId,
-      });
-      if (data.conversationId) setConversationId(data.conversationId);
-      if (data.status === 'offline') {
-        setIsOnline(false);
-        addMessage('system', data.answer);
-      } else {
-        setIsOnline(true);
-        addMessage('assistant', data.answer, {
-          citations: data.citations ?? [],
-          requests: data.requests ?? [],
-        });
-      }
+      await streamChat(
+        { query, context: buildContext(), conversation_id: conversationId },
+        (delta) => {
+          if (!streamStarted) {
+            // 첫 델타가 도착해야 진짜 스트리밍이 시작된 것 — 그 전까지는 로딩 표시 유지.
+            streamStarted = true;
+            setIsLoading(false);
+            setMessages((prev) => [
+              ...prev,
+              { id: assistantId, role: 'assistant', content: '', streaming: true, timestamp: new Date() },
+            ]);
+          }
+          setMessages((prev) => prev.map((m) => (
+            m.id === assistantId ? { ...m, content: m.content + delta } : m
+          )));
+        },
+        (done) => {
+          setIsOnline(done.status !== 'offline');
+          if (done.conversation_id) setConversationId(done.conversation_id);
+          if (streamStarted) {
+            setMessages((prev) => prev.map((m) => (
+              m.id === assistantId
+                ? { ...m, streaming: false, citations: done.citations, requests: done.requests }
+                : m
+            )));
+          } else {
+            // 델타 없이 done 만 온 경우(전체 실패) — 오프라인 안내 메시지로 대체.
+            addMessage('system', 'AI 서버가 응답하지 않습니다. Settings → AI/LLM 에서 연결 상태를 확인하세요.');
+          }
+        },
+      );
     } catch {
-      setIsOnline(false);
-      addMessage('system', 'AI 서버가 응답하지 않습니다. Settings → AI/LLM 에서 연결 상태를 확인하세요.');
+      if (streamStarted) {
+        // 이미 일부 응답을 받은 뒤 연결이 끊김 — 새로 재시도(중복 답변)하지 않고
+        // 지금까지 받은 내용 그대로 마무리한다.
+        setMessages((prev) => prev.map((m) => (
+          m.id === assistantId ? { ...m, streaming: false } : m
+        )));
+        setIsOnline(false);
+      } else {
+        // 스트림 자체를 시작하지 못함(구버전 프록시/네트워크) — 비스트리밍 폴백.
+        try {
+          await sendQueryNonStreaming(query);
+        } catch {
+          setIsOnline(false);
+          addMessage('system', 'AI 서버가 응답하지 않습니다. Settings → AI/LLM 에서 연결 상태를 확인하세요.');
+        }
+      }
     } finally {
       setIsLoading(false);
     }
@@ -306,9 +420,18 @@ export function AgentChat() {
                 >
                   {msg.role === 'assistant' ? (
                     <div className="space-y-2">
-                      <div className="prose prose-sm dark:prose-invert max-w-none [&_pre]:overflow-x-auto [&_pre]:text-xs">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                      </div>
+                      {msg.streaming ? (
+                        // 스트리밍 중엔 마크다운 파서가 미완성 구문(닫히지 않은 ``` 등)을
+                        // 잘못 렌더링할 수 있어 완료 전까지는 순수 텍스트로 표시한다.
+                        <p className="whitespace-pre-wrap">
+                          {msg.content}
+                          <span className="inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-current animate-pulse" aria-hidden />
+                        </p>
+                      ) : (
+                        <div className="prose prose-sm dark:prose-invert max-w-none [&_pre]:overflow-x-auto [&_pre]:text-xs">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                        </div>
+                      )}
                       {msg.citations && msg.citations.length > 0 && (
                         <CitationList citations={msg.citations} />
                       )}

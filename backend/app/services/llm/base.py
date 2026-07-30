@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 
 
 @dataclass
@@ -22,6 +22,24 @@ class LLMResult:
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
     error: Optional[str] = None
+
+
+@dataclass
+class LLMStreamChunk:
+    """스트리밍 청크 — 중간 청크는 ``delta`` 만, 마지막 청크는 ``done=True`` + 메타데이터.
+
+    ``status`` 는 ``done=True`` 청크에서만 의미가 있다("ok"|"offline"|"error").
+    중간 청크의 status 는 "ok" 고정(스트림이 이어지고 있다는 뜻일 뿐).
+    """
+
+    delta: str = ""
+    done: bool = False
+    status: str = "ok"
+    model: str = ""
+    profile: str = ""
+    error: Optional[str] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
 
 
 @dataclass
@@ -73,6 +91,18 @@ class BaseLLMProvider(ABC):
         options: Optional[dict] = None,
     ) -> LLMResult:
         """단발 프롬프트 호출. 절대 raise 하지 않는다."""
+
+    @abstractmethod
+    def chat_stream(
+        self,
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        options: Optional[dict] = None,
+    ) -> AsyncIterator[LLMStreamChunk]:
+        """토큰 단위 스트리밍 호출. 마지막 청크는 항상 ``done=True`` 로 끝난다
+        (정상/오류 모두). 첫 청크 이전 연결 실패는 게이트웨이가 fallback 판단에
+        쓸 수 있도록 ``done=True, status="offline"|"error"`` 단일 청크만 방출한다."""
 
     @abstractmethod
     async def embed(self, text: str, *, model: Optional[str] = None) -> Optional[list[float]]:

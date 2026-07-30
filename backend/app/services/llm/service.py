@@ -17,10 +17,10 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 
 from app.config import settings
-from app.services.llm.base import LLMProfile, LLMResult, BaseLLMProvider
+from app.services.llm.base import LLMProfile, LLMResult, LLMStreamChunk, BaseLLMProvider
 from app.services.llm.ollama_provider import OllamaProvider
 from app.services.llm.openai_provider import OpenAICompatProvider
 from app.services.llm.prompts import get_system_prompt
@@ -307,6 +307,73 @@ class LLMService:
             last = result
         return last or LLMResult(status="offline", error="no_enabled_profile",
                                  profile="", model="")
+
+    async def chat_stream_for_purpose(
+        self,
+        purpose: str,
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        options: Optional[dict] = None,
+        db=None,
+    ) -> AsyncIterator[LLMStreamChunk]:
+        """스트리밍 버전 — primary → fallback 은 **아직 아무 델타도 방출하지 않았을 때만**
+        시도한다. 이미 사용자에게 부분 응답을 보여준 뒤 중간에 끊기면, 다른 프로필로
+        다시 시작해 이어붙이면 앞뒤가 안 맞는 답변이 되므로 그 자리에서 오류로 종료한다.
+
+        절대 raise 하지 않는다 — 실패는 항상 ``done=True`` 청크로 알린다.
+        """
+        cfg = self.resolve_settings(db)
+        if system is None:
+            system = get_system_prompt(purpose, cfg.get("language", "ko"))
+        from app.services.llm.masking import mask_secrets
+        prompt = mask_secrets(prompt)
+        route = cfg["routing"].get(purpose) or cfg["routing"]["chat"]
+        candidates = [route.get("primary"), route.get("fallback")]
+
+        last_error: Optional[LLMStreamChunk] = None
+        for name in candidates:
+            if not name:
+                continue
+            profile = self.get_profile(name, cfg)
+            if profile is None or not profile.enabled:
+                continue
+            provider = self.build_provider(profile)
+            sem = self._semaphore_for(profile)
+            started = False
+            start_time = time.monotonic()
+            prompt_tokens = completion_tokens = None
+            async with sem:
+                async for chunk in provider.chat_stream(prompt, system=system, options=options):
+                    if not chunk.done:
+                        started = True
+                        yield chunk
+                        continue
+                    prompt_tokens = chunk.prompt_tokens
+                    completion_tokens = chunk.completion_tokens
+                    if chunk.status == "ok" or started:
+                        # 이미 델타를 보냈다면 성공/실패와 무관하게 여기서 스트림을 끝낸다
+                        # (fallback 이 앞선 부분 응답과 이어붙지 않도록).
+                        self._record_stats(profile.name, purpose, LLMResult(
+                            status=chunk.status, profile=profile.name, model=chunk.model,
+                            latency_ms=int((time.monotonic() - start_time) * 1000),
+                            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+                            error=chunk.error,
+                        ))
+                        yield chunk
+                        return
+                    # 델타 없이 바로 실패 — fallback 후보로 넘어간다.
+                    self._record_stats(profile.name, purpose, LLMResult(
+                        status=chunk.status, profile=profile.name, model=chunk.model,
+                        latency_ms=int((time.monotonic() - start_time) * 1000), error=chunk.error,
+                    ))
+                    last_error = chunk
+                    logger.warning(
+                        "LLM 스트리밍 실패 (purpose=%s, profile=%s, status=%s, error=%s)%s",
+                        purpose, profile.name, chunk.status, chunk.error,
+                        " — fallback 시도" if name == route.get("primary") and route.get("fallback") else "",
+                    )
+        yield last_error or LLMStreamChunk(done=True, status="offline", error="no_enabled_profile")
 
     async def embed(self, text: str, *, db=None) -> Optional[list[float]]:
         """임베딩 — routing.embedding 프로필 + ``embedding_model`` 로 호출.

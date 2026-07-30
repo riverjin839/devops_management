@@ -80,7 +80,8 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 무실행(No-Execution) 회귀 가드 | `backend/tests/test_no_execution_guard.py` — LLM 계열 ↔ 실행 계열(SSH/exec/playbook) 모듈 상호 import 금지 AST 검사 + `AnalysisResult` 필드 계약 |
 | LLM 설정 (Settings → AI/LLM 탭) | `backend/app/routers/llm_settings.py` (AppSetting `llm_settings`) · `backend/app/models/llm_credential.py` (API 키 암호화 저장) → `frontend/src/components/settings/LlmSettingsTab.tsx` + `frontend/src/hooks/useLlmSettings.ts` |
 | AI Agent (fail-safe, 게이트웨이 파사드) | `backend/app/routers/agent.py`, `backend/app/services/agent_service.py` |
-| Agent 챗봇 UI (한국어·멀티턴·인용·정보요청) | `frontend/src/components/agent/AgentChat.tsx` · `InfoRequestChips.tsx` · `frontend/src/components/common/CitationList.tsx` |
+| Agent 챗봇 UI (한국어·멀티턴·인용·정보요청·SSE 스트리밍) | `frontend/src/components/agent/AgentChat.tsx`(`streamChat` — 인증 fetch+reader SSE 소비, 실패 시 비스트리밍 폴백) · `InfoRequestChips.tsx` · `frontend/src/components/common/CitationList.tsx` |
+| 챗 스트리밍 백엔드 | `POST /agent/chat/stream`(`routers/agent.py`) → `llm_service.chat_stream_for_purpose`(`services/llm/service.py`) → provider별 `chat_stream`(`ollama_provider.py` NDJSON, `openai_provider.py` SSE) |
 | 챗 대화 지속성 | `backend/app/models/agent_conversation.py` + `routers/agent.py` `/agent/conversations*` |
 | RAG 근거 인용 (사내 지식 pgvector 검색) | `backend/app/services/rag_service.py` (`GET /llm/rag-search`, `POST /llm/backfill-embeddings`) — work_guides/work_items/ops_notes 임베딩 |
 | LLM 정보요청 파서 (need_more_info) | `backend/app/services/llm/response_parser.py` |

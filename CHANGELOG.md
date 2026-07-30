@@ -11,6 +11,14 @@
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **AI 챗봇 SSE 토큰 스트리밍**: `/agent/chat/stream` 신설 — 답변을 토큰 단위로
+  실시간 전송해 챗봇 응답 체감 속도를 개선한다. 게이트웨이에 `chat_stream_for_purpose`
+  추가(Ollama NDJSON / OpenAI-호환 SSE 델타 파싱, 마스킹·사용량 통계 재사용). fallback
+  규칙: 델타가 아직 하나도 안 나간 상태에서 primary 가 실패하면 다음 프로필로 넘어가고,
+  이미 일부를 보낸 뒤 끊기면 그 자리에서 종료한다(중간에 다른 LLM 으로 갈아타 앞뒤가
+  안 맞는 답변이 되는 것을 방지). `AgentChat.tsx` 는 인증 fetch+reader 로 SSE 를 소비하고
+  (PodLogStream.tsx 와 동일 패턴), 스트림 시작 자체가 실패하면 기존 비스트리밍
+  `/agent/chat` 으로 자동 폴백한다. 대화 저장·RAG 인용·정보요청 파싱은 기존 로직 재사용.
 - **무실행 보증 강화 + 배포/폐쇄망 반입 (Phase 4)**: LLM 파이프라인이 실행 경로(SSH/
   kubectl exec/플레이북/일괄 실행)와 구조적으로 격리돼 있음을 CI 회귀 테스트로 고정
   (`test_no_execution_guard.py` — AST import 그래프 + `AnalysisResult` 필드 계약).
