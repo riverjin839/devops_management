@@ -1533,6 +1533,10 @@ export const k8sEventsApi = {
   }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
   get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
   delete: (id: string) => api.delete(`/events/${id}`),
+  getAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/events/${id}/analysis`),
+  triggerAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/events/${id}/analyze`),
 };
 
 // Trend Digest API

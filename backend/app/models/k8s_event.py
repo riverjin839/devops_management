@@ -25,6 +25,11 @@ class K8sEvent(Base):
     raw = Column(JSONB, nullable=True)
     received_at = Column(DateTime, nullable=False, default=datetime.utcnow, server_default=func.now())
 
+    # AI 자동 분석 연결 (incident_analyses) — FK 없음(분석 실패/삭제가 이벤트에 영향 없도록).
+    # analysis_status: null(미대상) | queued | running | done | failed | skipped
+    analysis_id = Column(UUID(as_uuid=True), nullable=True)
+    analysis_status = Column(String(16), nullable=True)
+
     __table_args__ = (
         Index("ix_k8s_events_received_at", "received_at"),
         Index("ix_k8s_events_severity", "severity"),

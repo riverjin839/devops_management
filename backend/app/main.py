@@ -1013,6 +1013,9 @@ def _run_migrations():
         _safe_create_index("ix_k8s_events_received_at", "k8s_events", "(received_at DESC)")
         _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
         _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
+        # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
+        _safe_add_column("k8s_events", "analysis_id", "UUID")
+        _safe_add_column("k8s_events", "analysis_status", "VARCHAR(16)")
 
     # alert_events: Alertmanager / 사내 alert-forwarder 수신 알람 — 테이블은 create_all, 인덱스 보강.
     if "alert_events" in inspector.get_table_names():
@@ -1024,6 +1027,10 @@ def _run_migrations():
         # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
         _safe_add_column("alert_events", "analysis_id", "UUID")
         _safe_add_column("alert_events", "analysis_status", "VARCHAR(16)")
+    # incident_analyses: alert 트리거로 처음 생성됐던 테이블에 k8s_event 트리거 지원 추가.
+    if "incident_analyses" in inspector.get_table_names():
+        _safe_add_column("incident_analyses", "k8s_event_id", "UUID")
+        _safe_create_index("ix_incident_analyses_k8s_event", "incident_analyses", "(k8s_event_id)")
 
     # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.
     if "observability_metrics" in inspector.get_table_names():

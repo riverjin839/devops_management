@@ -34,6 +34,7 @@ celery_app.conf.update(
 # (k8s/base/celery/worker-llm.yaml · docker-compose `celery-worker-llm`).
 celery_app.conf.task_routes = {
     "app.celery_app.run_auto_incident_analysis": {"queue": "llm"},
+    "app.celery_app.run_auto_incident_analysis_k8s_event": {"queue": "llm"},
     "app.celery_app.backfill_embeddings": {"queue": "llm"},
 }
 
@@ -1210,6 +1211,103 @@ def run_auto_incident_analysis(self, alert_event_id: str, rule_id: str | None = 
                     title=f"[AI 분석] {event.alertname}",
                     body=f"원인 분석: {summary}",
                     link=f"/alerts?id={event.id}",
+                )
+                db.commit()
+            except Exception:  # noqa: BLE001
+                log.exception("analysis notify failed")
+
+        return {"ok": True, "analysis_id": str(analysis.id), "status": analysis.status}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_auto_incident_analysis_k8s_event",
+                 ignore_result=True, time_limit=240)
+def run_auto_incident_analysis_k8s_event(self, k8s_event_id: str, rule_id: str | None = None,
+                                         include_logs: bool = False, notify_analysis: bool = False):
+    """K8s 이벤트(kubewatch) 1건에 대한 AI 자동 분석 — 전용 `llm` 큐에서 실행.
+
+    `services/observability/analysis_hook.maybe_enqueue_analysis_for_k8s_event` 가
+    scope 매칭·디바운스·레이트 검사를 통과시킨 이벤트만 여기 도착한다 (수동 실행은
+    `POST /events/{id}/analyze`). `run_auto_incident_analysis`(알람용)와 동일한
+    분석 전용/fail-safe 계약 — 실패해도 이벤트 자체에는 영향이 없다.
+    """
+    import logging
+    import time as _time
+    import uuid as _uuid
+    from datetime import datetime as _dt
+
+    from app.database import SessionLocal
+    from app.models import K8sEvent, IncidentAnalysis
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        try:
+            event_uuid = _uuid.UUID(str(k8s_event_id))
+        except ValueError:
+            return {"ok": False, "reason": "bad_id"}
+        event = db.query(K8sEvent).filter(K8sEvent.id == event_uuid).first()
+        if event is None:
+            return {"ok": False, "reason": "k8s_event_not_found"}
+
+        analysis = IncidentAnalysis(
+            k8s_event_id=event.id,
+            cluster_id=event.cluster_id,
+            namespace=event.namespace,
+            resource=event.resource_name,
+            trigger="k8s_event" if rule_id else "manual",
+            status="running",
+            matched_rule_id=rule_id,
+        )
+        db.add(analysis)
+        db.flush()
+        event.analysis_id = analysis.id
+        event.analysis_status = "running"
+        db.commit()
+        db.refresh(analysis)
+
+        started = _time.monotonic()
+        try:
+            from app.services.analyzers.factory import get_analyzer
+            from app.services.incident_context_builder import build_context_from_k8s_event
+
+            ctx = build_context_from_k8s_event(db, event, include_logs=include_logs)
+            analyzer = get_analyzer(db)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(analyzer.analyze(ctx))
+            finally:
+                loop.close()
+
+            analysis.severity = result.severity
+            analysis.root_cause = result.root_cause
+            analysis.suggested_actions = list(result.suggested_actions or [])
+            analysis.related_runbooks = list(result.related_runbooks or [])
+            analysis.citations = list(getattr(result, "citations", None) or [])
+            analysis.confidence = result.confidence
+            analysis.analyzed_by = result.analyzed_by
+            analysis.status = "done"
+        except Exception as exc:  # noqa: BLE001
+            log.warning("auto incident analysis failed (k8s_event=%s): %s", k8s_event_id, exc)
+            analysis.status = "failed"
+            analysis.error = str(exc)[:500]
+        analysis.duration_ms = int((_time.monotonic() - started) * 1000)
+        analysis.finished_at = _dt.utcnow()
+        event.analysis_status = analysis.status
+        db.commit()
+
+        if notify_analysis and analysis.status == "done":
+            try:
+                from app.services.user_notify import notify_broadcast
+                summary = (analysis.root_cause or "")[:200]
+                notify_broadcast(
+                    db,
+                    type="k8s_event",
+                    title=f"[AI 분석] {event.resource_kind}/{event.resource_name}",
+                    body=f"원인 분석: {summary}",
+                    link="/k8s-events",
                 )
                 db.commit()
             except Exception:  # noqa: BLE001

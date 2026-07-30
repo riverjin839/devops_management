@@ -608,6 +608,7 @@ export function LlmSettingsTab() {
 const EMPTY_RULE: Omit<LlmAnalysisScopeRule, 'id'> = {
   priority: 100,
   enabled: true,
+  sources: ['alert', 'k8s_event'],
   clusterId: null,
   namespacePattern: '*',
   alertnamePattern: '*',
@@ -657,12 +658,23 @@ function AnalysisScopePanel() {
     setDraft({ ...draft, rules });
   };
 
+  const toggleRuleSource = (idx: number, source: 'alert' | 'k8s_event') => {
+    const rule = draft.rules[idx];
+    const has = rule.sources.includes(source);
+    // 최소 1개는 항상 선택돼 있어야 한다 — 둘 다 해제하면 어느 쪽에도 적용되지 않아
+    // 규칙이 조용히 죽은 것처럼 보이므로, 마지막 하나는 해제되지 않게 막는다.
+    if (has && rule.sources.length <= 1) return;
+    const sources = has ? rule.sources.filter((s) => s !== source) : [...rule.sources, source];
+    setRule(idx, { sources });
+  };
+
   return (
-    <MacCard title="알람 자동 분석 범위" bodyPadding="p-0">
+    <MacCard title="자동 분석 범위 (알람 · K8s 이벤트)" bodyPadding="p-0">
       <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border flex items-center justify-between gap-3">
         <span>
-          알람 수신 시 규칙(클러스터/네임스페이스/알람명/심각도)에 매칭되면 AI 분석을 자동 실행합니다.
-          규칙은 priority 오름차순 first-match. 시간당 상한·디바운스로 부하를 제한하며, 아래 사용량 표를 보면서 점진적으로 넓히세요.
+          알람 또는 K8s 이벤트(kubewatch) 수신 시 규칙(소스/클러스터/네임스페이스/알람명·reason/심각도)에 매칭되면
+          AI 분석을 자동 실행합니다. 규칙은 priority 오름차순 first-match, 같은 대상은 두 소스 어느 쪽이 먼저 와도
+          디바운스로 중복 분석되지 않습니다. 시간당 상한·디바운스로 부하를 제한하며, 아래 사용량 표를 보면서 점진적으로 넓히세요.
         </span>
         <label className="flex items-center gap-2 text-sm shrink-0">
           <input
@@ -718,9 +730,10 @@ function AnalysisScopePanel() {
               <tr className="text-xs text-muted-foreground border-b border-border">
                 <th className="text-left px-3 py-2 font-medium">on</th>
                 <th className="text-left px-3 py-2 font-medium">우선순위</th>
+                <th className="text-left px-3 py-2 font-medium">소스</th>
                 <th className="text-left px-3 py-2 font-medium">클러스터</th>
                 <th className="text-left px-3 py-2 font-medium">네임스페이스</th>
-                <th className="text-left px-3 py-2 font-medium">알람명 패턴</th>
+                <th className="text-left px-3 py-2 font-medium" title="K8s 이벤트는 reason 필드에 매칭">알람명/Reason 패턴</th>
                 <th className="text-left px-3 py-2 font-medium">심각도≥</th>
                 <th className="text-left px-3 py-2 font-medium">시간당</th>
                 <th className="text-left px-3 py-2 font-medium">로그</th>
@@ -747,6 +760,24 @@ function AnalysisScopePanel() {
                       aria-label="우선순위"
                       className="w-16 bg-secondary border border-border rounded-xl px-2 py-1 text-sm"
                     />
+                  </td>
+                  <td className="px-3 py-2">
+                    <label className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+                      <input
+                        type="checkbox" checked={rule.sources.includes('alert')}
+                        onChange={() => toggleRuleSource(idx, 'alert')}
+                        aria-label="알람 소스 적용" className="rounded"
+                      />
+                      알람
+                    </label>
+                    <label className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+                      <input
+                        type="checkbox" checked={rule.sources.includes('k8s_event')}
+                        onChange={() => toggleRuleSource(idx, 'k8s_event')}
+                        aria-label="K8s 이벤트 소스 적용" className="rounded"
+                      />
+                      K8s 이벤트
+                    </label>
                   </td>
                   <td className="px-3 py-2">
                     <select

@@ -11,6 +11,20 @@
 1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **K8s 이벤트(kubewatch) 직접 트리거 AI 자동분석**: 지금까지는 알람 파이프라인을
+  거친 경우만 자동 분석됐는데, kubewatch 로 수신되는 K8s 이벤트도 알람과 동일한
+  범위(scope) 규칙·디바운스·레이트 제한을 거쳐 전용 `llm` 큐로 직접 분석 요청할 수
+  있다. Backend: `IncidentAnalysis`/`K8sEvent` 에 `k8s_event_id`/`analysis_id`·
+  `analysis_status` 연결 컬럼 추가, 범위 매칭 로직을 `_MatchFields` 로 일반화해 알람/
+  K8s 이벤트 양쪽에 공용 적용하고 규칙마다 `sources`(알람/K8s 이벤트 부분집합) 로
+  적용 파이프라인을 고를 수 있게 함(레거시 규칙은 필드 없으면 둘 다 적용 — 하위 호환).
+  같은 (클러스터,네임스페이스,리소스) 는 두 파이프라인이 공유하는 디바운스 키를 써서
+  어느 쪽이 먼저 들어와도 중복 분석되지 않는다. `run_auto_incident_analysis_k8s_event`
+  Celery 태스크 + `GET/POST /events/{id}/analysis`,`/analyze` 신설. Frontend: 알람
+  인박스와 K8s 이벤트 화면이 공용 `IncidentAnalysisPanel` 컴포넌트를 공유하도록 리팩터링
+  (`AlertAnalysisPanel`/`K8sEventAnalysisPanel` 은 얇은 래퍼), K8s 이벤트 목록의 펼침
+  행에 AI 분석 패널을 부착. Settings → AI/LLM 의 자동 분석 범위 규칙 테이블에 소스
+  선택(알람/K8s 이벤트) 체크박스 열 추가.
 - **AI 챗봇 SSE 토큰 스트리밍**: `/agent/chat/stream` 신설 — 답변을 토큰 단위로
   실시간 전송해 챗봇 응답 체감 속도를 개선한다. 게이트웨이에 `chat_stream_for_purpose`
   추가(Ollama NDJSON / OpenAI-호환 SSE 델타 파싱, 마스킹·사용량 통계 재사용). fallback

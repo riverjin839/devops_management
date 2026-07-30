@@ -212,6 +212,8 @@ export interface K8sEvent {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw?: Record<string, any> | null;
   receivedAt: string;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface K8sEventListResponse {
@@ -4418,6 +4420,7 @@ export interface LlmAnalysisScopeRule {
   id: string;
   priority: number;
   enabled: boolean;
+  sources: Array<'alert' | 'k8s_event'>;
   clusterId: string | null;
   namespacePattern: string;
   alertnamePattern: string;
@@ -4437,10 +4440,11 @@ export interface LlmAnalysisScope {
 export interface AlertIncidentAnalysis {
   id: string;
   alertEventId: string | null;
+  k8sEventId: string | null;
   clusterId: string | null;
   namespace: string | null;
   resource: string | null;
-  trigger: 'alert' | 'manual';
+  trigger: 'alert' | 'k8s_event' | 'manual';
   status: 'queued' | 'running' | 'done' | 'failed' | 'skipped';
   severity: string | null;
   rootCause: string | null;
