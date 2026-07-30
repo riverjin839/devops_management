@@ -12,14 +12,22 @@
 한 컬럼씩 사후에 쫓아가는 대신 **전체를 기계적으로 비교**하고, 운영자가 화면에서
 직접 확인·복구할 수 있게 한다(프로젝트 UI-First 원칙 — `CLAUDE.md`).
 
-감지하는 드리프트 3종:
-  - `missing_table`  : 모델에 있는 테이블이 DB 에 없음 (create_all 실패 흔적)
-  - `missing_column` : 모델에 있는 컬럼이 DB 에 없음
-  - `not_null_drift` : 모델은 nullable 인데 DB 는 NOT NULL (레거시 제약)
+감지하는 드리프트 4종:
+  - `missing_table`         : 모델에 있는 테이블이 DB 에 없음 (create_all 실패 흔적)
+  - `missing_column`        : 모델에 있는 컬럼이 DB 에 없음
+  - `not_null_drift`        : 모델은 nullable 인데 DB 는 NOT NULL (레거시 제약)
+  - `orphan_not_null_column`: DB 에는 있지만 **모델에 없는** 컬럼이 NOT NULL + 기본값
+    없음으로 남아 있음. ORM 은 모델에 없는 컬럼에 값을 절대 채우지 않으므로, 이 컬럼이
+    있는 테이블은 **모든 INSERT 가 NotNullViolation 으로 죽는다**(예:
+    `deep_check_results.ai_status` — 지금 모델에는 존재한 적도 없는 컬럼인데 운영 DB 에만
+    남아 deep check 실행을 전부 막았던 사례). 위 3종은 "모델 → DB" 단방향 비교라 이 경우를
+    잡지 못해 별도로 스캔한다.
 
 복구는 **덧붙이기와 제약 완화만** 한다 — 컬럼 삭제·타입 변경처럼 데이터를 잃을 수 있는
-작업은 절대 자동으로 하지 않는다. 반대 방향(모델 NOT NULL / DB nullable)도 보고만 하고
-고치지 않는다 — 기존 행의 backfill 값을 알 수 없어 임의로 채우면 안 되기 때문이다.
+작업은 절대 자동으로 하지 않는다(orphan 컬럼도 DROP 하지 않고 NOT NULL 만 푼다 — 그
+컬럼이 실제로 어떤 의미였는지, 다른 시스템이 아직 읽고 있는지 알 수 없기 때문). 반대
+방향(모델 NOT NULL / DB nullable)도 보고만 하고 고치지 않는다 — 기존 행의 backfill 값을
+알 수 없어 임의로 채우면 안 되기 때문이다.
 """
 from __future__ import annotations
 
@@ -108,6 +116,7 @@ def inspect_drift() -> dict[str, Any]:
             })
             continue
 
+        model_col_names = {col.name for col in table.columns}
         for col in table.columns:
             checked_columns += 1
             db_col = db_cols.get(col.name)
@@ -138,6 +147,28 @@ def inspect_drift() -> dict[str, Any]:
                     "repairable": True,
                 })
 
+        # DB 전용(orphan) 컬럼 — 모델에는 없는데 NOT NULL + 기본값 없음이면 ORM INSERT 가
+        # 이 컬럼에 값을 채울 방법이 없어 그 테이블의 모든 삽입이 실패한다. 위 루프는
+        # "모델에 있는 컬럼"만 순회하므로 이런 컬럼은 여기서 별도로 찾는다.
+        for db_name, db_col in db_cols.items():
+            if db_name in model_col_names:
+                continue
+            if db_col.get("nullable", True):
+                continue
+            if db_col.get("default") is not None:
+                continue  # DB 기본값이 있으면 ORM 이 값을 안 줘도 INSERT 가 죽지 않는다.
+            issues.append({
+                "kind": "orphan_not_null_column",
+                "table": table.name,
+                "column": db_name,
+                "detail": (
+                    "DB 에는 있지만 모델에 없는 컬럼이 NOT NULL + 기본값 없음으로 남아 있습니다 — "
+                    "SQLAlchemy 가 이 컬럼에 값을 채울 방법이 없어 이 테이블의 모든 저장이 "
+                    "500(NotNullViolation)으로 실패합니다."
+                ),
+                "repairable": True,
+            })
+
     return {
         "healthy": len(issues) == 0,
         "checked_tables": checked_tables,
@@ -154,7 +185,8 @@ def repair_drift(*, dry_run: bool = False) -> dict[str, Any]:
 
     - `missing_column`  → `ADD COLUMN IF NOT EXISTS <type>` (항상 nullable —
       기존 행의 backfill 값을 알 수 없으므로 NOT NULL 은 걸지 않는다).
-    - `not_null_drift`  → `ALTER COLUMN ... DROP NOT NULL`.
+    - `not_null_drift`, `orphan_not_null_column` → `ALTER COLUMN ... DROP NOT NULL`
+      (orphan 컬럼은 존재 자체는 그대로 두고 삽입을 막는 제약만 푼다 — DROP COLUMN 은 하지 않는다).
     - 그 외(missing_table 등)는 손대지 않고 `skipped` 로 보고한다 — 사람이 판단할 일이다.
 
     개별 문장은 독립 트랜잭션으로 실행하고 실패해도 다음으로 진행한다(부분 복구 허용).
@@ -183,7 +215,7 @@ def repair_drift(*, dry_run: bool = False) -> dict[str, Any]:
                 skipped.append({**issue, "reason": "타입 컴파일 불가"})
                 continue
             sql = f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {type_sql}"
-        elif issue["kind"] == "not_null_drift":
+        elif issue["kind"] in ("not_null_drift", "orphan_not_null_column"):
             sql = f"ALTER TABLE {table} ALTER COLUMN {column} DROP NOT NULL"
         else:
             skipped.append({**issue, "reason": "지원하지 않는 복구 유형"})
@@ -211,19 +243,24 @@ def repair_drift(*, dry_run: bool = False) -> dict[str, Any]:
     }
 
 
-def relax_not_null_drift() -> int:
-    """부팅 안전망 — NOT NULL 드리프트만 자동으로 푼다.
+_BOOT_RELAXABLE_KINDS = ("not_null_drift", "orphan_not_null_column")
 
-    `_sync_missing_model_columns()` 가 "누락 컬럼"을 자동 보강하듯, 이 함수는 "레거시
-    NOT NULL"을 자동 완화한다. 모델이 nullable 이라고 선언한 컬럼은 NULL 저장이
-    정상 동작이므로, DB 쪽 제약을 푸는 것은 데이터 손실 없는 안전한 방향이다.
-    반대 방향(모델 NOT NULL)은 backfill 판단이 필요해 건드리지 않는다.
+
+def relax_not_null_drift() -> int:
+    """부팅 안전망 — NOT NULL 계열 드리프트(레거시 제약 + 모델에 없는 고아 컬럼)를 자동으로 푼다.
+
+    `_sync_missing_model_columns()` 가 "누락 컬럼"을 자동 보강하듯, 이 함수는 "삽입을
+    막는 NOT NULL 제약"을 자동 완화한다 — 두 경우 모두 데이터 손실 없이 안전하다:
+      - `not_null_drift`: 모델이 nullable 이라고 선언한 컬럼에 DB 쪽 레거시 제약이 남음.
+      - `orphan_not_null_column`: 모델에 아예 없는 컬럼이라 ORM 이 절대 값을 채울 수
+        없음 — 컬럼 자체는 그대로 두고(DROP COLUMN 아님) 제약만 푼다.
+    반대 방향(모델이 NOT NULL 인데 DB 가 nullable)은 backfill 판단이 필요해 건드리지 않는다.
     """
     relaxed = 0
     targets: list[str] = []
     failures: list[dict[str, str]] = []
     for issue in inspect_drift()["issues"]:
-        if issue["kind"] != "not_null_drift":
+        if issue["kind"] not in _BOOT_RELAXABLE_KINDS:
             continue
         target = f"{issue['table']}.{issue['column']}"
         targets.append(target)

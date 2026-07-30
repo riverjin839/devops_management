@@ -11,6 +11,15 @@
 1.17.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **Deep check 실행이 여전히 500 (`ai_status` NotNullViolation, 심각)**: 스키마 점검이
+  `missing_column`/`not_null_drift` 두 종류만 감지해 이 케이스를 놓쳤다 —
+  `deep_check_results.ai_status` 는 **모델에 존재한 적조차 없는** 컬럼인데 운영 DB 에만
+  NOT NULL + 기본값 없이 남아 있어, ORM 이 값을 채울 방법이 없어 그 테이블의 **모든 저장**이
+  실패했다(기존 두 드리프트 종류는 "모델 → DB" 단방향 비교라 모델에 없는 DB 전용 컬럼은
+  스캔 대상 자체가 아니었다). `orphan_not_null_column` 드리프트 종류를 신설해 모델에 없는
+  DB 전용 컬럼 중 NOT NULL + 기본값 없음인 것을 별도 스캔하고, 부팅 자동 복구·Settings ▸
+  스키마 점검 화면·수동 복구 API 모두에서 기존 NOT NULL 드리프트와 동일하게 처리한다
+  (컬럼 자체는 삭제하지 않고 제약만 완화 — DROP COLUMN 은 여전히 하지 않는다).
 - **점검 항목 삭제 실패 (심각)**: 항목을 지우면
   `null value in column "item_id" of relation "check_matrix_runs"` 로 실패했다.
   `CheckMatrixSchedule`/`Result`/`Run` 의 `item` 관계에 `passive_deletes=True` 가 빠져 있어,
