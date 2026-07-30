@@ -15,6 +15,7 @@ os.environ.setdefault(
 )
 
 from app.database import SessionLocal, Base, engine  # noqa: E402
+from app.main import _ensure_pgvector_extension  # noqa: E402
 from app.models.agent_conversation import AgentConversation, AgentMessage  # noqa: E402
 from app.routers.agent import (  # noqa: E402
     _get_owned_conversation,
@@ -27,6 +28,10 @@ from app.routers.agent import (  # noqa: E402
 
 @pytest.fixture(scope="module", autouse=True)
 def _ensure_schema():
+    # work_guides.embedding 은 pgvector 확장 필요 — 이 파일이 알파벳순으로 가장 먼저
+    # 수집돼 최초로 create_all() 을 부르므로, 확장을 먼저 보장해야 한다
+    # (test_architecture_docs.py 등 형제 테스트와 동일 순서 보장).
+    _ensure_pgvector_extension()
     Base.metadata.create_all(bind=engine)
     yield
 
