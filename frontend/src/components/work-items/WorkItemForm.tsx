@@ -107,8 +107,9 @@ interface WorkItemFormProps {
   /** 신규 등록 시 초기 날짜·시간 (YYYY-MM-DDTHH:mm). URL 파라미터나 달력 날짜 클릭에서 전달. */
   defaultStartedAt?: string;
   onCancel: () => void;
-  /** 저장 완료 후 콜백. id 는 신규 등록 시 발급된 새 id. */
-  onSaved: (savedId?: string) => void;
+  /** 저장 완료 후 콜백. id 는 신규 등록 시 발급된 새 id, created 는 신규 등록일 때만
+   *  서버가 반환한 전체 WorkItem(수정 시에는 undefined) — 자동 생성 모달 등에 필요. */
+  onSaved: (savedId?: string, created?: WorkItem) => void;
   /** 컴팩트한 인라인 모드 (SidePane 내부) — 외부 컨테이너가 이미 패딩을 갖춘 환경에서 form 만 렌더. */
   embedded?: boolean;
 }
@@ -339,6 +340,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
 
     try {
       let savedId: string | undefined;
+      let created: WorkItem | undefined;
       if (isEdit && initial) {
         await updateTask.mutateAsync({ id: initial.id, data: payload as WorkItemUpdate });
         saveWorkItemImages(initial.id, images);
@@ -346,10 +348,11 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const res: any = await createTask.mutateAsync(payload);
-        savedId = res?.data?.id ?? res?.id;
+        created = res?.data ?? res;
+        savedId = created?.id;
         if (images.length > 0 && savedId) saveWorkItemImages(savedId, images);
       }
-      onSaved(savedId);
+      onSaved(savedId, created);
     } catch (err) {
       // 저장 실패(검증 422·권한 등)를 조용히 삼키지 않고 사유를 노출.
       toast.error(isEdit ? '수정 실패' : '등록 실패', formatApiError(err, '저장 중 오류가 발생했습니다.'));

@@ -12,8 +12,9 @@ interface WorkItemFormModalProps {
   /** 신규 등록 시 초기 시작일. */
   defaultStartedAt?: string;
   onClose: () => void;
-  /** 저장 완료 후 콜백 — 모달은 자동으로 닫힌다. */
-  onSaved?: (savedId?: string) => void;
+  /** 저장 완료 후 콜백 — 모달은 자동으로 닫힌다. created 는 신규 등록일 때만 전체
+   *  WorkItem(Jira·Confluence 자동 생성 모달 연결 등에 사용). */
+  onSaved?: (savedId?: string, created?: WorkItem) => void;
 }
 
 /** 업무 등록/하위 업무 등록을 페이지 전환 없이 팝업으로 띄운다 — 전체 폼(WorkItemForm)을 그대로 감싼다. */
@@ -45,7 +46,7 @@ export function WorkItemFormModal({
             parentItem={parentItem}
             defaultStartedAt={defaultStartedAt}
             onCancel={onClose}
-            onSaved={(savedId) => { onSaved?.(savedId); onClose(); }}
+            onSaved={(savedId, created) => { onSaved?.(savedId, created); onClose(); }}
             embedded
           />
         </div>
