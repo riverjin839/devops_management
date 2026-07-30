@@ -607,9 +607,9 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **UI 구성**:
   - `ClusterSidebar` 단일 선택(`iconOnly`)
   - 탭: `etcdctl 실행` / `etcd 서비스 로그`
-  - 좌측 패널: master 후보 드롭다운(`master-candidates`) + 수동 host override, SSH 인증
-  - 우측 패널: 프리셋 버튼(args 자동 채움), env file 옵션, args/timeout, 또는 로그 탭의 unit/tail/since/grep
-  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일), 결과 패널(`ResultPanel` — executed command + `ExecOutputTabs` stdout/stderr 탭). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
+  - **10-컬럼 그리드 (mc 클라이언트 콘솔과 동일한 좌/우 한 로우 레이아웃)**: 좌(2) 타겟+인증(master 후보 드롭다운(`master-candidates`) + 수동 host override, user/port, password|key), 중(3) 실행 구성(프리셋 버튼 · env file 옵션 · args/`SavedCommands`/etcdctl 경로/timeout, 로그 탭이면 unit/tail/since/grep), 우(5) 결과 패널.
+  - 결과 패널(`ResultPanel`)은 **실행 전에도 같은 자리에 플레이스홀더**로 존재해 레이아웃이 흔들리지 않고, 카드 내부에서만 세로 스크롤(`lg:h-[calc(100vh-260px)]` + `overflow-y-auto`/`overflow-x-hidden`)된다. 상태 배지 헤더는 sticky, 본문은 executed command + `ExecOutputTabs` stdout/stderr 탭.
+  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
 - **Frontend**: `useClusters()`, `useQuery(['etcdctl','masters',clusterId])`(`etcdctlApi.masters`), `useQuery(['etcdctl','presets',clusterId])`(`etcdctlApi.presets`), `useAbortableMutation`으로 `etcdctlApi.run` / `etcdctlApi.logs`. 호출 함수: `etcdctlApi.{presets,masters,run,logs}`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/etcdctl/presets`, `GET .../etcdctl/master-candidates`, `POST .../etcdctl/run`, `POST .../etcdctl/logs` — `backend/app/routers/etcdctl.py`. master 후보는 control-plane 라벨 노드를 K8s SDK로 조회, 실행은 SSH 러너(bulk_exec와 유사한 SSH 실행 계층)로 `etcdctl` 바이너리/env file을 원격 실행, 로그는 `journalctl -u {unit}` 실행.
 - **핵심 기능**:
