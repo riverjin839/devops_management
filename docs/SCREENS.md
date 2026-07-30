@@ -1033,9 +1033,9 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **UI 구성**:
   - 헤더: 전체/WIP/Done 카운트 배지, 뷰 전환(`ViewModeBar`: 목록/달력/칸반), Jira 가져오기 버튼(`jiraConfig.enabled`일 때만), CSV 추출, 업무 등록 버튼
   - 업무 분류 드롭다운(6개 유형) + **내 업무 토글(기본 ON)** · 담당자/분류/우선순위/모듈/스프린트/기간(이번주 토글, from~to) 필터 바, 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴
-  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`), 하단 인라인 `AddWorkItemRow`
+  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`), **상단 인라인 `AddWorkItemRow`**(헤더 바로 아래 — 목록 최상단)
   - 제목 셀: Jira 키 박스(`JiraIssueChip` 계열) + **Confluence 문서 박스**(`DocLinkChip` — 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장)
-  - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): Epic · 이슈 종류 · Jira 상태 · 컴포넌트 · 라벨. Jira 연결 업무의 상태 셀은 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준
+  - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): Epic · 이슈 종류 · 컴포넌트 · 라벨. **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
   - 칸반 뷰: `WorkItemKanban` (상태별 컬럼)
   - 달력 뷰: `WorkItemCalendar`
   - 모달: `WorkItemFormModal`(신규/하위 등록), `WorkItemCustomFieldsManager`, `JiraImportModal`, `JiraProvisionModal`(Jira 이슈 + Confluence 문서 동시 생성), 삭제 `ConfirmDialog`

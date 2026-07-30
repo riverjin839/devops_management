@@ -220,9 +220,13 @@ class AlertEventOut(BaseModel):
 
 
 class IncidentAnalysisOut(BaseModel):
-    """AI 장애 분석 결과 (분석 전용 — 실행 가능한 필드 없음)."""
+    """AI 장애 분석 결과 (분석 전용 — 실행 가능한 필드 없음).
+
+    ``trigger`` 에 따라 ``alert_event_id`` 또는 ``k8s_event_id`` 중 하나만 채워진다
+    (alert|k8s_event|manual — manual 은 둘 다 비어 있을 수 있음)."""
     id: UUID
     alert_event_id: Optional[UUID] = None
+    k8s_event_id: Optional[UUID] = None
     cluster_id: Optional[UUID] = None
     namespace: Optional[str] = None
     resource: Optional[str] = None

@@ -21,6 +21,20 @@ const ACTION_META: Record<string, { label: string; cls: string }> = {
 };
 
 type SearchMode = 'simple' | 'cql';
+type ContributorMode = 'me' | 'user' | 'any';
+
+const CONTRIBUTOR_OPTIONS: { id: ContributorMode; label: string }[] = [
+  { id: 'me', label: '나 (기본)' },
+  { id: 'user', label: '특정 사용자' },
+  { id: 'any', label: '전체' },
+];
+
+const PERIOD_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '전체 기간' },
+  { value: '7', label: '최근 7일' },
+  { value: '30', label: '최근 30일' },
+  { value: '90', label: '최근 90일' },
+];
 
 interface Props {
   open: boolean;
@@ -41,6 +55,11 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
   const [mode, setMode] = useState<SearchMode>('simple');
   const [spaceKey, setSpaceKey] = useState('');
   const [text, setText] = useState('');
+  // 기본값 '나' — 본인이 기여한 문서를 기준으로 가져오기 시작 (요청사항)
+  const [contributorMode, setContributorMode] = useState<ContributorMode>('me');
+  const [contributorUser, setContributorUser] = useState('');
+  const [labelsInput, setLabelsInput] = useState('');
+  const [period, setPeriod] = useState('');
   const [cql, setCql] = useState('');
   const [found, setFound] = useState<ConfluenceDocSearchItem[] | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -71,7 +90,17 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
       const data = await searchMut.mutateAsync(
         mode === 'cql'
           ? { cql: cql.trim(), limit: 50 }
-          : { spaceKey: spaceKey.trim() || undefined, text: text.trim() || undefined, limit: 50 },
+          : {
+              spaceKey: spaceKey.trim() || undefined,
+              text: text.trim() || undefined,
+              contributorMode,
+              contributor: contributorMode === 'user' ? contributorUser.trim() || undefined : undefined,
+              labels: labelsInput.trim()
+                ? labelsInput.split(',').map((l) => l.trim()).filter(Boolean)
+                : undefined,
+              updatedSinceDays: period ? Number(period) : undefined,
+              limit: 50,
+            },
       );
       if (data.status !== 'ok') {
         toast.error('Confluence ' + (data.status === 'offline' ? '연결 실패' : '오류'), data.detail || '검색에 실패했습니다.');
@@ -289,22 +318,69 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
               </div>
 
               {mode === 'simple' ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-xs font-medium text-muted-foreground">스페이스 키</span>
-                    <input
-                      value={spaceKey} onChange={(e) => setSpaceKey(e.target.value)} placeholder="예: OPS (비우면 전체)"
-                      className={`mt-1 ${inputCls}`} disabled={busy}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-medium text-muted-foreground">검색어</span>
-                    <input
-                      value={text} onChange={(e) => setText(e.target.value)} placeholder="제목·본문 텍스트"
-                      className={`mt-1 ${inputCls}`} disabled={busy}
-                      onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
-                    />
-                  </label>
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-xs font-medium text-muted-foreground">기여자 (contributor)</span>
+                    <div className="mt-1 flex items-stretch gap-1.5">
+                      {CONTRIBUTOR_OPTIONS.map((c) => (
+                        <button
+                          key={c.id} type="button" onClick={() => setContributorMode(c.id)}
+                          aria-pressed={contributorMode === c.id}
+                          className={`flex-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                            contributorMode === c.id
+                              ? 'bg-primary/10 text-primary border-primary/30 ring-2 ring-primary/20'
+                              : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                    {contributorMode === 'user' && (
+                      <input
+                        value={contributorUser} onChange={(e) => setContributorUser(e.target.value)}
+                        placeholder="사용자명 (콤마로 여러 명)"
+                        className={`mt-1.5 ${inputCls}`} disabled={busy}
+                      />
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">스페이스 키</span>
+                      <input
+                        value={spaceKey} onChange={(e) => setSpaceKey(e.target.value)} placeholder="예: OPS (비우면 전체)"
+                        className={`mt-1 ${inputCls}`} disabled={busy}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">라벨</span>
+                      <input
+                        value={labelsInput} onChange={(e) => setLabelsInput(e.target.value)} placeholder="예: runbook, etcd (콤마 구분)"
+                        className={`mt-1 ${inputCls}`} disabled={busy}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">최근 수정 기간</span>
+                      <select
+                        value={period} onChange={(e) => setPeriod(e.target.value)}
+                        className={`mt-1 ${inputCls}`} disabled={busy}
+                      >
+                        {PERIOD_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">검색어</span>
+                      <input
+                        value={text} onChange={(e) => setText(e.target.value)} placeholder="제목·본문 텍스트"
+                        className={`mt-1 ${inputCls}`} disabled={busy}
+                        onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
+                      />
+                    </label>
+                  </div>
                 </div>
               ) : (
                 <label className="block">
@@ -340,7 +416,11 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
               </div>
 
               <button
-                type="button" onClick={runSearch} disabled={busy || (mode === 'cql' ? !cql.trim() : !(spaceKey.trim() || text.trim()))}
+                type="button" onClick={runSearch}
+                disabled={busy || (mode === 'cql'
+                  ? !cql.trim()
+                  : (contributorMode === 'user' && !contributorUser.trim())
+                    || !(contributorMode !== 'any' || spaceKey.trim() || labelsInput.trim() || period || text.trim()))}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
               >
                 {searchMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}

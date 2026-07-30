@@ -212,6 +212,8 @@ export interface K8sEvent {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw?: Record<string, any> | null;
   receivedAt: string;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface K8sEventListResponse {
@@ -346,7 +348,7 @@ export interface AgentChatResponse {
 /** RAG 근거 인용 — 백엔드 rag_service.Citation */
 export interface RagCitation {
   title: string;
-  sourceType: 'work_guide' | 'work_item' | 'ops_note';
+  sourceType: 'work_guide' | 'work_item' | 'ops_note' | 'ontology_event';
   refId: string;
   route: string;
   snippet: string;
@@ -1238,6 +1240,11 @@ export interface ConfluenceDocSearchRequest {
   cql?: string;
   spaceKey?: string;
   text?: string;
+  /** 기여자 조건 — me: 본인(기본값) · user: contributor 값 사용(콤마로 여러 명) · any: 조건 없음 */
+  contributorMode?: 'me' | 'user' | 'any';
+  contributor?: string;
+  labels?: string[];
+  updatedSinceDays?: number;
   limit?: number;
 }
 
@@ -4545,6 +4552,7 @@ export interface LlmAnalysisScopeRule {
   id: string;
   priority: number;
   enabled: boolean;
+  sources: Array<'alert' | 'k8s_event'>;
   clusterId: string | null;
   namespacePattern: string;
   alertnamePattern: string;
@@ -4564,10 +4572,11 @@ export interface LlmAnalysisScope {
 export interface AlertIncidentAnalysis {
   id: string;
   alertEventId: string | null;
+  k8sEventId: string | null;
   clusterId: string | null;
   namespace: string | null;
   resource: string | null;
-  trigger: 'alert' | 'manual';
+  trigger: 'alert' | 'k8s_event' | 'manual';
   status: 'queued' | 'running' | 'done' | 'failed' | 'skipped';
   severity: string | null;
   rootCause: string | null;

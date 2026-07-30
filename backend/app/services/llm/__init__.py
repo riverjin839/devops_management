@@ -7,11 +7,12 @@
 여기서 일괄 처리한다. 설계: docs/AIRGAP_LLM_ARCHITECTURE.md.
 """
 
-from app.services.llm.base import LLMResult, BaseLLMProvider
+from app.services.llm.base import LLMResult, LLMStreamChunk, BaseLLMProvider
 from app.services.llm.service import llm_service, LLMService, PURPOSES, LLM_SETTINGS_KEY
 
 __all__ = [
     "LLMResult",
+    "LLMStreamChunk",
     "BaseLLMProvider",
     "llm_service",
     "LLMService",

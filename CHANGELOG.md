@@ -46,9 +46,60 @@
   `services/confluence_storage.py`(code/info/warning/expand 매크로 ↔ 코드블록/Callout/토글),
   `GET /work-guides/search` 시맨틱 검색 + HNSW 인덱스, 가져온 문서 임베딩 자동 계산(LLM 학습
   소스 편입). Frontend: `DocumentsPage` + `components/documents/`, 문서 읽기 화면 게시/재가져오기
-  버튼.
+  버튼. 가져오기 검색은 Jira 조건 조합처럼 **기여자(contributor)·라벨·최근 수정 기간**으로
+  세부 필터링할 수 있고, 기본값은 "본인이 기여한 문서"(`contributor = currentUser()`)다.
+- **업무 등록 시 Jira·Confluence 자동 생성 모달 — 전체 등록 경로로 확장**: 목록 하단 인라인
+  추가에만 연결돼 있던 자동 생성 흐름을 우측 상단 "업무 등록" 버튼(팝업 등록)에도 연결했다.
+  인라인 추가 행은 스크롤 없이 바로 쓸 수 있도록 표 맨 아래에서 **헤더 바로 아래(목록 최상단)로
+  이동**.
+
+### Changed
+- **업무 관리 게시판 컬럼 정리**: "상태"와 "Jira 상태"가 같은 정보(Jira 연결 업무는 "상태" 셀이
+  이미 Jira 원본 상태명을 보여줌)라 별도 "Jira 상태" 컬럼을 없애고 "상태" 하나로 병합.
 
 ### Added
+- **Ontology RAG 확장**: AI 분석·챗봇의 근거 인용(RAG) 대상에 구성변경 영향분석 이력
+  (`ontology_events` — `POST /ontology/impact` 로 생성되는, 특정 설정 변경이 온톨로지
+  그래프 상에서 얼마나 넓게 영향을 미치는지 계산한 기록)을 추가했다. "과거 이런 구성
+  변경이 이런 영향을 미쳤다"는 사내 이력이 이제 네 번째 근거 소스(work_guide/work_item/
+  ops_note/ontology_event)로 검색·인용된다. Backend: `OntologyEvent.embedding`
+  컬럼(pgvector) + `compute_ontology_event_embedding` Celery 태스크(영향분석 생성 커밋
+  직후 큐잉) + `backfill_embeddings` 확장. Frontend: `RagCitation.sourceType` 에
+  `ontology_event` 추가, `CitationList` 에 전용 아이콘/라벨(구성변경 영향분석) 표시.
+- **K8s 이벤트(kubewatch) 직접 트리거 AI 자동분석**: 지금까지는 알람 파이프라인을
+  거친 경우만 자동 분석됐는데, kubewatch 로 수신되는 K8s 이벤트도 알람과 동일한
+  범위(scope) 규칙·디바운스·레이트 제한을 거쳐 전용 `llm` 큐로 직접 분석 요청할 수
+  있다. Backend: `IncidentAnalysis`/`K8sEvent` 에 `k8s_event_id`/`analysis_id`·
+  `analysis_status` 연결 컬럼 추가, 범위 매칭 로직을 `_MatchFields` 로 일반화해 알람/
+  K8s 이벤트 양쪽에 공용 적용하고 규칙마다 `sources`(알람/K8s 이벤트 부분집합) 로
+  적용 파이프라인을 고를 수 있게 함(레거시 규칙은 필드 없으면 둘 다 적용 — 하위 호환).
+  같은 (클러스터,네임스페이스,리소스) 는 두 파이프라인이 공유하는 디바운스 키를 써서
+  어느 쪽이 먼저 들어와도 중복 분석되지 않는다. `run_auto_incident_analysis_k8s_event`
+  Celery 태스크 + `GET/POST /events/{id}/analysis`,`/analyze` 신설. Frontend: 알람
+  인박스와 K8s 이벤트 화면이 공용 `IncidentAnalysisPanel` 컴포넌트를 공유하도록 리팩터링
+  (`AlertAnalysisPanel`/`K8sEventAnalysisPanel` 은 얇은 래퍼), K8s 이벤트 목록의 펼침
+  행에 AI 분석 패널을 부착. Settings → AI/LLM 의 자동 분석 범위 규칙 테이블에 소스
+  선택(알람/K8s 이벤트) 체크박스 열 추가.
+- **AI 챗봇 SSE 토큰 스트리밍**: `/agent/chat/stream` 신설 — 답변을 토큰 단위로
+  실시간 전송해 챗봇 응답 체감 속도를 개선한다. 게이트웨이에 `chat_stream_for_purpose`
+  추가(Ollama NDJSON / OpenAI-호환 SSE 델타 파싱, 마스킹·사용량 통계 재사용). fallback
+  규칙: 델타가 아직 하나도 안 나간 상태에서 primary 가 실패하면 다음 프로필로 넘어가고,
+  이미 일부를 보낸 뒤 끊기면 그 자리에서 종료한다(중간에 다른 LLM 으로 갈아타 앞뒤가
+  안 맞는 답변이 되는 것을 방지). `AgentChat.tsx` 는 인증 fetch+reader 로 SSE 를 소비하고
+  (PodLogStream.tsx 와 동일 패턴), 스트림 시작 자체가 실패하면 기존 비스트리밍
+  `/agent/chat` 으로 자동 폴백한다. 대화 저장·RAG 인용·정보요청 파싱은 기존 로직 재사용.
+- **무실행 보증 강화 + 배포/폐쇄망 반입 (Phase 4)**: LLM 파이프라인이 실행 경로(SSH/
+  kubectl exec/플레이북/일괄 실행)와 구조적으로 격리돼 있음을 CI 회귀 테스트로 고정
+  (`test_no_execution_guard.py` — AST import 그래프 + `AnalysisResult` 필드 계약).
+  프롬프트로 나가는 로그/컨텍스트에서 Bearer 토큰·비밀번호·AWS 키·PEM·kubeconfig
+  JWT 등을 게이트웨이 진입점에서 일괄 마스킹(`services/llm/masking.py`, 과잉 마스킹
+  회귀 테스트 포함). 배포: Helm 차트에 Ollama Deployment/Service(+선택적 PVC)와
+  LLM 전용 Celery 워커 템플릿 추가(이전엔 values 만 있고 실제 배포 안 됨), configmap/
+  secret 에 `OLLAMA_*`/`LLM_API_BASE`/`LLM_API_KEY` 방출, 기본 모델을 pre-baked
+  이미지와 일치하는 `qwen2.5-coder:7b` 로 수정. `deploy-airgap.sh` 가 Ollama 이미지도
+  미러링(이전엔 backend/frontend 만 다뤄 수동 반입 필요했음). GPU 서빙(vLLM) 과 Ollama
+  모델 영속화(PVC)는 opt-in kustomize component(`k8s/components/{vllm-gpu,ollama-pvc}`)
+  로 제공 — base 오버레이는 무변경.
 - **AI 근거 인용(RAG) + 정보요청 루프 + 대화 지속 챗봇 (Phase 3)**: AI 분석·챗봇
   답변에 사내 지식(작업 가이드·업무 이력·운영 노트) 근거를 pgvector 유사 검색으로
   인용한다 — 클릭 가능한 딥링크 + 유사도 표시, 근거 없는 내용은 '(추정)' 표기 지시.

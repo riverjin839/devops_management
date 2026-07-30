@@ -7,13 +7,14 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 import httpx
 
-from app.services.llm.base import BaseLLMProvider, LLMResult
+from app.services.llm.base import BaseLLMProvider, LLMResult, LLMStreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,61 @@ class OllamaProvider(BaseLLMProvider):
         except Exception as exc:  # noqa: BLE001
             logger.exception("Unexpected error calling Ollama (profile=%s): %s", p.name, exc)
             return self._fail("error", str(exc)[:200], start)
+
+    async def chat_stream(
+        self,
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        options: Optional[dict] = None,
+    ) -> AsyncIterator[LLMStreamChunk]:
+        p = self.profile
+        payload: dict = {"model": p.model, "prompt": prompt, "stream": True}
+        if system:
+            payload["system"] = system
+        if options:
+            payload["options"] = options
+        started = False
+        try:
+            async with httpx.AsyncClient(timeout=p.timeout_seconds) as client:
+                async with client.stream("POST", f"{p.base_url}/api/generate", json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except ValueError:
+                            continue
+                        started = True
+                        piece = obj.get("response", "")
+                        if piece:
+                            yield LLMStreamChunk(delta=piece, profile=p.name, model=obj.get("model", p.model))
+                        if obj.get("done"):
+                            yield LLMStreamChunk(
+                                done=True, status="ok", profile=p.name,
+                                model=obj.get("model", p.model),
+                                prompt_tokens=obj.get("prompt_eval_count"),
+                                completion_tokens=obj.get("eval_count"),
+                            )
+                            return
+            # 스트림이 done:true 없이 끝난 경우 — 그래도 정상 종료로 처리.
+            if started:
+                yield LLMStreamChunk(done=True, status="ok", profile=p.name, model=p.model)
+        except httpx.ConnectError:
+            logger.warning("Ollama connect error (profile=%s, stream)", p.name)
+            yield LLMStreamChunk(done=True, status="offline", profile=p.name, model=p.model, error="connect_error")
+        except httpx.TimeoutException:
+            logger.warning("Ollama stream timed out after %ss (profile=%s)", p.timeout_seconds, p.name)
+            yield LLMStreamChunk(done=True, status="offline", profile=p.name, model=p.model,
+                                 error=f"timeout_{p.timeout_seconds}s")
+        except httpx.HTTPStatusError as exc:
+            code = exc.response.status_code
+            logger.warning("Ollama returned HTTP %s (profile=%s, stream)", code, p.name)
+            yield LLMStreamChunk(done=True, status="error", profile=p.name, model=p.model, error=f"http_{code}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Unexpected error in Ollama stream (profile=%s): %s", p.name, exc)
+            yield LLMStreamChunk(done=True, status="error", profile=p.name, model=p.model, error=str(exc)[:200])
 
     async def embed(self, text: str, *, model: Optional[str] = None) -> Optional[list[float]]:
         if not text or not text.strip():

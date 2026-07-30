@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { BookOpen, FileText, StickyNote } from 'lucide-react';
+import { BookOpen, FileText, StickyNote, Share2 } from 'lucide-react';
 import type { RagCitation } from '@/types';
 
 const SOURCE_META: Record<RagCitation['sourceType'], { label: string; icon: typeof BookOpen }> = {
   work_guide: { label: '작업 가이드', icon: BookOpen },
   work_item: { label: '업무 이력', icon: FileText },
   ops_note: { label: '운영 노트', icon: StickyNote },
+  ontology_event: { label: '구성변경 영향분석', icon: Share2 },
 };
 
 /**

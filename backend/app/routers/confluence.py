@@ -89,6 +89,62 @@ def update_docs_settings(
     return ConfluenceDocsSettings(**value)
 
 
+def _cql_quote(v: str) -> str:
+    """CQL 문자열 리터럴 — 역슬래시/따옴표 이스케이프 (jira.py `_jql_quote` 와 동일 패턴)."""
+    return (v or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _build_confluence_cql(payload: ConfluenceDocSearchRequest) -> tuple[str, str]:
+    """기여자/스페이스/라벨/기간/텍스트 조건을 AND 로 묶어 CQL 을 조립한다.
+
+    Jira 가져오기의 `_build_filter_jql`(jira.py:817) 과 동일 패턴 — 여러 값은 `IN (...)`
+    으로 OR 처리. 반환 (cql, error) — `contributor_mode='any'` 인데 다른 조건도 전혀 없으면
+    error 를 채운다(전체 스페이스 스캔 방지 가드, Jira 쪽 가드와 동일)."""
+    clauses: list[str] = ["type = page"]
+    has_filter = False
+
+    if payload.contributor_mode == "me":
+        # Confluence CQL 내장 함수 — 세션 사용자를 가리킨다(사용자명 조회 불필요).
+        # Jira 가져오기의 `assignee = currentUser()` 와 동일한 패턴.
+        clauses.append("contributor = currentUser()")
+        has_filter = True
+    elif payload.contributor_mode == "user":
+        users = [u.strip() for u in (payload.contributor or "").split(",") if u.strip()]
+        if users:
+            if len(users) == 1:
+                clauses.append(f'contributor = "{_cql_quote(users[0])}"')
+            else:
+                joined = ", ".join(f'"{_cql_quote(u)}"' for u in users)
+                clauses.append(f"contributor IN ({joined})")
+            has_filter = True
+    # contributor_mode == "any" → 조건 생략
+
+    space_key = (payload.space_key or "").strip()
+    if space_key:
+        clauses.append(f'space = "{_cql_quote(space_key)}"')
+        has_filter = True
+
+    labels = [x.strip() for x in payload.labels if x and x.strip()]
+    if labels:
+        # Confluence CQL 필드명은 단수 `label` — Jira 의 복수형 `labels` 와 다르다.
+        joined = ", ".join(f'"{_cql_quote(x)}"' for x in labels)
+        clauses.append(f"label IN ({joined})")
+        has_filter = True
+
+    if payload.updated_since_days and payload.updated_since_days > 0:
+        clauses.append(f'lastmodified >= now("-{int(payload.updated_since_days)}d")')
+        has_filter = True
+
+    text = (payload.text or "").strip()
+    if text:
+        clauses.append(f'text ~ "{_cql_quote(text)}"')
+        has_filter = True
+
+    if not has_filter:
+        return "", "조건을 하나 이상 지정하세요 (기여자/스페이스/라벨/기간/검색어)."
+    return " and ".join(clauses) + " order by lastmodified desc", ""
+
+
 # ── 검색 ────────────────────────────────────────────────────────────────────
 @router.post("/docs/search", response_model=ConfluenceDocSearchResult)
 async def search_docs(
@@ -96,22 +152,16 @@ async def search_docs(
     db: Session = Depends(get_db),
     actor: User = Depends(get_current_user),
 ):
-    """페이지 검색 — CQL 직접 입력 또는 간편(스페이스+텍스트) 검색.
+    """페이지 검색 — CQL 직접 입력 또는 조건 조합(기여자/스페이스/라벨/기간/텍스트) 검색.
 
-    이미 work_guides 에 연결된 페이지는 `linked=true` 로 표시해 위저드가 구분한다."""
+    기본값은 `contributor_mode="me"` — 본인이 기여한 문서만 좁혀서 보여준다(위저드도
+    동일 기본값으로 연다). 이미 work_guides 에 연결된 페이지는 `linked=true` 로 표시."""
     cfg = _get_config(db)
     cql = (payload.cql or "").strip()
     if not cql:
-        parts = ["type = page"]
-        if (payload.space_key or "").strip():
-            parts.append(f'space = "{payload.space_key.strip()}"')
-        if (payload.text or "").strip():
-            text = payload.text.strip().replace('"', '\\"')
-            parts.append(f'text ~ "{text}"')
-        if len(parts) == 1:
-            return ConfluenceDocSearchResult(
-                status="error", detail="스페이스 키 또는 검색어를 입력하세요.")
-        cql = " and ".join(parts) + " order by lastmodified desc"
+        cql, err = _build_confluence_cql(payload)
+        if err:
+            return ConfluenceDocSearchResult(status="error", detail=err)
 
     svc, res = await _confluence_service_verified(db, actor, cfg)
     if svc is None or res.get("status") != "ok":
