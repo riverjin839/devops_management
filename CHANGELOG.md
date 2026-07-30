@@ -30,7 +30,16 @@
   `services/confluence_storage.py`(code/info/warning/expand 매크로 ↔ 코드블록/Callout/토글),
   `GET /work-guides/search` 시맨틱 검색 + HNSW 인덱스, 가져온 문서 임베딩 자동 계산(LLM 학습
   소스 편입). Frontend: `DocumentsPage` + `components/documents/`, 문서 읽기 화면 게시/재가져오기
-  버튼.
+  버튼. 가져오기 검색은 Jira 조건 조합처럼 **기여자(contributor)·라벨·최근 수정 기간**으로
+  세부 필터링할 수 있고, 기본값은 "본인이 기여한 문서"(`contributor = currentUser()`)다.
+- **업무 등록 시 Jira·Confluence 자동 생성 모달 — 전체 등록 경로로 확장**: 목록 하단 인라인
+  추가에만 연결돼 있던 자동 생성 흐름을 우측 상단 "업무 등록" 버튼(팝업 등록)에도 연결했다.
+  인라인 추가 행은 스크롤 없이 바로 쓸 수 있도록 표 맨 아래에서 **헤더 바로 아래(목록 최상단)로
+  이동**.
+
+### Changed
+- **업무 관리 게시판 컬럼 정리**: "상태"와 "Jira 상태"가 같은 정보(Jira 연결 업무는 "상태" 셀이
+  이미 Jira 원본 상태명을 보여줌)라 별도 "Jira 상태" 컬럼을 없애고 "상태" 하나로 병합.
 
 ### Added
 - **AI 근거 인용(RAG) + 정보요청 루프 + 대화 지속 챗봇 (Phase 3)**: AI 분석·챗봇

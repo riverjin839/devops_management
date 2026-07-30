@@ -2,10 +2,13 @@
 import base64
 
 from app.routers.confluence import (
+    _build_confluence_cql,
+    _cql_quote,
     _import_changes,
     _inline_attachment_images,
     _INLINE_IMAGE_MAX,
 )
+from app.schemas.confluence_docs import ConfluenceDocSearchRequest
 
 
 class _Guide:
@@ -24,6 +27,76 @@ class _FakeSvc:
 
     async def get_attachment(self, page_id, filename):
         return self.responses.get(filename, {"status": "error", "detail": "없음"})
+
+
+# ── _build_confluence_cql ────────────────────────────────────────────────────────
+def test_cql_default_mode_is_contributor_currentuser():
+    """기본값 검증 — 요청사항: '본인 기준으로 가져오는 걸 기본설정으로'."""
+    req = ConfluenceDocSearchRequest()
+    assert req.contributor_mode == "me"
+    cql, err = _build_confluence_cql(req)
+    assert err == ""
+    assert cql == 'type = page and contributor = currentUser() order by lastmodified desc'
+
+
+def test_cql_specific_user_single():
+    req = ConfluenceDocSearchRequest(contributor_mode="user", contributor="hong")
+    cql, err = _build_confluence_cql(req)
+    assert err == ""
+    assert 'contributor = "hong"' in cql
+
+
+def test_cql_specific_user_multiple_uses_in_clause():
+    req = ConfluenceDocSearchRequest(contributor_mode="user", contributor="hong, kim")
+    cql, _ = _build_confluence_cql(req)
+    assert 'contributor IN ("hong", "kim")' in cql
+
+
+def test_cql_specific_user_mode_without_value_omits_clause():
+    """'user' 모드인데 값이 비어 있으면 조건 없이 넘어간다 (다른 조건이 없으면 에러)."""
+    req = ConfluenceDocSearchRequest(contributor_mode="user", contributor="")
+    cql, err = _build_confluence_cql(req)
+    assert cql == "" and "조건" in err
+
+
+def test_cql_any_mode_requires_other_condition():
+    req = ConfluenceDocSearchRequest(contributor_mode="any")
+    cql, err = _build_confluence_cql(req)
+    assert cql == "" and "조건" in err
+
+
+def test_cql_any_mode_with_space_is_valid():
+    req = ConfluenceDocSearchRequest(contributor_mode="any", space_key="OPS")
+    cql, err = _build_confluence_cql(req)
+    assert err == ""
+    assert "contributor" not in cql
+    assert 'space = "OPS"' in cql
+
+
+def test_cql_combines_space_label_period_text_with_and():
+    req = ConfluenceDocSearchRequest(
+        space_key="OPS", labels=["runbook", "etcd"], updated_since_days=7, text="백업",
+    )
+    cql, err = _build_confluence_cql(req)
+    assert err == ""
+    assert 'contributor = currentUser()' in cql
+    assert 'space = "OPS"' in cql
+    assert 'label IN ("runbook", "etcd")' in cql
+    assert 'lastmodified >= now("-7d")' in cql
+    assert 'text ~ "백업"' in cql
+    assert cql.count(" and ") == 5   # type + contributor + space + label + period + text = 6절 → 5개 and
+    assert cql.endswith("order by lastmodified desc")
+
+
+def test_cql_quote_escapes_quotes_and_backslashes():
+    assert _cql_quote('a"b') == 'a\\"b'
+    assert _cql_quote("a\\b") == "a\\\\b"
+
+
+def test_cql_escapes_injection_attempt_in_space_key():
+    req = ConfluenceDocSearchRequest(contributor_mode="any", space_key='X" or space = "Y')
+    cql, _ = _build_confluence_cql(req)
+    assert 'space = "X\\" or space = \\"Y"' in cql
 
 
 # ── _import_changes ────────────────────────────────────────────────────────────

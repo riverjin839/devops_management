@@ -1238,6 +1238,11 @@ export interface ConfluenceDocSearchRequest {
   cql?: string;
   spaceKey?: string;
   text?: string;
+  /** 기여자 조건 — me: 본인(기본값) · user: contributor 값 사용(콤마로 여러 명) · any: 조건 없음 */
+  contributorMode?: 'me' | 'user' | 'any';
+  contributor?: string;
+  labels?: string[];
+  updatedSinceDays?: number;
   limit?: number;
 }
 
