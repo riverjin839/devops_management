@@ -9,7 +9,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models import BatchJob, BatchJobRun
+from app.services import active_runs
 from app.services.batch_jobs import (
+    CancelToken,
     ExecutionContext,
     ExecutionResult,
     get_executor,
@@ -128,40 +130,70 @@ async def _run_and_record(
     triggered_by_user_id: Optional[str] = None,
     triggered_by_username: Optional[str] = None,
 ) -> tuple[BatchJobRun, ExecutionResult]:
-    """Run the executor and persist the outcome as a BatchJobRun row."""
-    job.last_status = "running"
-    db.commit()
+    """Run the executor and persist the outcome as a BatchJobRun row.
 
+    The run row is created *before* the executor starts (status="running")
+    so a concurrent ``POST /{id}/stop`` always has something to point at —
+    without this, a job stuck mid-execution had no queryable row at all
+    until it finished, which is exactly when you'd want to interrupt it.
+
+    A `CancelToken` is attached to the context and registered in the
+    in-process `active_runs` registry (manual/synchronous runs only — see
+    that module's docstring for why scheduled/bulk runs use Celery revoke
+    instead) so a stop request landing on this same process can actually
+    interrupt the blocking SSH/subprocess call the executor is holding.
+    """
+    job_id_str = str(job.id)
     started_at = datetime.utcnow()
-    try:
-        result = await executor.run(ctx)
-    except Exception as exc:
-        result = ExecutionResult(status="error", error=str(exc)[:500])
-    finished_at = datetime.utcnow()
 
     run = BatchJobRun(
         job_id=job.id,
-        status=result.status,
+        status="running",
         trigger=trigger,
         triggered_by_user_id=triggered_by_user_id,
         triggered_by_username=triggered_by_username,
         host=host,
-        executed_command=(result.executed_command or "")[:2000],
-        exit_code=result.exit_code,
-        stdout=result.stdout or "",
-        stderr=result.stderr or "",
-        error=(result.error or None) and result.error[:1000],
         # admin 이 "이 실행이 정확히 어떤 설정으로 이뤄졌는지"(예: k8s_job_cleanup
         # 의 dry_run) 나중에도 확인할 수 있도록 merge 후 파라미터를 그대로 남긴다.
         params_snapshot=ctx.params or None,
-        duration_ms=result.duration_ms,
+        duration_ms=0,
         started_at=started_at,
-        finished_at=finished_at,
     )
     db.add(run)
+    job.last_status = "running"
+    db.commit()
+    db.refresh(run)
 
-    job.last_status = result.status
+    token = CancelToken()
+    ctx.cancel_token = token
+    active_runs.register(job_id_str, token)
+    try:
+        try:
+            result = await executor.run(ctx)
+        except Exception as exc:
+            result = ExecutionResult(status="error", error=str(exc)[:500])
+    finally:
+        active_runs.unregister(job_id_str, token)
+
+    finished_at = datetime.utcnow()
+    # 실행기가 cancel 을 직접 반영 못했더라도(강제 종료로 예외만 남긴 경우) 여기서
+    # 최종적으로 "cancelled" 로 정정 — DB 상태는 항상 정확해야 한다.
+    final_status = "cancelled" if token.cancelled else result.status
+
+    run.status = final_status
+    run.executed_command = (result.executed_command or "")[:2000]
+    run.exit_code = result.exit_code
+    run.stdout = result.stdout or ""
+    run.stderr = result.stderr or ""
+    run.error = (result.error or None) and result.error[:1000]
+    if token.cancelled and not run.error:
+        run.error = "사용자에 의해 중지됨"
+    run.duration_ms = result.duration_ms
+    run.finished_at = finished_at
+
+    job.last_status = final_status
     job.last_run_at = finished_at
+    job.active_task_id = None
     db.commit()
     db.refresh(run)
 

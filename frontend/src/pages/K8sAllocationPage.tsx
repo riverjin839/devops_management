@@ -86,9 +86,17 @@ function CsvButton({ onClick, disabled }: { onClick: () => void; disabled?: bool
 }
 
 function csvCluster(name: string | undefined): string {
-  return (name || 'cluster').replace(/[^\w.-]+/g, '-');
+  // 파일명에 안전한 문자만 남긴다. `\w` 는 ASCII 전용이라 한글 클러스터명이 전부 "-" 로
+  // 무너져 파일명이 "k8s-alloc-nodes---2026-07-30.csv" 처럼 뭉개졌다 — 유니코드 문자/숫자는
+  // 보존하고 구분자/특수문자만 치환한다.
+  return (name || 'cluster').trim().replace(/[^\p{L}\p{N}._-]+/gu, '-') || 'cluster';
 }
-const today = () => new Date().toISOString().slice(0, 10);
+// 로컬(KST 등) 날짜 — UTC 기준(toISOString)이면 자정 이전 내보내기가 하루 밀려 찍힌다.
+const today = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 // 자동갱신 간격 옵션 (ms). false = 끔.
 const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
@@ -143,24 +151,44 @@ function paginate<T>(rows: T[], page: number, pageSize: number) {
 }
 
 // ── 포맷/계산 헬퍼 ───────────────────────────────────────────────────────────
-const ratio = (part: number, whole: number) => (whole > 0 ? part / whole : 0);
-const pctText = (part: number, whole: number) => `${Math.round(ratio(part, whole) * 100)}%`;
-const fmtCores = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)}` : `${m}m`);
-const fmtGi = (b: number) => {
-  const gi = b / 1024 ** 3;
-  if (gi >= 1) return `${gi.toFixed(1)}Gi`;
-  const mi = b / 1024 ** 2;
-  return `${mi.toFixed(0)}Mi`;
+// 분모(whole)가 0/음수면(allocatable 미상 등) 비율을 알 수 없다 — 0%(정상처럼 보임)로
+// 위장하지 않고 null 로 구분해 호출부가 "—" 를 표시하게 한다.
+const ratio = (part: number, whole: number): number | null => (whole > 0 ? part / whole : null);
+const pctText = (part: number, whole: number): string => {
+  const r = ratio(part, whole);
+  return r == null ? '—' : `${Math.round(r * 100)}%`;
+};
+// 코어/밀리코어 단위를 스스로 표기(호출부가 "코어"를 따로 덧붙이면 "500m 코어"처럼 겹친다).
+// 음수(과할당 slack)도 부호를 보존해 그대로 표시한다.
+const fmtCores = (m: number): string => {
+  const sign = m < 0 ? '-' : '';
+  const abs = Math.abs(m);
+  return abs >= 1000 ? `${sign}${(abs / 1000).toFixed(1)}코어` : `${sign}${abs}m`;
+};
+const fmtGi = (b: number): string => {
+  const sign = b < 0 ? '-' : '';
+  const abs = Math.abs(b);
+  const gi = abs / 1024 ** 3;
+  if (gi >= 1) return `${sign}${gi.toFixed(1)}Gi`;
+  const mi = abs / 1024 ** 2;
+  return `${sign}${mi.toFixed(0)}Mi`;
 };
 const fmtN = (n: number) => n.toLocaleString();
+// 과할당 노드는 slack(alloc-req) 이 음수가 될 수 있다 — 초록 "여유"로 표시하면 실제로는
+// 부족한 노드가 정상처럼 보인다. 부호에 따라 라벨/색을 함께 바꾼다.
+const slackLabel = (m: number) => (m < 0 ? '부족' : '여유');
+const slackCls = (m: number) => (m < 0 ? 'text-status-critical' : 'text-status-healthy');
 
-/** 효율 판정: 사용량/request 비율 → 배지. usage 없으면 null. */
+/** 효율 판정: 사용량/request 비율 → 배지. usage 없으면 null.
+ * 임계값(30%/105%)은 UtilPct 와 반드시 동일해야 한다 — 한쪽은 반올림 정수, 한쪽은 원시
+ * 비율로 비교하면 같은 값에서 배지 색과 R% 색이 어긋난다(예: r=1.052 일 때 배지=위험,
+ * R%=105%=정상으로 보이는 문제). 둘 다 반올림 전 비율로 비교하도록 통일한다. */
 type EffKind = 'over' | 'ok' | 'under' | null;
 function efficiency(reqM: number, usageM: number | null): EffKind {
   if (usageM == null || reqM <= 0) return null;
   const r = usageM / reqM;
-  if (r < 0.3) return 'over';      // request 과대(낭비)
-  if (r > 1.05) return 'under';    // 실사용이 request 초과(위험)
+  if (r < 0.3) return 'over';       // request 과대(낭비)
+  if (r > 1.05) return 'under';     // 실사용이 request 초과(위험)
   return 'ok';
 }
 const EFF_BADGE: Record<Exclude<EffKind, null>, { label: string; cls: string }> = {
@@ -182,9 +210,11 @@ function MeterBar({
   alloc: number; req: number; lim: number; usage: number | null;
   reqDisplay: string; usageDisplay: string | null;
 }) {
-  const reqPct = Math.min(100, ratio(req, alloc) * 100);
-  const usagePct = usage == null ? 0 : Math.min(100, ratio(usage, alloc) * 100);
-  const reqColor = ratio(req, alloc) > 1 ? 'bg-status-critical' : 'bg-status-info';
+  const allocRatio = ratio(req, alloc);
+  const reqPct = allocRatio == null ? 0 : Math.min(100, allocRatio * 100);
+  const usageRatio = usage == null ? null : ratio(usage, alloc);
+  const usagePct = usageRatio == null ? 0 : Math.min(100, usageRatio * 100);
+  const reqColor = allocRatio != null && allocRatio > 1 ? 'bg-status-critical' : 'bg-status-info';
   return (
     <div className="min-w-[150px]">
       <div className="flex items-center gap-1.5">
@@ -224,27 +254,35 @@ function ReqUseCell({ req, usage, icon }: { req: string; usage: string | null; i
 // ── 사용률(util) 배지: k9s 의 %R / %L 에 해당 ─────────────────────────────────
 // R = 실사용 ÷ request (req 대비 사용률), L = 실사용 ÷ limit (limit 기준 사용율).
 // usage 없거나(메트릭 미가용) req·lim 모두 0이면 표시하지 않는다.
-const utilPct = (usage: number | null, base: number): number | null =>
-  usage == null || base <= 0 ? null : Math.round((usage / base) * 100);
+// 분류는 표시용 반올림 %가 아니라 원시 비율로 판정한다 — `efficiency()` 의 배지와 동일한
+// 임계값(0.3/1.05)을 원시 비율로 비교해야, 반올림 경계(예: 실비율 1.052→105%)에서 배지 색과
+// R% 색이 어긋나지 않는다.
+const utilRatio = (usage: number | null, base: number): number | null =>
+  usage == null || base <= 0 ? null : usage / base;
+// 표시/CSV 용 반올림 % — 색상 분류는 utilRatio(원시 비율)로 하고, 이건 오직 보여주기용.
+const utilPct = (usage: number | null, base: number): number | null => {
+  const r = utilRatio(usage, base);
+  return r == null ? null : Math.round(r * 100);
+};
 
 function UtilPct({ usage, req, lim, className = '' }: {
   usage: number | null; req: number; lim: number; className?: string;
 }) {
   if (usage == null) return null;
-  const r = utilPct(usage, req);
-  const l = utilPct(usage, lim);
-  if (r == null && l == null) return null;
+  const rRatio = utilRatio(usage, req);
+  const lRatio = utilRatio(usage, lim);
+  if (rRatio == null && lRatio == null) return null;
   // req 대비: 30% 미만 낭비(amber) · 105% 초과 request 초과(red) · 그 외 적정(green)
-  const rCls = r == null ? 'text-muted-foreground' : r > 105 ? 'text-status-critical' : r < 30 ? 'text-status-warning' : 'text-status-healthy';
+  const rCls = rRatio == null ? 'text-muted-foreground' : rRatio > 1.05 ? 'text-status-critical' : rRatio < 0.3 ? 'text-status-warning' : 'text-status-healthy';
   // limit 대비: 90% 이상 스로틀/OOM 위험(red) · 그 외 muted
-  const lCls = l == null ? 'text-muted-foreground' : l >= 90 ? 'text-status-critical' : 'text-muted-foreground';
+  const lCls = lRatio == null ? 'text-muted-foreground' : lRatio >= 0.9 ? 'text-status-critical' : 'text-muted-foreground';
   return (
     <div className={`text-[11px] tabular-nums flex items-center gap-1 ${className}`}
       title="R = 사용/요청(req 대비 사용률) · L = 사용/제한(limit 기준 사용율)">
       <span className="text-muted-foreground">사용률</span>
-      <span>R <b className={rCls}>{r == null ? '—' : `${r}%`}</b></span>
+      <span>R <b className={rCls}>{rRatio == null ? '—' : `${Math.round(rRatio * 100)}%`}</b></span>
       <span className="text-muted-foreground/50">·</span>
-      <span>L <b className={lCls}>{l == null ? '—' : `${l}%`}</b></span>
+      <span>L <b className={lCls}>{lRatio == null ? '—' : `${Math.round(lRatio * 100)}%`}</b></span>
     </div>
   );
 }
@@ -279,20 +317,21 @@ export function K8sAllocationPage() {
   // 페이지 레벨 observer — computing 진행 표시 + 새로고침. (하위 뷰들과 동일 queryKey 라 캐시 공유)
   const nsQ = useAllocNamespaces(clusterId);
   const nodesQ = useAllocNodes(clusterId);
-  const forceRefresh = useForceAllocRefresh(clusterId);
+  const { refresh: forceRefresh, isPending: refreshPending, isError: refreshFailed } = useForceAllocRefresh(clusterId);
   const computing = nsQ.data?.status === 'computing' || nodesQ.data?.status === 'computing';
   const progSrc = nsQ.data?.status === 'computing' ? nsQ.data : nodesQ.data;
-  const isFetching = nsQ.isFetching || nodesQ.isFetching;
+  const isFetching = nsQ.isFetching || nodesQ.isFetching || refreshPending;
   const clusterName = clusters.find((c) => c.id === clusterId)?.name;
   const contentRef = useRef<HTMLDivElement>(null);
 
-
   // 자동 갱신: 켜져 있으면(autoMs) 주기마다 강제 재집계. OFF 면 완료 결과를 그대로 유지(0부터 재집계 없음).
+  // 진행 중인 새로고침(refreshPending)이 있으면 이번 tick 은 건너뛴다 — 안 그러면 집계가
+  // 오래 걸리는 클러스터에서 120s 짜리 요청이 계속 겹쳐 쌓인다.
   useEffect(() => {
     if (!autoMs || !clusterId) return;
-    const id = setInterval(() => { void forceRefresh(); }, autoMs);
+    const id = setInterval(() => { if (!refreshPending) void forceRefresh(); }, autoMs);
     return () => clearInterval(id);
-  }, [autoMs, clusterId, forceRefresh]);
+  }, [autoMs, clusterId, forceRefresh, refreshPending]);
 
   return (
     <div className="min-h-screen bg-background py-3 pr-3">
@@ -319,9 +358,15 @@ export function K8sAllocationPage() {
             {clusterId && (
               <div className="ml-auto flex items-center gap-2" data-export-ignore>
                 <ExportMenu targetRef={contentRef} filenameBase={`k8s-alloc-${csvCluster(clusterName)}`} />
-                <button onClick={() => void forceRefresh()}
-                  className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card">
+                <button
+                  type="button"
+                  onClick={() => void forceRefresh()}
+                  disabled={refreshPending}
+                  title={refreshFailed ? '직전 새로고침 실패 — 다시 시도' : '새로고침'}
+                  className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} /> 새로고침
+                  {refreshFailed && <span className="text-status-critical">(실패, 재시도)</span>}
                 </button>
                 <select
                   value={autoMs === false ? 'off' : String(autoMs)}
@@ -345,6 +390,16 @@ export function K8sAllocationPage() {
               progress={progSrc?.progress ?? null}
               label="자원 누적 집계 중"
             />
+          )}
+          {/* 재집계 중 직전(부분/이전) 스냅샷을 보고 있음을 알림 — 안 그러면 절단된 집계 결과가
+              최종 확정치처럼 보인다. */}
+          {clusterId && (nsQ.data?.partial || nsQ.data?.stale || nodesQ.data?.partial || nodesQ.data?.stale) && (
+            <div className="flex items-center gap-1.5 text-xs text-status-warning">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {nsQ.data?.partial || nodesQ.data?.partial
+                ? '일부만 집계된 잠정 결과입니다 — API 응답 지연/절단으로 재집계가 자동으로 재시도됩니다.'
+                : '재집계 중이라 직전 스냅샷을 표시하고 있습니다.'}
+            </div>
           )}
 
           {!clusterId ? (
@@ -412,6 +467,9 @@ function SummarySection({ clusterId }: { clusterId: string }) {
   // 전체 기준 할당 가용(여유) = allocatable − request → 추가로 스케줄 가능한 자원량.
   const cpuAvailM = Math.max(0, s.cpuAllocM - s.cpuReqM);
   const memAvailB = Math.max(0, s.memAllocB - s.memReqB);
+  // 할당효율 경고 — CPU/MEM 동일 기준(alloc 미상 시 null → 경고 안 띄움, 0%로 오인 방지).
+  const cpuAllocRatio = ratio(s.cpuReqM, s.cpuAllocM);
+  const memAllocRatio = ratio(s.memReqB, s.memAllocB);
 
   return (
     <MacCard title="클러스터 요약" bodyPadding="p-3">
@@ -434,7 +492,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
         />
         <Stat label="CPU 할당효율" value={pctText(s.cpuReqM, s.cpuAllocM)}
           sub={`req ${fmtCores(s.cpuReqM)} / alloc ${fmtCores(s.cpuAllocM)}`}
-          warn={ratio(s.cpuReqM, s.cpuAllocM) < 0.5}
+          warn={cpuAllocRatio != null && cpuAllocRatio < 0.5}
           help={
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">CPU 할당효율 (Allocation Efficiency)</p>
@@ -451,6 +509,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
         />
         <Stat label="MEM 할당효율" value={pctText(s.memReqB, s.memAllocB)}
           sub={`req ${fmtGi(s.memReqB)} / alloc ${fmtGi(s.memAllocB)}`}
+          warn={memAllocRatio != null && memAllocRatio < 0.5}
           help={
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">MEM 할당효율 (Allocation Efficiency)</p>
@@ -476,7 +535,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
               <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
                 <li>30% 미만 → request 과대 설정 (낭비, 주황 경고)</li>
                 <li>105% 초과 → 실사용이 request 초과 (스로틀 위험)</li>
-                <li>30–100% → 적정 범위</li>
+                <li>30–105% → 적정 범위</li>
               </ul>
               <p className="text-muted-foreground">※ 메트릭 서버 없으면 표시 불가</p>
             </div>
@@ -490,7 +549,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <PackageOpen className="w-4 h-4 text-status-healthy" /> 할당 가용(여유 = alloc − req):
         </span>
-        <span className="font-semibold tabular-nums text-status-healthy">CPU {fmtCores(cpuAvailM)} 코어</span>
+        <span className="font-semibold tabular-nums text-status-healthy">CPU {fmtCores(cpuAvailM)}</span>
         <span className="font-semibold tabular-nums text-status-healthy">MEM {fmtGi(memAvailB)}</span>
         <span className="text-xs text-muted-foreground">· 추가 스케줄 가능한 자원 (request 미반영분)</span>
       </div>
@@ -498,7 +557,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <TrendingDown className="w-4 h-4 text-status-warning" /> 추정 낭비(slack=req−use):
         </span>
-        <span className="font-semibold tabular-nums">CPU {cpuWasteM == null ? '—' : `${fmtCores(cpuWasteM)} 코어`}</span>
+        <span className="font-semibold tabular-nums">CPU {cpuWasteM == null ? '—' : fmtCores(cpuWasteM)}</span>
         <span className="font-semibold tabular-nums">MEM {memWasteB == null ? '—' : fmtGi(memWasteB)}</span>
         {s.noRequestPods > 0 && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-status-warning/10 text-status-warning border border-status-warning/30">
@@ -526,8 +585,10 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
   const [mem, setMem] = useState('1');     // Gi
 
   const result = useMemo(() => {
-    const reqCpuM = Math.round((parseFloat(cpu) || 0) * 1000);
-    const reqMemB = Math.round((parseFloat(mem) || 0) * 1024 ** 3);
+    // `min="0"` 은 브라우저 UI 힌트일 뿐 실제 입력값을 막지 않는다 — 음수가 들어오면
+    // 아래 나눗셈이 음수 fit 을 만들어 결과가 조용히 "0개"로 보이므로 여기서 명시적으로 clamp.
+    const reqCpuM = Math.max(0, Math.round((parseFloat(cpu) || 0) * 1000));
+    const reqMemB = Math.max(0, Math.round((parseFloat(mem) || 0) * 1024 ** 3));
     if (reqCpuM <= 0 && reqMemB <= 0) return null;
     const nodes = (data?.items ?? []).filter((n) => !n.unschedulable);
     let total = 0;
@@ -599,7 +660,7 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
             )}
           </span>
           <span className="text-xs text-muted-foreground">
-            (schedulable 노드 {result.per.length}/{result.nodeCount} · CPU/MEM/max-pods 반영 · 마우스오버로 노드별 보기)
+            (배치 가능 노드 {result.per.length} / schedulable {result.nodeCount} · CPU/MEM/max-pods 반영 · 마우스오버로 노드별 보기)
           </span>
         </>
       ) : (
@@ -629,14 +690,17 @@ function StatTooltip({ children }: { children: ReactNode }) {
   );
 }
 
-function Stat({ label, value, sub, icon, warn, help }: { label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean; help?: ReactNode }) {
+function Stat({ label, value, sub, icon, warn, help, valueClassName }: {
+  label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean; help?: ReactNode;
+  valueClassName?: string;
+}) {
   return (
     <div className="rounded-lg border border-border bg-card/50 px-2.5 py-2">
       <div className="text-xs text-muted-foreground flex items-center gap-1">
         {icon}{label}
         {help && <StatTooltip>{help}</StatTooltip>}
       </div>
-      <div className={`text-xl font-semibold leading-tight mt-0.5 ${warn ? 'text-status-warning' : ''}`}>{value}</div>
+      <div className={`text-xl font-semibold leading-tight mt-0.5 ${warn ? 'text-status-warning' : (valueClassName ?? '')}`}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground mt-0.5 truncate" title={sub}>{sub}</div>}
     </div>
   );
@@ -702,6 +766,7 @@ function PodCapacityStatusCards({ clusterId }: { clusterId: string }) {
             .filter((m) => POD_STATUS_ALWAYS.includes(m.key) || (counts[m.key] ?? 0) > 0)
             .map((m) => (
               <Stat key={m.key} label={m.label} value={fmtN(counts[m.key] ?? 0)}
+                valueClassName={m.cls}
                 warn={m.key === 'error' && (counts[m.key] ?? 0) > 0} />
             ))}
         </div>
@@ -712,9 +777,11 @@ function PodCapacityStatusCards({ clusterId }: { clusterId: string }) {
 
 // ── 노드 게이지 행 (카드 뷰에서 사용) ─────────────────────────────────────────────
 function GaugeRow({ label, alloc, req, lim, usage }: { label: string; alloc: number; req: number; lim: number; usage: number | null }) {
-  const reqPct = Math.min(100, ratio(req, alloc) * 100);
-  const usePct = usage == null ? 0 : Math.min(100, ratio(usage, alloc) * 100);
-  const over = ratio(req, alloc) > 1;
+  const allocRatio = ratio(req, alloc);
+  const reqPct = allocRatio == null ? 0 : Math.min(100, allocRatio * 100);
+  const useRatio = usage == null ? null : ratio(usage, alloc);
+  const usePct = useRatio == null ? 0 : Math.min(100, useRatio * 100);
+  const over = allocRatio != null && allocRatio > 1;
   return (
     <div>
       <div className="flex justify-between text-xs text-muted-foreground mb-0.5">
@@ -752,6 +819,7 @@ const RANK_PAGE_SIZES = [10, 15, 25, 50];
 
 function NsRankingView({ clusterId }: { clusterId: string }) {
   const nsQ = useAllocNamespaces(clusterId);
+  const { isError, error } = nsQ;
   const [metric, setMetric] = useState<ChartMetric>('cpu');
   const [q, setQ] = useState('');
   const [pageSize, setPageSize] = useState(15);
@@ -767,8 +835,14 @@ function NsRankingView({ clusterId }: { clusterId: string }) {
       const slack = use == null ? null : Math.max(0, req - use);
       return { namespace: n.namespace, req: +req.toFixed(2), use: use == null ? null : +use.toFixed(2), slack };
     });
+    // 단일 정렬키(slack, 없으면 -Infinity)로 비교해야 추이성이 보장된다 — slack 유무가 섞인
+    // 조건부 비교(a,b 모두 있을 때만 slack, 아니면 req)는 A>B>C>A 순환이 생겨 정렬 결과가
+    // 브라우저마다/실행마다 달라질 수 있었다.
+    const sortKey = (x: (typeof items)[number]) => x.slack ?? -Infinity;
     items.sort((a, b) => {
-      if (a.slack != null && b.slack != null) return b.slack - a.slack;
+      const ka = sortKey(a);
+      const kb = sortKey(b);
+      if (ka !== kb) return kb - ka;
       return b.req - a.req;
     });
     return items;
@@ -779,6 +853,17 @@ function NsRankingView({ clusterId }: { clusterId: string }) {
   useEffect(() => { setPage(1); }, [metric, q, pageSize]);
 
   const unit = metric === 'cpu' ? ' 코어' : ' Gi';
+
+  // 다른 세 뷰(NodesView/NamespacesView/PodsDrill)와 동일하게 조회 실패를 "데이터 없음" 과
+  // 구분해 보여준다 — 안 그러면 502 가 "표시할 네임스페이스가 없습니다"로 보여 사용자가
+  // 빈 클러스터와 장애를 구분할 수 없었다.
+  if (isError) {
+    return (
+      <MacCard title="네임스페이스 비효율 랭킹" bodyPadding="p-3">
+        <EmptyState title="조회 실패" description={(error as Error)?.message ?? '네임스페이스 자원을 불러오지 못했습니다.'} />
+      </MacCard>
+    );
+  }
 
   return (
     <MacCard title={`네임스페이스 비효율 랭킹 (${fmtN(nsRanked.length)}개 · req vs 실사용, 간격이 클수록 낭비)`} bodyPadding="p-3">
@@ -977,9 +1062,9 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
                   <GaugeRow label="CPU" alloc={n.cpuAllocM} req={n.cpuReqM} lim={n.cpuLimM} usage={n.cpuUsageM} />
                   <GaugeRow label="MEM" alloc={n.memAllocB} req={n.memReqB} lim={n.memLimB} usage={n.memUsageB} />
                 </div>
-                <div className="flex justify-between text-xs text-status-healthy mt-1.5 tabular-nums">
-                  <span>여유 {fmtCores(n.cpuSlackM)}</span>
-                  <span>여유 {fmtGi(n.memSlackB)}</span>
+                <div className="flex justify-between text-xs mt-1.5 tabular-nums">
+                  <span className={slackCls(n.cpuSlackM)}>{slackLabel(n.cpuSlackM)} {fmtCores(n.cpuSlackM)}</span>
+                  <span className={slackCls(n.memSlackB)}>{slackLabel(n.memSlackB)} {fmtGi(n.memSlackB)}</span>
                   <span className="text-muted-foreground">{n.podCount}p</span>
                 </div>
               </div>
@@ -1030,11 +1115,11 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
                       reqDisplay={n.memReqDisplay} usageDisplay={n.memUsageDisplay} />
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    <div className="text-status-healthy font-medium">{fmtCores(n.cpuSlackM)}</div>
+                    <div className={`font-medium ${slackCls(n.cpuSlackM)}`}>{fmtCores(n.cpuSlackM)}</div>
                     <div className="text-xs text-muted-foreground">/ {fmtCores(n.cpuAllocM)}</div>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    <div className="text-status-healthy font-medium">{fmtGi(n.memSlackB)}</div>
+                    <div className={`font-medium ${slackCls(n.memSlackB)}`}>{fmtGi(n.memSlackB)}</div>
                     <div className="text-xs text-muted-foreground">/ {fmtGi(n.memAllocB)}</div>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{n.podCount}</td>
@@ -1055,7 +1140,10 @@ const NS_ACCESSORS: Record<string, (r: AllocNamespaceRow) => number | string | n
   workloadCount: (r) => r.workloadCount,
   cpuReqM: (r) => r.cpuReqM,
   memReqB: (r) => r.memReqB,
-  eff: (r) => (r.cpuUsageM == null ? null : r.cpuUsageM / Math.max(1, r.cpuReqM)),
+  // `efficiency()` 배지와 동일하게 reqM<=0 이면 null(배지 없음) — Math.max(1, req) 로 0
+  // 나눗셈을 회피하면 request 가 없는 네임스페이스가 최상단(가장 위험)으로 정렬되면서
+  // 정작 배지는 표시되지 않는 모순이 생겼다.
+  eff: (r) => (r.cpuUsageM == null || r.cpuReqM <= 0 ? null : r.cpuUsageM / r.cpuReqM),
 };
 const NS_PAGE_SIZES = [10, 20, 50, 100];
 function NamespacesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {

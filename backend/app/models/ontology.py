@@ -2,6 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Column,
     DateTime,
@@ -14,7 +15,9 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import deferred
 
+from app.config import settings
 from app.database import Base
 
 
@@ -79,4 +82,7 @@ class OntologyEvent(Base):
     evidence = Column(JSONB, nullable=False, default=dict)
     blast_radius_score = Column(Float, nullable=False, default=0.0)
     impacted_count = Column(Integer, nullable=False, default=0)
+    # RAG 근거 인용용 임베딩(제목+설명) — Celery 비동기로 계산·저장 (동기 쓰기 경로에 없음).
+    # deferred() — 기본 SELECT 에 포함되지 않도록 지연 로딩 (work_guide.py 의 동일 컬럼 참고).
+    embedding = deferred(Column(Vector(settings.embedding_dim), nullable=True))
     created_at = Column(DateTime, default=datetime.utcnow)

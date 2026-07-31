@@ -32,7 +32,7 @@ type ViewMode = 'table' | 'calendar' | 'kanban';
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 /** 컬럼 헤더 — 드래그 핸들(순서 변경) + 정렬 토글 + 우측 리사이즈 그립. */
-/** 업무 분류(유형) 필터 — 6개 탭을 버튼 하나 + 드롭다운으로 접어 한 줄에 들어오게. */
+/** 업무 분류(유형) 필터 — 4개 탭(이슈 대응/회의/운영 대응/기타)을 버튼 하나 + 드롭다운으로 접어 한 줄에 들어오게. */
 function TypeFilterDropdown({
   value, onChange,
 }: {
@@ -281,8 +281,6 @@ export function WorkItemBoardPage() {
           cmp = epic(a).localeCompare(epic(b));
         } else if (sortKey === 'jiraType') {
           cmp = (a.jiraIssueType ?? '').localeCompare(b.jiraIssueType ?? '');
-        } else if (sortKey === 'jiraStatus') {
-          cmp = (a.jiraStatus ?? '').localeCompare(b.jiraStatus ?? '');
         }
         return sortDir === 'asc' ? cmp : -cmp;
       })
@@ -797,6 +795,21 @@ export function WorkItemBoardPage() {
                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
                   <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   <tbody>
+                  {/* 헤더 바로 아래(목록 최상단)에 배치 — 새 업무를 스크롤 없이 바로 추가 */}
+                  <AddWorkItemRow
+                    clusters={clusters}
+                    colSpan={visibleCols.length + 1}
+                    defaultClusterId={filterClusterId || undefined}
+                    defaultAssignee={effectiveAssignee || undefined}
+                    onCreate={(data) => createTask.mutate(data, {
+                      onSuccess: (created) => {
+                        toast.success('업무 등록됨');
+                        // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
+                        if (jiraConfig?.enabled && created?.data) setProvisionItem(created.data);
+                      },
+                      onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
+                    })}
+                  />
                   {sortedTasks.map((item) => (
                     <WorkItemTableRow
                       key={item.id}
@@ -818,20 +831,6 @@ export function WorkItemBoardPage() {
                       onJiraLink={(t) => openJiraLink(t)}
                     />
                   ))}
-                  <AddWorkItemRow
-                    clusters={clusters}
-                    colSpan={visibleCols.length + 1}
-                    defaultClusterId={filterClusterId || undefined}
-                    defaultAssignee={effectiveAssignee || undefined}
-                    onCreate={(data) => createTask.mutate(data, {
-                      onSuccess: (created) => {
-                        toast.success('업무 등록됨');
-                        // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
-                        if (jiraConfig?.enabled && created?.data) setProvisionItem(created.data);
-                      },
-                      onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
-                    })}
-                  />
                 </tbody>
                 </SortableContext>
                 </DndContext>
@@ -858,7 +857,11 @@ export function WorkItemBoardPage() {
         defaultType={createParent ? undefined : (typeFilter === 'all' ? 'task' : typeFilter)}
         parentItem={createParent}
         onClose={() => { setCreateOpen(false); setCreateParent(null); }}
-        onSaved={() => setCreateParent(null)}
+        onSaved={(_savedId, created) => {
+          setCreateParent(null);
+          // 인라인 행 추가와 동일하게 — 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
+          if (jiraConfig?.enabled && created) setProvisionItem(created);
+        }}
       />
 
       <ConfirmDialog

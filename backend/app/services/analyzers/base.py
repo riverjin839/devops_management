@@ -46,9 +46,14 @@ class AnalysisResult:
     root_cause: str
     suggested_actions: list[str]
     confidence: float
-    analyzed_by: Literal["claude", "local_llm", "rule_based"]
+    # "rule_based" | "claude" | "local_llm[:<profile>:<model>]" — 어느 백엔드/프로필이
+    # 분석했는지 UI 에 투명하게 표기하기 위한 자유 문자열.
+    analyzed_by: str
     analyzed_at: str
     related_runbooks: list[str] = field(default_factory=list)
+    # RAG 근거 인용 — {"title","source_type","ref_id","route","snippet","similarity"}[]
+    # (rag_service.retrieve 가 공급, 프론트가 딥링크로 렌더)
+    citations: list[dict] = field(default_factory=list)
 
 
 class BaseAnalyzer(ABC):

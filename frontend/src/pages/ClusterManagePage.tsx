@@ -1,10 +1,11 @@
-import { useId, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX } from '@/components/common';
+import { Fragment, useId, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
-  LayoutList, LayoutGrid, Network, Loader2, GripVertical,
+  LayoutList, LayoutGrid, Network, Loader2, GripVertical, Globe, Tag,
 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
@@ -27,7 +28,7 @@ import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFi
 import { Settings2, Wand2 } from 'lucide-react';
 import { StandardizeClusterNamesModal } from '@/components/cluster-manage/StandardizeClusterNamesModal';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 type GroupByMode = 'none' | 'region' | 'level';
@@ -39,6 +40,10 @@ function cidrIpToNum(ip: string): number {
 function parseCidrRange(cidr: string): { start: number; end: number } | null {
   const m = cidr.trim().match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/);
   if (!m) return null;
+  // 정규식은 `999.1.1.1` 도 통과시키므로 옥텟 범위를 따로 본다 — 잘못된 값이 겹침
+  // 판정에 참여하면 있지도 않은 충돌을 경고하게 된다 (D-053).
+  const octets = m[1].split('.').map((o) => parseInt(o, 10));
+  if (octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return null;
   const prefix = parseInt(m[2], 10);
   if (prefix < 0 || prefix > 32) return null;
   const ipNum = cidrIpToNum(m[1]);
@@ -55,10 +60,13 @@ function cidrsOverlap(a: string, b: string): boolean {
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, pending: 3 };
 
 // ── 드래그 가능한 ClusterCard 래퍼 ────────────────────────────────────────────
+// sortEnabled=false(수동 정렬 아님)면 useSortable 을 비활성하고 핸들을 숨긴다 —
+// 이름/상태순에서는 드롭 직후 재정렬돼 되돌아간 것처럼 보이기 때문 (D-045).
 function SortableClusterCard(
-  props: Parameters<typeof ClusterCard>[0],
+  { sortEnabled, ...props }: Parameters<typeof ClusterCard>[0] & { sortEnabled: boolean },
 ) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.cluster.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.cluster.id, disabled: !sortEnabled });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -66,14 +74,16 @@ function SortableClusterCard(
   };
   return (
     <div ref={setNodeRef} style={style} className="relative group/card">
-      <button
-        {...attributes} {...listeners}
-        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
-        title="드래그하여 순서 변경"
-        aria-label="순서 변경 핸들"
-      >
-        <GripVertical className="w-4 h-4" />
-      </button>
+      {sortEnabled && (
+        <button
+          {...attributes} {...listeners}
+          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+          title="드래그하여 순서 변경 (정렬: 수동 모드)"
+          aria-label="순서 변경 핸들"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      )}
       <ClusterCard {...props} />
     </div>
   );
@@ -83,15 +93,25 @@ function SortableClusterCard(
 export function ClusterManagePage() {
   const navigate = useNavigate();
   const { clusters } = useClusterStore();
-  useClusters();
+  // 로딩/조회실패를 "등록된 클러스터가 없습니다" 로 위장하지 않도록 쿼리 상태를 사용한다 (D-043).
+  const { isLoading: clustersLoading, isError: clustersError, error: clustersLoadError, refetch: refetchClusters } = useClusters();
   const queryClient = useQueryClient();
   const toast = useToast();
 
   const [deletingId, setDeletingId]       = useState<string | null>(null);
-  const [autoUpdatingId, setAutoUpdatingId] = useState<string | null>(null);
+  // 삭제는 Addon/Playbook/점검 이력까지 캐스케이드되므로 native confirm 이 아니라
+  // ConfirmDialog(danger) 로 게이팅한다 (D-048).
+  const [deleteTarget, setDeleteTarget]   = useState<Cluster | null>(null);
+  // auto-update 는 클러스터별로 동시에 돌 수 있으므로 진행 상태·중단 컨트롤러를
+  // 단일 슬롯이 아니라 per-cluster 로 관리한다 (D-047).
+  const [autoUpdatingIds, setAutoUpdatingIds] = useState<Set<string>>(new Set());
+  const autoUpdateAbortsRef = useRef<Map<string, AbortController>>(new Map());
   const [applyingId, setApplyingId]       = useState<string | null>(null);
   const [collectingNodeIpsId, setCollectingNodeIpsId] = useState<string | null>(null);
   const [bulkCollecting, setBulkCollecting] = useState(false);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkProgress, setBulkProgress]   = useState<{ done: number; total: number } | null>(null);
+  const bulkAbortRef = useRef(false);
   // SSH 기반 NIC 수집 모달 — bond0/bond1 IP/MAC 채우기 위한 진입점.
   // kubectl 자동수집(auto-update)은 인터페이스 이름을 알 수 없어 별도 SSH 수집이 필요하다.
   const [nicsClusterId, setNicsClusterId] = useState<string | null>(null);
@@ -99,20 +119,55 @@ export function ClusterManagePage() {
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
-  const [search, setSearch]               = useState('');
-  const [filterLevel, setFilterLevel]     = useState('');
-  const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level' | 'manual'>('manual');
-  const [groupBy, setGroupBy]             = useState<GroupByMode>('none');
-  const [showFilter, setShowFilter]       = useState(false);
+  // 검색/필터/정렬/그룹/뷰모드를 URL 에 영속화 — 새로고침·공유·뒤로가기에서 유지된다
+  // (D-029 후속 "목록 필터 URL 저장", D-038 의 `?tab=` 패턴 준용: `replace: true` 라
+  //  필터 조작이 히스토리에 쌓이지 않아 전역 뒤로가기를 되짚지 않는다). (D-053)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const setParam = (key: string, value: string, defaultValue: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === defaultValue) next.delete(key);
+      else next.set(key, value);
+      return next;
+    }, { replace: true });
+  };
+  const search      = searchParams.get('q') ?? '';
+  const filterLevel = searchParams.get('level') ?? '';
+  const sortParam   = searchParams.get('sort');
+  const sortBy: 'name' | 'status' | 'level' | 'manual' =
+    sortParam === 'name' || sortParam === 'status' || sortParam === 'level' ? sortParam : 'manual';
+  const groupParam  = searchParams.get('group');
+  const groupBy: GroupByMode = groupParam === 'region' || groupParam === 'level' ? groupParam : 'none';
+  const viewMode: 'table' | 'card' = searchParams.get('view') === 'card' ? 'card' : 'table';
+  const setSearch      = (v: string) => setParam('q', v, '');
+  const setFilterLevel = (v: string) => setParam('level', v, '');
+  const setSortBy      = (v: 'name' | 'status' | 'level' | 'manual') => setParam('sort', v, 'manual');
+  const setGroupBy     = (v: GroupByMode) => setParam('group', v, 'none');
+  const setViewMode    = (v: 'table' | 'card') => setParam('view', v, 'table');
+  // 필터가 URL 에 있으면 패널을 펼친 상태로 시작 (딥링크 진입 시 조건이 보이게)
+  const [showFilter, setShowFilter]       = useState(() => !!(search || filterLevel));
   const [standardizeOpen, setStandardizeOpen] = useState(false);
-  const [viewMode, setViewMode]           = useState<'table' | 'card'>('table');
   const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
 
-  // Diff 팝업 상태
+  // Diff 팝업 상태 — 열려 있는 대상을 ref 로도 추적해, 다른 클러스터의 늦은 응답이
+  // 열린 다이얼로그를 소리 없이 덮어쓰지 않게 한다 (D-047).
   const [diffCluster, setDiffCluster] = useState<Cluster | null>(null);
   const [diffRows, setDiffRows]       = useState<DiffRow[]>([]);
   const [diffWarnings, setDiffWarnings] = useState<string[]>([]);
-  const autoUpdateAbortRef = useRef<AbortController | null>(null);
+  const diffClusterRef = useRef<Cluster | null>(null);
+
+  const openDiff = (cluster: Cluster, rows: DiffRow[], warnings: string[]) => {
+    diffClusterRef.current = cluster;
+    setDiffCluster(cluster);
+    setDiffRows(rows);
+    setDiffWarnings(warnings);
+  };
+  const closeDiff = () => {
+    diffClusterRef.current = null;
+    setDiffCluster(null);
+    setDiffRows([]);
+    setDiffWarnings([]);
+  };
 
   // 커스텀 필드
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
@@ -170,7 +225,9 @@ export function ClusterManagePage() {
     list.sort((a, b) => {
       if (sortBy === 'status') return (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
       if (sortBy === 'level')  return (a.operationLevel ?? '').localeCompare(b.operationLevel ?? '');
-      if (sortBy === 'manual') return (a.seq ?? 0) - (b.seq ?? 0);
+      // seq 미할당 fallback 은 useClusters 의 정렬(?? 1000)과 동일하게 — 두 기준이
+      // 다르면 미할당 클러스터의 위치가 화면마다 반대로 나온다 (D-045).
+      if (sortBy === 'manual') return (a.seq ?? 1000) - (b.seq ?? 1000);
       return a.name.localeCompare(b.name);
     });
     return list;
@@ -205,10 +262,19 @@ export function ClusterManagePage() {
     }));
   }, [filteredClusters, groupBy, opsLevels]);
 
+  // 그룹 헤더 표식 — 이모지 단독(🌐/🏷️)은 스크린리더/폰트에 따라 의미가 전달되지 않아
+  // lucide 아이콘(aria-hidden) + 텍스트 라벨 조합으로 대체 (D-052).
+  const GroupIcon = groupBy === 'region' ? Globe : Tag;
+  const groupLabelPrefix = groupBy === 'region' ? '지역' : '운영레벨';
+
   // ── 드래그 순서 변경 ─────────────────────────────────────────────────────
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // 드래그는 수동 정렬 모드에서만 — 이름/상태순에서는 드롭 직후 재정렬돼 되돌아간
+  // 것처럼 보이고 seq 만 바뀐다 (D-045). 핸들 노출·useSortable 활성도 이 값을 따른다.
+  const sortEnabled = sortBy === 'manual';
 
   const handleDragEnd = async (e: DragEndEvent) => {
+    if (!sortEnabled) return;
     if (!e.over || e.active.id === e.over.id) return;
     const activeId = String(e.active.id);
     const overId = String(e.over.id);
@@ -218,17 +284,16 @@ export function ClusterManagePage() {
     const overGroup = groupedClusters.find((g) => g.clusters.some((c) => c.id === overId));
     if (!activeGroup || !overGroup || activeGroup.key !== overGroup.key) return;
 
-    const oldIdx = activeGroup.clusters.findIndex((c) => c.id === activeId);
-    const newIdx = activeGroup.clusters.findIndex((c) => c.id === overId);
-    if (oldIdx < 0 || newIdx < 0) return;
-
-    const reorderedGroup = arrayMove(activeGroup.clusters, oldIdx, newIdx);
-    // 전체 클러스터 정렬: 영향받지 않은 그룹은 그대로 + 영향받은 그룹만 새 순서.
-    const fullOrder: string[] = [];
-    for (const g of groupedClusters) {
-      const slice = g.key === activeGroup.key ? reorderedGroup : g.clusters;
-      for (const c of slice) fullOrder.push(c.id);
-    }
+    // 전송 순서는 화면(검색/필터된) 목록이 아니라 **전체 클러스터** 기준으로 만든다 —
+    // 백엔드 reorder 는 받은 id 에만 seq 를 재할당하므로, 필터로 가려진 클러스터를 빼고
+    // 보내면 그들의 옛 seq 사이로 끼어들어 전체 순서가 오염된다 (D-044).
+    // 스토어 순서 = seq 정렬(useClusters)이고, arrayMove 는 이동 대상 외 상대 순서를
+    // 보존하므로 가려진 클러스터의 자리도 그대로 유지된다.
+    const fullIds = clusters.map((c) => c.id);
+    const fromIdx = fullIds.indexOf(activeId);
+    const toIdx = fullIds.indexOf(overId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const fullOrder = arrayMove(fullIds, fromIdx, toIdx);
     try {
       await clustersApi.reorder(fullOrder);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
@@ -277,13 +342,17 @@ export function ClusterManagePage() {
 
   const overlapCount = cidrOverlapGroups.size;
 
-  const handleDelete = async (cluster: Cluster) => {
-    if (!confirm(`"${cluster.name}" 클러스터를 삭제하시겠습니까?\n연관된 Addon, Playbook, 점검 이력이 모두 삭제됩니다.`)) return;
-    setDeletingId(cluster.id);
+  const handleDelete = (cluster: Cluster) => setDeleteTarget(cluster);
+
+  const executeDelete = async () => {
+    const target = deleteTarget;
+    if (!target) return;
+    setDeleteTarget(null);
+    setDeletingId(target.id);
     try {
-      await clustersApi.delete(cluster.id);
+      await clustersApi.delete(target.id);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
-      toast.success('클러스터 삭제됨', cluster.name);
+      toast.success('클러스터 삭제됨', target.name);
     } catch (e) {
       toast.error('삭제 실패', formatApiError(e));
     } finally {
@@ -292,29 +361,40 @@ export function ClusterManagePage() {
   };
 
   const handleAutoUpdate = async (cluster: Cluster) => {
-    // 이미 수집 중인 클러스터면 중지
-    if (autoUpdatingId === cluster.id && autoUpdateAbortRef.current) {
-      autoUpdateAbortRef.current.abort();
+    const aborts = autoUpdateAbortsRef.current;
+    // 이미 수집 중인 클러스터면 중지 — 다른 클러스터의 진행에는 영향 없음 (D-047)
+    const existing = aborts.get(cluster.id);
+    if (existing) {
+      existing.abort();
       return;
     }
-    setAutoUpdatingId(cluster.id);
-    autoUpdateAbortRef.current = new AbortController();
+    const ctrl = new AbortController();
+    aborts.set(cluster.id, ctrl);
+    setAutoUpdatingIds((prev) => new Set(prev).add(cluster.id));
     try {
       const { data } = await clustersApi.autoUpdate(cluster.id, {
         dryRun: true,
-        signal: autoUpdateAbortRef.current.signal,
+        signal: ctrl.signal,
       });
-      setDiffCluster(cluster);
-      setDiffRows((data.diff ?? []) as DiffRow[]);
-      setDiffWarnings(data.warnings ?? []);
+      const open = diffClusterRef.current;
+      if (open && open.id !== cluster.id) {
+        // 다른 클러스터의 diff 가 열려 있음 — 덮어쓰면 사용자가 엉뚱한 대상에 적용할 수 있다.
+        toast.info(`${cluster.name} 수집 완료`, `${open.name} 의 변경 미리보기가 열려 있어 표시하지 않았습니다. 닫은 뒤 다시 새로고침하세요.`);
+      } else {
+        openDiff(cluster, (data.diff ?? []) as DiffRow[], data.warnings ?? []);
+      }
     } catch (e: unknown) {
       const err = e as { name?: string; code?: string };
       if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
-        toast.error('클러스터 정보 수집 실패', formatApiError(e));
+        toast.error('클러스터 정보 수집 실패', `${cluster.name}: ${formatApiError(e)}`);
       }
     } finally {
-      setAutoUpdatingId(null);
-      autoUpdateAbortRef.current = null;
+      aborts.delete(cluster.id);
+      setAutoUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cluster.id);
+        return next;
+      });
     }
   };
 
@@ -336,26 +416,51 @@ export function ClusterManagePage() {
     }
   };
 
-  const handleBulkCollectNodeIps = async () => {
-    const targets = clusters.filter((c) => !c.nodeIps);
-    if (targets.length === 0) {
+  // 일괄 수집은 dryRun 없는 auto-update 를 N개 클러스터에 적용하는 위험 동작 —
+  // 확인 다이얼로그로 게이팅하고, 진행률(n/N)·중단·실패 구분 토스트를 제공한다 (D-048).
+  const bulkTargets = clusters.filter((c) => !c.nodeIps);
+
+  const handleBulkCollectNodeIps = () => {
+    if (bulkCollecting) {
+      // 수집 중 재클릭 = 중단 요청 (다음 클러스터로 넘어가기 전에 반영)
+      bulkAbortRef.current = true;
+      return;
+    }
+    if (bulkTargets.length === 0) {
       toast.success('수집 대상 없음', '모든 클러스터에 노드 IP 가 이미 채워져 있습니다.');
       return;
     }
+    setBulkConfirmOpen(true);
+  };
+
+  const executeBulkCollect = async () => {
+    setBulkConfirmOpen(false);
+    const targets = clusters.filter((c) => !c.nodeIps);
+    if (targets.length === 0) return;
     setBulkCollecting(true);
+    bulkAbortRef.current = false;
+    setBulkProgress({ done: 0, total: targets.length });
     let ok = 0;
     let fail = 0;
+    let aborted = false;
     for (const c of targets) {
+      if (bulkAbortRef.current) { aborted = true; break; }
       try {
         await clustersApi.autoUpdate(c.id);
         ok += 1;
       } catch {
         fail += 1;
       }
+      setBulkProgress({ done: ok + fail, total: targets.length });
     }
     await queryClient.refetchQueries({ queryKey: ['clusters'] });
     setBulkCollecting(false);
-    toast.success('일괄 수집 종료', `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}`);
+    setBulkProgress(null);
+    const summary = `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}${aborted ? ' · 중단됨' : ''}`;
+    if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', summary);
+    else if (fail > 0) toast.warning('일괄 수집 부분 실패', summary);
+    else if (aborted) toast.info('일괄 수집 중단됨', summary);
+    else toast.success('일괄 수집 완료', summary);
   };
 
   const handleApplyDiff = async () => {
@@ -365,9 +470,7 @@ export function ClusterManagePage() {
       await clustersApi.autoUpdate(diffCluster.id);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
       toast.success('클러스터 정보 갱신됨', diffCluster.name);
-      setDiffCluster(null);
-      setDiffRows([]);
-      setDiffWarnings([]);
+      closeDiff();
     } catch (e: unknown) {
       toast.error('적용 실패', formatApiError(e));
     } finally {
@@ -378,26 +481,30 @@ export function ClusterManagePage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-[2400px] mx-auto px-4 py-6">
-        <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdatingId, diffRowsCount: diffRows.length }} />
+        <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdating: [...autoUpdatingIds].join(','), diffRowsCount: diffRows.length }} />
 
-        {/* 페이지 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+        {/* 페이지 헤더 — 액션이 많아 좁은 폭에서 줄바꿈 허용 (D-051) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex flex-wrap items-center gap-3">
             <Server className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">클러스터 관리</h1>
             {clusters.length > 0 && (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
                 {filteredClusters.length} / {clusters.length}
               </span>
             )}
             {overlapCount > 0 && (
-              <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                <AlertTriangle className="w-3 h-3" />
-                CIDR 겹침 {overlapCount}건
+              <span
+                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30"
+                title="INTERNAL_IP / Pod / Service CIDR 이 다른 클러스터와 겹치는 클러스터 수"
+              >
+                <AlertTriangle className="w-3 h-3" aria-hidden />
+                {/* 쌍(pair) 수가 아니라 겹침에 연루된 클러스터 수 — 문구를 실제 값에 맞춤 (D-053) */}
+                CIDR 겹침 클러스터 {overlapCount}개
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ViewModeBar
               modes={[
                 { id: 'table', label: '테이블', icon: <LayoutList className="w-3.5 h-3.5" /> },
@@ -426,14 +533,18 @@ export function ClusterManagePage() {
             </button>
             <button
               onClick={handleBulkCollectNodeIps}
-              disabled={bulkCollecting || clusters.length === 0}
+              disabled={!bulkCollecting && clusters.length === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-lg text-primary transition-colors disabled:opacity-50"
-              title="nodeIps 가 비어있는 모든 클러스터에 대해 auto-update 호출 (diff 다이얼로그 없이 즉시 반영)"
+              title={bulkCollecting
+                ? '클릭하면 다음 클러스터로 넘어가기 전에 수집을 중단합니다'
+                : 'nodeIps 가 비어있는 모든 클러스터에 대해 auto-update 호출 (실행 전 대상·범위 확인)'}
             >
               {bulkCollecting
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <Network className="w-3.5 h-3.5" />}
-              {bulkCollecting ? '수집중…' : '노드 IP 일괄 수집'}
+              {bulkCollecting
+                ? `수집중 ${bulkProgress?.done ?? 0}/${bulkProgress?.total ?? 0} — 중단`
+                : '노드 IP 일괄 수집'}
             </button>
             <button
               onClick={colW.reset}
@@ -452,9 +563,9 @@ export function ClusterManagePage() {
           </div>
         </div>
 
-        {/* 검색 / 필터 패널 */}
+        {/* 검색 / 필터 패널 — 수제 카드 div 대신 MacCard (D-050) */}
         {showFilter && (
-          <div className="mb-5 p-4 bg-card border border-border rounded-xl flex flex-wrap items-end gap-3">
+          <MacCard title="검색 / 필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
               <label htmlFor={f('search')} className="block text-sm text-muted-foreground mb-1">검색</label>
               <div className="relative">
@@ -498,106 +609,140 @@ export function ClusterManagePage() {
             </div>
             {(search || filterLevel) && (
               <button onClick={() => { setSearch(''); setFilterLevel(''); }}
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary border border-border rounded-lg transition-colors">
+                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary border border-border rounded-xl transition-colors">
                 초기화
               </button>
             )}
-          </div>
+          </MacCard>
         )}
 
-        {/* 클러스터 목록 */}
-        {clusters.length === 0 ? (
-          <div className="text-center py-20">
-            <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground">등록된 클러스터가 없습니다.</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Settings 페이지에서 클러스터를 먼저 등록하세요.</p>
-          </div>
+        {/* 클러스터 목록 — 로딩/조회실패/0건 3분기 (D-043) */}
+        {clusters.length === 0 && clustersLoading ? (
+          <MacCard bodyPadding="p-0">
+            <div aria-busy="true">
+              <div className="px-3 py-2.5 bg-secondary border-b border-border flex gap-6">
+                {[90, 60, 70, 90, 120, 110, 80, 130].map((w, i) => <Skeleton key={i} width={w} height={12} />)}
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  <SkeletonTable rows={6} columns={8} />
+                </tbody>
+              </table>
+            </div>
+          </MacCard>
+        ) : clusters.length === 0 && clustersError ? (
+          <EmptyState
+            icon={AlertTriangle}
+            title="클러스터 목록을 불러오지 못했습니다."
+            description={formatApiError(clustersLoadError)}
+            action={{ label: '다시 시도', onClick: () => { void refetchClusters(); }, variant: 'secondary' }}
+          />
+        ) : clusters.length === 0 ? (
+          <EmptyState
+            icon={Server}
+            title="등록된 클러스터가 없습니다."
+            description="클러스터 등록과 API/kubeconfig 설정은 Settings → 클러스터 탭에서 할 수 있습니다."
+            action={{ label: 'Settings 에서 클러스터 등록', onClick: () => navigate('/settings?tab=clusters') }}
+          />
         ) : filteredClusters.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground">
-            <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>검색 결과가 없습니다.</p>
-          </div>
+          <EmptyState
+            icon={Search}
+            title="검색 결과가 없습니다."
+            description="검색어나 운영레벨 필터를 바꿔 보세요."
+            action={(search || filterLevel)
+              ? { label: '필터 초기화', onClick: () => { setSearch(''); setFilterLevel(''); }, variant: 'secondary' }
+              : undefined}
+          />
         ) : viewMode === 'table' ? (
-          <div className="rounded-xl border border-border overflow-hidden">
-            <DoubleScrollX>
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          {/* 수제 카드 div → MacCard (D-050). 본문에 max-h 를 줘 세로 스크롤을 만들고
+              thead 를 sticky 로 고정 — 13열+커스텀열 표에서 헤더가 사라지지 않게 (D-051) */}
+          <MacCard bodyPadding="p-0">
+            <DoubleScrollX bodyClassName="max-h-[calc(100vh-16rem)]">
               <table className="text-sm border-collapse" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
                   {COLUMNS.map((c) => <col key={c.key} style={{ width: `${colW.getWidth(c.key)}px` }} />)}
                   {customFields.map((f) => <col key={`custom_${f.id}`} style={{ width: `${colW.getWidth(`custom_${f.id}`)}px` }} />)}
                   <col style={{ width: `${colW.getWidth('actions')}px` }} />
                 </colgroup>
-                <thead className="bg-secondary/50">
-                  <tr className="border-b border-border">
+                {/* sticky 헤더 — border-collapse 에서는 sticky 셀의 border 가 사라지므로
+                    구분선은 inset box-shadow 로 그린다. 배경은 반투명이면 행이 비쳐 보여 solid. */}
+                <thead className="sticky top-0 z-10 bg-secondary">
+                  <tr>
                     {COLUMNS.map((c) => (
                       <th key={c.key}
                         title={c.tip}
-                        className={`relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground ${c.center ? 'text-center' : ''}`}>
+                        className={`relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))] ${c.center ? 'text-center' : ''}`}>
                         <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
                           {c.label}
-                          <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
+                          <span className="text-[10px] text-muted-foreground/50" aria-hidden>ⓘ</span>
                         </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(c.key, e)} onDoubleClick={() => colW.autoFit(c.key)} />
                       </th>
                     ))}
                     {customFields.map((f) => (
                       <th key={f.id}
-                        className="relative px-3 py-2.5 text-left text-sm font-semibold text-primary/80 border-l border-primary/10"
-                        title={f.description ?? ''}>
+                        className="relative px-3 py-2.5 text-left text-sm font-semibold text-primary/80 border-l border-primary/10 shadow-[inset_0_-1px_0_hsl(var(--border))]"
+                        // 설명이 없으면 빈 title 대신 필드명을 안내 (빈 title 은 툴팁만 깜빡임)
+                        title={f.description?.trim() || `커스텀 컬럼: ${f.label}`}>
                         <span className="truncate inline-block max-w-full align-middle">{f.label}</span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(`custom_${f.id}`, e)} onDoubleClick={() => colW.autoFit(`custom_${f.id}`)} />
                       </th>
                     ))}
-                    <th className="relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground"
+                    <th className="relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]"
                       title="행 단위 동작 — 새로고침(자동수집 → diff 미리보기), 수정, 삭제. (Cilium 설정은 K8s/Cilium 셀 클릭으로 이동)">
                       <span className="inline-flex items-center gap-1 cursor-help">
                         편집
-                        <span className="text-[10px] text-muted-foreground/50">ⓘ</span>
+                        <span className="text-[10px] text-muted-foreground/50" aria-hidden>ⓘ</span>
                       </span>
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {groupedClusters.flatMap((group) => {
-                    const rows: React.ReactNode[] = [];
-                    if (group.label) {
-                      rows.push(
-                        <tr key={`hdr-${group.key}`} className="bg-primary/5 border-y border-primary/20">
+                  {groupedClusters.map((group) => (
+                    <Fragment key={group.key}>
+                      {group.label && (
+                        <tr className="bg-primary/5 border-y border-primary/20">
                           <td colSpan={COLUMNS.length + customFields.length + 1}
                             className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary">
-                            {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
+                            <span className="inline-flex items-center gap-1.5 align-middle">
+                              <GroupIcon className="w-3 h-3" aria-hidden />
+                              {groupLabelPrefix} {group.label}
+                            </span>
                             <span className="ml-2 text-muted-foreground font-normal normal-case tracking-normal">
                               {group.clusters.length}개
                             </span>
                           </td>
-                        </tr>,
-                      );
-                    }
-                    for (const cluster of group.clusters) {
-                      rows.push(
-                        <ClusterTableRow
-                          key={cluster.id}
-                          cluster={cluster}
-                          onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
-                          onDelete={handleDelete}
-                          deletingId={deletingId}
-                          overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
-                          onCilium={c => setCiliumCluster(c)}
-                          onAutoUpdate={handleAutoUpdate}
-                          autoUpdatingId={autoUpdatingId}
-                          customFields={customFields}
-                          onCollectNodeIps={collectNodeIps}
-                          collectingNodeIpsId={collectingNodeIpsId}
-                          onCollectNics={(c) => setNicsClusterId(c.id)}
-                        />,
-                      );
-                    }
-                    return rows;
-                  })}
+                        </tr>
+                      )}
+                      <SortableContext items={group.clusters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                        {group.clusters.map((cluster) => (
+                          <ClusterTableRow
+                            key={cluster.id}
+                            cluster={cluster}
+                            onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
+                            onDelete={handleDelete}
+                            deletingId={deletingId}
+                            overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                            onCilium={c => setCiliumCluster(c)}
+                            onAutoUpdate={handleAutoUpdate}
+                            autoUpdating={autoUpdatingIds.has(cluster.id)}
+                            customFields={customFields}
+                            onCollectNodeIps={collectNodeIps}
+                            collectingNodeIpsId={collectingNodeIpsId}
+                            onCollectNics={(c) => setNicsClusterId(c.id)}
+                            sortable={sortEnabled}
+                          />
+                        ))}
+                      </SortableContext>
+                    </Fragment>
+                  ))}
                 </tbody>
               </table>
             </DoubleScrollX>
-          </div>
+          </MacCard>
+          </DndContext>
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="space-y-5">
@@ -605,8 +750,9 @@ export function ClusterManagePage() {
                 <div key={group.key}>
                   {group.label && (
                     <div className="flex items-baseline gap-2 mb-2 px-1 border-l-2 border-primary pl-3">
-                      <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                        {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+                        <GroupIcon className="w-3 h-3" aria-hidden />
+                        {groupLabelPrefix} {group.label}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {group.clusters.length}개
@@ -614,7 +760,8 @@ export function ClusterManagePage() {
                     </div>
                   )}
                   <SortableContext items={group.clusters.map((c) => c.id)} strategy={rectSortingStrategy}>
-                    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                    {/* 좁은 폭에서 가로 오버플로가 나지 않게 min() 패턴 (D-025·D-051) */}
+                    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))' }}>
                       {group.clusters.map((cluster) => (
                         <SortableClusterCard
                           key={cluster.id}
@@ -624,8 +771,9 @@ export function ClusterManagePage() {
                           deletingId={deletingId}
                           overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
                           onAutoUpdate={handleAutoUpdate}
-                          autoUpdatingId={autoUpdatingId}
+                          autoUpdating={autoUpdatingIds.has(cluster.id)}
                           onCollectNics={(c) => setNicsClusterId(c.id)}
+                          sortEnabled={sortEnabled}
                         />
                       ))}
                     </div>
@@ -661,7 +809,7 @@ export function ClusterManagePage() {
         diff={diffRows}
         warnings={diffWarnings}
         applying={applyingId === diffCluster?.id}
-        onCancel={() => { if (!applyingId) { setDiffCluster(null); setDiffRows([]); setDiffWarnings([]); } }}
+        onCancel={() => { if (!applyingId) closeDiff(); }}
         onConfirm={handleApplyDiff}
       />
 
@@ -669,6 +817,45 @@ export function ClusterManagePage() {
         open={customFieldsOpen}
         onClose={() => setCustomFieldsOpen(false)}
       />
+
+      {/* 클러스터 삭제 확인 — 캐스케이드 삭제 범위를 명시 (D-048) */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        danger
+        title="클러스터 삭제"
+        description={deleteTarget ? `"${deleteTarget.name}" 클러스터를 삭제합니다.` : undefined}
+        confirmLabel="삭제"
+        onConfirm={executeDelete}
+        onCancel={() => setDeleteTarget(null)}
+      >
+        <p className="text-muted-foreground">
+          이 동작은 되돌릴 수 없으며, 클러스터에 연관된{' '}
+          <strong className="text-foreground">Addon · Playbook · 점검 이력이 모두 함께 삭제</strong>됩니다.
+        </p>
+      </ConfirmDialog>
+
+      {/* 노드 IP 일괄 수집 확인 — 대상 수·갱신 범위를 명시 (D-048) */}
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title="노드 IP 일괄 수집"
+        description={`노드 IP 가 비어 있는 클러스터 ${bulkTargets.length}개에 auto-update 를 적용합니다.`}
+        confirmLabel={`${bulkTargets.length}개 수집 시작`}
+        onConfirm={executeBulkCollect}
+        onCancel={() => setBulkConfirmOpen(false)}
+      >
+        <div className="space-y-2 text-muted-foreground">
+          <p>
+            diff 미리보기 없이 kubeconfig 수집 결과가 바로 반영됩니다 — 노드 IP 외에도{' '}
+            <strong className="text-foreground">hostname · CIDR · K8s/Cilium 버전 · Max Pods</strong> 등이
+            함께 갱신될 수 있습니다.
+          </p>
+          <p className="text-xs">
+            대상: {bulkTargets.slice(0, 8).map((c) => c.name).join(', ')}
+            {bulkTargets.length > 8 && ` 외 ${bulkTargets.length - 8}개`}
+          </p>
+          <p className="text-xs">진행 중에는 버튼을 다시 눌러 언제든 중단할 수 있습니다.</p>
+        </div>
+      </ConfirmDialog>
 
       {nicsClusterId && (
         <NodeNicsCollectModal

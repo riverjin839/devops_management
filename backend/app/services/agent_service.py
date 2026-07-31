@@ -35,9 +35,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional, TYPE_CHECKING
 
-import httpx
-
 from app.config import settings
+from app.services.llm import llm_service
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -46,16 +45,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "You are a Kubernetes operations assistant embedded in a monitoring dashboard. "
-    "You help DevOps engineers diagnose cluster issues, interpret health-check results, "
-    "and suggest remediation steps. Be concise, technical, and actionable. "
-    "When given cluster context (pod logs, node status, etc.), reference it directly."
-)
-
 
 class AIAgentService:
-    """Resilient proxy to a local Ollama instance."""
+    """LLM 게이트웨이(``services/llm``) 위의 fail-safe 파사드.
+
+    직접 Ollama 를 호출하던 구현은 ``services/llm/ollama_provider.py`` 로 이관됐다.
+    이 클래스는 기존 호출부(라우터·review_service·cluster_item_service)의 공개
+    시그니처를 유지하면서, 실제 호출을 프로필 × 용도 라우팅 게이트웨이에 위임한다.
+    """
 
     def __init__(
         self,
@@ -63,6 +60,7 @@ class AIAgentService:
         model: Optional[str] = None,
         timeout: Optional[int] = None,
     ):
+        # 레거시 호환 필드 — 게이트웨이 도입 후에는 표시용으로만 쓰인다.
         self.base_url = (base_url or settings.ollama_url).rstrip("/")
         self.model = model or settings.ollama_model
         self.timeout = timeout or settings.ollama_timeout
@@ -72,43 +70,19 @@ class AIAgentService:
     # ------------------------------------------------------------------
 
     async def health_check(self) -> dict:
-        """Quick probe — returns {"status": "online"} or {"status": "offline"}."""
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.base_url}/")
-                if resp.status_code != 200:
-                    return {"status": "offline", "detail": f"HTTP {resp.status_code}"}
-                # Check if the model is available
-                tags_resp = await client.get(f"{self.base_url}/api/tags")
-                if tags_resp.status_code == 200:
-                    models = tags_resp.json().get("models", [])
-                    # Ollama returns full names like "qwen2.5:7b".
-                    # Match by full name OR by base name (before ":") so that
-                    # OLLAMA_MODEL="qwen2.5" matches a pulled "qwen2.5:7b".
-                    model_names_full = [m.get("name", "") for m in models]
-                    model_names_base = [n.split(":")[0] for n in model_names_full]
-                    configured_base = self.model.split(":")[0]
-                    model_found = (
-                        self.model in model_names_full
-                        or configured_base in model_names_base
-                    )
-                    if not model_found:
-                        return {
-                            "status": "online",
-                            "model": self.model,
-                            "detail": (
-                                f"Server running but model '{self.model}' not pulled. "
-                                f"Available: {model_names_full or 'none'}"
-                            ),
-                        }
-                return {"status": "online", "model": self.model}
-        except Exception as exc:
-            logger.debug("Ollama health-check failed: %s", exc)
-            return {"status": "offline", "model": self.model, "detail": str(exc)}
+        """Quick probe — chat 용도의 primary 프로필 health (기존 응답 형태 유지)."""
+        h = await llm_service.health_for_purpose("chat")
+        return {
+            "status": h.get("status", "offline"),
+            "model": h.get("model", self.model),
+            **({"detail": h["detail"]} if h.get("detail") else {}),
+        }
 
-    async def ask_agent(self, query: str, context: Optional[dict] = None) -> dict:
+    async def ask_agent(
+        self, query: str, context: Optional[dict] = None, *, purpose: str = "chat"
+    ) -> dict:
         """
-        Send a question to the Ollama LLM with optional K8s context.
+        Send a question to the routed LLM with optional K8s context.
 
         Returns
         -------
@@ -118,39 +92,23 @@ class AIAgentService:
             model   : str   (model name, empty when offline)
         """
         prompt = self._build_prompt(query, context)
-        return await self._call_llm(prompt)
+        return await self._call_llm(prompt, purpose=purpose)
 
     async def pull_model(self, model: Optional[str] = None) -> dict:
-        """Trigger model pull on Ollama. Returns status immediately (pull runs server-side)."""
-        target = model or self.model
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/pull",
-                    json={"name": target, "stream": False},
-                )
-                if resp.status_code == 200:
-                    return {"status": "ok", "message": f"Model '{target}' pull initiated."}
-                return {"status": "error", "message": f"HTTP {resp.status_code}: {resp.text[:200]}"}
-        except httpx.ConnectError:
-            return {"status": "offline", "message": "Ollama service is not reachable."}
-        except httpx.TimeoutException:
-            return {"status": "ok", "message": f"Model '{target}' pull started (large model, request timed out but pull continues server-side)."}
-        except Exception as exc:
-            logger.exception("Error pulling model: %s", exc)
-            return {"status": "error", "message": str(exc)}
+        """Trigger model pull — 첫 enabled Ollama 프로필에 위임 (Ollama 전용 기능)."""
+        profile = llm_service.first_ollama_profile()
+        if profile is None:
+            return {"status": "error", "message": "활성화된 Ollama 프로필이 없습니다. Settings → AI/LLM 에서 확인하세요."}
+        from app.services.llm.ollama_provider import OllamaProvider
+        return await OllamaProvider(profile).pull_model(model=model)
 
     async def list_models(self) -> dict:
-        """List models available on Ollama."""
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.base_url}/api/tags")
-                if resp.status_code == 200:
-                    models = resp.json().get("models", [])
-                    return {"status": "ok", "models": [m.get("name", "") for m in models]}
-                return {"status": "error", "models": []}
-        except Exception:
+        """List models — 첫 enabled Ollama 프로필의 모델 목록 (기존 API 호환)."""
+        profile = llm_service.first_ollama_profile()
+        if profile is None:
             return {"status": "offline", "models": []}
+        models = await llm_service.list_profile_models(profile.name)
+        return {"status": "ok" if models else "offline", "models": models}
 
     async def run_cluster_summary_pipeline(
         self,
@@ -172,7 +130,7 @@ class AIAgentService:
 
         ContextCollectorNode(db=db, cluster=cluster).safe_run(state)
         PromptBuilderNode().safe_run(state)
-        await LLMCallerNode(self).safe_run(state)
+        await LLMCallerNode(self, purpose="review_summary").safe_run(state)
 
         if state.llm_response.get("status") == "ok":
             RiskParserNode().safe_run(state)
@@ -183,54 +141,35 @@ class AIAgentService:
     # Internals
     # ------------------------------------------------------------------
 
-    async def _call_llm(self, prompt: str) -> dict:
-        """Raw call to the LLM endpoint. All exceptions are caught — never raises.
+    async def _call_llm(self, prompt: str, *, purpose: str = "chat") -> dict:
+        """Raw call — 게이트웨이(``llm_service.chat_for_purpose``)에 위임한다.
 
-        Extracted from ``ask_agent`` so the Agent Loop's ``llm_caller`` node (and any
-        future endpoint swap, e.g. Phase 3 vLLM) has a single call site to replace.
+        기존 반환 계약({status: "ok"|"offline", answer, model})을 유지한다.
+        게이트웨이가 primary→fallback 을 이미 처리하므로 여기 도달한 실패는
+        모든 프로필이 실패한 경우다 — 한국어 안내문으로 폴백한다.
         """
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/generate",
-                    json={
-                        "model": self.model,
-                        "prompt": prompt,
-                        "system": SYSTEM_PROMPT,
-                        "stream": False,
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                return {
-                    "status": "ok",
-                    "answer": data.get("response", ""),
-                    "model": data.get("model", self.model),
-                }
+            result = await llm_service.chat_for_purpose(purpose, prompt)
+        except Exception as exc:  # noqa: BLE001  (방어 — 게이트웨이는 원래 raise 하지 않음)
+            logger.exception("Unexpected error calling LLM gateway: %s", exc)
+            return self._fallback("AI 어시스턴트에 일시적인 오류가 발생했습니다.")
 
-        # ---- Fail-safe: catch ALL exceptions, never propagate --------
-        except httpx.ConnectError:
-            logger.warning("Ollama connect error — service may not be deployed.")
-            return self._fallback("AI Agent is currently unavailable. Ollama service is not reachable.")
+        if result.status == "ok":
+            return {"status": "ok", "answer": result.text, "model": result.model}
 
-        except httpx.TimeoutException:
-            logger.warning("Ollama request timed out after %ss.", self.timeout)
-            return self._fallback("AI Agent request timed out. The model may be loading or the server is overloaded.")
-
-        except httpx.HTTPStatusError as exc:
-            code = exc.response.status_code
-            logger.warning("Ollama returned HTTP %s: %s", code, exc.response.text[:200])
-            if code == 404:
-                return self._fallback(
-                    f"Model '{self.model}' is not available. "
-                    "It may still be downloading. Use the pull-model endpoint or wait for auto-pull to finish."
-                )
-            return self._fallback(f"AI Agent returned an error (HTTP {code}).")
-
-        except Exception as exc:
-            # Catch-all so nothing leaks to the caller.
-            logger.exception("Unexpected error calling Ollama: %s", exc)
-            return self._fallback("AI Agent encountered an unexpected error.")
+        error = result.error or ""
+        if error.startswith("timeout"):
+            msg = "AI 응답이 시간 내에 도착하지 않았습니다. 모델 로딩 중이거나 서버가 과부하 상태일 수 있습니다."
+        elif error.startswith("model_not_found"):
+            msg = (
+                f"모델 '{result.model}' 을 사용할 수 없습니다. 아직 다운로드 중일 수 있습니다 — "
+                "Settings → AI/LLM 에서 모델 상태를 확인하세요."
+            )
+        elif error.startswith("auth_failed"):
+            msg = "LLM 서비스 인증에 실패했습니다. Settings → AI/LLM 에서 API 키를 확인하세요."
+        else:
+            msg = "AI 어시스턴트에 연결할 수 없습니다. Settings → AI/LLM 에서 LLM 연결 상태를 확인하세요."
+        return self._fallback(msg)
 
     @staticmethod
     def _fallback(message: str) -> dict:
@@ -390,19 +329,19 @@ class PromptBuilderNode(AgentNode):
 
 
 class LLMCallerNode:
-    """현재 Ollama 호출부. 추후 엔드포인트만 교체 가능하게 인터페이스 분리
-    (Phase 3 vLLM 전환 시 이 노드만 수정하면 나머지 노드는 무수정).
+    """LLM 호출 노드 — ``services/llm`` 게이트웨이 경유 (프로필 × 용도 라우팅).
 
     ``AgentNode`` 의 다른 노드들과 달리 비동기 호출이라 별도 ``safe_run`` 을 갖는다.
     """
 
     name = "llm_caller"
 
-    def __init__(self, agent: AIAgentService):
+    def __init__(self, agent: AIAgentService, purpose: str = "chat"):
         self.agent = agent
+        self.purpose = purpose
 
     async def run(self, state: AgentState) -> None:
-        state.llm_response = await self.agent._call_llm(state.prompt)
+        state.llm_response = await self.agent._call_llm(state.prompt, purpose=self.purpose)
 
     async def safe_run(self, state: AgentState) -> bool:
         start = datetime.utcnow()
@@ -415,7 +354,7 @@ class LLMCallerNode:
             # 방어적으로 한 번 더 감싼다.
             logger.warning("Agent node '%s' failed: %s", self.name, exc)
             state.log(self.name, "error", detail=str(exc), duration_ms=_elapsed_ms(start))
-            state.llm_response = {"status": "offline", "answer": "AI Agent encountered an unexpected error.", "model": ""}
+            state.llm_response = {"status": "offline", "answer": "AI 어시스턴트에 일시적인 오류가 발생했습니다.", "model": ""}
             return False
 
 

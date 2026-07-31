@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import {
-  Plus, Pencil, Trash2, GitFork,
+  Plus, Pencil, Trash2, GitFork, Loader2, RefreshCw, UploadCloud,
   ChevronRight, FileText, CheckCircle, Archive, FileText as FileTextIcon, ExternalLink,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
-import { ReactionBar } from '@/components/common';
+import { ReactionBar, useToast } from '@/components/common';
+import { ConfluenceExportDialog, SyncStatusBadge } from '@/components/documents';
+import { useConfluenceDocPull } from '@/hooks/useConfluenceDocs';
+import { formatApiError } from '@/lib/utils';
 import type { WorkGuide } from '@/types';
 
 const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
@@ -54,10 +58,23 @@ interface GuidePageViewProps {
 }
 
 export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, onAddToWorkflow, onDelete }: GuidePageViewProps) {
+  const toast = useToast();
+  const pullMut = useConfluenceDocPull();
+  const [exportOpen, setExportOpen] = useState(false);
   const sc = STATUS_CFG[guide.status] ?? STATUS_CFG.draft;
   const pc = PRIORITY_DOT[guide.priority] ?? PRIORITY_DOT.medium;
   const tagList = guide.tags ? guide.tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
   const childPages = allGuides.filter((g) => g.parentId === guide.id);
+
+  const pull = async () => {
+    try {
+      const res = await pullMut.mutateAsync(guide.id);
+      if (res.status !== 'ok') toast.error('다시 가져오기 실패', res.detail);
+      else toast.success('다시 가져오기 완료', `Confluence v${res.version ?? '?'} 내용으로 갱신했습니다.`);
+    } catch (err) {
+      toast.error('다시 가져오기 실패', formatApiError(err));
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -93,11 +110,24 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
                   <ExternalLink className="w-2.5 h-2.5" /> Confluence
                 </a>
               )}
+              <SyncStatusBadge guide={guide} showVersion />
               <span className="text-muted-foreground">{guide.updatedAt?.slice(0, 10)}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0">
+            {guide.confluencePageId && (
+              <button onClick={pull} disabled={pullMut.isPending}
+                className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                title="Confluence 에서 다시 가져오기" aria-label="Confluence 에서 다시 가져오기">
+                {pullMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </button>
+            )}
+            <button onClick={() => setExportOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+              title="Confluence 게시" aria-label="Confluence 게시">
+              <UploadCloud className="w-3.5 h-3.5" /> 게시
+            </button>
             <button onClick={onAddToWorkflow}
               className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
               title="워크플로에 추가">
@@ -162,6 +192,8 @@ export function GuidePageView({ guide, allGuides, onSelect, onEdit, onAddChild, 
           </div>
         )}
       </div>
+
+      <ConfluenceExportDialog open={exportOpen} onClose={() => setExportOpen(false)} guide={guide} />
     </div>
   );
 }

@@ -666,22 +666,6 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
           </td>
         );
 
-      case 'jiraStatus':
-        return (
-          <td key="jiraStatus" className="px-4 py-1.5 whitespace-nowrap">
-            {item.jiraStatus ? (
-              <span className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${JIRA_CAT_DOT[item.jiraStatusCategory ?? ''] ?? 'bg-status-unknown'}`} />
-                <span className={`text-sm font-medium ${JIRA_CAT_TEXT[item.jiraStatusCategory ?? ''] ?? 'text-muted-foreground'}`}>
-                  {item.jiraStatus}
-                </span>
-              </span>
-            ) : (
-              <span className="text-muted-foreground/50">-</span>
-            )}
-          </td>
-        );
-
       case 'jiraComponents':
         return (
           <td key="jiraComponents" className="px-4 py-1.5">
@@ -808,7 +792,7 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
   );
 }
 
-/** 인라인 행 추가 — 테이블 꼬리. 필수: category + content + startedAt + primaryAssignee.
+/** 인라인 행 추가 — 헤더 바로 아래(목록 최상단). 필수: category + content + startedAt + primaryAssignee.
  *  컬럼 개인화(순서/숨김)와 무관하게 동작하도록 colSpan 한 줄 폼으로 렌더한다. */
 interface AddWorkItemRowProps {
   clusters: Cluster[];
@@ -865,7 +849,8 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
 
   if (!open) {
     return (
-      <tr className="border-t border-border bg-muted/10">
+      // 헤더 바로 아래(목록 최상단)에 배치되므로 아래쪽 경계선으로 다음 행과 구분한다.
+      <tr className="border-b border-border bg-muted/10">
         <td colSpan={colSpan}>
           <button
             type="button"
@@ -881,7 +866,7 @@ export function AddWorkItemRow({ clusters, colSpan, defaultClusterId, defaultAss
 
   // 컬럼 표시/순서와 독립적인 한 줄 폼 — 필수 입력(분류·내용·시작일·정담당)을 항상 노출.
   return (
-    <tr className="border-t border-border bg-primary/[0.04]">
+    <tr className="border-b border-border bg-primary/[0.04]">
       <td colSpan={colSpan} className="px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <select value={kanbanStatus} onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}

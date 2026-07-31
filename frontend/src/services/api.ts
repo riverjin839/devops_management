@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -192,7 +192,10 @@ export const clustersApi = {
   getById: (id: string) => api.get<ApiResponse<Cluster>>(`/clusters/${id}`),
   create: (data: Partial<Cluster> & { kubeconfigContent?: string; skipConnectivityCheck?: boolean }) =>
     api.post<ApiResponse<Cluster>>('/clusters', data),
-  update: (id: string, data: Partial<Cluster>) => api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
+  // 값 해제(빈 입력)는 `null` 로 보내야 저장된다 — `undefined` 는 JSON 직렬화에서 사라지고
+  // 백엔드 `exclude_unset=True` 가 "미전송 = 기존 값 유지"로 처리한다. (DESIGN.md D-031/D-041)
+  update: (id: string, data: Partial<Cluster> | import('@/types').ClusterManageUpdate) =>
+    api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
   delete: (id: string) => api.delete(`/clusters/${id}`),
   reorder: (clusterIds: string[]) =>
     api.post<{ updated: number }>('/clusters/reorder', { clusterIds }),
@@ -721,10 +724,46 @@ export const ansibleAssetsApi = {
 
 // Agent API (AI Mode — fail-safe)
 export const agentApi = {
-  chat: (data: AgentChatRequest) =>
+  chat: (data: AgentChatRequest & { conversationId?: string | null }) =>
     api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
   health: () =>
     api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
+  conversations: () =>
+    api.get<{ data: import('@/types').AgentConversationSummary[] }>('/agent/conversations'),
+  messages: (conversationId: string) =>
+    api.get<{ data: import('@/types').AgentMessageOut[] }>(`/agent/conversations/${conversationId}/messages`),
+  deleteConversation: (conversationId: string) =>
+    api.delete<{ ok: boolean }>(`/agent/conversations/${conversationId}`),
+};
+
+// LLM 게이트웨이 설정 API (Settings → AI/LLM 탭)
+export const llmApi = {
+  getSettings: () =>
+    api.get<{ data: LlmSettings; purposes: string[] }>('/llm/settings'),
+  updateSettings: (data: LlmSettings) =>
+    api.put<{ data: LlmSettings; warnings: string[] }>('/llm/settings', data),
+  health: () =>
+    api.get<{ data: LlmHealthEntry[] }>('/llm/health', { timeout: 15000 }),
+  profileModels: (name: string) =>
+    api.get<{ data: string[] }>(`/llm/profiles/${encodeURIComponent(name)}/models`, { timeout: 10000 }),
+  testProfile: (profile: string, prompt?: string) =>
+    api.post<LlmTestResult>('/llm/test', { profile, ...(prompt ? { prompt } : {}) }, { timeout: 120000 }),
+  usage: () =>
+    api.get<{ data: LlmUsageBucket[] }>('/llm/usage'),
+  listCredentials: () =>
+    api.get<{ data: LlmCredentialSummary[] }>('/llm/credentials'),
+  createCredential: (name: string, apiKey: string) =>
+    api.post<{ data: { name: string; hint: string }; updated: boolean }>('/llm/credentials', { name, apiKey }),
+  deleteCredential: (name: string) =>
+    api.delete<{ ok: boolean }>(`/llm/credentials/${encodeURIComponent(name)}`),
+  ragSearch: (q: string, k = 5) =>
+    api.get<{ data: import('@/types').RagCitation[] }>('/llm/rag-search', { params: { q, k }, timeout: 30000 }),
+  backfillEmbeddings: () =>
+    api.post<{ ok: boolean; detail: string }>('/llm/backfill-embeddings'),
+  getAnalysisScope: () =>
+    api.get<{ data: import('@/types').LlmAnalysisScope }>('/llm/analysis-scope'),
+  updateAnalysisScope: (data: import('@/types').LlmAnalysisScope) =>
+    api.put<{ data: import('@/types').LlmAnalysisScope; warnings: string[] }>('/llm/analysis-scope', data),
 };
 
 // PromQL Metric Cards API
@@ -1100,6 +1139,29 @@ export const workGuidesApi = {
   create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
   update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
   delete: (id: string) => api.delete(`/work-guides/${id}`),
+  /** 문서 검색 — 임베딩 시맨틱 우선, 불가 시 ILIKE 폴백 (embeddingAvailable 로 구분) */
+  search: (q: string, limit = 10) =>
+    api.get<import('@/types').GuideSearchResult>('/work-guides/search', { params: { q, limit } }),
+};
+
+// Confluence 문서 가져오기/내보내기 API (routers/confluence.py)
+export const confluenceDocsApi = {
+  search: (data: import('@/types').ConfluenceDocSearchRequest) =>
+    api.post<import('@/types').ConfluenceDocSearchResult>('/confluence/docs/search', data),
+  import: (data: import('@/types').ConfluenceDocImportRequest) =>
+    api.post<import('@/types').ConfluenceDocImportResult>('/confluence/docs/import', data, {
+      timeout: 2 * 60_000, // 페이지별 조회+변환 — 기본 30s 로는 부족
+    }),
+  export: (guideId: string, data?: import('@/types').ConfluenceDocExportRequest) =>
+    api.post<import('@/types').ConfluenceDocExportResult>(
+      `/confluence/docs/export/${guideId}`, data ?? {}, { timeout: 2 * 60_000 }),
+  pull: (guideId: string) =>
+    api.post<import('@/types').ConfluenceDocPullResult>(
+      `/confluence/docs/pull/${guideId}`, {}, { timeout: 2 * 60_000 }),
+  settings: () =>
+    api.get<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings'),
+  updateSettings: (data: import('@/types').ConfluenceDocsSettings) =>
+    api.put<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings', data),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
@@ -1497,6 +1559,10 @@ export const k8sEventsApi = {
   }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
   get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
   delete: (id: string) => api.delete(`/events/${id}`),
+  getAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/events/${id}/analysis`),
+  triggerAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/events/${id}/analyze`),
 };
 
 // Trend Digest API
@@ -1772,6 +1838,14 @@ export interface BatchJobTestConnectionResponse {
   error?: string | null;
 }
 
+export interface BatchJobStopResponse {
+  stopped: boolean;
+  /** 실제 강제종료(SSH 채널 close / kubectl kill / celery revoke)가 시도됐는지. */
+  interrupted: boolean;
+  message: string;
+  run?: BatchJobRun | null;
+}
+
 export const batchJobsApi = {
   listTypes: () =>
     api.get<{ data: BatchJobTypeDescriptor[] }>('/batch-jobs/types'),
@@ -1783,6 +1857,7 @@ export const batchJobsApi = {
   delete: (id: string) => api.delete(`/batch-jobs/${id}`),
   run: (id: string, payload: BatchJobRunRequest, signal?: AbortSignal) =>
     api.post<BatchJobRun>(`/batch-jobs/${id}/run`, payload, { signal, timeout: 600000 }),
+  stop: (id: string) => api.post<BatchJobStopResponse>(`/batch-jobs/${id}/stop`),
   bulkRun: (jobIds: string[]) =>
     api.post<{ queued: number; skipped: number; results: { jobId: string; queued: boolean; reason?: string | null }[] }>(
       '/batch-jobs/bulk-run', { jobIds },
@@ -2040,6 +2115,10 @@ export const observabilityApi = {
       },
     }),
   deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+  getAlertAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/observability/alerts/${id}/analysis`),
+  triggerAlertAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/observability/alerts/${id}/analyze`),
 
   // 알림 규칙 / 전역 설정
   alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),

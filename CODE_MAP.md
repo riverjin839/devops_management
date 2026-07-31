@@ -63,6 +63,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 업무 → Jira 이슈 + Confluence 문서 연계 생성 (Epic/Sub-task, 사용자별 조건 프리셋) | `routers/jira.py` `GET/POST /jira/provision*` (`user_settings` key=`jira_provision_preset`) | `components/work-items/JiraProvisionModal.tsx` |
 | Jira+Confluence SSO 자동 로그인 / Confluence API | `backend/app/services/jira_sso_http.py`(다중 제품 폼 SSO) · `services/confluence_service.py` · `routers/jira.py` `/jira/sso/*`·`/jira/confluence/*` (401 자동 재로그인 포함) | `components/settings/JiraIntegrationPanel.tsx` |
 | 주간보고 (월~금 집계 → 3개 표 → Confluence 게시) | `backend/app/services/weekly_report_service.py` · `routers/jira.py` `/jira/weekly-report/{preview,publish,settings}` · Celery `dispatch_weekly_report` | `frontend/src/pages/WeeklyReportPage.tsx` (`/weekly-report`) |
+| Confluence 문서 가져오기/내보내기 + 문서 관리 대시보드 | `backend/app/routers/confluence.py` (`/confluence/docs/*` — dry-run import·export·pull·설정) · `services/confluence_storage.py`(storage↔에디터 HTML 변환) · `services/knowledge_search.py`(시맨틱 검색, `GET /work-guides/search`) | `frontend/src/pages/DocumentsPage.tsx` (`/documents`) · `components/documents/`(`ConfluenceImportModal`·`ConfluenceExportDialog`·`SyncStatusBadge`·설정 다이얼로그) · `hooks/useConfluenceDocs.ts` |
 | PEP → Jira 신규 생성 / 삭제 | `routers/jira.py` `POST /jira/create` · `DELETE /jira/issue/{key}` · `services/jira_service.py` `create_issue()`/`delete_issue()` | `hooks/useJira.ts` |
 | Jira 연결 복구 (해제·다른 이슈로 변경·죽은 링크 점검) | `routers/jira.py` `POST /jira/{unlink,relink,verify-links}/…` · `_clear_jira_link()`/`_parse_issue_key()` · `services/jira_service.py` `get_issue()` 404 `missing` 플래그 | `components/work-items/JiraLinkDialog.tsx` · `JiraImportModal.tsx`(연결 점검 탭) |
 | 오늘 할일 / 멤버별 업무 | `work_items` 재사용 | `frontend/src/pages/TodoTodayPage.tsx` · `MemberBoardPage.tsx` |
@@ -76,11 +77,19 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | PromQL 카드 CRUD + 쿼리 | `backend/app/routers/promql.py`, `backend/app/services/prometheus_service.py` |
 | Prometheus 서비스 (fail-safe) | `backend/app/services/prometheus_service.py` |
 | 메트릭 추이 | `backend/app/routers/metric_trend.py` · `cluster_trends.py` → `frontend/src/pages/ClusterTrendsPage.tsx` |
-| Ollama AI Agent (fail-safe) | `backend/app/routers/agent.py`, `backend/app/services/agent_service.py` |
-| Agent 사이드바 UI | `frontend/src/components/agent/AgentChat.tsx` |
-| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
+| **LLM 게이트웨이 (프로필 × 용도 라우팅)** | `backend/app/services/llm/` (`service.py` 게이트웨이 · `ollama_provider.py` · `openai_provider.py` · `prompts.py` 한국어 시스템 프롬프트 · `masking.py` 시크릿 마스킹) — 모든 LLM 호출의 단일 진입점, 사내 OpenAI-호환 LLM + 인클러스터 Ollama 병행 운용 |
+| 무실행(No-Execution) 회귀 가드 | `backend/tests/test_no_execution_guard.py` — LLM 계열 ↔ 실행 계열(SSH/exec/playbook) 모듈 상호 import 금지 AST 검사 + `AnalysisResult` 필드 계약 |
+| LLM 설정 (Settings → AI/LLM 탭) | `backend/app/routers/llm_settings.py` (AppSetting `llm_settings`) · `backend/app/models/llm_credential.py` (API 키 암호화 저장) → `frontend/src/components/settings/LlmSettingsTab.tsx` + `frontend/src/hooks/useLlmSettings.ts` |
+| AI Agent (fail-safe, 게이트웨이 파사드) | `backend/app/routers/agent.py`, `backend/app/services/agent_service.py` |
+| Agent 챗봇 UI (한국어·멀티턴·인용·정보요청·SSE 스트리밍) | `frontend/src/components/agent/AgentChat.tsx`(`streamChat` — 인증 fetch+reader SSE 소비, 실패 시 비스트리밍 폴백) · `InfoRequestChips.tsx` · `frontend/src/components/common/CitationList.tsx` |
+| 챗 스트리밍 백엔드 | `POST /agent/chat/stream`(`routers/agent.py`) → `llm_service.chat_stream_for_purpose`(`services/llm/service.py`) → provider별 `chat_stream`(`ollama_provider.py` NDJSON, `openai_provider.py` SSE) |
+| 챗 대화 지속성 | `backend/app/models/agent_conversation.py` + `routers/agent.py` `/agent/conversations*` |
+| RAG 근거 인용 (사내 지식 pgvector 검색) | `backend/app/services/rag_service.py` (`GET /llm/rag-search`, `POST /llm/backfill-embeddings`) — work_guides/work_items/ops_notes/ontology_events(`compute_ontology_event_embedding`, `routers/ontology.py` 커밋 직후 큐잉) 임베딩 |
+| LLM 정보요청 파서 (need_more_info) | `backend/app/services/llm/response_parser.py` |
+| 알람/K8s 이벤트 AI 자동 분석 (scope·디바운스·llm 큐) | `backend/app/services/observability/analysis_hook.py`(`sources` 로 알람/K8s 이벤트 규칙 적용 범위 선택, 공유 디바운스 키) + `services/incident_context_builder.py` + `models/incident_analysis.py` + `celery_app.run_auto_incident_analysis`/`run_auto_incident_analysis_k8s_event`(전용 `llm` 큐, `k8s/base/celery/worker-llm-deployment.yaml`) → 공용 `frontend/src/components/common/IncidentAnalysisPanel.tsx`(래퍼: `components/observability/AlertAnalysisPanel.tsx`, `components/k8s/K8sEventAnalysisPanel.tsx`) |
+| AI 장애 분석 (분석 전용) | `backend/app/routers/analyze.py` + `backend/app/services/analyzers/` (claude/local_llm/rule_based — 백엔드 선택은 `llm_settings.analyzer_backend`) → `frontend/src/pages/IncidentAnalysisPage.tsx` |
 | 파드 로그 스트리밍 (SSE) | `analyze.py` 의 `/logs/stream` → `frontend/src/pages/K8sLogsPage.tsx` |
-| 임베딩 (WorkItem/WorkGuide 유사 검색) | `backend/app/services/embedding_service.py` (pgvector) |
+| 임베딩 (WorkItem/WorkGuide 유사 검색) | `backend/app/services/embedding_service.py` (pgvector, llm 게이트웨이 위임) |
 
 ### 모니터링 / 점검
 | 기능 | 위치 |
@@ -90,7 +99,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 일일 점검 리뷰 | `daily_check.py` → `frontend/src/pages/DailyCheckReview.tsx` |
 | Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/deep_checkers/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔 | `backend/app/routers/ops_check.py` + `services/ops_check_service.py` → `frontend/src/pages/OpsCheckConsolePage.tsx` |
-| K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py` + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
+| K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py`(수신 직후 `analysis_hook.maybe_enqueue_analysis_for_k8s_event` 훅 + `/{id}/analysis`,`/analyze`) + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
 | Observability 지표 대시보드 (kube-prometheus-stack) | `backend/app/routers/observability.py` + `services/observability/catalog_seed.py` · `services/alertmanager_service.py` · `services/prometheus_service.py`(rules/targets/status) + `models/observability.py` → `frontend/src/pages/ObservabilityPage.tsx` + `components/observability/` |
 | 인시던트 알람 수신 / 인박스 | `backend/app/routers/observability.py`(`ingest_router`) + `services/observability/alert_ingest.py`(Alertmanager v4 · generic 파서) · `alert_router.py`(라우팅·중복억제) + `models/alert_event.py` · `models/alert_notify_rule.py` → `frontend/src/pages/AlertInboxPage.tsx` |
 | Pod 병목 진단 | `backend/app/routers/bottleneck.py` + `services/bottleneck_probes/` → `frontend/src/pages/PodBottleneckPage.tsx` · `PodBottleneckDetailPage.tsx` |

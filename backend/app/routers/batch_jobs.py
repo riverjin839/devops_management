@@ -8,6 +8,7 @@ Pattern (extending with new job types):
 That's it — `GET /api/v1/batch-jobs/types` will surface it and the existing
 CRUD/run endpoints work unchanged.
 """
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import BatchJob, BatchJobRun, Cluster, User
-from app.services import audit_logger
+from app.services import active_runs, audit_logger
 from app.schemas.batch_job import (
     BatchJobBulkRunItem,
     BatchJobBulkRunRequest,
@@ -27,6 +28,7 @@ from app.schemas.batch_job import (
     BatchJobRunListResponse,
     BatchJobRunRequest,
     BatchJobRunResponse,
+    BatchJobStopResponse,
     BatchJobTestConnectionRequest,
     BatchJobTestConnectionResponse,
     BatchJobTypeListResponse,
@@ -398,6 +400,79 @@ async def run_job(
         request=request,
     )
     return run
+
+
+@router.post("/{job_id}/stop", response_model=BatchJobStopResponse)
+def stop_job(
+    job_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """갑자기 부하/문제가 생겨 실행 중인 잡을 중지한다.
+
+    수동(동기 HTTP) 실행은 이 요청을 처리하는 프로세스에 살아있는 in-process
+    핸들(SSH 채널/kubectl 프로세스)을 닫아 중지하고, 스케줄/일괄(Celery) 실행은
+    `celery_app.control.revoke(terminate=True)` 로 워커 프로세스를 강제 종료해
+    중지한다(브로커를 통해 프로세스 경계를 넘어 동작). 어느 쪽이든 실제 강제종료가
+    씹혔거나 이미 끝나 있었어도(레이스) DB 상태는 이 요청에서 항상 정확하게
+    정리한다 — "실행 중"에 영원히 갇히는 화면을 만들지 않기 위함.
+    """
+    try:
+        job = get_job_or_404(db, job_id)
+    except BatchJobNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+
+    run = (
+        db.query(BatchJobRun)
+        .filter(BatchJobRun.job_id == job.id, BatchJobRun.status == "running")
+        .order_by(BatchJobRun.started_at.desc())
+        .first()
+    )
+    if run is None and job.last_status != "running" and not job.active_task_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="실행 중인 작업이 없습니다.",
+        )
+
+    interrupted = False
+    if job.active_task_id:
+        try:
+            from app.celery_app import celery_app  # lazy import — celery 의존 분리
+            celery_app.control.revoke(job.active_task_id, terminate=True, signal="SIGTERM")
+            interrupted = True
+        except Exception:  # noqa: BLE001 — 강제종료 실패해도 아래에서 DB 는 정리
+            interrupted = False
+    else:
+        interrupted = active_runs.try_cancel(str(job.id))
+
+    now = datetime.utcnow()
+    if run is not None:
+        run.status = "cancelled"
+        run.error = run.error or "사용자에 의해 중지됨"
+        run.finished_at = now
+        run.duration_ms = int((now - run.started_at).total_seconds() * 1000)
+    job.last_status = "cancelled"
+    job.active_task_id = None
+    db.commit()
+    if run is not None:
+        db.refresh(run)
+
+    audit_logger.record(
+        db, action="batch_job.stop", actor=actor, target_type="batch_job", target_id=job.id,
+        details={"name": job.name, "job_type": job.job_type, "interrupted": interrupted},
+        request=request,
+    )
+    return BatchJobStopResponse(
+        stopped=True,
+        interrupted=interrupted,
+        message=(
+            "중지 요청을 보냈습니다."
+            if interrupted
+            else "실행 중인 프로세스를 찾지 못해 상태만 정리했습니다 (이미 끝났을 수 있음)."
+        ),
+        run=run,
+    )
 
 
 @router.post("/{job_id}/test-connection", response_model=BatchJobTestConnectionResponse)

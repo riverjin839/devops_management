@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
   CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
-  ClipboardList, CalendarCheck, Plus, AlertTriangle, RotateCcw,
+  ClipboardList, CalendarCheck, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
@@ -11,7 +11,6 @@ import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
 import { stripHtml, cn, toLocalDateKey } from '@/lib/utils';
-import { WorkItemFormModal } from '@/components/work-items/WorkItemFormModal';
 import { Button } from '@/components/ui/button';
 
 // 평일(월~금)만 표시한다.
@@ -157,9 +156,6 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const today = useMemo(() => new Date(todayKey + 'T00:00:00'), [todayKey]);
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
-
-  // 업무 등록 — 팝업(WorkItemFormModal). 페이지 이동 없이 이 화면 컨텍스트를 유지.
-  const [createOpen, setCreateOpen] = useState(false);
 
   const currentUser = useAuthStore((s) => s.user);
   const barOpacity = useHomeStore((s) => s.weeklyBarOpacity);
@@ -374,13 +370,6 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               title="업무 관리로 이동"
               className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors">
               <ClipboardList className="w-3 h-3" /> 업무 관리
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              title="새 업무 등록"
-              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
-              <Plus className="w-3 h-3" /> 업무 등록
             </button>
             <button
               type="button"
@@ -642,12 +631,6 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-healthy" />해결 이슈</span>
         <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
       </div>
-
-      <WorkItemFormModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onSaved={() => setCreateOpen(false)}
-      />
     </div>
   );
 }

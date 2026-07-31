@@ -4,6 +4,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { useClusters } from '@/hooks/useCluster';
 import { useK8sEvents, useDeleteK8sEvent } from '@/hooks/useK8sEvents';
+import { K8sEventAnalysisPanel } from '@/components/k8s/K8sEventAnalysisPanel';
 import type { K8sEvent, K8sEventSeverity } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
@@ -190,7 +191,8 @@ export function K8sEventsPage() {
                         </tr>
                         {expandedId === ev.id && (
                           <tr key={`${ev.id}-detail`} className="bg-muted/20">
-                            <td colSpan={8} className="px-4 py-3">
+                            <td colSpan={8} className="px-4 py-3 space-y-3">
+                              <K8sEventAnalysisPanel event={ev} />
                               <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
                                 {JSON.stringify(ev.raw ?? {}, null, 2)}
                               </pre>

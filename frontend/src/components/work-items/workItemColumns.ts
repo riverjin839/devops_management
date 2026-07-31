@@ -20,9 +20,10 @@ export type WorkItemColumnKey =
   | 'jiraLink'
   | 'confluenceLink'
   // ── Jira 원본 축 — 가져온 이슈를 Jira 에서 보던 것과 같은 항목으로 보여준다.
+  // "Jira 상태"는 별도 컬럼 없이 'status'(상태) 셀이 연결 업무면 Jira 원본 상태명으로
+  // 대신 표시한다 — 두 항목이 같은 정보라 하나로 합쳤다(WorkItemTableRow.tsx `case 'status'`).
   | 'jiraEpic'
   | 'jiraType'
-  | 'jiraStatus'
   | 'jiraComponents'
   | 'jiraLabels';
 
@@ -36,8 +37,7 @@ export type WorkItemSortKey =
   | 'startedAt'
   | 'closedAt'
   | 'jiraEpic'
-  | 'jiraType'
-  | 'jiraStatus';
+  | 'jiraType';
 
 export interface WorkItemColumnMeta {
   label: string;
@@ -71,7 +71,6 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
   // Jira 원본 축 — 가져오기를 쓰는 팀만 켜면 되므로 기본 숨김.
   jiraEpic:       { label: 'Epic',             defaultWidth: 220, defaultVisible: false, hideable: true, sortKey: 'jiraEpic' },
   jiraType:       { label: '이슈 종류',        defaultWidth: 100, defaultVisible: false, hideable: true, sortKey: 'jiraType' },
-  jiraStatus:     { label: 'Jira 상태',        defaultWidth: 120, defaultVisible: false, hideable: true, sortKey: 'jiraStatus' },
   jiraComponents: { label: '컴포넌트',         defaultWidth: 160, defaultVisible: false, hideable: true },
   jiraLabels:     { label: '라벨',             defaultWidth: 160, defaultVisible: false, hideable: true },
 };
@@ -81,7 +80,7 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
 export const DEFAULT_COLUMN_ORDER: WorkItemColumnKey[] = [
   'project', 'sprint', 'status', 'assignee', 'category', 'title', 'startedAt', 'closedAt', 'actions',
   'priority', 'cluster', 'content', 'result', 'remarks', 'jiraLink', 'confluenceLink',
-  'jiraEpic', 'jiraType', 'jiraStatus', 'jiraComponents', 'jiraLabels',
+  'jiraEpic', 'jiraType', 'jiraComponents', 'jiraLabels',
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: WorkItemColumnKey[] = (

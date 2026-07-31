@@ -45,7 +45,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 좌측 상단 홈 버튼으로 "업무 현황"(work) ↔ "플랫폼 현황"(platform) 두 모드를 토글하며, 상단 고정 스트립에는 내 할일/미해결 이슈/위험 클러스터/다음 일정 KPI 필과 업무 알람 종이 항상 노출된다.
 - **UI 구성**:
   - 공통 상단 스트립: 사용자명 + 날짜, KPI 필 그룹 맨 앞에 **Your Island 진입 필**(`IslandPill` — 마지막에 보던 아일랜드로 이동, 없으면 "만들기"), 이어서 KPI 필 4종(`내 할일`→`/todo-today`, `미해결 이슈`→`/items`, `위험 클러스터`→`/cluster-overview`, `다음 일정`→`/items`), `WorkAlarmBell`.
-  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다.
+  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다. **업무 등록 진입점은 `DayScheduleBoard` 헤더의 "등록"(`QuickAddTaskModal`) 하나뿐** — 예전엔 `WeeklyStatusTimeline`(주간 탭)에도 별도 "업무 등록"(`WorkItemFormModal`)이 동시에 떠 있어 같은 화면에 등록 버튼이 2개였다가 통합됨. `QuickAddTaskModal`은 PEP 저장 성공 직후 Jira 연동이 켜져 있으면(`useJiraConfig().enabled`) 곧바로 `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성, 체크박스+"생성"/"나중에")로 전환된다 — "나중에"면 PEP 에만 저장. `WorkCalendar`(월간 탭)의 날짜별 "+" 버튼도 같은 `QuickAddTaskModal`을 재사용하므로 동일한 흐름을 탄다.
   - **플랫폼(platform) 모드**: `PlatformStatusMatrix` — 행(점검 항목) × 열(등록된 클러스터) 매트릭스. 첫 열은 sticky(그립(⋮⋮) **드래그로 순서 변경** + 항목명 + **영역 칩·행 배경 색**(category/color — 8색 차트 토큰 프리셋, 항목 폼에서 지정) + 실행방식 배지 + 상시 ▶(전 클러스터 실행) + hover 시 수정/삭제 아이콘, 시스템 항목은 삭제 버튼 숨김), 클러스터 열 헤더는 이름 + cron 배지(클릭 시 팝오버로 `Cluster.check_cron_expr` 편집), 셀은 상태 dot + 값/라벨(클릭 시 `CheckMatrixCellDetailModal` — 탭 3종: **추이 · 이력**(기간별 트렌드 차트 + 변경 이력 + manual 항목이면 값 입력 폼 + core_bundle 이외 항목이면 항목×클러스터 cron 편집) / **실행 방식**(`CheckMatrixRunbookPanel` — 이 셀이 대상 클러스터에서 실제 수행하는 명령·단계·설정값) / **수행 로그**(`CheckMatrixRunList`+`CheckMatrixRunDetailView`), 헤더에 셀 단독 "지금 실행" 버튼). 클러스터 열 헤더에 **열 전체 실행 ▶**, 항목 행 hover 에 **전 클러스터 실행 ▶** 버튼. 카드 헤더에 "수행 로그"(`CheckMatrixRunLogPanel` — 전체/배치 필터, 배치 추적 시 3초 폴링) + "항목 추가"(`CheckMatrixItemFormModal`) + 도움말 `?`(`CheckMatrixHelpPanel` — 기본 사용법/실행하기/점검 방식/로그·보관 4탭 매뉴얼) + 설정 톱니바퀴(`CheckMatrixSettingsModal`, 이력 보관 일수) 버튼. 하단 "플랫폼 도메인" 퀵 액세스(`DomainQuickAccess`)는 제거됨.
   - ClusterSidebar 미사용(홈은 특정 클러스터에 종속되지 않음).
 - **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 플랫폼 모드는 `hooks/useCheckMatrix.ts`(`useCheckMatrixGrid`/`useCheckMatrixItems`/`useReorderCheckMatrixItems`/`useDeleteCheckMatrixItem`/`usePutClusterCron`/`usePutSchedule`/`usePostManualEntry`/`useCheckMatrixCellHistory`/`useCheckMatrixSettings`/`useCheckMatrixRunbook`/`useRunCheckMatrixCell`/`useRunCheckMatrixCluster`/`useRunCheckMatrixItem`/`useCheckMatrixRuns`/`useCheckMatrixRun`). 로컬 state: `weeklyTab`.
@@ -138,15 +138,17 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 시스템 설정 (`/settings`, admin)
 
-- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `SchemaHealthPanel.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
-- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그·스키마 점검까지 플랫폼 전역 설정을 12개 탭으로 모아둔 관리자 콘솔.
+- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `SchemaHealthPanel.tsx`, `LlmSettingsTab.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
+- **목적 / UX**: 클러스터·관리서버·담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·Debug·백업/복구·감사로그·스키마 점검까지 플랫폼 전역 설정을 13개 탭으로 모아둔 관리자 콘솔 (AI/LLM 탭 포함).
 - **UI 구성**:
-  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`Debug`/`백업 / 복구`/`감사 로그`/`스키마 점검`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`PEP 서비스`/`APP 서비스` — 도메인 구분)로 구성되고, 각 서브탭 본문은 `ServiceCategoryManager`(해당 도메인 카테고리) + `LakeServiceTypeManager`(해당 도메인 서비스 타입) 두 섹션을 세로로 렌더한다. 구 최상위 "서비스 카테고리" 탭과 구 "서비스 타입"/"서비스 카탈로그" 서브탭이 전부 여기로 통합됐다 — 레거시 `?tab=service`·`?tab=service-categories` 딥링크는 `mgmt-service` 로 리다이렉트.
+  - 탭 바(`TabId`): `클러스터`/`관리서버`/`담당자`/`운영레벨`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`AI / LLM`/`Debug`/`백업 / 복구`/`감사 로그`/`스키마 점검`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`PEP 서비스`/`APP 서비스` — 도메인 구분)로 구성되고, 각 서브탭 본문은 `ServiceCategoryManager`(해당 도메인 카테고리) + `LakeServiceTypeManager`(해당 도메인 서비스 타입) 두 섹션을 세로로 렌더한다. 구 최상위 "서비스 카테고리" 탭과 구 "서비스 타입"/"서비스 카탈로그" 서브탭이 전부 여기로 통합됐다 — 레거시 `?tab=service`·`?tab=service-categories` 딥링크는 `mgmt-service` 로 리다이렉트.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
+  - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift / orphan_not_null_column — 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음이라 모든 저장이 실패하는 경우)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다.
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/담당자/Jira/백업/감사로그).
+  - `AI / LLM` 탭(`LlmSettingsTab`): 폐쇄망 LLM 이중 운용 설정 — ① LLM 엔드포인트 프로필 목록(사내 OpenAI-호환 서비스 / 인클러스터 Ollama, 상태 pill·연결 테스트·편집/삭제, `ProfileEditModal` 에서 provider/URL/모델(엔드포인트 목록 조회)/API 키 참조(credential·env)/타임아웃/동시성 편집) ② 용도별 라우팅 테이블(챗봇/장애분석/점검리뷰/아키텍처문서/트렌드/임베딩 × primary/fallback) ③ 분석기 백엔드(rule_based/local_llm/claude)·응답 언어(ko/en)·임베딩 모델(변경 시 재계산 경고) ④ API 키 등록(암호화 저장 `llm_credentials`, 원문 재표시 없음) ⑤ **알람 자동 분석 범위**(전역 on/off + 디바운스/전역 시간당 상한 + 규칙 테이블: 클러스터/네임스페이스·알람명 패턴/최소 심각도/시간당 상한/로그 포함/완료 알림 — priority first-match, 저장 시 llm 큐 워커 부재 경고) ⑥ 최근 24h 사용량(프로필×용도 호출/오류/지연/토큰 — 분석 범위 확대 전 부하 확인용). Backend: `GET/PUT /api/v1/llm/settings`, `GET /llm/health`, `GET /llm/profiles/{name}/models`, `POST /llm/test`, `GET /llm/usage`, `GET/PUT /llm/analysis-scope`, `GET/POST/DELETE /llm/credentials`(`llm_settings.py` — AppSetting `llm_settings`/`llm_analysis_scope` + `services/llm/` 게이트웨이). Frontend hooks: `useLlmSettings.ts`.
   - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/담당자/접근제어/Jira/백업/감사로그).
   - ClusterSidebar 미사용(전역 설정 화면이라 클러스터 단위 필터 없음).
@@ -327,14 +329,14 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 알람 인박스 (`/alerts`)
 
-- **파일**: `frontend/src/pages/AlertInboxPage.tsx` (+ `components/observability/{AlertReceiverGuide,AlertNotifyRulesPanel}`).
+- **파일**: `frontend/src/pages/AlertInboxPage.tsx` (+ `components/observability/{AlertReceiverGuide,AlertNotifyRulesPanel,AlertAnalysisPanel}`).
 - **목적 / UX**: 사내 메신저(cube)로만 가던 인시던트 알람을 PEP 에서도 받아 쌓아두는 인박스. Alertmanager webhook 과 사내 alert-forwarder 를 모두 수용하고, 같은 알람이 반복되면 행을 늘리지 않고 반복 수(×N)만 올린다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="전체 클러스터"`).
   - 접이식 "알람 수신 설정 방법" 안내 — Alertmanager `webhook_configs` YAML + curl 테스트 스니펫 복사 버튼(토큰 값은 마스킹).
   - 메인 탭 — **알람 인박스 / 알림 규칙**.
   - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색 + 일괄 확인 + 새로고침. 최근 24시간 요약 pill.
-  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침.
+  - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침 + **AI 분석 패널**(`AlertAnalysisPanel`) — 자동 분석 상태 배지(대기/분석 중/완료/실패/건너뜀), 원인 분석·조치 가이드(실행 없음 — 사람이 수행), analyzed_by(규칙 기반/LLM 프로필) 투명 표기, 수동 'AI 분석 실행/재분석' 버튼(operator+, `POST /observability/alerts/{id}/analyze` → 전용 llm Celery 큐). 자동 분석 범위는 Settings → AI/LLM 의 '알람 자동 분석 범위'(AppSetting `llm_analysis_scope`)에서 규칙(클러스터/네임스페이스/알람명/심각도, 시간당 상한·디바운스)으로 관리.
   - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기.
 - **Frontend**: `useAlerts`, `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
 - **Backend**: 수신 `POST /api/v1/observability/alerts/ingest`(JWT 없음 — `ALERT_INGEST_TOKEN` Bearer 자체 검증, **미설정 시 503 fail-closed**), 조회 `GET /observability/alerts`·`/alerts/stats`·`/alerts/{id}`, `POST /alerts/{id}/ack`·`/alerts/ack-all`, 규칙/설정 CRUD(`require_operator`). 라우터 `backend/app/routers/observability.py`(`ingest_router` + `router`). 모델: `models/alert_event.py`, `models/alert_notify_rule.py`. 서비스: `services/observability/alert_ingest.py`(포맷 2종 파싱), `alert_router.py`(규칙 매칭·중복 억제·알림 생성).
@@ -607,9 +609,9 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **UI 구성**:
   - `ClusterSidebar` 단일 선택(`iconOnly`)
   - 탭: `etcdctl 실행` / `etcd 서비스 로그`
-  - 좌측 패널: master 후보 드롭다운(`master-candidates`) + 수동 host override, SSH 인증
-  - 우측 패널: 프리셋 버튼(args 자동 채움), env file 옵션, args/timeout, 또는 로그 탭의 unit/tail/since/grep
-  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일), 결과 패널(`ResultPanel` — executed command + `ExecOutputTabs` stdout/stderr 탭). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
+  - **10-컬럼 그리드 (mc 클라이언트 콘솔과 동일한 좌/우 한 로우 레이아웃)**: 좌(2) 타겟+인증(master 후보 드롭다운(`master-candidates`) + 수동 host override, user/port, password|key), 중(3) 실행 구성(프리셋 버튼 · env file 옵션 · args/`SavedCommands`/etcdctl 경로/timeout, 로그 탭이면 unit/tail/since/grep), 우(5) 결과 패널.
+  - 결과 패널(`ResultPanel`)은 **실행 전에도 같은 자리에 플레이스홀더**로 존재해 레이아웃이 흔들리지 않고, 카드 내부에서만 세로 스크롤(`lg:h-[calc(100vh-260px)]` + `overflow-y-auto`/`overflow-x-hidden`)된다. 상태 배지 헤더는 sticky, 본문은 executed command + `ExecOutputTabs` stdout/stderr 탭.
+  - 실행 확인 `ConfirmDialog`(위험 명령 정규식 매칭 시 danger 스타일). `useTerminalEnvSync` 로 운영등급 → Appearance 자동 적용.
 - **Frontend**: `useClusters()`, `useQuery(['etcdctl','masters',clusterId])`(`etcdctlApi.masters`), `useQuery(['etcdctl','presets',clusterId])`(`etcdctlApi.presets`), `useAbortableMutation`으로 `etcdctlApi.run` / `etcdctlApi.logs`. 호출 함수: `etcdctlApi.{presets,masters,run,logs}`.
 - **Backend**: `GET /api/v1/clusters/{cluster_id}/etcdctl/presets`, `GET .../etcdctl/master-candidates`, `POST .../etcdctl/run`, `POST .../etcdctl/logs` — `backend/app/routers/etcdctl.py`. master 후보는 control-plane 라벨 노드를 K8s SDK로 조회, 실행은 SSH 러너(bulk_exec와 유사한 SSH 실행 계층)로 `etcdctl` 바이너리/env file을 원격 실행, 로그는 `journalctl -u {unit}` 실행.
 - **핵심 기능**:
@@ -627,18 +629,24 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: 등록된 전체 클러스터를 테이블/카드 뷰로 관리 — 검색/필터/정렬/그룹화(지역·운영레벨), CIDR 겹침 감지, kubeconfig 기반 자동 정보 수집(diff 미리보기 후 적용), 커스텀 컬럼 추가, 드래그 정렬. `/cluster-manage/:id/edit`으로 이동해 상세 메타를 편집한다.
 - **UI 구성**:
   - 이 페이지 자체는 **ClusterSidebar를 사용하지 않음** — 전체 클러스터를 관리하는 목록/테이블 화면이라 별도 좌측 사이드바 없이 본문 전체가 테이블/카드
-  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 이름 표준화, 컬럼 관리(커스텀 필드), 노드 IP 일괄 수집, 컬럼너비 리셋, 검색/필터 패널
-  - 테이블 뷰: 리사이즈 가능한 다열 테이블(이름/상태/지역/운영레벨/BGP/CIDR/bond0·1/Pod·Svc CIDR/Max Pods/K8s·Cilium 버전/노드 IP + 커스텀 필드), 지역/운영레벨 그룹 헤더 행
+  - 헤더: 테이블/카드 뷰 토글(`ViewModeBar`), 이름 표준화, 컬럼 관리(커스텀 필드), 노드 IP 일괄 수집, 컬럼너비 리셋, 검색/필터 패널. 액션이 많아 좁은 폭에서는 줄바꿈(`flex-wrap`)
+  - 검색/필터 패널과 표 컨테이너는 `MacCard`(표는 `bodyPadding="p-0"`), 표 본문은 `DoubleScrollX bodyClassName="max-h-…"` 안에서 세로 스크롤되며 **`thead` 가 sticky 로 고정**된다. 셀은 `overflow-hidden`+`truncate`(툴팁 병행)이라 컬럼을 좁혀도 이웃 열로 넘치지 않는다
+  - 색은 전부 테마 토큰 — 상태 `status-*`, 범주(BGP·bond0/1·버전·CIDR 겹침 그룹) categorical `chart-*` (고정 팔레트 0건)
+  - 상태 표시는 3분기: 로딩=표 skeleton / 조회 실패=`EmptyState`+사유+다시 시도 / 0건·검색 무결과=`EmptyState`+CTA(Settings 등록·필터 초기화)
+  - **검색/필터/정렬/그룹/뷰모드는 URL 쿼리(`?q=&level=&sort=&group=&view=`)에 영속화**(기본값 생략, `replace: true` 로 히스토리 미적재) — 새로고침·공유·뒤로가기에서 유지
+  - 테이블 뷰: 리사이즈 가능한 다열 테이블(이름/상태/지역/운영레벨/BGP/CIDR/bond0·1/Pod·Svc CIDR/Max Pods/K8s·Cilium 버전/노드 IP + 커스텀 필드), 지역/운영레벨 그룹 헤더 행. **수동 정렬 모드에서 행 드래그 지원**(이름 셀 좌측 그립, `DndContext`+그룹별 `SortableContext`)
   - 카드 뷰: `dnd-kit` 드래그 정렬 가능한 `ClusterCard` 그리드(그룹 내에서만 순서 변경)
+  - 드래그 정렬(테이블/카드 공통)은 **정렬이 `수동(드래그)` 일 때만 활성** — 이름/상태/운영레벨순에서는 핸들이 노출되지 않음(D-045). 정보 수집(auto-update)은 클러스터별로 동시 실행·개별 중지 가능(D-047)
   - 행/카드 액션: 새로고침(auto-update dry-run → `ClusterUpdateDiffDialog`), NIC 수집, 수정(`/cluster-manage/:id/edit`), 삭제, Cilium 설정 보기(`CiliumConfigModal`)
-- **Frontend**: `useClusters()` + `useClusterStore()`(Zustand, 클러스터 목록 캐시), `useOperationLevels()`, `useClusterCustomFields()`. 로컬 state: 검색/필터/정렬/그룹, 다수의 진행중 ID(`deletingId`,`autoUpdatingId` 등). 호출 함수: `clustersApi.{delete,autoUpdate,reorder,update(via edit page)}`, `clusterCustomFieldsApi`(via `ClusterCustomFieldsManager`).
+- **Frontend**: `useClusters()`(`isLoading`/`isError`/`refetch` 사용 — 목록이 비어 있을 때 로딩 skeleton / 조회 실패(사유+다시 시도) / 진짜 0건 3분기, 로딩·실패를 "클러스터 없음" 으로 위장하지 않음) + `useClusterStore()`(Zustand, 클러스터 목록 캐시), `useOperationLevels()`, `useClusterCustomFields()`. 로컬 state: 검색/필터/정렬/그룹, 다수의 진행중 ID(`deletingId`,`autoUpdatingId` 등)와 확인 다이얼로그 대상(`deleteTarget`,`bulkConfirmOpen`,`bulkProgress`). 호출 함수: `clustersApi.{delete,autoUpdate,reorder,update(via edit page)}`, `clusterCustomFieldsApi`(via `ClusterCustomFieldsManager`). 표의 인라인 편집(지역/운영레벨/INTERNAL_IP/Pod·Svc CIDR)은 빈 입력을 **`null` 로 전송**해 값 해제가 저장되고(D-041), 저장 실패는 토스트로 고지(D-042).
 - **Backend**: `GET /api/v1/clusters`, `POST /api/v1/clusters/reorder`, `DELETE /api/v1/clusters/{id}`, `POST /api/v1/clusters/{id}/auto-update?dry_run=`, `GET /api/v1/clusters/{id}/cilium-config` — `backend/app/routers/clusters.py`. 커스텀 컬럼은 `GET/POST/PUT/DELETE /api/v1/cluster-custom-fields`, `PUT /api/v1/clusters/{id}/custom-values` — `backend/app/routers/cluster_custom_fields.py`, 모델 `ClusterCustomField`(`backend/app/models/cluster_custom_field.py`) + `Cluster.custom_values`(JSONB). `Cluster` 모델(`backend/app/models/cluster.py`)의 `seq`(드래그 정렬), `cidr/pod_cidr/svc_cidr`, `bond0_ip/bond1_ip`, `node_ips` 등이 테이블 컬럼 데이터 소스.
 - **핵심 기능**:
   - kubeconfig 기반 auto-update(dry-run diff 미리보기 → 적용) — K8s 버전, node IP, CIDR, Max Pods 등 자동 갱신
   - CIDR 겹침(internal/pod/svc) 자동 탐지 + 경고 배지
-  - 지역/운영레벨 그룹화, 드래그 앤 드롭 수동 정렬(`clustersApi.reorder`)
-  - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집
-  - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집
+  - 지역/운영레벨 그룹화, 드래그 앤 드롭 수동 정렬(`clustersApi.reorder`) — 전송 순서는 화면(필터된) 목록이 아니라 **전체 클러스터 기준**으로 재구성해 검색/필터 중 드래그해도 가려진 클러스터의 순서가 오염되지 않음(D-044)
+  - 클러스터별 커스텀 컬럼 CRUD(`ClusterCustomFieldsManager`) + 값 편집 — 편집 진입 시점의 서버 값으로 초기화(stale draft 방지), 저장 실패 시 토스트+편집 유지
+  - 이름 일괄 표준화(`StandardizeClusterNamesModal`), 노드 IP 일괄 수집 — 일괄 수집은 실행 전 `ConfirmDialog`(대상 수·이름 미리보기·hostname/CIDR/버전까지 갱신됨을 명시) → 진행률 `n/N` 버튼 표기 → 재클릭으로 중단, 결과는 완료/중단/부분 실패/전건 실패 구분 토스트(D-048)
+  - 클러스터 삭제는 `ConfirmDialog`(danger) — Addon·Playbook·점검 이력 연쇄 삭제 범위를 명시(D-048)
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -958,16 +966,17 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### Batch Jobs (`/batch-jobs`)
 
-- **파일**: `frontend/src/pages/BatchJobsPage.tsx` (+ `components/batch-jobs/BatchJobTable.tsx`, `BatchJobClusterGroup.tsx`, `BatchJobFilters.tsx`, `BatchJobSlideOver.tsx`(+`.EditForm`/`.RunForm`/`.RunHistory`/`.SavedCreds`), `BatchJobLogDetail.tsx`, `CreateBatchJobWizard.tsx`(+`.StepType`/`.StepHost`/`.StepSchedule`), `UnregisteredTypeChips.tsx`, `StatusPill.tsx`, 공통 `ClusterSidebar`/`ConfirmDialog`/`ExecOutputTabs`/`useToast`)
+- **파일**: `frontend/src/pages/BatchJobsPage.tsx` (+ `components/batch-jobs/BatchJobTable.tsx`, `BatchJobRow.tsx`, `BatchJobClusterGroup.tsx`, `CronBadge.tsx`, `BatchJobFilters.tsx`, `BatchJobSlideOver.tsx`(+`.EditForm`/`.RunForm`/`.RunHistory`/`.SavedCreds`), `BatchJobLogDetail.tsx`, `CreateBatchJobWizard.tsx`(+`.StepType`/`.StepHost`/`.StepSchedule`), `UnregisteredTypeChips.tsx`, `StatusPill.tsx`, 공통 `ClusterSidebar`/`ConfirmDialog`/`ExecOutputTabs`/`useToast`/`ui/tooltip`)
 - **목적 / UX**: etcd defrag, snapshot 저장, K8s 완료/실패 Job 정리 등 클러스터별 반복적 운영 작업(batch job)을 등록하고 수동/일괄/스케줄(cron) 실행하며 실행 이력을 확인한다. SSH 잡은 대상 호스트·자격증명을 잡에 저장해두고 재사용하며, non-SSH(클러스터 스코프) 잡은 클러스터 kubeconfig 로 백엔드에서 직접 실행된다.
 - **UI 구성**:
   - 좌측 `ClusterSidebar` — **단일 선택 + 전체** 모드(`iconOnly` + `allowAll` + `allLabel="전체"`, `selectedId`/`onSelect`).
   - 헤더: 잡 개수/실패/실행 중 요약, "새 잡" 버튼(클러스터 미선택 시 빈 wizard, 선택 시 prefilled).
   - `MacCard "배치 잡"`: `BatchJobFilters`(상태 필터 + 검색), 체크박스 다중 선택 시 일괄 실행 바(저장된 자격증명으로 `bulkRun`). **전체 모드**에서는 잡이 등록된 클러스터별로 `BatchJobClusterGroup` collapsible 섹션(클러스터명·region·운영등급·잡/실패/실행중 통계 헤더 + 섹션별 `BatchJobTable` + `UnregisteredTypeChips`)으로 그룹핑되고, **단일 클러스터 선택**시에는 기존처럼 flat `BatchJobTable` + `UnregisteredTypeChips`.
-  - 우측 `BatchJobSlideOver` — 행 클릭 시 잡 상세(수정/실행/이력/자격증명), 뷰포트 <1280px에서는 overlay 모드. 실행 이력 위에 **"최근 실행 로그"**(`BatchJobLogDetail` — mc 클라이언트 콘솔과 동일한 상태/트리거/실행자/호스트/exit/시간 sticky 헤더 + 실행 명령 + `ExecOutputTabs`)가 펼치지 않아도 항상 노출.
-  - `CreateBatchJobWizard`(3단계: 타입 → 호스트 → 스케줄), 삭제 시 `ConfirmDialog`.
-- **Frontend**: `useBatchJobTypes`, `useBatchJobs`, `useDeleteBatchJob`(+ 컴포넌트 내부에서 `useCreateBatchJob`/`useUpdateBatchJob`/`useRunBatchJob`/`useTestBatchJobConnection`/`useBatchJobRuns`(15초 폴링), 모두 `hooks/useBatchJobs.ts`), `useClusters`. 순수 로컬 state(Zustand 스토어 없음)로 `selectedClusterId`, `statusFilter`, `search`, `sort`, `selectedJob`, `wizardCtx`, `selectedIds`(일괄 실행용), `collapsedClusterIds`(그룹 접기), `overlayMode`(matchMedia) 관리. 일괄 실행은 훅이 아닌 `batchJobsApi.bulkRun()` 직접 호출 + `useToast`로 결과 알림.
-- **Backend**: `GET /api/v1/batch-jobs/types`(등록된 job_type 목록, `requires_ssh` 포함), `GET/POST /api/v1/batch-jobs`, `PUT/DELETE /api/v1/batch-jobs/{id}`, `POST /api/v1/batch-jobs/{id}/run`(동기, timeout 600s), `POST /api/v1/batch-jobs/bulk-run`(Celery `run_batch_job.delay()`로 비동기 큐잉, 저장된 자격증명 없으면 스킵), `GET /api/v1/batch-jobs/{id}/runs`, `GET /api/v1/batch-jobs/runs/{id}`, `POST /api/v1/batch-jobs/{id}/test-connection`(SSH 연결만 검증) — 전부 `backend/app/routers/batch_jobs.py`. create/update/delete/run/bulk-run 은 `audit_logger.record()`(action=`batch_job.*`)로 감사 로그도 남긴다(admin 이 Settings 감사 로그 조회에서 누가/언제/무엇을 했는지 추적). 서비스: `app/services/batch_job_service.py`(`execute_job`, `get_job_or_404` — 수동/일괄 실행 시 요청 사용자를 `triggered_by_user_id`/`triggered_by_username` 로 전달), `app/services/batch_jobs/`(`@register_executor` 패턴으로 job_type별 executor 등록, `list_executors`/`get_executor`; SSH executor `etcdctl_defrag`/`shell_command` + non-SSH(`requires_ssh=False`) executor `k8s_job_cleanup` — 클러스터 kubeconfig 로 kubectl 직접 실행, dry_run 기본), `app/services/ssh_runner.py`(paramiko 기반 `test_connection`), `app/services/secret_box.py`(자격증명 암/복호화). 모델: `backend/app/models/batch_job.py`(`BatchJob`, `BatchJobRun` — cron·`encrypted_password`/`encrypted_private_key`·`last_schedule_check_at`/`last_schedule_note` 필드로 스케줄 진단 지원 + `triggered_by_user_id`/`triggered_by_username`(실행자 스냅샷)·`params_snapshot`(그 실행에 실제로 쓰인 merge 후 파라미터, admin 감사용)).
+  - `BatchJobTable` 각 행(`BatchJobRow`): cron 컬럼은 `CronBadge`(색상 코드 배지 — 등록됨/대기 중/평가 오류/자격증명 없음/꺼짐 + hover 툴팁으로 cron 식·활성화·저장 자격증명·스케줄러 최근 평가·최근 실행 노출), 우측 "실행" 컬럼에 상태에 따라 ▶(즉시 실행, hover 로 잡 상세 툴팁) 또는 ■(중지, 실행 중일 때만) 아이콘.
+  - 우측 `BatchJobSlideOver` — 행 클릭 시 잡 상세(수정/실행/이력/자격증명), 뷰포트 <1280px에서는 overlay 모드. 실행 이력 위에 **"최근 실행 로그"**(`BatchJobLogDetail` — mc 클라이언트 콘솔과 동일한 상태/트리거/실행자/호스트/exit/시간 sticky 헤더 + 실행 명령 + `ExecOutputTabs`)가 펼치지 않아도 항상 노출. 실행 중인 잡은 액션 바의 "지금 실행" 버튼이 "지금 중지"로 바뀐다.
+  - `CreateBatchJobWizard`(3단계: 타입 → 호스트 → 스케줄), 삭제/중지 시 `ConfirmDialog`(위험 확인).
+- **Frontend**: `useBatchJobTypes`, `useBatchJobs`, `useDeleteBatchJob`(+ 컴포넌트 내부에서 `useCreateBatchJob`/`useUpdateBatchJob`/`useRunBatchJob`/`useStopBatchJob`/`useTestBatchJobConnection`/`useBatchJobRuns`(15초 폴링), 모두 `hooks/useBatchJobs.ts`), `useClusters`. 순수 로컬 state(Zustand 스토어 없음)로 `selectedClusterId`, `statusFilter`, `search`, `sort`, `selectedJob`, `wizardCtx`, `selectedIds`(일괄 실행용), `collapsedClusterIds`(그룹 접기), `overlayMode`(matchMedia) 관리. 일괄 실행은 훅이 아닌 `batchJobsApi.bulkRun()` 직접 호출 + `useToast`로 결과 알림. cron 배지/즉시 실행·중지 아이콘의 hover 는 shadcn `Tooltip`(Base UI, `components/ui/tooltip.tsx`) — `BatchJobTable` 루트를 `TooltipProvider` 로 감싼다.
+- **Backend**: `GET /api/v1/batch-jobs/types`(등록된 job_type 목록, `requires_ssh` 포함), `GET/POST /api/v1/batch-jobs`, `PUT/DELETE /api/v1/batch-jobs/{id}`, `POST /api/v1/batch-jobs/{id}/run`(동기, timeout 600s), `POST /api/v1/batch-jobs/{id}/stop`(실행 중지 — 아래 참고), `POST /api/v1/batch-jobs/bulk-run`(Celery `run_batch_job.delay()`로 비동기 큐잉, 저장된 자격증명 없으면 스킵), `GET /api/v1/batch-jobs/{id}/runs`, `GET /api/v1/batch-jobs/runs/{id}`, `POST /api/v1/batch-jobs/{id}/test-connection`(SSH 연결만 검증) — 전부 `backend/app/routers/batch_jobs.py`. create/update/delete/run/bulk-run/stop 은 `audit_logger.record()`(action=`batch_job.*`)로 감사 로그도 남긴다(admin 이 Settings 감사 로그 조회에서 누가/언제/무엇을 했는지 추적). 서비스: `app/services/batch_job_service.py`(`execute_job`, `get_job_or_404` — 수동/일괄 실행 시 요청 사용자를 `triggered_by_user_id`/`triggered_by_username` 로 전달; `_run_and_record` 가 실행 *전*에 BatchJobRun 을 status="running" 으로 먼저 만들어 중지 대상이 항상 존재하게 함), `app/services/batch_jobs/`(`@register_executor` 패턴으로 job_type별 executor 등록, `list_executors`/`get_executor`; SSH executor `etcdctl_defrag`/`shell_command` + non-SSH(`requires_ssh=False`) executor `k8s_job_cleanup` — 클러스터 kubeconfig 로 kubectl 직접 실행, dry_run 기본; `base.py` 의 `CancelToken` 이 SSH client/kubectl Popen 을 attach 해 중지 요청 시 강제 종료), `app/services/active_runs.py`(수동 실행용 in-process 취소 레지스트리), `app/services/ssh_runner.py`(paramiko 기반 `test_connection`, `_exec_ssh`/`run_bulk` 가 `cancel_token` 을 받아 SSH client 를 attach), `app/services/secret_box.py`(자격증명 암/복호화). 모델: `backend/app/models/batch_job.py`(`BatchJob` — cron·`encrypted_password`/`encrypted_private_key`·`last_schedule_check_at`/`last_schedule_note`·`active_task_id`(Celery revoke 대상 추적); `BatchJobRun` — `triggered_by_user_id`/`triggered_by_username`(실행자 스냅샷)·`params_snapshot`(그 실행에 실제로 쓰인 merge 후 파라미터, admin 감사용), status 에 `cancelled` 추가).
 - **핵심 기능**:
   - 클러스터 단일 선택/전체 보기(전체는 클러스터별 그룹 섹션), 상태 필터(전체/실패/실행중 등) + 텍스트 검색
   - 체크박스 다중 선택 후 저장된 자격증명으로 여러 클러스터 잡을 Celery 백그라운드 일괄 실행(`bulk-run`), 큐잉/스킵 결과를 토스트로 안내
@@ -976,7 +985,9 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - **K8s Job 정리(`k8s_job_cleanup`)**: 완료/실패 Job 을 kubeconfig 로 조회·삭제하는 non-SSH 잡 — dry_run 기본, active Job 보호, `older_than_hours`/네임스페이스 제외/라벨 셀렉터 필터. 위저드/실행 폼이 호스트·자격증명 입력을 자동 생략
   - SSH 연결 테스트(명령 미실행, `test-connection`)로 자격증명/네트워크 사전 검증 (SSH 타입 한정)
   - 실행 이력 15초 자동 갱신 + 트리거 배지(수동/스케줄/일괄), 일괄 실행은 trigger="bulk" 로 기록
-  - **admin 실행 추적성**: 실행자(수동/일괄만, 스케줄은 시스템)와 그 실행에 실제로 쓰인 파라미터 스냅샷(dry_run 여부 등)이 로그 상세 카드에 노출되고, 등록/수정/삭제/실행은 감사 로그에도 기록
+  - **admin 실행 추적성**: 실행자(수동/일괄만, 스케줄은 시스템)와 그 실행에 실제로 쓰인 파라미터 스냅샷(dry_run 여부 등)이 로그 상세 카드에 노출되고, 등록/수정/삭제/실행/중지는 감사 로그에도 기록
+  - **실행 중지**: 테이블 행 또는 슬라이드오버에서 실행 중인 잡을 즉시 중지 — 수동 실행은 SSH 채널/kubectl 프로세스를 직접 닫아, 스케줄/일괄은 Celery revoke(terminate)로 중단. 실제 강제종료 성공 여부와 무관하게 DB 상태는 항상 `cancelled` 로 정정됨
+  - **행별 즉시 실행**: 잡을 열지 않고 테이블에서 바로 실행하는 ▶ 아이콘(저장 자격증명/non-SSH 필요, 없으면 비활성화+안내)
   - 미등록 job_type을 클러스터별로 안내하는 `UnregisteredTypeChips` → wizard로 바로 등록 유도
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -1028,13 +1039,13 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
 - **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `AddWorkItemRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemFormModal.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`)
-- **목적 / UX**: 전사 업무(task/issue/meeting/training/etc)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
+- **목적 / UX**: 전사 업무(유형: 이슈 대응/회의/운영 대응/기타 — 내부 저장값은 `issue`/`meeting`/`task`/`etc`, 레거시 `training` 도 조회는 계속 됨)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
 - **UI 구성**:
   - 헤더: 전체/WIP/Done 카운트 배지, 뷰 전환(`ViewModeBar`: 목록/달력/칸반), Jira 가져오기 버튼(`jiraConfig.enabled`일 때만), CSV 추출, 업무 등록 버튼
-  - 업무 분류 드롭다운(6개 유형) + **내 업무 토글(기본 ON)** · 담당자/분류/우선순위/모듈/스프린트/기간(이번주 토글, from~to) 필터 바, 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴
-  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`), 하단 인라인 `AddWorkItemRow`
+  - 업무 분류 드롭다운(4개 유형 — 이슈 대응/회의/운영 대응/기타) + **내 업무 토글(기본 ON)** · 담당자/분류/우선순위/모듈/스프린트/기간(이번주 토글, from~to) 필터 바, 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴
+  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`), **상단 인라인 `AddWorkItemRow`**(헤더 바로 아래 — 목록 최상단)
   - 제목 셀: Jira 키 박스(`JiraIssueChip` 계열) + **Confluence 문서 박스**(`DocLinkChip` — 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장)
-  - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): Epic · 이슈 종류 · Jira 상태 · 컴포넌트 · 라벨. Jira 연결 업무의 상태 셀은 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준
+  - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): Epic · 이슈 종류 · 컴포넌트 · 라벨. **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
   - 칸반 뷰: `WorkItemKanban` (상태별 컬럼)
   - 달력 뷰: `WorkItemCalendar`
   - 모달: `WorkItemFormModal`(신규/하위 등록), `WorkItemCustomFieldsManager`, `JiraImportModal`, `JiraProvisionModal`(Jira 이슈 + Confluence 문서 동시 생성), 삭제 `ConfirmDialog`
@@ -1063,7 +1074,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **Frontend**: `useWorkItems()`(hooks/useWorkItems.ts, 목록에서 `parentId`로 상위 항목 조회) — 별도 단건 GET을 쓰지 않고 이미 캐시된 목록에서 find. `useSearchParams`로 `parentId`/`type`/`startedAt` 쿼리 읽어 기본값 지정. 실제 저장 mutation은 `WorkItemForm` 내부에서 처리(`useCreateWorkItem`).
 - **Backend**: 저장 시 `POST /api/v1/work-items` (`backend/app/routers/work_items.py`). 목록 조회는 `GET /api/v1/work-items`. 모델: `WorkItem` (parent_id 자기참조 FK로 하위 업무 구현).
 - **핵심 기능**:
-  - `type` 쿼리파라미터로 유형(task/issue/meeting/training/etc) 사전 지정, 유효하지 않으면 `task` 기본값
+  - `type` 쿼리파라미터로 유형 사전 지정, 유효하지 않으면 `task`(라벨 "운영 대응") 기본값. 선택 가능한 4종은 `issue`(이슈 대응)/`meeting`(회의)/`task`(운영 대응)/`etc`(기타) — `training`(교육)은 과거 데이터 호환을 위해 백엔드 스키마에는 남아있지만 신규 등록 UI 에서는 더 이상 선택하지 않는다
   - `parentId` 쿼리파라미터로 하위 업무 등록 모드 전환 + 상위 업무 제목 미리보기(HTML 스트립, 60자 절삭)
   - `startedAt` 쿼리파라미터로 캘린더/보드에서 날짜 지정 진입 지원
   - 취소/저장 완료 시 `/tasks-mgmt`로 복귀
@@ -1425,6 +1436,25 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 문서 관리 (`/documents`)
+
+- **파일**: `frontend/src/pages/DocumentsPage.tsx` (+ `frontend/src/components/documents/` 의 `ConfluenceImportModal`, `ConfluenceExportDialog`, `ConfluenceDocsSettingsDialog`, `SyncStatusBadge`)
+- **목적 / UX**: 파트 문서(WorkGuide)를 한 화면의 테이블로 관리하고 Confluence 가져오기/게시/재동기화를 실행하는 대시보드. 사이드바 work 모드의 신규 "문서 관리" 그룹 진입점이며, 같은 그룹에 2026-07 개편 때 고아가 됐던 지식 화면들(`/work-guides` `/docs` `/ops-notes` `/mindmap` `/ontology` `/trends`)이 복귀했다. 문서 편집 자체는 기존 `/work-guides/:id` 화면을 그대로 쓴다.
+- **UI 구성**:
+  - 요약 타일 4개(전체/PEP 작성/Confluence 연동/동기화 필요 — 클릭 시 출처 필터 적용)
+  - 검색창 + "AI 검색" 토글(임베딩 시맨틱 검색, Ollama 미기동 시 ILIKE 폴백 안내) + 분류/상태/출처 필터
+  - 문서 테이블: 제목·분류·상태·작성자·출처(PEP/Confluence 배지)·동기화(`SyncStatusBadge` — synced/modified/error + 버전)·수정일, 행 hover 액션(게시/다시 가져오기/편집), 행 클릭 → `/work-guides/:id`
+  - 툴바: 새 문서(`/work-guides/new`), Confluence 가져오기(위저드 모달), 동기화 설정(admin)
+  - 가져오기 위저드: 간편(스페이스+검색어)/CQL 검색 → dry-run 미리보기(create/update/unchanged 배지 + changes/경고 펼침, 행 선택) → 커밋 결과(신규/갱신/건너뜀/경고)
+- **Backend**: `backend/app/routers/confluence.py` (`/confluence/docs/{search,import,export,pull,settings}`) — 세션은 `routers/jira.py` 의 `_confluence_service_verified` 재사용(SSO 자동 재로그인 포함), storage-format ↔ 에디터 HTML 변환은 `services/confluence_storage.py`, 시맨틱 검색은 `GET /work-guides/search` (`services/knowledge_search.py`). 가져오기 커밋 시 문서별 임베딩 재계산(Celery `compute_work_guide_embedding`)이 큐잉된다.
+- **핵심 기능**:
+  - Confluence 페이지 → WorkGuide 가져오기 (dry-run 프리뷰, `confluence_page_id` 기준 upsert, 버전 동일 시 unchanged 스킵, 매크로 변환 경고 노출)
+  - PEP 문서 → Confluence 게시 (연결 문서는 같은 페이지 새 버전, base64 이미지는 첨부 업로드 후 `ri:attachment` 치환)
+  - 동기화 상태 추적: PEP 에서 수정 시 `modified`(재게시 필요) 전이, 실패 시 `error`+사유
+  - 가져온 문서는 임베딩 계산 후 AI 검색·내부 LLM 학습(RAG) 소스로 편입
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 작업 가이드 (`/work-guides`, `/work-guides/new`, `/work-guides/:id`, `/work-guides/:id/edit`)
 
 - **파일**: `frontend/src/pages/WorkGuidePage.tsx` (+ `frontend/src/components/work-guides` 의 `GuideForm`, `GuidePageView`; 리치텍스트는 TipTap `RichTextEditor`/`RichContent` 사용)
@@ -1432,6 +1462,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **UI 구성**:
   - 좌측 사이드바: 페이지 트리(부모-자식, 폴더/파일 아이콘, 상태 배지, 인라인 이름변경·하위 페이지 추가), "새 페이지" 버튼
   - 우측 본문: 모드별로 `GuideForm`(작성/수정) 또는 `GuidePageView`(읽기, 수정/하위추가/워크플로 추가/삭제 액션 포함) 또는 빈 상태 안내
+  - 읽기 헤더에 Confluence 동기화 배지(`SyncStatusBadge`) + "게시" 버튼(`ConfluenceExportDialog`) + 연결 문서면 "다시 가져오기"(pull) 버튼 — `/documents` 화면 명세 참조
   - "워크플로에 노드로 추가" 모달(`AddToWorkflowModal`, `SidePane`) — 가이드를 기존 워크플로 스텝으로 연결
 - **Frontend**: `useQuery(['work-guides'], workGuidesApi.getAll)`로 전체 트리 로드 후 `parentId` 기준 클라이언트 필터링. 워크플로 연결 시 `workflowsApi.getAll` + `workflowsApi.createStep`. 이름변경/삭제/자식생성은 `workGuidesApi.update`/`delete`/`create` 직접 호출 후 `invalidateQueries(['work-guides'])`.
 - **Backend**: `GET/POST /api/v1/work-guides`, `GET/PUT/DELETE /api/v1/work-guides/{guide_id}` — `backend/app/routers/work_guide.py`. 모델은 `backend/app/models/work_guide.py`의 `WorkGuide`(`parent_id`로 계층, `status` draft/active/archived, `embedding` — pgvector 컬럼으로 유사 문서 검색용, 제목/본문 변경 시 `compute_work_guide_embedding` Celery 태스크로 비동기 재계산). 워크플로 스텝 연결은 workflows 라우터의 `createStep` 사용.

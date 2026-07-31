@@ -2,6 +2,7 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import type { Cluster } from '@/types';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { BatchJobRow } from './BatchJobRow';
 import { type SortKey, type SortState } from './types';
 
@@ -95,52 +96,57 @@ export function BatchJobTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="border-b border-border">
-            {selectable && (
-              <th className="px-3 py-2 bg-secondary/40" style={{ width: '36px' }}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={() => onToggleAll?.(sorted.map((j) => j.id))}
-                  aria-label="전체 선택"
-                  className="cursor-pointer"
-                />
+    <TooltipProvider delay={150}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-border">
+              {selectable && (
+                <th className="px-3 py-2 bg-secondary/40" style={{ width: '36px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => onToggleAll?.(sorted.map((j) => j.id))}
+                    aria-label="전체 선택"
+                    className="cursor-pointer"
+                  />
+                </th>
+              )}
+              <SortHeader label="상태" sortKey="status" current={sort} onChange={onSortChange} width="100px" />
+              <SortHeader label="잡" sortKey="name" current={sort} onChange={onSortChange} />
+              {clusterMap && (
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
+                  클러스터
+                </th>
+              )}
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '120px' }}>
+                타입
               </th>
-            )}
-            <SortHeader label="상태" sortKey="status" current={sort} onChange={onSortChange} width="100px" />
-            <SortHeader label="잡" sortKey="name" current={sort} onChange={onSortChange} />
-            {clusterMap && (
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
-                클러스터
+                cron
               </th>
-            )}
-            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '120px' }}>
-              타입
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '110px' }}>
-              cron
-            </th>
-            <SortHeader label="최근 실행" sortKey="lastRunAt" current={sort} onChange={onSortChange} width="120px" />
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((job) => (
-            <BatchJobRow
-              key={job.id}
-              job={job}
-              cluster={clusterMap ? clusterMap[job.clusterId] : undefined}
-              selected={selectedJobId === job.id}
-              onClick={() => onSelectJob(job)}
-              checkbox={selectable}
-              checked={selectedIds?.has(job.id) ?? false}
-              onToggleSelect={onToggleSelect}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+              <SortHeader label="최근 실행" sortKey="lastRunAt" current={sort} onChange={onSortChange} width="120px" />
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-secondary/40" style={{ width: '60px' }}>
+                실행
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((job) => (
+              <BatchJobRow
+                key={job.id}
+                job={job}
+                cluster={clusterMap ? clusterMap[job.clusterId] : undefined}
+                selected={selectedJobId === job.id}
+                onClick={() => onSelectJob(job)}
+                checkbox={selectable}
+                checked={selectedIds?.has(job.id) ?? false}
+                onToggleSelect={onToggleSelect}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </TooltipProvider>
   );
 }

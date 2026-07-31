@@ -13,7 +13,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import paramiko
 
@@ -159,14 +159,24 @@ def test_connection(tgt: SSHTarget, connect_timeout: int = 8) -> SSHResult:
 def _exec_ssh(
     tgt: SSHTarget, command: str, connect_timeout: int, exec_timeout: int,
     max_stdout_chars: int = 8000,
+    cancel_token: Optional[Any] = None,
 ) -> SSHResult:
     """SSH 로 명령 실행. stdout 은 기본 8000 chars 로 잘리는데, JSON 등 구조화된
     큰 출력을 받는 호출은 max_stdout_chars 를 넉넉히 늘려야 한다 (예: ip -j addr show
-    가 노드당 인터페이스 수에 따라 수십 KB 까지 커짐 — 잘리면 JSON 파싱 실패)."""
+    가 노드당 인터페이스 수에 따라 수십 KB 까지 커짐 — 잘리면 JSON 파싱 실패).
+
+    ``cancel_token`` — optional object with an ``attach(handle)`` method
+    (duck-typed to avoid importing the batch-jobs feature module from this
+    general-purpose infra module). If given, the connected client is
+    attached so a concurrent caller can force-close it to interrupt this
+    blocking call from another thread (used by batch job "중지").
+    """
     start = time.monotonic()
     client: Optional[paramiko.SSHClient] = None
     try:
         client = _build_client(tgt, connect_timeout)
+        if cancel_token is not None:
+            cancel_token.attach(client)
         stdin, stdout, stderr = client.exec_command(command, timeout=exec_timeout, get_pty=False)
         # 출력 읽기
         out = stdout.read().decode("utf-8", errors="replace")
@@ -282,6 +292,7 @@ async def run_bulk(
     chunk_size: int = 30,
     chunk_pause_ms: int = 200,
     max_stdout_chars: int = 8000,
+    cancel_token: Optional[Any] = None,
 ) -> list[SSHResult]:
     """여러 target 에 대해 SSH/SCP 일괄 실행.
 
@@ -299,6 +310,7 @@ async def run_bulk(
             res = _exec_ssh(
                 t, command or "", connect_timeout, exec_timeout,
                 max_stdout_chars=max_stdout_chars,
+                cancel_token=cancel_token,
             )
         elif action == "scp":
             res = _exec_scp_push(t, scp_content or b"", scp_remote_path or "", connect_timeout)

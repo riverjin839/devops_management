@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clustersApi, healthApi, historyApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
-import { Cluster, Addon } from '@/types';
+import { Cluster, Addon, ClusterManageUpdate } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 // Query Keys
@@ -92,7 +92,9 @@ export function useUpdateCluster() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Cluster> }) =>
+    // 값 해제는 `null` 전송이 필요하므로 `ClusterManageUpdate`(null 허용)도 받는다 (D-041).
+    // 에러 고지는 호출부 책임 — SettingsPage 등이 자체 인라인 에러를 쓰므로 훅 공통 토스트는 두지 않는다.
+    mutationFn: ({ id, data }: { id: string; data: Partial<Cluster> | ClusterManageUpdate }) =>
       clustersApi.update(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cluster(id) });
