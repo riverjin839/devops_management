@@ -7,9 +7,11 @@ import {
 import { useCreateWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useAssignees } from '@/hooks/useAssignees';
+import { useJiraConfig } from '@/hooks/useJira';
 import { useToast } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import type { KanbanStatus, WorkItemType } from '@/types';
+import { JiraProvisionModal } from '@/components/work-items/JiraProvisionModal';
+import type { KanbanStatus, WorkItem, WorkItemType } from '@/types';
 import { WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { formatApiError } from '@/lib/utils';
 
@@ -55,8 +57,15 @@ function formatDateLabel(date: string): string {
  * 메인 화면 달력에서 날짜 클릭 시 띄우는 빠른 업무 등록 모달.
  *
  * 백엔드의 `work_items` 테이블을 그대로 사용한다 — `startedAt` 가 일정의 시점,
- * `type` 으로 작업/이슈/회의/교육/기타 를 구분한다. 자세한 옵션(서비스 태그,
+ * `type` 으로 이슈 대응/회의/운영 대응/기타 를 구분한다. 자세한 옵션(서비스 태그,
  * 모듈, effortHours 등)은 업무 관리 게시판의 정식 폼에서 추가/수정.
+ *
+ * PEP 저장 성공 후 Jira 연동이 켜져 있으면(`jiraConfig.enabled`) 곧바로
+ * `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성 팝업)로 전환한다 — 그 안의
+ * 체크박스 + "생성"/"나중에" 가 "Jira/Confluence 에도 등록할지" 를 묻는 절차를 겸한다.
+ * "나중에" 를 누르면 PEP 에만 저장된 채로 끝난다. 연동이 꺼져 있으면 이 단계 자체가
+ * 생략되고 바로 닫힌다. `AddWorkItemRow`(업무 관리 게시판 인라인 등록행)의 기존
+ * 패턴과 동일하다.
  */
 export function QuickAddTaskModal({
   open, defaultDate, defaultTime, defaultAssignee, defaultClusterId, onClose, onCreated,
@@ -68,8 +77,12 @@ export function QuickAddTaskModal({
 
   const { data: clusters = [] } = useClusters();
   const { data: assignees = [] } = useAssignees();
+  const { data: jiraConfig } = useJiraConfig();
   const createMut = useCreateWorkItem();
-  const dialogRef = useModalA11y(open, onClose);
+  // 등록 성공 후 Jira/Confluence 단계로 넘어가면 이 폼 자체는 닫힌 것으로 취급 —
+  // 포커스 트랩·Escape 를 JiraProvisionModal 쪽으로 넘긴다(이중 활성 방지).
+  const [provisionItem, setProvisionItem] = useState<WorkItem | null>(null);
+  const dialogRef = useModalA11y(open && !provisionItem, onClose);
 
   const [selectedType, setSelectedType] = useState<WorkItemType | null>(null);
   const [title, setTitle] = useState('');
@@ -91,9 +104,23 @@ export function QuickAddTaskModal({
     setTime(defaultTime ?? '09:00');
     setClusterId(defaultClusterId ?? '');
     setError(null);
+    setProvisionItem(null);
   }, [open, defaultClusterId, defaultTime, defaultAssignee]);
 
   if (!open) return null;
+
+  // Jira/Confluence 단계 — 완료(생성 또는 나중에) 시에만 진짜로 닫는다.
+  const finishAfterProvision = () => {
+    setProvisionItem(null);
+    onCreated?.();
+    onClose();
+  };
+
+  if (provisionItem) {
+    return (
+      <JiraProvisionModal open onClose={finishAfterProvision} item={provisionItem} />
+    );
+  }
 
   const canSubmit = selectedType !== null
     && title.trim().length > 0
@@ -107,7 +134,7 @@ export function QuickAddTaskModal({
     try {
       const cluster = clusters.find((c) => c.id === clusterId);
       const trimmedTitle = title.trim();
-      await createMut.mutateAsync({
+      const created = await createMut.mutateAsync({
         type: selectedType,
         assignee: assignee.trim(),
         primaryAssignee: assignee.trim(),
@@ -122,8 +149,14 @@ export function QuickAddTaskModal({
       });
       const typeLabel = WORK_ITEM_TYPE_CONFIG[selectedType].label;
       toast.success(`${typeLabel} 등록 완료`, `${formatDateLabel(defaultDate)} · ${time}`);
-      onCreated?.();
-      onClose();
+      // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다 — PEP 저장은
+      // 이미 끝났으므로 이 단계를 건너뛰어도("나중에") 데이터 유실은 없다.
+      if (jiraConfig?.enabled) {
+        setProvisionItem(created.data);
+      } else {
+        onCreated?.();
+        onClose();
+      }
     } catch (err) {
       setError(formatApiError(err));
     }
@@ -161,7 +194,7 @@ export function QuickAddTaskModal({
         </div>
 
         <div className="px-5 pb-5 space-y-3.5">
-          {/* 업무 유형 picker — 작업/이슈/회의/교육/기타. 기본값 없음. */}
+          {/* 업무 유형 picker — 이슈 대응/회의/운영 대응/기타. 기본값 없음. */}
           <fieldset>
             <legend className="text-sm font-medium text-muted-foreground mb-1.5 block">
               유형 <span className="text-status-critical">*</span>

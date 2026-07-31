@@ -32,7 +32,7 @@ type ViewMode = 'table' | 'calendar' | 'kanban';
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 /** 컬럼 헤더 — 드래그 핸들(순서 변경) + 정렬 토글 + 우측 리사이즈 그립. */
-/** 업무 분류(유형) 필터 — 6개 탭을 버튼 하나 + 드롭다운으로 접어 한 줄에 들어오게. */
+/** 업무 분류(유형) 필터 — 4개 탭(이슈 대응/회의/운영 대응/기타)을 버튼 하나 + 드롭다운으로 접어 한 줄에 들어오게. */
 function TypeFilterDropdown({
   value, onChange,
 }: {

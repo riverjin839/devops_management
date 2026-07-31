@@ -10,6 +10,24 @@
 
 1.18.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **업무 현황 — 업무 등록 진입점 통합 + Jira/Confluence 연계**: 홈 화면 업무 현황(work)
+  모드에서 동시에 노출되던 두 등록 버튼(당일 스케줄 패널의 "등록" ↔ 담당자별 진행 현황
+  패널의 "업무 등록", 서로 다른 팝업으로 각각 열렸음)을 "등록"(`QuickAddTaskModal`) 팝업
+  하나로 통합했다. 이 팝업으로 업무를 등록하면 이제 PEP 저장 성공 직후 Jira 연동이
+  켜져 있을 때만 Jira 이슈·Confluence 문서 생성 팝업(`JiraProvisionModal`)으로 자동
+  전환된다 — 만들지 않고 "나중에"를 누르면 PEP 에만 저장된 채로 끝난다(업무 관리
+  게시판의 인라인 등록행이 쓰던 것과 같은 흐름). Frontend:
+  `WeeklyStatusTimeline`(중복 버튼·모달 제거), `QuickAddTaskModal`(Jira 단계 체이닝).
+- **업무 유형 재정리**: "유형"이 곧 "업무 유형"인데 선택지 안에 "업무"가 들어있던 순환을
+  정리해, 새 업무 등록 시 고를 수 있는 유형을 **이슈 대응 · 회의 · 운영 대응 · 기타** 4종으로
+  줄였다. 기존 "업무"는 "운영 대응"으로 라벨만 재정의(같은 내부 값 재사용, 데이터 이관
+  불필요)했고, "교육"은 선택 목록에서만 제외했다(과거에 교육으로 등록된 항목은 배지·CSV
+  라벨 그대로 유지, 신규 등록만 불가). 백엔드 스키마(`WorkItemType` Literal)는 하위 호환을
+  위해 변경하지 않았다 — 프론트 표시 라벨과 CSV 내보내기 라벨만 맞췄다.
+  Frontend: `workItemKanbanUtils.ts`(`WORK_ITEM_TYPE_CONFIG`/`WORK_ITEM_TYPE_ORDER`).
+  Backend: `work_items.py`(CSV export `type_label_map`).
+
 ## [1.18.1] - 2026-07-30
 
 ### Fixed
