@@ -5,24 +5,26 @@ import { create } from 'zustand';
  * - `default`       : 기본 테마 — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경 +
  *                     큰 radius + 은은한 그림자 + 코랄 #D97757 accent). 신규 사용자
  *                     첫 진입 시 보이는 화면.
+ * - `comfort`       : 크림 배경 + 딥그린 액센트 + 화이트 카드 + 큰 radius(16px) —
+ *                     부드럽고 편안한 대시보드 톤 (Donezo-inspired).
  * - `light` / `dark`: Databricks-leaning 라이트 / 다크 (대안).
  * - `system`        : OS 환경설정 따라가는 라이트/다크.
  */
-export type Theme = 'default' | 'dark' | 'light' | 'system';
+export type Theme = 'default' | 'comfort' | 'dark' | 'light' | 'system';
 
 function getSystemPreference(): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-const ALL_CLASSES = ['light', 'dark', 'default'] as const;
+const ALL_CLASSES = ['light', 'dark', 'default', 'comfort'] as const;
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
   // 기존 모드 클래스 제거
   for (const c of ALL_CLASSES) root.classList.remove(c);
 
-  if (theme === 'default') {
-    root.classList.add('default');
+  if (theme === 'default' || theme === 'comfort') {
+    root.classList.add(theme);
   } else {
     const resolved = theme === 'system' ? getSystemPreference() : theme;
     root.classList.add(resolved);
@@ -38,7 +40,7 @@ if (_stored === 'claude') {
   localStorage.setItem('k8s:theme', 'default');
 }
 const _initial: Theme = (
-  _stored === 'default' || _stored === 'dark' || _stored === 'light' || _stored === 'system'
+  _stored === 'default' || _stored === 'comfort' || _stored === 'dark' || _stored === 'light' || _stored === 'system'
     ? _stored
     : 'default'
 );

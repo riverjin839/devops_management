@@ -1,0 +1,117 @@
+{{- if .Values.ollama.enabled }}
+# 인클러스터 자체 LLM (Ollama) — 모델이 이미지에 pre-baked 된 커스텀 이미지 사용.
+# 폐쇄망에서는 values-airgap.yaml 이 내부 레지스트리로 이미지를 재지정한다.
+# 모델 영속화가 필요하면 ollama.persistence.enabled=true (PVC — 이미지에 구운
+# 모델 외에 추가 pull 한 모델을 재시작 후에도 유지).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  labels:
+    app.kubernetes.io/name: ollama
+    app.kubernetes.io/component: llm
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ollama
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ollama
+        app.kubernetes.io/component: llm
+        app.kubernetes.io/part-of: k8s-daily-monitor
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ollama.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ollama.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ollama
+          image: {{ include "k8s-daily-monitor.image" (dict "global" .Values.global "repository" .Values.ollama.image.repository "tag" .Values.ollama.image.tag) }}
+          imagePullPolicy: {{ .Values.ollama.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              ollama serve &
+              until ollama list >/dev/null 2>&1; do sleep 1; done
+              ollama list
+              wait
+          ports:
+            - containerPort: 11434
+              name: http
+          env:
+            - name: OLLAMA_NUM_PARALLEL
+              value: {{ .Values.ollama.numParallel | default 2 | quote }}
+            - name: OLLAMA_MAX_LOADED_MODELS
+              value: "1"
+          resources:
+            {{- toYaml .Values.ollama.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          {{- if .Values.ollama.persistence.enabled }}
+          volumeMounts:
+            - name: ollama-models
+              mountPath: /root/.ollama
+          {{- end }}
+      {{- if .Values.ollama.persistence.enabled }}
+      volumes:
+        - name: ollama-models
+          persistentVolumeClaim:
+            claimName: ollama-models
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  labels:
+    app.kubernetes.io/name: ollama
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ollama
+  ports:
+    - port: 11434
+      targetPort: 11434
+      name: http
+{{- if .Values.ollama.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  labels:
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.ollama.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.ollama.persistence.size }}
+{{- end }}
+{{- end }}

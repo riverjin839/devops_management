@@ -160,6 +160,17 @@ class WorkItemResponse(WorkItemBase):
     jira_status: Optional[str] = None
     jira_synced_at: Optional[datetime] = None
     jira_watchers: Optional[list[str]] = None
+    # Jira 원본 항목 — 게시판 표를 Jira 와 같은 축(Epic / Sub-task / component / label /
+    # 원본 상태)으로 보여주기 위해 노출한다. 전부 가져오기로만 채워지는 읽기 전용.
+    jira_issue_type: Optional[str] = None
+    jira_status_category: Optional[str] = None
+    jira_epic: Optional[str] = None
+    jira_epic_key: Optional[str] = None
+    jira_epic_summary: Optional[str] = None
+    jira_parent_key: Optional[str] = None
+    jira_parent_summary: Optional[str] = None
+    jira_components: Optional[list[str]] = None
+    jira_labels: Optional[list[str]] = None
     created_at: datetime
     updated_at: datetime
     subtasks: list["WorkItemResponse"] = []

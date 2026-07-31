@@ -1,12 +1,11 @@
 """
-Ollama 기반 한국어 요약기
-- 외부망/폐쇄망 모두 로컬 Ollama 사용
-- Ollama 불가 시 원문 제목 반환 (fail-safe)
+LLM 기반 한국어 요약기 — ``services/llm`` 게이트웨이 경유 (purpose="trends")
+- 라우팅에 따라 인클러스터 Ollama / 사내 LLM 어느 쪽으로도 요약 가능
+- LLM 불가 시 원문 제목 반환 (fail-safe)
 """
 import logging
-import httpx
 
-from app.config import settings
+from app.services.llm import llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,17 +47,14 @@ async def summarize_digest(digest_date: str, items: list[dict]) -> str:
 
 
 async def _call_ollama(prompt: str) -> str | None:
-    payload = {
-        "model": settings.ollama_model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.3, "num_predict": 512},
-    }
     try:
-        async with httpx.AsyncClient(timeout=settings.ollama_timeout) as client:
-            r = await client.post(f"{settings.ollama_url}/api/generate", json=payload)
-            r.raise_for_status()
-            return r.json().get("response", "").strip()
-    except Exception as e:
-        logger.warning("Ollama 요약 실패: %s", e)
+        result = await llm_service.chat_for_purpose(
+            "trends", prompt, options={"temperature": 0.3, "num_predict": 512},
+        )
+        if result.status == "ok":
+            return result.text.strip()
+        logger.warning("LLM 요약 실패 (profile=%s): %s", result.profile, result.error)
+        return None
+    except Exception as e:  # noqa: BLE001
+        logger.warning("LLM 요약 실패: %s", e)
         return None

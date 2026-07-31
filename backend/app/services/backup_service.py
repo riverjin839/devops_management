@@ -61,6 +61,11 @@ LOG_TABLES: frozenset[str] = frozenset({
     "alert_events",
     "observability_snapshots",
     "k8s_events",
+    # AI 자동 분석 이력 — 알람과 함께 무한 증가하는 로그성 테이블.
+    "incident_analyses",
+    # AI 챗봇 대화 이력 — 로그성.
+    "agent_conversations",
+    "agent_messages",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와
@@ -79,6 +84,8 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "user_jira_credentials": ["token_encrypted", "sso_login_encrypted", "confluence_cookie_encrypted"],
     # Isilon SSH 자격증명 — 암호문이지만 export 기본 마스킹.
     "isilon_servers": ["encrypted_password", "encrypted_private_key"],
+    # 사내 LLM 서비스 API 키 — 암호문이지만 export 기본 마스킹 (SECRET_KEY 유출 대비).
+    "llm_credentials": ["api_key"],
 }
 
 

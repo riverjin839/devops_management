@@ -130,6 +130,33 @@ export function useJiraDeleteIssue() {
   });
 }
 
+/** 연결 해제 (선택적으로 업무 삭제까지) — Jira 이슈는 건드리지 않는다. */
+export function useJiraUnlink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, data }: { itemId: string; data?: import('@/types').JiraUnlinkRequest }) =>
+      jiraApi.unlink(itemId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
+  });
+}
+
+/** 연결을 다른 이슈로 갈아끼우기 — 서버가 존재를 확인한 뒤에만 반영한다. */
+export function useJiraRelink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, data }: { itemId: string; data: import('@/types').JiraRelinkRequest }) =>
+      jiraApi.relink(itemId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
+  });
+}
+
+/** 죽은 Jira 링크 일괄 점검. */
+export function useJiraVerifyLinks() {
+  return useMutation({
+    mutationFn: (allUsers?: boolean) => jiraApi.verifyLinks(allUsers ?? false),
+  });
+}
+
 export function useWeeklyReportPreview() {
   return useMutation({
     mutationFn: (data?: import('@/types').WeeklyReportRequest) => jiraApi.weeklyPreview(data),

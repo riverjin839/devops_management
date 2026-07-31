@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
-  ListTodo, Sparkles, Palmtree,
+  ListTodo, Sparkles, Palmtree, Leaf,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
   KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug,
 } from 'lucide-react';
@@ -24,9 +24,9 @@ import { GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
-// default(Claude paper) → 라이트 → 다크 → 시스템 → default …
-const THEME_CYCLE: Record<Theme, Theme> = { default: 'light', light: 'dark', dark: 'system', system: 'default' };
-const THEME_LABEL: Record<Theme, string> = { default: '기본', light: '라이트', dark: '다크', system: '시스템' };
+// default(Claude paper) → 컴포트(크림+그린) → 라이트 → 다크 → 시스템 → default …
+const THEME_CYCLE: Record<Theme, Theme> = { default: 'comfort', comfort: 'light', light: 'dark', dark: 'system', system: 'default' };
+const THEME_LABEL: Record<Theme, string> = { default: '기본', comfort: '컴포트', light: '라이트', dark: '다크', system: '시스템' };
 
 // ── 호버 툴팁이 붙은 아이콘 버튼 — 레일에서 사용 ────────────────────────────
 interface RailIconButtonProps {
@@ -471,6 +471,7 @@ export function Sidebar() {
             label={`테마: ${THEME_LABEL[theme]}`}
             Icon={
               theme === 'default' ? Sparkles
+              : theme === 'comfort' ? Leaf
               : theme === 'light'   ? Sun
               : theme === 'dark'    ? Moon
               : Monitor

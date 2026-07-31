@@ -2,6 +2,9 @@
 
 httpx.AsyncClient 를 monkeypatch 해서 실제 Ollama 없이 각 노드/파이프라인을 검증한다
 (tests/test_cluster_registration.py 의 httpx monkeypatch 패턴과 동일한 접근).
+LLM 호출이 services/llm 게이트웨이로 이관된 뒤에는 기본 라우팅(local-ollama 프로필)
+의 실제 HTTP 계층인 ``ollama_provider.httpx`` 를 patch 한다 — 파이프라인 계약
+(반환 형태·fail-safe)이 게이트웨이 경유 후에도 유지되는지가 이 테스트의 목적이다.
 """
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
@@ -9,7 +12,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from app.services import agent_service as agent_service_module
+from app.services.llm import ollama_provider as ollama_provider_module
 from app.services.agent_service import (
     AgentState,
     AIAgentService,
@@ -117,7 +120,7 @@ class _FakeAsyncClient:
 
 def _patch_client(monkeypatch, behavior):
     monkeypatch.setattr(
-        agent_service_module.httpx, "AsyncClient",
+        ollama_provider_module.httpx, "AsyncClient",
         lambda *a, **k: _FakeAsyncClient(behavior),
     )
 
@@ -152,7 +155,7 @@ async def test_llm_caller_connect_error_is_fail_safe(monkeypatch):
 
     assert ok is True  # _call_llm never raises, so the node itself reports "ok"
     assert state.llm_response["status"] == "offline"
-    assert "unavailable" in state.llm_response["answer"]
+    assert "연결할 수 없습니다" in state.llm_response["answer"]
 
 
 @pytest.mark.asyncio
@@ -166,7 +169,7 @@ async def test_llm_caller_timeout_is_fail_safe(monkeypatch):
     await LLMCallerNode(agent).safe_run(state)
 
     assert state.llm_response["status"] == "offline"
-    assert "timed out" in state.llm_response["answer"]
+    assert "시간 내에 도착하지" in state.llm_response["answer"]
 
 
 @pytest.mark.asyncio

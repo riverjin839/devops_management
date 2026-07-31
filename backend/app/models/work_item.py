@@ -61,7 +61,6 @@ class WorkItem(Base):
     # Phase B (knowledge-workitem-linkage) — service 하위 component (예: k8s→api-server).
     # 자유 텍스트지만 frontend 의 COMPONENT_BY_SERVICE 가 추천 enum 을 제공.
     component = Column(String(64), nullable=True, index=True)
-    confluence_url = Column(Text, nullable=True)
 
     # Issue 전용 (nullable)
     detail_content = Column(Text, nullable=True)
@@ -93,8 +92,22 @@ class WorkItem(Base):
     jira_watchers = Column(JSONB, nullable=True)            # list[str] — 가져온 PEP username
     # Jira Epic (또는 상위 이슈) — 주간보고 진척률을 category × Epic 으로 묶는 기준.
     # Server/DC 는 Epic Link 가 커스텀 필드라 설정(jira_epic_field)으로 필드 ID 를 지정한다.
+    # `jira_epic` 은 "KEY summary" 합본(레거시·표시용), key/summary 는 링크 렌더용으로 분해 보관.
     jira_epic = Column(String(200), nullable=True)
-    # PEP 에서 업무를 만들 때 함께 생성한 Confluence 문서 (프로비저닝).
+    jira_epic_key = Column(String(50), nullable=True, index=True)
+    jira_epic_summary = Column(String(200), nullable=True)
+    # Jira issuetype 명 원본 (Epic / Story / Task / Sub-task / Bug …). PEP 의 type/type_label
+    # 로 축약 매핑하면 Epic↔Sub-task 구분이 사라지므로 원본을 그대로 함께 보관한다.
+    jira_issue_type = Column(String(50), nullable=True, index=True)
+    # Sub-task 의 상위 이슈 (task = Epic, sub task = Epic 아래 이슈 매핑 기준).
+    jira_parent_key = Column(String(50), nullable=True, index=True)
+    jira_parent_summary = Column(String(200), nullable=True)
+    # status.statusCategory.key — new | indeterminate | done. 커스텀 워크플로에서도 색을
+    # 일관되게 칠하기 위해 상태명(jira_status)과 별도로 저장한다.
+    jira_status_category = Column(String(20), nullable=True)
+    jira_components = Column(JSONB, nullable=True)           # list[str]
+    jira_labels = Column(JSONB, nullable=True)               # list[str]
+    # PEP 에서 업무를 만들 때 함께 생성했거나(프로비저닝), Jira 이슈에서 발견한 Confluence 문서.
     confluence_page_id = Column(String(50), nullable=True)
     confluence_url = Column(Text, nullable=True)
 
