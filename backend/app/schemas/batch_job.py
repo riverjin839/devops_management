@@ -121,6 +121,20 @@ class BatchJobRunListResponse(BaseModel):
     data: list[BatchJobRunResponse]
 
 
+class BatchJobStopResponse(BaseModel):
+    """POST /{id}/stop 응답.
+
+    ``interrupted`` 는 실제 프로세스 강제종료(SSH 채널 close / kubectl kill /
+    Celery revoke)가 시도됐는지를 나타낸다 — best-effort 이므로 True 라도
+    원격 프로세스가 즉시 죽었다는 보장은 아니다. ``run`` 의 DB 상태(cancelled)는
+    interrupted 여부와 무관하게 항상 정확하다.
+    """
+    stopped: bool
+    interrupted: bool
+    message: str
+    run: Optional[BatchJobRunResponse] = None
+
+
 class BatchJobTestConnectionRequest(BaseModel):
     """자격증명/네트워크 검증용. 명령은 실행하지 않음.
 

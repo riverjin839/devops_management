@@ -30,6 +30,11 @@
   Frontend: `workItemKanbanUtils.ts`(`WORK_ITEM_TYPE_CONFIG`/`WORK_ITEM_TYPE_ORDER`).
   Backend: `work_items.py`(CSV export `type_label_map`).
 
+### Added
+- **Batch Jobs — 실행 중지(Stop)**: 실행(수동/스케줄/일괄) 후 중지할 방법이 없던 문제를 해소 — 부하/오작동으로 지금 실행 중인 잡을 강제 중지할 수 있다. 수동(동기) 실행은 in-process `CancelToken` 이 SSH 채널/kubectl 프로세스를 직접 닫아 중단하고, 스케줄·일괄(Celery) 실행은 `celery_app.control.revoke(terminate=True)` 로 워커 프로세스를 강제 종료해 프로세스 경계를 넘어 중단한다. 어느 경로든 실제 강제종료 성공 여부와 무관하게 DB 상태(실행 이력·잡 상태)는 항상 `cancelled` 로 정확히 정리되어 "실행 중"에 화면이 갇히지 않는다. Backend: `POST /batch-jobs/{id}/stop`, `services/batch_jobs/base.py` 의 `CancelToken`, `services/active_runs.py`(in-process 레지스트리), `BatchJob.active_task_id`(Celery revoke 대상 추적). Frontend: 배치 잡 테이블 각 행과 슬라이드오버에 "중지" 버튼(위험 확인 다이얼로그 포함).
+- **Batch Jobs — 행별 즉시 실행 아이콘**: 잡 상세를 열지 않고도 테이블 행에서 바로 실행할 수 있는 ▶ 아이콘 추가(저장된 자격증명 또는 non-SSH 잡에 한해 활성화) — hover 시 잡 이름·타입·호스트·최근 실행 정보를 툴팁으로 보여준다. 자격증명이 없는 SSH 잡은 비활성화되고 이유가 툴팁에 안내된다.
+- **Batch Jobs — cron 상태 시각화**: cron 등록 여부가 실제로 스케줄대로 동작하는지 표에서 판독하기 어렵다는 피드백을 반영 — cron 셀을 색상 코드 배지(등록됨/대기 중/평가 오류/자격증명 없음/꺼짐)로 바꾸고, hover 시 cron 식·활성화 여부·저장 자격증명 상태·스케줄러 최근 평가 결과·최근 실행 시각을 툴팁으로 노출.
+
 ## [1.18.1] - 2026-07-30
 
 ### Fixed

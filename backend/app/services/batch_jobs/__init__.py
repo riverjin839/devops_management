@@ -13,6 +13,7 @@ and the UI surfaces them as selectable options when creating a job.
 """
 from app.services.batch_jobs.base import (
     BatchJobExecutor,
+    CancelToken,
     ExecutionContext,
     ExecutionResult,
     register_executor,
@@ -27,6 +28,7 @@ from app.services.batch_jobs import k8s_job_cleanup  # noqa: F401
 
 __all__ = [
     "BatchJobExecutor",
+    "CancelToken",
     "ExecutionContext",
     "ExecutionResult",
     "register_executor",

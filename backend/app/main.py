@@ -976,6 +976,11 @@ def _run_migrations():
         _safe_add_column("batch_job_runs", "triggered_by_username", "VARCHAR(64)")
         _safe_add_column("batch_job_runs", "params_snapshot", "JSONB")
 
+    # batch_jobs: 실행 중지(stop) 기능 — Celery 로 큐잉된(스케줄/일괄) 실행을
+    # revoke(terminate=True) 로 찾아 중단하기 위한 task id 추적.
+    if "batch_jobs" in inspector.get_table_names():
+        _safe_add_column("batch_jobs", "active_task_id", "VARCHAR(64)")
+
     # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화 + 에디터 개인 설정
     if "users" in inspector.get_table_names():
         _safe_add_column("users", "must_change_password", "BOOLEAN NOT NULL DEFAULT FALSE")
