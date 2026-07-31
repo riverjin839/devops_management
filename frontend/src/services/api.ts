@@ -1838,6 +1838,14 @@ export interface BatchJobTestConnectionResponse {
   error?: string | null;
 }
 
+export interface BatchJobStopResponse {
+  stopped: boolean;
+  /** 실제 강제종료(SSH 채널 close / kubectl kill / celery revoke)가 시도됐는지. */
+  interrupted: boolean;
+  message: string;
+  run?: BatchJobRun | null;
+}
+
 export const batchJobsApi = {
   listTypes: () =>
     api.get<{ data: BatchJobTypeDescriptor[] }>('/batch-jobs/types'),
@@ -1849,6 +1857,7 @@ export const batchJobsApi = {
   delete: (id: string) => api.delete(`/batch-jobs/${id}`),
   run: (id: string, payload: BatchJobRunRequest, signal?: AbortSignal) =>
     api.post<BatchJobRun>(`/batch-jobs/${id}/run`, payload, { signal, timeout: 600000 }),
+  stop: (id: string) => api.post<BatchJobStopResponse>(`/batch-jobs/${id}/stop`),
   bulkRun: (jobIds: string[]) =>
     api.post<{ queued: number; skipped: number; results: { jobId: string; queued: boolean; reason?: string | null }[] }>(
       '/batch-jobs/bulk-run', { jobIds },

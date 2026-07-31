@@ -89,6 +89,7 @@ class ShellCommandExecutor(BatchJobExecutor):
                 connect_timeout=min(ctx.timeout, 10),
                 exec_timeout=ctx.timeout,
                 parallelism=1,
+                cancel_token=ctx.cancel_token,
             )
         except Exception as exc:
             return ExecutionResult(
@@ -99,12 +100,14 @@ class ShellCommandExecutor(BatchJobExecutor):
             )
 
         r = results[0]
+        # 강제 종료(중지)로 인한 실패는 일반 error 가 아니라 cancelled 로 보고한다.
+        cancelled = bool(ctx.cancel_token and ctx.cancel_token.cancelled)
         return ExecutionResult(
-            status=r.status,
+            status="cancelled" if cancelled else r.status,
             exit_code=r.exit_code,
             stdout=r.stdout,
             stderr=r.stderr,
             duration_ms=r.duration_ms,
-            error=r.error,
+            error="사용자에 의해 중지됨" if cancelled else r.error,
             executed_command=bash_cmd,
         )

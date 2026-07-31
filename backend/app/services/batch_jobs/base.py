@@ -1,8 +1,57 @@
 """Base classes and registry for batch job executors."""
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Optional
+
+
+class CancelToken:
+    """Cooperative, cross-thread cancellation handle for a single run.
+
+    Executors attach whatever OS-level handle they hold while running (a
+    connected ``paramiko.SSHClient``, a ``subprocess.Popen``) via
+    :meth:`attach`. Calling :meth:`cancel` — from a *different* thread/coroutine
+    than the one executing the job, e.g. the ``POST /{id}/stop`` request
+    handler — closes/terminates every attached handle, which unblocks the
+    executor's blocking call (closing an SSH transport mid-read makes the
+    blocked ``channel.recv()`` raise; ``Popen.terminate()`` ends
+    ``communicate()``). The remote SSH command itself also dies: sshd sends
+    SIGHUP to the session's foreground process group when its channel closes
+    (true unless the remote command detached itself via nohup/setsid, which
+    none of our executors do).
+    """
+
+    def __init__(self) -> None:
+        self._handles: list[Any] = []
+        self._lock = threading.Lock()
+        self.cancelled = False
+
+    def attach(self, handle: Any) -> None:
+        with self._lock:
+            if self.cancelled:
+                # cancel() already fired before this handle existed (race) —
+                # close/kill it immediately instead of leaking it.
+                self._close_one(handle)
+                return
+            self._handles.append(handle)
+
+    def cancel(self) -> None:
+        with self._lock:
+            self.cancelled = True
+            handles, self._handles = self._handles, []
+        for h in handles:
+            self._close_one(h)
+
+    @staticmethod
+    def _close_one(handle: Any) -> None:
+        try:
+            if hasattr(handle, "terminate"):
+                handle.terminate()
+            elif hasattr(handle, "close"):
+                handle.close()
+        except Exception:  # noqa: BLE001 — best-effort interruption only
+            pass
 
 
 @dataclass
@@ -28,11 +77,17 @@ class ExecutionContext:
     kubeconfig_path: Optional[str] = None
     cluster_name: str = ""
 
+    # Set by batch_job_service before executor.run() — executors that hold a
+    # cancellable OS handle (SSH client, subprocess) should attach() it so a
+    # concurrent "중지" request can interrupt the run. Optional: executors
+    # that don't attach anything simply can't be force-stopped mid-flight.
+    cancel_token: Optional[CancelToken] = None
+
 
 @dataclass
 class ExecutionResult:
     """Standardised result returned from BatchJobExecutor.run()."""
-    status: str  # "ok" / "error" / "timeout" / "auth_error" / "connect_error"
+    status: str  # "ok" / "error" / "timeout" / "auth_error" / "connect_error" / "cancelled"
     exit_code: Optional[int] = None
     stdout: str = ""
     stderr: str = ""

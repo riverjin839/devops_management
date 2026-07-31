@@ -109,10 +109,24 @@ def select_cleanup_targets(
     return targets
 
 
-def _run_kubectl(args: list[str], timeout: int) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["kubectl", *args], capture_output=True, text=True, timeout=timeout
+def _run_kubectl(
+    args: list[str], timeout: int, cancel_token: Optional[Any] = None
+) -> subprocess.CompletedProcess:
+    """kubectl 실행 — Popen 기반이라 실행 중에도 다른 스레드/코루틴에서
+    `proc.terminate()` 로 중단할 수 있다(``cancel_token`` 이 attach 해두면
+    "중지" 요청이 이 블로킹 호출을 즉시 풀어준다)."""
+    proc = subprocess.Popen(
+        ["kubectl", *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
+    if cancel_token is not None:
+        cancel_token.attach(proc)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        raise
+    return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
 
 
 @register_executor
@@ -219,14 +233,22 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
         }
         dry_run = bool(params.get("dry_run", True))
 
+        def _cancelled() -> bool:
+            return bool(ctx.cancel_token and ctx.cancel_token.cancelled)
+
         # 1) 대상 조회
         items: list[dict[str, Any]] = []
         executed: list[str] = []
         for args in self._list_args(params):
+            if _cancelled():
+                return _done(
+                    status="cancelled", error="사용자에 의해 중지됨",
+                    executed_command="\n".join(executed),
+                )
             executed.append("kubectl " + " ".join(args))
             try:
                 proc = await asyncio.to_thread(
-                    _run_kubectl, kubeconfig + args, ctx.timeout
+                    _run_kubectl, kubeconfig + args, ctx.timeout, ctx.cancel_token
                 )
             except subprocess.TimeoutExpired:
                 return _done(
@@ -238,6 +260,11 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
                 return _done(
                     status="error",
                     error="kubectl 을 찾을 수 없습니다 — 백엔드/워커 이미지에 kubectl 이 필요합니다.",
+                    executed_command="\n".join(executed),
+                )
+            if _cancelled():
+                return _done(
+                    status="cancelled", error="사용자에 의해 중지됨",
                     executed_command="\n".join(executed),
                 )
             if proc.returncode != 0:
@@ -292,11 +319,17 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
         deleted = 0
         errors: list[str] = []
         for ns, names in by_ns.items():
+            if _cancelled():
+                lines.append(f"중지됨 — {deleted}/{len(targets)}개 삭제 후 남은 네임스페이스 스킵")
+                return _done(
+                    status="cancelled", error="사용자에 의해 중지됨",
+                    stdout="\n".join(lines), executed_command="\n".join(executed),
+                )
             del_args = ["delete", "job", "-n", ns, *names, "--wait=false"]
             executed.append("kubectl " + " ".join(shlex.quote(a) for a in del_args))
             try:
                 proc = await asyncio.to_thread(
-                    _run_kubectl, kubeconfig + del_args, ctx.timeout
+                    _run_kubectl, kubeconfig + del_args, ctx.timeout, ctx.cancel_token
                 )
             except subprocess.TimeoutExpired:
                 errors.append(f"{ns}: 삭제 타임아웃")
@@ -307,6 +340,12 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
             else:
                 errors.append(f"{ns}: {proc.stderr.strip()[:300]}")
 
+        if _cancelled():
+            lines.append(f"중지됨 — {deleted}/{len(targets)}개 삭제 완료")
+            return _done(
+                status="cancelled", error="사용자에 의해 중지됨",
+                stdout="\n".join(lines), executed_command="\n".join(executed),
+            )
         lines.append(f"삭제 완료 {deleted}/{len(targets)}개")
         return _done(
             status="ok" if not errors else "error",

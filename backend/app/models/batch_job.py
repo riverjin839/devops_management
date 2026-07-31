@@ -49,12 +49,18 @@ class BatchJob(Base):
     encrypted_password = Column(String, nullable=True)
     encrypted_private_key = Column(String, nullable=True)
 
-    last_status = Column(String(20), default="unknown")  # ok / error / running / unknown
+    last_status = Column(String(20), default="unknown")  # ok / error / running / cancelled / unknown
     last_run_at = Column(DateTime, nullable=True)
 
     # 디스패처(매 분)가 이 잡을 마지막으로 평가한 시각/결과 — "왜 스케줄이 안 돌았는지" 진단용.
     last_schedule_check_at = Column(DateTime, nullable=True)
     last_schedule_note = Column(String(200), nullable=True)
+
+    # 스케줄/일괄 실행(Celery)이 현재 진행 중이면 그 Celery task id — "중지" 요청이
+    # `celery_app.control.revoke(id, terminate=True)` 로 워커 프로세스를 강제 종료할
+    # 대상을 찾는 데 쓰인다. 수동(동기 HTTP) 실행은 이 필드를 쓰지 않고 대신
+    # `app.services.active_runs` 의 in-process 레지스트리로 중지한다.
+    active_task_id = Column(String(64), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -77,7 +83,7 @@ class BatchJobRun(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(UUID(as_uuid=True), ForeignKey("batch_jobs.id"), nullable=False)
 
-    status = Column(String(20), nullable=False)  # ok / error / timeout / running
+    status = Column(String(20), nullable=False)  # ok / error / timeout / running / cancelled
     trigger = Column(String(20), default="manual")  # manual / schedule / bulk
 
     # 실행자 — 수동/일괄 실행 시 요청한 사용자. 스냅샷(username)이라 사용자가

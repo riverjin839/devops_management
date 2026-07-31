@@ -574,20 +574,33 @@ def run_batch_job(
         if not job.enabled:
             return {"job_id": job_id, "skipped": True, "reason": "disabled"}
 
+        # "중지" 요청이 이 실행을 revoke(terminate=True) 로 찾아 죽일 수 있도록
+        # 자기 자신의 celery task id 를 잡에 기록해둔다. execute_job 이 끝나면
+        # (성공/실패 불문) 항상 다시 None 으로 지운다.
+        job.active_task_id = self.request.id
+        db.commit()
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            run, result = loop.run_until_complete(
-                execute_job(
-                    db,
-                    job,
-                    password=password,
-                    private_key=private_key,
-                    trigger=trigger,
-                    triggered_by_user_id=triggered_by_user_id,
-                    triggered_by_username=triggered_by_username,
+            try:
+                run, result = loop.run_until_complete(
+                    execute_job(
+                        db,
+                        job,
+                        password=password,
+                        private_key=private_key,
+                        trigger=trigger,
+                        triggered_by_user_id=triggered_by_user_id,
+                        triggered_by_username=triggered_by_username,
+                    )
                 )
-            )
+            finally:
+                # execute_job 이 정상 경로(_run_and_record)를 못 타고 일찍 raise 하는
+                # 예외적인 경우(예: UnknownJobType)에도 active_task_id 는 항상 정리한다.
+                if job.active_task_id == self.request.id:
+                    job.active_task_id = None
+                    db.commit()
         finally:
             loop.close()
 
