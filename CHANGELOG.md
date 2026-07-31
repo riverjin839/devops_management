@@ -17,6 +17,13 @@
   Frontend: `index.css`(`html.comfort` 토큰 블록 + 소프트 카드 섀도), `stores/themeStore.ts`,
   `components/layout/Sidebar.tsx`.
 
+### Changed
+- **클러스터 아이콘 빌더 — 운영타입 밴드 라벨 제거**: 아이콘 2층(운영타입) 밴드에서 텍스트
+  라벨을 뺐다. 운영 레벨은 밴드 색상만으로 이미 구분되므로, 라벨을 없애 아이콘 안 정보량을
+  줄이고 가독성을 높였다(업무명·속성·지역 3개 밴드는 라벨 유지).
+  Frontend: `lib/clusterIconBuilder.ts`(`opTypeLabel` 옵션·`suggestOpTypeLabel` 제거),
+  `components/common/ClusterIconPicker.tsx`, `pages/SettingsPage.tsx`(일괄 생성).
+
 ## [1.17.1] - 2026-07-29
 
 ### Fixed
