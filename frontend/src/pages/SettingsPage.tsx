@@ -29,9 +29,9 @@ import { useToast, ClusterIconPicker, useModalA11y } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
-  suggestAttribute, suggestOpTypeLabel,
+  suggestAttribute,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor, levelLabel, levelCustomHex } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelColor, levelCustomHex } from '@/hooks/useOperationLevels';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
@@ -485,7 +485,6 @@ export function SettingsPage() {
       try {
         const svg = buildClusterIconSvg({
           workName: suggestInitials(c.name),
-          opTypeLabel: suggestOpTypeLabel(levelLabel(opLevels, c.operationLevel)),
           attribute: suggestAttribute(c.name),
           regionAbbr: suggestRegionAbbr(c.region),
           colorToken: levelColor(opLevels, c.operationLevel),

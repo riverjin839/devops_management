@@ -4,7 +4,8 @@
 //
 // 시각 구성 (64 viewBox, 위→아래 4개 밴드 각 16px):
 //   1층 — 업무명 (서비스 이니셜)
-//   2층 — 운영타입 (환경 라벨) — 4개 밴드 중 가장 진한 색으로 강조
+//   2층 — 운영타입 — 4개 밴드 중 가장 진한 색으로만 표시(텍스트 라벨 없음). 아이콘 안
+//         정보량을 줄여 가독성을 높이기 위해 라벨은 빼고 색상 구분만 남긴다.
 //   3층 — 속성 (클러스터 기능 — 표준 이름 규칙의 3번째 세그먼트, 예: Computing/Storage)
 //   4층 — 지역 약어
 //   4개 밴드는 같은 색 계통(운영등급 색 토큰)의 서로 다른 명도로 통일감을 준다.
@@ -16,8 +17,6 @@ import { deriveToneSet, isValidHex } from './colorTone';
 export interface ClusterIconBuildOptions {
   /** 1층(최상단) — 업무명 (1~5자 권장, 이상은 잘림) */
   workName: string;
-  /** 2층 — 운영타입 라벨 (예: 운영/스테이징/개발/테스트/DR) */
-  opTypeLabel: string;
   /** 3층 — 속성 — 클러스터 기능 구분 (예: Computing/Storage) */
   attribute: string;
   /** 4층(최하단) — 지역 약어 */
@@ -117,14 +116,6 @@ export function suggestAttribute(name: string | null | undefined): string {
   return parsed?.attr ? parsed.attr.slice(0, 5) : '';
 }
 
-/** 운영등급 라벨("운영 (Production)" 등) → 2층(운영타입) 짧은 표시 텍스트.
- *  괄호 안 영문 설명은 잘라내고 앞부분만 사용. */
-export function suggestOpTypeLabel(label: string | null | undefined): string {
-  const raw = (label ?? '').trim();
-  if (!raw) return '';
-  return raw.split('(')[0].trim().slice(0, 5);
-}
-
 /** k8s 7-spoke 휠 워터마크 — 중심 원 + 7방향 스포크 + 외곽 칠각형 링(단순화). */
 function k8sWheel(cx: number, cy: number, r: number, color: string, opacity: number): string {
   const spokes: string[] = [];
@@ -160,10 +151,11 @@ export function buildClusterIconSvg(opts: ClusterIconBuildOptions): string {
   const circle = opts.shape === 'circle';
 
   const bands = [
-    { text: escapeXml(opts.workName.trim().slice(0, 5)),    fill: mixHex(pal.band, '#ffffff', 0.72), dark: false },
-    { text: escapeXml(opts.opTypeLabel.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0),    dark: true  },
-    { text: escapeXml(opts.attribute.trim().slice(0, 5)),   fill: mixHex(pal.band, '#ffffff', 0.30), dark: true  },
-    { text: escapeXml(opts.regionAbbr.trim().slice(0, 5)),  fill: mixHex(pal.band, '#ffffff', 0.52), dark: false },
+    { text: escapeXml(opts.workName.trim().slice(0, 5)),   fill: mixHex(pal.band, '#ffffff', 0.72), dark: false },
+    // 2층(운영타입)은 라벨 없이 색상만 — 운영 레벨 구분은 색으로 충분하다.
+    { text: '',                                            fill: mixHex(pal.band, '#ffffff', 0),    dark: true  },
+    { text: escapeXml(opts.attribute.trim().slice(0, 5)),  fill: mixHex(pal.band, '#ffffff', 0.30), dark: true  },
+    { text: escapeXml(opts.regionAbbr.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.52), dark: false },
   ];
 
   // 배경 — 클립 없이 그려 테두리 링(stroke)이 온전히 보이게 한다.
