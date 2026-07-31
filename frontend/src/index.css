@@ -331,9 +331,11 @@
     --status-neutral:     150 6% 48%;
     --status-neutral-bg:  90 10% 91%;
 
-    /* Categorical chart tokens (D-005) — 그린 우선 배치, red-green 비인접 유지 */
-    --chart-1: 150 45% 32%;   /* deep green */
-    --chart-2: 217 60% 50%;   /* blue */
+    /* Categorical chart tokens (D-005) — chart-1은 타 테마와 동일하게 파랑 유지
+       (--status-healthy 초록과 겹치지 않게: 완료/진행중 범례 등에서 chart-1을 상태색과
+       나란히 쓰는 소비자가 있어, 그린을 1번에 두면 혼동된다) */
+    --chart-1: 217 60% 48%;   /* blue */
+    --chart-2: 150 45% 32%;   /* deep green */
     --chart-3: 38 85% 50%;    /* amber */
     --chart-4: 262 55% 55%;   /* violet */
     --chart-5: 340 55% 52%;   /* rose */
