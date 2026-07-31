@@ -10,6 +10,11 @@
 
 1.18.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Batch Jobs — 실행 중지(Stop)**: 실행(수동/스케줄/일괄) 후 중지할 방법이 없던 문제를 해소 — 부하/오작동으로 지금 실행 중인 잡을 강제 중지할 수 있다. 수동(동기) 실행은 in-process `CancelToken` 이 SSH 채널/kubectl 프로세스를 직접 닫아 중단하고, 스케줄·일괄(Celery) 실행은 `celery_app.control.revoke(terminate=True)` 로 워커 프로세스를 강제 종료해 프로세스 경계를 넘어 중단한다. 어느 경로든 실제 강제종료 성공 여부와 무관하게 DB 상태(실행 이력·잡 상태)는 항상 `cancelled` 로 정확히 정리되어 "실행 중"에 화면이 갇히지 않는다. Backend: `POST /batch-jobs/{id}/stop`, `services/batch_jobs/base.py` 의 `CancelToken`, `services/active_runs.py`(in-process 레지스트리), `BatchJob.active_task_id`(Celery revoke 대상 추적). Frontend: 배치 잡 테이블 각 행과 슬라이드오버에 "중지" 버튼(위험 확인 다이얼로그 포함).
+- **Batch Jobs — 행별 즉시 실행 아이콘**: 잡 상세를 열지 않고도 테이블 행에서 바로 실행할 수 있는 ▶ 아이콘 추가(저장된 자격증명 또는 non-SSH 잡에 한해 활성화) — hover 시 잡 이름·타입·호스트·최근 실행 정보를 툴팁으로 보여준다. 자격증명이 없는 SSH 잡은 비활성화되고 이유가 툴팁에 안내된다.
+- **Batch Jobs — cron 상태 시각화**: cron 등록 여부가 실제로 스케줄대로 동작하는지 표에서 판독하기 어렵다는 피드백을 반영 — cron 셀을 색상 코드 배지(등록됨/대기 중/평가 오류/자격증명 없음/꺼짐)로 바꾸고, hover 시 cron 식·활성화 여부·저장 자격증명 상태·스케줄러 최근 평가 결과·최근 실행 시각을 툴팁으로 노출.
+
 ## [1.18.1] - 2026-07-30
 
 ### Fixed
@@ -787,9 +792,6 @@
 - **Batch Jobs — 클러스터 단위 그룹 뷰**: "전체" 모드에서 flat 테이블 대신 잡이 등록된 클러스터별 collapsible 섹션(클러스터명·등급·잡 통계 헤더 + 개별 테이블 + 미등록 타입 칩)으로 표시 — 클러스터가 늘어나도 어디에 무엇이 등록됐는지 한눈에 파악 가능. Frontend: `BatchJobClusterGroup` 신설.
 - **Batch Jobs — mc 대시보드 스타일 로그 상세 카드**: 잡 상세 패널에 "최근 실행 로그"를 mc 클라이언트 콘솔과 동일한 형태(상태/트리거/실행자/호스트/exit/소요시간 sticky 헤더 + 실행 명령 + `ExecOutputTabs`)로 항상 노출 — 실행 이력을 펼치지 않아도 방금 실행이 어떻게 됐는지 바로 확인 가능. 실행 폼 결과와 실행 이력 상세도 같은 컴포넌트(`BatchJobLogDetail`)로 통일해 stdout/stderr 를 stack 하지 않고 탭으로 전환(CLAUDE.md 콘솔 표준 패턴 준수).
 - **Batch Jobs — admin 실행 추적성**: "방금 실행이 정확히 어떤 방법으로 이뤄졌는지" 확인 불가능하던 문제를 해소 — `BatchJobRun` 에 실행자 스냅샷(`triggered_by_username`, 수동/일괄만 채워짐)과 그 실행에 실제로 사용된 merge 후 파라미터 스냅샷(`params_snapshot` — 예: k8s_job_cleanup 의 dry_run 여부)을 추가해 로그 상세 카드에서 확인 가능. 등록/수정/삭제/수동 실행/일괄 실행을 감사 로그(`audit_logs`, action=`batch_job.*`)에 기록해 Settings 의 감사 로그 조회(admin 전용)에서도 추적 가능.
-- **Batch Jobs — 실행 중지(Stop)**: 실행(수동/스케줄/일괄) 후 중지할 방법이 없던 문제를 해소 — 부하/오작동으로 지금 실행 중인 잡을 강제 중지할 수 있다. 수동(동기) 실행은 in-process `CancelToken` 이 SSH 채널/kubectl 프로세스를 직접 닫아 중단하고, 스케줄·일괄(Celery) 실행은 `celery_app.control.revoke(terminate=True)` 로 워커 프로세스를 강제 종료해 프로세스 경계를 넘어 중단한다. 어느 경로든 실제 강제종료 성공 여부와 무관하게 DB 상태(실행 이력·잡 상태)는 항상 `cancelled` 로 정확히 정리되어 "실행 중"에 화면이 갇히지 않는다. Backend: `POST /batch-jobs/{id}/stop`, `services/batch_jobs/base.py` 의 `CancelToken`, `services/active_runs.py`(in-process 레지스트리), `BatchJob.active_task_id`(Celery revoke 대상 추적). Frontend: 배치 잡 테이블 각 행과 슬라이드오버에 "중지" 버튼(위험 확인 다이얼로그 포함).
-- **Batch Jobs — 행별 즉시 실행 아이콘**: 잡 상세를 열지 않고도 테이블 행에서 바로 실행할 수 있는 ▶ 아이콘 추가(저장된 자격증명 또는 non-SSH 잡에 한해 활성화) — hover 시 잡 이름·타입·호스트·최근 실행 정보를 툴팁으로 보여준다. 자격증명이 없는 SSH 잡은 비활성화되고 이유가 툴팁에 안내된다.
-- **Batch Jobs — cron 상태 시각화**: cron 등록 여부가 실제로 스케줄대로 동작하는지 표에서 판독하기 어렵다는 피드백을 반영 — cron 셀을 색상 코드 배지(등록됨/대기 중/평가 오류/자격증명 없음/꺼짐)로 바꾸고, hover 시 cron 식·활성화 여부·저장 자격증명 상태·스케줄러 최근 평가 결과·최근 실행 시각을 툴팁으로 노출.
 
 ### Changed
 - **Batch Jobs 실행 이력 개선**: 슬라이드오버의 실행 이력이 15초 주기로 자동 갱신되어 스케줄/일괄(백그라운드) 실행 결과가 새로고침 없이 반영되고, 이력 항목에 실행 트리거 배지(수동/스케줄/일괄)가 표시된다. 일괄 실행은 이제 trigger="bulk" 로 구분 기록.
