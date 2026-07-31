@@ -4094,8 +4094,9 @@ export interface CheckMatrixBatchResult {
 // ── 스키마 점검 (모델 vs 실제 DB 드리프트) ──────────────────────────────────
 /** 드리프트 1건. repairable=false 면 자동 복구 대상이 아니라 사람이 판단해야 한다. */
 export interface SchemaDriftIssue {
-  /** missing_table = 테이블 없음 · missing_column = 컬럼 없음 · not_null_drift = 레거시 NOT NULL */
-  kind: 'missing_table' | 'missing_column' | 'not_null_drift' | 'inspect_failed';
+  /** missing_table = 테이블 없음 · missing_column = 컬럼 없음 · not_null_drift = 레거시 NOT NULL ·
+   *  orphan_not_null_column = 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음(모든 저장 실패) */
+  kind: 'missing_table' | 'missing_column' | 'not_null_drift' | 'orphan_not_null_column' | 'inspect_failed';
   table: string;
   column?: string | null;
   detail: string;
