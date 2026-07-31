@@ -476,7 +476,9 @@ export interface SprintListResponse {
   total: number;
 }
 
-// Work Item Board — 업무 통합 모델 (작업/이슈/회의/교육/기타)
+// Work Item Board — 업무 통합 모델. 선택 가능한 유형(라벨)은 이슈 대응(issue)/회의(meeting)/
+// 운영 대응(task)/기타(etc) 4종 — 값은 하위 호환을 위해 유지, 라벨만 workItemKanbanUtils.ts
+// WORK_ITEM_TYPE_CONFIG 에서 재정의했다. training(구 "교육")은 과거 데이터 호환용으로만 남음.
 export type WorkItemType = 'task' | 'issue' | 'meeting' | 'training' | 'etc';
 export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
 export type WorkItemModule = 'k8s' | 'keycloak' | 'nexus' | 'cilium' | 'argocd' | 'jenkins' | 'backend' | 'frontend' | 'monitoring' | 'infra';

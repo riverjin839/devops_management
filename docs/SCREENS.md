@@ -45,7 +45,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 좌측 상단 홈 버튼으로 "업무 현황"(work) ↔ "플랫폼 현황"(platform) 두 모드를 토글하며, 상단 고정 스트립에는 내 할일/미해결 이슈/위험 클러스터/다음 일정 KPI 필과 업무 알람 종이 항상 노출된다.
 - **UI 구성**:
   - 공통 상단 스트립: 사용자명 + 날짜, KPI 필 그룹 맨 앞에 **Your Island 진입 필**(`IslandPill` — 마지막에 보던 아일랜드로 이동, 없으면 "만들기"), 이어서 KPI 필 4종(`내 할일`→`/todo-today`, `미해결 이슈`→`/items`, `위험 클러스터`→`/cluster-overview`, `다음 일정`→`/items`), `WorkAlarmBell`.
-  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다.
+  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다. **업무 등록 진입점은 `DayScheduleBoard` 헤더의 "등록"(`QuickAddTaskModal`) 하나뿐** — 예전엔 `WeeklyStatusTimeline`(주간 탭)에도 별도 "업무 등록"(`WorkItemFormModal`)이 동시에 떠 있어 같은 화면에 등록 버튼이 2개였다가 통합됨. `QuickAddTaskModal`은 PEP 저장 성공 직후 Jira 연동이 켜져 있으면(`useJiraConfig().enabled`) 곧바로 `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성, 체크박스+"생성"/"나중에")로 전환된다 — "나중에"면 PEP 에만 저장. `WorkCalendar`(월간 탭)의 날짜별 "+" 버튼도 같은 `QuickAddTaskModal`을 재사용하므로 동일한 흐름을 탄다.
   - **플랫폼(platform) 모드**: `PlatformStatusMatrix` — 행(점검 항목) × 열(등록된 클러스터) 매트릭스. 첫 열은 sticky(그립(⋮⋮) **드래그로 순서 변경** + 항목명 + **영역 칩·행 배경 색**(category/color — 8색 차트 토큰 프리셋, 항목 폼에서 지정) + 실행방식 배지 + 상시 ▶(전 클러스터 실행) + hover 시 수정/삭제 아이콘, 시스템 항목은 삭제 버튼 숨김), 클러스터 열 헤더는 이름 + cron 배지(클릭 시 팝오버로 `Cluster.check_cron_expr` 편집), 셀은 상태 dot + 값/라벨(클릭 시 `CheckMatrixCellDetailModal` — 탭 3종: **추이 · 이력**(기간별 트렌드 차트 + 변경 이력 + manual 항목이면 값 입력 폼 + core_bundle 이외 항목이면 항목×클러스터 cron 편집) / **실행 방식**(`CheckMatrixRunbookPanel` — 이 셀이 대상 클러스터에서 실제 수행하는 명령·단계·설정값) / **수행 로그**(`CheckMatrixRunList`+`CheckMatrixRunDetailView`), 헤더에 셀 단독 "지금 실행" 버튼). 클러스터 열 헤더에 **열 전체 실행 ▶**, 항목 행 hover 에 **전 클러스터 실행 ▶** 버튼. 카드 헤더에 "수행 로그"(`CheckMatrixRunLogPanel` — 전체/배치 필터, 배치 추적 시 3초 폴링) + "항목 추가"(`CheckMatrixItemFormModal`) + 도움말 `?`(`CheckMatrixHelpPanel` — 기본 사용법/실행하기/점검 방식/로그·보관 4탭 매뉴얼) + 설정 톱니바퀴(`CheckMatrixSettingsModal`, 이력 보관 일수) 버튼. 하단 "플랫폼 도메인" 퀵 액세스(`DomainQuickAccess`)는 제거됨.
   - ClusterSidebar 미사용(홈은 특정 클러스터에 종속되지 않음).
 - **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 플랫폼 모드는 `hooks/useCheckMatrix.ts`(`useCheckMatrixGrid`/`useCheckMatrixItems`/`useReorderCheckMatrixItems`/`useDeleteCheckMatrixItem`/`usePutClusterCron`/`usePutSchedule`/`usePostManualEntry`/`useCheckMatrixCellHistory`/`useCheckMatrixSettings`/`useCheckMatrixRunbook`/`useRunCheckMatrixCell`/`useRunCheckMatrixCluster`/`useRunCheckMatrixItem`/`useCheckMatrixRuns`/`useCheckMatrixRun`). 로컬 state: `weeklyTab`.
@@ -1036,10 +1036,10 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
 - **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `AddWorkItemRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemFormModal.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`)
-- **목적 / UX**: 전사 업무(task/issue/meeting/training/etc)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
+- **목적 / UX**: 전사 업무(유형: 이슈 대응/회의/운영 대응/기타 — 내부 저장값은 `issue`/`meeting`/`task`/`etc`, 레거시 `training` 도 조회는 계속 됨)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
 - **UI 구성**:
   - 헤더: 전체/WIP/Done 카운트 배지, 뷰 전환(`ViewModeBar`: 목록/달력/칸반), Jira 가져오기 버튼(`jiraConfig.enabled`일 때만), CSV 추출, 업무 등록 버튼
-  - 업무 분류 드롭다운(6개 유형) + **내 업무 토글(기본 ON)** · 담당자/분류/우선순위/모듈/스프린트/기간(이번주 토글, from~to) 필터 바, 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴
+  - 업무 분류 드롭다운(4개 유형 — 이슈 대응/회의/운영 대응/기타) + **내 업무 토글(기본 ON)** · 담당자/분류/우선순위/모듈/스프린트/기간(이번주 토글, from~to) 필터 바, 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴
   - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`), **상단 인라인 `AddWorkItemRow`**(헤더 바로 아래 — 목록 최상단)
   - 제목 셀: Jira 키 박스(`JiraIssueChip` 계열) + **Confluence 문서 박스**(`DocLinkChip` — 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장)
   - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): Epic · 이슈 종류 · 컴포넌트 · 라벨. **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
@@ -1071,7 +1071,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **Frontend**: `useWorkItems()`(hooks/useWorkItems.ts, 목록에서 `parentId`로 상위 항목 조회) — 별도 단건 GET을 쓰지 않고 이미 캐시된 목록에서 find. `useSearchParams`로 `parentId`/`type`/`startedAt` 쿼리 읽어 기본값 지정. 실제 저장 mutation은 `WorkItemForm` 내부에서 처리(`useCreateWorkItem`).
 - **Backend**: 저장 시 `POST /api/v1/work-items` (`backend/app/routers/work_items.py`). 목록 조회는 `GET /api/v1/work-items`. 모델: `WorkItem` (parent_id 자기참조 FK로 하위 업무 구현).
 - **핵심 기능**:
-  - `type` 쿼리파라미터로 유형(task/issue/meeting/training/etc) 사전 지정, 유효하지 않으면 `task` 기본값
+  - `type` 쿼리파라미터로 유형 사전 지정, 유효하지 않으면 `task`(라벨 "운영 대응") 기본값. 선택 가능한 4종은 `issue`(이슈 대응)/`meeting`(회의)/`task`(운영 대응)/`etc`(기타) — `training`(교육)은 과거 데이터 호환을 위해 백엔드 스키마에는 남아있지만 신규 등록 UI 에서는 더 이상 선택하지 않는다
   - `parentId` 쿼리파라미터로 하위 업무 등록 모드 전환 + 상위 업무 제목 미리보기(HTML 스트립, 60자 절삭)
   - `startedAt` 쿼리파라미터로 캘린더/보드에서 날짜 지정 진입 지원
   - 취소/저장 완료 시 `/tasks-mgmt`로 복귀

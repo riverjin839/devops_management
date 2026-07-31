@@ -1,18 +1,26 @@
-import { ListTodo, AlertTriangle, Users, GraduationCap, MoreHorizontal, type LucideIcon } from 'lucide-react';
+import { Wrench, AlertTriangle, Users, GraduationCap, MoreHorizontal, type LucideIcon } from 'lucide-react';
 import type { WorkItem, KanbanStatus, WorkItemModule, WorkItemType, WorkItemTypeLabel } from '@/types';
 
 export type { KanbanStatus };
 
 // ── 업무 유형(task/issue/meeting/training/etc) 공통 메타 ─────────────────────
 // 게시판 탭, 캘린더 범례, QuickAdd picker, CSV 라벨 등에서 공통으로 사용.
-export const WORK_ITEM_TYPE_ORDER: WorkItemType[] = ['task', 'issue', 'meeting', 'training', 'etc'];
+//
+// "유형"은 곧 "업무 유형"이므로 옵션 안에 "업무" 자체가 들어있는 게 순환이었다 — 선택
+// 가능한 유형을 [이슈 대응 · 회의 · 운영 대응 · 기타] 4종으로 정리한다(사용자 요청).
+// 기존 값과의 호환을 위해 DB 컬럼/백엔드 Literal(`WorkItemType`)은 그대로 두고 프론트
+// 레이블만 바꾼다 — `task`(구 "업무")는 "운영 대응"으로 재정의해 재사용하고(과거 데이터가
+// 자연스럽게 새 라벨을 얻음), `training`(구 "교육")은 선택 목록(ORDER)에서만 제외한다.
+// CONFIG 에는 남겨둬 기존 training 항목의 배지/라벨 조회(WORK_ITEM_TYPE_CONFIG[item.type])는
+// 계속 정상 동작한다 — 신규 등록 시에만 고를 수 없다.
+export const WORK_ITEM_TYPE_ORDER: WorkItemType[] = ['issue', 'meeting', 'task', 'etc'];
 
 export const WORK_ITEM_TYPE_CONFIG: Record<WorkItemType, { label: string; Icon: LucideIcon; cls: string }> = {
-  task:     { label: '업무', Icon: ListTodo,        cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' },
-  issue:    { label: '이슈', Icon: AlertTriangle,   cls: 'bg-red-500/10 text-red-700 dark:text-red-300' },
-  meeting:  { label: '회의', Icon: Users,           cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
-  training: { label: '교육', Icon: GraduationCap,   cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
-  etc:      { label: '기타', Icon: MoreHorizontal,  cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-300' },
+  issue:    { label: '이슈 대응', Icon: AlertTriangle,   cls: 'bg-red-500/10 text-red-700 dark:text-red-300' },
+  meeting:  { label: '회의',      Icon: Users,           cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
+  task:     { label: '운영 대응', Icon: Wrench,          cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' },
+  etc:      { label: '기타',      Icon: MoreHorizontal,  cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-300' },
+  training: { label: '교육',      Icon: GraduationCap,   cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
 };
 
 // ── 컬럼 정의 ─────────────────────────────────────────────────────────────────
