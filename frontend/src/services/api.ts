@@ -820,6 +820,8 @@ export interface WorkItemFilters {
   closed?: boolean;
   allAttendees?: boolean;
   sprintId?: string;
+  /** 제목(title/content) 검색어 — ILIKE 부분 일치 */
+  q?: string;
   limit?: number;
 }
 
@@ -912,6 +914,13 @@ export const jiraApi = {
   deleteCredential: () => api.delete('/jira/credential'),
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   confluenceTest: () => api.post<import('@/types').JiraTestResult>('/jira/confluence/test'),
+  // Confluence 검색 — "Jira 가져오기"와 동일한 검색→선택→반영 패턴.
+  confluenceSearch: (cql: string, limit = 25) =>
+    api.get<import('@/types').ConfluenceSearchResult>('/jira/confluence/search', { params: { cql, limit } }),
+  confluenceLink: (data: import('@/types').ConfluenceLinkRequest) =>
+    api.post<import('@/types').WorkItem>('/jira/confluence/link', data),
+  confluenceSync: (itemId: string) =>
+    api.post<import('@/types').ConfluenceSyncResult>(`/jira/confluence/sync/${itemId}`),
   ssoDiagnose: () =>
     api.post<import('@/types').SsoDiagnoseResult>('/jira/sso/diagnose', undefined, { timeout: 90_000 }),
   // SSO 자동 로그인 — data 지정 시 파드 내 폼 로그인(ID/PW), 생략 시 서버측 브라우저(헤디드).

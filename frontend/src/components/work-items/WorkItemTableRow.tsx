@@ -255,9 +255,17 @@ interface WorkItemTableRowProps {
   onJiraProvision?: (item: WorkItem) => void;
   /** 연결 관리(해제/다른 이슈로 변경/업무 삭제) 다이얼로그 진입. */
   onJiraLink?: (item: WorkItem) => void;
+  /** Confluence 연결 업무 — 현재 내용을 연결된 문서에 반영(재게시). Jira "보내기"와 동일 역할. */
+  onConfluenceSync?: (item: WorkItem) => void;
+  /** 이 행에서 Confluence 동기화가 진행 중인지 (버튼 스피너/중복 클릭 방지). */
+  confluenceBusy?: boolean;
 }
 
-export function WorkItemTableRow({ item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false, onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, onJiraLink, jiraBusy = false }: WorkItemTableRowProps) {
+export function WorkItemTableRow({
+  item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false,
+  onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, onJiraLink,
+  jiraBusy = false, onConfluenceSync, confluenceBusy = false,
+}: WorkItemTableRowProps) {
   const fmtDate = showTime ? formatDateTime : formatDate;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
@@ -757,6 +765,17 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
                   aria-label={`Jira ${item.jiraIssueKey} 연결 관리`}
                 >
                   <Link2Off className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {item.confluenceUrl && onConfluenceSync && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onConfluenceSync(item); }}
+                  disabled={confluenceBusy}
+                  className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-status-info disabled:opacity-50"
+                  title="수정한 내용을 연결된 Confluence 문서에 반영"
+                  aria-label="Confluence 문서 동기화"
+                >
+                  {confluenceBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                 </button>
               )}
               <button

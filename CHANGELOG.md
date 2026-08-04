@@ -10,6 +10,44 @@
 
 1.19.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무 관리 게시판 — 기본 필터/정렬/검색 강화**: 진입 시 기본으로 **본인 담당 + 현재(2주)
+  스프린트** 기준으로 필터되며, "OOO님, 본인 담당 업무 · 'N차 스프린트' 스프린트 기준으로
+  필터된 결과입니다" 안내 토스트를 1회 표시한다. "상태"(칸반) 필터 드롭다운과 제목 검색바
+  (300ms 디바운스, title/content ILIKE)를 추가했고, 기본 정렬을 시작일 최신순으로 바꿨다.
+  - Backend: `GET /work-items`·`/work-items/export/csv` 에 `q` 파라미터(title/content ILIKE)
+    추가, `type` 필터 정규식에 누락돼 있던 `build_response` 추가(선택 시 422 나던 버그 수정).
+  - Frontend: `StatusFilterDropdown`(TypeFilterDropdown과 동일 패턴), 디바운스 검색 input,
+    `useCurrentSprint()` 로 스프린트 기본값 시딩(`?sprint=` 딥링크가 있으면 그쪽 우선).
+- **업무 등록/수정 팝업 통일**: 업무 관리 게시판의 "업무 등록"·✏️ 수정 버튼이 홈 "업무 현황"과
+  동일한 팝업(`QuickAddTaskModal`)을 쓰도록 통일 — 게시판 전용 별도 등록 폼을 없애 중복 코드를
+  줄였다. `QuickAddTaskModal` 에 수정 모드(`initial` prop)를 추가해 같은 디자인/패턴으로 제목·
+  시간·우선순위·담당자·클러스터·상태를 수정할 수 있다(유형은 생성 후 불변 정책에 따라 배지로만
+  표시). 부분 업데이트(PUT, `exclude_unset`)만 보내 본문(content) 등 이 팝업이 다루지 않는
+  필드는 건드리지 않는다 — 리치텍스트 편집 등은 팝업의 "상세 수정" 링크로 이어지는 전체 폼에서.
+  - Frontend: `components/dashboard/QuickAddTaskModal.tsx`, `pages/WorkItemBoardPage.tsx`.
+- **Jira·Confluence 동시 생성 시 상호 링크**: "Jira 이슈 · Confluence 문서 자동 생성"(provision)
+  에서 둘 다 새로 만들면, 기존에도 Confluence 문서 본문에 Jira 링크가 들어갔던 것에 더해
+  이제 **Jira Description 끝에도 Confluence 문서 제목·링크**가 자동으로 붙는다(Jira 이슈
+  생성 → Confluence 문서 생성 → Jira Description PUT 갱신 순서). 이미 한쪽만 연결된 업무는
+  건드리지 않는다.
+  - Backend: `routers/jira.py` `provision_work_item` — `JiraService.update_issue()` 로 후속 반영.
+- **Jira 가져오기 — 기본 날짜 범위 = 이번주**: "내게 할당"/"프로젝트" 스코프에 "최근 N일
+  변경분" 옵션을 추가하고, 모달을 열면 이번주 월요일부터에 해당하는 일수로 기본값을 채운다
+  (직접 수정 가능, 비우면 전체 이력). 기존 "조건 조합" 스코프의 동일 옵션과 공유.
+  - Backend: `import_issues` 의 me/project JQL 조립에 `updated_since_days` 반영.
+  - Frontend: `JiraImportModal.tsx` `daysSinceMonday()` 기본값 + me/project 스코프에도 입력 노출.
+- **Confluence 연동 — 검색해서 업무로 가져오기 + 행 단위 동기화**: "Jira 가져오기" 옆에
+  "Confluence 연동" 버튼을 같은 패턴(검색 → 선택 → 반영)으로 추가 — Confluence 문서를 검색해
+  고른 페이지를 새 업무(유형=기타, category="Confluence")로 게시판에 등록한다. 이미 Confluence
+  와 연결된 업무는 게시판 행의 "관리" 열에 새 동기화 버튼이 생겨, 수정한 내용을 Jira "반영"
+  버튼과 동일한 방식으로 연결된 Confluence 문서에 재게시(page_id 기준 — 제목이 바뀌어도 같은
+  문서 유지)할 수 있다.
+  - Backend: `WorkItem.confluence_synced_at` 컬럼 추가, `POST /jira/confluence/link`
+    (검색 결과 → 신규 업무 생성), `POST /jira/confluence/sync/{item_id}`(재게시).
+  - Frontend: `ConfluenceLinkModal.tsx`(신규), `WorkItemTableRow.tsx` 동기화 버튼,
+    `useConfluenceSearch`/`useConfluenceLink`/`useConfluenceSync` 훅.
+
 ## [1.19.0] - 2026-08-04
 
 ### Added

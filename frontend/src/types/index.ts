@@ -522,6 +522,10 @@ export interface WorkItem {
   component?: string;
   /** Confluence 문서 링크 (운영 페이지) */
   confluenceUrl?: string;
+  /** 연결된 Confluence 페이지 ID — 프로비저닝/연동으로만 세팅되는 읽기 전용(동기화 대상 식별용). */
+  confluencePageId?: string | null;
+  /** 마지막으로 PEP → Confluence 반영(동기화)한 시각. */
+  confluenceSyncedAt?: string | null;
   priority: 'high' | 'medium' | 'low';
   kanbanStatus: KanbanStatus;
   module?: WorkItemModule;
@@ -900,6 +904,36 @@ export interface JiraPushResult {
   fieldErrors: string[];     // 반영 실패 사유
   jiraStatus?: string | null;
   availableTransitions: string[];
+}
+
+// ── Confluence 연동 (업무 관리 게시판, "Jira 가져오기"와 동일한 검색→선택→반영 패턴) ──────
+export interface ConfluenceSearchItem {
+  id: string;
+  title: string;
+  type?: string;
+  spaceKey?: string;
+  url: string;
+  updated?: string;
+}
+
+export interface ConfluenceSearchResult {
+  status: 'ok' | 'offline' | 'error';
+  detail: string;
+  total: number;
+  items: ConfluenceSearchItem[];
+}
+
+export interface ConfluenceLinkRequest {
+  pageId: string;
+  title: string;
+  url: string;
+}
+
+export interface ConfluenceSyncResult {
+  status: 'ok' | 'error' | 'offline' | 'not_linked';
+  detail: string;
+  confluenceUrl?: string | null;
+  syncedAt?: string | null;
 }
 
 export interface WorkItemComment {

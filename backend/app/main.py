@@ -946,6 +946,8 @@ def _run_migrations():
         # 업무 생성 시 함께 만든 Confluence 문서 링크.
         _safe_add_column("work_items", "confluence_page_id", "VARCHAR(50)")
         _safe_add_column("work_items", "confluence_url", "TEXT")
+        # PEP → Confluence 반영(동기화) 마지막 시각 — jira_synced_at 과 동일한 목적.
+        _safe_add_column("work_items", "confluence_synced_at", "TIMESTAMP WITHOUT TIME ZONE")
         # Jira 원본 항목 동기화 — Epic / Sub-task / 컴포넌트 / 라벨 / 상태 카테고리.
         # 게시판 표를 Jira 와 같은 축으로 보여주기 위해 축약 매핑(type/type_label) 과 별도로
         # 원본 값을 보관한다.
