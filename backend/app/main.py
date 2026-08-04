@@ -981,6 +981,9 @@ def _run_migrations():
         _safe_add_column("batch_job_runs", "triggered_by_user_id", "VARCHAR(36)")
         _safe_add_column("batch_job_runs", "triggered_by_username", "VARCHAR(64)")
         _safe_add_column("batch_job_runs", "params_snapshot", "JSONB")
+        # 단계별 실행 trace + 실측 명령 기록 (배치잡 진행 상태 가시화)
+        _safe_add_column("batch_job_runs", "steps", "JSONB")
+        _safe_add_column("batch_job_runs", "commands", "JSONB")
 
     # batch_jobs: 실행 중지(stop) 기능 — Celery 로 큐잉된(스케줄/일괄) 실행을
     # revoke(terminate=True) 로 찾아 중단하기 위한 task id 추적.

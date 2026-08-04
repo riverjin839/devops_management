@@ -8,6 +8,7 @@ import type { BatchJob, BatchJobTypeDescriptor } from '@/services/api';
 import type { Cluster } from '@/types';
 import { BatchJobTable } from './BatchJobTable';
 import { UnregisteredTypeChips } from './UnregisteredTypeChips';
+import { aggregateCronHealth, type CronHealth } from './filters';
 import { FAILED_STATUSES, type SortState } from './types';
 
 const LEVEL_LABEL: Record<string, string> = {
@@ -17,6 +18,27 @@ const LEVEL_LABEL: Record<string, string> = {
   staging: 'STG',
   dev: 'DEV',
   development: 'DEV',
+};
+
+// cron 상태 → 섹션 테두리/상태 dot 색. 접힌 상태에서도 "펼치지 않고 판독"이 목표 —
+// 정상 실행 중이면 초록, 비정상(에러 등)이면 레드, 중지/미설정이면 회색톤.
+const GROUP_BORDER: Record<CronHealth, string> = {
+  ok: 'border-emerald-500/40 hover:border-emerald-500/70',
+  failed: 'border-red-500/50 hover:border-red-500/80',
+  running: 'border-blue-500/40 hover:border-blue-500/70',
+  stopped: 'border-border hover:border-muted-foreground/40',
+};
+const GROUP_DOT: Record<CronHealth, string> = {
+  ok: 'bg-emerald-500',
+  failed: 'bg-red-500',
+  running: 'bg-blue-500 animate-pulse',
+  stopped: 'bg-slate-400',
+};
+const GROUP_DOT_LABEL: Record<CronHealth, string> = {
+  ok: 'cron 정상 동작 중',
+  failed: 'cron 비정상 — 실패/오류/자격증명 확인 필요',
+  running: '실행 중',
+  stopped: 'cron 중지/미설정',
 };
 
 interface BatchJobClusterGroupProps {
@@ -49,9 +71,10 @@ export function BatchJobClusterGroup({
   const running = allClusterJobs.filter((j) => j.lastStatus === 'running').length;
   const level = cluster.operationLevel ? LEVEL_LABEL[cluster.operationLevel.toLowerCase()] : undefined;
   const filtered = jobs.length !== allClusterJobs.length;
+  const health = aggregateCronHealth(allClusterJobs);
 
   return (
-    <div className="border border-border rounded-xl overflow-hidden">
+    <div className={`border rounded-xl overflow-hidden transition-colors ${GROUP_BORDER[health]}`}>
       <button
         type="button"
         onClick={onToggleCollapsed}
@@ -63,6 +86,11 @@ export function BatchJobClusterGroup({
         ) : (
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         )}
+        <span
+          className={`w-2 h-2 rounded-full flex-shrink-0 ${GROUP_DOT[health]}`}
+          title={GROUP_DOT_LABEL[health]}
+          aria-label={GROUP_DOT_LABEL[health]}
+        />
         <span className="font-semibold text-sm truncate">{cluster.name}</span>
         {cluster.region && <span className="text-xs text-muted-foreground">· {cluster.region}</span>}
         {level && (

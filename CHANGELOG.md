@@ -10,6 +10,20 @@
 
 1.20.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Batch Jobs — 단계별 실행 추적 가시화**: 실행 이력·실행 결과 카드에 **실행 단계 타임라인**(kubeconfig 해석 → kubectl 연결·Job 조회 → 대상 선정 → 삭제 / SSH 잡은 명령 조립 → SSH 실행 → 결과 정리)과 **실측 명령 trace**(실제로 나간 kubectl/SSH 명령 + exit code·소요시간·출력 발췌, kubeconfig 경로 마스킹)를 표시 — "어느 단계에서 무엇을 하다 실패했는지"를 로그를 뒤지지 않고 판독. deep check 의 `ExecutionStep`/`ExecutionStepsTimeline` 패턴을 배치잡 프레임워크에 이식(`BatchJobExecutor._step`/`_record_command`/`step_plan`), 실행마다 `batch_job_runs.steps`/`commands`(JSONB)에 영속(실패·예외 경로 포함). Backend: `services/batch_jobs/base.py` + executor 3종 계측. Frontend: `BatchJobLogDetail` 에 타임라인+`CommandTraceList`.
+- **Batch Jobs — non-SSH(K8s) 잡 사전 연결테스트**: `POST /batch-jobs/{id}/test-connection` 이 non-SSH 타입을 422 로 거부하던 것을 **K8s 사전 점검**으로 대체 — kubeconfig 해석 → kubectl 바이너리 → 인증 `/healthz` 프로브 → `auth can-i list jobs`(RBAC) 를 단계별 결과로 반환하고, 실행 폼의 "사전 점검" 버튼으로 실행 전 원인 확인 가능.
+- **Batch Jobs — cron 상태 색상 인터랙션**: 클러스터 그룹 섹션과 잡 행 테두리를 cron 건강 상태로 착색 — 정상 동작 초록 / 비정상(실패·평가 오류·자격증명 없음) 레드 / 중지·미설정 회색 / 실행 중 블루. 접힌 그룹에서도 상태 dot 로 판독 가능, hover 시 상태색 강조.
+- **감사 로그 — batch_job 필터 + details 테이블 보기**: 감사 로그 액션 드롭다운에 `batch_job.*`(패밀리 전체 조회, 백엔드 `action_prefix`/`target_type` 필터 신설)과 개별 6종 액션 추가. 상세(details) 셀은 클릭 시 원문 JSON 대신 **key/value 테이블**로 펼쳐져 긴 페이로드도 판독 가능.
+
+### Fixed
+- **연결된 클러스터가 "미연결"로 오진되던 문제 (DailyChecker)**: anonymous-auth 를 끈 하드닝 클러스터는 익명 `/healthz` 프로브에 401/403 을 반환하는데, 일일점검이 200 이 아니면 전부 critical→pending(미연결)으로 판정해 kubectl 인증이 정상인 클러스터도 항상 미연결로 표시됐다. 401/403 을 "도달 가능(인증 필요)"으로 판정하도록 수정하고(등록 검증·HealthChecker 와 기준 통일), 익명 프로브가 완전히 실패하면 **kubeconfig 인증 프로브로 폴백**해 재확인한다. 실패 시에도 원인 힌트(DNS/포트/라우팅/TLS — `services/k8s_diagnose.py`)를 점검 상세에 남긴다.
+- **배치잡 연결 실패가 전부 "에러"로 뭉개지던 문제**: k8s_job_cleanup 의 kubectl 실패를 stderr 기반으로 `connect_error`(연결 실패)/`auth_error`(인증·RBAC)/`error` 로 분류하고, headline 에 stderr 첫 줄 + 한국어 원인 힌트를 실어 상태 pill 만 봐도 원인 계열을 알 수 있게 했다.
+- **kubeconfig 해석 실패 사유 무표시**: `ensure_kubeconfig_file` 이 사유 없이 None 을 반환해 "kubeconfig 미등록" 한 메시지로 뭉개지던 것을 `resolve_kubeconfig` 로 세분화 — 미등록 / **경로만 등록(DB content 없음 — Compose 워커가 파일을 못 보는 케이스)** / 파일 재생성 실패를 구분해 실행 로그·사전 점검·클러스터 연결 확인에 그대로 노출.
+
+### Changed
+- **클러스터 "연결 확인"(verify) 의미 변경**: API 서버는 도달하지만 kubeconfig 가 없거나 인증 불가면 이제 healthy 가 아니라 **warning** 으로 마킹 — "클러스터는 연결됨인데 배치잡·점검은 kubeconfig 미등록 에러" 모순을 해소. Settings 연결 확인 UI 도 한 줄 요약 대신 3개 체크(healthz/kubeconfig 인증/kubectl) 개별 결과를 행으로 표시. (기존에 healthy 로 보이던 kubeconfig 미등록 클러스터는 다음 확인부터 warning 으로 나타남)
+
 ## [1.20.0] - 2026-08-04
 
 ### Added

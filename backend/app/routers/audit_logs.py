@@ -21,6 +21,10 @@ def list_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     action: str | None = Query(None),
+    action_prefix: str | None = Query(
+        None, description="액션 패밀리 필터 — 예: 'batch_job.' 이면 batch_job.* 전부"
+    ),
+    target_type: str | None = Query(None),
     actor_username: str | None = Query(None),
     status: str | None = Query(None),
     date_from: datetime | None = Query(None),
@@ -29,6 +33,12 @@ def list_audit_logs(
     q = db.query(AuditLog)
     if action:
         q = q.filter(AuditLog.action == action)
+    elif action_prefix:
+        # LIKE 와일드카드 이스케이프 — 사용자가 % / _ 를 넣어도 리터럴로 매칭
+        escaped = action_prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(AuditLog.action.like(f"{escaped}%", escape="\\"))
+    if target_type:
+        q = q.filter(AuditLog.target_type == target_type)
     if actor_username:
         q = q.filter(AuditLog.actor_username == actor_username)
     if status:

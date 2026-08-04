@@ -2,12 +2,15 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { BatchJobRun } from '@/services/api';
+import type { DeepCheckStepPlanItem } from '@/types';
 import { StatusPill } from './StatusPill';
 import { BatchJobLogDetail } from './BatchJobLogDetail';
 
 interface RunHistoryProps {
   runs: BatchJobRun[];
   isLoading: boolean;
+  /** 잡 타입의 정적 단계 계획 — 상세 로그 카드의 타임라인에 전달. */
+  stepPlan?: DeepCheckStepPlanItem[];
 }
 
 function formatShortDate(iso: string): string {
@@ -25,7 +28,7 @@ const TRIGGER_LABEL: Record<string, string> = {
   bulk: '일괄',
 };
 
-export function RunHistory({ runs, isLoading }: RunHistoryProps) {
+export function RunHistory({ runs, isLoading, stepPlan }: RunHistoryProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (isLoading) {
@@ -68,7 +71,7 @@ export function RunHistory({ runs, isLoading }: RunHistoryProps) {
             </button>
             {open && (
               <div className="px-2.5 pb-2 border-t border-border pt-2">
-                <BatchJobLogDetail run={run} maxHeight="max-h-[240px]" />
+                <BatchJobLogDetail run={run} stepPlan={stepPlan} maxHeight="max-h-[240px]" />
               </div>
             )}
           </div>

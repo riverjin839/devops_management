@@ -114,7 +114,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | ↑ 두 SSH 콘솔 공용 base 툴 | `backend/app/services/ssh_pty.py`(WS↔paramiko PTY 브리지·init 프레임·토큰 검증) + `ssh_runner.py`(TOFU 연결) → `frontend/src/components/k8s/SshTerminalWindow.tsx`(xterm 창) · `frontend/src/lib/terminalPopout.ts`(창 간 handoff) · `hooks/useTerminalAppearance.ts`(`useXtermTheme`) |
 | 노드 라벨 / 노드 이미지 | `backend/app/routers/node_labels.py` · `node_images.py` → `frontend/src/pages/NodeLabelsPage.tsx` · `NodeImagesPage.tsx` |
 | 주요 명령어 모음 | `backend/app/routers/commands.py` → `frontend/src/pages/CommandsPage.tsx` · `CommandFormPage.tsx` |
-| Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/`(SSH: `etcdctl_defrag`/`shell_command`, non-SSH kubectl: `k8s_job_cleanup`) → `frontend/src/pages/BatchJobsPage.tsx` |
+| Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/`(SSH: `etcdctl_defrag`/`shell_command`, non-SSH kubectl: `k8s_job_cleanup`; base.py 에 단계 trace `_step`/`_record_command`/`step_plan`) + `services/k8s_diagnose.py`(kubectl 실패 분류·연결 원인 힌트) → `frontend/src/pages/BatchJobsPage.tsx` |
 | Ansible 자산 (파일/인벤토리) | `backend/app/routers/ansible_assets.py` |
 
 ### 네트워크 / 토폴로지 / 스토리지

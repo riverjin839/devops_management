@@ -4,7 +4,7 @@ import { Play, Plug, ShieldCheck } from 'lucide-react';
 import type { BatchJob, BatchJobRun, BatchJobTestConnectionResponse } from '@/services/api';
 import { MasterHostPicker } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { useRunBatchJob, useTestBatchJobConnection } from '@/hooks/useBatchJobs';
+import { useBatchJobTypes, useRunBatchJob, useTestBatchJobConnection } from '@/hooks/useBatchJobs';
 import { BatchJobLogDetail } from './BatchJobLogDetail';
 
 interface RunFormProps {
@@ -14,6 +14,8 @@ interface RunFormProps {
 export function RunForm({ job }: RunFormProps) {
   const run = useRunBatchJob();
   const testConn = useTestBatchJobConnection();
+  const typesQ = useBatchJobTypes();
+  const stepPlan = (typesQ.data ?? []).find((t) => t.jobType === job.jobType)?.stepPlan;
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
 
@@ -77,21 +79,26 @@ export function RunForm({ job }: RunFormProps) {
   const runTest = async () => {
     setError(null);
     setTestResult(null);
-    if (!host.trim()) { setError('호스트를 입력해주세요.'); return; }
-    if (!credsProvided && !hasSavedCreds) {
-      setError('비밀번호 또는 개인키를 입력하거나, 잡에 자격증명을 저장하세요.');
-      return;
+    // non-SSH(K8s) 잡은 호스트/자격증명 없이 백엔드가 kubeconfig→kubectl→API→RBAC 를 점검
+    if (isSsh) {
+      if (!host.trim()) { setError('호스트를 입력해주세요.'); return; }
+      if (!credsProvided && !hasSavedCreds) {
+        setError('비밀번호 또는 개인키를 입력하거나, 잡에 자격증명을 저장하세요.');
+        return;
+      }
     }
     try {
       const { data } = await testConn.mutateAsync({
         id: job.id,
-        payload: {
-          host: host.trim(),
-          port,
-          username: username.trim() || 'root',
-          password: password || undefined,
-          privateKey: privateKey || undefined,
-        },
+        payload: isSsh
+          ? {
+              host: host.trim(),
+              port,
+              username: username.trim() || 'root',
+              password: password || undefined,
+              privateKey: privateKey || undefined,
+            }
+          : {},
       });
       setTestResult(data);
     } catch (e) {
@@ -213,17 +220,17 @@ export function RunForm({ job }: RunFormProps) {
       <TestConnectionResult result={testResult} />
 
       <div className="flex items-center gap-1.5">
-        {isSsh && (
-          <button
-            type="button"
-            onClick={runTest}
-            disabled={testConn.isPending || run.isPending}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl disabled:opacity-60"
-          >
-            <Plug className="w-3.5 h-3.5" />
-            {testConn.isPending ? '테스트 중…' : '연결 테스트'}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={testConn.isPending || run.isPending}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-secondary hover:bg-primary/10 hover:text-primary border border-border rounded-xl disabled:opacity-60"
+        >
+          <Plug className="w-3.5 h-3.5" />
+          {testConn.isPending
+            ? '테스트 중…'
+            : isSsh ? '연결 테스트' : '사전 점검'}
+        </button>
         <button
           type="button"
           onClick={submit}
@@ -235,14 +242,22 @@ export function RunForm({ job }: RunFormProps) {
         </button>
       </div>
 
-      {result && <BatchJobLogDetail run={result} maxHeight="max-h-[240px]" />}
+      {result && <BatchJobLogDetail run={result} stepPlan={stepPlan} maxHeight="max-h-[240px]" />}
     </div>
   );
 }
 
+const PREFLIGHT_CHECK_LABEL: Record<string, string> = {
+  kubeconfig: 'kubeconfig 해석',
+  kubectl_binary: 'kubectl 바이너리',
+  api_server: 'API 서버 (인증 프로브)',
+  rbac_jobs: 'Job 조회 권한 (RBAC)',
+};
+
 /**
  * Shared test-connection result banner. Exported so SavedCreds can reuse the
  * same visual treatment (status pill + latency + error + saved-cred indicator).
+ * K8s(non-SSH) 사전 점검 응답(mode="k8s")은 단계별 체크 결과를 행으로 펼친다.
  */
 export function TestConnectionResult({ result }: { result: BatchJobTestConnectionResponse | null }) {
   if (!result) return null;
@@ -259,12 +274,13 @@ export function TestConnectionResult({ result }: { result: BatchJobTestConnectio
       error: '오류',
     } as Record<string, string>
   )[result.status] ?? result.status;
+  const isK8s = result.mode === 'k8s';
   return (
     <div className={`border rounded-xl px-2.5 py-2 text-xs ${tone}`}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-semibold">{label}</span>
         <span className="font-mono text-xs opacity-70">
-          {result.username}@{result.host}:{result.port}
+          {isK8s ? `클러스터 ${result.host}` : `${result.username}@${result.host}:${result.port}`}
         </span>
         <span className="font-mono text-xs opacity-70">{result.latencyMs}ms</span>
         {(result.usedSavedPassword || result.usedSavedPrivateKey) && (
@@ -273,7 +289,22 @@ export function TestConnectionResult({ result }: { result: BatchJobTestConnectio
           </span>
         )}
       </div>
-      {result.error && <div className="mt-1 text-xs font-mono break-all">{result.error}</div>}
+      {isK8s && (result.checks?.length ?? 0) > 0 && (
+        <ul className="mt-1.5 space-y-0.5">
+          {result.checks!.map((c) => (
+            <li key={c.check} className="flex items-start gap-1.5 text-foreground/90">
+              <span className="flex-shrink-0 mt-px">
+                {c.ok === true ? '✓' : c.ok === false ? '✗' : '—'}
+              </span>
+              <span className="flex-shrink-0 font-medium">
+                {PREFLIGHT_CHECK_LABEL[c.check] ?? c.check}
+              </span>
+              <span className="min-w-0 opacity-80 break-all">{c.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!isK8s && result.error && <div className="mt-1 text-xs font-mono break-all">{result.error}</div>}
     </div>
   );
 }

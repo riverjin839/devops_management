@@ -475,6 +475,105 @@ def stop_job(
     )
 
 
+async def _k8s_preflight(job: BatchJob, *, timeout: int) -> BatchJobTestConnectionResponse:
+    """non-SSH(K8s) 잡의 사전 연결 점검 — 실행하지 않고 단계별로 검증만.
+
+    체크 순서 (실패 시 이후 체크는 ok=None 으로 "확인 불가" 처리):
+      1. kubeconfig — resolve_kubeconfig 로 해석 (실패 사유 그대로 노출)
+      2. kubectl_binary — 컨테이너에 kubectl 존재 여부
+      3. api_server — `kubectl get --raw /healthz` (인증 프로브)
+      4. rbac_jobs — `kubectl auth can-i list jobs -A` (이 잡이 필요로 하는 권한)
+    """
+    import asyncio
+    import shutil
+    import subprocess
+    import time as _time
+
+    from app.services.k8s_diagnose import classify_kubectl_failure
+    from app.services.kubeconfig import resolve_kubeconfig
+
+    start = _time.monotonic()
+    checks: list[dict] = []
+    overall_status = "ok"
+    error: str | None = None
+    cluster_name = job.cluster.name if job.cluster is not None else "(클러스터 없음)"
+
+    def _skip_rest(names: list[str]) -> None:
+        for n in names:
+            checks.append({"check": n, "ok": None, "detail": "선행 단계 실패로 확인 불가"})
+
+    # 1) kubeconfig 해석
+    kc_path, kc_reason = resolve_kubeconfig(job.cluster)
+    if not kc_path:
+        checks.append({"check": "kubeconfig", "ok": False, "detail": kc_reason})
+        _skip_rest(["kubectl_binary", "api_server", "rbac_jobs"])
+        overall_status, error = "error", kc_reason
+    else:
+        checks.append({"check": "kubeconfig", "ok": True, "detail": "kubeconfig 파일 확보됨"})
+
+        # 2) kubectl 바이너리
+        if not shutil.which("kubectl"):
+            detail = "kubectl 을 찾을 수 없습니다 — 백엔드/워커 이미지에 kubectl 이 필요합니다."
+            checks.append({"check": "kubectl_binary", "ok": False, "detail": detail})
+            _skip_rest(["api_server", "rbac_jobs"])
+            overall_status, error = "error", detail
+        else:
+            checks.append({"check": "kubectl_binary", "ok": True, "detail": "kubectl 사용 가능"})
+
+            def _kubectl(*args: str) -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    ["kubectl", "--kubeconfig", kc_path, *args],
+                    capture_output=True, text=True, timeout=timeout,
+                )
+
+            # 3) 인증 healthz 프로브
+            try:
+                proc = await asyncio.to_thread(_kubectl, "get", "--raw", "/healthz")
+                if proc.returncode == 0:
+                    checks.append({"check": "api_server", "ok": True,
+                                   "detail": f"/healthz 응답: {(proc.stdout or '').strip()[:40] or 'ok'}"})
+                else:
+                    st, headline = classify_kubectl_failure(proc.stderr or "", host=cluster_name)
+                    checks.append({"check": "api_server", "ok": False, "detail": headline[:300]})
+                    _skip_rest(["rbac_jobs"])
+                    overall_status, error = st, headline[:500]
+            except subprocess.TimeoutExpired:
+                detail = f"/healthz 프로브 타임아웃 ({timeout}s)"
+                checks.append({"check": "api_server", "ok": False, "detail": detail})
+                _skip_rest(["rbac_jobs"])
+                overall_status, error = "timeout", detail
+
+            # 4) RBAC — 이 잡이 실제로 쓰는 권한 (선행 성공 시에만)
+            if overall_status == "ok":
+                try:
+                    proc = await asyncio.to_thread(_kubectl, "auth", "can-i", "list", "jobs", "-A")
+                    allowed = proc.returncode == 0 and "yes" in (proc.stdout or "").lower()
+                    if allowed:
+                        checks.append({"check": "rbac_jobs", "ok": True, "detail": "jobs 조회 권한 있음"})
+                    else:
+                        detail = (
+                            "jobs 조회 권한 없음(RBAC) — 이 kubeconfig 계정에 batch/jobs list 권한이 필요합니다."
+                        )
+                        checks.append({"check": "rbac_jobs", "ok": False, "detail": detail})
+                        overall_status, error = "auth_error", detail
+                except subprocess.TimeoutExpired:
+                    checks.append({"check": "rbac_jobs", "ok": False, "detail": f"권한 확인 타임아웃 ({timeout}s)"})
+                    overall_status, error = "timeout", f"권한 확인 타임아웃 ({timeout}s)"
+
+    return BatchJobTestConnectionResponse(
+        status=overall_status,
+        latency_ms=int((_time.monotonic() - start) * 1000),
+        host=cluster_name,
+        port=0,
+        username="-",
+        used_saved_password=False,
+        used_saved_private_key=False,
+        error=error,
+        mode="k8s",
+        checks=checks,
+    )
+
+
 @router.post("/{job_id}/test-connection", response_model=BatchJobTestConnectionResponse)
 async def test_job_connection(
     job_id: UUID,
@@ -496,10 +595,9 @@ async def test_job_connection(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
 
     if not _requires_ssh(job.job_type):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="이 잡 타입은 SSH 를 사용하지 않습니다 — 연결 테스트가 필요 없습니다.",
-        )
+        # 클러스터 스코프(non-SSH) 잡 — SSH 대신 K8s 사전 점검을 수행한다.
+        # 예전엔 422 로 거부해 실행해 보기 전까지는 연결 문제를 알 수 없었다.
+        return await _k8s_preflight(job, timeout=payload.timeout)
 
     target_host = payload.host or job.default_host
     if not target_host:
