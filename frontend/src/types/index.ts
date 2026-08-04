@@ -516,6 +516,11 @@ export interface WorkItem {
   jiraParentSummary?: string | null;
   jiraComponents?: string[] | null;
   jiraLabels?: string[] | null;
+  /** 프로비저닝(Jira+Confluence 동시 생성) 마지막 시도 결과 — null 이면 시도한 적
+   *  없음(가져오기/수동 등록 등). 'partial' 이면 한쪽만 생성돼 재시도가 필요하다. */
+  provisionStatus?: 'ok' | 'partial' | 'error' | null;
+  provisionJiraError?: string | null;
+  provisionConfluenceError?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -4203,6 +4208,10 @@ export interface ProvisionResult {
   confluencePageId?: string | null;
   confluenceUrl?: string | null;
   confluenceDetail: string;
+  /** 실패 원인이 내 인증(토큰/세션) 문제인지 — true 면 재시도 전에 연결 설정을
+   *  고칠 수 있는 카드를 보여준다(빈 필드 같은 입력값 문제와 구분). */
+  jiraAuthIssue: boolean;
+  confluenceAuthIssue: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

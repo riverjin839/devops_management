@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  X, Loader2, Rocket, CheckCircle2, AlertTriangle, ExternalLink, FileText,
+  X, Loader2, Rocket, CheckCircle2, AlertTriangle, ExternalLink, FileText, RotateCcw, KeyRound,
 } from 'lucide-react';
 import { useProvisionDefaults, useProvision } from '@/hooks/useJira';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { useToast } from '@/components/common';
+import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { formatApiError } from '@/lib/utils';
 import type { ProvisionResult, WorkItem } from '@/types';
 
@@ -48,10 +49,12 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const [result, setResult] = useState<ProvisionResult | null>(null);
 
   // 서버가 준 기본값으로 폼을 채운다 — 이후 사용자가 자유롭게 수정.
+  // 이미 한쪽이 만들어져 있으면(재시도 진입) 그쪽은 기본으로 체크 해제해 "나머지만"
+  // 만드는 흐름을 바로 보여준다.
   useEffect(() => {
     if (!defaults) return;
-    setCreateJira(defaults.jiraEnabled);
-    setCreateConfluence(defaults.confluenceEnabled);
+    setCreateJira(defaults.jiraEnabled && !item?.jiraIssueKey);
+    setCreateConfluence(defaults.confluenceEnabled && !item?.confluenceUrl);
     setProjectKey(defaults.projectKey);
     setIssueType(defaults.issueType || 'Task');
     setPriority(defaults.priority);
@@ -66,7 +69,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     setPageTitle(defaults.pageTitle);
     setRememberPreset(true);
     setResult(null);
-  }, [defaults]);
+  }, [defaults, item]);
 
   if (!open || !item) return null;
 
@@ -95,6 +98,11 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
         rememberPreset,
       });
       setResult(data);
+      // 성공한 쪽은 체크 해제 — "다시 시도"를 누르면 이 submit() 을 그대로 재사용해도
+      // 남은 쪽만 다시 보낸다(서버도 이미 연결된 쪽은 멱등하게 건너뛰지만, 화면에서부터
+      // 필요한 것만 보여주는 편이 명확하다).
+      if (data.jiraKey) setCreateJira(false);
+      if (data.confluenceUrl) setCreateConfluence(false);
       if (data.status === 'ok') toast.success('생성 완료', data.detail);
       else if (data.status === 'partial') toast.error('일부만 생성됨', data.detail);
       else toast.error('생성 실패', data.detail);
@@ -130,6 +138,17 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
           {isLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" /> 기본값 불러오는 중…
+            </div>
+          )}
+
+          {!result && item.provisionStatus === 'partial' && (
+            <div className="text-xs px-3 py-2 rounded-lg bg-amber-500/10 text-amber-500 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              <span>
+                지난 시도에서 일부만 생성됐습니다.
+                {item.provisionJiraError && <> Jira: {item.provisionJiraError}</>}
+                {item.provisionConfluenceError && <> Confluence: {item.provisionConfluenceError}</>}
+              </span>
             </div>
           )}
 
@@ -181,16 +200,54 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setResult(null)}
-                  className="px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80">
-                  다시 설정
-                </button>
-                <button type="button" onClick={onClose}
-                  className="ml-auto px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
-                  닫기
-                </button>
-              </div>
+              {result.status !== 'ok' && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 space-y-3">
+                  <div className="text-sm font-medium text-amber-500">
+                    다시 시도하시겠어요? {(result.jiraAuthIssue || result.confluenceAuthIssue)
+                      && '— 연결 설정을 먼저 고치면 재시도가 성공할 확률이 높습니다.'}
+                  </div>
+                  {(result.jiraAuthIssue || result.confluenceAuthIssue) && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                        <KeyRound className="w-3.5 h-3.5" />
+                        {result.jiraAuthIssue && result.confluenceAuthIssue
+                          ? 'Jira · Confluence 인증(토큰/세션) 문제로 보입니다 — 아래에서 바로 고칠 수 있습니다.'
+                          : result.jiraAuthIssue
+                            ? 'Jira 인증(토큰/세션) 문제로 보입니다 — 아래에서 바로 고칠 수 있습니다.'
+                            : 'Confluence 인증(세션) 문제로 보입니다 — 같은 세션 쿠키를 다시 등록하면 Confluence 도 함께 갱신됩니다.'}
+                      </p>
+                      <JiraConnectCard compact />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => void submit()} disabled={busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                      다시 시도 {result.jiraKey ? '(Confluence만)' : result.confluenceUrl ? '(Jira만)' : ''}
+                    </button>
+                    <button type="button" onClick={() => setResult(null)} disabled={busy}
+                      className="px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
+                      설정 수정
+                    </button>
+                    <button type="button" onClick={onClose} disabled={busy}
+                      className="ml-auto px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">
+                      나중에
+                    </button>
+                  </div>
+                </div>
+              )}
+              {result.status === 'ok' && (
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setResult(null)}
+                    className="px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80">
+                    다시 설정
+                  </button>
+                  <button type="button" onClick={onClose}
+                    className="ml-auto px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
+                    닫기
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <>

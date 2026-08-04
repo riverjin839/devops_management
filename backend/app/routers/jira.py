@@ -1505,6 +1505,9 @@ async def provision_work_item(
     jira_detail = confluence_detail = ""
     conf_id = conf_url = ""
     jira_ok = conf_ok = False
+    # 실패가 "내 인증(토큰/세션)" 문제인지 — 프론트가 재시도 전에 연결 설정 카드를
+    # 보여줄지 판단하는 신호. 빈 필드 같은 입력값 문제와는 구분한다.
+    jira_auth_issue = confluence_auth_issue = False
 
     # ── Jira ─────────────────────────────────────────────────────────────────
     if payload.create_jira:
@@ -1521,6 +1524,7 @@ async def provision_work_item(
             summary = (payload.summary or item.title or "").strip()
             if svc is None:
                 jira_detail = "내 Jira 인증이 등록되지 않았습니다."
+                jira_auth_issue = True
             elif not project_key:
                 jira_detail = "프로젝트 키를 지정하세요."
             elif not summary:
@@ -1554,43 +1558,44 @@ async def provision_work_item(
                     item.jira_synced_at = datetime.utcnow()
                 else:
                     jira_detail = res.get("detail", "Jira 이슈 생성 실패")
+                    jira_auth_issue = bool(res.get("auth_failed"))
 
     # ── Confluence ───────────────────────────────────────────────────────────
     if payload.create_confluence:
-        space_key = (payload.space_key or "").strip() or (_get_weekly_settings(db).get("space_key") or "").strip()
-        page_title = (payload.page_title or item.title or "").strip()
-        if not space_key:
-            confluence_detail = "Confluence 스페이스 키를 지정하세요."
-        elif not page_title:
-            confluence_detail = "문서 제목이 비어 있습니다."
+        if item.confluence_page_id:
+            # Jira 와 동일하게 이미 연결된 쪽은 건너뛴다 — 나머지 한쪽만 재시도하는
+            # 호출(둘 다 True 로 다시 보내도)이 이미 성공한 페이지를 불필요하게
+            # 새 버전으로 갱신하지 않도록 한다.
+            confluence_detail = "이미 연결된 Confluence 문서가 있어 생성을 건너뛰었습니다."
+            conf_id, conf_url = item.confluence_page_id, item.confluence_url or ""
+            conf_ok = True
         else:
-            svc, res = await _confluence_service_verified(db, actor, cfg)
-            if svc is None or res.get("status") != "ok":
-                confluence_detail = res.get("detail", "Confluence 세션 없음")
+            space_key = (payload.space_key or "").strip() or (_get_weekly_settings(db).get("space_key") or "").strip()
+            page_title = (payload.page_title or item.title or "").strip()
+            if not space_key:
+                confluence_detail = "Confluence 스페이스 키를 지정하세요."
+            elif not page_title:
+                confluence_detail = "문서 제목이 비어 있습니다."
             else:
-                body = payload.page_body or _default_page_body(item, jira_key, jira_url)
-                out = await svc.upsert_page(
-                    space_key, page_title, body,
-                    parent_id=(payload.parent_page_id or "").strip()
-                    or (_get_weekly_settings(db).get("parent_page_id") or ""),
-                )
-                if out.get("status") == "ok":
-                    conf_ok = True
-                    conf_id, conf_url = out.get("id", ""), out.get("url", "")
-                    item.confluence_page_id = conf_id or None
-                    item.confluence_url = conf_url or None
+                svc, res = await _confluence_service_verified(db, actor, cfg)
+                if svc is None or res.get("status") != "ok":
+                    confluence_detail = res.get("detail", "Confluence 세션 없음")
+                    confluence_auth_issue = True
                 else:
-                    confluence_detail = out.get("detail", "Confluence 문서 생성 실패")
-
-    db.commit()
-    audit_logger.record(
-        db, action="work_item.provision", actor=actor,
-        target_type="work_item", target_id=str(item.id),
-        details={"jira": jira_key or None, "confluence": conf_id or None},
-    )
-    # 하나라도 성공했으면 이번 조건을 내 기본값으로 기억한다(다음 등록에서 자동 채움).
-    if payload.remember_preset and (jira_ok or conf_ok):
-        _save_provision_preset(db, actor.id, payload)
+                    body = payload.page_body or _default_page_body(item, jira_key, jira_url)
+                    out = await svc.upsert_page(
+                        space_key, page_title, body,
+                        parent_id=(payload.parent_page_id or "").strip()
+                        or (_get_weekly_settings(db).get("parent_page_id") or ""),
+                    )
+                    if out.get("status") == "ok":
+                        conf_ok = True
+                        conf_id, conf_url = out.get("id", ""), out.get("url", "")
+                        item.confluence_page_id = conf_id or None
+                        item.confluence_url = conf_url or None
+                    else:
+                        confluence_detail = out.get("detail", "Confluence 문서 생성 실패")
+                        confluence_auth_issue = bool(out.get("auth_failed"))
 
     wanted = [payload.create_jira, payload.create_confluence]
     succeeded = [payload.create_jira and jira_ok, payload.create_confluence and conf_ok]
@@ -1602,11 +1607,30 @@ async def provision_work_item(
         status, detail = "partial", "일부만 생성되었습니다 — 아래 사유를 확인하세요."
     else:
         status, detail = "error", "생성에 실패했습니다 — 아래 사유를 확인하세요."
+
+    # 다음 시도(재시도 버튼/게시판 재반영)가 무엇이 왜 막혔는지 알 수 있도록 결과를
+    # 업무에 영속화한다 — null 이면 프로비저닝을 시도한 적 없다는 뜻(가져오기/수동
+    # 등록과 구분).
+    item.provision_status = status
+    item.provision_jira_error = jira_detail if (payload.create_jira and not jira_ok) else None
+    item.provision_confluence_error = confluence_detail if (payload.create_confluence and not conf_ok) else None
+    db.commit()
+
+    audit_logger.record(
+        db, action="work_item.provision", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"jira": jira_key or None, "confluence": conf_id or None},
+    )
+    # 하나라도 성공했으면 이번 조건을 내 기본값으로 기억한다(다음 등록에서 자동 채움).
+    if payload.remember_preset and (jira_ok or conf_ok):
+        _save_provision_preset(db, actor.id, payload)
+
     return ProvisionResult(
         status=status, detail=detail,
         jira_key=jira_key or None, jira_url=jira_url or None, jira_detail=jira_detail,
         confluence_page_id=conf_id or None, confluence_url=conf_url or None,
         confluence_detail=confluence_detail,
+        jira_auth_issue=jira_auth_issue, confluence_auth_issue=confluence_auth_issue,
     )
 
 

@@ -711,12 +711,18 @@ export function WorkItemTableRow({ item, clusters, columns, projectNameById, spr
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
-              {!item.jiraIssueKey && onJiraProvision && (
+              {(!item.jiraIssueKey || item.provisionStatus === 'partial') && onJiraProvision && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onJiraProvision(item); }}
-                  className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
-                  title="Jira 이슈 · Confluence 문서 자동 생성"
-                  aria-label="Jira · Confluence 자동 생성"
+                  className={`p-1.5 hover:bg-secondary rounded-md transition-colors ${
+                    item.provisionStatus === 'partial'
+                      ? 'text-amber-500 hover:text-amber-400'
+                      : 'text-muted-foreground hover:text-primary'
+                  }`}
+                  title={item.provisionStatus === 'partial'
+                    ? `일부만 생성됨 — ${!item.jiraIssueKey ? item.provisionJiraError || 'Jira 생성 실패' : item.provisionConfluenceError || 'Confluence 생성 실패'} (클릭해서 재시도)`
+                    : 'Jira 이슈 · Confluence 문서 자동 생성'}
+                  aria-label={item.provisionStatus === 'partial' ? '일부만 생성됨 — 재시도' : 'Jira · Confluence 자동 생성'}
                 >
                   <Rocket className="w-3.5 h-3.5" />
                 </button>

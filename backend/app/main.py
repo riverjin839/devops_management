@@ -951,6 +951,10 @@ def _run_migrations():
         _safe_create_index("ix_work_items_jira_epic_key", "work_items", "(jira_epic_key)")
         _safe_create_index("ix_work_items_jira_parent_key", "work_items", "(jira_parent_key)")
         _safe_create_index("ix_work_items_jira_issue_type", "work_items", "(jira_issue_type)")
+        # 프로비저닝(Jira+Confluence 동시 생성) 마지막 시도 결과 — null 이면 시도한 적 없음.
+        _safe_add_column("work_items", "provision_status", "VARCHAR(20)")
+        _safe_add_column("work_items", "provision_jira_error", "TEXT")
+        _safe_add_column("work_items", "provision_confluence_error", "TEXT")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
