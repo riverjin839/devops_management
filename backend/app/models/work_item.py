@@ -111,6 +111,14 @@ class WorkItem(Base):
     confluence_page_id = Column(String(50), nullable=True)
     confluence_url = Column(Text, nullable=True)
 
+    # ── 프로비저닝(Jira+Confluence 동시 생성) 마지막 시도 결과 ──────────────────
+    # `POST /jira/provision` 이 호출될 때마다 갱신. null = 프로비저닝을 시도한 적 없음
+    # (Jira 가져오기로 생성됐거나 수동 등록 등) — 이 경우와 "일부만 성공"을 구분해야
+    # 업무 관리 게시판이 정말 재시도가 필요한 행만 표시할 수 있다.
+    provision_status = Column(String(20), nullable=True)      # ok | partial | error
+    provision_jira_error = Column(Text, nullable=True)        # 마지막 Jira 생성 실패 사유
+    provision_confluence_error = Column(Text, nullable=True)  # 마지막 Confluence 생성 실패 사유
+
     # 유사 WorkItem 검색용 임베딩(제목+본문) — Celery 비동기로 계산·저장 (동기 쓰기 경로에 없음).
     # settings.embedding_model 교체 시 차원(embedding_dim)도 함께 바뀌면 재계산 필요.
     # deferred() — 기본 SELECT(list/get 등 일반 쿼리)에 포함되지 않도록 지연 로딩. pgvector

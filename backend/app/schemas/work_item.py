@@ -171,6 +171,11 @@ class WorkItemResponse(WorkItemBase):
     jira_parent_summary: Optional[str] = None
     jira_components: Optional[list[str]] = None
     jira_labels: Optional[list[str]] = None
+    # 프로비저닝(Jira+Confluence 동시 생성) 마지막 시도 결과 — null 이면 시도한 적 없음
+    # (Jira 가져오기·수동 등록 등). 게시판이 "일부만 생성됨" 행을 골라내는 데 쓴다.
+    provision_status: Optional[str] = None
+    provision_jira_error: Optional[str] = None
+    provision_confluence_error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     subtasks: list["WorkItemResponse"] = []

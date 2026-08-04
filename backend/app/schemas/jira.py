@@ -430,6 +430,11 @@ class ProvisionResult(BaseModel):
     confluence_page_id: Optional[str] = None
     confluence_url: Optional[str] = None
     confluence_detail: str = ""
+    # 실패 원인이 "내 인증(토큰/세션)" 문제인지 — 프론트가 재시도 전에 연결 설정을
+    # 바로 고칠 수 있는 카드를 보여줄지 판단하는 신호(빈 필드/프로젝트키 같은 입력값
+    # 문제와 구분).
+    jira_auth_issue: bool = False
+    confluence_auth_issue: bool = False
 
 
 # ── 연결 복구 (해제 / 갈아끼우기 / 고아 점검) ──────────────────────────────────

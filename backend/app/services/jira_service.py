@@ -425,6 +425,9 @@ class JiraService:
                         key = data.get("key", "")
                         return {"status": "ok", "key": key, "id": str(data.get("id", "")),
                                 "url": self.issue_browse_url(key)}
+                    if resp.status_code == 401:
+                        return {"status": "error", "detail": "인증 실패 — 토큰을 확인하세요 (401).",
+                                "auth_failed": True}
                     if resp.status_code != 400 or not with_optional:
                         detail = ""
                         try:
