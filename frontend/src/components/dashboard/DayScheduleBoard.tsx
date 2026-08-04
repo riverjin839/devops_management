@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, RotateCcw, Plus, CalendarClock, Clock3, User, Users, X, Trash2, AlertTriangle,
+  ClipboardList,
 } from 'lucide-react';
 import {
   useHomeWorkItems, useTimeBlocksRange, useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock,
@@ -441,10 +442,17 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         )}
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">{totalCount}건</span>
         <button
+          type="button"
+          onClick={() => navigate('/tasks-mgmt')}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-secondary text-muted-foreground text-xs font-semibold hover:text-foreground hover:bg-secondary/80"
+          title="업무 관리로 이동">
+          <ClipboardList className="w-3 h-3" /> 업무 관리
+        </button>
+        <button
           onClick={() => setQuickAdd({ time: isToday ? `${String(Math.min(new Date().getHours(), 23)).padStart(2, '0')}:00` : '09:00', assignee: meOnly ? (selectedName || undefined) : undefined })}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20"
           title="업무 등록">
-          <Plus className="w-3 h-3" /> 등록
+          <Plus className="w-3 h-3" /> 업무 등록
         </button>
       </div>
 
