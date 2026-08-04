@@ -1586,6 +1586,9 @@ async def provision_work_item(
     jira_detail = confluence_detail = ""
     conf_id = conf_url = ""
     jira_ok = conf_ok = False
+    # conf_ok 는 "이미 연결돼 있어 skip" 도 True 가 되므로, 상호 링크는 이번 호출에서
+    # 실제로 새 페이지를 만든 경우(conf_created)에만 건다 — skip 경로엔 page_title 이 없다.
+    conf_created = False
     # 실패가 "내 인증(토큰/세션)" 문제인지 — 프론트가 재시도 전에 연결 설정 카드를
     # 보여줄지 판단하는 신호. 빈 필드 같은 입력값 문제와는 구분한다.
     jira_auth_issue = confluence_auth_issue = False
@@ -1677,6 +1680,7 @@ async def provision_work_item(
                     )
                     if out.get("status") == "ok":
                         conf_ok = True
+                        conf_created = True
                         conf_id, conf_url = out.get("id", ""), out.get("url", "")
                         item.confluence_page_id = conf_id or None
                         item.confluence_url = conf_url or None
@@ -1687,9 +1691,10 @@ async def provision_work_item(
     # ── Jira ↔ Confluence 상호 링크 ─────────────────────────────────────────────
     # 이번 호출에서 Jira 를 새로 생성했고(jira_svc 존재) Confluence 도 함께 만들어졌으면,
     # Confluence 쪽엔 이미 Jira 링크가 들어가 있으므로(_default_page_body) 반대 방향으로
-    # Jira Description 끝에 Confluence 제목·링크를 덧붙인다. 기존에 이미 연결된 Jira
-    # 이슈(jira_svc=None, 위에서 skip 된 경우)는 건드리지 않는다.
-    if jira_svc is not None and conf_ok and jira_key:
+    # Jira Description 끝에 Confluence 제목·링크를 덧붙인다. 기존에 이미 연결된 쪽은
+    # 어느 방향이든 건드리지 않는다 — Jira 는 jira_svc=None(위에서 skip), Confluence 는
+    # conf_created=False(이미 연결돼 생성 skip — 이때는 page_title 도 바인딩되지 않는다).
+    if jira_svc is not None and conf_created and jira_key:
         conf_note = f"\n\nConfluence 문서: [{page_title}|{conf_url}]"
         new_description = (jira_description_base + conf_note).strip()
         upd = await jira_svc.update_issue(jira_key, {"description": new_description})
