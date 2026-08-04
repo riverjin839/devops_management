@@ -27,5 +27,6 @@
 | `release` | 새 버전 릴리스(마이너/패치) — SemVer 버전업·CHANGELOG·태그 절차 |
 | `docs-sync` | 기능 추가/변경 후 문서(README·CLAUDE.md·CODE_MAP·SCREENS·CHANGELOG) 동기화. CI `docs-sync` 검사 실패 시 |
 | `ux-ui-designer` | 디자인 감사·UX 점검·`DESIGN.md` 현행화/백로그 운영 (전담 에이전트: `.claude/agents/ux-ui-designer.md`) |
+| `impeccable` | 프론트엔드 화면(웹/랜딩/대시보드/컴포넌트) 디자인 품질 개선 — 3rd-party 스킬([impeccable.style](https://impeccable.style)). `/impeccable init` 으로 시작, `polish`/`audit`/`critique` 등 23개 서브커맨드 + 60개 결정론적 안티패턴 감지 규칙 제공 (전담 에이전트 4종: `.claude/agents/impeccable-*.md`) |
 
 > 참고: 운영 점검(Ops Checks) 콘솔 아키텍처와 점검 소스 추가는 `add-deep-checker` 에 정리.
