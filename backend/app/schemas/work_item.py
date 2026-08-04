@@ -176,6 +176,10 @@ class WorkItemResponse(WorkItemBase):
     provision_status: Optional[str] = None
     provision_jira_error: Optional[str] = None
     provision_confluence_error: Optional[str] = None
+    # Confluence 연동 — confluence_url 은 WorkItemBase 에 있어 수동 입력/프로비저닝 모두 가능.
+    # page_id/synced_at 은 프로비저닝·동기화로만 세팅되는 읽기 전용(반영 대상 페이지 식별용).
+    confluence_page_id: Optional[str] = None
+    confluence_synced_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     subtasks: list["WorkItemResponse"] = []

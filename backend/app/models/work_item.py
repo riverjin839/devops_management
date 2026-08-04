@@ -110,6 +110,8 @@ class WorkItem(Base):
     # PEP 에서 업무를 만들 때 함께 생성했거나(프로비저닝), Jira 이슈에서 발견한 Confluence 문서.
     confluence_page_id = Column(String(50), nullable=True)
     confluence_url = Column(Text, nullable=True)
+    # 마지막으로 PEP → Confluence 반영(동기화)한 시각 — jira_synced_at 과 동일한 목적.
+    confluence_synced_at = Column(DateTime, nullable=True)
 
     # ── 프로비저닝(Jira+Confluence 동시 생성) 마지막 시도 결과 ──────────────────
     # `POST /jira/provision` 이 호출될 때마다 갱신. null = 프로비저닝을 시도한 적 없음

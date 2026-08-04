@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange, UserRound } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange, UserRound, Search } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -14,18 +14,20 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
-import { useJiraConfig, useJiraRefreshItem, useJiraPush } from '@/hooks/useJira';
+import { ConfluenceLinkModal } from '@/components/work-items/ConfluenceLinkModal';
+import { QuickAddTaskModal } from '@/components/dashboard/QuickAddTaskModal';
+import { useJiraConfig, useJiraRefreshItem, useJiraPush, useConfluenceSync } from '@/hooks/useJira';
 import { Settings2 } from 'lucide-react';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER, KANBAN_COLUMNS } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useProjects } from '@/hooks/useProjects';
-import { useSprints } from '@/hooks/useSprints';
+import { useSprints, useCurrentSprint } from '@/hooks/useSprints';
 import { useClusterStore } from '@/stores/clusterStore';
 import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { useAuthStore } from '@/stores/authStore';
-import { WorkItem, WorkItemModule, WorkItemType, JiraFieldChange } from '@/types';
+import { WorkItem, WorkItemModule, WorkItemType, JiraFieldChange, KanbanStatus } from '@/types';
 
 type ViewMode = 'table' | 'calendar' | 'kanban';
 
@@ -85,6 +87,63 @@ function TypeFilterDropdown({
                 </button>
               );
             })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 상태(칸반) 필터 — TypeFilterDropdown 과 동일한 패턴, KANBAN_COLUMNS 기준. */
+function StatusFilterDropdown({
+  value, onChange,
+}: {
+  value: KanbanStatus | 'all';
+  onChange: (v: KanbanStatus | 'all') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = value === 'all' ? null : KANBAN_COLUMNS.find((c) => c.key === value) ?? null;
+  const active = value !== 'all';
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
+          active ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        {current ? <span className={`w-2 h-2 rounded-full ${current.dotCls}`} /> : <ListFilter className="w-3.5 h-3.5" />}
+        {current ? current.label : '상태'}
+        <ChevronDown className="w-3 h-3 opacity-60" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-1 min-w-[140px]" role="listbox">
+            <button
+              type="button"
+              onClick={() => { onChange('all'); setOpen(false); }}
+              className={`w-full text-left px-2 py-1.5 rounded-md text-sm inline-flex items-center gap-1.5 transition-colors ${
+                value === 'all' ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'
+              }`}
+            >
+              <ListFilter className="w-3.5 h-3.5" /> 전체 상태
+            </button>
+            {KANBAN_COLUMNS.map((col) => (
+              <button
+                key={col.key}
+                type="button"
+                onClick={() => { onChange(col.key); setOpen(false); }}
+                className={`w-full text-left px-2 py-1.5 rounded-md text-sm inline-flex items-center gap-1.5 transition-colors ${
+                  value === col.key ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${col.dotCls}`} /> {col.label}
+              </button>
+            ))}
           </div>
         </>
       )}
@@ -160,11 +219,22 @@ export function WorkItemBoardPage() {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [filterModule, setFilterModule] = useState<WorkItemModule | ''>('');
-  // 스프린트 페이지의 '게시판에서 보기' 딥링크(?sprint=...) 를 초기 필터로 반영.
+  const [filterKanbanStatus, setFilterKanbanStatus] = useState<KanbanStatus | 'all'>('all');
+  // 제목 검색 — 서버사이드 ILIKE(title/content). 타이핑 중 매 키 입력마다 재조회하지
+  // 않도록 300ms 디바운스 후 실제 필터(debouncedSearchTitle)에 반영.
+  const [searchTitle, setSearchTitle] = useState('');
+  const [debouncedSearchTitle, setDebouncedSearchTitle] = useState('');
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearchTitle(searchTitle), 300);
+    return () => window.clearTimeout(t);
+  }, [searchTitle]);
+  // 스프린트 페이지의 '게시판에서 보기' 딥링크(?sprint=...) 를 초기 필터로 반영. 딥링크가
+  // 없으면 아래 useEffect 가 현재(진행중) 스프린트로 기본값을 채운다.
   const [searchParams] = useSearchParams();
   const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') ?? '');
-  const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // 기본 정렬 = 시작일 최신순(기존 백엔드 정렬과 동일 — 사용자가 다른 컬럼을 클릭하면 바뀐다).
+  const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('startedAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   // 기본 화면은 **내 업무**만 — 전사 업무가 통째로 뜨면 매번 담당자를 직접 입력해야 한다.
   // 끈 상태는 localStorage 로 기억한다(팀 전체를 보는 사용자가 매번 다시 끄지 않도록).
   const [onlyMine, setOnlyMine] = useState<boolean>(() => {
@@ -228,10 +298,12 @@ export function WorkItemBoardPage() {
     assignee: effectiveAssignee || undefined,
     category: filterCategory || undefined,
     priority: filterPriority || undefined,
+    kanbanStatus: filterKanbanStatus === 'all' ? undefined : filterKanbanStatus,
     module: filterModule || undefined,
     sprintId: filterSprintId || undefined,
     startedFrom: filterFrom || undefined,
     startedTo: filterTo || undefined,
+    q: debouncedSearchTitle.trim() || undefined,
   };
 
   const { data, isLoading, error } = useWorkItems(filters);
@@ -240,8 +312,14 @@ export function WorkItemBoardPage() {
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
+  const [confluenceOpen, setConfluenceOpen] = useState(false);
+  // 하위 업무 등록 전용(전체 폼) — 상위 업무 등록은 홈 "업무 현황"과 동일한 QuickAddTaskModal 사용.
   const [createOpen, setCreateOpen] = useState(false);
   const [createParent, setCreateParent] = useState<WorkItem | null>(null);
+  // 상위 업무 등록/수정 — 홈 화면 "업무 등록"과 동일한 팝업(QuickAddTaskModal) 재사용.
+  // initial 이 있으면 수정 모드, 없으면 신규 등록.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<WorkItem | null>(null);
   const { data: jiraConfig } = useJiraConfig();
 
   const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
@@ -289,10 +367,44 @@ export function WorkItemBoardPage() {
   const deleteTask = useDeleteWorkItem();
   const createTask = useCreateWorkItem();
   const toast = useToast();
+
+  // 스프린트 딥링크(?sprint=)가 없으면 현재(2주) 스프린트로 기본 필터를 맞춘다 — 마운트 시 1회.
+  const currentSprintQuery = useCurrentSprint();
+  const sprintDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (sprintDefaultedRef.current) return;
+    if (searchParams.get('sprint')) { sprintDefaultedRef.current = true; return; } // 딥링크 우선
+    if (currentSprintQuery.isLoading) return; // 응답 대기 후 1회만 적용
+    sprintDefaultedRef.current = true;
+    if (currentSprintQuery.data?.id) setFilterSprintId(currentSprintQuery.data.id);
+  }, [currentSprintQuery.isLoading, currentSprintQuery.data, searchParams]);
+
+  // 로드 시 "OOO님, 어떤 기준으로 필터된 결과인지" 안내 토스트 — 마운트 시 1회.
+  // 위 sprint-default effect 가 setFilterSprintId 한 값은 같은 tick 에 아직 반영되지 않으므로
+  // (state 는 다음 렌더에야 갱신) filterSprintId state 를 읽지 않고 직접 재계산한다.
+  const filterToastShownRef = useRef(false);
+  useEffect(() => {
+    if (filterToastShownRef.current) return;
+    if (!myName) return;
+    if (currentSprintQuery.isLoading) return; // 스프린트명까지 함께 보여주기 위해 로딩 대기
+    filterToastShownRef.current = true;
+    const deepLinkSprintId = searchParams.get('sprint');
+    const sprintLabel = deepLinkSprintId
+      ? (sprintNameById.get(deepLinkSprintId) ? `'${sprintNameById.get(deepLinkSprintId)}' 스프린트` : '지정 스프린트')
+      : (currentSprintQuery.data?.name ? `'${currentSprintQuery.data.name}' 스프린트` : '전체 스프린트');
+    toast.info(
+      `${myName}님, 필터 적용됨`,
+      `${onlyMine ? '본인 담당 업무' : '전체 담당자'} · ${sprintLabel} 기준으로 필터된 결과입니다.`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myName, currentSprintQuery.isLoading, currentSprintQuery.data]);
   // Jira 연결 업무의 행 단위 동기화 — 다시 가져오기 / 수정 내용 보내기.
   const jiraRefresh = useJiraRefreshItem();
   const jiraPush = useJiraPush();
   const [jiraBusyId, setJiraBusyId] = useState<string | null>(null);
+  // Confluence 연결 업무의 행 단위 동기화(반영) — Jira "보내기"와 동일한 패턴.
+  const confluenceSync = useConfluenceSync();
+  const [confluenceBusyId, setConfluenceBusyId] = useState<string | null>(null);
   // 업무 생성 직후 Jira·Confluence 자동 생성 모달을 띄운다(연동이 켜져 있을 때만).
   const [provisionItem, setProvisionItem] = useState<WorkItem | null>(null);
   // Jira 연결 관리(해제/변경/삭제) — 재가져오기가 "Jira 에 없음"으로 끝나면 사유와 함께 자동으로 연다.
@@ -354,6 +466,22 @@ export function WorkItemBoardPage() {
     }
   };
 
+  const handleConfluenceSync = async (item: WorkItem) => {
+    setConfluenceBusyId(item.id);
+    try {
+      const { data } = await confluenceSync.mutateAsync(item.id);
+      if (data.status !== 'ok') {
+        toast.error('Confluence 반영 실패', data.detail);
+        return;
+      }
+      toast.success('Confluence 문서 반영 완료', data.detail);
+    } catch (err) {
+      toast.error('Confluence 반영 실패', formatApiError(err));
+    } finally {
+      setConfluenceBusyId(null);
+    }
+  };
+
 
   const handleDelete = (item: WorkItem) => setConfirmDelete(item);
   const doDelete = () => {
@@ -382,21 +510,21 @@ export function WorkItemBoardPage() {
     });
   };
 
-  // 행/카드의 ✏️ 버튼 — 상세 페이지를 편집 모드로 바로 연다 (별도 수정 페이지 없음).
+  // 행/카드의 ✏️ 버튼 — "업무 등록"과 동일한 팝업(QuickAddTaskModal)을 수정 모드로 연다.
+  // 본문(리치텍스트)·모듈·서비스 등 이 팝업이 다루지 않는 필드는 팝업의 "상세 수정" 링크로 이동.
   const handleEdit = (item: WorkItem) => {
-    navigate(`/tasks-mgmt/${item.id}?edit=1`);
+    setEditingItem(item);
   };
 
-  // 하위 업무 등록 — 페이지 전환 없이 팝업으로.
+  // 하위 업무 등록 — 페이지 전환 없이 팝업으로 (parentItem 연결이 필요해 전체 폼 그대로 사용).
   const handleAddSubItem = (item: WorkItem) => {
     setCreateParent(item);
     setCreateOpen(true);
   };
 
-  // 신규 등록 — type tab 의 현재 값으로 기본 type 결정 (전체 탭이면 task 가 기본). 팝업으로 등록.
+  // 신규 등록 — 홈 "업무 현황"의 "업무 등록"과 동일한 QuickAddTaskModal 팝업으로 통일.
   const handleCreateNew = () => {
-    setCreateParent(null);
-    setCreateOpen(true);
+    setQuickAddOpen(true);
   };
 
   // 행 / 카드 클릭 — read 라우트로 진입.
@@ -450,14 +578,17 @@ export function WorkItemBoardPage() {
     setFilterAssignee('');
     setFilterCategory('');
     setFilterPriority('');
+    setFilterKanbanStatus('all');
     setFilterModule('');
     setFilterSprintId('');
     setFilterFrom('');
     setFilterTo('');
+    setSearchTitle('');
   };
 
   // "내 업무"(기본값)는 초기화 대상이 아니다 — 빈 목록이 떴을 때 안내 문구를 고르는 데만 쓴다.
-  const hasFilters = !!(filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterSprintId || filterFrom || filterTo);
+  const hasFilters = !!(filterClusterId || filterAssignee || filterCategory || filterPriority
+    || filterKanbanStatus !== 'all' || filterModule || filterSprintId || filterFrom || filterTo || searchTitle);
   const isFilteredView = hasFilters || (onlyMine && !!myName);
 
   const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
@@ -521,6 +652,16 @@ export function WorkItemBoardPage() {
                 Jira 가져오기
               </button>
             )}
+            {jiraConfig?.confluenceBaseUrl && (
+              <button
+                onClick={() => setConfluenceOpen(true)}
+                className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
+                title="Confluence 문서를 work item 으로 가져오기"
+              >
+                <DownloadCloud className="w-4 h-4" />
+                Confluence 연동
+              </button>
+            )}
             {viewMode !== 'calendar' && items.length > 0 && (
               <button
                 onClick={handleExportCsv}
@@ -544,10 +685,22 @@ export function WorkItemBoardPage() {
         <div className="flex items-center justify-between gap-3 mb-3 flex-nowrap">
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <TypeFilterDropdown value={typeFilter} onChange={setTypeFilter} />
+            <StatusFilterDropdown value={filterKanbanStatus} onChange={setFilterKanbanStatus} />
           </div>
 
           {/* 검색 컨트롤 — 라인 패턴(rounded-lg · bg-secondary · border)으로 통일. 모듈 필터도 여기 드롭다운으로 통합(2줄→1줄) */}
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={searchTitle}
+                onChange={(e) => setSearchTitle(e.target.value)}
+                placeholder="제목 검색"
+                aria-label="제목 검색"
+                className="w-36 pl-8 pr-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+              />
+            </div>
             {myName && (
               <button
                 type="button"
@@ -829,6 +982,8 @@ export function WorkItemBoardPage() {
                       jiraBusy={jiraBusyId === item.id}
                       onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
                       onJiraLink={(t) => openJiraLink(t)}
+                      onConfluenceSync={handleConfluenceSync}
+                      confluenceBusy={confluenceBusyId === item.id}
                     />
                   ))}
                 </tbody>
@@ -844,6 +999,7 @@ export function WorkItemBoardPage() {
       <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
+      <ConfluenceLinkModal open={confluenceOpen} onClose={() => setConfluenceOpen(false)} />
       <JiraProvisionModal open={!!provisionItem} onClose={() => setProvisionItem(null)} item={provisionItem} />
       <JiraLinkDialog
         open={!!linkItem}
@@ -852,9 +1008,9 @@ export function WorkItemBoardPage() {
         missingDetail={linkMissingDetail}
       />
 
+      {/* 하위 업무 등록 전용 — parentItem 연결이 필요해 전체 폼(WorkItemFormModal) 유지. */}
       <WorkItemFormModal
         open={createOpen}
-        defaultType={createParent ? undefined : (typeFilter === 'all' ? 'task' : typeFilter)}
         parentItem={createParent}
         onClose={() => { setCreateOpen(false); setCreateParent(null); }}
         onSaved={(_savedId, created) => {
@@ -862,6 +1018,14 @@ export function WorkItemBoardPage() {
           // 인라인 행 추가와 동일하게 — 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
           if (jiraConfig?.enabled && created) setProvisionItem(created);
         }}
+      />
+
+      {/* 상위 업무 등록/수정 — 홈 "업무 현황"과 동일한 팝업. initial 지정 시 수정 모드. */}
+      <QuickAddTaskModal
+        open={quickAddOpen || !!editingItem}
+        initial={editingItem}
+        onClose={() => { setQuickAddOpen(false); setEditingItem(null); }}
+        onSaved={() => setEditingItem(null)}
       />
 
       <ConfirmDialog

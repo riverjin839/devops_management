@@ -74,6 +74,31 @@ export function useConfluenceTest() {
   });
 }
 
+// Confluence 연동 — "Jira 가져오기"와 동일한 검색→선택→반영 패턴 + 행 단위 동기화(반영).
+export function useConfluenceSearch() {
+  return useMutation({
+    mutationFn: ({ cql, limit }: { cql: string; limit?: number }) => jiraApi.confluenceSearch(cql, limit),
+  });
+}
+
+export function useConfluenceLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: import('@/types').ConfluenceLinkRequest) => jiraApi.confluenceLink(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workItemKeys.all }),
+  });
+}
+
+export function useConfluenceSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => jiraApi.confluenceSync(itemId),
+    onSuccess: (res) => {
+      if (res.data.status === 'ok') qc.invalidateQueries({ queryKey: workItemKeys.all });
+    },
+  });
+}
+
 export function useSsoDiagnose() {
   return useMutation({ mutationFn: () => jiraApi.ssoDiagnose() });
 }

@@ -33,6 +33,12 @@ const SCOPES: { id: Scope; label: string }[] = [
   { id: 'jql', label: '직접 JQL' },
 ];
 
+/** 이번주 월요일부터 오늘까지 일수 — 가져오기 날짜 범위 기본값(옵션 수정 가능). */
+function daysSinceMonday(): number {
+  const day = new Date().getDay(); // 0=일 ... 6=토
+  return (day + 6) % 7 + 1; // 월=1, 화=2, ... 일=7 (당일 포함 버퍼)
+}
+
 export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImportModalProps) {
   const dialogRef = useModalA11y(open, onClose);
   const toast = useToast();
@@ -49,7 +55,8 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const [components, setComponents] = useState('');
   const [statuses, setStatuses] = useState('');
   const [assignee, setAssignee] = useState('');
-  const [sinceDays, setSinceDays] = useState('');
+  // 가져오는 날짜 기본 범위 = 이번주(월요일부터) — 옵션(입력칸)에서 언제든 수정 가능.
+  const [sinceDays, setSinceDays] = useState(() => String(daysSinceMonday()));
   const [preview, setPreview] = useState<JiraImportResult | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   /** 확정 가져오기가 끝난 상태 — 결과만 보여주고 닫기/다시 가져오기로 전환한다. */
@@ -139,7 +146,9 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
         components: scope === 'filter' ? csv(components) : undefined,
         statuses: scope === 'filter' ? csv(statuses) : undefined,
         assignee: scope === 'filter' && assignee.trim() ? assignee.trim() : undefined,
-        updatedSinceDays: scope === 'filter' && sinceDays.trim() ? Number(sinceDays) : undefined,
+        // 이번주(기본값) 등 날짜 범위 — 직접 JQL(scope='jql')은 사용자가 전체 쿼리를 쥐고
+        // 있으므로 자동으로 끼워넣지 않는다.
+        updatedSinceDays: scope !== 'jql' && sinceDays.trim() ? Number(sinceDays) : undefined,
         onlyKeys: !dryRun && excluded.size > 0 ? applicable.filter((k) => !excluded.has(k)) : undefined,
         dryRun,
       });
@@ -307,6 +316,17 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                       <span className="text-sm font-medium text-muted-foreground mb-1 block">프로젝트 키</span>
                       <input className={inputCls} placeholder="PROJ" value={projectKey}
                         onChange={(e) => setProjectKey(e.target.value)} />
+                    </div>
+                  )}
+
+                  {(scope === 'me' || scope === 'project') && (
+                    <div>
+                      <span className="text-sm font-medium text-muted-foreground mb-1 block">최근 N일 변경분</span>
+                      <input className={inputCls} type="number" min={1} placeholder="7" value={sinceDays}
+                        onChange={(e) => setSinceDays(e.target.value)} />
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        기본값은 이번주 월요일부터입니다 — 비우면 전체 이력을 가져옵니다.
+                      </p>
                     </div>
                   )}
 
