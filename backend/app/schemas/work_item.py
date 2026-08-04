@@ -25,7 +25,7 @@ def _coerce_datetime_input(v):
             return f"{s}T00:00:00"
     return v
 
-WorkItemType = Literal["task", "issue", "meeting", "training", "etc"]
+WorkItemType = Literal["task", "issue", "meeting", "training", "etc", "build_response"]
 KanbanStatus = Literal["backlog", "todo", "in_progress", "review_test", "done"]
 Priority = Literal["high", "medium", "low"]
 ModuleName = Literal[

@@ -361,7 +361,10 @@ def export_csv(
     # 프론트 WORK_ITEM_TYPE_CONFIG 와 라벨을 맞춘다 — task(구 "업무")는 "운영 대응"으로,
     # issue(구 "이슈")는 "이슈 대응"으로 재정의. training(구 "교육")은 선택 목록에서만
     # 빠졌을 뿐 기존 데이터는 남아있어 CSV 라벨은 유지한다.
-    type_label_map = {"task": "운영 대응", "issue": "이슈 대응", "meeting": "회의", "training": "교육", "etc": "기타"}
+    type_label_map = {
+        "task": "운영 대응", "issue": "이슈 대응", "meeting": "회의", "training": "교육", "etc": "기타",
+        "build_response": "구축 대응",
+    }
     for w in items:
         writer.writerow([
             type_label_map.get(w.type, w.type),

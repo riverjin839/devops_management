@@ -10,6 +10,20 @@
 
 1.18.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무 유형에 "구축 대응" 추가**: 이슈 대응/회의/운영 대응/기타 4종이던 선택 가능 업무 유형에
+  "구축 대응"(`build_response`)을 추가 — 시스템/인프라 구축 요청에 대응하는 업무를 다른 유형과
+  구분해 등록할 수 있다. 업무 등록(QuickAdd 유형 picker)·업무 관리 게시판 유형 필터·CSV
+  내보내기 라벨에 자동 반영.
+  - Backend: `WorkItemType` Literal 에 `build_response` 추가(DB 는 이미 자유 문자열 컬럼이라
+    마이그레이션 불필요), CSV 내보내기 `type_label_map` 에 라벨 추가.
+  - Frontend: `WORK_ITEM_TYPE_ORDER`/`WORK_ITEM_TYPE_CONFIG`(`HardHat` 아이콘, amber 톤)에 추가.
+- **홈 "업무 현황" — 당일 스케줄 패널에 업무 관리 바로가기 추가**: `DayScheduleBoard`(홈 화면
+  좌측 당일 시간단위 스케줄)의 업무 등록 버튼 옆에 "업무 관리"(→ `/tasks-mgmt`) 버튼을 추가해,
+  우측 "담당자별 진행 현황" 패널과 동일하게 두 버튼이 나란히 노출되도록 통일. 기존 "등록"
+  버튼 라벨도 "업무 등록"으로 명확화.
+  - Frontend: `components/dashboard/DayScheduleBoard.tsx`.
+
 ## [1.18.2] - 2026-07-31
 
 ### Changed

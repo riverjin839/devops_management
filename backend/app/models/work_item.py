@@ -25,7 +25,7 @@ class WorkItem(Base):
     __tablename__ = "work_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    # 디스크리미네이터 — 'task' | 'issue' | 'meeting' | 'training' | 'etc'
+    # 디스크리미네이터 — 'task' | 'issue' | 'meeting' | 'training' | 'etc' | 'build_response'(구축 대응)
     type = Column(String(20), nullable=False, default="task", index=True)
 
     # 공통 필드 — 담당자
