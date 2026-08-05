@@ -13,6 +13,7 @@ import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
+import { SystemUserAccountManager } from '@/components/settings/SystemUserAccountManager';
 import { AuditLogManager } from '@/components/settings/AuditLogManager';
 import { LlmSettingsTab } from '@/components/settings/LlmSettingsTab';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
@@ -566,6 +567,9 @@ export function SettingsPage() {
   // "관리 서비스" 탭 내부 서브탭 — PEP 서비스 / APP 서비스 도메인 구분. 각 서브탭은
   // 해당 도메인의 카테고리 + 서비스 타입을 한 화면에서 관리한다.
   const [mgmtDomain, setMgmtDomain] = useState<ServiceDomain>('pep');
+  // "시스템 담당자" 탭 내부 서브탭 — 담당자 명부(사번/이메일/좌석 등) / 로그인 계정(권한·비밀번호).
+  // 사이드바 독립 "사용자 관리" 페이지가 여기로 통합됐다.
+  const [assigneeSubTab, setAssigneeSubTab] = useState<'roster' | 'accounts'>('roster');
 
   // Debug 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
@@ -578,7 +582,7 @@ export function SettingsPage() {
   const TABS: { id: TabId; label: string; icon: JSX.Element; count: number }[] = [
     { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
-    { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
+    { id: 'assignee', label: '시스템 담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'mgmt-service', label: '관리 서비스', icon: <Database className="w-4 h-4" />, count: 0 },
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
@@ -593,7 +597,7 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">
+      <main className="max-w-[1700px] px-4 lg:px-6 py-5">
         {/* Page Header + Tabs */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -1160,8 +1164,32 @@ export function SettingsPage() {
           )}
         </MacCard>}
 
-        {/* 담당자 관리 */}
-        {activeTab === 'assignee' && <AssigneeManager />}
+        {/* 시스템 담당자 — 담당자 명부 / 로그인 계정 서브탭 2개. 구 사이드바 독립 "사용자 관리"
+            페이지(로그인 계정: username/password/role)가 여기로 통합됐다 — 담당자 명부에 사번을
+            입력하면 자동으로 로그인 계정이 생성되므로 개념상 같은 데이터의 두 얼굴이다. */}
+        {activeTab === 'assignee' && (
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
+              {([
+                { id: 'roster', label: '담당자 명부' },
+                { id: 'accounts', label: '로그인 계정' },
+              ] as const).map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setAssigneeSubTab(v.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    assigneeSubTab === v.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            {assigneeSubTab === 'roster' && <AssigneeManager />}
+            {assigneeSubTab === 'accounts' && <SystemUserAccountManager />}
+          </div>
+        )}
 
         {/* Debug 탭: 대시보드 별 상세 로그 토글 */}
         {activeTab === 'debug' && (

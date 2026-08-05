@@ -156,9 +156,9 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 인증 / 사용자 / 설정
 | 기능 | 위치 |
 |---|---|
-| 로그인/JWT/사용자 관리 | `backend/app/routers/auth.py` → `frontend/src/pages/LoginPage.tsx` · `UsersPage.tsx` · `ChangePasswordPage.tsx` |
+| 로그인/JWT/사용자 관리 | `backend/app/routers/auth.py` → `frontend/src/pages/LoginPage.tsx` · `components/settings/SystemUserAccountManager.tsx`(Settings ▸ 시스템 담당자 ▸ 로그인 계정 서브탭) · `ChangePasswordPage.tsx` |
 | 시스템 설정 (admin) | `backend/app/routers/ui_settings.py` · `terminal_appearance.py` → `frontend/src/pages/SettingsPage.tsx` |
-| 담당자 관리 / 내 담당자 정보 | `backend/app/routers/ui_settings.py` (`/assignees` = admin 전용 전체 목록, `/assignees/me` = 로그인 사용자 본인 행만 부분 수정) + `services/assignee_accounts.py` → `components/settings/AssigneeManager.tsx`(Settings ▸ 담당자 탭) · `components/layout/SelfAssigneePanel.tsx`(사용자 메뉴 SidePane) · `hooks/useAssignees.ts` |
+| 담당자 관리 / 내 담당자 정보 | `backend/app/routers/ui_settings.py` (`/assignees` = admin 전용 전체 목록, `/assignees/me` = 로그인 사용자 본인 행만 부분 수정) + `services/assignee_accounts.py` → `components/settings/AssigneeManager.tsx`(Settings ▸ 시스템 담당자 ▸ 담당자 명부 서브탭) · `components/layout/SelfAssigneePanel.tsx`(사용자 메뉴 SidePane) · `hooks/useAssignees.ts` |
 | 감사 로그 | `backend/app/routers/audit_logs.py` + `services/audit_logger.py` (Settings 탭) |
 | 인앱 알림 | `backend/app/routers/notifications.py` + `services/user_notify.py` |
 | JSON 백업/복원 | `backend/app/routers/backup.py` + `services/backup_service.py` (Settings 탭) |

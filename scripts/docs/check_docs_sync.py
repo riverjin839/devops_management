@@ -36,6 +36,7 @@ EXEMPT_ROUTES = {
     "/work-items", "/work-items/:id", "/work-items/:id/edit", "/work-items/new",  # 레거시 alias → /tasks-mgmt
     "/k8s-resources", "/k8s-resources/:clusterId",  # 구 리소스 탐색기 → /k8s-manage 로 통합·redirect
     "/tasks-mgmt/:id/edit",  # 상세 페이지 ?edit=1 로 redirect (독립 화면 아님)
+    "/settings/users",  # 구 독립 페이지 → Settings "시스템 담당자" ▸ 로그인 계정 서브탭으로 통합, /settings?tab=assignee 로 redirect
 }
 EXEMPT_ROUTERS = {"__init__.py"}
 EXEMPT_PAGES: set[str] = set()

@@ -259,7 +259,8 @@ kubectl get pods -n k8s-monitor
 ### 8.1 애플리케이션 계정/권한
 
 - 역할 3종: **viewer**(조회) / **operator**(운영 조작) / **admin**(전체 관리) —
-  Settings → 사용자 관리(`/settings/users`, admin 전용)에서 생성·삭제·역할변경·비밀번호 초기화
+  Settings → 시스템 담당자 → 로그인 계정 서브탭(`/settings?tab=assignee`, admin 전용)에서
+  생성·삭제·역할변경·비밀번호 초기화 (구 `/settings/users` 독립 페이지는 여기로 통합됨)
 - Settings·사용자관리·백업/복구·감사 로그는 **admin 만 접근 가능**
 - 최초 admin 계정(`admin`/`admin`)은 배포 직후 반드시 비밀번호 변경
 - 화면/기능 단위 접근 제어(Feature Access)는 Settings → 접근 제어 탭에서 검토
@@ -278,7 +279,7 @@ kubectl get pods -n k8s-monitor
 
 | 기능 | 위치 | 설명 |
 |---|---|---|
-| 사용자 관리 | `/settings/users` (admin) | 계정 생성/삭제/역할변경/비밀번호 초기화 |
+| 사용자 관리 | Settings → 시스템 담당자 → 로그인 계정 서브탭 (admin) | 계정 생성/삭제/역할변경/비밀번호 초기화 |
 | 감사 로그 | Settings → 감사 로그 탭 | 로그인 성공/실패, 사용자 변경, 백업 import 등 이력 |
 | 점검 항목 관리 | `/daily-check/settings` | Deep Check 정의 CRUD(클러스터별) + 알림 설정 |
 | 운영 점검 콘솔 | `/ops-checks` | 점검 항목 선택 일괄/개별 실행, 진행률/로그 |
