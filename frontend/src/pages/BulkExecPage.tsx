@@ -678,7 +678,7 @@ export function BulkExecPage() {
   const [copyToast, setCopyToast] = useState<string | null>(null);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="pr-3 py-3 flex gap-3">
         {/* 좌측: 클러스터 사이드바 — 다중 선택 모드 */}
         <ClusterSidebar

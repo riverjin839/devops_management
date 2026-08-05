@@ -56,7 +56,7 @@ export function LakeServiceDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[1400px] mx-auto space-y-3">
           <div className="h-8 w-48 bg-muted/30 animate-pulse rounded" />
           <div className="h-48 bg-muted/30 animate-pulse rounded-md" />
@@ -67,7 +67,7 @@ export function LakeServiceDetailPage() {
 
   if (error || !svc) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[800px] mx-auto">
           <div className="rounded-md border border-red-500/40 bg-red-500/5 p-4 flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -87,7 +87,7 @@ export function LakeServiceDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-5">
+    <div className="app-min-h-screen bg-background p-5">
       <div className="max-w-[1400px] mx-auto space-y-4">
         {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">

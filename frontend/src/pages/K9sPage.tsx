@@ -101,7 +101,7 @@ export function K9sPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background py-3 pr-3">
+    <div className="app-min-h-screen bg-background py-3 pr-3">
       <div className="flex gap-3">
         <div className="sticky top-3 self-start">
           <ClusterSidebar

@@ -401,7 +401,7 @@ export function MemberBoardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="mx-auto px-8 py-8">
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">

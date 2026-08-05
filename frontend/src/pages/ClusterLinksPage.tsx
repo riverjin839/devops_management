@@ -535,7 +535,7 @@ export function ClusterLinksPage() {
   const noClusters = clusters.length === 0 && orphanGroups.length === 0;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="mx-auto max-w-[1600px] px-5 md:px-8 py-6 md:py-8 space-y-3">
         {/* ── Hero / Header ─────────────────────────────────────────────── */}
         <MacCard bodyPadding="p-4 md:p-5">

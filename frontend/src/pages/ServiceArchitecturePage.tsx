@@ -214,7 +214,7 @@ export function ServiceArchitecturePage() {
   const warnings = doc?.autoGraph?.warnings ?? [];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="py-3 pr-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}

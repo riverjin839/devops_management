@@ -1,31 +1,25 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Sun, ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
+  ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
+  ListTodo, ServerCog,
 } from 'lucide-react';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
 import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimeline';
 import { DayScheduleBoard } from '@/components/dashboard/DayScheduleBoard';
 import { PlatformStatusMatrix } from '@/components/platform-status';
-import { WorkAlarmBell } from '@/components/layout/WorkAlarmBell';
 import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useToday } from '@/hooks/useToday';
-import { useHomeStore } from '@/stores/homeStore';
+import { useHomeStore, type HomeTab } from '@/stores/homeStore';
 import { useIslands } from '@/hooks/useIslands';
 import { useIslandStore } from '@/stores/islandStore';
 import type { WorkItem } from '@/types';
 import { cn, parseUTC } from '@/lib/utils';
 import { isMyDueTodo } from '@/lib/workItems';
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-function fmtKoreanDate(d: Date): string {
-  const week = ['일', '월', '화', '수', '목', '금', '토'];
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} (${week[d.getDay()]})`;
-}
 
 function nextDueTask(items: WorkItem[]): WorkItem | null {
   const now = Date.now();
@@ -100,7 +94,8 @@ function IslandPill() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export function HomePage() {
-  const mode = useHomeStore((s) => s.mode);
+  const homeTab = useHomeStore((s) => s.homeTab);
+  const setHomeTab = useHomeStore((s) => s.setHomeTab);
   const scheduleBg = useHomeStore((s) => s.scheduleBg);
 
   const user = useAuthStore((s) => s.user);
@@ -138,85 +133,104 @@ export function HomePage() {
   // 밀도로 보이므로 기본 탭으로 되돌린다.
   const [weeklyTab, setWeeklyTab] = useState<'week' | 'month' | 'member'>('week');
 
-  const now = new Date();
-  const dateStr = fmtKoreanDate(now);
+  const TABS: Array<{ key: HomeTab; label: string; Icon: typeof ListTodo }> = [
+    { key: 'work', label: '내 업무', Icon: ListTodo },
+    { key: 'platform', label: '플랫폼 현황', Icon: ServerCog },
+  ];
+  const handleTabKeyDown = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const next = (idx + (e.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length;
+    setHomeTab(TABS[next].key);
+  };
 
   return (
-    <div className="h-screen overflow-hidden bg-background flex flex-col">
+    <div className="app-h-screen overflow-hidden bg-background flex flex-col">
 
-      {/* ── Compact top strip — always visible ─────────────────────────────── */}
-      <div className="flex-none flex items-center gap-3 pl-3 lg:pl-4 pr-3 lg:pr-4 py-2 border-b border-border bg-background/95 backdrop-blur flex-wrap">
-        {/* 사용자 / 날짜 */}
-        <div className="flex items-center gap-2 min-w-0">
-          <Sun className="w-4 h-4 text-primary flex-shrink-0" />
-          {myName && (
-            <span className="text-sm font-bold leading-none whitespace-nowrap">{myName}님</span>
-          )}
-          <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">{dateStr}</span>
-        </div>
+      {/* ── KPI 스트립 — 업무/플랫폼 신호를 탭과 무관하게 항상 함께 보여준다 ──────── */}
+      <div className="flex-none flex items-center gap-1.5 pl-3 lg:pl-4 pr-3 lg:pr-4 py-2 border-b border-border bg-background/95 backdrop-blur flex-wrap">
+        {/* Your Island — KPI 그룹 맨 앞. 지표가 아니라 목적지라 accent 로 구분. */}
+        <IslandPill />
+        <KpiPill
+          label="내 할일"
+          value={myName ? myTodayTasks.length : '—'}
+          hint={myName ? '건' : undefined}
+          Icon={ClipboardList}
+          accent="text-primary"
+          to="/todo-today"
+          isLoading={workItemsLoading}
+          isError={workItemsError}
+        />
+        <KpiPill
+          label="미해결 이슈"
+          value={openIssueCount}
+          hint="건"
+          Icon={AlertCircle}
+          accent="text-status-critical"
+          to="/tasks-mgmt"
+          isLoading={workItemsLoading}
+          isError={workItemsError}
+        />
+        <KpiPill
+          label="위험 클러스터"
+          value={criticalClusters}
+          hint={`/ ${clusters.length}`}
+          Icon={Server}
+          accent="text-status-warning"
+          to="/cluster-overview"
+          isLoading={clustersLoading}
+          isError={clustersError}
+        />
+        <KpiPill
+          label="다음 일정"
+          value={upcomingLabel}
+          Icon={CalendarClock}
+          accent="text-status-info"
+          to="/tasks-mgmt"
+          isLoading={workItemsLoading}
+          isError={workItemsError}
+        />
+      </div>
 
-        {/* KPI pills */}
-        <div className="ml-auto flex items-center gap-1.5 flex-wrap">
-          {/* Your Island — KPI 그룹 맨 앞(내 할일 왼쪽). 지표가 아니라 목적지라 accent 로 구분. */}
-          <IslandPill />
-          <KpiPill
-            label="내 할일"
-            value={myName ? myTodayTasks.length : '—'}
-            hint={myName ? '건' : undefined}
-            Icon={ClipboardList}
-            accent="text-primary"
-            to="/todo-today"
-            isLoading={workItemsLoading}
-            isError={workItemsError}
-          />
-          <KpiPill
-            label="미해결 이슈"
-            value={openIssueCount}
-            hint="건"
-            Icon={AlertCircle}
-            accent="text-status-critical"
-            to="/tasks-mgmt"
-            isLoading={workItemsLoading}
-            isError={workItemsError}
-          />
-          <KpiPill
-            label="위험 클러스터"
-            value={criticalClusters}
-            hint={`/ ${clusters.length}`}
-            Icon={Server}
-            accent="text-status-warning"
-            to="/cluster-overview"
-            isLoading={clustersLoading}
-            isError={clustersError}
-          />
-          <KpiPill
-            label="다음 일정"
-            value={upcomingLabel}
-            Icon={CalendarClock}
-            accent="text-status-info"
-            to="/tasks-mgmt"
-            isLoading={workItemsLoading}
-            isError={workItemsError}
-          />
-          {/* 업무 알람 종 — KPI pill 과 같은 높이/디자인으로 우측 끝에 배치 */}
-          <div className="flex items-center rounded-lg border border-border bg-card overflow-hidden">
-            <WorkAlarmBell />
-          </div>
+      {/* ── 세그먼트 탭 — 홈 본문에서 뭘 볼지 고르는 로컬 선택. 예전엔 사이드바 전체를
+          게이팅하는 "모드"였지만(D-054), 지금은 이 홈 화면 안에서만 의미가 있다. ───────── */}
+      <div className="flex-none px-3 lg:px-4 pt-2" role="tablist" aria-label="홈 화면 보기">
+        <div className="inline-flex items-center rounded-xl border border-border overflow-hidden text-sm">
+          {TABS.map((t, idx) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={homeTab === t.key}
+              tabIndex={homeTab === t.key ? 0 : -1}
+              onClick={() => setHomeTab(t.key)}
+              onKeyDown={(e) => handleTabKeyDown(e, idx)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 transition-colors',
+                idx > 0 && 'border-l border-border',
+                homeTab === t.key
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+              )}
+            >
+              <t.Icon className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Mode B: platform status matrix — fills remaining space, no page-level
-          scroll (matrix manages its own internal scroll region so it uses all
-          available height instead of capping out and leaving/needing a second
-          scrollbar) ───────────────────────────────────────────────────────── */}
-      {mode === 'platform' && (
+      {/* ── 플랫폼 탭: 점검 매트릭스 — 남는 공간을 모두 채우고 카드 안쪽에서만 스크롤
+          (matrix manages its own internal scroll region so it uses all available
+          height instead of capping out and leaving/needing a second scrollbar) ── */}
+      {homeTab === 'platform' && (
         <div className="flex-1 min-h-0 px-3 pt-2 pb-3 flex flex-col overflow-hidden">
           <PlatformStatusMatrix />
         </div>
       )}
 
-      {/* ── Mode A: work panels — scrollable ────────────────────────────────── */}
-      {mode === 'work' && (
+      {/* ── 업무 탭: 스케줄/진행 현황 패널 ───────────────────────────────────── */}
+      {homeTab === 'work' && (
         <div className={cn(
           'flex-1 min-h-0 flex flex-col px-3 py-3 gap-3 overflow-auto',
           scheduleBg === 'cream' ? 'schedule-bg-cream' : 'schedule-bg-white',

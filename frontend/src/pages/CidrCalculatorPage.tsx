@@ -440,7 +440,7 @@ export function CidrCalculatorPage() {
     'px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-colors';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
         {/* ── Page Header ─────────────────────────────────────────────────── */}
         <header className="flex items-center justify-between gap-4 flex-wrap">

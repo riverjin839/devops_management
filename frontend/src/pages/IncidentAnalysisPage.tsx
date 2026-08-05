@@ -304,7 +304,7 @@ export function IncidentAnalysisPage() {
   const canAutofill = !!clusterId && !!namespace && !!podName;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1500px] mx-auto px-6 py-8">
 
         {/* 헤더 */}

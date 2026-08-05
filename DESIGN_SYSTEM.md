@@ -575,6 +575,25 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` (+ 신�
 만든다. 4·5 항목은 그대로 지킨다 — `useTerminalEnvSync` 호출(터미널 색/글꼴이 `useXtermTheme` 로 xterm 에도
 적용된다), 연결 테스트 결과는 `STATUS_META` 배지. 새 SSH 터미널 화면을 xterm 부터 직접 붙이는 코드는 금지.
 
+### 12.7 전역 상단바 (`components/layout/AppTopBar.tsx`) — 높이 규약
+
+모든 화면은 `PageStyleProvider` 안에서 `AppTopBar`(업무 도메인 그룹 + 인사말/날짜 + 알람 종) 를
+`sticky top-0` 로 이고 있다. 페이지 루트가 뷰포트 전체 높이를 자기 것으로 가정하면(`min-h-screen`/
+`h-screen`) 상단바 높이만큼 화면 아래로 넘친다.
+
+- **높이 상수**: `index.css` `:root { --topbar-h: 3rem; }` — 테마 무관 레이아웃 값이라 테마 블록마다
+  재정의하지 않는다.
+- **소비는 반드시 이름 있는 유틸리티로**: `min-h-screen` → **`app-min-h-screen`**,
+  `h-screen` → **`app-h-screen`**, `max-h-screen` → **`app-max-h-screen`**
+  (`calc(100vh - var(--topbar-h))` 를 감싼 `index.css` 커스텀 클래스). Tailwind arbitrary value
+  (`h-[calc(100vh-var(--topbar-h))]`)를 페이지마다 반복해 쓰지 않는다 — 상단바 높이가 바뀌어도
+  `--topbar-h` 하나만 고치면 전 화면에 반영된다.
+- **Your Island 임베드 예외**: `.island-embed :is(.min-h-screen, .h-screen, .app-min-h-screen,
+  .app-h-screen)` 가 이 네 클래스를 전부 무력화한다(`index.css`) — 패널 안에서는 전체화면 셸 가정이
+  의미 없기 때문. 새 페이지가 이 네 클래스 중 하나라도 새로 쓰면 자동으로 이 예외의 적용을 받는다.
+- **제외 대상**: `AppShell` 밖 라우트(`/login`, `/me/change-password`)와 팝업 escape 라우트
+  (`/k9s/popup`, `/node-ssh/popup`)는 상단바가 없으므로 구 `min-h-screen`/`h-screen` 을 그대로 쓴다.
+
 ---
 
 ## 부록 A — 검증 출처

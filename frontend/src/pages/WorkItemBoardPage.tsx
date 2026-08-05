@@ -640,7 +640,7 @@ export function WorkItemBoardPage() {
   const doneCount = items.filter((t) => t.kanbanStatus === 'done').length;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="mx-auto px-4 lg:px-6 py-4">
         <div className="min-w-0">
         {/* Page Header */}

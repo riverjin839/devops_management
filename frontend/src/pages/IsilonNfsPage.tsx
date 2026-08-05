@@ -59,7 +59,7 @@ export function IsilonNfsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background py-3 pr-3">
+    <div className="app-min-h-screen bg-background py-3 pr-3">
       <div className="flex gap-3">
         {/* 좌측 서버 레일 */}
         <div className="sticky top-4 self-start w-56 flex-shrink-0">

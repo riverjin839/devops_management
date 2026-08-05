@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
-  ListTodo, Sparkles, Palmtree, Leaf,
-  Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
-  KeyRound, ScrollText, ServerCog, MessageSquare, Bug, Bot,
+  Sparkles, Palmtree, Leaf,
+  Moon, Sun, Monitor, LogOut, User, ChevronRight, ArrowLeft,
+  KeyRound, ScrollText, Home, MessageSquare, Bug, Bot,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
@@ -13,7 +13,6 @@ import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useIslandStore } from '@/stores/islandStore';
-import { useHomeStore } from '@/stores/homeStore';
 import { useAgentChatStore } from '@/stores/agentChatStore';
 import { AGENT_CHAT_FEATURE_KEY } from '@/components/agent';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
@@ -22,6 +21,7 @@ import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { ReleaseNotesPanel } from './ReleaseNotesPanel';
 import { BugFixLogPanel } from './BugFixLogPanel';
 import { VocBoardPanel } from './VocBoardPanel';
+import { FlyoutShell, FlyoutLink } from './NavFlyout';
 import { GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
@@ -100,74 +100,6 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
   );
 }
 
-// ── Flyout 패널 — 클릭한 아이콘 우측에 컴팩트 popover 형태로 표시 ─────────────
-interface FlyoutProps {
-  title: string;
-  /** 앵커 아이콘의 viewport 좌표. flyout 의 top 을 여기 맞춤. */
-  anchorRect: DOMRect;
-  children: React.ReactNode;
-  onClose: () => void;
-}
-
-function FlyoutShell({ title, anchorRect, children, onClose }: FlyoutProps) {
-  // popover top 은 아이콘의 top 에 맞추되, 화면 아래로 넘치면 위로 끌어올림.
-  // max-height 로 본문 스크롤을 보장.
-  const top = Math.min(anchorRect.top, window.innerHeight - 100);
-  const maxHeight = window.innerHeight - top - 8;
-
-  return createPortal(
-    <div
-      style={{ top, left: NAV_WIDTH, maxHeight }}
-      className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col overflow-hidden min-w-[180px] max-w-[260px]"
-      role="dialog"
-      aria-label={title}
-    >
-      <div className="px-3 py-1.5 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
-        <span className="text-xs font-semibold text-zinc-700 uppercase tracking-wider truncate">{title}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="닫기"
-          className="p-0.5 rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-900"
-        >
-          <X className="w-3 h-3" />
-        </button>
-      </div>
-      <div className="overflow-y-auto py-1">{children}</div>
-    </div>,
-    document.body,
-  );
-}
-
-// flyout 내부에서 항목 한 줄을 그릴 때 쓰는 공통 스타일.
-const FLYOUT_LINK_BASE = 'flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded text-[13px] transition-colors';
-const FLYOUT_LINK_INACTIVE = 'text-black hover:bg-zinc-100';
-const FLYOUT_LINK_ACTIVE = 'bg-primary/10 text-primary font-semibold';
-
-function FlyoutLink({
-  to, label, Icon, active, onSelect, iconColor, iconSize,
-}: {
-  to: string;
-  label: string;
-  Icon: ComponentType<{ className?: string }>;
-  active: boolean;
-  onSelect: () => void;
-  iconColor?: string;
-  iconSize?: string;
-}) {
-  return (
-    <Link
-      to={to}
-      onClick={onSelect}
-      className={`${FLYOUT_LINK_BASE} ${active ? FLYOUT_LINK_ACTIVE : FLYOUT_LINK_INACTIVE}`}
-    >
-      <Icon className={`${iconSize || 'w-4 h-4'} flex-shrink-0 ${iconColor || ''}`} />
-      <span className="flex-1 min-w-0 break-keep">{label}</span>
-      {active && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 text-primary" />}
-    </Link>
-  );
-}
-
 /** 아일랜드 아이콘(lucide 이름/이모지/이미지) → flyout 이 기대하는 ComponentType.
  *  lucide 가 아닌 값은 FlyoutLink 가 컴포넌트만 받으므로 기본 아이콘으로 폴백한다. */
 function islandFlyoutIcon(icon?: string | null): ComponentType<{ className?: string }> {
@@ -189,21 +121,11 @@ export function Sidebar() {
   // 동적 navMap / 라벨 오버라이드 / 기능별 접근 제어 — Your Island 패널 피커와 공유.
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
 
-  const { mode, toggle } = useHomeStore();
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
-  const handleHomeClick = () => {
-    if (location.pathname === '/') {
-      toggle();
-    } else {
-      // 업무현황 홈 = 메인 홈. 현재 모드를 유지한 채 홈으로 — 아이콘이 가리키는 홈으로 일관 이동.
-      navigate('/');
-    }
-  };
-
-  const homeTooltip = location.pathname === '/'
-    ? (mode === 'work' ? '업무 현황 (클릭 시 플랫폼 현황)' : '플랫폼 현황 (클릭 시 업무 현황)')
-    : (mode === 'work' ? '업무 현황 홈으로' : '플랫폼 현황 홈으로');
+  // 홈 버튼 — 항상 홈으로 이동만 한다. 예전엔 이미 홈에 있을 때 work/platform 모드를
+  // 토글하는 이중 동작이었지만(D-055), 모드 개념 자체가 폐지되며 순수 홈 이동 버튼이 됐다.
+  const handleHomeClick = () => navigate('/');
 
   // 전역 뒤로가기 — 브라우저 히스토리 기반(navigate(-1)). React Router 가 history.state.idx 를
   // 기록하므로 idx>0 이면 실제 이전 화면으로, 딥링크로 바로 진입(idx=0)했으면 홈으로 fallback.
@@ -214,11 +136,10 @@ export function Sidebar() {
     else navigate('/');
   };
 
-  // 홈 버튼 아이콘 — 홈은 2개(업무현황=메인 홈 / 플랫폼현황)뿐이다. 어느 화면이든 현재 모드를
-  // 모양으로 구분(업무=ListTodo, 플랫폼=ServerCog). Settings(홈 화면 설정)에서 모드별 커스텀 가능.
+  // 홈 버튼 아이콘 — Settings(화면 UI 설정 → 홈 아이콘)에서 커스텀 가능, 미설정 시 기본 Home.
+  // 과거 work/platform 모드별로 아이콘이 갈리던 것을 모드 폐지와 함께 단일화했다.
   const renderHomeButtonIcon = () => {
-    const custom = mode === 'platform' ? settings?.homeIcons?.platform : settings?.homeIcons?.work;
-    const resolved = resolveClusterIcon(custom);
+    const resolved = resolveClusterIcon(settings?.homeIcons?.work);
     if (resolved?.kind === 'lucide') {
       const IconC = resolved.Component;
       return <IconC className="w-5 h-5" />;
@@ -229,10 +150,7 @@ export function Sidebar() {
     if (resolved?.kind === 'text') {
       return <span className="text-base leading-none">{resolved.value}</span>;
     }
-    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=ServerCog)
-    return mode === 'platform'
-      ? <ServerCog className="w-5 h-5" />
-      : <ListTodo className="w-5 h-5" />;
+    return <Home className="w-5 h-5" />;
   };
 
   // Your Island — 내 아일랜드가 2개 이상이면 레일 버튼 클릭 시 flyout 으로 고른다.
@@ -265,11 +183,11 @@ export function Sidebar() {
   // 사용자 VOC 게시판 — 릴리즈 노트 바로 위 레일 아이콘 → 우측 SidePane.
   const [vocOpen, setVocOpen] = useState(false);
 
-  // 현재 모드에서 보여줄 그룹만 필터링 (상단 레일).
-  // system(Settings) 그룹은 상단이 아니라 하단 푸터에서 admin 에게만 렌더한다.
+  // 레일에는 플랫폼 도메인 그룹만 — 업무 도메인은 전역 상단바(AppTopBar)로 이동했다(D-054).
+  // 더는 홈 모드가 사이드바 노출 범위를 게이팅하지 않는다 — 항상 전체가 보인다.
   const visibleGroups = useMemo(
-    () => GROUPS.filter((g) => g.modes.includes(mode) && g.id !== 'system'),
-    [mode],
+    () => GROUPS.filter((g) => g.domain === 'platform'),
+    [],
   );
 
   // 하단 푸터에 둘 Settings(system) 그룹 — admin 전용.
@@ -277,7 +195,6 @@ export function Sidebar() {
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
-    if (location.pathname.startsWith('/services/')) return 'services';
     for (const g of GROUPS) {
       if (g.paths.includes(location.pathname)) return g.id;
     }
@@ -372,21 +289,15 @@ export function Sidebar() {
         } as React.CSSProperties}
         className="fixed top-0 left-0 h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col z-40"
       >
-        {/* 로고 — 클릭 시 홈으로. 좌측 상단의 공식 홈 버튼 역할. */}
+        {/* 로고 — 클릭 시 홈으로 이동만 한다(D-055 — 예전엔 모드 토글도 겸했다). */}
         <div className="flex items-center justify-center py-3 border-b border-border flex-shrink-0">
           <button
             type="button"
             onClick={handleHomeClick}
-            title={homeTooltip}
-            aria-label={homeTooltip}
-            className={`w-9 h-9 bg-gradient-to-br rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
-              mode === 'platform' ? 'from-amber-500 to-orange-600' : 'from-primary to-sky-700'
-            } ${
-              location.pathname === '/'
-                ? mode === 'platform'
-                  ? 'ring-2 ring-amber-300/70'
-                  : 'ring-2 ring-primary/50'
-                : ''
+            title="홈으로"
+            aria-label="홈으로"
+            className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+              location.pathname === '/' ? 'ring-2 ring-primary/50' : ''
             }`}
           >
             {renderHomeButtonIcon()}
@@ -408,7 +319,7 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* 그룹 아이콘 레일 — 현재 모드에 맞는 그룹만 표시 */}
+        {/* 그룹 아이콘 레일 — 플랫폼 도메인 그룹만 (업무 도메인은 상단바로 이동) */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
           <div className="flex flex-col items-center gap-1">
             {visibleGroups.map((g) => (
@@ -420,8 +331,8 @@ export function Sidebar() {
                 highlighted={openGroup === g.id}
                 suppressTooltip={openGroup === g.id}
                 onClick={(rect) => {
-                  // 하위 경로가 1개뿐인 그룹(PEP 서비스/APP 서비스 등)은 플라이아웃이 무의미하므로
-                  // 바로 이동. 2개 이상이면 플라이아웃으로 하위 메뉴를 고른다.
+                  // 하위 경로가 1개뿐인 그룹은 플라이아웃이 무의미하므로 바로 이동.
+                  // 2개 이상이면 플라이아웃으로 하위 메뉴를 고른다.
                   if (g.paths.length === 1) { setOpenGroup(null); navigate(g.paths[0]); }
                   else toggleGroup(g.id, rect);
                 }}

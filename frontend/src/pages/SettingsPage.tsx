@@ -596,7 +596,7 @@ export function SettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1700px] px-4 lg:px-6 py-5">
         {/* Page Header + Tabs */}
         <div className="flex items-center justify-between mb-6">

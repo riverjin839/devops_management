@@ -22,6 +22,21 @@
   과거 데이터 보존을 위해 스키마는 그대로 둠(DROP 없음). Frontend: `PepServicesPage`·
   `AppServicesPage`·`ServicesCatalogPage`·`ServiceHubPage`·`components/service-domain/` 삭제.
 
+### Changed
+- **홈 "모드"를 사이드바 게이팅에서 분리, 업무 도메인을 전역 상단바로 이동**: 사이드바 로고
+  버튼이 "업무 현황"/"플랫폼 현황" 모드를 토글하면서 반대 도메인 그룹(협업 7개 화면 또는
+  클러스터·서버·네트워크·스토리지·DevOps 36개 화면)이 사이드바에서 통째로 사라지던 문제
+  (R-4 5차 D-054)를 없앴다. 협업/문서 관리 그룹은 신규 전역 `AppTopBar`(모든 화면 상단,
+  사용자명·날짜·알람 종 포함)로, 클러스터/서버/네트워크/스토리지/서비스/DevOps 그룹은 좌측
+  사이드바에 그대로 남아 **두 도메인이 항상 동시에 보인다**. 홈 화면 안의 "업무 현황/플랫폼
+  현황" 선택은 라벨 있는 세그먼트 탭(`[내 업무] [플랫폼 현황]`)으로 대체(D-055). 로그인마다
+  선택이 `work` 로 강제 리셋되던 것도 제거해 기기 간 선호가 유지된다(D-056). Backend 무변경.
+  Frontend: `components/layout/AppTopBar.tsx`·`NavFlyout.tsx`(신규, `Sidebar.tsx` 의 flyout
+  공용화), `navConfig.ts`(`GROUPS.modes`→`GROUPS.domain`), `stores/homeStore.ts`(`mode`→
+  `homeTab`, localStorage 키 `pep:homeMode`→`pep:homeTab`), `stores/authStore.ts`(강제 리셋
+  제거), `pages/HomePage.tsx`, `index.css`(`--topbar-h` + `.app-min-h-screen`/`.app-h-screen`/
+  `.app-max-h-screen` 유틸리티, 60여 개 페이지 적용).
+
 ## [1.24.2] - 2026-08-05
 
 ### Changed

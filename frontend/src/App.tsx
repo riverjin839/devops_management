@@ -141,8 +141,8 @@ function AppShell() {
         본문으로 건너뛰기
       </a>
       <Sidebar />
-      {/* 업무 알람 종은 더 이상 전역 고정하지 않는다 — HomePage(업무 현황) 상단 스트립 우측에 배치. */}
-      {/* PageStyleProvider — 본문 래퍼. 라우트별 "화면 UI 설정"(폰트/크기/색/배경) 적용. */}
+      {/* PageStyleProvider — 전역 상단바(AppTopBar, 업무 알람 종 포함) + 라우트별
+          "화면 UI 설정"(폰트/크기/색/배경)이 적용된 본문 래퍼. */}
       <PageStyleProvider>
             <Routes>
               <Route path="/" element={<HomePage />} />

@@ -23,7 +23,7 @@ export function WorkItemFormPage() {
   const pageTitle = parentItem ? '하위 업무 등록' : '업무 등록';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button

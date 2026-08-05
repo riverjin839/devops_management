@@ -926,7 +926,7 @@ export function VersionsPage() {
   const visibleComponents = grouped.reduce((acc, g) => acc + g.items.length, 0);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="mx-auto px-3 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}

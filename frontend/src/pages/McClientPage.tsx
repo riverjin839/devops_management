@@ -139,7 +139,7 @@ export function McClientPage() {
   const isDanger = dangerKeywords.test(args);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="pr-6 py-6 flex gap-5">
         <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => { setClusterId(id ?? ''); setResult(null); }} iconOnly />
 

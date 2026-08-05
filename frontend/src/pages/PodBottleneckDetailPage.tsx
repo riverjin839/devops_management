@@ -40,7 +40,7 @@ export function PodBottleneckDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[1400px] mx-auto space-y-3">
           <div className="h-8 w-64 bg-muted/30 animate-pulse rounded" />
           <div className="h-32 bg-muted/30 animate-pulse rounded-md" />
@@ -51,7 +51,7 @@ export function PodBottleneckDetailPage() {
 
   if (error || !run) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="app-min-h-screen bg-background p-6">
         <div className="max-w-[800px] mx-auto rounded-md border border-red-500/40 bg-red-500/5 p-4 text-sm text-red-500 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
@@ -73,7 +73,7 @@ export function PodBottleneckDetailPage() {
   const orderedKeys: Array<keyof typeof run.probes> = ['tcp_state', 'tcp_perf', 'dns_latency', 'endpoints'];
 
   return (
-    <div className="min-h-screen bg-background p-5">
+    <div className="app-min-h-screen bg-background p-5">
       <div className="max-w-[1400px] mx-auto space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <Link

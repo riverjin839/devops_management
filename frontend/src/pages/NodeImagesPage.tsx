@@ -63,7 +63,7 @@ export function NodeImagesPage() {
   const safeName = (activeClusterName || 'cluster').replace(/[^\w.-]+/g, '-');
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="pr-3 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}

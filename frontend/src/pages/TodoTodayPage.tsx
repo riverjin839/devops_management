@@ -325,7 +325,7 @@ export function TodoTodayPage() {
   const totalOpen = buckets.overdue.length + buckets.todayList.length + buckets.upcoming.length;
 
   return (
-    <div className="p-6 flex flex-col gap-5 min-h-screen max-w-[1200px] mx-auto">
+    <div className="p-6 flex flex-col gap-5 app-min-h-screen max-w-[1200px] mx-auto">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
