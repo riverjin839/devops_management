@@ -139,7 +139,7 @@ export function ClusterTrendsPage() {
   const noSelection = nodeList.length === 0 || metricList.length === 0;
 
   return (
-    <div className="min-h-screen bg-background p-3">
+    <div className="app-min-h-screen bg-background p-3">
       <div className="flex gap-3 max-w-[1800px] mx-auto">
         <div className="sticky top-3 self-start">
           <ClusterSidebar

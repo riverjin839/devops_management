@@ -422,7 +422,7 @@ export function WorkflowBoardPage() {
 
   // ── render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen flex overflow-hidden bg-background">
+    <div className="app-h-screen flex overflow-hidden bg-background">
       {/* ── Left sidebar ── */}
       <aside className="w-64 flex-shrink-0 border-r border-border flex flex-col bg-card">
         <div className="flex items-center justify-between px-4 py-4 border-b border-border">

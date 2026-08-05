@@ -9,8 +9,6 @@ import { ConfluenceUrlInput, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
-import { useServiceCatalog } from '@/hooks/useServiceCatalog';
-import { getComponentsForService } from '@/components/services/serviceCatalog';
 import { useCreateWorkItem, useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { useWorkItemCustomFields, sortedWorkItemFields } from '@/hooks/useWorkItemCustomFields';
 import { useWorkItems } from '@/hooks/useWorkItems';
@@ -36,13 +34,6 @@ const DEFAULT_TASK_CATEGORIES = [
 ];
 const TASK_CATEGORIES = [...DEFAULT_TASK_CATEGORIES, '기타'];
 const CATEGORY_STORAGE_KEY = 'k8s:item:categories';
-
-/** 서비스 운영에 직접 결부된 카테고리만 서비스 선택을 강제한다.
- *  나머지 기본 카테고리(문서/회의/교육/코드리뷰/기획/기타)와 사용자 정의 카테고리는 선택사항. */
-const SERVICE_REQUIRED_CATEGORIES = new Set([
-  'Cluster 점검', 'Node 관리', 'Pod 배포', 'Network 설정', 'Storage 관리',
-  'RBAC / 보안', 'Monitoring 설정', 'Backup / Restore', '업그레이드', '장애 대응', '이슈 대응',
-]);
 
 function loadCustomCategories(): string[] {
   try {
@@ -127,7 +118,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   // 신규 등록 시 담당자(정) 기본값 = 현재 로그인 사용자 (변경 가능)
   const currentUser = useAuthStore((s) => s.user);
   const defaultAssignee = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
-  const serviceCatalog = useServiceCatalog();
   const createTask = useCreateWorkItem();
   const updateTask = useUpdateWorkItem();
   const toast = useToast();
@@ -147,15 +137,12 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [clusterIds, setClusterIds] = useState<string[]>([]);
   const [category, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
-  const [service, setService] = useState('');
-  // Phase B — service 하위 component (recommended dropdown + 직접 입력 escape hatch).
-  // 빈 문자열 = 미선택, '__custom__' = 직접 입력 모드 (componentCustom 사용).
-  const [component, setComponent] = useState('');
-  const [componentCustom, setComponentCustom] = useState('');
   const [content, setTaskContent] = useState('');
   const [resolution, setResultContent] = useState('');
   const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? nowDateOnly());
   const [closedAt, setCompletedAt] = useState('');
+  // 마감일 — Jira 연동 업무는 가져올 때마다 Jira 값으로 덮어써진다(참고용 편집).
+  const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
   const [confluenceUrl, setConfluenceUrl] = useState('');
@@ -225,6 +212,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setDetailContent(initial.detailContent ?? '');
       setScheduledAt(toDatetimeLocal(initial.startedAt));
       setCompletedAt(toDatetimeLocal(initial.closedAt));
+      setDueDate(initial.dueDate ? initial.dueDate.slice(0, 10) : '');
       setPriority(initial.priority);
       setRemarks(initial.remarks ?? '');
       setConfluenceUrl(initial.confluenceUrl ?? '');
@@ -238,17 +226,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setIssueId(initial.relatedWorkItemId ?? '');
       setCustomValues(initial.customValues ?? {});
       setAllAttendees(initial.allAttendees ?? false);
-      setService(initial.service ?? '');
-      // Phase B — initial.component 가 COMPONENT_BY_SERVICE 의 추천 옵션이면 그대로,
-      // 그렇지 않으면 '__custom__' 모드로 진입 + componentCustom 채움.
-      {
-        const initComp = initial.component ?? '';
-        if (initComp) {
-          const known = getComponentsForService(initial.service).includes(initComp);
-          setComponent(known ? initComp : '__custom__');
-          setComponentCustom(known ? '' : initComp);
-        }
-      }
       setHydrated(true);
     } else if (parentItem) {
       setPrimaryList(parseAssignees(parentItem.primaryAssignee ?? parentItem.assignee));
@@ -291,12 +268,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
     // 담당자(정) = 로그인 사용자 자동 맵핑(primaryList). 담당자(부)는 수정 시 보존.
     const primaryFinal = primaryList;
     const secondaryFinal = secondaryList;
-    // 필수값 누락 — 조용히 return 하지 않고 무엇이 빠졌는지 알려준다.
-    // 서비스 운영 카테고리만 서비스 선택을 강제 — 회의/교육/기획 등은 서비스 없이도 등록 가능.
-    if (SERVICE_REQUIRED_CATEGORIES.has(resolvedCategory) && !service.trim()) {
-      toast.error('등록 불가', `"${resolvedCategory}" 카테고리는 서비스 선택이 필요합니다.`);
-      return;
-    }
 
     const payload: WorkItemCreate = {
       type,
@@ -315,6 +286,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       detailContent: type === 'issue' ? (detailContent || undefined) : undefined,
       startedAt: toApiDatetime(startedAt) as string,
       closedAt: toApiDatetime(closedAt),
+      dueDate: dueDate || null,
       priority,
       remarks: remarks.trim() || undefined,
       confluenceUrl: confluenceUrl.trim() || undefined,
@@ -328,14 +300,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       relatedWorkItemId: relatedWorkItemId || undefined,
       customValues: customFields.length ? customValues : undefined,
       allAttendees,
-      service: service.trim() || undefined,
-      // Phase B — service 가 있을 때만 component 가 의미. '__custom__' 모드면 input 값을,
-      // 추천 옵션 선택이면 그 값을 그대로 전송. service 가 없으면 component 강제 null.
-      component: service.trim()
-        ? (component === '__custom__'
-            ? (componentCustom.trim() || undefined)
-            : (component || undefined))
-        : undefined,
     };
 
     try {
@@ -370,59 +334,6 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       {/* ── 기본 설정 — 한 줄 그리드. 우선순위/보드상태/프로젝트/스프린트는 등록 폼에서 제외
            (우선순위·보드상태는 목록/칸반에서 바로 편집 가능). ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-x-2 gap-y-2">
-        {/* 서비스 — 서비스 운영 카테고리일 때만 필수 */}
-        <div>
-          <label htmlFor={f('service')} className={labelClass} title="통합지식 서비스 카탈로그 tag">
-            서비스{SERVICE_REQUIRED_CATEGORIES.has(resolvedCategory)
-              ? <span className="text-primary"> *</span>
-              : <span className="text-muted-foreground"> (선택)</span>}
-          </label>
-          <select
-            id={f('service')}
-            value={service}
-            onChange={(e) => {
-              setService(e.target.value);
-              setComponent('');
-              setComponentCustom('');
-            }}
-            className={inputClass}
-          >
-            <option value="">— 선택 —</option>
-            {serviceCatalog.map((s) => (
-              <option key={s.key} value={s.key}>{s.label}</option>
-            ))}
-          </select>
-        </div>
-        {/* 컴포넌트 — service 선택 시만 표시 */}
-        {service && (
-          <div>
-            <label htmlFor={f('component')} className={labelClass} title="서비스 하위 component (선택)">
-              컴포넌트
-            </label>
-            <select
-              id={f('component')}
-              value={component}
-              onChange={(e) => setComponent(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">— 선택 안 함 —</option>
-              {getComponentsForService(service).map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-              <option value="__custom__">직접 입력...</option>
-            </select>
-            {component === '__custom__' && (
-              <input
-                type="text"
-                value={componentCustom}
-                onChange={(e) => setComponentCustom(e.target.value)}
-                placeholder="component 이름"
-                className={`${inputClass} mt-1`}
-                maxLength={64}
-              />
-            )}
-          </div>
-        )}
         {/* 업무 분류 — 옵션 */}
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -521,6 +432,18 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             onChange={setCompletedAt}
             placeholder="완료 시 입력"
             size="sm"
+          />
+        </div>
+        {/* 마감일 — 옵션. Jira 연동 업무는 가져올 때마다 Jira 값으로 갱신되므로 여기서
+            바꿔도 다음 동기화에 덮어써질 수 있다(참고용 편집). */}
+        <div>
+          <label htmlFor={f('dueDate')} className={labelClass}>마감일</label>
+          <input
+            id={f('dueDate')}
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className={inputClass}
           />
         </div>
         {/* 공통업무 — 옵션. 특정 개인 담당자 업무가 아니라 파트 전체가 함께 하는 업무(회의 등).

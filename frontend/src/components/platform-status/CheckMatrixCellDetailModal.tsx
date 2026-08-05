@@ -160,7 +160,12 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
                 지금 실행
               </button>
             )}
-            <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
+            <button
+              onClick={onClose}
+              title="닫기"
+              aria-label="닫기"
+              className="p-1 hover:bg-secondary rounded-lg transition-colors"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>

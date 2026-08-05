@@ -28,7 +28,8 @@ function Placeholder({ Icon, title, body }: {
 /**
  * 아일랜드 패널 한 칸 — 등록된 페이지 컴포넌트를 그대로 렌더한다.
  *
- * `.island-embed` 래퍼가 페이지의 전체화면 셸(`min-h-screen`)을 무력화하고(index.css 참고),
+ * `.island-embed` 래퍼가 페이지의 전체화면 셸(`min-h-screen`/`app-min-h-screen` 등)을
+ * 무력화하고(index.css 참고),
  * 스크롤을 이 컨테이너가 소유해서 아일랜드 크롬(탭바/레일)이 고정되도록 한다.
  * Settings "접근 제어"에서 admin 이 화면을 껐으면(`feature_access[path]`) 여기서도 같은
  * 판정을 적용해, 공유받은 아일랜드에 권한 없는 화면이 들어 있어도 페이지가 깨지는 대신

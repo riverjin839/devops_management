@@ -58,7 +58,7 @@ export function IsilonNfsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background py-3 pr-3">
+    <div className="app-min-h-screen bg-background py-3 pr-3">
       <div className="flex gap-3">
         {/* 좌측 서버 레일 — 클러스터가 아닌 서버 스코프라 ClusterSidebar 대신 전용 레일 사용 */}
         <div className="sticky top-4 self-start w-56 flex-shrink-0">

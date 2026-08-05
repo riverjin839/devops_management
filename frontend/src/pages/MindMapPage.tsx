@@ -1133,7 +1133,7 @@ export function MindMapPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="app-min-h-screen bg-background flex">
       <aside className="w-64 flex-shrink-0 border-r border-border bg-card flex flex-col">
         <div className="px-4 py-3.5 border-b border-border flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">

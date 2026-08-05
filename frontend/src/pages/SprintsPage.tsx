@@ -414,7 +414,7 @@ export function SprintsPage() {
     );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1400px] mx-auto px-4 lg:px-6 py-5 space-y-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">

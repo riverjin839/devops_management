@@ -101,7 +101,7 @@ export function JiraExcelImportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1400px] mx-auto px-8 py-8">
         <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
           <div className="flex items-center gap-3">

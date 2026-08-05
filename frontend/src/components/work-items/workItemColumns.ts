@@ -11,6 +11,7 @@ export type WorkItemColumnKey =
   | 'title'
   | 'startedAt'
   | 'closedAt'
+  | 'dueDate'
   | 'actions'
   | 'priority'
   | 'cluster'
@@ -36,6 +37,7 @@ export type WorkItemSortKey =
   | 'category'
   | 'startedAt'
   | 'closedAt'
+  | 'dueDate'
   | 'jiraEpic'
   | 'jiraType';
 
@@ -57,9 +59,10 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
   status:    { label: '상태',          defaultWidth: 110, defaultVisible: true,  hideable: true, sortKey: 'kanbanStatus' },
   assignee:  { label: '담당자(정/부)', defaultWidth: 200, defaultVisible: true,  hideable: true, sortKey: 'assignee' },
   category:  { label: '업무 분류',     defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'category' },
-  title:     { label: '제목',          defaultWidth: 260, defaultVisible: true,  hideable: true },
+  title:     { label: '작업 제목',     defaultWidth: 260, defaultVisible: true,  hideable: true },
   startedAt: { label: '시작일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'startedAt' },
   closedAt:  { label: '완료일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'closedAt' },
+  dueDate:   { label: '마감일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'dueDate' },
   actions:   { label: '관리',          defaultWidth: 110, defaultVisible: true,  hideable: false, headerAlign: 'center' },
   priority:  { label: '우선순위',      defaultWidth: 90,  defaultVisible: false, hideable: true, sortKey: 'priority' },
   cluster:   { label: '대상 클러스터', defaultWidth: 140, defaultVisible: false, hideable: true, sortKey: 'clusterName' },
@@ -69,7 +72,8 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
   jiraLink:       { label: 'Jira 링크',        defaultWidth: 110, defaultVisible: false, hideable: true },
   confluenceLink: { label: 'Confl. 링크',      defaultWidth: 110, defaultVisible: false, hideable: true },
   // Jira 원본 축 — 가져오기를 쓰는 팀만 켜면 되므로 기본 숨김.
-  jiraEpic:       { label: 'Epic',             defaultWidth: 220, defaultVisible: false, hideable: true, sortKey: 'jiraEpic' },
+  // "상위업무" = Epic→Task 체인(둘 다 있으면 두 칩을 함께 표시, WorkItemTableRow.tsx 참고).
+  jiraEpic:       { label: '상위업무',         defaultWidth: 260, defaultVisible: false, hideable: true, sortKey: 'jiraEpic' },
   jiraType:       { label: '이슈 종류',        defaultWidth: 100, defaultVisible: false, hideable: true, sortKey: 'jiraType' },
   jiraComponents: { label: '컴포넌트',         defaultWidth: 160, defaultVisible: false, hideable: true },
   jiraLabels:     { label: '라벨',             defaultWidth: 160, defaultVisible: false, hideable: true },
@@ -78,7 +82,7 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
 /** 기본 컬럼 순서 (사용자 요청: 프로젝트명·상태·담당자·작업분류·제목·시작일·완료일·작업,
  *  이후 기본 숨김 컬럼). 행 드래그 핸들(`drag`)은 개인화 대상이 아니라 항상 선두 고정이므로 제외. */
 export const DEFAULT_COLUMN_ORDER: WorkItemColumnKey[] = [
-  'project', 'sprint', 'status', 'assignee', 'category', 'title', 'startedAt', 'closedAt', 'actions',
+  'project', 'sprint', 'status', 'assignee', 'category', 'title', 'startedAt', 'closedAt', 'dueDate', 'actions',
   'priority', 'cluster', 'content', 'result', 'remarks', 'jiraLink', 'confluenceLink',
   'jiraEpic', 'jiraType', 'jiraComponents', 'jiraLabels',
 ];

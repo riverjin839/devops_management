@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 from uuid import UUID
 import re
@@ -7,6 +7,14 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 _DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _coerce_date_input(v):
+    """date 필드용 입력 보정 — 빈 문자열/공백만 → None (프론트 date input 이 비워진 채
+    전송돼도 안전하게 null 처리)."""
+    if isinstance(v, str) and v.strip() == "":
+        return None
+    return v
 
 
 def _coerce_datetime_input(v):
@@ -35,6 +43,11 @@ ModuleName = Literal[
 TypeLabel = Literal["feature", "bug", "chore", "docs", "security"]
 
 
+class ConfluenceLinkItem(BaseModel):
+    url: str
+    title: str = ""
+
+
 class WorkItemBase(BaseModel):
     type: WorkItemType
 
@@ -60,6 +73,9 @@ class WorkItemBase(BaseModel):
     resolution: Optional[str] = None
     started_at: datetime
     closed_at: Optional[datetime] = None
+    # 마감일 — Jira 연동 업무는 duedate 동기화(가져올 때마다 갱신), 미연동 업무는 여기서
+    # 직접 편집.
+    due_date: Optional[date] = None
 
     remarks: Optional[str] = None
     service: Optional[str] = Field(None, max_length=64)
@@ -86,6 +102,7 @@ class WorkItemBase(BaseModel):
     _coerce_blank_dates = field_validator(
         "started_at", "closed_at", mode="before"
     )(_coerce_datetime_input)
+    _coerce_blank_due_date = field_validator("due_date", mode="before")(_coerce_date_input)
 
 
 class WorkItemCreate(WorkItemBase):
@@ -108,6 +125,7 @@ class WorkItemUpdate(BaseModel):
     resolution: Optional[str] = None
     started_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
+    due_date: Optional[date] = None
     remarks: Optional[str] = None
     service: Optional[str] = Field(None, max_length=64)
     component: Optional[str] = Field(None, max_length=64)
@@ -127,6 +145,7 @@ class WorkItemUpdate(BaseModel):
     _coerce_blank_dates = field_validator(
         "started_at", "closed_at", mode="before"
     )(_coerce_datetime_input)
+    _coerce_blank_due_date = field_validator("due_date", mode="before")(_coerce_date_input)
 
 
 class WorkItemCommentCreate(BaseModel):
@@ -180,6 +199,9 @@ class WorkItemResponse(WorkItemBase):
     # page_id/synced_at 은 프로비저닝·동기화로만 세팅되는 읽기 전용(반영 대상 페이지 식별용).
     confluence_page_id: Optional[str] = None
     confluence_synced_at: Optional[datetime] = None
+    # Jira 이슈의 원격 링크에서 찾은 Confluence 페이지 전체 목록(복수) — confluence_url(단일,
+    # 대표)과 별개. Jira 동기화로만 채워지는 읽기 전용.
+    confluence_links: Optional[list[ConfluenceLinkItem]] = None
     created_at: datetime
     updated_at: datetime
     subtasks: list["WorkItemResponse"] = []

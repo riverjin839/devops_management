@@ -24,6 +24,46 @@
   체커 코드를 일일이 고칠 필요 없이 한 곳에서 구조적으로 막는다. 부수적으로
   `SoftTimeLimitExceeded` 가 그대로 새어나온 경우도 연결 오류로 정확히 분류되도록
   분류 힌트에 추가.
+### Added
+- **업무 관리 ↔ Jira 동기화 확장**: 마감일(Jira `duedate`), 스프린트(Jira Sprint
+  커스텀필드 → PEP `Sprint` 이름 매칭, 설정 `jira_sprint_field`), 상위업무 체인
+  (Epic→Task, Sub-task 는 상위를 1회 추가 조회해 Epic 값을 끌어옴 — 형제 Sub-task 는
+  배치당 1회만 조회), Confluence 원격 링크 전체 목록(`confluence_links`, 복수 등록
+  가능 — 대표 링크 `confluence_url` 은 그대로 유지)을 가져오기/재가져오기/재연결마다
+  동기화한다. 담당자는 title/content 와 동일하게 이제 Jira 가 무조건 소유(매 동기화마다
+  PEP 매핑 이름으로 갱신 — 이전엔 비어있을 때만 채움). 업무 관리 게시판에 **마감일**
+  컬럼 신규, **상위업무**(구 Epic) 컬럼이 Epic+상위 2개 칩 체인으로, Confl. 링크
+  컬럼이 다중 링크 드롭다운으로 확장. Backend: `services/jira_service.py`
+  (`extract_sprint_name`, `map_jira_issue` 의 `epic_override`/`remote_confluence_links`
+  파라미터), `routers/jira.py`(`_resolve_epic_chain`, `_resolve_sprint_id`,
+  `_JIRA_OWNED_ATTRS`/`_SYNC_FIELDS` 확장), `models/work_item.py`(`due_date`,
+  `confluence_links`). Frontend: `WorkItemTableRow.tsx`, `workItemColumns.ts`.
+- **하위 업무 등록 팝업을 상위 업무 등록과 통일**: `WorkItemFormModal`(무거운 전체 폼)
+  대신 `QuickAddTaskModal`(컴팩트 팝업, 저장 후 Jira/Confluence 자동 생성으로 이어지는
+  흐름)을 하위 업무 등록에도 재사용 — 상위 업무를 읽기전용 칩으로 보여주고(수정 불가)
+  담당자/카테고리를 상위 업무 값으로 기본 채운다. Frontend:
+  `components/dashboard/QuickAddTaskModal.tsx`(`parentItem` prop 신규),
+  `pages/WorkItemBoardPage.tsx`.
+- **업무 관리 필터 "이번주" 버튼 4단 순환**: 이번주(월~일) → 2주(이번주+다음주) →
+  이번달(1일~말일) → 해제 순으로 반복 클릭 시 넓어진다. Frontend:
+  `pages/WorkItemBoardPage.tsx`(`cycleDateFilter`).
+- **컬럼 순서/폭/표시여부 개인화**: 업무 관리 게시판 컬럼 레이아웃(순서/폭/표시여부)이
+  필터 조건과 마찬가지로 로그인 계정별 localStorage 키로 분리 저장돼, 같은 브라우저를
+  여러 계정이 써도 서로 섞이지 않는다. Frontend: `pages/WorkItemBoardPage.tsx`
+  (`useColumnLayout`/`useColumnWidths` storageKey 에 username 반영).
+- **Confluence 문서 가져오기 조건 추가**: 상위 페이지 ID(ancestor)·문서 제목 필터를
+  추가하고, 최근 수정 기간 기본값을 "이번주"(월요일부터)로 변경(Jira 가져오기와 동일
+  패턴, 수정 가능). Backend: `schemas/confluence_docs.py`(`title`, `ancestor_id`),
+  `routers/confluence.py`(`_build_confluence_cql`). Frontend:
+  `components/documents/ConfluenceImportModal.tsx`.
+
+### Fixed
+- **업무 완료일 — 칸반 드래그로 재오픈해도 완료일이 안 지워지던 문제**: 정식 폼 저장
+  (PUT)은 done 에서 벗어나면 완료일을 해제했지만, 칸반 드래그(PATCH `/status`) 경로는
+  그 분기가 없어 재오픈해도 완료일이 남아있었다 — 두 경로가 동일하게 동작하도록 수정.
+  Backend: `routers/work_items.py`(`patch_status`).
+- **작업 제목/작업 내용 항목명·설명 명확화**: 업무 관리 게시판의 "제목" 컬럼을
+  "작업 제목"으로 변경(Jira summary 와 동기화됨을 명시).
 
 ## [1.24.3] - 2026-08-05
 
@@ -53,6 +93,66 @@
   `isilon_service.run_selected_commands`) 신규 추가. Frontend: `IsilonNfsPage.tsx` 재구성,
   `components/isilon/IsilonCommandSelector.tsx`(신규) + `useRunIsilonCommands` 훅,
   `useTerminalEnvSync` 최상단 호출 추가.
+
+### Fixed
+- **홈 "플랫폼 현황" 매트릭스 — 일괄 실행 확인·조회 실패 표시·색상단독 상태·접근성 수정**:
+  impeccable critique/audit 진단(Design Health 26/40, Audit 12/20)에서 나온 이슈를 반영.
+  클러스터/항목 단위 "전체 실행"에 `ConfirmDialog`(danger)를 추가해 삭제보다 마찰이 낮던
+  문제를 해소했고, 그리드 조회 실패 시 "항목/클러스터 없음"으로 오인되던 것을 재시도 가능한
+  에러 배너로 분리했다. 클러스터 cron 배지·셀 값 표시가 색상(StatusDot/배경색)에만 의존하던
+  부분에 톤별 아이콘(정상/경고/위험/실행중)을 병행했고, 모달 닫기 버튼 3곳에 누락된
+  `aria-label`을 채웠다. 행 편집/삭제 버튼은 hover 전용(`opacity-0`)이라 키보드 포커스 시
+  보이지 않고 터치 기기에서 아예 도달 불가했던 것을 상시 노출(`opacity-40`) +
+  hover/focus-within 시 100%로 바꿔 두 문제를 함께 해결했다. 행 라벨 셀에 최대 8개 요소가
+  한 줄에 몰려 있던 것을 2줄로 분리해 정리. Frontend:
+  `components/platform-status/PlatformStatusMatrix.tsx`,
+  `CheckMatrixCellDetailModal.tsx`/`CheckMatrixItemFormModal.tsx`/`CheckMatrixSettingsModal.tsx`.
+
+### Removed
+- **PEP 서비스 / APP 서비스 완전 삭제**: 사이드바 "PEP 서비스"(`/services` 서비스 카탈로그·허브)·
+  "APP 서비스"(`/app-services`) 그룹과 레거시 `/pep-services` 화면을 삭제했다 — 제공하던 서비스별
+  가이드/이슈대응 노트 기능이 이미 "문서 관리" 그룹(`/docs`·`/work-guides`·`/ops-notes`)과
+  중복이었다. 업무 관리의 "관련 서비스" 태그(`ServiceChip`)와 상세 페이지의 연관 ServiceEntry
+  사이드바도 함께 제거했다. LAKE 서비스 모니터링(`/lake-services`)과 Settings "관리 서비스"
+  (서비스 타입/카테고리 레지스트리)는 완전히 별개 기능이라 영향 없음. Backend:
+  `routers/service_entries.py`·`models/service_entry.py`·`schemas/service_entry.py`·
+  `data/lake_service_knowledge.py` 삭제, `service_entries` 테이블/`work_items.service` 컬럼은
+  과거 데이터 보존을 위해 스키마는 그대로 둠(DROP 없음). Frontend: `PepServicesPage`·
+  `AppServicesPage`·`ServicesCatalogPage`·`ServiceHubPage`·`components/service-domain/` 삭제.
+
+### Changed
+- **홈 "모드"를 사이드바 게이팅에서 분리, 업무 도메인을 전역 상단바로 이동**: 사이드바 로고
+  버튼이 "업무 현황"/"플랫폼 현황" 모드를 토글하면서 반대 도메인 그룹(협업 7개 화면 또는
+  클러스터·서버·네트워크·스토리지·DevOps 36개 화면)이 사이드바에서 통째로 사라지던 문제
+  (R-4 5차 D-054)를 없앴다. 협업/문서 관리 그룹은 신규 전역 `AppTopBar`(모든 화면 상단,
+  사용자명·날짜·알람 종 포함)로, 클러스터/서버/네트워크/스토리지/서비스/DevOps 그룹은 좌측
+  사이드바에 그대로 남아 **두 도메인이 항상 동시에 보인다**. 홈 화면 안의 "업무 현황/플랫폼
+  현황" 선택은 라벨 있는 세그먼트 탭(`[내 업무] [플랫폼 현황]`)으로 대체(D-055). 로그인마다
+  선택이 `work` 로 강제 리셋되던 것도 제거해 기기 간 선호가 유지된다(D-056). Backend 무변경.
+  Frontend: `components/layout/AppTopBar.tsx`·`NavFlyout.tsx`(신규, `Sidebar.tsx` 의 flyout
+  공용화), `navConfig.ts`(`GROUPS.modes`→`GROUPS.domain`), `stores/homeStore.ts`(`mode`→
+  `homeTab`, localStorage 키 `pep:homeMode`→`pep:homeTab`), `stores/authStore.ts`(강제 리셋
+  제거), `pages/HomePage.tsx`, `index.css`(`--topbar-h` + `.app-min-h-screen`/`.app-h-screen`/
+  `.app-max-h-screen` 유틸리티, 60여 개 페이지 적용).
+
+### Added
+- **홈 KPI 스트립에 "점검 실패" 신호 추가**: 위험 클러스터 옆에 점검 매트릭스의 critical 셀
+  개수를 보여주는 필을 추가했다(R-4 5차 D-060 단기안) — 업무 탭에 있어도 플랫폼 이상 유무를
+  바로 알 수 있다. 클릭하면 페이지 이동 없이 `플랫폼 현황` 탭으로 전환된다. `플랫폼 현황`
+  탭 라벨에도 위험 클러스터+점검 실패 합계 배지가 붙고 0건이면 숨는다. Frontend:
+  `hooks/useCheckMatrix.ts` 의 `useCheckMatrixFailureCount()`(신규, `useCheckMatrixGrid()` 와
+  쿼리키를 공유해 추가 네트워크 요청 없음), `pages/HomePage.tsx`.
+- **홈 개인화 — 기본 홈 탭 · 즐겨찾기 · 최근 방문**: 로그인 시 열릴 홈 탭(`내 업무`/`플랫폼
+  현황`)을 서버에 저장해 기기를 넘어 유지하고(Settings "화면 UI 설정" 탭에 선택기 추가),
+  전역 상단바·좌측 사이드바 flyout 메뉴 항목에 마우스를 올리면 별 아이콘으로 즐겨찾기를
+  바로 추가/해제할 수 있으며, 상단바 ★ 드롭다운과 사이드바 최상단 "즐겨찾기" 레일 아이콘에서
+  즐겨찾기 목록과 최근 방문(기기 로컬, 최대 5개) 화면을 확인·이동할 수 있다(R-4 5차 D-060
+  잔여 해소). Backend: `routers/home_prefs.py`(신규, `GET/PUT /api/v1/me/home-prefs`,
+  `user_settings` 테이블 재사용이라 스키마 변경 없음), `schemas/home_prefs.py`. Frontend:
+  `hooks/useHomePrefs.ts`·`hooks/useFavorites.ts`·`stores/recentPathsStore.ts`·
+  `components/layout/FavoritesFlyoutBody.tsx`(신규), `components/layout/NavFlyout.tsx`
+  (`FlyoutLink` 에 즐겨찾기 토글 별 버튼 추가), `AppTopBar.tsx`·`Sidebar.tsx`·`HomePage.tsx`·
+  `SettingsPage.tsx`.
 
 ## [1.24.2] - 2026-08-05
 

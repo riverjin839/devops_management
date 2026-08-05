@@ -28,6 +28,9 @@ interface QuickAddTaskModalProps {
   /** 지정하면 수정 모드 — 해당 업무를 프리필하고 저장 시 update(부분 필드만) 를 호출한다.
    *  유형(type)은 생성 후 변경 불가라 수정 모드에서는 표시만 하고 선택은 막는다. */
   initial?: WorkItem | null;
+  /** 지정하면 하위 업무 등록 모드 — 상위 업무를 읽기전용 칩으로 보여주고(수정 불가) 저장
+   *  시 parentId 로 연결한다. initial 과 동시에 쓰지 않는다(하위 업무 "수정"은 initial 만). */
+  parentItem?: WorkItem | null;
   onClose: () => void;
   /** 등록 후 caller 가 추가로 처리할 후크 (선택). 기본은 useCreateWorkItem 가 캐시 무효화. */
   onCreated?: () => void;
@@ -102,7 +105,8 @@ function extractTimeHHMM(iso?: string | null): string {
  * 저장 후 바로 닫힌다(연동 관리는 행의 별도 아이콘으로 수행).
  */
 export function QuickAddTaskModal({
-  open, defaultDate, defaultTime, defaultAssignee, defaultClusterId, initial, onClose, onCreated, onSaved,
+  open, defaultDate, defaultTime, defaultAssignee, defaultClusterId, initial, parentItem,
+  onClose, onCreated, onSaved,
 }: QuickAddTaskModalProps) {
   const toast = useToast();
   const navigate = useNavigate();
@@ -146,16 +150,17 @@ export function QuickAddTaskModal({
     } else {
       setSelectedType(null);
       setTitle('');
-      setAssignee(defaultAssignee ?? '');
+      // 하위 업무는 상위 업무의 담당자를 기본값으로 물려받는다(그대로 두거나 바꿀 수 있음).
+      setAssignee(defaultAssignee ?? parentItem?.primaryAssignee ?? parentItem?.assignee ?? '');
       setPriority('medium');
       setKanbanStatus('todo');
       setTime(defaultTime ?? '09:00');
-      setClusterId(defaultClusterId ?? '');
+      setClusterId(defaultClusterId ?? parentItem?.clusterId ?? '');
     }
     setError(null);
     setProvisionItem(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial?.id, defaultClusterId, defaultTime, defaultAssignee]);
+  }, [open, initial?.id, parentItem?.id, defaultClusterId, defaultTime, defaultAssignee]);
 
   if (!open) return null;
 
@@ -213,16 +218,20 @@ export function QuickAddTaskModal({
         assignee: assignee.trim(),
         primaryAssignee: assignee.trim(),
         title: trimmedTitle,
-        category: '일반 업무',
+        category: parentItem?.category || '일반 업무',
         content: trimmedTitle,
         startedAt: buildScheduledAtIso(effectiveDate, time),
         priority,
         kanbanStatus,
         clusterId: cluster?.id,
         clusterName: cluster?.name,
+        parentId: parentItem?.id,
       });
       const typeLabel = WORK_ITEM_TYPE_CONFIG[selectedType].label;
-      toast.success(`${typeLabel} 등록 완료`, `${formatDateLabel(effectiveDate)} · ${time}`);
+      toast.success(
+        parentItem ? '하위 업무 등록 완료' : `${typeLabel} 등록 완료`,
+        `${formatDateLabel(effectiveDate)} · ${time}`,
+      );
       // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다 — PEP 저장은
       // 이미 끝났으므로 이 단계를 건너뛰어도("나중에") 데이터 유실은 없다.
       if (jiraConfig?.enabled) {
@@ -253,7 +262,9 @@ export function QuickAddTaskModal({
             <CalendarDays className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 id={f('heading')} className="text-base font-semibold leading-tight">{isEdit ? '업무 수정' : '업무 등록'}</h2>
+            <h2 id={f('heading')} className="text-base font-semibold leading-tight">
+              {isEdit ? '업무 수정' : parentItem ? '하위 업무 등록' : '업무 등록'}
+            </h2>
             <p className="text-xs text-muted-foreground">{formatDateLabel(effectiveDate)}</p>
           </div>
           <button
@@ -268,6 +279,16 @@ export function QuickAddTaskModal({
         </div>
 
         <div className="px-5 pb-5 space-y-3.5">
+          {/* 상위 업무 — 하위 업무 등록 전용, 읽기전용(수정 불가). */}
+          {parentItem && !isEdit && (
+            <div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">상위 업무</p>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-border bg-secondary/60 text-sm text-foreground max-w-full">
+                <span className="truncate">{parentItem.title?.trim() || parentItem.category}</span>
+              </div>
+            </div>
+          )}
+
           {/* 업무 유형 — 이슈 대응/회의/운영 대응/기타. 신규 등록만 선택 가능(기본값 없음),
               수정 모드는 생성 후 변경 불가 정책에 따라 현재 값만 배지로 표시. */}
           <fieldset>

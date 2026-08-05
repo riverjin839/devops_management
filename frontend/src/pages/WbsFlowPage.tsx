@@ -677,7 +677,7 @@ export function WbsFlowPage() {
   const COL_W = viewMode === 'month' ? 80 : 110;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1800px]">
         {/* ── Page header ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">

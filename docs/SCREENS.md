@@ -27,13 +27,29 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 5. [서버·인프라 / 네트워크 / 스토리지](#서버인프라--네트워크--스토리지)
 6. [DevOps — Playbook / Batch Job / 명령어](#devops--playbook--batch-job--명령어)
 7. [협업 — 업무 관리 / 스프린트 / 워크플로우](#협업--업무-관리--스프린트--워크플로우)
-8. [PEP 서비스 (LAKE 기반, 구) / APP 서비스](#pep-서비스-lake-기반-구--app-서비스)
-9. [지식 허브 (사이드바 아이콘 없음 — 직접 URL 접근)](#지식-허브-사이드바-아이콘-없음--직접-url-접근)
+8. [관리 서비스 (서비스 타입/카테고리 관리)](#관리-서비스-서비스-타입카테고리-관리)
+9. [지식 허브](#지식-허브)
 
-각 그룹은 사이드바(`frontend/src/components/layout/navConfig.ts`)의 그룹 분류(클러스터/서버·인프라/네트워크/
-스토리지/DevOps/협업/PEP 서비스/APP 서비스/시스템)를 기준으로 나눴습니다. 사이드바 "PEP 서비스"
-아이콘은 서비스 카탈로그 / 통합지식(`/services`, §9 참고)으로 연결되며, 과거 이 아이콘이 가리키던
-LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직접 URL 로만 접근 가능하다.
+각 그룹은 `frontend/src/components/layout/navConfig.ts` 의 그룹 분류(클러스터/서버·인프라/
+네트워크/스토리지/DevOps/협업/문서 관리/시스템)를 기준으로 나눴습니다. 과거 있던 "PEP 서비스"/
+"APP 서비스" 그룹과 그 화면들(`/services`, `/pep-services`, `/app-services`)은 문서 관리
+그룹과 기능이 중복되어 완전히 삭제되었다 — §8 참고.
+
+**전역 레이아웃**: 각 그룹의 `domain` 이 배치를 결정한다 — `platform`(클러스터·서버·인프라·
+네트워크·스토리지·DevOps)은 좌측 사이드바 레일, `work`(협업·문서 관리)은 상단 `AppTopBar`,
+`system`(Settings)은 레일 하단 개인 존. 예전엔 홈 모드(work/platform)가 이 배치 자체를
+게이팅해 반대 도메인 그룹이 사이드바에서 통째로 사라졌지만(R-4 5차 D-054), 지금은 `domain` 이
+배치만 결정할 뿐 게이팅하지 않는다 — 사이드바·상단바가 항상 전체를 보여주므로 어떤 화면에서든
+반대 도메인이 1~2클릭 거리에 있다.
+
+**즐겨찾기 / 최근 방문**: `AppTopBar`(우측 ★)와 좌측 사이드바 최상단 "즐겨찾기" 레일 아이콘,
+두 진입점이 같은 `FavoritesFlyoutBody`(`components/layout/FavoritesFlyoutBody.tsx`)를 공유해
+드롭다운을 연다. `AppTopBar`·`Sidebar` 의 그룹 flyout(`NavFlyout.tsx` 의 `FlyoutLink`) 항목에
+마우스를 올리면 별 아이콘이 나타나 즐겨찾기를 바로 토글할 수 있다. 즐겨찾기 경로는 서버 저장
+(`hooks/useFavorites.ts` → `hooks/useHomePrefs.ts` → `GET/PUT /api/v1/me/home-prefs`, R-4 5차
+D-060 잔여 해소)이라 기기를 넘어 따라오고, 최근 방문 5개(`stores/recentPathsStore.ts`,
+localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteAccessGate` 가 접근 가능한
+라우트로 이동할 때마다 기록한다.
 
 ---
 
@@ -41,19 +57,20 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 홈 (`/`)
 
-- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `components/layout/WorkAlarmBell.tsx`)
-- **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 좌측 상단 홈 버튼으로 "업무 현황"(work) ↔ "플랫폼 현황"(platform) 두 모드를 토글하며, 상단 고정 스트립에는 내 할일/미해결 이슈/위험 클러스터/다음 일정 KPI 필과 업무 알람 종이 항상 노출된다.
+- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고).
+- **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. KPI 스트립 아래 라벨 있는 **세그먼트 탭**(`내 업무`/`플랫폼 현황`)으로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다.
 - **UI 구성**:
-  - 공통 상단 스트립: 사용자명 + 날짜, KPI 필 그룹 맨 앞에 **Your Island 진입 필**(`IslandPill` — 마지막에 보던 아일랜드로 이동, 없으면 "만들기"), 이어서 KPI 필 4종(`내 할일`→`/todo-today`, `미해결 이슈`→`/items`, `위험 클러스터`→`/cluster-overview`, `다음 일정`→`/items`), `WorkAlarmBell`.
-  - **업무(work) 모드**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다. **업무 등록 진입점은 `DayScheduleBoard` 헤더의 "등록"(`QuickAddTaskModal`) 하나뿐** — 예전엔 `WeeklyStatusTimeline`(주간 탭)에도 별도 "업무 등록"(`WorkItemFormModal`)이 동시에 떠 있어 같은 화면에 등록 버튼이 2개였다가 통합됨. `QuickAddTaskModal`은 PEP 저장 성공 직후 Jira 연동이 켜져 있으면(`useJiraConfig().enabled`) 곧바로 `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성, 체크박스+"생성"/"나중에")로 전환된다 — "나중에"면 PEP 에만 저장. `WorkCalendar`(월간 탭)의 날짜별 "+" 버튼도 같은 `QuickAddTaskModal`을 재사용하므로 동일한 흐름을 탄다.
-  - **플랫폼(platform) 모드**: `PlatformStatusMatrix` — 행(점검 항목) × 열(등록된 클러스터) 매트릭스. 첫 열은 sticky(그립(⋮⋮) **드래그로 순서 변경** + 항목명 + **영역 칩·행 배경 색**(category/color — 8색 차트 토큰 프리셋, 항목 폼에서 지정) + 실행방식 배지 + 상시 ▶(전 클러스터 실행) + hover 시 수정/삭제 아이콘, 시스템 항목은 삭제 버튼 숨김), 클러스터 열 헤더는 이름 + cron 배지(클릭 시 팝오버로 `Cluster.check_cron_expr` 편집 — 배지 색은 **중지**(회색, cron 미설정)/**실행중**(파랑, 전역 활성 수행 폴링)/**정상·경고·위험**(초록/주황/빨강, `core_bundle` 행의 최근 셀 상태)으로 한눈에 판독 가능), 셀은 상태 dot + 값/라벨(클릭 시 `CheckMatrixCellDetailModal` — 탭 3종: **추이 · 이력**(기간별 트렌드 차트 + 변경 이력 + manual 항목이면 값 입력 폼 + core_bundle 이외 항목이면 항목×클러스터 cron 편집) / **실행 방식**(`CheckMatrixRunbookPanel` — 이 셀의 가장 최근 수행을 짧은 주기로 폴링해 계획 대신 실제 결과로 단계를 색칠하고 진행 중이면 상태 배지로 보여줌) / **수행 로그**(`CheckMatrixRunList`+`CheckMatrixRunDetailView` — 목록·상세 모두 실행 중인 수행은 자동 폴링, 완료(위험)/실패는 사유 콜아웃 + 결과 상세 자동 펼침), 헤더에 셀 단독 "지금 실행" 버튼). 실행 단계 타임라인(`ExecutionStepsTimeline`, `components/daily-check/`)의 각 단계 아이콘은 클릭하면 그 단계의 상세 로그(전체 텍스트·metrics·소요시간)를 펼쳐 보여준다. 매트릭스 영역은 페이지 남는 세로 공간을 모두 채우고(고정 높이 제한 없이 `flex-1`), 카드 안쪽 스크롤 하나만 갖는다(이중 스크롤 없음). 클러스터 열 헤더에 **열 전체 실행 ▶**, 항목 행 hover 에 **전 클러스터 실행 ▶** 버튼. 카드 헤더에 "수행 로그"(`CheckMatrixRunLogPanel` — 전체/배치 필터, 배치 추적 시 3초 폴링) + "항목 추가"(`CheckMatrixItemFormModal`) + 도움말 `?`(`CheckMatrixHelpPanel` — 기본 사용법/실행하기/점검 방식/로그·보관 4탭 매뉴얼) + 설정 톱니바퀴(`CheckMatrixSettingsModal`, 이력 보관 일수) 버튼. 하단 "플랫폼 도메인" 퀵 액세스(`DomainQuickAccess`)는 제거됨.
+  - KPI 스트립(탭과 무관하게 항상 노출 — 업무 탭에서도 플랫폼 신호가, 플랫폼 탭에서도 업무 신호가 보인다): **Your Island 진입 필**(`IslandPill` — 마지막에 보던 아일랜드로 이동, 없으면 "만들기"), 이어서 KPI 필 5종(`내 할일`→`/todo-today`, `미해결 이슈`→`/tasks-mgmt`, `위험 클러스터`→`/cluster-overview`, **`점검 실패`**→클릭 시 라우트 이동 없이 `플랫폼 현황` 탭으로 전환(`useCheckMatrixFailureCount()` — 점검 매트릭스 그리드에서 `critical` 상태 셀 개수만 파생, `useCheckMatrixGrid()` 와 쿼리키 공유라 추가 네트워크 요청 없음), `다음 일정`→`/tasks-mgmt`). `플랫폼 현황` 탭 라벨에도 위험 클러스터+점검 실패 합계 배지가 붙고 0이면 숨는다.
+  - 세그먼트 탭(`role="tablist"`, 좌우 화살표 키 이동): `[내 업무]`(`ListTodo` 아이콘) / `[플랫폼 현황]`(`ServerCog` 아이콘). 선택은 `useHomeStore().homeTab` 에 저장되고 localStorage(`pep:homeTab`)에 영속된다.
+  - **내 업무 탭**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다. **업무 등록 진입점은 `DayScheduleBoard` 헤더의 "등록"(`QuickAddTaskModal`) 하나뿐** — 예전엔 `WeeklyStatusTimeline`(주간 탭)에도 별도 "업무 등록"(`WorkItemFormModal`)이 동시에 떠 있어 같은 화면에 등록 버튼이 2개였다가 통합됨. `QuickAddTaskModal`은 PEP 저장 성공 직후 Jira 연동이 켜져 있으면(`useJiraConfig().enabled`) 곧바로 `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성, 체크박스+"생성"/"나중에")로 전환된다 — "나중에"면 PEP 에만 저장. `WorkCalendar`(월간 탭)의 날짜별 "+" 버튼도 같은 `QuickAddTaskModal`을 재사용하므로 동일한 흐름을 탄다.
+  - **플랫폼 현황 탭**: `PlatformStatusMatrix` — 행(점검 항목) × 열(등록된 클러스터) 매트릭스. 첫 열은 sticky(그립(⋮⋮) **드래그로 순서 변경** + 항목명 + **영역 칩·행 배경 색**(category/color — 8색 차트 토큰 프리셋, 항목 폼에서 지정) + 실행방식 배지 + 상시 ▶(전 클러스터 실행) + hover 시 수정/삭제 아이콘, 시스템 항목은 삭제 버튼 숨김), 클러스터 열 헤더는 이름 + cron 배지(클릭 시 팝오버로 `Cluster.check_cron_expr` 편집 — 배지 색은 **중지**(회색, cron 미설정)/**실행중**(파랑, 전역 활성 수행 폴링)/**정상·경고·위험**(초록/주황/빨강, `core_bundle` 행의 최근 셀 상태)으로 한눈에 판독 가능), 셀은 상태 dot + 값/라벨(클릭 시 `CheckMatrixCellDetailModal` — 탭 3종: **추이 · 이력**(기간별 트렌드 차트 + 변경 이력 + manual 항목이면 값 입력 폼 + core_bundle 이외 항목이면 항목×클러스터 cron 편집) / **실행 방식**(`CheckMatrixRunbookPanel` — 이 셀의 가장 최근 수행을 짧은 주기로 폴링해 계획 대신 실제 결과로 단계를 색칠하고 진행 중이면 상태 배지로 보여줌) / **수행 로그**(`CheckMatrixRunList`+`CheckMatrixRunDetailView` — 목록·상세 모두 실행 중인 수행은 자동 폴링, 완료(위험)/실패는 사유 콜아웃 + 결과 상세 자동 펼침), 헤더에 셀 단독 "지금 실행" 버튼). 실행 단계 타임라인(`ExecutionStepsTimeline`, `components/daily-check/`)의 각 단계 아이콘은 클릭하면 그 단계의 상세 로그(전체 텍스트·metrics·소요시간)를 펼쳐 보여준다. 매트릭스 영역은 페이지 남는 세로 공간을 모두 채우고(고정 높이 제한 없이 `flex-1`), 카드 안쪽 스크롤 하나만 갖는다(이중 스크롤 없음). 클러스터 열 헤더에 **열 전체 실행 ▶**, 항목 행 hover 에 **전 클러스터 실행 ▶** 버튼. 카드 헤더에 "수행 로그"(`CheckMatrixRunLogPanel` — 전체/배치 필터, 배치 추적 시 3초 폴링) + "항목 추가"(`CheckMatrixItemFormModal`) + 도움말 `?`(`CheckMatrixHelpPanel` — 기본 사용법/실행하기/점검 방식/로그·보관 4탭 매뉴얼) + 설정 톱니바퀴(`CheckMatrixSettingsModal`, 이력 보관 일수) 버튼.
   - ClusterSidebar 미사용(홈은 특정 클러스터에 종속되지 않음).
-- **Frontend**: `useHomeStore`(Zustand, `mode`/`scheduleBg`, localStorage 키 `pep:homeMode`/`pep:scheduleBg`) · `useAuthStore`(user) · `useClusterStore` + `useClusters()`(TanStack Query) · `useWorkItems()`(TanStack Query) · 플랫폼 모드는 `hooks/useCheckMatrix.ts`(`useCheckMatrixGrid`/`useCheckMatrixItems`/`useReorderCheckMatrixItems`/`useDeleteCheckMatrixItem`/`usePutClusterCron`/`usePutSchedule`/`usePostManualEntry`/`useCheckMatrixCellHistory`/`useCheckMatrixSettings`/`useCheckMatrixRunbook`/`useRunCheckMatrixCell`/`useRunCheckMatrixCluster`/`useRunCheckMatrixItem`/`useCheckMatrixRuns`/`useCheckMatrixRun`). 로컬 state: `weeklyTab`.
-- **Backend**: `GET /api/v1/clusters`(`clusters.py`) · `GET /api/v1/work-items`(`work_items.py`) · 플랫폼 모드는 `check_matrix.py` 라우터(prefix `/check-matrix`): `GET /items`, `POST/PUT/DELETE /items(/{id})`, `POST /items/reorder`, `GET /grid`, `GET /cell/{item_id}/{cluster_id}/history`, `POST /cell/{item_id}/{cluster_id}/manual-entry`, `PUT /schedule/{item_id}/{cluster_id}`, `PUT /clusters/{cluster_id}/cron`, `GET/PUT /settings`, `GET /cell/{item_id}/{cluster_id}/runbook`, `POST /cell/{item_id}/{cluster_id}/run`(동기), `POST /clusters/{cluster_id}/run`·`POST /items/{item_id}/run`(Celery fan-out → batch_id), `GET /runs`·`GET /runs/{run_id}`. 실행/집계는 `services/check_matrix_service.py`(`build_grid`/`get_cell_history`/`dispatch_due`/`purge_expired_logs`/`seed_default_items`/`create_run`/`execute_run`/`run_cell_now`/`run_cluster_now`/`run_item_now`/`list_runs`/`get_run`), 실행 계획(런북)은 `services/check_matrix_runbook.py`. 구 `daily-check/summary` 기반 `InfraHealthBar`/`DailyCheckReviewPanel`/`IncidentMiniPanel`(2026-07 이전) 및 `CheckSchedule`(아침/점심/저녁 온오프) 스케줄 체계는 **완전히 대체·제거**되었다 — 상세는 `check_matrix.py` 모델 주석 및 CHANGELOG 참고.
+- **Frontend**: `useHomeStore`(Zustand, `homeTab`/`scheduleBg`, localStorage 키 `pep:homeTab`/`pep:scheduleBg` — 구 `pep:homeMode` 키는 1회 마이그레이션) · `useAuthStore`(user, "내 할일" 집계용) · `useClusterStore` + `useClusters()`(TanStack Query) · `useHomeWorkItems()`(TanStack Query, `useWorkItems` 의 `limit:500` 고정 래퍼 — 홈의 모든 위젯이 같은 캐시를 공유) · KPI 스트립의 `점검 실패` 는 `useCheckMatrixFailureCount()`(파생 전용, `select` 로 grid 를 critical 셀 개수로 변환) · 플랫폼 탭은 `hooks/useCheckMatrix.ts`(`useCheckMatrixGrid`/`useCheckMatrixItems`/`useReorderCheckMatrixItems`/`useDeleteCheckMatrixItem`/`usePutClusterCron`/`usePutSchedule`/`usePostManualEntry`/`useCheckMatrixCellHistory`/`useCheckMatrixSettings`/`useCheckMatrixRunbook`/`useRunCheckMatrixCell`/`useRunCheckMatrixCluster`/`useRunCheckMatrixItem`/`useCheckMatrixRuns`/`useCheckMatrixRun`) · **기본 홈 탭**은 `hooks/useHomePrefs.ts`(`useHomePrefs`/`useUpdateHomePrefs`) — 로그인 후 최초 1회 `homePrefs.defaultHomeTab` 을 `useHomeStore.setHomeTab()` 에 반영(`appliedServerDefault` ref 로 재적용 방지)하고, 이후 탭을 바꾸면 500ms 디바운스로 서버에 저장. 로컬 state: `weeklyTab`.
+- **Backend**: `GET /api/v1/clusters`(`clusters.py`) · `GET /api/v1/work-items`(`work_items.py`) · `GET/PUT /api/v1/me/home-prefs`(`home_prefs.py` — `defaultHomeTab`/`pinnedPaths`, `user_settings` 테이블 재사용) · 플랫폼 탭은 `check_matrix.py` 라우터(prefix `/check-matrix`): `GET /items`, `POST/PUT/DELETE /items(/{id})`, `POST /items/reorder`, `GET /grid`, `GET /cell/{item_id}/{cluster_id}/history`, `POST /cell/{item_id}/{cluster_id}/manual-entry`, `PUT /schedule/{item_id}/{cluster_id}`, `PUT /clusters/{cluster_id}/cron`, `GET/PUT /settings`, `GET /cell/{item_id}/{cluster_id}/runbook`, `POST /cell/{item_id}/{cluster_id}/run`(동기), `POST /clusters/{cluster_id}/run`·`POST /items/{item_id}/run`(Celery fan-out → batch_id), `GET /runs`·`GET /runs/{run_id}`. 실행/집계는 `services/check_matrix_service.py`(`build_grid`/`get_cell_history`/`dispatch_due`/`purge_expired_logs`/`seed_default_items`/`create_run`/`execute_run`/`run_cell_now`/`run_cluster_now`/`run_item_now`/`list_runs`/`get_run`), 실행 계획(런북)은 `services/check_matrix_runbook.py`.
 - **핵심 기능**:
-  - work/platform 2-모드 전환(세션 중에는 localStorage 유지, 단 **로그인할 때마다 항상 `'work'`로 리셋** — `authStore.setSession()`에서 강제).
-  - 담당자별 진행 현황을 주간/월간/담당자 3가지 뷰로 전환, 업무 모드 스케줄 배경색(흰색/크림) 커스터마이즈(`SettingsPage`의 화면 UI 설정 탭에서 변경).
-  - 플랫폼 모드: 클러스터 상태에 영향을 주는 핵심 점검(API 서버 응답시간, `is_system=true`, 삭제 불가)은 클러스터 열의 cron(`Cluster.check_cron_expr`)으로, 그 외 자동 점검(deep_check/addon 소스)과 수동 항목은 항목×클러스터별 cron(`CheckMatrixSchedule`, 5분 미만 간격 거부)으로 독립 스케줄. `Cluster.status`는 `DailyChecker.run_daily_check()`(무변경)가 여전히 유일한 authoritative 소스이며 `check-matrix-dispatch` Celery Beat(매분)가 due 한 클러스터에 대해 그대로 호출한다.
+  - 내 업무/플랫폼 현황 세그먼트 탭 전환(localStorage 영속, **로그인해도 리셋되지 않음** — 예전엔 `authStore.setSession()` 이 로그인마다 강제로 `work` 로 되돌렸다, R-4 5차 D-056). 기본 홈 탭은 `SettingsPage`의 "화면 UI 설정" 탭에서 지정하면 다음 로그인부터 어느 기기에서든 해당 탭으로 열린다.
+  - 담당자별 진행 현황을 주간/월간/담당자 3가지 뷰로 전환, 업무 탭 스케줄 배경색(흰색/크림) 커스터마이즈(`SettingsPage`의 화면 UI 설정 탭에서 변경).
+  - 플랫폼 현황 탭: 클러스터 상태에 영향을 주는 핵심 점검(API 서버 응답시간, `is_system=true`, 삭제 불가)은 클러스터 열의 cron(`Cluster.check_cron_expr`)으로, 그 외 자동 점검(deep_check/addon 소스)과 수동 항목은 항목×클러스터별 cron(`CheckMatrixSchedule`, 5분 미만 간격 거부)으로 독립 스케줄. `Cluster.status`는 `DailyChecker.run_daily_check()`(무변경)가 여전히 유일한 authoritative 소스이며 `check-matrix-dispatch` Celery Beat(매분)가 due 한 클러스터에 대해 그대로 호출한다.
   - 셀 이력은 `CheckMatrixResultLog`에 append-only 저장되고, 설정한 보관 일수를 초과하면 `check-matrix-log-purge` Beat(매일 03:00 KST)가 청크 삭제로 정리한다.
   - **수행 로그**는 별도 `CheckMatrixRun`(trigger=cron|manual_cell|manual_cluster|manual_item|manual_entry, run_state=queued→running→success/failed/skipped, batch_id, triggered_by, details 에 `_steps`/`_commands`/`_runbook`)에 쌓인다 — 판정 없는 수행(대기열·건너뜀)이 추이 차트를 오염시키지 않도록 값 이력과 분리했다. cron 자동 실행도 같은 표에 남고, 보관 일수는 값 이력과 공유한다. 실제 나간 kubectl 명령은 `DeepCheckerBase._kubectl` 이 수집해 `_commands` 로 보존.
   - 운영 매뉴얼: `docs/CHECK_MATRIX_GUIDE.md` (화면 내 `CheckMatrixHelpPanel` 과 동일 내용의 상세판).
@@ -91,11 +108,11 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **목적 / UX**: 별도 라우트 경로 없이 앱 전체를 감싸는 `AuthGate`가 유효한 세션(token+user)이 없으면 자동으로 `LoginPage`를 렌더링하는 방식의 게이트. 사용자명/비밀번호로 로그인하면 세션이 저장되고 `AuthGate`가 재렌더링되어 원래 화면으로 자연 전환된다(수동 navigate 없음).
 - **UI 구성**:
   - 중앙 정렬 단일 카드(`max-w-sm`): 로고+타이틀("DEVOPS MANAGEMENT" / "로그인"), 사용자명·비밀번호 입력, 에러 메시지(`role="alert"`), 로그인 버튼(제출 중 스피너).
-- **Frontend**: 로컬 state만 사용(`username`, `password`, `error`, `submitting`) — TanStack Query/Zustand 쿼리 훅 없음. `useAuthStore((s) => s.setSession)`으로 세션 저장. 호출 함수: `authApi.login(username, password)`. `authStore.setSession()` 내부에서 `useHomeStore.getState().setMode('work')`를 함께 호출해 홈 모드를 리셋한다.
+- **Frontend**: 로컬 state만 사용(`username`, `password`, `error`, `submitting`) — TanStack Query/Zustand 쿼리 훅 없음. `useAuthStore((s) => s.setSession)`으로 세션 저장. 호출 함수: `authApi.login(username, password)`. `authStore.setSession()`은 홈 탭을 더 이상 강제로 리셋하지 않는다(R-4 5차 D-056) — 로그인 직후 홈 탭은 이전 localStorage 값 또는 서버에 저장된 `home_prefs.defaultHomeTab` 을 따른다.
 - **Backend**: `POST /api/v1/auth/login` (`backend/app/routers/auth.py`) — `User` 모델(`backend/app/models/user.py`) 조회 후 `verify_password` 검증, 성공 시 `create_access_token`으로 JWT 발급 + `audit_logger.record(action="login.success"/"login.failure")` 감사 로그 기록. 실패 시 401 + 한글 상세 메시지.
 - **핵심 기능**:
   - 사용자명/비밀번호 로그인, JWT + `AuthUser` 세션을 `localStorage`(`k8s:auth:token`, `k8s:auth:user`)에 저장.
-  - 로그인 성공 시 `useHomeStore` 모드를 항상 `'work'`(업무 현황)로 강제 리셋 — 이전 세션에서 플랫폼 현황으로 전환해뒀어도 로그인 직후에는 항상 업무 현황부터 보여준다(로그인 이후 토글은 자유롭게 가능, 그 상태는 다음 로그인 전까지만 유지).
+  - 로그인 성공 시 홈 탭을 강제로 되돌리지 않는다 — 마지막으로 보던 탭(또는 Settings 에서 지정한 기본 홈 탭)이 로그인 후에도 유지된다.
   - 로그인 성공/실패 모두 감사 로그(`audit_logs`)에 기록.
   - 401 등 실패 응답의 `detail`을 그대로 폼 하단에 노출.
   - 이후 모든 API 호출은 axios 인터셉터가 저장된 token을 `Authorization: Bearer` 헤더로 첨부(`get_current_user`가 `OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")`로 검증).
@@ -126,7 +143,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `시스템 담당자` 탭: 내부 서브탭 2개(`담당자 명부`/`로그인 계정`, `mgmt-service` 와 같은 pill 토글 UI). **담당자 명부**(`AssigneeManager`) — 사번/이름/이메일/IP/좌석/정·부담당역할 테이블(열 리사이즈 가능, CSV/마크다운 내보내기, 사번 등록 시 로그인 계정 자동 생성). **로그인 계정**(`SystemUserAccountManager`, 구 `UsersPage.tsx`) — 사용자명/표시이름/역할(viewer·operator·admin)/생성일 테이블, 새 사용자 생성·비밀번호 재설정·역할 변경·삭제, 본인 계정 자기 강등·자기 삭제는 UI+서버 이중 차단.
-  - `화면 UI 설정` 탭: 홈 화면 설정(업무/플랫폼 모드별 홈 아이콘 picker, 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
+  - `화면 UI 설정` 탭: 홈 화면 설정(좌측 상단 홈 아이콘 picker, **기본 홈 탭**(내 업무/플랫폼 현황 — `home_prefs.defaultHomeTab`, 로그인 기기와 무관하게 서버에 저장), 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
   - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift / orphan_not_null_column — 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음이라 모든 저장이 실패하는 경우)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다.
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/시스템 담당자/Jira/백업/감사로그).
@@ -135,7 +152,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/시스템 담당자/접근제어/Jira/백업/감사로그).
   - ClusterSidebar 미사용(전역 설정 화면이라 클러스터 단위 필터 없음).
 - **Frontend**: `useClusters()`+`useClusterStore`, `useUpdateCluster()`, `useDeleteCluster()`(`hooks/useCluster.ts`) · `useAssignees()`(담당자 카운트) · `useUiSettings()`/`useUpdateUiSettings()`(`hooks/useUiSettings.ts`) · `useOperationLevels()`(`hooks/useOperationLevels.ts`) · `useHomeStore`(`scheduleBg`) · `useDebugStore`(Debug 탭 토글, localStorage) · `useQuery(['management-servers'], managementServersApi.getAll)` + `useMutation`(`managementServersApi.delete`). 직접 호출 api 함수: `clustersApi.verify`, `managementServersApi.ping/create/update/delete`, `updateClusterMut.mutateAsync`(아이콘 저장 포함).
-- **Backend**: `GET/PUT/DELETE /api/v1/clusters`, `POST /api/v1/clusters/{id}/verify`(`clusters.py`) · `GET/POST/PUT/DELETE /api/v1/management-servers`, ping 엔드포인트(`management_servers.py`) · `GET/PATCH /api/v1/ui-settings`(홈 아이콘 등, `ui_settings.py`, `AppSetting` 모델 기반 key-value 저장: `UI_SETTINGS_KEY`/`OPERATION_LEVELS_KEY`/`ASSIGNEES_KEY`/`FEATURE_ACCESS_KEY`) · **로그인 계정**(`시스템 담당자` ▸ 로그인 계정 서브탭): `GET/POST /api/v1/auth/users` · `PUT /api/v1/auth/users/{id}/role` · `POST /api/v1/auth/users/{id}/password` · `DELETE /api/v1/auth/users/{id}`(`auth.py`, `Depends(require_admin)`, `User` 모델 role: `admin`/`operator`/`viewer`. 자기 자신 대상 삭제/역할변경은 400 거부, 모든 변경은 `audit_logger.record(action="user.create"/"user.delete"/"user.role.update")`) · 담당자 명부/운영레벨/서비스카탈로그/Jira/백업/감사로그는 각 하위 매니저 컴포넌트가 별도 라우터(`work_item_custom_fields.py`, `jira.py`, `backup.py`, `audit_logs.py` 등) 호출 · 스키마 점검은 `GET /api/v1/schema-health`, `POST /api/v1/schema-health/repair?dry_run=`(`schema_health.py` + `services/schema_health.py`, admin 전용). 부팅 시에도 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼 보강)와 `_relax_not_null_drift`(레거시 NOT NULL 완화)가 자동 실행된다.
+- **Backend**: `GET/PUT/DELETE /api/v1/clusters`, `POST /api/v1/clusters/{id}/verify`(`clusters.py`) · `GET/POST/PUT/DELETE /api/v1/management-servers`, ping 엔드포인트(`management_servers.py`) · `GET/PATCH /api/v1/ui-settings`(홈 아이콘 등, `ui_settings.py`, `AppSetting` 모델 기반 key-value 저장: `UI_SETTINGS_KEY`/`OPERATION_LEVELS_KEY`/`ASSIGNEES_KEY`/`FEATURE_ACCESS_KEY`) · `GET/PUT /api/v1/me/home-prefs`(기본 홈 탭, `home_prefs.py` — 사용자별 `user_settings` 행) · **로그인 계정**(`시스템 담당자` ▸ 로그인 계정 서브탭): `GET/POST /api/v1/auth/users` · `PUT /api/v1/auth/users/{id}/role` · `POST /api/v1/auth/users/{id}/password` · `DELETE /api/v1/auth/users/{id}`(`auth.py`, `Depends(require_admin)`, `User` 모델 role: `admin`/`operator`/`viewer`. 자기 자신 대상 삭제/역할변경은 400 거부, 모든 변경은 `audit_logger.record(action="user.create"/"user.delete"/"user.role.update")`) · 담당자 명부/운영레벨/서비스카탈로그/Jira/백업/감사로그는 각 하위 매니저 컴포넌트가 별도 라우터(`work_item_custom_fields.py`, `jira.py`, `backup.py`, `audit_logs.py` 등) 호출 · 스키마 점검은 `GET /api/v1/schema-health`, `POST /api/v1/schema-health/repair?dry_run=`(`schema_health.py` + `services/schema_health.py`, admin 전용). 부팅 시에도 `main.py` 의 `_sync_missing_model_columns`(누락 컬럼 보강)와 `_relax_not_null_drift`(레거시 NOT NULL 완화)가 자동 실행된다.
 - **핵심 기능**:
   - 클러스터 등록/수정/삭제/연결확인(Verify)/Kubeconfig 조회·수정/아이콘 설정(단건+일괄 생성).
   - 관리서버(Jump Host/Bastion 등) 등록/수정/삭제/Ping 상태 확인.
@@ -675,18 +692,20 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### LAKE 서비스 상세 (`/lake-services/:id`)
 
-- **파일**: `frontend/src/pages/LakeServiceDetailPage.tsx` (+ `components/lake-services/{HealthBadge,ServiceTypeIcon}`, `components/editor/RichContent`, `components/ui/MacCard`)
-- **목적 / UX**: 단일 LAKE 서비스 인스턴스의 현재 상태, 트러블슈팅 가이드(ServiceEntry 지식베이스 연동), 점검+히스토리 통합 타임라인을 확인하고 즉시 재점검하거나 인스턴스를 삭제한다.
-- **UI 구성**: **ClusterSidebar 미사용**(단일 리소스 상세 페이지). `MacCard` 3장 — "현재 상태"(최근 점검 시각/메시지/details JSON 펼치기), "트러블슈팅 가이드"(`ServiceEntry kind=guide`, 없으면 ServiceHub 작성 링크), "히스토리 timeline"(`LakeServiceCheck` + `ServiceEntry kind=history|troubleshoot` 통합, 최신순). 헤더에 "지금 점검"/"삭제" 버튼 + 삭제 확인 `ConfirmDialog`.
-- **Frontend**: `useLakeService(id)`, `useLakeServiceTypes()`, `useLakeServiceChecks(id, {limit:50})`, `useRunLakeServiceCheck()`, `useDeleteLakeService()` (모두 `hooks/useLakeServices.ts`). 가이드/히스토리는 별도 `useQuery(['serviceEntries','lake',serviceSlug])` → `serviceEntriesApi.list(serviceSlug)`. 호출 함수: `lakeServicesApi.{get,listChecks,runCheck,remove}`, `serviceEntriesApi.list`.
-- **Backend**: `GET /api/v1/lake-services/{service_id}`, `GET .../checks`, `POST .../check`, `DELETE /api/v1/lake-services/{service_id}` — `backend/app/routers/lake_services.py`. 가이드/히스토리는 `GET /api/v1/services/{service}/entries` — `ServiceEntry` 모델(`backend/app/models/service_entry.py`, `kind=guide/history/troubleshoot`, `service` 슬러그가 `LakeService.service_type`과 매칭).
+- **파일**: `frontend/src/pages/LakeServiceDetailPage.tsx` (+ `components/lake-services/{HealthBadge,ServiceTypeIcon}`, `components/ui/MacCard`)
+- **목적 / UX**: 단일 LAKE 서비스 인스턴스의 현재 상태와 점검 이력을 확인하고 즉시 재점검하거나 인스턴스를 삭제한다.
+- **UI 구성**: **ClusterSidebar 미사용**(단일 리소스 상세 페이지). `MacCard` 2장 — "현재 상태"(최근 점검 시각/메시지/details JSON 펼치기), "점검 이력"(`LakeServiceCheck` 최신순 타임라인). 헤더에 "지금 점검"/"삭제" 버튼 + 삭제 확인 `ConfirmDialog`.
+- **Frontend**: `useLakeService(id)`, `useLakeServiceTypes()`, `useLakeServiceChecks(id, {limit:50})`, `useRunLakeServiceCheck()`, `useDeleteLakeService()` (모두 `hooks/useLakeServices.ts`). 호출 함수: `lakeServicesApi.{get,listChecks,runCheck,remove}`.
+- **Backend**: `GET /api/v1/lake-services/{service_id}`, `GET .../checks`, `POST .../check`, `DELETE /api/v1/lake-services/{service_id}` — `backend/app/routers/lake_services.py`.
 - **핵심 기능**:
   - 최근 점검 상태 + details JSON 원시 데이터 확인
-  - `service_type` 슬러그로 매칭된 트러블슈팅 가이드(리치텍스트, `RichContent`) 펼침
-  - 점검 기록(`LakeServiceCheck`) + 지식베이스 히스토리(`ServiceEntry`)를 하나의 시간순 타임라인으로 병합
+  - 점검 기록(`LakeServiceCheck`)을 시간순 타임라인으로 확인
   - 즉시 재점검 실행, 인스턴스 삭제(연관 체크 이력 cascade 삭제)
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+> ℹ️ **제거된 기능 — 트러블슈팅 가이드 / 서비스 지식 연동**: 이 화면이 `ServiceEntry`(서비스별
+> 가이드/히스토리) 를 함께 보여주던 카드는 PEP/APP 서비스 삭제와 함께 제거되었다.
 
 > ℹ️ **제거된 화면 — 애플리케이션 APM (Coroot) (`/coroot` 였음)**: COROOT APM 통합은 전체
 > 제거되어 라우트/페이지/백엔드 라우터가 더 이상 존재하지 않는다
@@ -1025,29 +1044,38 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
-- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `AddWorkItemRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemFormModal.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`)
+- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `AddWorkItemRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`, `components/dashboard/QuickAddTaskModal.tsx`)
 - **목적 / UX**: 전사 업무(유형: 이슈 대응/회의/운영 대응/기타 — 내부 저장값은 `issue`/`meeting`/`task`/`etc`, 레거시 `training` 도 조회는 계속 됨)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
 - **UI 구성**:
   - 헤더: 전체/WIP/Done 카운트 배지, 뷰 전환(`ViewModeBar`: 목록/달력/칸반), Jira 가져오기 버튼(`jiraConfig.enabled`일 때만), CSV 추출, 업무 등록 버튼
-  - 필터 바(**업무 분류 드롭다운**(4개 유형 — 이슈 대응/회의/운영 대응/기타) · **상태 드롭다운**(칸반 상태) · 제목 검색 · **내 업무 토글(기본 ON)** · 담당자/우선순위/모듈/스프린트/기간(이번주 토글, from~to))가 하나의 `flex-wrap` 행으로 통일돼 넓은 화면에서도 정렬이 어긋나지 않는다(이전엔 업무 분류만 별도 컨테이너라 줄바꿈 시 다른 필터와 어긋났음). "분류"(자유 텍스트) 필터는 "업무 분류" 드롭다운과 이름이 겹쳐 혼동을 줘 제거. 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴는 같은 행 우측(`ml-auto`)에 배치
-  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`), **상단 인라인 `AddWorkItemRow`**(헤더 바로 아래 — 목록 최상단)
-  - 제목 셀: Jira 키 박스(`JiraIssueChip` 계열) + **Confluence 문서 박스**(`DocLinkChip` — 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장)
-  - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): Epic · 이슈 종류 · 컴포넌트 · 라벨. **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
+  - 필터 바(**업무 분류 드롭다운**(4개 유형 — 이슈 대응/회의/운영 대응/기타) · **상태 드롭다운**(칸반 상태) · 제목 검색 · **내 업무 토글(기본 ON)** · 담당자/우선순위/모듈/스프린트/기간(**이번주→2주→이번달→해제 4단 순환** 버튼, from~to))가 하나의 `flex-wrap` 행으로 통일돼 넓은 화면에서도 정렬이 어긋나지 않는다. "분류"(자유 텍스트) 필터는 "업무 분류" 드롭다운과 이름이 겹쳐 혼동을 줘 제거. 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴는 같은 행 우측(`ml-auto`)에 배치
+  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`) — **컬럼 폭/순서/표시여부도 필터와 동일하게 계정별 localStorage 키(`item-board-table:{username}`)로 분리 저장**, **상단 인라인 `AddWorkItemRow`**(헤더 바로 아래 — 목록 최상단)
+  - "작업 제목" 셀(구 "제목"): Jira 키 박스(`JiraIssueChip` 계열) + **Confluence 문서 박스**(`DocLinkChip` — 대표 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장)
+  - **마감일** 컬럼(기본 노출): Jira 연동 업무는 `duedate` 동기화, 미연동 업무는 직접 편집(인라인 date input). 마감 지났고 미완료(`kanbanStatus !== 'done'`)면 빨간색 강조
+  - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): **상위업무**(구 "Epic") · 이슈 종류 · 컴포넌트 · 라벨. **"상위업무" 는 Epic→Task 체인을 함께 보여준다** — Epic 과 상위(Task) 가 둘 다 있고 서로 다르면 `JiraIssueChip` 2개를 화살표로 이어 표시(Epic → Task), 하나만 있으면 그 칩만(`jiraEpicKey`/`jiraParentKey` 동시 참조). **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
+  - **Confl. 링크 컬럼**: Jira 원격 링크에서 찾은 Confluence 페이지가 2개 이상이면 "Confl. N" 배지 + 클릭 시 전체 목록 드롭다운(제목·새창 열기), 1개 이하면 기존처럼 단일 링크만
   - 칸반 뷰: `WorkItemKanban` (상태별 컬럼)
   - 달력 뷰: `WorkItemCalendar`
-  - 모달: `WorkItemFormModal`(신규/하위 등록), `WorkItemCustomFieldsManager`, `JiraImportModal`, `JiraProvisionModal`(Jira 이슈 + Confluence 문서 동시 생성), 삭제 `ConfirmDialog`
+  - 모달: `QuickAddTaskModal`(신규 등록 **및 하위 업무 등록** — 상위 업무 등록과 동일한 컴팩트 팝업을 재사용, 하위 업무 등록 시 상위 업무를 읽기전용 칩으로 표시), `WorkItemCustomFieldsManager`, `JiraImportModal`, `JiraProvisionModal`(Jira 이슈 + Confluence 문서 동시 생성 — `QuickAddTaskModal` 저장 성공 후 연동이 켜져 있으면 자동으로 이어짐, 하위 업무도 대상), 삭제 `ConfirmDialog`
 - **Frontend**: `useWorkItems(filters)`, `useCreateWorkItem`, `useDeleteWorkItem`(hooks/useWorkItems.ts, TanStack Query), `useClusters`/`useClusterStore`(Zustand), `useProjects`, `useSprints`, `useJiraConfig`(hooks/useJira.ts). 로컬 state로 뷰모드·필터·정렬·show-time·only-mine(localStorage 영속) 관리. 기본 조회는 로그인 사용자(`useAuthStore` 의 displayName/username)를 담당자 필터로 넣어 **내 업무만** 보여주고, 토글을 끄면 전체가 나온다. `workItemsApi.exportCsv`(axios blob) 직접 호출. **필터 개인화**: 유형/담당자/우선순위/상태/모듈/제목검색/기간 필터를 사용자별 localStorage 키(`k8s:item-board:filters:{username}`)에 저장해 다음 방문 때 마지막으로 쓴 조건을 그대로 복원한다(계정별로 분리 — 같은 브라우저를 여러 계정이 써도 섞이지 않음). 스프린트는 제외 — 딥링크가 없으면 항상 현재(진행중) 스프린트로 기본값을 다시 채우는 별도 effect 가 있어 영속시켜도 의미가 없다.
 - **Backend**: `GET /api/v1/work-items`(목록, 필터 쿼리파라미터 snake_case 변환), `POST /api/v1/work-items`, `DELETE /api/v1/work-items/{id}`, `GET /api/v1/work-items/export/csv` — `backend/app/routers/work_items.py`. 프로젝트명/스프린트명 매핑을 위해 `GET /api/v1/projects`(`projects.py`), `GET /api/v1/sprints`(`sprint.py`)도 호출. Jira 가져오기 가능 여부는 `GET /api/v1/jira/config`(`jira.py`). 행 단위 동기화는 `POST /api/v1/jira/refresh/{id}` · `POST /api/v1/jira/push/{id}`, 연계 생성은 `GET /api/v1/jira/provision/defaults` · `POST /api/v1/jira/provision`. 연결 복구는 `POST /api/v1/jira/unlink/{id}` · `POST /api/v1/jira/relink/{id}` · `POST /api/v1/jira/verify-links`. 모델: `backend/app/models/work_item.py` (WorkItem).
 - **핵심 기능**:
   - 표/달력/칸반 3뷰 전환 및 유형·상태·제목·담당자·우선순위·모듈·스프린트·시작일 범위 복합 필터
-  - 컬럼 순서/폭/표시여부 개인화(localStorage) + 헤더 드래그 정렬, 행 드래그(dnd-kit) 순서 저장
-  - 인라인 행 추가(AddWorkItemRow), 팝업 등록/하위 등록(WorkItemFormModal), 상세 페이지 편집 딥링크(`?edit=1`)
+  - 컬럼 순서/폭/표시여부 + 필터 조건 모두 계정별 개인화(localStorage) + 헤더 드래그 정렬, 행 드래그(dnd-kit) 순서 저장
+  - 인라인 행 추가(AddWorkItemRow), 팝업 등록/하위 등록(`QuickAddTaskModal`), 상세 페이지 편집 딥링크(`?edit=1`)
   - CSV 추출, Jira 이슈 가져오기(JiraImportModal), 업무 사용자 정의 필드 관리
   - 기본 화면이 로그인 사용자 담당 업무로 필터링됨 ("내 업무" 토글로 해제, localStorage 기억)
+  - **Jira 동기화 확장** — 가져오기/재가져오기/재연결 시마다 `backend/app/routers/jira.py` 가 최신값으로 반영:
+    - **담당자**: 이제 title/content 와 동일하게 Jira 가 무조건 소유(매 동기화마다 PEP 담당자명으로 갱신 — 이전엔 비어있을 때만 채움). Jira displayName↔PEP 담당자명 매핑은 이메일 우선, 실패 시 첫 토큰 매칭
+    - **마감일**(`due_date`): Jira `duedate` 동기화
+    - **스프린트**: Jira Sprint 커스텀필드(설정 `jira_sprint_field`, Epic Link 필드와 같은 방식) 이름을 PEP `Sprint.name` 과 대소문자 무시로 매칭 — 매칭 실패 시 자동 생성 없이 스킵
+    - **상위업무 체인**: Sub-task 자신에게 Epic Link 값이 없으면 상위(Task) 를 1회 추가 조회해 그 Epic 값을 가져온다(형제 Sub-task 가 같은 상위를 공유하면 배치당 1회만 조회)
+    - **Confluence 링크 전체 목록**: `confluence_base_url` 설정 시 이슈당 원격 링크(remote link) 조회를 추가해(옵트인, N+1 비용 수용) 찾은 모든 Confluence 페이지를 `confluence_links` 에 저장(대표 링크 `confluence_url` 은 기존처럼 1개)
   - 행 단위 Jira 재가져오기 / Jira 로 보내기 / Jira·Confluence 연계 생성(Epic·Sub-task 상위 이슈 지정, 기준 조건은 사용자별로 기억)
   - **일부만 생성됨 재시도**: Jira·Confluence 연계 생성이 한쪽만 성공하면(`provision_status='partial'`) Rocket 아이콘이 노란색으로 바뀌어 해당 행에 남는다 — 클릭하면 이미 만들어진 쪽은 건드리지 않고 실패한 쪽만 다시 시도하도록 모달이 미리 채워진다. 모달의 재시도 결과 화면은 실패 사유가 토큰/세션 문제로 보이면 `JiraConnectCard` 를 그 자리에서 띄워 재연결 후 바로 재시도할 수 있게 한다
   - **Jira 연결 관리**(`JiraLinkDialog`): 연결 해제 · 다른 이슈로 변경(서버가 존재 확인) · 연결 해제+업무 삭제. 재가져오기가 `missing` 이면 사유와 함께 자동으로 열린다. 해제하면 자동 생성(Rocket)이 다시 열려 다른 프로젝트로 재생성할 수 있다
   - 가져오기 팝업의 **연결 점검** 탭: 내 업무의 Jira 연결 생사를 확인해 죽은 링크를 골라 일괄 해제/삭제
+  - 완료일(`closed_at`) 자동 관리: done 전이 시 자동 set, done 에서 벗어나면(재오픈) 자동으로 채웠던 완료일을 해제 — 정식 폼 저장(PUT)과 칸반 드래그(PATCH `/status`) 두 경로 모두 동일하게 동작
   - 삭제 시 403(본인 등록/담당만 삭제 가능) 등 서버 에러 메시지를 토스트로 구체 노출
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -1071,11 +1099,11 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 업무 상세 (`/tasks-mgmt/:id`)
 
-- **파일**: `frontend/src/pages/WorkItemDetailPage.tsx` (+ `components/work-items/WorkItemForm.tsx`, `WorkItemReadView.tsx`, `RelatedServiceEntriesSidebar.tsx`, `CommentThread.tsx`, `ActivityTimeline.tsx`)
+- **파일**: `frontend/src/pages/WorkItemDetailPage.tsx` (+ `components/work-items/WorkItemForm.tsx`, `WorkItemReadView.tsx`, `CommentThread.tsx`, `ActivityTimeline.tsx`)
 - **목적 / UX**: 업무 1건의 상세 조회/인라인 편집, Jira 반영, 하위 업무 등록, 삭제를 한 화면에서 처리. `?edit=1` 쿼리로 진입하면 바로 편집 모드(칸반 카드/테이블 행의 연필 아이콘이 여기로 딥링크).
 - **UI 구성**:
   - sticky 상단바: 목록으로, Jira 반영 버튼(`jiraIssueKey` 있을 때만), 하위 등록, 삭제(읽기 모드에서만 노출)
-  - 읽기 모드: `WorkItemReadView`(본문 카드) + `item.service`가 있으면 우측 `RelatedServiceEntriesSidebar`(같은 서비스의 ServiceEntry 5건, sticky). 내부에 `ActivityTimeline`(변경 이력), `CommentThread`(댓글 + `ReactionBar`로 댓글 리액션) 포함
+  - 읽기 모드: `WorkItemReadView`(본문 카드) — `ActivityTimeline`(변경 이력), `CommentThread`(댓글 + `ReactionBar`로 댓글 리액션) 포함
   - 편집 모드: `WorkItemForm` embedded
   - 삭제 확인 / Jira 강제 반영(conflict) `ConfirmDialog` 2종
 - **Frontend**: `useWorkItems()`로 id 매칭(단건 GET 없이 목록 캐시 재사용), `useDeleteWorkItem`, `useJiraPush`(hooks/useJira.ts). `isEditing` 로컬 state(초기값 `searchParams.get('edit')==='1'`). 댓글/이력은 `useWorkItemComments`, `useAddWorkItemComment`, `useDeleteWorkItemComment`, `useWorkItemActivities`(hooks/useWorkItems.ts) — `WorkItemReadView`/`CommentThread`/`ActivityTimeline` 내부에서 호출.
@@ -1085,7 +1113,6 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - Jira 반영(현재 상태 push) 및 Jira 쪽이 더 최신일 때 충돌 감지 → 강제 반영 확인 다이얼로그
   - 하위 업무 등록 딥링크(`/tasks-mgmt/new?parentId=...`)
   - 댓글 스레드(리액션 포함) + 활동 타임라인으로 변경 이력 추적
-  - 같은 서비스에 속한 다른 ServiceEntry cross-view 사이드바(서비스 필드가 있을 때만)
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1236,56 +1263,23 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ---
 
-## PEP 서비스 (LAKE 기반, 구) / APP 서비스
+## 관리 서비스 (서비스 타입/카테고리 관리)
 
-> **사이드바 "PEP 서비스" 아이콘은 더 이상 이 `/pep-services` 화면을 가리키지 않는다.**
-> 서비스 카탈로그 편집기(ui_settings.serviceCatalog)는 Settings → "관리 서비스" 탭 → "서비스 카탈로그" 서브탭에 있으며,
-> 사이드바 "PEP 서비스" 그룹의 진입 경로도 `/pep-services`(LakeService 기반)에서
-> `/services`(서비스 카탈로그 / 통합지식 — [§ 서비스 카탈로그 / 통합지식](#서비스-카탈로그--통합지식-services))로
-> 변경되었다. 아래 `/pep-services` 화면은 라우트/데이터는 그대로 유지되지만 사이드바 노출은
-> 종료되어(`/docs`와 동일한 성격) 직접 URL 로만 접근 가능하다.
+> 과거 사이드바 "PEP 서비스"/"APP 서비스" 그룹과 이들이 가리키던 `/services`(서비스 카탈로그·
+> 허브)·`/pep-services`·`/app-services` 화면은 문서 관리 그룹(`/docs`·`/work-guides`·
+> `/ops-notes`)과 기능이 중복되어 완전히 삭제되었다. 아래 Settings 관리 화면은 LAKE 서비스
+> (`/lake-services`)와 업무 관리 화면의 서비스 아이콘/색상이 참조하는 타입·카테고리 레지스트리로
+> 계속 쓰이므로 남아 있다.
 
-동일 구조의 "APP 서비스" 아이콘(사이드바 유지)은 그대로 `/app-services` 를 가리킨다. 백엔드
-데이터는 LAKE 서비스 시스템(`LakeService`/`LakeServiceType`)을 확장해 재사용한다(`domain`: pep/app,
-`category_id`: 상위 카테고리 FK).
-
-> **2026-07 재편**: 기존에 domain='pep' 로 잘못 시드되던 LAKE 데이터 플랫폼 카탈로그
-> (Airflow/Spark/Trino/StarRocks/Iceberg/JupyterLab/Superset/Polaris)는 domain='app' 으로
-> 이전했다 — K8s 위에서 사용자가 쓰는 애플리케이션 서비스이지 DevOps 관리 인프라가 아니기
-> 때문. PEP 서비스는 카테고리 없이 평면 목록(K8s/Cilium/Linux/Keycloak/Nexus/CI-CD/
-> Prometheus/Grafana/AIStor/Network 10종, custom)으로 새로 채워졌다.
-
-### PEP 서비스 — LAKE 기반, 구 (`/pep-services`, 사이드바 노출 종료)
-
-- **파일**: `frontend/src/pages/PepServicesPage.tsx` → `components/service-domain/ServiceDomainCatalog.tsx` (`domain="pep"`) (+ `CategoryRail`, `AddServiceInstanceModal`, 기존 `LakeServiceCard`/`ServiceTypeIcon` 재사용)
-- **목적 / UX**: DevOps 엔지니어가 운영하는 플랫폼 인프라 서비스 카탈로그. `CategoryRail`(좌측
-  카테고리 레일)은 표시되지만 카테고리가 없어 "전체" 하나만 보인다 — K8s/Cilium/Linux/
-  Keycloak/Nexus/CI-CD/Prometheus/Grafana/AIStor/Network 10종(custom, `category_id=null`
-  미분류, 부팅 시 자동 시드·자유 수정/삭제 가능)이 평면 목록으로 표시된다.
-- **UI 구성**: `CategoryRail`(좌, sticky) + 헤더(제목/설명 + 클러스터 필터 select + "카테고리 관리"(Settings 딥링크) + "서비스 등록") + 카테고리 chip 요약(카운트) + 서비스 카드 그리드(카드 클릭 시 기존 `/lake-services/:id` 상세로 이동 — 도메인 무관 공용 상세 페이지).
-- **Frontend**: `useServiceCategories('pep', {enabled:true})`, `useLakeServiceTypeRows({domain:'pep', enabled:true})`, `useLakeServices({domain:'pep', limit:500})` — 카테고리/클러스터 필터는 쿼리 파라미터 대신 응답을 클라이언트에서 필터링(axios 가 multi-word 쿼리 키를 camelCase 그대로 보내 백엔드 snake_case 파라미터와 어긋나는 기존 이슈를 회피).
-- **Backend**: `GET /api/v1/service-categories?domain=pep`, `GET /api/v1/lake-service-types?domain=pep`, `GET /api/v1/lake-services?domain=pep` — 모두 기존 라우터에 `domain`/`category_id` 필터를 추가한 것.
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
-
-### APP 서비스 (`/app-services`)
-
-- **파일**: `frontend/src/pages/AppServicesPage.tsx` → 동일 `ServiceDomainCatalog.tsx` (`domain="app"`)
-- **목적 / UX**: K8s 내부에 배포되는 사용자 서비스 카탈로그. 좌측 카테고리 레일에 Runtime/
-  Catalog/Workbench/AI Ready(부팅 시 자동 시드되는 builtin 4개, 삭제 불가·label/icon/정렬은
-  편집 가능) + 운영자가 추가한 custom 카테고리가 표시된다. Runtime 에는 spark/starrocks/
-  trino/iceberg, Catalog 에는 polaris/catalog-datahub, Workbench 에는 airflow/superset/
-  jupyterlab 타입이 기본 배정되고, AI Ready 는 신규 항목 등록을 위해 빈 채로 시작한다.
-- **UI/Frontend/Backend**: PEP 서비스와 동일 컴포넌트/훅/엔드포인트를 `domain="app"`으로만 다르게 호출.
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+백엔드 데이터는 LAKE 서비스 시스템(`LakeService`/`LakeServiceType`)을 확장해 재사용한다
+(`domain`: pep/app, `category_id`: 상위 카테고리 FK).
 
 ### Settings — 관리 서비스 (`/settings?tab=mgmt-service`)
 
 - **파일**: `frontend/src/components/settings/ServiceCategoryManager.tsx` + `LakeServiceTypeManager.tsx` (Settings 탭 `mgmt-service`, 둘 다 `domain: 'pep' | 'app'` prop 을 받음)
 - **목적 / UX**: PEP/APP 서비스의 상위 카테고리와 서비스 타입을 도메인별로 한 화면에서 관리. 상단 서브탭(`PEP 서비스`/`APP 서비스`)이 도메인을 결정하고, 그 아래 **카테고리 섹션**(아이콘/key/label/builtin 여부/활성/정렬 테이블 + 추가·편집 모달)과 **서비스 타입 섹션**(아이콘/slug/label/카테고리/default_path/유형/활성/정렬 테이블 + 추가·편집 모달)이 세로로 놓인다. 두 컴포넌트 모두 도메인 선택 UI 를 자체적으로 갖지 않는다(상위 서브탭이 단일 출처).
   - APP builtin 카테고리 4개(Runtime/Catalog/Workbench/AI Ready)는 key/domain 변경·삭제 불가, label/icon/정렬/활성만 편집 가능. PEP 는 builtin 카테고리 없이 평면 목록이 기본이지만 필요하면 직접 추가할 수 있다.
-  - 서비스 타입의 `icon`/`color` 는 `/services` 지식 카탈로그와 업무/이슈 서비스 태그의 표시에도 그대로 쓰인다(구 `ui_settings.serviceCatalog` 를 대체 — 아이콘 정의의 단일 출처).
+  - 서비스 타입의 `icon`/`color` 는 `useServiceCatalog()` 를 통해 지식 허브·사이드바 등 전역에서 참조하는 아이콘 정의의 단일 출처다(구 `ui_settings.serviceCatalog` 를 대체). 업무/이슈의 서비스 태그 기능은 PEP/APP 서비스 삭제와 함께 제거되었다.
 - **Backend**: `GET/POST /api/v1/service-categories`, `PUT/DELETE /api/v1/service-categories/{id}` (`service_categories.py`, 모델 `ServiceCategory`) · `GET/POST /api/v1/lake-service-types`, `PUT/PATCH/DELETE /api/v1/lake-service-types/{id}` (`lake_service_types.py`, 모델 `LakeServiceType` — `color` 컬럼 포함).
 - **마이그레이션**: 부팅 시 `_merge_service_catalog_into_pep_types()`(`main.py`)가 구 서비스 카탈로그를 1회성으로 흡수 — 이름이 겹치는 PEP 타입에 color 백필, 카탈로그에만 있던 jenkins/argocd/etcd/hubble/ingress/storage 를 PEP custom 타입으로 추가.
 - **요청사항 (수정 요청)**:
@@ -1293,13 +1287,10 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ---
 
-## 지식 허브 (사이드바 아이콘 없음 — 직접 URL 접근)
+## 지식 허브
 
-> 구 "지식/분석" 사이드바 아이콘이 PEP 서비스로 대체되면서, 아래 화면들은 좌측 메뉴 진입점이
-> 없어졌다. 코드/데이터는 그대로 유지되며 `/docs` 등 직접 URL 로만 접근 가능하다(기존
-> `/ops-notes`·`/mindmap`·`/ontology`·`/trends` 와 동일한 성격). **예외**: 이 그룹에 함께
-> 정리된 [서비스 카탈로그 / 통합지식 (`/services`)](#서비스-카탈로그--통합지식-services)만
-> 사이드바 "PEP 서비스" 아이콘의 진입점으로 재연결되어 좌측 메뉴에서 다시 접근 가능하다.
+> 아래 화면들은 사이드바 "문서 관리" 그룹(`/documents`·`/work-guides`·`/docs`·`/ops-notes`·
+> `/mindmap`·`/ontology`·`/trends`, `navConfig.ts`)의 진입점으로 노출된다.
 
 ### 지식 허브 (`/docs`)
 
@@ -1433,7 +1424,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 검색창 + "AI 검색" 토글(임베딩 시맨틱 검색, Ollama 미기동 시 ILIKE 폴백 안내) + 분류/상태/출처 필터
   - 문서 테이블: 제목·분류·상태·작성자·출처(PEP/Confluence 배지)·동기화(`SyncStatusBadge` — synced/modified/error + 버전)·수정일, 행 hover 액션(게시/다시 가져오기/편집), 행 클릭 → `/work-guides/:id`
   - 툴바: 새 문서(`/work-guides/new`), Confluence 가져오기(위저드 모달), 동기화 설정(admin)
-  - 가져오기 위저드: 간편(스페이스+검색어)/CQL 검색 → dry-run 미리보기(create/update/unchanged 배지 + changes/경고 펼침, 행 선택) → 커밋 결과(신규/갱신/건너뜀/경고)
+  - 가져오기 위저드: 간편(스페이스/상위 페이지 ID/기여자/라벨/기간/문서 제목/검색어)/CQL 검색 → dry-run 미리보기(create/update/unchanged 배지 + changes/경고 펼침, 행 선택) → 커밋 결과(신규/갱신/건너뜀/경고). 기여자 기본값은 본인(수정 가능), 기간 기본값은 이번주(월요일부터, Jira 가져오기와 동일 패턴)
 - **Backend**: `backend/app/routers/confluence.py` (`/confluence/docs/{search,import,export,pull,settings}`) — 세션은 `routers/jira.py` 의 `_confluence_service_verified` 재사용(SSO 자동 재로그인 포함), storage-format ↔ 에디터 HTML 변환은 `services/confluence_storage.py`, 시맨틱 검색은 `GET /work-guides/search` (`services/knowledge_search.py`). 가져오기 커밋 시 문서별 임베딩 재계산(Celery `compute_work_guide_embedding`)이 큐잉된다.
 - **핵심 기능**:
   - Confluence 페이지 → WorkGuide 가져오기 (dry-run 프리뷰, `confluence_page_id` 기준 upsert, 버전 동일 시 unchanged 스킵, 매크로 변환 경고 노출)
@@ -1462,41 +1453,3 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 서비스 카탈로그 / 통합지식 (`/services`)
-
-> **사이드바 "PEP 서비스" 아이콘의 진입점.** 클릭하면 이 화면으로 이동하고, 서비스 카드/행을
-> 클릭하면 아래 [서비스 허브 (`/services/:service`)](#서비스-허브-servicesservice)로 이동해
-> 작업 계획서·업무 소개·이슈 대응·구축 작업 노트와 연관 업무를 확인한다.
-
-- **파일**: `frontend/src/pages/ServicesCatalogPage.tsx` (+ `frontend/src/components/services/serviceCatalog.ts`의 `colorBadgeClass`, `frontend/src/components/common`의 `DebugLogPanel`/`ViewModeBar`/`DoubleScrollX`)
-- **목적 / UX**: k8s/keycloak/nexus/jenkins/argocd 등 관리 서비스별로 등록된 지식 항목(가이드/트러블슈팅/변경이력/메모/링크) 개수와 최근 갱신을 한눈에 보고 각 서비스 허브로 진입하는 진입점 화면. Settings의 서비스 카탈로그 정의(`ui_settings.serviceCatalog`)와 실제 DB에 쌓인 통계를 병합해 표시한다.
-- **UI 구성**: 뷰 모드 토글(리스트/카드) + 서비스 검색. 리스트 뷰는 서비스/설명/항목수/유형별 분포/최근 업데이트 컬럼 테이블(가로 스크롤 `DoubleScrollX`), 카드 뷰는 서비스별 카드 그리드.
-- **Frontend**: `useServiceCatalog()`(`ui_settings` 기반 카탈로그 정의), `useGetServiceDef()`, `useQuery(['service-catalog','all'], serviceEntriesApi.catalog)`로 DB 통계를 가져와 카탈로그 정의와 `Map` 병합(카탈로그에 없는 커스텀 서비스 키는 'other' fallback으로 표시).
-- **Backend**: `GET /api/v1/services/catalog` — `backend/app/routers/service_entries.py`의 `get_catalog`. `service_entries` 테이블을 `service` 별로 그룹핑해 `total`/`by_kind`/`last_updated` 집계. 모델은 `backend/app/models/service_entry.py`의 `ServiceEntry`.
-- **핵심 기능**:
-  - 서비스명/키 검색
-  - 서비스별 등록 항목 수 + kind별(가이드/트러블슈팅/변경이력/메모/링크) 분포 배지
-  - 각 행/카드 클릭 시 `/services/:service` 상세 허브로 이동
-  - 서비스 카탈로그 자체의 추가/수정은 이 화면이 아닌 Settings → "관리 서비스" 탭 → "서비스 카탈로그" 서브탭에서 수행함을 안내 문구로 명시
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
-
-### 서비스 허브 (`/services/:service`)
-
-- **파일**: `frontend/src/pages/ServiceHubPage.tsx` (+ `frontend/src/components/services`의 `ServiceEntryEditModal`, `RelatedWorkItemsPanel`, `RelatedOpsNotesPanel`, `KIND_CATALOG`/`KIND_BY_KEY`/`colorBadgeClass`; 리치텍스트는 `RichContent`)
-- **목적 / UX**: 특정 서비스(예: k8s, keycloak) 하나에 대한 가이드/트러블슈팅/변경이력/메모/링크를 모아보고 관리하는 상세 화면. 같은 서비스와 연관된 `WorkItem`(업무/이슈)과 `OpsNote`(Q&A)도 하단에 교차 표시해 지식이 흩어지지 않도록 한다.
-- **UI 구성**:
-  - 헤더: 서비스 아이콘/이름/설명 + kind별 "새 항목 추가" 버튼들
-  - 탭바(전체/가이드/트러블슈팅/변경이력/메모/링크, 각 카운트 표시) + 검색 + 태그 필터 select
-  - 항목 카드 그리드: kind 배지, severity 배지, 고정(pin), 리치 콘텐츠 미리보기, 태그 chip, 작성자/시간/클러스터, 공유 URL 복사/Markdown 복사(Slack/Teams용)/수정/삭제 액션
-  - 하단: `RelatedWorkItemsPanel`, `RelatedOpsNotesPanel`(같은 `service` 값을 가진 업무/Q&A 교차 표시)
-  - 생성/수정 모달: `ServiceEntryEditModal`
-- **Frontend**: `useGetServiceDef()`로 서비스 메타 조회. `useQuery(['service-entries', service, kindFilter, search, tagFilter], serviceEntriesApi.list)`. `serviceEntriesApi.update`(핀 토글), `delete` 직접 호출 후 `invalidateQueries(['service-entries'])` + `['service-catalog']`.
-- **Backend**: `GET /api/v1/services/{service}/entries`(kind/search/tag 필터), `GET/POST/PUT/DELETE /api/v1/service-entries[/{id}]` — `backend/app/routers/service_entries.py`. 태그 필터는 JSONB `@>` 연산자로 구현. 모델은 `ServiceEntry`(`backend/app/models/service_entry.py`).
-- **핵심 기능**:
-  - kind/검색/태그 교차 필터로 서비스 지식 탐색
-  - 항목 고정(pin), 인라인 삭제 확인(`ConfirmDialog`)
-  - 공유 URL 복사 및 Slack/Teams용 Markdown 복사(태그/심각도/발생시각 포함 포맷)
-  - 같은 서비스의 업무(WorkItem)·Q&A(OpsNote)를 하단 패널로 교차 노출해 서비스 단위 지식을 통합
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_

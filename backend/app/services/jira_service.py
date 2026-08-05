@@ -300,7 +300,8 @@ class JiraService:
         """이슈의 원격 링크 목록 — `GET /rest/api/2/issue/{key}/remotelink`.
 
         Confluence 문서를 Jira 이슈에 붙여둔 경우 여기에 URL 이 들어온다. 이슈마다 1회
-        호출이라 **행 단위 재가져오기에서만** 쓰고, 대량 import 는 본문 스캔으로 갈음한다."""
+        호출(N+1) — `confluence_base_url` 설정 시에만(옵트인) 행 단위 재가져오기와 대량
+        import 양쪽에서 호출한다."""
         if not self.configured:
             return {"status": "offline", "detail": "Jira 미설정", "links": []}
         try:
@@ -530,6 +531,36 @@ def extract_epic(fields: dict, epic_field: str = "") -> str:
     return f"{key} {summary}".strip()[:200]
 
 
+# Greenhopper 레거시 스프린트 필드 문자열(Server/DC 구버전) — 예:
+# "com.atlassian.greenhopper.service.sprint.Sprint@1a2b3c4d[id=5,rapidViewId=1,
+#  state=ACTIVE,name=Sprint 12,...]" 에서 name= 값만 뽑는다.
+_SPRINT_NAME_RE = re.compile(r"name=([^,\]]+)")
+
+
+def extract_sprint_name(fields: dict, sprint_field: str = "") -> str:
+    """Jira Sprint 커스텀필드 → 스프린트 이름(work_item.sprint_id 매칭용).
+
+    Server/DC 구버전은 Greenhopper 문자열 리스트, 최신 REST 는 dict 리스트
+    (`{"id":5,"name":"Sprint 12",...}`) — 둘 다 처리한다. 한 이슈가 여러 스프린트를
+    거쳤으면(과거 이력 포함) 리스트의 마지막(가장 최근) 값을 쓴다."""
+    if not sprint_field:
+        return ""
+    raw = fields.get(sprint_field)
+    if not raw:
+        return ""
+    items = raw if isinstance(raw, list) else [raw]
+    if not items:
+        return ""
+    last = items[-1]
+    if isinstance(last, dict):
+        return str(last.get("name") or "").strip()
+    if isinstance(last, str):
+        m = _SPRINT_NAME_RE.search(last)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
 # 이슈 본문에 섞여 들어온 Confluence 문서 링크를 찾기 위한 URL 패턴 (공백/따옴표/괄호 전까지).
 _URL_RE = re.compile(r"https?://[^\s\"'<>\]\)]+")
 
@@ -538,9 +569,9 @@ def extract_confluence_url(fields: dict, confluence_base_url: str = "") -> str:
     """이슈 본문(description)에서 **설정된 Confluence Base URL 로 시작하는 링크**를 찾는다.
 
     Jira 이슈에 문서 링크를 본문으로 붙여두는 관행이 흔해, 가져오기 시 이 링크를 그대로
-    업무의 Confluence 링크로 채워준다(원격 링크 API 를 이슈마다 호출하면 N+1 이라
-    대량 가져오기에서는 본문 스캔만 한다 — 행 단위 재가져오기는 remote_links 를 함께 쓴다).
-    Base URL 이 설정돼 있지 않으면 오탐을 피하려 아무것도 반환하지 않는다."""
+    업무의 Confluence 대표 링크로 우선 채워준다 — 원격 링크(remote_links, N+1) 스캔보다
+    먼저 시도해 API 콜을 아낀다. Base URL 이 설정돼 있지 않으면 오탐을 피하려 아무것도
+    반환하지 않는다."""
     base = (confluence_base_url or "").strip().rstrip("/")
     if not base:
         return ""
@@ -555,9 +586,13 @@ def extract_confluence_url(fields: dict, confluence_base_url: str = "") -> str:
 
 def map_jira_issue(
     issue: dict, base_url: str, *, assignee_resolver=None, epic_field: str = "",
-    confluence_base_url: str = "",
+    confluence_base_url: str = "", sprint_field: str = "",
+    epic_override: Optional[tuple[str, str]] = None,
+    remote_confluence_links: Optional[list[dict]] = None,
 ) -> dict:
-    """단일 Jira 이슈 → work_item 필드 dict (생성/upsert 공용). 순수 함수."""
+    """단일 Jira 이슈 → work_item 필드 dict (생성/upsert 공용). 순수 함수 — API 콜은 호출부
+    (jira.py 라우터) 가 미리 해서 `epic_override`(상위 Task 의 Epic 값 — Sub-task 체인
+    해석용)/`remote_confluence_links`(원격 링크 전체 목록) 로 넘긴다."""
     fields = issue.get("fields", {}) or {}
     key = issue.get("key", "")
     summary = (fields.get("summary") or "").strip()
@@ -572,11 +607,23 @@ def map_jira_issue(
 
     started = parse_jira_dt(fields.get("created")) or datetime.utcnow()
     closed = parse_jira_dt(fields.get("resolutiondate")) if kanban == "done" else None
+    due = parse_jira_dt(fields.get("duedate"))
+    due_date = due.date() if due else None
     desc = fields.get("description")
     content = desc if isinstance(desc, str) and desc.strip() else summary or key
 
-    epic_key, epic_summary = extract_epic_parts(fields, epic_field)
+    if epic_override is not None:
+        epic_key, epic_summary = epic_override
+    else:
+        epic_key, epic_summary = extract_epic_parts(fields, epic_field)
     parent_key, parent_summary = extract_parent_parts(fields)
+    sprint_name = extract_sprint_name(fields, sprint_field)
+    # 원격 링크(remote link) 로 찾은 Confluence 페이지 전체 — {"url","title"} 리스트.
+    confluence_links = [
+        {"url": str(link["url"])[:500], "title": str(link.get("title") or "")[:200]}
+        for link in (remote_confluence_links or [])
+        if isinstance(link, dict) and link.get("url")
+    ]
     components = [
         str(c.get("name") or "").strip()
         for c in (fields.get("components") or [])
@@ -588,7 +635,7 @@ def map_jira_issue(
     # 때만 종전처럼 "Jira" 로 폴백한다.
     category = components[0] if components else "Jira"
 
-    return {
+    out = {
         "type": wtype,
         "type_label": type_label,
         "title": f"{key} {summary}".strip()[:200],
@@ -599,6 +646,8 @@ def map_jira_issue(
         "primary_assignee": pep_assignee or "(미할당)",
         "started_at": started,
         "closed_at": closed,
+        "due_date": due_date,
+        "sprint_name": sprint_name or None,
         "jira_issue_id": str(issue.get("id", "")),
         "jira_issue_key": key,
         "jira_url": f"{base_url.rstrip('/')}/browse/{key}" if base_url and key else None,
@@ -613,8 +662,20 @@ def map_jira_issue(
         "jira_parent_summary": parent_summary or None,
         "jira_components": components or None,
         "jira_labels": labels or None,
-        "confluence_url": extract_confluence_url(fields, confluence_base_url) or None,
+        # 대표(단일) 링크 — 본문 스캔 우선, 없으면 원격 링크 중 첫 값(기존 단건 재가져오기와
+        # 동일 우선순위). 전체 목록은 별도 confluence_links.
+        "confluence_url": (
+            extract_confluence_url(fields, confluence_base_url)
+            or (confluence_links[0]["url"] if confluence_links else None)
+        ),
     }
+    # confluence_links 는 이번 호출에서 원격 링크 조회를 **시도했을 때만** 채운다
+    # (remote_confluence_links=None ↔ "이번엔 안 봤음" 을 "찾아봤는데 0건" 과 구분해야
+    # 호출부가 기존 값을 잘못 지우지 않는다 — 아래 confluence_links 딕셔너리 키
+    # 존재 여부로 판별).
+    if remote_confluence_links is not None:
+        out["confluence_links"] = confluence_links
+    return out
 
 
 # 미설정 placeholder 싱글톤 (라우터에서 사용자별 자격증명으로 재생성).

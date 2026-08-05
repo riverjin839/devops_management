@@ -17,6 +17,11 @@ class ConfluenceDocSearchRequest(BaseModel):
     cql: Optional[str] = None
     space_key: Optional[str] = Field(None, max_length=50)
     text: Optional[str] = Field(None, max_length=200)
+    # 문서 제목만 좁혀 검색(`title ~ "..."`) — text 는 제목+본문 통합 검색이라 축이 다르다.
+    title: Optional[str] = Field(None, max_length=200)
+    # 상위 페이지 ID(Confluence CQL `ancestor`) — 특정 트리 하위만 검색 범위로 좁힌다.
+    # 이름이 ConfluenceDocsSettings.parent_page_id(게시 대상)와 겹치지 않게 ancestor_id 로 명명.
+    ancestor_id: Optional[str] = Field(None, max_length=50)
     # 기여자(Confluence CQL `contributor` 필드) — me: 본인(기본값) · user: contributor 값 사용
     # (콤마로 여러 명) · any: 조건 없음.
     contributor_mode: str = Field("me", pattern="^(me|user|any)$")

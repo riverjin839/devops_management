@@ -11,7 +11,6 @@ import {
 // ── Nav registry ──────────────────────────────────────────────────────────────
 // 사이드바(Sidebar)와 Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)이
 // 공유하는 정적 네비게이션 정의. 컴포넌트 파일에 두면 react-refresh 가 경고하므로 분리.
-// `/services` (통합 지식/SOP) 는 사이드바 "PEP 서비스" 그룹의 진입점 — 아래 GROUPS 참고.
 export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }>; iconColor?: string; iconSize?: string }> = {
   '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
   // Your Island — 사용자 커스텀 화면. GROUPS 에는 넣지 않는다(그룹 레일이 아니라
@@ -29,9 +28,6 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/lake-services':      { defaultLabel: 'LAKE 서비스',     icon: Database },
   '/pod-bottleneck':     { defaultLabel: 'Pod 병목 진단',   icon: Activity },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
-  '/services':           { defaultLabel: 'PEP 서비스',      icon: Package },
-  '/pep-services':       { defaultLabel: 'PEP 서비스 (LAKE, 구)', icon: Package },
-  '/app-services':       { defaultLabel: 'APP 서비스',      icon: Boxes },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/tasks-mgmt':         { defaultLabel: '업무 관리',      icon: ListTodo },
   '/todo-today':         { defaultLabel: 'Work To Do',     icon: CalendarCheck2 },
@@ -76,28 +72,27 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
 };
 
 // 사이드바 레일에 표시되는 그룹들
-export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'documents' | 'pep-services' | 'app-services' | 'system';
-export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; modes: ('work' | 'platform')[] }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage'], modes: ['platform'] },
-  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], modes: ['platform'] },
-  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], modes: ['platform'] },
-  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], modes: ['platform'] },
+export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' | 'devops' | 'collab' | 'documents' | 'system';
+/**
+ * `domain` — 예전엔 홈 모드(work/platform)가 이 값으로 사이드바 그룹 자체를 게이팅했다
+ * (D-054). 지금은 게이팅에 쓰지 않고 **배치 위치 결정**에만 쓴다: `platform` → 좌측
+ * 사이드바 레일, `work` → 전역 상단바(AppTopBar), `system` → 레일 하단 개인 존(admin 전용).
+ * 모든 그룹이 항상 어딘가에 보이므로 반대 도메인 화면이 "사라지는" 일이 없다.
+ */
+export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; domain: 'work' | 'platform' | 'system' }> = [
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage', '/k8s-logs'], domain: 'platform' },
+  { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], domain: 'platform' },
+  { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], domain: 'platform' },
+  { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], domain: 'platform' },
   // /coroot 는 COROOT APM 통합 전체 제거로 더 이상 존재하지 않는 라우트 — 재추가하지 않음.
-  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], modes: ['platform'] },
-  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], modes: ['platform'] },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report'], modes: ['work'] },
+  { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], domain: 'platform' },
+  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], domain: 'platform' },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report'], domain: 'work' },
   // "문서 관리" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
   // 개편 때 그룹을 잃고 URL 전용으로 남았던 지식 화면들(/work-guides, /docs, /ops-notes,
   // /mindmap, /ontology, /trends)을 이 그룹으로 복귀시킨다.
-  { id: 'documents', label: '문서 관리',  icon: Library,   paths: ['/documents', '/work-guides', '/docs', '/ops-notes', '/mindmap', '/ontology', '/trends'], modes: ['work'] },
-  // "PEP 서비스" — Settings → "관리 서비스" 탭 → "PEP 서비스" 서브탭(LakeServiceType domain='pep')에 등록된 서비스
-  // 카탈로그의 진입점(/services, ServicesCatalogPage). 서비스 클릭 시 노트(작업계획서/업무소개/
-  // 이슈대응/구축작업)와 연관 업무를 보여주는 /services/:service(ServiceHubPage)로 이동한다.
-  // 과거 LakeService 기반 페이지(/pep-services)는 사이드바에서 빠지고 직접 URL 접근으로만
-  // 남는다(/docs, /lake-services 와 동일 패턴) — 데이터/라우트 자체는 그대로 유지.
-  { id: 'pep-services', label: 'PEP 서비스', icon: Package, paths: ['/services'], modes: ['work'] },
-  { id: 'app-services', label: 'APP 서비스', icon: Boxes,   paths: ['/app-services'], modes: ['work'] },
-  { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], modes: ['work', 'platform'] },
+  { id: 'documents', label: '문서 관리',  icon: Library,   paths: ['/documents', '/work-guides', '/docs', '/ops-notes', '/mindmap', '/ontology', '/trends'], domain: 'work' },
+  { id: 'system',    label: '시스템',     icon: Settings,  paths: ['/settings'], domain: 'system' },
 ];
 
 export const DEFAULT_TITLE = 'PEP';

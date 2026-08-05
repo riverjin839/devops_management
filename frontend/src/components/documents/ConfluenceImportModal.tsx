@@ -29,12 +29,18 @@ const CONTRIBUTOR_OPTIONS: { id: ContributorMode; label: string }[] = [
   { id: 'any', label: '전체' },
 ];
 
-const PERIOD_OPTIONS: { value: string; label: string }[] = [
+const PERIOD_PRESET_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: '전체 기간' },
   { value: '7', label: '최근 7일' },
   { value: '30', label: '최근 30일' },
   { value: '90', label: '최근 90일' },
 ];
+
+/** 이번주 월요일부터 오늘까지 일수 — 기간 필터 기본값(Jira 가져오기 모달과 동일 패턴). */
+function daysSinceMonday(): number {
+  const day = new Date().getDay(); // 0=일 ... 6=토
+  return (day + 6) % 7 + 1; // 월=1, 화=2, ... 일=7 (당일 포함 버퍼)
+}
 
 interface Props {
   open: boolean;
@@ -55,11 +61,14 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
   const [mode, setMode] = useState<SearchMode>('simple');
   const [spaceKey, setSpaceKey] = useState('');
   const [text, setText] = useState('');
+  const [title, setTitle] = useState('');
+  const [ancestorId, setAncestorId] = useState('');
   // 기본값 '나' — 본인이 기여한 문서를 기준으로 가져오기 시작 (요청사항)
   const [contributorMode, setContributorMode] = useState<ContributorMode>('me');
   const [contributorUser, setContributorUser] = useState('');
   const [labelsInput, setLabelsInput] = useState('');
-  const [period, setPeriod] = useState('');
+  // 기본값 '이번주' — Jira 가져오기 모달과 동일하게 최근 변경분만 기본 노출(옵션 수정 가능).
+  const [period, setPeriod] = useState(() => String(daysSinceMonday()));
   const [cql, setCql] = useState('');
   const [found, setFound] = useState<ConfluenceDocSearchItem[] | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -78,6 +87,7 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
 
   if (!open) return null;
   const busy = searchMut.isPending || importMut.isPending;
+  const periodOptions = [{ value: String(daysSinceMonday()), label: '이번주' }, ...PERIOD_PRESET_OPTIONS];
 
   const resetAll = () => {
     setFound(null); setPicked(new Set()); setPreview(null);
@@ -93,6 +103,8 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
           : {
               spaceKey: spaceKey.trim() || undefined,
               text: text.trim() || undefined,
+              title: title.trim() || undefined,
+              ancestorId: ancestorId.trim() || undefined,
               contributorMode,
               contributor: contributorMode === 'user' ? contributorUser.trim() || undefined : undefined,
               labels: labelsInput.trim()
@@ -364,12 +376,32 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
 
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">상위 페이지 ID</span>
+                      <input
+                        value={ancestorId} onChange={(e) => setAncestorId(e.target.value)} placeholder="예: 12345 (그 하위 트리만 검색)"
+                        className={`mt-1 ${inputCls}`} disabled={busy}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">문서 제목</span>
+                      <input
+                        value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목에 포함된 텍스트"
+                        className={`mt-1 ${inputCls}`} disabled={busy}
+                        onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
                       <span className="text-xs font-medium text-muted-foreground">최근 수정 기간</span>
                       <select
                         value={period} onChange={(e) => setPeriod(e.target.value)}
                         className={`mt-1 ${inputCls}`} disabled={busy}
                       >
-                        {PERIOD_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        {/* key 는 label 기준 — 일요일엔 '이번주' 값이 '최근 7일' 프리셋과 우연히
+                            같아질 수 있어(둘 다 7) value 를 key 로 쓰면 React 가 중복으로 본다. */}
+                        {periodOptions.map((p) => <option key={p.label} value={p.value}>{p.label}</option>)}
                       </select>
                     </label>
                     <label className="block">
@@ -420,7 +452,8 @@ export function ConfluenceImportModal({ open, onClose }: Props) {
                 disabled={busy || (mode === 'cql'
                   ? !cql.trim()
                   : (contributorMode === 'user' && !contributorUser.trim())
-                    || !(contributorMode !== 'any' || spaceKey.trim() || labelsInput.trim() || period || text.trim()))}
+                    || !(contributorMode !== 'any' || spaceKey.trim() || ancestorId.trim() || labelsInput.trim()
+                      || period || title.trim() || text.trim()))}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
               >
                 {searchMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}

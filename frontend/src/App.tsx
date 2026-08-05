@@ -38,8 +38,6 @@ import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { NodeSpecPage } from '@/pages/NodeSpecPage';
-import { ServicesCatalogPage } from '@/pages/ServicesCatalogPage';
-import { ServiceHubPage } from '@/pages/ServiceHubPage';
 import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { OntologyPage } from '@/pages/OntologyPage';
@@ -63,8 +61,6 @@ import { NodeSshPage } from '@/pages/NodeSshPage';
 import { NodeSshPopupPage } from '@/pages/NodeSshPopupPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
-import { PepServicesPage } from '@/pages/PepServicesPage';
-import { AppServicesPage } from '@/pages/AppServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
@@ -78,6 +74,7 @@ import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
+import { useRecentPathsStore } from '@/stores/recentPathsStore';
 import { NAV_MAP } from '@/components/layout/navConfig';
 
 function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
@@ -108,6 +105,7 @@ function RouteAccessGate() {
   const navigate = useNavigate();
   const { data: featureAccess, isLoading } = useFeatureAccess();
   const user = useAuthStore((s) => s.user);
+  const recordVisit = useRecentPathsStore((s) => s.recordVisit);
 
   useEffect(() => {
     if (isLoading || !user) return;
@@ -117,8 +115,12 @@ function RouteAccessGate() {
       .sort((a, b) => b.length - a.length)[0];
     if (match && !canAccessFeature(featureAccess, match, user)) {
       navigate('/', { replace: true });
+      return;
     }
-  }, [location.pathname, featureAccess, isLoading, user, navigate]);
+    // 최근 방문 — 즐겨찾기 드롭다운이 소비. 상세 페이지(`/tasks-mgmt/:id`)도 캐노니컬
+    // 화면 경로(`/tasks-mgmt`)로 기록돼 목록이 파라미터로 흩어지지 않는다.
+    if (match) recordVisit(match);
+  }, [location.pathname, featureAccess, isLoading, user, navigate, recordVisit]);
 
   return null;
 }
@@ -145,8 +147,8 @@ function AppShell() {
         본문으로 건너뛰기
       </a>
       <Sidebar />
-      {/* 업무 알람 종은 더 이상 전역 고정하지 않는다 — HomePage(업무 현황) 상단 스트립 우측에 배치. */}
-      {/* PageStyleProvider — 본문 래퍼. 라우트별 "화면 UI 설정"(폰트/크기/색/배경) 적용. */}
+      {/* PageStyleProvider — 전역 상단바(AppTopBar, 업무 알람 종 포함) + 라우트별
+          "화면 UI 설정"(폰트/크기/색/배경)이 적용된 본문 래퍼. */}
       <PageStyleProvider>
             <Routes>
               <Route path="/" element={<HomePage />} />
@@ -159,10 +161,6 @@ function AppShell() {
               {/* LAKE service monitoring (lake-service-monitoring PDCA) */}
               <Route path="/lake-services" element={<LakeServicesPage />} />
               <Route path="/lake-services/:id" element={<LakeServiceDetailPage />} />
-
-              {/* PEP 서비스 / APP 서비스 — service-category-catalog PDCA (구 "지식/분석" 아이콘 자리 재정의 + 신규) */}
-              <Route path="/pep-services" element={<PepServicesPage />} />
-              <Route path="/app-services" element={<AppServicesPage />} />
 
               {/* Pod-to-pod bottleneck analyzer (pod-bottleneck-analyzer PDCA) */}
               <Route path="/pod-bottleneck" element={<PodBottleneckPage />} />
@@ -201,8 +199,6 @@ function AppShell() {
               <Route path="/isilon-nfs" element={<IsilonNfsPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/node-specs" element={<NodeSpecPage />} />
-              <Route path="/services" element={<ServicesCatalogPage />} />
-              <Route path="/services/:service" element={<ServiceHubPage />} />
               <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/documents" element={<DocumentsPage />} />

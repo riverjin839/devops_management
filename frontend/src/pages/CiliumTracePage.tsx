@@ -204,7 +204,7 @@ export function CiliumTracePage() {
   const agents = agentsResp?.agents ?? [];
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="app-min-h-screen bg-background flex">
       <ClusterSidebar
         clusters={clusters}
         selectedId={selectedClusterId}

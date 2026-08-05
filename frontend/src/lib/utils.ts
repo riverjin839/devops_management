@@ -26,6 +26,12 @@ export function dateKeyOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Date → "YYYY-MM-DD (요일)" 한국어 표기. 상단바/홈 인사말 스트립에서 공용으로 쓴다. */
+export function fmtKoreanDate(d: Date): string {
+  const week = ['일', '월', '화', '수', '목', '금', '토'];
+  return `${dateKeyOf(d)} (${week[d.getDay()]})`;
+}
+
 /**
  * ISO 문자열 → 로컬(KST) 날짜 키(YYYY-MM-DD).
  * 저장은 UTC canonical 이므로 `parseUTC` 로 UTC 해석 후 로컬로 변환한 "그 날" 을 반환한다.
