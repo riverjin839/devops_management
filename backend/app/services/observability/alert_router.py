@@ -90,6 +90,23 @@ def set_alert_settings(db: Session, patch: dict[str, Any]) -> dict[str, Any]:
 
 # ── 규칙 매칭 ────────────────────────────────────────────────────────────────
 
+# 알람이 어느 운영 모듈/서비스에서 왔는지 식별하는 라벨 후보 (앞에 있을수록 우선).
+# Alertmanager 알람에 `module` 이라는 라벨은 사실상 존재하지 않는다 — 예전에는 그 라벨만
+# 보다가 모듈 조건을 건 규칙이 **어떤 알람에도 매칭되지 않는** 버그가 있었다. 실제로 모듈을
+# 식별해 주는 건 대개 `job`(kube-prometheus-stack-prometheus / fluent-bit / opensearch …)이라
+# 이를 함께 본다.
+MODULE_LABEL_KEYS = ("module", "job", "service", "component", "app", "app_kubernetes_io_name")
+
+
+def _module_value(alert: ParsedAlert) -> Optional[str]:
+    """알람에서 모듈/서비스를 나타내는 첫 번째 라벨 값. 후보가 없으면 None."""
+    for key in MODULE_LABEL_KEYS:
+        value = (alert.labels or {}).get(key)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
 def _regex_matches(pattern: Optional[str], value: Optional[str]) -> bool:
     """빈 패턴 = 조건 없음(통과). 잘못된 정규식은 부분 문자열 매칭으로 폴백."""
     if not pattern or not str(pattern).strip():
@@ -105,7 +122,10 @@ def _regex_matches(pattern: Optional[str], value: Optional[str]) -> bool:
 def _rule_matches(rule: AlertNotifyRule, alert: ParsedAlert, cluster_id: Optional[UUID]) -> bool:
     if rule.cluster_id and cluster_id != rule.cluster_id:
         return False
-    if rule.module_key and str(alert.labels.get("module") or "") != rule.module_key:
+    # module_key 는 "키 완전일치"가 아니라 다른 매처들과 같은 **정규식 부분 매칭**이다
+    # (`fluent` 하나로 fluent-bit/fluentd 를 함께 잡을 수 있게). 후보 라벨이 하나도 없으면
+    # 조용히 통과시키지 않고 미매칭 처리한다.
+    if rule.module_key and not _regex_matches(rule.module_key, _module_value(alert)):
         return False
     if not _regex_matches(rule.alertname_pattern, alert.alertname):
         return False

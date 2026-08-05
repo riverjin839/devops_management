@@ -482,6 +482,51 @@ def test_invalid_regex_falls_back_to_substring():
     assert _rule_matches(broken, parsed(alertname="KubePodCrashLooping"), None) is False
 
 
+# ── 모듈/서비스 매처 (회귀 방지) ──────────────────────────────────────────────
+# 예전에는 labels["module"] 만 봤는데 Alertmanager 알람에 그 라벨이 없어서, 모듈 조건을 건
+# 규칙이 어떤 알람에도 매칭되지 않았다. 이제 job/service 등 후보 라벨을 함께 본다.
+
+def test_module_pattern_matches_job_label():
+    r = rule(module_key="fluent")
+    assert _rule_matches(r, parsed(labels={"job": "fluent-bit"}), None) is True
+    assert _rule_matches(r, parsed(labels={"job": "fluentd"}), None) is True
+
+
+def test_module_pattern_matches_explicit_module_label_first():
+    r = rule(module_key="opensearch")
+    assert _rule_matches(
+        r, parsed(labels={"module": "opensearch-stack", "job": "node-exporter"}), None) is True
+
+
+@pytest.mark.parametrize("label_key", ["service", "component", "app", "app_kubernetes_io_name"])
+def test_module_pattern_matches_other_candidate_labels(label_key):
+    assert _rule_matches(rule(module_key="opensearch"), parsed(labels={label_key: "opensearch"}), None) is True
+
+
+def test_module_pattern_does_not_match_other_module():
+    assert _rule_matches(rule(module_key="fluent"), parsed(labels={"job": "node-exporter"}), None) is False
+
+
+def test_module_pattern_without_any_candidate_label_does_not_match():
+    """후보 라벨이 하나도 없으면 조용히 통과시키지 않는다(예전 버그의 반대 방향 회귀 방지)."""
+    assert _rule_matches(rule(module_key="fluent"), parsed(labels={"team": "platform"}), None) is False
+
+
+def test_module_pattern_broken_regex_falls_back_to_substring():
+    r = rule(module_key="fluent(")
+    assert _rule_matches(r, parsed(labels={"job": "fluent(bit"}), None) is True
+    assert _rule_matches(r, parsed(labels={"job": "fluent-bit"}), None) is False
+
+
+def test_module_value_helper_prefers_first_candidate():
+    from app.services.observability.alert_router import MODULE_LABEL_KEYS, _module_value
+
+    assert MODULE_LABEL_KEYS[0] == "module"
+    assert _module_value(parsed(labels={"job": "j", "service": "s"})) == "j"
+    assert _module_value(parsed(labels={"module": "m", "job": "j"})) == "m"
+    assert _module_value(parsed(labels={"team": "platform"})) is None
+
+
 def test_rule_matches_by_namespace_and_labels():
     assert _rule_matches(rule(namespace_pattern="team-"), parsed(), None) is True
     assert _rule_matches(rule(label_matchers={"team": "platform"}), parsed(), None) is True
