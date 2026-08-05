@@ -1580,6 +1580,9 @@ export interface Assignee {
   secondaryRole?: string;
 }
 
+/** 본인이 직접 수정할 수 있는 담당자 필드 (이름/사번은 admin 전용이라 제외). */
+export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'primaryRole' | 'secondaryRole'>;
+
 // Management Server
 export interface ManagementServer {
   id: string;

@@ -1,17 +1,20 @@
 import { useEffect, useId, useState } from 'react';
 import { Loader2, Save, UserCheck } from 'lucide-react';
-import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
+import { useAssignees, useUpdateMyAssignee } from '@/hooks/useAssignees';
 import { useToastSafe } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { Assignee } from '@/types';
 
 // 사용자 메뉴 SidePane 상단에 표시되는 "본인 담당자 정보" 폼.
 // 담당자 계정은 username = employeeId 로 provisioning 되므로, 이 매칭으로 본인 레코드만 찾아 편집한다.
+// 저장은 본인 행만 부분 갱신하는 PUT /ui-settings/assignees/me 로 나간다 — 전체 목록을 덮어쓰는
+// admin 전용 PUT /ui-settings/assignees 를 쓰면 operator 가 본인 IP 를 바꿀 때 403 이 난다.
 // 전체 담당자 목록 관리는 Settings ▸ 담당자 탭(admin 전용)에서만 가능.
 export function SelfAssigneePanel({ onSaved }: { onSaved?: () => void }) {
   const currentUser = useAuthStore((s) => s.user);
   const { data: assignees = [], isLoading } = useAssignees();
-  const updateAssignees = useUpdateAssignees();
+  const updateMyAssignee = useUpdateMyAssignee();
   const toast = useToastSafe();
 
   const myIdx = assignees.findIndex(
@@ -34,11 +37,20 @@ export function SelfAssigneePanel({ onSaved }: { onSaved?: () => void }) {
 
   const handleSave = () => {
     if (!form || myIdx < 0) return;
-    const updated = assignees.map((a, i) => (i === myIdx ? form : a));
-    updateAssignees.mutate(updated, {
-      onSuccess: () => { toast.success('내 정보 저장됨'); onSaved?.(); },
-      onError: () => toast.error('저장 실패', '내 정보 저장 중 오류가 발생했습니다.'),
-    });
+    // 이름/사번은 보내지 않는다 — 서버에서도 본인이 바꿀 수 없는 필드로 막혀 있다.
+    updateMyAssignee.mutate(
+      {
+        email: form.email,
+        ip: form.ip,
+        seatLocation: form.seatLocation,
+        primaryRole: form.primaryRole,
+        secondaryRole: form.secondaryRole,
+      },
+      {
+        onSuccess: () => { toast.success('내 정보 저장됨'); onSaved?.(); },
+        onError: (e) => toast.error('저장 실패', formatApiError(e)),
+      },
+    );
   };
 
   if (isLoading) {
@@ -86,10 +98,10 @@ export function SelfAssigneePanel({ onSaved }: { onSaved?: () => void }) {
       <button
         type="button"
         onClick={handleSave}
-        disabled={!dirty || updateAssignees.isPending}
+        disabled={!dirty || updateMyAssignee.isPending}
         className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
-        {updateAssignees.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        {updateMyAssignee.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         저장
       </button>
     </div>
