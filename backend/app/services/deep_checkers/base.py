@@ -36,7 +36,36 @@ _CONNECTION_ERROR_HINTS = (
     "max retries exceeded",
     "connection error",
     "ssl:",
+    "softtimelimitexceeded",
 )
+
+# K8s API 서버가 응답하지 않을 때(다운/네트워크 단절) 호출이 무한정 대기하다 Celery 의
+# soft time limit(240s, celery_app.py)에 걸려서야 SoftTimeLimitExceeded 로 죽는 문제가
+# 있었다 — kubernetes 파이썬 클라이언트는 Configuration 레벨 전역 기본 타임아웃을 지원하지
+# 않고 호출마다 `_request_timeout=` 을 넘겨야 하는데(까먹기 쉬운 패턴, 실제로 여러 체커가
+# 누락하고 있었다), `_v1()`/`_wrap_api()` 가 반환하는 프록시가 모든 호출에 자동으로
+# 주입해 이 클래스의 실수를 구조적으로 막는다.
+_K8S_API_TIMEOUT_SECONDS = 15
+
+
+class _TimeoutGuardedApi:
+    """K8s Api(``CoreV1Api`` 등) 얇은 프록시 — 호출자가 ``_request_timeout`` 을 명시하지
+    않으면 ``_K8S_API_TIMEOUT_SECONDS`` 를 기본으로 주입한다. 호출자가 직접 넘긴 값은
+    그대로 존중한다."""
+
+    def __init__(self, api: Any) -> None:
+        self._api = api
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._api, name)
+        if not callable(attr):
+            return attr
+
+        def _call(*args: Any, **kwargs: Any) -> Any:
+            kwargs.setdefault("_request_timeout", _K8S_API_TIMEOUT_SECONDS)
+            return attr(*args, **kwargs)
+
+        return _call
 
 
 @dataclass
@@ -98,6 +127,9 @@ class DeepCheckerBase(ABC):
         있다. ``config.new_client_from_config()`` 는 전역 상태를 건드리지 않는 별도
         ``ApiClient`` 를 반환해 이 문제를 피한다(``daily_checker.py`` 의
         ``_get_k8s_client`` 와 동일 패턴).
+
+        반환값은 실제로는 ``_TimeoutGuardedApi`` 로 감싼 ``CoreV1Api`` — 호출자는
+        신경 쓸 필요 없이 그냥 ``CoreV1Api`` 처럼 쓰면 된다(모든 메서드가 그대로 위임됨).
         """
         if ctx.in_cluster:
             try:
@@ -115,7 +147,13 @@ class DeepCheckerBase(ABC):
                     api_client = client.ApiClient()
                 except config.ConfigException:
                     api_client = config.new_client_from_config()
-        return client.CoreV1Api(api_client)
+        return self._wrap_api(client.CoreV1Api(api_client))
+
+    @staticmethod
+    def _wrap_api(api: Any) -> Any:
+        """다른 Api 클래스(``RbacAuthorizationV1Api`` 등)를 ``_v1()`` 이 만든 것과
+        같은 ``api_client`` 로 추가 생성할 때도 동일한 타임아웃 보호를 적용하는 헬퍼."""
+        return _TimeoutGuardedApi(api)
 
     def _kubectl(self, ctx: DeepCheckContext, *args: str, timeout: int = 30) -> subprocess.CompletedProcess:
         cmd = ["kubectl"]

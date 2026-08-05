@@ -12,6 +12,20 @@
 
 ## [1.25.0] - 2026-08-05
 
+### Fixed
+- **Deep Check 기반 점검(배치잡/점검 매트릭스)이 API 서버가 응답하지 않는 클러스터에서
+  최대 240초씩 멈춘 뒤 `SoftTimeLimitExceeded` + `HTTPSConnectionPool(...port=6443):
+  Max retries exceeded` 로 실패하던 문제**: "API 서버 응답시간"(core_bundle) 점검은
+  `httpx` 에 명시적 타임아웃(30초)을 쓰기 때문에 정상 동작했지만, 대부분의 Deep Check 체커
+  (`cert_expiry`/`etcd_defrag`/`oom_events`/`pod_to_pod`/`stuck_terminating`/`audit_rbac`/
+  `cni_flow`/`isilon_nfs`/`pvc_health` 등)는 kubernetes 파이썬 클라이언트 호출에
+  타임아웃을 넘기지 않아, 죽은 API 서버(`:6443`)에 물리면 셀 하나가 무한정 대기하다
+  Celery 의 soft time limit(240초)에야 겨우 죽었다. `DeepCheckerBase._v1()`/`_wrap_api()`
+  가 반환하는 클라이언트를 얇은 타임아웃 프록시로 감싸 모든 K8s API 호출에 기본
+  15초 타임아웃을 강제로 주입하도록 수정(호출자가 직접 넘긴 값은 그대로 존중) — 개별
+  체커 코드를 일일이 고칠 필요 없이 한 곳에서 구조적으로 막는다. 부수적으로
+  `SoftTimeLimitExceeded` 가 그대로 새어나온 경우도 연결 오류로 정확히 분류되도록
+  분류 힌트에 추가.
 ### Added
 - **업무 관리 ↔ Jira 동기화 확장**: 마감일(Jira `duedate`), 스프린트(Jira Sprint
   커스텀필드 → PEP `Sprint` 이름 매칭, 설정 `jira_sprint_field`), 상위업무 체인
