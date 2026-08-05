@@ -337,7 +337,7 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 메인 탭 — **알람 인박스 / 알림 규칙**.
   - 필터 — 심각도(전체/Critical/Warning/Info) + 상태(발생중/해소/전체) + 검색 + 일괄 확인 + 새로고침. 최근 24시간 요약 pill.
   - 알람 테이블 — 좌측 심각도 색 바 + 행 배경 그라데이션 + 글자 굵기로 심각도 구분. 수신 · 상태 · 심각도 · 클러스터 · 알람 · 대상 · 요약 · 반복(×N, 억제 n) · 확인. 행 클릭 시 라벨/어노테이션/generatorURL/원본 페이로드 펼침 + **AI 분석 패널**(`AlertAnalysisPanel`) — 자동 분석 상태 배지(대기/분석 중/완료/실패/건너뜀), 원인 분석·조치 가이드(실행 없음 — 사람이 수행), analyzed_by(규칙 기반/LLM 프로필) 투명 표기, 수동 'AI 분석 실행/재분석' 버튼(operator+, `POST /observability/alerts/{id}/analyze` → 전용 llm Celery 큐). 자동 분석 범위는 Settings → AI/LLM 의 '알람 자동 분석 범위'(AppSetting `llm_analysis_scope`)에서 규칙(클러스터/네임스페이스/알람명/심각도, 시간당 상한·디바운스)으로 관리.
-  - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기.
+  - 알림 규칙 탭 — 전역 기본값(알림 대상/최소 심각도/중복 억제 창·모드/기본 담당자/보존일) + 규칙 목록·편집기. 규칙 편집기에서 매처(클러스터·**모듈/서비스 패턴**·알람명·네임스페이스·라벨·최소 심각도), 알림 대상/담당자, 심각도 재정의, 중복 억제 창·모드, **재전파 채널**(기존 `NotificationChannel` 다중 선택)을 모두 편집한다.
 - **Frontend**: `useAlerts`, `useAlertStats`, `useAckAlert`, `useAckAllAlerts`, `useDeleteAlert`, `useAlertRules`, `useAlertSettings` 등(`hooks/useAlertInbox.ts`, 30초 `refetchInterval`). api.ts: `observabilityApi.{alerts,alertStats,ackAlert,ackAllAlerts,alertRules,alertSettings,…}`.
 - **Backend**: 수신 `POST /api/v1/observability/alerts/ingest`(JWT 없음 — `ALERT_INGEST_TOKEN` Bearer 자체 검증, **미설정 시 503 fail-closed**), 조회 `GET /observability/alerts`·`/alerts/stats`·`/alerts/{id}`, `POST /alerts/{id}/ack`·`/alerts/ack-all`, 규칙/설정 CRUD(`require_operator`). 라우터 `backend/app/routers/observability.py`(`ingest_router` + `router`). 모델: `models/alert_event.py`, `models/alert_notify_rule.py`. 서비스: `services/observability/alert_ingest.py`(포맷 2종 파싱), `alert_router.py`(규칙 매칭·중복 억제·알림 생성).
 - **핵심 기능**:
