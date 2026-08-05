@@ -1730,6 +1730,18 @@ export interface IsilonNfsOverview {
   k8sNfsPvs?: IsilonK8sNfsPv[];
 }
 
+/** mc 클라이언트 패턴 — 등록된 isi 명령 중 선택한 것만 온디맨드 실행한 결과(캐시 미사용). */
+export interface IsilonRunResponse {
+  server?: { id: string; name: string; host: string };
+  executedAt?: string;
+  connectionOk?: boolean;
+  connectionError?: string | null;
+  results?: IsilonCommandResult[];
+  /** 등록/활성화되지 않아 실행에서 제외된 요청 키 */
+  skippedKeys?: string[];
+  k8sNfsPvs?: IsilonK8sNfsPv[];
+}
+
 export interface IsilonTestResult {
   ok: boolean;
   status: string;

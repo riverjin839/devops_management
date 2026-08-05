@@ -93,6 +93,10 @@ class IsilonCommandUpdate(BaseModel):
     sort_order: Optional[int] = None
 
 
+class IsilonRunRequest(BaseModel):
+    keys: list[str] = Field(..., min_length=1, max_length=20)
+
+
 class IsilonCommandResponse(BaseModel):
     id: UUID
     server_id: Optional[UUID]
@@ -342,6 +346,26 @@ def overview(
     snapshot["configured"] = True
     snapshot["k8s_nfs_pvs"] = _list_k8s_nfs_pvs(server)
     return snapshot
+
+
+@router.post("/servers/{server_id}/run")
+def run_commands(
+    server_id: UUID,
+    payload: IsilonRunRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+) -> dict[str, Any]:
+    """등록된 isi 명령 중 사용자가 선택한 것만 온디맨드 실행(캐시 미사용) —
+    mc 클라이언트 화면처럼 프리셋(등록된 명령) 중 골라 실행하는 패턴."""
+    server = db.query(IsilonServer).filter(IsilonServer.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Isilon 서버를 찾을 수 없습니다.")
+    try:
+        result = isilon_service.run_selected_commands(db, server, payload.keys)
+    except Exception as e:  # noqa: BLE001 — 빈 500 금지, 구체적 사유 노출.
+        raise HTTPException(status_code=500, detail=f"isi 명령 실행 실패: {str(e)[:300]}")
+    result["k8s_nfs_pvs"] = _list_k8s_nfs_pvs(server)
+    return result
 
 
 def _list_k8s_nfs_pvs(server: IsilonServer) -> list[dict[str, Any]]:

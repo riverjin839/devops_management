@@ -340,3 +340,54 @@ def collect_nfs_snapshot(db, server: IsilonServer, *, force: bool = False) -> di
 
     _cache_put(sid, snapshot)
     return snapshot
+
+
+def run_selected_commands(db, server: IsilonServer, keys: list[str]) -> dict[str, Any]:
+    """등록된 명령 중 선택한 키만 온디맨드 실행(캐시 미사용) — mc 클라이언트처럼 사용자가
+    고른 것만 실행한다. 임의 문자열은 받지 않고 ``effective_commands`` 에 있는(=등록·활성화된)
+    키만 허용해 UI-First 등록 정책을 그대로 지킨다. 부하 보호는 ``collect_nfs_snapshot`` 과
+    동일: SSH 세션 1개, 직렬 실행.
+    """
+    sid = str(server.id)
+    requested = set(keys)
+    # effective_commands() 순서(sort_order)를 그대로 따른다 — 화면에 보이는 순서와 결과 순서가
+    # 요청 배열 순서에 좌우되지 않고 항상 일치하게.
+    ordered = effective_commands(db, server)
+    selected = [c for c in ordered if c.key in requested]
+    skipped = requested - {c.key for c in ordered}
+
+    result: dict[str, Any] = {
+        "server": {"id": sid, "name": server.name, "host": server.host},
+        "executed_at": datetime.utcnow().isoformat() + "Z",
+        "connection_ok": False,
+        "connection_error": None,
+        "results": [],
+        "skipped_keys": [k for k in keys if k in skipped],
+    }
+    if not selected:
+        result["connection_error"] = "실행할 명령이 없습니다 (등록/활성화 여부를 확인하세요)."
+        return result
+
+    target = resolve_target(server)
+    if not target.password and not target.private_key:
+        result["connection_error"] = "저장된 자격증명이 없습니다. 서버 설정에서 비밀번호 또는 키를 등록하세요."
+        return result
+
+    client: Optional[paramiko.SSHClient] = None
+    try:
+        client = ssh_runner._build_client(target, CONNECT_TIMEOUT)
+        result["connection_ok"] = True
+        for cmd in selected:
+            result["results"].append(_run_one(client, cmd))
+    except paramiko.AuthenticationException as e:
+        result["connection_error"] = f"인증 실패: {str(e)[:150]}"
+    except Exception as e:  # noqa: BLE001
+        result["connection_error"] = f"연결 실패: {str(e)[:200]}"
+    finally:
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+    return result

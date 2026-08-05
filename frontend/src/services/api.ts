@@ -1344,6 +1344,9 @@ export const isilonNfsApi = {
     api.get<import('@/types').IsilonNfsOverview>('/isilon-nfs/overview', {
       params: { ...(serverId ? { server_id: serverId } : {}), force },
     }),
+  /** mc 클라이언트 패턴 — 등록된 명령 중 선택한 키만 온디맨드 실행(캐시 미사용). */
+  runCommands: (serverId: string, keys: string[]) =>
+    api.post<import('@/types').IsilonRunResponse>(`/isilon-nfs/servers/${serverId}/run`, { keys }),
 };
 
 // Infra Nodes API (물리 서버 노드)

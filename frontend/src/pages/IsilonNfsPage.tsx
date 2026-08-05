@@ -1,38 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import {
-  HardDrive, Plus, Pencil, RefreshCw, Loader2, Terminal,
-  ServerCog, CheckCircle2, AlertCircle,
+  HardDrive, Plus, Pencil, Loader2, ServerCog,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, StatusDot, statusToVariant, EmptyState, useToast } from '@/components/common';
-import { IsilonServerModal, IsilonCommandManager } from '@/components/isilon';
-import {
-  useIsilonServers, useIsilonOverview, isilonKeys,
-} from '@/hooks/useIsilonNfs';
-import { isilonNfsApi } from '@/services/api';
+import { StatusBadge, StatusDot, statusToVariant, EmptyState, LogViewer } from '@/components/common';
+import { IsilonServerModal, IsilonCommandManager, IsilonCommandSelector, ISILON_SECTION_LABEL } from '@/components/isilon';
+import { useIsilonServers, useRunIsilonCommands } from '@/hooks/useIsilonNfs';
+import { useClusters } from '@/hooks/useCluster';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
 import type {
-  IsilonServer, IsilonCommandResult, IsilonNfsOverview, IsilonK8sNfsPv,
+  IsilonServer, IsilonCommandResult, IsilonRunResponse, IsilonK8sNfsPv,
 } from '@/types';
-import { parseUTC } from '@/lib/utils';
-
-const SECTION_LABEL: Record<string, string> = {
-  exports: 'Export / 마운트',
-  nfs_settings: 'NFS 서비스 설정',
-  quotas: '쿼터 / 용량',
-  clients: '클라이언트 / 성능',
-  node_health: '클러스터 / 노드 상태',
-  custom: '커스텀 명령',
-};
 
 export function IsilonNfsPage() {
-  const toast = useToast();
-  const qc = useQueryClient();
   const { data: servers = [], isLoading: loadingServers } = useIsilonServers();
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [serverModal, setServerModal] = useState<{ open: boolean; edit?: IsilonServer | null }>({ open: false });
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [forcing, setForcing] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [runResult, setRunResult] = useState<IsilonRunResponse | null>(null);
+
+  // 서버가 tied 된 K8s 클러스터가 없는 서버 스코프 화면이라 항상 전역 기본(dev) 프로파일 —
+  // 그래도 콘솔 화면 표준(§12.6 rule 4)에 맞춰 최상단에서 호출한다.
+  const { data: clusters = [] } = useClusters();
+  useTerminalEnvSync(clusters, null);
 
   // 서버 목록 로드 시 기본 선택
   useEffect(() => {
@@ -41,27 +32,35 @@ export function IsilonNfsPage() {
     }
   }, [servers, selectedId]);
 
-  const selected = servers.find((s) => s.id === selectedId);
-  const { data: overview, isLoading: loadingOverview, isFetching } = useIsilonOverview(selectedId, !!selectedId);
+  // 서버를 바꾸면 이전 서버의 선택/결과를 들고 있지 않는다.
+  useEffect(() => {
+    setSelectedKeys(new Set());
+    setRunResult(null);
+  }, [selectedId]);
 
-  const handleForceRefresh = async () => {
-    if (!selectedId) return;
-    setForcing(true);
-    try {
-      const { data } = await isilonNfsApi.getOverview(selectedId, true);
-      qc.setQueryData(isilonKeys.overview(selectedId), data);
-      toast.success('재수집 완료');
-    } catch {
-      toast.error('재수집 실패');
-    } finally {
-      setForcing(false);
-    }
+  const selected = servers.find((s) => s.id === selectedId);
+  const runMut = useRunIsilonCommands();
+
+  const toggleKey = (key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const handleRun = () => {
+    if (!selectedId || selectedKeys.size === 0) return;
+    runMut.mutate(
+      { serverId: selectedId, keys: [...selectedKeys] },
+      { onSuccess: (data) => setRunResult(data) },
+    );
   };
 
   return (
     <div className="min-h-screen bg-background py-3 pr-3">
       <div className="flex gap-3">
-        {/* 좌측 서버 레일 */}
+        {/* 좌측 서버 레일 — 클러스터가 아닌 서버 스코프라 ClusterSidebar 대신 전용 레일 사용 */}
         <div className="sticky top-4 self-start w-56 flex-shrink-0">
           <MacCard title="Isilon 서버" bodyPadding="p-2">
             <div className="space-y-1">
@@ -84,14 +83,10 @@ export function IsilonNfsPage() {
                 </button>
               ))}
             </div>
-            <div className="border-t border-border mt-2 pt-2 space-y-1">
+            <div className="border-t border-border mt-2 pt-2">
               <button onClick={() => setServerModal({ open: true, edit: null })}
                 className="w-full inline-flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-xl border border-border hover:bg-muted">
                 <Plus className="w-3.5 h-3.5" /> 서버 추가
-              </button>
-              <button onClick={() => setCmdOpen(true)}
-                className="w-full inline-flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-xl border border-border hover:bg-muted">
-                <Terminal className="w-3.5 h-3.5" /> isi 명령 관리
               </button>
             </div>
           </MacCard>
@@ -102,7 +97,7 @@ export function IsilonNfsPage() {
           <div className="flex items-center gap-2">
             <HardDrive className="w-5 h-5 text-sky-500" />
             <h1 className="text-lg font-semibold">NFS 모니터링 (Isilon)</h1>
-            <span className="text-xs text-muted-foreground">K8s 가 쓰는 NFS 를 NAS 서버 쪽에서 점검 · 읽기전용/무부하</span>
+            <span className="text-xs text-muted-foreground">K8s 가 쓰는 NFS 를 NAS 서버 쪽에서 점검 · 읽기전용/무부하 · 선택한 명령만 실행</span>
           </div>
 
           {!loadingServers && servers.length === 0 ? (
@@ -130,48 +125,44 @@ export function IsilonNfsPage() {
                     <span className="text-xs text-muted-foreground">{selected.username}@{selected.host}:{selected.port}</span>
                   </div>
                   <div className="ml-auto flex items-center gap-3">
-                    {overview?.collectedAt && (
+                    {runResult?.executedAt && (
                       <span className="text-xs text-muted-foreground">
-                        수집 {parseUTC(overview.collectedAt).toLocaleTimeString()}
-                        {overview.fromCache && <span className="ml-1 text-[10px] px-1 rounded bg-muted">캐시</span>}
+                        마지막 실행 {new Date(runResult.executedAt).toLocaleTimeString()}
                       </span>
                     )}
-                    <ConnBadge overview={overview} loading={loadingOverview || isFetching} />
-                    <button onClick={handleForceRefresh} disabled={forcing}
-                      title="캐시를 무시하고 재수집 (NAS 부하 주의)"
-                      className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl border border-border hover:bg-muted disabled:opacity-50">
-                      {forcing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                      새로고침
-                    </button>
+                    <ConnBadge runResult={runResult} running={runMut.isPending} />
                   </div>
                 </div>
-                {overview?.connectionError && (
-                  <div className="mt-3 text-sm text-red-500 flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4" /> {overview.connectionError}
-                  </div>
+                {runResult?.connectionError && (
+                  <div className="mt-3 text-sm text-red-500">⚠ {runResult.connectionError}</div>
                 )}
-                {overview && overview.errors && overview.errors.length > 0 && (
-                  <ul className="mt-2 text-xs text-amber-600 space-y-0.5">
-                    {overview.errors.slice(0, 6).map((er, i) => <li key={i}>· {er}</li>)}
-                  </ul>
+                {runResult?.skippedKeys && runResult.skippedKeys.length > 0 && (
+                  <p className="mt-2 text-xs text-amber-600">등록/활성화되지 않아 건너뜀: {runResult.skippedKeys.join(', ')}</p>
                 )}
               </MacCard>
 
-              {/* K8s NFS PV ↔ export 매칭 */}
+              {/* K8s NFS PV ↔ export 매칭 (직전 실행에 exports 명령이 포함된 경우에만 채워짐) */}
               <MacCard title="K8s 가 사용하는 NFS (PV ↔ Isilon export)">
-                <K8sNfsTable overview={overview} loading={loadingOverview} />
+                <K8sNfsTable runResult={runResult} />
               </MacCard>
 
-              {/* 수집 결과 섹션들 */}
-              {loadingOverview && !overview ? (
-                <MacCard><div className="text-sm text-muted-foreground py-6 text-center"><Loader2 className="w-4 h-4 animate-spin inline" /> 수집 중…</div></MacCard>
-              ) : (
-                (overview?.results ?? []).filter((r) => r.showOnOverview).map((r) => (
-                  <MacCard key={r.key} title={`${SECTION_LABEL[r.section] ?? r.section} · ${r.label}`}>
-                    <ResultBody result={r} />
-                  </MacCard>
-                ))
-              )}
+              {/* 좌(명령 선택) / 우(결과) 한 로우 고정 — 콘솔 화면 표준(§12.6) */}
+              <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 items-start">
+                <MacCard title="명령 선택" rootClassName="lg:col-span-4 min-w-0" bodyPadding="p-4">
+                  <IsilonCommandSelector
+                    serverId={selectedId}
+                    selectedKeys={selectedKeys}
+                    onToggle={toggleKey}
+                    onSelectAll={(keys) => setSelectedKeys(new Set(keys))}
+                    onClear={() => setSelectedKeys(new Set())}
+                    onRun={handleRun}
+                    onManage={() => setCmdOpen(true)}
+                    running={runMut.isPending}
+                  />
+                </MacCard>
+
+                <RunResultPanel runResult={runResult} running={runMut.isPending} />
+              </div>
             </>
           ) : null}
         </div>
@@ -188,11 +179,10 @@ export function IsilonNfsPage() {
 }
 
 // ── 하위 렌더 조각 (module-local, 비-export) ──────────────────────────────────
-function ConnBadge({ overview, loading }: { overview?: IsilonNfsOverview; loading: boolean }) {
-  if (loading) return <StatusBadge variant="loading" label="수집 중" />;
-  if (!overview) return <StatusBadge variant="neutral" label="-" />;
-  if (overview.configured === false) return <StatusBadge variant="pending" label="미설정" />;
-  return overview.connectionOk
+function ConnBadge({ runResult, running }: { runResult: IsilonRunResponse | null; running: boolean }) {
+  if (running) return <StatusBadge variant="loading" label="실행 중" />;
+  if (!runResult) return <StatusBadge variant="neutral" label="미실행" />;
+  return runResult.connectionOk
     ? <StatusBadge variant="healthy" label="접속됨" />
     : <StatusBadge variant="pending" label="접속 불가" />;
 }
@@ -224,11 +214,16 @@ function pathServed(pvPath: string, exportPaths: string[]): boolean {
   });
 }
 
-function K8sNfsTable({ overview, loading }: { overview?: IsilonNfsOverview; loading: boolean }) {
-  const pvs: IsilonK8sNfsPv[] = overview?.k8sNfsPvs ?? [];
-  const exportPaths = useMemo(() => extractExportPaths(overview?.results), [overview]);
-  if (loading && !overview) return <div className="text-sm text-muted-foreground py-4 text-center"><Loader2 className="w-4 h-4 animate-spin inline" /> …</div>;
-  if (pvs.length === 0) return <p className="text-sm text-muted-foreground">NFS 백엔드(spec.nfs)를 쓰는 K8s PV 가 없거나 K8s 조회가 불가합니다.</p>;
+function K8sNfsTable({ runResult }: { runResult: IsilonRunResponse | null }) {
+  const pvs: IsilonK8sNfsPv[] = runResult?.k8sNfsPvs ?? [];
+  const exportPaths = useMemo(() => extractExportPaths(runResult?.results), [runResult]);
+  if (pvs.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        NFS 백엔드(spec.nfs)를 쓰는 K8s PV 가 없거나 K8s 조회가 불가합니다. (명령을 하나 이상 실행하면 함께 채워집니다.)
+      </p>
+    );
+  }
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -252,7 +247,7 @@ function K8sNfsTable({ overview, loading }: { overview?: IsilonNfsOverview; load
                 <td className="py-1.5 pr-3 text-xs">{pv.server ?? '-'}</td>
                 <td className="py-1.5 pr-3">
                   {served === null
-                    ? <StatusBadge variant="neutral" label="확인불가" />
+                    ? <StatusBadge variant="neutral" label="exports 미실행" />
                     : served
                       ? <StatusBadge variant="healthy" label="매칭됨" />
                       : <StatusBadge variant="critical" label="누락" />}
@@ -266,21 +261,51 @@ function K8sNfsTable({ overview, loading }: { overview?: IsilonNfsOverview; load
   );
 }
 
-function ResultBody({ result }: { result: IsilonCommandResult }) {
+// 결과는 실행 전에도 같은 자리(우측)에 플레이스홀더로 존재 — 콘솔 화면 표준(§12.6 rule 1).
+// 로그 출력은 항상 LogViewer(plain <pre> 금지, rule 3).
+function RunResultPanel({ runResult, running }: { runResult: IsilonRunResponse | null; running: boolean }) {
+  if (!runResult && !running) {
+    return (
+      <MacCard rootClassName="lg:col-span-6 min-w-0" bodyPadding="p-5" className="flex items-center justify-center min-h-[200px] lg:h-[calc(100vh-360px)]">
+        <p className="text-sm text-muted-foreground text-center">
+          왼쪽에서 isi 명령을 선택하고 실행하면<br />결과가 여기에 표시됩니다.
+        </p>
+      </MacCard>
+    );
+  }
+  const results = runResult?.results ?? [];
+  return (
+    <MacCard rootClassName="lg:col-span-6 min-w-0 overflow-y-auto overflow-x-hidden lg:h-[calc(100vh-360px)]" bodyPadding="p-0">
+      {running && !runResult ? (
+        <div className="text-sm text-muted-foreground py-10 text-center"><Loader2 className="w-4 h-4 animate-spin inline" /> 실행 중…</div>
+      ) : results.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-10 text-center">실행된 명령 결과가 없습니다.</p>
+      ) : (
+        <div className="divide-y divide-border">
+          {results.map((r) => <ResultBlock key={r.key} result={r} />)}
+        </div>
+      )}
+    </MacCard>
+  );
+}
+
+function ResultBlock({ result }: { result: IsilonCommandResult }) {
   const content = result.parsed != null
     ? JSON.stringify(result.parsed, null, 2)
     : (result.raw ?? '');
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs">
-        {result.ok
-          ? <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" /> exit {result.exitCode}</span>
-          : <span className="inline-flex items-center gap-1 text-red-500"><AlertCircle className="w-3.5 h-3.5" /> {result.error ?? `exit ${result.exitCode}`}</span>}
+    <div className="p-4 space-y-2">
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <StatusBadge
+          variant={result.ok ? 'healthy' : 'critical'}
+          label={result.ok ? `exit ${result.exitCode ?? 0}` : (result.error ?? `exit ${result.exitCode ?? '-'}`)}
+        />
+        <span className="font-medium text-foreground">{ISILON_SECTION_LABEL[result.section] ?? result.section} · {result.label}</span>
         <code className="text-muted-foreground truncate">{result.command}</code>
-        <span className="ml-auto text-muted-foreground">{result.durationMs}ms</span>
+        <span className="ml-auto text-muted-foreground shrink-0">{result.durationMs}ms</span>
       </div>
       {content
-        ? <div className="overflow-x-auto"><pre className="text-xs bg-muted/40 rounded-xl p-3 max-h-72 overflow-y-auto">{content}</pre></div>
+        ? <LogViewer text={content} maxHeight="max-h-72" asError={!result.ok} />
         : <p className="text-xs text-muted-foreground">출력 없음</p>}
     </div>
   );
