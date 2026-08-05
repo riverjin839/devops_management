@@ -45,7 +45,7 @@ class AuditRbacChecker(DeepCheckerBase):
         # ClusterRoleBinding 점검 — cluster-admin 대상자 수
         from kubernetes import client
 
-        rbac = client.RbacAuthorizationV1Api(api_client=v1.api_client)
+        rbac = self._wrap_api(client.RbacAuthorizationV1Api(api_client=v1.api_client))
         try:
             crbs = rbac.list_cluster_role_binding(timeout_seconds=15)
         except Exception:
