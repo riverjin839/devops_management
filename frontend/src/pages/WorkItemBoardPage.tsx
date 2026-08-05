@@ -33,6 +33,38 @@ type ViewMode = 'table' | 'calendar' | 'kanban';
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
+// ── 필터 개인화 — 로그인 사용자가 마지막으로 쓴 필터 조건을 기억한다(사용자별로 분리
+// 저장해 같은 브라우저를 여러 계정이 쓸 때 서로 값이 섞이지 않게 한다). ──────────────
+interface WorkItemFilterPrefs {
+  type: WorkItemType | 'all';
+  assignee: string;
+  priority: string;
+  status: KanbanStatus | 'all';
+  module: WorkItemModule | '';
+  from: string;
+  to: string;
+  searchTitle: string;
+}
+
+const EMPTY_FILTER_PREFS: WorkItemFilterPrefs = {
+  type: 'all', assignee: '', priority: '', status: 'all', module: '', from: '', to: '', searchTitle: '',
+};
+
+function filterPrefsKey(username: string): string {
+  return `k8s:item-board:filters:${username}`;
+}
+
+function loadFilterPrefs(username: string): WorkItemFilterPrefs {
+  if (!username) return EMPTY_FILTER_PREFS;
+  try {
+    const raw = localStorage.getItem(filterPrefsKey(username));
+    if (!raw) return EMPTY_FILTER_PREFS;
+    return { ...EMPTY_FILTER_PREFS, ...JSON.parse(raw) };
+  } catch {
+    return EMPTY_FILTER_PREFS;
+  }
+}
+
 /** 컬럼 헤더 — 드래그 핸들(순서 변경) + 정렬 토글 + 우측 리사이즈 그립. */
 /** 업무 분류(유형) 필터 — 4개 탭(이슈 대응/회의/운영 대응/기타)을 버튼 하나 + 드롭다운으로 접어 한 줄에 들어오게. */
 function TypeFilterDropdown({
@@ -210,31 +242,48 @@ function DraggableSortHeader({
 
 export function WorkItemBoardPage() {
   const navigate = useNavigate();
+  const currentUser = useAuthStore((s) => s.user);
+  const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
+  const myUsername = currentUser?.username || '';
+  // 필터 개인화 — 로그인 사용자가 마지막으로 쓴 조건을 이번 마운트에서 딱 1번만 읽는다
+  // (이후 변경은 아래 useEffect 가 저장). 사용자가 바뀌어도(재로그인) 컴포넌트가
+  // 다시 마운트되므로 그 시점 값을 다시 읽는다.
+  const savedFilters = useMemo(() => loadFilterPrefs(myUsername), [myUsername]);
+
   const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>(savedFilters.type);
   const [filterClusterId, setFilterClusterId] = useState('');
-  const [filterAssignee, setFilterAssignee] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
-  const [filterModule, setFilterModule] = useState<WorkItemModule | ''>('');
-  const [filterKanbanStatus, setFilterKanbanStatus] = useState<KanbanStatus | 'all'>('all');
+  const [filterAssignee, setFilterAssignee] = useState(savedFilters.assignee);
+  const [filterPriority, setFilterPriority] = useState(savedFilters.priority);
+  const [filterFrom, setFilterFrom] = useState(savedFilters.from);
+  const [filterTo, setFilterTo] = useState(savedFilters.to);
+  const [filterModule, setFilterModule] = useState<WorkItemModule | ''>(savedFilters.module);
+  const [filterKanbanStatus, setFilterKanbanStatus] = useState<KanbanStatus | 'all'>(savedFilters.status);
   // 제목 검색 — 서버사이드 ILIKE(title/content). 타이핑 중 매 키 입력마다 재조회하지
   // 않도록 300ms 디바운스 후 실제 필터(debouncedSearchTitle)에 반영.
-  const [searchTitle, setSearchTitle] = useState('');
-  const [debouncedSearchTitle, setDebouncedSearchTitle] = useState('');
+  const [searchTitle, setSearchTitle] = useState(savedFilters.searchTitle);
+  const [debouncedSearchTitle, setDebouncedSearchTitle] = useState(savedFilters.searchTitle);
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearchTitle(searchTitle), 300);
     return () => window.clearTimeout(t);
   }, [searchTitle]);
   // 스프린트 페이지의 '게시판에서 보기' 딥링크(?sprint=...) 를 초기 필터로 반영. 딥링크가
-  // 없으면 아래 useEffect 가 현재(진행중) 스프린트로 기본값을 채운다.
+  // 없으면 아래 useEffect 가 현재(진행중) 스프린트로 기본값을 채운다(개인화 저장 대상에서는
+  // 제외 — 그 기본값 effect 가 항상 덮어써 저장해봐야 의미가 없다).
   const [searchParams] = useSearchParams();
   const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') ?? '');
   // 기본 정렬 = 시작일 최신순(기존 백엔드 정렬과 동일 — 사용자가 다른 컬럼을 클릭하면 바뀐다).
   const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('startedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // 이 필터들이 바뀔 때마다 사용자별로 저장 — 다음 방문 때 그대로 복원된다.
+  useEffect(() => {
+    if (!myUsername) return;
+    const prefs: WorkItemFilterPrefs = {
+      type: typeFilter, assignee: filterAssignee, priority: filterPriority, status: filterKanbanStatus,
+      module: filterModule, from: filterFrom, to: filterTo, searchTitle: debouncedSearchTitle,
+    };
+    try { localStorage.setItem(filterPrefsKey(myUsername), JSON.stringify(prefs)); } catch { /* ignore */ }
+  }, [myUsername, typeFilter, filterAssignee, filterPriority, filterKanbanStatus, filterModule, filterFrom, filterTo, debouncedSearchTitle]);
   // 기본 화면은 **내 업무**만 — 전사 업무가 통째로 뜨면 매번 담당자를 직접 입력해야 한다.
   // 끈 상태는 localStorage 로 기억한다(팀 전체를 보는 사용자가 매번 다시 끄지 않도록).
   const [onlyMine, setOnlyMine] = useState<boolean>(() => {
@@ -245,8 +294,6 @@ export function WorkItemBoardPage() {
     try { localStorage.setItem('k8s:item-board:only-mine', next ? '1' : '0'); } catch { /* ignore */ }
     return next;
   });
-  const currentUser = useAuthStore((s) => s.user);
-  const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
   // 시작일/완료일 시간 표시 토글 (기본 off = 날짜만). localStorage 영속.
   const [showTime, setShowTime] = useState<boolean>(() => {
     try { return localStorage.getItem('k8s:item-board:show-time') === '1'; } catch { return false; }
@@ -296,7 +343,6 @@ export function WorkItemBoardPage() {
     type: typeFilter === 'all' ? undefined : typeFilter,
     clusterId: filterClusterId || undefined,
     assignee: effectiveAssignee || undefined,
-    category: filterCategory || undefined,
     priority: filterPriority || undefined,
     kanbanStatus: filterKanbanStatus === 'all' ? undefined : filterKanbanStatus,
     module: filterModule || undefined,
@@ -576,7 +622,6 @@ export function WorkItemBoardPage() {
   const clearFilters = () => {
     setFilterClusterId('');
     setFilterAssignee('');
-    setFilterCategory('');
     setFilterPriority('');
     setFilterKanbanStatus('all');
     setFilterModule('');
@@ -587,7 +632,7 @@ export function WorkItemBoardPage() {
   };
 
   // "내 업무"(기본값)는 초기화 대상이 아니다 — 빈 목록이 떴을 때 안내 문구를 고르는 데만 쓴다.
-  const hasFilters = !!(filterClusterId || filterAssignee || filterCategory || filterPriority
+  const hasFilters = !!(filterClusterId || filterAssignee || filterPriority
     || filterKanbanStatus !== 'all' || filterModule || filterSprintId || filterFrom || filterTo || searchTitle);
   const isFilteredView = hasFilters || (onlyMine && !!myName);
 
@@ -681,129 +726,120 @@ export function WorkItemBoardPage() {
           </div>
         </div>
 
-        {/* 업무 분류 드롭다운 (좌) + 검색/컬럼 컨트롤 (우) — 유형 탭을 버튼 하나로 접어 한 줄로 통합 */}
-        <div className="flex items-center justify-between gap-3 mb-3 flex-nowrap">
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <TypeFilterDropdown value={typeFilter} onChange={setTypeFilter} />
-            <StatusFilterDropdown value={filterKanbanStatus} onChange={setFilterKanbanStatus} />
+        {/* 필터 바 — 모든 컨트롤을 한 flex-wrap 행에 두어 줄바꿈이 일어나도 같은 그룹으로
+            함께 움직인다(좌/우 두 컨테이너로 나뉘어 있으면 넓은 화면에서 업무분류만 뚝
+            떨어져 보이는 정렬 어긋남이 생긴다). 라인 패턴(rounded-lg · bg-secondary · border)
+            으로 통일. */}
+        <div className="flex items-center gap-1.5 flex-wrap mb-3">
+          <TypeFilterDropdown value={typeFilter} onChange={setTypeFilter} />
+          <StatusFilterDropdown value={filterKanbanStatus} onChange={setFilterKanbanStatus} />
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchTitle}
+              onChange={(e) => setSearchTitle(e.target.value)}
+              placeholder="제목 검색"
+              aria-label="제목 검색"
+              className="w-36 pl-8 pr-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+            />
           </div>
-
-          {/* 검색 컨트롤 — 라인 패턴(rounded-lg · bg-secondary · border)으로 통일. 모듈 필터도 여기 드롭다운으로 통합(2줄→1줄) */}
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-              <input
-                type="text"
-                value={searchTitle}
-                onChange={(e) => setSearchTitle(e.target.value)}
-                placeholder="제목 검색"
-                aria-label="제목 검색"
-                className="w-36 pl-8 pr-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-              />
-            </div>
-            {myName && (
-              <button
-                type="button"
-                onClick={toggleOnlyMine}
-                aria-pressed={onlyMine}
-                title={onlyMine ? `내 업무(${myName})만 보는 중 — 눌러서 전체 보기` : '내 업무만 보기'}
-                className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
-                  onlyMine ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <UserRound className="w-3.5 h-3.5" /> 내 업무
-              </button>
-            )}
-            <input
-              type="text"
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              placeholder={onlyMine && myName ? myName : '담당자'}
-              aria-label="담당자 필터"
-              className="w-24 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-            />
-            <input
-              type="text"
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              placeholder="분류"
-              aria-label="분류 필터"
-              className="w-24 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-            />
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              aria-label="우선순위 필터"
-              className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-            >
-              <option value="">우선순위</option>
-              <option value="high">높음</option>
-              <option value="medium">보통</option>
-              <option value="low">낮음</option>
-            </select>
-            <select
-              value={filterModule}
-              onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}
-              aria-label="모듈 필터"
-              className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-            >
-              <option value="">전체 모듈</option>
-              {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
-                <option key={key} value={key}>{cfg.label}</option>
-              ))}
-            </select>
-            {sprintList.length > 0 && (
-              <select
-                value={filterSprintId}
-                onChange={(e) => setFilterSprintId(e.target.value)}
-                aria-label="스프린트 필터"
-                className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-              >
-                <option value="">전체 스프린트</option>
-                {sprintList.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}{s.status === 'active' ? ' (진행중)' : ''}</option>
-                ))}
-              </select>
-            )}
+          {myName && (
             <button
               type="button"
-              onClick={toggleThisWeek}
-              aria-pressed={isThisWeek}
-              title={isThisWeek ? '이번주 필터 해제' : '이번주(월~일) 시작 업무만 보기'}
+              onClick={toggleOnlyMine}
+              aria-pressed={onlyMine}
+              title={onlyMine ? `내 업무(${myName})만 보는 중 — 눌러서 전체 보기` : '내 업무만 보기'}
               className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
-                isThisWeek ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                onlyMine ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
               }`}
             >
-              <CalendarRange className="w-3.5 h-3.5" /> 이번주
+              <UserRound className="w-3.5 h-3.5" /> 내 업무
             </button>
-            <input
-              type="date"
-              value={filterFrom}
-              onChange={(e) => setFilterFrom(e.target.value)}
-              aria-label="시작일 (이후)"
-              title="시작일 (이후)"
-              className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
-            />
-            <span className="text-muted-foreground text-sm">~</span>
-            <input
-              type="date"
-              value={filterTo}
-              onChange={(e) => setFilterTo(e.target.value)}
-              aria-label="시작일 (이전)"
-              title="시작일 (이전)"
-              className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
-            />
-            {hasFilters && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                aria-label="필터 초기화"
-                className="px-2 py-1.5 text-sm rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
-              >
-                <X className="w-3 h-3" />
-                초기화
-              </button>
-            )}
+          )}
+          <input
+            type="text"
+            value={filterAssignee}
+            onChange={(e) => setFilterAssignee(e.target.value)}
+            placeholder={onlyMine && myName ? myName : '담당자'}
+            aria-label="담당자 필터"
+            className="w-24 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+          />
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            aria-label="우선순위 필터"
+            className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+          >
+            <option value="">우선순위</option>
+            <option value="high">높음</option>
+            <option value="medium">보통</option>
+            <option value="low">낮음</option>
+          </select>
+          <select
+            value={filterModule}
+            onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}
+            aria-label="모듈 필터"
+            className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+          >
+            <option value="">전체 모듈</option>
+            {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
+              <option key={key} value={key}>{cfg.label}</option>
+            ))}
+          </select>
+          {sprintList.length > 0 && (
+            <select
+              value={filterSprintId}
+              onChange={(e) => setFilterSprintId(e.target.value)}
+              aria-label="스프린트 필터"
+              className="px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+            >
+              <option value="">전체 스프린트</option>
+              {sprintList.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}{s.status === 'active' ? ' (진행중)' : ''}</option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            onClick={toggleThisWeek}
+            aria-pressed={isThisWeek}
+            title={isThisWeek ? '이번주 필터 해제' : '이번주(월~일) 시작 업무만 보기'}
+            className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
+              isThisWeek ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <CalendarRange className="w-3.5 h-3.5" /> 이번주
+          </button>
+          <input
+            type="date"
+            value={filterFrom}
+            onChange={(e) => setFilterFrom(e.target.value)}
+            aria-label="시작일 (이후)"
+            title="시작일 (이후)"
+            className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+          />
+          <span className="text-muted-foreground text-sm">~</span>
+          <input
+            type="date"
+            value={filterTo}
+            onChange={(e) => setFilterTo(e.target.value)}
+            aria-label="시작일 (이전)"
+            title="시작일 (이전)"
+            className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+          />
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              aria-label="필터 초기화"
+              className="px-2 py-1.5 text-sm rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+            >
+              <X className="w-3 h-3" />
+              초기화
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
               onClick={toggleShowTime}
