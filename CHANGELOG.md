@@ -10,6 +10,20 @@
 
 1.25.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **클러스터 관리(`/cluster-manage`) — viewer 권한 게이팅·확인절차·접근성 수정**: impeccable
+  critique 진단(Design Health 30/40)에서 나온 이슈를 반영. 커스텀 컬럼 삭제를 네이티브
+  `confirm()`에서 `ConfirmDialog(danger)`로 교체했고, 커스텀 컬럼 셀에 키보드로 편집 진입할 수
+  있는 연필 버튼을 추가했다. 모달 닫기 버튼 5곳(Cilium 설정·커스텀 컬럼·정보수집 diff·NIC 수집)에
+  누락된 `aria-label`을 채웠다. 서버(`require_operator`)만 막던 변경성 동작(삭제·정보수집·인라인
+  편집·이름 표준화·컬럼 관리)을 프론트에서도 `viewer` 역할에는 숨기거나 조회 전용으로 표시해,
+  클릭 후 403으로만 실패를 알게 되던 문제를 해소했다. 그 외 카드뷰 드래그 핸들 포커스 가시성,
+  `ClusterCard`의 `MacCard` 미사용, 이름 표준화 확인 절차 부재, IP 배지 색상단독 표시,
+  `NodeNicsCollectModal`의 `LogViewer` 미사용·에러 상태 누락, CIDR 겹침 배지의 상대 클러스터명
+  누락을 함께 수정. Frontend: `pages/ClusterManagePage.tsx`,
+  `components/cluster-manage/{ClusterCard,ClusterTableRow,ClusterCustomCell,ClusterCustomFieldsManager,StandardizeClusterNamesModal,CiliumConfigModal,ClusterUpdateDiffDialog}.tsx`,
+  `components/versions/NodeNicsCollectModal.tsx`.
+
 ## [1.25.1] - 2026-08-05
 
 ### Fixed

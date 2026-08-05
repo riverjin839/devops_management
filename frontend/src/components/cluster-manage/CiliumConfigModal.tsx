@@ -42,7 +42,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
               </p>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={onClose} title="닫기" aria-label="닫기" className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -5,7 +5,7 @@ import type { NodeSummary } from '@/services/api';
 import type { NodeNicsCollectResponse } from '@/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { useToast, DoubleScrollX} from '@/components/common';
+import { useToast, DoubleScrollX, LogViewer } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 
@@ -137,7 +137,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
               public/private IP 를 분류 저장. 변경시 히스토리 누적.
             </p>
           </div>
-          <button onClick={onClose} disabled={collectMut.isPending}
+          <button onClick={onClose} disabled={collectMut.isPending} title="닫기" aria-label="닫기"
             className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
@@ -228,9 +228,24 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
             </div>
             <div className="max-h-52 overflow-y-auto border border-border rounded-lg bg-background p-1">
               {nodes.length === 0 ? (
-                <p className="text-center py-3 text-sm text-muted-foreground">
-                  {nodeQ.isLoading ? '노드 로딩 중...' : '노드 없음'}
-                </p>
+                <div className="text-center py-3 text-sm">
+                  {nodeQ.isLoading ? (
+                    <p className="text-muted-foreground">노드 로딩 중...</p>
+                  ) : nodeQ.isError ? (
+                    <div className="space-y-1.5">
+                      <p className="text-status-critical">노드 목록을 불러오지 못했습니다.</p>
+                      <p className="text-xs text-muted-foreground">{formatApiError(nodeQ.error)}</p>
+                      <button
+                        onClick={() => nodeQ.refetch()}
+                        className="px-2 py-1 text-xs font-medium rounded-lg border border-border hover:bg-secondary transition-colors"
+                      >
+                        다시 시도
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">노드 없음</p>
+                  )}
+                </div>
               ) : nodes.map((n) => {
                 const host = n.internalIp || n.name;
                 const on = selected.has(host);
@@ -398,13 +413,13 @@ function RawOutputDetails({
         {hasStdout && (
           <div>
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">stdout</div>
-            <pre className="font-mono text-xs bg-background border border-border rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap">{stdout}</pre>
+            <LogViewer text={stdout!} maxHeight="max-h-40" hideToolbar />
           </div>
         )}
         {hasStderr && (
           <div>
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">stderr</div>
-            <pre className="font-mono text-xs bg-status-critical/5 border border-status-critical/20 text-status-critical rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap">{stderr}</pre>
+            <LogViewer text={stderr!} maxHeight="max-h-40" asError hideToolbar />
           </div>
         )}
       </div>
