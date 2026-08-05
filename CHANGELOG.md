@@ -28,6 +28,14 @@
   ② **재전파 채널** — 규칙에 걸린 알람을 기존 알림 채널(Slack/webhook/email)로도 보낼지
   체크박스로 선택. 규칙 목록에도 "재전파" 열과 모듈 조건(`module~…`)이 표시된다.
 
+### Fixed
+- **업무 프로비저닝 재시도가 500 으로 실패하던 문제**: Jira 는 이번에 새로 만들고 Confluence 는
+  이미 연결돼 있던 상태로 재시도하면 `UnboundLocalError: page_title` 로 500 이 났다. 상호 링크
+  단계가 "Confluence 를 이번에 만들었는지"가 아니라 `conf_ok`(이미 연결돼 건너뛴 경우도 True)를
+  보고 있었던 탓이다. 이제 **이번 호출에서 실제로 만든 경우에만** Jira Description 에 Confluence
+  링크를 덧붙인다 — 이미 연결된 문서 때문에 기존 Description 을 덮어쓰는 PUT 도 더 이상 나가지
+  않는다(재시도 멱등성).
+
 ## [1.20.0] - 2026-08-04
 
 ### Added
