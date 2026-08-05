@@ -26,6 +26,7 @@ from app.routers.analyze import router as analyze_router
 from app.routers.trends import router as trends_router
 from app.routers.versions import router as versions_router
 from app.routers.bulk_exec import router as bulk_exec_router
+from app.routers.saved_scripts import router as saved_scripts_router
 from app.routers.etcdctl import router as etcdctl_router
 from app.routers.cilium_trace import router as cilium_trace_router
 from app.routers.mc_client import router as mc_client_router
@@ -114,6 +115,7 @@ __all__ = [
     "trends_router",
     "versions_router",
     "bulk_exec_router",
+    "saved_scripts_router",
     "etcdctl_router",
     "cilium_trace_router",
     "mc_client_router",

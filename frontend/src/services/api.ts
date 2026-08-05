@@ -517,6 +517,8 @@ export interface BulkExecRequest {
   password?: string;
   privateKey?: string;
   command?: string;
+  /** command 가 python 스크립트 본문일 때만 지정 — 서버가 원격 python3 로 감싸 실행 */
+  language?: 'bash' | 'python';
   scpContent?: string;
   scpRemotePath?: string;
   mode: 'sequential' | 'parallel';
@@ -1183,6 +1185,20 @@ export const confluenceDocsApi = {
     api.get<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings'),
   updateSettings: (data: import('@/types').ConfluenceDocsSettings) =>
     api.put<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings', data),
+};
+
+// Saved Scripts API (노드 일괄 실행 - 사용자별 저장 스크립트, bash/python)
+export const savedScriptsApi = {
+  list: (language?: import('@/types').ScriptLanguage) =>
+    api.get<import('@/types').SavedScript[]>('/saved-scripts', {
+      params: language ? { language } : undefined,
+    }),
+  get: (id: string) => api.get<import('@/types').SavedScript>(`/saved-scripts/${id}`),
+  create: (data: import('@/types').SavedScriptCreate) =>
+    api.post<import('@/types').SavedScript>('/saved-scripts', data),
+  update: (id: string, data: import('@/types').SavedScriptUpdate) =>
+    api.put<import('@/types').SavedScript>(`/saved-scripts/${id}`, data),
+  delete: (id: string) => api.delete(`/saved-scripts/${id}`),
 };
 
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)

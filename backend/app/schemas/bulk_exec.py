@@ -44,6 +44,9 @@ class BulkExecRequest(BaseModel):
 
     # ssh
     command: Optional[str] = None
+    # command 가 python 스크립트 본문일 때만 지정 — 서버가 원격 python3 인터프리터로
+    # 감싸 실행한다(services/script_wrap.py). 미지정/"bash" 는 기존과 동일하게 원본 그대로.
+    language: Optional[Literal["bash", "python"]] = None
 
     # scp
     scp_content: Optional[str] = None     # 업로드할 파일 내용

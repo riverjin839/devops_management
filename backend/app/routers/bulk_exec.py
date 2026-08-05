@@ -16,6 +16,7 @@ from app.schemas.bulk_exec import (
     NodeListResponse, NodeSummary,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.script_wrap import wrap_script_for_language
 from app.services.ssh_runner import SSHTarget, run_bulk
 from app.services import audit_logger
 
@@ -120,6 +121,7 @@ async def bulk_exec_run(
         details={
             "action": payload.action,
             "target_count": len(payload.targets or []),
+            "language": payload.language,
         },
         request=request,
     )
@@ -150,11 +152,15 @@ async def bulk_exec_run(
         for t in payload.targets
     ]
 
+    command = payload.command
+    if payload.action == "ssh" and payload.language == "python" and command:
+        command = wrap_script_for_language(command, "python")
+
     start = time.monotonic()
     results = await run_bulk(
         targets,
         action=payload.action,
-        command=payload.command,
+        command=command,
         scp_content=(payload.scp_content.encode("utf-8") if payload.scp_content is not None else None),
         scp_remote_path=payload.scp_remote_path,
         mode=payload.mode,
