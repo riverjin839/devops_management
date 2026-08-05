@@ -392,7 +392,8 @@ export function ClusterIconPicker({
   );
 }
 
-/** "빌더" 탭 — 업무명/운영타입/속성/지역 4개 가로 밴드 + k8s 워터마크를 조합해 SVG 아이콘 생성.
+/** "빌더" 탭 — 업무명/속성(+지역, 옵션) 가로 밴드 + k8s 워터마크를 조합해 SVG 아이콘 생성.
+ *  운영타입은 별도 밴드 없이 테두리/배경 색으로만 반영된다.
  *  클러스터의 name/region/operationLevel 로 자동 프리필되고 모든 값은 편집 가능. */
 function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply: (dataUrl: string) => void }) {
   const { data: levels } = useOperationLevels();
@@ -414,8 +415,9 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
   return (
     <div className="space-y-3 px-1">
       <p className="text-xs text-muted-foreground">
-        업무명 / 운영타입 / 속성 / 지역 4개 밴드를 위→아래로 쌓은 아이콘을 생성합니다.
-        사이드바 레일에서도 클러스터를 한눈에 구분할 수 있습니다.
+        업무명 / 속성(+지역, 선택 시) 밴드를 위→아래로 쌓은 아이콘을 생성합니다. 운영타입은
+        전용 밴드를 두지 않고 테두리·배경 색으로만 구분되며, 지역을 비우면 그 공간은
+        업무명/속성 밴드에 재할당됩니다. 사이드바 레일에서도 클러스터를 한눈에 구분할 수 있습니다.
       </p>
 
       {/* 미리보기 — 실제 크기(40px)와 확대(64px) 나란히 */}
@@ -430,9 +432,9 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         </div>
       </div>
 
-      {/* 4개 층 — 위→아래 순서 그대로 입력 */}
+      {/* 업무명 / 속성 — 아이콘에 실제로 표시되는 정보 */}
       <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">1층 · 업무명 (1~5자)</span>
+        <span className="text-muted-foreground">업무명 (1~5자)</span>
         <input
           type="text"
           value={workName}
@@ -443,21 +445,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       </label>
 
       <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">2층 · 운영타입 (환경 → 색상만 표시, 라벨 없음)</span>
-        <select
-          value={level}
-          onChange={(e) => setLevel(e.target.value)}
-          className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="">(미지정 — 회색)</option>
-          {(levels ?? []).map((l) => (
-            <option key={l.value} value={l.value}>{l.label}</option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">3층 · 속성 — 클러스터 기능 (예: Computing/Storage)</span>
+        <span className="text-muted-foreground">속성 — 클러스터 기능 (예: Computing/Storage)</span>
         <input
           type="text"
           value={attribute}
@@ -469,15 +457,30 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       </label>
 
       <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">4층 · 지역 약어</span>
+        <span className="text-muted-foreground">지역 약어 (선택 — 비우면 남는 공간을 업무명/속성에 재할당)</span>
         <input
           type="text"
           value={regionAbbr}
           onChange={(e) => setRegionAbbr(e.target.value.slice(0, 5))}
           maxLength={5}
-          placeholder="예: 이천"
+          placeholder="예: 이천 (선택)"
           className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
         />
+      </label>
+
+      {/* 운영타입 — 아이콘 내부에 전용 밴드를 두지 않고 테두리/배경 색으로만 반영 */}
+      <label className="flex flex-col gap-1 text-xs">
+        <span className="text-muted-foreground">운영타입 (색상만 반영 — 테두리·배경, 전용 밴드 없음)</span>
+        <select
+          value={level}
+          onChange={(e) => setLevel(e.target.value)}
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="">(미지정 — 회색)</option>
+          {(levels ?? []).map((l) => (
+            <option key={l.value} value={l.value}>{l.label}</option>
+          ))}
+        </select>
       </label>
 
       <div className="flex items-center gap-4 text-xs">

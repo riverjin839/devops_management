@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Save, Loader2, Layers, ChevronDown, Palette, X } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Layers, ChevronDown, Palette, X, Sparkles } from 'lucide-react';
 import type { OperationLevelItem } from '@/types';
 import {
   COLOR_OPTIONS,
@@ -10,8 +10,60 @@ import {
   useUpdateOperationLevels,
 } from '@/hooks/useOperationLevels';
 import { deriveToneSet, isValidHex } from '@/lib/colorTone';
+import { COLOR_PATTERNS } from '@/lib/colorPatterns';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+
+/** 큐레이션 배색 프리셋(Burnt Sienna 등)에서 커스텀 hex 를 고르는 팝오버. */
+function PatternColorPicker({ onPick }: { onPick: (hex: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="배색 패턴에서 선택"
+        aria-label="배색 패턴에서 선택"
+        className="flex items-center justify-center w-6 h-6 rounded border border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+      >
+        <Sparkles className="w-3 h-3" />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 left-0 w-64 p-2 bg-card border border-border rounded-lg shadow-lg space-y-2">
+          {COLOR_PATTERNS.map((pattern) => (
+            <div key={pattern.key}>
+              <p className="text-[10px] text-muted-foreground mb-1">{pattern.label}</p>
+              <div className="flex items-center gap-1">
+                {pattern.colors.map((hex) => (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => { onPick(hex); setOpen(false); }}
+                    title={hex}
+                    aria-label={`${pattern.label} ${hex}`}
+                    style={{ backgroundColor: hex }}
+                    className="w-5 h-5 rounded-full border border-border/60 hover:scale-110 transition-transform"
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EmojiPicker({
   value,
@@ -169,9 +221,11 @@ export function OperationLevelsManager() {
           <h2 className="font-semibold">운영레벨 관리</h2>
           <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
             클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
-            "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지에 즉시 반영됩니다. <strong>value</strong> 는 저장된
-            식별자(라벨이 비어 있으면 자동 생성), <strong>label</strong> 은 화면 표시 이름,
-            <strong> 이모지</strong>는 클러스터 카드 앞에 표시됩니다(자동 = 운영레벨 이름으로 추론).
+            "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지, 클러스터 아이콘 빌더의 테두리·배경 색에
+            즉시 반영됩니다. <strong>value</strong> 는 저장된 식별자(라벨이 비어 있으면 자동 생성),
+            <strong> label</strong> 은 화면 표시 이름, <strong>이모지</strong>는 클러스터 카드 앞에
+            표시됩니다(자동 = 운영레벨 이름으로 추론). <Sparkles className="w-3 h-3 inline -mt-0.5" /> 아이콘을
+            누르면 큐레이션 배색 패턴(Burnt Sienna 등)에서 커스텀 색을 바로 고를 수 있습니다.
           </p>
         </div>
       </div>
@@ -247,6 +301,7 @@ export function OperationLevelsManager() {
                         className="absolute inset-0 opacity-0 cursor-pointer"
                       />
                     </label>
+                    <PatternColorPicker onPick={(hex) => update(idx, { customHex: hex })} />
                     {isValidHex(l.customHex) && (
                       <>
                         <span className="text-[10px] font-mono text-muted-foreground">{l.customHex}</span>

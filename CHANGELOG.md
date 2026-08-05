@@ -10,6 +10,18 @@
 
 1.24.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **클러스터 아이콘 빌더 — 운영타입 전용 밴드 제거, 남는 공간 재할당**: 운영타입은 색상(테두리·
+  배경·밴드 명도)만으로 구분되고 텍스트 라벨이 없었는데도 아이콘 내부에 전용 밴드를 따로 차지하고
+  있었다. 이제 그 밴드를 없애고 확보한 공간을 업무명/속성 밴드에 재배분했으며(지역 밴드는 값이 있을
+  때만 추가), 글자 크기도 넓어진 밴드에 맞춰 커졌다. Frontend: `clusterIconBuilder.ts`
+  `buildClusterIconSvg()` 가 지역 유무에 따라 2~3개 밴드로 동적 구성, `ClusterIconPicker.tsx`
+  빌더 탭 라벨을 층수 표기 대신 항목명으로 정리.
+- **운영레벨 커스텀 색상 — 큐레이션 배색 패턴 프리셋 추가**: Settings ▸ 운영레벨 관리의 커스텀 색상
+  선택기에 Burnt Sienna/Tuscan Sunset/Electropop/Pop Art/Urban Graffiti 5가지 배색 패턴 팔레트를
+  추가해 어울리는 색 조합을 클릭 한 번으로 고를 수 있다. Frontend: `lib/colorPatterns.ts`
+  (`COLOR_PATTERNS`), `OperationLevelsManager.tsx` 에 `PatternColorPicker` 팝오버 추가.
+
 ## [1.24.1] - 2026-08-05
 
 ### Changed

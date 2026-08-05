@@ -1,27 +1,28 @@
-// 클러스터 아이콘 빌더 — 업무명 / 운영타입 / 속성 / 지역 4개 가로 밴드를 쌓아
-// SVG 아이콘을 생성한다. 결과는 data:image/svg+xml;base64 URL 로, 기존 Cluster.icon
-// 컬럼에 그대로 저장되고 resolveClusterIcon() 이 image 로 렌더한다 (백엔드 무변경).
+// 클러스터 아이콘 빌더 — 업무명 / 속성 (+ 지역, 옵션) 정보로 SVG 아이콘을 생성한다.
+// 결과는 data:image/svg+xml;base64 URL 로, 기존 Cluster.icon 컬럼에 그대로 저장되고
+// resolveClusterIcon() 이 image 로 렌더한다 (백엔드 무변경).
 //
-// 시각 구성 (64 viewBox, 위→아래 4개 밴드 각 16px):
-//   1층 — 업무명 (서비스 이니셜)
-//   2층 — 운영타입 — 4개 밴드 중 가장 진한 색으로만 표시(텍스트 라벨 없음). 아이콘 안
-//         정보량을 줄여 가독성을 높이기 위해 라벨은 빼고 색상 구분만 남긴다.
-//   3층 — 속성 (클러스터 기능 — 표준 이름 규칙의 3번째 세그먼트, 예: Computing/Storage)
-//   4층 — 지역 약어
-//   4개 밴드는 같은 색 계통(운영등급 색 토큰)의 서로 다른 명도로 통일감을 준다.
+// 시각 구성 (64 viewBox):
+//   운영타입은 색상으로만 구분되고(테두리 ring + 배경 bg + 밴드 명도 계통이 전부 운영레벨
+//   색 1개에서 파생), 그 자체로는 판독 가능한 텍스트 정보가 없다 — 그래서 아이콘 내부에
+//   운영타입 전용 밴드(2층)를 따로 할당하지 않는다. 확보된 공간은 실제로 값을 담는
+//   업무명 / 속성 밴드에 재배분하고, 지역은 입력이 있을 때만 세 번째 밴드로 추가한다.
+//     - 지역 있음: 업무명(26) / 속성(22) / 지역(16)
+//     - 지역 없음: 업무명(34) / 속성(30)
 //   ※ 우상단은 사이드바 레일의 status dot 오버레이 자리이므로 텍스트를 넣지 않는다.
 
 import { parseClusterName } from './clusterName';
 import { deriveToneSet, isValidHex } from './colorTone';
 
 export interface ClusterIconBuildOptions {
-  /** 1층(최상단) — 업무명 (1~5자 권장, 이상은 잘림) */
+  /** 업무명 (1~5자 권장, 이상은 잘림) — 상단 밴드 */
   workName: string;
-  /** 3층 — 속성 — 클러스터 기능 구분 (예: Computing/Storage) */
+  /** 속성 — 클러스터 기능 구분 (예: Computing/Storage) */
   attribute: string;
-  /** 4층(최하단) — 지역 약어 */
+  /** 지역 약어 — 옵션. 비우면 지역 밴드를 만들지 않고 남는 공간을 업무명/속성에 재할당한다. */
   regionAbbr: string;
-  /** 환경 색 토큰 — useOperationLevels 의 color 토큰과 동일 키 (red/amber/blue/…) */
+  /** 운영타입(환경) 색 토큰 — useOperationLevels 의 color 토큰과 동일 키 (red/amber/blue/…).
+   *  아이콘 안에는 전용 공간을 할당하지 않고 테두리(ring)/배경(bg)/밴드 명도로만 표시한다. */
   colorToken: string;
   /** 지정되면 colorToken 프리셋 대신 이 hex 를 시드로 톤을 자동 산출한다(운영레벨 customHex). */
   customHex?: string | null;
@@ -32,7 +33,7 @@ export interface ClusterIconBuildOptions {
 }
 
 /** 환경 색 토큰 → SVG HEX 팔레트. COLOR_BADGE(useOperationLevels)의 13색 토큰과 동일 키.
- *  bg=연한 배경(비클립 테두리 영역), ring=테두리, band=4개 밴드 색의 기준(가장 진한 색),
+ *  bg=연한 배경(비클립 테두리 영역), ring=테두리, band=밴드 색의 기준(가장 진한 색),
  *  text=밝은 배경 밴드의 글자색. */
 export const COLOR_HEX: Record<string, { bg: string; ring: string; band: string; text: string }> = {
   red:     { bg: '#fee2e2', ring: '#ef4444', band: '#dc2626', text: '#7f1d1d' },
@@ -69,8 +70,8 @@ function escapeXml(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
-/** hex 색 → target 색으로 ratio(0~1) 만큼 섞기. 0=원본, 1=target. 4개 밴드의 명도
- *  단계를 같은 계통 색에서 생성하는 데 쓴다. */
+/** hex 색 → target 색으로 ratio(0~1) 만큼 섞기. 0=원본, 1=target. 밴드별 명도 단계를
+ *  같은 계통 색에서 생성하는 데 쓴다. */
 function mixHex(hex: string, target: string, ratio: number): string {
   const h = hex.replace('#', '');
   const t = target.replace('#', '');
@@ -81,7 +82,7 @@ function mixHex(hex: string, target: string, ratio: number): string {
   return `#${toHex(mixCh(hr, tr))}${toHex(mixCh(hg, tg))}${toHex(mixCh(hb, tb))}`;
 }
 
-/** 서비스명 → 업무명(1층) 자동 제안. 영문 단어 첫 글자 대문자 조합(최대 3자), 한글이면 앞 2자.
+/** 서비스명 → 업무명 자동 제안. 영문 단어 첫 글자 대문자 조합(최대 3자), 한글이면 앞 2자.
  *  표준 이름 규칙([업무명]-[운영타입]-[속성])을 따르면 첫 세그먼트를 우선 사용한다. */
 export function suggestInitials(name: string | null | undefined): string {
   const n = (name ?? '').trim();
@@ -99,7 +100,7 @@ export function suggestInitials(name: string | null | undefined): string {
   return biz.slice(0, 3).toUpperCase();
 }
 
-/** 지역 → 4층(지역) 약어 자동 제안. 한글이면 앞 2자(이천/용인/청주/우시 그대로), 영문이면 대문자 3자. */
+/** 지역 → 지역 약어 자동 제안(옵션). 한글이면 앞 2자(이천/용인/청주/우시 그대로), 영문이면 대문자 3자. */
 export function suggestRegionAbbr(region: string | null | undefined): string {
   const r = (region ?? '').trim();
   if (!r) return '';
@@ -109,7 +110,7 @@ export function suggestRegionAbbr(region: string | null | undefined): string {
   return r.replace(/[\s\-_./]+/g, '').slice(0, 3).toUpperCase();
 }
 
-/** 클러스터 이름 → 3층(속성) 자동 제안. 표준 이름 규칙([업무명]-[운영타입]-[속성])의
+/** 클러스터 이름 → 속성 자동 제안. 표준 이름 규칙([업무명]-[운영타입]-[속성])의
  *  3번째 세그먼트(클러스터 기능 — 예: computing/storage)를 추출, 표준 형식이 아니면 빈 문자열. */
 export function suggestAttribute(name: string | null | undefined): string {
   const parsed = parseClusterName((name ?? '').trim());
@@ -134,50 +135,65 @@ function k8sWheel(cx: number, cy: number, r: number, color: string, opacity: num
   return `<g opacity="${opacity}">${spokes.join('')}<polygon points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2.4"/><circle cx="${cx}" cy="${cy}" r="${(r * 0.28).toFixed(1)}" fill="${color}"/></g>`;
 }
 
-/** 밴드 텍스트 폰트 크기 — 밴드 높이가 16px 로 좁으므로 기존보다 작은 범위에서 계산. */
-function bandFontSize(text: string): number {
+/** 밴드 텍스트 폰트 크기 — 밴드 높이(bandH)에 맞춰 글자를 최대한 키우되 넘치지 않게 캡. */
+function bandFontSize(text: string, bandH: number): number {
   const wide = hasWideChar(text);
   const len = Math.max(1, [...text].length);
-  if (wide) return len >= 3 ? 9 : 10;
-  return len >= 5 ? 8 : len >= 4 ? 9 : 10;
+  const base = wide ? (len >= 3 ? 12 : 14) : (len >= 5 ? 11 : len >= 4 ? 12 : 14);
+  return Math.min(base, Math.round(bandH * 0.6));
 }
 
-const BAND_H = 16; // 64 / 4개 밴드
+interface Band {
+  text: string;
+  fill: string;
+  dark: boolean;
+  h: number;
+}
 
-/** 옵션 조합으로 64×64 SVG 문자열 생성 — 업무명/운영타입/속성/지역 4개 가로 밴드. */
+/** 옵션 조합으로 64×64 SVG 문자열 생성 — 업무명/속성(+지역, 옵션) 밴드를 위→아래로 쌓는다.
+ *  운영타입은 밴드가 아니라 테두리(ring)/배경(bg)/밴드 명도로만 반영된다. */
 export function buildClusterIconSvg(opts: ClusterIconBuildOptions): string {
   const pal = paletteOf(opts.colorToken, opts.customHex);
   const watermark = opts.k8sWatermark !== false;
   const circle = opts.shape === 'circle';
+  const region = opts.regionAbbr.trim();
+  const hasRegion = region.length > 0;
 
-  const bands = [
-    { text: escapeXml(opts.workName.trim().slice(0, 5)),   fill: mixHex(pal.band, '#ffffff', 0.72), dark: false },
-    // 2층(운영타입)은 라벨 없이 색상만 — 운영 레벨 구분은 색으로 충분하다.
-    { text: '',                                            fill: mixHex(pal.band, '#ffffff', 0),    dark: true  },
-    { text: escapeXml(opts.attribute.trim().slice(0, 5)),  fill: mixHex(pal.band, '#ffffff', 0.30), dark: true  },
-    { text: escapeXml(opts.regionAbbr.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.52), dark: false },
-  ];
+  // 운영타입 전용 밴드를 없애고 확보한 공간을 업무명/속성(+지역)에 재배분한다.
+  const bands: Band[] = hasRegion
+    ? [
+        { text: escapeXml(opts.workName.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.70), dark: false, h: 26 },
+        { text: escapeXml(opts.attribute.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.28), dark: true, h: 22 },
+        { text: escapeXml(region.slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.50), dark: false, h: 16 },
+      ]
+    : [
+        { text: escapeXml(opts.workName.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.68), dark: false, h: 34 },
+        { text: escapeXml(opts.attribute.trim().slice(0, 5)), fill: mixHex(pal.band, '#ffffff', 0.26), dark: true, h: 30 },
+      ];
 
-  // 배경 — 클립 없이 그려 테두리 링(stroke)이 온전히 보이게 한다.
+  // 배경 — 클립 없이 그려 테두리 링(stroke)이 온전히 보이게 한다. 운영타입 색은 여기(ring/bg)
+  // 와 밴드 명도 계통에만 반영되고 별도 공간을 차지하지 않는다.
   const bgShape = circle
     ? `<circle cx="32" cy="32" r="30" fill="${pal.bg}" stroke="${pal.ring}" stroke-width="3"/>`
     : `<rect x="2" y="2" width="60" height="60" rx="14" fill="${pal.bg}" stroke="${pal.ring}" stroke-width="3"/>`;
 
-  // 4개 밴드 — 배경 모양 안쪽(테두리보다 살짝 안쪽)에 클립.
+  // 밴드 — 배경 모양 안쪽(테두리보다 살짝 안쪽)에 클립.
   const clipId = circle ? 'cibc' : 'cibs';
   const clipShape = circle
     ? `<circle cx="32" cy="32" r="28.5"/>`
     : `<rect x="3.5" y="3.5" width="57" height="57" rx="12.5"/>`;
 
-  const bandRects = bands.map((b, i) => {
-    const y = i * BAND_H;
+  let y = 0;
+  const bandRects = bands.map((b) => {
+    const top = y;
+    y += b.h;
     const textColor = b.dark ? '#ffffff' : pal.text;
     const label = b.text
-      ? `<text x="32" y="${y + BAND_H / 2}" text-anchor="middle" dominant-baseline="central" ` +
+      ? `<text x="32" y="${top + b.h / 2}" text-anchor="middle" dominant-baseline="central" ` +
         `font-family="system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" ` +
-        `font-size="${bandFontSize(b.text)}" font-weight="700" fill="${textColor}">${b.text}</text>`
+        `font-size="${bandFontSize(b.text, b.h)}" font-weight="700" fill="${textColor}">${b.text}</text>`
       : '';
-    return `<rect x="0" y="${y}" width="64" height="${BAND_H}" fill="${b.fill}"/>${label}`;
+    return `<rect x="0" y="${top}" width="64" height="${b.h}" fill="${b.fill}"/>${label}`;
   }).join('');
 
   const wheel = watermark ? k8sWheel(32, 32, 24, pal.ring, 0.12) : '';
