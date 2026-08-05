@@ -35,8 +35,30 @@ _CONNECTION_ERROR_HINTS = (
     "network is unreachable",
     "max retries exceeded",
     "connection error",
-    "ssl:",
     "softtimelimitexceeded",
+)
+
+# TLS/인증서 문제는 "연결 안 됨"과 증상(HTTPSConnectionPool ... Max retries exceeded)이
+# 겹쳐 보이지만 원인·조치가 다르다 — 연결 자체는 되는데 kubeconfig 의 CA 데이터가 서버
+# 인증서와 안 맞거나(클러스터 CA 로테이션 후 kubeconfig 미갱신 등) 만료된 경우라, 재시도로
+# 저절로 낫지 않는 지속적 설정 문제다. 예전엔 `_CONNECTION_ERROR_HINTS` 에 "ssl:" 하나로
+# 뭉뚱그려 pending(=곧 나아질 것) 으로 분류했는데, 그러면 운영자가 진짜 원인(kubeconfig
+# 갱신 필요)을 놓친다. kubectl 기반 배치잡의 `k8s_diagnose.classify_kubectl_failure` 와
+# 같은 패턴 매칭을 써서 critical + 구체적 안내 문구로 분리한다.
+_TLS_ERROR_HINTS = (
+    "certificate verify failed",
+    "certificate_verify_failed",
+    "certificate signed by unknown authority",
+    "certificate has expired",
+    "hostname mismatch",
+    "unable to get local issuer certificate",
+    "ssl:",
+    "x509",
+)
+_TLS_ERROR_HINT_MESSAGE = (
+    "TLS/인증서 확인 실패로 보입니다 — kubeconfig 의 certificate-authority-data 가 "
+    "실제 API 서버 인증서와 맞지 않거나(클러스터 CA 로테이션 후 미갱신 등) 만료됐을 수 "
+    "있습니다. /cluster-manage 에서 kubeconfig 를 최신 상태로 다시 등록하세요."
 )
 
 # K8s API 서버가 응답하지 않을 때(다운/네트워크 단절) 호출이 무한정 대기하다 Celery 의
@@ -276,15 +298,23 @@ class DeepCheckerBase(ABC):
             )
         except Exception as e:
             msg = str(e).lower()
-            status = (
-                StatusEnum.pending
-                if any(h in msg for h in _CONNECTION_ERROR_HINTS)
-                else StatusEnum.critical
-            )
+            # TLS/인증서 문제는 "연결 실패" 힌트와 문자열이 겹치는 경우가 많아(예:
+            # "Max retries exceeded ... Caused by SSLError(...)") 더 구체적인 TLS 패턴을
+            # 먼저 확인한다 — pending(곧 나아질 것)이 아니라 critical + 조치 안내로.
+            if any(h in msg for h in _TLS_ERROR_HINTS):
+                status = StatusEnum.critical
+                message = f"{self.display_name} 실패 — {_TLS_ERROR_HINT_MESSAGE} (원문: {str(e)[:200]})"
+            else:
+                status = (
+                    StatusEnum.pending
+                    if any(h in msg for h in _CONNECTION_ERROR_HINTS)
+                    else StatusEnum.critical
+                )
+                message = f"{self.display_name} 실패: {str(e)[:200]}"
             logger.warning("Deep check %s failed: %s", self.check_type, e)
             return DeepCheckOutcome(
                 status=status,
-                message=f"{self.display_name} 실패: {str(e)[:200]}",
+                message=message,
                 details={"error": str(e)[:1000]},
                 duration_ms=int((time.time() - start) * 1000),
                 steps=self._collected_steps(),

@@ -10,6 +10,18 @@
 
 1.25.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **Deep Check 실패가 TLS/인증서 문제일 때도 "곧 나아질 것"(pending)으로 잘못 분류되던
+  문제**: `HTTPSConnectionPool(...): Max retries exceeded` 는 순수 연결 불가(타임아웃 등)
+  뿐 아니라 `Caused by SSLError(...)`/`x509: ...` 처럼 TLS/인증서 검증 실패(클러스터 CA
+  로테이션 후 kubeconfig 미갱신, 인증서 만료 등)로도 나타난다 — 이건 재시도로 저절로
+  낫는 문제가 아니라 kubeconfig 를 다시 등록해야 하는 지속적 설정 오류인데, 기존
+  분류 힌트("ssl:" 하나)가 전자와 뭉뚱그려져 "pending" 으로 표시되며 운영자가 진짜
+  원인을 놓쳤다. TLS/인증서 관련 패턴(`certificate verify failed`/`x509`/
+  `certificate signed by unknown authority`/만료 등)을 먼저 확인해 **critical** +
+  "kubeconfig 를 최신 상태로 다시 등록하세요" 안내 메시지로 분리 분류하도록 수정
+  (kubectl 기반 배치잡의 `k8s_diagnose.classify_kubectl_failure` 와 같은 원칙).
+
 ## [1.25.0] - 2026-08-05
 
 ### Fixed
