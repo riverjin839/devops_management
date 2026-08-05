@@ -98,6 +98,14 @@ export function useUpdateIsilonCommand() {
   });
 }
 
+/** mc 클라이언트 패턴 — 등록된 명령 중 선택한 키만 온디맨드 실행(캐시 미사용). */
+export function useRunIsilonCommands() {
+  return useMutation({
+    mutationFn: ({ serverId, keys }: { serverId: string; keys: string[] }) =>
+      isilonNfsApi.runCommands(serverId, keys).then((r) => r.data),
+  });
+}
+
 export function useDeleteIsilonCommand() {
   const qc = useQueryClient();
   return useMutation({

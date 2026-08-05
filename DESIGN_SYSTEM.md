@@ -549,7 +549,15 @@ Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className
 "콘솔 패턴 반영해줘" 류 요청이 오면 아래 목록의 화면 전부에 일괄 적용한다.
 
 **적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc-client` · etcdctl `/etcdctl` ·
-Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
+Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 모니터링(Isilon) `/isilon-nfs`
+(+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
+
+> `/isilon-nfs` 는 명령 1건이 stdout/stderr 두 스트림이 아니라 단일 출력(+선택적 error)만 갖는
+> 조회 전용 isi 명령이라 2번(`ExecOutputTabs`)은 적용하지 않고 `LogViewer` 로 바로 렌더링한다.
+> 또한 좌측에 "타겟"이 아니라 서버 레일이 오고(§12.5 예외와 동일하게 서버 스코프), 중앙 컬럼이
+> mc 클라이언트의 인자 입력 대신 **등록된 명령 체크박스 다중 선택**(프리셋 전용, 자유 입력 없음)
+> 이다 — isi 명령은 항상 DB 등록·검증(읽기전용 allowlist)된 것만 실행 가능해 위험 명령 확인
+> (`ConfirmDialog` danger)도 필요 없다.
 
 1. **레이아웃 — 좌(컨트롤) / 우(결과) 한 로우 고정**: 10~12컬럼 grid(`grid grid-cols-1 lg:grid-cols-10 gap-4 items-start` 등)로
    컨트롤 카드(들)를 좌측(4~5), 결과/로그 카드를 우측(5~6)에 배치한다. 결과 카드는 **실행 전에도 같은 자리에

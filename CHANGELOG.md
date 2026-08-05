@@ -10,6 +10,17 @@
 
 1.24.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **NFS 모니터링(Isilon) — mc 클라이언트 콘솔 패턴 적용, 일괄 수집 → 선택 실행으로 전환**: 페이지
+  로드 시 등록된 isi 명령을 전부 자동 수집하던 방식을 없애고, mc 클라이언트처럼 등록된 명령 중
+  원하는 것만 체크박스로 골라(중복 선택 가능) "선택 실행" 하도록 바꿨다. 결과는 항상 우측 결과
+  패널(플레이스홀더 고정)에 표시되고 출력은 plain `<pre>` 대신 `LogViewer` 로 렌더링되며, 상태는
+  ok/error `StatusBadge` 로 통일했다. K8s PV ↔ Isilon export 매칭 테이블은 직전 실행 결과 기준으로
+  갱신된다. Backend: `POST /api/v1/isilon-nfs/servers/{id}/run`(선택 키만 캐시 없이 온디맨드 실행,
+  `isilon_service.run_selected_commands`) 신규 추가. Frontend: `IsilonNfsPage.tsx` 재구성,
+  `components/isilon/IsilonCommandSelector.tsx`(신규) + `useRunIsilonCommands` 훅,
+  `useTerminalEnvSync` 최상단 호출 추가.
+
 ## [1.24.2] - 2026-08-05
 
 ### Changed
