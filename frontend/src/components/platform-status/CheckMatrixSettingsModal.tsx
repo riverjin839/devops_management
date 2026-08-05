@@ -47,7 +47,12 @@ export function CheckMatrixSettingsModal({ isOpen, onClose }: Props) {
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 id={titleId} className="text-lg font-semibold">매트릭스 설정</h2>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            title="닫기"
+            aria-label="닫기"
+            className="p-1 hover:bg-secondary rounded-lg transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -121,7 +121,12 @@ export function CheckMatrixItemFormModal({ isOpen, onClose, editingItem }: Props
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
           <h2 id={titleId} className="text-lg font-semibold">{isEdit ? '점검 항목 수정' : '점검 항목 추가'}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            title="닫기"
+            aria-label="닫기"
+            className="p-1 hover:bg-secondary rounded-lg transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
