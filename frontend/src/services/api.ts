@@ -2108,13 +2108,14 @@ export const checkMatrixApi = {
     api.post<CheckMatrixBatchResult>(`/check-matrix/items/${itemId}/run`),
   listRuns: (params: {
     itemId?: string; clusterId?: string; batchId?: string;
-    trigger?: string; limit?: number; offset?: number;
+    trigger?: string; runState?: string; limit?: number; offset?: number;
   }) => api.get<CheckMatrixRunList>('/check-matrix/runs', {
     params: {
       item_id: params.itemId,
       cluster_id: params.clusterId,
       batch_id: params.batchId,
       trigger: params.trigger,
+      run_state: params.runState,
       limit: params.limit,
       offset: params.offset,
     },

@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import {
   Terminal, Globe, Server, Database, KeyRound, AlertTriangle, Info, Target, Pencil, Save, Plus, X,
 } from 'lucide-react';
-import { useToast } from '@/components/common';
+import { StatusBadge, useToast } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { useUpdateSourceConfig } from '@/hooks/useCheckMatrix';
 import { formatApiError } from '@/lib/utils';
+import { RunStateBadge } from './CheckMatrixRunBadges';
 import type {
   CheckMatrixRunbook, CheckMatrixRunbookCommand, CheckMatrixRunbookInput,
-  CheckMatrixSourceConfigEntry,
+  CheckMatrixRunDetail, CheckMatrixSourceConfigEntry,
 } from '@/types';
 
 interface Props {
@@ -16,6 +17,9 @@ interface Props {
   isLoading?: boolean;
   /** 지정하면 소스 설정 편집(연필)이 활성화된다 — 수행 로그의 과거 스냅샷에는 넘기지 않는다. */
   editTarget?: { itemId: string; clusterId: string };
+  /** 이 셀의 가장 최근 수행 — 있으면 계획(회색) 대신 실제 결과로 단계를 색칠하고 상단에 상태를 보여준다.
+   *  수행 로그의 과거 스냅샷 보기에는 넘기지 않는다(그 화면은 이미 자기 run 을 보여주고 있으므로). */
+  latestRun?: CheckMatrixRunDetail | null;
 }
 
 const KIND_META: Record<
@@ -264,7 +268,7 @@ function SourceConfigEditor({
  * 실행하지 않고 조립된 계획만 보여준다. 실제로 나간 명령은 실행 로그 탭의
  * "실행된 명령" 목록에서 종료 코드·출력과 함께 확인한다.
  */
-export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget }: Props) {
+export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latestRun }: Props) {
   const [editing, setEditing] = useState(false);
   if (isLoading) {
     return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획 불러오는 중…</div>;
@@ -273,6 +277,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget }: Prop
     return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획을 불러오지 못했습니다.</div>;
   }
   const canEdit = !!editTarget && runbook.configEditable;
+  const running = latestRun?.runState === 'queued' || latestRun?.runState === 'running';
 
   return (
     <div className="space-y-5">
@@ -297,7 +302,30 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget }: Prop
         )}
       </section>
 
-      {runbook.steps.length > 0 && <ExecutionStepsTimeline stepPlan={runbook.steps} />}
+      {/* 가장 최근 수행 상태 — 실행 중이면 잠시 후 자동으로 결과가 반영된다(폴링). */}
+      {latestRun && (
+        <section className="rounded-md border border-border bg-secondary/30 p-3 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-muted-foreground">최근 수행</span>
+            <RunStateBadge state={latestRun.runState} />
+            {latestRun.status && <StatusBadge variant={latestRun.status} size="sm" />}
+            {running && (
+              <span className="text-[11px] text-status-warning">
+                진행 중입니다 — 완료되면 아래 실행 단계가 자동으로 색칠됩니다.
+              </span>
+            )}
+          </div>
+          {(latestRun.message || latestRun.error) && (
+            <p className={`text-xs break-all ${latestRun.error ? 'text-status-critical' : 'text-foreground/90'}`}>
+              {latestRun.error || latestRun.message}
+            </p>
+          )}
+        </section>
+      )}
+
+      {runbook.steps.length > 0 && (
+        <ExecutionStepsTimeline stepPlan={runbook.steps} steps={running ? undefined : latestRun?.steps} />
+      )}
 
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">

@@ -495,6 +495,7 @@ pre .text-\[9px\], pre .text-\[10px\], code .text-\[9px\], code .text-\[10px\] {
 .bg-status-warning-soft  { background-color: hsl(var(--status-warning-bg)); }
 .bg-status-critical-soft { background-color: hsl(var(--status-critical-bg)); }
 .bg-status-unknown-soft  { background-color: hsl(var(--status-unknown-bg)); }
+.bg-status-info-soft     { background-color: hsl(var(--status-info-bg)); }
 
 /* ── Focus ring — 키보드 접근성 (마우스 클릭 시는 안 보이게) ────────────── */
 *:focus { outline: none; }

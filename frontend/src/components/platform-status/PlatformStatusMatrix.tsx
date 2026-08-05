@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
   Play, ScrollText, Loader2,
@@ -7,7 +7,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton } from '@/components/common';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
-  useRunCheckMatrixCluster, useRunCheckMatrixItem,
+  useRunCheckMatrixCluster, useRunCheckMatrixItem, useCheckMatrixActiveRuns,
 } from '@/hooks/useCheckMatrix';
 import type { CheckMatrixCell, CheckMatrixItem, CheckMatrixGridCluster, Status } from '@/types';
 import { formatApiError } from '@/lib/utils';
@@ -67,7 +67,27 @@ function CellButton({
   );
 }
 
-function ClusterCronBadge({ cluster }: { cluster: CheckMatrixGridCluster }) {
+type CronTone = 'off' | 'running' | 'healthy' | 'warning' | 'critical';
+
+// 색만으로 실행중/중지중/정상/비정상을 구분할 수 있게 — 토큰만 사용(고정 hex 금지).
+const CRON_TONE_CLS: Record<CronTone, string> = {
+  off: 'text-muted-foreground border-border/60',
+  running: 'text-status-info border-status-info/50 bg-status-info-soft animate-pulse',
+  healthy: 'text-status-healthy border-status-healthy/50 bg-status-healthy-soft',
+  warning: 'text-status-warning border-status-warning/50 bg-status-warning-soft',
+  critical: 'text-status-critical border-status-critical/50 bg-status-critical-soft',
+};
+const CRON_TONE_HINT: Record<CronTone, string> = {
+  off: '중지 — cron 미설정(수동 실행만 가능)',
+  running: '실행 중 — 지금 이 클러스터의 점검이 돌고 있습니다.',
+  healthy: '정상 — 핵심 점검이 최근 정상 완료됐습니다.',
+  warning: '경고 — 핵심 점검 결과가 주의가 필요합니다.',
+  critical: '위험 — 핵심 점검 결과가 비정상입니다.',
+};
+
+function ClusterCronBadge({
+  cluster, isRunning, coreHealth,
+}: { cluster: CheckMatrixGridCluster; isRunning: boolean; coreHealth: Status | null }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(cluster.checkCronExpr ?? '');
@@ -83,11 +103,18 @@ function ClusterCronBadge({ cluster }: { cluster: CheckMatrixGridCluster }) {
     }
   };
 
+  const tone: CronTone = !cluster.checkCronExpr
+    ? 'off'
+    : isRunning
+      ? 'running'
+      : coreHealth === 'critical' ? 'critical' : coreHealth === 'warning' ? 'warning' : 'healthy';
+
   return (
     <div className="relative inline-block">
       <button
         onClick={() => { setValue(cluster.checkCronExpr ?? ''); setOpen((v) => !v); }}
-        className="inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors px-1.5 py-0.5 rounded border border-border/60 hover:border-primary/50"
+        title={`${cluster.checkCronExpr || '미설정'} — ${CRON_TONE_HINT[tone]}`}
+        className={`inline-flex items-center gap-1 text-[10px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 ${CRON_TONE_CLS[tone]}`}
       >
         <Clock className="w-2.5 h-2.5" />
         {cluster.checkCronExpr || '미설정'}
@@ -149,6 +176,15 @@ export function PlatformStatusMatrix() {
   const items = grid?.items ?? [];
   const clusters = grid?.clusters ?? [];
 
+  // 클러스터 cron 배지 색상 — "실행중" 판정은 전역 활성 수행(대기열+실행중) 한 번의 가벼운
+  // 폴링으로 공유하고, "정상/경고/위험"은 핵심 점검(core_bundle) 행의 최근 셀 상태로 판정한다.
+  const { data: activeRuns } = useCheckMatrixActiveRuns(clusters.length > 0);
+  const runningClusterIds = useMemo(
+    () => new Set((activeRuns?.runs ?? []).map((r) => r.clusterId)),
+    [activeRuns],
+  );
+  const coreBundleItem = items.find((i) => i.sourceType === 'core_bundle');
+
   const handleRunCluster = async (cluster: CheckMatrixGridCluster) => {
     setRunningKey(`cluster:${cluster.id}`);
     try {
@@ -202,9 +238,9 @@ export function PlatformStatusMatrix() {
   };
 
   return (
-    <div className="flex flex-col gap-2 min-h-0">
-      <MacCard bodyPadding="p-0" rootClassName="min-h-0">
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
+    <div className="flex flex-col gap-2 min-h-0 flex-1">
+      <MacCard bodyPadding="p-0" rootClassName="min-h-0 flex-1 flex flex-col" className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
             플랫폼 현황
           </span>
@@ -245,7 +281,7 @@ export function PlatformStatusMatrix() {
 
         {isLoading ? (
           // 실제 매트릭스 구조(항목 라벨 열 + 클러스터 셀 그리드)를 흉내낸 skeleton — 로드 전환 시 시프트 최소화
-          <div className="p-3 space-y-2" aria-busy="true" aria-label="점검 매트릭스 불러오는 중">
+          <div className="flex-1 min-h-0 overflow-auto p-3 space-y-2" aria-busy="true" aria-label="점검 매트릭스 불러오는 중">
             {Array.from({ length: 6 }).map((_, r) => (
               <div key={r} className="flex items-center gap-3">
                 <Skeleton height={14} width="20%" className="flex-shrink-0" />
@@ -258,11 +294,11 @@ export function PlatformStatusMatrix() {
             ))}
           </div>
         ) : items.length === 0 || clusters.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
+          <div className="flex-1 min-h-0 flex items-center justify-center text-center text-sm text-muted-foreground">
             {clusters.length === 0 ? '등록된 클러스터가 없습니다.' : '점검 항목이 없습니다 — 우측 상단에서 추가하세요.'}
           </div>
         ) : (
-          <div className="overflow-auto max-h-[520px]">
+          <div className="flex-1 min-h-0 overflow-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="sticky top-0 z-20 bg-card">
@@ -286,7 +322,13 @@ export function PlatformStatusMatrix() {
                               : <Play className="w-3.5 h-3.5" />}
                           </button>
                         </div>
-                        <ClusterCronBadge cluster={cluster} />
+                        <ClusterCronBadge
+                          cluster={cluster}
+                          isRunning={runningClusterIds.has(cluster.id)}
+                          coreHealth={
+                            coreBundleItem ? (grid?.cells[coreBundleItem.id]?.[cluster.id]?.status ?? null) : null
+                          }
+                        />
                       </div>
                     </th>
                   ))}
