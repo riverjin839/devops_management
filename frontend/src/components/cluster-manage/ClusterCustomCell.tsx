@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pencil } from 'lucide-react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateClusterCustomValues } from '@/hooks/useClusterCustomFields';
 import { useToast } from '@/components/common';
@@ -7,6 +8,8 @@ import { formatApiError } from '@/lib/utils';
 interface Props {
   cluster: Cluster;
   field: ClusterCustomField;
+  /** viewer 역할은 조회만 — 편집 진입점을 노출하지 않는다 */
+  canEdit?: boolean;
 }
 
 function boolLabel(v: unknown): string {
@@ -15,7 +18,7 @@ function boolLabel(v: unknown): string {
   return '·';
 }
 
-export function ClusterCustomCell({ cluster, field }: Props) {
+export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
   const mut = useUpdateClusterCustomValues();
   const toast = useToast();
   const current = cluster.customValues?.[field.key];
@@ -93,6 +96,20 @@ export function ClusterCustomCell({ cluster, field }: Props) {
 
   // 읽기 모드
   if (field.dataType === 'checkbox') {
+    if (!canEdit) {
+      return (
+        <span
+          className={`font-mono text-sm px-1 ${
+            current === true ? 'text-status-healthy font-bold'
+            : current === false ? 'text-muted-foreground/60'
+            : 'text-muted-foreground/30'
+          }`}
+          title={field.label}
+        >
+          {boolLabel(current)}
+        </span>
+      );
+    }
     return (
       <button
         type="button"
@@ -117,13 +134,32 @@ export function ClusterCustomCell({ cluster, field }: Props) {
     ? null
     : String(current);
 
+  if (!canEdit) {
+    return (
+      <span className="text-sm px-0.5 block min-h-[1.2em] truncate" title={field.label}>
+        {text ?? <span className="text-muted-foreground/40">-</span>}
+      </span>
+    );
+  }
+
   return (
-    <span
-      onDoubleClick={beginEdit}
-      className="cursor-text hover:bg-primary/5 rounded px-0.5 text-sm block min-h-[1.2em]"
-      title={`더블클릭으로 편집 — ${field.label}`}
-    >
-      {text ?? <span className="text-muted-foreground/40">-</span>}
+    <span className="group relative flex items-center gap-1 min-h-[1.2em]">
+      <span
+        onDoubleClick={beginEdit}
+        className="cursor-text hover:bg-primary/5 rounded px-0.5 text-sm flex-1 min-w-0 truncate"
+        title={`더블클릭 또는 편집 버튼으로 수정 — ${field.label}`}
+      >
+        {text ?? <span className="text-muted-foreground/40">-</span>}
+      </span>
+      <button
+        type="button"
+        onClick={beginEdit}
+        className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-primary text-muted-foreground hover:text-primary hover:bg-secondary/80 transition-opacity"
+        title={`${field.label} 편집`}
+        aria-label={`${field.label} 편집`}
+      >
+        <Pencil className="w-3 h-3" />
+      </button>
     </span>
   );
 }

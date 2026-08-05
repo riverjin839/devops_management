@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable } from 'lucide-react';
+import { MacCard } from '@/components/ui/MacCard';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
 import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
@@ -23,9 +24,11 @@ interface ClusterCardProps {
   autoUpdating: boolean;
   /** SSH 기반 NIC 수집(bond0/bond1 채움) 모달 열기 */
   onCollectNics?: (c: Cluster) => void;
+  /** viewer 역할은 조회만 — 수집/수정/삭제 진입점을 노출하지 않는다 */
+  canEdit?: boolean;
 }
 
-export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdating, onCollectNics }: ClusterCardProps) {
+export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdating, onCollectNics, canEdit = true }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
@@ -60,7 +63,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
   const hasNetworkData = !!(cluster.cidr || cluster.podCidr || cluster.svcCidr || cluster.nodeIps);
 
   return (
-    <div className={`bg-card border border-border border-l-4 ${st.border} rounded-md flex flex-col mac-shadow`}>
+    <MacCard rootClassName={`border-l-4 ${st.border} mac-shadow`} bodyPadding="p-0" className="flex flex-col h-full">
       {/* 카드 헤더 */}
       <div className="px-4 pt-4 pb-3 border-b border-border/50">
         <div className="flex items-start justify-between gap-2">
@@ -96,38 +99,40 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => onAutoUpdate(cluster)}
-              className={`p-1.5 rounded-md transition-colors ${
-                autoUpdating
-                  ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
-                  : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
-              }`}
-              title={autoUpdating ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}
-              aria-label={autoUpdating ? `${cluster.name} 수집 중지` : `${cluster.name} 정보 수집`}>
-              {autoUpdating
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <RefreshCw className="w-3.5 h-3.5" />}
-            </button>
-            {onCollectNics && (
-              <button onClick={() => onCollectNics(cluster)}
-                className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary"
-                title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움"
-                aria-label={`${cluster.name} NIC 수집`}>
-                <Cable className="w-3.5 h-3.5" />
+          {canEdit && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button onClick={() => onAutoUpdate(cluster)}
+                className={`p-1.5 rounded-md transition-colors ${
+                  autoUpdating
+                    ? 'bg-status-critical/10 text-status-critical hover:bg-status-critical/20'
+                    : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                }`}
+                title={autoUpdating ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}
+                aria-label={autoUpdating ? `${cluster.name} 수집 중지` : `${cluster.name} 정보 수집`}>
+                {autoUpdating
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <RefreshCw className="w-3.5 h-3.5" />}
               </button>
-            )}
-            <button onClick={() => onEdit(cluster)}
-              className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
-              title="수정" aria-label={`${cluster.name} 수정`}>
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id}
-              className="p-1.5 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical disabled:opacity-40"
-              title="삭제" aria-label={`${cluster.name} 삭제`}>
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+              {onCollectNics && (
+                <button onClick={() => onCollectNics(cluster)}
+                  className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary"
+                  title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움"
+                  aria-label={`${cluster.name} NIC 수집`}>
+                  <Cable className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button onClick={() => onEdit(cluster)}
+                className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                title="수정" aria-label={`${cluster.name} 수정`}>
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => onDelete(cluster)} disabled={deletingId === cluster.id}
+                className="p-1.5 hover:bg-status-critical/10 rounded-md transition-colors text-muted-foreground hover:text-status-critical disabled:opacity-40"
+                title="삭제" aria-label={`${cluster.name} 삭제`}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
         <p className="text-xs font-mono text-muted-foreground/60 mt-1.5 truncate" title={cluster.apiEndpoint}>
           {cluster.apiEndpoint}
@@ -234,7 +239,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
           <p className="text-xs text-muted-foreground/70 line-clamp-2">{cluster.description}</p>
         </div>
       )}
-    </div>
+    </MacCard>
   );
 }
 

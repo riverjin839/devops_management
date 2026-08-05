@@ -10,6 +10,7 @@ import {
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { useAuthStore, hasRole } from '@/stores/authStore';
 import { clustersApi } from '@/services/api';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -65,8 +66,9 @@ const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy:
 function SortableClusterCard(
   { sortEnabled, ...props }: Parameters<typeof ClusterCard>[0] & { sortEnabled: boolean },
 ) {
+  const canDrag = sortEnabled && (props.canEdit ?? true);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: props.cluster.id, disabled: !sortEnabled });
+    useSortable({ id: props.cluster.id, disabled: !canDrag });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -74,10 +76,10 @@ function SortableClusterCard(
   };
   return (
     <div ref={setNodeRef} style={style} className="relative group/card">
-      {sortEnabled && (
+      {canDrag && (
         <button
           {...attributes} {...listeners}
-          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
           title="드래그하여 순서 변경 (정렬: 수동 모드)"
           aria-label="순서 변경 핸들"
         >
@@ -93,6 +95,10 @@ function SortableClusterCard(
 export function ClusterManagePage() {
   const navigate = useNavigate();
   const { clusters } = useClusterStore();
+  // 서버(require_operator)는 이미 막지만, 프론트도 viewer 에게 변경성 버튼을 숨겨
+  // "눌러보고서야 403 으로 안다"를 없앤다.
+  const authUser = useAuthStore((s) => s.user);
+  const canEdit = hasRole(authUser, 'admin', 'operator');
   // 로딩/조회실패를 "등록된 클러스터가 없습니다" 로 위장하지 않도록 쿼리 상태를 사용한다 (D-043).
   const { isLoading: clustersLoading, isError: clustersError, error: clustersLoadError, refetch: refetchClusters } = useClusters();
   const queryClient = useQueryClient();
@@ -302,8 +308,10 @@ export function ClusterManagePage() {
     }
   };
 
-  const cidrOverlapGroups = useMemo(() => {
-    if (clusters.length < 2) return new Map<string, number>();
+  const { cidrOverlapGroups, overlapPeerNames } = useMemo(() => {
+    if (clusters.length < 2) {
+      return { cidrOverlapGroups: new Map<string, number>(), overlapPeerNames: new Map<string, string[]>() };
+    }
     const adj = new Map<string, string[]>();
     for (const c of clusters) adj.set(c.id, []);
     const keys: (keyof Cluster)[] = ['cidr', 'podCidr', 'svcCidr'];
@@ -337,7 +345,15 @@ export function ClusterManagePage() {
       }
       gIdx++;
     }
-    return groupMap;
+    // CIDR 겹침 배지 툴팁용 — 그룹 전체가 아니라 실제 직접 겹치는 상대만 나열해야
+    // "A-B, B-C 겹침, A-C 는 안 겹침"인 경우 A에게 C를 잘못 지목하지 않는다.
+    const nameById = new Map(clusters.map((c) => [c.id, c.name]));
+    const overlapPeerNames = new Map<string, string[]>();
+    for (const [id, neighborIds] of adj) {
+      if (neighborIds.length === 0) continue;
+      overlapPeerNames.set(id, neighborIds.map((nid) => nameById.get(nid) ?? nid));
+    }
+    return { cidrOverlapGroups: groupMap, overlapPeerNames };
   }, [clusters]);
 
   const overlapCount = cidrOverlapGroups.size;
@@ -514,38 +530,44 @@ export function ClusterManagePage() {
               onChange={(v) => setViewMode(v as 'table' | 'card')}
               showStylePanel={false}
             />
-            <button
-              onClick={() => setStandardizeOpen(true)}
-              disabled={clusters.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
-              title="기존 클러스터 이름을 [업무명]-[운영타입]-[속성] 표준으로 정리"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              이름 표준화
-            </button>
-            <button
-              onClick={() => setCustomFieldsOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-              title="테이블에 커스텀 컬럼 추가/수정/삭제"
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              컬럼 관리 {customFields.length > 0 && <span className="text-primary">({customFields.length})</span>}
-            </button>
-            <button
-              onClick={handleBulkCollectNodeIps}
-              disabled={!bulkCollecting && clusters.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-lg text-primary transition-colors disabled:opacity-50"
-              title={bulkCollecting
-                ? '클릭하면 다음 클러스터로 넘어가기 전에 수집을 중단합니다'
-                : 'nodeIps 가 비어있는 모든 클러스터에 대해 auto-update 호출 (실행 전 대상·범위 확인)'}
-            >
-              {bulkCollecting
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <Network className="w-3.5 h-3.5" />}
-              {bulkCollecting
-                ? `수집중 ${bulkProgress?.done ?? 0}/${bulkProgress?.total ?? 0} — 중단`
-                : '노드 IP 일괄 수집'}
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setStandardizeOpen(true)}
+                disabled={clusters.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+                title="기존 클러스터 이름을 [업무명]-[운영타입]-[속성] 표준으로 정리"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                이름 표준화
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setCustomFieldsOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+                title="테이블에 커스텀 컬럼 추가/수정/삭제"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                컬럼 관리 {customFields.length > 0 && <span className="text-primary">({customFields.length})</span>}
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={handleBulkCollectNodeIps}
+                disabled={!bulkCollecting && clusters.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-lg text-primary transition-colors disabled:opacity-50"
+                title={bulkCollecting
+                  ? '클릭하면 다음 클러스터로 넘어가기 전에 수집을 중단합니다'
+                  : 'nodeIps 가 비어있는 모든 클러스터에 대해 auto-update 호출 (실행 전 대상·범위 확인)'}
+              >
+                {bulkCollecting
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Network className="w-3.5 h-3.5" />}
+                {bulkCollecting
+                  ? `수집중 ${bulkProgress?.done ?? 0}/${bulkProgress?.total ?? 0} — 중단`
+                  : '노드 IP 일괄 수집'}
+              </button>
+            )}
             <button
               onClick={colW.reset}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
@@ -725,6 +747,7 @@ export function ClusterManagePage() {
                             onDelete={handleDelete}
                             deletingId={deletingId}
                             overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                            overlapPeers={overlapPeerNames.get(cluster.id)}
                             onCilium={c => setCiliumCluster(c)}
                             onAutoUpdate={handleAutoUpdate}
                             autoUpdating={autoUpdatingIds.has(cluster.id)}
@@ -733,6 +756,7 @@ export function ClusterManagePage() {
                             collectingNodeIpsId={collectingNodeIpsId}
                             onCollectNics={(c) => setNicsClusterId(c.id)}
                             sortable={sortEnabled}
+                            canEdit={canEdit}
                           />
                         ))}
                       </SortableContext>
@@ -774,6 +798,7 @@ export function ClusterManagePage() {
                           autoUpdating={autoUpdatingIds.has(cluster.id)}
                           onCollectNics={(c) => setNicsClusterId(c.id)}
                           sortEnabled={sortEnabled}
+                          canEdit={canEdit}
                         />
                       ))}
                     </div>

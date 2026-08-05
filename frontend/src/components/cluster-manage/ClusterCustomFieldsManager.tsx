@@ -3,7 +3,7 @@ import { X, Plus, Trash2, Save, Loader2, GripVertical, Settings2 } from 'lucide-
 import type {
   ClusterCustomField, ClusterCustomFieldType, ClusterCustomFieldCreate,
 } from '@/types';
-import { useToast } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 import {
@@ -56,6 +56,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
   });
   const [optionsText, setOptionsText] = useState('');   // "AA, BB, CC"
   const [err, setErr] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ClusterCustomField | null>(null);
 
   // label 변경 시 key 미입력이면 자동 생성
   const [keyTouched, setKeyTouched] = useState(false);
@@ -98,13 +99,15 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
     }
   };
 
-  const deleteField = async (f: ClusterCustomField) => {
-    if (!confirm(`커스텀 컬럼 "${f.label}" 을(를) 삭제하면 저장된 값도 모든 클러스터에서 사라집니다. 계속할까요?`)) return;
+  const confirmDeleteField = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteMut.mutateAsync(f.id);
-      toast.success('커스텀 컬럼 삭제됨', f.label);
+      await deleteMut.mutateAsync(deleteTarget.id);
+      toast.success('커스텀 컬럼 삭제됨', deleteTarget.label);
     } catch (e: unknown) {
       toast.error('삭제 실패', formatApiError(e));
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -131,7 +134,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <Settings2 className="w-5 h-5 text-primary" />
           <h2 id={titleId} className="text-sm font-semibold">클러스터 커스텀 컬럼 관리</h2>
-          <button onClick={onClose}
+          <button onClick={onClose} title="닫기" aria-label="닫기"
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
@@ -215,7 +218,8 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                       ) : <span className="text-muted-foreground/60">-</span>}
                     </td>
                     <td className="px-2 py-1.5 text-right">
-                      <button onClick={() => deleteField(f)}
+                      <button onClick={() => setDeleteTarget(f)}
+                        title={`${f.label} 컬럼 삭제`} aria-label={`${f.label} 컬럼 삭제`}
                         className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -307,6 +311,17 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
           </button>
         </div>
       </div>
+      {deleteTarget && (
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="커스텀 컬럼 삭제"
+          description={`"${deleteTarget.label}" 컬럼을 삭제하면 저장된 값도 모든 클러스터에서 함께 사라집니다. 계속할까요?`}
+          danger
+          confirmLabel="삭제"
+          onConfirm={confirmDeleteField}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

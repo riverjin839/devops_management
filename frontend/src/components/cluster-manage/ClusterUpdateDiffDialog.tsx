@@ -92,7 +92,7 @@ export function ClusterUpdateDiffDialog({
                 : '변경된 필드가 없습니다.'}
             </p>
           </div>
-          <button onClick={onCancel} disabled={applying}
+          <button onClick={onCancel} disabled={applying} title="닫기" aria-label="닫기"
             className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>

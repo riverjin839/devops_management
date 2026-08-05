@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { X, Wand2, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { clustersApi } from '@/services/api';
-import { useToast } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { formatApiError } from '@/lib/utils';
 import { CLUSTER_NAME_OPS as OPS, parseClusterName } from '@/lib/clusterName';
@@ -29,6 +29,9 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
   const [edits, setEdits] = useState<Record<string, Parts>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
+  // 연결된 업무 표시 이름까지 동기화되는 파급 효과가 있는 변경이라 각주 고지만으로
+  // 즉시 적용하지 않고 확인을 받는다.
+  const [confirmTarget, setConfirmTarget] = useState<{ cluster: Cluster; next: string } | null>(null);
   const titleId = useId();
   const dialogRef = useModalA11y(open, onClose);
 
@@ -53,9 +56,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
   const setPart = (id: string, k: keyof Parts, v: string) =>
     setEdits((e) => ({ ...e, [id]: { ...(e[id] ?? { biz: '', ops: '', attr: '' }), [k]: v } }));
 
-  const apply = async (c: Cluster) => {
-    const next = compose(edits[c.id] ?? parseName(c.name));
-    if (!next || next === c.name) return;
+  const apply = async (c: Cluster, next: string) => {
     setBusyId(c.id);
     try {
       await clustersApi.update(c.id, { name: next });
@@ -67,6 +68,13 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
     } finally {
       setBusyId(null);
     }
+  };
+
+  const confirmApply = async () => {
+    if (!confirmTarget) return;
+    const { cluster, next } = confirmTarget;
+    setConfirmTarget(null);
+    await apply(cluster, next);
   };
 
   const inputCls = 'min-w-0 px-2 py-1.5 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:border-primary/50';
@@ -129,7 +137,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
                   />
                   <button
                     type="button"
-                    onClick={() => apply(c)}
+                    onClick={() => setConfirmTarget({ cluster: c, next })}
                     disabled={!changed || busyId === c.id}
                     className="flex-shrink-0 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
                   >
@@ -148,6 +156,20 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
           </button>
         </div>
       </div>
+      {confirmTarget && (
+        <ConfirmDialog
+          open={!!confirmTarget}
+          title="클러스터 이름 변경"
+          description={`"${confirmTarget.cluster.name}" → "${confirmTarget.next}"`}
+          confirmLabel="변경"
+          onConfirm={confirmApply}
+          onCancel={() => setConfirmTarget(null)}
+        >
+          <p className="text-muted-foreground">
+            연결된 업무의 표시 이름도 함께 동기화됩니다.
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
