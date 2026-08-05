@@ -121,22 +121,79 @@ def _get_config(db: Session) -> dict:
     return value
 
 
-def _build_assignee_resolver(db: Session):
-    """Jira displayName → PEP 담당자 이름. 레지스트리(name) 와 대소문자 무시 매칭, 실패 시 원본."""
+def _build_assignee_resolver(db: Session, *, self_name: Optional[str] = None):
+    """Jira 담당자(assignee 필드 dict) → PEP 담당자 이름 해석기.
+
+    매칭 우선순위:
+      1. `self_name` — 호출부가 "이 검색은 로그인 사용자 자신"(scope=me,
+         `assignee = currentUser()`)임을 이미 알 때 넘긴다. Jira 쪽 표시명이 어떻게
+         생겼든(회사명 접미사 등) 신원이 이미 확정돼 있으므로 문자열 매칭을 아예
+         건너뛰고 그대로 쓴다.
+      2. Jira `emailAddress` ↔ 담당자 레지스트리 `email` — 이름은 동명이인이 있을 수
+         있지만 이메일은 고유하므로, Jira 가 이메일을 노출하는 인스턴스에서는 표시명
+         표기와 무관하게 안전하게 매칭된다.
+      3. displayName 전체 문자열 정확 매칭(대소문자 무시) — 회사명이 안 붙는 인스턴스 호환.
+      4. 첫 토큰(공백 앞부분) 매칭 — Jira 표시명이 "이름 회사명" 형태인 가장 흔한 케이스
+         (Excel 가져오기 `_match_excel_assignee` 와 동일 전략).
+      5. 전부 실패하면 Jira 원본 표시명 그대로.
+    """
     try:
         row = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
         registry = row.value if row and isinstance(row.value, list) else []
     except Exception:  # noqa: BLE001
         registry = []
-    by_lower = {}
+    by_lower: dict[str, str] = {}
+    by_email: dict[str, str] = {}
     for a in registry:
-        if isinstance(a, dict) and a.get("name"):
-            by_lower[str(a["name"]).strip().lower()] = str(a["name"]).strip()
+        if not isinstance(a, dict):
+            continue
+        name = str(a.get("name") or "").strip()
+        if not name:
+            continue
+        by_lower[name.lower()] = name
+        email = str(a.get("email") or "").strip().lower()
+        if email:
+            by_email[email] = name
 
-    def _resolve(jira_name: str) -> str:
-        return by_lower.get(jira_name.strip().lower(), jira_name.strip())
+    def _resolve(assignee_obj: dict) -> str:
+        if self_name:
+            return self_name
+        jira_name = str(assignee_obj.get("displayName") or assignee_obj.get("name") or "").strip()
+        email = str(assignee_obj.get("emailAddress") or "").strip().lower()
+        if email and email in by_email:
+            return by_email[email]
+        if not jira_name:
+            return jira_name
+        if jira_name.lower() in by_lower:
+            return by_lower[jira_name.lower()]
+        first_token = jira_name.split()[0]
+        return by_lower.get(first_token.lower(), jira_name)
 
     return _resolve
+
+
+def _resolve_self_assignee_name(actor: User, db: Session) -> str:
+    """로그인 사용자 자신의 PEP 담당자 표시 이름 — 담당자 레지스트리에서 사번(employeeId)
+    으로 역참조한다(고유 식별자 기준 — `_resolve_owner_identities` 와 동일한 사번↔이름
+    브리지). scope='me' Jira 가져오기는 JQL(`assignee = currentUser()`) 로 대상이 로그인
+    사용자 자신임이 이미 확정되므로, Jira 쪽 표시명 표기(회사명 접미사 등)와 무관하게
+    이 이름을 그대로 쓴다. 레지스트리에 없으면 로그인 표시 이름 → username 순으로 폴백."""
+    username = (actor.username or "").strip()
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
+        registry = row.value if row and isinstance(row.value, list) else []
+    except Exception:  # noqa: BLE001
+        registry = []
+    if username:
+        for a in registry:
+            if not isinstance(a, dict):
+                continue
+            emp = str(a.get("employeeId") or a.get("employee_id") or "").strip()
+            if emp and emp == username:
+                name = str(a.get("name") or "").strip()
+                if name:
+                    return name
+    return (actor.display_name or "").strip() or username
 
 
 def _build_assignee_roster(db: Session) -> dict[str, str]:
@@ -1915,7 +1972,9 @@ async def import_issues(
             applied_jql=jql,
         )
 
-    resolver = _build_assignee_resolver(db)
+    resolver = _build_assignee_resolver(
+        db, self_name=_resolve_self_assignee_name(actor, db) if payload.scope == "me" else None,
+    )
     confluence_base = (cfg.get("confluence_base_url") or "").strip()
     issues = search.get("issues", [])
     created = updated = skipped = 0
