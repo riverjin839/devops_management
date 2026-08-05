@@ -10,6 +10,19 @@
 
 1.24.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **사이드바 "사용자 관리" → Settings "시스템 담당자" 탭으로 통합, Settings 여백 축소**: 사이드바
+  독립 아이콘이던 로그인 계정 관리(`/settings/users`)를 없애고 Settings 의 "담당자" 탭을
+  "시스템 담당자" 탭으로 확장해 **담당자 명부**(기존 `AssigneeManager`) / **로그인 계정**(신규
+  `SystemUserAccountManager`, 구 `UsersPage.tsx`) 두 서브탭으로 묶었다 — 담당자 명부에 사번을
+  등록하면 로그인 계정이 자동 생성되던 기존 동작과 개념이 합쳐진다. 구 라우트는
+  `/settings?tab=assignee` 로 자동 리다이렉트. 또한 Settings 본문 컨테이너가 `mx-auto` 로
+  가운데 정렬되며 메인 사이드바로부터 과도한 여백이 생기던 문제를 좌측 정렬(flush) + 여백 축소
+  (`px-8 py-8` → `px-4 lg:px-6 py-5`) + 폭 확대(`max-w-[1200px]` → `max-w-[1700px]`)로
+  수정해, 클러스터/관리서버/담당자/감사로그 등 각 탭의 표가 더 넓게 표시된다. Frontend:
+  `Sidebar.tsx`(레일 버튼 제거), `App.tsx`(`/settings/users` → redirect), `SettingsPage.tsx`,
+  `components/settings/SystemUserAccountManager.tsx`(신규).
+
 ## [1.24.1] - 2026-08-05
 
 ### Changed

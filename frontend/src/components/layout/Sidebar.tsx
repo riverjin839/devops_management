@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles, Palmtree, Leaf,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
-  KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug, Bot,
+  KeyRound, ScrollText, ServerCog, MessageSquare, Bug, Bot,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
@@ -513,14 +513,6 @@ export function Sidebar() {
               highlighted={userMenuOpen}
               suppressTooltip={userMenuOpen}
               onClick={() => setUserMenuOpen((v) => !v)}
-            />
-          )}
-          {isAdmin && (
-            <RailIconButton
-              label="사용자 관리"
-              Icon={ShieldCheck}
-              active={location.pathname === '/settings/users'}
-              onClick={() => navigate('/settings/users')}
             />
           )}
           {currentUser && (
