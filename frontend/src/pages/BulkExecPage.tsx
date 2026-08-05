@@ -114,14 +114,22 @@ function resultsToTxt(
   return lines.join('\n');
 }
 
-function downloadBlob(text: string, filename: string, mime: string) {
-  const blob = new Blob(['﻿', text], { type: `${mime};charset=utf-8` });
+function downloadBlob(text: string, filename: string, mime: string, withBom: boolean = true) {
+  // BOM 은 CSV/TXT 를 엑셀에서 열 때 UTF-8 로 정확히 인식시키는 용도 — 스크립트/설정
+  // 파일(예: bash 셔뱅 #!/bin/bash)에 붙이면 실행이 깨지므로 그런 용도는 withBom=false.
+  const blob = new Blob(withBom ? ['﻿', text] : [text], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** 경로 문자열의 마지막 세그먼트 — scpRemotePath 를 로컬 저장 파일명 제안에 재사용 */
+function basenameOf(path: string, fallback: string): string {
+  const name = path.split('/').filter(Boolean).pop();
+  return name || fallback;
 }
 
 function copyToClipboard(text: string): Promise<boolean> {
@@ -944,6 +952,17 @@ export function BulkExecPage() {
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <FolderInput className="w-3 h-3" /> 다른 노드에서 불러오기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadBlob(
+                        scpContent, basenameOf(scpRemotePath, 'scp-content.txt'), 'text/plain', false,
+                      )}
+                      disabled={!scpContent}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="현재 업로드 내용을 내 컴퓨터에 파일로 저장"
+                    >
+                      <Download className="w-3 h-3" /> 로컬에 저장
                     </button>
                   </div>
 
