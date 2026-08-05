@@ -568,7 +568,7 @@ def map_jira_issue(
     status_name = (fields.get("status") or {}).get("name", "")
     assignee_obj = fields.get("assignee") or {}
     jira_assignee = assignee_obj.get("displayName") or assignee_obj.get("name") or ""
-    pep_assignee = assignee_resolver(jira_assignee) if (assignee_resolver and jira_assignee) else jira_assignee
+    pep_assignee = assignee_resolver(assignee_obj) if (assignee_resolver and jira_assignee) else jira_assignee
 
     started = parse_jira_dt(fields.get("created")) or datetime.utcnow()
     closed = parse_jira_dt(fields.get("resolutiondate")) if kanban == "done" else None

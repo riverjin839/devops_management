@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  X, Loader2, DownloadCloud, AlertTriangle, CheckCircle2, ExternalLink,
+  X, Loader2, DownloadCloud, AlertTriangle, CheckCircle2,
   FileSpreadsheet, ClipboardPaste, RotateCcw, Upload, Link2Off, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -315,7 +315,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     <div>
                       <span className="text-sm font-medium text-muted-foreground mb-1 block">프로젝트 키</span>
                       <input className={inputCls} placeholder="PROJ" value={projectKey}
-                        onChange={(e) => setProjectKey(e.target.value)} />
+                        onChange={(e) => { setProjectKey(e.target.value); setPreview(null); }} />
                     </div>
                   )}
 
@@ -323,7 +323,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     <div>
                       <span className="text-sm font-medium text-muted-foreground mb-1 block">최근 N일 변경분</span>
                       <input className={inputCls} type="number" min={1} placeholder="7" value={sinceDays}
-                        onChange={(e) => setSinceDays(e.target.value)} />
+                        onChange={(e) => { setSinceDays(e.target.value); setPreview(null); }} />
                       <p className="text-[11px] text-muted-foreground mt-1">
                         기본값은 이번주 월요일부터입니다 — 비우면 전체 이력을 가져옵니다.
                       </p>
@@ -336,32 +336,32 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                         <div>
                           <span className="text-xs font-medium text-muted-foreground mb-1 block">프로젝트 (쉼표)</span>
                           <input className={inputCls} placeholder="PROJ" value={projectKey}
-                            onChange={(e) => setProjectKey(e.target.value)} />
+                            onChange={(e) => { setProjectKey(e.target.value); setPreview(null); }} />
                         </div>
                         <div>
                           <span className="text-xs font-medium text-muted-foreground mb-1 block">컴포넌트 (쉼표)</span>
                           <input className={inputCls} placeholder="K8s, Network" value={components}
-                            onChange={(e) => setComponents(e.target.value)} />
+                            onChange={(e) => { setComponents(e.target.value); setPreview(null); }} />
                         </div>
                         <div>
                           <span className="text-xs font-medium text-muted-foreground mb-1 block">라벨 (쉼표)</span>
                           <input className={inputCls} placeholder="infra, urgent" value={labels}
-                            onChange={(e) => setLabels(e.target.value)} />
+                            onChange={(e) => { setLabels(e.target.value); setPreview(null); }} />
                         </div>
                         <div>
                           <span className="text-xs font-medium text-muted-foreground mb-1 block">상태 (쉼표)</span>
                           <input className={inputCls} placeholder="In Progress, Done" value={statuses}
-                            onChange={(e) => setStatuses(e.target.value)} />
+                            onChange={(e) => { setStatuses(e.target.value); setPreview(null); }} />
                         </div>
                         <div>
                           <span className="text-xs font-medium text-muted-foreground mb-1 block">담당자 (선택)</span>
                           <input className={inputCls} placeholder="jira 계정 또는 currentUser()" value={assignee}
-                            onChange={(e) => setAssignee(e.target.value)} />
+                            onChange={(e) => { setAssignee(e.target.value); setPreview(null); }} />
                         </div>
                         <div>
                           <span className="text-xs font-medium text-muted-foreground mb-1 block">최근 N일 변경분</span>
                           <input className={inputCls} type="number" min={1} placeholder="7" value={sinceDays}
-                            onChange={(e) => setSinceDays(e.target.value)} />
+                            onChange={(e) => { setSinceDays(e.target.value); setPreview(null); }} />
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
@@ -375,7 +375,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     <div>
                       <span className="text-sm font-medium text-muted-foreground mb-1 block">JQL</span>
                       <input className={inputCls} placeholder='project = "PROJ" AND status != Done ORDER BY updated DESC'
-                        value={jql} onChange={(e) => setJql(e.target.value)} />
+                        value={jql} onChange={(e) => { setJql(e.target.value); setPreview(null); }} />
                     </div>
                   )}
 
@@ -391,7 +391,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                         <p className="mt-1 text-[11px] font-mono text-muted-foreground break-all">JQL: {preview.appliedJql}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        미리보기 — 아직 저장되지 않았습니다. <b>적용할 항목만 체크</b>한 뒤 "가져오기"를 누르세요.
+                        미리보기 — 아직 저장되지 않았습니다. <b>적용할 항목만 체크</b>한 뒤 "가져오기 확정"을 누르세요.
                         {excluded.size > 0 && <span className="text-amber-500"> ({excluded.size}건 제외됨)</span>}
                       </p>
                       {preview.items.length > 0 && (
@@ -449,15 +449,18 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                   )}
 
                   <div className="flex items-center gap-2 pt-1">
-                    <button type="button" onClick={() => void run(true)} disabled={busy || !cred?.configured}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
-                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                      미리보기
-                    </button>
-                    <button type="button" onClick={() => void run(false)} disabled={busy || !cred?.configured}
+                    {preview && preview.status === 'ok' && (
+                      <button type="button" onClick={() => setPreview(null)} disabled={busy}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-secondary text-sm hover:bg-secondary/80 disabled:opacity-50">
+                        <RotateCcw className="w-4 h-4" /> 다시 검색
+                      </button>
+                    )}
+                    <button type="button"
+                      onClick={() => void run(!(preview && preview.status === 'ok'))}
+                      disabled={busy || !cred?.configured}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
                       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                      가져오기
+                      {preview && preview.status === 'ok' ? '가져오기 확정' : '가져오기'}
                     </button>
                     <button type="button" onClick={onClose} disabled={busy}
                       className="ml-auto px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground">닫기</button>
