@@ -11,6 +11,18 @@
 1.25.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **업무 관리 게시판(`/tasks-mgmt`) — 디자인 토큰 통일·필터 바 재구성·접근성 수정**: impeccable
+  critique 진단(Design Health 24/40, P0 2건)에서 나온 이슈를 반영. 칸반/캘린더/Jira 모달 전반의
+  고정 팔레트(`bg-red-500` 등)를 테이블 뷰(`WorkItemTableRow.tsx`)와 동일한 `--status-*`/
+  `--chart-*` 토큰으로 통일해 같은 화면 안에서 뷰마다 다르던 우선순위 색 체계를 맞췄다. 필터
+  바의 상시 노출 컨트롤을 15개에서 4개(유형/상태/검색/내 업무)로 줄이고 담당자·우선순위·모듈·
+  스프린트·기간을 "필터 더보기" 팝오버로 묶었다(활성 조건 수 배지 표시). 그 외 Kanban 카드
+  `focus-within` 액션 노출, 아이콘 버튼 `aria-label` 누락 보강, 커스텀 필드/Jira 임포트 삭제의
+  `window.confirm` → `ConfirmDialog(danger)` 전환, WIP 한도 표시를 칸반과 동일한 기준으로 통일,
+  마감일 지난 업무 헤더 배지 추가, CSV 추출 실패 시 무음 콘솔 로그 대신 토스트 알림, Jira push
+  충돌 시 "다시 가져오기" 후속 액션 추가, 색상 단독으로만 전달되던 지연/우선순위 표시에 아이콘·
+  라벨 보강을 함께 수정. Frontend: `pages/WorkItemBoardPage.tsx`,
+  `components/work-items/{WorkItemKanban,WorkItemCalendar,WorkItemTableRow,WorkItemCustomFieldsManager,JiraIssueChip,JiraLinkDialog,JiraImportModal,JiraProvisionModal,workItemKanbanUtils}.tsx`.
 - **클러스터 관리(`/cluster-manage`) — viewer 권한 게이팅·확인절차·접근성 수정**: impeccable
   critique 진단(Design Health 30/40)에서 나온 이슈를 반영. 커스텀 컬럼 삭제를 네이티브
   `confirm()`에서 `ConfirmDialog(danger)`로 교체했고, 커스텀 컬럼 셀에 키보드로 편집 진입할 수

@@ -142,7 +142,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
           )}
 
           {!result && item.provisionStatus === 'partial' && (
-            <div className="text-xs px-3 py-2 rounded-lg bg-amber-500/10 text-amber-500 flex items-start gap-1.5">
+            <div className="text-xs px-3 py-2 rounded-lg bg-status-warning/10 text-status-warning flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
               <span>
                 지난 시도에서 일부만 생성됐습니다.
@@ -155,7 +155,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
           {defaults?.detail && !result && (
             <div className={`text-xs px-3 py-2 rounded-lg ${
               defaults.jiraEnabled || defaults.confluenceEnabled
-                ? 'bg-secondary text-muted-foreground' : 'bg-amber-500/10 text-amber-500'
+                ? 'bg-secondary text-muted-foreground' : 'bg-status-warning/10 text-status-warning'
             }`}>
               {defaults.detail}
               {defaults.presetSource === 'user' && (
@@ -168,13 +168,13 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
           {result ? (
             <>
               <div className={`rounded-xl border p-4 space-y-2 ${
-                result.status === 'ok' ? 'border-emerald-500/30 bg-emerald-500/5'
-                  : result.status === 'partial' ? 'border-amber-500/30 bg-amber-500/5'
-                  : 'border-red-500/30 bg-red-500/5'
+                result.status === 'ok' ? 'border-status-healthy/30 bg-status-healthy/5'
+                  : result.status === 'partial' ? 'border-status-warning/30 bg-status-warning/5'
+                  : 'border-status-critical/30 bg-status-critical/5'
               }`}>
                 <div className={`flex items-center gap-2 font-medium ${
-                  result.status === 'ok' ? 'text-emerald-500'
-                    : result.status === 'partial' ? 'text-amber-500' : 'text-red-500'
+                  result.status === 'ok' ? 'text-status-healthy'
+                    : result.status === 'partial' ? 'text-status-warning' : 'text-status-critical'
                 }`}>
                   {result.status === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                   {result.detail}
@@ -201,8 +201,8 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                 </div>
               </div>
               {result.status !== 'ok' && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 space-y-3">
-                  <div className="text-sm font-medium text-amber-500">
+                <div className="rounded-xl border border-status-warning/30 bg-status-warning/5 p-3.5 space-y-3">
+                  <div className="text-sm font-medium text-status-warning">
                     다시 시도하시겠어요? {(result.jiraAuthIssue || result.confluenceAuthIssue)
                       && '— 연결 설정을 먼저 고치면 재시도가 성공할 확률이 높습니다.'}
                   </div>

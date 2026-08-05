@@ -152,7 +152,7 @@ export function JiraLinkDialog({ open, onClose, item, missingDetail }: JiraLinkD
               type="button"
               onClick={() => void runRelink()}
               disabled={busy || !keyOrUrl.trim()}
-              className="bg-brand-jira text-white hover:bg-brand-jira/90"
+              className="bg-brand-jira text-primary-foreground hover:bg-brand-jira/90"
             >
               {relink.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
               연결 변경

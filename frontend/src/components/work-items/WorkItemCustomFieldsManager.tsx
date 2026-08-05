@@ -5,7 +5,7 @@ import {
   sortedWorkItemFields,
 } from '@/hooks/useWorkItemCustomFields';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { useToast } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import type { WorkItemCustomFieldType } from '@/types';
 
@@ -30,6 +30,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
   const [label, setLabel] = useState('');
   const [dataType, setDataType] = useState<WorkItemCustomFieldType>('text');
   const [optionsText, setOptionsText] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
 
   if (!open) return null;
 
@@ -55,8 +56,10 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
     );
   };
 
-  const remove = (id: string, lbl: string) => {
-    if (!window.confirm(`"${lbl}" 필드를 삭제하면 모든 업무의 해당 값도 제거됩니다. 계속할까요?`)) return;
+  const confirmRemove = () => {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
     del.mutate(id, { onError: (e) => toast.error('삭제 실패', formatApiError(e)) });
   };
 
@@ -68,7 +71,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
           <Settings2 className="w-4 h-4 text-primary" />
           <h2 id="work-item-custom-fields-modal-title" className="text-sm font-semibold">업무 사용자 정의 필드</h2>
-          <button onClick={onClose} className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="닫기">
+          <button onClick={onClose} title="닫기" className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -85,7 +88,7 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
                 {f.dataType === 'select' && f.options?.length ? (
                   <span className="text-xs text-muted-foreground truncate">{f.options.join(', ')}</span>
                 ) : null}
-                <button onClick={() => remove(f.id, f.label)} className="ml-auto p-1 rounded hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500" title="삭제">
+                <button onClick={() => setDeleteTarget({ id: f.id, label: f.label })} className="ml-auto p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical" title="삭제" aria-label={`${f.label} 필드 삭제`}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -111,6 +114,17 @@ export function WorkItemCustomFieldsManager({ open, onClose }: { open: boolean; 
           </div>
         </div>
       </div>
+      {deleteTarget && (
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="사용자 정의 필드 삭제"
+          description={`"${deleteTarget.label}" 필드를 삭제하면 모든 업무의 해당 값도 함께 제거됩니다. 계속할까요?`}
+          danger
+          confirmLabel="삭제"
+          onConfirm={confirmRemove}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
