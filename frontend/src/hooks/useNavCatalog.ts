@@ -1,7 +1,6 @@
 import { useCallback, useMemo, type ComponentType } from 'react';
 import { NAV_MAP, GROUPS, type GroupId } from '@/components/layout/navConfig';
 import { useUiSettings } from './useUiSettings';
-import { useServiceCatalog } from './useServiceCatalog';
 import { useFeatureAccess, canAccessFeature } from './useFeatureAccess';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -13,10 +12,7 @@ export interface NavEntry {
 }
 
 export interface NavCatalog {
-  /** 정적 NAV_MAP 위에 ui_settings 의 서비스 카탈로그(`/services/:key`)를 덧씌운 맵. */
   navMap: Record<string, NavEntry>;
-  /** 동적으로 추가된 서비스 경로들 (`/services/:key`). */
-  servicePaths: string[];
   /** ui_settings 의 navLabels 오버라이드를 반영한 표시 라벨. */
   getLabel: (path: string) => string;
   /** 기능별 접근 제어 통과 여부. */
@@ -32,29 +28,14 @@ export interface NavCatalog {
  */
 export function useNavCatalog(): NavCatalog {
   const { data: settings } = useUiSettings();
-  const services = useServiceCatalog();
   const currentUser = useAuthStore((s) => s.user);
   const { data: featureAccess } = useFeatureAccess();
 
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
 
-  const navMap = useMemo(() => {
-    const m: Record<string, NavEntry> = { ...NAV_MAP };
-    for (const s of services) {
-      if (s.key === 'other') continue;
-      m[`/services/${s.key}`] = { defaultLabel: s.label, icon: s.icon };
-    }
-    return m;
-  }, [services]);
-
-  const servicePaths = useMemo(
-    () => services.filter((s) => s.key !== 'other').map((s) => `/services/${s.key}`),
-    [services],
-  );
-
   const getLabel = useCallback(
-    (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path,
-    [navLabels, navMap],
+    (path: string) => navLabels[path] || NAV_MAP[path]?.defaultLabel || path,
+    [navLabels],
   );
 
   // feature_access 맵의 키는 라우트 경로 자체다(예: '/wbs') — Settings "접근 제어"에서
@@ -65,15 +46,11 @@ export function useNavCatalog(): NavCatalog {
     [featureAccess, currentUser],
   );
 
-  return { navMap, servicePaths, getLabel, featureAllowed };
+  return { navMap: NAV_MAP, getLabel, featureAllowed };
 }
 
 /** 경로 → 소속 그룹 라벨. 패널 피커에서 화면을 그룹별로 묶을 때 사용. */
 export function groupLabelForPath(path: string): { id: GroupId; label: string } | null {
-  if (path.startsWith('/services/')) {
-    const g = GROUPS.find((x) => x.id === 'services');
-    return g ? { id: g.id, label: g.label } : null;
-  }
   for (const g of GROUPS) {
     if (g.paths.includes(path)) return { id: g.id, label: g.label };
   }

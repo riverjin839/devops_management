@@ -39,7 +39,6 @@ CLUSTER_TABLE = "clusters"
 # 기록 자체는 남겨야 한다). 여기 없는 cluster_id 보유 테이블은 전부 DELETE 된다.
 KEEP_ROWS: dict[str, str] = {
     "work_items": "업무 이력 — 클러스터가 사라져도 기록은 보존",
-    "service_entries": "서비스 카탈로그 — 클러스터 연결만 해제",
     "node_server_specs": "서버 자산(스펙) 정보 — 클러스터 연결만 해제",
 }
 

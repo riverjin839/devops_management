@@ -10,6 +10,18 @@
 
 1.24.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Removed
+- **PEP 서비스 / APP 서비스 완전 삭제**: 사이드바 "PEP 서비스"(`/services` 서비스 카탈로그·허브)·
+  "APP 서비스"(`/app-services`) 그룹과 레거시 `/pep-services` 화면을 삭제했다 — 제공하던 서비스별
+  가이드/이슈대응 노트 기능이 이미 "문서 관리" 그룹(`/docs`·`/work-guides`·`/ops-notes`)과
+  중복이었다. 업무 관리의 "관련 서비스" 태그(`ServiceChip`)와 상세 페이지의 연관 ServiceEntry
+  사이드바도 함께 제거했다. LAKE 서비스 모니터링(`/lake-services`)과 Settings "관리 서비스"
+  (서비스 타입/카테고리 레지스트리)는 완전히 별개 기능이라 영향 없음. Backend:
+  `routers/service_entries.py`·`models/service_entry.py`·`schemas/service_entry.py`·
+  `data/lake_service_knowledge.py` 삭제, `service_entries` 테이블/`work_items.service` 컬럼은
+  과거 데이터 보존을 위해 스키마는 그대로 둠(DROP 없음). Frontend: `PepServicesPage`·
+  `AppServicesPage`·`ServicesCatalogPage`·`ServiceHubPage`·`components/service-domain/` 삭제.
+
 ## [1.24.2] - 2026-08-05
 
 ### Changed

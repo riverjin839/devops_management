@@ -4,7 +4,6 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
 import { useUpdateWorkItem } from '@/hooks/useWorkItems';
-import { ServiceChip } from '@/components/services/ServiceChip';
 import { Badge } from '@/components/ui/badge';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
@@ -479,7 +478,6 @@ export function WorkItemTableRow({
                 <span className="px-2 py-0.5 text-sm rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
                   {item.category}
                 </span>
-                {item.service && <ServiceChip service={item.service} />}
               </div>
             )}
           </EditableCell>

@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowLeft, Play, Trash2, AlertCircle, BookOpen, History, ChevronRight,
+  ArrowLeft, Play, Trash2, AlertCircle, History,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog } from '@/components/common';
 import { HealthBadge, ServiceTypeIcon } from '@/components/lake-services';
-import { RichContent } from '@/components/editor/RichContent';
 import {
   useLakeService,
   useLakeServiceTypes,
@@ -15,18 +13,14 @@ import {
   useRunLakeServiceCheck,
   useDeleteLakeService,
 } from '@/hooks/useLakeServices';
-import { serviceEntriesApi } from '@/services/api';
-import type { ServiceEntry } from '@/types';
 import { parseUTC } from '@/lib/utils';
 
 interface TimelineItem {
-  source: 'check' | 'entry';
+  source: 'check';
   id: string;
   at: string;
   title: string;
-  body?: string;
   status?: string;
-  severity?: string | null;
   author?: string | null;
 }
 
@@ -41,52 +35,19 @@ export function LakeServiceDetailPage() {
   const runCheck = useRunLakeServiceCheck();
   const delMutation = useDeleteLakeService();
 
-  // ServiceEntry 가이드 / 히스토리 — service 슬러그 매칭
-  const serviceSlug = svc?.serviceType;
-  const { data: entriesData } = useQuery({
-    queryKey: ['serviceEntries', 'lake', serviceSlug],
-    queryFn: async () =>
-      (await serviceEntriesApi.list(serviceSlug!, { clusterId: undefined })).data,
-    enabled: !!serviceSlug,
-  });
-  const entries: ServiceEntry[] = useMemo(
-    () => entriesData?.data ?? [],
-    [entriesData?.data],
-  );
-  const guides = useMemo(() => entries.filter((e) => e.kind === 'guide'), [entries]);
-  const historyEntries = useMemo(
-    () => entries.filter((e) => e.kind === 'history' || e.kind === 'troubleshoot'),
-    [entries],
-  );
-
   const typeInfo = types.find((t) => t.serviceType === svc?.serviceType);
 
-  // Unified timeline — LakeServiceCheck + ServiceEntry(history/troubleshoot)
   const timeline = useMemo<TimelineItem[]>(() => {
-    const items: TimelineItem[] = [];
-    for (const c of checksData?.data ?? []) {
-      items.push({
-        source: 'check',
-        id: c.id,
-        at: c.checkedAt,
-        title: `${c.status} — ${c.message ?? '점검 완료'}`,
-        status: c.status,
-        author: c.triggeredByUser ?? null,
-      });
-    }
-    for (const e of historyEntries) {
-      items.push({
-        source: 'entry',
-        id: e.id,
-        at: e.occurredAt ?? e.updatedAt ?? e.createdAt,
-        title: e.title,
-        body: e.content,
-        severity: e.severity,
-        author: e.author,
-      });
-    }
+    const items: TimelineItem[] = (checksData?.data ?? []).map((c) => ({
+      source: 'check' as const,
+      id: c.id,
+      at: c.checkedAt,
+      title: `${c.status} — ${c.message ?? '점검 완료'}`,
+      status: c.status,
+      author: c.triggeredByUser ?? null,
+    }));
     return items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
-  }, [checksData?.data, historyEntries]);
+  }, [checksData?.data]);
 
   const doDelete = () => {
     setConfirmDelete(false);
@@ -196,30 +157,8 @@ export function LakeServiceDetailPage() {
           </div>
         </MacCard>
 
-        {/* Troubleshoot guides */}
-        <MacCard title="트러블슈팅 가이드">
-          {guides.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">
-              <BookOpen className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
-              <code className="font-mono">service={svc.serviceType}</code> 슬러그로 등록된 가이드가 없습니다.{' '}
-              <Link
-                to={`/services/${svc.serviceType}`}
-                className="underline hover:text-foreground"
-              >
-                ServiceHub 에서 작성하기 →
-              </Link>
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {guides.map((g) => (
-                <GuideItem key={g.id} entry={g} />
-              ))}
-            </ul>
-          )}
-        </MacCard>
-
-        {/* History timeline (LakeServiceCheck + ServiceEntry kind=history) */}
-        <MacCard title="히스토리 timeline">
+        {/* 점검 이력 (LakeServiceCheck) */}
+        <MacCard title="점검 이력">
           {timeline.length === 0 ? (
             <div className="text-sm text-muted-foreground italic">
               <History className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
@@ -235,14 +174,8 @@ export function LakeServiceDetailPage() {
                   <span className="text-xs font-mono text-muted-foreground w-32 flex-shrink-0">
                     {parseUTC(t.at).toLocaleString('ko-KR')}
                   </span>
-                  <span
-                    className={`flex-shrink-0 inline-flex items-center text-xs rounded px-1.5 py-0.5 ${
-                      t.source === 'check'
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-amber-500/10 text-amber-500'
-                    }`}
-                  >
-                    {t.source === 'check' ? '점검' : '히스토리'}
+                  <span className="flex-shrink-0 inline-flex items-center text-xs rounded px-1.5 py-0.5 bg-primary/10 text-primary">
+                    점검
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="font-medium">{t.title}</span>
@@ -268,37 +201,5 @@ export function LakeServiceDetailPage() {
         onCancel={() => setConfirmDelete(false)}
       />
     </div>
-  );
-}
-
-function GuideItem({ entry }: { entry: ServiceEntry }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <li className="border border-border rounded-md overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary/40"
-      >
-        <BookOpen className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
-        <span className="flex-1 min-w-0">
-          <span className="font-medium truncate">{entry.title}</span>
-          {entry.severity && (
-            <span className="ml-2 text-xs text-muted-foreground">
-              · {entry.severity}
-            </span>
-          )}
-        </span>
-        <ChevronRight
-          className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
-        />
-      </button>
-      {expanded && (
-        <div className="px-3 py-3 border-t border-border bg-muted/20">
-          <RichContent content={entry.content} />
-        </div>
-      )}
-    </li>
   );
 }

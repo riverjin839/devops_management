@@ -187,7 +187,7 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.clear);
   const isAdmin = currentUser?.role === 'admin';
   // 동적 navMap / 라벨 오버라이드 / 기능별 접근 제어 — Your Island 패널 피커와 공유.
-  const { navMap, servicePaths, getLabel, featureAllowed } = useNavCatalog();
+  const { navMap, getLabel, featureAllowed } = useNavCatalog();
 
   const { mode, toggle } = useHomeStore();
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
@@ -320,30 +320,6 @@ export function Sidebar() {
     const group = GROUPS.find((g) => g.id === id);
     if (!group) return null;
     const close = () => setOpenGroup(null);
-
-    if (id === 'services') {
-      return (
-        <div className="space-y-1 pb-2">
-          {group.paths.map((p) => {
-            const entry = navMap[p];
-            if (!entry || !featureAllowed(p)) return null;
-            return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close} />
-            );
-          })}
-          {servicePaths.length > 0 && <div className="mx-2 my-1 border-t border-zinc-200" />}
-          {servicePaths.map((p) => {
-            const entry = navMap[p];
-            if (!entry || !featureAllowed(p)) return null;
-            return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close} />
-            );
-          })}
-        </div>
-      );
-    }
 
     if (id === 'system') {
       return (

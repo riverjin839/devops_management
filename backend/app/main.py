@@ -50,7 +50,6 @@ from app.routers import (
     work_item_custom_fields_router,
     backup_router,
     schema_health_router,
-    service_entries_router,
     batch_jobs_router,
     commands_router,
     ansible_files_router,
@@ -1822,53 +1821,6 @@ def _merge_service_catalog_into_pep_types():
         db.close()
 
 
-def _seed_default_lake_service_entries():
-    """LAKE 8 OSS 서비스의 "기능 동작 특징" 가이드를 ServiceEntry kind=guide 로
-    전역 등록. service+title 매칭으로 idempotent — 운영자가 수정하거나 삭제한
-    경우는 영향 없음.
-
-    PDCA: lake-service-knowledge-seed
-    """
-    from app.models.service_entry import ServiceEntry
-    from app.data.lake_service_knowledge import LAKE_SERVICE_KNOWLEDGE_ENTRIES
-
-    entries = LAKE_SERVICE_KNOWLEDGE_ENTRIES
-
-    db = SessionLocal()
-    try:
-        # 같은 (service, title) 기존 행 조회
-        existing_keys = {
-            (row.service, row.title)
-            for row in db.query(ServiceEntry)
-            .filter(ServiceEntry.service.in_([e["service"] for e in entries]))
-            .filter(ServiceEntry.title.in_([e["title"] for e in entries]))
-            .all()
-        }
-        added = 0
-        for e in entries:
-            key = (e["service"], e["title"])
-            if key in existing_keys:
-                continue
-            db.add(ServiceEntry(
-                service=e["service"],
-                cluster_id=None,             # 전역
-                kind="guide",
-                title=e["title"],
-                content=e["content"],
-                severity=None,
-                pinned=True,                  # ServiceHub 카드 상단
-                tags=["lake", "feature", "overview"],
-                author="system",
-                meta={"seeded_by": "lake-service-knowledge-seed", "category": e["category"]},
-            ))
-            added += 1
-        if added:
-            db.commit()
-            _log.info("seeded %d lake service knowledge entries", added)
-    finally:
-        db.close()
-
-
 def _seed_assignee_users():
     """이미 등록된 담당자(assignees)에 대해 operator 로그인 계정을 보강.
 
@@ -2029,7 +1981,6 @@ async def lifespan(app: FastAPI):
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
-            ("seed_lake_service_entries", _seed_default_lake_service_entries),
             ("seed_observability_catalog", _seed_observability_catalog),
             ("seed_initial_admin", _seed_initial_admin),
             ("seed_assignee_users", _seed_assignee_users),
@@ -2129,7 +2080,6 @@ app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=
 app.include_router(work_item_custom_fields_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(schema_health_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(service_entries_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_files_router, prefix="/api/v1", dependencies=_auth)

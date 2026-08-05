@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud } from 'lucide-react';
-import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar, JiraPushDialog } from '@/components/work-items';
+import { WorkItemForm, WorkItemReadView, JiraPushDialog } from '@/components/work-items';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { cn, formatApiError } from '@/lib/utils';
@@ -119,12 +119,8 @@ export function WorkItemDetailPage() {
             />
           </div>
         ) : (
-          <div className="flex gap-6 items-start">
-            <div className={cn('flex-1 min-w-0 border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
-              <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
-            </div>
-            {/* Cross-view (Phase A) — 같은 service 의 ServiceEntry 5건 sticky sidebar */}
-            {item.service && <RelatedServiceEntriesSidebar service={item.service} />}
+          <div className={cn('border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
+            <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
           </div>
         )}
       </main>
