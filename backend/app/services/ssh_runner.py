@@ -278,6 +278,90 @@ def _exec_scp_push(tgt: SSHTarget, local_content: bytes, remote_path: str,
                 pass
 
 
+# SCP "다른 노드에서 불러오기" — 텍스트 미리보기 용도라 넉넉한 상한만 둔다.
+FETCH_FILE_MAX_BYTES = 2 * 1024 * 1024  # 2MB
+
+
+def fetch_remote_file(tgt: SSHTarget, remote_path: str, connect_timeout: int,
+                      max_bytes: int = FETCH_FILE_MAX_BYTES) -> SSHResult:
+    """다른 노드에 이미 있는 텍스트 파일을 읽어와 SSHResult.stdout 에 담아 반환(SCP pull).
+
+    SCP 업로드 내용 입력을 채우는 용도라 UTF-8 텍스트만 지원 — 바이너리/디코드
+    실패·용량 초과는 error 로 처리한다(그대로 화면에 보여줄 수 없으므로).
+    """
+    start = time.monotonic()
+    client: Optional[paramiko.SSHClient] = None
+    try:
+        client = _build_client(tgt, connect_timeout)
+        sftp = client.open_sftp()
+        try:
+            try:
+                st = sftp.stat(remote_path)
+            except IOError as e:
+                return SSHResult(
+                    host=tgt.host, status="error", exit_code=None,
+                    stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+                    error=f"파일을 찾을 수 없거나 읽을 권한이 없습니다: {str(e)[:150]}",
+                )
+            size = st.st_size or 0
+            if size > max_bytes:
+                return SSHResult(
+                    host=tgt.host, status="error", exit_code=None,
+                    stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+                    error=f"파일이 너무 큽니다 ({size:,} bytes, 최대 {max_bytes:,} bytes).",
+                )
+            with sftp.file(remote_path, "rb") as rf:
+                raw = rf.read()
+        finally:
+            sftp.close()
+
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return SSHResult(
+                host=tgt.host, status="error", exit_code=None,
+                stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+                error="텍스트(UTF-8) 파일만 불러올 수 있습니다.",
+            )
+        return SSHResult(
+            host=tgt.host, status="ok", exit_code=0,
+            stdout=text, stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=None,
+        )
+    except paramiko.AuthenticationException as e:
+        return SSHResult(
+            host=tgt.host, status="auth_error", exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=f"인증 실패: {str(e)[:120]}",
+        )
+    except (paramiko.SSHException, OSError, TimeoutError) as e:
+        msg = str(e).lower()
+        status = "timeout" if "timeout" in msg or "timed out" in msg else "connect_error"
+        return SSHResult(
+            host=tgt.host, status=status, exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=f"연결 실패: {str(e)[:120]}",
+        )
+    except ValueError as e:
+        return SSHResult(
+            host=tgt.host, status="auth_error", exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=str(e)[:200],
+        )
+    except Exception as e:
+        return SSHResult(
+            host=tgt.host, status="error", exit_code=None,
+            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
+            error=str(e)[:200],
+        )
+    finally:
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+
 async def run_bulk(
     targets: list[SSHTarget],
     *,

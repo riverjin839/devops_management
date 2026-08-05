@@ -84,3 +84,23 @@ class BulkExecResponse(BaseModel):
     error_count: int
     total_duration_ms: int
     results: list[BulkExecResultItem]
+
+
+class FetchFileRequest(BaseModel):
+    """SCP 업로드 내용 입력을 다른 노드에 이미 있는 텍스트 파일로 채운다(pull).
+    업로드 대상(targets)과는 별개 — 이 요청은 "원본" 노드 하나에서만 읽어온다."""
+    host: str = Field(..., description="읽어올 원본 노드 — IP 또는 FQDN")
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: Optional[str] = None
+    private_key: Optional[str] = None
+    remote_path: str = Field(..., min_length=1, max_length=4096)
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+
+
+class FetchFileResponse(BaseModel):
+    host: str
+    status: Literal["ok", "error", "timeout", "auth_error", "connect_error"]
+    content: str = ""
+    size: int = 0
+    error: Optional[str] = None

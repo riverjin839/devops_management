@@ -592,13 +592,14 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
   - 실행 결과(5): 요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기. 상세 뷰 노드 확장 시 stdout/stderr 는 `ExecOutputTabs`(탭 + 결과 유무 dot·라인수) 로 표시.
   - 실행 확인 `ConfirmDialog`. `useTerminalEnvSync` 로 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용(다중 선택은 하나라도 운영이면 ops).
 - **Frontend**: `useClusters()`, `useQueries`로 선택된 클러스터별 노드 목록 병렬 조회(`bulkExecApi.nodeList`), `useAbortableMutation`으로 `bulkExecApi.run`. 저장 스크립트는 `useSavedScripts`/`useCreateSavedScript`/`useUpdateSavedScript`/`useDeleteSavedScript`(TanStack Query, `savedScriptsApi`). 로컬 state: `clusterIds`(다중), `selected`(Set, `clusterId::nodeName` 키), `language`(bash/python), 실행 옵션 다수. 호출 함수: `bulkExecApi.nodeList`, `bulkExecApi.run`.
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. `language="python"` 이면 `app/services/script_wrap.py`(순수 함수)가 스크립트 본문을 `python3 - <<'DELIM' ... DELIM` heredoc 으로 감싸 원격 실행 — 실행 자체는 여전히 DB 모델 없이 휘발성. 저장 스크립트 CRUD 는 `GET/POST /api/v1/saved-scripts`, `GET/PUT/DELETE /api/v1/saved-scripts/{id}` — `backend/app/routers/saved_scripts.py` + `SavedScript` 모델(사용자별, `username` 소유권 검사).
+- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. `language="python"` 이면 `app/services/script_wrap.py`(순수 함수)가 스크립트 본문을 `python3 - <<'DELIM' ... DELIM` heredoc 으로 감싸 원격 실행 — 실행 자체는 여전히 DB 모델 없이 휘발성. 저장 스크립트 CRUD 는 `GET/POST /api/v1/saved-scripts`, `GET/PUT/DELETE /api/v1/saved-scripts/{id}` — `backend/app/routers/saved_scripts.py` + `SavedScript` 모델(사용자별, `username` 소유권 검사). SCP 업로드 내용을 다른 노드에서 읽어오는 `POST /api/v1/bulk-exec/fetch-file`(`require_operator`) 는 `ssh_runner.fetch_remote_file`(SFTP pull, UTF-8 텍스트·2MB 상한)을 씀 — 결과는 응답으로만 반환(비저장), 감사 로그에 `bulk_exec.fetch_file` 로 기록.
 - **핵심 기능**:
   - 다중 클러스터 × 다중 노드 선택 (클러스터별 그룹 UI)
   - SSH 명령 실행 / SCP 파일 업로드, 병렬(동시성 조절)·순차 모드, 청크 단위 실행(대규모 완화)
   - 비밀번호/Private Key 인증(저장하지 않음), 실행 중 중지(abort)
   - 결과 요약/상세 뷰, 공통 필터, CSV/TXT/클립보드 내보내기
   - **사용자별 저장 스크립트**(`SavedScriptPanel`+`SavedScriptEditorModal`, DB 백엔드): bash/python 스크립트를 이름·설명과 함께 저장·수정·삭제·재사용. python 은 서버가 원격 `python3` 로 감싸 실행(스크립트 본문은 그대로 노출, 인증정보는 저장하지 않음)
+  - **SCP 업로드 내용 — 다른 노드에서 불러오기**: 로컬 파일 선택과 나란히, 현재 화면에 로드된 임의 노드 하나를 골라 원격 경로의 텍스트 파일 내용을 그대로 가져와 업로드 입력창을 채운다(가져온 뒤 수정 후 다른 노드들에 재배포 가능). 업로드 대상(targets) 인증 정보를 그대로 재사용, 별도 저장 없음
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

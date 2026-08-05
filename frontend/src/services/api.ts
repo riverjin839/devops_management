@@ -530,11 +530,32 @@ export interface BulkExecRequest {
   chunkPauseMs?: number;
 }
 
+export interface FetchFileRequest {
+  /** 읽어올 원본 노드 — 업로드 대상(targets)과는 별개 */
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKey?: string;
+  remotePath: string;
+  connectTimeout: number;
+}
+
+export interface FetchFileResponse {
+  host: string;
+  status: 'ok' | 'error' | 'timeout' | 'auth_error' | 'connect_error';
+  content: string;
+  size: number;
+  error?: string | null;
+}
+
 export const bulkExecApi = {
   nodeList: (clusterId: string) =>
     api.get<{ clusterId: string; clusterName: string; nodes: NodeSummary[] }>(
       `/clusters/${clusterId}/node-list`,
     ),
+  fetchFile: (payload: FetchFileRequest, signal?: AbortSignal) =>
+    api.post<FetchFileResponse>('/bulk-exec/fetch-file', payload, { signal }),
   run: (payload: BulkExecRequest, signal?: AbortSignal) => {
     // 대규모 호스트 실행 시간 추정: 청크 수 × (exec_timeout+connect_timeout+pause) + 여유.
     // 기본 30초 timeout 은 100+ 호스트에서 바로 끊겨 에러가 됨.

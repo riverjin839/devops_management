@@ -24,6 +24,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 노드 일괄 SSH/SCP 실행 | `backend/app/routers/bulk_exec.py` + `backend/app/services/ssh_runner.py` (paramiko) + `services/script_wrap.py`(python 스크립트 → heredoc 래핑) | `frontend/src/pages/BulkExecPage.tsx` |
 | 클러스터 노드 목록 조회 (선택용) | `GET /clusters/{id}/node-list` in `bulk_exec.py` | `bulkExecApi.nodeList` |
 | 사용자별 저장 스크립트 (bulk-exec 재사용) | `backend/app/routers/saved_scripts.py` + `models/saved_script.py`(`SavedScript`, `username` 소유권) | `components/bulk-exec/{SavedScriptPanel,SavedScriptEditorModal}` + `hooks/useSavedScripts.ts` |
+| SCP 업로드 내용 — 다른 노드에서 불러오기 | `POST /bulk-exec/fetch-file` in `bulk_exec.py` + `ssh_runner.fetch_remote_file`(SFTP pull) | `bulkExecApi.fetchFile` (BulkExecPage 내 인라인) |
 | etcdctl 원격 실행 + journal 로그 | `backend/app/routers/etcdctl.py` (SSH 경유, `/etc/etcd.env` source) | `frontend/src/pages/EtcdCtlPage.tsx` |
 | mc (MinIO) 원격 실행 | `backend/app/routers/mc_client.py` | `frontend/src/pages/McClientPage.tsx` |
 | OS / 커널 파라미터 조회 | bulk-exec 재사용 + 프리셋 라이브러리 | `frontend/src/pages/KernelParamsPage.tsx` |
