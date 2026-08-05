@@ -133,13 +133,16 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | Isilon NFS 모니터링 | `backend/app/routers/isilon_nfs.py` + `services/isilon_service.py` → `frontend/src/pages/IsilonNfsPage.tsx` |
 | CIDR 계산기 / 주요 링크 | — → `frontend/src/pages/CidrCalculatorPage.tsx` · `ClusterLinksPage.tsx` |
 
-### 서비스 카탈로그 (LAKE / PEP / APP)
+### 서비스 카탈로그 (LAKE)
+
+> PEP/APP 서비스(`/services`·`/pep-services`·`/app-services`, `service_entries` 라우터/모델)는
+> 문서 관리 그룹과 기능이 중복돼 완전히 삭제되었다. LAKE 서비스와 관리 서비스(서비스 타입/
+> 카테고리) 레지스트리만 남는다.
+
 | 기능 | 위치 |
 |---|---|
 | LAKE 서비스 + 타입 | `backend/app/routers/lake_services.py` · `lake_service_types.py` + `services/lake_checkers/` → `frontend/src/pages/LakeServicesPage.tsx` · `LakeServiceDetailPage.tsx` |
-| 서비스 카탈로그/허브 | `backend/app/routers/service_entries.py` · `service_categories.py` → `frontend/src/pages/ServicesCatalogPage.tsx` · `ServiceHubPage.tsx` · 아이콘/색상 출처는 PEP 서비스 타입(`hooks/useServiceCatalog.ts`) |
-| PEP / APP 서비스 | `cluster_items` 등 재사용 → `frontend/src/pages/PepServicesPage.tsx` · `AppServicesPage.tsx` |
-| 관리 서비스 설정 (admin) | Settings `?tab=mgmt-service` → `frontend/src/components/settings/ServiceCategoryManager.tsx`(카테고리) · `LakeServiceTypeManager.tsx`(서비스 타입), 둘 다 `domain` prop |
+| 관리 서비스 설정 (admin) | `backend/app/routers/service_categories.py` → Settings `?tab=mgmt-service` → `frontend/src/components/settings/ServiceCategoryManager.tsx`(카테고리) · `LakeServiceTypeManager.tsx`(서비스 타입), 둘 다 `domain` prop. 아이콘/색상 출처는 `hooks/useServiceCatalog.ts` |
 | 클러스터 아이템/커스텀 필드 | `backend/app/routers/cluster_items.py` · `cluster_custom_fields.py` |
 
 ### 지식 / 소통
@@ -180,7 +183,9 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 |---|---|
 | 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
-| Sidebar + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리) |
+| Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
+| 전역 상단바(업무 도메인) | `frontend/src/components/layout/AppTopBar.tsx` + `NavFlyout.tsx`(`FlyoutShell`/`FlyoutLink` 공용, Sidebar 와 공유) |
+| 홈 개인화 (기본 홈 탭 · 즐겨찾기 · 최근 방문) | `backend/app/routers/home_prefs.py` + `schemas/home_prefs.py`(`user_settings` 재사용) → `frontend/src/hooks/useHomePrefs.ts` · `hooks/useFavorites.ts` · `stores/recentPathsStore.ts` · `components/layout/FavoritesFlyoutBody.tsx`(AppTopBar·Sidebar 공유 드롭다운) |
 | 라우팅 | `frontend/src/App.tsx` |
 | Axios API 클라이언트 | `frontend/src/services/api.ts` (snake_case→camelCase 자동 변환) |
 | TanStack Query 훅 | `frontend/src/hooks/use*.ts` |

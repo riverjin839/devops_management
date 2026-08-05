@@ -196,7 +196,7 @@ export function VersionGraphPage() {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="app-h-screen bg-background flex flex-col overflow-hidden">
       {/* 툴바 */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
         <button onClick={() => navigate('/versions')}

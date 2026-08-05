@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, ListTodo, Palette, FileSearch, Wand2, Bot } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { SchemaHealthPanel } from '@/components/settings/SchemaHealthPanel';
@@ -24,8 +24,9 @@ import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, ServiceDomain } from '@/types';
-import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
+import { getStatusIcon, formatDateTime, formatApiError, cn } from '@/lib/utils';
 import { useHomeStore } from '@/stores/homeStore';
+import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
 import { useToast, ClusterIconPicker, useModalA11y } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
@@ -360,6 +361,9 @@ export function SettingsPage() {
   const setWeeklyBarOpacity = useHomeStore((s) => s.setWeeklyBarOpacity);
   const weeklyBarTextColor = useHomeStore((s) => s.weeklyBarTextColor);
   const setWeeklyBarTextColor = useHomeStore((s) => s.setWeeklyBarTextColor);
+  // 기본 홈 탭 — 서버 저장(user_settings.home_prefs), 기기/브라우저를 넘어 따라온다.
+  const { data: homePrefs } = useHomePrefs();
+  const updateHomePrefs = useUpdateHomePrefs();
   // Cluster state
   const [showAddModal, setShowAddModal] = useState(false);
   const [editCluster, setEditCluster] = useState<Cluster | null>(null);
@@ -382,28 +386,21 @@ export function SettingsPage() {
   // 홈 버튼 아이콘 커스터마이즈 (업무/플랫폼 모드별).
   const { data: uiSettings } = useUiSettings();
   const updateUiSettings = useUpdateUiSettings();
-  const [homeIconPickerMode, setHomeIconPickerMode] = useState<null | 'work' | 'platform'>(null);
+  const [homeIconPickerOpen, setHomeIconPickerOpen] = useState(false);
   const [homeIconAnchor, setHomeIconAnchor] = useState<DOMRect | null>(null);
 
-  const saveHomeIcon = (target: 'work' | 'platform', next: string | null) => {
-    // work/platform 전체를 항상 함께 전송해 다른 모드 값이 초기화되지 않도록.
-    updateUiSettings.mutate({
-      homeIcons: {
-        work: target === 'work' ? next : (uiSettings?.homeIcons?.work ?? null),
-        platform: target === 'platform' ? next : (uiSettings?.homeIcons?.platform ?? null),
-      },
-    });
+  // 홈 버튼은 이제 work/platform 구분 없이 하나뿐이다(모드 폐지) — `homeIcons` 스키마는
+  // 하위 호환을 위해 그대로 두되 두 키에 항상 같은 값을 함께 저장한다.
+  const saveHomeIcon = (next: string | null) => {
+    updateUiSettings.mutate({ homeIcons: { work: next, platform: next } });
   };
 
-  const renderHomeIconPreview = (target: 'work' | 'platform', iconStr?: string | null) => {
+  const renderHomeIconPreview = (iconStr?: string | null) => {
     const resolved = resolveClusterIcon(iconStr);
     if (resolved?.kind === 'lucide') { const IconC = resolved.Component; return <IconC className="w-5 h-5" />; }
     if (resolved?.kind === 'image') return <img src={resolved.value} alt="" className="w-6 h-6 object-contain rounded-sm" />;
     if (resolved?.kind === 'text') return <span className="text-base leading-none">{resolved.value}</span>;
-    // 미설정 → 기본값 (업무=ListTodo, 플랫폼=☸)
-    return target === 'platform'
-      ? <span className="text-base leading-none">☸</span>
-      : <ListTodo className="w-5 h-5" />;
+    return <Home className="w-5 h-5" />;
   };
 
   // Management server state
@@ -596,7 +593,7 @@ export function SettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1700px] px-4 lg:px-6 py-5">
         {/* Page Header + Tabs */}
         <div className="flex items-center justify-between mb-6">
@@ -655,33 +652,59 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* 홈 버튼 아이콘 커스터마이즈 — 좌측 상단 홈 버튼(업무/플랫폼 모드 전환) */}
-          {([
-            { mode: 'work' as const, label: '업무 현황 홈 아이콘', hint: '좌측 상단 홈 버튼 · 업무 모드 (기본: 목록 아이콘)' },
-            { mode: 'platform' as const, label: '플랫폼 현황 홈 아이콘', hint: '좌측 상단 홈 버튼 · 플랫폼 모드 (기본: ☸ 톱니)' },
-          ]).map(({ mode, label, hint }) => (
-            <div key={mode} className="px-4 py-3 flex items-center justify-between border-t border-border">
-              <div>
-                <p className="text-sm">{label}</p>
-                <p className="text-xs text-muted-foreground">{hint}</p>
-              </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  setHomeIconPickerMode(mode);
-                  setHomeIconAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
-                }}
-                className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-lg border border-border bg-secondary hover:bg-secondary/70 transition-colors"
-                title="클릭하여 아이콘 변경"
-              >
-                <span className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-sky-700 text-white flex items-center justify-center flex-shrink-0">
-                  {renderHomeIconPreview(mode, uiSettings?.homeIcons?.[mode])}
-                </span>
-                <span className="text-sm text-muted-foreground">변경</span>
-                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
+          {/* 홈 버튼 아이콘 커스터마이즈 — 좌측 상단 홈 버튼(홈으로 이동 전용, 모드 폐지) */}
+          <div className="px-4 py-3 flex items-center justify-between border-t border-border">
+            <div>
+              <p className="text-sm">홈 아이콘</p>
+              <p className="text-xs text-muted-foreground">좌측 상단 홈 버튼 (기본: 홈 아이콘)</p>
             </div>
-          ))}
+            <button
+              type="button"
+              onClick={(e) => {
+                setHomeIconPickerOpen(true);
+                setHomeIconAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+              }}
+              className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-lg border border-border bg-secondary hover:bg-secondary/70 transition-colors"
+              title="클릭하여 아이콘 변경"
+            >
+              <span className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-sky-700 text-white flex items-center justify-center flex-shrink-0">
+                {renderHomeIconPreview(uiSettings?.homeIcons?.work)}
+              </span>
+              <span className="text-sm text-muted-foreground">변경</span>
+              <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          </div>
+
+          {/* 기본 홈 탭 — 로그인 시 홈(/) 에서 처음 보여줄 탭. user_settings.home_prefs 에 저장돼
+              기기/브라우저를 넘어 따라온다(D-056 연장). */}
+          <div className="px-4 py-3 flex items-center justify-between border-t border-border">
+            <div>
+              <p className="text-sm">기본 홈 탭</p>
+              <p className="text-xs text-muted-foreground">로그인 시 홈 화면에서 먼저 보여줄 탭</p>
+            </div>
+            <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+              {([
+                { key: 'work' as const, label: '내 업무' },
+                { key: 'platform' as const, label: '플랫폼 현황' },
+              ]).map(({ key, label }, idx) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => updateHomePrefs.mutate({ defaultHomeTab: key })}
+                  aria-pressed={homePrefs?.defaultHomeTab === key}
+                  className={cn(
+                    'px-2.5 py-1.5 transition-colors',
+                    idx > 0 && 'border-l border-border',
+                    homePrefs?.defaultHomeTab === key
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-secondary text-muted-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* 스케줄 배경 — 당일 스케줄 · 담당자별 진행현황 패널 배경 (흰색/크림) */}
           <div className="px-4 py-3 flex items-center justify-between border-t border-border">
@@ -765,15 +788,15 @@ export function SettingsPage() {
         </div>
         )}
 
-        {/* 홈 아이콘 picker — 탭과 무관하게 동작 */}
-        {homeIconPickerMode && (
+        {/* 홈 아이콘 picker */}
+        {homeIconPickerOpen && (
           <ClusterIconPicker
-            title={homeIconPickerMode === 'work' ? '업무 현황 홈 아이콘' : '플랫폼 현황 홈 아이콘'}
-            value={uiSettings?.homeIcons?.[homeIconPickerMode] ?? null}
+            title="홈 아이콘"
+            value={uiSettings?.homeIcons?.work ?? null}
             anchorRect={homeIconAnchor}
-            onChange={(next) => saveHomeIcon(homeIconPickerMode, next)}
+            onChange={(next) => saveHomeIcon(next)}
             onClose={() => {
-              setHomeIconPickerMode(null);
+              setHomeIconPickerOpen(false);
               setHomeIconAnchor(null);
             }}
           />

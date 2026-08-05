@@ -169,7 +169,7 @@ export function IslandPage() {
 
   if (!island) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <div className="app-min-h-screen bg-background p-6">
         <EmptyIslandState onOpenManager={() => setManagerOpen(true)} />
         <IslandManagerPane open={managerOpen} onClose={() => setManagerOpen(false)} currentId={null} />
       </div>
@@ -227,7 +227,7 @@ export function IslandPage() {
     <>
       {island.layoutMode === 'sidebar' ? (
         // 보조 사이드바는 메인 사이드바에 flush(좌측 공백 0) — CLAUDE.md 간격 표준.
-        <div className="min-h-screen bg-background flex">
+        <div className="app-min-h-screen bg-background flex">
           <IslandRail
             panels={panelViews}
             activeKey={activeKey}
@@ -245,7 +245,7 @@ export function IslandPage() {
           </div>
         </div>
       ) : (
-        <div className="min-h-screen bg-background flex flex-col">
+        <div className="app-min-h-screen bg-background flex flex-col">
           <div className="px-3 py-2 border-b border-border">{header}</div>
           <div className="px-3 py-2">
             <IslandTabBar

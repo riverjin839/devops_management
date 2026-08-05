@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud } from 'lucide-react';
-import { WorkItemForm, WorkItemReadView, RelatedServiceEntriesSidebar, JiraPushDialog } from '@/components/work-items';
+import { WorkItemForm, WorkItemReadView, JiraPushDialog } from '@/components/work-items';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { cn, formatApiError } from '@/lib/utils';
@@ -25,7 +25,7 @@ export function WorkItemDetailPage() {
 
   if (listData && !item) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="app-min-h-screen bg-background">
         <main className="max-w-[1200px] mx-auto px-8 py-8">
           <div className="text-center py-20">
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
@@ -43,7 +43,7 @@ export function WorkItemDetailPage() {
   }
 
   if (!item) {
-    return <div className="min-h-screen bg-background" />;
+    return <div className="app-min-h-screen bg-background" />;
   }
 
   const handleDelete = () => setConfirmDeleteOpen(true);
@@ -63,7 +63,7 @@ export function WorkItemDetailPage() {
   const pageTitle = isEditing ? '업무 수정' : '업무 상세';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
@@ -119,12 +119,8 @@ export function WorkItemDetailPage() {
             />
           </div>
         ) : (
-          <div className="flex gap-6 items-start">
-            <div className={cn('flex-1 min-w-0 border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
-              <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
-            </div>
-            {/* Cross-view (Phase A) — 같은 service 의 ServiceEntry 5건 sticky sidebar */}
-            {item.service && <RelatedServiceEntriesSidebar service={item.service} />}
+          <div className={cn('border border-border rounded-2xl p-8 mac-shadow', 'bg-card')}>
+            <WorkItemReadView item={item} onEdit={() => setIsEditing(true)} />
           </div>
         )}
       </main>

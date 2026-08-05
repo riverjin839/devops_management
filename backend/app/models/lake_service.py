@@ -8,7 +8,6 @@ starrocks/jupyterlab/superset/polaris) 인스턴스 등록 + 헬스체크 결과
  - tls_verify 는 cluster.tls_verify 와 동일 정책 — 폐쇄망 자체 인증서 환경 호환.
 
 기존 자산과의 관계:
- - ServiceEntry (kind=guide/history) 는 service 슬러그(=service_type) 매칭으로 detail 에 표시.
  - Cluster 와 cascade — cluster 삭제 시 LakeService 도 정리.
 """
 import uuid

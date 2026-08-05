@@ -321,7 +321,7 @@ export function OntologyPage() {
   const isEmpty = !isLoading && graph && graph.entities.length === 0;
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="app-h-screen bg-background flex flex-col overflow-hidden">
       {/* 상단 툴바 */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-card flex-shrink-0 z-20">
         <Share2 className="w-5 h-5 text-primary flex-shrink-0" />

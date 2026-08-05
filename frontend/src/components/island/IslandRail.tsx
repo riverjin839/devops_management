@@ -133,7 +133,7 @@ export function IslandRail({
   return (
     <nav
       aria-label="아일랜드 패널"
-      className="flex-shrink-0 w-14 sticky top-0 self-start max-h-screen overflow-y-auto no-scrollbar border-r border-border bg-card py-2"
+      className="flex-shrink-0 w-14 sticky top-0 self-start app-max-h-screen overflow-y-auto no-scrollbar border-r border-border bg-card py-2"
     >
       <div className="flex flex-col items-center gap-1">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

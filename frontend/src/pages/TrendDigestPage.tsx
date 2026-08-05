@@ -432,7 +432,7 @@ export function TrendDigestPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex app-h-screen overflow-hidden bg-background">
       {/* 좌측: 날짜 목록 */}
       <aside className="w-56 flex-shrink-0 border-r border-border flex flex-col bg-card">
         <div className="px-4 py-4 border-b border-border">

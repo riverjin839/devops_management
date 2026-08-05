@@ -62,7 +62,7 @@ def test_known_regression_tables_are_deleted():
 def test_history_tables_are_never_deleted():
     """이력/자산 테이블은 클러스터 삭제로 같이 사라지면 안 된다 (연결만 해제)."""
     order = purge_order()
-    for name in ("work_items", "service_entries", "node_server_specs"):
+    for name in ("work_items", "node_server_specs"):
         assert name in KEEP_ROWS, f"{name} 이 보존 정책에서 빠졌다"
         assert name not in order, f"{name} 이 삭제 대상에 들어갔다 — 이력이 지워진다"
 

@@ -27,7 +27,7 @@ export function ArchitecturePage() {
   );
 
   return (
-    <div className="min-h-screen bg-background p-5">
+    <div className="app-min-h-screen bg-background p-5">
       <div className="flex gap-4 max-w-[1600px] mx-auto">
         {tab === 'cluster' && (
           <div className="sticky top-4 self-start">

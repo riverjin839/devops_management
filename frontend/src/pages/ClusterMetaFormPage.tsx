@@ -224,7 +224,7 @@ export function ClusterMetaFormPage() {
 
   // ── D-032: 로딩/에러/미발견 3분기 — 데이터가 확정되기 전엔 폼을 렌더하지 않는다 ──
   const shell = (children: ReactNode) => (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1200px] mx-auto px-8 py-8">{children}</main>
     </div>
   );
@@ -426,7 +426,7 @@ export function ClusterMetaFormPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="max-w-[1200px] mx-auto px-8 py-8">
         {/* Page header */}
         <div className="flex items-center gap-3 mb-6">

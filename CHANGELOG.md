@@ -53,6 +53,52 @@
   `components/platform-status/PlatformStatusMatrix.tsx`,
   `CheckMatrixCellDetailModal.tsx`/`CheckMatrixItemFormModal.tsx`/`CheckMatrixSettingsModal.tsx`.
 
+### Removed
+- **PEP 서비스 / APP 서비스 완전 삭제**: 사이드바 "PEP 서비스"(`/services` 서비스 카탈로그·허브)·
+  "APP 서비스"(`/app-services`) 그룹과 레거시 `/pep-services` 화면을 삭제했다 — 제공하던 서비스별
+  가이드/이슈대응 노트 기능이 이미 "문서 관리" 그룹(`/docs`·`/work-guides`·`/ops-notes`)과
+  중복이었다. 업무 관리의 "관련 서비스" 태그(`ServiceChip`)와 상세 페이지의 연관 ServiceEntry
+  사이드바도 함께 제거했다. LAKE 서비스 모니터링(`/lake-services`)과 Settings "관리 서비스"
+  (서비스 타입/카테고리 레지스트리)는 완전히 별개 기능이라 영향 없음. Backend:
+  `routers/service_entries.py`·`models/service_entry.py`·`schemas/service_entry.py`·
+  `data/lake_service_knowledge.py` 삭제, `service_entries` 테이블/`work_items.service` 컬럼은
+  과거 데이터 보존을 위해 스키마는 그대로 둠(DROP 없음). Frontend: `PepServicesPage`·
+  `AppServicesPage`·`ServicesCatalogPage`·`ServiceHubPage`·`components/service-domain/` 삭제.
+
+### Changed
+- **홈 "모드"를 사이드바 게이팅에서 분리, 업무 도메인을 전역 상단바로 이동**: 사이드바 로고
+  버튼이 "업무 현황"/"플랫폼 현황" 모드를 토글하면서 반대 도메인 그룹(협업 7개 화면 또는
+  클러스터·서버·네트워크·스토리지·DevOps 36개 화면)이 사이드바에서 통째로 사라지던 문제
+  (R-4 5차 D-054)를 없앴다. 협업/문서 관리 그룹은 신규 전역 `AppTopBar`(모든 화면 상단,
+  사용자명·날짜·알람 종 포함)로, 클러스터/서버/네트워크/스토리지/서비스/DevOps 그룹은 좌측
+  사이드바에 그대로 남아 **두 도메인이 항상 동시에 보인다**. 홈 화면 안의 "업무 현황/플랫폼
+  현황" 선택은 라벨 있는 세그먼트 탭(`[내 업무] [플랫폼 현황]`)으로 대체(D-055). 로그인마다
+  선택이 `work` 로 강제 리셋되던 것도 제거해 기기 간 선호가 유지된다(D-056). Backend 무변경.
+  Frontend: `components/layout/AppTopBar.tsx`·`NavFlyout.tsx`(신규, `Sidebar.tsx` 의 flyout
+  공용화), `navConfig.ts`(`GROUPS.modes`→`GROUPS.domain`), `stores/homeStore.ts`(`mode`→
+  `homeTab`, localStorage 키 `pep:homeMode`→`pep:homeTab`), `stores/authStore.ts`(강제 리셋
+  제거), `pages/HomePage.tsx`, `index.css`(`--topbar-h` + `.app-min-h-screen`/`.app-h-screen`/
+  `.app-max-h-screen` 유틸리티, 60여 개 페이지 적용).
+
+### Added
+- **홈 KPI 스트립에 "점검 실패" 신호 추가**: 위험 클러스터 옆에 점검 매트릭스의 critical 셀
+  개수를 보여주는 필을 추가했다(R-4 5차 D-060 단기안) — 업무 탭에 있어도 플랫폼 이상 유무를
+  바로 알 수 있다. 클릭하면 페이지 이동 없이 `플랫폼 현황` 탭으로 전환된다. `플랫폼 현황`
+  탭 라벨에도 위험 클러스터+점검 실패 합계 배지가 붙고 0건이면 숨는다. Frontend:
+  `hooks/useCheckMatrix.ts` 의 `useCheckMatrixFailureCount()`(신규, `useCheckMatrixGrid()` 와
+  쿼리키를 공유해 추가 네트워크 요청 없음), `pages/HomePage.tsx`.
+- **홈 개인화 — 기본 홈 탭 · 즐겨찾기 · 최근 방문**: 로그인 시 열릴 홈 탭(`내 업무`/`플랫폼
+  현황`)을 서버에 저장해 기기를 넘어 유지하고(Settings "화면 UI 설정" 탭에 선택기 추가),
+  전역 상단바·좌측 사이드바 flyout 메뉴 항목에 마우스를 올리면 별 아이콘으로 즐겨찾기를
+  바로 추가/해제할 수 있으며, 상단바 ★ 드롭다운과 사이드바 최상단 "즐겨찾기" 레일 아이콘에서
+  즐겨찾기 목록과 최근 방문(기기 로컬, 최대 5개) 화면을 확인·이동할 수 있다(R-4 5차 D-060
+  잔여 해소). Backend: `routers/home_prefs.py`(신규, `GET/PUT /api/v1/me/home-prefs`,
+  `user_settings` 테이블 재사용이라 스키마 변경 없음), `schemas/home_prefs.py`. Frontend:
+  `hooks/useHomePrefs.ts`·`hooks/useFavorites.ts`·`stores/recentPathsStore.ts`·
+  `components/layout/FavoritesFlyoutBody.tsx`(신규), `components/layout/NavFlyout.tsx`
+  (`FlyoutLink` 에 즐겨찾기 토글 별 버튼 추가), `AppTopBar.tsx`·`Sidebar.tsx`·`HomePage.tsx`·
+  `SettingsPage.tsx`.
+
 ## [1.24.2] - 2026-08-05
 
 ### Changed

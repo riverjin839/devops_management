@@ -306,7 +306,7 @@ export function KernelParamsPage() {
   const runError = runMut.error as { response?: { data?: { detail?: string } }; message?: string } | null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="mx-auto px-3 py-3 flex gap-3">
         <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => setClusterId(id ?? '')} iconOnly />
 

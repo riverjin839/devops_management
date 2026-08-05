@@ -10,9 +10,6 @@ import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
-import { ServicesCatalogPage } from '@/pages/ServicesCatalogPage';
-import { PepServicesPage } from '@/pages/PepServicesPage';
-import { AppServicesPage } from '@/pages/AppServicesPage';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
@@ -58,7 +55,7 @@ import { JiraExcelImportPage } from '@/pages/JiraExcelImportPage';
  *
  * NAV_MAP 에 있으나 여기에 없는 경로는 패널 카탈로그에서 자동으로 빠진다. 그래서 App.tsx 에
  * 새 라우트가 생겨도 아일랜드가 깨지지 않고, 담을 수 없는 화면은 조용히 목록에서 제외된다.
- * 라우트 파라미터가 필요한 화면(`/services/:key` 등)도 같은 이유로 여기 넣지 않는다 —
+ * 라우트 파라미터가 필요한 화면(`/lake-services/:id` 등)도 같은 이유로 여기 넣지 않는다 —
  * 임베드 시 파라미터를 받을 수 없어 빈 화면이 되기 때문.
  */
 export const PANEL_COMPONENTS: Record<string, ComponentType> = {
@@ -72,9 +69,6 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/lake-services': LakeServicesPage,
   '/pod-bottleneck': PodBottleneckPage,
   '/docs': KnowledgeHubPage,
-  '/services': ServicesCatalogPage,
-  '/pep-services': PepServicesPage,
-  '/app-services': AppServicesPage,
   '/playbooks': PlaybooksPage,
   '/tasks-mgmt': WorkItemBoardPage,
   '/todo-today': TodoTodayPage,

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
-import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { InlineEdit } from '@/components/common';
 import { NAV_MAP, GROUPS, DEFAULT_TITLE } from '@/components/layout/navConfig';
 
@@ -12,25 +11,11 @@ import { NAV_MAP, GROUPS, DEFAULT_TITLE } from '@/components/layout/navConfig';
 export function NavMenuManager() {
   const { data: settings } = useUiSettings();
   const updateSettings = useUpdateUiSettings();
-  const services = useServiceCatalog();
 
   const title = settings?.appTitle || DEFAULT_TITLE;
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
 
-  // 동적 NAV_MAP — 정적 위에 서비스 카탈로그 항목을 덧씌움 (사이드바와 동일).
-  const navMap = useMemo(() => {
-    const m: typeof NAV_MAP = { ...NAV_MAP };
-    for (const s of services) {
-      if (s.key === 'other') continue;
-      m[`/services/${s.key}`] = { defaultLabel: s.label, icon: s.icon };
-    }
-    return m;
-  }, [services]);
-  const servicePaths = useMemo(
-    () => services.filter((s) => s.key !== 'other').map((s) => `/services/${s.key}`),
-    [services],
-  );
-  const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
+  const getLabel = (path: string) => navLabels[path] || NAV_MAP[path]?.defaultLabel || path;
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingNavPath, setEditingNavPath] = useState<string | null>(null);
@@ -71,14 +56,14 @@ export function NavMenuManager() {
       {/* 그룹별 메뉴 항목 */}
       <div className="px-4 py-3 space-y-4">
         {GROUPS.map((g) => {
-          const paths = g.id === 'services' ? [...g.paths, ...servicePaths] : g.paths;
+          const paths = g.paths;
           if (paths.length === 0) return null;
           return (
             <div key={g.id}>
               <p className="px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                 {paths.map((path) => {
-                  const navItem = navMap[path];
+                  const navItem = NAV_MAP[path];
                   if (!navItem) return null;
                   const { icon: Icon } = navItem;
                   const itemLabel = getLabel(path);

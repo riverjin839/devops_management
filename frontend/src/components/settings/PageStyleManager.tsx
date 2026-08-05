@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Save, X } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
-import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useToast } from '@/components/common';
 import { NAV_MAP, GROUPS } from '@/components/layout/navConfig';
 import {
@@ -30,17 +29,12 @@ function cleanStyle(s: PageStyle): PageStyle {
 export function PageStyleManager() {
   const { data: settings } = useUiSettings();
   const updateSettings = useUpdateUiSettings();
-  const services = useServiceCatalog();
   const toast = useToast();
 
   const navLabels = settings?.navLabels || {};
   const pageStyles = useMemo(() => settings?.pageStyles || {}, [settings?.pageStyles]);
 
   // 대상 페이지 목록 — 전체 기본 + 그룹별 라우트.
-  const servicePaths = useMemo(
-    () => services.filter((s) => s.key !== 'other').map((s) => ({ path: `/services/${s.key}`, label: s.label })),
-    [services],
-  );
   const labelOf = (path: string) => navLabels[path] || NAV_MAP[path]?.defaultLabel || path;
 
   const targets = useMemo(() => {
@@ -48,15 +42,12 @@ export function PageStyleManager() {
       { group: '공통', items: [{ key: PAGE_STYLE_DEFAULT_KEY, label: '전체 기본 (모든 페이지)' }] },
     ];
     for (const g of GROUPS) {
-      const items = [
-        ...g.paths.filter((p) => NAV_MAP[p]).map((p) => ({ key: p, label: labelOf(p) })),
-        ...(g.id === 'services' ? servicePaths.map((s) => ({ key: s.path, label: s.label })) : []),
-      ];
+      const items = g.paths.filter((p) => NAV_MAP[p]).map((p) => ({ key: p, label: labelOf(p) }));
       if (items.length) groups.push({ group: g.label, items });
     }
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servicePaths, navLabels]);
+  }, [navLabels]);
 
   const [target, setTarget] = useState<string>(PAGE_STYLE_DEFAULT_KEY);
   const [draft, setDraft] = useState<PageStyle>({});

@@ -65,7 +65,7 @@ export function K8sEventsPage() {
   const events: K8sEvent[] = data?.data ?? [];
 
   return (
-    <div className="min-h-screen bg-background py-3 pr-3">
+    <div className="app-min-h-screen bg-background py-3 pr-3">
       <div className="flex gap-3">
         <ClusterSidebar
           clusters={clusters}

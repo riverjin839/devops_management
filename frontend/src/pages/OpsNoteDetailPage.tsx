@@ -30,7 +30,7 @@ export function OpsNoteDetailPage() {
 
   if (!isLoading && !note) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="app-min-h-screen bg-background">
         <main className="max-w-[1200px] mx-auto px-8 py-8">
           <div className="text-center py-20">
             <HelpCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
@@ -48,7 +48,7 @@ export function OpsNoteDetailPage() {
   }
 
   if (!note) {
-    return <div className="min-h-screen bg-background" />;
+    return <div className="app-min-h-screen bg-background" />;
   }
 
   const handleDelete = async () => {
@@ -66,7 +66,7 @@ export function OpsNoteDetailPage() {
   const pageTitle = editMode ? 'Q&A 수정' : 'Q&A 상세';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button

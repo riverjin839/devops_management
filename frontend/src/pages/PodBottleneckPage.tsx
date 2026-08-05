@@ -85,7 +85,7 @@ export function PodBottleneckPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-min-h-screen bg-background">
       <main className="pr-3 py-3 flex gap-3">
         <div className="sticky top-4 self-start">
           <ClusterSidebar

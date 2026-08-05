@@ -327,7 +327,7 @@ export function KnowledgeHubPage() {
 
   return (
     // 메인 사이드바 바로 옆에 서비스 사이드바를 붙인다(공백 없이 flush). 본문은 flex-1.
-    <div className="min-h-screen bg-background flex">
+    <div className="app-min-h-screen bg-background flex">
       {tab === 'list' && (
         <ServiceSidebar services={services} selectedKey={serviceFilter} onSelect={setServiceFilter} allLabel="전체 서비스" />
       )}

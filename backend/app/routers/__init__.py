@@ -35,7 +35,6 @@ from app.routers.cluster_custom_fields import router as cluster_custom_fields_ro
 from app.routers.work_item_custom_fields import router as work_item_custom_fields_router
 from app.routers.backup import router as backup_router
 from app.routers.schema_health import router as schema_health_router
-from app.routers.service_entries import router as service_entries_router
 from app.routers.batch_jobs import router as batch_jobs_router
 from app.routers.commands import router as commands_router
 from app.routers.ansible_assets import (
@@ -75,6 +74,7 @@ from app.routers.release_notes import router as release_notes_router
 from app.routers.check_matrix import router as check_matrix_router
 from app.routers.island import router as island_router
 from app.routers.llm_settings import router as llm_settings_router
+from app.routers.home_prefs import router as home_prefs_router
 
 __all__ = [
     "check_matrix_router",
@@ -124,7 +124,6 @@ __all__ = [
     "work_item_custom_fields_router",
     "backup_router",
     "schema_health_router",
-    "service_entries_router",
     "batch_jobs_router",
     "commands_router",
     "ansible_files_router",
@@ -149,4 +148,5 @@ __all__ = [
     "release_notes_router",
     "island_router",
     "llm_settings_router",
+    "home_prefs_router",
 ]
