@@ -8,10 +8,14 @@ limit(240s)까지 블로킹하다 ``SoftTimeLimitExceeded`` 로 죽는다(사용
 ``_v1()``/``_wrap_api()`` 가 반환하는 프록시가 모든 호출에 기본 타임아웃을 강제로
 주입해 이 실수를 구조적으로 막는다 — 이 파일은 그 프록시 자체를 DB-free 로 검증한다.
 """
+from app.models import StatusEnum
 from app.services.deep_checkers.base import (
+    DeepCheckContext,
     DeepCheckerBase,
+    DeepCheckOutcome,
     _CONNECTION_ERROR_HINTS,
     _K8S_API_TIMEOUT_SECONDS,
+    _TLS_ERROR_HINTS,
     _TimeoutGuardedApi,
 )
 
@@ -69,3 +73,70 @@ class TestConnectionErrorHints:
         # 기존 힌트("timeout" 등)에 안 걸렸다 — safe_run() 이 critical 대신 pending 으로
         # 분류하도록 힌트에 추가했는지 확인.
         assert any(h in "softtimelimitexceeded()" for h in _CONNECTION_ERROR_HINTS)
+
+
+def _raising_checker(exc: Exception):
+    class _RaisingChecker(DeepCheckerBase):
+        check_type = "raising_fake"
+        display_name = "가짜 체커"
+
+        def run(self, ctx: DeepCheckContext) -> DeepCheckOutcome:
+            raise exc
+
+    return _RaisingChecker()
+
+
+class TestSafeRunClassification:
+    """safe_run() 의 예외 → StatusEnum 분류. TLS 문제는 "연결 실패"와 겹쳐 보이는
+    문자열(Max retries exceeded)을 공유하지만, 실제로는 재시도로 낫지 않는 지속적
+    설정 오류라 pending 이 아니라 critical + 구체적 안내로 분류돼야 한다."""
+
+    def test_pure_connection_error_is_pending(self):
+        exc = Exception("HTTPSConnectionPool(host='10.0.0.5', port=6443): Max retries exceeded (Connection refused)")
+        outcome = _raising_checker(exc).safe_run(DeepCheckContext())
+
+        assert outcome.status == StatusEnum.pending
+
+    def test_tls_certificate_error_is_critical_with_guidance_not_pending(self):
+        exc = Exception(
+            "HTTPSConnectionPool(host='10.0.0.5', port=6443): Max retries exceeded with url: /api/v1/nodes "
+            "(Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] "
+            "certificate verify failed: unable to get local issuer certificate')))"
+        )
+        outcome = _raising_checker(exc).safe_run(DeepCheckContext())
+
+        assert outcome.status == StatusEnum.critical
+        assert "kubeconfig" in outcome.message
+        assert "TLS" in outcome.message or "인증서" in outcome.message
+
+    def test_x509_error_is_critical_with_guidance(self):
+        exc = Exception("x509: certificate signed by unknown authority")
+        outcome = _raising_checker(exc).safe_run(DeepCheckContext())
+
+        assert outcome.status == StatusEnum.critical
+        assert "kubeconfig" in outcome.message
+
+    def test_generic_exception_is_critical_without_tls_guidance(self):
+        exc = ValueError("unexpected null field in response")
+        outcome = _raising_checker(exc).safe_run(DeepCheckContext())
+
+        assert outcome.status == StatusEnum.critical
+        assert "kubeconfig" not in outcome.message
+
+    def test_soft_time_limit_exceeded_end_to_end_is_pending_not_critical(self):
+        exc = Exception("SoftTimeLimitExceeded()")
+        outcome = _raising_checker(exc).safe_run(DeepCheckContext())
+
+        assert outcome.status == StatusEnum.pending
+
+
+class TestTlsErrorHints:
+    def test_hints_cover_common_openssl_and_x509_messages(self):
+        samples = [
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed",
+            "x509: certificate signed by unknown authority",
+            "certificate has expired or is not yet valid",
+        ]
+        for s in samples:
+            lowered = s.lower()
+            assert any(h in lowered for h in _TLS_ERROR_HINTS), s
