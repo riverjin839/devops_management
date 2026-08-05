@@ -37,6 +37,14 @@
   제거), `pages/HomePage.tsx`, `index.css`(`--topbar-h` + `.app-min-h-screen`/`.app-h-screen`/
   `.app-max-h-screen` 유틸리티, 60여 개 페이지 적용).
 
+### Added
+- **홈 KPI 스트립에 "점검 실패" 신호 추가**: 위험 클러스터 옆에 점검 매트릭스의 critical 셀
+  개수를 보여주는 필을 추가했다(R-4 5차 D-060 단기안) — 업무 탭에 있어도 플랫폼 이상 유무를
+  바로 알 수 있다. 클릭하면 페이지 이동 없이 `플랫폼 현황` 탭으로 전환된다. `플랫폼 현황`
+  탭 라벨에도 위험 클러스터+점검 실패 합계 배지가 붙고 0건이면 숨는다. Frontend:
+  `hooks/useCheckMatrix.ts` 의 `useCheckMatrixFailureCount()`(신규, `useCheckMatrixGrid()` 와
+  쿼리키를 공유해 추가 네트워크 요청 없음), `pages/HomePage.tsx`.
+
 ## [1.24.2] - 2026-08-05
 
 ### Changed

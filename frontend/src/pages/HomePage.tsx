@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
-  ListTodo, ServerCog,
+  ListTodo, ServerCog, ShieldAlert,
 } from 'lucide-react';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
+import { useCheckMatrixFailureCount } from '@/hooks/useCheckMatrix';
 import { useToday } from '@/hooks/useToday';
 import { useHomeStore, type HomeTab } from '@/stores/homeStore';
 import { useIslands } from '@/hooks/useIslands';
@@ -40,11 +41,13 @@ interface KpiPillProps {
   Icon: typeof ClipboardList;
   accent: string;
   to?: string;
+  /** 라우트 이동 대신 같은 화면 안에서 상태만 바꿀 때(예: 홈 탭 전환). `to` 보다 우선한다. */
+  onSelect?: () => void;
   isLoading?: boolean;
   isError?: boolean;
 }
 
-function KpiPill({ label, value, hint, Icon, accent, to, isLoading, isError }: KpiPillProps) {
+function KpiPill({ label, value, hint, Icon, accent, to, onSelect, isLoading, isError }: KpiPillProps) {
   const body = (
     <div className={cn(
       'flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border transition-colors text-xs whitespace-nowrap',
@@ -64,6 +67,9 @@ function KpiPill({ label, value, hint, Icon, accent, to, isLoading, isError }: K
       )}
     </div>
   );
+  if (onSelect) {
+    return <button type="button" onClick={onSelect}>{body}</button>;
+  }
   return to ? <Link to={to}>{body}</Link> : body;
 }
 
@@ -103,6 +109,9 @@ export function HomePage() {
 
   const { clusters } = useClusterStore();
   const { isLoading: clustersLoading, isError: clustersError } = useClusters();
+  const {
+    data: checkFailureCount, isLoading: checkFailureLoading, isError: checkFailureError,
+  } = useCheckMatrixFailureCount();
 
   const { data: workItemsData, isLoading: workItemsLoading, isError: workItemsError } = useHomeWorkItems();
   const allWorkItems = useMemo<WorkItem[]>(() => workItemsData?.data ?? [], [workItemsData]);
@@ -133,9 +142,11 @@ export function HomePage() {
   // 밀도로 보이므로 기본 탭으로 되돌린다.
   const [weeklyTab, setWeeklyTab] = useState<'week' | 'month' | 'member'>('week');
 
-  const TABS: Array<{ key: HomeTab; label: string; Icon: typeof ListTodo }> = [
+  // 플랫폼 탭 배지 — 위험 클러스터 + 점검 실패 합계. 0이면 배지를 숨겨 평상시엔 조용하다.
+  const platformSignalCount = criticalClusters + (checkFailureCount ?? 0);
+  const TABS: Array<{ key: HomeTab; label: string; Icon: typeof ListTodo; badge?: number }> = [
     { key: 'work', label: '내 업무', Icon: ListTodo },
-    { key: 'platform', label: '플랫폼 현황', Icon: ServerCog },
+    { key: 'platform', label: '플랫폼 현황', Icon: ServerCog, badge: platformSignalCount || undefined },
   ];
   const handleTabKeyDown = (e: React.KeyboardEvent, idx: number) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -182,6 +193,16 @@ export function HomePage() {
           isError={clustersError}
         />
         <KpiPill
+          label="점검 실패"
+          value={checkFailureCount ?? 0}
+          hint="건"
+          Icon={ShieldAlert}
+          accent="text-status-critical"
+          onSelect={() => setHomeTab('platform')}
+          isLoading={checkFailureLoading}
+          isError={checkFailureError}
+        />
+        <KpiPill
           label="다음 일정"
           value={upcomingLabel}
           Icon={CalendarClock}
@@ -215,6 +236,19 @@ export function HomePage() {
             >
               <t.Icon className="w-3.5 h-3.5" />
               {t.label}
+              {!!t.badge && (
+                <span
+                  className={cn(
+                    'inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[10px] font-bold tabular-nums',
+                    homeTab === t.key
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-status-critical/15 text-status-critical',
+                  )}
+                  title={`위험 클러스터·점검 실패 합계 ${t.badge}건`}
+                >
+                  {t.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>

@@ -47,6 +47,32 @@ export function useCheckMatrixGrid() {
   });
 }
 
+/**
+ * 홈 KPI 스트립의 "점검 실패" 신호 — critical 상태인 셀 개수만 파생한다.
+ * `useCheckMatrixGrid()` 와 같은 쿼리키를 써 캐시를 공유하므로, 홈 탭이 어느 쪽이든
+ * (업무/플랫폼) `/check-matrix/grid` 요청은 여전히 최대 60초에 한 번뿐이다.
+ */
+export function useCheckMatrixFailureCount() {
+  return useQuery({
+    queryKey: checkMatrixKeys.grid,
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.getGrid();
+      return data;
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,
+    select: (grid) => {
+      let count = 0;
+      for (const rowCells of Object.values(grid.cells)) {
+        for (const cell of Object.values(rowCells)) {
+          if (cell.status === 'critical') count += 1;
+        }
+      }
+      return count;
+    },
+  });
+}
+
 export function useCheckMatrixCellHistory(itemId: string | undefined, clusterId: string | undefined, days = 30) {
   return useQuery({
     queryKey: checkMatrixKeys.history(itemId || '', clusterId || '', days),
