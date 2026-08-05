@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, ListTodo, Palette, FileSearch, Wand2 } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, ListTodo, Palette, FileSearch, Wand2, Bot } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { SchemaHealthPanel } from '@/components/settings/SchemaHealthPanel';
@@ -13,7 +13,9 @@ import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
+import { SystemUserAccountManager } from '@/components/settings/SystemUserAccountManager';
 import { AuditLogManager } from '@/components/settings/AuditLogManager';
+import { LlmSettingsTab } from '@/components/settings/LlmSettingsTab';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees } from '@/hooks/useAssignees';
@@ -28,9 +30,9 @@ import { useToast, ClusterIconPicker, useModalA11y } from '@/components/common';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
-  suggestAttribute, suggestOpTypeLabel,
+  suggestAttribute,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor, levelLabel, levelCustomHex } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelColor, levelCustomHex } from '@/hooks/useOperationLevels';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
@@ -364,7 +366,12 @@ export function SettingsPage() {
   const [kubeconfigCluster, setKubeconfigCluster] = useState<Cluster | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; detail: string }>>({});
+  const [verifyResults, setVerifyResults] = useState<Record<string, {
+    ok: boolean;
+    status?: string;
+    statusReason?: string | null;
+    checks: { check: string; ok: boolean | null; detail: string }[];
+  }>>({});
   // 클러스터 아이콘 picker — 행의 아이콘 버튼 클릭 시 anchor 좌표 보존.
   const [iconPickerCluster, setIconPickerCluster] = useState<Cluster | null>(null);
   const [iconPickerAnchor, setIconPickerAnchor] = useState<DOMRect | null>(null);
@@ -450,17 +457,26 @@ export function SettingsPage() {
     try {
       const res = await clustersApi.verify(cluster.id);
       const data = res.data;
-      const summary = data.results
-        .map((r) => {
-          const detailStr = typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail ?? '');
-          const label = r.check === 'api_server' ? 'API서버' : r.check === 'kubeconfig_auth' ? '인증' : '노드조회';
-          const mark = r.ok === null ? '건너뜀' : r.ok ? '✓' : '✗';
-          return `${label}: ${mark} ${detailStr}`;
-        })
-        .join(' | ');
-      setVerifyResults((prev) => ({ ...prev, [cluster.id]: { ok: data.ok, detail: summary } }));
+      // 체크별 결과를 그대로 보존 — "healthz OK / kubeconfig 없음" 같은 모순을
+      // 한 줄 요약으로 뭉개지 않고 행 단위로 보여주기 위함.
+      setVerifyResults((prev) => ({
+        ...prev,
+        [cluster.id]: {
+          ok: data.ok,
+          status: data.status,
+          statusReason: data.statusReason,
+          checks: data.results.map((r) => ({
+            check: r.check,
+            ok: r.ok,
+            detail: typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail ?? ''),
+          })),
+        },
+      }));
     } catch {
-      setVerifyResults((prev) => ({ ...prev, [cluster.id]: { ok: false, detail: '연결 확인 실패' } }));
+      setVerifyResults((prev) => ({
+        ...prev,
+        [cluster.id]: { ok: false, checks: [{ check: 'api_server', ok: false, detail: '연결 확인 실패' }] },
+      }));
     } finally {
       setVerifyingId(null);
     }
@@ -484,7 +500,6 @@ export function SettingsPage() {
       try {
         const svg = buildClusterIconSvg({
           workName: suggestInitials(c.name),
-          opTypeLabel: suggestOpTypeLabel(levelLabel(opLevels, c.operationLevel)),
           attribute: suggestAttribute(c.name),
           regionAbbr: suggestRegionAbbr(c.region),
           colorToken: levelColor(opLevels, c.operationLevel),
@@ -541,7 +556,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log' | 'schema';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log' | 'schema' | 'ai-llm';
   const [searchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
   // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭과 "서비스 카테고리"(service-categories)
@@ -552,6 +567,9 @@ export function SettingsPage() {
   // "관리 서비스" 탭 내부 서브탭 — PEP 서비스 / APP 서비스 도메인 구분. 각 서브탭은
   // 해당 도메인의 카테고리 + 서비스 타입을 한 화면에서 관리한다.
   const [mgmtDomain, setMgmtDomain] = useState<ServiceDomain>('pep');
+  // "시스템 담당자" 탭 내부 서브탭 — 담당자 명부(사번/이메일/좌석 등) / 로그인 계정(권한·비밀번호).
+  // 사이드바 독립 "사용자 관리" 페이지가 여기로 통합됐다.
+  const [assigneeSubTab, setAssigneeSubTab] = useState<'roster' | 'accounts'>('roster');
 
   // Debug 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
@@ -564,12 +582,13 @@ export function SettingsPage() {
   const TABS: { id: TabId; label: string; icon: JSX.Element; count: number }[] = [
     { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
-    { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
+    { id: 'assignee', label: '시스템 담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
     { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'mgmt-service', label: '관리 서비스', icon: <Database className="w-4 h-4" />, count: 0 },
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
     { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'jira', label: '연동 (Jira)', icon: <Globe className="w-4 h-4" />, count: 0 },
+    { id: 'ai-llm', label: 'AI / LLM', icon: <Bot className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
     { id: 'audit-log', label: '감사 로그', icon: <FileSearch className="w-4 h-4" />, count: 0 },
@@ -578,7 +597,7 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">
+      <main className="max-w-[1700px] px-4 lg:px-6 py-5">
         {/* Page Header + Tabs */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -930,15 +949,40 @@ export function SettingsPage() {
                         <span className="ml-4">수정일: {formatDateTime(cluster.updatedAt)}</span>
                       )}
                     </div>
-                    {verifyResults[cluster.id] && (
-                      <div className={`text-sm mt-1 px-2 py-1 rounded ${
-                        verifyResults[cluster.id].ok
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : 'bg-red-500/10 text-red-400'
-                      }`}>
-                        {verifyResults[cluster.id].ok ? '✓ 연결 정상' : '✗ 연결 이상'} — {verifyResults[cluster.id].detail}
-                      </div>
-                    )}
+                    {verifyResults[cluster.id] && (() => {
+                      const vr = verifyResults[cluster.id];
+                      const tone = vr.ok
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : vr.status === 'warning'
+                          ? 'bg-amber-500/10 text-amber-500'
+                          : 'bg-red-500/10 text-red-400';
+                      const headline = vr.ok
+                        ? '✓ 연결 정상'
+                        : vr.status === 'warning'
+                          ? '△ 부분 이상 — API 는 도달하지만 kubeconfig 기반 기능(배치잡/점검)이 실패할 상태'
+                          : '✗ 연결 이상';
+                      const CHECK_LABEL: Record<string, string> = {
+                        api_server: 'API 서버 (/healthz)',
+                        kubeconfig_auth: 'kubeconfig 인증',
+                        kubectl_nodes: 'kubectl 노드 조회',
+                      };
+                      return (
+                        <div className={`text-sm mt-1 px-2 py-1.5 rounded ${tone}`}>
+                          <div className="font-medium">{headline}</div>
+                          <ul className="mt-1 space-y-0.5">
+                            {vr.checks.map((c) => (
+                              <li key={c.check} className="flex items-start gap-1.5 text-xs">
+                                <span className="flex-shrink-0 mt-px">
+                                  {c.ok === true ? '✓' : c.ok === false ? '✗' : '—'}
+                                </span>
+                                <span className="flex-shrink-0 font-medium">{CHECK_LABEL[c.check] ?? c.check}</span>
+                                <span className="min-w-0 opacity-80 break-all">{c.detail}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -1120,8 +1164,32 @@ export function SettingsPage() {
           )}
         </MacCard>}
 
-        {/* 담당자 관리 */}
-        {activeTab === 'assignee' && <AssigneeManager />}
+        {/* 시스템 담당자 — 담당자 명부 / 로그인 계정 서브탭 2개. 구 사이드바 독립 "사용자 관리"
+            페이지(로그인 계정: username/password/role)가 여기로 통합됐다 — 담당자 명부에 사번을
+            입력하면 자동으로 로그인 계정이 생성되므로 개념상 같은 데이터의 두 얼굴이다. */}
+        {activeTab === 'assignee' && (
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
+              {([
+                { id: 'roster', label: '담당자 명부' },
+                { id: 'accounts', label: '로그인 계정' },
+              ] as const).map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setAssigneeSubTab(v.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    assigneeSubTab === v.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            {assigneeSubTab === 'roster' && <AssigneeManager />}
+            {assigneeSubTab === 'accounts' && <SystemUserAccountManager />}
+          </div>
+        )}
 
         {/* Debug 탭: 대시보드 별 상세 로그 토글 */}
         {activeTab === 'debug' && (
@@ -1189,6 +1257,7 @@ export function SettingsPage() {
 
         {activeTab === 'backup' && <BackupRestorePanel />}
         {activeTab === 'schema' && <SchemaHealthPanel />}
+        {activeTab === 'ai-llm' && <LlmSettingsTab />}
 
         {activeTab === 'jira' && <JiraIntegrationPanel />}
 

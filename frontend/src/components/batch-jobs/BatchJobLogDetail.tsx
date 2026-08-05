@@ -1,9 +1,12 @@
 // frontend/src/components/batch-jobs/BatchJobLogDetail.tsx
 // mc 클라이언트 콘솔(McClientPage ResultPanel)과 동일한 로그 상세 카드 패턴 —
-// 상단 sticky 헤더(상태/트리거/실행자/호스트/exit/시간) + 실행 명령 + ExecOutputTabs.
-// RunForm(방금 실행한 결과)과 RunHistory(과거 이력 상세)가 이 한 컴포넌트를 공유한다.
-import { ExecOutputTabs } from '@/components/common';
+// 상단 sticky 헤더(상태/트리거/실행자/호스트/exit/시간) + 단계 타임라인 + 실측 명령
+// trace + ExecOutputTabs. RunForm(방금 실행한 결과)과 RunHistory(과거 이력 상세)가
+// 이 한 컴포넌트를 공유한다.
+import { CommandTraceList, ExecOutputTabs } from '@/components/common';
+import { ExecutionStepsTimeline } from '@/components/daily-check';
 import type { BatchJobRun } from '@/services/api';
+import type { DeepCheckStepPlanItem } from '@/types';
 import { StatusPill } from './StatusPill';
 
 const TRIGGER_LABEL: Record<string, string> = {
@@ -28,13 +31,17 @@ function actorLabel(run: BatchJobRun): string {
 
 interface BatchJobLogDetailProps {
   run: BatchJobRun;
+  /** 잡 타입의 정적 단계 계획 — 있으면 미계측 상태에서도 타임라인이 그려진다. */
+  stepPlan?: DeepCheckStepPlanItem[];
   /** ExecOutputTabs 본문 높이. */
   maxHeight?: string;
   className?: string;
 }
 
-export function BatchJobLogDetail({ run, maxHeight = 'max-h-[320px]', className = '' }: BatchJobLogDetailProps) {
+export function BatchJobLogDetail({ run, stepPlan, maxHeight = 'max-h-[320px]', className = '' }: BatchJobLogDetailProps) {
   const hasParams = run.paramsSnapshot && Object.keys(run.paramsSnapshot).length > 0;
+  const steps = run.steps ?? [];
+  const commands = run.commands ?? [];
   return (
     <div className={`border border-border rounded-xl overflow-hidden ${className}`}>
       <header className="px-3 py-2 border-b border-border bg-secondary/40 flex items-center gap-2 flex-wrap">
@@ -53,14 +60,21 @@ export function BatchJobLogDetail({ run, maxHeight = 'max-h-[320px]', className 
         <span className="text-xs font-mono text-muted-foreground/70 ml-auto">{formatDateTime(run.startedAt)}</span>
       </header>
       <div className="p-2.5 space-y-2.5">
-        {run.executedCommand && (
+        {/* 단계별 진행 상태 — 어느 단계에서 무엇을 하다 실패했는지 한눈에 */}
+        {(steps.length > 0 || (stepPlan?.length ?? 0) > 0) && (
+          <ExecutionStepsTimeline stepPlan={stepPlan} steps={steps} />
+        )}
+        {commands.length > 0 ? (
+          <CommandTraceList commands={commands} />
+        ) : run.executedCommand ? (
+          // 구버전 run (steps/commands 없음) fallback
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">command</p>
             <pre className="text-xs font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all">
               {run.executedCommand}
             </pre>
           </div>
-        )}
+        ) : null}
         <ExecOutputTabs stdout={run.stdout} stderr={run.stderr} maxHeight={maxHeight} />
         {run.error && (
           <div>

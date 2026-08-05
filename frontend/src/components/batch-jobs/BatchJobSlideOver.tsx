@@ -1,10 +1,11 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.tsx
 import { useEffect, useState } from 'react';
-import { Play, History, Terminal, Trash2, X, KeyRound, Pencil } from 'lucide-react';
+import { Play, History, Square, Terminal, Trash2, X, KeyRound, Pencil } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
-import { useModalA11y } from '@/components/common';
-import { useBatchJobRuns } from '@/hooks/useBatchJobs';
+import { ConfirmDialog, useModalA11y, useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
+import { useBatchJobRuns, useBatchJobTypes, useStopBatchJob } from '@/hooks/useBatchJobs';
 import { RunForm } from './BatchJobSlideOver.RunForm';
 import { RunHistory } from './BatchJobSlideOver.RunHistory';
 import { SavedCreds } from './BatchJobSlideOver.SavedCreds';
@@ -23,7 +24,24 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
   const [runFormOpen, setRunFormOpen] = useState(false);
   const [credsOpen, setCredsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
   const runsQ = useBatchJobRuns(job.id);
+  const typesQ = useBatchJobTypes();
+  const stopMut = useStopBatchJob();
+  const toast = useToast();
+  const isRunning = job.lastStatus === 'running';
+  // 잡 타입의 정적 단계 계획 — 실행 전에도 로그 카드에 타임라인을 그린다.
+  const stepPlan = (typesQ.data ?? []).find((t) => t.jobType === job.jobType)?.stepPlan;
+
+  const doStop = async () => {
+    setConfirmStop(false);
+    try {
+      const { data } = await stopMut.mutateAsync(job.id);
+      toast[data.interrupted ? 'success' : 'warning']('중지 요청', data.message);
+    } catch (err) {
+      toast.error('중지 실패', formatApiError(err));
+    }
+  };
 
   // 잡이 바뀔 때마다 폼/이력 펼침 reset.
   useEffect(() => {
@@ -48,15 +66,27 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
 
       {/* 액션 바 */}
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setRunFormOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
-          aria-expanded={runFormOpen}
-        >
-          <Play className="w-3.5 h-3.5" />
-          {runFormOpen ? '실행 닫기' : '지금 실행'}
-        </button>
+        {isRunning ? (
+          <button
+            type="button"
+            onClick={() => setConfirmStop(true)}
+            disabled={stopMut.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-status-critical hover:bg-status-critical/90 text-primary-foreground rounded-xl mac-shadow disabled:opacity-60"
+          >
+            <Square className="w-3.5 h-3.5" fill="currentColor" />
+            지금 중지
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setRunFormOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl mac-shadow"
+            aria-expanded={runFormOpen}
+          >
+            <Play className="w-3.5 h-3.5" />
+            {runFormOpen ? '실행 닫기' : '지금 실행'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setEditOpen((v) => !v)}
@@ -127,7 +157,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
             <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs uppercase tracking-wider text-muted-foreground">최근 실행 로그</span>
           </div>
-          <BatchJobLogDetail run={runsQ.data![0]} />
+          <BatchJobLogDetail run={runsQ.data![0]} stepPlan={stepPlan} />
         </div>
       )}
 
@@ -137,34 +167,54 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <History className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-xs uppercase tracking-wider text-muted-foreground">실행 이력</span>
         </div>
-        <RunHistory runs={runsQ.data ?? []} isLoading={runsQ.isLoading} />
+        <RunHistory runs={runsQ.data ?? []} isLoading={runsQ.isLoading} stepPlan={stepPlan} />
       </div>
     </MacCard>
   );
 
+  const stopConfirm = confirmStop && (
+    <ConfirmDialog
+      open
+      title="배치 잡 중지"
+      description={`"${job.name}" 실행 중인 작업을 지금 강제 중지할까요? 원격 프로세스가 중간에 종료돼 부분 작업 상태가 남을 수 있습니다.`}
+      confirmLabel="중지"
+      danger
+      onConfirm={doStop}
+      onCancel={() => setConfirmStop(false)}
+    />
+  );
+
   if (overlayMode) {
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="패널 닫기"
-        className="fixed inset-0 z-40 bg-black/40"
-        onClick={onClose}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }}
-      >
+      <>
         <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${job.name} 배치 잡`}
-          className="absolute inset-y-0 right-0 w-[min(420px,90vw)] overflow-y-auto p-4"
-          onClick={(e) => e.stopPropagation()}
+          role="button"
+          tabIndex={0}
+          aria-label="패널 닫기"
+          className="fixed inset-0 z-40 bg-black/40"
+          onClick={onClose}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }}
         >
-          {body}
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${job.name} 배치 잡`}
+            className="absolute inset-y-0 right-0 w-[min(420px,90vw)] overflow-y-auto p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {body}
+          </div>
         </div>
-      </div>
+        {stopConfirm}
+      </>
     );
   }
 
-  return <div className="w-[380px] flex-shrink-0">{body}</div>;
+  return (
+    <div className="w-[380px] flex-shrink-0">
+      {body}
+      {stopConfirm}
+    </div>
+  );
 }

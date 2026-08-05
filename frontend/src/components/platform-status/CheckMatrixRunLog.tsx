@@ -1,42 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Check, X, Loader2, Clock, SkipForward, ChevronRight, Terminal, User, CalendarClock,
+  ChevronRight, Terminal, User, CalendarClock, AlertTriangle,
 } from 'lucide-react';
 import { LogViewer, StatusBadge, Skeleton } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
 import { useCheckMatrixRun, useCheckMatrixRuns, type CheckMatrixRunFilter } from '@/hooks/useCheckMatrix';
 import { parseUTC } from '@/lib/utils';
-import type { CheckMatrixRun, CheckMatrixRunState, CheckMatrixTrigger } from '@/types';
+import type { CheckMatrixRun } from '@/types';
 import { CheckMatrixRunbookPanel } from './CheckMatrixRunbookPanel';
+import { RunStateBadge, TRIGGER_LABEL } from './CheckMatrixRunBadges';
 
-const STATE_META: Record<CheckMatrixRunState, { label: string; cls: string; icon: typeof Check }> = {
-  queued: { label: '대기열', cls: 'text-muted-foreground border-border', icon: Clock },
-  running: { label: '실행 중', cls: 'text-status-warning border-status-warning/50', icon: Loader2 },
-  success: { label: '완료', cls: 'text-status-healthy border-status-healthy/50', icon: Check },
-  failed: { label: '실패', cls: 'text-status-critical border-status-critical/50', icon: X },
-  skipped: { label: '건너뜀', cls: 'text-muted-foreground border-border', icon: SkipForward },
-};
-
-const TRIGGER_LABEL: Record<CheckMatrixTrigger, string> = {
-  cron: '자동(cron)',
-  manual_cell: '수동 · 셀',
-  manual_cluster: '수동 · 클러스터',
-  manual_item: '수동 · 항목',
-  manual_entry: '수동 입력',
-};
-
-export function RunStateBadge({ state }: { state: CheckMatrixRunState }) {
-  const meta = STATE_META[state] ?? STATE_META.queued;
-  const Icon = meta.icon;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium ${meta.cls}`}
-    >
-      <Icon className={`w-3 h-3 ${state === 'running' ? 'animate-spin' : ''}`} />
-      {meta.label}
-    </span>
-  );
-}
+export { RunStateBadge } from './CheckMatrixRunBadges';
 
 function RunRow({
   run, selected, showCell, onClick,
@@ -52,6 +26,11 @@ function RunRow({
         <div className="flex items-center gap-2 min-w-0">
           <RunStateBadge state={run.runState} />
           {run.status && <StatusBadge variant={run.status} size="sm" />}
+          {(run.status === 'warning' || run.status === 'critical') && (
+            <span title="완료됐지만 점검 결과가 정상이 아닙니다 — 클릭해 상세 로그에서 원인을 확인하세요." className="flex-shrink-0">
+              <AlertTriangle className="w-3 h-3 text-status-warning" />
+            </span>
+          )}
           <span className="text-[11px] text-muted-foreground tabular-nums ml-auto flex-shrink-0">
             {parseUTC(run.queuedAt).toLocaleString('ko-KR')}
           </span>
@@ -74,7 +53,7 @@ function RunRow({
             <span className="tabular-nums flex-shrink-0">{run.durationMs}ms</span>
           )}
           {(run.message || run.error) && (
-            <span className="truncate">{run.error || run.message}</span>
+            <span className="truncate" title={run.error || run.message || undefined}>{run.error || run.message}</span>
           )}
         </div>
       </button>
@@ -196,10 +175,21 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
   const [showRunbook, setShowRunbook] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
+  // 완료했지만 결과가 위험/경고이거나 아예 실패한 수행은 "왜?"가 가장 궁금한 순간이라
+  // 결과 상세(raw JSON)를 처음부터 펼쳐 보여준다. runId 가 바뀔 때만 재평가 — 폴링으로
+  // 같은 run 이 갱신될 때마다 사용자가 접어둔 걸 다시 펼치지 않는다.
+  useEffect(() => {
+    if (run && (run.status === 'warning' || run.status === 'critical' || run.runState === 'failed')) {
+      setShowRaw(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.id]);
+
   if (isLoading) return <div className="py-6 text-sm text-muted-foreground">불러오는 중…</div>;
   if (!run) return <div className="py-6 text-sm text-muted-foreground">실행 로그를 찾을 수 없습니다.</div>;
 
   const rawKeys = Object.keys(run.details ?? {});
+  const needsExplanation = run.status === 'warning' || run.status === 'critical' || run.runState === 'failed';
 
   return (
     <div className="space-y-4">
@@ -224,8 +214,28 @@ export function CheckMatrixRunDetailView({ runId }: { runId: string }) {
           {run.finishedAt && <span>종료 {parseUTC(run.finishedAt).toLocaleString('ko-KR')}</span>}
           {run.durationMs != null && <span className="tabular-nums">소요 {run.durationMs}ms</span>}
         </div>
-        {run.message && <p className="text-sm">{run.message}</p>}
-        {run.error && <p className="text-sm text-status-critical break-all">{run.error}</p>}
+        {needsExplanation ? (
+          <div className="flex items-start gap-2 rounded-md border border-status-warning/40 bg-status-warning-soft px-2.5 py-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-status-warning" />
+            <div className="min-w-0 space-y-0.5">
+              {run.message && <p className="text-sm break-all">{run.message}</p>}
+              {run.error && <p className="text-sm text-status-critical break-all">{run.error}</p>}
+              {!run.message && !run.error && (
+                <p className="text-sm text-muted-foreground italic">
+                  이 수행에는 별도 사유 메시지가 없습니다 — 아래 &quot;결과 상세&quot;에서 원본 필드를 확인하세요.
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                더 자세한 원인은 아래 &quot;결과 상세&quot;(자동으로 펼쳐짐)와, 계측됐다면 &quot;실행된 명령&quot;의 출력에서 확인할 수 있습니다.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {run.message && <p className="text-sm">{run.message}</p>}
+            {run.error && <p className="text-sm text-status-critical break-all">{run.error}</p>}
+          </>
+        )}
       </section>
 
       {(run.steps.length > 0 || run.stepPlan.length > 0) && (

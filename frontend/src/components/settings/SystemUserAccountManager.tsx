@@ -1,15 +1,15 @@
 /**
- * 사용자 관리 페이지 — admin 전용.
+ * 로그인 계정 관리 — Settings ▸ 시스템 담당자 ▸ 로그인 계정 서브탭 (admin 전용).
  *
- * 라우트는 RoleGate 로 보호되지만 백엔드 또한 require_admin 으로 한 번 더 막힌다.
- * 본인 자신의 강등/삭제는 UI 와 서버에서 동시에 차단.
+ * 원래 사이드바 "사용자 관리"(`/settings/users`) 독립 페이지였던 것을 Settings 안으로
+ * 통합했다. 라우트 자체가 이미 `RequireAdmin` 으로 보호되므로 여기서는 별도 RoleGate 를
+ * 두지 않는다. 본인 자신의 강등/삭제는 UI 와 서버에서 동시에 차단.
  */
 import { useId, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, KeyRound, ShieldCheck, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Loader2, RefreshCw } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { RoleGate } from '@/components/auth/RoleGate';
 import { ConfirmDialog, useToast, useModalA11y } from '@/components/common';
 import { authApi, type UserRoleApi } from '@/services/api';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
@@ -222,7 +222,7 @@ function ResetPasswordModal({
   );
 }
 
-export function UsersPage() {
+export function SystemUserAccountManager() {
   const me = useAuthStore((s) => s.user);
   const toast = useToast();
   const qc = useQueryClient();
@@ -262,8 +262,8 @@ export function UsersPage() {
     return arr;
   }, [data]);
 
-  const content = (
-    <MacCard title="사용자 관리">
+  return (
+    <MacCard title="로그인 계정">
       <div className="flex justify-between items-center mb-3">
         <p className="text-sm text-muted-foreground">
           역할: viewer (조회) · operator (쓰기/실행) · admin (전체 + 계정 관리)
@@ -379,28 +379,5 @@ export function UsersPage() {
         onCancel={() => setDeleteTarget(null)}
       />
     </MacCard>
-  );
-
-  return (
-    <div className="min-h-screen bg-background p-5">
-      <div className="max-w-[1400px] mx-auto space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <ShieldCheck className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-bold">계정 및 권한</h1>
-        </div>
-        <RoleGate
-          allow={['admin']}
-          fallback={
-            <MacCard>
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                이 페이지는 admin 권한이 필요합니다.
-              </p>
-            </MacCard>
-          }
-        >
-          {content}
-        </RoleGate>
-      </div>
-    </div>
   );
 }

@@ -51,10 +51,24 @@ class _Job:
 
 
 class SnapshotManager:
-    def __init__(self, ttl: float = 30.0) -> None:
+    def __init__(self, ttl: float = 30.0, partial_ttl: Optional[float] = None,
+                 stuck_timeout: float = 1800.0) -> None:
+        """ttl: 완전한 결과의 캐시 수명. partial_ttl: 결과가 부분(절단) 집계일 때 적용할
+        더 짧은 수명(None 이면 ttl 과 동일) — 절단된 스냅샷이 ttl 내내 확정 데이터처럼
+        서빙되는 것을 막고 자동 재집계되게 한다. stuck_timeout: computing 이 이 시간(초)을
+        넘기면 행업으로 간주하고 새 계산으로 교체(영구 wedge 방지)."""
         self._ttl = ttl
+        self._partial_ttl = partial_ttl
+        self._stuck_timeout = stuck_timeout
         self._jobs: dict[str, _Job] = {}
         self._lock = threading.Lock()
+
+    def _effective_ttl(self, job: _Job) -> float:
+        """부분(절단) 결과면 partial_ttl 로 단축된 TTL 반환(duck-check: dict 의 partial 키)."""
+        if (self._partial_ttl is not None and isinstance(job.result, dict)
+                and job.result.get("partial")):
+            return min(self._ttl, self._partial_ttl)
+        return self._ttl
 
     def get(self, key: str, builder: Callable[[Progress], Any],
             initial_wait: float = 2.0, force: bool = False) -> dict:
@@ -70,12 +84,17 @@ class SnapshotManager:
         new: Optional[_Job] = None
         with self._lock:
             job = self._jobs.get(key)
-            # 이미 계산 중 → 진행 상황(또는 stale 데이터) 반환 (force 라도 재시작 안 함 — 폭주 방지)
+            # 이미 계산 중 → 진행 상황(또는 stale 데이터) 반환 (force 라도 재시작 안 함 — 폭주 방지).
+            # 단, stuck_timeout 을 넘긴 잡은 행업(끊긴 apiserver 등)으로 간주하고 새 계산으로
+            # 교체한다 — 그렇지 않으면 refresh 가 영원히 no-op 이 되어 재기동 외엔 복구 불가.
             if job and job.status == "computing":
-                return self._view(job)
+                if (now - job.started_at) < self._stuck_timeout:
+                    return self._view(job)
+                logger.warning("snapshot job stuck > %.0fs — replacing (key=%s)",
+                               self._stuck_timeout, key)
             # 신선한 완료 결과 → 그대로 반환 (force 면 무시하고 재계산)
             if (not force and job and job.status == "ready" and job.finished_at is not None
-                    and (now - job.finished_at) < self._ttl):
+                    and (now - job.finished_at) < self._effective_ttl(job)):
                 return self._view(job)
             # 새 계산 시작(직전 결과/추정 total 은 보존해 stale 제공 + 진행률 분모로 사용)
             new = _Job(key=key)
@@ -101,19 +120,22 @@ class SnapshotManager:
             return
         if job.last_total:                  # 직전 처리량을 진행률 분모 추정치로 미리 세팅
             job.progress.total = job.last_total
+        # finished_at 을 status 보다 먼저 기록 — 리더가 status=="ready" 인데 finished_at 이
+        # None 인 순간을 관측해 불필요한 전체 재계산을 시작하는 것을 방지(GIL 상 필드 단위
+        # 쓰기는 원자적이므로 이 순서만 보장하면 충분).
         try:
             result = builder(job.progress)
             job.result = result
             job.last_result = result
             if job.progress.processed:
                 job.last_total = job.progress.processed
+            job.finished_at = time.monotonic()
             job.status = "ready"
         except Exception as e:  # noqa: BLE001
             logger.exception("snapshot build failed (key=%s)", key)
             job.error = str(e)[:300]
-            job.status = "error"
-        finally:
             job.finished_at = time.monotonic()
+            job.status = "error"
 
     def _view(self, job: _Job) -> dict:
         # computing 중에는 빌더가 publish 한 부분결과(progress.partial)를 우선 노출하고,

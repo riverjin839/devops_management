@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
-  ListTodo, Sparkles, Palmtree,
+  ListTodo, Sparkles, Palmtree, Leaf,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
-  KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug,
+  KeyRound, ScrollText, ServerCog, MessageSquare, Bug, Bot,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
@@ -14,6 +14,8 @@ import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useIslandStore } from '@/stores/islandStore';
 import { useHomeStore } from '@/stores/homeStore';
+import { useAgentChatStore } from '@/stores/agentChatStore';
+import { AGENT_CHAT_FEATURE_KEY } from '@/components/agent';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
@@ -24,9 +26,9 @@ import { GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
-// default(Claude paper) → 라이트 → 다크 → 시스템 → default …
-const THEME_CYCLE: Record<Theme, Theme> = { default: 'light', light: 'dark', dark: 'system', system: 'default' };
-const THEME_LABEL: Record<Theme, string> = { default: '기본', light: '라이트', dark: '다크', system: '시스템' };
+// default(Claude paper) → 컴포트(크림+그린) → 라이트 → 다크 → 시스템 → default …
+const THEME_CYCLE: Record<Theme, Theme> = { default: 'comfort', comfort: 'light', light: 'dark', dark: 'system', system: 'default' };
+const THEME_LABEL: Record<Theme, string> = { default: '기본', comfort: '컴포트', light: '라이트', dark: '다크', system: '시스템' };
 
 // ── 호버 툴팁이 붙은 아이콘 버튼 — 레일에서 사용 ────────────────────────────
 interface RailIconButtonProps {
@@ -188,6 +190,7 @@ export function Sidebar() {
   const { navMap, servicePaths, getLabel, featureAllowed } = useNavCatalog();
 
   const { mode, toggle } = useHomeStore();
+  const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
   const handleHomeClick = () => {
     if (location.pathname === '/') {
@@ -471,6 +474,7 @@ export function Sidebar() {
             label={`테마: ${THEME_LABEL[theme]}`}
             Icon={
               theme === 'default' ? Sparkles
+              : theme === 'comfort' ? Leaf
               : theme === 'light'   ? Sun
               : theme === 'dark'    ? Moon
               : Monitor
@@ -490,6 +494,18 @@ export function Sidebar() {
               onClick={goToIsland}
             />
           )}
+          {/* AI 어시스턴트 — 우하단 플로팅 버튼이었던 것을 좌측 사이드바 하단 레일로 이동해
+              항상 같은 자리에 고정했다. 패널(AgentChat.tsx)은 이 상태를 Zustand 로 공유해서
+              연다 — 접근 제어(기능 접근)가 꺼진 사용자에게는 아이콘 자체를 숨긴다. */}
+          {currentUser && featureAllowed(AGENT_CHAT_FEATURE_KEY) && (
+            <RailIconButton
+              label="AI 어시스턴트"
+              Icon={Bot}
+              highlighted={agentChatOpen}
+              suppressTooltip={agentChatOpen}
+              onClick={toggleAgentChat}
+            />
+          )}
           {currentUser && (
             <RailIconButton
               label={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}
@@ -497,14 +513,6 @@ export function Sidebar() {
               highlighted={userMenuOpen}
               suppressTooltip={userMenuOpen}
               onClick={() => setUserMenuOpen((v) => !v)}
-            />
-          )}
-          {isAdmin && (
-            <RailIconButton
-              label="사용자 관리"
-              Icon={ShieldCheck}
-              active={location.pathname === '/settings/users'}
-              onClick={() => navigate('/settings/users')}
             />
           )}
           {currentUser && (

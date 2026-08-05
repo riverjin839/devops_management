@@ -81,6 +81,45 @@ class TestInspectDrift:
         finally:
             _exec("ALTER TABLE check_matrix_items ALTER COLUMN name SET NOT NULL")
 
+    def test_detects_orphan_not_null_column(self):
+        """실사례: deep_check_results.ai_status — 모델에는 존재한 적도 없는 컬럼이
+        운영 DB 에만 NOT NULL + 기본값 없음으로 남아 deep check 실행을 전부 막았다.
+        위 두 드리프트 종류는 '모델 → DB' 단방향 비교라 이 케이스를 놓친다 —
+        모델에 없는 컬럼을 별도로 스캔해야 잡힌다.
+        """
+        _exec("ALTER TABLE deep_check_results ADD COLUMN legacy_orphan_col VARCHAR(20)")
+        try:
+            _exec("UPDATE deep_check_results SET legacy_orphan_col = 'x'")
+            _exec("ALTER TABLE deep_check_results ALTER COLUMN legacy_orphan_col SET NOT NULL")
+            issues = schema_health.inspect_drift()["issues"]
+            hit = [i for i in issues
+                   if i["kind"] == "orphan_not_null_column"
+                   and i["table"] == "deep_check_results" and i["column"] == "legacy_orphan_col"]
+            assert hit and hit[0]["repairable"] is True
+        finally:
+            _exec("ALTER TABLE deep_check_results DROP COLUMN IF EXISTS legacy_orphan_col")
+
+    def test_orphan_column_with_db_default_is_not_flagged(self):
+        """DB 기본값이 있으면 ORM 이 값을 안 줘도 INSERT 가 죽지 않으므로 문제가 아니다."""
+        _exec("ALTER TABLE deep_check_results ADD COLUMN legacy_orphan_col VARCHAR(20) "
+              "NOT NULL DEFAULT 'x'")
+        try:
+            issues = schema_health.inspect_drift()["issues"]
+            assert not [i for i in issues
+                        if i["table"] == "deep_check_results" and i["column"] == "legacy_orphan_col"]
+        finally:
+            _exec("ALTER TABLE deep_check_results DROP COLUMN IF EXISTS legacy_orphan_col")
+
+    def test_orphan_nullable_column_is_not_flagged(self):
+        """nullable 이면 ORM 이 안 채워도 NULL 로 들어가므로 문제가 아니다."""
+        _exec("ALTER TABLE deep_check_results ADD COLUMN legacy_orphan_col VARCHAR(20)")
+        try:
+            issues = schema_health.inspect_drift()["issues"]
+            assert not [i for i in issues
+                        if i["table"] == "deep_check_results" and i["column"] == "legacy_orphan_col"]
+        finally:
+            _exec("ALTER TABLE deep_check_results DROP COLUMN IF EXISTS legacy_orphan_col")
+
 
 class TestRepairDrift:
     def test_repairs_both_kinds_and_converges(self):
@@ -113,6 +152,67 @@ class TestRepairDrift:
         assert schema_health.repair_drift()["applied"] == []
         assert schema_health.inspect_drift()["healthy"]
 
+    def test_repairs_orphan_column_by_relaxing_not_dropping(self):
+        """orphan 컬럼은 존재 자체는 그대로 두고 NOT NULL 제약만 푼다 — DROP COLUMN 은
+        데이터 손실 위험이 있어 자동으로 하지 않는다."""
+        _exec("ALTER TABLE deep_check_results ADD COLUMN legacy_orphan_col VARCHAR(20)")
+        try:
+            _exec("UPDATE deep_check_results SET legacy_orphan_col = 'x'")
+            _exec("ALTER TABLE deep_check_results ALTER COLUMN legacy_orphan_col SET NOT NULL")
+
+            result = schema_health.repair_drift()
+
+            assert result["errors"] == []
+            assert _has_column("deep_check_results", "legacy_orphan_col"), "컬럼이 삭제됐다 — DROP 금지 위반"
+            assert _is_nullable("deep_check_results", "legacy_orphan_col")
+        finally:
+            _exec("ALTER TABLE deep_check_results DROP COLUMN IF EXISTS legacy_orphan_col")
+
+    def test_orphan_column_no_longer_blocks_insert(self):
+        """실제 버그 재현 — deep_check_results 에 모델 밖 NOT NULL 컬럼이 있으면 모든
+        저장이 NotNullViolation 으로 죽었다. 복구 후에는 정상 저장돼야 한다."""
+        import uuid as _uuid
+        from app.database import SessionLocal
+        from app.models import Cluster, DeepCheckResult, StatusEnum
+
+        _exec("ALTER TABLE deep_check_results ADD COLUMN legacy_orphan_col VARCHAR(20)")
+        db = SessionLocal()
+        cluster = None
+        try:
+            _exec("UPDATE deep_check_results SET legacy_orphan_col = 'x'")
+            _exec("ALTER TABLE deep_check_results ALTER COLUMN legacy_orphan_col SET NOT NULL")
+
+            cluster = Cluster(name=f"orphan-{_uuid.uuid4().hex[:8]}", api_endpoint="https://127.0.0.1:65535")
+            db.add(cluster)
+            db.commit()
+
+            row = DeepCheckResult(
+                cluster_id=cluster.id, check_type="cert_expiry",
+                status=StatusEnum.healthy, message="pre-repair",
+            )
+            db.add(row)
+            with pytest.raises(Exception, match="not-null constraint|NotNullViolation"):
+                db.commit()
+            db.rollback()
+
+            schema_health.repair_drift()
+
+            row2 = DeepCheckResult(
+                cluster_id=cluster.id, check_type="cert_expiry",
+                status=StatusEnum.healthy, message="post-repair",
+            )
+            db.add(row2)
+            db.commit()  # 회귀 시 여기서 다시 NotNullViolation
+            assert row2.id is not None
+        finally:
+            db.rollback()
+            if cluster is not None:
+                db.query(DeepCheckResult).filter(DeepCheckResult.cluster_id == cluster.id).delete()
+                db.query(Cluster).filter(Cluster.id == cluster.id).delete()
+                db.commit()
+            db.close()
+            _exec("ALTER TABLE deep_check_results DROP COLUMN IF EXISTS legacy_orphan_col")
+
 
 class TestBootSafetyNet:
     def test_relax_not_null_drift_fixes_legacy_constraint(self):
@@ -127,3 +227,19 @@ class TestBootSafetyNet:
 
     def test_relax_is_noop_on_clean_schema(self):
         assert schema_health.relax_not_null_drift() == 0
+
+    def test_relax_also_covers_orphan_columns(self):
+        """부팅 안전망(재시작만으로 복구)이 orphan 컬럼까지 커버해야 한다 — 이게 빠지면
+        `daily_check_log_id` 류는 재시작으로 낫는데 `ai_status` 류는 화면에서 수동
+        복구해야 하는 비일관성이 생긴다."""
+        _exec("ALTER TABLE deep_check_results ADD COLUMN legacy_orphan_col VARCHAR(20)")
+        try:
+            _exec("UPDATE deep_check_results SET legacy_orphan_col = 'x'")
+            _exec("ALTER TABLE deep_check_results ALTER COLUMN legacy_orphan_col SET NOT NULL")
+
+            relaxed = schema_health.relax_not_null_drift()
+
+            assert relaxed >= 1
+            assert _is_nullable("deep_check_results", "legacy_orphan_col")
+        finally:
+            _exec("ALTER TABLE deep_check_results DROP COLUMN IF EXISTS legacy_orphan_col")

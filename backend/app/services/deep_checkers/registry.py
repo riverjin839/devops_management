@@ -64,15 +64,28 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="cert_expiry",
             display_name="K8s 인증서 만료",
-            description="kubeadm certs check-expiration 으로 컨트롤 플레인 인증서 잔여일 점검",
+            description=(
+                "kubeadm certs check-expiration 으로 컨트롤 플레인 인증서 잔여일 점검. "
+                "kube-apiserver 파드 이미지는 distroless(쉘 없음)라 pod exec 이 실패하는 "
+                "경우가 흔하다 — '버전/설정 관리(/versions)' 화면의 'K8s 인증서(kubeadm)' "
+                "버튼으로 SSH 수집한 스냅샷을 쓰려면 source 를 snapshot(또는 auto 폴백)으로."
+            ),
             threshold_fields=[
                 DeepCheckFieldSpec("warning_days", "int", "경고 (일)", 30,
                                    help="잔여일이 이 값 이하면 warning"),
                 DeepCheckFieldSpec("critical_days", "int", "심각 (일)", 7,
                                    help="잔여일이 이 값 이하면 critical"),
             ],
+            param_fields=[
+                DeepCheckFieldSpec("source", "string", "실행 경로 (auto|pod|snapshot)", "auto",
+                                   help="auto: pod exec 시도 후 없거나 실패하면 수집 스냅샷 폴백 / "
+                                        "pod: kubectl exec 전용(대부분 distroless 이미지에서 실패) / "
+                                        "snapshot: /versions 에서 SSH 로 수집한 kubeadm_certs 스냅샷만 사용"),
+                DeepCheckFieldSpec("snapshot_max_age_hours", "int", "스냅샷 허용 나이 (시간)", 24,
+                                   help="수집 시각이 이보다 오래되면 판정하지 않고 대기(pending) 처리"),
+            ],
             default_thresholds={"warning_days": 30, "critical_days": 7},
-            default_params={},
+            default_params={"source": "auto", "snapshot_max_age_hours": 24},
         ),
     ),
     "etcd_defrag": (
@@ -600,6 +613,7 @@ STEP_PLANS: dict[str, list[tuple[str, str]]] = {
     "cert_expiry": [
         ("locate_pod", "컨트롤플레인 파드 탐색"),
         ("exec_kubeadm", "kubeadm certs check-expiration 실행"),
+        ("snapshot", "수집 스냅샷 폴백 (SSH 로 kubeadm 수집)"),
         ("parse", "인증서 잔여일 파싱"),
         ("verdict", "최소 잔여일 임계 비교"),
     ],

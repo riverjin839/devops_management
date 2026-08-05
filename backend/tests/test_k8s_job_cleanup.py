@@ -139,3 +139,92 @@ class TestCronInvariantForNonSshJobs:
                 default_host="h",
                 job_type="no_such_type",
             )
+
+
+class TestStepTraceAndClassification:
+    """단계별 trace + kubectl 실패 분류 — "연결안됨 오진" 해소의 실행기 측 검증."""
+
+    def _ctx(self, **kwargs):
+        from app.services.batch_jobs import ExecutionContext
+        defaults = dict(params={}, timeout=5)
+        defaults.update(kwargs)
+        return ExecutionContext(**defaults)
+
+    def test_missing_kubeconfig_records_failed_step_with_reason(self):
+        import asyncio
+        ex = get_executor("k8s_job_cleanup")
+        ctx = self._ctx(kubeconfig_note="kubeconfig 가 경로로만 등록돼 있고 DB 에 내용이 없습니다.")
+        r = asyncio.run(ex.run(ctx))
+        assert r.status == "error"
+        assert "경로로만 등록" in (r.error or "")
+        assert [s["id"] for s in r.steps] == ["resolve_kubeconfig"]
+        assert r.steps[0]["status"] == "failed"
+        assert "경로로만 등록" in r.steps[0]["detail"]
+
+    def test_connect_failure_classified_and_steps_recorded(self, monkeypatch):
+        """kubectl 이 dial tcp 로 죽으면 status=connect_error + 원인 headline."""
+        import asyncio
+        import subprocess as sp
+        from app.services.batch_jobs import k8s_job_cleanup as mod
+
+        def fake_kubectl(args, timeout, cancel_token=None):
+            return sp.CompletedProcess(
+                ["kubectl", *args], 1, "",
+                "Unable to connect to the server: dial tcp 10.0.0.9:6443: connect: connection refused",
+            )
+
+        monkeypatch.setattr(mod, "_run_kubectl", fake_kubectl)
+        ex = get_executor("k8s_job_cleanup")
+        ctx = self._ctx(kubeconfig_path="/tmp/fake-kubeconfig.yaml", cluster_name="prod")
+        r = asyncio.run(ex.run(ctx))
+        assert r.status == "connect_error"
+        assert "Unable to connect" in (r.error or "")
+        step_map = {s["id"]: s for s in r.steps}
+        assert step_map["resolve_kubeconfig"]["status"] == "success"
+        assert step_map["kubectl_query"]["status"] == "failed"
+        # 실측 명령 기록 — kubeconfig 경로는 마스킹
+        assert r.commands, "commands trace 가 비어있으면 안 됨"
+        assert "<kubeconfig>" in r.commands[0]["command"]
+        assert r.commands[0]["exit_code"] == 1
+
+    def test_auth_failure_classified(self, monkeypatch):
+        import asyncio
+        import subprocess as sp
+        from app.services.batch_jobs import k8s_job_cleanup as mod
+
+        def fake_kubectl(args, timeout, cancel_token=None):
+            return sp.CompletedProcess(
+                ["kubectl", *args], 1, "",
+                "error: You must be logged in to the server (Unauthorized)",
+            )
+
+        monkeypatch.setattr(mod, "_run_kubectl", fake_kubectl)
+        ex = get_executor("k8s_job_cleanup")
+        r = asyncio.run(ex.run(self._ctx(kubeconfig_path="/tmp/kc.yaml")))
+        assert r.status == "auth_error"
+
+    def test_dry_run_success_marks_delete_step_skipped(self, monkeypatch):
+        import asyncio
+        import json as _json
+        import subprocess as sp
+        from app.services.batch_jobs import k8s_job_cleanup as mod
+
+        def fake_kubectl(args, timeout, cancel_token=None):
+            return sp.CompletedProcess(["kubectl", *args], 0, _json.dumps({"items": []}), "")
+
+        monkeypatch.setattr(mod, "_run_kubectl", fake_kubectl)
+        ex = get_executor("k8s_job_cleanup")
+        r = asyncio.run(ex.run(self._ctx(kubeconfig_path="/tmp/kc.yaml", params={"dry_run": True})))
+        assert r.status == "ok"
+        step_map = {s["id"]: s for s in r.steps}
+        assert step_map["delete_jobs"]["status"] == "skipped"
+        assert [s["id"] for s in r.steps] == [
+            "resolve_kubeconfig", "kubectl_query", "select_targets", "delete_jobs",
+        ]
+
+    def test_step_plan_exposed_in_descriptor(self):
+        by_type = {d["job_type"]: d for d in list_executors()}
+        ids = [s["id"] for s in by_type["k8s_job_cleanup"]["step_plan"]]
+        assert ids == ["resolve_kubeconfig", "kubectl_query", "select_targets", "delete_jobs"]
+        # SSH executor 도 계획이 노출된다
+        assert by_type["shell_command"]["step_plan"]

@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -161,6 +161,9 @@ export interface AuditLogQuery {
   page?: number;
   pageSize?: number;
   action?: string;
+  /** 액션 패밀리 필터 — 'batch_job.' 이면 batch_job.* 전부 (action 과 동시 지정 시 action 우선). */
+  actionPrefix?: string;
+  targetType?: string;
   actorUsername?: string;
   status?: string;
   dateFrom?: string;
@@ -174,6 +177,8 @@ export const auditLogsApi = {
     if (params.page) q.page = params.page;
     if (params.pageSize) q.page_size = params.pageSize;
     if (params.action) q.action = params.action;
+    if (params.actionPrefix) q.action_prefix = params.actionPrefix;
+    if (params.targetType) q.target_type = params.targetType;
     if (params.actorUsername) q.actor_username = params.actorUsername;
     if (params.status) q.status = params.status;
     if (params.dateFrom) q.date_from = params.dateFrom;
@@ -192,7 +197,10 @@ export const clustersApi = {
   getById: (id: string) => api.get<ApiResponse<Cluster>>(`/clusters/${id}`),
   create: (data: Partial<Cluster> & { kubeconfigContent?: string; skipConnectivityCheck?: boolean }) =>
     api.post<ApiResponse<Cluster>>('/clusters', data),
-  update: (id: string, data: Partial<Cluster>) => api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
+  // 값 해제(빈 입력)는 `null` 로 보내야 저장된다 — `undefined` 는 JSON 직렬화에서 사라지고
+  // 백엔드 `exclude_unset=True` 가 "미전송 = 기존 값 유지"로 처리한다. (DESIGN.md D-031/D-041)
+  update: (id: string, data: Partial<Cluster> | import('@/types').ClusterManageUpdate) =>
+    api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
   delete: (id: string) => api.delete(`/clusters/${id}`),
   reorder: (clusterIds: string[]) =>
     api.post<{ updated: number }>('/clusters/reorder', { clusterIds }),
@@ -201,7 +209,14 @@ export const clustersApi = {
   updateKubeconfig: (id: string, content: string) =>
     api.put<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`, { content }),
   verify: (id: string) =>
-    api.post<{ ok: boolean; cluster_name: string; results: { check: string; ok: boolean | null; detail: string }[] }>(`/clusters/${id}/verify`),
+    api.post<{
+      ok: boolean;
+      cluster_name: string;
+      /** 반영된 cluster.status — healthy | warning(kubeconfig 부재/인증불가) | pending(API 도달 불가) */
+      status?: string;
+      statusReason?: string | null;
+      results: { check: string; ok: boolean | null; detail: string }[];
+    }>(`/clusters/${id}/verify`),
   autoUpdate: (id: string, opts?: { dryRun?: boolean; signal?: AbortSignal }) =>
     api.post<{
       clusterId: string;
@@ -346,6 +361,19 @@ export const versionsApi = {
     const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
     return api.post<import('@/types').EtcdSystemdCollectResponse>(
       `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal, timeout },
+    );
+  },
+  collectKubeadmCerts: (
+    clusterId: string,
+    payload: import('@/types').KubeadmCertsCollectRequest,
+    signal?: AbortSignal,
+  ) => {
+    const n = payload.hosts.length;
+    const perHost = ((payload.connectTimeout ?? 8) + 25) * 1000;
+    const est = n * perHost + 10_000;   // 순차 수집(collect_etcdctl_config 와 동일 패턴)
+    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
+    return api.post<import('@/types').KubeadmCertsCollectResponse>(
+      `/clusters/${clusterId}/collect-kubeadm-certs`, payload, { signal, timeout },
     );
   },
   collectKernelParams: (
@@ -502,6 +530,8 @@ export interface BulkExecRequest {
   password?: string;
   privateKey?: string;
   command?: string;
+  /** command 가 python 스크립트 본문일 때만 지정 — 서버가 원격 python3 로 감싸 실행 */
+  language?: 'bash' | 'python';
   scpContent?: string;
   scpRemotePath?: string;
   mode: 'sequential' | 'parallel';
@@ -513,11 +543,36 @@ export interface BulkExecRequest {
   chunkPauseMs?: number;
 }
 
+export interface FetchFileRequest {
+  /** 읽어올 원본 노드 — 업로드 대상(targets)과는 별개 */
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKey?: string;
+  remotePath: string;
+  connectTimeout: number;
+}
+
+export interface FetchFileResponse {
+  host: string;
+  status: 'ok' | 'error' | 'timeout' | 'auth_error' | 'connect_error';
+  content: string;
+  size: number;
+  error?: string | null;
+  // 연결/파일확인/읽기 각 단계에서 무엇을 시도했는지 — 연결 실패의 "왜"를 화면에서
+  // 바로 보여주기 위함(batch_job 실행 추적과 동일 shape).
+  steps?: import('@/types').DeepCheckExecStep[];
+  commands?: BatchJobCommandTrace[];
+}
+
 export const bulkExecApi = {
   nodeList: (clusterId: string) =>
     api.get<{ clusterId: string; clusterName: string; nodes: NodeSummary[] }>(
       `/clusters/${clusterId}/node-list`,
     ),
+  fetchFile: (payload: FetchFileRequest, signal?: AbortSignal) =>
+    api.post<FetchFileResponse>('/bulk-exec/fetch-file', payload, { signal }),
   run: (payload: BulkExecRequest, signal?: AbortSignal) => {
     // 대규모 호스트 실행 시간 추정: 청크 수 × (exec_timeout+connect_timeout+pause) + 여유.
     // 기본 30초 timeout 은 100+ 호스트에서 바로 끊겨 에러가 됨.
@@ -721,10 +776,46 @@ export const ansibleAssetsApi = {
 
 // Agent API (AI Mode — fail-safe)
 export const agentApi = {
-  chat: (data: AgentChatRequest) =>
+  chat: (data: AgentChatRequest & { conversationId?: string | null }) =>
     api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
   health: () =>
     api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
+  conversations: () =>
+    api.get<{ data: import('@/types').AgentConversationSummary[] }>('/agent/conversations'),
+  messages: (conversationId: string) =>
+    api.get<{ data: import('@/types').AgentMessageOut[] }>(`/agent/conversations/${conversationId}/messages`),
+  deleteConversation: (conversationId: string) =>
+    api.delete<{ ok: boolean }>(`/agent/conversations/${conversationId}`),
+};
+
+// LLM 게이트웨이 설정 API (Settings → AI/LLM 탭)
+export const llmApi = {
+  getSettings: () =>
+    api.get<{ data: LlmSettings; purposes: string[] }>('/llm/settings'),
+  updateSettings: (data: LlmSettings) =>
+    api.put<{ data: LlmSettings; warnings: string[] }>('/llm/settings', data),
+  health: () =>
+    api.get<{ data: LlmHealthEntry[] }>('/llm/health', { timeout: 15000 }),
+  profileModels: (name: string) =>
+    api.get<{ data: string[] }>(`/llm/profiles/${encodeURIComponent(name)}/models`, { timeout: 10000 }),
+  testProfile: (profile: string, prompt?: string) =>
+    api.post<LlmTestResult>('/llm/test', { profile, ...(prompt ? { prompt } : {}) }, { timeout: 120000 }),
+  usage: () =>
+    api.get<{ data: LlmUsageBucket[] }>('/llm/usage'),
+  listCredentials: () =>
+    api.get<{ data: LlmCredentialSummary[] }>('/llm/credentials'),
+  createCredential: (name: string, apiKey: string) =>
+    api.post<{ data: { name: string; hint: string }; updated: boolean }>('/llm/credentials', { name, apiKey }),
+  deleteCredential: (name: string) =>
+    api.delete<{ ok: boolean }>(`/llm/credentials/${encodeURIComponent(name)}`),
+  ragSearch: (q: string, k = 5) =>
+    api.get<{ data: import('@/types').RagCitation[] }>('/llm/rag-search', { params: { q, k }, timeout: 30000 }),
+  backfillEmbeddings: () =>
+    api.post<{ ok: boolean; detail: string }>('/llm/backfill-embeddings'),
+  getAnalysisScope: () =>
+    api.get<{ data: import('@/types').LlmAnalysisScope }>('/llm/analysis-scope'),
+  updateAnalysisScope: (data: import('@/types').LlmAnalysisScope) =>
+    api.put<{ data: import('@/types').LlmAnalysisScope; warnings: string[] }>('/llm/analysis-scope', data),
 };
 
 // PromQL Metric Cards API
@@ -781,6 +872,8 @@ export interface WorkItemFilters {
   closed?: boolean;
   allAttendees?: boolean;
   sprintId?: string;
+  /** 제목(title/content) 검색어 — ILIKE 부분 일치 */
+  q?: string;
   limit?: number;
 }
 
@@ -873,6 +966,13 @@ export const jiraApi = {
   deleteCredential: () => api.delete('/jira/credential'),
   test: () => api.post<import('@/types').JiraTestResult>('/jira/test'),
   confluenceTest: () => api.post<import('@/types').JiraTestResult>('/jira/confluence/test'),
+  // Confluence 검색 — "Jira 가져오기"와 동일한 검색→선택→반영 패턴.
+  confluenceSearch: (cql: string, limit = 25) =>
+    api.get<import('@/types').ConfluenceSearchResult>('/jira/confluence/search', { params: { cql, limit } }),
+  confluenceLink: (data: import('@/types').ConfluenceLinkRequest) =>
+    api.post<import('@/types').WorkItem>('/jira/confluence/link', data),
+  confluenceSync: (itemId: string) =>
+    api.post<import('@/types').ConfluenceSyncResult>(`/jira/confluence/sync/${itemId}`),
   ssoDiagnose: () =>
     api.post<import('@/types').SsoDiagnoseResult>('/jira/sso/diagnose', undefined, { timeout: 90_000 }),
   // SSO 자동 로그인 — data 지정 시 파드 내 폼 로그인(ID/PW), 생략 시 서버측 브라우저(헤디드).
@@ -1125,6 +1225,20 @@ export const confluenceDocsApi = {
     api.put<import('@/types').ConfluenceDocsSettings>('/confluence/docs/settings', data),
 };
 
+// Saved Scripts API (노드 일괄 실행 - 사용자별 저장 스크립트, bash/python)
+export const savedScriptsApi = {
+  list: (language?: import('@/types').ScriptLanguage) =>
+    api.get<import('@/types').SavedScript[]>('/saved-scripts', {
+      params: language ? { language } : undefined,
+    }),
+  get: (id: string) => api.get<import('@/types').SavedScript>(`/saved-scripts/${id}`),
+  create: (data: import('@/types').SavedScriptCreate) =>
+    api.post<import('@/types').SavedScript>('/saved-scripts', data),
+  update: (id: string, data: import('@/types').SavedScriptUpdate) =>
+    api.put<import('@/types').SavedScript>(`/saved-scripts/${id}`, data),
+  delete: (id: string) => api.delete(`/saved-scripts/${id}`),
+};
+
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
 export const commandsApi = {
   list: (params?: { category?: string; importance?: string; q?: string }) =>
@@ -1316,6 +1430,11 @@ export const assigneesApi = {
   getAll: () => api.get<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees'),
   update: (assignees: import('@/types').Assignee[]) =>
     api.put<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees', { assignees }),
+  // 본인 담당자 정보만 부분 수정 — admin 이 아닌 사용자(operator/viewer)도 호출 가능.
+  updateMine: (patch: import('@/types').SelfAssigneePatch) =>
+    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee }>(
+      '/ui-settings/assignees/me', patch,
+    ),
 };
 
 // Ontology API
@@ -1520,6 +1639,10 @@ export const k8sEventsApi = {
   }) => api.get<import('@/types').K8sEventListResponse>('/events/', { params }),
   get: (id: string) => api.get<import('@/types').K8sEvent>(`/events/${id}`),
   delete: (id: string) => api.delete(`/events/${id}`),
+  getAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/events/${id}/analysis`),
+  triggerAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/events/${id}/analyze`),
 };
 
 // Trend Digest API
@@ -1682,6 +1805,8 @@ export interface BatchJobTypeDescriptor {
   defaultParams: Record<string, any>;
   /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요 (kubeconfig 로 실행). */
   requiresSsh: boolean;
+  /** 정적 실행 단계 계획 — 실행 전에도 타임라인을 그린다. */
+  stepPlan?: { id: string; label: string }[];
 }
 
 export interface BatchJob {
@@ -1770,9 +1895,23 @@ export interface BatchJobRun {
   /** 이 실행에 실제로 사용된 merge 후 파라미터 스냅샷 (admin 감사용). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   paramsSnapshot?: Record<string, any> | null;
+  /** 단계별 실행 trace — DeepCheckExecStep 과 동일 shape (id/label/status/detail/metrics/startedMs/durationMs). */
+  steps?: import('@/types').DeepCheckExecStep[] | null;
+  /** 실제로 나간 명령 기록 (kind/command/exitCode/durationMs/stdout/stderr/truncated). */
+  commands?: BatchJobCommandTrace[] | null;
   durationMs: number;
   startedAt: string;
   finishedAt?: string | null;
+}
+
+export interface BatchJobCommandTrace {
+  kind: string; // kubectl | ssh
+  command: string;
+  exitCode?: number | null;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  truncated: boolean;
 }
 
 export interface BatchJobTestConnectionRequest {
@@ -1784,6 +1923,12 @@ export interface BatchJobTestConnectionRequest {
   timeout?: number;
 }
 
+export interface BatchJobPreflightCheck {
+  check: string;
+  ok?: boolean | null; // null = 선행 단계 실패로 확인 불가
+  detail: string;
+}
+
 export interface BatchJobTestConnectionResponse {
   status: 'ok' | 'auth_error' | 'connect_error' | 'timeout' | 'error';
   latencyMs: number;
@@ -1793,6 +1938,17 @@ export interface BatchJobTestConnectionResponse {
   usedSavedPassword: boolean;
   usedSavedPrivateKey: boolean;
   error?: string | null;
+  /** ssh: 단일 SSH 검증 / k8s: kubeconfig→kubectl→API→RBAC 단계별 사전 점검 */
+  mode?: 'ssh' | 'k8s';
+  checks?: BatchJobPreflightCheck[];
+}
+
+export interface BatchJobStopResponse {
+  stopped: boolean;
+  /** 실제 강제종료(SSH 채널 close / kubectl kill / celery revoke)가 시도됐는지. */
+  interrupted: boolean;
+  message: string;
+  run?: BatchJobRun | null;
 }
 
 export const batchJobsApi = {
@@ -1806,6 +1962,7 @@ export const batchJobsApi = {
   delete: (id: string) => api.delete(`/batch-jobs/${id}`),
   run: (id: string, payload: BatchJobRunRequest, signal?: AbortSignal) =>
     api.post<BatchJobRun>(`/batch-jobs/${id}/run`, payload, { signal, timeout: 600000 }),
+  stop: (id: string) => api.post<BatchJobStopResponse>(`/batch-jobs/${id}/stop`),
   bulkRun: (jobIds: string[]) =>
     api.post<{ queued: number; skipped: number; results: { jobId: string; queued: boolean; reason?: string | null }[] }>(
       '/batch-jobs/bulk-run', { jobIds },
@@ -1956,13 +2113,14 @@ export const checkMatrixApi = {
     api.post<CheckMatrixBatchResult>(`/check-matrix/items/${itemId}/run`),
   listRuns: (params: {
     itemId?: string; clusterId?: string; batchId?: string;
-    trigger?: string; limit?: number; offset?: number;
+    trigger?: string; runState?: string; limit?: number; offset?: number;
   }) => api.get<CheckMatrixRunList>('/check-matrix/runs', {
     params: {
       item_id: params.itemId,
       cluster_id: params.clusterId,
       batch_id: params.batchId,
       trigger: params.trigger,
+      run_state: params.runState,
       limit: params.limit,
       offset: params.offset,
     },
@@ -2063,6 +2221,10 @@ export const observabilityApi = {
       },
     }),
   deleteAlert: (id: string) => api.delete(`/observability/alerts/${id}`),
+  getAlertAnalysis: (id: string) =>
+    api.get<{ data: import('@/types').AlertIncidentAnalysis }>(`/observability/alerts/${id}/analysis`),
+  triggerAlertAnalysis: (id: string) =>
+    api.post<{ ok: boolean; status: string; detail?: string }>(`/observability/alerts/${id}/analyze`),
 
   // 알림 규칙 / 전역 설정
   alertRules: () => api.get<import('@/types').AlertNotifyRule[]>('/observability/alert-rules'),

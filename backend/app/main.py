@@ -41,6 +41,7 @@ from app.routers import (
     trends_router,
     versions_router,
     bulk_exec_router,
+    saved_scripts_router,
     etcdctl_router,
     cilium_trace_router,
     mc_client_router,
@@ -84,6 +85,7 @@ from app.routers import (
     release_notes_router,
     check_matrix_router,
     island_router,
+    llm_settings_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -776,6 +778,14 @@ def _run_migrations():
             label="work_guides embedding hnsw index",
         )
 
+    # ops_notes: RAG(근거 인용) 검색용 임베딩 — 구버전 DB 호환 보강.
+    if "ops_notes" in inspector.get_table_names():
+        _safe_add_column("ops_notes", "embedding", f"VECTOR({settings.embedding_dim})")
+
+    # ontology_events: RAG(근거 인용) 검색용 임베딩 — 구버전 DB 호환 보강.
+    if "ontology_events" in inspector.get_table_names():
+        _safe_add_column("ontology_events", "embedding", f"VECTOR({settings.embedding_dim})")
+
     # 지식베이스(KnowledgePage) 기능 제거 — 더 이상 사용하지 않는 테이블 정리(데이터 불필요).
     # 구버전 DB 에 남아있을 수 있는 3개 테이블을 안전하게 DROP.
     for _kb_table in ("knowledge_presence", "knowledge_page_versions", "knowledge_pages"):
@@ -937,6 +947,8 @@ def _run_migrations():
         # 업무 생성 시 함께 만든 Confluence 문서 링크.
         _safe_add_column("work_items", "confluence_page_id", "VARCHAR(50)")
         _safe_add_column("work_items", "confluence_url", "TEXT")
+        # PEP → Confluence 반영(동기화) 마지막 시각 — jira_synced_at 과 동일한 목적.
+        _safe_add_column("work_items", "confluence_synced_at", "TIMESTAMP WITHOUT TIME ZONE")
         # Jira 원본 항목 동기화 — Epic / Sub-task / 컴포넌트 / 라벨 / 상태 카테고리.
         # 게시판 표를 Jira 와 같은 축으로 보여주기 위해 축약 매핑(type/type_label) 과 별도로
         # 원본 값을 보관한다.
@@ -970,6 +982,14 @@ def _run_migrations():
         _safe_add_column("batch_job_runs", "triggered_by_user_id", "VARCHAR(36)")
         _safe_add_column("batch_job_runs", "triggered_by_username", "VARCHAR(64)")
         _safe_add_column("batch_job_runs", "params_snapshot", "JSONB")
+        # 단계별 실행 trace + 실측 명령 기록 (배치잡 진행 상태 가시화)
+        _safe_add_column("batch_job_runs", "steps", "JSONB")
+        _safe_add_column("batch_job_runs", "commands", "JSONB")
+
+    # batch_jobs: 실행 중지(stop) 기능 — Celery 로 큐잉된(스케줄/일괄) 실행을
+    # revoke(terminate=True) 로 찾아 중단하기 위한 task id 추적.
+    if "batch_jobs" in inspector.get_table_names():
+        _safe_add_column("batch_jobs", "active_task_id", "VARCHAR(64)")
 
     # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화 + 에디터 개인 설정
     if "users" in inspector.get_table_names():
@@ -1028,6 +1048,9 @@ def _run_migrations():
         _safe_create_index("ix_k8s_events_received_at", "k8s_events", "(received_at DESC)")
         _safe_create_index("ix_k8s_events_severity", "k8s_events", "(severity)")
         _safe_create_index("ix_k8s_events_cluster_received", "k8s_events", "(cluster_id, received_at DESC)")
+        # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
+        _safe_add_column("k8s_events", "analysis_id", "UUID")
+        _safe_add_column("k8s_events", "analysis_status", "VARCHAR(16)")
 
     # alert_events: Alertmanager / 사내 alert-forwarder 수신 알람 — 테이블은 create_all, 인덱스 보강.
     if "alert_events" in inspector.get_table_names():
@@ -1036,6 +1059,13 @@ def _run_migrations():
         _safe_create_index("ix_alert_events_status_severity", "alert_events", "(status, severity)")
         _safe_create_index(
             "ix_alert_events_fingerprint_starts", "alert_events", "(fingerprint, starts_at DESC)")
+        # AI 자동 분석 연결 (incident_analyses) — 구버전 DB 호환 보강.
+        _safe_add_column("alert_events", "analysis_id", "UUID")
+        _safe_add_column("alert_events", "analysis_status", "VARCHAR(16)")
+    # incident_analyses: alert 트리거로 처음 생성됐던 테이블에 k8s_event 트리거 지원 추가.
+    if "incident_analyses" in inspector.get_table_names():
+        _safe_add_column("incident_analyses", "k8s_event_id", "UUID")
+        _safe_create_index("ix_incident_analyses_k8s_event", "incident_analyses", "(k8s_event_id)")
 
     # observability_*: 관측 모듈/지표 카탈로그 + push 모드 스냅샷.
     if "observability_metrics" in inspector.get_table_names():
@@ -2024,7 +2054,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.17.1",
+    version="1.24.2",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2065,6 +2095,7 @@ app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(llm_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
@@ -2089,6 +2120,7 @@ app.include_router(analyze_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(versions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(saved_scripts_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mc_client_router, prefix="/api/v1", dependencies=_auth)
@@ -2156,7 +2188,7 @@ app.include_router(island_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.17.1",
+        "version": "1.24.2",
         "version": "1.8.2",
         "status": "running"
     }

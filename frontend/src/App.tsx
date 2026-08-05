@@ -71,7 +71,6 @@ import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { IslandPage } from '@/pages/IslandPage';
-import { UsersPage } from '@/pages/UsersPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
@@ -263,7 +262,8 @@ function AppShell() {
               <Route path="/cluster-trends/:clusterId" element={<ClusterTrendsPage />} />
               <Route path="/cluster-trends" element={<ClusterTrendsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
-              <Route path="/settings/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
+              {/* 사용자 관리(로그인 계정)는 Settings ▸ 시스템 담당자 ▸ 로그인 계정 서브탭으로 통합됨 */}
+              <Route path="/settings/users" element={<Navigate to="/settings?tab=assignee" replace />} />
               <Route path="/me/change-password" element={<ChangePasswordPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

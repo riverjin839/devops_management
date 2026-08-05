@@ -266,6 +266,30 @@ kubeadm 이 아닌 구성에서는 etcd 가 master 노드의 **systemd 유닛**�
 > 체커가 직접 SSH 하지 않는 이유: params 는 JSONB 라 런북·실행 로그에 그대로 노출된다.
 > 자격증명을 거기 담지 않으려고 수집(자격증명 미저장 UI 흐름)과 판정(스냅샷 읽기)을 분리했다.
 
+### 6.2b K8s 인증서 만료(`cert_expiry`) — kube-apiserver 가 distroless 인 환경
+
+`kubeadm certs check-expiration` 은 원래 `kubectl exec <apiserver-pod> -- kubeadm ...` 로
+실행하려 했지만, **kube-apiserver 공식 이미지는 쉘/kubeadm 바이너리가 없는 distroless 이미지인
+경우가 흔해** exec 자체가 실패한다(`OCI runtime exec failed: exec: "kubeadm": executable file
+not found in $PATH`). `etcd_defrag` 와 동일한 이유로 이 점검도 **파라미터로 경로를 선택**한다.
+
+| `source` | 동작 |
+|---|---|
+| `auto` (기본) | apiserver 파드 exec 를 먼저 시도하고, 파드가 없거나 exec 이 실패하면 자동으로 스냅샷 경로로 폴백 |
+| `pod` | `kubectl exec … kubeadm certs check-expiration` 전용 — 대부분의 최신 클러스터에서 실패한다 |
+| `snapshot` | SSH 로 호스트에서 직접 수집한 `kubeadm_certs` 스냅샷만 사용 |
+
+**스냅샷 경로 사용 절차**:
+
+1. **버전 / 설정 관리(`/versions`)** 화면의 **"K8s 인증서(kubeadm)"** 버튼으로 컨트롤 플레인
+   노드에 SSH 접속해 `kubeadm certs check-expiration` 을 호스트에서 직접 실행하고,
+   `cluster_config_snapshots` 에 `kubeadm_certs:{host}` 로 저장한다.
+   - **자격증명은 저장되지 않는다** — 요청 시에만 쓰이고 DB 에 남지 않는다.
+2. 매트릭스의 인증서 만료 행은 이 스냅샷을 읽어 잔여일을 계산한다. 수집이
+   `snapshot_max_age_hours`(기본 24h)보다 오래되면 판정하지 않고 **대기(pending)** 로 남긴다.
+3. `auto` 모드는 pod exec 실패 사유(exit code + stderr)를 실행 단계(steps)에 그대로 남긴 뒤
+   스냅샷으로 폴백한다 — "왜 실패했는지"가 수행 로그에서 바로 보인다.
+
 ### 6.3 새 환경 차이가 생기면
 
 점검이 우리 환경과 안 맞는데 화면에서 바꿀 수 없다면 그건 **구현 결함**이다. 해당 값을
@@ -284,6 +308,7 @@ kubeadm 이 아닌 구성에서는 etcd 가 master 노드의 **systemd 유닛**�
 | cron 을 저장하면 422 가 뜬다 | 최소 5분 간격 제약. `*/1 * * * *` 같은 표현은 거부된다. |
 | 셀은 정상인데 클러스터 색이 위험이다 | 클러스터 상태는 `core_bundle`(DailyChecker)과 애드온 상태에서 나온다. 개별 deep_check 셀 색과 직접 연결되지 않는다. |
 | etcd 점검이 "etcd pod 를 찾지 못했습니다" | 데몬(systemd) etcd 환경이다. 설정 편집에서 `source` 를 `auto` 또는 `snapshot` 으로 두고, `/versions` 화면에서 etcd 설정 수집을 먼저 실행한다 (§6.2). |
+| 인증서 만료 점검이 "kubeadm certs check-expiration 실행 불가"(pending) | kube-apiserver 이미지가 distroless 라 kubectl exec 가 안 되는 흔한 케이스다. `/versions` 화면의 "K8s 인증서(kubeadm)" 버튼으로 SSH 수집 후 설정 편집에서 `source` 를 `auto` 또는 `snapshot` 으로 둔다 (§6.2b). |
 | deep check 실행이 500 (`daily_check_log_id` NOT NULL) | 구버전 DB 의 레거시 제약. 백엔드를 재시작하면 부팅 마이그레이션이 자동으로 푼다(`ALTER COLUMN … DROP NOT NULL`). |
 | 상태가 **대기(pending)** 로 남는다 | 연결 거부/타임아웃은 위험이 아니라 대기로 판정한다(클러스터가 죽은 것과 PEP 가 못 닿는 것을 구분하기 위함). 수행 로그의 stderr 를 본다. |
 | 자동 실행이 아예 안 돈다 | 클러스터 열 cron 이 비어 있거나(핵심 항목), 셀 cron 이 비활성이거나, `check-matrix-dispatch` Beat 가 안 도는 경우. |

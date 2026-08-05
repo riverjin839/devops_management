@@ -112,8 +112,11 @@ class AnalysisResultSchema(BaseModel):
     suggested_actions: list[str]
     related_runbooks: list[str] = []
     confidence: float
-    analyzed_by: Literal["claude", "local_llm", "rule_based"]
+    # "rule_based" | "claude" | "local_llm[:<profile>:<model>]"
+    analyzed_by: str
     analyzed_at: str
+    # RAG 근거 인용 — {title, source_type, ref_id, route, snippet, similarity}
+    citations: list[dict] = []
 
 
 class AnalyzeResponse(BaseModel):
@@ -130,9 +133,9 @@ class HealthResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────
 
 @router.post("/incident", response_model=AnalyzeResponse)
-async def analyze_incident(body: IncidentContextSchema):
+async def analyze_incident(body: IncidentContextSchema, db: Session = Depends(get_db)):
     """Analyze a Kubernetes pod incident and return structured insights."""
-    analyzer = get_analyzer()
+    analyzer = get_analyzer(db)
 
     ctx = IncidentContext(
         pod_name=body.pod_name,
@@ -187,6 +190,7 @@ async def analyze_incident(body: IncidentContextSchema):
             confidence=result.confidence,
             analyzed_by=result.analyzed_by,
             analyzed_at=result.analyzed_at,
+            citations=list(getattr(result, "citations", None) or []),
         ),
     )
 
@@ -194,7 +198,8 @@ async def analyze_incident(body: IncidentContextSchema):
 @router.get("/health", response_model=HealthResponse)
 async def analyzer_health():
     """Check whether the configured analyzer backend is reachable."""
-    backend = os.getenv("ANALYZER_BACKEND", "rule_based")
+    from app.services.analyzers.factory import get_analyzer_backend
+    backend = get_analyzer_backend()
     analyzer = get_analyzer()
     available = await analyzer.health_check()
     return HealthResponse(backend=backend, available=available)

@@ -62,6 +62,11 @@ class AlertEvent(Base):
     ack_by = Column(String(128), nullable=True)
     ack_at = Column(DateTime, nullable=True)
 
+    # AI 자동 분석 연결 (incident_analyses) — FK 없음(분석 실패/삭제가 알람에 영향 없도록).
+    # analysis_status: null(미대상) | queued | running | done | failed | skipped
+    analysis_id = Column(UUID(as_uuid=True), nullable=True)
+    analysis_status = Column(String(16), nullable=True)
+
     raw = Column(JSONB, nullable=True)
     received_at = Column(DateTime, nullable=False, default=datetime.utcnow, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

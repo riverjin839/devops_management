@@ -3,14 +3,17 @@ import { useQueries } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   Terminal, RefreshCw, Play, Square, CheckCircle, XCircle, Key, Upload, ChevronDown, ChevronRight,
-  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server,
+  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server, FolderInput, Loader2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ExecutionStepsTimeline } from '@/components/daily-check';
+import { SavedScriptPanel } from '@/components/bulk-exec';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
-import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
+import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem, type FetchFileResponse } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
+import type { ScriptLanguage } from '@/types';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
 
@@ -112,14 +115,22 @@ function resultsToTxt(
   return lines.join('\n');
 }
 
-function downloadBlob(text: string, filename: string, mime: string) {
-  const blob = new Blob(['﻿', text], { type: `${mime};charset=utf-8` });
+function downloadBlob(text: string, filename: string, mime: string, withBom: boolean = true) {
+  // BOM 은 CSV/TXT 를 엑셀에서 열 때 UTF-8 로 정확히 인식시키는 용도 — 스크립트/설정
+  // 파일(예: bash 셔뱅 #!/bin/bash)에 붙이면 실행이 깨지므로 그런 용도는 withBom=false.
+  const blob = new Blob(withBom ? ['﻿', text] : [text], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** 경로 문자열의 마지막 세그먼트 — scpRemotePath 를 로컬 저장 파일명 제안에 재사용 */
+function basenameOf(path: string, fallback: string): string {
+  const name = path.split('/').filter(Boolean).pop();
+  return name || fallback;
 }
 
 function copyToClipboard(text: string): Promise<boolean> {
@@ -521,6 +532,7 @@ export function BulkExecPage() {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [command, setCommand] = useState('');
+  const [language, setLanguage] = useState<ScriptLanguage>('bash');
   const [scpContent, setScpContent] = useState('');
   const [scpRemotePath, setScpRemotePath] = useState('/tmp/uploaded.txt');
   const [mode, setMode] = useState<'sequential' | 'parallel'>('parallel');
@@ -564,6 +576,23 @@ export function BulkExecPage() {
     return Array.from(byKey.values());
   }, [selected, clusterSections]);
 
+  // SCP "다른 노드에서 불러오기" 원본 후보 — 선택 여부와 무관하게, 현재 화면에 로드된
+  // (클러스터 사이드바에서 체크한) 모든 노드를 대상으로 한다. 업로드 대상(selectedHosts)과는
+  // 별개 목적이라 굳이 노드 선택 여부에 종속시키지 않는다.
+  const knownNodes = useMemo(() => {
+    const list: { key: string; label: string; host: string }[] = [];
+    for (const sec of clusterSections) {
+      for (const n of sec.nodes) {
+        list.push({
+          key: makeKey(sec.clusterId, n.name),
+          label: `${n.name} @ ${sec.clusterName}`,
+          host: n.internalIp || n.name,
+        });
+      }
+    }
+    return list;
+  }, [clusterSections]);
+
   const [runResponse, setRunResponse] = useState<BulkExecResponse | null>(null);
 
   const runMutation = useAbortableMutation({
@@ -584,6 +613,7 @@ export function BulkExecPage() {
         password: authMode === 'password' ? password : undefined,
         privateKey: authMode === 'key' ? privateKey : undefined,
         command: action === 'ssh' ? command : undefined,
+        language: action === 'ssh' ? language : undefined,
         scpContent: action === 'scp' ? scpContent : undefined,
         scpRemotePath: action === 'scp' ? scpRemotePath : undefined,
         mode,
@@ -596,6 +626,42 @@ export function BulkExecPage() {
       return res.data;
     },
     onSuccess: (data) => setRunResponse(data),
+  });
+
+  // SCP "다른 노드에서 불러오기"
+  const [remoteFetchOpen, setRemoteFetchOpen] = useState(false);
+  const [fetchSourceKey, setFetchSourceKey] = useState('');
+  const [fetchRemotePath, setFetchRemotePath] = useState('');
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  // 마지막 시도의 단계별 trace — 성공/실패 무관하게 "무엇을 시도했는지" 항상 보여준다.
+  const [fetchTrace, setFetchTrace] = useState<FetchFileResponse | null>(null);
+
+  const fetchFileMutation = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
+      const node = knownNodes.find((n) => n.key === fetchSourceKey);
+      if (!node) throw new Error('불러올 노드를 선택하세요.');
+      if (!fetchRemotePath.trim()) throw new Error('원격 파일 경로를 입력하세요.');
+      const res = await bulkExecApi.fetchFile({
+        host: node.host,
+        port,
+        username,
+        password: authMode === 'password' ? password : undefined,
+        privateKey: authMode === 'key' ? privateKey : undefined,
+        remotePath: fetchRemotePath.trim(),
+        connectTimeout,
+      }, signal);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      setFetchTrace(data);
+      if (data.status === 'ok') {
+        setScpContent(data.content);
+        setFetchError(null);
+      } else {
+        setFetchError(data.error || '파일을 불러오지 못했습니다.');
+      }
+    },
+    onError: (err) => { setFetchError(formatApiError(err)); setFetchTrace(null); },
   });
 
   const canRun =
@@ -816,22 +882,41 @@ export function BulkExecPage() {
             {/* 명령/파일 */}
             {action === 'ssh' ? (
               <div>
-                <label htmlFor={f('cmd')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                  <Terminal className="w-3 h-3" /> 실행할 명령
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor={f('cmd')} className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Terminal className="w-3 h-3" /> 실행할 명령 / 스크립트
+                  </label>
+                  <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+                    {(['bash', 'python'] as const).map((l) => (
+                      <button
+                        key={l}
+                        type="button"
+                        onClick={() => setLanguage(l)}
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
+                          language === l
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground/70 hover:text-foreground'
+                        }`}
+                        title={l === 'python' ? '원격 python3 인터프리터로 실행됩니다' : '원격 기본 셸로 그대로 실행됩니다'}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <textarea
                   id={f('cmd')}
                   value={command}
                   onChange={(e) => setCommand(e.target.value)}
-                  placeholder="예: uname -a && free -m && uptime"
+                  placeholder={language === 'python' ? 'import os\nprint(os.uname())' : '예: uname -a && free -m && uptime'}
                   rows={3}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
-                <SavedCommands
+                <SavedScriptPanel
                   className="mt-2"
-                  storageKey="k8s:saved-cmd:bulk-exec-ssh"
                   currentValue={command}
-                  onPick={setCommand}
+                  currentLanguage={language}
+                  onPick={(content, lang) => { setCommand(content); setLanguage(lang); }}
                 />
               </div>
             ) : (
@@ -848,7 +933,7 @@ export function BulkExecPage() {
                     rows={4}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                   />
-                  <div className="mt-1 flex items-center gap-1.5">
+                  <div className="mt-1 flex items-center gap-3 flex-wrap">
                     <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                       <Upload className="w-3 h-3" /> 파일에서 불러오기
                       <input
@@ -865,7 +950,80 @@ export function BulkExecPage() {
                         }}
                       />
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => setRemoteFetchOpen((v) => !v)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <FolderInput className="w-3 h-3" /> 다른 노드에서 불러오기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadBlob(
+                        scpContent, basenameOf(scpRemotePath, 'scp-content.txt'), 'text/plain', false,
+                      )}
+                      disabled={!scpContent}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="현재 업로드 내용을 내 컴퓨터에 파일로 저장"
+                    >
+                      <Download className="w-3 h-3" /> 로컬에 저장
+                    </button>
                   </div>
+
+                  {remoteFetchOpen && (
+                    <div className="mt-2 p-2.5 bg-secondary/30 border border-border rounded-lg space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <label htmlFor={f('fetchSrc')} className="block text-xs text-muted-foreground mb-1">원본 노드</label>
+                          <select
+                            id={f('fetchSrc')}
+                            value={fetchSourceKey}
+                            onChange={(e) => setFetchSourceKey(e.target.value)}
+                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            <option value="">노드를 선택하세요</option>
+                            {knownNodes.map((n) => (
+                              <option key={n.key} value={n.key}>{n.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor={f('fetchPath')} className="block text-xs text-muted-foreground mb-1">원격 파일 경로</label>
+                          <input
+                            id={f('fetchPath')}
+                            type="text"
+                            value={fetchRemotePath}
+                            onChange={(e) => setFetchRemotePath(e.target.value)}
+                            placeholder="/etc/hosts"
+                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-muted-foreground/70">
+                          위 인증 정보(사용자/포트/비밀번호|키)를 그대로 사용해 텍스트 파일을 읽어옵니다.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => fetchFileMutation.mutate()}
+                          disabled={fetchFileMutation.isPending || !fetchSourceKey || !fetchRemotePath.trim()}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                        >
+                          {fetchFileMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderInput className="w-3 h-3" />}
+                          불러오기
+                        </button>
+                      </div>
+                      {fetchError && (
+                        <p className="text-xs text-status-critical">{fetchError}</p>
+                      )}
+                      {fetchTrace && (fetchTrace.steps?.length || fetchTrace.commands?.length) ? (
+                        <div className="pt-1 border-t border-border space-y-2">
+                          <ExecutionStepsTimeline steps={fetchTrace.steps} />
+                          <CommandTraceList commands={fetchTrace.commands ?? []} />
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label htmlFor={f('scpPath')} className="block text-sm text-muted-foreground mb-1">원격 경로</label>
@@ -1156,7 +1314,10 @@ export function BulkExecPage() {
           </div>
           {action === 'ssh' ? (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행할 명령</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
+                실행할 명령
+                <span className="normal-case text-[10px] px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
+              </p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
                 {command}
               </pre>

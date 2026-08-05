@@ -18,3 +18,13 @@ data:
   REDIS_PORT: "6379"
   PROMETHEUS_URL: "http://prometheus:9090"
   GRAFANA_URL: "http://grafana:3000"
+  # LLM 게이트웨이 bootstrap 폴백 — 운영 설정의 원천은 AppSetting `llm_settings`
+  # (Settings → AI/LLM 탭). 이 값들은 AppSetting 행이 없을 때만 쓰인다.
+  OLLAMA_URL: {{ .Values.ollama.url | quote }}
+  OLLAMA_MODEL: {{ .Values.ollama.model | quote }}
+  {{- if .Values.llm.apiBase }}
+  LLM_API_BASE: {{ .Values.llm.apiBase | quote }}
+  {{- end }}
+  {{- if .Values.llm.model }}
+  LLM_MODEL: {{ .Values.llm.model | quote }}
+  {{- end }}

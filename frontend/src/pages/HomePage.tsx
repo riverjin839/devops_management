@@ -205,9 +205,12 @@ export function HomePage() {
         </div>
       </div>
 
-      {/* ── Mode B: platform status matrix — fills remaining space ───────────── */}
+      {/* ── Mode B: platform status matrix — fills remaining space, no page-level
+          scroll (matrix manages its own internal scroll region so it uses all
+          available height instead of capping out and leaving/needing a second
+          scrollbar) ───────────────────────────────────────────────────────── */}
       {mode === 'platform' && (
-        <div className="flex-1 min-h-0 px-3 pt-2 pb-3 flex flex-col overflow-auto">
+        <div className="flex-1 min-h-0 px-3 pt-2 pb-3 flex flex-col overflow-hidden">
           <PlatformStatusMatrix />
         </div>
       )}

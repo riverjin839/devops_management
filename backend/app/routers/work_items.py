@@ -199,9 +199,14 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
                    module: Optional[str], started_from: Optional[date],
                    started_to: Optional[date], closed: Optional[bool],
                    all_attendees: Optional[bool] = None,
-                   sprint_id: Optional[UUID] = None):
+                   sprint_id: Optional[UUID] = None,
+                   q: Optional[str] = None):
     if type_:
         query = query.filter(WorkItem.type == type_)
+    if q:
+        # 제목 기준 검색 — title 이 비어있는 구버전 항목은 화면에도 content 를 제목으로
+        # 대신 표시하므로(WorkItem.title 주석 참고), content 도 함께 ILIKE 매칭한다.
+        query = query.filter(WorkItem.title.ilike(f"%{q}%") | WorkItem.content.ilike(f"%{q}%"))
     if all_attendees is True:
         query = query.filter(WorkItem.all_attendees.is_(True))
     if sprint_id is not None:
@@ -240,8 +245,8 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
 @router.get("", response_model=WorkItemListResponse)
 def list_work_items(
     type: Optional[str] = Query(
-        default=None, pattern="^(task|issue|meeting|training|etc)$",
-        description="Work item 유형 필터 (task/issue/meeting/training/etc)",
+        default=None, pattern="^(task|issue|meeting|training|etc|build_response)$",
+        description="Work item 유형 필터 (task/issue/meeting/training/etc/build_response)",
     ),
     cluster_id: UUID | None = Query(default=None, description="대상 클러스터 UUID 필터"),
     assignee: str | None = Query(default=None, description="담당자(primary/secondary/legacy) ILIKE 부분 일치"),
@@ -254,6 +259,7 @@ def list_work_items(
     closed: bool | None = Query(default=None, description="true=closed 만, false=open 만, 미지정=전체"),
     all_attendees: bool | None = Query(default=None, description="true=공통업무 항목만"),
     sprint_id: UUID | None = Query(default=None, description="스프린트 ID 필터"),
+    q: str | None = Query(default=None, description="제목(title/content) 검색어 — ILIKE 부분 일치"),
     # G-C2: 페이지네이션 — 클라이언트가 명시적으로 limit 지정. 기본 100, 최대 500.
     offset: int = Query(default=0, ge=0, description="페이지네이션 offset (0 부터)"),
     limit: int = Query(default=100, ge=1, le=500, description="페이지네이션 limit (1~500, 기본 100)"),
@@ -271,7 +277,7 @@ def list_work_items(
         query, type_=type, cluster_id=cluster_id, assignee=assignee, category=category,
         priority=priority, kanban_status=kanban_status, module=module,
         started_from=started_from, started_to=started_to, closed=closed,
-        all_attendees=all_attendees, sprint_id=sprint_id,
+        all_attendees=all_attendees, sprint_id=sprint_id, q=q,
     )
     # G-C2: 진짜 COUNT 쿼리 (limit 이전) + offset/limit 적용.
     total = query.count()
@@ -289,7 +295,7 @@ def list_work_items(
 
 @router.get("/export/csv")
 def export_csv(
-    type: Optional[str] = Query(default=None, pattern="^(task|issue|meeting|training|etc)$"),
+    type: Optional[str] = Query(default=None, pattern="^(task|issue|meeting|training|etc|build_response)$"),
     cluster_id: UUID | None = Query(default=None),
     assignee: str | None = Query(default=None),
     category: str | None = Query(default=None),
@@ -298,6 +304,7 @@ def export_csv(
     module: str | None = Query(default=None),
     started_from: date | None = Query(default=None),
     started_to: date | None = Query(default=None),
+    q: str | None = Query(default=None, description="제목(title/content) 검색어 — ILIKE 부분 일치"),
     # G-C3: 무인증 bulk export 차단 — operator 만 가능. limit 으로 메모리 cap.
     limit: int = Query(default=5000, ge=1, le=10000, description="최대 export 행 수 (메모리 보호용)"),
     db: Session = Depends(get_db),
@@ -313,7 +320,7 @@ def export_csv(
     query = _apply_filters(
         query, type_=type, cluster_id=cluster_id, assignee=assignee, category=category,
         priority=priority, kanban_status=kanban_status, module=module,
-        started_from=started_from, started_to=started_to, closed=None,
+        started_from=started_from, started_to=started_to, closed=None, q=q,
     )
     items = (
         query.order_by(WorkItem.started_at.desc(), WorkItem.created_at.desc())
@@ -358,7 +365,13 @@ def export_csv(
         "비고",
         "등록일시",
     ])
-    type_label_map = {"task": "작업", "issue": "이슈", "meeting": "회의", "training": "교육", "etc": "기타"}
+    # 프론트 WORK_ITEM_TYPE_CONFIG 와 라벨을 맞춘다 — task(구 "업무")는 "운영 대응"으로,
+    # issue(구 "이슈")는 "이슈 대응"으로 재정의. training(구 "교육")은 선택 목록에서만
+    # 빠졌을 뿐 기존 데이터는 남아있어 CSV 라벨은 유지한다.
+    type_label_map = {
+        "task": "운영 대응", "issue": "이슈 대응", "meeting": "회의", "training": "교육", "etc": "기타",
+        "build_response": "구축 대응",
+    }
     for w in items:
         writer.writerow([
             type_label_map.get(w.type, w.type),

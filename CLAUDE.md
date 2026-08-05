@@ -46,47 +46,21 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
 
 ## Tech Stack
 
-### Backend (`backend/`)
-| Layer | Technology |
-|---|---|
-| Framework | FastAPI 0.109 + Uvicorn |
-| ORM | SQLAlchemy 2.0 |
-| DB | PostgreSQL 15 (via psycopg2-binary) |
-| Migrations | Lightweight inline (`_run_migrations()` in `main.py`) — **no Alembic CLI** |
-| Task queue | Celery 5.3 + Redis 7 |
-| Scheduler | Celery Beat (매분 check-matrix cron 디스패처 + 리소스 스냅샷/배치잡/트렌드 수집) |
-| HTTP client | httpx (async) |
-| Config | pydantic-settings (`Settings` class reads `.env`) |
-| K8s checks | `subprocess` calling `kubectl` + `kubernetes==29.0.0` SDK |
-| AI Agent | Ollama HTTP API (local, optional) |
-| Automation | ansible-runner |
-| Python | 3.11 |
+**버전은 여기 적지 않는다** — `backend/requirements.txt` · `frontend/package.json` 이 원천이다.
+아래는 "무엇을 쓰는가"보다 **"무엇을 쓰지 않는가 / 왜 이렇게 갈렸는가"** 만 남긴 것이다.
 
-### Frontend (`frontend/`)
-| Layer | Technology |
-|---|---|
-| Framework | React 18 + TypeScript 5.3 |
-| Build | Vite 5 |
-| Styling | Tailwind CSS 3 + shadcn/ui (Base UI 기본 · Radix 호환) + shadcn MCP (`frontend/.mcp.json`) |
-| State | Zustand 4 (client state) + TanStack Query 5 (server state) |
-| HTTP | axios |
-| Charts | Recharts |
-| Routing | React Router v6 |
-| Icons | lucide-react |
-| Linting | ESLint 8 + TypeScript ESLint |
-
-### Infrastructure
-| Concern | Technology |
-|---|---|
-| Containerisation | Docker + Docker Compose |
-| K8s manifests | Kustomize (base + overlays: dev / prod / airgap / kind) |
-| Helm chart | `helm/k8s-daily-monitor/` (values-dev / values-prod / values-airgap) |
-| Local K8s | kind (`scripts/kind-setup.sh`) |
-| Dev loop | Skaffold (`skaffold.yaml`) |
-| CI | GitHub Actions (`ci.yml`) |
-| CD | GitHub Actions (`cd.yml`) → GHCR → Kustomize deploy |
-| GitOps | ArgoCD (`argocd/`) |
-| Jenkins | `Jenkinsfile` (phase 3 production) |
+- **Backend**: FastAPI + Uvicorn · SQLAlchemy · PostgreSQL · Celery + Redis · httpx(async) ·
+  pydantic-settings · Python 3.11.
+  - **마이그레이션은 `main.py` 의 `_run_migrations()` 인라인 방식 — Alembic CLI 없음.**
+  - K8s 점검은 `subprocess` 의 `kubectl` + `kubernetes` SDK 두 경로를 함께 쓴다.
+  - Ollama(로컬 LLM)와 ansible-runner 는 **optional 의존** — 없어도 앱이 떠야 한다.
+- **Frontend**: React + TypeScript · Vite · Tailwind + shadcn/ui(Base UI 기본, Radix 호환) ·
+  axios · Recharts · React Router v6 · lucide-react.
+  - **상태는 Zustand(client) / TanStack Query(server) 로 엄격히 분리** — §Frontend Architecture.
+  - shadcn 컴포넌트는 shadcn MCP(`frontend/.mcp.json`)로 추가한다 (props 를 추측하지 말 것).
+- **Infra**: Docker Compose(로컬) · Kustomize base + overlays(dev/prod/airgap/kind) ·
+  Helm(`helm/k8s-daily-monitor/`) · kind(`scripts/kind-setup.sh`) · Skaffold ·
+  GitHub Actions(CI/CD) · ArgoCD · Jenkins(`Jenkinsfile`, phase 3).
 
 ---
 
@@ -148,7 +122,7 @@ devops_management/
 | kind 로컬 K8s | `bash scripts/kind-setup.sh up｜reload｜destroy` | FE `:30080` · API `:30800/docs` |
 | K8s 핫리로드 | `make skaffold-dev` | |
 
-그 외 타깃은 `make help`. Compose 는 postgres+redis+backend+frontend+celery(worker/beat)
+그 외 타깃은 `make help`. Compose 는 postgres+redis+backend+frontend+celery(worker/worker-llm/beat)
 +kubewatch+grafana-renderer 를 띄운다.
 
 **머지 전 게이트 (CI 와 동일 — 전부 통과해야 함):**
@@ -244,49 +218,44 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
 `dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`,
 `dispatch_architecture_doc_sync`), 수집류(`collect_resource_counts`, `run_trend_collect`,
-`sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`),
+`sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`, `run_auto_incident_analysis` — 전용 `llm` 큐),
 AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_work_guide_embedding`,
-`generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
+`compute_ops_note_embedding`, `backfill_embeddings`, `generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
 async 서비스는 `asyncio.new_event_loop()` + `loop.run_until_complete()` 로 브리지한다.
 
 ### Health Check Logic (`services/daily_checker.py`)
 
-`DailyChecker.run_daily_check()` orchestrates four sub-checks:
-1. `_check_api_server` — HTTP GET to `{cluster.api_endpoint}/{healthz,livez,readyz}` via httpx.
-2. `_check_components` — `kubectl get componentstatuses -o json`.
-3. `_check_nodes` — `kubectl get nodes -o json`.
-4. `_check_system_pods` — `kubectl get pods -n kube-system -o json`.
+`DailyChecker.run_daily_check()` 가 API server / componentstatuses / nodes / kube-system pods 를
+순회한다. **종합 상태 우선순위는 `critical` > `warning` > `healthy`** — 하나라도 critical 이면
+전체가 critical 이다. 서브 체크 구성은 파일을 읽는다.
 
-Overall status precedence: `critical` > `warning` > `healthy`.
+### Fail-Safe External Services (필수 패턴)
 
-### Fail-Safe External Services
-
-Both `AIAgentService` (`agent_service.py`) and `PrometheusService` (`prometheus_service.py`) follow the same pattern: **all exceptions are caught, returning structured offline/error dicts**. They never raise HTTP 500s. The dashboard continues to work even when Ollama or Prometheus is unavailable.
+외부 의존(Ollama·Prometheus·Alertmanager 등)을 호출하는 서비스는 **모든 예외를 잡아 구조화된
+offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_service.py`,
+`prometheus_service.py` 가 레퍼런스). 외부 서비스가 죽어도 대시보드는 계속 떠야 하고, 카드가
+"offline" 로 표시되는 것이 정상 동작이다. 새 외부 연동도 같은 패턴을 따른다.
 
 ### AI Agent (Ollama)
 
-- Endpoint: `/api/v1/agent/chat` (POST), `/api/v1/agent/health` (GET).
-- Default model: `llama3` (configurable via `OLLAMA_MODEL`).
-- Context dict fields: `cluster_name`, `cluster_status`, `pod_logs`, `node_status`, `error_messages`, `extra`.
-- Model auto-pull is NOT done at startup; call `POST /api/v1/agent/pull-model` to trigger it.
+- 모델 auto-pull 은 startup 에서 하지 않는다 — `POST /api/v1/agent/pull-model` 로만 트리거.
 - 장애 분석은 별도 분석기 스택(`services/analyzers/` — `claude`/`local_llm`/`rule_based`,
-  `ANALYZER_BACKEND` 로 선택)이 담당하며 **분석 전용(조치 실행 없음)** 이다.
-  폐쇄망 LLM 구성·아키텍처는 `docs/AIRGAP_LLM_ARCHITECTURE.md`, 모델 반입은
+  `ANALYZER_BACKEND` 로 선택)이 담당하며 **분석 전용(조치 실행 없음)** 이다. 분석기가 클러스터를
+  변경하는 코드를 넣지 않는다.
+- 폐쇄망 LLM 구성·아키텍처는 `docs/AIRGAP_LLM_ARCHITECTURE.md`, 모델 반입은
   `docs/AIRGAP_LLM_NEXUS.md` 참고.
 
 ### PromQL Metric Cards
 
-- Stored in `metric_cards` PostgreSQL table.
-- Seeded with 6 defaults on first run (CrashLoopBackOff pods, Failed pods, CPU/Memory usage, PVC disk, network).
-- `display_type`: `value` | `gauge` | `list`.
-- `thresholds`: string format `"warning:70,critical:90"`.
-- Query execution: `GET /api/v1/promql/query/{card_id}` or `GET /api/v1/promql/query/all`.
+`metric_cards` 테이블 행이라 **카드 추가·수정은 코드가 아니라 UI/DB 에서 한다** (UI-First 원칙).
+`display_type` 은 `value|gauge|list`, `thresholds` 는 `"warning:70,critical:90"` 형식의 문자열
+컬럼이다. 쿼리 실행 엔드포인트와 나머지 컬럼은 `models/metric_card.py` · `routers/promql.py` 참고.
 
 ---
 
 ## UI Design System
 
-테마 3종(`default` 기본 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
+테마 4종(`default` 기본 / `comfort` 크림+딥그린 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
 
 - **규격·구현 표준의 원천 = `DESIGN_SYSTEM.md` §12 구현 표준** — 테마 매트릭스, radius 토큰,
   MacCard props, ClusterSidebar 사용 패턴 3종 + 레이아웃 규칙, 콘솔 패턴 5개 항목이 전부 거기 있다.
@@ -364,7 +333,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island` |
 | 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
@@ -374,24 +343,19 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 ## Database Schema
 
-### Key Models
+**컬럼 정의는 `backend/app/models/` 가 원천이다** — 여기에 복제하지 않는다. 아래는 "어느 도메인의
+무엇을 어느 모델이 들고 있나"를 찾기 위한 지도다.
 
-**`clusters`** — `id (UUID PK)`, `name`, `api_endpoint`, `kubeconfig_path`, `status (healthy/warning/critical)`, `created_at`, `updated_at`
+### Core (원조 모니터링)
 
-**`daily_check_logs`** — `id`, `cluster_id (FK)`, `schedule_type`, `check_date`, `overall_status`, `api_server_status`, `api_server_response_time_ms`, `api_server_details (JSONB)`, `components_status (JSONB)`, `nodes_status (JSONB)`, `total_nodes`, `ready_nodes`, `system_pods_status (JSONB)`, `error_messages`, `warning_messages`, `check_duration_seconds`
-
-**`check_schedules`** — `id`, `cluster_id (FK)`, `morning_time`, `noon_time`, `evening_time`, `morning_enabled`, `noon_enabled`, `evening_enabled`, `timezone`, `is_active`
-
-**`addons`** — `id`, `cluster_id (FK)`, `name`, `type`, `icon`, `description`, `status`, `response_time`, `details (JSONB)`, `config (JSONB)`, `last_check`
-
-**`metric_cards`** — `id`, `title`, `description`, `icon`, `promql`, `unit`, `display_type`, `category`, `thresholds`, `grafana_panel_url`, `sort_order`, `enabled`, `created_at`, `updated_at`
-
-**`playbooks`** — `id`, `cluster_id (FK)`, `name`, `description`, `playbook_path`, `inventory_path`, `extra_vars (JSONB)`, `tags`, `status`, `show_on_dashboard`, `last_run_at`, `last_result (JSONB)`
+`clusters`(UUID PK, `status` = healthy/warning/critical) → `daily_check_logs`(점검 1회 = 1행,
+서브 결과는 JSONB) · `check_schedules`(구 아침/점심/저녁 — 현재 스케줄링은 check-matrix cron 이
+담당) · `addons`(클러스터별 애드온 상태, 환경차는 `config` JSONB) · `metric_cards`(PromQL 카드) ·
+`playbooks`(Ansible 실행 정의 + `last_result` JSONB).
 
 ### Additional Model Families
 
-위 6개는 원조 모니터링 코어다. 이외 모델은 도메인별로 아래처럼 묶인다 — 전수와 컬럼 정의는
-`backend/app/models/__init__.py` 와 각 모델 파일을 본다:
+이외 모델은 도메인별로 아래처럼 묶인다:
 
 - **관측/알람**: `observability`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot` — 지표 카탈로그는 DB 행이라 UI 편집 대상), `alert_event`(수신 알람, fingerprint 기준 upsert), `alert_notify_rule`(알림 라우팅·중복 억제 규칙)
 - **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `deep_check`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
@@ -399,7 +363,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
 - **플랫폼/자동화**: `batch_job`, `bottleneck_run`, `ansible_assets`
-- **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`, `island`(Your Island 커스텀 화면)
+- **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`, `island`(Your Island 커스텀 화면), `saved_script`(bulk-exec 재사용 사용자별 bash/python 스크립트)
 
 ---
 
@@ -420,20 +384,14 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
 
 ## CI/CD
 
-### CI (`ci.yml`) — triggers on push/PR to `main` or `develop`
+워크플로 정의는 `.github/workflows/` 가 원천이다. 작업 시 알아야 할 것만:
 
-1. **Frontend**: `npm install` → lint → `tsc --noEmit` → `npm run build`
-2. **Backend**: Python 3.11, `pip install -r requirements.txt` + `pytest pytest-asyncio httpx` → `pytest -v`
-   - Requires: PostgreSQL 15 + Redis 7 service containers
-
-### CD (`cd.yml`) — triggers on push to `main` or `workflow_dispatch`
-
-1. Build + push Docker images to GHCR (`ghcr.io/<owner>/backend:<sha>`, `ghcr.io/<owner>/frontend:<sha>`)
-2. `kustomize edit set image` to pin SHA tags
-3. `kustomize build | kubectl apply -f -`
-4. `kubectl rollout status` for backend, frontend, celery-worker
-
-Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
+- **CI (`ci.yml`, push/PR → `main`·`develop`)**: frontend lint → `tsc --noEmit` → build,
+  backend `pytest`(PostgreSQL·Redis 서비스 컨테이너 필요), 그리고 `docs-sync` job.
+  머지 전 로컬 게이트는 §Development & Tests 와 동일하다 — **CI 에서 처음 확인하지 말 것.**
+- **CD (`cd.yml`, push → `main`)**: GHCR 이미지 빌드 → `kustomize edit set image` 로 SHA 핀 →
+  apply → rollout status. 배포는 **SHA 태그로만** 고정한다(`latest` 금지).
+- 필요한 GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`.
 
 ---
 
@@ -563,31 +521,24 @@ Categories are free-form strings stored in `metric_cards.category`. Current valu
 
 ## Troubleshooting
 
-### Backend won't start — DB connection refused
+일반적인 원인(DB/Redis 미기동, 포트 충돌 등)은 로그를 보고 판단한다. 아래는 **로그만 봐서는
+오해하기 쉬운, 이 환경 고유의 함정**이다 — "버그"로 착각하고 고치려 들지 말 것.
 
-Ensure PostgreSQL is running. With Docker Compose: `docker-compose up -d postgres`.
+### Docker Compose 에서 kubectl 점검이 실패한다 — 원인은 kubeconfig, kubectl 아님
 
-### Celery tasks not running
+`kubectl` 바이너리는 backend 이미지에 **설치돼 있다**(`backend/Dockerfile` 의
+KUBECTL_VERSION 다운로드 — celery 워커도 같은 이미지). 실패 원인은 kubeconfig 쪽이다:
+Compose 는 kubeconfig 볼륨을 마운트하지 않고, backend/celery 컨테이너가
+`/tmp/k8s-monitor` 를 공유하지 않으므로 **경로만 등록된(=DB `kubeconfig_content` 가 빈)
+클러스터는 워커에서 kubeconfig 를 재구체화하지 못한다**. `/cluster-manage` 에서
+kubeconfig 파일을 업로드해 DB 에 content 로 저장하면 모든 컨테이너에서 동작한다.
+K8s 배포에서는 서비스 어카운트(`k8s/base/backend/serviceaccount.yaml`) 또는
+kubeconfig 시크릿 마운트를 쓴다. 실패 사유는 배치잡 사전 점검(연결 테스트)과
+실행 로그의 kubeconfig 해석 단계에 그대로 표시된다(`services/kubeconfig.py`
+`resolve_kubeconfig`).
 
-Check Redis: `redis-cli ping`. Check Beat is running: `celery -A app.celery_app beat --loglevel=info`.
+### PromQL 카드가 "offline" 로 뜬다 (로컬에선 정상)
 
-### kubectl checks failing in Docker Compose
-
-The backend container does not have `kubectl` or a kubeconfig by default in the Compose setup. K8s health checks work when deployed inside the cluster with the service account (`k8s/base/backend/serviceaccount.yaml`) or when a kubeconfig volume is mounted.
-
-### Ollama model not available
-
-```bash
-# Trigger pull via API
-curl -X POST http://localhost:8000/api/v1/agent/pull-model \
-  -H "Content-Type: application/json" \
-  -d '{"model": "llama3"}'
-```
-
-### DB schema out of date
-
-Add a column check to `_run_migrations()` in `backend/app/main.py` and restart the backend. The migration runs automatically on startup.
-
-### PromQL cards show "offline"
-
-Prometheus must be reachable at `PROMETHEUS_URL`. In local dev, Prometheus is not included in `docker-compose.yml` — set `PROMETHEUS_URL` to a reachable instance or deploy the full stack on K8s.
+`docker-compose.yml` 에 Prometheus 가 포함돼 있지 않다. `PROMETHEUS_URL` 을 도달 가능한
+인스턴스로 지정하거나 K8s 에 전체 스택을 배포해야 한다. Fail-safe 설계상 offline 표시는
+장애가 아니라 정상 폴백이다.

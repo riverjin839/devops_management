@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { useToast } from '@/components/common';
+import { useNotificationChannels } from '@/hooks/useNotifications';
 import {
   useAlertRules,
   useAlertSettings,
@@ -12,7 +13,7 @@ import {
 } from '@/hooks/useAlertInbox';
 import type {
   AlertDedupMode, AlertNotifyMode, AlertNotifyRule, AlertNotifyRuleInput,
-  AlertSettings, AlertSeverity, Cluster,
+  AlertSettings, AlertSeverity, Cluster, NotificationChannel,
 } from '@/types';
 import { formatApiError } from '@/lib/utils';
 import { ROW, TD, TH } from './shared';
@@ -65,6 +66,8 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
   const toast = useToast();
   const { data: rules = [], isLoading } = useAlertRules();
   const { data: settings } = useAlertSettings();
+  // 재전파 대상 후보 — 기존 알림 채널 훅을 그대로 재사용한다.
+  const { data: channels = [] } = useNotificationChannels();
   const createRule = useCreateAlertRule();
   const updateRule = useUpdateAlertRule();
   const deleteRule = useDeleteAlertRule();
@@ -154,15 +157,16 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
                 <th className={`${TH} w-40`}>담당자</th>
                 <th className={`${TH} w-32`}>중복 억제</th>
                 <th className={`${TH} w-24`}>심각도</th>
+                <th className={`${TH} w-24`}>재전파</th>
                 <th className={`${TH} w-16`}>사용</th>
                 <th className={`${TH} w-10`}><span className="sr-only">삭제</span></th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={9} className="py-8 text-center text-sm text-muted-foreground">불러오는 중…</td></tr>
+                <tr><td colSpan={10} className="py-8 text-center text-sm text-muted-foreground">불러오는 중…</td></tr>
               ) : rules.length === 0 ? (
-                <tr><td colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                <tr><td colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                   등록된 규칙이 없습니다 — 전역 기본값으로만 동작합니다.
                 </td></tr>
               ) : (
@@ -191,6 +195,9 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
                       {rule.severityMin ?? '-'}
                       {rule.severityOverride ? ` → ${rule.severityOverride}` : ''}
                     </td>
+                    <td className={`${TD} text-xs text-muted-foreground`}>
+                      {rule.channelIds.length ? `채널 ${rule.channelIds.length}` : '-'}
+                    </td>
                     <td className={`${TD} text-xs`}>{rule.enabled ? '사용' : '중지'}</td>
                     <td className={TD}>
                       {canEdit ? (
@@ -218,6 +225,7 @@ export function AlertNotifyRulesPanel({ clusters, canEdit }: {
           draft={draft}
           setDraft={setDraft}
           clusters={clusters}
+          channels={channels}
           isEdit={!!editing}
           busy={createRule.isPending || updateRule.isPending}
           onCancel={() => { setDraft(null); setEditing(null); }}
@@ -233,6 +241,7 @@ function describeMatchers(rule: AlertNotifyRule, clusters: Cluster[]): string {
   if (rule.clusterId) {
     parts.push(clusters.find((c) => c.id === rule.clusterId)?.name ?? '클러스터');
   }
+  if (rule.moduleKey) parts.push(`module~${rule.moduleKey}`);
   if (rule.alertnamePattern) parts.push(`alert~${rule.alertnamePattern}`);
   if (rule.namespacePattern) parts.push(`ns~${rule.namespacePattern}`);
   rule.labelMatchers.forEach((pair) => parts.push(`${pair.k}=${pair.v}`));
@@ -341,10 +350,11 @@ function GlobalSettingsCard({ settings, canEdit }: {
   );
 }
 
-function RuleEditor({ draft, setDraft, clusters, isEdit, busy, onCancel, onSave }: {
+function RuleEditor({ draft, setDraft, clusters, channels, isEdit, busy, onCancel, onSave }: {
   draft: AlertNotifyRuleInput;
   setDraft: (next: AlertNotifyRuleInput) => void;
   clusters: Cluster[];
+  channels: NotificationChannel[];
   isEdit: boolean;
   busy: boolean;
   onCancel: () => void;
@@ -383,6 +393,19 @@ function RuleEditor({ draft, setDraft, clusters, isEdit, busy, onCancel, onSave 
           </select>
         </div>
 
+        <div>
+          <label className={labelCls} htmlFor={`${fieldId}-module`}>모듈 / 서비스 패턴 (정규식)</label>
+          <input
+            id={`${fieldId}-module`} className={`${inputCls} font-mono`} value={draft.moduleKey ?? ''}
+            onChange={(e) => set('moduleKey', e.target.value || null)}
+            placeholder="fluent|opensearch"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            알람 라벨 중 <code>module</code> · <code>job</code> · <code>service</code> ·
+            {' '}<code>component</code> · <code>app</code> 순으로 처음 있는 값에 매칭합니다
+            (대개 <code>job</code>).
+          </p>
+        </div>
         <div>
           <label className={labelCls} htmlFor={`${fieldId}-alertname`}>알람명 패턴 (정규식)</label>
           <input
@@ -466,6 +489,42 @@ function RuleEditor({ draft, setDraft, clusters, isEdit, busy, onCancel, onSave 
               {DEDUP_MODES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
             </select>
           </div>
+        </div>
+
+        {/* 재전파 채널 — 이 규칙에 걸린 알람을 기존 알림 채널(Slack/webhook/email)로도 보낸다.
+            채널 자체의 등록/수정은 Deep Check 설정의 알림 채널 관리에서 한다. */}
+        <div className="sm:col-span-2 lg:col-span-3">
+          <span className={labelCls}>재전파 채널 (선택)</span>
+          {channels.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              등록된 알림 채널이 없습니다 — 점검 항목 관리 → 알림 채널에서 먼저 등록하세요.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {channels.map((channel) => (
+                <label key={channel.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded"
+                    checked={draft.channelIds.includes(channel.id)}
+                    onChange={(e) => set(
+                      'channelIds',
+                      e.target.checked
+                        ? [...draft.channelIds, channel.id]
+                        : draft.channelIds.filter((id) => id !== channel.id),
+                    )}
+                  />
+                  <span className={channel.enabled ? '' : 'text-muted-foreground'}>
+                    {channel.name}
+                    <span className="ml-1 text-xs text-muted-foreground">({channel.channelType})</span>
+                    {channel.enabled ? null : (
+                      <span className="ml-1 text-xs text-muted-foreground">· 중지</span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

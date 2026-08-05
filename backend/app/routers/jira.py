@@ -28,6 +28,7 @@ from app.models.app_setting import AppSetting
 from app.models.user import User
 from app.models.user_jira_credential import UserJiraCredential
 from app.models.work_item import WorkItem
+from app.schemas.work_item import WorkItemResponse
 from app.auth.deps import get_current_user, require_admin, require_operator
 from app.services import secret_box
 from app.services import audit_logger
@@ -51,6 +52,8 @@ from app.schemas.jira import (
     JiraSsoLoginResult,
     ConfluenceSearchItem,
     ConfluenceSearchResult,
+    ConfluenceLinkRequest,
+    ConfluenceSyncResult,
     SsoDiagnoseEntry,
     SsoDiagnoseResult,
     JiraImportRequest,
@@ -1000,6 +1003,84 @@ async def confluence_search(
     )
 
 
+@router.post("/confluence/link", response_model=WorkItemResponse)
+async def link_confluence_page(
+    payload: ConfluenceLinkRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """검색에서 고른 Confluence 페이지 1건을 새 work item 으로 가져온다 — "Jira 가져오기"
+    와 동일한 검색→선택→반영 패턴(여러 건 선택 시 프론트가 항목별로 반복 호출한다)."""
+    title = (payload.title or "").strip() or "제목 없음"
+    who = (actor.display_name or actor.username or "").strip() or "(미할당)"
+    item = WorkItem(
+        type="etc",
+        assignee=who,
+        primary_assignee=who,
+        category="Confluence",
+        title=title[:200],
+        content=title,
+        started_at=datetime.utcnow(),
+        confluence_page_id=payload.page_id,
+        confluence_url=payload.url,
+        created_by=actor.username,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    audit_logger.record(
+        db, action="work_item.confluence_link", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"page_id": payload.page_id, "title": title},
+    )
+    return item
+
+
+@router.post("/confluence/sync/{item_id}", response_model=ConfluenceSyncResult)
+async def sync_confluence_page(
+    item_id: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """업무의 현재 내용을 이미 연결된 Confluence 문서에 재게시한다 — Jira 의 "반영"
+    (push) 버튼과 동일한 역할. page_id 기준으로 갱신하므로 제목이 바뀌어도 같은 문서를
+    유지한다(upsert_page 의 제목 기반 매칭과 달리 새 페이지가 생기지 않음)."""
+    item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    if not item.confluence_page_id:
+        return ConfluenceSyncResult(status="not_linked", detail="Confluence 문서와 연결되지 않은 업무입니다.")
+
+    cfg = _get_config(db)
+    svc, res = await _confluence_service_verified(db, actor, cfg)
+    if svc is None or res.get("status") != "ok":
+        return ConfluenceSyncResult(status=res.get("status", "error"), detail=res.get("detail", "Confluence 세션 없음"))
+
+    got = await svc.get_page(item.confluence_page_id)
+    if got.get("status") != "ok":
+        return ConfluenceSyncResult(status="error", detail=got.get("detail", "페이지 조회 실패"))
+    page = got["page"]
+    title = (item.title or item.category or "").strip() or page.get("title") or "제목 없음"
+    body = _default_page_body(item, item.jira_issue_key or "", item.jira_url or "")
+    next_version = int(page.get("version") or 1) + 1
+    upd = await svc.update_page(item.confluence_page_id, title, body, version=next_version)
+    if upd.get("status") != "ok":
+        return ConfluenceSyncResult(status="error", detail=upd.get("detail", "반영 실패"))
+
+    now = datetime.utcnow()
+    item.confluence_synced_at = now
+    if upd.get("url"):
+        item.confluence_url = upd.get("url")
+    db.commit()
+    audit_logger.record(
+        db, action="work_item.confluence_sync", actor=actor,
+        target_type="work_item", target_id=str(item.id),
+        details={"page_id": item.confluence_page_id},
+    )
+    return ConfluenceSyncResult(status="ok", detail="Confluence 문서에 반영했습니다.",
+                                confluence_url=item.confluence_url, synced_at=now)
+
+
 @router.post("/refresh/{item_id}", response_model=JiraImportResult)
 async def refresh_work_item_from_jira(
     item_id: str,
@@ -1504,10 +1585,25 @@ async def provision_work_item(
     jira_key = jira_url = ""
     jira_detail = confluence_detail = ""
     conf_id = conf_url = ""
+    # Confluence 문서 제목 — 아래 두 분기(신규 생성 / 이미 연결돼 건너뜀) 어디서든 채워질 수
+    # 있고, 마지막 "Jira ↔ Confluence 상호 링크" 블록이 이 값을 읽는다. 여기서 미리 초기화하지
+    # 않으면 건너뛰기 분기를 탄 호출에서 UnboundLocalError 가 난다.
+    page_title = ""
     jira_ok = conf_ok = False
+    # conf_ok 는 "이미 연결돼 있어 skip" 도 True 가 되므로, 상호 링크는 이번 호출에서
+    # 실제로 새 페이지를 만든 경우(conf_created)에만 건다 — skip 경로엔 page_title 이 없다.
+    conf_created = False
     # 실패가 "내 인증(토큰/세션)" 문제인지 — 프론트가 재시도 전에 연결 설정 카드를
     # 보여줄지 판단하는 신호. 빈 필드 같은 입력값 문제와는 구분한다.
     jira_auth_issue = confluence_auth_issue = False
+    # 이번 호출에서 Jira 를 새로 생성했을 때만 채워짐 — Confluence 생성 성공 후 그 제목/링크를
+    # Jira Description 에 덧붙이는 후속 PUT 에 재사용한다(이미 연결된 Jira 는 건드리지 않음).
+    jira_svc = None
+    jira_description_base = ""
+    # 이번 호출에서 Confluence 문서를 **실제로 만들었는지**. conf_ok 와 구분해야 한다 —
+    # conf_ok 는 "이미 연결돼 있어 건너뜀"도 True 라서, 그걸 상호 링크 조건으로 쓰면 이번에
+    # 만들지도 않은 문서 때문에 Jira Description 을 덮어쓰는 PUT 이 나간다(멱등성 위반).
+    conf_created_now = False
 
     # ── Jira ─────────────────────────────────────────────────────────────────
     if payload.create_jira:
@@ -1532,9 +1628,10 @@ async def provision_work_item(
             else:
                 epic_key = (payload.epic_key or "").strip()
                 parent_key = (payload.parent_key or "").strip()
+                jira_description_base = (payload.description if payload.description is not None else item.content) or ""
                 res = await svc.create_issue(
                     project_key, summary,
-                    description=(payload.description if payload.description is not None else item.content) or "",
+                    description=jira_description_base,
                     issue_type=payload.issue_type,
                     priority=payload.priority or PEP_PRIORITY_TO_JIRA.get(item.priority or ""),
                     labels=payload.labels, components=payload.components,
@@ -1543,6 +1640,7 @@ async def provision_work_item(
                 )
                 if res.get("status") == "ok":
                     jira_ok = True
+                    jira_svc = svc
                     jira_key, jira_url = res.get("key", ""), res.get("url", "")
                     item.jira_issue_key = jira_key
                     item.jira_issue_id = res.get("id") or None
@@ -1590,12 +1688,29 @@ async def provision_work_item(
                     )
                     if out.get("status") == "ok":
                         conf_ok = True
+                        conf_created_now = True
                         conf_id, conf_url = out.get("id", ""), out.get("url", "")
                         item.confluence_page_id = conf_id or None
                         item.confluence_url = conf_url or None
                     else:
                         confluence_detail = out.get("detail", "Confluence 문서 생성 실패")
                         confluence_auth_issue = bool(out.get("auth_failed"))
+
+    # ── Jira ↔ Confluence 상호 링크 ─────────────────────────────────────────────
+    # 이번 호출에서 Jira 를 새로 생성했고(jira_svc 존재) Confluence 도 함께 만들어졌으면,
+    # Confluence 쪽엔 이미 Jira 링크가 들어가 있으므로(_default_page_body) 반대 방향으로
+    # Jira Description 끝에 Confluence 제목·링크를 덧붙인다. 기존에 이미 연결된 Jira
+    # 이슈(jira_svc=None, 위에서 skip 된 경우)는 건드리지 않는다.
+    # Confluence 쪽도 마찬가지로 **이번에 새로 만든 경우에만** 덧붙인다(conf_ok 가 아니라
+    # conf_created_now) — 이미 연결돼 있던 문서는 이 Jira 링크를 담고 있지 않으므로 반대 방향
+    # 링크를 넣을 근거가 없고, 재시도가 기존 Description 을 건드리면 멱등성이 깨진다.
+    if jira_svc is not None and conf_created_now and jira_key:
+        conf_note = f"\n\nConfluence 문서: [{page_title}|{conf_url}]"
+        new_description = (jira_description_base + conf_note).strip()
+        upd = await jira_svc.update_issue(jira_key, {"description": new_description})
+        if upd.get("status") != "ok":
+            note = f"Confluence 링크를 Jira Description 에 반영하지 못했습니다: {upd.get('detail', '')}"
+            jira_detail = f"{jira_detail} {note}".strip() if jira_detail else note
 
     wanted = [payload.create_jira, payload.create_confluence]
     succeeded = [payload.create_jira and jira_ok, payload.create_confluence and conf_ok]
@@ -1765,14 +1880,18 @@ async def import_issues(
     if not token:
         return JiraImportResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동에서 등록).")
 
-    # JQL 구성
+    # JQL 구성 — updated_since_days 는 scope 무관하게(me/project 포함) 적용한다. 프론트가
+    # 모달을 열 때 기본값으로 "이번주 월요일부터"에 해당하는 일수를 채워 보내므로(옵션 수정
+    # 가능), 매번 전체 이력을 긁어오지 않고 최근 변경분만 가져오는 것이 기본 동작이 된다.
+    days = payload.updated_since_days
+    date_clause = f" AND updated >= -{int(days)}d" if days and days > 0 else ""
     if payload.scope == "me":
-        jql = "assignee = currentUser() ORDER BY updated DESC"
+        jql = f"assignee = currentUser(){date_clause} ORDER BY updated DESC"
     elif payload.scope == "project":
         pk = (payload.project_key or "").strip()
         if not pk:
             return JiraImportResult(status="error", detail="프로젝트 키를 입력하세요.")
-        jql = f'project = "{_jql_quote(pk)}" ORDER BY updated DESC'
+        jql = f'project = "{_jql_quote(pk)}"{date_clause} ORDER BY updated DESC'
     elif payload.scope == "filter":
         jql, err = _build_filter_jql(payload)
         if err:

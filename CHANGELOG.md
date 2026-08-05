@@ -8,8 +8,248 @@
 
 ## [Unreleased]
 
-1.17.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.24.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+## [1.24.2] - 2026-08-05
+
+### Changed
+- **사이드바 "사용자 관리" → Settings "시스템 담당자" 탭으로 통합, Settings 여백 축소**: 사이드바
+  독립 아이콘이던 로그인 계정 관리(`/settings/users`)를 없애고 Settings 의 "담당자" 탭을
+  "시스템 담당자" 탭으로 확장해 **담당자 명부**(기존 `AssigneeManager`) / **로그인 계정**(신규
+  `SystemUserAccountManager`, 구 `UsersPage.tsx`) 두 서브탭으로 묶었다 — 담당자 명부에 사번을
+  등록하면 로그인 계정이 자동 생성되던 기존 동작과 개념이 합쳐진다. 구 라우트는
+  `/settings?tab=assignee` 로 자동 리다이렉트. 또한 Settings 본문 컨테이너가 `mx-auto` 로
+  가운데 정렬되며 메인 사이드바로부터 과도한 여백이 생기던 문제를 좌측 정렬(flush) + 여백 축소
+  (`px-8 py-8` → `px-4 lg:px-6 py-5`) + 폭 확대(`max-w-[1200px]` → `max-w-[1700px]`)로
+  수정해, 클러스터/관리서버/담당자/감사로그 등 각 탭의 표가 더 넓게 표시된다. Frontend:
+  `Sidebar.tsx`(레일 버튼 제거), `App.tsx`(`/settings/users` → redirect), `SettingsPage.tsx`,
+  `components/settings/SystemUserAccountManager.tsx`(신규).
+
+## [1.24.1] - 2026-08-05
+
+### Changed
+- **업무 알람 벨 — 확인한 개인 알림이 아이폰 알림센터처럼 목록에서 자동으로 사라짐**: 댓글 등
+  개인 인앱 알림을 한 번 확인(클릭)하면 벨 목록에서 즉시 빠지고, 링크로 이동하지 않고도 바로
+  치울 수 있는 지우기(X) 버튼이 각 알림에 추가됐다 — 이전엔 읽어도 90일 보존기간까지 목록에
+  계속 남아 있었다. Backend: `GET /notifications/my` 가 읽지 않은 알림만 반환. Frontend:
+  `WorkAlarmBell.tsx` 알림 행에 개별 지우기 버튼 추가.
+
+### Fixed
+- **내 담당자 정보 — operator 가 IP 주소·좌석 등을 저장하면 "권한이 부족합니다" 오류가 나던 문제**:
+  사용자 메뉴의 "내 담당자 정보" 패널이 담당자 **전체 목록**을 덮어쓰는 admin 전용 API 를 호출하고
+  있어, admin 이 아닌 계정(담당자 등록 시 자동 생성되는 operator 포함)은 본인 정보조차 저장할 수
+  없었다. 이제 본인 행만 부분 갱신하는 전용 API 로 저장하므로 로그인한 사용자 누구나 본인의
+  이메일·IP·좌석·담당역할을 바꿀 수 있고, 다른 담당자의 데이터를 덮어쓸 위험도 사라졌다.
+  이름·사번은 업무 담당자 식별 키·로그인 계정 키라서 계속 admin(Settings ▸ 담당자 탭) 전용이다.
+  Backend: `PUT /api/v1/ui-settings/assignees/me` 추가(인증만 필요, 본인 행만 부분 수정).
+  Frontend: `SelfAssigneePanel` 이 새 API 를 쓰고 저장 실패 시 서버 사유를 그대로 노출.
+
+## [1.24.0] - 2026-08-05
+
+### Added
+- **점검 매트릭스(홈 → 플랫폼 현황) — 클러스터 cron 배지 색상 판독**: 클러스터 열 헤더의 cron 배지가
+  더 이상 항상 같은 회색이 아니다 — **중지**(cron 미설정) / **실행중**(파랑, 지금 이 클러스터에서
+  점검이 돌고 있음 — 전역 활성 수행을 4초 주기로 가볍게 폴링) / **정상·경고·위험**(초록/주황/빨강,
+  핵심 점검(`core_bundle`) 행의 최근 셀 상태)로 한눈에 구분된다. Backend: `GET /check-matrix/runs`
+  에 `run_state`(쉼표 다중값, 예 `queued,running`) 필터 추가.
+
+### Fixed
+- **점검 매트릭스 셀 상세 — "실행 방식"/"수행 로그" 탭이 실행 중 상태·실제 결과 색을 전혀
+  보여주지 못하던 문제**: "실행 방식" 탭은 계획(설계)만 회색으로 그렸을 뿐 실제 수행 결과로
+  단계를 색칠한 적이 없었고, "수행 로그" 탭은 목록/상세 모두 실행 중인 수행을 폴링하지 않아
+  완료될 때까지 화면이 그대로 멈춰 있었다. 이제 "실행 방식" 탭이 이 셀의 가장 최근 수행을
+  가볍게 폴링해 상태 배지 + 실제 단계 색을 보여주고(진행 중이면 완료 시 자동 반영), "수행 로그"
+  탭의 목록·상세 모두 실행 중인 항목을 짧은 주기로 따라간다. 실행 단계 타임라인(`ExecutionStepsTimeline`
+  — 딥체크/배치잡/점검 매트릭스 공용)의 각 단계 아이콘을 클릭하면 그 단계의 전체 로그·metrics·
+  소요시간을 펼쳐 볼 수 있다(기존엔 hover 툴팁의 짧은 발췌만 가능했음).
+- **점검 매트릭스 — 완료(위험)/실패 수행에서 원인을 알기 어렵던 문제**: 결과가 경고/위험이거나
+  아예 실패한 수행은 상세 화면을 열면 사유 콜아웃(메시지/에러)이 강조되고 "결과 상세"(원본 필드)가
+  자동으로 펼쳐진다 — 이전엔 접힌 JSON 을 직접 펼쳐야 원인을 확인할 수 있었다.
+- **홈 대시보드 — 플랫폼 현황 매트릭스가 남는 세로 공간을 못 쓰고 고정 높이(520px)로 스크롤되던
+  문제**: 매트릭스가 이제 페이지의 남는 공간을 모두 채우고(고정 높이 제한 제거) 카드 안쪽
+  스크롤 하나만 갖는다 — 화면이 큰 모니터에서 아래쪽이 비거나 이중 스크롤이 생기던 현상 해소.
+
+### Changed
+- **AI 어시스턴트 진입점을 우하단 플로팅 버튼에서 좌측 사이드바 하단 레일로 이동**: 다른 화면
+  요소(콘텐츠·모달)에 겹쳐 가리던 문제를 없애고, 릴리즈 노트·VOC 게시판 등 다른 개인 존
+  아이콘과 같은 자리에 고정했다. 패널은 트리거 근처(좌하단)에서 열린다. 동작·접근 제어는
+  변경 없음(기능 접근이 꺼진 사용자에게는 아이콘 자체가 보이지 않음).
+
+## [1.23.1] - 2026-08-05
+
+### Fixed
+- **K8s 인증서 만료 점검(`cert_expiry`) — kube-apiserver 가 distroless 인 클러스터에서 상세로그 없이 실패하던 문제**: kubeadm 클러스터의 최신 apiserver 이미지는 셸/`kubeadm` 바이너리가 없는 distroless 라 `kubectl exec ... kubeadm certs check-expiration` 이 항상 실패하는데, 실행 단계·명령·stderr 가 전혀 기록되지 않아 점검 수행로그만 봐서는 원인을 알 수 없었다. `etcd_defrag` 와 동일한 `source: auto|pod|snapshot` 패턴을 적용해 (1) 각 단계(파드 탐색·`kubeadm` 실행·파싱·판정)를 실시간 타임라인으로 노출하고 실패 시 stderr 요약을 단계 상세에 남기며, (2) `source=auto`(기본값) 는 파드 실행 실패 시 `/versions` 화면에서 SSH 로 수집해둔 `kubeadm certs check-expiration` 스냅샷으로 자동 폴백한다. Backend: `POST /api/v1/versions/{cluster_id}/collect-kubeadm-certs`(요청 시에만 SSH 자격증명 사용, 미저장) + `cert_expiry_checker.py` 재작성 + `registry.py` 에 `source`/`snapshot_max_age_hours` params 노출(UI 편집 가능). Frontend: `/versions` 툴바에 "K8s 인증서(kubeadm)" 수집 모달 추가.
+- **노드 일괄 실행 — "다른 노드에서 불러오기" 연결 실패 시 상세로그 없이 에러 메시지만 보이던 문제**(`/bulk-exec`): SCP 로 원격 파일을 읽어오는 `fetch_remote_file` 이 접속·stat·read 각 단계를 추적하지 않아, 실패해도 어느 단계(접속/경로 확인/읽기)에서 왜 멈췄는지 화면에서 알 수 없었다. 이제 딥체크와 동일한 단계별 실시간 타임라인(`ExecutionStepsTimeline`)과 명령 추적(`CommandTraceList`)을 결과 영역에 표시한다. `CommandTraceList` 를 batch-jobs 전용 로컬 컴포넌트에서 `components/common/` 공용 컴포넌트로 추출해 재사용.
+
+## [1.23.0] - 2026-08-05
+
+### Added
+- **노드 일괄 실행 — SCP 업로드 내용 로컬에 저장**(`/bulk-exec`): "다른 노드에서 불러오기"로 채웠든 직접 입력했든, 현재 업로드 내용을 브라우저 다운로드로 내 컴퓨터에 파일로 저장할 수 있다. 파일명은 업로드 원격 경로의 마지막 세그먼트를 재사용하고, CSV/TXT 내보내기와 달리 BOM 없이 저장해 bash 셔뱅(`#!/bin/bash`) 등 스크립트 실행에 영향을 주지 않는다.
+
+## [1.22.0] - 2026-08-05
+
+### Added
+- **노드 일괄 실행 — SCP 업로드 내용을 다른 노드에서 불러오기**(`/bulk-exec`): 로컬 파일 선택과 나란히, 현재 화면에 로드된 노드 중 하나를 골라 원격 경로의 텍스트 파일을 그대로 읽어와 업로드 입력창을 채울 수 있다(가져온 뒤 수정해서 다른 노드들에 재배포하는 흐름에 유용). 업로드 대상에 입력한 인증 정보를 그대로 재사용하고 별도 저장은 하지 않는다. Backend: `POST /api/v1/bulk-exec/fetch-file` + `ssh_runner.fetch_remote_file`(SFTP pull, UTF-8 텍스트·2MB 상한, 바이너리/용량초과는 에러로 반환).
+
+## [1.21.0] - 2026-08-05
+
+### Added
+- **노드 일괄 실행 — 사용자별 저장 스크립트**(`/bulk-exec`): bash/python 스크립트를 이름·설명과 함께 저장해두고 목록에서 클릭 한 번으로 불러오거나 수정·삭제할 수 있다. 기존 localStorage 전용 `SavedCommands` 위젯을 이 화면에서 DB 백엔드 라이브러리로 교체 — 다른 브라우저/기기에서도 동일하게 보인다. 명령창 옆 bash/python 토글로 언어를 고르면, python 은 서버가 원격 `python3` 인터프리터로 감싸 실행한다(본문은 그대로 저장·표시, 인증정보는 여전히 저장하지 않음). Backend: `models/saved_script.py`(`SavedScript`, 사용자별 소유권) + `routers/saved_scripts.py`(CRUD) + `services/script_wrap.py`(python 스크립트 → heredoc 변환). Frontend: `components/bulk-exec/{SavedScriptPanel,SavedScriptEditorModal}` + `hooks/useSavedScripts.ts`.
+
+## [1.20.1] - 2026-08-05
+
+### Fixed
+- **알림 규칙의 "모듈" 조건이 아무 알람에도 걸리지 않던 문제** (`/alerts` → 알림 규칙):
+  모듈 조건이 알람 라벨 중 `module` 하나만 보고 있었는데, Alertmanager 알람에도 사내
+  alert-forwarder 페이로드에도 그런 라벨은 사실상 없다. 그래서 모듈 조건을 건 규칙은
+  **매칭이 조용히 실패**했고, 운영자에게는 "규칙을 만들었는데 알림이 안 온다"로 나타났다.
+  이제 `module` · `job` · `service` · `component` · `app` 순으로 처음 존재하는 라벨 값에
+  **정규식 부분 매칭**한다(대개 `job` 이 모듈을 알려준다 — `fluent-bit`, `opensearch` …).
+  후보 라벨이 하나도 없으면 통과가 아니라 미매칭으로 처리한다.
+
+### Added
+- **알림 규칙 편집 UI 보강** (`/alerts` → 알림 규칙): 그동안 API 로만 설정할 수 있던 두 항목을
+  화면에서 편집할 수 있다(CLAUDE.md §UI-First).
+  ① **모듈/서비스 패턴** — 어떤 라벨을 보는지 입력 아래에 안내를 함께 표시.
+  ② **재전파 채널** — 규칙에 걸린 알람을 기존 알림 채널(Slack/webhook/email)로도 보낼지
+  체크박스로 선택. 규칙 목록에도 "재전파" 열과 모듈 조건(`module~…`)이 표시된다.
+
+### Fixed
+- **업무 프로비저닝 재시도가 500 으로 실패하던 문제**: Jira 는 이번에 새로 만들고 Confluence 는
+  이미 연결돼 있던 상태로 재시도하면 `UnboundLocalError: page_title` 로 500 이 났다. 상호 링크
+  단계가 "Confluence 를 이번에 만들었는지"가 아니라 `conf_ok`(이미 연결돼 건너뛴 경우도 True)를
+  보고 있었던 탓이다. 이제 **이번 호출에서 실제로 만든 경우에만** Jira Description 에 Confluence
+  링크를 덧붙인다 — 이미 연결된 문서 때문에 기존 Description 을 덮어쓰는 PUT 도 더 이상 나가지
+  않는다(재시도 멱등성).
+
+### Added
+- **Batch Jobs — 단계별 실행 추적 가시화**: 실행 이력·실행 결과 카드에 **실행 단계 타임라인**(kubeconfig 해석 → kubectl 연결·Job 조회 → 대상 선정 → 삭제 / SSH 잡은 명령 조립 → SSH 실행 → 결과 정리)과 **실측 명령 trace**(실제로 나간 kubectl/SSH 명령 + exit code·소요시간·출력 발췌, kubeconfig 경로 마스킹)를 표시 — "어느 단계에서 무엇을 하다 실패했는지"를 로그를 뒤지지 않고 판독. deep check 의 `ExecutionStep`/`ExecutionStepsTimeline` 패턴을 배치잡 프레임워크에 이식(`BatchJobExecutor._step`/`_record_command`/`step_plan`), 실행마다 `batch_job_runs.steps`/`commands`(JSONB)에 영속(실패·예외 경로 포함). Backend: `services/batch_jobs/base.py` + executor 3종 계측. Frontend: `BatchJobLogDetail` 에 타임라인+`CommandTraceList`.
+- **Batch Jobs — non-SSH(K8s) 잡 사전 연결테스트**: `POST /batch-jobs/{id}/test-connection` 이 non-SSH 타입을 422 로 거부하던 것을 **K8s 사전 점검**으로 대체 — kubeconfig 해석 → kubectl 바이너리 → 인증 `/healthz` 프로브 → `auth can-i list jobs`(RBAC) 를 단계별 결과로 반환하고, 실행 폼의 "사전 점검" 버튼으로 실행 전 원인 확인 가능.
+- **Batch Jobs — cron 상태 색상 인터랙션**: 클러스터 그룹 섹션과 잡 행 테두리를 cron 건강 상태로 착색 — 정상 동작 초록 / 비정상(실패·평가 오류·자격증명 없음) 레드 / 중지·미설정 회색 / 실행 중 블루. 접힌 그룹에서도 상태 dot 로 판독 가능, hover 시 상태색 강조.
+- **감사 로그 — batch_job 필터 + details 테이블 보기**: 감사 로그 액션 드롭다운에 `batch_job.*`(패밀리 전체 조회, 백엔드 `action_prefix`/`target_type` 필터 신설)과 개별 6종 액션 추가. 상세(details) 셀은 클릭 시 원문 JSON 대신 **key/value 테이블**로 펼쳐져 긴 페이로드도 판독 가능.
+
+### Fixed
+- **연결된 클러스터가 "미연결"로 오진되던 문제 (DailyChecker)**: anonymous-auth 를 끈 하드닝 클러스터는 익명 `/healthz` 프로브에 401/403 을 반환하는데, 일일점검이 200 이 아니면 전부 critical→pending(미연결)으로 판정해 kubectl 인증이 정상인 클러스터도 항상 미연결로 표시됐다. 401/403 을 "도달 가능(인증 필요)"으로 판정하도록 수정하고(등록 검증·HealthChecker 와 기준 통일), 익명 프로브가 완전히 실패하면 **kubeconfig 인증 프로브로 폴백**해 재확인한다. 실패 시에도 원인 힌트(DNS/포트/라우팅/TLS — `services/k8s_diagnose.py`)를 점검 상세에 남긴다.
+- **배치잡 연결 실패가 전부 "에러"로 뭉개지던 문제**: k8s_job_cleanup 의 kubectl 실패를 stderr 기반으로 `connect_error`(연결 실패)/`auth_error`(인증·RBAC)/`error` 로 분류하고, headline 에 stderr 첫 줄 + 한국어 원인 힌트를 실어 상태 pill 만 봐도 원인 계열을 알 수 있게 했다.
+- **kubeconfig 해석 실패 사유 무표시**: `ensure_kubeconfig_file` 이 사유 없이 None 을 반환해 "kubeconfig 미등록" 한 메시지로 뭉개지던 것을 `resolve_kubeconfig` 로 세분화 — 미등록 / **경로만 등록(DB content 없음 — Compose 워커가 파일을 못 보는 케이스)** / 파일 재생성 실패를 구분해 실행 로그·사전 점검·클러스터 연결 확인에 그대로 노출.
+
+### Changed
+- **클러스터 "연결 확인"(verify) 의미 변경**: API 서버는 도달하지만 kubeconfig 가 없거나 인증 불가면 이제 healthy 가 아니라 **warning** 으로 마킹 — "클러스터는 연결됨인데 배치잡·점검은 kubeconfig 미등록 에러" 모순을 해소. Settings 연결 확인 UI 도 한 줄 요약 대신 3개 체크(healthz/kubeconfig 인증/kubectl) 개별 결과를 행으로 표시. (기존에 healthy 로 보이던 kubeconfig 미등록 클러스터는 다음 확인부터 warning 으로 나타남)
+
+## [1.20.0] - 2026-08-04
+
+### Added
+- **업무 관리 게시판 — 기본 필터/정렬/검색 강화**: 진입 시 기본으로 **본인 담당 + 현재(2주)
+  스프린트** 기준으로 필터되며, "OOO님, 본인 담당 업무 · 'N차 스프린트' 스프린트 기준으로
+  필터된 결과입니다" 안내 토스트를 1회 표시한다. "상태"(칸반) 필터 드롭다운과 제목 검색바
+  (300ms 디바운스, title/content ILIKE)를 추가했고, 기본 정렬을 시작일 최신순으로 바꿨다.
+  - Backend: `GET /work-items`·`/work-items/export/csv` 에 `q` 파라미터(title/content ILIKE)
+    추가, `type` 필터 정규식에 누락돼 있던 `build_response` 추가(선택 시 422 나던 버그 수정).
+  - Frontend: `StatusFilterDropdown`(TypeFilterDropdown과 동일 패턴), 디바운스 검색 input,
+    `useCurrentSprint()` 로 스프린트 기본값 시딩(`?sprint=` 딥링크가 있으면 그쪽 우선).
+- **업무 등록/수정 팝업 통일**: 업무 관리 게시판의 "업무 등록"·✏️ 수정 버튼이 홈 "업무 현황"과
+  동일한 팝업(`QuickAddTaskModal`)을 쓰도록 통일 — 게시판 전용 별도 등록 폼을 없애 중복 코드를
+  줄였다. `QuickAddTaskModal` 에 수정 모드(`initial` prop)를 추가해 같은 디자인/패턴으로 제목·
+  시간·우선순위·담당자·클러스터·상태를 수정할 수 있다(유형은 생성 후 불변 정책에 따라 배지로만
+  표시). 부분 업데이트(PUT, `exclude_unset`)만 보내 본문(content) 등 이 팝업이 다루지 않는
+  필드는 건드리지 않는다 — 리치텍스트 편집 등은 팝업의 "상세 수정" 링크로 이어지는 전체 폼에서.
+  - Frontend: `components/dashboard/QuickAddTaskModal.tsx`, `pages/WorkItemBoardPage.tsx`.
+- **Jira·Confluence 동시 생성 시 상호 링크**: "Jira 이슈 · Confluence 문서 자동 생성"(provision)
+  에서 둘 다 새로 만들면, 기존에도 Confluence 문서 본문에 Jira 링크가 들어갔던 것에 더해
+  이제 **Jira Description 끝에도 Confluence 문서 제목·링크**가 자동으로 붙는다(Jira 이슈
+  생성 → Confluence 문서 생성 → Jira Description PUT 갱신 순서). 이미 한쪽만 연결된 업무는
+  건드리지 않는다.
+  - Backend: `routers/jira.py` `provision_work_item` — `JiraService.update_issue()` 로 후속 반영.
+- **Jira 가져오기 — 기본 날짜 범위 = 이번주**: "내게 할당"/"프로젝트" 스코프에 "최근 N일
+  변경분" 옵션을 추가하고, 모달을 열면 이번주 월요일부터에 해당하는 일수로 기본값을 채운다
+  (직접 수정 가능, 비우면 전체 이력). 기존 "조건 조합" 스코프의 동일 옵션과 공유.
+  - Backend: `import_issues` 의 me/project JQL 조립에 `updated_since_days` 반영.
+  - Frontend: `JiraImportModal.tsx` `daysSinceMonday()` 기본값 + me/project 스코프에도 입력 노출.
+- **Confluence 연동 — 검색해서 업무로 가져오기 + 행 단위 동기화**: "Jira 가져오기" 옆에
+  "Confluence 연동" 버튼을 같은 패턴(검색 → 선택 → 반영)으로 추가 — Confluence 문서를 검색해
+  고른 페이지를 새 업무(유형=기타, category="Confluence")로 게시판에 등록한다. 이미 Confluence
+  와 연결된 업무는 게시판 행의 "관리" 열에 새 동기화 버튼이 생겨, 수정한 내용을 Jira "반영"
+  버튼과 동일한 방식으로 연결된 Confluence 문서에 재게시(page_id 기준 — 제목이 바뀌어도 같은
+  문서 유지)할 수 있다.
+  - Backend: `WorkItem.confluence_synced_at` 컬럼 추가, `POST /jira/confluence/link`
+    (검색 결과 → 신규 업무 생성), `POST /jira/confluence/sync/{item_id}`(재게시).
+  - Frontend: `ConfluenceLinkModal.tsx`(신규), `WorkItemTableRow.tsx` 동기화 버튼,
+    `useConfluenceSearch`/`useConfluenceLink`/`useConfluenceSync` 훅.
+
+## [1.19.0] - 2026-08-04
+
+### Added
+- **업무 유형에 "구축 대응" 추가**: 이슈 대응/회의/운영 대응/기타 4종이던 선택 가능 업무 유형에
+  "구축 대응"(`build_response`)을 추가 — 시스템/인프라 구축 요청에 대응하는 업무를 다른 유형과
+  구분해 등록할 수 있다. 업무 등록(QuickAdd 유형 picker)·업무 관리 게시판 유형 필터·CSV
+  내보내기 라벨에 자동 반영.
+  - Backend: `WorkItemType` Literal 에 `build_response` 추가(DB 는 이미 자유 문자열 컬럼이라
+    마이그레이션 불필요), CSV 내보내기 `type_label_map` 에 라벨 추가.
+  - Frontend: `WORK_ITEM_TYPE_ORDER`/`WORK_ITEM_TYPE_CONFIG`(`HardHat` 아이콘, amber 톤)에 추가.
+- **홈 "업무 현황" — 당일 스케줄 패널에 업무 관리 바로가기 추가**: `DayScheduleBoard`(홈 화면
+  좌측 당일 시간단위 스케줄)의 업무 등록 버튼 옆에 "업무 관리"(→ `/tasks-mgmt`) 버튼을 추가해,
+  우측 "담당자별 진행 현황" 패널과 동일하게 두 버튼이 나란히 노출되도록 통일. 기존 "등록"
+  버튼 라벨도 "업무 등록"으로 명확화.
+  - Frontend: `components/dashboard/DayScheduleBoard.tsx`.
+
+## [1.18.2] - 2026-07-31
+
+### Changed
+- **업무 현황 — 업무 등록 진입점 통합 + Jira/Confluence 연계**: 홈 화면 업무 현황(work)
+  모드에서 동시에 노출되던 두 등록 버튼(당일 스케줄 패널의 "등록" ↔ 담당자별 진행 현황
+  패널의 "업무 등록", 서로 다른 팝업으로 각각 열렸음)을 "등록"(`QuickAddTaskModal`) 팝업
+  하나로 통합했다. 이 팝업으로 업무를 등록하면 이제 PEP 저장 성공 직후 Jira 연동이
+  켜져 있을 때만 Jira 이슈·Confluence 문서 생성 팝업(`JiraProvisionModal`)으로 자동
+  전환된다 — 만들지 않고 "나중에"를 누르면 PEP 에만 저장된 채로 끝난다(업무 관리
+  게시판의 인라인 등록행이 쓰던 것과 같은 흐름). Frontend:
+  `WeeklyStatusTimeline`(중복 버튼·모달 제거), `QuickAddTaskModal`(Jira 단계 체이닝).
+- **업무 유형 재정리**: "유형"이 곧 "업무 유형"인데 선택지 안에 "업무"가 들어있던 순환을
+  정리해, 새 업무 등록 시 고를 수 있는 유형을 **이슈 대응 · 회의 · 운영 대응 · 기타** 4종으로
+  줄였다. 기존 "업무"는 "운영 대응"으로 라벨만 재정의(같은 내부 값 재사용, 데이터 이관
+  불필요)했고, "교육"은 선택 목록에서만 제외했다(과거에 교육으로 등록된 항목은 배지·CSV
+  라벨 그대로 유지, 신규 등록만 불가). 백엔드 스키마(`WorkItemType` Literal)는 하위 호환을
+  위해 변경하지 않았다 — 프론트 표시 라벨과 CSV 내보내기 라벨만 맞췄다.
+  Frontend: `workItemKanbanUtils.ts`(`WORK_ITEM_TYPE_CONFIG`/`WORK_ITEM_TYPE_ORDER`).
+  Backend: `work_items.py`(CSV export `type_label_map`).
+
+### Added
+- **Batch Jobs — 실행 중지(Stop)**: 실행(수동/스케줄/일괄) 후 중지할 방법이 없던 문제를 해소 — 부하/오작동으로 지금 실행 중인 잡을 강제 중지할 수 있다. 수동(동기) 실행은 in-process `CancelToken` 이 SSH 채널/kubectl 프로세스를 직접 닫아 중단하고, 스케줄·일괄(Celery) 실행은 `celery_app.control.revoke(terminate=True)` 로 워커 프로세스를 강제 종료해 프로세스 경계를 넘어 중단한다. 어느 경로든 실제 강제종료 성공 여부와 무관하게 DB 상태(실행 이력·잡 상태)는 항상 `cancelled` 로 정확히 정리되어 "실행 중"에 화면이 갇히지 않는다. Backend: `POST /batch-jobs/{id}/stop`, `services/batch_jobs/base.py` 의 `CancelToken`, `services/active_runs.py`(in-process 레지스트리), `BatchJob.active_task_id`(Celery revoke 대상 추적). Frontend: 배치 잡 테이블 각 행과 슬라이드오버에 "중지" 버튼(위험 확인 다이얼로그 포함).
+- **Batch Jobs — 행별 즉시 실행 아이콘**: 잡 상세를 열지 않고도 테이블 행에서 바로 실행할 수 있는 ▶ 아이콘 추가(저장된 자격증명 또는 non-SSH 잡에 한해 활성화) — hover 시 잡 이름·타입·호스트·최근 실행 정보를 툴팁으로 보여준다. 자격증명이 없는 SSH 잡은 비활성화되고 이유가 툴팁에 안내된다.
+- **Batch Jobs — cron 상태 시각화**: cron 등록 여부가 실제로 스케줄대로 동작하는지 표에서 판독하기 어렵다는 피드백을 반영 — cron 셀을 색상 코드 배지(등록됨/대기 중/평가 오류/자격증명 없음/꺼짐)로 바꾸고, hover 시 cron 식·활성화 여부·저장 자격증명 상태·스케줄러 최근 평가 결과·최근 실행 시각을 툴팁으로 노출.
+
+## [1.18.1] - 2026-07-30
+
+### Fixed
+- **K8S 자원 관리(`/k8s-allocation`) 정확성/안정성 감사 수정**: request/slack 집계가
+  네이티브 사이드카(Istio/Linkerd 등 init `restartPolicy: Always`)·init 컨테이너·
+  `RuntimeClass` overhead 를 누락해 메시 주입 클러스터에서 여유(slack)가 과대평가되던
+  문제를 수정했다. 이 외에 apiserver 5xx/`_continue` 토큰 만료로 절단된 스냅샷이 24시간
+  캐시로 확정 데이터처럼 서빙되던 문제(짧은 partial TTL 로 자동 재집계), 행업된 백그라운드
+  집계가 새로고침으로도 복구되지 않던 문제(stuck timeout 재시작), 과할당 노드의 음수
+  여유(slack)가 초록색 "여유 -8192Mi"로 표시되던 문제, 사용률 배지·%R 색상 판정 기준이
+  반올림 vs 원시 비율로 서로 어긋나던 문제, 네임스페이스 비효율 랭킹 정렬이 데이터에
+  따라 순서가 흔들리던 문제(비추이적 comparator), 실제 K8s pod-template-hash 알파벳과
+  안 맞아 워크로드 개수가 부풀려지던 ReplicaSet 이름 매칭, 한글 클러스터명이 CSV 파일명에서
+  전부 `-` 로 뭉개지던 문제, nanocores 서브밀리코어 usage 가 절삭으로 소실되던 문제를 고쳤다.
+  Backend: `routers/k8s_allocation.py`(`_pod_effective_resources`, `_strip_hash`, ApiClient
+  누수 정리), `services/snapshot_jobs.py`(partial/stuck TTL), `services/k8s_paging.py`(절단 로깅).
+  Frontend: `pages/K8sAllocationPage.tsx`(단위 표기·임계값·정렬·CSV·새로고침 스피너/에러 표시).
+
+## [1.18.0] - 2026-07-29
+
+### Added
+- **Comfort 테마**: 기존 기본/라이트/다크/시스템에 더해 크림 배경 + 딥그린 액센트 +
+  화이트 카드 + 큰 라운딩(16px)의 부드러운 대시보드 톤 테마를 추가했다. 사이드바 하단
+  테마 토글로 순환 선택(기본 → 컴포트 → 라이트 → 다크 → 시스템).
+  Frontend: `index.css`(`html.comfort` 토큰 블록 + 소프트 카드 섀도), `stores/themeStore.ts`,
+  `components/layout/Sidebar.tsx`.
+
+### Changed
+- **클러스터 아이콘 빌더 — 운영타입 밴드 라벨 제거**: 아이콘 2층(운영타입) 밴드에서 텍스트
+  라벨을 뺐다. 운영 레벨은 밴드 색상만으로 이미 구분되므로, 라벨을 없애 아이콘 안 정보량을
+  줄이고 가독성을 높였다(업무명·속성·지역 3개 밴드는 라벨 유지).
+  Frontend: `lib/clusterIconBuilder.ts`(`opTypeLabel` 옵션·`suggestOpTypeLabel` 제거),
+  `components/common/ClusterIconPicker.tsx`, `pages/SettingsPage.tsx`(일괄 생성).
 ### Added
 - **Confluence 문서 가져오기/내보내기 + 문서 관리 대시보드** (`/documents`): Jira 연동과 같은
   dry-run 프리뷰 → 선택 커밋 방식으로 Confluence 페이지를 문서(WorkGuide)로 가져오고, PEP 에서
@@ -49,9 +289,94 @@
 - **업무 관리 게시판 컬럼 정리**: "상태"와 "Jira 상태"가 같은 정보(Jira 연결 업무는 "상태" 셀이
   이미 Jira 원본 상태명을 보여줌)라 별도 "Jira 상태" 컬럼을 없애고 "상태" 하나로 병합.
 
+### Added
+- **Ontology RAG 확장**: AI 분석·챗봇의 근거 인용(RAG) 대상에 구성변경 영향분석 이력
+  (`ontology_events` — `POST /ontology/impact` 로 생성되는, 특정 설정 변경이 온톨로지
+  그래프 상에서 얼마나 넓게 영향을 미치는지 계산한 기록)을 추가했다. "과거 이런 구성
+  변경이 이런 영향을 미쳤다"는 사내 이력이 이제 네 번째 근거 소스(work_guide/work_item/
+  ops_note/ontology_event)로 검색·인용된다. Backend: `OntologyEvent.embedding`
+  컬럼(pgvector) + `compute_ontology_event_embedding` Celery 태스크(영향분석 생성 커밋
+  직후 큐잉) + `backfill_embeddings` 확장. Frontend: `RagCitation.sourceType` 에
+  `ontology_event` 추가, `CitationList` 에 전용 아이콘/라벨(구성변경 영향분석) 표시.
+- **K8s 이벤트(kubewatch) 직접 트리거 AI 자동분석**: 지금까지는 알람 파이프라인을
+  거친 경우만 자동 분석됐는데, kubewatch 로 수신되는 K8s 이벤트도 알람과 동일한
+  범위(scope) 규칙·디바운스·레이트 제한을 거쳐 전용 `llm` 큐로 직접 분석 요청할 수
+  있다. Backend: `IncidentAnalysis`/`K8sEvent` 에 `k8s_event_id`/`analysis_id`·
+  `analysis_status` 연결 컬럼 추가, 범위 매칭 로직을 `_MatchFields` 로 일반화해 알람/
+  K8s 이벤트 양쪽에 공용 적용하고 규칙마다 `sources`(알람/K8s 이벤트 부분집합) 로
+  적용 파이프라인을 고를 수 있게 함(레거시 규칙은 필드 없으면 둘 다 적용 — 하위 호환).
+  같은 (클러스터,네임스페이스,리소스) 는 두 파이프라인이 공유하는 디바운스 키를 써서
+  어느 쪽이 먼저 들어와도 중복 분석되지 않는다. `run_auto_incident_analysis_k8s_event`
+  Celery 태스크 + `GET/POST /events/{id}/analysis`,`/analyze` 신설. Frontend: 알람
+  인박스와 K8s 이벤트 화면이 공용 `IncidentAnalysisPanel` 컴포넌트를 공유하도록 리팩터링
+  (`AlertAnalysisPanel`/`K8sEventAnalysisPanel` 은 얇은 래퍼), K8s 이벤트 목록의 펼침
+  행에 AI 분석 패널을 부착. Settings → AI/LLM 의 자동 분석 범위 규칙 테이블에 소스
+  선택(알람/K8s 이벤트) 체크박스 열 추가.
+- **AI 챗봇 SSE 토큰 스트리밍**: `/agent/chat/stream` 신설 — 답변을 토큰 단위로
+  실시간 전송해 챗봇 응답 체감 속도를 개선한다. 게이트웨이에 `chat_stream_for_purpose`
+  추가(Ollama NDJSON / OpenAI-호환 SSE 델타 파싱, 마스킹·사용량 통계 재사용). fallback
+  규칙: 델타가 아직 하나도 안 나간 상태에서 primary 가 실패하면 다음 프로필로 넘어가고,
+  이미 일부를 보낸 뒤 끊기면 그 자리에서 종료한다(중간에 다른 LLM 으로 갈아타 앞뒤가
+  안 맞는 답변이 되는 것을 방지). `AgentChat.tsx` 는 인증 fetch+reader 로 SSE 를 소비하고
+  (PodLogStream.tsx 와 동일 패턴), 스트림 시작 자체가 실패하면 기존 비스트리밍
+  `/agent/chat` 으로 자동 폴백한다. 대화 저장·RAG 인용·정보요청 파싱은 기존 로직 재사용.
+- **무실행 보증 강화 + 배포/폐쇄망 반입 (Phase 4)**: LLM 파이프라인이 실행 경로(SSH/
+  kubectl exec/플레이북/일괄 실행)와 구조적으로 격리돼 있음을 CI 회귀 테스트로 고정
+  (`test_no_execution_guard.py` — AST import 그래프 + `AnalysisResult` 필드 계약).
+  프롬프트로 나가는 로그/컨텍스트에서 Bearer 토큰·비밀번호·AWS 키·PEM·kubeconfig
+  JWT 등을 게이트웨이 진입점에서 일괄 마스킹(`services/llm/masking.py`, 과잉 마스킹
+  회귀 테스트 포함). 배포: Helm 차트에 Ollama Deployment/Service(+선택적 PVC)와
+  LLM 전용 Celery 워커 템플릿 추가(이전엔 values 만 있고 실제 배포 안 됨), configmap/
+  secret 에 `OLLAMA_*`/`LLM_API_BASE`/`LLM_API_KEY` 방출, 기본 모델을 pre-baked
+  이미지와 일치하는 `qwen2.5-coder:7b` 로 수정. `deploy-airgap.sh` 가 Ollama 이미지도
+  미러링(이전엔 backend/frontend 만 다뤄 수동 반입 필요했음). GPU 서빙(vLLM) 과 Ollama
+  모델 영속화(PVC)는 opt-in kustomize component(`k8s/components/{vllm-gpu,ollama-pvc}`)
+  로 제공 — base 오버레이는 무변경.
+- **AI 근거 인용(RAG) + 정보요청 루프 + 대화 지속 챗봇 (Phase 3)**: AI 분석·챗봇
+  답변에 사내 지식(작업 가이드·업무 이력·운영 노트) 근거를 pgvector 유사 검색으로
+  인용한다 — 클릭 가능한 딥링크 + 유사도 표시, 근거 없는 내용은 '(추정)' 표기 지시.
+  컨텍스트가 부족하면 AI 가 구조화된 정보요청(코드/이력/로그/설정)을 보내고,
+  **운영자가 칩 UI 로 직접 제공** 한다(자율 실행 없음 — 무실행 보증 유지;
+  트러블슈팅 이력은 `GET /llm/rag-search` 사내 검색 모달로 첨부). 챗봇은 한국어
+  UI 로 전면 개편 — 마크다운 렌더, 서버 저장 멀티턴 대화(목록/이어가기/삭제),
+  화면별 접근 제어 게이트 적용. Backend: `rag_service`, `ops_notes.embedding`
+  (+`compute_ops_note_embedding`/`backfill_embeddings` — llm 큐), `response_parser`,
+  `agent_conversations`/`agent_messages` 테이블(보존 180일), 분석 결과 `citations`.
+  Frontend: `CitationList`, `InfoRequestChips`, `AgentChat` 개편.
+- **알람 AI 자동 분석 — 범위 지정 점진 롤아웃 (Phase 2)**: 알람(`/alerts`) 수신 시
+  운영자가 정의한 범위 규칙(클러스터/네임스페이스/알람명 패턴/최소 심각도, priority
+  first-match)에 매칭되면 AI 장애 분석을 자동 실행하고 결과를 알람 행 확장에 표시한다
+  (원인 분석·조치 가이드 — **실행 권한 없음, 사람이 수행**). 부하 제어: 전용 Celery
+  `llm` 큐(워커 분리, concurrency 1)·Redis 디바운스·규칙별/전역 시간당 상한, 기본
+  전부 꺼짐(운영자가 사용량 대시보드를 보며 점진 확대). 수동 분석/재분석 버튼(operator+),
+  분석 백엔드·프로필(analyzed_by) 투명 표기. Backend: `incident_analyses` 테이블,
+  `alert_events.analysis_id/analysis_status`, `analysis_hook`(scope 매칭)·
+  `incident_context_builder`, `run_auto_incident_analysis` 태스크, retention/backup 등록.
+  Frontend: `AlertAnalysisPanel`, Settings AI/LLM 탭에 분석 범위 규칙 편집기.
+- **폐쇄망 LLM 이중 운용 — 프로필 × 용도 라우팅 게이트웨이 (Phase 1)**: 사내 OpenAI-호환
+  LLM 서비스와 인클러스터 Ollama 를 동시에 등록하고, 기능별(챗봇/장애분석/점검리뷰/
+  아키텍처문서/트렌드/임베딩)로 어느 LLM 을 쓸지 UI 에서 라우팅한다(primary 실패 시
+  fallback 자동 전환). Settings 에 **AI / LLM 탭** 신설 — 프로필 CRUD·연결 테스트·용도별
+  라우팅·분석기 백엔드 선택·API 키 암호화 저장(`llm_credentials`)·최근 24h 사용량
+  (호출/오류/지연/토큰) 가시화. 시스템 프롬프트 한국어 기본화.
+  Backend: `services/llm/` 게이트웨이 신설, 기존 5개 Ollama 하드코딩 호출부
+  (`agent_service`/`local_llm_analyzer`/`embedding_service`/`trends summarizer`/
+  `architecture_doc_service`) 이관, `ANALYZER_BACKEND` raw env → AppSetting
+  `llm_settings` 로 이동(UI-First), `routers/llm_settings.py` 신설.
+  Frontend: `LlmSettingsTab.tsx`, `useLlmSettings.ts`, `llmApi`.
+
 ## [1.17.1] - 2026-07-29
 
 ### Fixed
+- **Deep check 실행이 여전히 500 (`ai_status` NotNullViolation, 심각)**: 스키마 점검이
+  `missing_column`/`not_null_drift` 두 종류만 감지해 이 케이스를 놓쳤다 —
+  `deep_check_results.ai_status` 는 **모델에 존재한 적조차 없는** 컬럼인데 운영 DB 에만
+  NOT NULL + 기본값 없이 남아 있어, ORM 이 값을 채울 방법이 없어 그 테이블의 **모든 저장**이
+  실패했다(기존 두 드리프트 종류는 "모델 → DB" 단방향 비교라 모델에 없는 DB 전용 컬럼은
+  스캔 대상 자체가 아니었다). `orphan_not_null_column` 드리프트 종류를 신설해 모델에 없는
+  DB 전용 컬럼 중 NOT NULL + 기본값 없음인 것을 별도 스캔하고, 부팅 자동 복구·Settings ▸
+  스키마 점검 화면·수동 복구 API 모두에서 기존 NOT NULL 드리프트와 동일하게 처리한다
+  (컬럼 자체는 삭제하지 않고 제약만 완화 — DROP COLUMN 은 여전히 하지 않는다).
 - **점검 항목 삭제 실패 (심각)**: 항목을 지우면
   `null value in column "item_id" of relation "check_matrix_runs"` 로 실패했다.
   `CheckMatrixSchedule`/`Result`/`Run` 의 `item` 관계에 `passive_deletes=True` 가 빠져 있어,
@@ -117,6 +442,51 @@
   값 유무와 무관하게 유지해 폭이 밀리지 않게 함). 공통업무 체크박스 옆 긴 설명 문구는
   툴팁으로 옮겨 두 칸을 잡아먹지 않게 했다.
 - **`work_items.confluence_url` 중복 선언 제거**: 같은 컬럼이 모델에 두 번 정의돼 있었다.
+
+### Changed
+- **etcdctl 콘솔 레이아웃을 mc 클라이언트와 통일** (`/etcdctl`): 실행 결과가 화면 **아래로**
+  붙던 것을 **우측 컬럼으로** 옮겼다. 타겟(2) : 실행 구성(3) : 결과(5) 10-컬럼 그리드로,
+  컨트롤과 로그를 한 화면에서 나란히 보며 인자를 고쳐가며 반복 실행할 수 있다. 결과 패널은
+  실행 전에도 같은 자리에 플레이스홀더로 있어 레이아웃이 흔들리지 않고, 스크롤은 패널
+  내부에서만 일어난다(상태 배지 헤더는 sticky). 좌측 `ClusterSidebar` 여백도 mc 와 동일하게
+  flush 로 맞췄다.
+
+### Fixed
+- **클러스터 관리 목록 기능 버그 일괄 수정** (`/cluster-manage`, DESIGN.md D-041~D-044·D-048):
+  ①표의 인라인 편집(지역/운영레벨/INTERNAL_IP/Pod·Svc CIDR)에서 값을 지워 저장하면 이제
+  실제로 해제된다(빈 입력을 `null` 로 전송 — 이전엔 `undefined` 가 직렬화에서 사라져 30초 뒤
+  옛 값이 되살아났음) ②인라인 편집·커스텀 컬럼 저장 실패가 토스트로 고지되고, 커스텀 컬럼은
+  편집 진입 시점의 서버 값으로 초기화돼 낡은 값 덮어쓰기가 사라짐 ③목록 로딩/조회 실패를
+  "등록된 클러스터가 없습니다" 로 위장하던 것을 skeleton·오류(사유+다시 시도)·빈 상태 3분기로
+  분리 ④검색/필터 중 카드 드래그 시 가려진 클러스터의 순서가 오염되던 것을 전체 목록 기준
+  재정렬로 수정 ⑤클러스터 삭제를 native `confirm` 대신 `ConfirmDialog`(연쇄 삭제 범위 명시)로
+  게이팅하고, 노드 IP 일괄 수집에 실행 전 확인(대상 수·갱신 범위)+진행률(n/N)+중단 버튼+
+  실패 구분 토스트를 추가. Frontend: `ClusterManagePage`, `ClusterTableRow`,
+  `ClusterCustomCell`, `useCluster`/`api` 타입에 null 해제 반영.
+- **클러스터 관리 목록 인터랙션 버그 수정** (`/cluster-manage`, DESIGN.md D-045~D-047):
+  ①드래그 순서 변경을 수동 정렬 모드에서만 활성화(이름/상태순에서는 드롭이 즉시 재정렬돼
+  되돌아간 것처럼 보였음)하고, **테이블 뷰에도 행 드래그를 추가**(수동 정렬 시 이름 셀
+  좌측 그립) — 카드 뷰에서만 가능하던 수동 정렬 수단이 양쪽 뷰에서 동작 ②이름 표준화
+  모달이 30초 자동 리페치마다 입력·완료 표시를 초기화하던 문제 수정(열려 있는 동안 편집
+  보존) ③클러스터 정보 수집(auto-update)을 여러 클러스터에서 동시에 실행 가능 —
+  클러스터별 스피너/중지가 독립 동작하고, 다른 클러스터의 늦은 응답이 열려 있는 변경
+  미리보기를 덮어쓰지 않음(토스트 안내). Frontend: `ClusterManagePage`,
+  `ClusterTableRow`(행 `useSortable`), `ClusterCard`, `StandardizeClusterNamesModal`.
+
+### Changed
+- **클러스터 관리 목록 디자인·접근성 정비** (`/cluster-manage`, DESIGN.md D-049~D-053):
+  ①고정 팔레트 115곳을 테마 토큰으로 전환(상태색 `status-*`, 범주색 `chart-*`) — 특히
+  bond0/bond1 IP 가 다크 테마에서, 상태 배지가 라이트 테마에서 저대비로 보이던 문제 해소
+  ②검색/필터 패널·표 컨테이너를 `MacCard` 로 통일 ③**표 헤더 고정(sticky)** 과 셀 클리핑
+  추가 — 13열 이상 표를 스크롤해도 헤더가 남고, 컬럼을 좁혀도 내용이 옆 칸으로 넘치지 않음.
+  페이지 헤더는 좁은 폭에서 줄바꿈, 카드 그리드는 좁은 폭 가로 오버플로 제거
+  ④인라인 편집·순서 변경 진입점이 키보드 포커스에서 보이고, 아이콘 버튼에 클러스터명이 담긴
+  `aria-label` 부여, 그룹 헤더 이모지를 아이콘+텍스트로 교체 ⑤**검색/필터/정렬/그룹/뷰모드가
+  URL 에 저장**돼 새로고침·공유·뒤로가기에서 유지되고, 빈 상태·조회 실패·검색 무결과가 공용
+  `EmptyState` + 실행 버튼(클러스터 등록/다시 시도/필터 초기화)으로 통일. CIDR 겹침 판정의
+  옥텟 검증(`999.x` 같은 잘못된 값 배제)과 배지 문구("겹침 클러스터 N개")도 정정.
+  Frontend: `ClusterManagePage`, `cluster-manage/*`, `versions/NodeNicsCollectModal`,
+  공용 `DoubleScrollX`(`bodyClassName` prop 추가).
 
 ## [1.17.0] - 2026-07-29
 

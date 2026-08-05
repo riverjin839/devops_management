@@ -12,6 +12,10 @@ import type { SchemaDriftIssue, SchemaRepairResult } from '@/types';
 const KIND_META: Record<SchemaDriftIssue['kind'], { label: string; cls: string }> = {
   missing_column: { label: '컬럼 없음', cls: 'text-status-critical border-status-critical/50' },
   not_null_drift: { label: 'NOT NULL 잔존', cls: 'text-status-warning border-status-warning/50' },
+  // 모델에 없는 DB 전용 컬럼(orphan)이 NOT NULL + 기본값 없음 — ORM 이 값을 채울 방법이
+  // 없어 그 테이블의 모든 저장이 실패한다. missing_column/not_null_drift 와 달리
+  // "모델 → DB" 비교로는 못 잡는 케이스(예: deep_check_results.ai_status).
+  orphan_not_null_column: { label: '고아 컬럼 NOT NULL', cls: 'text-status-critical border-status-critical/50' },
   missing_table: { label: '테이블 없음', cls: 'text-status-critical border-status-critical/50' },
   inspect_failed: { label: '점검 실패', cls: 'text-muted-foreground border-border' },
 };

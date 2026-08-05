@@ -212,6 +212,8 @@ export interface K8sEvent {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw?: Record<string, any> | null;
   receivedAt: string;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface K8sEventListResponse {
@@ -338,6 +340,42 @@ export interface AgentChatResponse {
   status: 'ok' | 'offline';
   answer: string;
   model: string;
+  conversationId?: string | null;
+  citations?: RagCitation[];
+  requests?: AgentInfoRequest[];
+}
+
+/** RAG 근거 인용 — 백엔드 rag_service.Citation */
+export interface RagCitation {
+  title: string;
+  sourceType: 'work_guide' | 'work_item' | 'ops_note' | 'ontology_event';
+  refId: string;
+  route: string;
+  snippet: string;
+  similarity: number;
+}
+
+/** AI 의 추가 정보 요청 (운영자가 제공 — 자율 실행 아님) */
+export interface AgentInfoRequest {
+  kind: 'github_code' | 'troubleshooting_history' | 'logs' | 'config';
+  detail: string;
+}
+
+export interface AgentConversationSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentMessageOut {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  citations: RagCitation[];
+  requests: AgentInfoRequest[];
+  model: string | null;
+  createdAt: string;
 }
 
 export interface AgentHealthResponse {
@@ -438,8 +476,10 @@ export interface SprintListResponse {
   total: number;
 }
 
-// Work Item Board — 업무 통합 모델 (작업/이슈/회의/교육/기타)
-export type WorkItemType = 'task' | 'issue' | 'meeting' | 'training' | 'etc';
+// Work Item Board — 업무 통합 모델. 선택 가능한 유형(라벨)은 이슈 대응(issue)/회의(meeting)/
+// 운영 대응(task)/기타(etc) 4종 — 값은 하위 호환을 위해 유지, 라벨만 workItemKanbanUtils.ts
+// WORK_ITEM_TYPE_CONFIG 에서 재정의했다. training(구 "교육")은 과거 데이터 호환용으로만 남음.
+export type WorkItemType = 'task' | 'issue' | 'meeting' | 'training' | 'etc' | 'build_response';
 export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
 export type WorkItemModule = 'k8s' | 'keycloak' | 'nexus' | 'cilium' | 'argocd' | 'jenkins' | 'backend' | 'frontend' | 'monitoring' | 'infra';
 export type WorkItemTypeLabel = 'feature' | 'bug' | 'chore' | 'docs' | 'security';
@@ -482,6 +522,10 @@ export interface WorkItem {
   component?: string;
   /** Confluence 문서 링크 (운영 페이지) */
   confluenceUrl?: string;
+  /** 연결된 Confluence 페이지 ID — 프로비저닝/연동으로만 세팅되는 읽기 전용(동기화 대상 식별용). */
+  confluencePageId?: string | null;
+  /** 마지막으로 PEP → Confluence 반영(동기화)한 시각. */
+  confluenceSyncedAt?: string | null;
   priority: 'high' | 'medium' | 'low';
   kanbanStatus: KanbanStatus;
   module?: WorkItemModule;
@@ -860,6 +904,36 @@ export interface JiraPushResult {
   fieldErrors: string[];     // 반영 실패 사유
   jiraStatus?: string | null;
   availableTransitions: string[];
+}
+
+// ── Confluence 연동 (업무 관리 게시판, "Jira 가져오기"와 동일한 검색→선택→반영 패턴) ──────
+export interface ConfluenceSearchItem {
+  id: string;
+  title: string;
+  type?: string;
+  spaceKey?: string;
+  url: string;
+  updated?: string;
+}
+
+export interface ConfluenceSearchResult {
+  status: 'ok' | 'offline' | 'error';
+  detail: string;
+  total: number;
+  items: ConfluenceSearchItem[];
+}
+
+export interface ConfluenceLinkRequest {
+  pageId: string;
+  title: string;
+  url: string;
+}
+
+export interface ConfluenceSyncResult {
+  status: 'ok' | 'error' | 'offline' | 'not_linked';
+  detail: string;
+  confluenceUrl?: string | null;
+  syncedAt?: string | null;
 }
 
 export interface WorkItemComment {
@@ -1506,6 +1580,9 @@ export interface Assignee {
   secondaryRole?: string;
 }
 
+/** 본인이 직접 수정할 수 있는 담당자 필드 (이름/사번은 admin 전용이라 제외). */
+export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'primaryRole' | 'secondaryRole'>;
+
 // Management Server
 export interface ManagementServer {
   id: string;
@@ -1924,6 +2001,30 @@ export interface EtcdSystemdCollectResponse {
   errors: string[];
 }
 
+// ── kubeadm 인증서 만료 수집 (Ops Checks cert_expiry 의 snapshot 경로용) ────────
+export interface KubeadmCertsCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+}
+
+export interface KubeadmCertsPerHost {
+  host: string;
+  stored?: boolean;
+  error?: string | null;
+}
+
+export interface KubeadmCertsCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: KubeadmCertsPerHost[];
+  errors: string[];
+}
+
 // ── kernel params / etcdctl config 수집 ─────────────────────────────
 export interface KernelParamsCollectRequest {
   hosts: string[];
@@ -2118,6 +2219,33 @@ export interface CommandEntryCreate {
   sortOrder?: number;
   author?: string;
   confluenceUrl?: string;
+}
+
+// ── 노드 일괄 실행(bulk-exec) 재사용 — 사용자별 저장 스크립트 ──────────────
+export type ScriptLanguage = 'bash' | 'python';
+
+export interface SavedScript {
+  id: string;
+  name: string;
+  language: ScriptLanguage;
+  content: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedScriptCreate {
+  name: string;
+  language: ScriptLanguage;
+  content: string;
+  description?: string;
+}
+
+export interface SavedScriptUpdate {
+  name?: string;
+  language?: ScriptLanguage;
+  content?: string;
+  description?: string;
 }
 
 // ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────
@@ -4061,8 +4189,9 @@ export interface CheckMatrixBatchResult {
 // ── 스키마 점검 (모델 vs 실제 DB 드리프트) ──────────────────────────────────
 /** 드리프트 1건. repairable=false 면 자동 복구 대상이 아니라 사람이 판단해야 한다. */
 export interface SchemaDriftIssue {
-  /** missing_table = 테이블 없음 · missing_column = 컬럼 없음 · not_null_drift = 레거시 NOT NULL */
-  kind: 'missing_table' | 'missing_column' | 'not_null_drift' | 'inspect_failed';
+  /** missing_table = 테이블 없음 · missing_column = 컬럼 없음 · not_null_drift = 레거시 NOT NULL ·
+   *  orphan_not_null_column = 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음(모든 저장 실패) */
+  kind: 'missing_table' | 'missing_column' | 'not_null_drift' | 'orphan_not_null_column' | 'inspect_failed';
   table: string;
   column?: string | null;
   detail: string;
@@ -4389,6 +4518,8 @@ export interface AlertEvent {
   labels: LabelPair[];
   annotations: LabelPair[];
   rawJson?: string | null;
+  analysisId?: string | null;
+  analysisStatus?: 'queued' | 'running' | 'done' | 'failed' | 'skipped' | null;
 }
 
 export interface AlertEventListResponse {
@@ -4437,4 +4568,126 @@ export interface AlertSettings {
   dedupWindowSec: number;
   dedupMode: AlertDedupMode;
   retentionDays: number;
+}
+
+// ── LLM 게이트웨이 설정 (Settings → AI/LLM) ───────────────────────────
+// 주의: axios 인터셉터가 응답 키를 snake→camel 로 변환하므로 여기 타입은 camelCase.
+// routing 의 purpose 키도 응답에서는 camelCase 가 된다 (요청 시 자동 역변환).
+
+export type LlmProviderType = 'ollama' | 'openai_compat';
+
+/** camelCase purpose 키 (백엔드 snake_case 와 인터셉터로 상호 변환됨) */
+export type LlmPurpose =
+  | 'chat'
+  | 'incidentAnalysis'
+  | 'reviewSummary'
+  | 'archDoc'
+  | 'trends'
+  | 'embedding';
+
+export interface LlmProfile {
+  name: string;
+  provider: LlmProviderType;
+  baseUrl: string;
+  model: string;
+  /** "credential:<name>" | "env:<VAR>" | "" — 키 원문은 절대 오가지 않는다 */
+  apiKeyRef: string;
+  timeoutSeconds: number;
+  maxConcurrency: number;
+  enabled: boolean;
+}
+
+export interface LlmRoute {
+  primary: string;
+  fallback: string | null;
+}
+
+export interface LlmSettings {
+  language: 'ko' | 'en';
+  analyzerBackend: 'claude' | 'local_llm' | 'rule_based';
+  embeddingModel: string;
+  profiles: LlmProfile[];
+  routing: Record<string, LlmRoute>;
+}
+
+export interface LlmHealthEntry {
+  profile: string;
+  provider: LlmProviderType;
+  enabled: boolean;
+  baseUrl: string;
+  status: 'online' | 'offline';
+  model: string;
+  detail: string;
+  latencyMs: number;
+}
+
+export interface LlmTestResult {
+  status: string;
+  latencyMs: number;
+  model: string;
+  answerPreview: string;
+  error: string | null;
+}
+
+export interface LlmCredentialSummary {
+  name: string;
+  hint: string;
+  createdAt: string | null;
+}
+
+export interface LlmUsageBucket {
+  profile: string;
+  purpose: string;
+  bucket: string; // YYYYMMDDHH (UTC)
+  count: number;
+  errors: number;
+  avgLatencyMs: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+// ── 알람 AI 자동 분석 (Phase 2) ───────────────────────────────────────
+
+export interface LlmAnalysisScopeRule {
+  id: string;
+  priority: number;
+  enabled: boolean;
+  sources: Array<'alert' | 'k8s_event'>;
+  clusterId: string | null;
+  namespacePattern: string;
+  alertnamePattern: string;
+  severityMin: 'info' | 'warning' | 'critical';
+  maxPerHour: number;
+  notifyAnalysis: boolean;
+  includeLogs: boolean;
+}
+
+export interface LlmAnalysisScope {
+  enabled: boolean;
+  debounceSeconds: number;
+  globalMaxPerHour: number;
+  rules: LlmAnalysisScopeRule[];
+}
+
+export interface AlertIncidentAnalysis {
+  id: string;
+  alertEventId: string | null;
+  k8sEventId: string | null;
+  clusterId: string | null;
+  namespace: string | null;
+  resource: string | null;
+  trigger: 'alert' | 'k8s_event' | 'manual';
+  status: 'queued' | 'running' | 'done' | 'failed' | 'skipped';
+  severity: string | null;
+  rootCause: string | null;
+  suggestedActions: string[];
+  relatedRunbooks: string[];
+  confidence: number | null;
+  citations: RagCitation[];
+  analyzedBy: string | null;
+  matchedRuleId: string | null;
+  durationMs: number | null;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
 }

@@ -31,6 +31,7 @@ from app.services.batch_jobs.base import (
     ExecutionResult,
     register_executor,
 )
+from app.services.k8s_diagnose import classify_kubectl_failure
 
 
 def _parse_k8s_time(value: Optional[str]) -> Optional[datetime]:
@@ -109,10 +110,24 @@ def select_cleanup_targets(
     return targets
 
 
-def _run_kubectl(args: list[str], timeout: int) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["kubectl", *args], capture_output=True, text=True, timeout=timeout
+def _run_kubectl(
+    args: list[str], timeout: int, cancel_token: Optional[Any] = None
+) -> subprocess.CompletedProcess:
+    """kubectl 실행 — Popen 기반이라 실행 중에도 다른 스레드/코루틴에서
+    `proc.terminate()` 로 중단할 수 있다(``cancel_token`` 이 attach 해두면
+    "중지" 요청이 이 블로킹 호출을 즉시 풀어준다)."""
+    proc = subprocess.Popen(
+        ["kubectl", *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
+    if cancel_token is not None:
+        cancel_token.attach(proc)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        raise
+    return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
 
 
 @register_executor
@@ -176,6 +191,13 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
         "label_selector": "",
         "dry_run": True,
     }
+    # 실행 전 UI 에 그려지는 정적 단계 계획 — 실행 후 같은 id 로 실측 상태가 오버레이됨.
+    step_plan = [
+        {"id": "resolve_kubeconfig", "label": "kubeconfig 해석"},
+        {"id": "kubectl_query", "label": "kubectl 연결·Job 조회"},
+        {"id": "select_targets", "label": "삭제 대상 선정"},
+        {"id": "delete_jobs", "label": "Job 삭제"},
+    ]
 
     def _list_args(self, params: dict[str, Any]) -> list[list[str]]:
         """네임스페이스 설정에 따른 `kubectl get jobs` 인자 목록(호출 단위)."""
@@ -190,22 +212,51 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
             return [base + ["-A"]]
         return [base + ["-n", ns] for ns in namespaces]
 
+    async def _kubectl(
+        self, ctx: ExecutionContext, kubeconfig: list[str], args: list[str]
+    ) -> subprocess.CompletedProcess:
+        """kubectl 1회 실행 + 실측 명령 기록. 예외도 기록 후 re-raise."""
+        full = ["kubectl", *kubeconfig, *args]
+        t0 = time.time()
+        try:
+            proc = await asyncio.to_thread(
+                _run_kubectl, kubeconfig + args, ctx.timeout, ctx.cancel_token
+            )
+        except Exception as e:  # noqa: BLE001 — 기록 후 원래 흐름대로 처리
+            self._record_command(full, t0, exit_code=None, stdout="", stderr=str(e)[:500])
+            raise
+        self._record_command(
+            full, t0, exit_code=proc.returncode,
+            stdout=proc.stdout or "", stderr=proc.stderr or "",
+        )
+        return proc
+
     async def run(self, ctx: ExecutionContext) -> ExecutionResult:
         params = self.merge_params(saved=None, override=ctx.params)
         start = time.monotonic()
 
         def _done(**kwargs: Any) -> ExecutionResult:
             kwargs.setdefault("duration_ms", int((time.monotonic() - start) * 1000))
+            # 모든 리턴 경로(조기 실패 포함)에 단계/명령 trace 를 싣는다.
+            kwargs.setdefault("steps", self._collected_steps())
+            kwargs.setdefault("commands", self._collected_commands())
             return ExecutionResult(**kwargs)
 
-        if not ctx.kubeconfig_path:
-            return _done(
-                status="error",
-                error=(
-                    "클러스터에 kubeconfig 가 등록되어 있지 않습니다 — "
-                    "/cluster-manage 에서 kubeconfig 를 먼저 등록하세요."
-                ),
-            )
+        host_hint = ctx.cluster_name or "API 서버"
+
+        # ── 1) kubeconfig 해석 ──────────────────────────────────────
+        with self._step("resolve_kubeconfig", "kubeconfig 해석") as st:
+            if not ctx.kubeconfig_path:
+                st.status = "failed"
+                st.detail = ctx.kubeconfig_note or "kubeconfig 미등록"
+                return _done(
+                    status="error",
+                    error=ctx.kubeconfig_note or (
+                        "클러스터에 kubeconfig 가 등록되어 있지 않습니다 — "
+                        "/cluster-manage 에서 kubeconfig 를 먼저 등록하세요."
+                    ),
+                )
+            st.detail = "kubeconfig 파일 확보됨"
 
         kubeconfig = ["--kubeconfig", ctx.kubeconfig_path]
         try:
@@ -219,51 +270,85 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
         }
         dry_run = bool(params.get("dry_run", True))
 
-        # 1) 대상 조회
+        def _cancelled() -> bool:
+            return bool(ctx.cancel_token and ctx.cancel_token.cancelled)
+
+        # ── 2) kubectl 연결·Job 조회 ────────────────────────────────
         items: list[dict[str, Any]] = []
         executed: list[str] = []
-        for args in self._list_args(params):
-            executed.append("kubectl " + " ".join(args))
-            try:
-                proc = await asyncio.to_thread(
-                    _run_kubectl, kubeconfig + args, ctx.timeout
-                )
-            except subprocess.TimeoutExpired:
-                return _done(
-                    status="timeout",
-                    error=f"kubectl 조회 타임아웃 ({ctx.timeout}s)",
-                    executed_command="\n".join(executed),
-                )
-            except FileNotFoundError:
-                return _done(
-                    status="error",
-                    error="kubectl 을 찾을 수 없습니다 — 백엔드/워커 이미지에 kubectl 이 필요합니다.",
-                    executed_command="\n".join(executed),
-                )
-            if proc.returncode != 0:
-                return _done(
-                    status="error",
-                    exit_code=proc.returncode,
-                    stderr=proc.stderr[-4000:],
-                    error="kubectl get jobs 실패",
-                    executed_command="\n".join(executed),
-                )
-            try:
-                items.extend(json.loads(proc.stdout).get("items") or [])
-            except json.JSONDecodeError:
-                return _done(
-                    status="error",
-                    error="kubectl 출력(JSON) 파싱 실패",
-                    executed_command="\n".join(executed),
-                )
+        with self._step("kubectl_query", "kubectl 연결·Job 조회") as st:
+            for args in self._list_args(params):
+                if _cancelled():
+                    st.status = "failed"
+                    st.detail = "사용자에 의해 중지됨"
+                    return _done(
+                        status="cancelled", error="사용자에 의해 중지됨",
+                        executed_command="\n".join(executed),
+                    )
+                executed.append("kubectl " + " ".join(args))
+                try:
+                    proc = await self._kubectl(ctx, kubeconfig, args)
+                except subprocess.TimeoutExpired:
+                    st.status = "failed"
+                    st.detail = f"kubectl 조회 타임아웃 ({ctx.timeout}s)"
+                    return _done(
+                        status="timeout",
+                        error=f"kubectl 조회 타임아웃 ({ctx.timeout}s)",
+                        executed_command="\n".join(executed),
+                    )
+                except FileNotFoundError:
+                    st.status = "failed"
+                    st.detail = "kubectl 바이너리 없음"
+                    return _done(
+                        status="error",
+                        error="kubectl 을 찾을 수 없습니다 — 백엔드/워커 이미지에 kubectl 이 필요합니다.",
+                        executed_command="\n".join(executed),
+                    )
+                if _cancelled():
+                    st.status = "failed"
+                    st.detail = "사용자에 의해 중지됨"
+                    return _done(
+                        status="cancelled", error="사용자에 의해 중지됨",
+                        executed_command="\n".join(executed),
+                    )
+                if proc.returncode != 0:
+                    # stderr 를 읽어 연결/인증/기타로 분류 — "에러" 한 단어로 뭉개지 않는다.
+                    fail_status, headline = classify_kubectl_failure(
+                        proc.stderr or "", host=host_hint
+                    )
+                    st.status = "failed"
+                    st.detail = headline[:200]
+                    return _done(
+                        status=fail_status,
+                        exit_code=proc.returncode,
+                        stderr=proc.stderr[-4000:],
+                        error=headline[:1000] or "kubectl get jobs 실패",
+                        executed_command="\n".join(executed),
+                    )
+                try:
+                    items.extend(json.loads(proc.stdout).get("items") or [])
+                except json.JSONDecodeError:
+                    st.status = "failed"
+                    st.detail = "kubectl 출력(JSON) 파싱 실패"
+                    return _done(
+                        status="error",
+                        error="kubectl 출력(JSON) 파싱 실패",
+                        executed_command="\n".join(executed),
+                    )
+            st.detail = f"Job {len(items)}개 조회"
+            st.metrics = {"scanned": len(items)}
 
-        targets = select_cleanup_targets(
-            items,
-            delete_succeeded=bool(params.get("delete_succeeded", True)),
-            delete_failed=bool(params.get("delete_failed", False)),
-            older_than_hours=older_than,
-            exclude_namespaces=exclude,
-        )
+        # ── 3) 삭제 대상 선정 ───────────────────────────────────────
+        with self._step("select_targets", "삭제 대상 선정") as st:
+            targets = select_cleanup_targets(
+                items,
+                delete_succeeded=bool(params.get("delete_succeeded", True)),
+                delete_failed=bool(params.get("delete_failed", False)),
+                older_than_hours=older_than,
+                exclude_namespaces=exclude,
+            )
+            st.detail = f"{len(items)}개 중 {len(targets)}개 선정"
+            st.metrics = {"targets": len(targets)}
 
         state_label = {"succeeded": "완료", "failed": "실패"}
         lines = [
@@ -277,6 +362,9 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
             )
 
         if dry_run or not targets:
+            with self._step("delete_jobs", "Job 삭제") as st:
+                st.status = "skipped"
+                st.detail = "dry run — 삭제 생략" if dry_run else "삭제 대상 없음"
             return _done(
                 status="ok",
                 exit_code=0,
@@ -284,30 +372,50 @@ class K8sJobCleanupExecutor(BatchJobExecutor):
                 executed_command="\n".join(executed),
             )
 
-        # 2) 네임스페이스별로 묶어 삭제 (--wait=false: 종료 대기 없이 큐잉)
-        by_ns: dict[str, list[str]] = {}
-        for t in targets:
-            by_ns.setdefault(t["namespace"], []).append(t["name"])
+        # ── 4) 네임스페이스별로 묶어 삭제 (--wait=false: 종료 대기 없이 큐잉) ──
+        with self._step("delete_jobs", "Job 삭제") as st:
+            by_ns: dict[str, list[str]] = {}
+            for t in targets:
+                by_ns.setdefault(t["namespace"], []).append(t["name"])
 
-        deleted = 0
-        errors: list[str] = []
-        for ns, names in by_ns.items():
-            del_args = ["delete", "job", "-n", ns, *names, "--wait=false"]
-            executed.append("kubectl " + " ".join(shlex.quote(a) for a in del_args))
-            try:
-                proc = await asyncio.to_thread(
-                    _run_kubectl, kubeconfig + del_args, ctx.timeout
+            deleted = 0
+            errors: list[str] = []
+            for ns, names in by_ns.items():
+                if _cancelled():
+                    lines.append(f"중지됨 — {deleted}/{len(targets)}개 삭제 후 남은 네임스페이스 스킵")
+                    st.status = "failed"
+                    st.detail = f"중지됨 ({deleted}/{len(targets)} 삭제)"
+                    return _done(
+                        status="cancelled", error="사용자에 의해 중지됨",
+                        stdout="\n".join(lines), executed_command="\n".join(executed),
+                    )
+                del_args = ["delete", "job", "-n", ns, *names, "--wait=false"]
+                executed.append("kubectl " + " ".join(shlex.quote(a) for a in del_args))
+                try:
+                    proc = await self._kubectl(ctx, kubeconfig, del_args)
+                except subprocess.TimeoutExpired:
+                    errors.append(f"{ns}: 삭제 타임아웃")
+                    continue
+                if proc.returncode == 0:
+                    deleted += len(names)
+                    lines.append(proc.stdout.strip())
+                else:
+                    first = (proc.stderr or "").strip().splitlines()
+                    errors.append(f"{ns}: {(first[0] if first else '')[:300]}")
+
+            if _cancelled():
+                lines.append(f"중지됨 — {deleted}/{len(targets)}개 삭제 완료")
+                st.status = "failed"
+                st.detail = f"중지됨 ({deleted}/{len(targets)} 삭제)"
+                return _done(
+                    status="cancelled", error="사용자에 의해 중지됨",
+                    stdout="\n".join(lines), executed_command="\n".join(executed),
                 )
-            except subprocess.TimeoutExpired:
-                errors.append(f"{ns}: 삭제 타임아웃")
-                continue
-            if proc.returncode == 0:
-                deleted += len(names)
-                lines.append(proc.stdout.strip())
-            else:
-                errors.append(f"{ns}: {proc.stderr.strip()[:300]}")
-
-        lines.append(f"삭제 완료 {deleted}/{len(targets)}개")
+            lines.append(f"삭제 완료 {deleted}/{len(targets)}개")
+            st.detail = f"{deleted}/{len(targets)}개 삭제"
+            st.metrics = {"deleted": deleted, "errors": len(errors)}
+            if errors:
+                st.status = "failed"
         return _done(
             status="ok" if not errors else "error",
             exit_code=0 if not errors else 1,

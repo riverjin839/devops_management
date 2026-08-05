@@ -12,10 +12,10 @@ import { formatApiError, parseUTC } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  EtcdSystemdModal, KernelParamsCollectModal, NodeNicsCollectModal,
+  EtcdSystemdModal, KubeadmCertsModal, KernelParamsCollectModal, NodeNicsCollectModal,
   KubeletConfigCollectModal, CsvExportModal,
 } from '@/components/versions';
-import { Database } from 'lucide-react';
+import { Database, ShieldCheck } from 'lucide-react';
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
@@ -812,6 +812,7 @@ export function VersionsPage() {
   const toast = useToast();
   const [clusterId, setClusterId] = useState<string>('');
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
+  const [certsModalOpen, setCertsModalOpen] = useState(false);
   const [kernelModalOpen, setKernelModalOpen] = useState(false);
   const [nicsModalOpen, setNicsModalOpen] = useState(false);
   const [kubeletModalOpen, setKubeletModalOpen] = useState(false);
@@ -975,6 +976,14 @@ export function VersionsPage() {
               >
                 <Database className="w-4 h-4" />
                 etcd (systemd)
+              </button>
+              <button
+                onClick={() => setCertsModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
+                title="K8s 인증서 만료 — SSH 로 kubeadm certs check-expiration 수집 (Ops Checks 인증서 만료 점검의 snapshot 경로용)"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                K8s 인증서(kubeadm)
               </button>
               <button
                 onClick={() => setKubeletModalOpen(true)}
@@ -1216,6 +1225,11 @@ export function VersionsPage() {
         open={etcdModalOpen && !!clusterId}
         clusterId={clusterId}
         onClose={() => setEtcdModalOpen(false)}
+      />
+      <KubeadmCertsModal
+        open={certsModalOpen && !!clusterId}
+        clusterId={clusterId}
+        onClose={() => setCertsModalOpen(false)}
       />
       <KernelParamsCollectModal
         open={kernelModalOpen && !!clusterId}

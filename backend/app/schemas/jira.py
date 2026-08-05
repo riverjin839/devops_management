@@ -144,6 +144,23 @@ class ConfluenceSearchResult(BaseModel):
     items: list[ConfluenceSearchItem] = []
 
 
+class ConfluenceLinkRequest(BaseModel):
+    """검색 결과에서 고른 Confluence 페이지를 새 work item 으로 가져와 연결(Jira 가져오기와
+    동일 패턴 — 검색 → 선택 → 반영)."""
+    page_id: str
+    title: str
+    url: str
+
+
+class ConfluenceSyncResult(BaseModel):
+    """업무 내용을 이미 연결된 Confluence 문서에 반영(재게시)한 결과. Jira 의
+    `JiraPushResult` 와 동일한 역할 — 행 단위 '동기화' 버튼이 호출한다."""
+    status: Literal["ok", "error", "offline", "not_linked"]
+    detail: str = ""
+    confluence_url: Optional[str] = None
+    synced_at: Optional[datetime] = None
+
+
 # ── 가져오기 ──────────────────────────────────────────────────────────────────
 class JiraImportRequest(BaseModel):
     """가져오기 조건. `scope="filter"` 면 project/labels/components/statuses 를 AND 로 묶어

@@ -7,7 +7,7 @@ import { StatusBadge, useToast } from '@/components/common';
 import type { CheckMatrixItem, CheckMatrixGridCluster, Status } from '@/types';
 import {
   useCheckMatrixCellHistory, usePostManualEntry, usePutSchedule,
-  useCheckMatrixRunbook, useRunCheckMatrixCell,
+  useCheckMatrixRunbook, useRunCheckMatrixCell, useCheckMatrixRuns, useCheckMatrixRun,
 } from '@/hooks/useCheckMatrix';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { useModalA11y } from '@/components/common/useModalA11y';
@@ -55,6 +55,14 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
   );
   const runCell = useRunCheckMatrixCell();
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+
+  // 이 셀의 가장 최근 수행 — '실행 방식' 탭에 실제 결과 색을 입히고, 진행 중이면 완료될 때까지
+  // 가볍게 따라간다(대기열이 비어있지 않을 동안만 폴링, 완료되면 자동으로 멈춘다).
+  const { data: recentRuns } = useCheckMatrixRuns(
+    { itemId: item.id, clusterId: cluster.id, limit: 1 }, tab === 'runbook', true,
+  );
+  const latestRunId = recentRuns?.runs[0]?.id;
+  const { data: latestRun } = useCheckMatrixRun(tab === 'runbook' ? latestRunId : undefined);
 
   const chartData = useMemo(
     () => (history?.points ?? [])
@@ -307,6 +315,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
               runbook={runbook}
               isLoading={runbookLoading}
               editTarget={{ itemId: item.id, clusterId: cluster.id }}
+              latestRun={latestRun}
             />
           )}
 
@@ -314,6 +323,7 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
             <div className="space-y-4">
               <CheckMatrixRunList
                 filter={{ itemId: item.id, clusterId: cluster.id, limit: 30 }}
+                live
                 selectedId={selectedRunId}
                 onSelect={(id) => setSelectedRunId((cur) => (cur === id ? null : id))}
                 emptyText="이 셀의 수행 기록이 아직 없습니다 — 상단 '지금 실행'으로 한 번 돌려보세요."

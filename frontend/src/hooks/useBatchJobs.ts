@@ -87,6 +87,17 @@ export function useRunBatchJob() {
   });
 }
 
+export function useStopBatchJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => batchJobsApi.stop(id),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: batchJobKeys.all });
+      qc.invalidateQueries({ queryKey: batchJobKeys.runs(id) });
+    },
+  });
+}
+
 export function useTestBatchJobConnection() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: BatchJobTestConnectionRequest }) =>

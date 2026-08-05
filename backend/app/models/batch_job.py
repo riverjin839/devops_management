@@ -49,12 +49,18 @@ class BatchJob(Base):
     encrypted_password = Column(String, nullable=True)
     encrypted_private_key = Column(String, nullable=True)
 
-    last_status = Column(String(20), default="unknown")  # ok / error / running / unknown
+    last_status = Column(String(20), default="unknown")  # ok / error / running / cancelled / unknown
     last_run_at = Column(DateTime, nullable=True)
 
     # 디스패처(매 분)가 이 잡을 마지막으로 평가한 시각/결과 — "왜 스케줄이 안 돌았는지" 진단용.
     last_schedule_check_at = Column(DateTime, nullable=True)
     last_schedule_note = Column(String(200), nullable=True)
+
+    # 스케줄/일괄 실행(Celery)이 현재 진행 중이면 그 Celery task id — "중지" 요청이
+    # `celery_app.control.revoke(id, terminate=True)` 로 워커 프로세스를 강제 종료할
+    # 대상을 찾는 데 쓰인다. 수동(동기 HTTP) 실행은 이 필드를 쓰지 않고 대신
+    # `app.services.active_runs` 의 in-process 레지스트리로 중지한다.
+    active_task_id = Column(String(64), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -77,7 +83,7 @@ class BatchJobRun(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(UUID(as_uuid=True), ForeignKey("batch_jobs.id"), nullable=False)
 
-    status = Column(String(20), nullable=False)  # ok / error / timeout / running
+    status = Column(String(20), nullable=False)  # ok / error / timeout / running / cancelled
     trigger = Column(String(20), default="manual")  # manual / schedule / bulk
 
     # 실행자 — 수동/일괄 실행 시 요청한 사용자. 스냅샷(username)이라 사용자가
@@ -97,6 +103,14 @@ class BatchJobRun(Base):
     # 바뀌어도 "그때 어떤 설정으로 실행됐는지"(예: k8s_job_cleanup 의 dry_run
     # 여부)를 그대로 확인할 수 있다. admin 감사/재현 목적.
     params_snapshot = Column(JSONB, nullable=True)
+
+    # 단계별 실행 trace [{id,label,status,detail,metrics,started_ms,duration_ms}] +
+    # 실제로 나간 명령 기록 [{kind,command,exit_code,duration_ms,stdout,stderr,truncated}].
+    # deep_checkers 의 ExecutionStep 패턴과 동일 shape — "어느 단계에서 무엇을 하다
+    # 실패했는지"를 화면 타임라인으로 판독하기 위한 데이터. 출력은 발췌만 저장(상한
+    # 은 services/batch_jobs/base.py 의 _OUTPUT_EXCERPT_CHARS/_MAX_RECORDED_COMMANDS).
+    steps = Column(JSONB, nullable=True)
+    commands = Column(JSONB, nullable=True)
 
     duration_ms = Column(Integer, default=0)
     started_at = Column(DateTime, default=datetime.utcnow)

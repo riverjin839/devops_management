@@ -12,6 +12,7 @@ import { auditLogsApi } from '@/services/api';
 import type { AuditLog } from '@/types';
 import { formatApiError, parseUTC } from '@/lib/utils';
 
+// `*.  ` 로 끝나는 항목은 prefix(패밀리) 필터 — 백엔드 action_prefix 로 전달된다.
 const ACTIONS: string[] = [
   '',
   'login.success',
@@ -27,6 +28,13 @@ const ACTIONS: string[] = [
   'bulk_exec.run',
   'etcdctl.run',
   'backup.import',
+  'batch_job.*',
+  'batch_job.create',
+  'batch_job.update',
+  'batch_job.delete',
+  'batch_job.run',
+  'batch_job.bulk_run',
+  'batch_job.stop',
   'k8s.scale',
   'k8s.restart',
   'k8s.delete',
@@ -57,15 +65,70 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/** 중첩 객체/배열을 "a.b.c" 경로 키로 평탄화 — details 를 테이블 행으로 펼치기 위함. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function flattenDetails(value: any, prefix = '', out: [string, string][] = []): [string, string][] {
+  if (value === null || value === undefined) {
+    out.push([prefix || '-', '-']);
+  } else if (Array.isArray(value)) {
+    if (value.length === 0) out.push([prefix, '[]']);
+    else if (value.every((v) => typeof v !== 'object' || v === null)) {
+      out.push([prefix, value.map((v) => String(v)).join(', ')]);
+    } else {
+      value.forEach((v, i) => flattenDetails(v, prefix ? `${prefix}[${i}]` : `[${i}]`, out));
+    }
+  } else if (typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      flattenDetails(v, prefix ? `${prefix}.${k}` : k, out);
+    }
+  } else {
+    out.push([prefix, String(value)]);
+  }
+  return out;
+}
+
 function DetailsCell({ row }: { row: AuditLog }) {
+  const [open, setOpen] = useState(false);
   if (!row.details) return <span className="text-sm text-muted-foreground">-</span>;
-  // 보기 좋게 key:value 한 줄에 표현.
+  const summary = Object.entries(row.details)
+    .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
+    .join(' · ');
+  if (!open) {
+    // 접힘: 기존 한 줄 요약 — 클릭하면 key/value 테이블로 펼침 (JSON 원문보다 판독 쉬움).
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="클릭해 표로 펼치기"
+        className="text-left w-full"
+      >
+        <code className="text-xs text-muted-foreground break-all line-clamp-2 hover:text-foreground">
+          {summary}
+        </code>
+      </button>
+    );
+  }
+  const rows = flattenDetails(row.details);
   return (
-    <code className="text-xs text-muted-foreground break-all">
-      {Object.entries(row.details)
-        .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
-        .join(' · ')}
-    </code>
+    <div className="border border-border rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="w-full px-2 py-1 text-left text-xs text-muted-foreground bg-secondary/40 hover:bg-secondary/60"
+      >
+        접기 ▲
+      </button>
+      <table className="w-full text-xs">
+        <tbody>
+          {rows.map(([k, v], i) => (
+            <tr key={`${k}-${i}`} className="border-t border-border align-top">
+              <td className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">{k}</td>
+              <td className="px-2 py-1 font-mono break-all">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -78,13 +141,16 @@ export function AuditLogManager() {
   const [actorUsername, setActorUsername] = useState('');
   const [status, setStatus] = useState('');
 
+  // 'batch_job.*' 류 패밀리 선택은 prefix 필터로 변환해 하위 액션 전부를 조회.
+  const isPrefix = action.endsWith('.*');
   const { data, isFetching, refetch, error } = useQuery({
     queryKey: ['audit-logs', page, pageSize, action, actorUsername, status],
     queryFn: async () =>
       (await auditLogsApi.list({
         page,
         pageSize,
-        action: action || undefined,
+        action: !isPrefix && action ? action : undefined,
+        actionPrefix: isPrefix ? action.slice(0, -1) : undefined,
         actorUsername: actorUsername || undefined,
         status: status || undefined,
       })).data,

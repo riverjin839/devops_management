@@ -1,4 +1,5 @@
 """Bulk SSH/SCP 엔드포인트 + 클러스터 노드 목록 조회."""
+import asyncio
 import os
 import time
 from uuid import UUID
@@ -13,10 +14,12 @@ from app.models.user import User
 from app.auth.deps import require_operator
 from app.schemas.bulk_exec import (
     BulkExecRequest, BulkExecResponse, BulkExecResultItem,
+    FetchFileRequest, FetchFileResponse,
     NodeListResponse, NodeSummary,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
-from app.services.ssh_runner import SSHTarget, run_bulk
+from app.services.script_wrap import wrap_script_for_language
+from app.services.ssh_runner import SSHTarget, fetch_remote_file, run_bulk
 from app.services import audit_logger
 
 router = APIRouter(tags=["bulk-exec"])
@@ -120,6 +123,7 @@ async def bulk_exec_run(
         details={
             "action": payload.action,
             "target_count": len(payload.targets or []),
+            "language": payload.language,
         },
         request=request,
     )
@@ -150,11 +154,15 @@ async def bulk_exec_run(
         for t in payload.targets
     ]
 
+    command = payload.command
+    if payload.action == "ssh" and payload.language == "python" and command:
+        command = wrap_script_for_language(command, "python")
+
     start = time.monotonic()
     results = await run_bulk(
         targets,
         action=payload.action,
-        command=payload.command,
+        command=command,
         scp_content=(payload.scp_content.encode("utf-8") if payload.scp_content is not None else None),
         scp_remote_path=payload.scp_remote_path,
         mode=payload.mode,
@@ -178,4 +186,51 @@ async def bulk_exec_run(
         error_count=err,
         total_duration_ms=total_elapsed,
         results=items,
+    )
+
+
+# ── SCP: 다른 노드에서 불러오기 ───────────────────────────────────────────────
+
+@router.post("/bulk-exec/fetch-file", response_model=FetchFileResponse)
+async def bulk_exec_fetch_file(
+    payload: FetchFileRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_operator),
+):
+    """SCP 업로드 내용 입력을 다른 노드에 이미 있는 텍스트 파일로 채운다.
+
+    파일을 직접 다른 노드로 복사하는 게 아니라, 내용을 화면으로 가져와 검토·수정한
+    뒤 (필요하면 다시) 여러 노드에 업로드하는 용도. 인증 정보는 요청에만 존재하고
+    저장되지 않는다(bulk_exec_run 과 동일 원칙).
+    """
+    audit_logger.record(
+        db,
+        action="bulk_exec.fetch_file",
+        actor=actor,
+        status="success",
+        target_type="bulk_exec",
+        details={"host": payload.host, "remote_path": payload.remote_path},
+        request=request,
+    )
+    if not payload.password and not payload.private_key:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="password 또는 private_key 중 하나는 필수입니다.")
+
+    target = SSHTarget(
+        host=payload.host, port=payload.port, username=payload.username,
+        password=payload.password, private_key=payload.private_key,
+    )
+    fetched = await asyncio.to_thread(
+        fetch_remote_file, target, payload.remote_path, payload.connect_timeout,
+    )
+    result = fetched.result
+    return FetchFileResponse(
+        host=result.host,
+        status=result.status,
+        content=result.stdout,
+        size=len(result.stdout.encode("utf-8")) if result.status == "ok" else 0,
+        error=result.error,
+        steps=fetched.steps,
+        commands=fetched.commands,
     )

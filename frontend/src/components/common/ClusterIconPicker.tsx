@@ -8,9 +8,9 @@ import {
 } from '@/lib/clusterIcons';
 import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
-  suggestAttribute, suggestOpTypeLabel,
+  suggestAttribute,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor, levelLabel, levelCustomHex } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelColor, levelCustomHex } from '@/hooks/useOperationLevels';
 
 /** 빌더 탭에 프리필할 클러스터 속성 — 전달되면 "빌더" 탭이 노출된다. */
 export interface IconBuilderContext {
@@ -405,10 +405,9 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
 
   const colorToken = levelColor(levels, level || undefined);
   const customHex = levelCustomHex(levels, level || undefined);
-  const opTypeLabel = suggestOpTypeLabel(levelLabel(levels, level || undefined));
   const svg = useMemo(
-    () => buildClusterIconSvg({ workName, opTypeLabel, attribute, regionAbbr, colorToken, customHex, k8sWatermark: watermark, shape }),
-    [workName, opTypeLabel, attribute, regionAbbr, colorToken, customHex, watermark, shape],
+    () => buildClusterIconSvg({ workName, attribute, regionAbbr, colorToken, customHex, k8sWatermark: watermark, shape }),
+    [workName, attribute, regionAbbr, colorToken, customHex, watermark, shape],
   );
   const previewUrl = useMemo(() => svgToDataUrl(svg), [svg]);
 
@@ -444,7 +443,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       </label>
 
       <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">2층 · 운영타입 (환경 → 색 + 라벨 결정)</span>
+        <span className="text-muted-foreground">2층 · 운영타입 (환경 → 색상만 표시, 라벨 없음)</span>
         <select
           value={level}
           onChange={(e) => setLevel(e.target.value)}
