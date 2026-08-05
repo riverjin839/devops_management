@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
-  Play, ScrollText, Loader2,
+  Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton } from '@/components/common';
@@ -43,10 +43,18 @@ function SourceBadge({ sourceType }: { sourceType: CheckMatrixItem['sourceType']
   );
 }
 
+// 경고/위험은 색상(StatusDot) 만으로 전달하지 않는다 — 값이 표시될 때도 상태를 알 수 있도록
+// 형태가 다른 아이콘을 함께 준다(색맹·저채도 화면에서도 구분 가능).
+const CELL_STATUS_ICON: Partial<Record<Status, typeof AlertTriangle>> = {
+  warning: AlertTriangle,
+  critical: XCircle,
+};
+
 function CellButton({
   item, cell, onClick,
 }: { item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void }) {
   const empty = !cell || !cell.hasResult || !cell.status;
+  const StatusIcon = !empty ? CELL_STATUS_ICON[cell.status!] : undefined;
   return (
     <button
       onClick={onClick}
@@ -58,6 +66,7 @@ function CellButton({
       ) : (
         <>
           <StatusDot variant={cell.status!} />
+          {StatusIcon && <StatusIcon className="w-3 h-3 flex-shrink-0" aria-hidden="true" />}
           <span className="text-xs font-medium tabular-nums">
             {cell.value != null ? `${cell.value}${item.unit ?? ''}` : STATUS_LABEL[cell.status!]}
           </span>
@@ -84,6 +93,14 @@ const CRON_TONE_HINT: Record<CronTone, string> = {
   warning: '경고 — 핵심 점검 결과가 주의가 필요합니다.',
   critical: '위험 — 핵심 점검 결과가 비정상입니다.',
 };
+// 색상 배경만으로 정상/경고/위험/실행중을 구분하지 않도록 톤별로 다른 아이콘을 쓴다.
+const CRON_TONE_ICON: Record<CronTone, typeof Clock> = {
+  off: Clock,
+  running: Loader2,
+  healthy: CheckCircle2,
+  warning: AlertTriangle,
+  critical: XCircle,
+};
 
 function ClusterCronBadge({
   cluster, isRunning, coreHealth,
@@ -109,6 +126,8 @@ function ClusterCronBadge({
       ? 'running'
       : coreHealth === 'critical' ? 'critical' : coreHealth === 'warning' ? 'warning' : 'healthy';
 
+  const ToneIcon = CRON_TONE_ICON[tone];
+
   return (
     <div className="relative inline-block">
       <button
@@ -116,7 +135,7 @@ function ClusterCronBadge({
         title={`${cluster.checkCronExpr || '미설정'} — ${CRON_TONE_HINT[tone]}`}
         className={`inline-flex items-center gap-1 text-[10px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 ${CRON_TONE_CLS[tone]}`}
       >
-        <Clock className="w-2.5 h-2.5" />
+        <ToneIcon className={`w-2.5 h-2.5 ${tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
         {cluster.checkCronExpr || '미설정'}
       </button>
       {open && (
@@ -155,7 +174,7 @@ function ClusterCronBadge({
 
 export function PlatformStatusMatrix() {
   const toast = useToast();
-  const { data: grid, isLoading } = useCheckMatrixGrid();
+  const { data: grid, isLoading, isError, error, refetch } = useCheckMatrixGrid();
   const reorderMut = useReorderCheckMatrixItems();
   const deleteMut = useDeleteCheckMatrixItem();
   const runClusterMut = useRunCheckMatrixCluster();
@@ -165,6 +184,11 @@ export function PlatformStatusMatrix() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [formItem, setFormItem] = useState<CheckMatrixItem | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<CheckMatrixItem | null>(null);
+  // 프로덕션 클러스터에 실제 명령이 나가는 일괄 실행(클러스터/항목 전체)은 확인을 받는다 —
+  // 로컬 메타데이터 삭제보다 마찰이 낮으면 안 된다.
+  const [runConfirm, setRunConfirm] = useState<
+    { type: 'cluster'; cluster: CheckMatrixGridCluster } | { type: 'item'; item: CheckMatrixItem } | null
+  >(null);
   const [cellTarget, setCellTarget] = useState<{ item: CheckMatrixItem; cluster: CheckMatrixGridCluster } | null>(null);
   // 로그 패널은 두 가지로 쓰인다 — batch 가 있으면 방금 트리거한 일괄 수행 추적, 없으면 전체 로그.
   const [runLog, setRunLog] = useState<{ open: boolean; batchId?: string | null; label?: string | null }>(
@@ -211,6 +235,13 @@ export function PlatformStatusMatrix() {
     }
   };
 
+  const confirmRun = async () => {
+    if (!runConfirm) return;
+    if (runConfirm.type === 'cluster') await handleRunCluster(runConfirm.cluster);
+    else await handleRunItem(runConfirm.item);
+    setRunConfirm(null);
+  };
+
   // 행 드래그 정렬 — HTML5 DnD. 그립 핸들에서 시작하고 행 위로 드롭한다.
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -240,7 +271,7 @@ export function PlatformStatusMatrix() {
   return (
     <div className="flex flex-col gap-2 min-h-0 flex-1">
       <MacCard bodyPadding="p-0" rootClassName="min-h-0 flex-1 flex flex-col" className="flex-1 min-h-0 flex flex-col">
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-container-high">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
             플랫폼 현황
           </span>
@@ -293,6 +324,18 @@ export function PlatformStatusMatrix() {
               </div>
             ))}
           </div>
+        ) : isError ? (
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-center text-sm p-6">
+            <AlertTriangle className="w-5 h-5 text-status-critical" aria-hidden="true" />
+            <p className="text-status-critical font-medium">매트릭스를 불러오지 못했습니다.</p>
+            <p className="text-xs text-muted-foreground">{formatApiError(error)}</p>
+            <button
+              onClick={() => refetch()}
+              className="mt-1 px-3 py-1.5 text-xs font-medium rounded-xl border border-border hover:bg-secondary transition-colors"
+            >
+              다시 시도
+            </button>
+          </div>
         ) : items.length === 0 || clusters.length === 0 ? (
           <div className="flex-1 min-h-0 flex items-center justify-center text-center text-sm text-muted-foreground">
             {clusters.length === 0 ? '등록된 클러스터가 없습니다.' : '점검 항목이 없습니다 — 우측 상단에서 추가하세요.'}
@@ -311,7 +354,7 @@ export function PlatformStatusMatrix() {
                         <div className="flex items-center gap-1 min-w-0">
                           <span className="truncate max-w-[120px]">{cluster.name}</span>
                           <button
-                            onClick={() => handleRunCluster(cluster)}
+                            onClick={() => setRunConfirm({ type: 'cluster', cluster })}
                             disabled={runningKey === `cluster:${cluster.id}`}
                             title={`${cluster.name} 의 모든 점검 항목을 지금 실행`}
                             aria-label={`${cluster.name} 전체 점검 실행`}
@@ -346,75 +389,85 @@ export function PlatformStatusMatrix() {
                       dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'bg-primary/5' : ''
                     } ${dragIdx === idx ? 'opacity-50' : ''}`}
                   >
-                    <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-2 py-1.5">
+                    <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-2 py-1">
                       <div
-                        className={`flex items-center gap-1.5 min-w-0 rounded-md px-1.5 py-0.5 border-l-2 ${
+                        role="group"
+                        aria-label={`${item.name} 행`}
+                        className={`flex flex-col gap-0.5 min-w-0 rounded-md px-1.5 py-1 border-l-2 ${
                           color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
                         }`}
                       >
-                        <button
-                          draggable
-                          onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
-                          onDragEnd={endDrag}
-                          disabled={reorderMut.isPending}
-                          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
-                          title="드래그해서 순서 변경"
-                          aria-label={`${item.name} 순서 변경 (드래그)`}
-                        >
-                          <GripVertical className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
-                          {item.name}
-                        </span>
-                        {item.category && (
-                          <span
-                            title={`영역: ${item.category}`}
-                            className={`flex-shrink-0 px-1.5 py-px rounded border text-[9px] font-medium select-none ${
-                              color ? color.chip : 'border-border text-muted-foreground'
-                            }`}
-                          >
-                            {item.category}
-                          </span>
-                        )}
-                        <SourceBadge sourceType={item.sourceType} />
-                        {item.isSystem && (
-                          <span title="시스템 항목" className="flex-shrink-0">
-                            <Lock className="w-3 h-3 text-muted-foreground" />
-                          </span>
-                        )}
-                        {/* 실행 ▶ 는 hover 없이 항상 노출 — hover 전용이면 "버튼이 없다"고 오인된다. */}
-                        {item.sourceType !== 'manual' && (
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <button
-                            onClick={() => handleRunItem(item)}
-                            disabled={runningKey === `item:${item.id}`}
-                            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50 flex-shrink-0"
-                            title="모든 클러스터에서 이 항목 실행"
-                            aria-label="모든 클러스터에서 이 항목 실행"
+                            draggable
+                            onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                            onDragEnd={endDrag}
+                            disabled={reorderMut.isPending}
+                            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
+                            title="드래그해서 순서 변경"
+                            aria-label={`${item.name} 순서 변경 (드래그)`}
                           >
-                            {runningKey === `item:${item.id}`
-                              ? <Loader2 className="w-3 h-3 animate-spin" />
-                              : <Play className="w-3 h-3" />}
+                            <GripVertical className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => setFormItem(item)}
-                            className="p-1 rounded hover:bg-secondary text-muted-foreground"
-                            title="수정"
-                            aria-label={`${item.name} 수정`}
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          {!item.isSystem && (
-                            <button
-                              onClick={() => setDeleteTarget(item)}
-                              className="p-1 rounded hover:bg-secondary text-status-critical"
-                              title="삭제"
-                              aria-label={`${item.name} 삭제`}
+                          <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
+                            {item.name}
+                          </span>
+                          {item.category && (
+                            <span
+                              title={`영역: ${item.category}`}
+                              className={`flex-shrink-0 px-1.5 py-px rounded border text-[9px] font-medium select-none ${
+                                color ? color.chip : 'border-border text-muted-foreground'
+                              }`}
                             >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                              {item.category}
+                            </span>
                           )}
+                        </div>
+                        <div className="flex items-center gap-1 min-w-0 pl-5">
+                          <SourceBadge sourceType={item.sourceType} />
+                          {item.isSystem && (
+                            <span title="시스템 항목" className="flex-shrink-0">
+                              <Lock className="w-3 h-3 text-muted-foreground" />
+                            </span>
+                          )}
+                          <div className="ml-auto flex items-center gap-0.5 flex-shrink-0">
+                            {/* 실행 ▶ 는 hover 없이 항상 노출 — hover 전용이면 "버튼이 없다"고 오인된다. */}
+                            {item.sourceType !== 'manual' && (
+                              <button
+                                onClick={() => setRunConfirm({ type: 'item', item })}
+                                disabled={runningKey === `item:${item.id}`}
+                                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50"
+                                title="모든 클러스터에서 이 항목 실행"
+                                aria-label="모든 클러스터에서 이 항목 실행"
+                              >
+                                {runningKey === `item:${item.id}`
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <Play className="w-3 h-3" />}
+                              </button>
+                            )}
+                            {/* 상시 은은하게 노출(opacity-40) — hover 전용이면 터치 기기에서 도달 불가하고
+                                포커스만으로는 opacity-0 상태라 키보드 사용자에게 보이지 않았다. */}
+                            <div className="flex items-center gap-0.5 opacity-40 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => setFormItem(item)}
+                                className="p-1 rounded hover:bg-secondary text-muted-foreground"
+                                title="수정"
+                                aria-label={`${item.name} 수정`}
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              {!item.isSystem && (
+                                <button
+                                  onClick={() => setDeleteTarget(item)}
+                                  className="p-1 rounded hover:bg-secondary text-status-critical"
+                                  title="삭제"
+                                  aria-label={`${item.name} 삭제`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -467,6 +520,21 @@ export function PlatformStatusMatrix() {
           confirmLabel="삭제"
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+      {runConfirm && (
+        <ConfirmDialog
+          open={!!runConfirm}
+          title={runConfirm.type === 'cluster' ? '클러스터 전체 점검 실행' : '항목 전체 클러스터 실행'}
+          description={
+            runConfirm.type === 'cluster'
+              ? `"${runConfirm.cluster.name}" 클러스터의 점검 항목 ${items.length}건을 지금 실행합니다. 실제 클러스터에 점검 명령이 나갑니다.`
+              : `"${runConfirm.item.name}" 항목을 등록된 클러스터 ${clusters.length}곳에서 지금 실행합니다. 실제 클러스터에 점검 명령이 나갑니다.`
+          }
+          danger
+          confirmLabel="실행"
+          onConfirm={confirmRun}
+          onCancel={() => setRunConfirm(null)}
         />
       )}
     </div>

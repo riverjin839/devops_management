@@ -39,6 +39,20 @@
   `components/isilon/IsilonCommandSelector.tsx`(신규) + `useRunIsilonCommands` 훅,
   `useTerminalEnvSync` 최상단 호출 추가.
 
+### Fixed
+- **홈 "플랫폼 현황" 매트릭스 — 일괄 실행 확인·조회 실패 표시·색상단독 상태·접근성 수정**:
+  impeccable critique/audit 진단(Design Health 26/40, Audit 12/20)에서 나온 이슈를 반영.
+  클러스터/항목 단위 "전체 실행"에 `ConfirmDialog`(danger)를 추가해 삭제보다 마찰이 낮던
+  문제를 해소했고, 그리드 조회 실패 시 "항목/클러스터 없음"으로 오인되던 것을 재시도 가능한
+  에러 배너로 분리했다. 클러스터 cron 배지·셀 값 표시가 색상(StatusDot/배경색)에만 의존하던
+  부분에 톤별 아이콘(정상/경고/위험/실행중)을 병행했고, 모달 닫기 버튼 3곳에 누락된
+  `aria-label`을 채웠다. 행 편집/삭제 버튼은 hover 전용(`opacity-0`)이라 키보드 포커스 시
+  보이지 않고 터치 기기에서 아예 도달 불가했던 것을 상시 노출(`opacity-40`) +
+  hover/focus-within 시 100%로 바꿔 두 문제를 함께 해결했다. 행 라벨 셀에 최대 8개 요소가
+  한 줄에 몰려 있던 것을 2줄로 분리해 정리. Frontend:
+  `components/platform-status/PlatformStatusMatrix.tsx`,
+  `CheckMatrixCellDetailModal.tsx`/`CheckMatrixItemFormModal.tsx`/`CheckMatrixSettingsModal.tsx`.
+
 ## [1.24.2] - 2026-08-05
 
 ### Changed
