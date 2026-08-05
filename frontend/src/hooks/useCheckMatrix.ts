@@ -19,6 +19,8 @@ export interface CheckMatrixRunFilter {
   clusterId?: string;
   batchId?: string;
   trigger?: string;
+  /** 콤마 구분 다중값 (예: `queued,running`) — "지금 실행 중"만 가볍게 폴링할 때 사용. */
+  runState?: string;
   limit?: number;
   offset?: number;
 }
@@ -236,5 +238,24 @@ export function useCheckMatrixRun(runId: string | undefined) {
       return data;
     },
     enabled: !!runId,
+    // 대기열/실행 중이면 끝날 때까지 짧은 주기로 폴링 — 상세 로그가 실시간에 가깝게 갱신되도록.
+    refetchInterval: (query) => {
+      const state = query.state.data?.runState;
+      return state === 'queued' || state === 'running' ? 2000 : false;
+    },
+  });
+}
+
+/** 매트릭스 전역에서 지금 대기열/실행 중인 수행만 — 클러스터 cron 배지의 '실행중' 판정에 쓴다.
+ *  `limit=1` 조회로 그리드/셀마다 별도 쿼리를 두지 않고 한 번의 가벼운 폴링으로 공유한다. */
+export function useCheckMatrixActiveRuns(enabled = true) {
+  return useQuery({
+    queryKey: ['checkMatrixActiveRuns'],
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.listRuns({ runState: 'queued,running', limit: 100 });
+      return data;
+    },
+    enabled,
+    refetchInterval: enabled ? 4000 : false,
   });
 }

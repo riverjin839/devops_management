@@ -594,3 +594,19 @@ class TestRunListing:
 
     def test_unknown_run_id_returns_none(self, db):
         assert svc.get_run(db, uuid.uuid4()) is None
+
+    def test_run_state_filter(self, db, fixture_ids):
+        """cron 배지·타임라인 실시간 폴링이 쓰는 run_state 필터 — 쉼표 다중값 + 미검증 상태 무시."""
+        deep = _get(db, CheckMatrixItem, fixture_ids["deep"])
+        cluster = _get(db, Cluster, fixture_ids["cluster"])
+        svc.run_cell_now(db, deep, cluster)  # 정의 없음 → skipped 로 종료됨
+        queued = svc.create_run(db, deep, cluster, trigger=CheckMatrixTrigger.manual_cell)
+
+        assert svc.list_runs(db, cluster_id=cluster.id, run_state="queued")["total"] == 1
+        assert svc.list_runs(db, cluster_id=cluster.id, run_state="skipped")["total"] == 1
+        assert svc.list_runs(db, cluster_id=cluster.id, run_state="queued,running")["total"] == 1
+        # 인식 못하는 토큰만 있으면 필터를 걸지 않은 것과 같다(무필터로 안전 폴백) — 422 로 막을 이유가
+        # 없는 내부 전용 파라미터라 조용히 무시한다.
+        assert svc.list_runs(db, cluster_id=cluster.id, run_state="not-a-real-state")["total"] == 2
+        assert svc.list_runs(db, cluster_id=cluster.id)["total"] == 2
+        assert queued.run_state.value == "queued"

@@ -411,14 +411,19 @@ def list_runs(
     cluster_id: Optional[UUID] = None,
     batch_id: Optional[UUID] = None,
     trigger: Optional[str] = None,
+    run_state: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    """수행 로그 목록 — cron 자동 실행과 수동 실행(셀/클러스터/항목/수동입력)을 모두 포함."""
+    """수행 로그 목록 — cron 자동 실행과 수동 실행(셀/클러스터/항목/수동입력)을 모두 포함.
+
+    ``run_state`` 는 콤마 구분 다중값(예: ``queued,running``) — 매트릭스 화면이 "지금 실행
+    중인 것"만 가볍게 폴링해 cron 배지/타임라인을 실시간에 가깝게 갱신하는 데 쓴다.
+    """
     return svc.list_runs(
         db, item_id=item_id, cluster_id=cluster_id, batch_id=batch_id,
-        trigger=trigger, limit=limit, offset=offset,
+        trigger=trigger, run_state=run_state, limit=limit, offset=offset,
     )
 
 

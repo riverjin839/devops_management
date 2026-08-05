@@ -6,6 +6,8 @@ import { agentApi } from '@/services/api';
 import { getAuthToken } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useAgentChatStore } from '@/stores/agentChatStore';
+import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
 import { CitationList } from '@/components/common/CitationList';
 import { InfoRequestChips } from '@/components/agent/InfoRequestChips';
@@ -84,14 +86,18 @@ async function streamChat(
 }
 
 // feature_access 게이트 키 — 라우트는 아니지만 화면별 접근 제어 규칙과 동일한 키 체계.
-const FEATURE_KEY = '/agent-chat';
+// Sidebar.tsx 의 트리거 아이콘도 같은 키로 접근 가능 여부를 판정한다(아이콘 자체를 숨김).
+export const AGENT_CHAT_FEATURE_KEY = '/agent-chat';
+const FEATURE_KEY = AGENT_CHAT_FEATURE_KEY;
 
 /**
- * 전역 AI 챗봇 (우하단 FAB) — 한국어 우선, 멀티턴 대화 지속(서버 저장),
+ * 전역 AI 챗봇 — 한국어 우선, 멀티턴 대화 지속(서버 저장),
  * RAG 근거 인용(사내 문서 딥링크), AI 정보요청 칩(운영자 매개 — 자율 실행 없음).
+ * 열림 트리거는 사이드바 하단 레일 아이콘(`Sidebar.tsx`)이 쥐고 있고, 이 컴포넌트는
+ * `useAgentChatStore` 로 그 상태를 공유해 패널만 그린다.
  */
 export function AgentChat() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { open: isOpen, setOpen: setIsOpen } = useAgentChatStore();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -302,22 +308,17 @@ export function AgentChat() {
   };
 
   // ── Render ────────────────────────────────────────────────────────
+  // 열기/닫기 트리거는 사이드바 하단 레일의 "AI 어시스턴트" 아이콘(Sidebar.tsx) — 여기서는
+  // 패널만 그린다. 트리거가 좌측 사이드바에 고정돼 있으므로 패널도 그 근처(좌하단)에서 연다.
 
   return (
     <>
-      {/* FAB Button */}
-      <button
-        onClick={() => setIsOpen((v) => !v)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all flex items-center justify-center hover:scale-105 active:scale-95"
-        title="AI 어시스턴트"
-        aria-label="AI 어시스턴트 열기/닫기"
-      >
-        {isOpen ? <X className="w-6 h-6" /> : <Bot className="w-6 h-6" />}
-      </button>
-
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-[420px] h-[560px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div
+          style={{ left: NAV_WIDTH + 12 }}
+          className="fixed bottom-4 z-50 w-[420px] h-[560px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        >
           {/* Header */}
           <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-card">
             <div className="flex items-center gap-2">

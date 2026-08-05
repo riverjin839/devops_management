@@ -869,6 +869,7 @@ def list_runs(
     cluster_id=None,
     batch_id=None,
     trigger: Optional[str] = None,
+    run_state: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -881,6 +882,16 @@ def list_runs(
         q = q.filter(CheckMatrixRun.batch_id == batch_id)
     if trigger:
         q = q.filter(CheckMatrixRun.trigger == trigger)
+    if run_state:
+        states = []
+        for token in run_state.split(","):
+            token = token.strip()
+            try:
+                states.append(CheckMatrixRunState(token))
+            except ValueError:
+                continue
+        if states:
+            q = q.filter(CheckMatrixRun.run_state.in_(states))
     total = q.count()
     rows = (
         q.order_by(CheckMatrixRun.queued_at.desc())

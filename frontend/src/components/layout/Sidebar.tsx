@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ListTodo, Sparkles, Palmtree, Leaf,
   Moon, Sun, Monitor, X, LogOut, User, ChevronRight, ArrowLeft,
-  KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug,
+  KeyRound, ShieldCheck, ScrollText, ServerCog, MessageSquare, Bug, Bot,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
@@ -14,6 +14,8 @@ import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useIslandStore } from '@/stores/islandStore';
 import { useHomeStore } from '@/stores/homeStore';
+import { useAgentChatStore } from '@/stores/agentChatStore';
+import { AGENT_CHAT_FEATURE_KEY } from '@/components/agent';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
@@ -188,6 +190,7 @@ export function Sidebar() {
   const { navMap, servicePaths, getLabel, featureAllowed } = useNavCatalog();
 
   const { mode, toggle } = useHomeStore();
+  const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
   const handleHomeClick = () => {
     if (location.pathname === '/') {
@@ -489,6 +492,18 @@ export function Sidebar() {
               highlighted={!!islandFlyoutAnchor}
               suppressTooltip={!!islandFlyoutAnchor}
               onClick={goToIsland}
+            />
+          )}
+          {/* AI 어시스턴트 — 우하단 플로팅 버튼이었던 것을 좌측 사이드바 하단 레일로 이동해
+              항상 같은 자리에 고정했다. 패널(AgentChat.tsx)은 이 상태를 Zustand 로 공유해서
+              연다 — 접근 제어(기능 접근)가 꺼진 사용자에게는 아이콘 자체를 숨긴다. */}
+          {currentUser && featureAllowed(AGENT_CHAT_FEATURE_KEY) && (
+            <RailIconButton
+              label="AI 어시스턴트"
+              Icon={Bot}
+              highlighted={agentChatOpen}
+              suppressTooltip={agentChatOpen}
+              onClick={toggleAgentChat}
             />
           )}
           {currentUser && (
