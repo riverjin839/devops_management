@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Cluster, DailyCheckLog, CheckScheduleType, StatusEnum
 from app.config import settings
+from app.services.k8s_diagnose import diagnose_connect_error
 from app.services.kubeconfig import ensure_kubeconfig_file
 
 
@@ -156,8 +157,69 @@ class DailyChecker:
 
         return check_log
 
+    @staticmethod
+    def _classify_healthz(status_code: Optional[int], response_time_ms: Optional[int]) -> tuple[StatusEnum, Optional[str]]:
+        """익명 /healthz 프로브 결과 → (상태, 진단 노트).
+
+        예전엔 200 이 아니면 전부 critical → 전체 pending(미연결)으로 오진했다.
+        anonymous-auth 를 끈 하드닝 클러스터는 익명 프로브에 401/403 을 반환하는데,
+        그건 "서버까지 도달했고 인증만 요구"라는 뜻 — 연결성은 정상이다.
+        (클러스터 등록 검증 `routers/clusters.py` 와 `health_checker.py` 는 이미
+        같은 기준으로 401/403 을 관용한다 — 여기만 어긋나 있었음.)
+        """
+        if status_code == 200:
+            if response_time_ms is not None and response_time_ms >= 3000:
+                return StatusEnum.warning, f"/healthz 응답 느림 ({response_time_ms}ms)"
+            return StatusEnum.healthy, None
+        if status_code in (401, 403):
+            note = f"인증 필요 — 익명 /healthz 차단됨(HTTP {status_code}); 연결성은 정상"
+            if response_time_ms is not None and response_time_ms >= 3000:
+                return StatusEnum.warning, note + f", 응답 느림 ({response_time_ms}ms)"
+            return StatusEnum.healthy, note
+        if status_code is not None and status_code < 500:
+            return StatusEnum.warning, f"/healthz 예상외 응답 (HTTP {status_code})"
+        # 5xx 또는 무응답(연결 실패)
+        return StatusEnum.critical, None
+
+    def _authenticated_healthz_probe(self, cluster: Cluster) -> dict:
+        """익명 프로브 실패 시 kubeconfig 인증으로 /healthz 재시도 (폴백).
+
+        /healthz 를 익명은 물론 인증 사용자에게만 여는 구성도 있어, 익명 실패만으로
+        미연결 판정하면 오진이다. SDK raw call 로 인증 프로브를 1회 수행한다.
+        blocking SDK 호출이므로 caller 가 asyncio.to_thread 로 offload 해야 한다.
+        """
+        start = time.time()
+        try:
+            v1 = self._get_k8s_client(cluster)
+            resp = v1.api_client.call_api(
+                "/healthz", "GET",
+                auth_settings=["BearerToken"],
+                response_type="str",
+                _return_http_data_only=False,
+                _preload_content=True,
+                _request_timeout=self.timeout,
+            )
+            status_code = resp[1]
+            return {
+                "ok": status_code == 200,
+                "status_code": status_code,
+                "response_time_ms": int((time.time() - start) * 1000),
+            }
+        except Exception as e:  # noqa: BLE001 — 폴백 실패는 결과에 사유로만 남긴다
+            return {
+                "ok": False,
+                "error": str(e)[:300],
+                "response_time_ms": int((time.time() - start) * 1000),
+            }
+
     async def _check_api_server(self, cluster: Cluster) -> dict:
-        """API 서버 헬스 체크"""
+        """API 서버 헬스 체크.
+
+        1) 익명 httpx 프로브(/healthz,/livez,/readyz) → `_classify_healthz` 로 분류
+           (200=정상, 401/403=도달 가능·인증 필요, 5xx/무응답=연결 실패 후보)
+        2) 익명 프로브가 연결 실패로 보이면 kubeconfig 인증 프로브로 재확인 —
+           성공 시 "익명만 차단된 클러스터"로 판정해 미연결 오진을 막는다.
+        """
         result = {
             "status": StatusEnum.critical,
             "response_time_ms": None,
@@ -192,15 +254,38 @@ class DailyChecker:
                             "error": str(e)
                         }
 
-            # 상태 결정
+            # 상태 결정 — 익명 프로브 분류
             healthz = result["details"].get("/healthz", {})
-            if healthz.get("status_code") == 200:
-                if result["response_time_ms"] and result["response_time_ms"] < 3000:
-                    result["status"] = StatusEnum.healthy
-                else:
-                    result["status"] = StatusEnum.warning
-            else:
-                result["status"] = StatusEnum.critical
+            status_, note = self._classify_healthz(
+                healthz.get("status_code"), result["response_time_ms"]
+            )
+            if note:
+                result["details"]["healthz_note"] = note
+
+            # 인증 폴백 — 익명 프로브가 연결 실패로 보일 때만
+            if status_ == StatusEnum.critical:
+                auth_probe = await asyncio.to_thread(
+                    self._authenticated_healthz_probe, cluster
+                )
+                result["details"]["/healthz_authenticated"] = auth_probe
+                if auth_probe.get("ok"):
+                    rt = auth_probe.get("response_time_ms")
+                    status_ = (
+                        StatusEnum.warning
+                        if rt is not None and rt >= 3000
+                        else StatusEnum.healthy
+                    )
+                    result["response_time_ms"] = result["response_time_ms"] or rt
+                    result["details"]["healthz_note"] = (
+                        "익명 /healthz 실패 — kubeconfig 인증 프로브 성공(연결성 정상)"
+                    )
+                elif healthz.get("error"):
+                    # 둘 다 실패 — 원인 힌트를 남겨 "왜 미연결인지" 화면에서 판독 가능하게
+                    result["details"]["healthz_note"] = diagnose_connect_error(
+                        cluster.api_endpoint or "(endpoint 미설정)", healthz["error"]
+                    )
+
+            result["status"] = status_
 
         except Exception as e:
             result["details"]["error"] = str(e)

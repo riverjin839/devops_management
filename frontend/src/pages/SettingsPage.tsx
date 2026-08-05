@@ -365,7 +365,12 @@ export function SettingsPage() {
   const [kubeconfigCluster, setKubeconfigCluster] = useState<Cluster | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; detail: string }>>({});
+  const [verifyResults, setVerifyResults] = useState<Record<string, {
+    ok: boolean;
+    status?: string;
+    statusReason?: string | null;
+    checks: { check: string; ok: boolean | null; detail: string }[];
+  }>>({});
   // 클러스터 아이콘 picker — 행의 아이콘 버튼 클릭 시 anchor 좌표 보존.
   const [iconPickerCluster, setIconPickerCluster] = useState<Cluster | null>(null);
   const [iconPickerAnchor, setIconPickerAnchor] = useState<DOMRect | null>(null);
@@ -451,17 +456,26 @@ export function SettingsPage() {
     try {
       const res = await clustersApi.verify(cluster.id);
       const data = res.data;
-      const summary = data.results
-        .map((r) => {
-          const detailStr = typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail ?? '');
-          const label = r.check === 'api_server' ? 'API서버' : r.check === 'kubeconfig_auth' ? '인증' : '노드조회';
-          const mark = r.ok === null ? '건너뜀' : r.ok ? '✓' : '✗';
-          return `${label}: ${mark} ${detailStr}`;
-        })
-        .join(' | ');
-      setVerifyResults((prev) => ({ ...prev, [cluster.id]: { ok: data.ok, detail: summary } }));
+      // 체크별 결과를 그대로 보존 — "healthz OK / kubeconfig 없음" 같은 모순을
+      // 한 줄 요약으로 뭉개지 않고 행 단위로 보여주기 위함.
+      setVerifyResults((prev) => ({
+        ...prev,
+        [cluster.id]: {
+          ok: data.ok,
+          status: data.status,
+          statusReason: data.statusReason,
+          checks: data.results.map((r) => ({
+            check: r.check,
+            ok: r.ok,
+            detail: typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail ?? ''),
+          })),
+        },
+      }));
     } catch {
-      setVerifyResults((prev) => ({ ...prev, [cluster.id]: { ok: false, detail: '연결 확인 실패' } }));
+      setVerifyResults((prev) => ({
+        ...prev,
+        [cluster.id]: { ok: false, checks: [{ check: 'api_server', ok: false, detail: '연결 확인 실패' }] },
+      }));
     } finally {
       setVerifyingId(null);
     }
@@ -931,15 +945,40 @@ export function SettingsPage() {
                         <span className="ml-4">수정일: {formatDateTime(cluster.updatedAt)}</span>
                       )}
                     </div>
-                    {verifyResults[cluster.id] && (
-                      <div className={`text-sm mt-1 px-2 py-1 rounded ${
-                        verifyResults[cluster.id].ok
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : 'bg-red-500/10 text-red-400'
-                      }`}>
-                        {verifyResults[cluster.id].ok ? '✓ 연결 정상' : '✗ 연결 이상'} — {verifyResults[cluster.id].detail}
-                      </div>
-                    )}
+                    {verifyResults[cluster.id] && (() => {
+                      const vr = verifyResults[cluster.id];
+                      const tone = vr.ok
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : vr.status === 'warning'
+                          ? 'bg-amber-500/10 text-amber-500'
+                          : 'bg-red-500/10 text-red-400';
+                      const headline = vr.ok
+                        ? '✓ 연결 정상'
+                        : vr.status === 'warning'
+                          ? '△ 부분 이상 — API 는 도달하지만 kubeconfig 기반 기능(배치잡/점검)이 실패할 상태'
+                          : '✗ 연결 이상';
+                      const CHECK_LABEL: Record<string, string> = {
+                        api_server: 'API 서버 (/healthz)',
+                        kubeconfig_auth: 'kubeconfig 인증',
+                        kubectl_nodes: 'kubectl 노드 조회',
+                      };
+                      return (
+                        <div className={`text-sm mt-1 px-2 py-1.5 rounded ${tone}`}>
+                          <div className="font-medium">{headline}</div>
+                          <ul className="mt-1 space-y-0.5">
+                            {vr.checks.map((c) => (
+                              <li key={c.check} className="flex items-start gap-1.5 text-xs">
+                                <span className="flex-shrink-0 mt-px">
+                                  {c.ok === true ? '✓' : c.ok === false ? '✗' : '—'}
+                                </span>
+                                <span className="flex-shrink-0 font-medium">{CHECK_LABEL[c.check] ?? c.check}</span>
+                                <span className="min-w-0 opacity-80 break-all">{c.detail}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex items-center gap-1">

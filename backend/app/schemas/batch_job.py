@@ -109,6 +109,10 @@ class BatchJobRunResponse(BaseModel):
     error: Optional[str] = None
     # 이 실행에 실제로 사용된 merge 후 파라미터(예: k8s_job_cleanup 의 dry_run) — admin 감사용.
     params_snapshot: Optional[dict[str, Any]] = None
+    # 단계별 실행 trace + 실측 명령 기록 — top-level 클린 필드명으로 노출
+    # (details._steps 류의 `_` 접두 키는 프론트 camelize 인터셉터가 이름을 망가뜨림).
+    steps: Optional[list[dict[str, Any]]] = None
+    commands: Optional[list[dict[str, Any]]] = None
     duration_ms: int = 0
     started_at: datetime
     finished_at: Optional[datetime] = None
@@ -149,6 +153,13 @@ class BatchJobTestConnectionRequest(BaseModel):
     timeout: int = Field(default=8, ge=1, le=30)
 
 
+class BatchJobPreflightCheck(BaseModel):
+    """non-SSH(K8s) 잡 사전 점검의 개별 체크 결과 — /clusters/{id}/verify 와 동일 형태."""
+    check: str
+    ok: Optional[bool] = None  # None = 선행 단계 실패로 확인 불가
+    detail: str = ""
+
+
 class BatchJobTestConnectionResponse(BaseModel):
     status: str  # ok | auth_error | connect_error | timeout | error
     latency_ms: int
@@ -158,6 +169,9 @@ class BatchJobTestConnectionResponse(BaseModel):
     used_saved_password: bool
     used_saved_private_key: bool
     error: Optional[str] = None
+    # ssh: 기존 단일 SSH 연결 검증 / k8s: kubeconfig→kubectl→API→RBAC 단계별 사전 점검
+    mode: str = "ssh"
+    checks: list[BatchJobPreflightCheck] = []
 
 
 class BatchJobTypeDescriptor(BaseModel):
@@ -167,6 +181,8 @@ class BatchJobTypeDescriptor(BaseModel):
     param_schema: dict[str, dict[str, Any]] = {}
     default_params: dict[str, Any] = {}
     requires_ssh: bool = True
+    # 정적 실행 단계 계획 [{"id","label"}] — 실행 전에도 타임라인을 그릴 수 있게.
+    step_plan: list[dict[str, str]] = []
 
 
 class BatchJobTypeListResponse(BaseModel):

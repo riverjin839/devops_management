@@ -5,7 +5,7 @@ import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog, useModalA11y, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { useBatchJobRuns, useStopBatchJob } from '@/hooks/useBatchJobs';
+import { useBatchJobRuns, useBatchJobTypes, useStopBatchJob } from '@/hooks/useBatchJobs';
 import { RunForm } from './BatchJobSlideOver.RunForm';
 import { RunHistory } from './BatchJobSlideOver.RunHistory';
 import { SavedCreds } from './BatchJobSlideOver.SavedCreds';
@@ -26,9 +26,12 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
   const [editOpen, setEditOpen] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
   const runsQ = useBatchJobRuns(job.id);
+  const typesQ = useBatchJobTypes();
   const stopMut = useStopBatchJob();
   const toast = useToast();
   const isRunning = job.lastStatus === 'running';
+  // 잡 타입의 정적 단계 계획 — 실행 전에도 로그 카드에 타임라인을 그린다.
+  const stepPlan = (typesQ.data ?? []).find((t) => t.jobType === job.jobType)?.stepPlan;
 
   const doStop = async () => {
     setConfirmStop(false);
@@ -154,7 +157,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
             <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs uppercase tracking-wider text-muted-foreground">최근 실행 로그</span>
           </div>
-          <BatchJobLogDetail run={runsQ.data![0]} />
+          <BatchJobLogDetail run={runsQ.data![0]} stepPlan={stepPlan} />
         </div>
       )}
 
@@ -164,7 +167,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
           <History className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-xs uppercase tracking-wider text-muted-foreground">실행 이력</span>
         </div>
-        <RunHistory runs={runsQ.data ?? []} isLoading={runsQ.isLoading} />
+        <RunHistory runs={runsQ.data ?? []} isLoading={runsQ.isLoading} stepPlan={stepPlan} />
       </div>
     </MacCard>
   );

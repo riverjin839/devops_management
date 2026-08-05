@@ -23,6 +23,7 @@ from app.models.work_item import WorkItem
 from app.models.user import User
 from app.auth.deps import require_operator
 from app.services.health_checker import HealthChecker
+from app.services.k8s_diagnose import diagnose_connect_error
 from app.services.cluster_purge import purge_cluster_references
 from app.services.config_snapshot import record_cluster_meta_snapshots
 from app.services import audit_logger
@@ -48,6 +49,7 @@ def _kubeconfig_store_path(cluster_id: UUID) -> str:
 from app.services.kubeconfig import (
     save_kubeconfig_content as _save_kubeconfig_content,  # noqa: F401  (호환)
     ensure_kubeconfig_file as _ensure_kubeconfig_file,    # noqa: F401  (호환)
+    resolve_kubeconfig as _resolve_kubeconfig,
 )
 
 
@@ -104,34 +106,12 @@ def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None)
 
 
 def _diagnose_max_retries(kubeconfig_host: str, exc: Exception) -> str:
-    """urllib3 MaxRetryError / ConnectionError 를 사람이 읽을 수 있는 원인 설명으로.
+    """공용 진단 서비스로 이동됨 — 호출부 호환용 thin alias.
 
-    흔한 시나리오:
-    - kubeconfig server URL 이 private IP (예: 10.x / 192.168.x / cluster.local)
-      인데 백엔드 컨테이너 네트워크에서 라우팅 안 됨 → "대상 호스트 도달 불가"
-    - DNS 실패 (FQDN 이 backend resolver 에서 안 풀림)
-    - TLS/인증서 문제 (self-signed CA 가 kubeconfig 에 없거나 잘못)
-    - 방화벽/보안 그룹 차단 (6443 포트 막힘)
+    원인 설명 로직은 배치잡 실행기 등과 공유하기 위해
+    `services/k8s_diagnose.py` 의 `diagnose_connect_error` 로 옮겼다.
     """
-    msg = str(exc).lower()
-    hints: list[str] = []
-    if "name or service not known" in msg or "nodename nor servname" in msg or "temporary failure in name resolution" in msg:
-        hints.append("DNS 해석 실패 — kubeconfig server URL 의 도메인을 backend 컨테이너가 resolve 할 수 있는지 확인")
-    if "connection refused" in msg:
-        hints.append("접속 거부 — 대상 호스트의 API 서버 포트(보통 6443)가 살아있는지, 방화벽이 열려있는지 확인")
-    if "no route to host" in msg or "network is unreachable" in msg:
-        hints.append("라우팅 불가 — kubeconfig server 가 internal IP(10.x/192.168.x/cluster.local)인 경우, backend 컨테이너는 기본적으로 그 네트워크에 접근 못 함. 공용 endpoint 또는 jump host 경유 필요")
-    if "timed out" in msg or "timeout" in msg:
-        hints.append("타임아웃 — 네트워크 경로가 느리거나 중간에 패킷이 버려짐")
-    if "certificate verify failed" in msg or "ssl:" in msg:
-        hints.append("TLS/CA 검증 실패 — kubeconfig 의 certificate-authority-data 가 실제 서버 인증서와 매칭되는지 확인")
-    if "max retries exceeded" in msg and not hints:
-        hints.append("urllib3 재시도 소진 — 네트워크 또는 TLS 설정 점검 필요")
-
-    base = f"kubeconfig 서버({kubeconfig_host}) 에 연결할 수 없습니다."
-    if hints:
-        return base + " 가능한 원인: " + " / ".join(hints)
-    return base + f" 원문: {str(exc)[:200]}"
+    return diagnose_connect_error(kubeconfig_host, exc)
 
 
 def _verify_kubeconfig_auth(api_endpoint: str, kubeconfig_path: str) -> None:
@@ -621,8 +601,9 @@ def verify_cluster(
     except Exception as e:
         results.append({"check": "api_server", "ok": False, "detail": str(e)[:80]})
 
-    # 2. kubeconfig 인증 — 파일이 없으면 DB content 로 재생성 시도
-    kc_path = _ensure_kubeconfig_file(cluster)
+    # 2. kubeconfig 인증 — 파일이 없으면 DB content 로 재생성 시도.
+    # 실패 사유(미등록 / 경로만 등록·워커 미공유 / 재생성 실패)를 그대로 노출한다.
+    kc_path, kc_reason = _resolve_kubeconfig(cluster)
     if kc_path and os.path.exists(kc_path):
         try:
             api_client = k8s_config.new_client_from_config(config_file=kc_path)
@@ -634,7 +615,7 @@ def verify_cluster(
         except Exception as e:
             results.append({"check": "kubeconfig_auth", "ok": False, "detail": str(e)[:80]})
     else:
-        results.append({"check": "kubeconfig_auth", "ok": None, "detail": "kubeconfig 파일 없음"})
+        results.append({"check": "kubeconfig_auth", "ok": None, "detail": kc_reason or "kubeconfig 파일 없음"})
 
     # 3. kubectl get nodes
     if kc_path and os.path.exists(kc_path):
@@ -652,18 +633,39 @@ def verify_cluster(
         except Exception as e:
             results.append({"check": "kubectl_nodes", "ok": False, "detail": str(e)[:80]})
     else:
-        results.append({"check": "kubectl_nodes", "ok": None, "detail": "kubeconfig 파일 없음"})
+        results.append({"check": "kubectl_nodes", "ok": None, "detail": kc_reason or "kubeconfig 파일 없음"})
 
-    overall_ok = all(r["ok"] is True for r in results if r["ok"] is not None)
+    api_ok = next((r["ok"] for r in results if r["check"] == "api_server"), False)
+    overall_ok = all(r["ok"] is True for r in results)
 
     # 연결 확인 결과를 cluster.status 에 반영.
-    # - OK   → healthy
-    # - 실패 → pending (연결 불가. critical 은 "연결은 되는데 addon 이 critical" 을 위해 유지)
-    cluster.status = StatusEnum.healthy if overall_ok else StatusEnum.pending
+    # - 전부 OK           → healthy
+    # - API 도달 불가      → pending (연결 불가. critical 은 "연결은 되는데 addon critical" 전용)
+    # - API 는 되는데 kubeconfig 부재/인증불가 → warning — 예전엔 healthy 로 마킹해
+    #   "클러스터는 연결됨인데 배치잡·점검은 kubeconfig 미등록 에러" 모순이 생겼다.
+    #   kubectl/SDK 를 쓰는 모든 기능이 실패할 상태이므로 미리 warning 으로 드러낸다.
+    if overall_ok:
+        new_status = StatusEnum.healthy
+        status_reason = None
+    elif not api_ok:
+        new_status = StatusEnum.pending
+        status_reason = "API 서버 도달 불가"
+    else:
+        new_status = StatusEnum.warning
+        failing = [r for r in results if r["ok"] is not True]
+        status_reason = " / ".join(f"{r['check']}: {r['detail']}" for r in failing)[:300]
+    cluster.status = new_status
     cluster.updated_at = datetime.utcnow()
     db.commit()
 
-    return {"cluster_id": str(cluster_id), "cluster_name": cluster.name, "ok": overall_ok, "results": results}
+    return {
+        "cluster_id": str(cluster_id),
+        "cluster_name": cluster.name,
+        "ok": overall_ok,
+        "status": new_status.value if hasattr(new_status, "value") else str(new_status),
+        "status_reason": status_reason,
+        "results": results,
+    }
 
 
 # ── 자동 업데이트 (kubeconfig 기반) ───────────────────────────────────────────

@@ -524,11 +524,18 @@ Categories are free-form strings stored in `metric_cards.category`. Current valu
 일반적인 원인(DB/Redis 미기동, 포트 충돌 등)은 로그를 보고 판단한다. 아래는 **로그만 봐서는
 오해하기 쉬운, 이 환경 고유의 함정**이다 — "버그"로 착각하고 고치려 들지 말 것.
 
-### Docker Compose 에서 kubectl 점검이 전부 실패한다 (정상)
+### Docker Compose 에서 kubectl 점검이 실패한다 — 원인은 kubeconfig, kubectl 아님
 
-Compose 의 backend 컨테이너에는 `kubectl` 도 kubeconfig 도 없다. K8s 점검은 클러스터 안에
-배포돼 서비스 어카운트(`k8s/base/backend/serviceaccount.yaml`)를 쓰거나 kubeconfig 볼륨을
-마운트했을 때만 동작한다. 로컬 Compose 에서 실패하는 것은 기대된 동작이다.
+`kubectl` 바이너리는 backend 이미지에 **설치돼 있다**(`backend/Dockerfile` 의
+KUBECTL_VERSION 다운로드 — celery 워커도 같은 이미지). 실패 원인은 kubeconfig 쪽이다:
+Compose 는 kubeconfig 볼륨을 마운트하지 않고, backend/celery 컨테이너가
+`/tmp/k8s-monitor` 를 공유하지 않으므로 **경로만 등록된(=DB `kubeconfig_content` 가 빈)
+클러스터는 워커에서 kubeconfig 를 재구체화하지 못한다**. `/cluster-manage` 에서
+kubeconfig 파일을 업로드해 DB 에 content 로 저장하면 모든 컨테이너에서 동작한다.
+K8s 배포에서는 서비스 어카운트(`k8s/base/backend/serviceaccount.yaml`) 또는
+kubeconfig 시크릿 마운트를 쓴다. 실패 사유는 배치잡 사전 점검(연결 테스트)과
+실행 로그의 kubeconfig 해석 단계에 그대로 표시된다(`services/kubeconfig.py`
+`resolve_kubeconfig`).
 
 ### PromQL 카드가 "offline" 로 뜬다 (로컬에선 정상)
 

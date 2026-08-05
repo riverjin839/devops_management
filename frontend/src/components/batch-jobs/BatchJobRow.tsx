@@ -10,6 +10,22 @@ import { formatApiError } from '@/lib/utils';
 import { useRunBatchJob, useStopBatchJob } from '@/hooks/useBatchJobs';
 import { StatusPill } from './StatusPill';
 import { CronBadge } from './CronBadge';
+import { cronHealth, type CronHealth } from './filters';
+
+// cron 상태 → 행 좌측 보더/hover 배경 색 — 표에서 스크롤만 해도 정상(초록)/
+// 비정상(레드)/중지(회색)/실행 중(블루)이 판독되게 한다. 선택 시엔 primary 유지.
+const ROW_BORDER: Record<CronHealth, string> = {
+  ok: 'border-l-emerald-500/60',
+  failed: 'border-l-red-500/70',
+  running: 'border-l-blue-500/70',
+  stopped: 'border-l-slate-400/50',
+};
+const ROW_HOVER: Record<CronHealth, string> = {
+  ok: 'hover:bg-emerald-500/5',
+  failed: 'hover:bg-red-500/5',
+  running: 'hover:bg-blue-500/5',
+  stopped: 'hover:bg-secondary/50',
+};
 
 interface BatchJobRowProps {
   job: BatchJob;
@@ -67,14 +83,16 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
     }
   };
 
+  const health = cronHealth(job);
+
   return (
     <>
     <tr
       onClick={onClick}
-      className={`cursor-pointer transition-colors ${
+      className={`cursor-pointer transition-colors border-l-[3px] ${
         selected
-          ? 'bg-primary/5 border-l-[3px] border-l-primary'
-          : 'hover:bg-secondary/50 border-l-[3px] border-l-transparent'
+          ? 'bg-primary/5 border-l-primary'
+          : `${ROW_BORDER[health]} ${ROW_HOVER[health]}`
       }`}
     >
       {checkbox && (

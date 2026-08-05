@@ -161,6 +161,9 @@ export interface AuditLogQuery {
   page?: number;
   pageSize?: number;
   action?: string;
+  /** 액션 패밀리 필터 — 'batch_job.' 이면 batch_job.* 전부 (action 과 동시 지정 시 action 우선). */
+  actionPrefix?: string;
+  targetType?: string;
   actorUsername?: string;
   status?: string;
   dateFrom?: string;
@@ -174,6 +177,8 @@ export const auditLogsApi = {
     if (params.page) q.page = params.page;
     if (params.pageSize) q.page_size = params.pageSize;
     if (params.action) q.action = params.action;
+    if (params.actionPrefix) q.action_prefix = params.actionPrefix;
+    if (params.targetType) q.target_type = params.targetType;
     if (params.actorUsername) q.actor_username = params.actorUsername;
     if (params.status) q.status = params.status;
     if (params.dateFrom) q.date_from = params.dateFrom;
@@ -204,7 +209,14 @@ export const clustersApi = {
   updateKubeconfig: (id: string, content: string) =>
     api.put<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`, { content }),
   verify: (id: string) =>
-    api.post<{ ok: boolean; cluster_name: string; results: { check: string; ok: boolean | null; detail: string }[] }>(`/clusters/${id}/verify`),
+    api.post<{
+      ok: boolean;
+      cluster_name: string;
+      /** 반영된 cluster.status — healthy | warning(kubeconfig 부재/인증불가) | pending(API 도달 불가) */
+      status?: string;
+      statusReason?: string | null;
+      results: { check: string; ok: boolean | null; detail: string }[];
+    }>(`/clusters/${id}/verify`),
   autoUpdate: (id: string, opts?: { dryRun?: boolean; signal?: AbortSignal }) =>
     api.post<{
       clusterId: string;
@@ -1734,6 +1746,8 @@ export interface BatchJobTypeDescriptor {
   defaultParams: Record<string, any>;
   /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요 (kubeconfig 로 실행). */
   requiresSsh: boolean;
+  /** 정적 실행 단계 계획 — 실행 전에도 타임라인을 그린다. */
+  stepPlan?: { id: string; label: string }[];
 }
 
 export interface BatchJob {
@@ -1822,9 +1836,23 @@ export interface BatchJobRun {
   /** 이 실행에 실제로 사용된 merge 후 파라미터 스냅샷 (admin 감사용). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   paramsSnapshot?: Record<string, any> | null;
+  /** 단계별 실행 trace — DeepCheckExecStep 과 동일 shape (id/label/status/detail/metrics/startedMs/durationMs). */
+  steps?: import('@/types').DeepCheckExecStep[] | null;
+  /** 실제로 나간 명령 기록 (kind/command/exitCode/durationMs/stdout/stderr/truncated). */
+  commands?: BatchJobCommandTrace[] | null;
   durationMs: number;
   startedAt: string;
   finishedAt?: string | null;
+}
+
+export interface BatchJobCommandTrace {
+  kind: string; // kubectl | ssh
+  command: string;
+  exitCode?: number | null;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  truncated: boolean;
 }
 
 export interface BatchJobTestConnectionRequest {
@@ -1836,6 +1864,12 @@ export interface BatchJobTestConnectionRequest {
   timeout?: number;
 }
 
+export interface BatchJobPreflightCheck {
+  check: string;
+  ok?: boolean | null; // null = 선행 단계 실패로 확인 불가
+  detail: string;
+}
+
 export interface BatchJobTestConnectionResponse {
   status: 'ok' | 'auth_error' | 'connect_error' | 'timeout' | 'error';
   latencyMs: number;
@@ -1845,6 +1879,9 @@ export interface BatchJobTestConnectionResponse {
   usedSavedPassword: boolean;
   usedSavedPrivateKey: boolean;
   error?: string | null;
+  /** ssh: 단일 SSH 검증 / k8s: kubeconfig→kubectl→API→RBAC 단계별 사전 점검 */
+  mode?: 'ssh' | 'k8s';
+  checks?: BatchJobPreflightCheck[];
 }
 
 export interface BatchJobStopResponse {

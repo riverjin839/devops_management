@@ -1590,6 +1590,9 @@ async def provision_work_item(
     # 않으면 건너뛰기 분기를 탄 호출에서 UnboundLocalError 가 난다.
     page_title = ""
     jira_ok = conf_ok = False
+    # conf_ok 는 "이미 연결돼 있어 skip" 도 True 가 되므로, 상호 링크는 이번 호출에서
+    # 실제로 새 페이지를 만든 경우(conf_created)에만 건다 — skip 경로엔 page_title 이 없다.
+    conf_created = False
     # 실패가 "내 인증(토큰/세션)" 문제인지 — 프론트가 재시도 전에 연결 설정 카드를
     # 보여줄지 판단하는 신호. 빈 필드 같은 입력값 문제와는 구분한다.
     jira_auth_issue = confluence_auth_issue = False
