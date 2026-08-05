@@ -53,12 +53,17 @@ def _notif_dict(n: UserNotification) -> dict:
 @router.get("/my")
 def my_notifications(limit: int = 30, db: Session = Depends(get_db),
                      user: User = Depends(get_current_user)):
+    """읽은 알림은 반환하지 않는다 — 벨은 안읽은 알림만 보여주고, 읽음 처리(개별 클릭
+    또는 지우기 버튼)되는 즉시 다음 조회에서 자동으로 빠진다(아이폰 알림센터 방식)."""
     ids = _me_ids(user)
     if not ids:
         return {"data": [], "unread": 0}
-    base = db.query(UserNotification).filter(UserNotification.recipient.in_(ids))
-    rows = base.order_by(desc(UserNotification.created_at)).limit(min(max(limit, 1), 100)).all()
-    unread = base.filter(UserNotification.is_read.is_(False)).count()
+    unread_q = db.query(UserNotification).filter(
+        UserNotification.recipient.in_(ids),
+        UserNotification.is_read.is_(False),
+    )
+    rows = unread_q.order_by(desc(UserNotification.created_at)).limit(min(max(limit, 1), 100)).all()
+    unread = unread_q.count()
     return {"data": [_notif_dict(n) for n in rows], "unread": unread}
 
 

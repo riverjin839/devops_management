@@ -117,6 +117,10 @@ export function WorkAlarmBell() {
     if (n.link) navigate(n.link);
     notificationsApi.markRead(n.id).then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
   };
+  const dismissNotif = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    notificationsApi.markRead(id).then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
+  };
   const markAllNotif = () => {
     notificationsApi.markAllRead().then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
   };
@@ -225,18 +229,28 @@ export function WorkAlarmBell() {
                       )}
                     </div>
                     {notifications.map((n) => (
-                      <button
-                        key={n.id}
-                        type="button"
-                        onClick={() => openNotif(n)}
-                        className={`w-full text-left px-3 py-2 border-b border-border/40 hover:bg-secondary/40 transition-colors ${n.isRead ? '' : 'bg-status-info/[0.04]'}`}
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-status-info flex-shrink-0" />}
-                          <span className="text-sm font-medium truncate">{n.title}</span>
-                        </div>
-                        {n.body && <p className="text-xs text-muted-foreground truncate mt-0.5">{n.body}</p>}
-                      </button>
+                      <div key={n.id} className="relative group border-b border-border/40 bg-status-info/[0.04]">
+                        <button
+                          type="button"
+                          onClick={() => openNotif(n)}
+                          className="w-full text-left px-3 py-2 pr-7 hover:bg-secondary/40 transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-status-info flex-shrink-0" />
+                            <span className="text-sm font-medium truncate">{n.title}</span>
+                          </div>
+                          {n.body && <p className="text-xs text-muted-foreground truncate mt-0.5">{n.body}</p>}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => dismissNotif(e, n.id)}
+                          title="지우기"
+                          aria-label="알림 지우기"
+                          className="absolute top-1.5 right-1.5 p-0.5 rounded text-muted-foreground/60 hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     ))}
                   </>
                 )}
