@@ -7,6 +7,7 @@ export { IncidentAnalysisPanel } from './IncidentAnalysisPanel';
 export { useModalA11y } from './useModalA11y';
 export { LogViewer } from './LogViewer';
 export { ExecOutputTabs } from './ExecOutputTabs';
+export { CommandTraceList } from './CommandTraceList';
 export { ClusterSidebar } from './ClusterSidebar';
 export { ServiceSidebar } from './ServiceSidebar';
 export { ClusterIconPicker } from './ClusterIconPicker';

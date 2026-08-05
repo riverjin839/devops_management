@@ -10,6 +10,10 @@
 
 1.23.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **K8s 인증서 만료 점검(`cert_expiry`) — kube-apiserver 가 distroless 인 클러스터에서 상세로그 없이 실패하던 문제**: kubeadm 클러스터의 최신 apiserver 이미지는 셸/`kubeadm` 바이너리가 없는 distroless 라 `kubectl exec ... kubeadm certs check-expiration` 이 항상 실패하는데, 실행 단계·명령·stderr 가 전혀 기록되지 않아 점검 수행로그만 봐서는 원인을 알 수 없었다. `etcd_defrag` 와 동일한 `source: auto|pod|snapshot` 패턴을 적용해 (1) 각 단계(파드 탐색·`kubeadm` 실행·파싱·판정)를 실시간 타임라인으로 노출하고 실패 시 stderr 요약을 단계 상세에 남기며, (2) `source=auto`(기본값) 는 파드 실행 실패 시 `/versions` 화면에서 SSH 로 수집해둔 `kubeadm certs check-expiration` 스냅샷으로 자동 폴백한다. Backend: `POST /api/v1/versions/{cluster_id}/collect-kubeadm-certs`(요청 시에만 SSH 자격증명 사용, 미저장) + `cert_expiry_checker.py` 재작성 + `registry.py` 에 `source`/`snapshot_max_age_hours` params 노출(UI 편집 가능). Frontend: `/versions` 툴바에 "K8s 인증서(kubeadm)" 수집 모달 추가.
+- **노드 일괄 실행 — "다른 노드에서 불러오기" 연결 실패 시 상세로그 없이 에러 메시지만 보이던 문제**(`/bulk-exec`): SCP 로 원격 파일을 읽어오는 `fetch_remote_file` 이 접속·stat·read 각 단계를 추적하지 않아, 실패해도 어느 단계(접속/경로 확인/읽기)에서 왜 멈췄는지 화면에서 알 수 없었다. 이제 딥체크와 동일한 단계별 실시간 타임라인(`ExecutionStepsTimeline`)과 명령 추적(`CommandTraceList`)을 결과 영역에 표시한다. `CommandTraceList` 를 batch-jobs 전용 로컬 컴포넌트에서 `components/common/` 공용 컴포넌트로 추출해 재사용.
+
 ## [1.23.0] - 2026-08-05
 
 ### Added

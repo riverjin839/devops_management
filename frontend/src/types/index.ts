@@ -1998,6 +1998,30 @@ export interface EtcdSystemdCollectResponse {
   errors: string[];
 }
 
+// ── kubeadm 인증서 만료 수집 (Ops Checks cert_expiry 의 snapshot 경로용) ────────
+export interface KubeadmCertsCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+}
+
+export interface KubeadmCertsPerHost {
+  host: string;
+  stored?: boolean;
+  error?: string | null;
+}
+
+export interface KubeadmCertsCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: KubeadmCertsPerHost[];
+  errors: string[];
+}
+
 // ── kernel params / etcdctl config 수집 ─────────────────────────────
 export interface KernelParamsCollectRequest {
   hosts: string[];

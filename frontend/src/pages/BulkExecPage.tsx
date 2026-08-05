@@ -7,10 +7,11 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, CommandTraceList, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ExecutionStepsTimeline } from '@/components/daily-check';
 import { SavedScriptPanel } from '@/components/bulk-exec';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
-import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
+import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem, type FetchFileResponse } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 import type { ScriptLanguage } from '@/types';
 
@@ -632,6 +633,8 @@ export function BulkExecPage() {
   const [fetchSourceKey, setFetchSourceKey] = useState('');
   const [fetchRemotePath, setFetchRemotePath] = useState('');
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // 마지막 시도의 단계별 trace — 성공/실패 무관하게 "무엇을 시도했는지" 항상 보여준다.
+  const [fetchTrace, setFetchTrace] = useState<FetchFileResponse | null>(null);
 
   const fetchFileMutation = useAbortableMutation({
     mutationFn: async (_: void, signal) => {
@@ -650,6 +653,7 @@ export function BulkExecPage() {
       return res.data;
     },
     onSuccess: (data) => {
+      setFetchTrace(data);
       if (data.status === 'ok') {
         setScpContent(data.content);
         setFetchError(null);
@@ -657,7 +661,7 @@ export function BulkExecPage() {
         setFetchError(data.error || '파일을 불러오지 못했습니다.');
       }
     },
-    onError: (err) => setFetchError(formatApiError(err)),
+    onError: (err) => { setFetchError(formatApiError(err)); setFetchTrace(null); },
   });
 
   const canRun =
@@ -1012,6 +1016,12 @@ export function BulkExecPage() {
                       {fetchError && (
                         <p className="text-xs text-status-critical">{fetchError}</p>
                       )}
+                      {fetchTrace && (fetchTrace.steps?.length || fetchTrace.commands?.length) ? (
+                        <div className="pt-1 border-t border-border space-y-2">
+                          <ExecutionStepsTimeline steps={fetchTrace.steps} />
+                          <CommandTraceList commands={fetchTrace.commands ?? []} />
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </div>

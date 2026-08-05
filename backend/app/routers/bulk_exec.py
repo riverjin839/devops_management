@@ -221,13 +221,16 @@ async def bulk_exec_fetch_file(
         host=payload.host, port=payload.port, username=payload.username,
         password=payload.password, private_key=payload.private_key,
     )
-    result = await asyncio.to_thread(
+    fetched = await asyncio.to_thread(
         fetch_remote_file, target, payload.remote_path, payload.connect_timeout,
     )
+    result = fetched.result
     return FetchFileResponse(
         host=result.host,
         status=result.status,
         content=result.stdout,
         size=len(result.stdout.encode("utf-8")) if result.status == "ok" else 0,
         error=result.error,
+        steps=fetched.steps,
+        commands=fetched.commands,
     )

@@ -113,14 +113,33 @@ def _p(params: dict[str, Any], key: str, default: Any = "") -> Any:
 
 def _deep_check_commands(check_type: str, params: dict[str, Any]) -> list[dict[str, Any]]:
     if check_type == "cert_expiry":
-        return [
+        source = str(_p(params, "source", "auto")).lower()
+        pod_cmds = [
             _cmd(KIND_K8S_API,
                  "list_namespaced_pod(kube-system, label_selector=component=kube-apiserver)",
-                 "Running 상태인 apiserver 파드 1개를 exec 대상으로 고른다."),
+                 "Running 상태인 apiserver 파드 1개를 exec 대상으로 고른다"
+                 + (" — 없으면 아래 수집 스냅샷으로 폴백한다." if source == "auto"
+                    else " — 없으면 대기(pending) 처리.")),
             _cmd(KIND_KUBECTL,
                  "kubectl -n kube-system exec <apiserver-pod> -- kubeadm certs check-expiration",
-                 "컨트롤 플레인 인증서 잔여일 출력을 파싱한다. exec 권한이나 kubeadm 이 없으면 대기(pending)."),
+                 "컨트롤 플레인 인증서 잔여일 출력을 파싱한다. kube-apiserver 공식 이미지는 "
+                 "distroless(쉘/kubeadm 바이너리 없음)라 실패하는 경우가 흔하다"
+                 + (" — 실패하면 아래 수집 스냅샷으로 폴백한다." if source == "auto"
+                    else " — 실패하면 대기(pending) 처리.")),
         ]
+        snap_cmds = [
+            _cmd(KIND_DB,
+                 "SELECT … FROM cluster_config_snapshots WHERE component LIKE 'kubeadm_certs:%'",
+                 "'버전 / 설정 관리(/versions)' 화면의 'K8s 인증서(kubeadm)' 버튼으로 SSH 수집해 둔 "
+                 "kubeadm certs check-expiration 출력 스냅샷(호스트별 최신)을 파싱한다. "
+                 f"수집 시각이 {_p(params, 'snapshot_max_age_hours', 24)}시간보다 오래되면 대기 처리. "
+                 "체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다."),
+        ]
+        if source == "pod":
+            return pod_cmds
+        if source == "snapshot":
+            return snap_cmds
+        return pod_cmds + snap_cmds
     if check_type == "etcd_defrag":
         source = str(_p(params, "source", "auto")).lower()
         pod_cmds = [

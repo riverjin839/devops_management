@@ -1009,6 +1009,96 @@ def collect_etcdctl_config(
     }
 
 
+# ── kubeadm 인증서 만료 수집 (Ops Checks cert_expiry 의 snapshot 경로용) ─────────
+
+class KubeadmCertsCollectRequest(BaseModel):
+    """컨트롤 플레인 인증서 잔여일을 호스트에서 직접 확인해 스냅샷 저장.
+
+    kube-apiserver 파드 이미지는 distroless(쉘조차 없음)라 ``kubectl exec`` 로는
+    호스트에 설치된 ``kubeadm`` 바이너리를 실행할 수 없다 — 그래서 이 체크는
+    etcd_defrag 의 데몬(systemd) 경로와 마찬가지로 SSH 로 호스트에서 직접 확인한다.
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = True
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+
+
+@router.post("/{cluster_id}/collect-kubeadm-certs")
+def collect_kubeadm_certs(
+    cluster_id: UUID,
+    payload: KubeadmCertsCollectRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """``kubeadm certs check-expiration`` 을 컨트롤 플레인 호스트에서 SSH 로 실행해
+    스냅샷 저장. Ops Checks 의 `cert_expiry` 체커가 `source=snapshot`(또는 auto 폴백)
+    일 때 이 스냅샷(component=`kubeadm_certs:{host}`)을 읽는다. 자격증명은 이
+    요청에만 존재하고 저장되지 않는다."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+    now = datetime.utcnow()
+    sudo = "sudo -n " if payload.use_sudo else ""
+
+    changed = 0
+    per_host: list[dict] = []
+    errors: list[str] = []
+
+    for host in payload.hosts:
+        target = SSHTarget(
+            host=host, port=payload.port, username=payload.username,
+            password=payload.password, private_key=payload.private_key,
+        )
+        r = _exec_ssh(
+            target, f"{sudo}kubeadm certs check-expiration",
+            connect_timeout=payload.connect_timeout, exec_timeout=20,
+        )
+        entry: dict = {"host": host}
+        if r.status != "ok" or not (r.stdout or "").strip():
+            entry["error"] = r.error or "kubeadm certs check-expiration 실패 (kubeadm 미설치 또는 권한 부족)"
+            errors.append(f"{host}: {entry['error']}")
+            per_host.append(entry)
+            continue
+
+        data = {
+            "host": host,
+            "check_expiration_output": r.stdout,
+            "collected_at": now.isoformat(),
+        }
+        stored = _store_if_changed(
+            db, cluster_id,
+            component=f"kubeadm_certs:{host}",
+            category="k8s",
+            version=None,
+            data=data,
+            now=now,
+        )
+        entry["stored"] = stored
+        if stored:
+            changed += 1
+        per_host.append(entry)
+
+    if changed:
+        db.commit()
+
+    return {
+        "cluster_id": str(cluster_id),
+        "changed": changed,
+        "hosts": per_host,
+        "errors": errors,
+    }
+
+
 @router.get("/{cluster_id}/versions/current")
 def get_current_versions(cluster_id: UUID, db: Session = Depends(get_db)):
     """각 component 별 가장 최근 스냅샷 반환."""
