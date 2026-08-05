@@ -3,7 +3,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   Terminal, RefreshCw, Play, Square, CheckCircle, XCircle, Key, Upload, ChevronDown, ChevronRight,
-  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server,
+  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server, FolderInput, Loader2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
@@ -567,6 +567,23 @@ export function BulkExecPage() {
     return Array.from(byKey.values());
   }, [selected, clusterSections]);
 
+  // SCP "다른 노드에서 불러오기" 원본 후보 — 선택 여부와 무관하게, 현재 화면에 로드된
+  // (클러스터 사이드바에서 체크한) 모든 노드를 대상으로 한다. 업로드 대상(selectedHosts)과는
+  // 별개 목적이라 굳이 노드 선택 여부에 종속시키지 않는다.
+  const knownNodes = useMemo(() => {
+    const list: { key: string; label: string; host: string }[] = [];
+    for (const sec of clusterSections) {
+      for (const n of sec.nodes) {
+        list.push({
+          key: makeKey(sec.clusterId, n.name),
+          label: `${n.name} @ ${sec.clusterName}`,
+          host: n.internalIp || n.name,
+        });
+      }
+    }
+    return list;
+  }, [clusterSections]);
+
   const [runResponse, setRunResponse] = useState<BulkExecResponse | null>(null);
 
   const runMutation = useAbortableMutation({
@@ -600,6 +617,39 @@ export function BulkExecPage() {
       return res.data;
     },
     onSuccess: (data) => setRunResponse(data),
+  });
+
+  // SCP "다른 노드에서 불러오기"
+  const [remoteFetchOpen, setRemoteFetchOpen] = useState(false);
+  const [fetchSourceKey, setFetchSourceKey] = useState('');
+  const [fetchRemotePath, setFetchRemotePath] = useState('');
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const fetchFileMutation = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
+      const node = knownNodes.find((n) => n.key === fetchSourceKey);
+      if (!node) throw new Error('불러올 노드를 선택하세요.');
+      if (!fetchRemotePath.trim()) throw new Error('원격 파일 경로를 입력하세요.');
+      const res = await bulkExecApi.fetchFile({
+        host: node.host,
+        port,
+        username,
+        password: authMode === 'password' ? password : undefined,
+        privateKey: authMode === 'key' ? privateKey : undefined,
+        remotePath: fetchRemotePath.trim(),
+        connectTimeout,
+      }, signal);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      if (data.status === 'ok') {
+        setScpContent(data.content);
+        setFetchError(null);
+      } else {
+        setFetchError(data.error || '파일을 불러오지 못했습니다.');
+      }
+    },
+    onError: (err) => setFetchError(formatApiError(err)),
   });
 
   const canRun =
@@ -871,7 +921,7 @@ export function BulkExecPage() {
                     rows={4}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                   />
-                  <div className="mt-1 flex items-center gap-1.5">
+                  <div className="mt-1 flex items-center gap-3 flex-wrap">
                     <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                       <Upload className="w-3 h-3" /> 파일에서 불러오기
                       <input
@@ -888,7 +938,63 @@ export function BulkExecPage() {
                         }}
                       />
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => setRemoteFetchOpen((v) => !v)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <FolderInput className="w-3 h-3" /> 다른 노드에서 불러오기
+                    </button>
                   </div>
+
+                  {remoteFetchOpen && (
+                    <div className="mt-2 p-2.5 bg-secondary/30 border border-border rounded-lg space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <label htmlFor={f('fetchSrc')} className="block text-xs text-muted-foreground mb-1">원본 노드</label>
+                          <select
+                            id={f('fetchSrc')}
+                            value={fetchSourceKey}
+                            onChange={(e) => setFetchSourceKey(e.target.value)}
+                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            <option value="">노드를 선택하세요</option>
+                            {knownNodes.map((n) => (
+                              <option key={n.key} value={n.key}>{n.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor={f('fetchPath')} className="block text-xs text-muted-foreground mb-1">원격 파일 경로</label>
+                          <input
+                            id={f('fetchPath')}
+                            type="text"
+                            value={fetchRemotePath}
+                            onChange={(e) => setFetchRemotePath(e.target.value)}
+                            placeholder="/etc/hosts"
+                            className="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-muted-foreground/70">
+                          위 인증 정보(사용자/포트/비밀번호|키)를 그대로 사용해 텍스트 파일을 읽어옵니다.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => fetchFileMutation.mutate()}
+                          disabled={fetchFileMutation.isPending || !fetchSourceKey || !fetchRemotePath.trim()}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                        >
+                          {fetchFileMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderInput className="w-3 h-3" />}
+                          불러오기
+                        </button>
+                      </div>
+                      {fetchError && (
+                        <p className="text-xs text-status-critical">{fetchError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label htmlFor={f('scpPath')} className="block text-sm text-muted-foreground mb-1">원격 경로</label>
