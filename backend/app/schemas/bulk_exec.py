@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -104,3 +104,7 @@ class FetchFileResponse(BaseModel):
     content: str = ""
     size: int = 0
     error: Optional[str] = None
+    # 어느 단계(연결/파일확인/읽기)에서 무엇을 시도했는지 — 연결 실패 시 "왜"를
+    # 화면에서 바로 보여주기 위함. batch_job 실행 추적(steps/commands)과 동일 shape.
+    steps: list[dict[str, Any]] = []
+    commands: list[dict[str, Any]] = []

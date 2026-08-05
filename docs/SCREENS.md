@@ -549,18 +549,19 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 버전 / 설정 관리 (`/versions`)
 
-- **파일**: `frontend/src/pages/VersionsPage.tsx` (+ `components/versions/EtcdSystemdModal.tsx`, `KernelParamsCollectModal.tsx`, `NodeNicsCollectModal.tsx`, `KubeletConfigCollectModal.tsx`, `CsvExportModal.tsx`)
-- **목적 / UX**: kubeconfig(+ SSH)로 클러스터의 K8s/Cilium 버전, 컨트롤플레인·kubelet·CNI·OS(sysctl/etcd systemd)·MinIO/DirectPV 스토리지 설정을 스냅샷으로 수집하고, 컴포넌트별 현재값·변경 히스토리·diff를 확인한다. 운영자가 "언제 무엇이 바뀌었는지" 추적하는 감사 성격의 화면.
+- **파일**: `frontend/src/pages/VersionsPage.tsx` (+ `components/versions/EtcdSystemdModal.tsx`, `KubeadmCertsModal.tsx`, `KernelParamsCollectModal.tsx`, `NodeNicsCollectModal.tsx`, `KubeletConfigCollectModal.tsx`, `CsvExportModal.tsx`)
+- **목적 / UX**: kubeconfig(+ SSH)로 클러스터의 K8s/Cilium 버전, 컨트롤플레인·kubelet·CNI·OS(sysctl/etcd systemd/kubeadm 인증서)·MinIO/DirectPV 스토리지 설정을 스냅샷으로 수집하고, 컴포넌트별 현재값·변경 히스토리·diff를 확인한다. 운영자가 "언제 무엇이 바뀌었는지" 추적하는 감사 성격의 화면.
 - **UI 구성**:
   - `ClusterSidebar` 단일 선택(`iconOnly`)
-  - 헤더 액션: `3D 그래프` 링크(`/versions/:clusterId/graph`), CSV 내보내기, etcd(systemd)/kubelet config/커널 파라미터/노드 NIC SSH 수집 모달 4개, MinIO 수집, "지금 수집"(kubeconfig 기반, 중지 가능)
-  - 컴포넌트를 카테고리(`control_plane`/`cni`/`kubelet`/`os`/`storage`/`other`)별 접기 섹션으로 그룹핑, 각 항목 펼치면 현재값(모듈별 전용 디테일: MinIO Tenant/DirectPV/kernel sysctl/etcd systemd/kubelet config) + 히스토리 타임라인(최대 2개 선택해 diff 자동 표시)
+  - 헤더 액션: `3D 그래프` 링크(`/versions/:clusterId/graph`), CSV 내보내기, etcd(systemd)/**K8s 인증서(kubeadm)**/kubelet config/커널 파라미터/노드 NIC SSH 수집 모달 5개, MinIO 수집, "지금 수집"(kubeconfig 기반, 중지 가능)
+  - 컴포넌트를 카테고리(`control_plane`/`cni`/`kubelet`/`os`/`storage`/`other`)별 접기 섹션으로 그룹핑, 각 항목 펼치면 현재값(모듈별 전용 디테일: MinIO Tenant/DirectPV/kernel sysctl/etcd systemd/kubelet config, kubeadm_certs 는 원시 필드 fallback) + 히스토리 타임라인(최대 2개 선택해 diff 자동 표시)
   - 노드/컴포넌트/버전/config 경로 통합 검색
-- **Frontend**: `useClusters()`, 순수 `useQuery(['versions','current',clusterId])`(`versionsApi.current`), `useQuery(['versions','history',...])`(`versionsApi.history`), `useQuery(['versions','diff',...])`(`versionsApi.diff`) — 별도 훅 파일 없이 `VersionsPage.tsx`/`VersionGraphPage.tsx` 내부에 인라인. Mutation은 `useAbortableMutation`으로 `versionsApi.collect`, `.collectMinio` 등. 호출 함수: `versionsApi.{current,history,diff,collect,collectMinio,collectEtcdSystemd,collectKernelParams,collectKubeletConfig,collectNodeNics,exportCsv}`.
-- **Backend**: `POST /api/v1/clusters/{id}/collect-versions`, `POST .../collect-etcd-systemd`, `POST .../collect-kernel-params`, `POST .../collect-kubelet-config`, `POST .../collect-etcdctl-config`, `POST .../collect-node-nics`, `POST .../collect-minio`, `GET .../versions/current`, `GET .../versions/history`, `GET .../versions/diff`, `GET .../versions/export.csv` — `backend/app/routers/versions.py`. DB 모델은 `ClusterConfigSnapshot`(`backend/app/models/config_snapshot.py`, `cluster_config_snapshots` 테이블) — 동일 `component`에 대해 `content_hash`가 바뀔 때만 새 행 추가(히스토리 누적), `data` JSONB에 image/flags/configmap/host별 원시 데이터 저장.
+- **Frontend**: `useClusters()`, 순수 `useQuery(['versions','current',clusterId])`(`versionsApi.current`), `useQuery(['versions','history',...])`(`versionsApi.history`), `useQuery(['versions','diff',...])`(`versionsApi.diff`) — 별도 훅 파일 없이 `VersionsPage.tsx`/`VersionGraphPage.tsx` 내부에 인라인. Mutation은 `useAbortableMutation`으로 `versionsApi.collect`, `.collectMinio` 등. 호출 함수: `versionsApi.{current,history,diff,collect,collectMinio,collectEtcdSystemd,collectKubeadmCerts,collectKernelParams,collectKubeletConfig,collectNodeNics,exportCsv}`.
+- **Backend**: `POST /api/v1/clusters/{id}/collect-versions`, `POST .../collect-etcd-systemd`, `POST .../collect-kernel-params`, `POST .../collect-kubelet-config`, `POST .../collect-etcdctl-config`, `POST .../collect-kubeadm-certs`, `POST .../collect-node-nics`, `POST .../collect-minio`, `GET .../versions/current`, `GET .../versions/history`, `GET .../versions/diff`, `GET .../versions/export.csv` — `backend/app/routers/versions.py`. DB 모델은 `ClusterConfigSnapshot`(`backend/app/models/config_snapshot.py`, `cluster_config_snapshots` 테이블) — 동일 `component`에 대해 `content_hash`가 바뀔 때만 새 행 추가(히스토리 누적), `data` JSONB에 image/flags/configmap/host별 원시 데이터 저장.
 - **핵심 기능**:
   - kubeconfig 기반 컴포넌트 버전/플래그/ConfigMap 자동 수집 (변경 시에만 히스토리 적재)
-  - SSH 기반 보조 수집: etcd systemd config, kubelet 실사용 config, 커널 sysctl, 노드 NIC, MinIO/DirectPV
+  - SSH 기반 보조 수집: etcd systemd config, **kubeadm 인증서 만료(`kubeadm certs check-expiration`)**, kubelet 실사용 config, 커널 sysctl, 노드 NIC, MinIO/DirectPV
+  - kubeadm 인증서 스냅샷(`kubeadm_certs:{host}`)은 Ops Checks의 `cert_expiry` 점검이 `source=snapshot`(또는 auto 폴백)일 때 읽는다 — kube-apiserver 파드가 distroless 라 kubectl exec 로는 확인 불가한 환경 대응
   - 컴포넌트별 히스토리 타임라인 + 2-스냅샷 diff 뷰
   - CSV 내보내기(디테일 레벨 선택), 3D 관계 그래프로 이동
 - **요청사항 (수정 요청)**:

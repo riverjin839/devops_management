@@ -12,7 +12,7 @@ import io
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Any, Literal, Optional
 
 import paramiko
@@ -282,84 +282,168 @@ def _exec_scp_push(tgt: SSHTarget, local_content: bytes, remote_path: str,
 FETCH_FILE_MAX_BYTES = 2 * 1024 * 1024  # 2MB
 
 
+_FETCH_OUTPUT_EXCERPT_CHARS = 2000
+
+
+@dataclass
+class FetchFileResult:
+    """`fetch_remote_file` 반환값 — 최종 결과(SSHResult) + 어느 단계에서 무엇을
+    시도했는지(steps/commands, batch_jobs 의 ExecutionStep/_record_command 와 동일
+    shape). 연결 실패처럼 "왜 실패했는지" 가 중요한 호출에서 화면에 단계별로
+    보여주기 위한 것 — 실패해도 지금까지의 steps/commands 는 그대로 채워져 있다."""
+    result: SSHResult
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    commands: list[dict[str, Any]] = field(default_factory=list)
+
+
 def fetch_remote_file(tgt: SSHTarget, remote_path: str, connect_timeout: int,
-                      max_bytes: int = FETCH_FILE_MAX_BYTES) -> SSHResult:
-    """다른 노드에 이미 있는 텍스트 파일을 읽어와 SSHResult.stdout 에 담아 반환(SCP pull).
+                      max_bytes: int = FETCH_FILE_MAX_BYTES) -> FetchFileResult:
+    """다른 노드에 이미 있는 텍스트 파일을 읽어와 반환(SCP pull, `_exec_scp_push` 의 대칭).
 
     SCP 업로드 내용 입력을 채우는 용도라 UTF-8 텍스트만 지원 — 바이너리/디코드
-    실패·용량 초과는 error 로 처리한다(그대로 화면에 보여줄 수 없으므로).
+    실패·용량 초과는 error 로 처리한다(그대로 화면에 보여줄 수 없으므로). "연결
+    실패인데 이유를 알 수 없다"는 문제를 막기 위해 연결/파일확인/읽기 3단계를
+    각각 batch_jobs 와 동일한 step/command 로그로 남긴다(deep_checkers 패턴 이식,
+    이 모듈은 batch_jobs 를 import 하지 않으므로 절차적으로 복사).
     """
-    start = time.monotonic()
+    run_start = time.time()
+    steps: list[dict[str, Any]] = []
+    commands: list[dict[str, Any]] = []
+
+    def add_step(step_id: str, label: str, status: str, detail: str, t0: float,
+                 metrics: Optional[dict[str, Any]] = None) -> None:
+        steps.append({
+            "id": step_id, "label": label, "status": status, "detail": detail,
+            "metrics": metrics or {},
+            "started_ms": int((t0 - run_start) * 1000),
+            "duration_ms": int((time.time() - t0) * 1000),
+        })
+
+    def add_command(kind: str, command: str, t0: float, *,
+                     exit_code: Optional[int], stdout: str = "", stderr: str = "") -> None:
+        commands.append({
+            "kind": kind, "command": command, "exit_code": exit_code,
+            "duration_ms": int((time.time() - t0) * 1000),
+            "stdout": (stdout or "")[:_FETCH_OUTPUT_EXCERPT_CHARS],
+            "stderr": (stderr or "")[:_FETCH_OUTPUT_EXCERPT_CHARS],
+            "truncated": len(stdout or "") > _FETCH_OUTPUT_EXCERPT_CHARS,
+        })
+
+    def failure(status: str, error: str) -> FetchFileResult:
+        return FetchFileResult(
+            result=SSHResult(
+                host=tgt.host, status=status, exit_code=None, stdout="", stderr="",
+                duration_ms=int((time.time() - run_start) * 1000), error=error,
+            ),
+            steps=steps, commands=commands,
+        )
+
+    # ── 1) 연결 ─────────────────────────────────────────────────────────
     client: Optional[paramiko.SSHClient] = None
+    conn_label = f"{tgt.username}@{tgt.host}:{tgt.port}"
+    conn_cmd = f"ssh {conn_label}"
+    t0 = time.time()
     try:
         client = _build_client(tgt, connect_timeout)
-        sftp = client.open_sftp()
-        try:
-            try:
-                st = sftp.stat(remote_path)
-            except IOError as e:
-                return SSHResult(
-                    host=tgt.host, status="error", exit_code=None,
-                    stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-                    error=f"파일을 찾을 수 없거나 읽을 권한이 없습니다: {str(e)[:150]}",
-                )
-            size = st.st_size or 0
-            if size > max_bytes:
-                return SSHResult(
-                    host=tgt.host, status="error", exit_code=None,
-                    stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-                    error=f"파일이 너무 큽니다 ({size:,} bytes, 최대 {max_bytes:,} bytes).",
-                )
-            with sftp.file(remote_path, "rb") as rf:
-                raw = rf.read()
-        finally:
-            sftp.close()
-
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            return SSHResult(
-                host=tgt.host, status="error", exit_code=None,
-                stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-                error="텍스트(UTF-8) 파일만 불러올 수 있습니다.",
-            )
-        return SSHResult(
-            host=tgt.host, status="ok", exit_code=0,
-            stdout=text, stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-            error=None,
-        )
+        add_step("connect", "SSH 연결", "success", conn_label, t0)
+        add_command("ssh", conn_cmd, t0, exit_code=0)
     except paramiko.AuthenticationException as e:
-        return SSHResult(
-            host=tgt.host, status="auth_error", exit_code=None,
-            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-            error=f"인증 실패: {str(e)[:120]}",
-        )
+        add_step("connect", "SSH 연결", "failed", f"인증 실패: {str(e)[:150]}", t0)
+        add_command("ssh", conn_cmd, t0, exit_code=None, stderr=str(e))
+        return failure("auth_error", f"인증 실패: {str(e)[:120]}")
     except (paramiko.SSHException, OSError, TimeoutError) as e:
         msg = str(e).lower()
         status = "timeout" if "timeout" in msg or "timed out" in msg else "connect_error"
-        return SSHResult(
-            host=tgt.host, status=status, exit_code=None,
-            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-            error=f"연결 실패: {str(e)[:120]}",
-        )
+        add_step("connect", "SSH 연결", "failed", f"연결 실패: {str(e)[:150]}", t0)
+        add_command("ssh", conn_cmd, t0, exit_code=None, stderr=str(e))
+        return failure(status, f"연결 실패: {str(e)[:120]}")
     except ValueError as e:
-        return SSHResult(
-            host=tgt.host, status="auth_error", exit_code=None,
-            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-            error=str(e)[:200],
-        )
+        add_step("connect", "SSH 연결", "failed", str(e)[:150], t0)
+        add_command("ssh", conn_cmd, t0, exit_code=None, stderr=str(e))
+        return failure("auth_error", str(e)[:200])
     except Exception as e:
-        return SSHResult(
-            host=tgt.host, status="error", exit_code=None,
-            stdout="", stderr="", duration_ms=int((time.monotonic() - start) * 1000),
-            error=str(e)[:200],
-        )
-    finally:
-        if client is not None:
-            try:
-                client.close()
-            except Exception:
-                pass
+        add_step("connect", "SSH 연결", "failed", str(e)[:150], t0)
+        add_command("ssh", conn_cmd, t0, exit_code=None, stderr=str(e))
+        return failure("error", str(e)[:200])
+
+    # ── 2) 원격 파일 확인 ────────────────────────────────────────────────
+    stat_cmd = f"sftp stat {remote_path}"
+    t0 = time.time()
+    try:
+        sftp = client.open_sftp()
+        st = sftp.stat(remote_path)
+    except IOError as e:
+        add_step("stat", "원격 파일 확인", "failed",
+                 f"경로를 찾을 수 없거나 읽을 권한이 없습니다: {str(e)[:150]}", t0)
+        add_command("sftp", stat_cmd, t0, exit_code=None, stderr=str(e))
+        try:
+            client.close()
+        except Exception:
+            pass
+        return failure("error", f"파일을 찾을 수 없거나 읽을 권한이 없습니다: {str(e)[:150]}")
+    except Exception as e:
+        add_step("stat", "원격 파일 확인", "failed", str(e)[:150], t0)
+        add_command("sftp", stat_cmd, t0, exit_code=None, stderr=str(e))
+        try:
+            client.close()
+        except Exception:
+            pass
+        return failure("error", str(e)[:200])
+
+    size = st.st_size or 0
+    add_step("stat", "원격 파일 확인", "success", f"{remote_path} ({size:,} bytes)", t0, {"size_bytes": size})
+    add_command("sftp", stat_cmd, t0, exit_code=0, stdout=f"{size} bytes")
+
+    # ── 3) 읽기 ─────────────────────────────────────────────────────────
+    read_cmd = f"sftp get {remote_path}"
+    t0 = time.time()
+    if size > max_bytes:
+        detail = f"파일이 너무 큽니다 ({size:,} bytes, 최대 {max_bytes:,} bytes)."
+        add_step("read", "파일 읽기", "failed", detail, t0)
+        add_command("sftp", read_cmd, t0, exit_code=None, stderr=detail)
+        try:
+            sftp.close()
+            client.close()
+        except Exception:
+            pass
+        return failure("error", detail)
+
+    try:
+        with sftp.file(remote_path, "rb") as rf:
+            raw = rf.read()
+    except Exception as e:
+        add_step("read", "파일 읽기", "failed", str(e)[:150], t0)
+        add_command("sftp", read_cmd, t0, exit_code=None, stderr=str(e))
+        try:
+            sftp.close()
+            client.close()
+        except Exception:
+            pass
+        return failure("error", str(e)[:200])
+
+    try:
+        sftp.close()
+        client.close()
+    except Exception:
+        pass
+
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        add_step("read", "파일 읽기", "failed", "텍스트(UTF-8) 파일만 불러올 수 있습니다.", t0)
+        add_command("sftp", read_cmd, t0, exit_code=0, stdout=f"{len(raw)} bytes (non-utf8)")
+        return failure("error", "텍스트(UTF-8) 파일만 불러올 수 있습니다.")
+
+    add_step("read", "파일 읽기", "success", f"{len(raw):,} bytes 읽음", t0)
+    add_command("sftp", read_cmd, t0, exit_code=0, stdout=f"{len(raw)} bytes")
+
+    return FetchFileResult(
+        result=SSHResult(
+            host=tgt.host, status="ok", exit_code=0, stdout=text, stderr="",
+            duration_ms=int((time.time() - run_start) * 1000), error=None,
+        ),
+        steps=steps, commands=commands,
+    )
 
 
 async def run_bulk(

@@ -363,6 +363,19 @@ export const versionsApi = {
       `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal, timeout },
     );
   },
+  collectKubeadmCerts: (
+    clusterId: string,
+    payload: import('@/types').KubeadmCertsCollectRequest,
+    signal?: AbortSignal,
+  ) => {
+    const n = payload.hosts.length;
+    const perHost = ((payload.connectTimeout ?? 8) + 25) * 1000;
+    const est = n * perHost + 10_000;   // 순차 수집(collect_etcdctl_config 와 동일 패턴)
+    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
+    return api.post<import('@/types').KubeadmCertsCollectResponse>(
+      `/clusters/${clusterId}/collect-kubeadm-certs`, payload, { signal, timeout },
+    );
+  },
   collectKernelParams: (
     clusterId: string,
     payload: import('@/types').KernelParamsCollectRequest,
@@ -547,6 +560,10 @@ export interface FetchFileResponse {
   content: string;
   size: number;
   error?: string | null;
+  // 연결/파일확인/읽기 각 단계에서 무엇을 시도했는지 — 연결 실패의 "왜"를 화면에서
+  // 바로 보여주기 위함(batch_job 실행 추적과 동일 shape).
+  steps?: import('@/types').DeepCheckExecStep[];
+  commands?: BatchJobCommandTrace[];
 }
 
 export const bulkExecApi = {
