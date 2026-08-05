@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
@@ -14,6 +14,7 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useCheckMatrixFailureCount } from '@/hooks/useCheckMatrix';
+import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
 import { useToday } from '@/hooks/useToday';
 import { useHomeStore, type HomeTab } from '@/stores/homeStore';
 import { useIslands } from '@/hooks/useIslands';
@@ -104,6 +105,26 @@ export function HomePage() {
   const setHomeTab = useHomeStore((s) => s.setHomeTab);
   const scheduleBg = useHomeStore((s) => s.scheduleBg);
 
+  // 서버 저장 기본 홈 탭 — 기기·브라우저를 넘어 따라온다(D-060 연장). localStorage 는
+  // 즉시 반영을 위한 기기 로컬 캐시일 뿐, 소스는 여기(user_settings.home_prefs).
+  const { data: homePrefs } = useHomePrefs();
+  const updateHomePrefs = useUpdateHomePrefs();
+  const appliedServerDefault = useRef(false);
+  useEffect(() => {
+    if (appliedServerDefault.current || homePrefs === undefined) return;
+    appliedServerDefault.current = true;
+    if (homePrefs.defaultHomeTab) setHomeTab(homePrefs.defaultHomeTab);
+  }, [homePrefs, setHomeTab]);
+
+  const saveTimerRef = useRef<number | undefined>(undefined);
+  const selectHomeTab = (tab: HomeTab) => {
+    setHomeTab(tab);
+    window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      updateHomePrefs.mutate({ defaultHomeTab: tab });
+    }, 500);
+  };
+
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
 
@@ -152,7 +173,7 @@ export function HomePage() {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
     const next = (idx + (e.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length;
-    setHomeTab(TABS[next].key);
+    selectHomeTab(TABS[next].key);
   };
 
   return (
@@ -198,7 +219,7 @@ export function HomePage() {
           hint="건"
           Icon={ShieldAlert}
           accent="text-status-critical"
-          onSelect={() => setHomeTab('platform')}
+          onSelect={() => selectHomeTab('platform')}
           isLoading={checkFailureLoading}
           isError={checkFailureError}
         />
@@ -224,7 +245,7 @@ export function HomePage() {
               role="tab"
               aria-selected={homeTab === t.key}
               tabIndex={homeTab === t.key ? 0 : -1}
-              onClick={() => setHomeTab(t.key)}
+              onClick={() => selectHomeTab(t.key)}
               onKeyDown={(e) => handleTabKeyDown(e, idx)}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 transition-colors',

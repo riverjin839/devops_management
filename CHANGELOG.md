@@ -44,6 +44,17 @@
   탭 라벨에도 위험 클러스터+점검 실패 합계 배지가 붙고 0건이면 숨는다. Frontend:
   `hooks/useCheckMatrix.ts` 의 `useCheckMatrixFailureCount()`(신규, `useCheckMatrixGrid()` 와
   쿼리키를 공유해 추가 네트워크 요청 없음), `pages/HomePage.tsx`.
+- **홈 개인화 — 기본 홈 탭 · 즐겨찾기 · 최근 방문**: 로그인 시 열릴 홈 탭(`내 업무`/`플랫폼
+  현황`)을 서버에 저장해 기기를 넘어 유지하고(Settings "화면 UI 설정" 탭에 선택기 추가),
+  전역 상단바·좌측 사이드바 flyout 메뉴 항목에 마우스를 올리면 별 아이콘으로 즐겨찾기를
+  바로 추가/해제할 수 있으며, 상단바 ★ 드롭다운과 사이드바 최상단 "즐겨찾기" 레일 아이콘에서
+  즐겨찾기 목록과 최근 방문(기기 로컬, 최대 5개) 화면을 확인·이동할 수 있다(R-4 5차 D-060
+  잔여 해소). Backend: `routers/home_prefs.py`(신규, `GET/PUT /api/v1/me/home-prefs`,
+  `user_settings` 테이블 재사용이라 스키마 변경 없음), `schemas/home_prefs.py`. Frontend:
+  `hooks/useHomePrefs.ts`·`hooks/useFavorites.ts`·`stores/recentPathsStore.ts`·
+  `components/layout/FavoritesFlyoutBody.tsx`(신규), `components/layout/NavFlyout.tsx`
+  (`FlyoutLink` 에 즐겨찾기 토글 별 버튼 추가), `AppTopBar.tsx`·`Sidebar.tsx`·`HomePage.tsx`·
+  `SettingsPage.tsx`.
 
 ## [1.24.2] - 2026-08-05
 

@@ -2468,4 +2468,11 @@ export const islandsApi = {
     api.post<import('@/types').IslandListResponse>('/islands/reorder', { order }),
 };
 
+// ── 홈/네비게이션 개인화 (기본 홈 탭, 즐겨찾기 경로) ─────────────────────────
+export const homePrefsApi = {
+  get: () => api.get<import('@/types').HomePrefs>('/me/home-prefs'),
+  update: (data: import('@/types').HomePrefsUpdate) =>
+    api.put<import('@/types').HomePrefs>('/me/home-prefs', data),
+};
+
 export default api;

@@ -85,6 +85,7 @@ from app.routers import (
     check_matrix_router,
     island_router,
     llm_settings_router,
+    home_prefs_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -2132,6 +2133,8 @@ app.include_router(observability_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(release_notes_router, prefix="/api/v1", dependencies=_auth)
 # Your Island — 사용자 커스텀 화면(개인 소유 + 선택적 공유)
 app.include_router(island_router, prefix="/api/v1", dependencies=_auth)
+# 홈/네비게이션 개인화 — 기본 홈 탭, 즐겨찾기 경로 (user_settings 재사용, 스키마 변경 없음)
+app.include_router(home_prefs_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

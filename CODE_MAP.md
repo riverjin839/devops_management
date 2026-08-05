@@ -185,6 +185,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
 | Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
 | 전역 상단바(업무 도메인) | `frontend/src/components/layout/AppTopBar.tsx` + `NavFlyout.tsx`(`FlyoutShell`/`FlyoutLink` 공용, Sidebar 와 공유) |
+| 홈 개인화 (기본 홈 탭 · 즐겨찾기 · 최근 방문) | `backend/app/routers/home_prefs.py` + `schemas/home_prefs.py`(`user_settings` 재사용) → `frontend/src/hooks/useHomePrefs.ts` · `hooks/useFavorites.ts` · `stores/recentPathsStore.ts` · `components/layout/FavoritesFlyoutBody.tsx`(AppTopBar·Sidebar 공유 드롭다운) |
 | 라우팅 | `frontend/src/App.tsx` |
 | Axios API 클라이언트 | `frontend/src/services/api.ts` (snake_case→camelCase 자동 변환) |
 | TanStack Query 훅 | `frontend/src/hooks/use*.ts` |

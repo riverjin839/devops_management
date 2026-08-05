@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Sun } from 'lucide-react';
+import { ChevronDown, Star, Sun } from 'lucide-react';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useAuthStore } from '@/stores/authStore';
+import { useFavorites } from '@/hooks/useFavorites';
 import { useToday } from '@/hooks/useToday';
 import { cn, fmtKoreanDate } from '@/lib/utils';
 import { FlyoutShell, FlyoutLink } from './NavFlyout';
+import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
 import { WorkAlarmBell } from './WorkAlarmBell';
 import { GROUPS, type GroupId } from './navConfig';
 
@@ -25,13 +27,18 @@ export function AppTopBar() {
   const myName = user?.displayName?.trim() || user?.username || null;
   useToday(); // 자정 넘기면 날짜 표기가 갱신되도록 리렌더만 구독(반환값은 안 씀)
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
+  const { isPinned, togglePin } = useFavorites();
 
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
 
-  useEffect(() => setOpenGroup(null), [location.pathname]);
+  useEffect(() => { setOpenGroup(null); setFavoritesOpen(false); }, [location.pathname]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenGroup(null); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setOpenGroup(null); setFavoritesOpen(false); }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -99,6 +106,26 @@ export function AppTopBar() {
       </nav>
 
       <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+        <button
+          type="button"
+          aria-haspopup="true"
+          aria-expanded={favoritesOpen}
+          title="즐겨찾기"
+          aria-label="즐겨찾기"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setFavoritesAnchor(rect);
+            setFavoritesOpen((cur) => !cur);
+          }}
+          className={cn(
+            'flex items-center justify-center w-8 h-8 rounded-lg border transition-colors',
+            favoritesOpen
+              ? 'bg-primary/10 text-primary border-primary/30'
+              : 'text-muted-foreground border-border hover:bg-secondary hover:text-foreground',
+          )}
+        >
+          <Star className="w-4 h-4" />
+        </button>
         <div className="flex items-center rounded-lg border border-border bg-card overflow-hidden">
           <WorkAlarmBell />
         </div>
@@ -127,10 +154,26 @@ export function AppTopBar() {
                     iconSize={entry.iconSize}
                     active={location.pathname === p}
                     onSelect={() => setOpenGroup(null)}
+                    isPinned={isPinned(p)}
+                    onTogglePin={() => togglePin(p)}
                   />
                 );
               })}
             </div>
+          </FlyoutShell>
+        </>
+      )}
+
+      {favoritesOpen && favoritesAnchor && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setFavoritesOpen(false)} aria-hidden />
+          <FlyoutShell
+            title="즐겨찾기"
+            anchorRect={favoritesAnchor}
+            placement="bottom"
+            onClose={() => setFavoritesOpen(false)}
+          >
+            <FavoritesFlyoutBody onClose={() => setFavoritesOpen(false)} />
           </FlyoutShell>
         </>
       )}

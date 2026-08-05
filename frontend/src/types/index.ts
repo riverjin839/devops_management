@@ -4656,3 +4656,11 @@ export interface AlertIncidentAnalysis {
   createdAt: string;
   finishedAt: string | null;
 }
+
+// ── 홈/네비게이션 개인화 (user_settings 의 home_prefs 키) ─────────────────────
+export interface HomePrefs {
+  defaultHomeTab?: 'work' | 'platform' | null;
+  pinnedPaths: string[];
+}
+
+export type HomePrefsUpdate = Partial<HomePrefs>;

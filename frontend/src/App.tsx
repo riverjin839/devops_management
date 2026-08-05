@@ -74,6 +74,7 @@ import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
+import { useRecentPathsStore } from '@/stores/recentPathsStore';
 import { NAV_MAP } from '@/components/layout/navConfig';
 
 function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
@@ -104,6 +105,7 @@ function RouteAccessGate() {
   const navigate = useNavigate();
   const { data: featureAccess, isLoading } = useFeatureAccess();
   const user = useAuthStore((s) => s.user);
+  const recordVisit = useRecentPathsStore((s) => s.recordVisit);
 
   useEffect(() => {
     if (isLoading || !user) return;
@@ -113,8 +115,12 @@ function RouteAccessGate() {
       .sort((a, b) => b.length - a.length)[0];
     if (match && !canAccessFeature(featureAccess, match, user)) {
       navigate('/', { replace: true });
+      return;
     }
-  }, [location.pathname, featureAccess, isLoading, user, navigate]);
+    // 최근 방문 — 즐겨찾기 드롭다운이 소비. 상세 페이지(`/tasks-mgmt/:id`)도 캐노니컬
+    // 화면 경로(`/tasks-mgmt`)로 기록돼 목록이 파라미터로 흩어지지 않는다.
+    if (match) recordVisit(match);
+  }, [location.pathname, featureAccess, isLoading, user, navigate, recordVisit]);
 
   return null;
 }

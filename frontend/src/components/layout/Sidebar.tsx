@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
-  Sparkles, Palmtree, Leaf,
+  Sparkles, Palmtree, Leaf, Star,
   Moon, Sun, Monitor, LogOut, User, ChevronRight, ArrowLeft,
   KeyRound, ScrollText, Home, MessageSquare, Bug, Bot,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useIslands } from '@/hooks/useIslands';
+import { useFavorites } from '@/hooks/useFavorites';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -22,6 +23,7 @@ import { ReleaseNotesPanel } from './ReleaseNotesPanel';
 import { BugFixLogPanel } from './BugFixLogPanel';
 import { VocBoardPanel } from './VocBoardPanel';
 import { FlyoutShell, FlyoutLink } from './NavFlyout';
+import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
 import { GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
@@ -120,6 +122,7 @@ export function Sidebar() {
   const isAdmin = currentUser?.role === 'admin';
   // 동적 navMap / 라벨 오버라이드 / 기능별 접근 제어 — Your Island 패널 피커와 공유.
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
+  const { isPinned, togglePin } = useFavorites();
 
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
@@ -182,6 +185,9 @@ export function Sidebar() {
   const [bugFixLogOpen, setBugFixLogOpen] = useState(false);
   // 사용자 VOC 게시판 — 릴리즈 노트 바로 위 레일 아이콘 → 우측 SidePane.
   const [vocOpen, setVocOpen] = useState(false);
+  // 즐겨찾기 — 레일 최상단 진입점 (AppTopBar 의 ★ 과 같은 본문을 공유).
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
 
   // 레일에는 플랫폼 도메인 그룹만 — 업무 도메인은 전역 상단바(AppTopBar)로 이동했다(D-054).
   // 더는 홈 모드가 사이드바 노출 범위를 게이팅하지 않는다 — 항상 전체가 보인다.
@@ -209,6 +215,7 @@ export function Sidebar() {
     setReleaseNotesOpen(false);
     setBugFixLogOpen(false);
     setVocOpen(false);
+    setFavoritesOpen(false);
   }, [location.pathname]);
 
   // ESC 로 flyout / edit mode 닫기
@@ -221,6 +228,7 @@ export function Sidebar() {
         setReleaseNotesOpen(false);
         setBugFixLogOpen(false);
         setVocOpen(false);
+        setFavoritesOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -246,7 +254,8 @@ export function Sidebar() {
             if (!entry || !featureAllowed(p)) return null;
             return (
               <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close} />
+                active={location.pathname === p} onSelect={close}
+                isPinned={isPinned(p)} onTogglePin={() => togglePin(p)} />
             );
           })}
         </div>
@@ -260,7 +269,8 @@ export function Sidebar() {
           if (!entry || !featureAllowed(p)) return null;
           return (
             <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-              active={location.pathname === p} onSelect={close} />
+              active={location.pathname === p} onSelect={close}
+              isPinned={isPinned(p)} onTogglePin={() => togglePin(p)} />
           );
         })}
       </div>
@@ -322,6 +332,18 @@ export function Sidebar() {
         {/* 그룹 아이콘 레일 — 플랫폼 도메인 그룹만 (업무 도메인은 상단바로 이동) */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
           <div className="flex flex-col items-center gap-1">
+            {/* 즐겨찾기 — 레일 최상단, 공용 그룹과 성격이 달라(개인 선택) 구분선으로 분리. */}
+            <RailIconButton
+              label="즐겨찾기"
+              Icon={Star}
+              highlighted={favoritesOpen}
+              suppressTooltip={favoritesOpen}
+              onClick={(rect) => {
+                setFavoritesOpen((cur) => !cur);
+                if (rect) setFavoritesAnchor(rect);
+              }}
+            />
+            <div className="w-6 border-t border-border my-1" aria-hidden />
             {visibleGroups.map((g) => (
               <RailIconButton
                 key={g.id}
@@ -453,6 +475,16 @@ export function Sidebar() {
             onClose={() => setOpenGroup(null)}
           >
             {renderFlyoutBody(openGroup)}
+          </FlyoutShell>
+        </>
+      )}
+
+      {/* 즐겨찾기 flyout — AppTopBar 의 ★ 과 같은 본문(FavoritesFlyoutBody)을 공유. */}
+      {favoritesOpen && favoritesAnchor && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setFavoritesOpen(false)} aria-hidden />
+          <FlyoutShell title="즐겨찾기" anchorRect={favoritesAnchor} onClose={() => setFavoritesOpen(false)}>
+            <FavoritesFlyoutBody onClose={() => setFavoritesOpen(false)} />
           </FlyoutShell>
         </>
       )}
