@@ -13,6 +13,7 @@ from app.models.app_setting import AppSetting
 from app.models.llm_credential import LlmCredential
 from app.models.incident_analysis import IncidentAnalysis
 from app.models.agent_conversation import AgentConversation, AgentMessage
+from app.models.saved_script import SavedScript
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
 from app.models.ops_note import OpsNote
@@ -171,4 +172,5 @@ __all__ = [
     "CheckMatrixRunState",
     "CheckMatrixSourceType",
     "CheckMatrixTrigger",
+    "SavedScript",
 ]

@@ -10,6 +10,9 @@
 
 1.20.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **노드 일괄 실행 — 사용자별 저장 스크립트**(`/bulk-exec`): bash/python 스크립트를 이름·설명과 함께 저장해두고 목록에서 클릭 한 번으로 불러오거나 수정·삭제할 수 있다. 기존 localStorage 전용 `SavedCommands` 위젯을 이 화면에서 DB 백엔드 라이브러리로 교체 — 다른 브라우저/기기에서도 동일하게 보인다. 명령창 옆 bash/python 토글로 언어를 고르면, python 은 서버가 원격 `python3` 인터프리터로 감싸 실행한다(본문은 그대로 저장·표시, 인증정보는 여전히 저장하지 않음). Backend: `models/saved_script.py`(`SavedScript`, 사용자별 소유권) + `routers/saved_scripts.py`(CRUD) + `services/script_wrap.py`(python 스크립트 → heredoc 변환). Frontend: `components/bulk-exec/{SavedScriptPanel,SavedScriptEditorModal}` + `hooks/useSavedScripts.ts`.
+
 ## [1.20.1] - 2026-08-05
 
 ### Fixed

@@ -333,7 +333,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island` |
 | 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
@@ -363,7 +363,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
 - **플랫폼/자동화**: `batch_job`, `bottleneck_run`, `ansible_assets`
-- **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`, `island`(Your Island 커스텀 화면)
+- **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`, `island`(Your Island 커스텀 화면), `saved_script`(bulk-exec 재사용 사용자별 bash/python 스크립트)
 
 ---
 

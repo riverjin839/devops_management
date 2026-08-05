@@ -583,22 +583,22 @@ LakeService 기반 화면(`/pep-services`)은 §8 에 "구" 표기로 남아 직
 
 ### 노드 일괄 실행 (SSH/SCP) (`/bulk-exec`)
 
-- **파일**: `frontend/src/pages/BulkExecPage.tsx` (+ `components/common/{ConfirmDialog,LogViewer,SavedCommands,DebugLogPanel,ResizeGrip,DoubleScrollX}`)
+- **파일**: `frontend/src/pages/BulkExecPage.tsx` (+ `components/common/{ConfirmDialog,LogViewer,DebugLogPanel,ResizeGrip,DoubleScrollX}`, `components/bulk-exec/{SavedScriptPanel,SavedScriptEditorModal}`)
 - **목적 / UX**: 여러 클러스터의 여러 노드를 한 번에 선택해 SSH 명령 실행 또는 SCP 파일 업로드를 병렬/순차로 수행하고, 결과를 요약/상세 뷰로 확인·필터링·내보내기(CSV/TXT/클립보드)한다. 운영자가 대규모 노드에 동일 작업을 배포할 때 쓰는 실행 콘솔.
 - **UI 구성**: mc 클라이언트 콘솔처럼 **[타겟 노드 | 명령 메뉴 | 실행 결과]** 를 한 로우(`lg:grid-cols-12`, 3:4:5)에 나란히 배치. 결과 컬럼은 항상 우측 같은 자리에 고정되고(실행 전엔 플레이스홀더), 컬럼 내부에서만 스크롤된다.
   - `ClusterSidebar` — `multiSelect` + `iconOnly` (다중 선택 패턴, `selectedIds`/`onMultiSelectChange`)
   - 타겟 노드(3): 클러스터별로 묶인 노드 체크박스 목록(`ClusterNodeGroup`, 클러스터별 접기/전체선택)
-  - 명령 메뉴(4): action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용, 타임아웃/청크 설정
+  - 명령 메뉴(4): action(ssh/scp) 토글, 병렬/순차 모드, 인증(비밀번호/PrivateKey), 명령/업로드 내용(ssh 모드는 bash/python 언어 토글 포함), 타임아웃/청크 설정
   - 실행 결과(5): 요약 테이블 `SummaryResultsTable` ↔ 상세 테이블 토글, 공통 필터, CSV/TXT/클립보드 내보내기. 상세 뷰 노드 확장 시 stdout/stderr 는 `ExecOutputTabs`(탭 + 결과 유무 dot·라인수) 로 표시.
   - 실행 확인 `ConfirmDialog`. `useTerminalEnvSync` 로 선택 클러스터 운영등급 → 터미널 Appearance(개발/운영) 자동 적용(다중 선택은 하나라도 운영이면 ops).
-- **Frontend**: `useClusters()`, `useQueries`로 선택된 클러스터별 노드 목록 병렬 조회(`bulkExecApi.nodeList`), `useAbortableMutation`으로 `bulkExecApi.run`. 로컬 state: `clusterIds`(다중), `selected`(Set, `clusterId::nodeName` 키), 실행 옵션 다수. 호출 함수: `bulkExecApi.nodeList`, `bulkExecApi.run`.
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. DB 모델 관여 없음(휘발성 실행 결과).
+- **Frontend**: `useClusters()`, `useQueries`로 선택된 클러스터별 노드 목록 병렬 조회(`bulkExecApi.nodeList`), `useAbortableMutation`으로 `bulkExecApi.run`. 저장 스크립트는 `useSavedScripts`/`useCreateSavedScript`/`useUpdateSavedScript`/`useDeleteSavedScript`(TanStack Query, `savedScriptsApi`). 로컬 state: `clusterIds`(다중), `selected`(Set, `clusterId::nodeName` 키), `language`(bash/python), 실행 옵션 다수. 호출 함수: `bulkExecApi.nodeList`, `bulkExecApi.run`.
+- **Backend**: `GET /api/v1/clusters/{cluster_id}/node-list`, `POST /api/v1/bulk-exec/run` — `backend/app/routers/bulk_exec.py`. `require_operator` 권한 필요, `app/services/ssh_runner.py`(`SSHTarget`, `run_bulk`)로 paramiko 기반 SSH/SCP 실행(병렬/청크 단위), `app/services/audit_logger`로 감사 로그 기록. `language="python"` 이면 `app/services/script_wrap.py`(순수 함수)가 스크립트 본문을 `python3 - <<'DELIM' ... DELIM` heredoc 으로 감싸 원격 실행 — 실행 자체는 여전히 DB 모델 없이 휘발성. 저장 스크립트 CRUD 는 `GET/POST /api/v1/saved-scripts`, `GET/PUT/DELETE /api/v1/saved-scripts/{id}` — `backend/app/routers/saved_scripts.py` + `SavedScript` 모델(사용자별, `username` 소유권 검사).
 - **핵심 기능**:
   - 다중 클러스터 × 다중 노드 선택 (클러스터별 그룹 UI)
   - SSH 명령 실행 / SCP 파일 업로드, 병렬(동시성 조절)·순차 모드, 청크 단위 실행(대규모 완화)
   - 비밀번호/Private Key 인증(저장하지 않음), 실행 중 중지(abort)
   - 결과 요약/상세 뷰, 공통 필터, CSV/TXT/클립보드 내보내기
-  - 저장된 명령어(`SavedCommands`, localStorage) 재사용
+  - **사용자별 저장 스크립트**(`SavedScriptPanel`+`SavedScriptEditorModal`, DB 백엔드): bash/python 스크립트를 이름·설명과 함께 저장·수정·삭제·재사용. python 은 서버가 원격 `python3` 로 감싸 실행(스크립트 본문은 그대로 노출, 인증정보는 저장하지 않음)
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

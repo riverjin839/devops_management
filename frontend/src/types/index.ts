@@ -2194,6 +2194,33 @@ export interface CommandEntryCreate {
   confluenceUrl?: string;
 }
 
+// ── 노드 일괄 실행(bulk-exec) 재사용 — 사용자별 저장 스크립트 ──────────────
+export type ScriptLanguage = 'bash' | 'python';
+
+export interface SavedScript {
+  id: string;
+  name: string;
+  language: ScriptLanguage;
+  content: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedScriptCreate {
+  name: string;
+  language: ScriptLanguage;
+  content: string;
+  description?: string;
+}
+
+export interface SavedScriptUpdate {
+  name?: string;
+  language?: ScriptLanguage;
+  content?: string;
+  description?: string;
+}
+
 // ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────
 export interface MinioCollectTenantSummary {
   namespace: string | null;

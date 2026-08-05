@@ -7,10 +7,12 @@ import {
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { ConfirmDialog, ExecOutputTabs, ClusterSidebar, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
+import { SavedScriptPanel } from '@/components/bulk-exec';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
+import type { ScriptLanguage } from '@/types';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
 
@@ -521,6 +523,7 @@ export function BulkExecPage() {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [command, setCommand] = useState('');
+  const [language, setLanguage] = useState<ScriptLanguage>('bash');
   const [scpContent, setScpContent] = useState('');
   const [scpRemotePath, setScpRemotePath] = useState('/tmp/uploaded.txt');
   const [mode, setMode] = useState<'sequential' | 'parallel'>('parallel');
@@ -584,6 +587,7 @@ export function BulkExecPage() {
         password: authMode === 'password' ? password : undefined,
         privateKey: authMode === 'key' ? privateKey : undefined,
         command: action === 'ssh' ? command : undefined,
+        language: action === 'ssh' ? language : undefined,
         scpContent: action === 'scp' ? scpContent : undefined,
         scpRemotePath: action === 'scp' ? scpRemotePath : undefined,
         mode,
@@ -816,22 +820,41 @@ export function BulkExecPage() {
             {/* 명령/파일 */}
             {action === 'ssh' ? (
               <div>
-                <label htmlFor={f('cmd')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                  <Terminal className="w-3 h-3" /> 실행할 명령
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor={f('cmd')} className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Terminal className="w-3 h-3" /> 실행할 명령 / 스크립트
+                  </label>
+                  <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+                    {(['bash', 'python'] as const).map((l) => (
+                      <button
+                        key={l}
+                        type="button"
+                        onClick={() => setLanguage(l)}
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
+                          language === l
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground/70 hover:text-foreground'
+                        }`}
+                        title={l === 'python' ? '원격 python3 인터프리터로 실행됩니다' : '원격 기본 셸로 그대로 실행됩니다'}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <textarea
                   id={f('cmd')}
                   value={command}
                   onChange={(e) => setCommand(e.target.value)}
-                  placeholder="예: uname -a && free -m && uptime"
+                  placeholder={language === 'python' ? 'import os\nprint(os.uname())' : '예: uname -a && free -m && uptime'}
                   rows={3}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
-                <SavedCommands
+                <SavedScriptPanel
                   className="mt-2"
-                  storageKey="k8s:saved-cmd:bulk-exec-ssh"
                   currentValue={command}
-                  onPick={setCommand}
+                  currentLanguage={language}
+                  onPick={(content, lang) => { setCommand(content); setLanguage(lang); }}
                 />
               </div>
             ) : (
@@ -1156,7 +1179,10 @@ export function BulkExecPage() {
           </div>
           {action === 'ssh' ? (
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">실행할 명령</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
+                실행할 명령
+                <span className="normal-case text-[10px] px-1.5 py-0.5 rounded border border-border bg-secondary">{language}</span>
+              </p>
               <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
                 {command}
               </pre>
