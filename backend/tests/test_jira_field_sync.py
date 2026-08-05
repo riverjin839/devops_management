@@ -3,11 +3,12 @@
 DB/네트워크 불필요 — 순수 매핑 함수(`map_jira_issue`, `extract_*`)와 라우터의
 보존 규칙 헬퍼(`_jira_sync_values`, `_diff_existing`)만 검증한다.
 """
-from app.routers.jira import _diff_existing, _jira_sync_values
+from app.routers.jira import _diff_existing, _jira_sync_values, _resolve_epic_chain
 from app.services.jira_service import (
     extract_confluence_url,
     extract_epic_parts,
     extract_parent_parts,
+    extract_sprint_name,
     map_jira_issue,
 )
 
@@ -40,7 +41,7 @@ class _Existing:
         for attr in (
             "title", "content", "kanban_status", "priority", "jira_status", "category",
             "jira_issue_type", "jira_epic", "jira_parent_key", "jira_components",
-            "jira_labels", "confluence_url",
+            "jira_labels", "confluence_url", "primary_assignee", "due_date",
         ):
             setattr(self, attr, kw.get(attr))
 
@@ -130,6 +131,7 @@ def test_unchanged_stays_unchanged_on_repeated_import():
         jira_issue_type="Sub-task", jira_epic="DL-10 인프라 고도화",
         jira_parent_key="DL-10", jira_components=["K8s", "Network"],
         jira_labels=["infra", "urgent"], confluence_url=None,
+        primary_assignee="홍길동", due_date=None,
     )
     fields = map_jira_issue(_issue(), BASE)
     assert _diff_existing(existing, fields) == []
@@ -169,3 +171,124 @@ def test_create_issue_keeps_parent_when_retrying_without_optional_fields():
     assert sent[1]["parent"] == {"key": "DL-10"}
     assert "customfield_10008" not in sent[1]
     assert "labels" not in sent[1]
+
+
+# ── 담당자/마감일 — 이제 title/content 와 동일하게 Jira 가 무조건 소유 ───────────────
+def test_sync_assignee_now_overwrites_existing_value():
+    """이전엔 담당자가 비어있을 때만 채웠지만, 이름 매핑이 정확해진 뒤로는 재배정 여부와
+    무관하게 매 동기화마다 Jira 쪽 값으로 최신화한다."""
+    existing = _Existing(primary_assignee="이전담당자")
+    values = _jira_sync_values(existing, {"primary_assignee": "새담당자"})
+    assert values["primary_assignee"] == "새담당자"
+
+
+def test_sync_due_date_always_included_even_when_cleared():
+    """마감일은 Jira 가 소유 — Jira 쪽에서 지워지면(None) PEP 값도 따라 지워진다."""
+    existing = _Existing(due_date="2026-08-01")
+    values = _jira_sync_values(existing, {"due_date": None})
+    assert values["due_date"] is None
+
+
+# ── Confluence 링크 전체 목록 — "이번엔 안 봤음" 과 "봤는데 0건" 구분 ────────────────
+def test_sync_confluence_links_untouched_when_not_attempted():
+    existing = _Existing()
+    assert "confluence_links" not in _jira_sync_values(existing, {})
+
+
+def test_sync_confluence_links_replaces_with_latest_when_attempted():
+    existing = _Existing()
+    values = _jira_sync_values(existing, {"confluence_links": []})
+    assert values["confluence_links"] == []
+
+
+# ── map_jira_issue: epic_override / remote_confluence_links / due_date ──────────
+def test_map_jira_issue_epic_override_replaces_self_extraction():
+    out = map_jira_issue(
+        _issue(), BASE, epic_field="customfield_10008", epic_override=("DL-1", "플랫폼 개선"),
+    )
+    assert out["jira_epic_key"] == "DL-1"
+    assert out["jira_epic_summary"] == "플랫폼 개선"
+
+
+def test_map_jira_issue_confluence_links_only_when_remote_links_param_given():
+    out_not_attempted = map_jira_issue(_issue(), BASE, confluence_base_url=CONF)
+    assert "confluence_links" not in out_not_attempted
+
+    out_attempted = map_jira_issue(
+        _issue(), BASE, confluence_base_url=CONF,
+        remote_confluence_links=[{"url": f"{CONF}/x", "title": "X"}],
+    )
+    assert out_attempted["confluence_links"] == [{"url": f"{CONF}/x", "title": "X"}]
+    # 대표 링크(confluence_url) 는 본문 스캔이 실패하면 원격 링크 첫 값으로 폴백.
+    assert out_attempted["confluence_url"] == f"{CONF}/x"
+
+
+def test_map_jira_issue_maps_due_date():
+    out = map_jira_issue(_issue(duedate="2026-08-20"), BASE)
+    assert str(out["due_date"]) == "2026-08-20"
+
+
+def test_map_jira_issue_due_date_none_when_unset():
+    assert map_jira_issue(_issue(), BASE)["due_date"] is None
+
+
+# ── extract_sprint_name ───────────────────────────────────────────────────────
+def test_extract_sprint_name_from_greenhopper_string():
+    raw = (
+        "com.atlassian.greenhopper.service.sprint.Sprint@1a2b3c4d[id=5,rapidViewId=1,"
+        "state=ACTIVE,name=Sprint 12,startDate=2026-08-01,endDate=2026-08-14]"
+    )
+    assert extract_sprint_name({"customfield_10007": [raw]}, "customfield_10007") == "Sprint 12"
+
+
+def test_extract_sprint_name_from_dict_list_uses_last():
+    fields = {"customfield_10007": [{"id": 4, "name": "Sprint 11"}, {"id": 5, "name": "Sprint 12"}]}
+    assert extract_sprint_name(fields, "customfield_10007") == "Sprint 12"
+
+
+def test_extract_sprint_name_empty_without_field_configured():
+    assert extract_sprint_name({"customfield_10007": [{"name": "Sprint 1"}]}, "") == ""
+
+
+def test_extract_sprint_name_missing_value():
+    assert extract_sprint_name({}, "customfield_10007") == ""
+
+
+# ── _resolve_epic_chain — Epic→Task→Sub-task 체인 해석, 형제 Sub-task 공유 상위 dedup ──
+def test_resolve_epic_chain_dedupes_shared_parent():
+    import asyncio
+
+    import httpx
+
+    from app.services.jira_service import JiraService
+
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, json={
+            "key": "DL-10",
+            "fields": {"customfield_10008": {"key": "DL-1", "fields": {"summary": "플랫폼 개선"}}},
+        })
+
+    svc = JiraService(BASE, "tok", transport=httpx.MockTransport(handler))
+
+    # 두 Sub-task 가 같은 상위(Task, DL-10) 를 공유 — 자신에게는 Epic Link 값이 없다.
+    issues = [
+        {"key": "DL-42", "fields": {"issuetype": {"name": "Sub-task"}, "parent": {"key": "DL-10"}}},
+        {"key": "DL-43", "fields": {"issuetype": {"name": "Sub-task"}, "parent": {"key": "DL-10"}}},
+        # 자기 자신에게 이미 Epic Link 가 있는 이슈 — 추가 조회 대상이 아니다.
+        {"key": "DL-44", "fields": {"customfield_10008": "DL-9", "parent": {"key": "DL-11"}}},
+    ]
+
+    chain = asyncio.run(_resolve_epic_chain(svc, issues, "customfield_10008"))
+
+    assert len(calls) == 1, "형제 Sub-task 가 같은 상위를 공유하면 1회만 조회해야 한다"
+    assert chain == {"DL-10": ("DL-1", "플랫폼 개선")}
+
+
+def test_resolve_epic_chain_noop_without_epic_field_configured():
+    import asyncio
+
+    result = asyncio.run(_resolve_epic_chain(None, [{"key": "DL-1", "fields": {}}], ""))
+    assert result == {}

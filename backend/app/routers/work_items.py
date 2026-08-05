@@ -741,8 +741,13 @@ def patch_status(
             wip_warning = True
 
     item.kanban_status = payload.kanban_status
+    # done 전이 시 완료일 자동 set, done 에서 벗어나면(재오픈) 자동으로 채웠던 완료일을
+    # 해제한다 — PUT /{item_id}(update_work_item) 과 동일한 규칙(정식 폼 수정 경로와
+    # 칸반 드래그 경로가 어긋나면 "재오픈했는데 완료일이 남아있는" 상태가 된다).
     if payload.kanban_status == "done" and not item.closed_at:
         item.closed_at = datetime.utcnow()
+    elif payload.kanban_status != "done" and prev_status == "done":
+        item.closed_at = None
 
     db.commit()
     db.refresh(item)

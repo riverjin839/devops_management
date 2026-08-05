@@ -7,7 +7,7 @@ import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, WorkItemFormModal, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -304,13 +304,15 @@ export function WorkItemBoardPage() {
     return next;
   });
 
-  const colW = useColumnWidths('item-board-table', {
+  // 컬럼 폭/순서/표시여부 개인화 — 필터와 동일하게 사용자별로 분리 저장한다(로그인 전
+  // 짧은 순간은 공용 키로 폴백, loadFilterPrefs 와 같은 guard 패턴).
+  const colStorageKey = myUsername ? `item-board-table:${myUsername}` : 'item-board-table';
+  const colW = useColumnWidths(colStorageKey, {
     defaults: COLUMN_WIDTH_DEFAULTS,
     min: 60, max: 800,
   });
 
-  // 컬럼 순서 / 표시여부 개인화 (localStorage 영속).
-  const colLayout = useColumnLayout<WorkItemColumnKey>('item-board-table', {
+  const colLayout = useColumnLayout<WorkItemColumnKey>(colStorageKey, {
     defaultOrder: DEFAULT_COLUMN_ORDER,
     defaultVisible: DEFAULT_VISIBLE_COLUMNS,
     alwaysVisible: ALWAYS_VISIBLE_COLUMNS,
@@ -359,13 +361,12 @@ export function WorkItemBoardPage() {
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
   const [confluenceOpen, setConfluenceOpen] = useState(false);
-  // 하위 업무 등록 전용(전체 폼) — 상위 업무 등록은 홈 "업무 현황"과 동일한 QuickAddTaskModal 사용.
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createParent, setCreateParent] = useState<WorkItem | null>(null);
-  // 상위 업무 등록/수정 — 홈 화면 "업무 등록"과 동일한 팝업(QuickAddTaskModal) 재사용.
-  // initial 이 있으면 수정 모드, 없으면 신규 등록.
+  // 업무 등록/수정/하위 업무 등록 — 홈 화면 "업무 등록"과 동일한 팝업(QuickAddTaskModal)
+  // 하나로 통일. initial 이 있으면 수정 모드, subItemParent 가 있으면 하위 업무 등록
+  // 모드(상위 업무를 읽기전용으로 보여줌), 둘 다 없으면 신규(상위) 등록.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<WorkItem | null>(null);
+  const [subItemParent, setSubItemParent] = useState<WorkItem | null>(null);
   const { data: jiraConfig } = useJiraConfig();
 
   const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(items, 'k8s:order:items');
@@ -562,10 +563,9 @@ export function WorkItemBoardPage() {
     setEditingItem(item);
   };
 
-  // 하위 업무 등록 — 페이지 전환 없이 팝업으로 (parentItem 연결이 필요해 전체 폼 그대로 사용).
+  // 하위 업무 등록 — 페이지 전환 없이 팝업으로 (QuickAddTaskModal 을 parentItem 과 함께 재사용).
   const handleAddSubItem = (item: WorkItem) => {
-    setCreateParent(item);
-    setCreateOpen(true);
+    setSubItemParent(item);
   };
 
   // 신규 등록 — 홈 "업무 현황"의 "업무 등록"과 동일한 QuickAddTaskModal 팝업으로 통일.
@@ -593,30 +593,43 @@ export function WorkItemBoardPage() {
     }
   };
 
-  // 이번주(월~일) 시작일 범위로 필터 설정.
+  // 이번주 → 2주(이번주+다음주) → 이번달 → 해제, 4단계 순환 시작일 범위 필터.
   const fmtDate = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  // 현재 from~to 가 이번주(월~일)와 정확히 일치하는지(버튼 활성 표시용).
-  const isThisWeek = (() => {
+  const DATE_RANGE_MODES = ['week', 'twoWeek', 'month'] as const;
+  const DATE_FILTER_LABELS: Record<(typeof DATE_RANGE_MODES)[number], string> = {
+    week: '이번주', twoWeek: '2주', month: '이번달',
+  };
+  // 오늘 기준 이번주(월~일)/2주(이번주 월~다음주 일)/이번달(1일~말일) 후보 범위.
+  const dateRanges = (() => {
     const now = new Date();
-    const diffToMon = (now.getDay() + 6) % 7;
+    const diffToMon = (now.getDay() + 6) % 7; // 0=Sun..6=Sat → 월요일까지 거슬러 갈 일수
     const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    return filterFrom === fmtDate(mon) && filterTo === fmtDate(sun);
+    const weekSun = new Date(mon); weekSun.setDate(mon.getDate() + 6);
+    const twoWeekSun = new Date(mon); twoWeekSun.setDate(mon.getDate() + 13);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      week: [fmtDate(mon), fmtDate(weekSun)] as const,
+      twoWeek: [fmtDate(mon), fmtDate(twoWeekSun)] as const,
+      month: [fmtDate(monthStart), fmtDate(monthEnd)] as const,
+    };
   })();
-  // 이번주 버튼 토글 — 이미 이번주 범위면 해제(범위 비움), 아니면 이번주(월~일)로 설정.
-  const toggleThisWeek = () => {
-    if (isThisWeek) {
+  // 현재 from~to 가 후보 범위 중 하나와 정확히 일치하면 그 단계, 아니면(직접 입력 등) null.
+  const dateFilterMode = DATE_RANGE_MODES.find(
+    (m) => filterFrom === dateRanges[m][0] && filterTo === dateRanges[m][1],
+  ) ?? null;
+  // 버튼 클릭 시 다음 단계로 순환 — null→이번주→2주→이번달→null(해제).
+  const cycleDateFilter = () => {
+    const idx = dateFilterMode ? DATE_RANGE_MODES.indexOf(dateFilterMode) : -1;
+    const next = DATE_RANGE_MODES[idx + 1];
+    if (!next) {
       setFilterFrom('');
       setFilterTo('');
-      return;
+    } else {
+      setFilterFrom(dateRanges[next][0]);
+      setFilterTo(dateRanges[next][1]);
     }
-    const now = new Date();
-    const diffToMon = (now.getDay() + 6) % 7;   // 0=Sun..6=Sat → 월요일까지 거슬러 갈 일수
-    const mon = new Date(now); mon.setDate(now.getDate() - diffToMon);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    setFilterFrom(fmtDate(mon));
-    setFilterTo(fmtDate(sun));
   };
 
   const clearFilters = () => {
@@ -802,14 +815,19 @@ export function WorkItemBoardPage() {
           )}
           <button
             type="button"
-            onClick={toggleThisWeek}
-            aria-pressed={isThisWeek}
-            title={isThisWeek ? '이번주 필터 해제' : '이번주(월~일) 시작 업무만 보기'}
+            onClick={cycleDateFilter}
+            aria-pressed={dateFilterMode !== null}
+            title={
+              dateFilterMode === null ? '이번주(월~일) 시작 업무만 보기 — 다시 누르면 2주, 이번달 순으로 넓어지고 그다음엔 해제됩니다.'
+                : dateFilterMode === 'week' ? '2주(이번주+다음주)로 넓히기'
+                : dateFilterMode === 'twoWeek' ? '이번달로 넓히기'
+                : '날짜 필터 해제'
+            }
             className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
-              isThisWeek ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              dateFilterMode !== null ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
             }`}
           >
-            <CalendarRange className="w-3.5 h-3.5" /> 이번주
+            <CalendarRange className="w-3.5 h-3.5" /> {dateFilterMode !== null ? DATE_FILTER_LABELS[dateFilterMode] : '이번주'}
           </button>
           <input
             type="date"
@@ -1044,23 +1062,14 @@ export function WorkItemBoardPage() {
         missingDetail={linkMissingDetail}
       />
 
-      {/* 하위 업무 등록 전용 — parentItem 연결이 필요해 전체 폼(WorkItemFormModal) 유지. */}
-      <WorkItemFormModal
-        open={createOpen}
-        parentItem={createParent}
-        onClose={() => { setCreateOpen(false); setCreateParent(null); }}
-        onSaved={(_savedId, created) => {
-          setCreateParent(null);
-          // 인라인 행 추가와 동일하게 — 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
-          if (jiraConfig?.enabled && created) setProvisionItem(created);
-        }}
-      />
-
-      {/* 상위 업무 등록/수정 — 홈 "업무 현황"과 동일한 팝업. initial 지정 시 수정 모드. */}
+      {/* 업무 등록/수정/하위 업무 등록 — 홈 "업무 현황"과 동일한 팝업. initial 지정 시 수정
+          모드, subItemParent 지정 시 하위 업무 등록 모드(상위 업무 읽기전용 표시 + Jira/
+          Confluence 자동 생성 체이닝은 모달 내부에서 자체 처리). */}
       <QuickAddTaskModal
-        open={quickAddOpen || !!editingItem}
+        open={quickAddOpen || !!editingItem || !!subItemParent}
         initial={editingItem}
-        onClose={() => { setQuickAddOpen(false); setEditingItem(null); }}
+        parentItem={subItemParent}
+        onClose={() => { setQuickAddOpen(false); setEditingItem(null); setSubItemParent(null); }}
         onSaved={() => setEditingItem(null)}
       />
 

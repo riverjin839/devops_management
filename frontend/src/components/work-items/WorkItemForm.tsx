@@ -141,6 +141,8 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
   const [resolution, setResultContent] = useState('');
   const [startedAt, setScheduledAt] = useState(defaultStartedAt ?? nowDateOnly());
   const [closedAt, setCompletedAt] = useState('');
+  // 마감일 — Jira 연동 업무는 가져올 때마다 Jira 값으로 덮어써진다(참고용 편집).
+  const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
   const [confluenceUrl, setConfluenceUrl] = useState('');
@@ -210,6 +212,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       setDetailContent(initial.detailContent ?? '');
       setScheduledAt(toDatetimeLocal(initial.startedAt));
       setCompletedAt(toDatetimeLocal(initial.closedAt));
+      setDueDate(initial.dueDate ? initial.dueDate.slice(0, 10) : '');
       setPriority(initial.priority);
       setRemarks(initial.remarks ?? '');
       setConfluenceUrl(initial.confluenceUrl ?? '');
@@ -283,6 +286,7 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
       detailContent: type === 'issue' ? (detailContent || undefined) : undefined,
       startedAt: toApiDatetime(startedAt) as string,
       closedAt: toApiDatetime(closedAt),
+      dueDate: dueDate || null,
       priority,
       remarks: remarks.trim() || undefined,
       confluenceUrl: confluenceUrl.trim() || undefined,
@@ -428,6 +432,18 @@ export function WorkItemForm({ initial, parentItem, defaultStartedAt, onCancel, 
             onChange={setCompletedAt}
             placeholder="완료 시 입력"
             size="sm"
+          />
+        </div>
+        {/* 마감일 — 옵션. Jira 연동 업무는 가져올 때마다 Jira 값으로 갱신되므로 여기서
+            바꿔도 다음 동기화에 덮어써질 수 있다(참고용 편집). */}
+        <div>
+          <label htmlFor={f('dueDate')} className={labelClass}>마감일</label>
+          <input
+            id={f('dueDate')}
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className={inputClass}
           />
         </div>
         {/* 공통업무 — 옵션. 특정 개인 담당자 업무가 아니라 파트 전체가 함께 하는 업무(회의 등).
