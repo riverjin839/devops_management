@@ -1585,6 +1585,10 @@ async def provision_work_item(
     jira_key = jira_url = ""
     jira_detail = confluence_detail = ""
     conf_id = conf_url = ""
+    # Confluence 문서 제목 — 아래 두 분기(신규 생성 / 이미 연결돼 건너뜀) 어디서든 채워질 수
+    # 있고, 마지막 "Jira ↔ Confluence 상호 링크" 블록이 이 값을 읽는다. 여기서 미리 초기화하지
+    # 않으면 건너뛰기 분기를 탄 호출에서 UnboundLocalError 가 난다.
+    page_title = ""
     jira_ok = conf_ok = False
     # conf_ok 는 "이미 연결돼 있어 skip" 도 True 가 되므로, 상호 링크는 이번 호출에서
     # 실제로 새 페이지를 만든 경우(conf_created)에만 건다 — skip 경로엔 page_title 이 없다.
@@ -1596,6 +1600,10 @@ async def provision_work_item(
     # Jira Description 에 덧붙이는 후속 PUT 에 재사용한다(이미 연결된 Jira 는 건드리지 않음).
     jira_svc = None
     jira_description_base = ""
+    # 이번 호출에서 Confluence 문서를 **실제로 만들었는지**. conf_ok 와 구분해야 한다 —
+    # conf_ok 는 "이미 연결돼 있어 건너뜀"도 True 라서, 그걸 상호 링크 조건으로 쓰면 이번에
+    # 만들지도 않은 문서 때문에 Jira Description 을 덮어쓰는 PUT 이 나간다(멱등성 위반).
+    conf_created_now = False
 
     # ── Jira ─────────────────────────────────────────────────────────────────
     if payload.create_jira:
@@ -1680,7 +1688,7 @@ async def provision_work_item(
                     )
                     if out.get("status") == "ok":
                         conf_ok = True
-                        conf_created = True
+                        conf_created_now = True
                         conf_id, conf_url = out.get("id", ""), out.get("url", "")
                         item.confluence_page_id = conf_id or None
                         item.confluence_url = conf_url or None
@@ -1691,10 +1699,12 @@ async def provision_work_item(
     # ── Jira ↔ Confluence 상호 링크 ─────────────────────────────────────────────
     # 이번 호출에서 Jira 를 새로 생성했고(jira_svc 존재) Confluence 도 함께 만들어졌으면,
     # Confluence 쪽엔 이미 Jira 링크가 들어가 있으므로(_default_page_body) 반대 방향으로
-    # Jira Description 끝에 Confluence 제목·링크를 덧붙인다. 기존에 이미 연결된 쪽은
-    # 어느 방향이든 건드리지 않는다 — Jira 는 jira_svc=None(위에서 skip), Confluence 는
-    # conf_created=False(이미 연결돼 생성 skip — 이때는 page_title 도 바인딩되지 않는다).
-    if jira_svc is not None and conf_created and jira_key:
+    # Jira Description 끝에 Confluence 제목·링크를 덧붙인다. 기존에 이미 연결된 Jira
+    # 이슈(jira_svc=None, 위에서 skip 된 경우)는 건드리지 않는다.
+    # Confluence 쪽도 마찬가지로 **이번에 새로 만든 경우에만** 덧붙인다(conf_ok 가 아니라
+    # conf_created_now) — 이미 연결돼 있던 문서는 이 Jira 링크를 담고 있지 않으므로 반대 방향
+    # 링크를 넣을 근거가 없고, 재시도가 기존 Description 을 건드리면 멱등성이 깨진다.
+    if jira_svc is not None and conf_created_now and jira_key:
         conf_note = f"\n\nConfluence 문서: [{page_title}|{conf_url}]"
         new_description = (jira_description_base + conf_note).strip()
         upd = await jira_svc.update_issue(jira_key, {"description": new_description})

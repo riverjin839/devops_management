@@ -8,7 +8,33 @@
 
 ## [Unreleased]
 
-1.20.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.20.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.20.1] - 2026-08-05
+
+### Fixed
+- **알림 규칙의 "모듈" 조건이 아무 알람에도 걸리지 않던 문제** (`/alerts` → 알림 규칙):
+  모듈 조건이 알람 라벨 중 `module` 하나만 보고 있었는데, Alertmanager 알람에도 사내
+  alert-forwarder 페이로드에도 그런 라벨은 사실상 없다. 그래서 모듈 조건을 건 규칙은
+  **매칭이 조용히 실패**했고, 운영자에게는 "규칙을 만들었는데 알림이 안 온다"로 나타났다.
+  이제 `module` · `job` · `service` · `component` · `app` 순으로 처음 존재하는 라벨 값에
+  **정규식 부분 매칭**한다(대개 `job` 이 모듈을 알려준다 — `fluent-bit`, `opensearch` …).
+  후보 라벨이 하나도 없으면 통과가 아니라 미매칭으로 처리한다.
+
+### Added
+- **알림 규칙 편집 UI 보강** (`/alerts` → 알림 규칙): 그동안 API 로만 설정할 수 있던 두 항목을
+  화면에서 편집할 수 있다(CLAUDE.md §UI-First).
+  ① **모듈/서비스 패턴** — 어떤 라벨을 보는지 입력 아래에 안내를 함께 표시.
+  ② **재전파 채널** — 규칙에 걸린 알람을 기존 알림 채널(Slack/webhook/email)로도 보낼지
+  체크박스로 선택. 규칙 목록에도 "재전파" 열과 모듈 조건(`module~…`)이 표시된다.
+
+### Fixed
+- **업무 프로비저닝 재시도가 500 으로 실패하던 문제**: Jira 는 이번에 새로 만들고 Confluence 는
+  이미 연결돼 있던 상태로 재시도하면 `UnboundLocalError: page_title` 로 500 이 났다. 상호 링크
+  단계가 "Confluence 를 이번에 만들었는지"가 아니라 `conf_ok`(이미 연결돼 건너뛴 경우도 True)를
+  보고 있었던 탓이다. 이제 **이번 호출에서 실제로 만든 경우에만** Jira Description 에 Confluence
+  링크를 덧붙인다 — 이미 연결된 문서 때문에 기존 Description 을 덮어쓰는 PUT 도 더 이상 나가지
+  않는다(재시도 멱등성).
 
 ### Added
 - **Batch Jobs — 단계별 실행 추적 가시화**: 실행 이력·실행 결과 카드에 **실행 단계 타임라인**(kubeconfig 해석 → kubectl 연결·Job 조회 → 대상 선정 → 삭제 / SSH 잡은 명령 조립 → SSH 실행 → 결과 정리)과 **실측 명령 trace**(실제로 나간 kubectl/SSH 명령 + exit code·소요시간·출력 발췌, kubeconfig 경로 마스킹)를 표시 — "어느 단계에서 무엇을 하다 실패했는지"를 로그를 뒤지지 않고 판독. deep check 의 `ExecutionStep`/`ExecutionStepsTimeline` 패턴을 배치잡 프레임워크에 이식(`BatchJobExecutor._step`/`_record_command`/`step_plan`), 실행마다 `batch_job_runs.steps`/`commands`(JSONB)에 영속(실패·예외 경로 포함). Backend: `services/batch_jobs/base.py` + executor 3종 계측. Frontend: `BatchJobLogDetail` 에 타임라인+`CommandTraceList`.
@@ -20,7 +46,6 @@
 - **연결된 클러스터가 "미연결"로 오진되던 문제 (DailyChecker)**: anonymous-auth 를 끈 하드닝 클러스터는 익명 `/healthz` 프로브에 401/403 을 반환하는데, 일일점검이 200 이 아니면 전부 critical→pending(미연결)으로 판정해 kubectl 인증이 정상인 클러스터도 항상 미연결로 표시됐다. 401/403 을 "도달 가능(인증 필요)"으로 판정하도록 수정하고(등록 검증·HealthChecker 와 기준 통일), 익명 프로브가 완전히 실패하면 **kubeconfig 인증 프로브로 폴백**해 재확인한다. 실패 시에도 원인 힌트(DNS/포트/라우팅/TLS — `services/k8s_diagnose.py`)를 점검 상세에 남긴다.
 - **배치잡 연결 실패가 전부 "에러"로 뭉개지던 문제**: k8s_job_cleanup 의 kubectl 실패를 stderr 기반으로 `connect_error`(연결 실패)/`auth_error`(인증·RBAC)/`error` 로 분류하고, headline 에 stderr 첫 줄 + 한국어 원인 힌트를 실어 상태 pill 만 봐도 원인 계열을 알 수 있게 했다.
 - **kubeconfig 해석 실패 사유 무표시**: `ensure_kubeconfig_file` 이 사유 없이 None 을 반환해 "kubeconfig 미등록" 한 메시지로 뭉개지던 것을 `resolve_kubeconfig` 로 세분화 — 미등록 / **경로만 등록(DB content 없음 — Compose 워커가 파일을 못 보는 케이스)** / 파일 재생성 실패를 구분해 실행 로그·사전 점검·클러스터 연결 확인에 그대로 노출.
-- **업무 프로비저닝 재시도 500 (UnboundLocalError)**: Jira 만 재시도(Confluence 는 이미 연결돼 skip)하는 호출에서 Jira↔Confluence 상호 링크 블록이 미바인딩 `page_title` 을 참조해 500 이 나던 문제 수정 — 상호 링크는 **이번 호출에서 Confluence 페이지를 실제로 새로 만든 경우에만** Jira Description 에 덧붙인다(이미 연결된 쪽 무변경 의도대로). Backend: `routers/jira.py` `provision_work_item`.
 
 ### Changed
 - **클러스터 "연결 확인"(verify) 의미 변경**: API 서버는 도달하지만 kubeconfig 가 없거나 인증 불가면 이제 healthy 가 아니라 **warning** 으로 마킹 — "클러스터는 연결됨인데 배치잡·점검은 kubeconfig 미등록 에러" 모순을 해소. Settings 연결 확인 UI 도 한 줄 요약 대신 3개 체크(healthz/kubeconfig 인증/kubectl) 개별 결과를 행으로 표시. (기존에 healthy 로 보이던 kubeconfig 미등록 클러스터는 다음 확인부터 warning 으로 나타남)

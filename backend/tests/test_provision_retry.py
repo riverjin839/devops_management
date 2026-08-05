@@ -65,17 +65,15 @@ class _FakeJiraSvc:
     def __init__(self, result: dict):
         self.result = result
         self.calls = 0
-        self.update_calls = 0
-        self.last_update_fields = None
+        # 상호 링크(Description 뒤에 Confluence 링크 덧붙이기) PUT 호출 기록.
+        self.update_calls: list[tuple] = []
 
     async def create_issue(self, *a, **kw):
         self.calls += 1
         return self.result
 
     async def update_issue(self, key, fields):
-        # Jira↔Confluence 상호 링크(Description PUT) 경로 검증용
-        self.update_calls += 1
-        self.last_update_fields = fields
+        self.update_calls.append((key, fields))
         return {"status": "ok"}
 
 
@@ -189,17 +187,18 @@ async def test_retry_skips_already_succeeded_confluence_side(db, monkeypatch):
     assert conf_svc.calls == 0
     assert jira_svc.calls == 1
     assert res.confluence_page_id == existing_page_id  # 기존 값 유지
+    # 이번에 만들지 않은 문서로 상호 링크 PUT 을 쏘지 않는다(멱등) — 예전에는 이 지점에서
+    # conf_ok 만 보고 진입해 UnboundLocalError(page_title) 로 500 이 났다.
+    assert jira_svc.update_calls == []
 
 
-async def test_both_fresh_success_appends_confluence_link_to_jira(db, monkeypatch):
-    """둘 다 이번 호출에서 신규 생성 성공 → Jira Description 에 Confluence 링크가 덧붙는다.
-
-    반대로 한쪽이 이미 연결돼 있던(skip) 호출에서는 상호 링크 PUT 이 나가면 안 된다 —
-    skip 경로는 page_title 을 바인딩하지 않아 과거 UnboundLocalError 의 원인이었다."""
+async def test_mutual_link_runs_only_when_confluence_created_now(db, monkeypatch):
+    """Jira·Confluence 를 이번 호출에서 함께 만든 경우에는 상호 링크 PUT 이 나간다."""
     item = _make_work_item(db)
     key, page_id = f"OPS-{_uid()}", _uid()
     jira_svc = _FakeJiraSvc({"status": "ok", "key": key, "id": _uid(), "url": f"https://j/{key}"})
-    conf_svc = _FakeConfluenceSvc({"status": "ok", "id": page_id, "url": f"https://c/{page_id}", "action": "created"})
+    conf_svc = _FakeConfluenceSvc(
+        {"status": "ok", "id": page_id, "url": f"https://c/{page_id}", "action": "created"})
     _patch(monkeypatch, jira_svc=jira_svc, conf_svc=conf_svc)
 
     res = await provision_work_item(
@@ -208,10 +207,11 @@ async def test_both_fresh_success_appends_confluence_link_to_jira(db, monkeypatc
         db, _Actor(),
     )
     assert res.status == "ok"
-    assert jira_svc.calls == 1 and conf_svc.calls == 1
-    assert jira_svc.update_calls == 1
-    assert f"https://c/{page_id}" in jira_svc.last_update_fields["description"]
-    assert "제목" in jira_svc.last_update_fields["description"]  # page_title = item.title
+    assert len(jira_svc.update_calls) == 1
+    updated_key, fields = jira_svc.update_calls[0]
+    assert updated_key == key
+    # 링크 텍스트로 문서 제목이 들어가고, 빈 `[|url]` 이 아니어야 한다.
+    assert f"[{item.title}|https://c/{page_id}]" in fields["description"]
 
 
 async def test_auth_failure_sets_auth_issue_flags(db, monkeypatch):
