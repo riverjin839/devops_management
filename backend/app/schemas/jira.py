@@ -21,6 +21,8 @@ class JiraConfig(BaseModel):
     sso_login_url: str = ""
     # Jira Epic Link 커스텀 필드 ID (예: customfield_10008) — 진척률의 Epic 축.
     jira_epic_field: str = ""
+    # Jira Sprint 커스텀 필드 ID (예: customfield_10007) — work_item.sprint_id 이름 매칭.
+    jira_sprint_field: str = ""
 
 
 class JiraConfigUpdate(BaseModel):
@@ -32,6 +34,7 @@ class JiraConfigUpdate(BaseModel):
     sso_login_url: Optional[str] = None
     sso_username_field: Optional[str] = None
     jira_epic_field: Optional[str] = None
+    jira_sprint_field: Optional[str] = None
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────

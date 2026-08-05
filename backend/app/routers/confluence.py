@@ -95,7 +95,7 @@ def _cql_quote(v: str) -> str:
 
 
 def _build_confluence_cql(payload: ConfluenceDocSearchRequest) -> tuple[str, str]:
-    """기여자/스페이스/라벨/기간/텍스트 조건을 AND 로 묶어 CQL 을 조립한다.
+    """기여자/스페이스/상위 페이지/라벨/기간/제목/텍스트 조건을 AND 로 묶어 CQL 을 조립한다.
 
     Jira 가져오기의 `_build_filter_jql`(jira.py:817) 과 동일 패턴 — 여러 값은 `IN (...)`
     으로 OR 처리. 반환 (cql, error) — `contributor_mode='any'` 인데 다른 조건도 전혀 없으면
@@ -124,6 +124,11 @@ def _build_confluence_cql(payload: ConfluenceDocSearchRequest) -> tuple[str, str
         clauses.append(f'space = "{_cql_quote(space_key)}"')
         has_filter = True
 
+    ancestor_id = (payload.ancestor_id or "").strip()
+    if ancestor_id:
+        clauses.append(f'ancestor = "{_cql_quote(ancestor_id)}"')
+        has_filter = True
+
     labels = [x.strip() for x in payload.labels if x and x.strip()]
     if labels:
         # Confluence CQL 필드명은 단수 `label` — Jira 의 복수형 `labels` 와 다르다.
@@ -135,13 +140,18 @@ def _build_confluence_cql(payload: ConfluenceDocSearchRequest) -> tuple[str, str
         clauses.append(f'lastmodified >= now("-{int(payload.updated_since_days)}d")')
         has_filter = True
 
+    title = (payload.title or "").strip()
+    if title:
+        clauses.append(f'title ~ "{_cql_quote(title)}"')
+        has_filter = True
+
     text = (payload.text or "").strip()
     if text:
         clauses.append(f'text ~ "{_cql_quote(text)}"')
         has_filter = True
 
     if not has_filter:
-        return "", "조건을 하나 이상 지정하세요 (기여자/스페이스/라벨/기간/검색어)."
+        return "", "조건을 하나 이상 지정하세요 (기여자/스페이스/상위 페이지/라벨/기간/제목/검색어)."
     return " and ".join(clauses) + " order by lastmodified desc", ""
 
 

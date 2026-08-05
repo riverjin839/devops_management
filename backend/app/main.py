@@ -967,6 +967,10 @@ def _run_migrations():
         _safe_add_column("work_items", "provision_status", "VARCHAR(20)")
         _safe_add_column("work_items", "provision_jira_error", "TEXT")
         _safe_add_column("work_items", "provision_confluence_error", "TEXT")
+        # 마감일(Jira duedate 동기화 + PEP 직접 편집) + Jira 원격 링크에서 찾은 Confluence
+        # 페이지 전체 목록(복수) — 기존 confluence_url(단일, 수동 편집)과 별개.
+        _safe_add_column("work_items", "due_date", "DATE")
+        _safe_add_column("work_items", "confluence_links", "JSONB")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():

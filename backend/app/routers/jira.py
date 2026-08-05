@@ -21,10 +21,12 @@ import openpyxl
 import xlrd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.app_setting import AppSetting
+from app.models.sprint import Sprint
 from app.models.user import User
 from app.models.user_jira_credential import UserJiraCredential
 from app.models.work_item import WorkItem
@@ -34,7 +36,7 @@ from app.services import secret_box
 from app.services import audit_logger
 from app.services.jira_service import (
     ISSUE_FIELDS, JiraService, map_jira_issue, map_issue_type, parse_jira_dt, KANBAN_TO_CATEGORY,
-    PEP_PRIORITY_TO_JIRA, strip_issue_key_prefix,
+    PEP_PRIORITY_TO_JIRA, strip_issue_key_prefix, extract_epic_parts,
 )
 from app.services.confluence_service import ConfluenceService
 from app.services.jira_sso_http import (
@@ -110,6 +112,9 @@ DEFAULT_JIRA_SETTINGS = {
     # Jira Epic Link 커스텀 필드 ID (선택, 예: customfield_10008) — 주간보고 진척률의
     # Epic 축을 채운다. Server/DC 는 Epic Link 가 커스텀 필드라 인스턴스마다 ID 가 다르다.
     "jira_epic_field": "",
+    # Jira Sprint 커스텀 필드 ID (선택, 예: customfield_10007) — 가져오기 시 work_item.sprint_id
+    # 를 이름으로 매칭한다. Epic Link 와 마찬가지로 Server/DC 는 인스턴스마다 필드 ID 가 다르다.
+    "jira_sprint_field": "",
 }
 
 
@@ -194,6 +199,59 @@ def _resolve_self_assignee_name(actor: User, db: Session) -> str:
                 if name:
                     return name
     return (actor.display_name or "").strip() or username
+
+
+async def _resolve_epic_chain(
+    svc: JiraService, issues: list[dict], epic_field: str,
+) -> dict[str, tuple[str, str]]:
+    """Epic→Task→Sub-task 3단 체인 해석 — Sub-task 자신에게 Epic Link 값이 없고 상위(Task)
+    가 있으면, 그 상위 이슈를 조회해 **상위의** Epic 값을 가져온다(1단 더 위로).
+
+    형제 Sub-task 들이 같은 상위 Task 를 공유하는 경우가 흔해 상위 키로 중복 제거 후 1회씩만
+    조회한다(N+1 방지 — 배치당 조회 수는 "고유 상위 개수" 로 상한). `epic_field` 미설정이면
+    애초에 시도하지 않고 빈 dict — 상위(parent) 만 표시되는 기존 동작 그대로 유지."""
+    if not epic_field:
+        return {}
+    parent_keys: set[str] = set()
+    for issue in issues:
+        fields = issue.get("fields", {}) or {}
+        raw = fields.get(epic_field)
+        has_own_epic = bool(
+            (isinstance(raw, str) and raw.strip())
+            or (isinstance(raw, dict) and (raw.get("key") or (raw.get("fields") or {}).get("summary")))
+        )
+        if has_own_epic:
+            continue
+        parent = fields.get("parent") or {}
+        parent_key = (parent.get("key") or "").strip() if isinstance(parent, dict) else ""
+        if parent_key:
+            parent_keys.add(parent_key)
+    chain: dict[str, tuple[str, str]] = {}
+    for parent_key in parent_keys:
+        got = await svc.get_issue(parent_key, fields=[epic_field])
+        if got.get("status") != "ok":
+            continue
+        parent_fields = (got.get("issue") or {}).get("fields", {}) or {}
+        epic_key, epic_summary = extract_epic_parts(parent_fields, epic_field)
+        if epic_key or epic_summary:
+            chain[parent_key] = (epic_key, epic_summary)
+    return chain
+
+
+def _resolve_sprint_id(db: Session, cache: dict[str, Optional[str]], sprint_name: str) -> Optional[str]:
+    """스프린트 이름 → PEP `Sprint.id` (대소문자 무시 매칭). 매칭 실패 시 자동 생성하지
+    않고 None(스킵) — 스프린트 생성은 PEP 기획 행위(UI-First 원칙). import 배치 내
+    이름별 캐시로 같은 이름 반복 조회를 피한다."""
+    name = (sprint_name or "").strip()
+    if not name:
+        return None
+    key = name.lower()
+    if key in cache:
+        return cache[key]
+    row = db.query(Sprint).filter(func.lower(Sprint.name) == key).first()
+    result = str(row.id) if row else None
+    cache[key] = result
+    return result
 
 
 def _build_assignee_roster(db: Session) -> dict[str, str]:
@@ -481,6 +539,8 @@ def update_config(
         current["sso_username_field"] = data["sso_username_field"].strip()
     if "jira_epic_field" in data and data["jira_epic_field"] is not None:
         current["jira_epic_field"] = data["jira_epic_field"].strip()
+    if "jira_sprint_field" in data and data["jira_sprint_field"] is not None:
+        current["jira_sprint_field"] = data["jira_sprint_field"].strip()
     for k in ("enabled", "verify_tls", "default_project_key"):
         if k in data and data[k] is not None:
             current[k] = data[k]
@@ -919,6 +979,8 @@ _SYNC_FIELDS: tuple[tuple[str, str], ...] = (
     ("content", "내용"),
     ("kanban_status", "진행 상태"),
     ("priority", "우선순위"),
+    ("primary_assignee", "담당자"),
+    ("due_date", "마감일"),
     ("jira_status", "Jira 상태"),
     ("category", "업무 분류"),
     ("jira_issue_type", "이슈 종류"),
@@ -930,9 +992,12 @@ _SYNC_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 
-# Jira 가 소유하는 필드 — 가져올 때마다 무조건 덮어쓴다.
+# Jira 가 소유하는 필드 — 가져올 때마다 무조건 덮어쓴다. 담당자(primary_assignee)/마감일
+# (due_date) 은 과거엔 "비어있을 때만 채움" 으로 보호했지만, PEP 담당자 이름 매핑이
+# 이제 정확하므로 title/content 와 동일하게 Jira 를 단일 소스로 승격했다 — 매 동기화마다
+# 미리보기 diff 로 변경 사항을 보여주고(그대로) 반영한다.
 _JIRA_OWNED_ATTRS: tuple[str, ...] = (
-    "title", "content", "kanban_status", "priority",
+    "title", "content", "kanban_status", "priority", "primary_assignee", "due_date",
     "jira_issue_key", "jira_url", "jira_status", "jira_status_category",
     "jira_updated_at", "jira_issue_type", "jira_parent_key", "jira_parent_summary",
     "jira_components", "jira_labels",
@@ -955,9 +1020,14 @@ def _jira_sync_values(existing: Optional[WorkItem], fields: dict) -> dict:
     # 정해둔 분류를 폴백값("Jira")으로 되돌리지 않도록 한다.
     if fields.get("jira_components") and fields.get("category"):
         out["category"] = fields["category"]
-    # Confluence 링크는 **비어 있을 때만** 채운다 — 사용자가 직접 넣은 링크를 덮지 않는다.
+    # Confluence 대표 링크는 **비어 있을 때만** 채운다 — 사용자가 직접 넣은 링크를 덮지 않는다.
     if fields.get("confluence_url") and not (getattr(existing, "confluence_url", "") or "").strip():
         out["confluence_url"] = fields["confluence_url"]
+    # Confluence 전체 링크 목록은 이번 호출에서 원격 링크 조회를 시도했을 때만(키 존재)
+    # 최신 전체 목록으로 통째 교체한다 — remote_links 는 매번 authoritative 한 전체 목록을
+    # 돌려주므로 append/merge 가 아니라 replace.
+    if "confluence_links" in fields:
+        out["confluence_links"] = fields["confluence_links"]
     return out
 
 
@@ -1017,15 +1087,17 @@ def _parse_issue_key(raw: str) -> str:
 
 
 def _apply_jira_fields(item: WorkItem, fields: dict, *, now: datetime) -> None:
-    """`_jira_sync_values` 결과를 업무에 반영. 담당자/완료일은 비어 있을 때만 채운다."""
+    """`_jira_sync_values` 결과를 업무에 반영. 담당자는 이제 title/content 와 동일하게
+    Jira 가 무조건 소유(매 동기화마다 갱신) — 완료일(closed_at)만 비어 있을 때 채운다."""
     for attr, val in _jira_sync_values(item, fields).items():
         setattr(item, attr, val)
+    # assignee 는 primary_assignee 의 미러 컬럼 — 위 루프가 primary_assignee 를 갱신했으면
+    # 같이 맞춘다(둘 다 Jira-owned 로 승격돼 fields 에 항상 존재).
+    if "primary_assignee" in fields:
+        item.assignee = fields["primary_assignee"]
     item.jira_synced_at = now
     if fields.get("closed_at") and not item.closed_at:
         item.closed_at = fields["closed_at"]
-    if not (item.primary_assignee or "").strip() or item.primary_assignee == "(미할당)":
-        item.primary_assignee = fields["primary_assignee"]
-        item.assignee = fields["primary_assignee"]
 
 
 # ── Confluence (Jira 와 같은 IdP 세션으로 연동) ─────────────────────────────────
@@ -1162,8 +1234,9 @@ async def refresh_work_item_from_jira(
         return JiraImportResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
 
     epic_field = (cfg.get("jira_epic_field") or "").strip()
-    got = await svc.get_issue(item.jira_issue_key,
-                              fields=ISSUE_FIELDS + ([epic_field] if epic_field else []))
+    sprint_field = (cfg.get("jira_sprint_field") or "").strip()
+    extra_fields = [f for f in (epic_field, sprint_field) if f]
+    got = await svc.get_issue(item.jira_issue_key, fields=ISSUE_FIELDS + extra_fields)
     if got.get("missing"):
         # 삭제됐거나 내 권한으로 안 보이거나 — 서버는 구분할 수 없다. 연결을 자동으로
         # 끊지 않고 상태만 알려, 화면에서 사용자가 해제/삭제를 고르게 한다.
@@ -1176,19 +1249,28 @@ async def refresh_work_item_from_jira(
         return JiraImportResult(status=got.get("status", "error"),
                                 detail=got.get("detail", "Jira 이슈 조회 실패"))
     confluence_base = (cfg.get("confluence_base_url") or "").strip()
-    fields = map_jira_issue(got["issue"], base_url,
-                            assignee_resolver=_build_assignee_resolver(db), epic_field=epic_field,
-                            confluence_base_url=confluence_base)
-    # 행 단위라 이슈 1건 — 본문에 없더라도 원격 링크에 붙은 Confluence 문서를 찾아본다
-    # (대량 가져오기는 이슈마다 1콜이 되어 N+1 이므로 본문 스캔만 한다).
-    if confluence_base and not fields.get("confluence_url"):
-        linked = await svc.remote_links(item.jira_issue_key)
-        for link in linked.get("links", []):
-            if link["url"].rstrip("/").startswith(confluence_base.rstrip("/")):
-                fields["confluence_url"] = link["url"][:500]
-                break
+    # 행 단위라 이슈 1건 — 상위(Task) 를 한 번 더 조회해 Epic→Task→Sub-task 체인을 완성한다.
+    epic_chain = await _resolve_epic_chain(svc, [got["issue"]], epic_field)
+    issue_fields_raw = got["issue"].get("fields", {}) or {}
+    parent_raw = issue_fields_raw.get("parent")
+    parent_key_raw = (parent_raw.get("key") or "").strip() if isinstance(parent_raw, dict) else ""
+    epic_override = epic_chain.get(parent_key_raw) if parent_key_raw else None
+    # 원격 링크에 붙은 Confluence 문서 전체를 찾아본다(조회 실패는 기존 값 보존을 위해 None).
+    remote_confluence_links = None
+    if confluence_base:
+        rl = await svc.remote_links(item.jira_issue_key)
+        if rl.get("status") == "ok":
+            remote_confluence_links = rl.get("links", [])
+    fields = map_jira_issue(
+        got["issue"], base_url, assignee_resolver=_build_assignee_resolver(db),
+        epic_field=epic_field, confluence_base_url=confluence_base, sprint_field=sprint_field,
+        epic_override=epic_override, remote_confluence_links=remote_confluence_links,
+    )
+    sprint_id = _resolve_sprint_id(db, {}, fields.get("sprint_name") or "")
     changes = _diff_existing(item, fields)
     if not changes:
+        if sprint_id and item.sprint_id != sprint_id:
+            item.sprint_id = sprint_id
         item.jira_synced_at = datetime.utcnow()
         db.commit()
         return JiraImportResult(
@@ -1199,6 +1281,8 @@ async def refresh_work_item_from_jira(
         )
 
     _apply_jira_fields(item, fields, now=datetime.utcnow())
+    if sprint_id:
+        item.sprint_id = sprint_id
     db.commit()
     audit_logger.record(
         db, action="work_item.jira_refresh", actor=actor,
@@ -1397,7 +1481,9 @@ async def relink_work_item(
         return JiraRelinkResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
 
     epic_field = (cfg.get("jira_epic_field") or "").strip()
-    got = await svc.get_issue(key, fields=ISSUE_FIELDS + ([epic_field] if epic_field else []))
+    sprint_field = (cfg.get("jira_sprint_field") or "").strip()
+    extra_fields = [f for f in (epic_field, sprint_field) if f]
+    got = await svc.get_issue(key, fields=ISSUE_FIELDS + extra_fields)
     if got.get("missing"):
         return JiraRelinkResult(
             status="missing",
@@ -1407,15 +1493,31 @@ async def relink_work_item(
         return JiraRelinkResult(status=got.get("status", "error"),
                                 detail=got.get("detail", "Jira 이슈 조회 실패"))
 
+    confluence_base = (cfg.get("confluence_base_url") or "").strip()
+    epic_chain = await _resolve_epic_chain(svc, [got["issue"]], epic_field)
+    issue_fields_raw = got["issue"].get("fields", {}) or {}
+    parent_raw = issue_fields_raw.get("parent")
+    parent_key_raw = (parent_raw.get("key") or "").strip() if isinstance(parent_raw, dict) else ""
+    epic_override = epic_chain.get(parent_key_raw) if parent_key_raw else None
+    remote_confluence_links = None
+    if confluence_base:
+        rl = await svc.remote_links(key)
+        if rl.get("status") == "ok":
+            remote_confluence_links = rl.get("links", [])
+
     prev_key = item.jira_issue_key or ""
     # 이전 연결의 잔재(Epic/컴포넌트 등)를 먼저 비우고 새 이슈 값으로 채운다.
     _clear_jira_link(item)
     fields = map_jira_issue(
         got["issue"], base_url, assignee_resolver=_build_assignee_resolver(db),
-        epic_field=epic_field, confluence_base_url=(cfg.get("confluence_base_url") or "").strip(),
+        epic_field=epic_field, confluence_base_url=confluence_base, sprint_field=sprint_field,
+        epic_override=epic_override, remote_confluence_links=remote_confluence_links,
     )
     item.jira_issue_id = fields.get("jira_issue_id") or None
     _apply_jira_fields(item, fields, now=datetime.utcnow())
+    sprint_id = _resolve_sprint_id(db, {}, fields.get("sprint_name") or "")
+    if sprint_id:
+        item.sprint_id = sprint_id
     db.commit()
     audit_logger.record(
         db, action="work_item.jira_relink", actor=actor,
@@ -1963,7 +2065,9 @@ async def import_issues(
     if svc is None:
         return JiraImportResult(status="error", detail="내 Jira 인증(PAT 또는 세션 쿠키)이 등록되지 않았습니다 (설정 > 연동에서 등록).")
     epic_field = (cfg.get("jira_epic_field") or "").strip()
-    search = await svc.search(jql, extra_fields=[epic_field] if epic_field else None)
+    sprint_field = (cfg.get("jira_sprint_field") or "").strip()
+    extra_fields = [f for f in (epic_field, sprint_field) if f]
+    search = await svc.search(jql, extra_fields=extra_fields or None)
     if search.get("status") != "ok":
         return JiraImportResult(
             status=search.get("status", "error"),
@@ -1977,6 +2081,9 @@ async def import_issues(
     )
     confluence_base = (cfg.get("confluence_base_url") or "").strip()
     issues = search.get("issues", [])
+    # Epic→Task→Sub-task 체인 — 형제 Sub-task 가 공유하는 상위 Task 는 배치당 1회만 조회.
+    epic_chain = await _resolve_epic_chain(svc, issues, epic_field)
+    sprint_cache: dict[str, Optional[str]] = {}
     created = updated = skipped = 0
     errors: list[str] = []
     preview: list[JiraImportItemPreview] = []
@@ -1984,8 +2091,24 @@ async def import_issues(
 
     for issue in issues:
         try:
-            fields = map_jira_issue(issue, base_url, assignee_resolver=resolver,
-                                    epic_field=epic_field, confluence_base_url=confluence_base)
+            issue_fields_raw = issue.get("fields", {}) or {}
+            parent_raw = issue_fields_raw.get("parent")
+            parent_key_raw = (parent_raw.get("key") or "").strip() if isinstance(parent_raw, dict) else ""
+            epic_override = epic_chain.get(parent_key_raw) if parent_key_raw else None
+            # Confluence 원격 링크 전체 수집 — 설정 시에만(옵트인, 이슈당 1콜 N+1 수용).
+            # 조회 실패는 "이번엔 못 봤음"(None) 으로 남겨 기존 confluence_links 를 보존한다.
+            remote_confluence_links = None
+            if confluence_base and issue.get("key"):
+                rl = await svc.remote_links(issue["key"])
+                if rl.get("status") == "ok":
+                    remote_confluence_links = rl.get("links", [])
+            fields = map_jira_issue(
+                issue, base_url, assignee_resolver=resolver,
+                epic_field=epic_field, confluence_base_url=confluence_base,
+                sprint_field=sprint_field, epic_override=epic_override,
+                remote_confluence_links=remote_confluence_links,
+            )
+            sprint_id = _resolve_sprint_id(db, sprint_cache, fields.get("sprint_name") or "")
             jid = fields.get("jira_issue_id")
             if not jid:
                 skipped += 1
@@ -2032,8 +2155,11 @@ async def import_issues(
                 continue
 
             if existing:
-                # Jira-소유 필드만 갱신 (PEP 로컬 편집 보존). 담당자는 비어있을 때만 채움.
+                # Jira-소유 필드 갱신 (PEP 로컬 편집 보존 — content/제목/담당자/마감일 등은
+                # 이제 Jira 가 소유해 무조건 반영됨, 자세한 보존 규칙은 _jira_sync_values 참고).
                 _apply_jira_fields(existing, fields, now=now)
+                if sprint_id:
+                    existing.sprint_id = sprint_id
                 watchers = list(existing.jira_watchers or [])
                 if actor.username not in watchers:
                     watchers.append(actor.username)
@@ -2052,6 +2178,8 @@ async def import_issues(
                     priority=fields["priority"],
                     started_at=fields["started_at"],
                     closed_at=fields["closed_at"],
+                    due_date=fields.get("due_date"),
+                    sprint_id=sprint_id,
                     jira_issue_id=fields["jira_issue_id"],
                     jira_issue_key=fields["jira_issue_key"],
                     jira_url=fields["jira_url"],
@@ -2067,6 +2195,7 @@ async def import_issues(
                     jira_components=fields.get("jira_components"),
                     jira_labels=fields.get("jira_labels"),
                     confluence_url=fields.get("confluence_url"),
+                    confluence_links=fields.get("confluence_links"),
                     jira_synced_at=now,
                     jira_watchers=[actor.username],
                     created_by=actor.username,
@@ -2288,6 +2417,8 @@ async def import_excel_save(
             content = row.description if (row.description or "").strip() else (summary or key)
             started_at = _parse_excel_date(row.created) or now
             closed_at = _parse_excel_date(row.resolved) if kanban == "done" else None
+            due_dt = _parse_excel_date(row.due_date)
+            due_date = due_dt.date() if due_dt else None
             # assignee_name 은 미리보기 단계(_match_excel_assignee)에서 이미 담당자 레지스트리와
             # 매칭 시도된 값 — 매칭 실패해도 원본 첫 토큰이 담겨 있어 빈 문자열이 아닌 한 그대로 쓴다.
             assignee_name = (row.assignee_name or "").strip() or "(미할당)"
@@ -2307,6 +2438,8 @@ async def import_excel_save(
                 existing.jira_synced_at = now
                 if closed_at and not existing.closed_at:
                     existing.closed_at = closed_at
+                if due_date:
+                    existing.due_date = due_date
                 if not (existing.primary_assignee or "").strip() or existing.primary_assignee == "(미할당)":
                     existing.primary_assignee = assignee_name
                     existing.assignee = assignee_name
@@ -2327,6 +2460,7 @@ async def import_excel_save(
                     kanban_status=kanban,
                     started_at=started_at,
                     closed_at=closed_at,
+                    due_date=due_date,
                     jira_issue_key=key,
                     jira_url=row.jira_url,
                     jira_status=row.status,

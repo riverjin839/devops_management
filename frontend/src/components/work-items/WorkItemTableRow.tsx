@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket, Link2Off } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket, Link2Off, ChevronRight, ChevronDown } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
@@ -120,6 +120,7 @@ type EditField =
   | 'resolution'
   | 'startedAt'
   | 'closedAt'
+  | 'dueDate'
   | 'remarks';
 
 function EditableCell({
@@ -274,6 +275,7 @@ export function WorkItemTableRow({
   const updateTask = useUpdateWorkItem();
   const toast = useToast();
   const [editing, setEditing] = useState<EditField>(null);
+  const [confluenceLinksOpen, setConfluenceLinksOpen] = useState(false);
 
   const save = (patch: WorkItemUpdate) => {
     updateTask.mutate({ id: item.id, data: patch }, {
@@ -600,6 +602,31 @@ export function WorkItemTableRow({
           </EditableCell>
         );
 
+      case 'dueDate': {
+        // 마감 지났고 아직 완료 안 됐으면 강조(closedAt 과 같은 인라인 편집 패턴).
+        const overdue = !!item.dueDate && item.kanbanStatus !== 'done'
+          && toDateInput(item.dueDate) < todayDateInput();
+        return (
+          <EditableCell key="dueDate" isEditing={editing === 'dueDate'} onEnter={() => setEditing('dueDate')}
+            className={`whitespace-nowrap font-mono text-sm ${overdue ? 'text-status-critical' : 'text-muted-foreground'}`}>
+            {editing === 'dueDate' ? (
+              <input
+                autoFocus
+                type="date"
+                defaultValue={toDateInput(item.dueDate)}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  if (v !== toDateInput(item.dueDate)) save({ dueDate: v || null });
+                  else setEditing(null);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
+                className="px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
+              />
+            ) : fmtDate(item.dueDate)}
+          </EditableCell>
+        );
+      }
+
       case 'jiraLink':
         return (
           <td key="jiraLink" className="px-4 py-1.5 whitespace-nowrap">
@@ -621,7 +648,45 @@ export function WorkItemTableRow({
           </td>
         );
 
-      case 'confluenceLink':
+      case 'confluenceLink': {
+        // 다중 링크(Jira 원격 링크에서 찾은 전체 목록)가 있으면 배지+드롭다운, 없으면
+        // 기존처럼 대표(단일) 링크만 표시(하위호환).
+        const links = item.confluenceLinks ?? [];
+        if (links.length > 1) {
+          return (
+            <td key="confluenceLink" className="px-4 py-1.5 whitespace-nowrap relative">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setConfluenceLinksOpen((v) => !v); }}
+                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                Confl. {links.length}
+                <ChevronDown className="w-3 h-3 opacity-60" />
+              </button>
+              {confluenceLinksOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setConfluenceLinksOpen(false); }} />
+                  <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-1 min-w-[220px] max-w-xs">
+                    {links.map((link, i) => (
+                      <a
+                        key={link.url + i}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title={link.url}
+                        className="block px-2 py-1.5 rounded-md text-sm text-foreground hover:bg-secondary truncate"
+                      >
+                        {link.title || link.url}
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
+            </td>
+          );
+        }
         return (
           <td key="confluenceLink" className="px-4 py-1.5 whitespace-nowrap">
             {item.confluenceUrl ? (
@@ -641,21 +706,39 @@ export function WorkItemTableRow({
             )}
           </td>
         );
+      }
 
       case 'jiraEpic':
-        // task = Jira Epic. Epic 이 없는 Sub-task 는 상위 이슈(parent)를 대신 보여준다.
+        // "상위업무" — Epic→Task 체인을 가시화한다. 둘 다 있고 서로 다르면 Epic 칩 →
+        // 화살표 → 상위(Task) 칩을 나란히, 하나만 있으면 그 칩만(기존 동작 유지).
         return (
           <td key="jiraEpic" className="px-4 py-1.5 max-w-xs">
             {(() => {
-              const key = item.jiraEpicKey || item.jiraParentKey;
-              const summary = item.jiraEpicKey ? item.jiraEpicSummary : item.jiraParentSummary;
-              if (!key && !item.jiraEpic) return <span className="text-muted-foreground/50">-</span>;
+              const hasEpic = !!(item.jiraEpicKey || item.jiraEpic);
+              const hasParent = !!item.jiraParentKey && item.jiraParentKey !== item.jiraEpicKey;
+              if (!hasEpic && !hasParent) return <span className="text-muted-foreground/50">-</span>;
+              const jiraKeyUrl = (key: string) =>
+                item.jiraUrl ? item.jiraUrl.replace(/\/browse\/.*$/, `/browse/${key}`) : undefined;
               return (
-                <JiraIssueChip
-                  issueKey={key ?? undefined}
-                  title={summary ?? (key ? undefined : item.jiraEpic ?? undefined)}
-                  url={key && item.jiraUrl ? item.jiraUrl.replace(/\/browse\/.*$/, `/browse/${key}`) : undefined}
-                />
+                <div className="flex items-center gap-1 min-w-0">
+                  {hasEpic && (
+                    <JiraIssueChip
+                      issueKey={item.jiraEpicKey ?? undefined}
+                      title={item.jiraEpicKey ? item.jiraEpicSummary ?? undefined : item.jiraEpic ?? undefined}
+                      url={item.jiraEpicKey ? jiraKeyUrl(item.jiraEpicKey) : undefined}
+                    />
+                  )}
+                  {hasEpic && hasParent && (
+                    <ChevronRight className="w-3 h-3 flex-shrink-0 text-muted-foreground/50" />
+                  )}
+                  {hasParent && (
+                    <JiraIssueChip
+                      issueKey={item.jiraParentKey ?? undefined}
+                      title={item.jiraParentSummary ?? undefined}
+                      url={item.jiraParentKey ? jiraKeyUrl(item.jiraParentKey) : undefined}
+                    />
+                  )}
+                </div>
               );
             })()}
           </td>

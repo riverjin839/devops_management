@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean, ForeignKey, func
+from sqlalchemy import Column, String, Text, DateTime, Date, Integer, Boolean, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship, deferred
 from pgvector.sqlalchemy import Vector
@@ -54,6 +54,8 @@ class WorkItem(Base):
     resolution = Column(Text, nullable=True)                   # action_content / result_content
     started_at = Column(DateTime, nullable=False)              # occurred_at / scheduled_at
     closed_at = Column(DateTime, nullable=True)                # resolved_at / completed_at
+    # 마감일 — Jira 연동 업무는 duedate 동기화, 미연동 업무는 PEP 폼에서 직접 편집.
+    due_date = Column(Date, nullable=True)
 
     # 공통 — 기타
     remarks = Column(Text, nullable=True)
@@ -112,6 +114,10 @@ class WorkItem(Base):
     confluence_url = Column(Text, nullable=True)
     # 마지막으로 PEP → Confluence 반영(동기화)한 시각 — jira_synced_at 과 동일한 목적.
     confluence_synced_at = Column(DateTime, nullable=True)
+    # Jira 이슈의 원격 링크(remote link)에서 찾은 Confluence 페이지 전체 목록 —
+    # list[{"url": str, "title": str}]. confluence_url/confluence_page_id(단일, 수동 편집
+    # 가능한 대표 링크)와 별개로 Jira 동기화가 매번 최신 전체 목록으로 교체한다.
+    confluence_links = Column(JSONB, nullable=True)
 
     # ── 프로비저닝(Jira+Confluence 동시 생성) 마지막 시도 결과 ──────────────────
     # `POST /jira/provision` 이 호출될 때마다 갱신. null = 프로비저닝을 시도한 적 없음

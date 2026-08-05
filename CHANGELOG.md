@@ -10,6 +10,47 @@
 
 1.24.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무 관리 ↔ Jira 동기화 확장**: 마감일(Jira `duedate`), 스프린트(Jira Sprint
+  커스텀필드 → PEP `Sprint` 이름 매칭, 설정 `jira_sprint_field`), 상위업무 체인
+  (Epic→Task, Sub-task 는 상위를 1회 추가 조회해 Epic 값을 끌어옴 — 형제 Sub-task 는
+  배치당 1회만 조회), Confluence 원격 링크 전체 목록(`confluence_links`, 복수 등록
+  가능 — 대표 링크 `confluence_url` 은 그대로 유지)을 가져오기/재가져오기/재연결마다
+  동기화한다. 담당자는 title/content 와 동일하게 이제 Jira 가 무조건 소유(매 동기화마다
+  PEP 매핑 이름으로 갱신 — 이전엔 비어있을 때만 채움). 업무 관리 게시판에 **마감일**
+  컬럼 신규, **상위업무**(구 Epic) 컬럼이 Epic+상위 2개 칩 체인으로, Confl. 링크
+  컬럼이 다중 링크 드롭다운으로 확장. Backend: `services/jira_service.py`
+  (`extract_sprint_name`, `map_jira_issue` 의 `epic_override`/`remote_confluence_links`
+  파라미터), `routers/jira.py`(`_resolve_epic_chain`, `_resolve_sprint_id`,
+  `_JIRA_OWNED_ATTRS`/`_SYNC_FIELDS` 확장), `models/work_item.py`(`due_date`,
+  `confluence_links`). Frontend: `WorkItemTableRow.tsx`, `workItemColumns.ts`.
+- **하위 업무 등록 팝업을 상위 업무 등록과 통일**: `WorkItemFormModal`(무거운 전체 폼)
+  대신 `QuickAddTaskModal`(컴팩트 팝업, 저장 후 Jira/Confluence 자동 생성으로 이어지는
+  흐름)을 하위 업무 등록에도 재사용 — 상위 업무를 읽기전용 칩으로 보여주고(수정 불가)
+  담당자/카테고리를 상위 업무 값으로 기본 채운다. Frontend:
+  `components/dashboard/QuickAddTaskModal.tsx`(`parentItem` prop 신규),
+  `pages/WorkItemBoardPage.tsx`.
+- **업무 관리 필터 "이번주" 버튼 4단 순환**: 이번주(월~일) → 2주(이번주+다음주) →
+  이번달(1일~말일) → 해제 순으로 반복 클릭 시 넓어진다. Frontend:
+  `pages/WorkItemBoardPage.tsx`(`cycleDateFilter`).
+- **컬럼 순서/폭/표시여부 개인화**: 업무 관리 게시판 컬럼 레이아웃(순서/폭/표시여부)이
+  필터 조건과 마찬가지로 로그인 계정별 localStorage 키로 분리 저장돼, 같은 브라우저를
+  여러 계정이 써도 서로 섞이지 않는다. Frontend: `pages/WorkItemBoardPage.tsx`
+  (`useColumnLayout`/`useColumnWidths` storageKey 에 username 반영).
+- **Confluence 문서 가져오기 조건 추가**: 상위 페이지 ID(ancestor)·문서 제목 필터를
+  추가하고, 최근 수정 기간 기본값을 "이번주"(월요일부터)로 변경(Jira 가져오기와 동일
+  패턴, 수정 가능). Backend: `schemas/confluence_docs.py`(`title`, `ancestor_id`),
+  `routers/confluence.py`(`_build_confluence_cql`). Frontend:
+  `components/documents/ConfluenceImportModal.tsx`.
+
+### Fixed
+- **업무 완료일 — 칸반 드래그로 재오픈해도 완료일이 안 지워지던 문제**: 정식 폼 저장
+  (PUT)은 done 에서 벗어나면 완료일을 해제했지만, 칸반 드래그(PATCH `/status`) 경로는
+  그 분기가 없어 재오픈해도 완료일이 남아있었다 — 두 경로가 동일하게 동작하도록 수정.
+  Backend: `routers/work_items.py`(`patch_status`).
+- **작업 제목/작업 내용 항목명·설명 명확화**: 업무 관리 게시판의 "제목" 컬럼을
+  "작업 제목"으로 변경(Jira summary 와 동기화됨을 명시).
+
 ## [1.24.3] - 2026-08-05
 
 ### Changed

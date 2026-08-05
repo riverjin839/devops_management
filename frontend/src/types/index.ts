@@ -514,6 +514,8 @@ export interface WorkItem {
   startedAt: string;
   /** 종료/해결/완료 일시. issue 의 resolved_at / task 의 completed_at 통합. */
   closedAt?: string;
+  /** 마감일 — Jira 연동 업무는 duedate 동기화(가져올 때마다 갱신), 미연동 업무는 직접 편집. */
+  dueDate?: string | null;
   remarks?: string;
   /** 통합지식 service tag — PEP 서비스 타입(LakeServiceType domain='pep') 의 slug 와 매칭. */
   service?: string;
@@ -526,6 +528,9 @@ export interface WorkItem {
   confluencePageId?: string | null;
   /** 마지막으로 PEP → Confluence 반영(동기화)한 시각. */
   confluenceSyncedAt?: string | null;
+  /** Jira 이슈의 원격 링크에서 찾은 Confluence 페이지 전체 목록(복수) — confluenceUrl(단일,
+   *  대표)과 별개. Jira 동기화로만 채워지는 읽기 전용. */
+  confluenceLinks?: { url: string; title?: string }[] | null;
   priority: 'high' | 'medium' | 'low';
   kanbanStatus: KanbanStatus;
   module?: WorkItemModule;
@@ -993,6 +998,7 @@ export interface WorkItemCreate {
   detailContent?: string;
   startedAt: string;
   closedAt?: string | null;
+  dueDate?: string | null;
   remarks?: string;
   service?: string;
   component?: string;
@@ -1281,6 +1287,10 @@ export interface ConfluenceDocSearchRequest {
   cql?: string;
   spaceKey?: string;
   text?: string;
+  /** 문서 제목만 좁혀 검색 — text(제목+본문 통합 검색)와 별개 축. */
+  title?: string;
+  /** 상위 페이지 ID(Confluence ancestor) — 특정 트리 하위만 검색 범위로 좁힌다. */
+  ancestorId?: string;
   /** 기여자 조건 — me: 본인(기본값) · user: contributor 값 사용(콤마로 여러 명) · any: 조건 없음 */
   contributorMode?: 'me' | 'user' | 'any';
   contributor?: string;

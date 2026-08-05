@@ -88,6 +88,50 @@ def test_cql_combines_space_label_period_text_with_and():
     assert cql.endswith("order by lastmodified desc")
 
 
+def test_cql_ancestor_id_clause():
+    req = ConfluenceDocSearchRequest(contributor_mode="any", ancestor_id="12345")
+    cql, err = _build_confluence_cql(req)
+    assert err == ""
+    assert 'ancestor = "12345"' in cql
+
+
+def test_cql_title_clause():
+    req = ConfluenceDocSearchRequest(contributor_mode="any", title="백업 절차")
+    cql, err = _build_confluence_cql(req)
+    assert err == ""
+    assert 'title ~ "백업 절차"' in cql
+
+
+def test_cql_ancestor_id_alone_satisfies_guard():
+    """다른 조건 없이 상위 페이지 ID만 지정해도 유효한 검색으로 인정된다."""
+    req = ConfluenceDocSearchRequest(contributor_mode="any", ancestor_id="1")
+    assert _build_confluence_cql(req)[1] == ""
+
+
+def test_cql_title_alone_satisfies_guard():
+    req = ConfluenceDocSearchRequest(contributor_mode="any", title="x")
+    assert _build_confluence_cql(req)[1] == ""
+
+
+def test_cql_combines_all_conditions_with_and():
+    req = ConfluenceDocSearchRequest(
+        space_key="OPS", ancestor_id="12345", labels=["runbook", "etcd"],
+        updated_since_days=7, title="백업", text="etcd",
+    )
+    cql, err = _build_confluence_cql(req)
+    assert err == ""
+    assert 'contributor = currentUser()' in cql
+    assert 'space = "OPS"' in cql
+    assert 'ancestor = "12345"' in cql
+    assert 'label IN ("runbook", "etcd")' in cql
+    assert 'lastmodified >= now("-7d")' in cql
+    assert 'title ~ "백업"' in cql
+    assert 'text ~ "etcd"' in cql
+    # type + contributor + space + ancestor + label + period + title + text = 8절 → 7개 and
+    assert cql.count(" and ") == 7
+    assert cql.endswith("order by lastmodified desc")
+
+
 def test_cql_quote_escapes_quotes_and_backslashes():
     assert _cql_quote('a"b') == 'a\\"b'
     assert _cql_quote("a\\b") == "a\\\\b"
