@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.app_setting import AppSetting
 from app.models.user import User
-from app.auth.deps import require_admin
+from app.auth.deps import get_current_user, require_admin
 from app.services.assignee_accounts import sync_assignee_accounts
 from app.schemas.ui_settings import (
     UiSettingsResponse,
@@ -180,6 +180,51 @@ def _normalize_assignee(a) -> dict | None:
     return None
 
 
+# 본인이 직접 고칠 수 있는 담당자 필드 → 허용되는 payload 키(별칭 포함).
+# 이름/사번은 제외한다 — 이름은 work item 의 담당자 식별 키, 사번은 로그인 username 이라
+# 본인이 바꾸면 업무 ownership 과 계정이 끊긴다. 둘의 변경은 admin 전용 엔드포인트에서만.
+SELF_EDITABLE_ASSIGNEE_FIELDS: dict[str, tuple[str, ...]] = {
+    "email": ("email",),
+    "ip": ("ip",),
+    "seatLocation": ("seatLocation", "seat_location"),
+    "primaryRole": ("primaryRole", "primary_role"),
+    "secondaryRole": ("secondaryRole", "secondary_role"),
+}
+
+
+def _apply_self_assignee_patch(cleaned: list[dict], username: str, payload: dict) -> int:
+    """정규화된 담당자 목록에서 본인 행을 찾아 self-editable 필드만 제자리 갱신.
+
+    본인 판정은 employeeId == username (담당자 계정은 username = employeeId 로 provisioning).
+    갱신한 인덱스를 반환하고, 본인 행이 없으면 -1 을 반환한다.
+    """
+    username = (username or "").strip()
+    if not username:
+        return -1
+    idx = next(
+        (i for i, a in enumerate(cleaned) if str(a.get("employeeId") or "").strip() == username),
+        -1,
+    )
+    if idx < 0:
+        return -1
+
+    merged = dict(cleaned[idx])
+    for field, aliases in SELF_EDITABLE_ASSIGNEE_FIELDS.items():
+        for alias in aliases:
+            if alias in payload:
+                raw = payload.get(alias)
+                merged[field] = raw.strip() if isinstance(raw, str) else raw
+                break
+
+    # 이름/사번은 payload 에 뭐가 오든 기존 값을 유지한다 (self 편집 대상 아님).
+    merged["name"] = cleaned[idx]["name"]
+    merged["employeeId"] = cleaned[idx].get("employeeId")
+
+    # cleaned 항목은 이미 _normalize_assignee 를 통과해 name 이 비어 있지 않으므로 None 이 아니다.
+    cleaned[idx] = _normalize_assignee(merged) or cleaned[idx]
+    return idx
+
+
 @router.get("/assignees")
 def get_assignees(db: Session = Depends(get_db)):
     setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
@@ -243,6 +288,37 @@ def update_assignees(
     except Exception:  # noqa: BLE001
         accounts = {"created": [], "skipped_existing": [], "skipped_no_employee_id": [], "errors": []}
     return {"data": cleaned, "accounts": accounts}
+
+
+@router.put("/assignees/me")
+def update_my_assignee(
+    payload: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """본인 담당자 정보(이메일/IP/좌석/역할)만 수정 — 로그인한 사용자 누구나 가능.
+
+    사용자 메뉴의 "내 담당자 정보" 패널이 쓰는 엔드포인트다. 예전에는 이 패널도 전체 목록을
+    덮어쓰는 admin 전용 `PUT /assignees` 를 호출해서 operator 가 본인 IP 를 바꾸면 403 이
+    났다. 여기서는 본인 행만 부분 갱신하므로 다른 담당자 데이터를 건드리지 않는다.
+
+    담당자 계정은 username = employeeId 로 provisioning 되므로 그 매칭으로 본인 행을 찾는다.
+    """
+    setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
+    raw_value = setting.value if isinstance(setting.value, list) else []
+    cleaned = [e for raw in raw_value if (e := _normalize_assignee(raw)) is not None]
+
+    idx = _apply_self_assignee_patch(cleaned, user.username or "", payload)
+    if idx < 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="등록된 담당자 정보가 없습니다. 관리자에게 사번 등록을 요청하세요.",
+        )
+
+    setting.value = cleaned
+    db.commit()
+    db.refresh(setting)
+    return {"data": cleaned, "me": cleaned[idx]}
 
 
 # ── 기능별 접근 제어 (feature access) ────────────────────────────────────

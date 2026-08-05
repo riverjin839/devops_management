@@ -1430,6 +1430,11 @@ export const assigneesApi = {
   getAll: () => api.get<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees'),
   update: (assignees: import('@/types').Assignee[]) =>
     api.put<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees', { assignees }),
+  // 본인 담당자 정보만 부분 수정 — admin 이 아닌 사용자(operator/viewer)도 호출 가능.
+  updateMine: (patch: import('@/types').SelfAssigneePatch) =>
+    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee }>(
+      '/ui-settings/assignees/me', patch,
+    ),
 };
 
 // Ontology API
