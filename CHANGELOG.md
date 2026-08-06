@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.26.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.26.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.26.1] - 2026-08-06
 
 ### Added
 - **테마 3종 추가 — Summer Breeze / Wildflower Meadow / Tropical Punch**: Figma 색상 조합
