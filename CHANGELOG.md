@@ -31,6 +31,21 @@
   `PUT /check-matrix/clusters/{id}/cron` 이 값을 받아 저장, `services/check_matrix_service.py`
   디스패처·그리드 빌드가 꺼진 클러스터를 실행 대상에서 제외. Frontend:
   `components/platform-status/PlatformStatusMatrix.tsx` `ClusterCronBadge`.
+### Fixed
+- **Deep check 전체 — 단계 실패의 서버 로그 추적성 + 실행 화면에서 바로 SSH 수집**: 각
+  체커가 흔히 쓰는 "권한 부족/바이너리 없음 등으로 `st.status="failed"` 만 세팅하고
+  예외 없이 pending 결과를 반환"하는 경로는 `safe_run()` 의 일반 예외 로깅을 타지 않아
+  DB/steps 에만 기록되고 서버 로그(journalctl 등)에는 아무 흔적도 없었다(실사례:
+  `kubectl exec ... kubeadm certs check-expiration` 이 "Internal error occurred" 로
+  실패). `deep_checkers/base.py` 의 `_step()` 한 곳에서 실패 상태를 감지해 로깅하도록
+  고쳐, 개별 체커 19종 전체가 별도 조치 없이 커버된다(cert_expiry 는 pod 이름 등 추가
+  맥락을 위해 자체 로깅도 유지). 또한 `cert_expiry`/`etcd_defrag` 처럼 pod exec 이
+  구조적으로 실패하기 쉬운(distroless 이미지, systemd 데몬 등) 점검은 실패를 본 셀
+  상세의 "실행 방식" 탭에서 바로 SSH 수집 모달(`KubeadmCertsModal`/`EtcdSystemdModal`)을
+  열 수 있는 인라인 액션을 추가해, `/versions` 를 따로 찾아가지 않아도 즉시 조치할 수
+  있게 했다(같은 패턴을 쓰는 점검이 늘면 `SSH_COLLECT_ACTIONS` 맵에 추가).
+  Backend: `services/deep_checkers/base.py`, `cert_expiry_checker.py`. Frontend:
+  `components/platform-status/CheckMatrixRunbookPanel.tsx`.
 
 ### Changed
 - **홈 플랫폼 현황(`/`, 플랫폼 현황 탭) — impeccable polish·layout·delight 고도화**: 이미 여러 차례

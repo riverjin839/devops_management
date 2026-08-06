@@ -140,3 +140,89 @@ class TestTlsErrorHints:
         for s in samples:
             lowered = s.lower()
             assert any(h in lowered for h in _TLS_ERROR_HINTS), s
+
+
+class TestStepFailureLogging:
+    """_step() 이 실패로 끝나면(예외든, 체커가 직접 status="failed" 만 세팅하고 정상
+    반환하든) 서버 로그에 한 곳에서 남는지 검증한다.
+
+    배경: 각 체커가 흔히 쓰는 "권한 부족/바이너리 없음 등으로 st.status='failed' 를
+    직접 세팅하고 pending DeepCheckOutcome 을 반환"하는 경로는 예외를 던지지 않아
+    safe_run() 의 일반 예외 로깅을 타지 않는다 — 실사례(cert_expiry 의 kubectl exec
+    실패)에서 DB/steps 에만 기록되고 서버 로그(journalctl 등)에는 아무 흔적도 없었다.
+    개별 체커마다 logger 호출을 추가하는 대신 _step() 한 곳에서 잡아야 앞으로 추가될
+    체커도 별도 조치 없이 커버된다.
+    """
+
+    def _checker_with_manual_failure(self):
+        class _ManualFailChecker(DeepCheckerBase):
+            check_type = "manual_fail_fake"
+            display_name = "가짜 체커"
+
+            def run(self, ctx: DeepCheckContext) -> DeepCheckOutcome:
+                with self._step("probe", "프로브 실행") as st:
+                    st.status = "failed"
+                    st.detail = "권한 부족: RBAC forbidden"
+                return DeepCheckOutcome(status=StatusEnum.pending, message="probe 실패")
+
+        return _ManualFailChecker()
+
+    def _checker_with_raising_step(self):
+        class _RaisingStepChecker(DeepCheckerBase):
+            check_type = "raising_step_fake"
+            display_name = "가짜 체커"
+
+            def run(self, ctx: DeepCheckContext) -> DeepCheckOutcome:
+                with self._step("probe", "프로브 실행"):
+                    raise RuntimeError("boom")
+
+        return _RaisingStepChecker()
+
+    def test_manual_status_failed_without_exception_is_logged(self, caplog):
+        from types import SimpleNamespace
+
+        ctx = DeepCheckContext(cluster=SimpleNamespace(name="prod-a"))
+
+        with caplog.at_level("WARNING", logger="app.services.deep_checkers.base"):
+            self._checker_with_manual_failure().safe_run(ctx)
+
+        assert any(
+            "manual_fail_fake" in r.message and "prod-a" in r.message
+            and "probe" in r.message and "RBAC forbidden" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]
+
+    def test_exception_inside_step_is_also_logged_with_step_context(self, caplog):
+        from types import SimpleNamespace
+
+        ctx = DeepCheckContext(cluster=SimpleNamespace(name="prod-b"))
+
+        with caplog.at_level("WARNING", logger="app.services.deep_checkers.base"):
+            self._checker_with_raising_step().safe_run(ctx)
+
+        assert any(
+            "raising_step_fake" in r.message and "prod-b" in r.message and "probe" in r.message
+            for r in caplog.records
+        ), [r.message for r in caplog.records]
+
+    def test_missing_cluster_label_falls_back_without_crashing(self):
+        ctx = DeepCheckContext(cluster=None)
+
+        outcome = self._checker_with_manual_failure().safe_run(ctx)
+
+        assert outcome.status == StatusEnum.pending
+
+    def test_successful_step_is_not_logged(self, caplog):
+        class _OkChecker(DeepCheckerBase):
+            check_type = "ok_fake"
+            display_name = "가짜 체커"
+
+            def run(self, ctx: DeepCheckContext) -> DeepCheckOutcome:
+                with self._step("probe", "프로브 실행") as st:
+                    st.detail = "정상"
+                return DeepCheckOutcome(status=StatusEnum.healthy, message="ok")
+
+        with caplog.at_level("WARNING", logger="app.services.deep_checkers.base"):
+            _OkChecker().safe_run(DeepCheckContext())
+
+        assert caplog.records == []
