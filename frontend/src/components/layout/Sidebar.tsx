@@ -32,6 +32,23 @@ import { GROUPS, type GroupId } from './navConfig';
 const THEME_CYCLE: Record<Theme, Theme> = { default: 'comfort', comfort: 'light', light: 'dark', dark: 'system', system: 'default' };
 const THEME_LABEL: Record<Theme, string> = { default: '기본', comfort: '컴포트', light: '라이트', dark: '다크', system: '시스템' };
 
+// flyout 을 여는 아이콘에 마우스를 올렸을 때 클릭 없이 바로 열리게 하는 hover-intent 지연.
+// OPEN 은 레일을 스쳐 지나가는 마우스에 flyout 이 깜빡이지 않도록, CLOSE 는 아이콘→flyout
+// 이동 중 잠깐 hover 가 끊겨도 안 닫히도록 여유를 둔다(패널 쪽 onMouseEnter 가 다시 취소).
+const HOVER_OPEN_DELAY = 150;
+const HOVER_CLOSE_DELAY = 200;
+
+// D-058 — '클러스터' 그룹 flyout 이 20여 개 항목의 단일 플랫 리스트라 스캔 시간이 길었다
+// (Hick's law). GROUPS.cluster.paths 자체는 그대로 두고, flyout 렌더링만 성격별 섹션
+// (모니터링/콘솔/점검/관리)으로 재배열한다. 여기 없는 새 경로가 그룹에 추가되면 렌더링
+// 쪽에서 "기타" 섹션으로 떨어뜨려 드리프트를 눈에 띄게 한다.
+const CLUSTER_FLYOUT_SECTIONS: Array<{ label: string; paths: string[] }> = [
+  { label: '모니터링', paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/pod-bottleneck'] },
+  { label: '콘솔', paths: ['/k9s', '/node-ssh', '/etcdctl', '/bulk-exec'] },
+  { label: '점검', paths: ['/ops-checks', '/daily-check/review', '/daily-check/settings'] },
+  { label: '관리', paths: ['/cluster-manage', '/versions', '/k8s-manage', '/k8s-allocation', '/node-labels', '/node-images', '/k8s-logs'] },
+];
+
 // ── 호버 툴팁이 붙은 아이콘 버튼 — 레일에서 사용 ────────────────────────────
 interface RailIconButtonProps {
   label: string;
@@ -43,9 +60,17 @@ interface RailIconButtonProps {
   onClick: (rect?: DOMRect) => void;
   /** flyout 이 열려있을 때는 툴팁을 숨김 (중복) */
   suppressTooltip?: boolean;
+  /** D-059 — 클릭 시 flyout 이 열리는 아이콘(하위 경로 2개 이상)에 점 인디케이터를 붙여
+   *  즉시 이동하는 아이콘과 시각적으로 구분한다. */
+  hasFlyout?: boolean;
+  /** 마우스를 올리면(hover-intent) 클릭 시 열리던 flyout 을 바로 연다. 지정하지 않으면
+   *  기존처럼 클릭으로만 열린다(테마 토글 등 flyout 이 없는 단순 액션). */
+  onHoverOpen?: (rect: DOMRect) => void;
+  /** 위 hover-open 과 짝 — 마우스가 벗어나면 지연 후 닫는다(패널로 이동 중이면 flyout 쪽에서 취소). */
+  onHoverClose?: () => void;
 }
 
-function RailIconButton({ label, Icon, active, highlighted, onClick, suppressTooltip }: RailIconButtonProps) {
+function RailIconButton({ label, Icon, active, highlighted, onClick, suppressTooltip, hasFlyout, onHoverOpen, onHoverClose }: RailIconButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   // top / left 는 viewport 기준 (position: fixed). 툴팁은 부모 overflow:auto 의 클리핑을
   // 회피하기 위해 document.body 에 portal 로 렌더한다.
@@ -64,6 +89,16 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
     if (rect) onClick(rect);
   };
 
+  const handleMouseEnter = () => {
+    showTooltip();
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) onHoverOpen?.(rect);
+  };
+  const handleMouseLeave = () => {
+    hideTooltip();
+    onHoverClose?.();
+  };
+
   return (
     <>
       <button
@@ -71,8 +106,8 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
         type="button"
         aria-label={label}
         onClick={handleClick}
-        onMouseEnter={showTooltip}
-        onMouseLeave={hideTooltip}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         onFocus={showTooltip}
         onBlur={hideTooltip}
         className={`relative flex items-center justify-center w-10 h-10 rounded-md transition-colors ${
@@ -87,6 +122,9 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
           <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
         )}
         <Icon className="w-5 h-5" />
+        {hasFlyout && (
+          <span aria-hidden className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-current opacity-50" />
+        )}
       </button>
       {tooltipPos && !suppressTooltip && createPortal(
         <span
@@ -189,6 +227,42 @@ export function Sidebar() {
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
 
+  // 마우스를 flyout 이 있는 아이콘에 올리면(hover-intent) 클릭 없이도 열리고, 벗어나면
+  // 지연 후 닫힌다. 아이콘→패널로 이동하는 짧은 순간 hover 가 끊겨도 패널 쪽
+  // onMouseEnter(cancelScheduledClose) 가 예약된 닫기를 취소해준다. 클릭은 기존처럼
+  // toggleGroup 등을 통해 즉시 토글한다(hover 타이머는 clearHoverTimers 로 정리).
+  const openTimerRef = useRef<number | undefined>(undefined);
+  const closeTimerRef = useRef<number | undefined>(undefined);
+  const clearHoverTimers = () => {
+    if (openTimerRef.current !== undefined) { window.clearTimeout(openTimerRef.current); openTimerRef.current = undefined; }
+    if (closeTimerRef.current !== undefined) { window.clearTimeout(closeTimerRef.current); closeTimerRef.current = undefined; }
+  };
+  // 여러 flyout 이 동시에 열리지 않도록, 새로 열기 전에 나머지를 전부 닫는다.
+  const closeAllFlyouts = () => {
+    setOpenGroup(null);
+    setFavoritesOpen(false);
+    setIslandFlyoutAnchor(null);
+  };
+  const scheduleFlyoutOpen = (openFn: () => void) => {
+    clearHoverTimers();
+    openTimerRef.current = window.setTimeout(() => {
+      closeAllFlyouts();
+      openFn();
+      openTimerRef.current = undefined;
+    }, HOVER_OPEN_DELAY);
+  };
+  const scheduleFlyoutClose = (closeFn: () => void) => {
+    clearHoverTimers();
+    closeTimerRef.current = window.setTimeout(() => {
+      closeFn();
+      closeTimerRef.current = undefined;
+    }, HOVER_CLOSE_DELAY);
+  };
+  const cancelScheduledClose = () => {
+    if (closeTimerRef.current !== undefined) { window.clearTimeout(closeTimerRef.current); closeTimerRef.current = undefined; }
+  };
+  useEffect(() => clearHoverTimers, []);
+
   // 레일에는 플랫폼 도메인 그룹만 — 업무 도메인은 전역 상단바(AppTopBar)로 이동했다(D-054).
   // 더는 홈 모드가 사이드바 노출 범위를 게이팅하지 않는다 — 항상 전체가 보인다.
   const visibleGroups = useMemo(
@@ -198,6 +272,8 @@ export function Sidebar() {
 
   // 하단 푸터에 둘 Settings(system) 그룹 — admin 전용.
   const systemGroup = useMemo(() => GROUPS.find((g) => g.id === 'system') ?? null, []);
+  const systemHasFlyout = (systemGroup?.paths.length ?? 0) > 1;
+  const islandHasFlyout = myIslands.length + sharedIslands.length > 1;
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
   const activeGroup: GroupId | null = useMemo(() => {
@@ -236,6 +312,7 @@ export function Sidebar() {
   }, []);
 
   const toggleGroup = (id: GroupId, rect?: DOMRect) => {
+    clearHoverTimers();
     setOpenGroup((cur) => (cur === id ? null : id));
     if (rect) setOpenAnchor(rect);
   };
@@ -246,33 +323,43 @@ export function Sidebar() {
     if (!group) return null;
     const close = () => setOpenGroup(null);
 
-    if (id === 'system') {
+    const renderLink = (p: string) => {
+      const entry = navMap[p];
+      if (!entry || !featureAllowed(p)) return null;
+      return (
+        <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
+          active={location.pathname === p} onSelect={close}
+          isPinned={isPinned(p)} onTogglePin={() => togglePin(p)} />
+      );
+    };
+
+    // D-058 — '클러스터' 그룹만 항목이 20여 개라 성격별 섹션으로 나눠서 보여준다.
+    // CLUSTER_FLYOUT_SECTIONS 에 없는 경로(그룹에 새로 추가됐는데 섹션 갱신을 놓친 경우)는
+    // "기타" 섹션으로 떨어뜨려 조용히 숨지 않게 한다.
+    if (id === 'cluster') {
+      const sectioned = new Set(CLUSTER_FLYOUT_SECTIONS.flatMap((s) => s.paths));
+      const leftover = group.paths.filter((p) => !sectioned.has(p));
+      const sections = leftover.length > 0
+        ? [...CLUSTER_FLYOUT_SECTIONS, { label: '기타', paths: leftover }]
+        : CLUSTER_FLYOUT_SECTIONS;
       return (
         <div className="space-y-1 pb-2">
-          {group.paths.map((p) => {
-            const entry = navMap[p];
-            if (!entry || !featureAllowed(p)) return null;
-            return (
-              <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-                active={location.pathname === p} onSelect={close}
-                isPinned={isPinned(p)} onTogglePin={() => togglePin(p)} />
-            );
-          })}
+          {sections.map((section, i) => (
+            <div key={section.label}>
+              {i > 0 && <div className="mx-2 my-1 border-t border-zinc-200" />}
+              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                {section.label}
+              </p>
+              {section.paths.map(renderLink)}
+            </div>
+          ))}
         </div>
       );
     }
 
     return (
       <div className="space-y-1 pb-2">
-        {group.paths.map((p) => {
-          const entry = navMap[p];
-          if (!entry || !featureAllowed(p)) return null;
-          return (
-            <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-              active={location.pathname === p} onSelect={close}
-              isPinned={isPinned(p)} onTogglePin={() => togglePin(p)} />
-          );
-        })}
+        {group.paths.map(renderLink)}
       </div>
     );
   };
@@ -332,34 +419,45 @@ export function Sidebar() {
         {/* 그룹 아이콘 레일 — 플랫폼 도메인 그룹만 (업무 도메인은 상단바로 이동) */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
           <div className="flex flex-col items-center gap-1">
-            {/* 즐겨찾기 — 레일 최상단, 공용 그룹과 성격이 달라(개인 선택) 구분선으로 분리. */}
+            {/* 즐겨찾기 — 레일 최상단, 공용 그룹과 성격이 달라(개인 선택) 구분선으로 분리.
+                마우스를 올리면 클릭 없이도 바로 열린다(hover-intent). */}
             <RailIconButton
               label="즐겨찾기"
               Icon={Star}
               highlighted={favoritesOpen}
               suppressTooltip={favoritesOpen}
+              hasFlyout
+              onHoverOpen={(rect) => scheduleFlyoutOpen(() => { setFavoritesOpen(true); setFavoritesAnchor(rect); })}
+              onHoverClose={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
               onClick={(rect) => {
+                clearHoverTimers();
                 setFavoritesOpen((cur) => !cur);
                 if (rect) setFavoritesAnchor(rect);
               }}
             />
             <div className="w-6 border-t border-border my-1" aria-hidden />
-            {visibleGroups.map((g) => (
-              <RailIconButton
-                key={g.id}
-                label={g.label}
-                Icon={g.icon}
-                active={activeGroup === g.id}
-                highlighted={openGroup === g.id}
-                suppressTooltip={openGroup === g.id}
-                onClick={(rect) => {
-                  // 하위 경로가 1개뿐인 그룹은 플라이아웃이 무의미하므로 바로 이동.
-                  // 2개 이상이면 플라이아웃으로 하위 메뉴를 고른다.
-                  if (g.paths.length === 1) { setOpenGroup(null); navigate(g.paths[0]); }
-                  else toggleGroup(g.id, rect);
-                }}
-              />
-            ))}
+            {visibleGroups.map((g) => {
+              const hasFlyout = g.paths.length > 1;
+              return (
+                <RailIconButton
+                  key={g.id}
+                  label={g.label}
+                  Icon={g.icon}
+                  active={activeGroup === g.id}
+                  highlighted={openGroup === g.id}
+                  suppressTooltip={openGroup === g.id}
+                  hasFlyout={hasFlyout}
+                  onHoverOpen={hasFlyout ? (rect) => scheduleFlyoutOpen(() => { setOpenGroup(g.id); setOpenAnchor(rect); }) : undefined}
+                  onHoverClose={hasFlyout ? () => scheduleFlyoutClose(() => setOpenGroup(null)) : undefined}
+                  onClick={(rect) => {
+                    // 하위 경로가 1개뿐인 그룹은 플라이아웃이 무의미하므로 바로 이동.
+                    // 2개 이상이면 플라이아웃으로 하위 메뉴를 고른다.
+                    if (!hasFlyout) { clearHoverTimers(); setOpenGroup(null); navigate(g.paths[0]); }
+                    else toggleGroup(g.id, rect);
+                  }}
+                />
+              );
+            })}
           </div>
         </nav>
 
@@ -372,9 +470,12 @@ export function Sidebar() {
               active={activeGroup === 'system'}
               highlighted={openGroup === 'system'}
               suppressTooltip={openGroup === 'system'}
+              hasFlyout={systemHasFlyout}
+              onHoverOpen={systemHasFlyout ? (rect) => scheduleFlyoutOpen(() => { setOpenGroup('system'); setOpenAnchor(rect); }) : undefined}
+              onHoverClose={systemHasFlyout ? () => scheduleFlyoutClose(() => setOpenGroup(null)) : undefined}
               onClick={(rect) => {
                 // 하위 경로가 1개뿐이면(현재 '/settings' 단일) 플라이아웃 없이 바로 이동.
-                if (systemGroup.paths.length === 1) { setOpenGroup(null); navigate(systemGroup.paths[0]); }
+                if (!systemHasFlyout) { clearHoverTimers(); setOpenGroup(null); navigate(systemGroup.paths[0]); }
                 else toggleGroup('system', rect);
               }}
             />
@@ -400,7 +501,10 @@ export function Sidebar() {
               active={location.pathname.startsWith('/island')}
               highlighted={!!islandFlyoutAnchor}
               suppressTooltip={!!islandFlyoutAnchor}
-              onClick={goToIsland}
+              hasFlyout={islandHasFlyout}
+              onHoverOpen={islandHasFlyout ? (rect) => scheduleFlyoutOpen(() => setIslandFlyoutAnchor(rect)) : undefined}
+              onHoverClose={islandHasFlyout ? () => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null)) : undefined}
+              onClick={(rect) => { clearHoverTimers(); goToIsland(rect); }}
             />
           )}
           {/* AI 어시스턴트 — 우하단 플로팅 버튼이었던 것을 좌측 사이드바 하단 레일로 이동해
@@ -461,11 +565,14 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Flyout — 그룹 아이콘 우측에 컴팩트 popover. 외부 클릭으로 닫힘 (투명 캐처). */}
+      {/* Flyout — 그룹 아이콘 우측에 컴팩트 popover. 외부 클릭으로 닫힘 (투명 캐처).
+          z-30(< aside 의 z-40) 로 레일보다 낮게 둔다 — 같은 z-40 이면 이 캐처가 DOM 순서상
+          레일 위에 그려져 호버 중인 아이콘이 즉시 mouseleave 로 판정되고, hover 로 연
+          flyout 이 열리자마자 닫혀버린다. */}
       {openGroup && openAnchor && (
         <>
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-30"
             onClick={() => setOpenGroup(null)}
             aria-hidden
           />
@@ -473,6 +580,8 @@ export function Sidebar() {
             title={flyoutTitle}
             anchorRect={openAnchor}
             onClose={() => setOpenGroup(null)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setOpenGroup(null))}
           >
             {renderFlyoutBody(openGroup)}
           </FlyoutShell>
@@ -482,8 +591,14 @@ export function Sidebar() {
       {/* 즐겨찾기 flyout — AppTopBar 의 ★ 과 같은 본문(FavoritesFlyoutBody)을 공유. */}
       {favoritesOpen && favoritesAnchor && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setFavoritesOpen(false)} aria-hidden />
-          <FlyoutShell title="즐겨찾기" anchorRect={favoritesAnchor} onClose={() => setFavoritesOpen(false)}>
+          <div className="fixed inset-0 z-30" onClick={() => setFavoritesOpen(false)} aria-hidden />
+          <FlyoutShell
+            title="즐겨찾기"
+            anchorRect={favoritesAnchor}
+            onClose={() => setFavoritesOpen(false)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
+          >
             <FavoritesFlyoutBody onClose={() => setFavoritesOpen(false)} />
           </FlyoutShell>
         </>
@@ -492,11 +607,13 @@ export function Sidebar() {
       {/* Your Island flyout — 아일랜드가 여러 개일 때 목록에서 고른다. */}
       {islandFlyoutAnchor && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setIslandFlyoutAnchor(null)} aria-hidden />
+          <div className="fixed inset-0 z-30" onClick={() => setIslandFlyoutAnchor(null)} aria-hidden />
           <FlyoutShell
             title="Your Island"
             anchorRect={islandFlyoutAnchor}
             onClose={() => setIslandFlyoutAnchor(null)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null))}
           >
             <div className="space-y-1 pb-2">
               {myIslands.map((isl) => (

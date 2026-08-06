@@ -87,7 +87,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   // /coroot 는 COROOT APM 통합 전체 제거로 더 이상 존재하지 않는 라우트 — 재추가하지 않음.
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], domain: 'platform' },
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], domain: 'platform' },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report'], domain: 'work' },
+  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report', '/jira-import'], domain: 'work' },
   // "문서 관리" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
   // 개편 때 그룹을 잃고 URL 전용으로 남았던 지식 화면들(/work-guides, /docs, /ops-notes,
   // /mindmap, /ontology, /trends)을 이 그룹으로 복귀시킨다.
