@@ -42,16 +42,25 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 배치만 결정할 뿐 게이팅하지 않는다 — 사이드바·상단바가 항상 전체를 보여주므로 어떤 화면에서든
 반대 도메인이 1~2클릭 거리에 있다.
 
-**사이드바 flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바의 그룹 아이콘(하위
-경로 2개 이상)·즐겨찾기·Your Island 는 클릭뿐 아니라 마우스를 올리기만 해도(hover-intent,
-150ms 오픈/200ms 닫기 지연) flyout 이 열린다(`RailIconButton` 의 `onHoverOpen`/`onHoverClose`,
-`NavFlyout.FlyoutShell` 의 `onMouseEnter`/`onMouseLeave` 로 패널 위에서는 닫기 타이머가
-취소됨). 이런 flyout 이 있는 아이콘에는 즉시 이동하는 아이콘과 구분되도록 작은 점
-인디케이터가 붙는다(R-4 5차 D-059). '클러스터' 그룹은 하위 화면이 20여 개로 많아
-`Sidebar.renderFlyoutBody` 가 모니터링/콘솔/점검/관리 4개 섹션으로 나눠 보여준다(D-058,
-`navConfig.ts` 의 그룹 정의 자체는 그대로 두고 렌더링만 재배열). `/jira-import`(Jira Excel
-가져오기)는 마지막까지 고아 라우트였다가 `collab`(협업) 그룹에 편입되어 R-4 5차 라운드
-(D-054~D-060)가 전 항목 완료됐다(D-057).
+**flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바의 그룹 아이콘(하위 경로
+2개 이상)·즐겨찾기·Your Island, 그리고 `AppTopBar`의 협업/문서 관리 드롭다운·즐겨찾기 버튼
+전부 클릭뿐 아니라 마우스를 올리기만 해도(hover-intent, 150ms 오픈/200ms 닫기 지연) flyout 이
+열린다(`RailIconButton`/`AppTopBar` 의 `onHoverOpen`/`onHoverClose`, `NavFlyout.FlyoutShell` 의
+`onMouseEnter`/`onMouseLeave` 로 패널 위에서는 닫기 타이머가 취소됨). 사이드바 아이콘은 hover
+시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴팁은 띄우지 않는다(`hasFlyout` 이면
+`RailIconButton` 이 툴팁을 생략) — flyout 이 없는 아이콘(테마 토글 등)은 기존처럼 툴팁만 뜬다.
+flyout 이 있는 사이드바 아이콘에는 즉시 이동하는 아이콘과 구분되도록 작은 점 인디케이터가
+붙는다(R-4 5차 D-059). ⚠구현 유의: click-outside 캐처(`fixed inset-0`)가 `AppTopBar`처럼 이미
+포지션이 있는 조상(`<header className="sticky z-30">`) **안의 자식**으로 렌더되면, 캐처가
+같은 스태킹 컨텍스트 안에서 포지션 없는 형제(버튼들)보다 z-index 값과 무관하게 항상 위에
+그려져 hover 로 연 flyout 이 열리자마자 캐처에 가려 `mouseleave` 로 판정되고 바로 닫혀버린다
+— 버튼이 속한 행에 `relative z-10`, 캐처는 `z-0`으로 둬서 해결했다(`Sidebar.tsx`처럼 아이콘
+레일 자체가 `<aside>` 로 최상위 포지션 요소인 경우는 캐처 z-index 를 그보다 한 단계 낮추는
+것만으로 충분하다 — 두 경우의 스태킹 맥락이 다르므로 같은 처방을 그대로 복붙하면 안 됨).
+'클러스터' 그룹은 하위 화면이 20여 개로 많아 `Sidebar.renderFlyoutBody` 가 모니터링/콘솔/
+점검/관리 4개 섹션으로 나눠 보여준다(D-058, `navConfig.ts` 의 그룹 정의 자체는 그대로 두고
+렌더링만 재배열). `/jira-import`(Jira Excel 가져오기)는 마지막까지 고아 라우트였다가
+`collab`(협업) 그룹에 편입되어 R-4 5차 라운드(D-054~D-060)가 전 항목 완료됐다(D-057).
 
 **즐겨찾기 / 최근 방문**: `AppTopBar`(우측 ★)와 좌측 사이드바 최상단 "즐겨찾기" 레일 아이콘,
 두 진입점이 같은 `FavoritesFlyoutBody`(`components/layout/FavoritesFlyoutBody.tsx`)를 공유해
