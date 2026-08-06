@@ -107,7 +107,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
           <h2 id="node-spec-edit-modal-title" className="text-sm font-semibold">
             {mode === 'create' ? '서버스펙 신규 등록' : `서버스펙 수정 — ${spec?.hostname}`}
           </h2>
-          <button onClick={onClose} disabled={saving}
+          <button onClick={onClose} disabled={saving} title="닫기" aria-label="닫기"
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
