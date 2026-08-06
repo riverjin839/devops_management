@@ -10,6 +10,28 @@
 
 1.25.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Jira·Confluence 자동 생성 — 이슈 종류 선택 + Epic/상위 이슈 목록 선택 + Confluence 옵션
+  확장**: 프로젝트 키가 필수 입력으로 바뀌었고, 이슈 종류가 텍스트 입력 대신 Epic/Task/
+  Sub-task 3종 선택 버튼으로 바뀌어 종류에 따라 필요한 하위 옵션만 보여준다(Epic 은 상위
+  연결 입력 자체가 없고, Task 는 Epic 키, Sub-task 는 상위 이슈를 수동 입력하거나 "목록"
+  버튼으로 프로젝트 내 후보를 불러와 고를 수 있다). Confluence 문서 생성 옵션에 문서 ID
+  (기존 문서를 제목 검색 없이 직접 지정), 라벨, Contributor(기본값은 나 자신, 수정 가능)를
+  추가했다. Backend: `routers/jira.py` `GET /jira/lookup/issues`(프로젝트+이슈종류로 후보
+  조회), `provision_work_item` 이 `page_id`/`confluence_labels`/`contributor` 를 처리,
+  `ConfluenceService.add_labels()` 신설, `schemas/jira.py` `ProvisionRequest`/
+  `ProvisionDefaults`/`JiraIssueLookupResult` 확장. Frontend:
+  `components/work-items/JiraProvisionModal.tsx` 전면 개편, `hooks/useJira.ts`
+  `useJiraIssueLookup`.
+- **점검 매트릭스 — 클러스터 cron on/off 스위치**: 클러스터 열 헤더의 cron 배지가 "미설정"
+  하나로만 표시되던 것을, cron 을 저장한 적 없는 상태(미설정)와 저장은 돼 있지만 꺼둔 상태
+  (꺼짐)로 구분했다. 배지 팝오버에 "자동 실행" 체크박스가 추가돼 cron 표현식을 지우지 않고도
+  실행만 껐다 켰다 할 수 있다(항목별 `CheckMatrixSchedule.enabled` 와 동일한 패턴). Backend:
+  `models/cluster.py` `check_cron_enabled` 컬럼 추가, `routers/check_matrix.py`
+  `PUT /check-matrix/clusters/{id}/cron` 이 값을 받아 저장, `services/check_matrix_service.py`
+  디스패처·그리드 빌드가 꺼진 클러스터를 실행 대상에서 제외. Frontend:
+  `components/platform-status/PlatformStatusMatrix.tsx` `ClusterCronBadge`.
+
 ### Changed
 - **홈 플랫폼 현황(`/`, 플랫폼 현황 탭) — impeccable polish·layout·delight 고도화**: 이미 여러 차례
   critique+fix 라운드를 거친 화면을 한 단계 더 다듬었다. 행 순서 변경 그립이 마우스 드래그

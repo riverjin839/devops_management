@@ -150,8 +150,9 @@ export function usePutSchedule() {
 export function usePutClusterCron() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ clusterId, checkCronExpr }: { clusterId: string; checkCronExpr: string | null }) =>
-      checkMatrixApi.putClusterCron(clusterId, checkCronExpr),
+    mutationFn: ({ clusterId, checkCronExpr, checkCronEnabled }: {
+      clusterId: string; checkCronExpr: string | null; checkCronEnabled?: boolean;
+    }) => checkMatrixApi.putClusterCron(clusterId, checkCronExpr, checkCronEnabled),
     onSuccess: () => qc.invalidateQueries({ queryKey: checkMatrixKeys.grid }),
   });
 }

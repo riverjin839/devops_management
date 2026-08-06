@@ -468,6 +468,7 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
             "api_endpoint": cluster.api_endpoint,
             "tls_verify": bool(getattr(cluster, "tls_verify", False)),
             "check_cron_expr": cluster.check_cron_expr,
+            "check_cron_enabled": cluster.check_cron_enabled,
         }})
         return out
 

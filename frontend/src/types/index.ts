@@ -4014,6 +4014,8 @@ export interface CheckMatrixGridCluster {
   id: string;
   name: string;
   checkCronExpr: string | null;
+  /** 저장된 cron 을 지우지 않고 켜고 끄는 스위치 — false 면 cron 이 있어도 실행되지 않는다. */
+  checkCronEnabled: boolean;
 }
 
 export interface CheckMatrixGrid {
@@ -4272,6 +4274,17 @@ export interface IslandCreatePayload {
 
 
 // ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
+export interface JiraIssueLookupItem {
+  key: string;
+  summary: string;
+}
+
+export interface JiraIssueLookupResult {
+  status: 'ok' | 'offline' | 'error';
+  detail: string;
+  items: JiraIssueLookupItem[];
+}
+
 export interface ProvisionDefaults {
   jiraEnabled: boolean;
   confluenceEnabled: boolean;
@@ -4290,6 +4303,8 @@ export interface ProvisionDefaults {
   /** Jira 계층 — epicKey = Epic Link, parentKey = Sub-task 의 상위 이슈. */
   epicKey: string;
   parentKey: string;
+  /** Confluence 문서 기여자(Contributor) 기본값 — 로그인 사용자 자신. */
+  contributor: string;
   /** 기본값 출처 — 'user' 면 지난번 내가 쓴 조건을 불러온 것. */
   presetSource: 'none' | 'settings' | 'user';
 }
@@ -4308,9 +4323,15 @@ export interface ProvisionRequest {
   epicKey?: string;
   parentKey?: string;
   spaceKey?: string;
+  /** 제목 검색 없이 기존 문서를 직접 지정 — 지정하면 이 문서를 그대로 갱신한다. */
+  pageId?: string;
   parentPageId?: string;
   pageTitle?: string;
   pageBody?: string;
+  /** Confluence 문서에 붙일 라벨 — Jira 쪽 labels 와 별개(문서 전용). */
+  confluenceLabels?: string[];
+  /** 문서 기여자 표시명 — 비우면 로그인 사용자 자신으로 채워진다. */
+  contributor?: string;
   /** 이번에 쓴 기준 조건을 내 기본값으로 저장할지 (다음 등록에서 자동 채움). */
   rememberPreset?: boolean;
 }

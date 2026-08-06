@@ -1,13 +1,54 @@
 import { useEffect, useState } from 'react';
 import {
   X, Loader2, Rocket, CheckCircle2, AlertTriangle, ExternalLink, FileText, RotateCcw, KeyRound,
+  ListChecks,
 } from 'lucide-react';
-import { useProvisionDefaults, useProvision } from '@/hooks/useJira';
+import { useProvisionDefaults, useProvision, useJiraIssueLookup } from '@/hooks/useJira';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { useToast } from '@/components/common';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { formatApiError } from '@/lib/utils';
-import type { ProvisionResult, WorkItem } from '@/types';
+import type { JiraIssueLookupItem, ProvisionResult, WorkItem } from '@/types';
+
+const ISSUE_TYPES = ['Epic', 'Task', 'Sub-task'] as const;
+type IssueTypeOption = (typeof ISSUE_TYPES)[number];
+
+/** Epic/상위 이슈 "목록에서 선택" 인라인 피커 — 버튼을 누르면 조회하고, 결과에서 골라
+ * 바로 입력칸을 채운다(수동 입력을 대체하지 않고 보조).  */
+function IssueLookupPicker({
+  open, loading, status, detail, items, onPick,
+}: {
+  open: boolean;
+  loading: boolean;
+  status?: 'ok' | 'offline' | 'error';
+  detail?: string;
+  items: JiraIssueLookupItem[];
+  onPick: (key: string) => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="mt-1 border border-border rounded-lg bg-card max-h-36 overflow-y-auto mac-shadow">
+      {loading && (
+        <div className="p-2 text-xs text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin" /> 불러오는 중…
+        </div>
+      )}
+      {!loading && status && status !== 'ok' && (
+        <div className="p-2 text-xs text-status-critical">{detail || '조회 실패'}</div>
+      )}
+      {!loading && status === 'ok' && items.length === 0 && (
+        <div className="p-2 text-xs text-muted-foreground">해당 프로젝트에 이슈가 없습니다.</div>
+      )}
+      {!loading && items.map((it) => (
+        <button key={it.key} type="button" onClick={() => onPick(it.key)}
+          className="w-full text-left px-2 py-1.5 text-xs hover:bg-secondary flex items-center gap-1.5">
+          <span className="font-medium text-primary flex-shrink-0">{it.key}</span>
+          <span className="text-muted-foreground truncate">{it.summary}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface JiraProvisionModalProps {
   open: boolean;
@@ -30,11 +71,13 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const toast = useToast();
   const { data: defaults, isLoading } = useProvisionDefaults(item?.id, open && !!item);
   const provision = useProvision();
+  const epicLookup = useJiraIssueLookup();
+  const parentLookup = useJiraIssueLookup();
 
   const [createJira, setCreateJira] = useState(true);
   const [createConfluence, setCreateConfluence] = useState(true);
   const [projectKey, setProjectKey] = useState('');
-  const [issueType, setIssueType] = useState('Task');
+  const [issueType, setIssueType] = useState<IssueTypeOption>('Task');
   const [priority, setPriority] = useState('');
   const [labels, setLabels] = useState('');
   const [components, setComponents] = useState('');
@@ -42,9 +85,14 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const [description, setDescription] = useState('');
   const [epicKey, setEpicKey] = useState('');
   const [parentKey, setParentKey] = useState('');
+  const [showEpicPicker, setShowEpicPicker] = useState(false);
+  const [showParentPicker, setShowParentPicker] = useState(false);
   const [spaceKey, setSpaceKey] = useState('');
+  const [pageId, setPageId] = useState('');
   const [parentPageId, setParentPageId] = useState('');
   const [pageTitle, setPageTitle] = useState('');
+  const [confluenceLabels, setConfluenceLabels] = useState('');
+  const [contributor, setContributor] = useState('');
   const [rememberPreset, setRememberPreset] = useState(true);
   const [result, setResult] = useState<ProvisionResult | null>(null);
 
@@ -56,7 +104,8 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     setCreateJira(defaults.jiraEnabled && !item?.jiraIssueKey);
     setCreateConfluence(defaults.confluenceEnabled && !item?.confluenceUrl);
     setProjectKey(defaults.projectKey);
-    setIssueType(defaults.issueType || 'Task');
+    setIssueType((ISSUE_TYPES as readonly string[]).includes(defaults.issueType)
+      ? (defaults.issueType as IssueTypeOption) : 'Task');
     setPriority(defaults.priority);
     setLabels(defaults.labels.join(', '));
     setComponents(defaults.components.join(', '));
@@ -64,9 +113,14 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     setDescription(defaults.description);
     setEpicKey(defaults.epicKey ?? '');
     setParentKey(defaults.parentKey ?? '');
+    setShowEpicPicker(false);
+    setShowParentPicker(false);
     setSpaceKey(defaults.spaceKey);
+    setPageId('');
     setParentPageId(defaults.parentPageId);
     setPageTitle(defaults.pageTitle);
+    setConfluenceLabels('');
+    setContributor(defaults.contributor ?? '');
     setRememberPreset(true);
     setResult(null);
   }, [defaults, item]);
@@ -75,10 +129,24 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
 
   const csv = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
   const busy = provision.isPending;
+  const projectKeyMissing = createJira && !item.jiraIssueKey && !projectKey.trim();
+
+  const openEpicPicker = () => {
+    setShowEpicPicker((v) => !v);
+    if (!showEpicPicker) epicLookup.mutate({ projectKey: projectKey.trim(), issueType: 'Epic' });
+  };
+  const openParentPicker = () => {
+    setShowParentPicker((v) => !v);
+    if (!showParentPicker) parentLookup.mutate({ projectKey: projectKey.trim(), issueType: 'Task' });
+  };
 
   const submit = async () => {
     if (!createJira && !createConfluence) {
       toast.error('선택 필요', 'Jira 또는 Confluence 중 하나 이상 선택하세요.');
+      return;
+    }
+    if (projectKeyMissing) {
+      toast.error('입력 필요', '프로젝트 키는 필수 입력입니다.');
       return;
     }
     try {
@@ -90,11 +158,14 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
         labels: csv(labels), components: csv(components),
         summary: summary.trim() || undefined,
         description: description || undefined,
-        epicKey: epicKey.trim() || undefined,
-        parentKey: parentKey.trim() || undefined,
+        epicKey: issueType === 'Task' ? (epicKey.trim() || undefined) : undefined,
+        parentKey: issueType === 'Sub-task' ? (parentKey.trim() || undefined) : undefined,
         spaceKey: spaceKey.trim() || undefined,
+        pageId: pageId.trim() || undefined,
         parentPageId: parentPageId.trim() || undefined,
         pageTitle: pageTitle.trim() || undefined,
+        confluenceLabels: csv(confluenceLabels),
+        contributor: contributor.trim() || undefined,
         rememberPreset,
       });
       setResult(data);
@@ -264,14 +335,31 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                 {createJira && (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-xs font-medium text-muted-foreground mb-1 block">프로젝트 키</span>
-                      <input className={inputCls} placeholder="PROJ" value={projectKey}
+                      <span className="text-xs font-medium text-muted-foreground mb-1 block">
+                        프로젝트 키 <span className="text-status-critical">*</span>
+                      </span>
+                      <input
+                        className={`${inputCls} ${projectKeyMissing ? 'border-status-critical/60' : ''}`}
+                        placeholder="PROJ" value={projectKey}
                         onChange={(e) => setProjectKey(e.target.value)} />
+                      {projectKeyMissing && (
+                        <span className="text-[11px] text-status-critical mt-0.5 block">필수 입력입니다.</span>
+                      )}
                     </div>
                     <div>
                       <span className="text-xs font-medium text-muted-foreground mb-1 block">이슈 종류</span>
-                      <input className={inputCls} placeholder="Task" value={issueType}
-                        onChange={(e) => setIssueType(e.target.value)} />
+                      <div className="inline-flex rounded-xl border border-border overflow-hidden w-full">
+                        {ISSUE_TYPES.map((t) => (
+                          <button key={t} type="button" onClick={() => setIssueType(t)}
+                            className={`flex-1 px-2 py-2 text-xs font-medium transition-colors ${
+                              issueType === t
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary text-muted-foreground hover:text-foreground'
+                            }`}>
+                            {t}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <span className="text-xs font-medium text-muted-foreground mb-1 block">우선순위</span>
@@ -291,23 +379,55 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                       <span className="text-xs font-medium text-muted-foreground mb-1 block">제목(summary)</span>
                       <input className={inputCls} value={summary} onChange={(e) => setSummary(e.target.value)} />
                     </div>
-                    {/* Jira 계층 — task = Epic, sub task = Epic 아래 이슈. */}
-                    <div>
-                      <span className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Epic 키 (선택)
-                      </span>
-                      <input className={inputCls} placeholder="DL-7" value={epicKey}
-                        title="이 이슈를 묶을 상위 Epic. 관리자 설정의 Epic Link 필드 ID 가 있어야 반영됩니다."
-                        onChange={(e) => setEpicKey(e.target.value)} />
-                    </div>
-                    <div>
-                      <span className="text-xs font-medium text-muted-foreground mb-1 block">
-                        상위 이슈 (Sub-task 일 때)
-                      </span>
-                      <input className={inputCls} placeholder="DL-10" value={parentKey}
-                        title="이슈 종류를 Sub-task 로 만들 때 필수인 상위 이슈 키."
-                        onChange={(e) => setParentKey(e.target.value)} />
-                    </div>
+                    {/* Jira 계층 — 이슈 종류에 따라 필요한 상위 연결만 보여준다.
+                        Epic 은 상위가 없고, Task 는 Epic 링크, Sub-task 는 상위 이슈가 필요하다. */}
+                    {issueType === 'Epic' && (
+                      <div className="col-span-2 text-xs text-muted-foreground px-1">
+                        Epic 은 상위 연결이 필요 없습니다 (Epic 키 / 상위 이슈 입력 불필요).
+                      </div>
+                    )}
+                    {issueType === 'Task' && (
+                      <div className="col-span-2 relative">
+                        <span className="text-xs font-medium text-muted-foreground mb-1 block">Epic 키 (선택)</span>
+                        <div className="flex items-center gap-1.5">
+                          <input className={inputCls} placeholder="DL-7" value={epicKey}
+                            title="이 이슈를 묶을 상위 Epic. 직접 입력하거나 목록에서 선택하세요."
+                            onChange={(e) => setEpicKey(e.target.value)} />
+                          <button type="button" onClick={openEpicPicker} disabled={!projectKey.trim()}
+                            title="프로젝트의 Epic 목록에서 선택" aria-label="Epic 목록에서 선택"
+                            className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-border bg-secondary text-xs hover:bg-secondary/80 disabled:opacity-40">
+                            <ListChecks className="w-3.5 h-3.5" /> 목록
+                          </button>
+                        </div>
+                        <IssueLookupPicker
+                          open={showEpicPicker} loading={epicLookup.isPending}
+                          status={epicLookup.data?.data.status} detail={epicLookup.data?.data.detail}
+                          items={epicLookup.data?.data.items ?? []}
+                          onPick={(key) => { setEpicKey(key); setShowEpicPicker(false); }}
+                        />
+                      </div>
+                    )}
+                    {issueType === 'Sub-task' && (
+                      <div className="col-span-2 relative">
+                        <span className="text-xs font-medium text-muted-foreground mb-1 block">상위 이슈</span>
+                        <div className="flex items-center gap-1.5">
+                          <input className={inputCls} placeholder="DL-10" value={parentKey}
+                            title="Sub-task 의 상위 이슈. 직접 입력하거나 목록에서 선택하세요."
+                            onChange={(e) => setParentKey(e.target.value)} />
+                          <button type="button" onClick={openParentPicker} disabled={!projectKey.trim()}
+                            title="프로젝트의 상위 이슈 목록에서 선택" aria-label="상위 이슈 목록에서 선택"
+                            className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-border bg-secondary text-xs hover:bg-secondary/80 disabled:opacity-40">
+                            <ListChecks className="w-3.5 h-3.5" /> 목록
+                          </button>
+                        </div>
+                        <IssueLookupPicker
+                          open={showParentPicker} loading={parentLookup.isPending}
+                          status={parentLookup.data?.data.status} detail={parentLookup.data?.data.detail}
+                          items={parentLookup.data?.data.items ?? []}
+                          onPick={(key) => { setParentKey(key); setShowParentPicker(false); }}
+                        />
+                      </div>
+                    )}
                     <div className="col-span-2">
                       <span className="text-xs font-medium text-muted-foreground mb-1 block">설명</span>
                       <textarea className={`${inputCls} min-h-[64px] resize-y`} value={description}
@@ -333,9 +453,26 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                           onChange={(e) => setSpaceKey(e.target.value)} />
                       </div>
                       <div>
+                        <span className="text-xs font-medium text-muted-foreground mb-1 block">문서 ID (선택)</span>
+                        <input className={inputCls} placeholder="기존 문서를 직접 지정" value={pageId}
+                          title="지정하면 제목 검색 없이 이 문서를 그대로 갱신합니다."
+                          onChange={(e) => setPageId(e.target.value)} />
+                      </div>
+                      <div>
                         <span className="text-xs font-medium text-muted-foreground mb-1 block">상위 페이지 ID (선택)</span>
                         <input className={inputCls} value={parentPageId}
                           onChange={(e) => setParentPageId(e.target.value)} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-muted-foreground mb-1 block">라벨 (쉼표)</span>
+                        <input className={inputCls} value={confluenceLabels}
+                          onChange={(e) => setConfluenceLabels(e.target.value)} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-muted-foreground mb-1 block">Contributor</span>
+                        <input className={inputCls} value={contributor}
+                          title="문서 기여자 표시명 — 기본은 나 자신이며 수정할 수 있습니다."
+                          onChange={(e) => setContributor(e.target.value)} />
                       </div>
                       <div className="col-span-2">
                         <span className="text-xs font-medium text-muted-foreground mb-1 block">문서 제목</span>
@@ -363,7 +500,8 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
               </label>
 
               <div className="flex items-center gap-2 pt-1">
-                <button type="button" onClick={() => void submit()} disabled={busy}
+                <button type="button" onClick={() => void submit()} disabled={busy || projectKeyMissing}
+                  title={projectKeyMissing ? '프로젝트 키를 입력하세요.' : undefined}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
                   생성
