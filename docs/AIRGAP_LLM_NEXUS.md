@@ -91,11 +91,18 @@ K8s 로 배포 시 백엔드와 같은 네임스페이스에 올리면 `OLLAMA_U
 접근할 수 있습니다.
 
 > ⚠️ **`k8s/base/ollama.yaml` 은 이미 `qwen2.5-coder:7b` 모델을 사전 적재한 커스텀 이미지**
-> (`ghcr.io/riverjin839/ollama-qwen2.5-coder:7b`)를 쓰며, 매니페스트 자체에 "폐쇄망에서
-> `ollama pull` 을 args 에 넣지 말 것(실패하거나 무한 대기)"이라는 주석이 있다. `k8s/overlays/
-> airgap/` 도 같은 이미지를 내부 레지스트리로 경로만 바꿔 재사용한다. 즉 **이 이미지를 그대로
-> 쓰면 아래 §2(Nexus 모델 수급) 절차 자체가 필요 없다** — 이미 반입돼 있다. 다른 모델로
-> 바꾸거나 vanilla Ollama 이미지를 쓸 때만 §2 를 따른다.
+> (`ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder:7b`)를 쓰며, 매니페스트
+> 자체에 "폐쇄망에서 `ollama pull` 을 args 에 넣지 말 것(실패하거나 무한 대기)"이라는 주석이
+> 있다. `k8s/overlays/airgap/` 도 같은 이미지를 내부 레지스트리로 경로만 바꿔 재사용한다.
+> 즉 **이 이미지를 그대로 쓰면 아래 §2(Nexus 모델 수급) 절차 자체가 필요 없다** — 이미
+> 반입돼 있다. 다른 모델로 바꾸거나 vanilla Ollama 이미지를 쓸 때만 §2 를 따른다.
+>
+> 이 이미지는 `docker/ollama-qwen2.5-coder/Dockerfile` 을 소스로
+> `.github/workflows/ollama-qwen2.5-coder.yml` 이 GHCR 에 자동 빌드/게시한다(수동
+> docker build/push 불필요, `docker/ollama-qwen2.5-coder/**` 변경 시 또는
+> workflow_dispatch 로 재빌드). Dockerfile 은 빌드 타임에 `ollama list` 로 모델이 실제로
+> 구워졌는지 검증하고 없으면 빌드를 실패시킨다 — "이미지 빌드는 성공했는데 모델은 비어있는"
+> 상황(2026-08 에 이전 수동 빌드 이미지에서 실제로 발생)을 재발 방지한다.
 
 ---
 

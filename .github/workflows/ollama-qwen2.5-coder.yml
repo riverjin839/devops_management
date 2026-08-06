@@ -1,0 +1,64 @@
+name: Build Ollama + qwen2.5-coder image
+
+# 인클러스터 자체 LLM(Ollama, CPU 전용)에 qwen2.5-coder:7b 모델을 pre-bake 한 이미지를
+# 이 저장소의 앱 이미지와 동일한 GHCR 네임스페이스(ghcr.io/<owner>/<repo>/ollama-qwen2.5-coder)
+# 에 빌드/게시한다. Dockerfile 자체가 빌드 타임에 `ollama list` 로 모델이 실제로 구워졌는지
+# 검증하므로, 이 워크플로우가 성공했다는 것은 곧 이미지에 모델이 들어있다는 뜻이다.
+# 자주 바뀌지 않는 이미지라 push 트리거는 Dockerfile 변경 시로 한정하고, 필요할 때
+# workflow_dispatch 로 수동 재빌드도 가능하게 한다.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docker/ollama-qwen2.5-coder/**'
+      - '.github/workflows/ollama-qwen2.5-coder.yml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/ollama-qwen2.5-coder
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=7b
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: docker/ollama-qwen2.5-coder
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 모델 pull(수 GB)이 들어가는 RUN 레이어라 캐시가 크게 도움되진 않지만, 베이스
+          # 이미지 레이어 재사용을 위해 GHA 캐시는 유지한다.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

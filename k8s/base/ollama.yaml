@@ -3,6 +3,10 @@
 # This is OPTIONAL: If not deployed, the AI Agent feature is simply disabled.
 # Air-gap note: Use an image with the model pre-baked. Do NOT add 'ollama pull' in args
 # when deploying in a closed network — it will fail or hang indefinitely.
+# Image is built by .github/workflows/ollama-qwen2.5-coder.yml from
+# docker/ollama-qwen2.5-coder/Dockerfile, which fails the build itself if the model
+# isn't actually present after pull — see that Dockerfile for why this replaced the
+# previous hand-built ghcr.io/riverjin839/ollama-qwen2.5-coder:7b image.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,14 +30,15 @@ spec:
     spec:
       containers:
         - name: ollama
-          image: ghcr.io/riverjin839/ollama-qwen2.5-coder:7b
+          image: ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder:7b
           command: ["/bin/sh", "-c"]
           args:
             - |
               # Start Ollama server in background
               ollama serve &
-              # Wait for server to be ready
-              until curl -sf http://localhost:11434/ > /dev/null 2>&1; do
+              # Wait for server to be ready — use 'ollama list' itself rather than curl,
+              # so a minimal base image without curl doesn't get stuck here forever.
+              until ollama list > /dev/null 2>&1; do
                 echo "Waiting for Ollama server..."
                 sleep 2
               done

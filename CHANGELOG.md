@@ -46,6 +46,19 @@
   `components/platform-status/PlatformStatusMatrix.tsx`(`toolbarSlot` prop + portal,
   `useColumnWidths`/`ResizeGrip` 로 열 리사이즈, `MatrixDisplaySettings` 행 높이 토글).
 
+### Fixed
+- **인클러스터 Ollama(qwen2.5-coder:7b) 이미지 — 모델이 실제로는 비어있던 문제**: 수동으로
+  빌드/push 했던 `ghcr.io/riverjin839/ollama-qwen2.5-coder:7b` 는 헬스체크는 온라인으로
+  뜨지만 실제로는 `/root/.ollama/models` 가 비어있어 챗봇/장애분석/임베딩이 전부
+  "model not pulled" 로 실패하는 상태였다. `docker/ollama-qwen2.5-coder/Dockerfile` 신설
+  (serve→pull→`ollama list` 검증을 한 RUN 레이어에서 끝내고, 모델이 없으면 빌드 자체를
+  실패시킨다) + `.github/workflows/ollama-qwen2.5-coder.yml` 로 GHCR
+  자동 빌드/게시(`ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder:7b`,
+  GITHUB_TOKEN 사용) 로 교체. `k8s/base/ollama.yaml` 의 부팅 대기 로직도 curl 의존성을
+  제거해 `ollama list` 기반으로 바꿔, curl 이 없는 베이스 이미지에서 무한 대기 로그만
+  찍히던 부수 증상도 함께 해소. `k8s/overlays/airgap/`, `helm/k8s-daily-monitor/
+  values.yaml`, `scripts/deploy-airgap.sh` 의 이미지 참조를 새 경로로 갱신.
+
 ## [1.25.2] - 2026-08-06
 
 ### Added
