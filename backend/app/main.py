@@ -300,6 +300,7 @@ def _run_migrations():
             ("custom_values", "JSONB"),
             ("seq", "INTEGER NOT NULL DEFAULT 1000"),
             ("icon", "VARCHAR(64)"),
+            ("icon_config", "JSONB"),
             # G-9: TLS 검증 옵트인. 기본 false = 기존 verify=False 동작 유지.
             ("tls_verify", "BOOLEAN NOT NULL DEFAULT FALSE"),
             # Cluster Trends — per-cluster Prometheus URL 오버라이드 + 토글.

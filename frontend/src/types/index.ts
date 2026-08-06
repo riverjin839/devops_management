@@ -1,6 +1,23 @@
 // Status types
 export type Status = 'healthy' | 'warning' | 'critical' | 'pending';
 
+/** 아이콘 빌더 레시피 — 클러스터 아이콘을 뷰어의 현재 UI 테마로 다시 렌더하기 위한 입력값.
+ *  `colorMode: 'theme'` 면 뷰어의 활성 테마(색상 패턴과 일치하면 그 팔레트, 아니면 운영타입
+ *  색상)를 매번 따라간다. `colorMode: 'custom'` 이면 `customHex` 가 테마와 무관하게 항상
+ *  우선한다(사용자가 배색 패턴 스와치를 직접 골랐을 때). `lib/clusterIconTheme.ts` 참고. */
+export interface ClusterIconConfig {
+  workName: string;
+  attribute: string;
+  regionAbbr: string;
+  shape: 'square' | 'circle';
+  watermark: boolean;
+  /** 운영타입 value — 색상 폴백(colorMode 무관하게 colorToken 소스) + 향후 재편집 시 복원용. */
+  level: string;
+  colorMode: 'theme' | 'custom';
+  /** colorMode === 'custom' 일 때만 의미 있음. */
+  customHex?: string | null;
+}
+
 // Cluster
 export interface Cluster {
   id: string;
@@ -47,9 +64,13 @@ export interface Cluster {
   // 사용자 정의 컬럼 값 (ClusterCustomField.key → value)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customValues?: Record<string, any> | null;
-  // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
-  // null/empty 면 status 기반 기본 아이콘으로 fallback.
+  // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자
+  // 또는 (아이콘 빌더로 만든 경우) 렌더된 SVG data URL 스냅샷. null/empty 면 status 기반
+  // 기본 아이콘으로 fallback. icon_config 가 있으면 프론트가 이 값 대신 매번 다시 렌더한다.
   icon?: string | null;
+  // 아이콘 빌더 레시피 — 있으면 뷰어의 현재 UI 테마로 아이콘을 다시 렌더한다(테마 동기화).
+  // useClusterIconSrc() 참고.
+  iconConfig?: ClusterIconConfig | null;
   // Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
@@ -144,6 +165,7 @@ export interface ClusterManageUpdate {
   bgpEnabled?: boolean;
   asNumber?: string | null;
   icon?: string | null;
+  iconConfig?: ClusterIconConfig | null;
   prometheusUrl?: string | null;
   prometheusEnabled?: boolean;
   alertmanagerUrl?: string | null;

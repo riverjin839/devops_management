@@ -24,6 +24,17 @@
   적용할 방법이 없었던 문제를 고쳤다 — "빌더" 탭에 배색 패턴 스와치를 추가해, 클릭 한 번으로
   해당 아이콘 1개에만 색을 적용할 수 있다(운영등급 설정 자체는 바뀌지 않음). Frontend:
   `ClusterIconPicker.tsx` `BuilderTab` 에 `COLOR_PATTERNS` 스와치 + `patternHex` 상태 추가.
+- **클러스터 아이콘 — 뷰어의 UI 테마에 맞춰 색상 자동 동기화 (커스텀 지정 시 항상 우선)**:
+  아이콘 빌더로 만든 클러스터 아이콘이 이제 색을 한 번 굽어서 고정하지 않고, 보는 사람의
+  현재 활성 테마(배색 패턴과 이름이 일치하면 그 팔레트, 아니면 운영타입 색상)에 맞춰
+  매번 다시 렌더된다 — 같은 클러스터를 봐도 각자 테마에 맞는 색으로 보인다. 아이콘 빌더에서
+  배색 패턴을 직접 골라 커스텀 지정한 경우엔 그 색이 테마 변경과 무관하게 항상 우선한다.
+  Backend: `Cluster.icon_config` JSONB 컬럼 추가(`{workName, attribute, regionAbbr, shape,
+  watermark, level, colorMode: 'theme'|'custom', customHex}`), `ClusterBase`/`ClusterUpdate`
+  스키마에 노출. Frontend: `lib/clusterIconTheme.ts`(`resolveIconSeed`) + 신규 훅
+  `hooks/useClusterIconSrc.ts` 로 렌더 시점에 색을 계산하도록 `ClusterSidebar`/
+  `ClusterTableRow`/`SettingsPage` 의 아이콘 표시를 전환, `BuilderTab` 이 레시피(iconConfig)를
+  함께 저장.
 
 ### Fixed
 - **홈 플랫폼 현황 — "좁게" 밀도가 실제로는 줄지 않던 문제 + 페이지당 행 수 제한 추가**:

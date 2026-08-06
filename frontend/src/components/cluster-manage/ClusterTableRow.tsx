@@ -7,7 +7,7 @@ import type { Cluster, ClusterCustomField, ClusterManageUpdate } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
-import { resolveClusterIcon } from '@/lib/clusterIcons';
+import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
 import { STATUS_STYLE } from './constants';
 import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
@@ -105,7 +105,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
     );
   };
 
-  const resolvedIcon = resolveClusterIcon(cluster.icon);
+  const resolvedIcon = useClusterIconSrc(cluster);
   const FallbackIcon = Server;
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
-from typing import Optional
+from typing import Any, Optional
 from enum import Enum
 
 
@@ -49,6 +49,9 @@ class ClusterBase(BaseModel):
     # 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 또는 emoji 1자.
     # lucide 이름 / emoji 1자 / 업로드 이미지 base64 data URL. 길이 무제한.
     icon: Optional[str] = Field(default=None)
+    # 아이콘 빌더 레시피 — 있으면 프론트가 뷰어의 현재 UI 테마로 매번 다시 렌더한다
+    # (colorMode: 'theme'|'custom' — 'custom' 이면 테마 무관하게 customHex 우선).
+    icon_config: Optional[dict[str, Any]] = Field(default=None)
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
@@ -96,6 +99,7 @@ class ClusterUpdate(BaseModel):
     as_number: Optional[str] = None
     # lucide 이름 / emoji 1자 / 업로드 이미지 base64 data URL. 길이 무제한.
     icon: Optional[str] = Field(default=None)
+    icon_config: Optional[dict[str, Any]] = Field(default=None)
     # Cluster Trends — per-cluster Prometheus URL 오버라이드 / 토글.
     prometheus_url: Optional[str] = Field(default=None, max_length=512)
     prometheus_enabled: Optional[bool] = None
