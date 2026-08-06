@@ -9,9 +9,10 @@ import {
   LayoutGrid, List, Search,
 } from 'lucide-react';
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Cell, Legend,
 } from 'recharts';
 import { MacCard } from '@/components/ui/MacCard';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { EmptyState, Skeleton, SnapshotProgressCard, SnapshotProgressBar, ExportMenu } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
@@ -118,7 +119,7 @@ function PageSizeSelect({ value, onChange, options }: {
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground"
+        className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         title="페이지당 표시 개수"
       >
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -233,7 +234,10 @@ function MeterBar({
           {usage == null ? '—' : `${usageDisplay} · ${pctText(usage, alloc)}`}
         </span>
       </div>
-      <UtilPct usage={usage} req={req} lim={lim} className="mt-0.5 pl-[34px]" />
+      <div className="flex items-center gap-1.5 mt-0.5 pl-[34px]">
+        <UtilPct usage={usage} req={req} lim={lim} />
+        <EffBadge kind={efficiency(req, usage)} />
+      </div>
     </div>
   );
 }
@@ -371,7 +375,7 @@ export function K8sAllocationPage() {
                 <select
                   value={autoMs === false ? 'off' : String(autoMs)}
                   onChange={(e) => setAutoMs(e.target.value === 'off' ? false : Number(e.target.value))}
-                  className="text-sm px-2 py-1 rounded-lg border border-border bg-card text-foreground"
+                  className="text-sm px-2 py-1 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   title="자동 갱신 간격"
                 >
                   {AUTO_OPTIONS.map((o) => (
@@ -462,6 +466,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
   );
   const s = data.summary;
   const useEff = s.cpuUsageM == null ? null : ratio(s.cpuUsageM, s.cpuReqM);
+  const memUseEff = s.memUsageB == null ? null : ratio(s.memUsageB, s.memReqB);
   const cpuWasteM = s.cpuUsageM == null ? null : Math.max(0, s.cpuReqM - s.cpuUsageM);
   const memWasteB = s.memUsageB == null ? null : Math.max(0, s.memReqB - s.memUsageB);
   // 전체 기준 할당 가용(여유) = allocatable − request → 추가로 스케줄 가능한 자원량.
@@ -470,16 +475,19 @@ function SummarySection({ clusterId }: { clusterId: string }) {
   // 할당효율 경고 — CPU/MEM 동일 기준(alloc 미상 시 null → 경고 안 띄움, 0%로 오인 방지).
   const cpuAllocRatio = ratio(s.cpuReqM, s.cpuAllocM);
   const memAllocRatio = ratio(s.memReqB, s.memAllocB);
+  // 사용효율 경고 — 30% 미만(낭비, 주황) / 105% 초과(스로틀·OOM 위험, 빨강). 아래 툴팁이
+  // 설명하는 임계값과 반드시 같은 기준이어야 한다(예전엔 105% 초과 케이스가 warn 계산에서
+  // 빠져 있어 "스로틀 위험"이라고 설명해놓고 카드 색은 안 바뀌는 불일치가 있었다).
+  const usageWarn = (r: number | null): boolean | 'critical' => (r == null ? false : r > 1.05 ? 'critical' : r < 0.3 ? true : false);
 
   return (
     <MacCard title="클러스터 요약" bodyPadding="p-3">
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-3 lg:grid-cols-7 gap-2">
         <Stat label="노드" value={fmtN(s.nodeCount)} icon={<Server className="w-3.5 h-3.5" />} />
         <Stat label="네임스페이스" value={fmtN(s.namespaceCount)} icon={<Layers className="w-3.5 h-3.5" />} />
         <Stat label="파드 (활성)"
           value={cap ? `${fmtN(s.podCount)} / ${fmtN(cap.allocatablePods)}` : fmtN(s.podCount)}
           icon={<Cpu className="w-3.5 h-3.5" />}
-          sub={cap ? `여유 ${fmtN(cap.schedulableFreeSlots)}개` : undefined}
           help={cap && (
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">파드 (활성)</p>
@@ -525,7 +533,7 @@ function SummarySection({ clusterId }: { clusterId: string }) {
         />
         <Stat label="CPU 사용효율" value={useEff == null ? '—' : pctText(s.cpuUsageM ?? 0, s.cpuReqM)}
           sub={s.cpuUsageM == null ? '드릴다운에서 확인' : `use ${fmtCores(s.cpuUsageM)}`}
-          warn={useEff != null && useEff < 0.3}
+          warn={usageWarn(useEff)}
           help={
             <div className="space-y-1.5">
               <p className="font-semibold text-foreground">CPU 사용효율 (Usage Efficiency)</p>
@@ -534,7 +542,25 @@ function SummarySection({ clusterId }: { clusterId: string }) {
               <p>request로 예약한 CPU 중 실제로 <b>사용 중인</b> 비율입니다.</p>
               <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
                 <li>30% 미만 → request 과대 설정 (낭비, 주황 경고)</li>
-                <li>105% 초과 → 실사용이 request 초과 (스로틀 위험)</li>
+                <li>105% 초과 → 실사용이 request 초과 (스로틀 위험, 빨강 경고)</li>
+                <li>30–105% → 적정 범위</li>
+              </ul>
+              <p className="text-muted-foreground">※ 메트릭 서버 없으면 표시 불가</p>
+            </div>
+          }
+        />
+        <Stat label="MEM 사용효율" value={memUseEff == null ? '—' : pctText(s.memUsageB ?? 0, s.memReqB)}
+          sub={s.memUsageB == null ? '드릴다운에서 확인' : `use ${fmtGi(s.memUsageB)}`}
+          warn={usageWarn(memUseEff)}
+          help={
+            <div className="space-y-1.5">
+              <p className="font-semibold text-foreground">MEM 사용효율 (Usage Efficiency)</p>
+              <p className="text-primary">관점: <b>노드 실사용(모니터링) 기준</b> — 예약해둔 자원을 실제로 얼마나 쓰고 있는지를 봅니다.</p>
+              <p><b>= 실사용량 ÷ Request × 100</b></p>
+              <p>request로 예약한 메모리 중 실제로 <b>사용 중인</b> 비율입니다.</p>
+              <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                <li>30% 미만 → request 과대 설정 (낭비, 주황 경고)</li>
+                <li>105% 초과 → 실사용이 request 초과 (OOM 위험, 빨강 경고)</li>
                 <li>30–105% → 적정 범위</li>
               </ul>
               <p className="text-muted-foreground">※ 메트릭 서버 없으면 표시 불가</p>
@@ -622,12 +648,12 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
       <label className="flex items-center gap-1 text-xs text-muted-foreground">
         CPU
         <input type="number" min="0" step="0.1" value={cpu} onChange={(e) => setCpu(e.target.value)}
-          className="w-16 px-1.5 py-0.5 rounded border border-border bg-card text-foreground tabular-nums" /> 코어
+          className="w-16 px-1.5 py-0.5 rounded border border-border bg-card text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary" /> 코어
       </label>
       <label className="flex items-center gap-1 text-xs text-muted-foreground">
         MEM
         <input type="number" min="0" step="0.5" value={mem} onChange={(e) => setMem(e.target.value)}
-          className="w-16 px-1.5 py-0.5 rounded border border-border bg-card text-foreground tabular-nums" /> Gi
+          className="w-16 px-1.5 py-0.5 rounded border border-border bg-card text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary" /> Gi
       </label>
       {isError ? (
         <span className="inline-flex items-center gap-1 text-xs text-status-warning">
@@ -671,36 +697,43 @@ function PodScheduleCalc({ clusterId }: { clusterId: string }) {
 }
 
 function StatTooltip({ children }: { children: ReactNode }) {
-  // hover 뿐 아니라 키보드 포커스/터치 탭으로도 열리도록 트리거를 button 으로,
-  // 패널을 group-focus-within 으로도 노출 (D-028 접근성).
+  // 프로젝트 표준 Tooltip 프리미티브(Base UI) 사용 — hover/키보드 포커스/터치 모두
+  // 지원하고 트리거에 title 이 붙어 마우스 사용자에게도 네이티브 툴팁 텍스트가 뜬다.
   return (
-    <span className="relative group inline-flex items-center ml-0.5">
-      <button type="button" aria-label="설명 보기"
-        className="inline-flex text-muted-foreground/60 hover:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
-        <HelpCircle className="w-3 h-3" />
-      </button>
-      <div
-        data-export-ignore
-        className="hidden group-hover:block group-focus-within:block absolute left-0 top-full mt-1 z-50 w-64
-          rounded-lg border border-border bg-card shadow-lg p-2.5 text-xs leading-relaxed text-foreground whitespace-normal"
+    <Tooltip>
+      <TooltipTrigger
+        type="button"
+        title="설명 보기"
+        aria-label="설명 보기"
+        className="inline-flex items-center ml-0.5 text-muted-foreground/60 hover:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
       >
+        <HelpCircle className="w-3 h-3" />
+      </TooltipTrigger>
+      <TooltipContent data-export-ignore side="bottom" className="max-w-64 whitespace-normal text-left leading-relaxed">
         {children}
-      </div>
-    </span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
+// warn: true = 주의(주황, 낭비 등 경미), 'critical' = 위험(빨강, 오버커밋/스로틀 등 심각).
+// 색상 단독으로 위험도를 전달하지 않도록 AlertTriangle 아이콘을 함께 표시한다(PRODUCT.md
+// §Accessibility & Inclusion — 색상 단독 정보 전달 금지).
 function Stat({ label, value, sub, icon, warn, help, valueClassName }: {
-  label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean; help?: ReactNode;
+  label: string; value: string; sub?: string; icon?: ReactNode; warn?: boolean | 'critical'; help?: ReactNode;
   valueClassName?: string;
 }) {
+  const warnCls = warn === 'critical' ? 'text-status-critical' : warn ? 'text-status-warning' : (valueClassName ?? '');
   return (
     <div className="rounded-lg border border-border bg-card/50 px-2.5 py-2">
       <div className="text-xs text-muted-foreground flex items-center gap-1">
         {icon}{label}
         {help && <StatTooltip>{help}</StatTooltip>}
       </div>
-      <div className={`text-xl font-semibold leading-tight mt-0.5 ${warn ? 'text-status-warning' : (valueClassName ?? '')}`}>{value}</div>
+      <div className={`text-xl font-semibold leading-tight mt-0.5 flex items-center gap-1 ${warnCls}`}>
+        {warn && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />}
+        {value}
+      </div>
       {sub && <div className="text-xs text-muted-foreground mt-0.5 truncate" title={sub}>{sub}</div>}
     </div>
   );
@@ -767,7 +800,7 @@ function PodCapacityStatusCards({ clusterId }: { clusterId: string }) {
             .map((m) => (
               <Stat key={m.key} label={m.label} value={fmtN(counts[m.key] ?? 0)}
                 valueClassName={m.cls}
-                warn={m.key === 'error' && (counts[m.key] ?? 0) > 0} />
+                warn={(m.key === 'error' || m.key === 'failed') && (counts[m.key] ?? 0) > 0 ? 'critical' : false} />
             ))}
         </div>
       </MacCard>
@@ -795,7 +828,10 @@ function GaugeRow({ label, alloc, req, lim, usage }: { label: string; alloc: num
         <div className={`absolute inset-y-0 left-0 ${over ? 'bg-status-critical/80' : 'bg-status-info/70'}`} style={{ width: `${reqPct}%` }} />
         {usage != null && <div className="absolute inset-y-0 left-0 bg-status-healthy" style={{ width: `${usePct}%`, opacity: 0.85 }} />}
       </div>
-      <UtilPct usage={usage} req={req} lim={lim} className="mt-0.5" />
+      <div className="flex items-center gap-1.5 mt-0.5">
+        <UtilPct usage={usage} req={req} lim={lim} />
+        <EffBadge kind={efficiency(req, usage)} />
+      </div>
     </div>
   );
 }
@@ -864,6 +900,16 @@ function NsRankingView({ clusterId }: { clusterId: string }) {
       </MacCard>
     );
   }
+  // NodesView/NamespacesView 와 동일하게 "집계 중" 구간을 별도 분기 — 안 그러면 페이지 상단
+  // 배너("집계 중")와 이 탭 본문("데이터 없음")이 동시에 모순된 메시지를 낸다.
+  if (nsQ.data?.status === 'computing' && !(nsQ.data?.items?.length)) {
+    return (
+      <MacCard title="네임스페이스 비효율 랭킹" bodyPadding="p-3">
+        <SnapshotProgressCard processed={nsQ.data.processed ?? 0} total={nsQ.data.total ?? null}
+          progress={nsQ.data.progress ?? null} label="자원 집계 중" unit="Pod" />
+      </MacCard>
+    );
+  }
 
   return (
     <MacCard title={`네임스페이스 비효율 랭킹 (${fmtN(nsRanked.length)}개 · req vs 실사용, 간격이 클수록 낭비)`} bodyPadding="p-3">
@@ -892,7 +938,7 @@ function NsRankingView({ clusterId }: { clusterId: string }) {
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
             <XAxis type="number" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} unit={unit} />
             <YAxis type="category" dataKey="namespace" width={150} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
-            <Tooltip
+            <RechartsTooltip
               formatter={(v: number, name) => [`${v}${unit}`, name === 'req' ? 'request' : '실사용']}
               contentStyle={{ fontSize: 13, borderRadius: 8, background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' }}
             />
@@ -1001,7 +1047,15 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
             </button>
           </div>
           <SearchInput value={q} onChange={setQ} placeholder="노드 찾기" />
-          {viewStyle === 'table' && <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>}
+          {viewStyle === 'table' && (
+            <span className="text-xs text-muted-foreground inline-flex items-center">
+              열 머리글을 클릭해 정렬
+              <StatTooltip>
+                <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
+                <p className="text-muted-foreground mt-1">노드/네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
+              </StatTooltip>
+            </span>
+          )}
           {viewStyle === 'card' && (
             <>
               <label className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1009,7 +1063,7 @@ function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?
                 <select
                   value={String(colMode)}
                   onChange={(e) => setColMode(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as ColMode))}
-                  className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground"
+                  className="text-sm px-1.5 py-0.5 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   title="한 줄에 표시할 카드 열 수"
                 >
                   {COL_OPTIONS.map((o) => <option key={o.label} value={String(o.value)}>{o.label}</option>)}
@@ -1207,7 +1261,13 @@ function NamespacesView({ clusterId, clusterName }: { clusterId: string; cluster
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="flex items-center gap-3 flex-wrap">
           <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
-          <span className="text-xs text-muted-foreground">열 머리글을 클릭해 정렬</span>
+          <span className="text-xs text-muted-foreground inline-flex items-center">
+            열 머리글을 클릭해 정렬
+            <StatTooltip>
+              <p><b>R</b> = 사용 ÷ 요청(request) 비율 · <b>L</b> = 사용 ÷ 제한(limit) 비율</p>
+              <p className="text-muted-foreground mt-1">네임스페이스/워크로드/파드 표 전반에서 공통으로 쓰이는 표기입니다.</p>
+            </StatTooltip>
+          </span>
           <PageSizeSelect value={pageSize} onChange={setPageSize} options={NS_PAGE_SIZES} />
         </div>
         <div className="flex items-center gap-3">
@@ -1383,6 +1443,21 @@ function WorkloadsDrill({ clusterId, namespace }: { clusterId: string; namespace
   );
 }
 
+// Pod phase(Running/Pending/Succeeded/Failed/Unknown) — API 에는 이미 있었지만 화면에
+// 전혀 렌더링되지 않아 "이 파드가 왜 Pending 인지" 를 드릴다운 끝까지 내려가도 확인할 수
+// 없던 문제를 해소한다.
+const POD_PHASE_CLS: Record<string, string> = {
+  Running: 'bg-status-healthy/10 text-status-healthy',
+  Pending: 'bg-status-warning/10 text-status-warning',
+  Failed: 'bg-status-critical/10 text-status-critical',
+  Succeeded: 'bg-muted text-muted-foreground',
+  Unknown: 'bg-muted text-muted-foreground',
+};
+function PodPhaseBadge({ phase }: { phase: string }) {
+  const cls = POD_PHASE_CLS[phase] ?? 'bg-muted text-muted-foreground';
+  return <span className={`text-xs px-1.5 py-0.5 rounded ${cls}`}>{phase || '-'}</span>;
+}
+
 function PodsDrill({ clusterId, namespace, kind, name }: { clusterId: string; namespace: string; kind: string; name: string }) {
   const { data, isLoading, isError } = useAllocPods(clusterId, namespace, kind, name, true);
   if (isLoading) return <Skeleton className="h-10 w-full" />;
@@ -1396,6 +1471,7 @@ function PodsDrill({ clusterId, namespace, kind, name }: { clusterId: string; na
         <thead className="bg-muted/20 text-left text-xs text-muted-foreground">
           <tr>
             <th className="px-2 py-1.5 font-medium">Pod / Container</th>
+            <th className="px-2 py-1.5 font-medium">상태</th>
             <th className="px-2 py-1.5 font-medium">QoS</th>
             <th className="px-2 py-1.5 font-medium">Node</th>
             <th className="px-2 py-1.5 font-medium">CPU req/lim/use</th>
@@ -1407,6 +1483,7 @@ function PodsDrill({ clusterId, namespace, kind, name }: { clusterId: string; na
             <Fragment key={p.name}>
               <tr className="border-t border-border">
                 <td className="px-2 py-1.5 font-medium">{p.name}</td>
+                <td className="px-2 py-1.5"><PodPhaseBadge phase={p.phase} /></td>
                 <td className="px-2 py-1.5">
                   <span className={`text-xs px-1.5 py-0.5 rounded ${p.qos === 'Guaranteed' ? 'bg-status-healthy/10 text-status-healthy' : p.qos === 'BestEffort' ? 'bg-status-critical/10 text-status-critical' : 'bg-status-warning/10 text-status-warning'}`}>
                     {p.qos ?? '-'}
@@ -1428,6 +1505,7 @@ function PodsDrill({ clusterId, namespace, kind, name }: { clusterId: string; na
                     ↳ {c.name}
                     {!c.hasRequests && <span className="ml-2 text-status-warning">req 미설정</span>}
                   </td>
+                  <td aria-hidden="true" />
                   <td aria-hidden="true" />
                   <td aria-hidden="true" />
                   <td className="px-2 py-1 text-xs tabular-nums">{fmtCores(c.cpuReqM)} / {fmtCores(c.cpuLimM)} / {c.cpuUsageM == null ? '—' : fmtCores(c.cpuUsageM)}</td>
