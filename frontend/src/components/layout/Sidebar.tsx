@@ -110,7 +110,9 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
   };
 
   const handleMouseEnter = () => {
-    showTooltip();
+    // flyout 이 있는 아이콘은 hover 시 flyout 자체가 열려 헤더에 라벨을 보여주므로,
+    // 이름만 뜨는 툴팁을 따로 띄우면 두 개가 겹쳐 보인다 — flyout 이 없는 아이콘에만 띄운다.
+    if (!hasFlyout) showTooltip();
     const rect = buttonRef.current?.getBoundingClientRect();
     if (rect) onHoverOpen?.(rect);
   };
