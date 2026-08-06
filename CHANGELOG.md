@@ -22,6 +22,17 @@
   끄면 버튼 자체가 숨는다. 구 URL `/batch-jobs` 는 `/` 로 리다이렉트(북마크 호환),
   Your Island 패널 등록은 라우트와 무관해 영향 없음.
 
+### Changed
+- **홈 플랫폼 현황 — 헤더 줄 병합 + 행/열 크기 조정**: 세그먼트 탭("업무 현황"/"플랫폼 현황")
+  줄 바로 아래에 "플랫폼 현황" 제목을 다시 반복하던 매트릭스 카드 헤더 줄을 탭 줄과 한 줄로
+  합쳐 세로 공간을 줄였다(제목은 탭이 이미 보여주므로 카드 쪽에서는 뺐다). 점검 항목 열/각
+  클러스터 열 너비를 헤더 경계 드래그로 조정할 수 있게 됐고(더블클릭으로 기본값 복원, 너비는
+  브라우저에 저장), 새 "표시 설정" 팝오버에서 행 높이를 좁게/보통/넓게 3단계로 바꿔 점검
+  항목이 많아져도 한 화면에 더 많이 보이게 할 수 있다. Frontend:
+  `pages/HomePage.tsx`(세그먼트 탭 줄에 툴바 portal slot 추가),
+  `components/platform-status/PlatformStatusMatrix.tsx`(`toolbarSlot` prop + portal,
+  `useColumnWidths`/`ResizeGrip` 로 열 리사이즈, `MatrixDisplaySettings` 행 높이 토글).
+
 ## [1.25.2] - 2026-08-06
 
 ### Added

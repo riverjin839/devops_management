@@ -128,6 +128,13 @@ export function HomePage() {
     }, 500);
   };
 
+  // 플랫폼 탭의 매트릭스 툴바(도움말·설명·수행 로그·항목 추가·설정)를 여기 세그먼트 탭
+  // 줄에 이식해 한 줄로 합친다 — 예전엔 탭 줄 바로 아래에 "플랫폼 현황" 제목을 다시 반복하는
+  // 카드 헤더 줄이 통째로 하나 더 있어(제목 중복 + 세로 공간 낭비), 탭이 이미 "플랫폼 현황"을
+  // 보여주는데 그 아래서 또 말하고 있었다. state 는 PlatformStatusMatrix 안에 그대로 두고
+  // DOM 만 여기로 옮기는 portal 이라 소유권(캡슐화)은 그대로 유지된다.
+  const [platformToolbarSlot, setPlatformToolbarSlot] = useState<HTMLDivElement | null>(null);
+
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
 
@@ -251,9 +258,15 @@ export function HomePage() {
       </div>
 
       {/* ── 세그먼트 탭 — 홈 본문에서 뭘 볼지 고르는 로컬 선택. 예전엔 사이드바 전체를
-          게이팅하는 "모드"였지만(D-054), 지금은 이 홈 화면 안에서만 의미가 있다. ───────── */}
-      <div className="flex-none px-3 lg:px-4 pt-2" role="tablist" aria-label="홈 화면 보기">
-        <div className="inline-flex items-center rounded-xl border border-border overflow-hidden text-sm">
+          게이팅하는 "모드"였지만(D-054), 지금은 이 홈 화면 안에서만 의미가 있다.
+          플랫폼 탭일 때는 오른쪽에 매트릭스 툴바(portal slot)를 같은 줄에 이어 붙여
+          카드 헤더 줄 하나를 통째로 줄인다. ───────── */}
+      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 pt-2">
+        <div
+          role="tablist"
+          aria-label="홈 화면 보기"
+          className="flex-shrink-0 inline-flex items-center rounded-xl border border-border overflow-hidden text-sm"
+        >
           {TABS.map((t, idx) => (
             <button
               key={t.key}
@@ -289,10 +302,14 @@ export function HomePage() {
             </button>
           ))}
         </div>
+        {homeTab === 'platform' && (
+          <div ref={setPlatformToolbarSlot} className="flex-1 min-w-0 flex items-center gap-2" />
+        )}
       </div>
 
       {/* ── 플랫폼 탭: 점검 매트릭스 / 배치잡 서브탭 — 남는 공간을 모두 채우고
-          선택된 서브뷰 안쪽에서만 스크롤 ─────────────────────────────────────── */}
+          선택된 서브뷰 안쪽에서만 스크롤. 매트릭스 자체 툴바는 위 세그먼트 탭 줄의
+          portal slot 으로 이식되므로 여기서는 toolbarSlot 만 넘긴다. ───────────── */}
       {homeTab === 'platform' && (() => {
         const effectiveView = platformView === 'batch' && !batchJobsAllowed ? 'matrix' : platformView;
         return (
@@ -327,7 +344,7 @@ export function HomePage() {
             )}
             {effectiveView === 'matrix' ? (
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <PlatformStatusMatrix />
+                <PlatformStatusMatrix toolbarSlot={platformToolbarSlot} />
               </div>
             ) : (
               // BatchJobsPage 는 원래 독립 라우트 페이지라 자체 전체높이 셸을 두른다 —

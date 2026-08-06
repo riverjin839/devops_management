@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
   Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2, Server, PauseCircle,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState } from '@/components/common';
+import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState, ResizeGrip } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { useColumnWidths } from '@/hooks/useColumnWidths';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
   useRunCheckMatrixCluster, useRunCheckMatrixItem, useCheckMatrixActiveRuns,
@@ -63,14 +66,15 @@ function emptyCellHint(item: CheckMatrixItem, cell: CheckMatrixCell | undefined)
 }
 
 function CellButton({
-  item, cell, onClick,
-}: { item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void }) {
+  item, cell, onClick, minH,
+}: { item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void; minH: number }) {
   const empty = !cell || !cell.hasResult || !cell.status;
   const StatusIcon = !empty ? CELL_STATUS_ICON[cell.status!] : undefined;
   return (
     <button
       onClick={onClick}
-      className="w-full h-full min-h-[36px] flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-muted/60 transition-colors"
+      style={{ minHeight: minH }}
+      className="w-full h-full flex items-center justify-center gap-1.5 px-2 rounded-md hover:bg-muted/60 transition-colors"
       title={empty ? emptyCellHint(item, cell) : (cell?.message || undefined)}
     >
       {empty ? (
@@ -118,6 +122,89 @@ const CRON_TONE_ICON: Record<CronTone, typeof Clock> = {
   warning: AlertTriangle,
   critical: XCircle,
 };
+
+// 행 높이 — 점검 항목이 늘어날수록 "한 줄이 너무 크다"는 불만이 커지므로 사용자가 직접
+// 조절할 수 있게 3단계로 노출한다. 열 너비(useColumnWidths)와 달리 행은 개별 드래그가
+// 아니라 전체 밀도 토글이 맞다 — 항목마다 따로 늘여야 할 이유가 없고, 토글 쪽이 한 번에
+// "더 많이 보기"를 만족시킨다.
+type RowDensity = 'compact' | 'normal' | 'comfortable';
+const ROW_DENSITY_STORAGE_KEY = 'pep:checkMatrixRowDensity';
+const ROW_DENSITY_OPTIONS: { value: RowDensity; label: string }[] = [
+  { value: 'compact', label: '좁게' },
+  { value: 'normal', label: '보통' },
+  { value: 'comfortable', label: '넓게' },
+];
+const ROW_PAD_CLS: Record<RowDensity, string> = {
+  compact: 'py-0.5',
+  normal: 'py-1',
+  comfortable: 'py-2',
+};
+const ROW_MIN_H: Record<RowDensity, number> = { compact: 26, normal: 36, comfortable: 48 };
+
+function loadRowDensity(): RowDensity {
+  try {
+    const v = localStorage.getItem(ROW_DENSITY_STORAGE_KEY);
+    if (v === 'compact' || v === 'normal' || v === 'comfortable') return v;
+  } catch { /* ignore */ }
+  return 'normal';
+}
+
+function MatrixDisplaySettings({
+  density, onDensityChange, onResetWidths,
+}: { density: RowDensity; onDensityChange: (d: RowDensity) => void; onResetWidths: () => void }) {
+  const [open, setOpen] = useState(false);
+  const popRef = useModalA11y(open, () => setOpen(false));
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="표시 설정 — 행 높이 · 열 너비"
+        aria-label="표시 설정 — 행 높이 · 열 너비"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={`p-1.5 rounded-xl transition-colors ${open ? 'bg-secondary text-primary' : 'hover:bg-secondary text-muted-foreground'}`}
+      >
+        <SlidersHorizontal className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            ref={popRef}
+            role="dialog"
+            aria-label="표시 설정"
+            className="absolute z-50 top-full mt-1 right-0 w-52 bg-card border border-border rounded-md shadow-xl p-3 space-y-2.5"
+          >
+            <div className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">행 높이</span>
+              <div className="flex items-center rounded-md bg-secondary/70 p-0.5 gap-px">
+                {ROW_DENSITY_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    onClick={() => onDensityChange(o.value)}
+                    className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                      density === o.value
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={onResetWidths}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center py-1 border-t border-border/50 pt-2"
+            >
+              열 너비 초기화
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function ClusterCronBadge({
   cluster, isRunning, coreHealth,
@@ -213,7 +300,13 @@ function ClusterCronBadge({
   );
 }
 
-export function PlatformStatusMatrix() {
+interface PlatformStatusMatrixProps {
+  /** 지정하면 카드 안쪽 헤더 줄 대신 이 DOM 노드로 툴바를 portal — 상위(HomePage)가
+   * 세그먼트 탭 줄과 한 줄로 합칠 때 쓴다. 없으면 기존처럼 카드 안에 단독 헤더 줄을 그린다. */
+  toolbarSlot?: HTMLElement | null;
+}
+
+export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps = {}) {
   const navigate = useNavigate();
   const toast = useToast();
   const { data: grid, isLoading, isError, error, refetch } = useCheckMatrixGrid();
@@ -241,6 +334,22 @@ export function PlatformStatusMatrix() {
 
   const items = grid?.items ?? [];
   const clusters = grid?.clusters ?? [];
+
+  // 행 높이 밀도 — 3단계 토글, localStorage 영속화(다른 화면 표에도 이미 쓰는 pep: 접두어).
+  const [rowDensity, setRowDensity] = useState<RowDensity>(loadRowDensity);
+  useEffect(() => {
+    try { localStorage.setItem(ROW_DENSITY_STORAGE_KEY, rowDensity); } catch { /* ignore */ }
+  }, [rowDensity]);
+
+  // 열 너비 — 항목 라벨 열 + 클러스터마다 하나씩, 드래그로 조정하고 더블클릭으로 기본값 복원.
+  // 클러스터 목록이 늘어나면 새 컬럼도 기본 너비로 자동 반영된다(useColumnWidths 의 defaults 머지).
+  const colDefaults = useMemo(
+    () => ({ item: 200, ...Object.fromEntries(clusters.map((c) => [c.id, 130])) }),
+    // clusters 는 grid?.clusters 의 파생값 — grid 자체를 넣으면 무관한 셀 데이터 변경에도 재계산된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [grid?.clusters],
+  );
+  const colW = useColumnWidths('platform-status-matrix', { defaults: colDefaults, min: 90, max: 420 });
 
   // 클러스터 cron 배지 색상 — "실행중" 판정은 전역 활성 수행(대기열+실행중) 한 번의 가벼운
   // 폴링으로 공유하고, "정상/경고/위험"은 핵심 점검(core_bundle) 행의 최근 셀 상태로 판정한다.
@@ -320,54 +429,69 @@ export function PlatformStatusMatrix() {
     }
   };
 
+  // 카드 안 단독 헤더 줄로 그릴 수도, 상위(HomePage)의 세그먼트 탭 줄에 portal 로 이식할
+  // 수도 있어 내용을 한 번만 정의한다 — toolbarSlot 이 있으면 중복되는 "플랫폼 현황" 제목은
+  // 뺀다(탭이 이미 보여주므로).
+  const toolbarContent = (
+    <>
+      {!toolbarSlot && (
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
+          플랫폼 현황
+        </span>
+      )}
+      <button
+        onClick={() => setHelpOpen(true)}
+        className="p-0.5 rounded-full text-muted-foreground hover:text-primary hover:bg-secondary transition-colors flex-shrink-0"
+        title="사용법 도움말"
+        aria-label="사용법 도움말"
+      >
+        <HelpCircle className="w-3.5 h-3.5" />
+      </button>
+      <span className="text-[11px] text-muted-foreground truncate">항목 × 클러스터 점검 매트릭스</span>
+      {/* ml-auto 여백만으로는 "화면 정체성" 그룹과 "동작" 그룹의 경계가 옅어(약한 근접성) —
+          구분선으로 명시(WorkItemBoardPage 필터 바에도 쓴 것과 동일한 패턴). */}
+      <div className="ml-auto flex items-center gap-1.5 border-l border-border pl-2.5 flex-shrink-0">
+        <MatrixDisplaySettings density={rowDensity} onDensityChange={setRowDensity} onResetWidths={colW.reset} />
+        <button
+          onClick={() => setRunLog({ open: true, batchId: null })}
+          className="relative inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
+          title={runningClusterIds.size > 0 ? `모든 수행의 실행 로그 — 지금 ${runningClusterIds.size}개 클러스터 실행 중` : '모든 수행의 실행 로그'}
+          aria-label={runningClusterIds.size > 0 ? `모든 수행의 실행 로그 — 지금 ${runningClusterIds.size}개 클러스터 실행 중` : '모든 수행의 실행 로그'}
+        >
+          <ScrollText className="w-3.5 h-3.5" /> 수행 로그
+          {/* 패널을 열지 않아도 "지금 뭔가 돌고 있다"는 걸 알 수 있게 — 확인하러 열어야만
+              아는 상태가 아니라 상시 곁눈질로 파악 가능한 상태로. */}
+          {runningClusterIds.size > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-status-info animate-pulse" aria-hidden="true" />
+          )}
+        </button>
+        <button
+          onClick={() => setFormItem('new')}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" /> 항목 추가
+        </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground"
+          title="매트릭스 설정"
+          aria-label="매트릭스 설정"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-2 min-h-0 flex-1">
+      {toolbarSlot && createPortal(toolbarContent, toolbarSlot)}
       <MacCard bodyPadding="p-0" rootClassName="min-h-0 flex-1 flex flex-col" className="flex-1 min-h-0 flex flex-col">
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-container-high">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
-            플랫폼 현황
-          </span>
-          <button
-            onClick={() => setHelpOpen(true)}
-            className="p-0.5 rounded-full text-muted-foreground hover:text-primary hover:bg-secondary transition-colors"
-            title="사용법 도움말"
-            aria-label="사용법 도움말"
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-          </button>
-          <span className="text-[11px] text-muted-foreground">항목 × 클러스터 점검 매트릭스</span>
-          {/* ml-auto 여백만으로는 "화면 정체성" 그룹과 "동작" 그룹의 경계가 옅어(약한 근접성) —
-              구분선으로 명시(WorkItemBoardPage 필터 바에도 쓴 것과 동일한 패턴). */}
-          <div className="ml-auto flex items-center gap-1.5 border-l border-border pl-2.5">
-            <button
-              onClick={() => setRunLog({ open: true, batchId: null })}
-              className="relative inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
-              title={runningClusterIds.size > 0 ? `모든 수행의 실행 로그 — 지금 ${runningClusterIds.size}개 클러스터 실행 중` : '모든 수행의 실행 로그'}
-              aria-label={runningClusterIds.size > 0 ? `모든 수행의 실행 로그 — 지금 ${runningClusterIds.size}개 클러스터 실행 중` : '모든 수행의 실행 로그'}
-            >
-              <ScrollText className="w-3.5 h-3.5" /> 수행 로그
-              {/* 패널을 열지 않아도 "지금 뭔가 돌고 있다"는 걸 알 수 있게 — 확인하러 열어야만
-                  아는 상태가 아니라 상시 곁눈질로 파악 가능한 상태로. */}
-              {runningClusterIds.size > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-status-info animate-pulse" aria-hidden="true" />
-              )}
-            </button>
-            <button
-              onClick={() => setFormItem('new')}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> 항목 추가
-            </button>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground"
-              title="매트릭스 설정"
-              aria-label="매트릭스 설정"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+        {!toolbarSlot && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-container-high">
+            {toolbarContent}
           </div>
-        </div>
+        )}
 
         {isLoading ? (
           // 실제 매트릭스 구조(항목 라벨 열 + 클러스터 셀 그리드)를 흉내낸 skeleton — 로드 전환 시 시프트 최소화
@@ -417,14 +541,24 @@ export function PlatformStatusMatrix() {
           </div>
         ) : (
           <div className="flex-1 min-h-0 overflow-auto">
-            <table className="w-full border-collapse text-sm">
+            {/* table-layout: fixed + colgroup → 열마다 독립적으로 드래그 리사이즈 가능(useColumnWidths).
+                width: max-content 는 총 열 너비가 컨테이너보다 넓어지면 그만큼 늘어나 가로 스크롤이
+                자연히 생기게 하고, minWidth: 100% 는 좁을 땐 컨테이너를 채운다(ClusterManagePage 와 동일 패턴). */}
+            <table className="border-collapse text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+              <colgroup>
+                <col style={{ width: `${colW.getWidth('item')}px` }} />
+                {clusters.map((cluster) => (
+                  <col key={cluster.id} style={{ width: `${colW.getWidth(cluster.id)}px` }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr className="sticky top-0 z-20 bg-card">
-                  <th className="sticky left-0 z-30 bg-card border-b border-r border-border text-left px-3 py-2 min-w-[200px]">
+                  <th className="relative sticky left-0 z-30 bg-card border-b border-r border-border text-left px-3 py-2">
                     점검 항목
+                    <ResizeGrip onMouseDown={(e) => colW.beginResize('item', e)} onDoubleClick={() => colW.autoFit('item')} />
                   </th>
                   {clusters.map((cluster) => (
-                    <th key={cluster.id} className="border-b border-border px-3 py-2 min-w-[130px] font-medium">
+                    <th key={cluster.id} className="relative border-b border-border px-3 py-2 font-medium">
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1 min-w-0">
                           <span className="truncate max-w-[120px]">{cluster.name}</span>
@@ -448,6 +582,7 @@ export function PlatformStatusMatrix() {
                           }
                         />
                       </div>
+                      <ResizeGrip onMouseDown={(e) => colW.beginResize(cluster.id, e)} onDoubleClick={() => colW.autoFit(cluster.id)} />
                     </th>
                   ))}
                 </tr>
@@ -464,11 +599,12 @@ export function PlatformStatusMatrix() {
                       dragIdx !== null && overIdx === idx && dragIdx !== idx ? 'bg-primary/5' : ''
                     } ${dragIdx === idx ? 'opacity-50' : ''}`}
                   >
-                    <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-2 py-1">
+                    <td className={`sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-2 ${ROW_PAD_CLS[rowDensity]}`}>
                       <div
                         role="group"
                         aria-label={`${item.name} 행`}
-                        className={`flex flex-col gap-0.5 min-w-0 rounded-md px-1.5 py-1 border-l-2 ${
+                        style={{ minHeight: ROW_MIN_H[rowDensity] }}
+                        className={`flex flex-col justify-center gap-0.5 min-w-0 rounded-md px-1.5 py-1 border-l-2 ${
                           color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
                         }`}
                       >
@@ -556,6 +692,7 @@ export function PlatformStatusMatrix() {
                           item={item}
                           cell={grid?.cells[item.id]?.[cluster.id]}
                           onClick={() => setCellTarget({ item, cluster })}
+                          minH={ROW_MIN_H[rowDensity]}
                         />
                       </td>
                     ))}
