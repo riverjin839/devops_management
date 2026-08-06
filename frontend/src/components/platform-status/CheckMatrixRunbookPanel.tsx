@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ComponentType } from 'react';
 import {
   Terminal, Globe, Server, Database, KeyRound, AlertTriangle, Info, Target, Pencil, Save, Plus, X,
   ShieldCheck,
 } from 'lucide-react';
 import { StatusBadge, useToast } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
-import { KubeadmCertsModal } from '@/components/versions';
+import { KubeadmCertsModal, EtcdSystemdModal } from '@/components/versions';
 import { useUpdateSourceConfig } from '@/hooks/useCheckMatrix';
 import { formatApiError } from '@/lib/utils';
 import { RunStateBadge } from './CheckMatrixRunBadges';
@@ -14,17 +14,28 @@ import type {
   CheckMatrixRunDetail, CheckMatrixSourceConfigEntry,
 } from '@/types';
 
-/** pod exec 로는 구조적으로 실패하기 쉬운 점검(예: cert_expiry — distroless 이미지,
- *  "Internal error occurred" 류 클러스터별 exec 거부) 은 SSH 로 수집한 스냅샷을
- *  읽는 경로가 있다. 여기 등록된 sourceRef 는 실행 방식 탭에서 "SSH 로 지금 수집"
- *  액션을 인라인으로 보여준다 — 실패를 본 화면에서 바로 고칠 수 있게(별도 /versions
- *  탐색 불필요). 같은 패턴을 쓰는 점검이 늘면 여기 추가한다. */
-const SSH_COLLECT_ACTIONS: Record<string, { label: string; hint: string }> = {
+interface SshCollectModalProps { open: boolean; clusterId: string; onClose: () => void }
+
+/** pod exec 로는 구조적으로 실패하기 쉬운 점검들(distroless 이미지 / systemd 데몬이라
+ *  파드 자체가 없는 경우 / "Internal error occurred" 류 클러스터별 exec 거부) 은
+ *  SSH 로 수집한 스냅샷을 읽는 `source: auto|pod|snapshot` 경로가 있다. 여기 등록된
+ *  sourceRef(=check_type)는 실행 방식 탭에서 "SSH 로 지금 수집" 액션을 인라인으로
+ *  보여준다 — 실패를 본 화면에서 바로 고칠 수 있게(별도 /versions 탐색 불필요).
+ *  같은 패턴(체커의 params.source + SSH 수집 모달)을 쓰는 점검이 늘면 여기 추가한다. */
+const SSH_COLLECT_ACTIONS: Record<string, { label: string; hint: string; Modal: ComponentType<SshCollectModalProps> }> = {
   cert_expiry: {
     label: 'SSH 로 지금 수집',
     hint: 'kube-apiserver pod exec 로 인증서 만료를 확인할 수 없는 클러스터가 흔합니다 '
       + '(distroless 이미지, "Internal error occurred" 등) — 컨트롤 플레인 노드에 SSH 로 '
       + '접속해 kubeadm certs check-expiration 을 직접 수집하면 source=auto/snapshot 이 이 결과를 씁니다.',
+    Modal: KubeadmCertsModal,
+  },
+  etcd_defrag: {
+    label: 'SSH 로 지금 수집',
+    hint: 'etcd 가 파드가 아니라 systemd 데몬으로 떠 있으면 kubectl exec 로는 확인할 수 '
+      + '없습니다 — master 노드에 SSH 로 접속해 etcd 상태를 직접 수집하면 source=auto/snapshot 이 '
+      + '이 결과를 씁니다.',
+    Modal: EtcdSystemdModal,
   },
 };
 
@@ -417,13 +428,16 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
         </section>
       )}
 
-      {showSshCollect && (
-        <KubeadmCertsModal
-          open={showSshCollect}
-          clusterId={runbook.clusterId}
-          onClose={() => setShowSshCollect(false)}
-        />
-      )}
+      {showSshCollect && runbook.sourceRef && SSH_COLLECT_ACTIONS[runbook.sourceRef] && (() => {
+        const { Modal } = SSH_COLLECT_ACTIONS[runbook.sourceRef];
+        return (
+          <Modal
+            open={showSshCollect}
+            clusterId={runbook.clusterId}
+            onClose={() => setShowSshCollect(false)}
+          />
+        );
+      })()}
     </div>
   );
 }
