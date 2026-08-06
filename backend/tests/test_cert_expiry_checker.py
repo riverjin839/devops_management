@@ -200,3 +200,48 @@ def test_snapshot_source_without_cluster_context_is_pending():
     assert outcome.status == StatusEnum.pending
     assert outcome.details["reason"] == "no_cluster_context"
     assert [s["id"] for s in outcome.steps] == ["snapshot"]
+
+
+# ── 서버 로그 추적성 — DB/UI 를 안 열어도 pod exec 실패가 로그로 드러나는지 ─────────
+
+def test_pod_exec_failure_is_logged_server_side(caplog):
+    """steps/details 에 남는 것과 별개로, 서버 로그(journalctl 등)만 보는 운영자도
+    실패 사유를 추적할 수 있어야 한다 — 이전엔 여기서 아무 로그도 안 남았다."""
+    checker = CertExpiryChecker()
+    checker._v1 = MagicMock(return_value=MagicMock(
+        list_namespaced_pod=MagicMock(return_value=SimpleNamespace(items=[_pod("kube-apiserver-m1")]))
+    ))
+    checker._kubectl = MagicMock(return_value=SimpleNamespace(
+        returncode=1, stdout="", stderr="Internal error occurred",
+    ))
+    ctx = _ctx(source="pod")
+    ctx.cluster.name = "prod-a"
+
+    with caplog.at_level("WARNING", logger="app.services.deep_checkers.cert_expiry_checker"):
+        checker.safe_run(ctx)
+
+    assert any(
+        "prod-a" in r.message and "Internal error occurred" in r.message
+        for r in caplog.records
+    ), [r.message for r in caplog.records]
+
+
+def test_pod_exec_failure_logging_survives_cluster_without_name_attr(caplog):
+    """cluster 컨텍스트가 실제 ORM 객체가 아닌 경우(SimpleNamespace 등)에도 로깅
+    자체가 AttributeError 로 죽어 판정 결과를 critical 로 오염시키면 안 된다."""
+    checker = CertExpiryChecker()
+    checker._v1 = MagicMock(return_value=MagicMock(
+        list_namespaced_pod=MagicMock(return_value=SimpleNamespace(items=[_pod("kube-apiserver-m1")]))
+    ))
+    checker._kubectl = MagicMock(return_value=SimpleNamespace(
+        returncode=1, stdout="", stderr="Internal error occurred",
+    ))
+    ctx = DeepCheckContext(cluster=SimpleNamespace(id="c1"), thresholds={}, params={"source": "pod"})
+
+    outcome = checker.safe_run(ctx)
+
+    assert outcome.status == StatusEnum.pending
+    assert outcome.details["stderr"] == "Internal error occurred"
+    step_ids = [s["id"] for s in outcome.steps]
+    assert step_ids == ["locate_pod", "exec_kubeadm"]
+    assert outcome.steps[-1]["status"] == "failed"

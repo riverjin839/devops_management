@@ -10,6 +10,17 @@
 
 1.25.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **인증서 만료 점검 — pod exec 실패의 서버 로그 추적성 + 실행 화면에서 바로 SSH 수집**:
+  `kubectl exec ... kubeadm certs check-expiration` 이 클러스터별 사유("Internal error
+  occurred" 등)로 실패해도 DB/steps 에만 기록되고 서버 로그(journalctl 등)에는 아무것도
+  남지 않아 UI 를 열지 않고는 추적할 수 없었다 — pod exec 실패·스냅샷 없음 분기에
+  `logger.warning`/`logger.info` 를 추가했다. 또한 이 실패를 본 셀 상세의 "실행 방식" 탭에서
+  바로 SSH 수집(`KubeadmCertsModal`)을 열 수 있는 인라인 액션을 추가해, 원인을 본 화면을
+  벗어나 `/versions` 를 따로 찾아가지 않아도 즉시 조치할 수 있게 했다.
+  Backend: `services/deep_checkers/cert_expiry_checker.py`. Frontend:
+  `components/platform-status/CheckMatrixRunbookPanel.tsx`(`SSH_COLLECT_ACTIONS`).
+
 ### Changed
 - **홈 플랫폼 현황(`/`, 플랫폼 현황 탭) — impeccable polish·layout·delight 고도화**: 이미 여러 차례
   critique+fix 라운드를 거친 화면을 한 단계 더 다듬었다. 행 순서 변경 그립이 마우스 드래그
