@@ -10,12 +10,14 @@ import {
 import { useAssignees } from '@/hooks/useAssignees';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { useToast } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { stripHtml, cn, assigneeNames } from '@/lib/utils';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
+import { STATUS_COLOR } from '@/lib/statusColors';
+import { StatusGlyph } from './StatusGlyph';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
-import type { WorkItem, KanbanStatus, WorkItemTimeBlock } from '@/types';
+import type { WorkItem, WorkItemTimeBlock } from '@/types';
 
 interface DayScheduleBoardProps {
   selectedClusterId: string | null;
@@ -57,15 +59,8 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-// D-011: 상태색은 semantic status 토큰 경유. done=완료(healthy), in_progress=warning,
-// todo=info, backlog=unknown(중립), review_test 는 의미색이 없는 구분 상태라 chart 토큰 사용.
-const STATUS_STYLE: Record<KanbanStatus, { dot: string; bar: string; tint: string }> = {
-  backlog:     { dot: 'bg-status-unknown', bar: 'bg-status-unknown', tint: 'bg-status-unknown/10' },
-  todo:        { dot: 'bg-status-info',    bar: 'bg-status-info',    tint: 'bg-status-info/10' },
-  in_progress: { dot: 'bg-status-warning', bar: 'bg-status-warning', tint: 'bg-status-warning/10' },
-  review_test: { dot: 'bg-chart-4',        bar: 'bg-chart-4',        tint: 'bg-chart-4/10' },
-  done:        { dot: 'bg-status-healthy', bar: 'bg-status-healthy', tint: 'bg-status-healthy/10' },
-};
+// D-011: 상태색은 semantic status 토큰 경유 — 공용 소스는 lib/statusColors.ts(STATUS_COLOR).
+// WeeklyStatusTimeline·MemberTodayTodos 와 동일 토큰을 참조해 탭을 넘나들어도 색이 안 바뀐다.
 
 // 담당자 구분용 categorical 색 — 의미(성공/실패)가 아닌 '사람 구분'이므로 chart-N 토큰(D-005).
 const ASSIGNEE_PALETTE = [
@@ -161,6 +156,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
 
   const [quickAdd, setQuickAdd] = useState<{ time: string; assignee?: string } | null>(null);
   const [addMenu, setAddMenu] = useState<{ minute: number; y: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<WorkItemTimeBlock | null>(null);
 
   const currentUser = useAuthStore((s) => s.user);
   const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
@@ -172,7 +168,7 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'ko'));
   }, [assigneesData]);
 
-  const scopeKey = `k8s:dayScheduleScope:${currentUser?.username ?? 'guest'}`;
+  const scopeKey = `pep:dayScheduleScope:${currentUser?.username ?? 'guest'}`;
   // 구버전 값('me'/'all' 문자열) → 신버전({scope,selectedName}) 마이그레이션.
   const readScopeState = useCallback((): ScheduleScopeState => {
     try {
@@ -407,11 +403,36 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
     );
   };
 
-  const removeBlock = (block: WorkItemTimeBlock) => {
+  const confirmRemoveBlock = () => {
+    if (!deleteTarget) return;
+    const block = deleteTarget;
+    setDeleteTarget(null);
     deleteBlock.mutate(block.id, {
       onSuccess: () => toast.success('시간 블록 삭제'),
       onError: (err) => toast.error('삭제 실패', String(err)),
     });
+  };
+  const deleteTargetItem = deleteTarget ? itemById.get(deleteTarget.workItemId) : undefined;
+
+  // 드래그(마우스) 전용이던 시간 이동에 키보드 대체 수단 제공 — 포커스된 세션 박스에서
+  // 화살표 위/아래로 15분 단위 이동. 리사이즈(길이 조절)는 여전히 마우스 전용이지만,
+  // 최소한 "언제로 옮길지"는 키보드만으로도 가능하게 한다.
+  const adjustSessionTime = (s: Session, deltaMin: number) => {
+    const dur = s.endMin - s.startMin;
+    const startMin = clamp(s.startMin + deltaMin, 0, 1440 - dur);
+    const endMin = startMin + dur;
+    if (startMin === s.startMin) return;
+    if (s.block) {
+      updateBlock.mutate(
+        { blockId: s.block.id, data: { startMinute: startMin, endMinute: endMin } },
+        { onError: (err) => toast.error('시간 변경 실패', String(err)) },
+      );
+    } else {
+      createBlock.mutate(
+        { itemId: s.item.id, data: { blockDate: viewDate, startMinute: startMin, endMinute: endMin } },
+        { onError: (err) => toast.error('블록 생성 실패', String(err)) },
+      );
+    }
   };
 
   const totalCount = sessions.length + allDay.length;
@@ -553,7 +574,9 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
                       onMoveDown={(e) => beginDrag(e, s, 'move')}
                       onTopDown={(e) => beginDrag(e, s, 'top')}
                       onBottomDown={(e) => beginDrag(e, s, 'bottom')}
-                      onDelete={s.block ? () => removeBlock(s.block!) : undefined}
+                      onDelete={s.block ? () => setDeleteTarget(s.block!) : undefined}
+                      onOpen={() => openItem(s.item.id)}
+                      onKeyboardMove={(delta) => adjustSessionTime(s, delta)}
                     />
                   );
                 })}
@@ -609,13 +632,23 @@ export function DayScheduleBoard({ selectedClusterId }: DayScheduleBoardProps) {
         defaultClusterId={selectedClusterId}
         onClose={() => setQuickAdd(null)}
       />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="시간 블록 삭제"
+        description={`"${deleteTargetItem?.title?.trim() || deleteTargetItem?.category || '이 업무'}" 의 시간 블록을 삭제합니다. 되돌릴 수 없습니다.`}
+        danger
+        confirmLabel="삭제"
+        onConfirm={confirmRemoveBlock}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
 
 // ── session box (이동 + 엣지 리사이즈) ──────────────────────────────────────────
 function SessionBox({
-  session, top, height, leftPct, widthPct, onMoveDown, onTopDown, onBottomDown, onDelete,
+  session, top, height, leftPct, widthPct, onMoveDown, onTopDown, onBottomDown, onDelete, onOpen, onKeyboardMove,
 }: {
   session: Session;
   top: number; height: number; leftPct: number; widthPct: number;
@@ -623,10 +656,13 @@ function SessionBox({
   onTopDown: (e: React.MouseEvent) => void;
   onBottomDown: (e: React.MouseEvent) => void;
   onDelete?: () => void;
+  onOpen: () => void;
+  /** 드래그(마우스) 전용이던 이동에 대한 키보드 대체 — ±분 단위로 이동 요청. */
+  onKeyboardMove: (deltaMin: number) => void;
 }) {
   const { item } = session;
   const status = item.kanbanStatus ?? 'todo';
-  const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
+  const sv = STATUS_COLOR[status] ?? STATUS_COLOR.todo;
   const isDone = status === 'done';
   const TypeIcon = WORK_ITEM_TYPE_CONFIG[item.type]?.Icon;
   const names = assigneeNames(item);
@@ -636,7 +672,15 @@ function SessionBox({
 
   return (
     <div
-      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/25 transition-colors', sv.tint, isDone && 'opacity-60')}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); onKeyboardMove(-15); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); onKeyboardMove(15); }
+      }}
+      aria-label={`${label} · ${sv.label} · ${fmtMin(session.startMin)}~${fmtMin(session.endMin)} · Enter 로 상세 열기, 화살표 위/아래로 15분 단위 이동`}
+      className={cn('absolute rounded-lg border border-border/70 overflow-hidden group hover:shadow-sm hover:border-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 transition-colors', sv.tintClass, isDone && 'opacity-60')}
       style={{ top, height, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
     >
       {/* 상단 리사이즈 핸들 — 히트영역은 넓게(h-2), 표시는 얇은 그립 라인만 */}
@@ -645,15 +689,16 @@ function SessionBox({
       </div>
       {/* 본문(이동) */}
       <div onMouseDown={onMoveDown} className="h-full pl-1.5 pr-1 py-0.5 cursor-grab active:cursor-grabbing flex flex-col">
-        <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l', sv.bar)} />
+        <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l', sv.bgClass)} />
         <div className="flex items-center gap-1 min-w-0">
+          {!compact && <StatusGlyph status={status} className={sv.textClass} />}
           {TypeIcon && !compact && <TypeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />}
           <span className={cn('text-xs font-medium truncate', isDone ? 'text-muted-foreground line-through' : 'text-foreground')}>{label}</span>
           {onDelete && (
             <button
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-status-critical flex-shrink-0"
+              className="ml-auto opacity-0 group-hover:opacity-100 focus:opacity-100 group-focus-within:opacity-100 text-muted-foreground hover:text-status-critical flex-shrink-0"
               title="이 시간 블록 삭제" aria-label="이 시간 블록 삭제">
               <Trash2 className="w-3 h-3" />
             </button>
@@ -680,19 +725,19 @@ function SessionBox({
 // ── 미지정 카드 (하단) ──────────────────────────────────────────────────────────
 function UnscheduledCard({ item, onOpen }: { item: WorkItem; onOpen: (id: string) => void }) {
   const status = item.kanbanStatus ?? 'todo';
-  const sv = STATUS_STYLE[status] ?? STATUS_STYLE.todo;
+  const sv = STATUS_COLOR[status] ?? STATUS_COLOR.todo;
   const isDone = status === 'done';
   const names = assigneeNames(item);
   const label = item.title?.trim() || stripHtml(item.content) || item.category;
   return (
-    <button type="button" onClick={() => onOpen(item.id)} title={label} aria-label={label}
-      className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tint, isDone && 'opacity-60')}>
-      <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bar)} />
+    <button type="button" onClick={() => onOpen(item.id)} title={`${label} · ${sv.label}`} aria-label={`${label} · ${sv.label}`}
+      className={cn('w-full flex items-center gap-2 rounded-lg border border-border/60 pl-0 pr-2 py-1.5 text-left hover:border-primary/40', sv.tintClass, isDone && 'opacity-60')}>
+      <span className={cn('flex-none w-1 self-stretch rounded-full', sv.bgClass)} />
+      <StatusGlyph status={status} className={cn(sv.textClass, 'flex-shrink-0')} />
       <div className="min-w-0 flex-1">
         <span className={cn('text-sm truncate font-medium block', isDone ? 'text-muted-foreground line-through' : 'text-foreground')}>{label}</span>
         <span className="text-xs text-muted-foreground truncate block">{names.join(', ')}{item.clusterName ? ` · ${item.clusterName}` : ''}</span>
       </div>
-      <span className={cn('w-1.5 h-1.5 rounded-full flex-none', sv.dot)} />
     </button>
   );
 }
@@ -711,7 +756,7 @@ function AddBlockMenu({
         style={{ top: Math.max(0, y) }}>
         <div className="flex items-center justify-between px-1.5 py-1">
           <span className="text-xs font-semibold tabular-nums">{fmtMin(minute)} 에 추가</span>
-          <button onClick={onClose} aria-label="닫기" className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
+          <button onClick={onClose} title="닫기" aria-label="닫기" className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
         </div>
         {candidates.length > 0 && (
           <>

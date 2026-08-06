@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket, Link2Off, ChevronRight, ChevronDown } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket, Link2Off, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, WorkItemCreate, KanbanStatus } from '@/types';
@@ -46,8 +46,8 @@ const JIRA_CAT_TEXT: Record<string, string> = {
 /** Jira 이슈 종류 배지 색 — Epic/Sub-task 를 눈으로 바로 구분할 수 있게. */
 function jiraTypeClass(type: string): string {
   const t = type.toLowerCase();
-  if (t === 'epic') return 'bg-purple-500/15 text-purple-500 border-purple-500/30';
-  if (t.includes('sub')) return 'bg-sky-500/15 text-sky-500 border-sky-500/30';
+  if (t === 'epic') return 'bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.3)]';
+  if (t.includes('sub')) return 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]';
   if (t === 'bug' || t === '버그' || t === '결함') return 'bg-status-critical/15 text-status-critical border-status-critical/30';
   return 'bg-secondary text-muted-foreground border-border';
 }
@@ -217,10 +217,10 @@ function TextareaInline({
         className="w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded resize-y focus:outline-none focus:border-primary"
       />
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        <button type="button" onClick={commit} className="p-0.5 text-primary hover:text-primary/80">
+        <button type="button" onClick={commit} title="저장" aria-label="저장" className="p-0.5 text-primary hover:text-primary/80">
           <Check className="w-3.5 h-3.5" />
         </button>
-        <button type="button" onClick={() => { committed.current = true; onCancel(); }} className="p-0.5 hover:text-foreground">
+        <button type="button" onClick={() => { committed.current = true; onCancel(); }} title="취소" aria-label="취소" className="p-0.5 hover:text-foreground">
           <X className="w-3.5 h-3.5" />
         </button>
         <span className="ml-auto">Ctrl+Enter 저장 / Esc 취소 · 서식 보존은 ✏ 사용</span>
@@ -620,6 +620,11 @@ export function WorkItemTableRow({
                 onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
                 className="px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
               />
+            ) : overdue ? (
+              <span className="inline-flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+                {fmtDate(item.dueDate)}
+              </span>
             ) : fmtDate(item.dueDate)}
           </EditableCell>
         );
@@ -805,7 +810,7 @@ export function WorkItemTableRow({
                   onClick={(e) => { e.stopPropagation(); onJiraProvision(item); }}
                   className={`p-1.5 hover:bg-secondary rounded-md transition-colors ${
                     item.provisionStatus === 'partial'
-                      ? 'text-amber-500 hover:text-amber-400'
+                      ? 'text-status-warning hover:text-status-warning/80'
                       : 'text-muted-foreground hover:text-primary'
                   }`}
                   title={item.provisionStatus === 'partial'

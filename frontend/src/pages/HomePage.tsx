@@ -4,6 +4,7 @@ import {
   ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
   ListTodo, ServerCog, ShieldAlert,
 } from 'lucide-react';
+import { MacCard } from '@/components/ui/MacCard';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
 import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
 import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimeline';
@@ -20,7 +21,7 @@ import { useHomeStore, type HomeTab } from '@/stores/homeStore';
 import { useIslands } from '@/hooks/useIslands';
 import { useIslandStore } from '@/stores/islandStore';
 import type { WorkItem } from '@/types';
-import { cn, parseUTC } from '@/lib/utils';
+import { cn, parseUTC, assigneeNames } from '@/lib/utils';
 import { isMyDueTodo } from '@/lib/workItems';
 
 function nextDueTask(items: WorkItem[]): WorkItem | null {
@@ -150,7 +151,13 @@ export function HomePage() {
 
   const openIssueCount = useMemo(() => allIssues.filter((i) => !i.closedAt).length, [allIssues]);
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);
-  const upcomingTask = useMemo(() => nextDueTask(allSchedulable), [allSchedulable]);
+  // "다음 일정" 은 옆의 "내 할일"과 같은 개인화 기준을 쓴다 — 이전엔 전체 담당자 기준이라
+  // 나란한 두 KPI 가 서로 다른 모집단을 보여줘 혼동을 줬다(impeccable critique, 업무 현황 P1).
+  const myUpcomingPool = useMemo(
+    () => (myName ? allSchedulable.filter((w) => assigneeNames(w).includes(myName)) : allSchedulable),
+    [allSchedulable, myName],
+  );
+  const upcomingTask = useMemo(() => nextDueTask(myUpcomingPool), [myUpcomingPool]);
   const upcomingLabel = upcomingTask?.startedAt
     ? parseUTC(upcomingTask.startedAt).toLocaleString('ko-KR', {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -166,7 +173,7 @@ export function HomePage() {
   // 플랫폼 탭 배지 — 위험 클러스터 + 점검 실패 합계. 0이면 배지를 숨겨 평상시엔 조용하다.
   const platformSignalCount = criticalClusters + (checkFailureCount ?? 0);
   const TABS: Array<{ key: HomeTab; label: string; Icon: typeof ListTodo; badge?: number }> = [
-    { key: 'work', label: '내 업무', Icon: ListTodo },
+    { key: 'work', label: '업무 현황', Icon: ListTodo },
     { key: 'platform', label: '플랫폼 현황', Icon: ServerCog, badge: platformSignalCount || undefined },
   ];
   const handleTabKeyDown = (e: React.KeyboardEvent, idx: number) => {
@@ -295,7 +302,11 @@ export function HomePage() {
           <div className="grid grid-cols-10 gap-3 xl:flex-1 xl:min-h-0">
 
             {/* ── 당일 시간단위 스케줄 (담당자 기준) (4/10) ─────────────────── */}
-            <div className="col-span-10 xl:col-span-4 flex flex-col min-h-[420px] xl:min-h-0 rounded-md border border-border bg-card overflow-hidden">
+            <MacCard
+              rootClassName="col-span-10 xl:col-span-4 flex flex-col min-h-[420px] xl:min-h-0"
+              bodyPadding="p-0"
+              className="flex-1 min-h-0 flex flex-col"
+            >
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <CalendarClock className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
@@ -305,10 +316,14 @@ export function HomePage() {
               <div className="flex-1 min-h-0 p-3">
                 <DayScheduleBoard selectedClusterId={null} />
               </div>
-            </div>
+            </MacCard>
 
             {/* ── 담당자별 진행 현황 (주간 / 월간 / 담당자) (6/10) ──────────── */}
-            <div className="col-span-10 xl:col-span-6 flex flex-col min-h-[420px] xl:min-h-0 rounded-md border border-border bg-card overflow-hidden">
+            <MacCard
+              rootClassName="col-span-10 xl:col-span-6 flex flex-col min-h-[420px] xl:min-h-0"
+              bodyPadding="p-0"
+              className="flex-1 min-h-0 flex flex-col"
+            >
               <div className="flex-none flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/40">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   담당자별 진행 현황
@@ -355,7 +370,7 @@ export function HomePage() {
                   <div className="h-full overflow-y-auto p-4"><MemberTodayTodos selectedClusterId={null} /></div>
                 )}
               </div>
-            </div>
+            </MacCard>
 
           </div>
         </div>

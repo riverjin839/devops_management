@@ -17,12 +17,12 @@ export type { KanbanStatus };
 export const WORK_ITEM_TYPE_ORDER: WorkItemType[] = ['issue', 'meeting', 'task', 'build_response', 'etc'];
 
 export const WORK_ITEM_TYPE_CONFIG: Record<WorkItemType, { label: string; Icon: LucideIcon; cls: string }> = {
-  issue:           { label: '이슈 대응', Icon: AlertTriangle,   cls: 'bg-red-500/10 text-red-700 dark:text-red-300' },
-  meeting:         { label: '회의',      Icon: Users,           cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
-  task:            { label: '운영 대응', Icon: Wrench,          cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' },
-  build_response:  { label: '구축 대응', Icon: HardHat,         cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
-  etc:             { label: '기타',      Icon: MoreHorizontal,  cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-300' },
-  training:        { label: '교육',      Icon: GraduationCap,   cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  issue:           { label: '이슈 대응', Icon: AlertTriangle,   cls: 'bg-[hsl(var(--chart-5)/0.1)] text-[hsl(var(--chart-5))]' },
+  meeting:         { label: '회의',      Icon: Users,           cls: 'bg-[hsl(var(--chart-4)/0.1)] text-[hsl(var(--chart-4))]' },
+  task:            { label: '운영 대응', Icon: Wrench,          cls: 'bg-[hsl(var(--chart-1)/0.1)] text-[hsl(var(--chart-1))]' },
+  build_response:  { label: '구축 대응', Icon: HardHat,         cls: 'bg-[hsl(var(--chart-3)/0.1)] text-[hsl(var(--chart-3))]' },
+  etc:             { label: '기타',      Icon: MoreHorizontal,  cls: 'bg-[hsl(var(--chart-8)/0.1)] text-[hsl(var(--chart-8))]' },
+  training:        { label: '교육',      Icon: GraduationCap,   cls: 'bg-[hsl(var(--chart-2)/0.1)] text-[hsl(var(--chart-2))]' },
 };
 
 // ── 컬럼 정의 ─────────────────────────────────────────────────────────────────
@@ -39,37 +39,37 @@ export const KANBAN_COLUMNS: KanbanColumnConfig[] = [
   {
     key: 'backlog',
     label: 'Backlog',
-    headerCls: 'border-slate-500/40 bg-slate-500/5',
-    dotCls: 'bg-slate-400',
+    headerCls: 'border-[hsl(var(--chart-8)/0.4)] bg-[hsl(var(--chart-8)/0.05)]',
+    dotCls: 'bg-[hsl(var(--chart-8))]',
     emptyText: '백로그가 비어 있습니다',
   },
   {
     key: 'todo',
     label: 'To Do',
-    headerCls: 'border-blue-500/40 bg-blue-500/5',
-    dotCls: 'bg-blue-400',
+    headerCls: 'border-[hsl(var(--chart-1)/0.4)] bg-[hsl(var(--chart-1)/0.05)]',
+    dotCls: 'bg-[hsl(var(--chart-1))]',
     emptyText: '이번 스프린트에 할 업무를 추가하세요',
   },
   {
     key: 'in_progress',
     label: 'In Progress',
-    headerCls: 'border-amber-500/40 bg-amber-500/5',
-    dotCls: 'bg-amber-400',
+    headerCls: 'border-[hsl(var(--chart-3)/0.4)] bg-[hsl(var(--chart-3)/0.05)]',
+    dotCls: 'bg-[hsl(var(--chart-3))]',
     emptyText: '진행 중인 업무가 없습니다',
     wipLimit: 2,
   },
   {
     key: 'review_test',
     label: 'Review & Test',
-    headerCls: 'border-purple-500/40 bg-purple-500/5',
-    dotCls: 'bg-purple-400',
+    headerCls: 'border-[hsl(var(--chart-4)/0.4)] bg-[hsl(var(--chart-4)/0.05)]',
+    dotCls: 'bg-[hsl(var(--chart-4))]',
     emptyText: '검증 중인 업무가 없습니다',
   },
   {
     key: 'done',
     label: 'Done',
-    headerCls: 'border-emerald-500/40 bg-emerald-500/5',
-    dotCls: 'bg-emerald-400',
+    headerCls: 'border-[hsl(var(--chart-2)/0.4)] bg-[hsl(var(--chart-2)/0.05)]',
+    dotCls: 'bg-[hsl(var(--chart-2))]',
     emptyText: '완료된 업무가 없습니다',
   },
 ];
@@ -86,25 +86,25 @@ export const KANBAN_STATUS_LABEL: Record<KanbanStatus, string> = {
 
 // ── 모듈 배지 설정 ─────────────────────────────────────────────────────────────
 export const MODULE_CONFIG: Record<WorkItemModule, { label: string; cls: string }> = {
-  k8s:        { label: 'K8s',       cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
-  keycloak:   { label: 'Keycloak',  cls: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30' },
-  nexus:      { label: 'Nexus',     cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-  cilium:     { label: 'Cilium',    cls: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' },
-  argocd:     { label: 'ArgoCD',    cls: 'bg-violet-500/15 text-violet-400 border-violet-500/30' },
-  jenkins:    { label: 'Jenkins',   cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
-  backend:    { label: 'Backend',   cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
-  frontend:   { label: 'Frontend',  cls: 'bg-pink-500/15 text-pink-400 border-pink-500/30' },
-  monitoring: { label: 'Monitor',   cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
-  infra:      { label: 'Infra',     cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
+  k8s:        { label: 'K8s',       cls: 'bg-[hsl(var(--chart-1)/0.15)] text-[hsl(var(--chart-1))] border-[hsl(var(--chart-1)/0.3)]' },
+  keycloak:   { label: 'Keycloak',  cls: 'bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.3)]' },
+  nexus:      { label: 'Nexus',     cls: 'bg-[hsl(var(--chart-2)/0.15)] text-[hsl(var(--chart-2))] border-[hsl(var(--chart-2)/0.3)]' },
+  cilium:     { label: 'Cilium',    cls: 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]' },
+  argocd:     { label: 'ArgoCD',    cls: 'bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.3)]' },
+  jenkins:    { label: 'Jenkins',   cls: 'bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))] border-[hsl(var(--chart-3)/0.3)]' },
+  backend:    { label: 'Backend',   cls: 'bg-[hsl(var(--chart-7)/0.15)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.3)]' },
+  frontend:   { label: 'Frontend',  cls: 'bg-[hsl(var(--chart-5)/0.15)] text-[hsl(var(--chart-5))] border-[hsl(var(--chart-5)/0.3)]' },
+  monitoring: { label: 'Monitor',   cls: 'bg-[hsl(var(--chart-5)/0.15)] text-[hsl(var(--chart-5))] border-[hsl(var(--chart-5)/0.3)]' },
+  infra:      { label: 'Infra',     cls: 'bg-[hsl(var(--chart-8)/0.15)] text-[hsl(var(--chart-8))] border-[hsl(var(--chart-8)/0.3)]' },
 };
 
 // ── 유형 배지 설정 ─────────────────────────────────────────────────────────────
 export const TYPE_LABEL_CONFIG: Record<WorkItemTypeLabel, { label: string; cls: string }> = {
-  feature:  { label: 'feat',     cls: 'bg-blue-500/10 text-blue-300' },
-  bug:      { label: 'fix',      cls: 'bg-red-500/10 text-red-300' },
-  chore:    { label: 'chore',    cls: 'bg-slate-500/10 text-slate-400' },
-  docs:     { label: 'docs',     cls: 'bg-teal-500/10 text-teal-300' },
-  security: { label: 'security', cls: 'bg-rose-500/10 text-rose-300' },
+  feature:  { label: 'feat',     cls: 'bg-[hsl(var(--chart-1)/0.1)] text-[hsl(var(--chart-1))]' },
+  bug:      { label: 'fix',      cls: 'bg-status-critical/10 text-status-critical' },
+  chore:    { label: 'chore',    cls: 'bg-muted text-muted-foreground' },
+  docs:     { label: 'docs',     cls: 'bg-[hsl(var(--chart-2)/0.1)] text-[hsl(var(--chart-2))]' },
+  security: { label: 'security', cls: 'bg-status-warning/10 text-status-warning' },
 };
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────

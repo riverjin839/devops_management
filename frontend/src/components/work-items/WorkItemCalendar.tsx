@@ -10,16 +10,25 @@ interface WorkItemCalendarProps {
   onItemClick: (item: WorkItem) => void;
 }
 
+// WorkItemTableRow.tsx 의 PRI_STYLES 와 동일한 status-* 토큰 사용
 const PRIORITY_BAR_COLORS: Record<string, string> = {
-  high: 'bg-red-500',
-  medium: 'bg-blue-500',
-  low: 'bg-slate-500',
+  high: 'bg-status-critical',
+  medium: 'bg-status-warning',
+  low: 'bg-status-info',
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
   high: '높음',
   medium: '보통',
   low: '낮음',
+};
+
+// 여러 날에 걸친 업무는 중간 구간에 카테고리 라벨이 숨겨져 우선순위가 색상에만
+// 의존했다 — 모든 구간에 짧은 문자 배지를 함께 노출해 색맹/저채도 화면에서도 구분되게 한다.
+const PRIORITY_LETTER: Record<string, string> = {
+  high: 'H',
+  medium: 'M',
+  low: 'L',
 };
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
@@ -160,7 +169,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
           <div
             key={name}
             className={`text-center text-sm font-medium py-2 border-r border-b border-border ${
-              i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-muted-foreground'
+              i === 0 ? 'text-status-critical' : i === 6 ? 'text-status-info' : 'text-muted-foreground'
             }`}
           >
             {name}
@@ -194,9 +203,9 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                         isToday(day)
                           ? 'bg-primary text-primary-foreground font-bold'
                           : colIdx === 0
-                          ? 'text-red-400'
+                          ? 'text-status-critical'
                           : colIdx === 6
-                          ? 'text-blue-400'
+                          ? 'text-status-info'
                           : 'text-foreground/80'
                       }`}
                     >
@@ -215,7 +224,8 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                   {/* WorkItem bars */}
                   <div className="space-y-px pb-1">
                     {dayBars.slice(0, MAX_BARS).map(({ item, isStart, isEnd, isMultiDay }) => {
-                      const color = PRIORITY_BAR_COLORS[item.priority] ?? 'bg-slate-500';
+                      const color = PRIORITY_BAR_COLORS[item.priority] ?? 'bg-muted-foreground';
+                      const letter = PRIORITY_LETTER[item.priority];
                       const isDone = !!item.closedAt;
 
                       // Rounding and margin based on position
@@ -230,15 +240,17 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
                       return (
                         <button
                           key={item.id}
-                          className={`w-full h-[18px] flex items-center px-1.5 text-[10px] text-white truncate cursor-pointer
+                          className={`w-full h-[18px] flex items-center gap-1 px-1.5 text-[10px] text-primary-foreground truncate cursor-pointer
                             focus:outline-none transition-opacity hover:brightness-110
                             ${color} ${barClass} ${isDone ? 'opacity-50' : ''}`}
                           onClick={(e) => { e.stopPropagation(); onItemClick(item); }}
                           onMouseEnter={(e) => handleBarEnter(e, item)}
                           onMouseLeave={handleBarLeave}
-                          aria-label={item.category}
+                          aria-label={`${item.category} (우선순위 ${PRIORITY_LABELS[item.priority] ?? item.priority})`}
                         >
-                          {/* Show label only on start day or single-day item */}
+                          {/* 우선순위 문자 배지 — 중간 구간에서도 색상 없이 구분 가능하게 항상 노출 */}
+                          <span className="font-bold leading-none flex-shrink-0" aria-hidden="true">{letter}</span>
+                          {/* 카테고리 라벨은 시작일 또는 단일일 항목에서만 */}
                           {(isStart || !isMultiDay) && (
                             <span className="truncate leading-none">{item.category}</span>
                           )}
@@ -269,12 +281,12 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
         ))}
         <span className="text-sm text-muted-foreground ml-1">|</span>
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span className="w-2 h-2 rounded-full bg-slate-500 opacity-50" />
+          <span className="w-2 h-2 rounded-full bg-muted-foreground opacity-50" />
           완료된 작업
         </span>
         <span className="text-sm text-muted-foreground ml-1">|</span>
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span className="inline-block w-8 h-2 bg-blue-500 rounded-full" />
+          <span className="inline-block w-8 h-2 bg-muted-foreground rounded-full" />
           기간 표시 (예정일 → 완료일)
         </span>
       </div>
@@ -291,7 +303,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
             <div className="flex items-start gap-2 mb-2 pb-2 border-b border-border/60">
               <span
                 className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5
-                  ${PRIORITY_BAR_COLORS[tooltip.item.priority] ?? 'bg-slate-500'}
+                  ${PRIORITY_BAR_COLORS[tooltip.item.priority] ?? 'bg-muted-foreground'}
                   ${tooltip.item.closedAt ? 'opacity-40' : ''}`}
               />
               <p className="text-sm font-medium leading-tight line-clamp-2 text-foreground">
@@ -323,7 +335,7 @@ export function WorkItemCalendar({ items, onItemClick }: WorkItemCalendarProps) 
               {tooltip.item.closedAt && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground w-[68px] flex-shrink-0">완료일</span>
-                  <span className="text-sm text-emerald-400 font-mono">
+                  <span className="text-sm text-status-healthy font-mono">
                     {tooltip.item.closedAt.slice(0, 10)}
                   </span>
                 </div>
@@ -398,6 +410,7 @@ function CalendarRegisterPanel({ date, onClose, onSaved }: CalendarRegisterPanel
           <button
             type="button"
             onClick={onClose}
+            title="닫기"
             aria-label="닫기"
             className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >

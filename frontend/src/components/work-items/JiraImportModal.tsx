@@ -8,7 +8,7 @@ import { useJiraImport, useJiraCredential, useJiraVerifyLinks, useJiraUnlink } f
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { jiraApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import { useToast } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import type { JiraImportResult, JiraExcelImportResult, JiraVerifyLinksResult } from '@/types';
 
@@ -74,6 +74,8 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
   const [verifyResult, setVerifyResult] = useState<JiraVerifyLinksResult | null>(null);
   const [pickedMissing, setPickedMissing] = useState<Set<string>>(new Set());
   const [cleaning, setCleaning] = useState(false);
+  // 벌크 삭제(업무 행까지 제거)는 단일 삭제 흐름들과 동일하게 확인을 받는다.
+  const [confirmDeleteCount, setConfirmDeleteCount] = useState<number | null>(null);
 
   if (!open) return null;
 
@@ -232,7 +234,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
               내 Jira 인증 권한으로 이슈를 가져오거나, Jira 에서 내보낸 Excel·표를 그대로 등록합니다.
             </p>
           </div>
-          <button type="button" onClick={onClose} disabled={busy}
+          <button type="button" onClick={onClose} disabled={busy} title="닫기"
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
@@ -242,20 +244,20 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
           {done ? (
             /* 완료 상태 — 결과만 보여주고 닫기 / 다시 가져오기 */
             <>
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-                <div className="flex items-center gap-2 font-medium text-emerald-500">
+              <div className="rounded-xl border border-status-healthy/30 bg-status-healthy/5 p-4">
+                <div className="flex items-center gap-2 font-medium text-status-healthy">
                   <CheckCircle2 className="w-4 h-4" /> 가져오기 완료
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-                  <div><span className="text-muted-foreground">신규</span> <b className="text-emerald-500">{done.imported}</b></div>
-                  <div><span className="text-muted-foreground">갱신</span> <b className="text-blue-500">{done.updated}</b></div>
+                  <div><span className="text-muted-foreground">신규</span> <b className="text-status-healthy">{done.imported}</b></div>
+                  <div><span className="text-muted-foreground">갱신</span> <b className="text-status-info">{done.updated}</b></div>
                   <div><span className="text-muted-foreground">건너뜀</span> <b>{done.skipped}</b></div>
                 </div>
                 {done.appliedJql && (
                   <p className="mt-2 text-[11px] font-mono text-muted-foreground break-all">JQL: {done.appliedJql}</p>
                 )}
                 {done.errors.length > 0 && (
-                  <div className="mt-2 text-xs text-red-500">
+                  <div className="mt-2 text-xs text-status-critical">
                     {done.errors.slice(0, 5).map((e, i) => <div key={i}>⚠ {e}</div>)}
                   </div>
                 )}
@@ -382,8 +384,8 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                   {preview && preview.status === 'ok' && (
                     <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm">
                       <div className="flex items-center gap-3 font-medium">
-                        <span className="text-emerald-500">신규 {preview.imported}</span>
-                        <span className="text-blue-500">갱신 {preview.updated}</span>
+                        <span className="text-status-healthy">신규 {preview.imported}</span>
+                        <span className="text-status-info">갱신 {preview.updated}</span>
                         <span className="text-muted-foreground">변경없음 {preview.skipped}</span>
                         <span className="text-muted-foreground ml-auto">검색 {preview.total}건{preview.truncated ? '+' : ''}</span>
                       </div>
@@ -392,7 +394,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
                         미리보기 — 아직 저장되지 않았습니다. <b>적용할 항목만 체크</b>한 뒤 "가져오기 확정"을 누르세요.
-                        {excluded.size > 0 && <span className="text-amber-500"> ({excluded.size}건 제외됨)</span>}
+                        {excluded.size > 0 && <span className="text-status-warning"> ({excluded.size}건 제외됨)</span>}
                       </p>
                       {preview.items.length > 0 && (
                         <ul className="mt-2 max-h-56 overflow-y-auto divide-y divide-border/40">
@@ -411,8 +413,8 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                                     aria-label={`${it.jiraKey} 적용 여부`} />
                                 )}
                                 <span className={`text-[10px] font-semibold px-1 rounded ${
-                                  it.action === 'create' ? 'bg-emerald-500/15 text-emerald-500'
-                                    : it.action === 'update' ? 'bg-blue-500/15 text-blue-500'
+                                  it.action === 'create' ? 'bg-status-healthy/15 text-status-healthy'
+                                    : it.action === 'update' ? 'bg-status-info/15 text-status-info'
                                     : 'bg-secondary text-muted-foreground'
                                 }`}>
                                   {it.action === 'create' ? '신규' : it.action === 'update' ? '갱신' : '변경없음'}
@@ -427,7 +429,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                                       <span className="font-medium text-foreground">{c.label || c.field}</span>{' '}
                                       <span className="line-through opacity-70">{c.old || '(없음)'}</span>
                                       {' → '}
-                                      <span className="text-blue-500">{c.new || '(없음)'}</span>
+                                      <span className="text-status-info">{c.new || '(없음)'}</span>
                                     </li>
                                   ))}
                                 </ul>
@@ -439,7 +441,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     </div>
                   )}
                   {preview && preview.status !== 'ok' && (
-                    <div className="rounded-xl bg-red-500/10 text-red-500 px-3 py-2 text-sm flex items-start gap-1.5">
+                    <div className="rounded-xl bg-status-critical/10 text-status-critical px-3 py-2 text-sm flex items-start gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                       <div>
                         <div>{preview.detail}</div>
@@ -495,7 +497,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                   </div>
 
                   {excelError && (
-                    <div className="rounded-xl bg-red-500/10 text-red-500 px-3 py-2 text-sm flex items-center gap-1.5">
+                    <div className="rounded-xl bg-status-critical/10 text-status-critical px-3 py-2 text-sm flex items-center gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5" /> {excelError}
                     </div>
                   )}
@@ -504,7 +506,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm">
                       <div className="flex items-center gap-3 font-medium">
                         <span>총 {excelRows.total}건</span>
-                        <span className="text-emerald-500">담당자 매칭 {excelRows.matched}</span>
+                        <span className="text-status-healthy">담당자 매칭 {excelRows.matched}</span>
                         <span className="text-muted-foreground">미매칭 {excelRows.total - excelRows.matched}</span>
                       </div>
                       <ul className="mt-2 max-h-40 overflow-y-auto divide-y divide-border/40">
@@ -562,7 +564,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                     <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm">
                       <div className="flex items-center gap-3 font-medium">
                         <span>확인 {verifyResult.checked}건</span>
-                        <span className={verifyResult.missing.length ? 'text-amber-500' : 'text-emerald-500'}>
+                        <span className={verifyResult.missing.length ? 'text-status-warning' : 'text-status-healthy'}>
                           미확인 {verifyResult.missing.length}건
                         </span>
                         {verifyResult.truncated && (
@@ -599,7 +601,7 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
                               {cleaning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2Off className="w-4 h-4" />}
                               연결만 해제 ({pickedMissing.size})
                             </button>
-                            <button type="button" onClick={() => void cleanMissing(true)}
+                            <button type="button" onClick={() => setConfirmDeleteCount(pickedMissing.size)}
                               disabled={busy || pickedMissing.size === 0}
                               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-status-critical/30 text-status-critical text-sm hover:bg-status-critical/10 disabled:opacity-50">
                               <Trash2 className="w-4 h-4" /> 업무까지 삭제 ({pickedMissing.size})
@@ -622,6 +624,17 @@ export function JiraImportModal({ open, onClose, defaultProjectKey }: JiraImport
           )}
         </div>
       </div>
+      {confirmDeleteCount !== null && (
+        <ConfirmDialog
+          open={confirmDeleteCount !== null}
+          title="업무 일괄 삭제"
+          description={`선택한 업무 ${confirmDeleteCount}건을 Jira 연결 해제와 함께 완전히 삭제합니다. 되돌릴 수 없습니다.`}
+          danger
+          confirmLabel="삭제"
+          onConfirm={() => { setConfirmDeleteCount(null); void cleanMissing(true); }}
+          onCancel={() => setConfirmDeleteCount(null)}
+        />
+      )}
     </div>
   );
 }

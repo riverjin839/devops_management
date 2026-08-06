@@ -3,6 +3,7 @@ import { Pencil, Trash2, CalendarDays, User, Server, ChevronRight, ChevronLeft, 
 import type { WorkItem, KanbanStatus } from '@/types';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import {
   KANBAN_COLUMNS,
   KANBAN_STATUS_ORDER,
@@ -14,11 +15,11 @@ import {
 } from './workItemKanbanUtils';
 import { usePatchWorkItemStatus } from '@/hooks/useWorkItems';
 
-// ── 우선순위 설정 ──────────────────────────────────────────────────────────────
+// ── 우선순위 설정 ── WorkItemTableRow.tsx 의 PRI_STYLES 와 동일한 status-* 토큰 사용
 const PRIORITY_CFG: Record<string, { dot: string; text: string; label: string }> = {
-  high:   { dot: 'bg-red-500',   text: 'text-red-400',   label: '높음' },
-  medium: { dot: 'bg-blue-500',  text: 'text-blue-400',  label: '보통' },
-  low:    { dot: 'bg-slate-400', text: 'text-slate-400', label: '낮음' },
+  high:   { dot: 'bg-status-critical', text: 'text-status-critical', label: '높음' },
+  medium: { dot: 'bg-status-warning',  text: 'text-status-warning',  label: '보통' },
+  low:    { dot: 'bg-status-info',     text: 'text-status-info',     label: '낮음' },
 };
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
@@ -43,10 +44,11 @@ interface WipToastProps {
 
 function WipToast({ onClose }: WipToastProps) {
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-amber-500/90 text-amber-950 rounded-xl shadow-lg text-sm font-medium backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-status-warning text-primary-foreground rounded-xl shadow-lg text-sm font-medium backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
       <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-      <span>WIP 한도 초과! In Progress는 동시 2개로 제한됩니다.</span>
-      <button onClick={onClose} className="ml-2 text-amber-800 hover:text-amber-900 font-bold text-base leading-none">×</button>
+      {/* 실제로 전이를 막지 않는 소프트 경고 — "제한됩니다"는 강제처럼 읽혀 카피를 정정 */}
+      <span>WIP 권장 한도 초과 — In Progress 동시 진행은 2개를 권장합니다.</span>
+      <button onClick={onClose} title="닫기" aria-label="닫기" className="ml-2 hover:opacity-80 font-bold text-base leading-none">×</button>
     </div>
   );
 }
@@ -107,9 +109,10 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
   const typeCfg = item.typeLabel ? TYPE_LABEL_CONFIG[item.typeLabel] : null;
 
   return (
-    <div
-      className="bg-card border border-border rounded-lg p-3 group hover:border-primary/30 transition-colors cursor-pointer shadow-sm"
-      onClick={onClick}
+    <div className="group cursor-pointer" onClick={onClick}>
+    <MacCard
+      rootClassName="group-hover:border-primary/30 transition-colors shadow-sm"
+      bodyPadding="p-3"
     >
       {/* 배지 행 */}
       <div className="flex items-center gap-1 mb-2 flex-wrap">
@@ -148,9 +151,9 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
       <div className="flex flex-col gap-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <User className="w-3 h-3 flex-shrink-0" />
-          <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">정:{item.primaryAssignee || item.assignee}</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border">정:{item.primaryAssignee || item.assignee}</span>
           {item.secondaryAssignee && (
-            <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">부:{item.secondaryAssignee}</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border">부:{item.secondaryAssignee}</span>
           )}
           {item.clusterName && (
             <>
@@ -176,8 +179,8 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
         </span>
       </div>
 
-      {/* 액션 — hover 시 표시 */}
-      <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* 액션 — hover 또는 키보드 포커스 시 표시 */}
+      <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         {/* 이전/다음 컬럼 이동 버튼 */}
         <div className="flex items-center gap-0.5">
           {prev && (
@@ -185,6 +188,7 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
               onClick={(e) => { e.stopPropagation(); onMove(prev); }}
               className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               title={`← ${KANBAN_STATUS_LABEL[prev]}`}
+              aria-label={`${KANBAN_STATUS_LABEL[prev]}로 이동`}
             >
               <ChevronLeft className="w-3 h-3" />
             </button>
@@ -194,6 +198,7 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
               onClick={(e) => { e.stopPropagation(); onMove(next); }}
               className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               title={`→ ${KANBAN_STATUS_LABEL[next]}`}
+              aria-label={`${KANBAN_STATUS_LABEL[next]}로 이동`}
             >
               <ChevronRight className="w-3 h-3" />
             </button>
@@ -207,18 +212,21 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
             className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
             title="수정"
+            aria-label="업무 수정"
           >
             <Pencil className="w-3 h-3" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+            className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical transition-colors"
             title="삭제"
+            aria-label="업무 삭제"
           >
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
+    </MacCard>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Star, Flag,
-  CheckCircle2, Clock, Circle, AlertCircle, ListTree, Users,
+  AlertCircle, ListTree, Users, ArrowDownAZ, ListOrdered,
   ClipboardList, CalendarCheck, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import type { WorkItem, KanbanStatus } from '@/types';
@@ -12,6 +12,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useHomeStore } from '@/stores/homeStore';
 import { stripHtml, cn, toLocalDateKey } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { STATUS_COLOR } from '@/lib/statusColors';
+import { StatusGlyph } from './StatusGlyph';
 
 // 평일(월~금)만 표시한다.
 const DAY_COUNT = 5;
@@ -40,23 +42,12 @@ function weeksBetween(a: Date, b: Date): number {
 const KR_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 type ViewMode = 'task' | 'assignee';
+type RowSort = 'name' | 'count';
 
-// ── status visual map (D-005: 차트/상태 토큰 체계) ─────────────────────────────
-// 배경 투명도(Settings → 홈 화면 설정)를 사용자가 조절할 수 있도록 토큰명을 들고
-// hsl(var(--x) / a%) 로 조합해 inline style 렌더한다 — 테마(light/dark/default) 추종.
-// done 은 "완료=성공" 의미가 있어 --status-healthy, 나머지는 시리즈 구분용 --chart-N.
-const STATUS_BAR: Record<KanbanStatus, { token: string; ring: string; label: string }> = {
-  done:        { token: '--status-healthy', ring: 'ring-status-healthy/30', label: '완료' },
-  in_progress: { token: '--chart-1',        ring: 'ring-chart-1/30',        label: '진행중' },
-  review_test: { token: '--chart-4',        ring: 'ring-chart-4/30',        label: '검토' },
-  todo:        { token: '--chart-7',        ring: 'ring-chart-7/30',        label: 'Todo' },
-  backlog:     { token: '--chart-8',        ring: 'ring-chart-8/30',        label: 'Backlog' },
-};
-
-/** 상태 막대 배경 inline style — 토큰 + 투명도(0~100) 반영. */
-function barBackgroundStyle(sv: { token: string }, opacityPct: number): CSSProperties {
+/** 상태 막대 배경 inline style — 공용 토큰(STATUS_COLOR, lib/statusColors.ts) + 투명도(0~100) 반영. */
+function barBackgroundStyle(sv: { cssVar: string }, opacityPct: number): CSSProperties {
   const pct = Math.max(0, Math.min(100, opacityPct));
-  return { background: `hsl(var(${sv.token}) / ${pct}%)` };
+  return { background: `hsl(var(${sv.cssVar}) / ${pct}%)` };
 }
 
 /**
@@ -72,13 +63,6 @@ function readableTextShadow(hex: string): string {
   return lum > 0.5
     ? '0 1px 2px rgba(0,0,0,0.55)'        // 밝은 글씨 → 어두운 그림자
     : '0 1px 2px rgba(255,255,255,0.6)';  // 어두운 글씨 → 밝은 그림자
-}
-
-function StatusGlyph({ status }: { status: KanbanStatus }) {
-  if (status === 'done') return <CheckCircle2 className="w-3 h-3 flex-shrink-0" />;
-  if (status === 'in_progress') return <Clock className="w-3 h-3 flex-shrink-0" />;
-  if (status === 'review_test') return <Clock className="w-3 h-3 flex-shrink-0" />;
-  return <Circle className="w-3 h-3 flex-shrink-0" />;
 }
 
 // ── derived row models ──────────────────────────────────────────────────────────
@@ -106,7 +90,7 @@ const TEAM_ROW_NAME = '공통';
 const ASSIGNEE_ITEM_LIMIT = 5;
 
 // 한 화면에 보일 담당자(행) 수 — 기본 20, 사용자별로 localStorage 에 저장.
-const ROWS_LIMIT_KEY = 'k8s:weekTimeline:rowsLimit';
+const ROWS_LIMIT_KEY = 'pep:weekTimeline:rowsLimit';
 const ROWS_LIMIT_OPTIONS = [10, 20, 30, 50];
 const DEFAULT_ROWS_LIMIT = 20;
 
@@ -158,6 +142,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
   const [viewMode, setViewMode] = useState<ViewMode>('assignee');
 
   const currentUser = useAuthStore((s) => s.user);
+  // 담당자 스윔레인 정렬 기준 — 이름순(기본) 또는 업무량순(누가 바쁜지 한눈에 보기 위함).
+  // 본인 행은 정렬 기준과 무관하게 항상 최상단(담당자 탭과 동일 규칙).
+  const [rowSort, setRowSort] = useState<RowSort>('name');
   const barOpacity = useHomeStore((s) => s.weeklyBarOpacity);
   const barTextColor = useHomeStore((s) => s.weeklyBarTextColor);
   const barTextShadow = readableTextShadow(barTextColor);
@@ -224,17 +211,21 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       }
     }
     // 로그인 본인을 최상단으로 — '담당자' 보기(MemberTodayTodos)와 동일하게 맞춘다.
+    // 본인 행 아래는 rowSort 에 따라 이름순 또는 업무량(건수)순.
     const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
     const individual = Array.from(map.entries())
-      .sort((a, b) =>
-        (b[0] === myName ? 1 : 0) - (a[0] === myName ? 1 : 0)
-        || a[0].localeCompare(b[0], 'ko'))
+      .sort((a, b) => {
+        const selfDiff = (b[0] === myName ? 1 : 0) - (a[0] === myName ? 1 : 0);
+        if (selfDiff !== 0) return selfDiff;
+        if (rowSort === 'count') return b[1].length - a[1].length || a[0].localeCompare(b[0], 'ko');
+        return a[0].localeCompare(b[0], 'ko');
+      })
       .map(([name, bars]) => ({ name, bars }));
     // "공통" 요약 행 — 특정 담당자가 아닌 파트 전체 대상 업무(allAttendees, 예: 파트 회의)만
     // 모아 항상 맨 위(본인 행보다도 위)에 노출한다. 전체 업무 병합이 아니다.
     const teamBars = taskBars.filter((b) => b.item.allAttendees);
     return teamBars.length > 0 ? [{ name: TEAM_ROW_NAME, bars: teamBars }, ...individual] : individual;
-  }, [taskBars, currentUser]);
+  }, [taskBars, currentUser, rowSort]);
 
   // ── 담당자별 "+N건 더보기"/"접기" (기본 ASSIGNEE_ITEM_LIMIT 개만 표시) ──
   const [expandedAssignees, setExpandedAssignees] = useState<Set<string>>(new Set());
@@ -345,22 +336,44 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
               <Users className="w-3 h-3" /> 담당자 기준
             </button>
           </div>
-          {/* 표시 인원 — 담당자 기준 뷰에서만 의미 있음. 한 화면에 보일 담당자(행) 수 제한
-              (기본 20, 사용자별 저장) — 라인 밀도를 줄인 것과 함께 스크롤 없이 더 많은
-              담당자가 보이게 하는 게 목적. */}
+          {/* 담당자 기준 뷰에서만 의미 있는 컨트롤 — 정렬 기준(이름순/업무량순) + 표시 인원 제한
+              (기본 20, 사용자별 저장). "누가 바쁜지" 확인이 목적일 때는 업무량순이 이름순보다
+              유용하므로 토글로 제공한다. */}
           {viewMode === 'assignee' && (
-            <label className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-              표시 인원
-              <select
-                value={rowsLimit}
-                onChange={(e) => changeRowsLimit(Number(e.target.value))}
-                className="px-1 py-0.5 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                {ROWS_LIMIT_OPTIONS.map((n) => (
-                  <option key={n} value={n}>{n}명</option>
-                ))}
-              </select>
-            </label>
+            <>
+              <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setRowSort('name')}
+                  aria-pressed={rowSort === 'name'}
+                  title="담당자 이름 가나다순 정렬"
+                  className={`flex items-center gap-1 px-1.5 py-1 transition-colors ${
+                    rowSort === 'name' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'}`}>
+                  <ArrowDownAZ className="w-3 h-3" /> 이름순
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRowSort('count')}
+                  aria-pressed={rowSort === 'count'}
+                  title="업무 건수 많은 순 정렬 — 누가 바쁜지 확인할 때 사용"
+                  className={`flex items-center gap-1 px-1.5 py-1 border-l border-border transition-colors ${
+                    rowSort === 'count' ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'}`}>
+                  <ListOrdered className="w-3 h-3" /> 업무량순
+                </button>
+              </div>
+              <label className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+                표시 인원
+                <select
+                  value={rowsLimit}
+                  onChange={(e) => changeRowsLimit(Number(e.target.value))}
+                  className="px-1 py-0.5 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {ROWS_LIMIT_OPTIONS.map((n) => (
+                    <option key={n} value={n}>{n}명</option>
+                  ))}
+                </select>
+              </label>
+            </>
           )}
           {/* 단축키 — 업무 관리 / 오늘 할일 페이지로 바로 이동 */}
           <div className="flex items-center gap-1 text-xs">
@@ -374,9 +387,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             <button
               type="button"
               onClick={() => navigate('/todo-today')}
-              title="Work To Do 로 이동"
+              title="오늘 할일 전체 보기"
               className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors">
-              <CalendarCheck className="w-3 h-3" /> Work To Do
+              <CalendarCheck className="w-3 h-3" /> 오늘 할일 전체 보기
             </button>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
@@ -388,7 +401,9 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
 
 
       {/* ── timeline grid ───────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden mac-shadow">
+      {/* 부모(HomePage)가 이미 MacCard 로 카드 테두리/배경을 제공하므로 여기선 내부 그룹핑만
+          (이중 카드 중첩 방지). */}
+      <div className="rounded-lg border border-border/50 overflow-hidden">
         {/* header: weekday columns (월~금) — 주 이동은 양끝 화살표(월 옆 ◀ / 금 옆 ▶)로 한다 */}
         <div className="relative grid grid-cols-[140px_1fr] sm:grid-cols-[200px_1fr] border-b border-border bg-secondary/30">
           <div className="px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center justify-between gap-1">
@@ -498,7 +513,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             {/* ── 업무 기준: 한 업무 = 한 행 ── */}
             {viewMode === 'task' && taskBars.map(({ item, startIdx, endIdx, clippedLeft, clippedRight, growing }) => {
               const status = item.kanbanStatus ?? 'todo';
-              const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
+              const sv = STATUS_COLOR[status] ?? STATUS_COLOR.todo;
               const span = endIdx - startIdx + 1;
               const team = item.primaryAssignee || item.assignee;
               return (
@@ -525,7 +540,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                         onClick={() => openWorkItem(item.id)}
                         title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                         style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor, textShadow: barTextShadow }}
-                        className={`w-full h-6 rounded-lg ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-2 overflow-hidden cursor-pointer hover:brightness-110 transition
+                        className={`w-full h-6 rounded-lg ring-1 ${sv.ringClass} shadow-sm flex items-center gap-1 px-2 overflow-hidden cursor-pointer hover:brightness-110 transition
                         ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                         <StatusGlyph status={status} />
                         <span className="text-xs font-semibold truncate">{team || sv.label}</span>
@@ -581,7 +596,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                     {lanes.map((lane, laneIdx) =>
                       lane.map(({ item, startIdx, endIdx, clippedLeft, clippedRight, growing }) => {
                         const status = item.kanbanStatus ?? 'todo';
-                        const sv = STATUS_BAR[status] ?? STATUS_BAR.todo;
+                        const sv = STATUS_COLOR[status] ?? STATUS_COLOR.todo;
                         const span = endIdx - startIdx + 1;
                         return (
                           <div key={item.id}
@@ -595,7 +610,7 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
                               onClick={() => openWorkItem(item.id)}
                               title={growing ? `${stripHtml(item.content)} · 진행 중(완료일 미입력)` : stripHtml(item.content)}
                               style={{ ...barBackgroundStyle(sv, barOpacity), color: barTextColor, textShadow: barTextShadow }}
-                              className={`w-full h-5 rounded-md ring-1 ${sv.ring} shadow-sm flex items-center gap-1 px-1.5 overflow-hidden cursor-pointer hover:brightness-110 transition
+                              className={`w-full h-5 rounded-md ring-1 ${sv.ringClass} shadow-sm flex items-center gap-1 px-1.5 overflow-hidden cursor-pointer hover:brightness-110 transition
                               ${clippedLeft ? 'rounded-l-none' : ''} ${clippedRight || growing ? 'rounded-r-none' : ''}`}>
                               <StatusGlyph status={status} />
                               <span className="text-[11px] font-semibold truncate">{item.title?.trim() || stripHtml(item.content)}</span>
@@ -621,10 +636,10 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
       {/* ── legend ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground px-1">
         <span className="font-medium">범례</span>
-        {(Object.keys(STATUS_BAR) as KanbanStatus[]).map((k) => (
+        {(Object.keys(STATUS_COLOR) as KanbanStatus[]).map((k) => (
           <span key={k} className="flex items-center gap-1">
-            <span className="w-3 h-2.5 rounded-sm" style={barBackgroundStyle(STATUS_BAR[k], barOpacity)} />
-            {STATUS_BAR[k].label}
+            <span className="w-3 h-2.5 rounded-sm" style={barBackgroundStyle(STATUS_COLOR[k], barOpacity)} />
+            {STATUS_COLOR[k].label}
           </span>
         ))}
         <span className="flex items-center gap-1"><Star className="w-3 h-3 text-status-warning fill-status-warning" />미해결 이슈</span>
