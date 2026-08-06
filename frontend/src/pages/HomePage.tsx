@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
-  ListTodo, ServerCog, ShieldAlert,
+  ListTodo, ServerCog, ShieldAlert, LayoutGrid, ListTree,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
@@ -10,6 +10,7 @@ import { WorkCalendar } from '@/components/dashboard/WorkCalendar';
 import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimeline';
 import { DayScheduleBoard } from '@/components/dashboard/DayScheduleBoard';
 import { PlatformStatusMatrix } from '@/components/platform-status';
+import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
@@ -20,6 +21,7 @@ import { useToday } from '@/hooks/useToday';
 import { useHomeStore, type HomeTab } from '@/stores/homeStore';
 import { useIslands } from '@/hooks/useIslands';
 import { useIslandStore } from '@/stores/islandStore';
+import { useNavCatalog } from '@/hooks/useNavCatalog';
 import type { WorkItem } from '@/types';
 import { cn, parseUTC, assigneeNames } from '@/lib/utils';
 import { isMyDueTodo } from '@/lib/workItems';
@@ -171,6 +173,13 @@ export function HomePage() {
       })
     : '없음';
 
+  // 플랫폼 탭 서브뷰 — 점검 매트릭스 / 배치잡. 배치잡은 예전엔 별도 라우트(/batch-jobs)
+  // 였지만 화면 개수를 줄이려 여기 서브탭으로 접었다(/batch-jobs 는 하위호환 리다이렉트).
+  // NAV_MAP 항목은 그대로 남아 있어 접근 제어(Settings)로 이 서브탭 자체를 끌 수 있다.
+  const { featureAllowed } = useNavCatalog();
+  const batchJobsAllowed = featureAllowed('/batch-jobs');
+  const [platformView, setPlatformView] = useState<'matrix' | 'batch'>('matrix');
+
   // 기본 탭 = '주간' — WeeklyStatusTimeline(담당자 기준 스윔레인 뷰)도 이제 담당자별
   // 표시 개수 제한(기본 5개) + "더보기/접기", 항상 최상단 "전체" 요약 행, 화면당 표시
   // 인원 수 제한(기본 20명, 옵션)을 모두 지원해 MemberTodayTodos(담당자 탭)와 동등한
@@ -298,14 +307,56 @@ export function HomePage() {
         )}
       </div>
 
-      {/* ── 플랫폼 탭: 점검 매트릭스 — 남는 공간을 모두 채우고 카드 안쪽에서만 스크롤
-          (matrix manages its own internal scroll region so it uses all available
-          height instead of capping out and leaving/needing a second scrollbar) ── */}
-      {homeTab === 'platform' && (
-        <div className="flex-1 min-h-0 px-3 pt-2 pb-3 flex flex-col overflow-hidden">
-          <PlatformStatusMatrix toolbarSlot={platformToolbarSlot} />
-        </div>
-      )}
+      {/* ── 플랫폼 탭: 점검 매트릭스 / 배치잡 서브탭 — 남는 공간을 모두 채우고
+          선택된 서브뷰 안쪽에서만 스크롤. 매트릭스 자체 툴바는 위 세그먼트 탭 줄의
+          portal slot 으로 이식되므로 여기서는 toolbarSlot 만 넘긴다. ───────────── */}
+      {homeTab === 'platform' && (() => {
+        const effectiveView = platformView === 'batch' && !batchJobsAllowed ? 'matrix' : platformView;
+        return (
+          <div className="flex-1 min-h-0 px-3 pt-2 pb-3 flex flex-col gap-2 overflow-hidden">
+            {batchJobsAllowed && (
+              <div className="flex-none inline-flex items-center self-start rounded-lg border border-border overflow-hidden text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPlatformView('matrix')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1.5 transition-colors',
+                    effectiveView === 'matrix'
+                      ? 'bg-secondary text-foreground font-semibold'
+                      : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
+                  )}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" /> 점검 매트릭스
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlatformView('batch')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1.5 border-l border-border transition-colors',
+                    effectiveView === 'batch'
+                      ? 'bg-secondary text-foreground font-semibold'
+                      : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
+                  )}
+                >
+                  <ListTree className="w-3.5 h-3.5" /> 배치잡
+                </button>
+              </div>
+            )}
+            {effectiveView === 'matrix' ? (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <PlatformStatusMatrix toolbarSlot={platformToolbarSlot} />
+              </div>
+            ) : (
+              // BatchJobsPage 는 원래 독립 라우트 페이지라 자체 전체높이 셸을 두른다 —
+              // island-embed 로 그 셸을 무력화하고 이 flex 컨테이너 안에서 자체 스크롤만 하게 한다
+              // (Your Island 패널이 페이지 컴포넌트를 임베드할 때 쓰는 것과 같은 패턴).
+              <div className="island-embed flex-1 min-h-0 overflow-auto">
+                <BatchJobsPage />
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── 업무 탭: 스케줄/진행 현황 패널 ───────────────────────────────────── */}
       {homeTab === 'work' && (
