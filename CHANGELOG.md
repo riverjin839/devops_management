@@ -10,6 +10,34 @@
 
 1.18.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **K8s 인증서 만료 점검 실패 시 원인 로그가 안 보임**: `kubeadm certs check-expiration`
+  실행이 실패해도(예: 표준 `kube-apiserver` 이미지에 `kubeadm` 바이너리가 없어 나는
+  "executable file not found") 셀 메시지는 "권한 또는 바이너리 부재"라는 고정 문구뿐이고
+  실제 stderr 는 실행 로그를 펼쳐야만 보이는 `details.stderr` 에만 있었다. 이제 stderr(또는
+  stdout) 발췌를 메시지에 바로 담아 셀 툴팁·실행 목록에서도 원인이 바로 보인다.
+- **Deep check 실행이 여전히 500 (`ai_status` NotNullViolation, 심각)**: 스키마 점검이
+  `missing_column`/`not_null_drift` 두 종류만 감지해 이 케이스를 놓쳤다 —
+  `deep_check_results.ai_status` 는 **모델에 존재한 적조차 없는** 컬럼인데 운영 DB 에만
+  NOT NULL + 기본값 없이 남아 있어, ORM 이 값을 채울 방법이 없어 그 테이블의 **모든 저장**이
+  실패했다(기존 두 드리프트 종류는 "모델 → DB" 단방향 비교라 모델에 없는 DB 전용 컬럼은
+  스캔 대상 자체가 아니었다). `orphan_not_null_column` 드리프트 종류를 신설해 모델에 없는
+  DB 전용 컬럼 중 NOT NULL + 기본값 없음인 것을 별도 스캔하고, 부팅 자동 복구·Settings ▸
+  스키마 점검 화면·수동 복구 API 모두에서 기존 NOT NULL 드리프트와 동일하게 처리한다
+  (컬럼 자체는 삭제하지 않고 제약만 완화 — DROP COLUMN 은 여전히 하지 않는다).
+- **점검 항목 삭제 실패 (심각)**: 항목을 지우면
+  `null value in column "item_id" of relation "check_matrix_runs"` 로 실패했다.
+  `CheckMatrixSchedule`/`Result`/`Run` 의 `item` 관계에 `passive_deletes=True` 가 빠져 있어,
+  SQLAlchemy 가 DB 의 `ON DELETE CASCADE` 를 쓰지 않고 자식 행의 `item_id` 를 NULL 로
+  UPDATE 하려 한 것이 원인(코드베이스가 `cluster` 쪽에는 이미 적용해 둔 패턴인데 `item`
+  쪽만 누락). 세 관계 모두 수정 — 이제 자식 정리는 DB CASCADE 가 담당한다. 회귀 테스트 추가.
+- **스키마 자동 복구가 조용히 실패하던 문제**: NOT NULL 완화 DDL 은 ACCESS EXCLUSIVE 락이
+  필요한데, 운영 중에는 Celery 워커/API 가 같은 테이블을 쓰고 있어 락을 못 잡을 수 있다.
+  기존에는 무제한 대기(부팅 정지 위험)하거나 실패해도 로그 한 줄만 남아 운영자가 알 수
+  없었다. `lock_timeout` + 재시도를 걸고, **부팅 자동 복구 결과(감지 대상·완화 건수·실패
+  사유)를 Settings ▸ 스키마 점검 화면 상단에 노출**한다 — "재시작하면 자동으로 고쳐진다"가
+  실제로 지켜졌는지 로그 없이 확인할 수 있다.
+
 ## [1.18.1] - 2026-07-30
 
 ### Fixed
@@ -136,34 +164,6 @@
   Frontend: `LlmSettingsTab.tsx`, `useLlmSettings.ts`, `llmApi`.
 
 ## [1.17.1] - 2026-07-29
-
-### Fixed
-- **K8s 인증서 만료 점검 실패 시 원인 로그가 안 보임**: `kubeadm certs check-expiration`
-  실행이 실패해도(예: 표준 `kube-apiserver` 이미지에 `kubeadm` 바이너리가 없어 나는
-  "executable file not found") 셀 메시지는 "권한 또는 바이너리 부재"라는 고정 문구뿐이고
-  실제 stderr 는 실행 로그를 펼쳐야만 보이는 `details.stderr` 에만 있었다. 이제 stderr(또는
-  stdout) 발췌를 메시지에 바로 담아 셀 툴팁·실행 목록에서도 원인이 바로 보인다.
-- **Deep check 실행이 여전히 500 (`ai_status` NotNullViolation, 심각)**: 스키마 점검이
-  `missing_column`/`not_null_drift` 두 종류만 감지해 이 케이스를 놓쳤다 —
-  `deep_check_results.ai_status` 는 **모델에 존재한 적조차 없는** 컬럼인데 운영 DB 에만
-  NOT NULL + 기본값 없이 남아 있어, ORM 이 값을 채울 방법이 없어 그 테이블의 **모든 저장**이
-  실패했다(기존 두 드리프트 종류는 "모델 → DB" 단방향 비교라 모델에 없는 DB 전용 컬럼은
-  스캔 대상 자체가 아니었다). `orphan_not_null_column` 드리프트 종류를 신설해 모델에 없는
-  DB 전용 컬럼 중 NOT NULL + 기본값 없음인 것을 별도 스캔하고, 부팅 자동 복구·Settings ▸
-  스키마 점검 화면·수동 복구 API 모두에서 기존 NOT NULL 드리프트와 동일하게 처리한다
-  (컬럼 자체는 삭제하지 않고 제약만 완화 — DROP COLUMN 은 여전히 하지 않는다).
-- **점검 항목 삭제 실패 (심각)**: 항목을 지우면
-  `null value in column "item_id" of relation "check_matrix_runs"` 로 실패했다.
-  `CheckMatrixSchedule`/`Result`/`Run` 의 `item` 관계에 `passive_deletes=True` 가 빠져 있어,
-  SQLAlchemy 가 DB 의 `ON DELETE CASCADE` 를 쓰지 않고 자식 행의 `item_id` 를 NULL 로
-  UPDATE 하려 한 것이 원인(코드베이스가 `cluster` 쪽에는 이미 적용해 둔 패턴인데 `item`
-  쪽만 누락). 세 관계 모두 수정 — 이제 자식 정리는 DB CASCADE 가 담당한다. 회귀 테스트 추가.
-- **스키마 자동 복구가 조용히 실패하던 문제**: NOT NULL 완화 DDL 은 ACCESS EXCLUSIVE 락이
-  필요한데, 운영 중에는 Celery 워커/API 가 같은 테이블을 쓰고 있어 락을 못 잡을 수 있다.
-  기존에는 무제한 대기(부팅 정지 위험)하거나 실패해도 로그 한 줄만 남아 운영자가 알 수
-  없었다. `lock_timeout` + 재시도를 걸고, **부팅 자동 복구 결과(감지 대상·완화 건수·실패
-  사유)를 Settings ▸ 스키마 점검 화면 상단에 노출**한다 — "재시작하면 자동으로 고쳐진다"가
-  실제로 지켜졌는지 로그 없이 확인할 수 있다.
 
 ### Added
 - **업무 게시판 Jira 기준 레이아웃** (`/tasks-mgmt`): 가져온 이슈를 Jira 에서 보던 것과 같은
