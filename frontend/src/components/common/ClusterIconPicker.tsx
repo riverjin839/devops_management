@@ -10,21 +10,28 @@ import {
   buildClusterIconSvg, svgToDataUrl, suggestInitials, suggestRegionAbbr,
   suggestAttribute,
 } from '@/lib/clusterIconBuilder';
-import { useOperationLevels, levelColor, levelCustomHex } from '@/hooks/useOperationLevels';
+import { useOperationLevels } from '@/hooks/useOperationLevels';
 import { COLOR_PATTERNS } from '@/lib/colorPatterns';
+import { resolveIconSeed, themePatternSeedHex } from '@/lib/clusterIconTheme';
+import { useThemeStore } from '@/stores/themeStore';
+import type { ClusterIconConfig } from '@/types';
 
 /** 빌더 탭에 프리필할 클러스터 속성 — 전달되면 "빌더" 탭이 노출된다. */
 export interface IconBuilderContext {
   name?: string | null;
   region?: string | null;
   operationLevel?: string | null;
+  /** 기존에 저장된 아이콘 빌더 레시피 — 있으면 재편집 시 그대로 복원한다(패턴/커스텀 색 포함). */
+  iconConfig?: ClusterIconConfig | null;
 }
 
 interface ClusterIconPickerProps {
   /** 현재 저장된 icon 값 (lucide 이름 / emoji / data URL / null). */
   value: string | null | undefined;
-  /** 새 값 선택 시 호출. null 이면 기본값(자동 status 아이콘) 으로 되돌림. */
-  onChange: (next: string | null) => void;
+  /** 새 값 선택 시 호출. null 이면 기본값(자동 status 아이콘) 으로 되돌림.
+   *  빌더 탭에서 고른 경우 iconConfig 도 함께 전달된다 — 다른 탭(아이콘/이모지/업로드) 선택
+   *  또는 기본값 되돌리기에서는 iconConfig 를 명시적으로 null 로 전달해 해제해야 한다. */
+  onChange: (next: string | null, iconConfig?: ClusterIconConfig | null) => void;
   onClose: () => void;
   /** 항목 이름 (cluster 명 / service 라벨 등) — 헤더 노출. */
   clusterName?: string;
@@ -136,17 +143,17 @@ export function ClusterIconPicker({
   })();
 
   const handleSelectLucide = (name: string) => {
-    onChange(name);
+    onChange(name, null);
     onClose();
   };
 
   const handleSelectEmoji = (emoji: string) => {
-    onChange(emoji);
+    onChange(emoji, null);
     onClose();
   };
 
   const handleReset = () => {
-    onChange(null);
+    onChange(null, null);
     onClose();
   };
 
@@ -175,7 +182,7 @@ export function ClusterIconPicker({
     setUploading(true);
     try {
       const dataUrl = await resizeImageToDataUrl(file, 64);
-      onChange(dataUrl);
+      onChange(dataUrl, null);
       onClose();
     } catch (err) {
       setUploadError((err as Error).message || '업로드 실패');
@@ -244,7 +251,7 @@ export function ClusterIconPicker({
           {tab === 'builder' && hasBuilder && (
             <BuilderTab
               context={builderContext!}
-              onApply={(dataUrl) => { onChange(dataUrl); onClose(); }}
+              onApply={(dataUrl, iconConfig) => { onChange(dataUrl, iconConfig); onClose(); }}
             />
           )}
           {tab === 'icons' && (
@@ -395,26 +402,34 @@ export function ClusterIconPicker({
 
 /** "빌더" 탭 — 업무명/속성(+지역, 옵션) 가로 밴드 + k8s 워터마크를 조합해 SVG 아이콘 생성.
  *  운영타입은 별도 밴드 없이 테두리/배경 색으로만 반영된다.
- *  클러스터의 name/region/operationLevel 로 자동 프리필되고 모든 값은 편집 가능. */
-function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply: (dataUrl: string) => void }) {
+ *  색상은 기본적으로 "테마 동기화"(뷰어의 활성 UI 테마가 배색 패턴과 일치하면 그 색, 아니면
+ *  운영타입 색상) 이고, 배색 패턴을 직접 고르면 그 색이 테마와 무관하게 항상 우선한다.
+ *  클러스터의 name/region/operationLevel(+기존 iconConfig)로 자동 프리필되고 모든 값은 편집 가능. */
+function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply: (dataUrl: string, iconConfig: ClusterIconConfig) => void }) {
   const { data: levels } = useOperationLevels();
-  const [workName, setWorkName] = useState(() => suggestInitials(context.name));
-  const [level, setLevel] = useState(context.operationLevel ?? '');
-  const [attribute, setAttribute] = useState(() => suggestAttribute(context.name));
-  const [regionAbbr, setRegionAbbr] = useState(() => suggestRegionAbbr(context.region));
-  const [watermark, setWatermark] = useState(true);
-  const [shape, setShape] = useState<'square' | 'circle'>('square');
-  /** 배색 패턴에서 직접 고른 시드 색상 — 지정되면 운영타입 색상 대신 이 색을 쓴다. */
-  const [patternHex, setPatternHex] = useState<string | null>(null);
+  const activeTheme = useThemeStore((s) => s.theme);
+  const existing = context.iconConfig;
+  const [workName, setWorkName] = useState(() => existing?.workName ?? suggestInitials(context.name));
+  const [level, setLevel] = useState(existing?.level ?? context.operationLevel ?? '');
+  const [attribute, setAttribute] = useState(() => existing?.attribute ?? suggestAttribute(context.name));
+  const [regionAbbr, setRegionAbbr] = useState(() => existing?.regionAbbr ?? suggestRegionAbbr(context.region));
+  const [watermark, setWatermark] = useState(existing?.watermark ?? true);
+  const [shape, setShape] = useState<'square' | 'circle'>(existing?.shape ?? 'square');
+  /** 배색 패턴에서 직접 고른 시드 색상 — 지정되면 "커스텀"(colorMode: 'custom')이 되어
+   *  테마 동기화 대신 이 색을 항상 우선 사용한다. null 이면 "테마 동기화"(colorMode: 'theme'). */
+  const [patternHex, setPatternHex] = useState<string | null>(
+    existing?.colorMode === 'custom' ? existing.customHex ?? null : null,
+  );
 
-  const colorToken = levelColor(levels, level || undefined);
-  const levelHex = levelCustomHex(levels, level || undefined);
-  const customHex = patternHex ?? levelHex;
+  const colorMode: ClusterIconConfig['colorMode'] = patternHex ? 'custom' : 'theme';
+  const previewConfig: ClusterIconConfig = { workName, attribute, regionAbbr, shape, watermark, level, colorMode, customHex: patternHex };
+  const { colorToken, customHex } = resolveIconSeed(previewConfig, levels, activeTheme);
   const svg = useMemo(
     () => buildClusterIconSvg({ workName, attribute, regionAbbr, colorToken, customHex, k8sWatermark: watermark, shape }),
     [workName, attribute, regionAbbr, colorToken, customHex, watermark, shape],
   );
   const previewUrl = useMemo(() => svgToDataUrl(svg), [svg]);
+  const themeSeedHex = themePatternSeedHex(activeTheme);
 
   return (
     <div className="space-y-3 px-1">
@@ -422,6 +437,14 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         업무명 / 속성(+지역, 선택 시) 밴드를 위→아래로 쌓은 아이콘을 생성합니다. 운영타입은
         전용 밴드를 두지 않고 테두리·배경 색으로만 구분되며, 지역을 비우면 그 공간은
         업무명/속성 밴드에 재할당됩니다. 사이드바 레일에서도 클러스터를 한눈에 구분할 수 있습니다.
+      </p>
+
+      <p className="text-xs px-2 py-1.5 rounded-md bg-secondary/50 text-muted-foreground">
+        {colorMode === 'custom'
+          ? '커스텀 색상 적용됨 — 앞으로 UI 테마가 바뀌어도 이 색을 계속 사용합니다.'
+          : themeSeedHex
+            ? `현재 테마(${activeTheme})에 동기화됩니다 — UI 테마를 바꾸면 아이콘 색도 함께 바뀝니다.`
+            : '현재 테마는 배색 패턴이 없어 운영타입 색상을 사용합니다 — 배색 패턴이 있는 테마를 쓰면 자동으로 그 색에 동기화됩니다.'}
       </p>
 
       {/* 미리보기 — 실제 크기(40px)와 확대(64px) 나란히 */}
@@ -499,7 +522,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
               onClick={() => setPatternHex(null)}
               className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
             >
-              초기화
+              테마 동기화로 되돌리기
             </button>
           )}
         </div>
@@ -552,7 +575,7 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
 
       <button
         type="button"
-        onClick={() => onApply(previewUrl)}
+        onClick={() => onApply(previewUrl, { workName, attribute, regionAbbr, shape, watermark, level, colorMode, customHex: patternHex })}
         disabled={!workName.trim()}
         className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
       >
@@ -564,7 +587,8 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         • SVG 로 저장되어 어느 크기에서도 선명합니다<br />
         • 우상단은 상태 표시(dot) 자리라 비워둡니다<br />
         • 운영타입별 기본 색은 Settings ▸ 운영등급에서 바꿀 수 있습니다<br />
-        • 배색 패턴을 고르면 이 아이콘 1개에만 적용되고, 운영등급 설정은 바뀌지 않습니다
+        • 배색 패턴을 고르면 이 아이콘 1개에만 커스텀 색이 고정되고, 이후 테마를 바꿔도 유지됩니다<br />
+        • 패턴을 고르지 않으면 이 아이콘은 모든 뷰어의 활성 테마를 계속 따라갑니다
       </p>
     </div>
   );

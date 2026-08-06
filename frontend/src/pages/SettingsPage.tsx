@@ -34,6 +34,7 @@ import {
   suggestAttribute,
 } from '@/lib/clusterIconBuilder';
 import { useOperationLevels, levelColor, levelCustomHex } from '@/hooks/useOperationLevels';
+import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
@@ -350,6 +351,33 @@ function ServerStatusBadge({ status }: { status: string }) {
   );
 }
 
+/** 클러스터 목록 행의 아이콘 버튼 — `useClusterIconSrc` 훅을 써야 해서(테마 동기화)
+ *  `clusters.map()` 콜백 안에서 직접 훅을 호출할 수 없어 별도 컴포넌트로 분리했다. */
+function ClusterIconButton({ cluster, onClick }: { cluster: Cluster; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void }) {
+  const resolved = useClusterIconSrc(cluster);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-card hover:bg-secondary hover:ring-2 hover:ring-primary/30 transition-all flex-shrink-0"
+      title={cluster.icon ? '아이콘 변경' : '아이콘 설정 (lucide / 이모지 / 이미지 업로드)'}
+      aria-label="클러스터 아이콘 설정"
+    >
+      {resolved?.kind === 'image' ? (
+        <img src={resolved.value} alt="" className="w-7 h-7 rounded object-cover" />
+      ) : resolved?.kind === 'lucide' ? (
+        <resolved.Component className="w-5 h-5 text-foreground/80" />
+      ) : resolved?.kind === 'text' ? (
+        <span className="text-xl leading-none">{resolved.value}</span>
+      ) : (
+        <span className="text-xl leading-none" aria-hidden>
+          {getStatusIcon(cluster.status)}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -495,14 +523,26 @@ export function SettingsPage() {
     let fail = 0;
     for (const c of targets) {
       try {
+        const workName = suggestInitials(c.name);
+        const attribute = suggestAttribute(c.name);
+        const regionAbbr = suggestRegionAbbr(c.region);
+        const level = c.operationLevel ?? '';
         const svg = buildClusterIconSvg({
-          workName: suggestInitials(c.name),
-          attribute: suggestAttribute(c.name),
-          regionAbbr: suggestRegionAbbr(c.region),
-          colorToken: levelColor(opLevels, c.operationLevel),
-          customHex: levelCustomHex(opLevels, c.operationLevel),
+          workName,
+          attribute,
+          regionAbbr,
+          colorToken: levelColor(opLevels, level),
+          customHex: levelCustomHex(opLevels, level),
         });
-        await updateClusterMut.mutateAsync({ id: c.id, data: { icon: svgToDataUrl(svg) } });
+        // colorMode: 'theme' — 뷰어의 활성 테마에 맞춰 색이 매번 다시 계산된다(테마 동기화).
+        // icon 은 최초 저장 시점 스냅샷(iconConfig 미지원 소비처를 위한 폴백)일 뿐이다.
+        await updateClusterMut.mutateAsync({
+          id: c.id,
+          data: {
+            icon: svgToDataUrl(svg),
+            iconConfig: { workName, attribute, regionAbbr, shape: 'square', watermark: true, level, colorMode: 'theme' },
+          },
+        });
         ok++;
       } catch {
         fail++;
@@ -907,35 +947,20 @@ export function SettingsPage() {
           ) : (
             <div className="divide-y divide-border">
               {clusters.map((cluster) => {
-                const resolved = resolveClusterIcon(cluster.icon);
                 return (
                 <div
                   key={cluster.id}
                   className="px-6 py-4 flex items-center gap-4 hover:bg-muted/20 transition-colors"
                 >
-                  {/* 아이콘 버튼 — 클릭 시 picker 노출. 미설정이면 status emoji 표시. */}
-                  <button
-                    type="button"
+                  {/* 아이콘 버튼 — 클릭 시 picker 노출. 미설정이면 status emoji 표시.
+                      아이콘 빌더로 만든 아이콘(iconConfig 있음)은 현재 테마로 매번 다시 렌더된다. */}
+                  <ClusterIconButton
+                    cluster={cluster}
                     onClick={(e) => {
                       setIconPickerAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
                       setIconPickerCluster(cluster);
                     }}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg border border-border bg-card hover:bg-secondary hover:ring-2 hover:ring-primary/30 transition-all flex-shrink-0"
-                    title={cluster.icon ? '아이콘 변경' : '아이콘 설정 (lucide / 이모지 / 이미지 업로드)'}
-                    aria-label="클러스터 아이콘 설정"
-                  >
-                    {resolved?.kind === 'image' ? (
-                      <img src={resolved.value} alt="" className="w-7 h-7 rounded object-cover" />
-                    ) : resolved?.kind === 'lucide' ? (
-                      <resolved.Component className="w-5 h-5 text-foreground/80" />
-                    ) : resolved?.kind === 'text' ? (
-                      <span className="text-xl leading-none">{resolved.value}</span>
-                    ) : (
-                      <span className="text-xl leading-none" aria-hidden>
-                        {getStatusIcon(cluster.status)}
-                      </span>
-                    )}
-                  </button>
+                  />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -1068,9 +1093,10 @@ export function SettingsPage() {
                 name: iconPickerCluster.name,
                 region: iconPickerCluster.region,
                 operationLevel: iconPickerCluster.operationLevel,
+                iconConfig: iconPickerCluster.iconConfig,
               }}
-              onChange={(next) => {
-                updateClusterMut.mutate({ id: iconPickerCluster.id, data: { icon: next } });
+              onChange={(next, iconConfig) => {
+                updateClusterMut.mutate({ id: iconPickerCluster.id, data: { icon: next, iconConfig: iconConfig ?? null } });
               }}
               onClose={() => {
                 setIconPickerCluster(null);

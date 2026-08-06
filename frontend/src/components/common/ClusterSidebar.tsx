@@ -10,7 +10,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, Status } from '@/types';
 import { useSidebarStore } from '@/stores/sidebarStore';
-import { resolveClusterIcon } from '@/lib/clusterIcons';
+import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
 import { ResizeHandle } from './ResizeHandle';
 
 interface ClusterSidebarProps {
@@ -219,6 +219,38 @@ function IconRailButton({ label, dotClass, Icon, emojiText, imageSrc, active, on
   );
 }
 
+/** 아이콘 레일의 클러스터 버튼 — `useClusterIconSrc` 훅(테마 동기화)을 써야 해서
+ *  `clusters.map()` 콜백 안에서 직접 훅을 호출할 수 없어 별도 컴포넌트로 분리했다. */
+function ClusterRailIconButton({
+  cluster, tooltip, active, onClick, size,
+}: {
+  cluster: Cluster;
+  tooltip: string;
+  active: boolean;
+  onClick: () => void;
+  size: ReturnType<typeof iconSizeFor>;
+}) {
+  const resolved = useClusterIconSrc(cluster);
+  const FallbackIcon = STATUS_ICON[cluster.status] ?? Server;
+  const lucideIcon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> =
+    resolved?.kind === 'lucide' ? resolved.Component : FallbackIcon;
+  const emojiText = resolved?.kind === 'text' ? resolved.value : undefined;
+  const imageSrc = resolved?.kind === 'image' ? resolved.value : undefined;
+
+  return (
+    <IconRailButton
+      label={tooltip}
+      Icon={lucideIcon}
+      emojiText={emojiText}
+      imageSrc={imageSrc}
+      dotClass={STATUS_DOT[cluster.status] ?? 'bg-slate-400'}
+      active={active}
+      onClick={onClick}
+      size={size}
+    />
+  );
+}
+
 /** 좌측 클러스터 선택 사이드바 — 드래그로 폭 조절 가능.
  *  부모가 flex row 레이아웃을 잡아주면, 이 컴포넌트는 자기 폭을 가짐.
  *  onReorder 가 주어지면 정렬 모드 토글 버튼이 노출되고, 모드에서 드래그로 seq 를 재할당한다.
@@ -292,22 +324,11 @@ function ClusterSidebarIconRail({
               ? `${baseTooltip}${isActive ? ' (선택됨 — 클릭하면 해제)' : ' (클릭하면 선택)'}`
               : baseTooltip;
 
-            // 사용자 지정 아이콘이 있으면 그걸 사용, 없으면 status 기반 fallback.
-            const resolved = resolveClusterIcon(c.icon);
-            const FallbackIcon = STATUS_ICON[c.status] ?? Server;
-            const lucideIcon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> =
-              resolved?.kind === 'lucide' ? resolved.Component : FallbackIcon;
-            const emojiText = resolved?.kind === 'text' ? resolved.value : undefined;
-            const imageSrc = resolved?.kind === 'image' ? resolved.value : undefined;
-
             return (
-              <IconRailButton
+              <ClusterRailIconButton
                 key={c.id}
-                label={tooltip}
-                Icon={lucideIcon}
-                emojiText={emojiText}
-                imageSrc={imageSrc}
-                dotClass={STATUS_DOT[c.status] ?? 'bg-slate-400'}
+                cluster={c}
+                tooltip={tooltip}
                 active={isActive}
                 onClick={() => handleClusterClick(c.id)}
                 size={size}

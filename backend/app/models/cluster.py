@@ -72,8 +72,16 @@ class Cluster(Base):
     custom_values = Column(JSONB, nullable=True)                   # {field_key: value, ...}
     # 사용자 지정 사이드바 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") /
     # emoji 1자 / 업로드 이미지 base64 data URL ("data:image/...;base64,..."). 길이 무제한.
-    # null/empty 면 status 기반 기본 아이콘으로 fallback.
+    # null/empty 면 status 기반 기본 아이콘으로 fallback. icon_config 가 있는 아이콘 빌더
+    # 생성 아이콘의 경우, 이 필드는 최초 저장 시점의 스냅샷일 뿐이고 실제 표시는 프론트가
+    # icon_config 를 뷰어의 현재 테마로 매번 다시 렌더한 결과를 우선한다.
     icon = Column(Text, nullable=True)
+    # 아이콘 빌더 레시피 — {workName, attribute, regionAbbr, shape, watermark, level,
+    # colorMode: 'theme'|'custom', customHex}. 있으면 프론트가 이 레시피 + 뷰어의 현재
+    # UI 테마로 아이콘을 매번 다시 렌더한다(테마 동기화). colorMode가 'custom'이면
+    # customHex 가 테마와 무관하게 항상 우선한다. lucide/emoji/업로드 아이콘은 이 필드가
+    # null 이며 icon 문자열 그대로 정적으로 표시된다.
+    icon_config = Column(JSONB, nullable=True)
 
     # Cluster Trends(노드 메트릭 추이) 연동 — 클러스터별 Prometheus.
     # base URL 은 비우면 전역 settings.prometheus_url fallback. enabled=false 면 Trends offline 표기.
