@@ -139,7 +139,9 @@ const ROW_PAD_CLS: Record<RowDensity, string> = {
   normal: 'py-1',
   comfortable: 'py-2',
 };
-const ROW_MIN_H: Record<RowDensity, number> = { compact: 26, normal: 36, comfortable: 48 };
+// compact 는 minHeight 만으로는 실제로 줄지 않았다 — 라벨 셀이 2줄(이름/카테고리 + 소스뱃지/실행·수정·삭제)
+// 구조라 콘텐츠 높이가 minHeight 를 이미 넘어서기 때문. compact 에서는 한 줄로 접어서 실제로 절반 가까이 줄인다.
+const ROW_MIN_H: Record<RowDensity, number> = { compact: 22, normal: 36, comfortable: 48 };
 
 function loadRowDensity(): RowDensity {
   try {
@@ -149,9 +151,34 @@ function loadRowDensity(): RowDensity {
   return 'normal';
 }
 
+// 페이지당 표시 행 수 — 점검 항목이 늘어나도 스크롤 없이 한 눈에 볼 분량을 사용자가 정할 수 있게.
+// 'all' 이 기본값(기존 동작 유지, 내부 스크롤로 전체 표시).
+type PageSize = 10 | 20 | 30 | 'all';
+const PAGE_SIZE_STORAGE_KEY = 'pep:checkMatrixPageSize';
+const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 10, label: '10행' },
+  { value: 20, label: '20행' },
+  { value: 30, label: '30행' },
+];
+
+function loadPageSize(): PageSize {
+  try {
+    const v = localStorage.getItem(PAGE_SIZE_STORAGE_KEY);
+    if (v === 'all') return 'all';
+    const n = Number(v);
+    if (n === 10 || n === 20 || n === 30) return n;
+  } catch { /* ignore */ }
+  return 'all';
+}
+
 function MatrixDisplaySettings({
-  density, onDensityChange, onResetWidths,
-}: { density: RowDensity; onDensityChange: (d: RowDensity) => void; onResetWidths: () => void }) {
+  density, onDensityChange, pageSize, onPageSizeChange, onResetWidths,
+}: {
+  density: RowDensity; onDensityChange: (d: RowDensity) => void;
+  pageSize: PageSize; onPageSizeChange: (p: PageSize) => void;
+  onResetWidths: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const popRef = useModalA11y(open, () => setOpen(false));
   return (
@@ -184,6 +211,24 @@ function MatrixDisplaySettings({
                     onClick={() => onDensityChange(o.value)}
                     className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
                       density === o.value
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1 border-t border-border/50 pt-2">
+              <span className="text-[11px] text-muted-foreground">화면당 표시 행 수</span>
+              <div className="grid grid-cols-4 gap-px rounded-md bg-secondary/70 p-0.5">
+                {PAGE_SIZE_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    onClick={() => onPageSizeChange(o.value)}
+                    className={`px-1 py-1 text-xs font-medium rounded transition-colors ${
+                      pageSize === o.value
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
@@ -341,6 +386,13 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     try { localStorage.setItem(ROW_DENSITY_STORAGE_KEY, rowDensity); } catch { /* ignore */ }
   }, [rowDensity]);
 
+  // 페이지당 표시 행 수 — 'all' 이면 기존처럼 내부 스크롤로 전체 표시.
+  const [pageSize, setPageSize] = useState<PageSize>(loadPageSize);
+  useEffect(() => {
+    try { localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch { /* ignore */ }
+  }, [pageSize]);
+  const [page, setPage] = useState(0);
+
   // 열 너비 — 항목 라벨 열 + 클러스터마다 하나씩, 드래그로 조정하고 더블클릭으로 기본값 복원.
   // 클러스터 목록이 늘어나면 새 컬럼도 기본 너비로 자동 반영된다(useColumnWidths 의 defaults 머지).
   const colDefaults = useMemo(
@@ -350,6 +402,12 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     [grid?.clusters],
   );
   const colW = useColumnWidths('platform-status-matrix', { defaults: colDefaults, min: 90, max: 420 });
+
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(items.length / pageSize));
+  useEffect(() => {
+    if (page > totalPages - 1) setPage(Math.max(0, totalPages - 1));
+  }, [totalPages, page]);
+  const pagedItems = pageSize === 'all' ? items : items.slice(page * pageSize, page * pageSize + pageSize);
 
   // 클러스터 cron 배지 색상 — "실행중" 판정은 전역 활성 수행(대기열+실행중) 한 번의 가벼운
   // 폴링으로 공유하고, "정상/경고/위험"은 핵심 점검(core_bundle) 행의 최근 셀 상태로 판정한다.
@@ -451,7 +509,11 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
       {/* ml-auto 여백만으로는 "화면 정체성" 그룹과 "동작" 그룹의 경계가 옅어(약한 근접성) —
           구분선으로 명시(WorkItemBoardPage 필터 바에도 쓴 것과 동일한 패턴). */}
       <div className="ml-auto flex items-center gap-1.5 border-l border-border pl-2.5 flex-shrink-0">
-        <MatrixDisplaySettings density={rowDensity} onDensityChange={setRowDensity} onResetWidths={colW.reset} />
+        <MatrixDisplaySettings
+          density={rowDensity} onDensityChange={setRowDensity}
+          pageSize={pageSize} onPageSizeChange={(p) => { setPageSize(p); setPage(0); }}
+          onResetWidths={colW.reset}
+        />
         <button
           onClick={() => setRunLog({ open: true, batchId: null })}
           className="relative inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
@@ -540,6 +602,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
             )}
           </div>
         ) : (
+          <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-auto">
             {/* table-layout: fixed + colgroup → 열마다 독립적으로 드래그 리사이즈 가능(useColumnWidths).
                 width: max-content 는 총 열 너비가 컨테이너보다 넓어지면 그만큼 늘어나 가로 스크롤이
@@ -588,7 +651,10 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => {
+                {pagedItems.map((item, localIdx) => {
+                  // 페이지네이션 시 pagedItems 는 items 의 부분집합이라 로컬 idx 를 그대로 쓰면
+                  // 정렬/드래그가 페이지 안에서만 움직인다 — items 전체 기준 절대 idx 로 환산한다.
+                  const idx = pageSize === 'all' ? localIdx : page * pageSize + localIdx;
                   const color = rowColor(item.color);
                   return (
                   <tr
@@ -600,15 +666,8 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                     } ${dragIdx === idx ? 'opacity-50' : ''}`}
                   >
                     <td className={`sticky left-0 z-10 bg-card group-hover:bg-muted/30 border-r border-b border-border px-2 ${ROW_PAD_CLS[rowDensity]}`}>
-                      <div
-                        role="group"
-                        aria-label={`${item.name} 행`}
-                        style={{ minHeight: ROW_MIN_H[rowDensity] }}
-                        className={`flex flex-col justify-center gap-0.5 min-w-0 rounded-md px-1.5 py-1 border-l-2 ${
-                          color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
+                      {(() => {
+                        const grip = (
                           <button
                             draggable
                             onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
@@ -624,28 +683,29 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           >
                             <GripVertical className="w-3.5 h-3.5" />
                           </button>
-                          <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
-                            {item.name}
+                        );
+                        const categoryChip = item.category && (
+                          <span
+                            title={`영역: ${item.category}`}
+                            className={`flex-shrink-0 px-1.5 py-px rounded border text-[9px] font-medium select-none ${
+                              color ? color.chip : 'border-border text-muted-foreground'
+                            }`}
+                          >
+                            {item.category}
                           </span>
-                          {item.category && (
-                            <span
-                              title={`영역: ${item.category}`}
-                              className={`flex-shrink-0 px-1.5 py-px rounded border text-[9px] font-medium select-none ${
-                                color ? color.chip : 'border-border text-muted-foreground'
-                              }`}
-                            >
-                              {item.category}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 min-w-0 pl-5">
-                          <SourceBadge sourceType={item.sourceType} />
-                          {item.isSystem && (
-                            <span title="시스템 항목" className="flex-shrink-0">
-                              <Lock className="w-3 h-3 text-muted-foreground" />
-                            </span>
-                          )}
-                          <div className="ml-auto flex items-center gap-0.5 flex-shrink-0">
+                        );
+                        const sourceMeta = (
+                          <>
+                            <SourceBadge sourceType={item.sourceType} />
+                            {item.isSystem && (
+                              <span title="시스템 항목" className="flex-shrink-0">
+                                <Lock className="w-3 h-3 text-muted-foreground" />
+                              </span>
+                            )}
+                          </>
+                        );
+                        const actions = (
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
                             {/* 실행 ▶ 는 hover 없이 항상 노출 — hover 전용이면 "버튼이 없다"고 오인된다. */}
                             {item.sourceType !== 'manual' && (
                               <button
@@ -683,8 +743,56 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                               )}
                             </div>
                           </div>
-                        </div>
-                      </div>
+                        );
+                        const nameSpan = (
+                          <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
+                            {item.name}
+                          </span>
+                        );
+
+                        // compact 는 minHeight 만으로 실제 높이가 줄지 않아(콘텐츠가 2줄이라 항상
+                        // minHeight 를 넘어섬) — 한 줄로 접어 실제로 절반 가까이 줄인다.
+                        if (rowDensity === 'compact') {
+                          return (
+                            <div
+                              role="group"
+                              aria-label={`${item.name} 행`}
+                              style={{ minHeight: ROW_MIN_H[rowDensity] }}
+                              className={`flex items-center gap-1.5 min-w-0 rounded-md px-1.5 border-l-2 ${
+                                color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
+                              }`}
+                            >
+                              {grip}
+                              {nameSpan}
+                              {categoryChip}
+                              {sourceMeta}
+                              {actions}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div
+                            role="group"
+                            aria-label={`${item.name} 행`}
+                            style={{ minHeight: ROW_MIN_H[rowDensity] }}
+                            className={`flex flex-col justify-center gap-0.5 min-w-0 rounded-md px-1.5 py-1 border-l-2 ${
+                              color ? `${color.bg} ${color.bar}` : 'border-l-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {grip}
+                              {nameSpan}
+                              {categoryChip}
+                            </div>
+                            <div className="flex items-center gap-1 min-w-0 pl-5">
+                              {sourceMeta}
+                              <div className="ml-auto flex items-center gap-0.5 flex-shrink-0">
+                                {actions}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                     {clusters.map((cluster) => (
                       <td key={cluster.id} className="border-b border-border text-center">
@@ -701,6 +809,35 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                 })}
               </tbody>
             </table>
+          </div>
+          {pageSize !== 'all' && items.length > 0 && (
+            <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-1.5 border-t border-border text-xs text-muted-foreground">
+              <span>
+                {page * pageSize + 1}–{Math.min(items.length, (page + 1) * pageSize)} / {items.length}행
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-2 py-1 rounded hover:bg-secondary disabled:opacity-30 transition-colors"
+                  title="이전 페이지"
+                  aria-label="이전 페이지"
+                >
+                  이전
+                </button>
+                <span className="tabular-nums">{page + 1} / {totalPages}</span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="px-2 py-1 rounded hover:bg-secondary disabled:opacity-30 transition-colors"
+                  title="다음 페이지"
+                  aria-label="다음 페이지"
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )}
           </div>
         )}
       </MacCard>
