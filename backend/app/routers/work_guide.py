@@ -12,6 +12,8 @@ from app.schemas.work_guide import (
     WorkGuideResponse,
     WorkGuideListResponse,
 )
+from app.schemas.confluence_docs import GuideSearchResult
+from app.services import knowledge_search
 
 router = APIRouter(prefix="/work-guides", tags=["work-guides"])
 
@@ -45,6 +47,21 @@ def list_guides(
     return WorkGuideListResponse(data=q.order_by(WorkGuide.created_at.desc()).all())
 
 
+# 주의: `/{guide_id}` 보다 위에 선언해야 "search" 가 UUID 로 파싱되지 않는다.
+@router.get("/search", response_model=GuideSearchResult)
+async def search_guides_endpoint(
+    q: str,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+):
+    """문서 검색 — 임베딩 시맨틱(cosine) 우선, 불가 시 ILIKE 폴백.
+
+    `embedding_available=false` 는 실패가 아니라 "시맨틱 아직 준비 안 됨"
+    (Ollama 미기동 / pgvector 부재 / 임베딩 미계산)."""
+    result = await knowledge_search.search_guides(db, q, limit)
+    return GuideSearchResult(**result)
+
+
 @router.get("/{guide_id}", response_model=WorkGuideResponse)
 def get_guide(guide_id: UUID, db: Session = Depends(get_db)):
     guide = db.query(WorkGuide).filter(WorkGuide.id == guide_id).first()
@@ -71,6 +88,9 @@ def update_guide(guide_id: UUID, payload: WorkGuideUpdate, db: Session = Depends
     update_data = payload.model_dump(exclude_unset=True)
     for k, v in update_data.items():
         setattr(guide, k, v)
+    # Confluence 연결 문서의 제목/본문이 바뀌면 "재게시 필요" 상태로 전이
+    if guide.confluence_page_id and ("title" in update_data or "content" in update_data):
+        guide.confluence_sync_status = "modified"
     db.commit()
     db.refresh(guide)
     if "title" in update_data or "content" in update_data:

@@ -690,6 +690,8 @@ def _alert_out(event: AlertEvent, cluster_names: dict[UUID, str]) -> AlertEventO
         labels=to_kv(event.labels),
         annotations=to_kv(event.annotations),
         raw_json=raw_json,
+        analysis_id=event.analysis_id,
+        analysis_status=event.analysis_status,
     )
 
 
@@ -811,6 +813,65 @@ def ack_all_alerts(
         count += 1
     db.commit()
     return {"acked": count}
+
+
+@router.get("/alerts/{alert_id}/analysis")
+def get_alert_analysis(alert_id: UUID, db: Session = Depends(get_db)):
+    """알람에 연결된 AI 분석 결과 조회 (최신 1건)."""
+    from app.models.incident_analysis import IncidentAnalysis
+    from app.schemas.observability import IncidentAnalysisOut
+
+    row = (
+        db.query(IncidentAnalysis)
+        .filter(IncidentAnalysis.alert_event_id == alert_id)
+        .order_by(IncidentAnalysis.created_at.desc())
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="이 알람에 대한 AI 분석이 없습니다.")
+    return {"data": IncidentAnalysisOut(
+        id=row.id,
+        alert_event_id=row.alert_event_id,
+        cluster_id=row.cluster_id,
+        namespace=row.namespace,
+        resource=row.resource,
+        trigger=row.trigger,
+        status=row.status,
+        severity=row.severity,
+        root_cause=row.root_cause,
+        suggested_actions=list(row.suggested_actions or []),
+        related_runbooks=list(row.related_runbooks or []),
+        confidence=row.confidence,
+        citations=list(row.citations or []),
+        analyzed_by=row.analyzed_by,
+        matched_rule_id=row.matched_rule_id,
+        duration_ms=row.duration_ms,
+        error=row.error,
+        created_at=row.created_at,
+        finished_at=row.finished_at,
+    )}
+
+
+@router.post("/alerts/{alert_id}/analyze")
+def trigger_alert_analysis(
+    alert_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """수동 AI 분석 실행 — scope 규칙과 무관하게 즉시 llm 큐로 보낸다 (operator+)."""
+    event = db.query(AlertEvent).filter(AlertEvent.id == alert_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="알람을 찾을 수 없습니다.")
+    if event.analysis_status in ("queued", "running"):
+        return {"ok": True, "status": event.analysis_status, "detail": "이미 분석이 진행 중입니다."}
+    try:
+        from app.celery_app import run_auto_incident_analysis
+        run_auto_incident_analysis.apply_async(args=[str(event.id)], queue="llm")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"분석 큐잉 실패: {e}")
+    event.analysis_status = "queued"
+    db.commit()
+    return {"ok": True, "status": "queued"}
 
 
 @router.delete("/alerts/{alert_id}", status_code=204)

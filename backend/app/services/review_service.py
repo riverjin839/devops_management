@@ -66,7 +66,7 @@ class ReviewService:
 
         context = self._build_context(cluster, log, diff, trend)
 
-        ai_resp = await agent_service.ask_agent(REVIEW_PROMPT, context=context)
+        ai_resp = await agent_service.ask_agent(REVIEW_PROMPT, context=context, purpose="review_summary")
         summary, remediation = self._parse_response(ai_resp)
 
         log.ai_summary = summary

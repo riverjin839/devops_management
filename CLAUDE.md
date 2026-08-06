@@ -148,7 +148,7 @@ devops_management/
 | kind 로컬 K8s | `bash scripts/kind-setup.sh up｜reload｜destroy` | FE `:30080` · API `:30800/docs` |
 | K8s 핫리로드 | `make skaffold-dev` | |
 
-그 외 타깃은 `make help`. Compose 는 postgres+redis+backend+frontend+celery(worker/beat)
+그 외 타깃은 `make help`. Compose 는 postgres+redis+backend+frontend+celery(worker/worker-llm/beat)
 +kubewatch+grafana-renderer 를 띄운다.
 
 **머지 전 게이트 (CI 와 동일 — 전부 통과해야 함):**
@@ -244,9 +244,9 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
 `dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`,
 `dispatch_architecture_doc_sync`), 수집류(`collect_resource_counts`, `run_trend_collect`,
-`sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`),
+`sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`, `run_auto_incident_analysis` — 전용 `llm` 큐),
 AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_work_guide_embedding`,
-`generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
+`compute_ops_note_embedding`, `backfill_embeddings`, `generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
 async 서비스는 `asyncio.new_event_loop()` + `loop.run_until_complete()` 로 브리지한다.
 
 ### Health Check Logic (`services/daily_checker.py`)
@@ -286,7 +286,7 @@ Both `AIAgentService` (`agent_service.py`) and `PrometheusService` (`prometheus_
 
 ## UI Design System
 
-테마 3종(`default` 기본 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
+테마 4종(`default` 기본 / `comfort` 크림+딥그린 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
 
 - **규격·구현 표준의 원천 = `DESIGN_SYSTEM.md` §12 구현 표준** — 테마 매트릭스, radius 토큰,
   MacCard props, ClusterSidebar 사용 패턴 3종 + 레이아웃 규칙, 콘솔 패턴 5개 항목이 전부 거기 있다.
@@ -367,7 +367,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
-| 지식 | `work_guide`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
+| 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
 | 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `service_entries`, `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks` |
 
 ---

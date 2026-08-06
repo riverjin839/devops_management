@@ -216,7 +216,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                     </td>
                     <td className="px-2 py-1.5 text-right">
                       <button onClick={() => deleteField(f)}
-                        className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400">
+                        className="p-1 rounded hover:bg-status-critical/10 text-muted-foreground hover:text-status-critical">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>

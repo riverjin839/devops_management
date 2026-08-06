@@ -30,6 +30,12 @@ celery:
   worker:
     replicaCount: 2
 
+# 운영망은 사내 LLM 서비스(OpenAI-호환)를 배선하고 인클러스터 Ollama 는 기본 꺼짐 —
+# 켜려면 ollama.enabled=true 로 오버라이드(GPU/리소스 예산 확인 후). 프로필/라우팅은
+# 배포 후 Settings → AI/LLM 탭에서 등록(민감정보라 values 에 두지 않는다).
+ollama:
+  enabled: false
+
 ingress:
   enabled: true
   host: k8s-monitor.company.internal

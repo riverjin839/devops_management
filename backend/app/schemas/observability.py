@@ -214,6 +214,36 @@ class AlertEventOut(BaseModel):
     annotations: list[KV] = Field(default_factory=list)
     # raw 는 키 변환을 피하려고 문자열로 내보낸다 (상세 펼침의 <pre> 표시용).
     raw_json: Optional[str] = None
+    # AI 자동 분석 연결 — null(미대상) | queued | running | done | failed | skipped
+    analysis_id: Optional[UUID] = None
+    analysis_status: Optional[str] = None
+
+
+class IncidentAnalysisOut(BaseModel):
+    """AI 장애 분석 결과 (분석 전용 — 실행 가능한 필드 없음).
+
+    ``trigger`` 에 따라 ``alert_event_id`` 또는 ``k8s_event_id`` 중 하나만 채워진다
+    (alert|k8s_event|manual — manual 은 둘 다 비어 있을 수 있음)."""
+    id: UUID
+    alert_event_id: Optional[UUID] = None
+    k8s_event_id: Optional[UUID] = None
+    cluster_id: Optional[UUID] = None
+    namespace: Optional[str] = None
+    resource: Optional[str] = None
+    trigger: str
+    status: str
+    severity: Optional[str] = None
+    root_cause: Optional[str] = None
+    suggested_actions: list[str] = Field(default_factory=list)
+    related_runbooks: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = None
+    citations: list[dict] = Field(default_factory=list)
+    analyzed_by: Optional[str] = None
+    matched_rule_id: Optional[str] = None
+    duration_ms: Optional[int] = None
+    error: Optional[str] = None
+    created_at: datetime
+    finished_at: Optional[datetime] = None
 
 
 class AlertEventListResponse(BaseModel):

@@ -38,7 +38,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
             {data && (
               <p className="text-sm text-muted-foreground mt-0.5">
                 소스: {data.source === 'live' ? '🟢 kubectl 실시간' : data.source === 'stored' ? '🟡 저장된 설정' : '⚪ 없음'}
-                {data.error && <span className="text-amber-400 ml-2">⚠ {data.error}</span>}
+                {data.error && <span className="text-status-warning ml-2">⚠ {data.error}</span>}
               </p>
             )}
           </div>
@@ -80,7 +80,7 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
                     return (
                       <div key={i}>
                         {line.slice(0, idx)}
-                        <mark className="bg-yellow-400/30 text-yellow-200 rounded px-0.5">{line.slice(idx, idx + search.length)}</mark>
+                        <mark className="bg-status-warning/30 text-foreground rounded px-0.5">{line.slice(idx, idx + search.length)}</mark>
                         {line.slice(idx + search.length)}
                       </div>
                     );

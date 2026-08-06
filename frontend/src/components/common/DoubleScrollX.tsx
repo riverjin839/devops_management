@@ -6,6 +6,12 @@ interface DoubleScrollXProps {
   className?: string;
   /** 상단 스크롤 레일 높이(px). 기본 12px (OS 기본 스크롤바 두께 정도). */
   topRailHeight?: number;
+  /**
+   * 본문 스크롤 컨테이너의 추가 클래스. `max-h-*` 를 주면 세로로도 스크롤되므로
+   * 안쪽 `thead` 에 `sticky top-0` 을 걸어 헤더를 고정할 수 있다 (미지정 시 기존처럼
+   * 페이지 스크롤을 따라가고 헤더 고정은 동작하지 않는다).
+   */
+  bodyClassName?: string;
 }
 
 /**
@@ -29,6 +35,7 @@ export function DoubleScrollX({
   children,
   className = '',
   topRailHeight = 12,
+  bodyClassName = '',
 }: DoubleScrollXProps) {
   const topRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -111,7 +118,7 @@ export function DoubleScrollX({
       >
         <div style={{ width: innerWidth || 1, height: 1 }} />
       </div>
-      <div ref={bottomRef} className="overflow-x-auto">
+      <div ref={bottomRef} className={`overflow-x-auto ${bodyClassName}`}>
         {children}
       </div>
     </div>

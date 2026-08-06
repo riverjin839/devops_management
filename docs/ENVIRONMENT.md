@@ -50,12 +50,21 @@
 
 | Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_URL` | `http://ollama:11434` | Ollama base URL |
+| `OLLAMA_URL` | `http://ollama:11434` | Ollama base URL (bootstrap 기본 프로필 `local-ollama` 합성용) |
 | `OLLAMA_MODEL` | `llama3` | LLM model name (airgap overlay 는 `qwen2.5-coder:7b`) |
 | `OLLAMA_TIMEOUT` | `120` | LLM request timeout (s) |
+| `LLM_API_BASE` | *(empty)* | 사내 OpenAI-호환 LLM 서비스 base URL. 설정 시 `internal-llm` 프로필이 bootstrap 합성됨 |
+| `LLM_API_KEY` | *(empty)* | 사내 LLM API 키 — 프로필 `api_key_ref: "env:LLM_API_KEY"` 로만 참조 (AppSetting 저장 금지) |
+| `LLM_MODEL` | *(empty)* | `internal-llm` 프로필 기본 모델명 |
+| `LLM_TIMEOUT` | `120` | 사내 LLM request timeout (s) |
+| `ANALYZER_BACKEND` | *(empty→`rule_based`)* | 장애 분석 백엔드 bootstrap 폴백 — **운영 설정은 Settings → AI/LLM 탭(AppSetting `llm_settings`)이 우선** |
 | `EMBEDDING_MODEL` | `nomic-embed-text` | 임베딩 모델 (WorkItem/WorkGuide 유사 검색) |
 | `EMBEDDING_DIM` | `768` | 임베딩 차원 — 모델 교체 시 함께 변경(기존 벡터 재계산 필요) |
 | `EMBEDDING_TIMEOUT` | `30` | 임베딩 요청 timeout (s) |
+
+> **LLM 운영 설정의 원천은 UI 다.** 프로필(사내 LLM/Ollama 병행)·용도별 라우팅·분석기 선택은
+> AppSetting `llm_settings` (Settings → AI/LLM 탭) 에서 관리하고, 위 env 는 행이 없을 때의
+> bootstrap 폴백이다. 구조는 `docs/AIRGAP_LLM_ARCHITECTURE.md` 참고.
 
 ## Prometheus / Grafana / Trends
 
@@ -88,7 +97,13 @@
 
 | Variable | Default | 읽는 곳 |
 |---|---|---|
-| `ANALYZER_BACKEND` | `rule_based` | `services/analyzers/factory.py` — `claude` \| `local_llm` \| `rule_based` |
 | `ALLOWED_ORIGINS` | *(empty)* | `main.py` — 추가 CORS origin (콤마 구분) |
 | `PEP_K9S_SSH_ENABLED` | `true` | `routers/k9s_ssh.py` — k9s 콘솔(SSH 웹 터미널) on/off. `false`\|`0`\|`no` 면 WS 를 4403 으로 거부 |
 | `PEP_NODE_SSH_ENABLED` | `true` | `routers/node_ssh.py` — 노드 SSH 터미널 on/off (위와 동일 규칙) |
+| `K8S_ALLOC_OVERVIEW_TTL` | `86400` (24h) | `routers/k8s_allocation.py` — `/k8s-allocation` 전체 스냅샷(노드+네임스페이스) 캐시 수명(초). 완전한 결과에만 적용 — 절단(partial) 결과는 `K8S_ALLOC_PARTIAL_TTL` 이 우선 |
+| `K8S_ALLOC_PARTIAL_TTL` | `300` (5m) | 동일 — 부분(절단) 스냅샷의 짧은 캐시 수명(초). apiserver 5xx/`_continue` 토큰 만료로 전량 순회가 끊긴 결과가 24h 짜리 확정 데이터처럼 서빙되지 않도록 자동 재집계를 유도 |
+| `K8S_ALLOC_STUCK_TIMEOUT` | `1800` (30m) | 동일 — 백그라운드 집계가 이 시간을 넘겨도 안 끝나면(행업) `refresh` 요청 시 새 계산으로 교체 |
+| `K8S_ALLOC_METRICS_TIMEOUT` | `8.0` | 동일 — metrics-server(`metrics.k8s.io`) 조회 read timeout(초). 느리면 usage 생략(best-effort) |
+| `K8S_ALLOC_POD_USAGE_MAX` | `6000` | 동일 — cluster-wide Pod usage 조회는 활성 Pod 수가 이 값 이하일 때만 시도(초과 시 생략 — 대형 클러스터에서 metrics 응답이 타임아웃만 반복하는 것을 방지, 드릴다운은 네임스페이스 단위로 계속 확인 가능) |
+| `K8S_ALLOC_API_READ_TIMEOUT` | `12.0` | `services/k8s_paging.py` — LIST 페이지 1개당 read timeout(초). 게이트웨이 타임아웃보다 충분히 짧게 |
+| `K8S_ALLOC_PAGE_LIMIT` | `500` | 동일 — LIST `_continue` 페이지네이션 페이지 크기 |

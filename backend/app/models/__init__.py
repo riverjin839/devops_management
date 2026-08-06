@@ -10,6 +10,9 @@ from app.models.work_item_comment import WorkItemComment
 from app.models.user_notification import UserNotification
 from app.models.work_item_custom_field import WorkItemCustomField
 from app.models.app_setting import AppSetting
+from app.models.llm_credential import LlmCredential
+from app.models.incident_analysis import IncidentAnalysis
+from app.models.agent_conversation import AgentConversation, AgentMessage
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
 from app.models.ops_note import OpsNote
@@ -99,6 +102,10 @@ __all__ = [
     "UserNotification",
     "WorkItemCustomField",
     "AppSetting",
+    "LlmCredential",
+    "IncidentAnalysis",
+    "AgentConversation",
+    "AgentMessage",
     "Workflow",
     "WorkflowStep",
     "WorkflowEdge",

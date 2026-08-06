@@ -127,6 +127,18 @@ celery:
       limits:
         memory: "512Mi"
         cpu: "500m"
+  # LLM 전용 워커 — `llm` 큐만 소비(알람 자동 분석·임베딩 백필). 기본 워커와 격리해
+  # LLM 대기(120s+)가 점검/배치잡을 밀어내지 않게 한다. LLM 부하 상한 = concurrency.
+  llmWorker:
+    enabled: true
+    concurrency: 1
+    resources:
+      requests:
+        memory: "192Mi"
+        cpu: "100m"
+      limits:
+        memory: "384Mi"
+        cpu: "300m"
   beat:
     resources:
       requests:
@@ -225,17 +237,49 @@ monitoring:
         cpu: "100m"
 
 # ============================================
-# Ollama (AI Agent backend)
+# Ollama (인클러스터 자체 LLM — services/llm 게이트웨이의 'ollama' provider)
 # Air-gap: set model to match the name baked into your custom image.
-# e.g. for ghcr.io/riverjin839/ollama-qwen2.5-coder:7b → model: "qwen2.5-coder:7b"
+# 모델명은 이미지에 pre-baked 된 이름과 반드시 일치해야 한다(ghcr.io/riverjin839/
+# ollama-qwen2.5-coder:7b → model: "qwen2.5-coder:7b"). 사내 LLM 서비스(OpenAI-호환)
+# 는 이 블록과 무관하게 Settings → AI/LLM 탭에서 프로필로 등록한다(LLM_API_BASE/
+# LLM_API_KEY 는 bootstrap 폴백 — docs/ENVIRONMENT.md).
 # ============================================
 ollama:
-  model: "llama3"
+  # false 로 끄면 사내 LLM 프로필만으로 운영 가능(자체 LLM 미배포).
+  enabled: true
+  model: "qwen2.5-coder:7b"
   url: "http://ollama:11434"
+  numParallel: 2
   image:
     repository: ghcr.io/riverjin839/ollama-qwen2.5-coder
     tag: "7b"
     pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "2"
+    limits:
+      memory: "16Gi"
+      cpu: "8"
+  nodeSelector: {}
+  tolerations: []
+  # 모델 영속화 — 기본은 이미지에 구운 모델만 사용(꺼짐). true 로 켜면 PVC 를 마운트해
+  # 재시작 후에도 추가로 pull 한 모델을 유지한다 (k8s/base/ollama.yaml 의 동일 주석 참고).
+  persistence:
+    enabled: false
+    size: 20Gi
+    storageClass: ""
+
+# ============================================
+# 사내 LLM 서비스 (OpenAI-호환) — bootstrap 폴백
+# 값을 채우면 배포 시 internal-llm 프로필이 자동 합성된다. 운영 중 변경은
+# Settings → AI/LLM 탭(AppSetting `llm_settings`)이 원천 — 이 값은 최초 배포용.
+# apiKey 는 여기 두는 대신 --set 이나 별도 sealed-secret 으로 주입 권장.
+# ============================================
+llm:
+  apiBase: ""
+  apiKey: ""
+  model: ""
 
 # ============================================
 # Super Pod — Deep Daily Check

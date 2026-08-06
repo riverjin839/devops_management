@@ -14,13 +14,19 @@ export function buildCsv(headers: string[], rows: (string | number | null | unde
   return body ? `${head}\n${body}\n` : `${head}\n`;
 }
 
-/** CSV 문자열을 파일로 다운로드(UTF-8 BOM 포함 → 엑셀에서 한글 정상). */
+/** CSV 문자열을 파일로 다운로드(UTF-8 BOM 포함 → 엑셀에서 한글 정상).
+ * 앵커를 DOM 에 붙였다가 클릭 후 제거하고, revoke 는 다음 이벤트 루프로 미룬다 —
+ * 즉시 revoke 하면 다운로드가 시작되기 전에 URL 이 무효화되어 Firefox/구버전 Safari 에서
+ * 다운로드가 조용히 실패하는 사례가 있다. */
 export function downloadCsv(filename: string, csv: string): void {
   const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

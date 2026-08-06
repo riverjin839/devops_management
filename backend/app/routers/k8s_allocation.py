@@ -25,7 +25,8 @@ import logging
 import os
 import re
 import time
-from decimal import Decimal
+from contextlib import contextmanager
+from decimal import ROUND_HALF_UP
 from typing import Any, Callable, Optional
 from uuid import UUID
 
@@ -68,12 +69,13 @@ from app.services.k8s_paging import (  # noqa: E402
     iter_all as _iter_all, list_all as _list_all, API_TIMEOUT as _API_TIMEOUT,
 )
 _METRICS_TIMEOUT = (3.05, _envf("K8S_ALLOC_METRICS_TIMEOUT", 8.0))  # 느리면 usage 생략(best-effort)
-# cluster-wide pod usage(metrics) 는 활성 Pod 가 이 수 이하일 때만 시도(대규모 클러스터 보호).
-_POD_USAGE_MAX = 6000
-# 전체 스냅샷(전량 페이지네이션 포함) 총 벽시계 예산(초). ingress/proxy 타임아웃보다 충분히
-# 짧게 잡아(기본 18s), 초대형 클러스터에서도 502 대신 partial 결과로 반드시 응답한다.
-# 게이트웨이 타임아웃이 더 짧으면 env K8S_ALLOC_SNAPSHOT_BUDGET 로 낮춘다.
-_SNAPSHOT_BUDGET = _envf("K8S_ALLOC_SNAPSHOT_BUDGET", 18.0)
+# cluster-wide pod usage(metrics) 는 활성 Pod 가 이 수 이하일 때만 시도(대규모 클러스터 보호 —
+# 초과 시 metrics 단일 응답이 타임아웃만 반복하므로 생략하고 드릴다운에서 NS 단위로 확인).
+_POD_USAGE_MAX = int(_envf("K8S_ALLOC_POD_USAGE_MAX", 6000))
+# 부분(절단) 스냅샷의 캐시 수명(초) — 완전한 스냅샷(_OVERVIEW_TTL)보다 짧게 둬서 자동 재집계.
+_PARTIAL_TTL = _envf("K8S_ALLOC_PARTIAL_TTL", 300.0)
+# computing 이 이 시간(초)을 넘기면 행업으로 간주하고 refresh 시 새 계산으로 교체.
+_STUCK_TIMEOUT = _envf("K8S_ALLOC_STUCK_TIMEOUT", 1800.0)
 
 # 비싼 집계 스냅샷에 대한 짧은 TTL 캐시(클러스터/네임스페이스 키별 격리).
 _CACHE_TTL = 20.0
@@ -92,28 +94,36 @@ def _cached(key: str, producer: Callable[[], Any]) -> Any:
 
 
 def _strip_hash(rs_name: str) -> str:
-    """ReplicaSet 이름에서 pod-template-hash 접미사 제거 → Deployment 이름 추정(폴백)."""
-    return re.sub(r"-[a-f0-9]{8,10}$", "", rs_name)
+    """ReplicaSet 이름에서 pod-template-hash 접미사 제거 → Deployment 이름 추정(폴백).
+
+    해시는 rand.SafeEncodeString 알파벳(bcdfghjklmnpqrstvwxz2456789)으로 생성된다 —
+    hex([a-f0-9]) 가 아니므로 hex 패턴으로는 대부분의 실제 해시를 못 벗겨 RS 세대마다
+    별개 워크로드로 집계된다.
+    """
+    return re.sub(r"-[bcdfghjklmnpqrstvwxz2456789]{5,10}$", "", rs_name)
 
 
 # ── 수량 파싱/표시 ──────────────────────────────────────────────────────────────
 def _cpu_m(v) -> int:
-    """CPU 수량 문자열 → millicores(int). 빈 값/파싱 실패 시 0."""
+    """CPU 수량 문자열 → millicores(int, 반올림 — nanocores("451331n") 절삭 소실 방지).
+    빈 값 0, 파싱 실패는 0 처리하되 로그를 남긴다(무요청 파드로 오인되는 것을 추적 가능하게)."""
     if not v:
         return 0
     try:
-        return int(Decimal(parse_quantity(v)) * 1000)
+        return int((parse_quantity(v) * 1000).to_integral_value(rounding=ROUND_HALF_UP))
     except Exception:  # noqa: BLE001
+        logger.warning("CPU 수량 파싱 실패(0 처리): %r", v)
         return 0
 
 
 def _mem_b(v) -> int:
-    """메모리 수량 문자열 → bytes(int). 빈 값/파싱 실패 시 0."""
+    """메모리 수량 문자열 → bytes(int). 빈 값/파싱 실패 시 0(실패는 로그)."""
     if not v:
         return 0
     try:
-        return int(Decimal(parse_quantity(v)))
+        return int(parse_quantity(v).to_integral_value(rounding=ROUND_HALF_UP))
     except Exception:  # noqa: BLE001
+        logger.warning("메모리 수량 파싱 실패(0 처리): %r", v)
         return 0
 
 
@@ -122,8 +132,9 @@ def _pods_n(v) -> int:
     if not v:
         return 0
     try:
-        return int(Decimal(parse_quantity(v)))
+        return int(parse_quantity(v))
     except Exception:  # noqa: BLE001
+        logger.warning("pods 수량 파싱 실패(0 처리): %r", v)
         return 0
 
 
@@ -164,6 +175,56 @@ def _sum_resources(containers) -> tuple[int, int, int, int]:
         lc += _cpu_m(lim.get("cpu"))
         lm += _mem_b(lim.get("memory"))
     return rc, rm, lc, lm
+
+
+def _sidecar_containers(spec) -> list:
+    """네이티브 사이드카(init 이면서 restartPolicy=Always, 1.29+ GA) 목록 — 파드 수명
+    내내 상주하므로 자원 집계·컨테이너 표시에서 일반 컨테이너와 동일하게 취급한다."""
+    return [c for c in (getattr(spec, "init_containers", None) or [])
+            if getattr(c, "restart_policy", None) == "Always"]
+
+
+def _pod_effective_resources(spec) -> tuple[int, int, int, int]:
+    """Pod spec → 스케줄러 기준 **유효** (req_cpu_m, req_mem_b, lim_cpu_m, lim_mem_b).
+
+    K8s 유효 요청량 규칙: max(Σ(일반 + 사이드카 컨테이너), max(일반 init 컨테이너))
+    + spec.overhead. 일반 init 는 순차 실행이라 리소스별 최대값만 점유하고, 사이드카
+    (init restartPolicy=Always)는 상주하므로 합산한다. spec.containers 만 합산하면
+    메시/에이전트 주입 클러스터에서 request 가 과소집계되어 slack(여유)이 과대평가된다.
+    """
+    if not spec:
+        return 0, 0, 0, 0
+    rc, rm, lc, lm = _sum_resources(getattr(spec, "containers", None))
+    src, srm, slc, slm = _sum_resources(_sidecar_containers(spec))
+    rc += src; rm += srm; lc += slc; lm += slm
+    init_rc = init_rm = init_lc = init_lm = 0
+    for c in (getattr(spec, "init_containers", None) or []):
+        if getattr(c, "restart_policy", None) == "Always":
+            continue  # 사이드카 — 위에서 합산됨
+        crc, crm, clc, clm = _sum_resources([c])
+        init_rc = max(init_rc, crc); init_rm = max(init_rm, crm)
+        init_lc = max(init_lc, clc); init_lm = max(init_lm, clm)
+    rc = max(rc, init_rc); rm = max(rm, init_rm)
+    lc = max(lc, init_lc); lm = max(lm, init_lm)
+    overhead = getattr(spec, "overhead", None) or {}
+    if overhead:  # RuntimeClass 오버헤드(Kata/gVisor)는 request/limit 양쪽에 가산된다.
+        oc, om = _cpu_m(overhead.get("cpu")), _mem_b(overhead.get("memory"))
+        rc += oc; rm += om; lc += oc; lm += om
+    return rc, rm, lc, lm
+
+
+@contextmanager
+def _api(cluster):
+    """ApiClient 를 요청/빌드 단위로 열고 반드시 닫는다 — urllib3 풀/스레드 누수 방지
+    (폴링 화면이라 요청마다 새 클라이언트가 만들어지므로 누적이 빠르다)."""
+    client = _api_client(cluster)
+    try:
+        yield client
+    finally:
+        try:
+            client.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _node_roles(labels: dict) -> list[str]:
@@ -421,119 +482,125 @@ def _assemble_overview(node_base, per_node, per_ns, node_usage, summary, ns_tota
     }
 
 
-def _build_overview(cluster, cid: str, progress: Optional[Progress] = None) -> dict:
+def _build_overview(cluster, progress: Optional[Progress] = None) -> dict:
     """단일 Pod 순회로 노드/네임스페이스 집계를 모두 계산. 결과는 작은 숫자 dict 만 캐시.
 
     반환: {node_base, per_node, node_usage, per_ns, summary, ns_total,
            metrics_available, pod_usage_skipped}
 
     백그라운드 스냅샷 매니저에서 호출되므로 게이트웨이 타임아웃과 무관 — **전수 집계를
-    끝까지 수행**해 무결성을 보장한다. progress 가 주어지면 Pod 처리량을 보고한다.
+    끝까지 수행**해 무결성을 보장한다(시간 예산으로 자르지 않고, 폭주 방지용 hard_cap 만
+    유지). progress 가 주어지면 Pod 처리량을 보고한다.
     """
-    client = _api_client(cluster)
-    core = k8s_client.CoreV1Api(client)
+    with _api(cluster) as client:
+        core = k8s_client.CoreV1Api(client)
+        partial_flag: list = []
 
-    # 백그라운드 실행이므로 시간 예산으로 자르지 않는다(무결성). 폭주 방지용 hard_cap 만 유지.
-    deadline = None
-    partial_flag: list = []
-
-    nodes = _list_all(lambda **kw: core.list_node(**kw), deadline=deadline)
-    if progress is not None:
-        progress.phase = "nodes"
-    node_usage = _node_usage(client)
-    ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), deadline=deadline))
-    if progress is not None:
-        progress.phase = "pods"
-
-    # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
-    node_base: dict[str, dict] = {}
-    for n in nodes:
-        labels = n.metadata.labels or {}
-        alloc = (n.status.allocatable or {}) if n.status else {}
-        cap = (n.status.capacity or {}) if n.status else {}
-        node_base[n.metadata.name] = {
-            "roles": _node_roles(labels),
-            "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
-            "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
-            "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
-            "pods_alloc": _pods_n(alloc.get("pods")),
-        }
-
-    per_node: dict[str, dict] = {}
-    per_ns: dict[str, dict] = {}
-    summary = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0, "pods": 0, "norq": 0}
-
-    # Pod 를 **페이지 단위로 스트리밍**하며 즉시 집계(전량 메모리 적재 금지 → OOM/502 방지).
-    # 약 1초마다 부분 결과를 progress.partial 로 publish → 프론트가 누적 표시.
-    last_pub = time.monotonic()
-    for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
-                       field_selector=_ACTIVE_FIELD_SELECTOR,
-                       deadline=deadline, report=partial_flag):
+        nodes = _list_all(lambda **kw: core.list_node(**kw), report=partial_flag)
         if progress is not None:
-            progress.processed += 1
-        if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
-            continue
-        ns = p.metadata.namespace
-        node = p.spec.node_name if p.spec else None
-        rc, rm, lc, lm = _sum_resources(p.spec.containers if p.spec else [])
-        no_req = (rc == 0 and rm == 0)
-        owner = _top_owner(p, {})  # 대규모 보호: RS 전량 미조회(해시 strip 근사)
-
-        # per-namespace
-        s = per_ns.setdefault(ns, {
-            "rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
-            "pods": 0, "norq": 0, "owners": set(), "has_usage": False,
-        })
-        s["rc"] += rc; s["rm"] += rm; s["lc"] += lc; s["lm"] += lm
-        s["pods"] += 1
-        s["owners"].add(owner)
-        if no_req:
-            s["norq"] += 1
-
-        # per-node (request/limit 합산. usage 는 노드 metrics(node_usage) 사용)
-        if node and node in node_base:
-            ag = per_node.setdefault(node, {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0})
-            ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm
-            ag["pods"] += 1
-
-        # summary
-        summary["rc"] += rc; summary["rm"] += rm; summary["lc"] += lc; summary["lm"] += lm
-        summary["pods"] += 1
-        if no_req:
-            summary["norq"] += 1
-
-        # 부분 결과 publish(usage 미반영=pending). accumulator 비파괴 복사로 안전.
+            progress.phase = "nodes"
+        node_usage = _node_usage(client)
+        ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw)))
         if progress is not None:
-            now = time.monotonic()
-            if now - last_pub >= _PARTIAL_PUBLISH_INTERVAL:
-                progress.partial = _assemble_overview(
-                    node_base, per_node, per_ns, node_usage, summary, ns_total,
-                    metrics_available=False, pod_usage_skipped=True, partial=bool(partial_flag),
-                )
-                last_pub = now
+            progress.phase = "pods"
 
-    partial = bool(partial_flag)
-    # cluster-wide pod usage — namespace 단위로 합산(대규모에서도 NS 랭킹 실사용 표시). best-effort.
-    pu = _pod_usage(client)
-    metrics_available = bool(pu)
-    if pu:
+        # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
+        node_base: dict[str, dict] = {}
+        for n in nodes:
+            labels = n.metadata.labels or {}
+            alloc = (n.status.allocatable or {}) if n.status else {}
+            cap = (n.status.capacity or {}) if n.status else {}
+            node_base[n.metadata.name] = {
+                "roles": _node_roles(labels),
+                "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
+                "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
+                "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
+                "pods_alloc": _pods_n(alloc.get("pods")),
+            }
+
+        per_node: dict[str, dict] = {}
+        per_ns: dict[str, dict] = {}
+        summary = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0, "pods": 0, "norq": 0}
+
+        # Pod 를 **페이지 단위로 스트리밍**하며 즉시 집계(전량 메모리 적재 금지 → OOM/502 방지).
+        # 약 1초마다 부분 결과를 progress.partial 로 publish → 프론트가 누적 표시.
+        last_pub = time.monotonic()
+        for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
+                           field_selector=_ACTIVE_FIELD_SELECTOR, report=partial_flag):
+            if progress is not None:
+                progress.processed += 1
+            if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+                continue
+            ns = p.metadata.namespace
+            node = p.spec.node_name if p.spec else None
+            rc, rm, lc, lm = _pod_effective_resources(p.spec)
+            no_req = (rc == 0 and rm == 0)
+            owner = _top_owner(p, {})  # 대규모 보호: RS 전량 미조회(해시 strip 근사)
+
+            # per-namespace
+            s = per_ns.setdefault(ns, {
+                "rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
+                "pods": 0, "norq": 0, "owners": set(), "has_usage": False,
+            })
+            s["rc"] += rc; s["rm"] += rm; s["lc"] += lc; s["lm"] += lm
+            s["pods"] += 1
+            s["owners"].add(owner)
+            if no_req:
+                s["norq"] += 1
+
+            # per-node (request/limit 합산. usage 는 노드 metrics(node_usage) 사용)
+            if node and node in node_base:
+                ag = per_node.setdefault(node, {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0})
+                ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm
+                ag["pods"] += 1
+
+            # summary
+            summary["rc"] += rc; summary["rm"] += rm; summary["lc"] += lc; summary["lm"] += lm
+            summary["pods"] += 1
+            if no_req:
+                summary["norq"] += 1
+
+            # 부분 결과 publish(usage 미반영=pending). accumulator 비파괴 복사로 안전.
+            if progress is not None:
+                now = time.monotonic()
+                if now - last_pub >= _PARTIAL_PUBLISH_INTERVAL:
+                    progress.partial = _assemble_overview(
+                        node_base, per_node, per_ns, node_usage, summary, ns_total,
+                        metrics_available=False, pod_usage_skipped=True, partial=bool(partial_flag),
+                    )
+                    last_pub = now
+
+        partial = bool(partial_flag)
+        # cluster-wide pod usage — namespace 단위로 합산(NS 랭킹 실사용 표시). best-effort.
+        # 활성 Pod 가 _POD_USAGE_MAX 를 넘으면 생략 — metrics 단일 응답이 타임아웃만 반복하는
+        # 초대형 클러스터 보호(드릴다운에서 NS 단위로 정확히 확인 가능).
+        usage_skipped = summary["pods"] > _POD_USAGE_MAX
+        if usage_skipped:
+            logger.info("cluster-wide pod usage 생략: 활성 Pod %d > %d",
+                        summary["pods"], _POD_USAGE_MAX)
+            pu = {}
+        else:
+            pu = _pod_usage(client)
+        metrics_available = bool(pu)
         for (ns, _pod), u in pu.items():
             cpu, mem = u["cpu"], u["mem"]
             if ns in per_ns:
                 per_ns[ns]["uc"] += cpu; per_ns[ns]["um"] += mem; per_ns[ns]["has_usage"] = True
             summary["uc"] += cpu; summary["um"] += mem
 
-    return _assemble_overview(
-        node_base, per_node, per_ns, node_usage, summary, ns_total,
-        metrics_available=metrics_available, pod_usage_skipped=(not metrics_available), partial=partial,
-    )
+        return _assemble_overview(
+            node_base, per_node, per_ns, node_usage, summary, ns_total,
+            metrics_available=metrics_available,
+            pod_usage_skipped=(usage_skipped or not metrics_available), partial=partial,
+        )
 
 
 # 비싼 overview 집계는 백그라운드 스냅샷 매니저로 수행(요청 스레드 비블로킹 → 502 방지).
 # TTL 을 길게 둬서 완료된 결과를 **그대로 유지**한다. 재집계는 오직 명시적 refresh(force)
 # 일 때만 — 자동갱신 OFF 면 0부터 다시 누적하는 일이 없도록(누적 결과 보존).
 _OVERVIEW_TTL = _envf("K8S_ALLOC_OVERVIEW_TTL", 86400.0)
-_overview_mgr = SnapshotManager(ttl=_OVERVIEW_TTL)
+_overview_mgr = SnapshotManager(ttl=_OVERVIEW_TTL, partial_ttl=_PARTIAL_TTL,
+                                stuck_timeout=_STUCK_TIMEOUT)
 
 
 def _overview_view(cluster_id: UUID, db: Session, force: bool = False) -> dict:
@@ -548,7 +615,7 @@ def _overview_view(cluster_id: UUID, db: Session, force: bool = False) -> dict:
         pass
     return _overview_mgr.get(
         f"{cid}:overview",
-        lambda prog: _build_overview(cluster, cid, prog),
+        lambda prog: _build_overview(cluster, prog),
         force=force,
     )
 
@@ -613,35 +680,38 @@ def allocation_nodes(cluster_id: UUID, refresh: bool = False, db: Session = Depe
 def allocation_node_refresh(cluster_id: UUID, node: str, db: Session = Depends(get_db)):
     """단일 노드만 즉시 재계산(개별 REFRESH). 스냅샷 미경유 — 그 노드의 활성 파드만 조회. (요구 3)"""
     cluster = _require_cluster(cluster_id, db)
-    client = _api_client(cluster)
-    core = k8s_client.CoreV1Api(client)
-    try:
-        n = core.read_node(node, _request_timeout=_API_TIMEOUT)
-    except Exception as e:  # noqa: BLE001
-        msg = str(e).lower()
-        code = 404 if "not found" in msg or '"code":404' in msg or "(404)" in msg else 502
-        raise HTTPException(status_code=code, detail=f"노드 조회 실패: {node}") from e
+    with _api(cluster) as client:
+        core = k8s_client.CoreV1Api(client)
+        try:
+            n = core.read_node(node, _request_timeout=_API_TIMEOUT)
+        except Exception as e:  # noqa: BLE001
+            msg = str(e).lower()
+            code = 404 if "not found" in msg or '"code":404' in msg or "(404)" in msg else 502
+            raise HTTPException(status_code=code, detail=f"노드 조회 실패: {node}") from e
 
-    labels = n.metadata.labels or {}
-    alloc = (n.status.allocatable or {}) if n.status else {}
-    cap = (n.status.capacity or {}) if n.status else {}
-    nb = {
-        "roles": _node_roles(labels),
-        "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
-        "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
-        "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
-        "pods_alloc": _pods_n(alloc.get("pods")),
-    }
-    fs = f"spec.nodeName={node},{_ACTIVE_FIELD_SELECTOR}"
-    pods = _list_all(lambda **kw: core.list_pod_for_all_namespaces(**kw), field_selector=fs)
-    ag = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0}
-    for p in pods:
-        if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
-            continue
-        rc, rm, lc, lm = _sum_resources(p.spec.containers if p.spec else [])
-        ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm; ag["pods"] += 1
-    u = _node_usage(client).get(node)
-    return {"item": _node_row(node, nb, ag, u), "metrics_available": bool(u)}
+        labels = n.metadata.labels or {}
+        alloc = (n.status.allocatable or {}) if n.status else {}
+        cap = (n.status.capacity or {}) if n.status else {}
+        nb = {
+            "roles": _node_roles(labels),
+            "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
+            "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
+            "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
+            "pods_alloc": _pods_n(alloc.get("pods")),
+        }
+        fs = f"spec.nodeName={node},{_ACTIVE_FIELD_SELECTOR}"
+        try:
+            pods = _list_all(lambda **kw: core.list_pod_for_all_namespaces(**kw), field_selector=fs)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
+        ag = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "pods": 0}
+        for p in pods:
+            if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+                continue
+            rc, rm, lc, lm = _pod_effective_resources(p.spec)
+            ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm; ag["pods"] += 1
+        u = _node_usage(client).get(node)
+        return {"item": _node_row(node, nb, ag, u), "metrics_available": bool(u)}
 
 
 def _ns_row(ns: str, s: dict) -> NamespaceAllocRow:
@@ -691,31 +761,31 @@ def allocation_namespaces(cluster_id: UUID, refresh: bool = False, db: Session =
 def allocation_namespace_refresh(cluster_id: UUID, namespace: str, db: Session = Depends(get_db)):
     """단일 네임스페이스만 즉시 재계산(개별 REFRESH). 스냅샷 미경유 — 그 NS 활성 파드만 조회."""
     cluster = _require_cluster(cluster_id, db)
-    client = _api_client(cluster)
-    core = k8s_client.CoreV1Api(client)
-    apps = k8s_client.AppsV1Api(client)
-    try:
-        pods = _list_all(lambda **kw: core.list_namespaced_pod(namespace, **kw),
-                         field_selector=_ACTIVE_FIELD_SELECTOR)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
-    rs_map = _build_rs_owner_map(apps, namespace)
-    pusage = _pod_usage(client, namespace)  # best-effort
-    s = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
-         "pods": 0, "norq": 0, "owners": set(), "has_usage": False}
-    for p in pods:
-        if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
-            continue
-        rc, rm, lc, lm = _sum_resources(p.spec.containers if p.spec else [])
-        s["rc"] += rc; s["rm"] += rm; s["lc"] += lc; s["lm"] += lm; s["pods"] += 1
-        if rc == 0 and rm == 0:
-            s["norq"] += 1
-        s["owners"].add(_top_owner(p, rs_map))
-        u = pusage.get((namespace, p.metadata.name))
-        if u:
-            s["uc"] += u["cpu"]; s["um"] += u["mem"]; s["has_usage"] = True
-    s["workload_count"] = len(s["owners"])
-    return {"item": _ns_row(namespace, s), "metrics_available": bool(pusage)}
+    with _api(cluster) as client:
+        core = k8s_client.CoreV1Api(client)
+        apps = k8s_client.AppsV1Api(client)
+        try:
+            pods = _list_all(lambda **kw: core.list_namespaced_pod(namespace, **kw),
+                             field_selector=_ACTIVE_FIELD_SELECTOR)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
+        rs_map = _build_rs_owner_map(apps, namespace)
+        pusage = _pod_usage(client, namespace)  # best-effort
+        s = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
+             "pods": 0, "norq": 0, "owners": set(), "has_usage": False}
+        for p in pods:
+            if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+                continue
+            rc, rm, lc, lm = _pod_effective_resources(p.spec)
+            s["rc"] += rc; s["rm"] += rm; s["lc"] += lc; s["lm"] += lm; s["pods"] += 1
+            if rc == 0 and rm == 0:
+                s["norq"] += 1
+            s["owners"].add(_top_owner(p, rs_map))
+            u = pusage.get((namespace, p.metadata.name))
+            if u:
+                s["uc"] += u["cpu"]; s["um"] += u["mem"]; s["has_usage"] = True
+        s["workload_count"] = len(s["owners"])
+        return {"item": _ns_row(namespace, s), "metrics_available": bool(pusage)}
 
 
 @router.get("/{cluster_id}/allocation/namespaces/{namespace}/workloads")
@@ -723,48 +793,48 @@ def allocation_workloads(cluster_id: UUID, namespace: str, db: Session = Depends
     """NS 내 상위 워크로드(Deployment/STS/DS/RS/Job/…) 단위 집계. (요구 4-1)"""
     cluster = _require_cluster(cluster_id, db)
     cid = str(cluster_id)
-    client = _api_client(cluster)
-    core = k8s_client.CoreV1Api(client)
-    apps = k8s_client.AppsV1Api(client)
-    try:
-        pods = _cached(f"{cid}:nspods:{namespace}",
-                       lambda: _list_all(lambda **kw: core.list_namespaced_pod(namespace, **kw),
-                                         field_selector=_ACTIVE_FIELD_SELECTOR))
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}")
+    with _api(cluster) as client:
+        core = k8s_client.CoreV1Api(client)
+        apps = k8s_client.AppsV1Api(client)
+        try:
+            pods = _cached(f"{cid}:nspods:{namespace}",
+                           lambda: _list_all(lambda **kw: core.list_namespaced_pod(namespace, **kw),
+                                             field_selector=_ACTIVE_FIELD_SELECTOR))
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
 
-    pusage = _cached(f"{cid}:nspu:{namespace}", lambda: _pod_usage(client, namespace))
-    rs_map = _cached(f"{cid}:rs:{namespace}", lambda: _build_rs_owner_map(apps, namespace))
+        pusage = _cached(f"{cid}:nspu:{namespace}", lambda: _pod_usage(client, namespace))
+        rs_map = _cached(f"{cid}:rs:{namespace}", lambda: _build_rs_owner_map(apps, namespace))
 
-    groups: dict[tuple[str, str], dict] = {}
-    for p in pods:
-        if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
-            continue
-        kind, name = _top_owner(p, rs_map)
-        rc, rm, lc, lm = _sum_resources(p.spec.containers if p.spec else [])
-        um = pusage.get((namespace, p.metadata.name))
-        g = groups.setdefault((kind, name), {
-            "rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
-            "pods": 0, "norq": 0, "has_usage": False,
-        })
-        g["rc"] += rc; g["rm"] += rm; g["lc"] += lc; g["lm"] += lm
-        g["pods"] += 1
-        if rc == 0 and rm == 0:
-            g["norq"] += 1
-        if um:
-            g["uc"] += um["cpu"]; g["um"] += um["mem"]; g["has_usage"] = True
+        groups: dict[tuple[str, str], dict] = {}
+        for p in pods:
+            if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+                continue
+            kind, name = _top_owner(p, rs_map)
+            rc, rm, lc, lm = _pod_effective_resources(p.spec)
+            um = pusage.get((namespace, p.metadata.name))
+            g = groups.setdefault((kind, name), {
+                "rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0,
+                "pods": 0, "norq": 0, "has_usage": False,
+            })
+            g["rc"] += rc; g["rm"] += rm; g["lc"] += lc; g["lm"] += lm
+            g["pods"] += 1
+            if rc == 0 and rm == 0:
+                g["norq"] += 1
+            if um:
+                g["uc"] += um["cpu"]; g["um"] += um["mem"]; g["has_usage"] = True
 
-    rows: list[WorkloadAllocRow] = []
-    for (kind, name), g in groups.items():
-        rows.append(WorkloadAllocRow(
-            namespace=namespace, kind=kind, name=name,
-            pod_count=g["pods"], no_request_pods=g["norq"],
-            cpu_req_m=g["rc"], mem_req_b=g["rm"], cpu_lim_m=g["lc"], mem_lim_b=g["lm"],
-            cpu_usage_m=(g["uc"] if g["has_usage"] else None),
-            mem_usage_b=(g["um"] if g["has_usage"] else None),
-        ))
-    rows.sort(key=lambda r: r.cpu_req_m, reverse=True)
-    return {"count": len(rows), "items": rows, "metrics_available": bool(pusage)}
+        rows: list[WorkloadAllocRow] = []
+        for (kind, name), g in groups.items():
+            rows.append(WorkloadAllocRow(
+                namespace=namespace, kind=kind, name=name,
+                pod_count=g["pods"], no_request_pods=g["norq"],
+                cpu_req_m=g["rc"], mem_req_b=g["rm"], cpu_lim_m=g["lc"], mem_lim_b=g["lm"],
+                cpu_usage_m=(g["uc"] if g["has_usage"] else None),
+                mem_usage_b=(g["um"] if g["has_usage"] else None),
+            ))
+        rows.sort(key=lambda r: r.cpu_req_m, reverse=True)
+        return {"count": len(rows), "items": rows, "metrics_available": bool(pusage)}
 
 
 @router.get("/{cluster_id}/allocation/namespaces/{namespace}/workloads/{kind}/{name}/pods")
@@ -778,51 +848,58 @@ def allocation_pods(
     """워크로드 소속 파드 + 컨테이너 단위 request/limit/usage. (요구 4-2)"""
     cluster = _require_cluster(cluster_id, db)
     cid = str(cluster_id)
-    client = _api_client(cluster)
-    core = k8s_client.CoreV1Api(client)
-    apps = k8s_client.AppsV1Api(client)
-    try:
-        pods = _cached(f"{cid}:nspods:{namespace}",
-                       lambda: _list_all(lambda **kw: core.list_namespaced_pod(namespace, **kw),
-                                         field_selector=_ACTIVE_FIELD_SELECTOR))
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}")
+    with _api(cluster) as client:
+        core = k8s_client.CoreV1Api(client)
+        apps = k8s_client.AppsV1Api(client)
+        try:
+            pods = _cached(f"{cid}:nspods:{namespace}",
+                           lambda: _list_all(lambda **kw: core.list_namespaced_pod(namespace, **kw),
+                                             field_selector=_ACTIVE_FIELD_SELECTOR))
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
 
-    pusage = _cached(f"{cid}:nspu:{namespace}", lambda: _pod_usage(client, namespace))
-    rs_map = _cached(f"{cid}:rs:{namespace}", lambda: _build_rs_owner_map(apps, namespace))
+        pusage = _cached(f"{cid}:nspu:{namespace}", lambda: _pod_usage(client, namespace))
+        rs_map = _cached(f"{cid}:rs:{namespace}", lambda: _build_rs_owner_map(apps, namespace))
 
-    rows: list[PodAllocRow] = []
-    for p in pods:
-        ok, on = _top_owner(p, rs_map)
-        if ok != kind or on != name:
-            continue
-        cmap = (pusage.get((namespace, p.metadata.name)) or {}).get("containers", {})
-        cells: list[ContainerAllocCell] = []
-        prc = prm = plc = plm = puc = pum = 0
-        has_usage = False
-        for c in (p.spec.containers if p.spec else []):
-            res = getattr(c, "resources", None)
-            req = (res.requests or {}) if res else {}
-            lim = (res.limits or {}) if res else {}
-            crc, crm = _cpu_m(req.get("cpu")), _mem_b(req.get("memory"))
-            clc, clm = _cpu_m(lim.get("cpu")), _mem_b(lim.get("memory"))
-            cu = cmap.get(c.name)
-            cells.append(ContainerAllocCell(
-                name=c.name, cpu_req_m=crc, mem_req_b=crm, cpu_lim_m=clc, mem_lim_b=clm,
-                cpu_usage_m=(cu[0] if cu else None), mem_usage_b=(cu[1] if cu else None),
-                has_requests=(crc > 0 or crm > 0),
+        rows: list[PodAllocRow] = []
+        for p in pods:
+            # 활성 phase 만 — 워크로드 목록(allocation_workloads)의 pod_count 와 일치시킨다.
+            if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+                continue
+            ok, on = _top_owner(p, rs_map)
+            if ok != kind or on != name:
+                continue
+            cmap = (pusage.get((namespace, p.metadata.name)) or {}).get("containers", {})
+            cells: list[ContainerAllocCell] = []
+            prc = prm = plc = plm = puc = pum = 0
+            has_usage = False
+            # 사이드카(init, restartPolicy=Always)도 상주 컨테이너이므로 일반 컨테이너와
+            # 함께 표시·합산한다(_pod_effective_resources 의 총합과 정합성 유지).
+            display_containers = list(p.spec.containers if p.spec else [])
+            display_containers += _sidecar_containers(p.spec)
+            for c in display_containers:
+                res = getattr(c, "resources", None)
+                req = (res.requests or {}) if res else {}
+                lim = (res.limits or {}) if res else {}
+                crc, crm = _cpu_m(req.get("cpu")), _mem_b(req.get("memory"))
+                clc, clm = _cpu_m(lim.get("cpu")), _mem_b(lim.get("memory"))
+                cu = cmap.get(c.name)
+                cells.append(ContainerAllocCell(
+                    name=c.name, cpu_req_m=crc, mem_req_b=crm, cpu_lim_m=clc, mem_lim_b=clm,
+                    cpu_usage_m=(cu[0] if cu else None), mem_usage_b=(cu[1] if cu else None),
+                    has_requests=(crc > 0 or crm > 0),
+                ))
+                prc += crc; prm += crm; plc += clc; plm += clm
+                if cu:
+                    puc += cu[0]; pum += cu[1]; has_usage = True
+            rows.append(PodAllocRow(
+                name=p.metadata.name, namespace=namespace,
+                node=(p.spec.node_name if p.spec else None),
+                qos=(p.status.qos_class if p.status else None),
+                phase=(p.status.phase if p.status else "-") or "-",
+                containers=cells,
+                cpu_req_m=prc, mem_req_b=prm, cpu_lim_m=plc, mem_lim_b=plm,
+                cpu_usage_m=(puc if has_usage else None), mem_usage_b=(pum if has_usage else None),
             ))
-            prc += crc; prm += crm; plc += clc; plm += clm
-            if cu:
-                puc += cu[0]; pum += cu[1]; has_usage = True
-        rows.append(PodAllocRow(
-            name=p.metadata.name, namespace=namespace,
-            node=(p.spec.node_name if p.spec else None),
-            qos=(p.status.qos_class if p.status else None),
-            phase=(p.status.phase if p.status else "-") or "-",
-            containers=cells,
-            cpu_req_m=prc, mem_req_b=prm, cpu_lim_m=plc, mem_lim_b=plm,
-            cpu_usage_m=(puc if has_usage else None), mem_usage_b=(pum if has_usage else None),
-        ))
-    rows.sort(key=lambda r: r.name)
-    return {"count": len(rows), "items": rows, "metrics_available": bool(pusage)}
+        rows.sort(key=lambda r: r.name)
+        return {"count": len(rows), "items": rows, "metrics_available": bool(pusage)}

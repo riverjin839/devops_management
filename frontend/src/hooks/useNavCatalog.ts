@@ -57,8 +57,11 @@ export function useNavCatalog(): NavCatalog {
     [navLabels, navMap],
   );
 
+  // feature_access 맵의 키는 라우트 경로 자체다(예: '/wbs') — Settings "접근 제어"에서
+  // 화면 하나를 끄면 이 한 줄로 사이드바 메뉴/Island 화면추가 피커/이미 담긴 Island 패널까지
+  // 동시에 막힌다. 규칙이 없는 경로는 canAccessFeature 가 기본 허용을 돌려준다.
   const featureAllowed = useCallback(
-    (path: string) => path !== '/wbs' || canAccessFeature(featureAccess, 'wbs', currentUser),
+    (path: string) => canAccessFeature(featureAccess, path, currentUser),
     [featureAccess, currentUser],
   );
 

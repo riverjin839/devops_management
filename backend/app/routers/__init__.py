@@ -7,6 +7,7 @@ from app.routers.agent import router as agent_router
 from app.routers.promql import router as promql_router
 from app.routers.work_items import router as work_items_router
 from app.routers.jira import router as jira_router
+from app.routers.confluence import router as confluence_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.node_labels import router as node_labels_router
 from app.routers.node_images import router as node_images_router
@@ -72,6 +73,7 @@ from app.routers.observability import (
 from app.routers.release_notes import router as release_notes_router
 from app.routers.check_matrix import router as check_matrix_router
 from app.routers.island import router as island_router
+from app.routers.llm_settings import router as llm_settings_router
 
 __all__ = [
     "check_matrix_router",
@@ -93,6 +95,7 @@ __all__ = [
     "promql_router",
     "work_items_router",
     "jira_router",
+    "confluence_router",
     "ui_settings_router",
     "node_labels_router",
     "node_images_router",
@@ -143,4 +146,5 @@ __all__ = [
     "observability_ingest_router",
     "release_notes_router",
     "island_router",
+    "llm_settings_router",
 ]

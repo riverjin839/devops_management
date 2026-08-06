@@ -12,6 +12,18 @@ from app.schemas.ops_note import OpsNoteCreate, OpsNoteUpdate, OpsNoteResponse, 
 router = APIRouter(prefix="/ops-notes", tags=["ops-notes"])
 
 
+def _queue_embedding_recompute(ops_note_id) -> None:
+    """RAG 검색용 임베딩 재계산 큐잉 — best-effort (work_guide.py 의 동일 헬퍼 패턴)."""
+    try:
+        from app.celery_app import compute_ops_note_embedding
+        compute_ops_note_embedding.delay(str(ops_note_id))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Failed to queue embedding recompute for ops_note %s", ops_note_id
+        )
+
+
 @router.get("", response_model=OpsNoteListResponse)
 def list_ops_notes(
     service: str | None = Query(default=None),
@@ -54,6 +66,7 @@ def create_ops_note(
     db.add(note)
     db.commit()
     db.refresh(note)
+    _queue_embedding_recompute(note.id)  # 비동기 — 쓰기 응답 속도에 영향 없음
     return note
 
 
@@ -71,6 +84,7 @@ def update_ops_note(
         setattr(note, key, value)
     db.commit()
     db.refresh(note)
+    _queue_embedding_recompute(note.id)
     return note
 
 

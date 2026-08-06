@@ -1,32 +1,22 @@
-export const OPERATION_LEVELS = [
-  { value: 'production', label: '운영 (Production)' },
-  { value: 'staging',    label: '스테이징 (Staging)' },
-  { value: 'dev',        label: '개발 (Dev)' },
-  { value: 'test',       label: '테스트 (Test)' },
-  { value: 'dr',         label: 'DR' },
-];
-
-export const LEVEL_BADGE: Record<string, string> = {
-  production: 'bg-red-500/15 text-red-400 border-red-500/30',
-  staging:    'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  dev:        'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  test:       'bg-slate-500/15 text-slate-400 border-slate-500/30',
-  dr:         'bg-purple-500/15 text-purple-400 border-purple-500/30',
-};
+// 색은 전부 테마 토큰 경유 — 고정 팔레트(text-*-400 등)는 테마마다 대비가 깨진다 (D-049).
+// 의미색(상태) = `status-*`, 범주 구분색(겹침 그룹) = categorical `chart-*`.
+// (구 `OPERATION_LEVELS`/`LEVEL_BADGE` 는 운영레벨이 Settings 기반 `useOperationLevels`
+//  로 옮겨간 뒤 참조가 0건이라 제거했다.)
 
 export const STATUS_STYLE: Record<string, { dot: string; border: string; badge: string; label: string }> = {
-  healthy:  { dot: 'bg-emerald-500', border: 'border-l-emerald-500', badge: 'bg-emerald-500/10 text-emerald-400', label: 'Healthy'  },
-  warning:  { dot: 'bg-amber-500',   border: 'border-l-amber-500',   badge: 'bg-amber-500/10 text-amber-400',    label: 'Warning'  },
-  critical: { dot: 'bg-red-500',     border: 'border-l-red-500',     badge: 'bg-red-500/10 text-red-400',        label: 'Critical' },
-  pending:  { dot: 'bg-slate-400',   border: 'border-l-slate-400',   badge: 'bg-slate-500/10 text-slate-400',    label: '미연결'   },
+  healthy:  { dot: 'bg-status-healthy',  border: 'border-l-status-healthy',  badge: 'bg-status-healthy/10 text-status-healthy',   label: 'Healthy'  },
+  warning:  { dot: 'bg-status-warning',  border: 'border-l-status-warning',  badge: 'bg-status-warning/10 text-status-warning',   label: 'Warning'  },
+  critical: { dot: 'bg-status-critical', border: 'border-l-status-critical', badge: 'bg-status-critical/10 text-status-critical', label: 'Critical' },
+  pending:  { dot: 'bg-status-unknown',  border: 'border-l-status-unknown',  badge: 'bg-status-unknown/10 text-status-unknown',   label: '미연결'   },
 };
 
+// CIDR 겹침 그룹 구분 — 의미가 아니라 "몇 번째 겹침 묶음인지" 를 나타내는 범주색.
 export const OVERLAP_COLORS = [
-  { bg: 'bg-orange-500/10', text: 'text-orange-300', border: 'border-orange-500/40', dot: 'bg-orange-400' },
-  { bg: 'bg-pink-500/10',   text: 'text-pink-300',   border: 'border-pink-500/40',   dot: 'bg-pink-400'   },
-  { bg: 'bg-cyan-500/10',   text: 'text-cyan-300',   border: 'border-cyan-500/40',   dot: 'bg-cyan-400'   },
-  { bg: 'bg-yellow-500/10', text: 'text-yellow-300', border: 'border-yellow-500/40', dot: 'bg-yellow-400' },
-  { bg: 'bg-violet-500/10', text: 'text-violet-300', border: 'border-violet-500/40', dot: 'bg-violet-400' },
+  { bg: 'bg-chart-7/10', text: 'text-chart-7', border: 'border-chart-7/40', dot: 'bg-chart-7' },
+  { bg: 'bg-chart-5/10', text: 'text-chart-5', border: 'border-chart-5/40', dot: 'bg-chart-5' },
+  { bg: 'bg-chart-6/10', text: 'text-chart-6', border: 'border-chart-6/40', dot: 'bg-chart-6' },
+  { bg: 'bg-chart-3/10', text: 'text-chart-3', border: 'border-chart-3/40', dot: 'bg-chart-3' },
+  { bg: 'bg-chart-4/10', text: 'text-chart-4', border: 'border-chart-4/40', dot: 'bg-chart-4' },
 ];
 
 export type OverlapColor = typeof OVERLAP_COLORS[0];
