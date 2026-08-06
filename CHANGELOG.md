@@ -10,6 +10,19 @@
 
 1.26.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **테마 3종 추가 — Summer Breeze / Wildflower Meadow / Tropical Punch**: Figma 색상 조합
+  라이브러리의 실제 배색 3개(조합 100/97/52)를 그대로 옮긴 앱 전체 UI 테마가 추가됐다.
+  기존 Burnt Sienna/Tuscan Sunset/Electropop 에 이어 사이드바 테마 순환 버튼에 편입돼
+  총 10종 테마가 됐다. Frontend: `index.css` 에 `html.summer-breeze` /
+  `html.wildflower-meadow` / `html.tropical-punch` 토큰 블록 추가, `themeStore.ts`
+  `Theme`/`STANDALONE_THEMES` 확장, `Sidebar.tsx` 테마 순환/라벨/아이콘 갱신.
+- **클러스터 아이콘 빌더 — 배색 패턴을 아이콘 빌더에서 직접 선택 가능**: 배색 패턴(Burnt
+  Sienna 등 6종)이 지금까지 Settings ▸ 운영레벨 관리에만 있어 실제 아이콘 빌더 화면에서는
+  적용할 방법이 없었던 문제를 고쳤다 — "빌더" 탭에 배색 패턴 스와치를 추가해, 클릭 한 번으로
+  해당 아이콘 1개에만 색을 적용할 수 있다(운영등급 설정 자체는 바뀌지 않음). Frontend:
+  `ClusterIconPicker.tsx` `BuilderTab` 에 `COLOR_PATTERNS` 스와치 + `patternHex` 상태 추가.
+
 ## [1.26.0] - 2026-08-06
 
 ### Changed

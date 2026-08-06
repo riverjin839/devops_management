@@ -5,7 +5,7 @@ import {
   Sparkles, Palmtree, Leaf, Star,
   Moon, Sun, Monitor, LogOut, User, ChevronRight, ArrowLeft,
   KeyRound, ScrollText, Home, MessageSquare, Bug, Bot,
-  Flame, Sunset, Zap,
+  Flame, Sunset, Zap, Waves, Flower2, Citrus,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
@@ -30,13 +30,16 @@ import { GROUPS, type GroupId } from './navConfig';
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
 // default(Claude paper) → 컴포트(크림+그린) → 번트시에나 → 토스카나 선셋 → 일렉트로팝
-// → 라이트 → 다크 → 시스템 → default …
+// → 서머브리즈 → 와일드플라워메도우 → 트로피컬펀치 → 라이트 → 다크 → 시스템 → default …
 const THEME_CYCLE: Record<Theme, Theme> = {
   default: 'comfort',
   comfort: 'burnt-sienna',
   'burnt-sienna': 'tuscan-sunset',
   'tuscan-sunset': 'electropop',
-  electropop: 'light',
+  electropop: 'summer-breeze',
+  'summer-breeze': 'wildflower-meadow',
+  'wildflower-meadow': 'tropical-punch',
+  'tropical-punch': 'light',
   light: 'dark',
   dark: 'system',
   system: 'default',
@@ -47,6 +50,9 @@ const THEME_LABEL: Record<Theme, string> = {
   'burnt-sienna': '번트 시에나',
   'tuscan-sunset': '토스카나 선셋',
   electropop: '일렉트로팝',
+  'summer-breeze': '서머 브리즈',
+  'wildflower-meadow': '와일드플라워 메도우',
+  'tropical-punch': '트로피컬 펀치',
   light: '라이트',
   dark: '다크',
   system: '시스템',
@@ -510,6 +516,9 @@ export function Sidebar() {
               : theme === 'burnt-sienna' ? Flame
               : theme === 'tuscan-sunset' ? Sunset
               : theme === 'electropop' ? Zap
+              : theme === 'summer-breeze' ? Waves
+              : theme === 'wildflower-meadow' ? Flower2
+              : theme === 'tropical-punch' ? Citrus
               : theme === 'light'   ? Sun
               : theme === 'dark'    ? Moon
               : Monitor
