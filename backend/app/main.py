@@ -312,6 +312,7 @@ def _run_migrations():
             # 점검 매트릭스 — core_bundle 행(DailyChecker 원자 실행) 클러스터별 cron.
             # check_schedules(구 아침/점심/저녁) 완전 대체.
             ("check_cron_expr", "VARCHAR(100)"),
+            ("check_cron_enabled", "BOOLEAN NOT NULL DEFAULT TRUE"),
             ("check_last_run_at", "TIMESTAMP"),
         ]
         for col_name, col_type in new_cluster_cols:

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
-  Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2, Server,
+  Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2, Server, PauseCircle,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState } from '@/components/common';
@@ -88,18 +88,22 @@ function CellButton({
   );
 }
 
-type CronTone = 'off' | 'running' | 'healthy' | 'warning' | 'critical';
+// 'unset' = cron 을 저장한 적 없음(진짜 미설정) / 'off' = cron 은 저장돼 있지만 스위치로
+// 꺼둠 — 이 둘을 구분해야 "미설정으로만 보이는" 이전의 일관성 없는 표시가 해소된다.
+type CronTone = 'unset' | 'off' | 'running' | 'healthy' | 'warning' | 'critical';
 
 // 색만으로 실행중/중지중/정상/비정상을 구분할 수 있게 — 토큰만 사용(고정 hex 금지).
 const CRON_TONE_CLS: Record<CronTone, string> = {
-  off: 'text-muted-foreground border-border/60',
+  unset: 'text-muted-foreground border-border/60',
+  off: 'text-muted-foreground border-border/60 opacity-60',
   running: 'text-status-info border-status-info/50 bg-status-info-soft animate-pulse',
   healthy: 'text-status-healthy border-status-healthy/50 bg-status-healthy-soft',
   warning: 'text-status-warning border-status-warning/50 bg-status-warning-soft',
   critical: 'text-status-critical border-status-critical/50 bg-status-critical-soft',
 };
 const CRON_TONE_HINT: Record<CronTone, string> = {
-  off: '중지 — cron 미설정(수동 실행만 가능)',
+  unset: '미설정 — 저장된 cron 이 없습니다(수동 실행만 가능).',
+  off: '꺼짐 — cron 은 저장돼 있지만 스위치가 꺼져 있어 실행되지 않습니다.',
   running: '실행 중 — 지금 이 클러스터의 점검이 돌고 있습니다.',
   healthy: '정상 — 핵심 점검이 최근 정상 완료됐습니다.',
   warning: '경고 — 핵심 점검 결과가 주의가 필요합니다.',
@@ -107,7 +111,8 @@ const CRON_TONE_HINT: Record<CronTone, string> = {
 };
 // 색상 배경만으로 정상/경고/위험/실행중을 구분하지 않도록 톤별로 다른 아이콘을 쓴다.
 const CRON_TONE_ICON: Record<CronTone, typeof Clock> = {
-  off: Clock,
+  unset: Clock,
+  off: PauseCircle,
   running: Loader2,
   healthy: CheckCircle2,
   warning: AlertTriangle,
@@ -120,6 +125,7 @@ function ClusterCronBadge({
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(cluster.checkCronExpr ?? '');
+  const [enabled, setEnabled] = useState(cluster.checkCronEnabled);
   const mutation = usePutClusterCron();
   // 다른 팝오버/모달과 동일한 접근성(Escape 로 닫기 + 포커스 트랩/복원) — 이 배지만 backdrop
   // 클릭에만 의존해 Escape 가 안 먹던 이탈을 다른 화면들과 통일한다.
@@ -127,7 +133,9 @@ function ClusterCronBadge({
 
   const handleSave = async () => {
     try {
-      await mutation.mutateAsync({ clusterId: cluster.id, checkCronExpr: value.trim() || null });
+      await mutation.mutateAsync({
+        clusterId: cluster.id, checkCronExpr: value.trim() || null, checkCronEnabled: enabled,
+      });
       toast.success('클러스터 cron 을 저장했습니다.');
       setOpen(false);
     } catch (e) {
@@ -136,17 +144,23 @@ function ClusterCronBadge({
   };
 
   const tone: CronTone = !cluster.checkCronExpr
-    ? 'off'
-    : isRunning
-      ? 'running'
-      : coreHealth === 'critical' ? 'critical' : coreHealth === 'warning' ? 'warning' : 'healthy';
+    ? 'unset'
+    : !cluster.checkCronEnabled
+      ? 'off'
+      : isRunning
+        ? 'running'
+        : coreHealth === 'critical' ? 'critical' : coreHealth === 'warning' ? 'warning' : 'healthy';
 
   const ToneIcon = CRON_TONE_ICON[tone];
 
   return (
     <div className="relative inline-block">
       <button
-        onClick={() => { setValue(cluster.checkCronExpr ?? ''); setOpen((v) => !v); }}
+        onClick={() => {
+          setValue(cluster.checkCronExpr ?? '');
+          setEnabled(cluster.checkCronEnabled);
+          setOpen((v) => !v);
+        }}
         title={`${cluster.checkCronExpr || '미설정'} — ${CRON_TONE_HINT[tone]}`}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -172,6 +186,11 @@ function ClusterCronBadge({
               placeholder="0 9,13,18 * * *"
               className="w-full text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
             />
+            <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+              <input type="checkbox" className="rounded border-border" checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)} />
+              자동 실행 (끄면 cron 은 남고 실행만 멈춥니다)
+            </label>
             <div className="flex justify-end gap-1.5">
               <button
                 onClick={() => setOpen(false)}

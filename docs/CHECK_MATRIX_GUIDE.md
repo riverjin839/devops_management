@@ -350,7 +350,7 @@ erDiagram
 |---|---|---|
 | `items.source_ref` (deep_check) | `deep_check_definitions.check_type` | 클러스터 전용 정의 우선 → 글로벌 폴백. 정의가 삭제돼도 행은 남고 셀은 "건너뜀" |
 | `items.source_ref` (addon) | `addons.type` (+ cluster_id) | 그 클러스터에 애드온이 없으면 "건너뜀" |
-| `clusters.check_cron_expr` / `check_last_run_at` | — | core_bundle 행의 cron / 디스패처 anchor |
+| `clusters.check_cron_expr` / `check_cron_enabled` / `check_last_run_at` | — | core_bundle 행의 cron / on-off 스위치(꺼도 cron 값은 보존) / 디스패처 anchor |
 | `app_settings` key `check_matrix.settings` | — | 이력 보관 일수 (`retention_days`) |
 
 ### 8.2 스키마 운영 특성 (audit 결과)

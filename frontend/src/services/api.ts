@@ -1007,6 +1007,10 @@ export const jiraApi = {
     }),
   provision: (data: import('@/types').ProvisionRequest) =>
     api.post<import('@/types').ProvisionResult>('/jira/provision', data, { timeout: 2 * 60_000 }),
+  lookupIssues: (projectKey: string, issueType: string) =>
+    api.get<import('@/types').JiraIssueLookupResult>('/jira/lookup/issues', {
+      params: { project_key: projectKey, issue_type: issueType },
+    }),
   refreshItem: (itemId: string) =>
     api.post<import('@/types').JiraImportResult>(`/jira/refresh/${itemId}`),
   createIssue: (data: import('@/types').JiraCreateRequest) =>
@@ -2069,8 +2073,8 @@ export const checkMatrixApi = {
   ) => api.post(`/check-matrix/cell/${itemId}/${clusterId}/manual-entry`, data),
   putSchedule: (itemId: string, clusterId: string, data: { cronExpr: string | null; enabled: boolean }) =>
     api.put(`/check-matrix/schedule/${itemId}/${clusterId}`, data),
-  putClusterCron: (clusterId: string, checkCronExpr: string | null) =>
-    api.put(`/check-matrix/clusters/${clusterId}/cron`, { checkCronExpr }),
+  putClusterCron: (clusterId: string, checkCronExpr: string | null, checkCronEnabled = true) =>
+    api.put(`/check-matrix/clusters/${clusterId}/cron`, { checkCronExpr, checkCronEnabled }),
   getSettings: () => api.get<CheckMatrixSettings>('/check-matrix/settings'),
   putSettings: (retentionDays: number) =>
     api.put<CheckMatrixSettings>('/check-matrix/settings', { retentionDays }),

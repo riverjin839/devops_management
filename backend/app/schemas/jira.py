@@ -390,6 +390,18 @@ class WeeklyReportSettings(BaseModel):
 
 
 # ── 업무 등록 시 Jira + Confluence 동시 생성 (프로비저닝) ────────────────────────
+class JiraIssueLookupItem(BaseModel):
+    """프로젝트 내 이슈 검색 결과 1건 — Epic/상위 이슈 선택 버튼의 후보 목록에 쓴다."""
+    key: str
+    summary: str = ""
+
+
+class JiraIssueLookupResult(BaseModel):
+    status: Literal["ok", "offline", "error"]
+    detail: str = ""
+    items: list[JiraIssueLookupItem] = []
+
+
 class ProvisionDefaults(BaseModel):
     """사용자/설정 기반 기본값 — 화면에 채워 보여주고 사용자가 수정할 수 있다."""
     jira_enabled: bool = False
@@ -410,6 +422,9 @@ class ProvisionDefaults(BaseModel):
     # parent_key 는 Sub-task 의 상위 이슈(둘 중 하나만 쓰는 게 보통이다).
     epic_key: str = ""
     parent_key: str = ""
+    # Confluence 문서의 기여자(Contributor) 표시명 — 기본은 로그인한 사용자 자신이고
+    # 화면에서 수정할 수 있다.
+    contributor: str = ""
     # 이 기본값이 **내가 지난번에 쓴 조건**(user preset)에서 왔는지, 관리자 공통 설정에서
     # 왔는지 — 화면에서 "저장된 조건을 불러왔습니다" 안내를 띄우는 데 쓴다.
     preset_source: Literal["none", "settings", "user"] = "settings"
@@ -433,9 +448,16 @@ class ProvisionRequest(BaseModel):
     parent_key: Optional[str] = None
     # Confluence
     space_key: Optional[str] = None
+    # 기존 문서를 제목 검색 없이 직접 지정 — 지정하면 스페이스 키 대신 이 페이지를
+    # 그대로 갱신한다(재게시 대상 확정 흐름).
+    page_id: Optional[str] = None
     parent_page_id: Optional[str] = None
     page_title: Optional[str] = None
     page_body: Optional[str] = None   # 비우면 업무 내용으로 기본 문서를 만든다
+    # Confluence 문서에 붙일 라벨 — Jira 쪽 labels 와 별개(문서 전용).
+    confluence_labels: list[str] = []
+    # 문서 기여자 표시명 — 비우면 로그인 사용자 자신으로 채워진다.
+    contributor: Optional[str] = None
     # 이번에 쓴 기준 조건(프로젝트/종류/라벨/컴포넌트/Epic/스페이스)을 내 기본값으로
     # 저장할지. 켜두면 다음 업무 등록 때 자동으로 채워진다(화면에서 언제든 수정 가능).
     remember_preset: bool = True

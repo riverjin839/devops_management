@@ -82,6 +82,8 @@ class ScheduleOut(BaseModel):
 
 class ClusterCronIn(BaseModel):
     check_cron_expr: Optional[str] = None
+    # 저장된 cron 을 지우지 않고 켜고 끄는 스위치 — CheckMatrixSchedule.enabled 와 동일 패턴.
+    check_cron_enabled: bool = True
 
 
 class ManualEntryIn(BaseModel):
@@ -290,8 +292,13 @@ def put_cluster_cron(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     cluster.check_cron_expr = body.check_cron_expr
+    cluster.check_cron_enabled = body.check_cron_enabled
     db.commit()
-    return {"cluster_id": str(cluster.id), "check_cron_expr": cluster.check_cron_expr}
+    return {
+        "cluster_id": str(cluster.id),
+        "check_cron_expr": cluster.check_cron_expr,
+        "check_cron_enabled": cluster.check_cron_enabled,
+    }
 
 
 # ── 런북 (실행 계획 — 실제로 클러스터에 나가는 명령) ─────────────────────────────

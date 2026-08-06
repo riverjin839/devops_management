@@ -164,7 +164,7 @@ def build_grid(db: Session) -> dict[str, Any]:
             r = result_by_cell.get(key)
             if item.source_type == CheckMatrixSourceType.core_bundle:
                 cron_expr = cluster.check_cron_expr
-                schedule_enabled = bool(cron_expr)
+                schedule_enabled = bool(cron_expr) and cluster.check_cron_enabled
             else:
                 sch = schedule_by_cell.get(key)
                 cron_expr = sch.cron_expr if sch else None
@@ -185,7 +185,10 @@ def build_grid(db: Session) -> dict[str, Any]:
     return {
         "items": [_item_to_dict(i) for i in items],
         "clusters": [
-            {"id": str(c.id), "name": c.name, "check_cron_expr": c.check_cron_expr}
+            {
+                "id": str(c.id), "name": c.name, "check_cron_expr": c.check_cron_expr,
+                "check_cron_enabled": c.check_cron_enabled,
+            }
             for c in clusters
         ],
         "cells": cells,
@@ -986,7 +989,9 @@ def dispatch_due(db: Session, *, jitter_seconds: float = 20.0) -> dict[str, Any]
     errors: list[str] = []
 
     # 1) core_bundle — Cluster.check_cron_expr (Cluster.status authority 는 여기서만 갱신)
-    for cluster in db.query(Cluster).filter(Cluster.check_cron_expr.isnot(None)).all():
+    for cluster in db.query(Cluster).filter(
+        Cluster.check_cron_expr.isnot(None), Cluster.check_cron_enabled.is_(True),
+    ).all():
         cron_expr = (cluster.check_cron_expr or "").strip()
         if not cron_expr or not croniter.is_valid(cron_expr):
             continue

@@ -273,6 +273,39 @@ class ConfluenceService:
             logger.exception("Confluence update_page error: %s", exc)
             return {"status": "offline", "detail": str(exc)[:200]}
 
+    async def add_labels(self, page_id: str, labels: list[str]) -> dict:
+        """페이지에 라벨 추가 (`POST /rest/api/content/{id}/label`) — 기존 라벨은 유지하고
+        새 라벨만 더한다(REST 스펙상 이 엔드포인트는 add-only, 제거는 별도 DELETE 필요)."""
+        if not self.configured:
+            return {"status": "offline", "detail": "Confluence 미설정"}
+        names = [str(v).strip() for v in (labels or []) if str(v).strip()]
+        if not names:
+            return {"status": "ok", "detail": "추가할 라벨 없음"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.post(
+                    f"{self.base_url}/rest/api/content/{page_id}/label",
+                    headers={**self._headers(), "Content-Type": "application/json"},
+                    json=[{"prefix": "global", "name": name} for name in names],
+                )
+                if resp.status_code == 401:
+                    return {"status": "error", "detail": "인증 실패 (401)", "auth_failed": True}
+                if resp.status_code not in (200, 201):
+                    detail = ""
+                    try:
+                        detail = resp.json().get("message", "")
+                    except Exception:  # noqa: BLE001
+                        detail = resp.text[:200]
+                    return {"status": "error", "detail": detail or f"HTTP {resp.status_code}"}
+                return {"status": "ok"}
+        except httpx.ConnectError:
+            return {"status": "offline", "detail": "Confluence 연결 불가"}
+        except httpx.TimeoutException:
+            return {"status": "offline", "detail": "Confluence 응답 시간 초과"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Confluence add_labels error: %s", exc)
+            return {"status": "offline", "detail": str(exc)[:200]}
+
     async def upload_attachment(
         self, page_id: str, filename: str, content: bytes, mime: str = "application/octet-stream",
     ) -> dict:

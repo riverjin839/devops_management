@@ -46,6 +46,7 @@ class _Actor:
     id = "tester-id"
     username = "tester"
     role = "operator"
+    display_name = "테스터"
 
 
 def _make_work_item(db, **overrides) -> WorkItem:

@@ -90,8 +90,12 @@ class Cluster(Base):
     observability_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
 
     # 점검 매트릭스(Check Matrix) — core_bundle 행(DailyChecker 원자 실행)의 클러스터별 cron.
-    # NULL 이면 미실행. check_schedules(구 아침/점심/저녁) 를 완전 대체.
+    # NULL 이면 미실행(cron 자체를 저장한 적 없음). check_cron_enabled 는 저장된 cron 을
+    # 지우지 않고 켜고 끄는 스위치 — 항목별 CheckMatrixSchedule.enabled 와 동일한 패턴을
+    # 클러스터 레벨에도 맞춘 것(꺼둬도 다음에 다시 켜면 입력값이 남아 있다).
+    # check_schedules(구 아침/점심/저녁) 를 완전 대체.
     check_cron_expr = Column(String(100), nullable=True)
+    check_cron_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
     check_last_run_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)

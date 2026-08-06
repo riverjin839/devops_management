@@ -131,6 +131,15 @@ export function useProvision() {
   });
 }
 
+// 프로비저닝 화면의 Epic/상위 이슈 선택 버튼 — 클릭 시점에만 조회하므로 useQuery 대신
+// useMutation(다른 Confluence 검색류와 동일 패턴)으로 둔다.
+export function useJiraIssueLookup() {
+  return useMutation({
+    mutationFn: ({ projectKey, issueType }: { projectKey: string; issueType: string }) =>
+      jiraApi.lookupIssues(projectKey, issueType),
+  });
+}
+
 export function useJiraRefreshItem() {
   const qc = useQueryClient();
   return useMutation({

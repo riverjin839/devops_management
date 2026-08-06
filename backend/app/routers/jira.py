@@ -85,6 +85,8 @@ from app.schemas.jira import (
     ProvisionDefaults,
     ProvisionRequest,
     ProvisionResult,
+    JiraIssueLookupItem,
+    JiraIssueLookupResult,
 )
 from app.services import weekly_report_service
 from app.services.user_settings import get_user_setting, set_user_setting
@@ -1638,7 +1640,9 @@ def _save_provision_preset(db: Session, user_id: str, payload: "ProvisionRequest
         logger.warning("프로비저닝 프리셋 저장 실패 (%s): %s", user_id, exc)
 
 
-def _default_page_body(item: WorkItem, jira_key: str = "", jira_url: str = "") -> str:
+def _default_page_body(
+    item: WorkItem, jira_key: str = "", jira_url: str = "", contributor: str = "",
+) -> str:
     """업무 내용을 담은 기본 Confluence 문서(storage format).
 
     사용자가 본문을 따로 주지 않으면 이 골격으로 만든다 — 담당자/일정/Jira 링크가 들어간
@@ -1649,6 +1653,8 @@ def _default_page_body(item: WorkItem, jira_key: str = "", jira_url: str = "") -
         ("구분", item.category or ""),
         ("우선순위", item.priority or ""),
     ]
+    if contributor:
+        rows.append(("작성자", contributor))
     if jira_key:
         link = f'<a href="{html.escape(jira_url)}">{html.escape(jira_key)}</a>' if jira_url else html.escape(jira_key)
         rows.append(("Jira", link))
@@ -1664,6 +1670,40 @@ def _default_page_body(item: WorkItem, jira_key: str = "", jira_url: str = "") -
         "<h2>이슈 / 리스크</h2><p></p>"
         "<h2>결과 / 후속 조치</h2><p></p>"
     )
+
+
+@router.get("/lookup/issues", response_model=JiraIssueLookupResult)
+async def lookup_issues(
+    project_key: str,
+    issue_type: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    """프로젝트 내 특정 이슈 종류(Epic/Task 등) 목록 — 프로비저닝 화면의 Epic 링크·상위
+    이슈 선택 버튼이 "수동 입력 대신 골라 넣기"를 하기 위해 호출한다."""
+    cfg = _get_config(db)
+    if not cfg.get("base_url"):
+        return JiraIssueLookupResult(status="offline", detail="Jira URL 미설정.")
+    project_key = (project_key or "").strip()
+    issue_type = (issue_type or "").strip()
+    if not project_key:
+        return JiraIssueLookupResult(status="error", detail="프로젝트 키를 지정하세요.")
+    if not issue_type:
+        return JiraIssueLookupResult(status="error", detail="이슈 종류를 지정하세요.")
+    svc, _myself = await _jira_service_verified(db, actor, cfg)
+    if svc is None:
+        return JiraIssueLookupResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다.")
+    jql = (f'project = "{_jql_quote(project_key)}" AND issuetype = "{_jql_quote(issue_type)}" '
+           "ORDER BY updated DESC")
+    res = await svc.search(jql, max_results=50, hard_cap=50)
+    if res.get("status") != "ok":
+        status_out = res.get("status") if res.get("status") in ("offline", "error") else "error"
+        return JiraIssueLookupResult(status=status_out, detail=res.get("detail", "조회 실패"))
+    items = [
+        JiraIssueLookupItem(key=i.get("key", ""), summary=((i.get("fields") or {}).get("summary") or ""))
+        for i in res.get("issues", [])
+    ]
+    return JiraIssueLookupResult(status="ok", items=items)
 
 
 @router.get("/provision/defaults", response_model=ProvisionDefaults)
@@ -1719,6 +1759,7 @@ async def provision_defaults(
         description=(item.content if item else "") or "",
         page_title=title,
         reporter=(cred.jira_account if cred and cred.jira_account else actor.username),
+        contributor=(actor.display_name or actor.username or ""),
         preset_source="user" if preset else "settings",
         detail=("바로 생성할 수 있습니다." if not missing
                 else "미설정: " + ", ".join(missing)),
@@ -1818,6 +1859,7 @@ async def provision_work_item(
                     jira_auth_issue = bool(res.get("auth_failed"))
 
     # ── Confluence ───────────────────────────────────────────────────────────
+    conf_svc = None
     if payload.create_confluence:
         if item.confluence_page_id:
             # Jira 와 동일하게 이미 연결된 쪽은 건너뛴다 — 나머지 한쪽만 재시도하는
@@ -1827,10 +1869,12 @@ async def provision_work_item(
             conf_id, conf_url = item.confluence_page_id, item.confluence_url or ""
             conf_ok = True
         else:
+            explicit_page_id = (payload.page_id or "").strip()
             space_key = (payload.space_key or "").strip() or (_get_weekly_settings(db).get("space_key") or "").strip()
             page_title = (payload.page_title or item.title or "").strip()
-            if not space_key:
-                confluence_detail = "Confluence 스페이스 키를 지정하세요."
+            contributor = (payload.contributor or "").strip() or (actor.display_name or actor.username or "")
+            if not explicit_page_id and not space_key:
+                confluence_detail = "Confluence 스페이스 키 또는 문서 ID 를 지정하세요."
             elif not page_title:
                 confluence_detail = "문서 제목이 비어 있습니다."
             else:
@@ -1839,21 +1883,51 @@ async def provision_work_item(
                     confluence_detail = res.get("detail", "Confluence 세션 없음")
                     confluence_auth_issue = True
                 else:
-                    body = payload.page_body or _default_page_body(item, jira_key, jira_url)
-                    out = await svc.upsert_page(
-                        space_key, page_title, body,
-                        parent_id=(payload.parent_page_id or "").strip()
-                        or (_get_weekly_settings(db).get("parent_page_id") or ""),
-                    )
-                    if out.get("status") == "ok":
-                        conf_ok = True
-                        conf_created_now = True
-                        conf_id, conf_url = out.get("id", ""), out.get("url", "")
-                        item.confluence_page_id = conf_id or None
-                        item.confluence_url = conf_url or None
+                    conf_svc = svc
+                    body = payload.page_body or _default_page_body(item, jira_key, jira_url, contributor)
+                    if explicit_page_id:
+                        # 제목 검색 없이 지정한 문서 ID 를 그대로 갱신 — 대상을 확정해
+                        # 들어온 경우(다른 화면에서 이미 검색해 골랐거나, 알고 있는 ID).
+                        got = await svc.get_page(explicit_page_id)
+                        if got.get("status") != "ok":
+                            confluence_detail = got.get("detail", "문서를 찾을 수 없습니다.")
+                            confluence_auth_issue = bool(got.get("auth_failed"))
+                        else:
+                            version = int((got.get("page") or {}).get("version") or 1) + 1
+                            out = await svc.update_page(explicit_page_id, page_title, body, version=version)
+                            if out.get("status") == "ok":
+                                conf_ok = True
+                                conf_created_now = True
+                                conf_id = out.get("id") or explicit_page_id
+                                conf_url = out.get("url", "")
+                                item.confluence_page_id = conf_id or None
+                                item.confluence_url = conf_url or None
+                            else:
+                                confluence_detail = out.get("detail", "Confluence 문서 갱신 실패")
+                                confluence_auth_issue = bool(out.get("auth_failed"))
                     else:
-                        confluence_detail = out.get("detail", "Confluence 문서 생성 실패")
-                        confluence_auth_issue = bool(out.get("auth_failed"))
+                        out = await svc.upsert_page(
+                            space_key, page_title, body,
+                            parent_id=(payload.parent_page_id or "").strip()
+                            or (_get_weekly_settings(db).get("parent_page_id") or ""),
+                        )
+                        if out.get("status") == "ok":
+                            conf_ok = True
+                            conf_created_now = True
+                            conf_id, conf_url = out.get("id", ""), out.get("url", "")
+                            item.confluence_page_id = conf_id or None
+                            item.confluence_url = conf_url or None
+                        else:
+                            confluence_detail = out.get("detail", "Confluence 문서 생성 실패")
+                            confluence_auth_issue = bool(out.get("auth_failed"))
+
+    # Confluence 라벨 — 이번에 실제로 문서를 만들었거나 갱신했을 때만 적용한다(기존에
+    # 연결돼 skip 된 문서는 건드리지 않음, 상호 링크 블록과 동일한 conf_created_now 기준).
+    if conf_svc is not None and conf_created_now and conf_id and payload.confluence_labels:
+        label_res = await conf_svc.add_labels(conf_id, payload.confluence_labels)
+        if label_res.get("status") not in ("ok",):
+            note = f"라벨 반영 실패: {label_res.get('detail', '')}"
+            confluence_detail = f"{confluence_detail} {note}".strip() if confluence_detail else note
 
     # ── Jira ↔ Confluence 상호 링크 ─────────────────────────────────────────────
     # 이번 호출에서 Jira 를 새로 생성했고(jira_svc 존재) Confluence 도 함께 만들어졌으면,
