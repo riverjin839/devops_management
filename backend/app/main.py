@@ -2011,7 +2011,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.25.2",
+    version="1.26.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2146,7 +2146,7 @@ app.include_router(home_prefs_router, prefix="/api/v1", dependencies=_auth)
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.25.2",
+        "version": "1.26.0",
         "version": "1.8.2",
         "status": "running"
     }
