@@ -42,6 +42,17 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 배치만 결정할 뿐 게이팅하지 않는다 — 사이드바·상단바가 항상 전체를 보여주므로 어떤 화면에서든
 반대 도메인이 1~2클릭 거리에 있다.
 
+**사이드바 flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바의 그룹 아이콘(하위
+경로 2개 이상)·즐겨찾기·Your Island 는 클릭뿐 아니라 마우스를 올리기만 해도(hover-intent,
+150ms 오픈/200ms 닫기 지연) flyout 이 열린다(`RailIconButton` 의 `onHoverOpen`/`onHoverClose`,
+`NavFlyout.FlyoutShell` 의 `onMouseEnter`/`onMouseLeave` 로 패널 위에서는 닫기 타이머가
+취소됨). 이런 flyout 이 있는 아이콘에는 즉시 이동하는 아이콘과 구분되도록 작은 점
+인디케이터가 붙는다(R-4 5차 D-059). '클러스터' 그룹은 하위 화면이 20여 개로 많아
+`Sidebar.renderFlyoutBody` 가 모니터링/콘솔/점검/관리 4개 섹션으로 나눠 보여준다(D-058,
+`navConfig.ts` 의 그룹 정의 자체는 그대로 두고 렌더링만 재배열). `/jira-import`(Jira Excel
+가져오기)는 마지막까지 고아 라우트였다가 `collab`(협업) 그룹에 편입되어 R-4 5차 라운드
+(D-054~D-060)가 전 항목 완료됐다(D-057).
+
 **즐겨찾기 / 최근 방문**: `AppTopBar`(우측 ★)와 좌측 사이드바 최상단 "즐겨찾기" 레일 아이콘,
 두 진입점이 같은 `FavoritesFlyoutBody`(`components/layout/FavoritesFlyoutBody.tsx`)를 공유해
 드롭다운을 연다. `AppTopBar`·`Sidebar` 의 그룹 flyout(`NavFlyout.tsx` 의 `FlyoutLink`) 항목에
