@@ -1,9 +1,10 @@
 # DEVOPS MANAGEMENT — Design System
 
 > **Stack**: React 18 + TypeScript + Tailwind CSS + Recharts + shadcn/ui (Radix)
-> **Mode**: 테마 4종 — 기본값은 `default`(Anthropic Claude 브랜드 톤, radius 14px), 대안으로
-> `comfort`(크림+딥그린, radius 16px), `light`/`dark`(Databricks-leaning flat, radius 8px)
-> + `system`. 이 문서의 "Ops Slate" 다크
+> **Mode**: 테마 7종 — 기본값은 `default`(Anthropic Claude 브랜드 톤, radius 14px), 대안으로
+> `comfort`(크림+딥그린, radius 16px), `burnt-sienna`/`tuscan-sunset`(Figma 색상 조합 라이브러리
+> 참고 테라코타 계열, radius 14px), `electropop`(네온 액센트 비비드 다크, radius 12px),
+> `light`/`dark`(Databricks-leaning flat, radius 8px) + `system`. 이 문서의 "Ops Slate" 다크
 > 규격은 `html.dark` 테마에 해당한다. (테마 전환: `stores/themeStore.ts`, fallback `'default'`)
 > **Source of truth**: 규격 근거는 이 문서, 토큰 **실측값**은 `frontend/src/index.css` (테마별 상이).
 > 컴포넌트는 토큰만 참조해야 함. 운영(감사·백로그)은 `DESIGN.md`.
@@ -419,6 +420,9 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 |---|---|---|
 | `html.default` | **기본값** — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경, `--radius` 14px, 은은한 그림자, 코랄 accent) | 신규 사용자 첫 진입 화면. 레거시 `'claude'` 값은 자동 마이그레이션 |
 | `html.comfort` | Comfort — 크림 배경(#F6F6F0) + 딥그린(#22593D) primary + 화이트 카드 + 민트 서페이스, `--radius` 16px, 소프트 카드 섀도(hover lift) | Donezo-inspired. 사이드바는 라이트 크림 + 활성 항목 딥그린 필 |
+| `html.burnt-sienna` | Burnt Sienna — 테라코타(#E35336)+베이지+샌드+시에나, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 시에나 브라운 |
+| `html.tuscan-sunset` | Tuscan Sunset — 테라코타(#E35336)+피치+모브+러스트, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 러스트 + 모브 액센트 필 |
+| `html.electropop` | Electropop — 인디고/라임/오렌지/마젠타 네온 액센트, 다크 베이스, `--radius` 12px | Figma 색상 조합 라이브러리 참고. 이 앱에서 유일한 비비드 다크 테마 |
 | `:root` / `html.light` | Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign |
 | `html.dark` | Databricks-leaning 다크 | 위 §2 "Ops Slate" 계열 |
 | (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 |
@@ -426,7 +430,7 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 핵심 원칙: **모든 색·라운딩은 테마별로 값이 달라지므로 고정값 대신 토큰을 쓴다.**
 Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단계
 (`bg-surface-container-lowest~highest`), brand(`--brand-jira`), motion(`--motion-*`) 토큰이
-`index.css` 에 4테마 모두 정의돼 있다.
+`index.css` 에 7테마 모두 정의돼 있다.
 
 ### 12.2 라운딩 (radius 토큰)
 
@@ -457,7 +461,8 @@ Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className
 ### 12.4 컴포넌트 컨벤션
 
 - **카드**: `MacCard` 사용, 직접 `bg-card border` div 조합 금지 (DESIGN.md D-004).
-- **Shadows**: light/dark 는 `--card-shadow: none`(보더가 그림자 대체), default 테마만 은은한 depth —
+- **Shadows**: light/dark/burnt-sienna/tuscan-sunset/electropop 는 `--card-shadow: none`(보더가
+  그림자 대체), default/comfort 만 은은한 depth(멀티레이어 섀도+hover lift) —
   `.mac-shadow` 유틸이 토큰을 따라가므로 개별 shadow 클래스를 만들지 않는다.
 - **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
 - **Colors**: JSX 내 raw hex 금지 — Tailwind 토큰(`text-primary` 등) 또는 `hsl(var(--*))`.

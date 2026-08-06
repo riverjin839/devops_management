@@ -16,9 +16,14 @@ interface FlyoutProps {
   placement?: 'right' | 'bottom';
   children: React.ReactNode;
   onClose: () => void;
+  /** 호버로 연 flyout 을 유지하기 위한 hover-intent 콜백 — 패널 위로 마우스가 들어오면
+   *  예약된 닫기를 취소하고(onMouseEnter), 패널을 벗어나면 다시 닫기를 예약한다(onMouseLeave).
+   *  클릭으로 연 flyout(호버 콜백 미전달)에는 영향 없다. */
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
-export function FlyoutShell({ title, anchorRect, placement = 'right', children, onClose }: FlyoutProps) {
+export function FlyoutShell({ title, anchorRect, placement = 'right', children, onClose, onMouseEnter, onMouseLeave }: FlyoutProps) {
   const style = placement === 'bottom'
     ? {
         top: anchorRect.bottom + 6,
@@ -35,6 +40,8 @@ export function FlyoutShell({ title, anchorRect, placement = 'right', children, 
   return createPortal(
     <div
       style={style}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col overflow-hidden min-w-[180px] max-w-[260px]"
       role="dialog"
       aria-label={title}

@@ -258,7 +258,9 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
 
 ## UI Design System
 
-테마 4종(`default` 기본 / `comfort` 크림+딥그린 / `light` / `dark` + `system`) + 토큰 기반 시스템이다.
+테마 7종(`default` 기본 / `comfort` 크림+딥그린 / `burnt-sienna` 테라코타+시에나 /
+`tuscan-sunset` 테라코타+피치+모브 / `electropop` 네온 다크 / `light` / `dark` + `system`) +
+토큰 기반 시스템이다.
 
 - **규격·구현 표준의 원천 = `DESIGN_SYSTEM.md` §12 구현 표준** — 테마 매트릭스, radius 토큰,
   MacCard props, ClusterSidebar 사용 패턴 3종 + 레이아웃 규칙, 콘솔 패턴 5개 항목이 전부 거기 있다.

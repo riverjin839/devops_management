@@ -22,6 +22,20 @@
   정체성과 동작 버튼 그룹을 시각적으로 분리했으며, 무언가 실행 중일 때 "수행 로그" 버튼에
   은은한 점 표시를 추가해 패널을 열지 않고도 알 수 있게 했다. Frontend:
   `components/platform-status/{PlatformStatusMatrix,CheckMatrixRunLogPanel}.tsx`.
+### Added
+- **테마 3종 추가 — Burnt Sienna / Tuscan Sunset / Electropop**: Figma 색상 조합 라이브러리의
+  실제 배색(Burnt sienna, Tuscan sunset, Electropop)을 그대로 옮긴 앱 전체 UI 테마 3개가
+  추가됐다. 사이드바 레일의 테마 순환 버튼(default → comfort → 번트 시에나 → 토스카나 선셋 →
+  일렉트로팝 → light → dark → system)으로 전환한다. Electropop 은 네온 액센트의 비비드
+  다크 테마로, 이 앱에서 유일한 "다크 계열 + 원색 accent" 조합이다. Frontend:
+  `index.css` 에 `html.burnt-sienna` / `html.tuscan-sunset` / `html.electropop` 토큰 블록
+  추가, `stores/themeStore.ts` `Theme` 유니언 확장, `Sidebar.tsx` 테마 순환/라벨/아이콘 갱신.
+
+### Changed
+- **운영레벨 커스텀 색상 — 배색 패턴 프리셋을 Figma 원본 3종으로 교체**: 커스텀 색상
+  선택기의 배색 패턴 프리셋을 근사값 5종에서 Figma 색상 조합 라이브러리 원본 HEX 3종
+  (Burnt Sienna/Tuscan Sunset/Electropop)으로 교체했다. Frontend: `lib/colorPatterns.ts`
+  `COLOR_PATTERNS` 값 갱신.
 
 ### Fixed
 - **K8S 자원 관리(`/k8s-allocation`) — 사용효율 경고 로직·포커스 접근성·Pod 상태 노출 수정**: impeccable
