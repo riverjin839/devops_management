@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import { SidePane } from '@/components/common';
 import { checkMatrixKeys, useCheckMatrixRuns } from '@/hooks/useCheckMatrix';
 import type { CheckMatrixTrigger } from '@/types';
@@ -45,6 +46,9 @@ export function CheckMatrixRunLogPanel({ open, onClose, batchId, batchLabel }: P
   const batchDone =
     !!batchId && !!batchData && batchData.runs.length > 0 &&
     batchData.runs.every((r) => TERMINAL_STATES.has(r.runState));
+  // 완료 문구가 "끝났습니다"라고만 하면 그 안에 실패가 섞여도 안심하고 넘어가게 된다 —
+  // 실패 건수가 있으면 확신 대신 정직한 경고 톤으로 바꾼다(연출이 아니라 정확도 문제).
+  const batchFailedCount = batchDone ? (batchData?.runs.filter((r) => r.runState === 'failed').length ?? 0) : 0;
 
   // 완료되면 폴링을 멈추고, 셀 결과가 바로 보이도록 그리드를 1회 갱신한다.
   const invalidatedFor = useRef<string | null>(null);
@@ -66,9 +70,16 @@ export function CheckMatrixRunLogPanel({ open, onClose, batchId, batchLabel }: P
     >
       <div className="space-y-4 pb-4">
         {batchId ? (
-          <p className="text-xs text-muted-foreground">
+          <p className={`text-xs flex items-center gap-1.5 ${
+            batchDone ? (batchFailedCount > 0 ? 'text-status-warning' : 'text-status-healthy') : 'text-muted-foreground'
+          }`}>
+            {batchDone && (batchFailedCount > 0
+              ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+              : <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />)}
             {batchDone
-              ? '일괄 수행이 끝났습니다 — 매트릭스 셀이 갱신되었습니다.'
+              ? (batchFailedCount > 0
+                ? `일괄 수행이 끝났습니다 — ${batchFailedCount}건 실패, 매트릭스 셀이 갱신되었습니다.`
+                : '일괄 수행이 끝났습니다 — 전부 성공, 매트릭스 셀이 갱신되었습니다.')
               : '방금 요청한 일괄 수행만 표시합니다 — 3초마다 갱신됩니다.'}
           </p>
         ) : (

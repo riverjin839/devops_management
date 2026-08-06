@@ -10,6 +10,18 @@
 
 1.25.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **홈 플랫폼 현황(`/`, 플랫폼 현황 탭) — impeccable polish·layout·delight 고도화**: 이미 여러 차례
+  critique+fix 라운드를 거친 화면을 한 단계 더 다듬었다. 행 순서 변경 그립이 마우스 드래그
+  전용이던 것에 화살표 위/아래 키보드 대체 수단을 추가했고, 클러스터 cron 설정 팝오버에
+  `aria-haspopup`/`aria-expanded`와 Escape-로-닫기(다른 팝오버·모달과 동일한 `useModalA11y`
+  패턴)를 부여했다. 빈 셀("—")의 안내 문구를 상황별(수동 미입력/예약 대기/미실행)로 구분했고,
+  일괄 실행 완료 메시지가 실패 건이 섞여도 무조건 "끝났습니다"로만 뜨던 것을 성공/실패 건수와
+  아이콘·색으로 정직하게 구분했다. "등록된 클러스터/점검 항목 없음" 빈 상태를 안내 문장만 있던
+  것에서 실제 동작하는 CTA 버튼(`EmptyState`)으로 교체했고, 헤더 툴바에 구분선을 추가해 화면
+  정체성과 동작 버튼 그룹을 시각적으로 분리했으며, 무언가 실행 중일 때 "수행 로그" 버튼에
+  은은한 점 표시를 추가해 패널을 열지 않고도 알 수 있게 했다. Frontend:
+  `components/platform-status/{PlatformStatusMatrix,CheckMatrixRunLogPanel}.tsx`.
 ### Added
 - **테마 3종 추가 — Burnt Sienna / Tuscan Sunset / Electropop**: Figma 색상 조합 라이브러리의
   실제 배색(Burnt sienna, Tuscan sunset, Electropop)을 그대로 옮긴 앱 전체 UI 테마 3개가
