@@ -22,7 +22,6 @@ import { VersionsPage } from '@/pages/VersionsPage';
 import { VersionGraphPage } from '@/pages/VersionGraphPage';
 import { BulkExecPage } from '@/pages/BulkExecPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
-import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
@@ -193,7 +192,8 @@ function AppShell() {
               <Route path="/versions/:clusterId/graph" element={<VersionGraphPage />} />
               <Route path="/bulk-exec" element={<BulkExecPage />} />
               <Route path="/etcdctl" element={<EtcdCtlPage />} />
-              <Route path="/batch-jobs" element={<BatchJobsPage />} />
+              {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크 호환용 리다이렉트 */}
+              <Route path="/batch-jobs" element={<Navigate to="/" replace />} />
               <Route path="/kernel-params" element={<KernelParamsPage />} />
               <Route path="/mc" element={<McClientPage />} />
               <Route path="/isilon-nfs" element={<IsilonNfsPage />} />

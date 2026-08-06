@@ -86,7 +86,9 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], domain: 'platform' },
   // /coroot 는 COROOT APM 통합 전체 제거로 더 이상 존재하지 않는 라우트 — 재추가하지 않음.
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], domain: 'platform' },
-  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/batch-jobs', '/commands'], domain: 'platform' },
+  // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로
+  // 병합됐다(NAV_MAP 항목은 접근 제어/라벨 커스터마이징/Island 패널을 위해 유지).
+  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/commands'], domain: 'platform' },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report', '/jira-import'], domain: 'work' },
   // "문서 관리" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
   // 개편 때 그룹을 잃고 URL 전용으로 남았던 지식 화면들(/work-guides, /docs, /ops-notes,
