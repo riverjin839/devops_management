@@ -5,6 +5,7 @@ import {
   Sparkles, Palmtree, Leaf, Star,
   Moon, Sun, Monitor, LogOut, User, ChevronRight, ArrowLeft,
   KeyRound, ScrollText, Home, MessageSquare, Bug, Bot,
+  Flame, Sunset, Zap,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
@@ -28,9 +29,28 @@ import { GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
-// default(Claude paper) → 컴포트(크림+그린) → 라이트 → 다크 → 시스템 → default …
-const THEME_CYCLE: Record<Theme, Theme> = { default: 'comfort', comfort: 'light', light: 'dark', dark: 'system', system: 'default' };
-const THEME_LABEL: Record<Theme, string> = { default: '기본', comfort: '컴포트', light: '라이트', dark: '다크', system: '시스템' };
+// default(Claude paper) → 컴포트(크림+그린) → 번트시에나 → 토스카나 선셋 → 일렉트로팝
+// → 라이트 → 다크 → 시스템 → default …
+const THEME_CYCLE: Record<Theme, Theme> = {
+  default: 'comfort',
+  comfort: 'burnt-sienna',
+  'burnt-sienna': 'tuscan-sunset',
+  'tuscan-sunset': 'electropop',
+  electropop: 'light',
+  light: 'dark',
+  dark: 'system',
+  system: 'default',
+};
+const THEME_LABEL: Record<Theme, string> = {
+  default: '기본',
+  comfort: '컴포트',
+  'burnt-sienna': '번트 시에나',
+  'tuscan-sunset': '토스카나 선셋',
+  electropop: '일렉트로팝',
+  light: '라이트',
+  dark: '다크',
+  system: '시스템',
+};
 
 // ── 호버 툴팁이 붙은 아이콘 버튼 — 레일에서 사용 ────────────────────────────
 interface RailIconButtonProps {
@@ -384,6 +404,9 @@ export function Sidebar() {
             Icon={
               theme === 'default' ? Sparkles
               : theme === 'comfort' ? Leaf
+              : theme === 'burnt-sienna' ? Flame
+              : theme === 'tuscan-sunset' ? Sunset
+              : theme === 'electropop' ? Zap
               : theme === 'light'   ? Sun
               : theme === 'dark'    ? Moon
               : Monitor
