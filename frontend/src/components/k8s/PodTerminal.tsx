@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css';
 import { useQuery } from '@tanstack/react-query';
 import { getAuthToken } from '@/stores/authStore';
 import { analyzeApi, k8sStreamUrls } from '@/services/api';
+import { attachClipboardShortcuts, clipboardHintText } from '@/lib/terminalClipboard';
 
 interface PodTerminalProps {
   clusterId: string;
@@ -94,6 +95,8 @@ export function PodTerminal({ clusterId, namespace, pod, container: initialConta
     term.loadAddon(fit);
     term.open(el);
     fit.fit();
+    // Ctrl+C(선택 복사) / Ctrl+V(붙여넣기) — xterm 기본값에는 없어 직접 붙인다.
+    attachClipboardShortcuts(term);
     term.onData((d) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'stdin', data: d }));
@@ -150,7 +153,10 @@ export function PodTerminal({ clusterId, namespace, pod, container: initialConta
             container && <span className="text-xs text-zinc-400">· {container}</span>
           )}
           <span className={`text-xs ${statusColor}`}>● {status}</span>
-          <button onClick={connect} title="재연결" className="ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
+          <span className="ml-auto hidden lg:inline text-[11px] text-zinc-500 truncate" title={clipboardHintText()}>
+            {clipboardHintText()}
+          </span>
+          <button onClick={connect} title="재연결" className="lg:ml-2 ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
             <RotateCw className="w-3.5 h-3.5" />
           </button>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
