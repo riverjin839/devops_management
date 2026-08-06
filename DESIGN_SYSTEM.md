@@ -1,10 +1,11 @@
 # DEVOPS MANAGEMENT — Design System
 
 > **Stack**: React 18 + TypeScript + Tailwind CSS + Recharts + shadcn/ui (Radix)
-> **Mode**: 테마 7종 — 기본값은 `default`(Anthropic Claude 브랜드 톤, radius 14px), 대안으로
-> `comfort`(크림+딥그린, radius 16px), `burnt-sienna`/`tuscan-sunset`(Figma 색상 조합 라이브러리
-> 참고 테라코타 계열, radius 14px), `electropop`(네온 액센트 비비드 다크, radius 12px),
-> `light`/`dark`(Databricks-leaning flat, radius 8px) + `system`. 이 문서의 "Ops Slate" 다크
+> **Mode**: 테마 10종 — 기본값은 `default`(Anthropic Claude 브랜드 톤, radius 14px), 대안으로
+> `comfort`(크림+딥그린, radius 16px), `burnt-sienna`/`tuscan-sunset`/`summer-breeze`/
+> `wildflower-meadow`/`tropical-punch`(Figma 색상 조합 라이브러리 참고, radius 14~16px),
+> `electropop`(네온 액센트 비비드 다크, radius 12px), `light`/`dark`(Databricks-leaning flat,
+> radius 8px) + `system`. 이 문서의 "Ops Slate" 다크
 > 규격은 `html.dark` 테마에 해당한다. (테마 전환: `stores/themeStore.ts`, fallback `'default'`)
 > **Source of truth**: 규격 근거는 이 문서, 토큰 **실측값**은 `frontend/src/index.css` (테마별 상이).
 > 컴포넌트는 토큰만 참조해야 함. 운영(감사·백로그)은 `DESIGN.md`.
@@ -423,6 +424,9 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 | `html.burnt-sienna` | Burnt Sienna — 테라코타(#E35336)+베이지+샌드+시에나, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 시에나 브라운 |
 | `html.tuscan-sunset` | Tuscan Sunset — 테라코타(#E35336)+피치+모브+러스트, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 러스트 + 모브 액센트 필 |
 | `html.electropop` | Electropop — 인디고/라임/오렌지/마젠타 네온 액센트, 다크 베이스, `--radius` 12px | Figma 색상 조합 라이브러리 참고. 이 앱에서 유일한 비비드 다크 테마 |
+| `html.summer-breeze` | Summer Breeze — 옐로우(#FFEB3B)+코랄(#F88379)+스카이블루+샌드, `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 스카이블루-틸 |
+| `html.wildflower-meadow` | Wildflower Meadow — 데이지화이트+버터컵앰버(#FDB813)+스카이블루+그라스그린, `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 그라스그린 |
+| `html.tropical-punch` | Tropical Punch — 망고오렌지(#FF8243)+파파야핑크+파인애플옐로우+딥틸(#069494), `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 딥틸 |
 | `:root` / `html.light` | Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign |
 | `html.dark` | Databricks-leaning 다크 | 위 §2 "Ops Slate" 계열 |
 | (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 |
@@ -430,7 +434,7 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 핵심 원칙: **모든 색·라운딩은 테마별로 값이 달라지므로 고정값 대신 토큰을 쓴다.**
 Semantic status(`--status-healthy/warning/critical/...`), Surface Container 5단계
 (`bg-surface-container-lowest~highest`), brand(`--brand-jira`), motion(`--motion-*`) 토큰이
-`index.css` 에 7테마 모두 정의돼 있다.
+`index.css` 에 10테마 모두 정의돼 있다.
 
 ### 12.2 라운딩 (radius 토큰)
 
@@ -461,8 +465,9 @@ Props: `title?`, `variant?`('flat'|'mac', 기본 'flat'), `children`, `className
 ### 12.4 컴포넌트 컨벤션
 
 - **카드**: `MacCard` 사용, 직접 `bg-card border` div 조합 금지 (DESIGN.md D-004).
-- **Shadows**: light/dark/burnt-sienna/tuscan-sunset/electropop 는 `--card-shadow: none`(보더가
-  그림자 대체), default/comfort 만 은은한 depth(멀티레이어 섀도+hover lift) —
+- **Shadows**: light/dark/burnt-sienna/tuscan-sunset/electropop/summer-breeze/wildflower-meadow/
+  tropical-punch 는 `--card-shadow: none`(보더가 그림자 대체), default/comfort 만 은은한
+  depth(멀티레이어 섀도+hover lift) —
   `.mac-shadow` 유틸이 토큰을 따라가므로 개별 shadow 클래스를 만들지 않는다.
 - **Section titles inside MacCard**: 카드 제목을 본문 `<h2>` 로 중복하지 않는다.
 - **Colors**: JSX 내 raw hex 금지 — Tailwind 토큰(`text-primary` 등) 또는 `hsl(var(--*))`.
@@ -584,7 +589,7 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 돌아오는 게 아니라 대화형 tty 라 위 1~3 항목(좌/우 로우, `ExecOutputTabs`, `LogViewer`)이 적용되지 않는다.
 대신 **공용 `SshTerminalWindow`**(`components/k8s/SshTerminalWindow.tsx`)를 쓴다 — xterm.js ↔ WebSocket 브리지,
 드래그 이동 플로팅 창 + 우하단 리사이즈, 헤더의 재연결/새 창으로 빼기/전체화면/종료, `lib/terminalPopout.ts`
-기반 별도 창 handoff 가 여기 다 들어있다. 화면은 접속 폼(`ClusterSidebar iconOnly` + `MacCard`)과 init 프레임만
+기반 별도 창 handoff, **Ctrl+C 복사 / Ctrl+V 붙여넣기**(`lib/terminalClipboard.ts`)가 여기 다 들어있다. 화면은 접속 폼(`ClusterSidebar iconOnly` + `MacCard`)과 init 프레임만
 만든다. 4·5 항목은 그대로 지킨다 — `useTerminalEnvSync` 호출(터미널 색/글꼴이 `useXtermTheme` 로 xterm 에도
 적용된다), 연결 테스트 결과는 `STATUS_META` 배지. 새 SSH 터미널 화면을 xterm 부터 직접 붙이는 코드는 금지.
 

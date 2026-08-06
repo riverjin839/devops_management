@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RotateCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { RotateCw, X, Maximize2, Minimize2, ExternalLink, Clipboard } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useXtermTheme } from '@/hooks/useTerminalAppearance';
+import { attachClipboardShortcuts, clipboardHintText } from '@/lib/terminalClipboard';
 
 export type SshTerminalStatus = 'connecting' | 'open' | 'closed' | 'error';
 
@@ -129,6 +130,8 @@ export function SshTerminalWindow({
     term.loadAddon(fit);
     term.open(el);
     fit.fit();
+    // Ctrl+C(선택 복사) / Ctrl+V(붙여넣기) — xterm 기본값에는 없어 직접 붙인다.
+    attachClipboardShortcuts(term);
     term.onData((d) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'stdin', data: d }));
@@ -179,6 +182,7 @@ export function SshTerminalWindow({
 
   const statusColor =
     status === 'open' ? 'text-green-500' : status === 'error' ? 'text-red-500' : 'text-muted-foreground';
+  const clipboardHint = clipboardHintText();
 
   // 기본(인라인) 모드는 드래그로 이동 가능한 플로팅 창 — 헤더가 드래그 핸들이다.
   const floating = !fill && !fullscreen;
@@ -228,8 +232,13 @@ export function SshTerminalWindow({
         <span className={`text-sm font-semibold ${labelClassName}`}>{label}</span>
         <span className="text-xs font-mono text-zinc-400 truncate">{subtitle}</span>
         <span className={`text-xs ${statusColor}`}>● {status}</span>
+        {/* 복사/붙여넣기 단축키는 발견되기 어려워(터미널마다 규칙이 달라서) 헤더에 노출한다.
+            좁은 창에서는 숨기고 아이콘 title 로만 남긴다. */}
+        <span className="ml-auto hidden xl:inline text-[11px] text-zinc-500 truncate" title={clipboardHint}>
+          <Clipboard className="w-3 h-3 inline-block mr-1 -mt-px" />{clipboardHint}
+        </span>
         <button onClick={connect} title="재연결" aria-label="재연결"
-          className="ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
+          className="xl:ml-2 ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
           <RotateCw className="w-3.5 h-3.5" />
         </button>
         {onPopOut && !fill && (

@@ -12,16 +12,25 @@ import { create } from 'zustand';
  * - `tuscan-sunset`  : 테라코타/피치/모브/러스트 — 노을톤 팔레트 ("Tuscan Sunset" 참고).
  * - `electropop`     : 인디고/라임/오렌지/마젠타 네온 액센트의 비비드 다크 테마
  *                      ("Electropop" 참고) — 이 앱에서 유일한 비비드 다크 테마.
+ * - `summer-breeze`   : 옐로우/코랄/스카이블루/샌드 — 여름 해변 톤 ("Summer Breeze" 참고).
+ * - `wildflower-meadow`: 데이지화이트/버터컵앰버/스카이블루/그라스그린 — 봄 들판 톤
+ *                      ("Wildflower Meadow" 참고).
+ * - `tropical-punch`  : 망고오렌지/파파야핑크/파인애플옐로우/딥틸 — 트로피컬 톤
+ *                      ("Tropical Punch" 참고).
  * - `light` / `dark` : Databricks-leaning 라이트 / 다크 (대안).
  * - `system`         : OS 환경설정 따라가는 라이트/다크.
  */
 export type Theme =
   | 'default' | 'comfort' | 'burnt-sienna' | 'tuscan-sunset' | 'electropop'
+  | 'summer-breeze' | 'wildflower-meadow' | 'tropical-punch'
   | 'dark' | 'light' | 'system';
 
 /** `system` 을 제외하고, 자체 완결된 토큰 세트를 가진 테마 — light/dark 로 해석하지 않고
  *  그대로 `<html>` 클래스로 적용한다. */
-const STANDALONE_THEMES = ['default', 'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop'] as const;
+const STANDALONE_THEMES = [
+  'default', 'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
+  'summer-breeze', 'wildflower-meadow', 'tropical-punch',
+] as const;
 type StandaloneTheme = (typeof STANDALONE_THEMES)[number];
 
 function isStandaloneTheme(theme: Theme): theme is StandaloneTheme {

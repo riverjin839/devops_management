@@ -8,7 +8,22 @@
 
 ## [Unreleased]
 
-1.26.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.26.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.26.1] - 2026-08-06
+
+### Added
+- **테마 3종 추가 — Summer Breeze / Wildflower Meadow / Tropical Punch**: Figma 색상 조합
+  라이브러리의 실제 배색 3개(조합 100/97/52)를 그대로 옮긴 앱 전체 UI 테마가 추가됐다.
+  기존 Burnt Sienna/Tuscan Sunset/Electropop 에 이어 사이드바 테마 순환 버튼에 편입돼
+  총 10종 테마가 됐다. Frontend: `index.css` 에 `html.summer-breeze` /
+  `html.wildflower-meadow` / `html.tropical-punch` 토큰 블록 추가, `themeStore.ts`
+  `Theme`/`STANDALONE_THEMES` 확장, `Sidebar.tsx` 테마 순환/라벨/아이콘 갱신.
+- **클러스터 아이콘 빌더 — 배색 패턴을 아이콘 빌더에서 직접 선택 가능**: 배색 패턴(Burnt
+  Sienna 등 6종)이 지금까지 Settings ▸ 운영레벨 관리에만 있어 실제 아이콘 빌더 화면에서는
+  적용할 방법이 없었던 문제를 고쳤다 — "빌더" 탭에 배색 패턴 스와치를 추가해, 클릭 한 번으로
+  해당 아이콘 1개에만 색을 적용할 수 있다(운영등급 설정 자체는 바뀌지 않음). Frontend:
+  `ClusterIconPicker.tsx` `BuilderTab` 에 `COLOR_PATTERNS` 스와치 + `patternHex` 상태 추가.
 
 ### Fixed
 - **홈 플랫폼 현황 — "좁게" 밀도가 실제로는 줄지 않던 문제 + 페이지당 행 수 제한 추가**:
@@ -42,6 +57,19 @@
   `pages/HomePage.tsx`(세그먼트 탭 줄에 툴바 portal slot 추가),
   `components/platform-status/PlatformStatusMatrix.tsx`(`toolbarSlot` prop + portal,
   `useColumnWidths`/`ResizeGrip` 로 열 리사이즈, `MatrixDisplaySettings` 행 높이 토글).
+
+### Fixed
+- **인클러스터 Ollama(qwen2.5-coder:7b) 이미지 — 모델이 실제로는 비어있던 문제**: 수동으로
+  빌드/push 했던 `ghcr.io/riverjin839/ollama-qwen2.5-coder:7b` 는 헬스체크는 온라인으로
+  뜨지만 실제로는 `/root/.ollama/models` 가 비어있어 챗봇/장애분석/임베딩이 전부
+  "model not pulled" 로 실패하는 상태였다. `docker/ollama-qwen2.5-coder/Dockerfile` 신설
+  (serve→pull→`ollama list` 검증을 한 RUN 레이어에서 끝내고, 모델이 없으면 빌드 자체를
+  실패시킨다) + `.github/workflows/ollama-qwen2.5-coder.yml` 로 GHCR
+  자동 빌드/게시(`ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder:7b`,
+  GITHUB_TOKEN 사용) 로 교체. `k8s/base/ollama.yaml` 의 부팅 대기 로직도 curl 의존성을
+  제거해 `ollama list` 기반으로 바꿔, curl 이 없는 베이스 이미지에서 무한 대기 로그만
+  찍히던 부수 증상도 함께 해소. `k8s/overlays/airgap/`, `helm/k8s-daily-monitor/
+  values.yaml`, `scripts/deploy-airgap.sh` 의 이미지 참조를 새 경로로 갱신.
 
 ## [1.25.2] - 2026-08-06
 
@@ -788,6 +816,17 @@
   값 유무와 무관하게 유지해 폭이 밀리지 않게 함). 공통업무 체크박스 옆 긴 설명 문구는
   툴팁으로 옮겨 두 칸을 잡아먹지 않게 했다.
 - **`work_items.confluence_url` 중복 선언 제거**: 같은 컬럼이 모델에 두 번 정의돼 있었다.
+
+### Fixed
+- **웹 터미널에서 Ctrl+C 복사 / Ctrl+V 붙여넣기가 되지 않던 문제** (노드 SSH 터미널 ·
+  k9s 콘솔 · 파드 exec 터미널): xterm.js 는 `Ctrl+<문자>` 를 제어문자로 바꾼 뒤 브라우저
+  기본 동작을 취소해, `Ctrl+C` 는 선택 영역을 복사하지 않고 SIGINT 만 보내고 `Ctrl+V` 는
+  `^V`(`\x16`) 가 셸에 입력됐다. 이제 **드래그로 선택한 뒤 Ctrl+C 로 복사**(선택이 없으면
+  기존대로 SIGINT — 복사 직후 선택은 해제되어 연속 Ctrl+C 로 중단 가능)하고 **Ctrl+V 로
+  붙여넣기**할 수 있다. macOS 는 ⌘C/⌘V 를 쓰고 Ctrl+C 는 항상 SIGINT 로 남는다.
+  터미널 헤더에 단축키 안내도 표시된다.
+  구현: `lib/terminalClipboard.ts` — 브라우저 기본 복사/붙여넣기에 위임하므로
+  `navigator.clipboard`(HTTPS 전용 API)가 없는 **HTTP(NodePort) 접속 환경에서도 동작**한다.
 
 ### Changed
 - **etcdctl 콘솔 레이아웃을 mc 클라이언트와 통일** (`/etcdctl`): 실행 결과가 화면 **아래로**

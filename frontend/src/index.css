@@ -589,6 +589,233 @@
     --motion-slow: 300ms;
     --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+
+  /* ── Summer Breeze — Figma 색상 조합 라이브러리 참고 (옐로우/코랄/스카이블루/샌드) ──
+     조합 100: 여름 산들바람. 시드 4색: #FFEB3B(yellow) #F88379(coral) #82C8E5(sky blue)
+     #E6D8C4(sand beige). 밝고 명랑한 여름 해변 톤 — 산뜻한 코랄 primary + 스카이블루
+     사이드바. */
+  html.summer-breeze {
+    --background: 35 45% 96%;
+    --foreground: 205 25% 16%;
+    --card: 35 55% 99%;
+    --card-foreground: 205 25% 16%;
+    --popover: 35 55% 99%;
+    --popover-foreground: 205 25% 16%;
+    --primary: 5 85% 68%;              /* #F88379 coral */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 198 55% 90%;          /* #82C8E5 sky blue tint */
+    --secondary-foreground: 205 25% 16%;
+    --muted: 35 30% 93%;
+    --muted-foreground: 205 12% 40%;
+    --accent: 54 90% 88%;              /* #FFEB3B soft yellow hover */
+    --accent-foreground: 205 25% 16%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 35 25% 86%;
+    --input: 35 25% 86%;
+    --ring: 5 85% 65%;
+    --radius: 1rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: none;
+
+    /* Sidebar — 진한 스카이블루-틸 다크, 코랄 액센트 필 */
+    --sidebar:                  198 45% 18%;
+    --sidebar-foreground:       35 40% 95%;
+    --sidebar-muted-foreground: 198 15% 65%;
+    --sidebar-accent:           5 75% 45%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           198 30% 26%;
+    --sidebar-primary:          5 85% 65%;
+
+    --status-healthy:     142 55% 40%;
+    --status-healthy-bg:  90 45% 90%;
+    --status-warning:     45 90% 50%;
+    --status-warning-bg:  45 75% 90%;
+    --status-critical:    5 70% 50%;
+    --status-critical-bg: 5 60% 92%;
+    --status-unknown:     205 10% 45%;
+    --status-unknown-bg:  35 15% 88%;
+    --status-pending:     205 10% 45%;
+    --status-pending-bg:  35 15% 88%;
+    --status-info:        198 65% 45%;
+    --status-info-bg:     198 50% 91%;
+    --status-neutral:     205 10% 50%;
+    --status-neutral-bg:  35 15% 90%;
+
+    /* Categorical chart tokens — 팔레트 4색(coral/yellow/sky/sand) + 보조색 */
+    --chart-1: 5 85% 68%;     /* coral */
+    --chart-2: 54 100% 62%;   /* yellow */
+    --chart-3: 198 66% 65%;   /* sky blue */
+    --chart-4: 35 40% 70%;    /* sand */
+    --chart-5: 262 55% 55%;   /* violet */
+    --chart-6: 168 50% 42%;   /* teal */
+    --chart-7: 340 55% 52%;   /* rose */
+    --chart-8: 205 10% 48%;   /* blue-gray slate */
+
+    --surface-container-lowest:  35 55% 99%;
+    --surface-container-low:     35 45% 97%;
+    --surface-container:         35 40% 96%;
+    --surface-container-high:    35 32% 94%;
+    --surface-container-highest: 35 28% 92%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* ── Wildflower Meadow — Figma 색상 조합 라이브러리 참고 (데이지화이트/버터컵/스카이/그라스) ──
+     조합 97: 들꽃 초원. 시드 4색: #FBF9E7(daisy white) #FDB813(buttercup amber)
+     #82C8E5(sky blue) #7CFC00(lawn green). 봄 들판 톤 — 앰버 primary + 그린 액센트,
+     라임그린 원색은 채도가 높아 hover/차트에만 절제해서 쓴다. */
+  html.wildflower-meadow {
+    --background: 54 60% 97%;
+    --foreground: 100 20% 14%;
+    --card: 54 65% 99%;
+    --card-foreground: 100 20% 14%;
+    --popover: 54 65% 99%;
+    --popover-foreground: 100 20% 14%;
+    --primary: 42 95% 48%;             /* #FDB813 buttercup amber */
+    --primary-foreground: 42 30% 12%;
+    --secondary: 198 55% 90%;          /* #82C8E5 sky blue tint */
+    --secondary-foreground: 100 20% 14%;
+    --muted: 54 35% 94%;
+    --muted-foreground: 100 10% 38%;
+    --accent: 90 70% 90%;              /* soft lawn-green hover */
+    --accent-foreground: 100 20% 14%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 54 25% 86%;
+    --input: 54 25% 86%;
+    --ring: 42 90% 45%;
+    --radius: 1rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: none;
+
+    /* Sidebar — 진한 그라스그린 다크, 앰버 액센트 필 */
+    --sidebar:                  100 35% 14%;
+    --sidebar-foreground:       54 40% 95%;
+    --sidebar-muted-foreground: 100 12% 65%;
+    --sidebar-accent:           42 80% 40%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           100 25% 22%;
+    --sidebar-primary:          90 70% 45%;
+
+    --status-healthy:     100 55% 35%;
+    --status-healthy-bg:  90 45% 90%;
+    --status-warning:     42 90% 48%;
+    --status-warning-bg:  42 75% 90%;
+    --status-critical:    0 65% 48%;
+    --status-critical-bg: 0 60% 92%;
+    --status-unknown:     100 8% 45%;
+    --status-unknown-bg:  54 15% 88%;
+    --status-pending:     100 8% 45%;
+    --status-pending-bg:  54 15% 88%;
+    --status-info:        198 65% 42%;
+    --status-info-bg:     198 50% 91%;
+    --status-neutral:     100 8% 50%;
+    --status-neutral-bg:  54 15% 90%;
+
+    /* Categorical chart tokens — 팔레트 4색(amber/grass/sky/daisy) + 보조색 */
+    --chart-1: 42 95% 48%;    /* amber */
+    --chart-2: 90 90% 42%;    /* grass green (원색 7CFC00 보다 톤다운) */
+    --chart-3: 198 66% 60%;   /* sky blue */
+    --chart-4: 54 85% 55%;    /* daisy yellow-gold */
+    --chart-5: 262 55% 55%;   /* violet */
+    --chart-6: 340 55% 52%;   /* rose */
+    --chart-7: 217 60% 50%;   /* blue */
+    --chart-8: 100 8% 48%;    /* green-gray slate */
+
+    --surface-container-lowest:  54 65% 99%;
+    --surface-container-low:     54 55% 97%;
+    --surface-container:         54 45% 96%;
+    --surface-container-high:    54 35% 94%;
+    --surface-container-highest: 54 30% 92%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* ── Tropical Punch — Figma 색상 조합 라이브러리 참고 (망고/파파야핑크/파인애플/틸) ──
+     조합 52: 트로피컬 펀치. 시드 4색: #FF8243(mango) #FFC0CB(papaya pink) #FCE883(pineapple)
+     #069494(teal). 망고 오렌지 primary + 딥틸 사이드바로 트로피컬 리조트 톤. */
+  html.tropical-punch {
+    --background: 50 60% 97%;
+    --foreground: 180 30% 14%;
+    --card: 50 65% 99%;
+    --card-foreground: 180 30% 14%;
+    --popover: 50 65% 99%;
+    --popover-foreground: 180 30% 14%;
+    --primary: 20 90% 60%;             /* #FF8243 mango orange */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 350 70% 93%;          /* #FFC0CB papaya pink tint */
+    --secondary-foreground: 180 30% 14%;
+    --muted: 50 35% 94%;
+    --muted-foreground: 180 12% 38%;
+    --accent: 50 85% 88%;              /* #FCE883 pineapple hover */
+    --accent-foreground: 180 30% 14%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 50 25% 86%;
+    --input: 50 25% 86%;
+    --ring: 20 85% 55%;
+    --radius: 1rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: none;
+
+    /* Sidebar — 진한 딥틸(#069494 계열), 망고 액센트 필 */
+    --sidebar:                  180 45% 14%;
+    --sidebar-foreground:       50 40% 95%;
+    --sidebar-muted-foreground: 180 15% 65%;
+    --sidebar-accent:           20 75% 45%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           180 30% 22%;
+    --sidebar-primary:          20 85% 60%;
+
+    --status-healthy:     160 55% 35%;
+    --status-healthy-bg:  150 40% 90%;
+    --status-warning:     42 90% 50%;
+    --status-warning-bg:  42 75% 90%;
+    --status-critical:    5 70% 50%;
+    --status-critical-bg: 5 60% 92%;
+    --status-unknown:     180 8% 45%;
+    --status-unknown-bg:  50 15% 88%;
+    --status-pending:     180 8% 45%;
+    --status-pending-bg:  50 15% 88%;
+    --status-info:        198 65% 42%;
+    --status-info-bg:     198 50% 91%;
+    --status-neutral:     180 8% 50%;
+    --status-neutral-bg:  50 15% 90%;
+
+    /* Categorical chart tokens — 팔레트 4색(mango/papaya/pineapple/teal) + 보조색 */
+    --chart-1: 20 90% 60%;    /* mango */
+    --chart-2: 350 85% 82%;   /* papaya pink */
+    --chart-3: 50 90% 65%;    /* pineapple yellow */
+    --chart-4: 180 92% 30%;   /* deep teal */
+    --chart-5: 262 55% 55%;   /* violet */
+    --chart-6: 217 60% 50%;   /* blue */
+    --chart-7: 100 55% 40%;   /* green */
+    --chart-8: 180 8% 48%;    /* teal-gray slate */
+
+    --surface-container-lowest:  50 65% 99%;
+    --surface-container-low:     50 55% 97%;
+    --surface-container:         50 45% 96%;
+    --surface-container-high:    50 35% 94%;
+    --surface-container-highest: 50 30% 92%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
 }
 
 /* default 모드 한정 — 약한 입체감
