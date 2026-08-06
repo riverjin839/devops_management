@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
 from typing import Any, Optional
@@ -26,6 +27,8 @@ from app.services.deep_checkers.base import (
     DeepCheckOutcome,
     DeepCheckerBase,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # kubeadm 의 RESIDUAL TIME 은 HumanDuration 포맷(예: "362d", "9y", "1y64d", "23h").
@@ -144,11 +147,23 @@ class CertExpiryChecker(DeepCheckerBase):
             st.metrics = {"rc": proc.returncode}
             if proc.returncode != 0:
                 # kube-apiserver 공식 이미지는 distroless(쉘/kubeadm 바이너리 없음)인 경우가
-                # 많아 여기서 실패하는 게 흔한 정상 경로다 — pending 으로 뭉개지 말고
-                # "왜"(exit code + stderr)를 그대로 남기고, auto 모드면 스냅샷으로 폴백한다.
+                # 많고, 그 외에도 "Internal error occurred" 처럼 클러스터마다 다른 이유로
+                # exec 자체가 거부되기도 한다 — pending 으로 뭉개지 말고 "왜"(exit code +
+                # stderr)를 그대로 남기고, auto 모드면 스냅샷으로 폴백한다. UI(steps/DB)만
+                # 보지 않는 운영자도 서버 로그로 추적할 수 있도록 warning 도 함께 남긴다.
                 st.status = "failed"
-                st.detail = f"rc={proc.returncode} · {(proc.stderr or '')[:120]}"
+                stderr_excerpt = (proc.stderr or "")[:300]
+                st.detail = f"rc={proc.returncode} · {stderr_excerpt}"
+                cluster_label = getattr(ctx.cluster, "name", None) or "(no cluster)"
+                logger.warning(
+                    "cert_expiry: kubectl exec kubeadm certs check-expiration 실패 "
+                    "(cluster=%s, pod=%s, rc=%s): %s",
+                    cluster_label, target.metadata.name, proc.returncode, stderr_excerpt,
+                )
                 if fallback_ok:
+                    logger.info(
+                        "cert_expiry: pod exec 실패 → snapshot 폴백 (cluster=%s)", cluster_label,
+                    )
                     return self._check_via_snapshot(ctx, warning_days, critical_days, snapshot_max_age_hours)
                 return DeepCheckOutcome(
                     status=StatusEnum.pending,
@@ -251,6 +266,10 @@ class CertExpiryChecker(DeepCheckerBase):
             if not latest_per_host:
                 st.status = "failed"
                 st.detail = "kubeadm_certs 스냅샷 없음"
+                logger.warning(
+                    "cert_expiry: kubeadm_certs 스냅샷 없음 (cluster=%s) — %s",
+                    getattr(ctx.cluster, "name", None) or "(no cluster)", collect_hint,
+                )
                 return DeepCheckOutcome(
                     status=StatusEnum.pending,
                     message=f"수집된 kubeadm 인증서 스냅샷이 없습니다. {collect_hint}",

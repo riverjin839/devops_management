@@ -265,6 +265,18 @@ class DeepCheckerBase(ABC):
             raise
         finally:
             rec.duration_ms = int((time.time() - t0) * 1000)
+            # 체커가 예외를 던지지 않고 st.status="failed" 만 세팅한 뒤 그대로
+            # DeepCheckOutcome 을 반환하는 경우(흔한 "정상적인 실패" 경로 — 권한 부족,
+            # 바이너리 없음, 스냅샷 없음 등) 는 safe_run() 의 일반 예외 로깅을 타지 않아
+            # 예전엔 서버 로그에 아무 흔적도 안 남았다(실사례: cert_expiry 의 kubectl
+            # exec 실패가 DB/steps 에만 기록되고 journalctl 등에는 안 보임). 여기서
+            # 한 곳에 모아 로깅해 모든 체커가 별도 logger 호출 없이도 추적 가능하게 한다.
+            if rec.status == "failed":
+                logger.warning(
+                    "deep check %s[%s] step '%s' (%s) failed: %s",
+                    self.check_type, getattr(self, "_log_cluster_label", "?"),
+                    step_id, label, (rec.detail or "")[:300],
+                )
 
     def _collected_steps(self) -> list[dict[str, Any]]:
         return [asdict(s) for s in getattr(self, "_steps", [])]
@@ -279,6 +291,9 @@ class DeepCheckerBase(ABC):
         self._steps = []
         self._commands = []
         self._run_start = start
+        # _step() 의 실패 로깅이 클러스터를 식별할 수 있도록 — ctx.cluster 가 실제 ORM
+        # 객체가 아닐 수도 있어(테스트, in-cluster 단독 모드) getattr 로 방어한다.
+        self._log_cluster_label = getattr(ctx.cluster, "name", None) or "(no cluster)"
         try:
             outcome = self.run(ctx)
             outcome.duration_ms = int((time.time() - start) * 1000)
