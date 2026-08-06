@@ -3,6 +3,9 @@
 This file provides essential context for AI assistants (Claude and others) working on this codebase.
 
 ---
+## riverjin839  custom 요청 
+모든 "실행"버튼 이벤트에는 항상 상세,실시간 로그 출력이 함께 구현되어야 하고, 사용자  "로그 보기" 옵션을 결정할수있어야한다.
+
 
 ## Project Overview
 
