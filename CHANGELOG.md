@@ -11,6 +11,11 @@
 1.17.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **K8s 인증서 만료 점검 실패 시 원인 로그가 안 보임**: `kubeadm certs check-expiration`
+  실행이 실패해도(예: 표준 `kube-apiserver` 이미지에 `kubeadm` 바이너리가 없어 나는
+  "executable file not found") 셀 메시지는 "권한 또는 바이너리 부재"라는 고정 문구뿐이고
+  실제 stderr 는 실행 로그를 펼쳐야만 보이는 `details.stderr` 에만 있었다. 이제 stderr(또는
+  stdout) 발췌를 메시지에 바로 담아 셀 툴팁·실행 목록에서도 원인이 바로 보인다.
 - **Deep check 실행이 여전히 500 (`ai_status` NotNullViolation, 심각)**: 스키마 점검이
   `missing_column`/`not_null_drift` 두 종류만 감지해 이 케이스를 놓쳤다 —
   `deep_check_results.ai_status` 는 **모델에 존재한 적조차 없는** 컬럼인데 운영 DB 에만

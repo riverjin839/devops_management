@@ -95,13 +95,18 @@ class CertExpiryChecker(DeepCheckerBase):
             timeout=20,
         )
         if proc.returncode != 0:
-            # exec 권한 또는 kubeadm 부재
+            # exec 권한 또는 kubeadm 부재 — 실제 stderr 를 message 에 바로 노출한다.
+            # details.stderr 에만 남기면 "실행된 명령" 로그를 직접 펼쳐야만 보여서
+            # 운영자가 셀 툴팁/실행 목록만 보고는 원인을 알 수 없었다.
+            stderr_excerpt = (proc.stderr or proc.stdout or "").strip()[:300]
+            reason = stderr_excerpt or f"exit code {proc.returncode}"
             return DeepCheckOutcome(
                 status=StatusEnum.pending,
-                message="kubeadm certs check-expiration 실행 불가 (권한 또는 바이너리 부재)",
+                message=f"kubeadm certs check-expiration 실행 실패: {reason}",
                 details={
                     "returncode": proc.returncode,
                     "stderr": (proc.stderr or "")[:1000],
+                    "stdout": (proc.stdout or "")[:1000],
                 },
             )
 
