@@ -359,6 +359,236 @@
     --motion-slow: 300ms;
     --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+
+  /* ── Burnt Sienna — Figma 색상 조합 라이브러리 참고 (테라코타/베이지/샌드/시에나) ──
+     https://www.figma.com/ko-kr/resource-library/color-combinations/
+     시드 4색: #E35336(terracotta) #F5F5DC(beige) #F4A460(sandy brown) #A0522D(sienna).
+     따뜻한 대지색 팔레트 — 크림 배경 + 번트오렌지 primary + 진한 시에나 사이드바. */
+  html.burnt-sienna {
+    --background: 42 35% 95%;
+    --foreground: 19 35% 18%;
+    --card: 42 45% 98%;
+    --card-foreground: 19 35% 18%;
+    --popover: 42 45% 98%;
+    --popover-foreground: 19 35% 18%;
+    --primary: 10 70% 55%;             /* #E35336 terracotta */
+    --primary-foreground: 42 45% 98%;
+    --secondary: 32 45% 90%;           /* sandy tint */
+    --secondary-foreground: 19 35% 18%;
+    --muted: 40 30% 92%;
+    --muted-foreground: 20 15% 40%;
+    --accent: 28 75% 90%;              /* peach hover */
+    --accent-foreground: 19 35% 18%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 42 45% 98%;
+    --border: 34 25% 84%;
+    --input: 34 25% 84%;
+    --ring: 10 70% 55%;
+    --radius: 0.875rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: none;
+
+    /* Sidebar — 진한 시에나 브라운 (#A0522D 계열) */
+    --sidebar:                  19 30% 16%;
+    --sidebar-foreground:       42 40% 94%;
+    --sidebar-muted-foreground: 34 15% 65%;
+    --sidebar-accent:           10 55% 30%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           19 25% 24%;
+    --sidebar-primary:          10 70% 60%;
+
+    --status-healthy:     142 50% 38%;
+    --status-healthy-bg:  90 35% 90%;
+    --status-warning:     32 85% 50%;
+    --status-warning-bg:  34 70% 90%;
+    --status-critical:    6 70% 48%;
+    --status-critical-bg: 6 55% 92%;
+    --status-unknown:     20 10% 45%;
+    --status-unknown-bg:  34 15% 88%;
+    --status-pending:     20 10% 45%;
+    --status-pending-bg:  34 15% 88%;
+    --status-info:        199 60% 42%;
+    --status-info-bg:     199 45% 91%;
+    --status-neutral:     20 10% 50%;
+    --status-neutral-bg:  34 15% 90%;
+
+    /* Categorical chart tokens — 팔레트 3색(terracotta/sandy/sienna) + 구분용 보조색 */
+    --chart-1: 10 70% 55%;    /* terracotta */
+    --chart-2: 28 80% 60%;    /* sandy orange */
+    --chart-3: 19 55% 40%;    /* sienna */
+    --chart-4: 217 60% 50%;   /* blue */
+    --chart-5: 168 50% 42%;   /* teal */
+    --chart-6: 340 55% 50%;   /* rose */
+    --chart-7: 262 55% 55%;   /* violet */
+    --chart-8: 20 12% 48%;    /* warm slate */
+
+    --surface-container-lowest:  42 45% 98%;
+    --surface-container-low:     42 40% 96%;
+    --surface-container:         42 35% 95%;
+    --surface-container-high:    40 30% 93%;
+    --surface-container-highest: 38 28% 91%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* ── Tuscan Sunset — Figma 색상 조합 라이브러리 참고 (테라코타/피치/모브/러스트) ──
+     시드 4색: #E35336(terracotta) #FFD3AC(peach) #9988A1(mauve) #8A2B0E(rust).
+     Burnt Sienna 와 같은 terracotta 를 공유하되, 모브톤 뉴트럴과 피치 서페이스로
+     노을(sunset) 느낌을 낸다. */
+  html.tuscan-sunset {
+    --background: 28 45% 95%;
+    --foreground: 14 40% 16%;
+    --card: 28 55% 98%;
+    --card-foreground: 14 40% 16%;
+    --popover: 28 55% 98%;
+    --popover-foreground: 14 40% 16%;
+    --primary: 10 70% 52%;             /* #E35336 terracotta */
+    --primary-foreground: 28 55% 98%;
+    --secondary: 28 60% 90%;           /* #FFD3AC peach surface */
+    --secondary-foreground: 14 40% 16%;
+    --muted: 28 30% 93%;
+    --muted-foreground: 281 10% 40%;   /* #9988A1 mauve-gray */
+    --accent: 28 80% 88%;              /* peach hover */
+    --accent-foreground: 14 40% 16%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 28 55% 98%;
+    --border: 28 25% 85%;
+    --input: 28 25% 85%;
+    --ring: 10 70% 52%;
+    --radius: 0.875rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: none;
+
+    /* Sidebar — 진한 러스트(#8A2B0E) 배경 + 모브 액센트 필 */
+    --sidebar:                  14 35% 15%;
+    --sidebar-foreground:       28 40% 94%;
+    --sidebar-muted-foreground: 281 8% 65%;
+    --sidebar-accent:           281 20% 28%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           14 25% 22%;
+    --sidebar-primary:          10 70% 58%;
+
+    --status-healthy:     142 45% 38%;
+    --status-healthy-bg:  100 30% 90%;
+    --status-warning:     34 85% 50%;
+    --status-warning-bg:  34 65% 90%;
+    --status-critical:    8 65% 46%;
+    --status-critical-bg: 8 55% 92%;
+    --status-unknown:     281 8% 45%;
+    --status-unknown-bg:  28 15% 88%;
+    --status-pending:     281 8% 45%;
+    --status-pending-bg:  28 15% 88%;
+    --status-info:        199 60% 42%;
+    --status-info-bg:     199 45% 91%;
+    --status-neutral:     281 8% 50%;
+    --status-neutral-bg:  28 15% 90%;
+
+    /* Categorical chart tokens — 팔레트 4색(terracotta/peach/mauve/rust) + 보조색 */
+    --chart-1: 10 70% 52%;    /* terracotta */
+    --chart-2: 28 90% 70%;    /* peach */
+    --chart-3: 281 20% 55%;   /* mauve */
+    --chart-4: 14 70% 32%;    /* deep rust */
+    --chart-5: 217 60% 50%;   /* blue */
+    --chart-6: 168 50% 42%;   /* teal */
+    --chart-7: 38 85% 50%;    /* amber */
+    --chart-8: 281 8% 48%;    /* mauve-gray slate */
+
+    --surface-container-lowest:  28 55% 98%;
+    --surface-container-low:     28 45% 96%;
+    --surface-container:         28 40% 95%;
+    --surface-container-high:    28 35% 93%;
+    --surface-container-highest: 28 30% 91%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* ── Electropop — Figma 색상 조합 라이브러리 참고 (샤르트뢰즈/오렌지/마젠타/인디고) ──
+     시드 4색: #CCFF00(chartreuse) #FF6B00(orange) #F900FF(magenta) #5200FF(indigo).
+     원색 그대로는 전체 배경에 쓰기엔 채도가 너무 높아 다크 베이스 위에 네온 액센트로
+     "팝"하게 얹는 구성 — 이 앱에서 유일한 비비드 다크 테마. */
+  html.electropop {
+    --background: 260 25% 8%;
+    --foreground: 70 10% 94%;
+    --card: 260 20% 11%;
+    --card-foreground: 70 10% 94%;
+    --popover: 260 20% 11%;
+    --popover-foreground: 70 10% 94%;
+    --primary: 299 100% 60%;           /* #F900FF magenta */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 260 18% 16%;
+    --secondary-foreground: 70 10% 94%;
+    --muted: 260 15% 16%;
+    --muted-foreground: 260 8% 65%;
+    --accent: 259 60% 22%;             /* deep indigo hover */
+    --accent-foreground: 70 10% 94%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 260 15% 22%;
+    --input: 260 15% 22%;
+    --ring: 299 100% 60%;
+    --radius: 0.75rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: none;
+
+    /* Sidebar — body 와 같은 다크 인디고, 마젠타 액센트 필 */
+    --sidebar:                  260 22% 6%;
+    --sidebar-foreground:       70 10% 94%;
+    --sidebar-muted-foreground: 260 8% 65%;
+    --sidebar-accent:           299 70% 30%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           260 15% 18%;
+    --sidebar-primary:          299 100% 65%;
+
+    /* Dark 계열 status — 전경 채도 유지, 배경만 어둡게 (html.dark 패턴과 동일) */
+    --status-healthy:     142 71% 50%;
+    --status-healthy-bg:  142 50% 16%;
+    --status-warning:     38 92% 55%;
+    --status-warning-bg:  38 60% 16%;
+    --status-critical:    0 84% 62%;
+    --status-critical-bg: 0 60% 18%;
+    --status-unknown:     260 9% 60%;
+    --status-unknown-bg:  260 12% 20%;
+    --status-pending:     260 9% 60%;
+    --status-pending-bg:  260 12% 20%;
+    --status-info:        199 89% 58%;
+    --status-info-bg:     199 50% 18%;
+    --status-neutral:     260 8% 62%;
+    --status-neutral-bg:  260 8% 20%;
+
+    /* Categorical chart tokens — 팔레트 4색(indigo/lime/orange/magenta) 그대로 + 보조색 */
+    --chart-1: 259 100% 65%;  /* #5200FF indigo */
+    --chart-2: 72 90% 55%;    /* #CCFF00 lime */
+    --chart-3: 25 95% 58%;    /* #FF6B00 orange */
+    --chart-4: 330 85% 62%;   /* hot pink — magenta(primary) 와 구분되게 살짝 이동 */
+    --chart-5: 190 75% 55%;   /* cyan */
+    --chart-6: 45 90% 55%;    /* gold */
+    --chart-7: 210 80% 60%;   /* blue */
+    --chart-8: 260 10% 60%;   /* neutral slate */
+
+    /* Dark: 밝을수록 더 떠 있는(elevated) 톤 — lowest 는 background 와 동일 */
+    --surface-container-lowest:  260 25% 8%;
+    --surface-container-low:     260 22% 10%;
+    --surface-container:         260 20% 12%;
+    --surface-container-high:    260 18% 15%;
+    --surface-container-highest: 260 16% 18%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
 }
 
 /* default 모드 한정 — 약한 입체감
@@ -1016,8 +1246,8 @@ html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* ── 업무 현황 스케줄 배경 — 흰색(기본) / 크림(옵션) ──────────────────────────
    업무 현황 홈의 "당일 스케줄 · 담당자별 진행현황" 패널 surface 에만 적용.
    --card/--secondary/--muted/--border 등 표면 토큰만 subtree 에서 덮어쓴다.
-   dark 테마에는 적용하지 않아 다크 화면이 깨지지 않는다. */
-html:not(.dark) .schedule-bg-white {
+   어두운 배경 테마(dark, electropop)에는 적용하지 않아 다크 화면이 깨지지 않는다. */
+html:not(.dark):not(.electropop) .schedule-bg-white {
   --card: 0 0% 100%;
   --popover: 0 0% 100%;
   --secondary: 0 0% 96%;
@@ -1025,7 +1255,7 @@ html:not(.dark) .schedule-bg-white {
   --border: 0 0% 90%;
   --input: 0 0% 90%;
 }
-html:not(.dark) .schedule-bg-cream {
+html:not(.dark):not(.electropop) .schedule-bg-cream {
   --card: 38 50% 99%;
   --popover: 38 50% 99%;
   --secondary: 35 30% 92%;

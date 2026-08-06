@@ -10,19 +10,37 @@
 
 1.25.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **테마 3종 추가 — Burnt Sienna / Tuscan Sunset / Electropop**: Figma 색상 조합 라이브러리의
+  실제 배색(Burnt sienna, Tuscan sunset, Electropop)을 그대로 옮긴 앱 전체 UI 테마 3개가
+  추가됐다. 사이드바 레일의 테마 순환 버튼(default → comfort → 번트 시에나 → 토스카나 선셋 →
+  일렉트로팝 → light → dark → system)으로 전환한다. Electropop 은 네온 액센트의 비비드
+  다크 테마로, 이 앱에서 유일한 "다크 계열 + 원색 accent" 조합이다. Frontend:
+  `index.css` 에 `html.burnt-sienna` / `html.tuscan-sunset` / `html.electropop` 토큰 블록
+  추가, `stores/themeStore.ts` `Theme` 유니언 확장, `Sidebar.tsx` 테마 순환/라벨/아이콘 갱신.
+
 ### Changed
-- **메인 사이드바 — flyout 메뉴가 마우스 오버만으로 열리도록 개선**: 클러스터/서버/네트워크
-  등 그룹 아이콘과 즐겨찾기·Your Island 아이콘의 flyout 메뉴가 지금까지 클릭해야만 열렸는데,
-  마우스를 올리기만 해도(hover-intent) 바로 열리도록 바꿨다. 레일을 스쳐 지나가는 마우스에
-  깜빡이지 않도록 150ms 오픈 지연을, 아이콘에서 flyout 패널로 이동하는 짧은 순간 hover 가
-  끊겨도 안 닫히도록 200ms 닫기 지연(패널 진입 시 취소)을 뒀다. 클릭 동작은 그대로 즉시
-  토글된다. R-4 5차 라운드 잔여 D-057~D-059 도 함께 처리: 마지막 고아 라우트였던
-  `/jira-import` 를 협업 그룹에 편입(D-057), '클러스터' 그룹 flyout(20여 항목)을 모니터링/
-  콘솔/점검/관리 섹션으로 구분(D-058), 하위 메뉴가 있는 아이콘에 점 인디케이터를 붙여 즉시
-  이동 아이콘과 구분(D-059) — 5차 라운드 전 항목(D-054~D-060) 완료. Frontend:
-  `components/layout/{Sidebar,NavFlyout}.tsx`, `navConfig.ts`.
+- **운영레벨 커스텀 색상 — 배색 패턴 프리셋을 Figma 원본 3종으로 교체**: 커스텀 색상
+  선택기의 배색 패턴 프리셋을 근사값 5종에서 Figma 색상 조합 라이브러리 원본 HEX 3종
+  (Burnt Sienna/Tuscan Sunset/Electropop)으로 교체했다. Frontend: `lib/colorPatterns.ts`
+  `COLOR_PATTERNS` 값 갱신.
 
 ### Fixed
+- **K8S 자원 관리(`/k8s-allocation`) — 사용효율 경고 로직·포커스 접근성·Pod 상태 노출 수정**: impeccable
+  critique 진단(Design Health 30/40)에서 나온 이슈를 반영. CPU/MEM 사용효율 요약 카드의 경고
+  로직이 "낭비"(30% 미만)만 반영하고 자체 툴팁이 설명하는 "스로틀/OOM 위험"(105% 초과) 케이스는
+  실제로 반영하지 않던 버그를 수정했고, 경고 신호에 색상만이 아니라 아이콘을 병기했다.
+  `NsRankingView`에만 없던 "집계 중(computing)" 상태 분기를 추가해 상단 배너와 탭 본문이
+  모순되던 문제를 해소했다. `PageSizeSelect`·자동갱신 간격 select·카드 열 수 select·Pod
+  스케줄 계산기 입력 2개 등 5개 폼 컨트롤에 키보드 포커스 인디케이터가 전혀 없던 문제(전역
+  CSS가 outline을 제거한 뒤 로컬 보완이 빠짐)를 수정했다. API에는 있지만 화면 어디에도
+  렌더링되지 않던 파드 `phase`(Running/Pending/Failed 등)를 파드 드릴다운 테이블에 상태
+  배지로 노출해 "Pending 원인 조사" 워크플로가 화면 안에서 완결되게 했다. 그 외 노드 뷰(카드·
+  테이블)에만 없던 효율 배지(`EffBadge`) 추가로 네임스페이스/워크로드 뷰와 대칭을 맞췄고,
+  요약 그리드에 누락돼 있던 "MEM 사용효율" 슬롯을 추가했으며, "스케줄 가능 Pod" 수치가 두
+  카드에서 중복 노출되던 것을 정리했다. 물음표 툴팁(`StatTooltip`)을 프로젝트 표준 Base UI
+  `Tooltip` 프리미티브로 교체해 키보드/스크린리더 접근성을 개선했다. Frontend:
+  `pages/K8sAllocationPage.tsx`.
 - **홈 업무 현황(`/`, 업무 현황 탭) — 상태색 통일·에러 처리·삭제 확인·접근성 수정**: impeccable
   critique 진단(Design Health 22/40, P0 1건)에서 나온 이슈를 반영. 당일 스케줄·주간 스윔레인·
   담당자별 진행 현황 세 컴포넌트가 같은 업무 상태에 서로 다른 색 토큰을 쓰던 문제를 공용
