@@ -11,6 +11,7 @@ import {
   suggestAttribute,
 } from '@/lib/clusterIconBuilder';
 import { useOperationLevels, levelColor, levelCustomHex } from '@/hooks/useOperationLevels';
+import { COLOR_PATTERNS } from '@/lib/colorPatterns';
 
 /** 빌더 탭에 프리필할 클러스터 속성 — 전달되면 "빌더" 탭이 노출된다. */
 export interface IconBuilderContext {
@@ -403,9 +404,12 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
   const [regionAbbr, setRegionAbbr] = useState(() => suggestRegionAbbr(context.region));
   const [watermark, setWatermark] = useState(true);
   const [shape, setShape] = useState<'square' | 'circle'>('square');
+  /** 배색 패턴에서 직접 고른 시드 색상 — 지정되면 운영타입 색상 대신 이 색을 쓴다. */
+  const [patternHex, setPatternHex] = useState<string | null>(null);
 
   const colorToken = levelColor(levels, level || undefined);
-  const customHex = levelCustomHex(levels, level || undefined);
+  const levelHex = levelCustomHex(levels, level || undefined);
+  const customHex = patternHex ?? levelHex;
   const svg = useMemo(
     () => buildClusterIconSvg({ workName, attribute, regionAbbr, colorToken, customHex, k8sWatermark: watermark, shape }),
     [workName, attribute, regionAbbr, colorToken, customHex, watermark, shape],
@@ -483,6 +487,46 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
         </select>
       </label>
 
+      {/* 배색 패턴 — 큐레이션 팔레트에서 색을 직접 고르면 운영타입 색상을 덮어쓴다.
+          같은 이름의 앱 테마(Settings 와 무관하게 사이드바 테마 순환 버튼에서도 선택 가능)와
+          팔레트를 맞춰, 특정 테마를 쓸 때 그 테마 색으로 아이콘도 통일할 수 있게 한다. */}
+      <div className="flex flex-col gap-1.5 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">배색 패턴 (선택 — 고르면 운영타입 색상 대신 적용)</span>
+          {patternHex && (
+            <button
+              type="button"
+              onClick={() => setPatternHex(null)}
+              className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+            >
+              초기화
+            </button>
+          )}
+        </div>
+        <div className="space-y-1.5">
+          {COLOR_PATTERNS.map((pattern) => (
+            <div key={pattern.key} className="flex items-center gap-1.5">
+              <span className="w-24 shrink-0 truncate text-muted-foreground/80">{pattern.label}</span>
+              <div className="flex items-center gap-1">
+                {pattern.colors.map((hex) => (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => setPatternHex(hex)}
+                    title={hex}
+                    aria-label={`${pattern.label} ${hex}`}
+                    style={{ backgroundColor: hex }}
+                    className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 ${
+                      patternHex === hex ? 'border-primary ring-1 ring-primary' : 'border-border/60'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="flex items-center gap-4 text-xs">
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={watermark} onChange={(e) => setWatermark(e.target.checked)} className="accent-primary" />
@@ -519,7 +563,8 @@ function BuilderTab({ context, onApply }: { context: IconBuilderContext; onApply
       <p className="text-xs text-muted-foreground/70 leading-relaxed">
         • SVG 로 저장되어 어느 크기에서도 선명합니다<br />
         • 우상단은 상태 표시(dot) 자리라 비워둡니다<br />
-        • 환경 색은 Settings ▸ 운영등급에서 바꿀 수 있습니다
+        • 운영타입별 기본 색은 Settings ▸ 운영등급에서 바꿀 수 있습니다<br />
+        • 배색 패턴을 고르면 이 아이콘 1개에만 적용되고, 운영등급 설정은 바뀌지 않습니다
       </p>
     </div>
   );
