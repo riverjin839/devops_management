@@ -10,6 +10,26 @@
 
 1.26.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **노드 서버스펙 대장(/node-specs) — impeccable critique 12건 반영**: 헤더의 CSV내보내기/
+  템플릿/CSV업로드/엑셀붙여넣기/HostFacts수집/클러스터임포트 6개 버튼이 색만 다르게 동일
+  비중으로 나열돼 있던 것을 "내보내기"/"가져오기" 드롭다운 메뉴 2개로 접어 "신규 등록"만
+  유일한 강조 버튼으로 남겼다. **Host Facts 수집(SSH)** 실행은 CLAUDE.md 필수 규칙(실행
+  버튼은 상세·실시간 로그 + 사용자가 켜고 끄는 로그 보기)을 위반해 결과를 건수 토스트
+  하나로만 보여주고 실패 호스트를 알 방법이 없었다 — 실행 전 확인 절차를 추가하고, 완료
+  후 모달을 자동으로 닫지 않고 호스트별 상태를 로그 뷰(접기/펼치기)로 남기게 했다.
+  그 외: 목록 조회 실패가 "등록된 서버 없음"과 똑같이 보이던 것을 별도 에러 상태로 구분,
+  상태 배지/헤더 버튼/디스크 타입의 하드코딩 팔레트 색을 `--status-*` 토큰으로 교체,
+  CSV/엑셀 붙여넣기의 중복 hostname 사전 경고 + 적용 후 오류 itemize + 대용량 경고,
+  3개 모달 닫기(X) 버튼 aria-label 보강, Host Facts 모달 입력 6곳 focus ring 추가,
+  SSD/VM 순환 토글에 aria-pressed + 저장 중 재클릭 방지, 표를 `MacCard` 로 통일,
+  역할 필터에 `ingress` 옵션 추가. Frontend: `pages/NodeSpecPage.tsx`,
+  `components/node-specs/NodeSpecCsvUploadModal.tsx`,
+  `components/node-specs/NodeSpecPasteModal.tsx`,
+  `components/node-specs/NodeSpecEditModal.tsx`,
+  `components/node-specs/DiffRow.tsx`(신규 — 두 모달이 공유하던 diff 행 렌더러를
+  분리해 중복 제거).
+
 ## [1.26.1] - 2026-08-06
 
 ### Added

@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, ClipboardPaste, Loader2, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { nodeSpecsApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
-import type { NodeSpecCsvDiff, NodeSpecCsvPreviewResponse, NodeSpecCsvRow } from '@/types';
+import type { NodeSpecCsvPreviewResponse, NodeSpecCsvRow } from '@/types';
 import {
   NODE_SPEC_COLUMNS, HEADER_TO_FIELD, normalizeHeader, parseCellValue,
 } from './columns';
 import type { NodeSpecColumn } from './columns';
 import type { NodeServerSpec } from '@/types';
+import { ActionCountPills, DiffRow } from './DiffRow';
+
+// 대용량 붙여넣기가 UI 를 그대로 얼릴 수 있어 임계치 이상이면 경고만 하고 계속 진행.
+const LARGE_ROW_WARN_THRESHOLD = 2000;
 
 interface Props {
   open: boolean;
@@ -107,6 +111,7 @@ function interpret(text: string, displayColumns: NodeSpecColumn[]): PasteInterpr
   }
 
   const result: NodeSpecCsvRow[] = [];
+  const seenHostnames = new Map<string, number>();
   dataRows.forEach((cells, r) => {
     const obj: Record<string, unknown> = {};
     mappedFields.forEach((field, colIdx) => {
@@ -123,11 +128,21 @@ function interpret(text: string, displayColumns: NodeSpecColumn[]): PasteInterpr
       }
     });
     if (obj.hostname) {
+      // 같은 배치 안에서 hostname 이 겹치면 나중 행이 앞 행 결과를 조용히 덮어쓴다.
+      const hostname = String(obj.hostname);
+      if (seenHostnames.has(hostname)) {
+        warnings.push(`행 ${r + 1}: hostname "${hostname}" 이 행 ${seenHostnames.get(hostname)! + 1}과 중복 — 나중 행이 앞 행을 덮어씁니다.`);
+      } else {
+        seenHostnames.set(hostname, r);
+      }
       result.push(obj as NodeSpecCsvRow);
     } else {
       warnings.push(`행 ${r + 1}: hostname 비어있음 → 건너뜀`);
     }
   });
+  if (result.length > LARGE_ROW_WARN_THRESHOLD) {
+    warnings.push(`${result.length}행 — 대용량 붙여넣기는 미리보기 계산이 느릴 수 있습니다. 필요하면 나눠서 붙여넣으세요.`);
+  }
 
   return {
     rows: result,
@@ -139,60 +154,6 @@ function interpret(text: string, displayColumns: NodeSpecColumn[]): PasteInterpr
   };
 }
 
-// ── 결과 행 스타일 ────────────────────────────────────────────────────
-const ACTION_CLS: Record<string, string> = {
-  insert: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-  update: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
-  skip:   'bg-slate-500/10 text-slate-400 border-slate-500/30',
-  error:  'bg-red-500/10 text-red-500 border-red-500/30',
-};
-const ACTION_LABEL: Record<string, string> = {
-  insert: '신규', update: '업데이트', skip: '변경없음', error: '오류',
-};
-
-function DiffRow({ d }: { d: NodeSpecCsvDiff }) {
-  const keys = Object.keys(d.changes);
-  return (
-    <tr className="border-b border-border align-top">
-      <td className="px-2 py-1.5 text-xs text-muted-foreground">{d.rowIndex + 1}</td>
-      <td className="px-2 py-1.5">
-        <span className={`inline-block text-xs px-1.5 py-0.5 rounded-full border ${ACTION_CLS[d.action] ?? ''}`}>
-          {ACTION_LABEL[d.action] ?? d.action}
-        </span>
-      </td>
-      <td className="px-2 py-1.5 font-mono text-sm">{d.hostname}</td>
-      <td className="px-2 py-1.5 text-xs">
-        {d.action === 'error' ? (
-          <span className="text-red-500">{d.error ?? '-'}</span>
-        ) : keys.length === 0 ? (
-          <span className="text-muted-foreground">-</span>
-        ) : (
-          <details>
-            <summary className="cursor-pointer text-muted-foreground">
-              {keys.length}개 필드 {d.action === 'insert' ? '신규' : '변경'}
-            </summary>
-            <table className="mt-1 text-xs font-mono w-full">
-              <tbody>
-                {keys.map((k) => (
-                  <tr key={k} className="border-t border-border/40">
-                    <td className="pr-2 text-muted-foreground/80">{k}</td>
-                    <td className="pr-2 text-red-400/80 line-through max-w-[180px] truncate">
-                      {String(d.changes[k].old ?? '—')}
-                    </td>
-                    <td className="pr-2 text-emerald-400 max-w-[200px] truncate">
-                      → {String(d.changes[k].new ?? '—')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
-        )}
-      </td>
-    </tr>
-  );
-}
-
 // ── 메인 모달 ─────────────────────────────────────────────────────────
 export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, initialText }: Props) {
   const dialogRef = useModalA11y(open, onClose);
@@ -201,6 +162,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
   const [previewLoading, setPreviewLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [applyErrors, setApplyErrors] = useState<string[]>([]);
 
   const cols = displayColumns ?? NODE_SPEC_COLUMNS;
 
@@ -257,6 +219,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
       const d = r.data;
       setMsg(`✓ 신규 ${d.inserted} / 업데이트 ${d.updated} / 건너뜀 ${d.skipped}` +
         (d.errors.length ? ` · 오류 ${d.errors.length}건` : ''));
+      setApplyErrors(d.errors);
       onApplied();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string };
@@ -266,7 +229,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
     }
   };
 
-  const reset = () => { setText(''); setPreview(null); setMsg(null); };
+  const reset = () => { setText(''); setPreview(null); setMsg(null); setApplyErrors([]); };
 
   if (!open) return null;
 
@@ -277,7 +240,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <ClipboardPaste className="w-5 h-5 text-primary" />
           <h2 id="node-spec-paste-modal-title" className="text-sm font-semibold">엑셀 블록 붙여넣기 — 노드 서버스펙</h2>
-          <button onClick={onClose} disabled={applying}
+          <button onClick={onClose} disabled={applying} title="닫기" aria-label="닫기"
             className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
@@ -320,7 +283,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
           )}
 
           {interpretation && interpretation.warnings.length > 0 && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-500">
+            <div className="px-3 py-2 rounded-lg bg-status-warning/10 border border-status-warning/30 text-xs text-status-warning">
               <p className="font-medium mb-0.5 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" /> 경고 {interpretation.warnings.length}건
               </p>
@@ -344,20 +307,7 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
           {preview && (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
-                  신규 {preview.insertCount}
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30">
-                  업데이트 {preview.updateCount}
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/30">
-                  변경없음 {preview.skipCount}
-                </span>
-                {preview.errorCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/30">
-                    오류 {preview.errorCount}
-                  </span>
-                )}
+                <ActionCountPills preview={preview} />
               </div>
               <div className="border border-border rounded-xl overflow-hidden max-h-[320px] overflow-y-auto">
                 <table className="w-full text-sm">
@@ -380,10 +330,16 @@ export function NodeSpecPasteModal({ open, onClose, onApplied, displayColumns, i
           {msg && (
             <div className={`px-3 py-2 rounded-lg text-sm border ${
               msg.startsWith('✓')
-                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                ? 'bg-status-healthy/10 text-status-healthy border-status-healthy/30'
                 : 'bg-destructive/10 text-destructive border-destructive/30'
             }`}>
-              {msg}
+              <p>{msg}</p>
+              {applyErrors.length > 0 && (
+                <ul className="list-disc pl-4 mt-1 space-y-0.5 text-status-critical">
+                  {applyErrors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
+                  {applyErrors.length > 10 && <li>... 외 {applyErrors.length - 10}건</li>}
+                </ul>
+              )}
             </div>
           )}
         </div>

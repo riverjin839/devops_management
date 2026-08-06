@@ -3,39 +3,99 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardCheck, Plus, Search, RefreshCw, Download, Upload, Trash2, Pencil,
   Server, Cpu, HardDrive, MapPin, Square, Copy, ClipboardPaste, FileDown, Terminal,
+  AlertTriangle, ScrollText, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y} from '@/components/common';
+  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX, useModalA11y, LogViewer} from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useGridSelection } from '@/hooks/useGridSelection';
 import { nodeSpecsApi } from '@/services/api';
-import type { NodeServerSpec, NodeSpecStatus } from '@/types';
+import type { NodeServerSpec, NodeSpecStatus, NodeSpecHostFactsCollectResponse } from '@/types';
 import { NodeSpecEditModal } from '@/components/node-specs/NodeSpecEditModal';
 import { NodeSpecCsvUploadModal } from '@/components/node-specs/NodeSpecCsvUploadModal';
 import { NodeSpecPasteModal } from '@/components/node-specs/NodeSpecPasteModal';
 import { EXPORT_COLUMNS, NODE_SPEC_COLUMNS, serializeCellValue } from '@/components/node-specs/columns';
 
-const STATUS_CLS: Record<string, string> = {
-  active:       'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-  spare:        'bg-sky-500/10 text-sky-500 border-sky-500/30',
-  maintenance:  'bg-amber-500/10 text-amber-500 border-amber-500/30',
-  decommission: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
+// 토큰 기반 — 테마 7종에서 깨지지 않도록 emerald/sky/amber/slate 고정 팔레트 대신
+// --status-* 토큰을 쓴다. dot 색을 배지 클래스 문자열에서 split(' ')[0] 으로 뽑아내던
+// 방식은 클래스 순서가 바뀌면 깨지는 취약한 패턴이라 별도 필드로 분리했다.
+const STATUS_TONE: Record<string, { badge: string; dot: string }> = {
+  active:       { badge: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', dot: 'bg-status-healthy' },
+  spare:        { badge: 'bg-status-info/10 text-status-info border-status-info/30', dot: 'bg-status-info' },
+  maintenance:  { badge: 'bg-status-warning/10 text-status-warning border-status-warning/30', dot: 'bg-status-warning' },
+  decommission: { badge: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30', dot: 'bg-status-unknown' },
 };
+const DEFAULT_STATUS_TONE = { badge: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30', dot: 'bg-status-unknown' };
 
 const STATUS_LABEL: Record<string, string> = {
   active: '운영중', spare: '예비', maintenance: '점검', decommission: '폐기',
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const cls = STATUS_CLS[status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+  const tone = STATUS_TONE[status] ?? DEFAULT_STATUS_TONE;
   return (
-    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${cls}`}>
+    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${tone.badge}`}>
       {STATUS_LABEL[status] ?? status}
     </span>
+  );
+}
+
+interface HeaderMenuItem {
+  icon: typeof Download;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}
+
+// 예전엔 CSV내보내기/템플릿/CSV업로드/붙여넣기/HostFacts/클러스터임포트가 전부 같은 줄에
+// 색만 다르게(emerald/violet/indigo/sky) 나열돼 있었다 — 7개가 동일 비중으로 보여
+// "신규 등록"(진짜 주 동작) 과 구분이 안 됐다. 성격별(내보내기/가져오기) 메뉴로 접어
+// 인지 부하를 줄이고, 색은 다시 토큰으로 통일한다.
+function HeaderMenu({ label, icon: Icon, items }: { label: string; icon: typeof Download; items: HeaderMenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  const popRef = useModalA11y(open, () => setOpen(false));
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1"
+      >
+        <Icon className="w-3 h-3" /> {label}
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            ref={popRef}
+            role="menu"
+            aria-label={label}
+            className="absolute z-50 top-full mt-1 left-0 min-w-[200px] bg-card border border-border rounded-lg shadow-xl py-1"
+          >
+            {items.map((it, i) => (
+              <button
+                key={i}
+                role="menuitem"
+                title={it.title}
+                disabled={it.disabled}
+                onClick={() => { it.onClick(); setOpen(false); }}
+                className="w-full text-left px-3 py-1.5 text-sm text-foreground hover:bg-secondary flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <it.icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" /> {it.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -133,8 +193,19 @@ export function NodeSpecPage() {
   const [hostList, setHostList] = useState('');
   const [useSudo, setUseSudo] = useState(false);
   const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
+  const [confirmHostFacts, setConfirmHostFacts] = useState(false);
+  // 실행 결과 — 건수 토스트만으로는 "어느 호스트가 왜 실패했는지" 알 수 없다.
+  // CLAUDE.md 필수 규칙(모든 "실행" 버튼은 상세 로그 + 사용자가 켜고 끄는 로그 보기)에 따라
+  // 호스트별 상세를 로그 형태로 남기고 접었다 펼 수 있게 한다.
+  const [hostFactsResult, setHostFactsResult] = useState<NodeSpecHostFactsCollectResponse | null>(null);
+  const [hostFactsLogOpen, setHostFactsLogOpen] = useState(false);
   // Host Facts 수집 모달 접근성 (Escape·포커스 트랩·초점 복원). 수집 중엔 닫기 무시.
-  const hostFactsRef = useModalA11y(hostFactsOpen, () => { if (!collectingFacts) setHostFactsOpen(false); });
+  const closeHostFacts = () => {
+    setHostFactsOpen(false);
+    setHostFactsResult(null);
+    setHostFactsLogOpen(false);
+  };
+  const hostFactsRef = useModalA11y(hostFactsOpen, () => { if (!collectingFacts) closeHostFacts(); });
 
   const listQ = useQuery({
     queryKey: ['node-specs', clusterId, statusFilter, roleFilter, search],
@@ -238,12 +309,24 @@ export function NodeSpecPage() {
   }, []);
 
   // 인라인 셀 편집 저장
+  // SSD/VM 순환 토글처럼 클릭이 겹칠 수 있는 필드는 저장 중 재클릭을 막는다 —
+  // 안 막으면 두 클릭 모두 같은(아직 갱신 안 된) 값을 기준으로 "다음 값"을 계산해
+  // 순환이 한 칸만 움직이고 요청은 중복으로 나간다.
+  const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const saveField = async (id: string, patch: Partial<NodeServerSpec>) => {
+    const keys = Object.keys(patch).map((f) => `${id}:${f}`);
+    setSavingKeys((s) => new Set([...s, ...keys]));
     try {
       await nodeSpecsApi.update(id, patch);
       qc.invalidateQueries({ queryKey: ['node-specs'] });
     } catch (e: unknown) {
       toast.error('저장 실패', formatApiError(e));
+    } finally {
+      setSavingKeys((s) => {
+        const next = new Set(s);
+        keys.forEach((k) => next.delete(k));
+        return next;
+      });
     }
   };
 
@@ -300,10 +383,14 @@ export function NodeSpecPage() {
     }
   };
 
+  const hostFactsHosts = useMemo(() => {
+    const manualHosts = hostList.split(/[\n,\s]+/).map((h) => h.trim()).filter(Boolean);
+    return Array.from(new Set([...selectedHosts, ...manualHosts]));
+  }, [hostList, selectedHosts]);
+
   const handleCollectHostFacts = async () => {
     if (!clusterId) return;
-    const manualHosts = hostList.split(/[\n,\s]+/).map((h) => h.trim()).filter(Boolean);
-    const hosts = Array.from(new Set([...selectedHosts, ...manualHosts]));
+    const hosts = hostFactsHosts;
     if (hosts.length === 0) {
       toast.warning('호스트 목록 필요', 'IP/hostname 을 1개 이상 입력하세요.');
       return;
@@ -313,6 +400,7 @@ export function NodeSpecPage() {
       return;
     }
     setCollectingFacts(true);
+    setHostFactsResult(null);
     try {
       const res = await nodeSpecsApi.collectHostFacts(clusterId, {
         hosts,
@@ -324,14 +412,35 @@ export function NodeSpecPage() {
       });
       qc.invalidateQueries({ queryKey: ['node-specs'] });
       toast.success('Host Facts 수집 완료', `신규 ${res.data.inserted} · 업데이트 ${res.data.updated} · 스킵 ${res.data.skipped}`);
-      if (res.data.errors.length > 0) toast.warning('일부 오류', `${res.data.errors.length}건`);
-      setHostFactsOpen(false);
+      if (res.data.errors.length > 0) toast.warning('일부 오류', `${res.data.errors.length}건 — 아래 상세 로그를 확인하세요.`);
+      // 성공/실패와 무관하게 모달은 열어둔다 — 자동으로 닫히면 방금 뭐가 실패했는지 볼 기회가 없다.
+      setHostFactsResult(res.data);
+      if (res.data.errors.length > 0) setHostFactsLogOpen(true);
     } catch (e: unknown) {
       toast.error('Host Facts 수집 실패', formatApiError(e));
     } finally {
       setCollectingFacts(false);
     }
   };
+
+  // 호스트별 상세 — "실행" 버튼의 결과를 건수 토스트 하나로 뭉개지 않고 로그로 남긴다.
+  function buildHostFactsLog(res: NodeSpecHostFactsCollectResponse): string {
+    return res.items.map((it) => {
+      const parts = [`[${it.status}]`, it.host];
+      if (it.message) parts.push(`— ${it.message}`);
+      if (it.status === 'updated') {
+        const facts: string[] = [];
+        if (it.bond0Ip) facts.push(`bond0=${it.bond0Ip}`);
+        if (it.bond1Ip) facts.push(`bond1=${it.bond1Ip}`);
+        if (it.diskTotalGb != null) facts.push(`disk=${it.diskTotalGb}GB`);
+        if (it.diskType) facts.push(`type=${it.diskType}`);
+        if (it.isSsd != null) facts.push(`ssd=${it.isSsd ? 'O' : 'X'}`);
+        if (it.isVm != null) facts.push(`vm=${it.isVm ? 'O' : 'X'}`);
+        if (facts.length) parts.push(`(${facts.join(', ')})`);
+      }
+      return parts.join(' ');
+    }).join('\n');
+  }
 
   const clusterNodeCandidates = useMemo(() => {
     const c = clusters.find((x) => x.id === clusterId);
@@ -368,42 +477,27 @@ export function NodeSpecPage() {
               {stats.total} 건
             </span>
             <div className="ml-auto flex items-center gap-1.5">
-              <button onClick={() => exportCsv(rows)} disabled={rows.length === 0}
-                className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1 disabled:opacity-50">
-                <Download className="w-3 h-3" /> CSV 내보내기
-              </button>
-              <button onClick={downloadCsvTemplate}
-                className="px-2.5 py-1 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1"
-                title="현재 테이블 컬럼 기준 빈 템플릿 다운로드">
-                <FileDown className="w-3 h-3" /> 템플릿
-              </button>
-              <button onClick={() => setCsvOpen(true)}
-                className="px-2.5 py-1 text-sm font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg flex items-center gap-1">
-                <Upload className="w-3 h-3" /> CSV 업로드
-              </button>
-              <button onClick={() => setPasteOpen(true)}
-                className="px-2.5 py-1 text-sm font-medium bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 border border-violet-500/30 rounded-lg flex items-center gap-1"
-                title="엑셀/구글시트에서 복사한 블록 붙여넣기">
-                <ClipboardPaste className="w-3 h-3" /> 엑셀 붙여넣기
-              </button>
-              {clusterId && (
-                <button onClick={() => { setSelectedHosts(clusterNodeCandidates); setHostFactsOpen(true); }}
-                  className="px-2.5 py-1 text-sm font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/30 rounded-lg flex items-center gap-1">
-                  <Terminal className="w-3 h-3" /> Host Facts 수집
+              <HeaderMenu label="내보내기" icon={Download} items={[
+                { icon: Download, label: 'CSV 내보내기', onClick: () => exportCsv(rows), disabled: rows.length === 0 },
+                { icon: FileDown, label: '템플릿 다운로드', onClick: downloadCsvTemplate, title: '현재 테이블 컬럼 기준 빈 템플릿 다운로드' },
+              ]} />
+              <HeaderMenu label="가져오기" icon={Upload} items={[
+                { icon: Upload, label: 'CSV 업로드', onClick: () => setCsvOpen(true) },
+                { icon: ClipboardPaste, label: '엑셀 붙여넣기', onClick: () => setPasteOpen(true), title: '엑셀/구글시트에서 복사한 블록 붙여넣기' },
+                ...(clusterId ? [{
+                  icon: Terminal, label: 'Host Facts 수집 (SSH)',
+                  onClick: () => { setSelectedHosts(clusterNodeCandidates); setHostFactsResult(null); setHostFactsLogOpen(false); setHostFactsOpen(true); },
+                }] : []),
+                ...(clusterId ? [{
+                  icon: RefreshCw, label: '클러스터 임포트 (kubeconfig)',
+                  onClick: () => setConfirmImport(true), disabled: importMut.isPending,
+                }] : []),
+              ]} />
+              {clusterId && importMut.isPending && (
+                <button onClick={importMut.abort}
+                  className="px-2.5 py-1 text-sm font-medium bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg flex items-center gap-1">
+                  <Square className="w-3 h-3 fill-current" /> 중지
                 </button>
-              )}
-              {clusterId && (
-                importMut.isPending ? (
-                  <button onClick={importMut.abort}
-                    className="px-2.5 py-1 text-sm font-medium bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg flex items-center gap-1">
-                    <Square className="w-3 h-3 fill-current" /> 중지
-                  </button>
-                ) : (
-                  <button onClick={() => setConfirmImport(true)}
-                    className="px-2.5 py-1 text-sm font-medium bg-sky-500/10 hover:bg-sky-500/20 text-sky-500 border border-sky-500/30 rounded-lg flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3" /> 클러스터 임포트
-                  </button>
-                )
               )}
               <button onClick={() => setCreating(true)}
                 className="px-3 py-1 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1.5">
@@ -416,7 +510,7 @@ export function NodeSpecPage() {
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
             {(['total', 'active', 'spare', 'maintenance', 'decommission'] as const).map((k) => {
               const isActive = k === 'total' ? statusFilter === '' : statusFilter === k;
-              const dotCls = k === 'total' ? '' : STATUS_CLS[k];
+              const dotCls = k === 'total' ? '' : (STATUS_TONE[k] ?? DEFAULT_STATUS_TONE).dot;
               return (
                 <button
                   key={k}
@@ -428,7 +522,7 @@ export function NodeSpecPage() {
                   }`}
                 >
                   {k !== 'total' && (
-                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${dotCls.split(' ')[0]}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${dotCls}`} />
                   )}
                   <span>{k === 'total' ? '전체' : STATUS_LABEL[k]}</span>
                   <span className="font-bold tabular-nums text-foreground">{stats[k] ?? 0}</span>
@@ -446,7 +540,7 @@ export function NodeSpecPage() {
               />
             </div>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as NodeSpecStatus | '')}
-              className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg">
+              className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
               <option value="">상태 전체</option>
               <option value="active">운영중</option>
               <option value="spare">예비</option>
@@ -454,13 +548,14 @@ export function NodeSpecPage() {
               <option value="decommission">폐기</option>
             </select>
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg">
+              className="px-1.5 py-1 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
               <option value="">역할 전체</option>
               <option value="control-plane">control-plane</option>
               <option value="worker">worker</option>
               <option value="etcd">etcd</option>
               <option value="storage">storage</option>
               <option value="spare">spare</option>
+              <option value="ingress">ingress</option>
             </select>
 
             {/* 전체 서버 기준 CPU·MEM 총합 — 맨 우측 */}
@@ -495,7 +590,8 @@ export function NodeSpecPage() {
           )}
 
           {/* 테이블 */}
-          <div ref={tableRef} tabIndex={-1} className="bg-card border border-border rounded-xl overflow-hidden">
+          <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
+          <div ref={tableRef} tabIndex={-1}>
             <DoubleScrollX>
               <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
@@ -521,9 +617,21 @@ export function NodeSpecPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {listQ.isLoading && <SkeletonTable rows={6} columns={15} />}
-                  {!listQ.isLoading && rows.length === 0 && (
-                    <tr><td colSpan={15} className="p-0">
+                  {listQ.isLoading && <SkeletonTable rows={6} columns={GRID_COLS.length + 1} />}
+                  {/* 실패도 "빈 목록"과 똑같이 보이면 사용자는 서버에 정말 아무 것도 없다고
+                      오해한다 — 실패와 빈 상태를 반드시 구분해서 보여준다. */}
+                  {!listQ.isLoading && listQ.isError && (
+                    <tr><td colSpan={GRID_COLS.length + 1} className="p-0">
+                      <EmptyState
+                        icon={AlertTriangle}
+                        title="목록을 불러오지 못했습니다"
+                        description={formatApiError(listQ.error)}
+                        action={{ label: '다시 시도', onClick: () => listQ.refetch() }}
+                      />
+                    </td></tr>
+                  )}
+                  {!listQ.isLoading && !listQ.isError && rows.length === 0 && (
+                    <tr><td colSpan={GRID_COLS.length + 1} className="p-0">
                       <EmptyState
                         icon={ClipboardCheck}
                         title="등록된 서버가 없습니다"
@@ -533,7 +641,7 @@ export function NodeSpecPage() {
                       />
                     </td></tr>
                   )}
-                  {rows.map((r) => (
+                  {!listQ.isError && rows.map((r) => (
                     <tr key={r.id} className="border-b border-border hover:bg-muted/10">
                       <GridCell row={r.id} col="hostname" selection={selection}
                         className="px-2 py-2 font-mono text-sm text-foreground align-top">
@@ -613,7 +721,7 @@ export function NodeSpecPage() {
                           OS 제외 {r.nonOsDiskGb != null ? `${r.nonOsDiskGb}GB` : '-'}
                         </p>
                         {r.diskType && (
-                          <p className="text-xs font-mono text-cyan-500/80 truncate max-w-[180px]" title={r.diskType}>
+                          <p className="text-xs font-mono text-status-info/80 truncate max-w-[180px]" title={r.diskType}>
                             {r.diskType}
                           </p>
                         )}
@@ -636,13 +744,16 @@ export function NodeSpecPage() {
                         <div className="flex flex-col items-center gap-0.5 text-sm font-mono">
                           <button
                             type="button"
-                            title="SSD 여부 (클릭 순환)"
+                            title="SSD 여부 (클릭 순환: 미설정 → O → X → 미설정)"
+                            aria-label={`SSD 여부: ${r.isSsd === true ? '예' : r.isSsd === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
+                            aria-pressed={r.isSsd === true ? 'true' : r.isSsd === false ? 'false' : 'mixed'}
+                            disabled={savingKeys.has(`${r.id}:isSsd`)}
                             onClick={() => {
                               const next = r.isSsd === true ? false : r.isSsd === false ? null : true;
                               saveField(r.id, { isSsd: next });
                             }}
-                            className={`px-1 rounded hover:bg-primary/10 ${
-                              r.isSsd === true ? 'text-emerald-500 font-bold'
+                            className={`px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
+                              r.isSsd === true ? 'text-status-healthy font-bold'
                               : r.isSsd === false ? 'text-muted-foreground/50'
                               : 'text-muted-foreground/30'
                             }`}
@@ -660,13 +771,16 @@ export function NodeSpecPage() {
                         className="px-2 py-2 align-top text-center">
                         <button
                           type="button"
-                          title="VM 여부 (클릭 순환)"
+                          title="VM 여부 (클릭 순환: 미설정 → O → X → 미설정)"
+                          aria-label={`VM 여부: ${r.isVm === true ? '예' : r.isVm === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
+                          aria-pressed={r.isVm === true ? 'true' : r.isVm === false ? 'false' : 'mixed'}
+                          disabled={savingKeys.has(`${r.id}:isVm`)}
                           onClick={() => {
                             const next = r.isVm === true ? false : r.isVm === false ? null : true;
                             saveField(r.id, { isVm: next });
                           }}
-                          className={`px-1 rounded text-sm font-mono hover:bg-primary/10 ${
-                            r.isVm === true ? 'text-sky-500 font-bold'
+                          className={`px-1 rounded text-sm font-mono hover:bg-primary/10 disabled:opacity-40 ${
+                            r.isVm === true ? 'text-status-info font-bold'
                             : r.isVm === false ? 'text-muted-foreground/50'
                             : 'text-muted-foreground/30'
                           }`}
@@ -708,6 +822,7 @@ export function NodeSpecPage() {
               </table>
             </DoubleScrollX>
           </div>
+          </MacCard>
 
           <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
             <Server className="w-3 h-3" />
@@ -775,14 +890,17 @@ export function NodeSpecPage() {
 
       {hostFactsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => !collectingFacts && setHostFactsOpen(false)} />
-          <div ref={hostFactsRef} role="dialog" aria-modal="true" aria-label="Host Facts 수집" className="relative w-full max-w-2xl bg-card border border-border rounded-xl p-5 shadow-2xl">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !collectingFacts && closeHostFacts()} />
+          <div ref={hostFactsRef} role="dialog" aria-modal="true" aria-label="Host Facts 수집" className="relative w-full max-w-2xl bg-card border border-border rounded-xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-semibold mb-3">Host Facts 수집 (bond/disk/vm)</h3>
             <div className="grid grid-cols-2 gap-3">
-              <input value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="SSH user (root)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />
-              <input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)} placeholder="SSH password (선택)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />
+              <input value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="SSH user (root)"
+                className="px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+              <input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)} placeholder="SSH password (선택)"
+                className="px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
-            <textarea value={sshPrivateKey} onChange={(e) => setSshPrivateKey(e.target.value)} placeholder="Private Key (선택, PEM)" className="mt-3 w-full h-24 px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg" />
+            <textarea value={sshPrivateKey} onChange={(e) => setSshPrivateKey(e.target.value)} placeholder="Private Key (선택, PEM)"
+              className="mt-3 w-full h-24 px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             <div className="mt-3 border border-border rounded-lg p-2 bg-background/60">
               <p className="text-sm text-muted-foreground mb-2">노드 일괄 실행 기준 노드 선택 (자동 로딩)</p>
               {clusterNodeCandidates.length === 0 ? (
@@ -802,20 +920,58 @@ export function NodeSpecPage() {
                 </div>
               )}
             </div>
-            <textarea value={hostList} onChange={(e) => setHostList(e.target.value)} placeholder={'호스트 목록 (공백/콤마/줄바꿈 구분)\n10.0.0.11\n10.0.0.12'} className="mt-3 w-full h-28 px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg" />
+            <textarea value={hostList} onChange={(e) => setHostList(e.target.value)} placeholder={'호스트 목록 (공백/콤마/줄바꿈 구분)\n10.0.0.11\n10.0.0.12'}
+              className="mt-3 w-full h-28 px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             <label className="mt-2 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={useSudo} onChange={(e) => setUseSudo(e.target.checked)} />
               sudo -n 사용
             </label>
+
+            {/* 실행 결과 — 건수 요약 + 상세 로그(사용자가 켜고 끄는 "로그 보기"). CLAUDE.md:
+                모든 "실행" 버튼은 상세 로그 출력 + 로그 보기 옵션을 함께 제공해야 한다. */}
+            {hostFactsResult && (
+              <div className="mt-4 border border-border rounded-lg overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
+                  <span className={`text-sm ${hostFactsResult.errors.length > 0 ? 'text-status-warning' : 'text-status-healthy'}`}>
+                    신규 {hostFactsResult.inserted} · 업데이트 {hostFactsResult.updated} · 스킵 {hostFactsResult.skipped}
+                    {hostFactsResult.errors.length > 0 && ` · 오류 ${hostFactsResult.errors.length}`}
+                  </span>
+                  <button
+                    onClick={() => setHostFactsLogOpen((v) => !v)}
+                    className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    aria-expanded={hostFactsLogOpen}
+                  >
+                    <ScrollText className="w-3.5 h-3.5" />
+                    {hostFactsLogOpen ? '로그 숨기기' : `로그 보기 (호스트 ${hostFactsResult.items.length}건)`}
+                  </button>
+                </div>
+                {hostFactsLogOpen && (
+                  <LogViewer text={buildHostFactsLog(hostFactsResult)} maxHeight="max-h-64" />
+                )}
+              </div>
+            )}
+
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setHostFactsOpen(false)} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-secondary hover:bg-secondary/80">취소</button>
-              <button onClick={handleCollectHostFacts} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
+              <button onClick={closeHostFacts} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-secondary hover:bg-secondary/80">
+                {hostFactsResult ? '닫기' : '취소'}
+              </button>
+              <button onClick={() => setConfirmHostFacts(true)} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
                 {collectingFacts ? '수집 중...' : '수집 실행'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmHostFacts}
+        title="Host Facts 수집 실행"
+        description={`${hostFactsHosts.length}개 호스트에 SSH(${sshUser || 'root'})로 접속해 bond/disk/vm 정보를 읽고 기존 서버스펙을 덮어씁니다. 실제 운영 호스트에 접속이 나갑니다.`}
+        danger
+        confirmLabel="실행"
+        onConfirm={() => { setConfirmHostFacts(false); handleCollectHostFacts(); }}
+        onCancel={() => setConfirmHostFacts(false)}
+      />
     </div>
   );
 }
