@@ -10,6 +10,17 @@
 
 1.17.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **웹 터미널에서 Ctrl+C 복사 / Ctrl+V 붙여넣기가 되지 않던 문제** (노드 SSH 터미널 ·
+  k9s 콘솔 · 파드 exec 터미널): xterm.js 는 `Ctrl+<문자>` 를 제어문자로 바꾼 뒤 브라우저
+  기본 동작을 취소해, `Ctrl+C` 는 선택 영역을 복사하지 않고 SIGINT 만 보내고 `Ctrl+V` 는
+  `^V`(`\x16`) 가 셸에 입력됐다. 이제 **드래그로 선택한 뒤 Ctrl+C 로 복사**(선택이 없으면
+  기존대로 SIGINT — 복사 직후 선택은 해제되어 연속 Ctrl+C 로 중단 가능)하고 **Ctrl+V 로
+  붙여넣기**할 수 있다. macOS 는 ⌘C/⌘V 를 쓰고 Ctrl+C 는 항상 SIGINT 로 남는다.
+  터미널 헤더에 단축키 안내도 표시된다.
+  구현: `lib/terminalClipboard.ts` — 브라우저 기본 복사/붙여넣기에 위임하므로
+  `navigator.clipboard`(HTTPS 전용 API)가 없는 **HTTP(NodePort) 접속 환경에서도 동작**한다.
+
 ### Changed
 - **etcdctl 콘솔 레이아웃을 mc 클라이언트와 통일** (`/etcdctl`): 실행 결과가 화면 **아래로**
   붙던 것을 **우측 컬럼으로** 옮겼다. 타겟(2) : 실행 구성(3) : 결과(5) 10-컬럼 그리드로,
