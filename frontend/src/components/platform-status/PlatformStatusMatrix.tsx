@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
-  Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2,
+  Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2, Server,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusDot, ConfirmDialog, useToast, Skeleton } from '@/components/common';
+import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
   useRunCheckMatrixCluster, useRunCheckMatrixItem, useCheckMatrixActiveRuns,
@@ -50,6 +52,16 @@ const CELL_STATUS_ICON: Partial<Record<Status, typeof AlertTriangle>> = {
   critical: XCircle,
 };
 
+// 빈 셀("—")이 미실행/예약 대기/수동 미입력을 전부 뭉개 보여주던 것을 조금이라도 구분한다 —
+// 백엔드가 "왜 비었는지" 사유 코드를 따로 안 주므로 가진 필드(sourceType/cronExpr/message)로
+// 추론 가능한 만큼만 안내한다.
+function emptyCellHint(item: CheckMatrixItem, cell: CheckMatrixCell | undefined): string {
+  if (cell?.message) return cell.message;
+  if (item.sourceType === 'manual') return '수동 입력 항목 — 아직 값이 입력되지 않았습니다. 클릭해 입력하세요.';
+  if (cell?.scheduleEnabled && cell.cronExpr) return '아직 실행되지 않았습니다 — 예약된 cron 을 기다리는 중입니다.';
+  return '아직 실행되지 않았습니다 — 클릭해 지금 실행할 수 있습니다.';
+}
+
 function CellButton({
   item, cell, onClick,
 }: { item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void }) {
@@ -59,7 +71,7 @@ function CellButton({
     <button
       onClick={onClick}
       className="w-full h-full min-h-[36px] flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-muted/60 transition-colors"
-      title={cell?.message || undefined}
+      title={empty ? emptyCellHint(item, cell) : (cell?.message || undefined)}
     >
       {empty ? (
         <span className="text-muted-foreground/50 text-xs">—</span>
@@ -109,6 +121,9 @@ function ClusterCronBadge({
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(cluster.checkCronExpr ?? '');
   const mutation = usePutClusterCron();
+  // 다른 팝오버/모달과 동일한 접근성(Escape 로 닫기 + 포커스 트랩/복원) — 이 배지만 backdrop
+  // 클릭에만 의존해 Escape 가 안 먹던 이탈을 다른 화면들과 통일한다.
+  const popRef = useModalA11y(open, () => setOpen(false));
 
   const handleSave = async () => {
     try {
@@ -133,22 +148,29 @@ function ClusterCronBadge({
       <button
         onClick={() => { setValue(cluster.checkCronExpr ?? ''); setOpen((v) => !v); }}
         title={`${cluster.checkCronExpr || '미설정'} — ${CRON_TONE_HINT[tone]}`}
-        className={`inline-flex items-center gap-1 text-[10px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 ${CRON_TONE_CLS[tone]}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={`inline-flex items-center gap-1 text-[10px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 max-w-[140px] ${CRON_TONE_CLS[tone]}`}
       >
-        <ToneIcon className={`w-2.5 h-2.5 ${tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
-        {cluster.checkCronExpr || '미설정'}
+        <ToneIcon className={`w-2.5 h-2.5 flex-shrink-0 ${tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
+        <span className="truncate">{cluster.checkCronExpr || '미설정'}</span>
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-56 bg-card border border-border rounded-md shadow-xl p-3 space-y-2">
+          <div
+            ref={popRef}
+            role="dialog"
+            aria-label={`${cluster.name} 핵심 점검 cron 설정`}
+            className="absolute z-50 top-full mt-1 left-1/2 -translate-x-1/2 w-56 bg-card border border-border rounded-md shadow-xl p-3 space-y-2"
+          >
             <p className="text-[11px] text-muted-foreground">핵심 점검(API 응답시간 등) cron. 5분 미만 간격 불가.</p>
             <input
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="0 9,13,18 * * *"
-              className="w-full text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background"
+              className="w-full text-xs font-mono border border-border rounded-xl px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <div className="flex justify-end gap-1.5">
               <button
@@ -173,6 +195,7 @@ function ClusterCronBadge({
 }
 
 export function PlatformStatusMatrix() {
+  const navigate = useNavigate();
   const toast = useToast();
   const { data: grid, isLoading, isError, error, refetch } = useCheckMatrixGrid();
   const reorderMut = useReorderCheckMatrixItems();
@@ -255,6 +278,16 @@ export function PlatformStatusMatrix() {
     reorderMut.mutate(reordered.map((i) => i.id));
     endDrag();
   };
+  // 그립 핸들은 마우스 드래그 전용이었다 — 포커스는 가능해도 순서를 바꿀 방법이 없는
+  // "가짜 버튼"이었던 것을 화살표 위/아래로 실제 이동시켜 해소한다.
+  const moveItem = (idx: number, dir: -1 | 1) => {
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= items.length) return;
+    const reordered = [...items];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    reorderMut.mutate(reordered.map((i) => i.id));
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -284,14 +317,21 @@ export function PlatformStatusMatrix() {
             <HelpCircle className="w-3.5 h-3.5" />
           </button>
           <span className="text-[11px] text-muted-foreground">항목 × 클러스터 점검 매트릭스</span>
-          <div className="ml-auto flex items-center gap-1.5">
+          {/* ml-auto 여백만으로는 "화면 정체성" 그룹과 "동작" 그룹의 경계가 옅어(약한 근접성) —
+              구분선으로 명시(WorkItemBoardPage 필터 바에도 쓴 것과 동일한 패턴). */}
+          <div className="ml-auto flex items-center gap-1.5 border-l border-border pl-2.5">
             <button
               onClick={() => setRunLog({ open: true, batchId: null })}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
-              title="모든 수행의 실행 로그"
-              aria-label="모든 수행의 실행 로그"
+              className="relative inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
+              title={runningClusterIds.size > 0 ? `모든 수행의 실행 로그 — 지금 ${runningClusterIds.size}개 클러스터 실행 중` : '모든 수행의 실행 로그'}
+              aria-label={runningClusterIds.size > 0 ? `모든 수행의 실행 로그 — 지금 ${runningClusterIds.size}개 클러스터 실행 중` : '모든 수행의 실행 로그'}
             >
               <ScrollText className="w-3.5 h-3.5" /> 수행 로그
+              {/* 패널을 열지 않아도 "지금 뭔가 돌고 있다"는 걸 알 수 있게 — 확인하러 열어야만
+                  아는 상태가 아니라 상시 곁눈질로 파악 가능한 상태로. */}
+              {runningClusterIds.size > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-status-info animate-pulse" aria-hidden="true" />
+              )}
             </button>
             <button
               onClick={() => setFormItem('new')}
@@ -337,8 +377,24 @@ export function PlatformStatusMatrix() {
             </button>
           </div>
         ) : items.length === 0 || clusters.length === 0 ? (
-          <div className="flex-1 min-h-0 flex items-center justify-center text-center text-sm text-muted-foreground">
-            {clusters.length === 0 ? '등록된 클러스터가 없습니다.' : '점검 항목이 없습니다 — 우측 상단에서 추가하세요.'}
+          // 다음 행동을 문장으로 안내만 하지 않고 실제 버튼으로 제시 — "우측 상단에서
+          // 추가하세요"를 읽고 직접 찾아가야 했던 것을 한 클릭으로 줄인다.
+          <div className="flex-1 min-h-0 flex items-center justify-center">
+            {clusters.length === 0 ? (
+              <EmptyState
+                icon={Server}
+                title="등록된 클러스터가 없습니다"
+                description="클러스터를 등록해야 점검 매트릭스를 구성할 수 있습니다."
+                action={{ label: 'Settings 에서 클러스터 등록', onClick: () => navigate('/settings?tab=clusters') }}
+              />
+            ) : (
+              <EmptyState
+                icon={Plus}
+                title="점검 항목이 없습니다"
+                description="행(점검 항목)을 추가하면 등록된 클러스터마다 열이 자동으로 채워집니다."
+                action={{ label: '항목 추가', onClick: () => setFormItem('new') }}
+              />
+            )}
           </div>
         ) : (
           <div className="flex-1 min-h-0 overflow-auto">
@@ -402,10 +458,14 @@ export function PlatformStatusMatrix() {
                             draggable
                             onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
                             onDragEnd={endDrag}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowUp') { e.preventDefault(); moveItem(idx, -1); }
+                              else if (e.key === 'ArrowDown') { e.preventDefault(); moveItem(idx, 1); }
+                            }}
                             disabled={reorderMut.isPending}
-                            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
-                            title="드래그해서 순서 변경"
-                            aria-label={`${item.name} 순서 변경 (드래그)`}
+                            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground disabled:opacity-30"
+                            title="드래그하거나 화살표 위/아래로 순서 변경"
+                            aria-label={`${item.name} 순서 변경 — 드래그하거나 화살표 위/아래 키`}
                           >
                             <GripVertical className="w-3.5 h-3.5" />
                           </button>
