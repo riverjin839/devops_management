@@ -4,20 +4,23 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight, CalendarCheck2, Clock, CircleDashed,
   ShieldAlert, ChevronLeft, ChevronRight, RotateCcw,
-  Square, CheckSquare, Users,
+  Users, AlertTriangle,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MacCard } from '@/components/ui/MacCard';
 import { todayWorkItemsApi } from '@/services/api';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useWorkItems } from '@/hooks/useWorkItems';
 import { useToday } from '@/hooks/useToday';
 import { useAuthStore } from '@/stores/authStore';
-import { stripHtml, toLocalDateKey } from '@/lib/utils';
-import { KanbanStatus } from '@/types';
+import { stripHtml, toLocalDateKey, cn } from '@/lib/utils';
+import { STATUS_COLOR } from '@/lib/statusColors';
+import { StatusGlyph } from './StatusGlyph';
 
 const TEAM_ASSIGNEE = '공통';
 
 // 인당 표시 개수 — 기본 5개, 사용자별로 localStorage 에 저장.
-const ITEM_LIMIT_KEY = 'k8s:memberToday:itemLimit';
+const ITEM_LIMIT_KEY = 'pep:memberToday:itemLimit';
 const ITEM_LIMIT_OPTIONS = [3, 5, 8, 10];
 const DEFAULT_ITEM_LIMIT = 5;
 
@@ -33,15 +36,6 @@ function loadItemLimit(): number {
 interface MemberTodayTodosProps {
   selectedClusterId: string | null;
 }
-
-// 노트(메모지) 느낌의 체크박스 불릿 색상 — 상태를 색으로 유지.
-const STATUS_TEXT: Record<KanbanStatus, string> = {
-  backlog: 'text-status-unknown',
-  todo: 'text-status-info',
-  in_progress: 'text-status-warning',
-  review_test: 'text-chart-4',
-  done: 'text-status-healthy',
-};
 
 function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -81,7 +75,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
     try { localStorage.setItem(ITEM_LIMIT_KEY, String(n)); } catch { /* ignore */ }
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['items', 'today', viewDate],
     queryFn: () => todayWorkItemsApi.getSummary(viewDate).then((r) => r.data),
     refetchInterval: isToday ? 60000 : false,
@@ -241,6 +235,16 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             <div key={i} className="h-16 rounded-xl bg-secondary/40 animate-pulse" />
           ))}
         </div>
+      ) : isError ? (
+        <div className="rounded-xl border border-status-critical/40 bg-status-critical/5 py-10 text-center text-sm text-status-critical">
+          <AlertTriangle className="w-6 h-6 mx-auto mb-2 opacity-80" />
+          멤버별 업무를 불러오지 못했습니다.
+          <div>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
+              <RotateCcw className="w-3 h-3" /> 다시 시도
+            </Button>
+          </div>
+        </div>
       ) : displayGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 py-10 text-center text-sm text-muted-foreground">
           {isToday ? '오늘 예정된 업무가 없습니다.' : '해당 날짜에 예정된 업무가 없습니다.'}
@@ -258,11 +262,10 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
             const visible = isExpanded ? all : all.slice(0, itemLimit);
 
             return (
-              <div
+              <MacCard
                 key={g.assignee}
-                className={`rounded-xl border p-2.5 ${
-                  isTeam ? 'lg:col-span-2 border-primary/40 bg-primary/5' : 'border-border/70 bg-transparent'
-                }`}
+                rootClassName={isTeam ? 'lg:col-span-2 border-primary/40 bg-primary/5' : ''}
+                bodyPadding="p-2.5"
               >
                 {/* 헤더 1줄 압축 — 이름은 작게, 카드 높이를 줄여 더 많은 담당자가 보이게 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -302,22 +305,18 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                   />
                 </div>
 
-                {/* 업무리스트 — 노트(메모지) 느낌: 크림 배경 + 좌측 마진선 + 점선 줄 + 체크박스 */}
-                <ul className="relative space-y-0 rounded-lg border border-amber-100 bg-amber-50/60 pl-6 pr-2 py-1 dark:border-border/50 dark:bg-secondary/20 before:absolute before:left-3.5 before:top-1.5 before:bottom-1.5 before:w-px before:bg-red-300/60 dark:before:bg-border">
+                {/* 업무리스트 — 다른 패널과 동일한 flat 톤(세만틱 토큰) + 좌측 마진선 + 점선 줄. */}
+                <ul className="relative space-y-0 rounded-lg border border-border/60 bg-secondary/30 pl-6 pr-2 py-1 before:absolute before:left-3.5 before:top-1.5 before:bottom-1.5 before:w-px before:bg-border">
                   {visible.map((t) => {
                     const isDone = t.kanbanStatus === 'done';
                     return (
                       <li key={`${g.assignee}:${t.id}`}>
                         <Link
                           to={`/tasks-mgmt/${t.id}`}
-                          className="flex items-center gap-2 text-sm min-w-0 py-1 border-b border-dashed border-amber-200/70 last:border-b-0 hover:bg-amber-100/50 dark:border-border/40 dark:hover:bg-secondary/40 transition-colors"
-                          title="상세 보기"
+                          className="flex items-center gap-2 text-sm min-w-0 py-1 border-b border-dashed border-border/50 last:border-b-0 hover:bg-secondary/60 transition-colors"
+                          title={`상세 보기 · ${STATUS_COLOR[t.kanbanStatus].label}`}
                         >
-                          {isDone ? (
-                            <CheckSquare className="w-3.5 h-3.5 text-status-healthy flex-shrink-0" />
-                          ) : (
-                            <Square className={`w-3.5 h-3.5 flex-shrink-0 ${STATUS_TEXT[t.kanbanStatus]}`} />
-                          )}
+                          <StatusGlyph status={t.kanbanStatus} className={cn(STATUS_COLOR[t.kanbanStatus].textClass, 'flex-shrink-0')} />
                           {t.type === 'issue' && (
                             <ShieldAlert className="w-3 h-3 text-status-warning flex-shrink-0" />
                           )}
@@ -350,7 +349,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                     </li>
                   )}
                 </ul>
-              </div>
+              </MacCard>
             );
           })}
         </div>
@@ -361,7 +360,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           to="/todo-today"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
         >
-          담당자별 상세 보기 <ArrowRight className="w-3 h-3" />
+          오늘 할일 전체 보기 <ArrowRight className="w-3 h-3" />
         </Link>
       </div>
     </div>

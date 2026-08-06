@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, Clock, ShieldAlert,
-  Plus, CalendarPlus, X,
+  Plus, CalendarPlus, X, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useToday } from '@/hooks/useToday';
 import { stripHtml } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
 import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
@@ -74,7 +75,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
   // null 이면 popover 닫힘.
   const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null);
 
-  const { data: workItemsData } = useHomeWorkItems();
+  const { data: workItemsData, isLoading, isError, refetch } = useHomeWorkItems();
 
   const buckets = useMemo<Map<string, DayBucket>>(() => {
     const all = workItemsData?.data ?? [];
@@ -224,7 +225,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               <div
                 key={w}
                 className={`text-center py-1.5 font-semibold ${
-                  i === 0 ? 'text-status-critical/90' : i === 6 ? 'text-status-info/90' : ''
+                  i === 0 ? 'text-chart-5' : i === 6 ? 'text-chart-6' : ''
                 }`}
               >
                 {w}
@@ -233,6 +234,21 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
           </div>
 
           {/* Day cells */}
+          {isError ? (
+            <div className="rounded-2xl border border-status-critical/40 bg-status-critical/5 py-14 flex flex-col items-center justify-center text-status-critical">
+              <AlertTriangle className="w-8 h-8 mb-2 opacity-70" />
+              <p className="text-sm">일정을 불러오지 못했습니다.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => refetch()}>
+                <RotateCcw className="w-3.5 h-3.5" /> 다시 시도
+              </Button>
+            </div>
+          ) : isLoading ? (
+            <div className="grid grid-cols-7 gap-1.5 p-1.5 rounded-2xl bg-secondary/20 border border-border/40">
+              {[...Array(35)].map((_, i) => (
+                <div key={i} className="rounded-xl bg-secondary/40 animate-pulse min-h-[110px]" />
+              ))}
+            </div>
+          ) : (
           <div className="grid grid-cols-7 gap-1.5 p-1.5 rounded-2xl bg-secondary/20 border border-border/40">
             {grid.map((d) => {
               const key = toDateKey(d);
@@ -246,9 +262,9 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               const dayNumberClr = isToday
                 ? 'text-primary'
                 : dow === 0
-                ? 'text-status-critical/90'
+                ? 'text-chart-5'
                 : dow === 6
-                ? 'text-status-info/90'
+                ? 'text-chart-6'
                 : 'text-foreground/85';
 
               return (
@@ -334,6 +350,7 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               );
             })}
           </div>
+          )}
 
           {/* Legend */}
           <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 px-1 flex-wrap gap-2">
@@ -463,6 +480,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
             <button
               type="button"
               onClick={onClose}
+              title="닫기"
               aria-label="닫기"
               className="p-1 rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
@@ -542,7 +560,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
             onClick={onClose}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
-            오늘 할일 상세 <ArrowRight className="w-3 h-3" />
+            오늘 할일 전체 보기 <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
       </div>

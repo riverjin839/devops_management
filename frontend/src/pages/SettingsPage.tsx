@@ -684,7 +684,7 @@ export function SettingsPage() {
             </div>
             <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
               {([
-                { key: 'work' as const, label: '내 업무' },
+                { key: 'work' as const, label: '업무 현황' },
                 { key: 'platform' as const, label: '플랫폼 현황' },
               ]).map(({ key, label }, idx) => (
                 <button
