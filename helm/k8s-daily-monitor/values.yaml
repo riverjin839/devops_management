@@ -240,9 +240,10 @@ monitoring:
 # Ollama (인클러스터 자체 LLM — services/llm 게이트웨이의 'ollama' provider)
 # Air-gap: set model to match the name baked into your custom image.
 # 모델명은 이미지에 pre-baked 된 이름과 반드시 일치해야 한다(ghcr.io/riverjin839/
-# ollama-qwen2.5-coder:7b → model: "qwen2.5-coder:7b"). 사내 LLM 서비스(OpenAI-호환)
-# 는 이 블록과 무관하게 Settings → AI/LLM 탭에서 프로필로 등록한다(LLM_API_BASE/
-# LLM_API_KEY 는 bootstrap 폴백 — docs/ENVIRONMENT.md).
+# devops_management/ollama-qwen2.5-coder:7b → model: "qwen2.5-coder:7b", 빌드는
+# .github/workflows/ollama-qwen2.5-coder.yml + docker/ollama-qwen2.5-coder/Dockerfile).
+# 사내 LLM 서비스(OpenAI-호환)는 이 블록과 무관하게 Settings → AI/LLM 탭에서 프로필로
+# 등록한다(LLM_API_BASE/LLM_API_KEY 는 bootstrap 폴백 — docs/ENVIRONMENT.md).
 # ============================================
 ollama:
   # false 로 끄면 사내 LLM 프로필만으로 운영 가능(자체 LLM 미배포).
@@ -251,7 +252,7 @@ ollama:
   url: "http://ollama:11434"
   numParallel: 2
   image:
-    repository: ghcr.io/riverjin839/ollama-qwen2.5-coder
+    repository: ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder
     tag: "7b"
     pullPolicy: IfNotPresent
   resources:

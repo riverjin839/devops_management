@@ -40,7 +40,8 @@ images:
     newName: 10.61.162.101:5000/prom/node-exporter
     newTag: v1.7.0
   # Air-gap: custom Ollama image with qwen2.5-coder:7b pre-baked
-  - name: ghcr.io/riverjin839/ollama-qwen2.5-coder
+  # (built by .github/workflows/ollama-qwen2.5-coder.yml from docker/ollama-qwen2.5-coder/)
+  - name: ghcr.io/riverjin839/devops_management/ollama-qwen2.5-coder
     newName: 10.61.162.101:5000/ollama-qwen2.5-coder
     newTag: "7b"
 
