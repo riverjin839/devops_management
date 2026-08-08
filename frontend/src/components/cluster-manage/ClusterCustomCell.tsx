@@ -67,9 +67,10 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
       return (
         <select autoFocus
           value={draft}
+          aria-label={`${field.label} 값 선택`}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={save}
-          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded"
+          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary"
         >
           <option value="">(없음)</option>
           {(field.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
@@ -88,7 +89,8 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
             if (e.key === 'Escape') setEditing(false);
           }}
           onBlur={save}
-          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded"
+          aria-label={`${field.label} 값 입력`}
+          className="w-full px-1 py-0.5 text-sm bg-background border border-primary rounded focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
     );
@@ -113,17 +115,23 @@ export function ClusterCustomCell({ cluster, field, canEdit = true }: Props) {
     return (
       <button
         type="button"
+        // 저장 중 재클릭을 막는다 — 두 클릭이 같은(아직 갱신 안 된) 값 기준으로 "다음 값"을
+        // 계산해 순환이 어긋나고 PATCH 가 레이스한다.
+        disabled={mut.isPending}
         onClick={() => {
           // 순환: undefined → true → false → null
           const next = current === true ? false : current === false ? null : true;
           commit(next);
         }}
-        className={`font-mono text-sm px-1 rounded hover:bg-primary/10 ${
+        className={`font-mono text-sm px-1 rounded hover:bg-primary/10 disabled:opacity-40 ${
           current === true ? 'text-status-healthy font-bold'
           : current === false ? 'text-muted-foreground/60'
           : 'text-muted-foreground/30'
         }`}
-        title={`${field.label} (클릭 순환)`}
+        title={`${field.label} (클릭 순환: 미설정 → O → X → 미설정)`}
+        // 스크린리더에 "O"/"·" 만 announce 되던 것 — 필드명·현재값·조작법을 이름에 담는다.
+        aria-label={`${field.label}: ${current === true ? '예' : current === false ? '아니오' : '미설정'} — 클릭하여 순환 변경`}
+        aria-pressed={current === true ? 'true' : current === false ? 'false' : 'mixed'}
       >
         {boolLabel(current)}
       </button>

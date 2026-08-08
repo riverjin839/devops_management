@@ -35,7 +35,7 @@ function deriveKey(label: string): string {
 }
 
 export function ClusterCustomFieldsManager({ open, onClose }: Props) {
-  const { data: fieldsRaw, isLoading } = useClusterCustomFields();
+  const { data: fieldsRaw, isLoading, isError, error, refetch } = useClusterCustomFields();
   const fields = sortedFields(fieldsRaw);
 
   const createMut = useCreateClusterCustomField();
@@ -111,17 +111,41 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
     }
   };
 
+  // onBlur/클릭 저장도 실패를 토스트로 고지 — 실패가 조용히 refetch 원복으로 사라지면
+  // "저장했는데 왜 안 바뀌지?"만 남는다 (D-042 클래스, 이 파일에서 재발했던 것).
   const quickLabel = async (f: ClusterCustomField, v: string) => {
     if (v.trim() === f.label) return;
-    await updateMut.mutateAsync({ id: f.id, data: { label: v.trim() } });
+    try {
+      await updateMut.mutateAsync({ id: f.id, data: { label: v.trim() } });
+    } catch (e) {
+      toast.error('라벨 저장 실패', formatApiError(e));
+    }
   };
 
   const shift = async (f: ClusterCustomField, dir: -1 | 1) => {
+    if (updateMut.isPending) return; // 연타 시 스왑 교차로 순서가 꼬이는 것 방지
     const idx = fields.findIndex((x) => x.id === f.id);
     const target = fields[idx + dir];
     if (!target) return;
-    await updateMut.mutateAsync({ id: f.id, data: { sortOrder: target.sortOrder } });
-    await updateMut.mutateAsync({ id: target.id, data: { sortOrder: f.sortOrder } });
+    // 두 sortOrder 가 같으면 스왑이 영구 no-op — 저장 실패 잔재 등으로 중복이 생겼을 때
+    // 명시적 재배열로 복구한다.
+    if (f.sortOrder === target.sortOrder) {
+      try {
+        await updateMut.mutateAsync({ id: f.id, data: { sortOrder: target.sortOrder + dir } });
+      } catch (e) {
+        toast.error('순서 변경 실패', formatApiError(e));
+      }
+      return;
+    }
+    try {
+      await updateMut.mutateAsync({ id: f.id, data: { sortOrder: target.sortOrder } });
+      await updateMut.mutateAsync({ id: target.id, data: { sortOrder: f.sortOrder } });
+    } catch (e) {
+      // 첫 호출만 성공하면 sortOrder 중복 상태가 남는다 — 실패를 알리고 목록을 다시 읽어
+      // 화면과 서버 상태를 일치시킨다.
+      toast.error('순서 변경 실패', formatApiError(e));
+      void refetch();
+    }
   };
 
   if (!open) return null;
@@ -165,7 +189,18 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                     <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 로딩...
                   </td></tr>
                 )}
-                {!isLoading && fields.length === 0 && !adding && (
+                {/* 조회 실패를 "컬럼 없음"과 똑같이 보여주면 정의가 지워졌다고 오해한다 — 구분 필수 */}
+                {!isLoading && isError && (
+                  <tr><td colSpan={6} className="text-center py-6 text-sm">
+                    <p className="text-status-critical font-medium">커스텀 컬럼을 불러오지 못했습니다.</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{formatApiError(error)}</p>
+                    <button onClick={() => refetch()}
+                      className="mt-2 px-3 py-1 text-xs font-medium rounded-lg border border-border hover:bg-secondary transition-colors">
+                      다시 시도
+                    </button>
+                  </td></tr>
+                )}
+                {!isLoading && !isError && fields.length === 0 && !adding && (
                   <tr><td colSpan={6} className="text-center py-6 text-sm text-muted-foreground">
                     등록된 커스텀 컬럼이 없습니다.
                   </td></tr>
@@ -174,11 +209,11 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                   <tr key={f.id} className="border-t border-border">
                     <td className="px-1 py-1 text-muted-foreground/60">
                       <div className="flex flex-col">
-                        <button onClick={() => shift(f, -1)} disabled={idx === 0}
-                          aria-label="위로 이동"
+                        <button onClick={() => shift(f, -1)} disabled={idx === 0 || updateMut.isPending}
+                          title="위로 이동" aria-label="위로 이동"
                           className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
-                        <button onClick={() => shift(f, 1)} disabled={idx === fields.length - 1}
-                          aria-label="아래로 이동"
+                        <button onClick={() => shift(f, 1)} disabled={idx === fields.length - 1 || updateMut.isPending}
+                          title="아래로 이동" aria-label="아래로 이동"
                           className="hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
                       </div>
                     </td>
@@ -196,10 +231,13 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                     <td className="px-2 py-1.5 text-sm">
                       <select
                         defaultValue={f.dataType}
-                        onChange={(e) => updateMut.mutate({
-                          id: f.id, data: { dataType: e.target.value as ClusterCustomFieldType },
-                        })}
-                        className="bg-background border border-border rounded px-1 py-0.5 text-sm"
+                        aria-label={`${f.label} 데이터 타입`}
+                        disabled={updateMut.isPending}
+                        onChange={(e) => updateMut.mutate(
+                          { id: f.id, data: { dataType: e.target.value as ClusterCustomFieldType } },
+                          { onError: (e2) => toast.error('타입 변경 실패', formatApiError(e2)) },
+                        )}
+                        className="bg-background border border-border rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
                       >
                         {TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
                       </select>
@@ -237,7 +275,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                         onChange={(e) => setDraft({ ...draft, label: e.target.value })}
                         placeholder="라벨 (예: 운영환경)"
                         aria-label="라벨 입력"
-                        className="w-full px-1 py-0.5 text-sm bg-background border border-border rounded"
+                        className="w-full px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -246,14 +284,15 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                         onChange={(e) => { setDraft({ ...draft, key: e.target.value }); setKeyTouched(true); }}
                         placeholder="ops_env"
                         aria-label="key 입력"
-                        className="w-full px-1 py-0.5 text-xs font-mono bg-background border border-border rounded"
+                        className="w-full px-1 py-0.5 text-xs font-mono bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </td>
                     <td className="px-2 py-1">
                       <select
                         value={draft.dataType ?? 'text'}
+                        aria-label="데이터 타입 선택"
                         onChange={(e) => setDraft({ ...draft, dataType: e.target.value as ClusterCustomFieldType })}
-                        className="w-full px-1 py-0.5 text-sm bg-background border border-border rounded"
+                        className="w-full px-1 py-0.5 text-sm bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
                       >
                         {TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
                       </select>
@@ -264,7 +303,8 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                           value={optionsText}
                           onChange={(e) => setOptionsText(e.target.value)}
                           placeholder="A, B, C"
-                          className="w-full px-1 py-0.5 text-xs font-mono bg-background border border-border rounded"
+                          aria-label="선택지 옵션 (쉼표 구분)"
+                          className="w-full px-1 py-0.5 text-xs font-mono bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                       ) : (
                         <span className="text-xs text-muted-foreground/60">-</span>
@@ -273,12 +313,12 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
                     <td className="px-2 py-1 text-right">
                       <div className="flex items-center gap-1 justify-end">
                         <button onClick={save} disabled={createMut.isPending}
-                          aria-label="저장"
+                          title="저장" aria-label="저장"
                           className="p-1 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50">
                           {createMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                         </button>
                         <button onClick={resetDraft}
-                          aria-label="취소"
+                          title="취소" aria-label="취소"
                           className="p-1 rounded hover:bg-secondary text-muted-foreground">
                           <X className="w-3.5 h-3.5" />
                         </button>
