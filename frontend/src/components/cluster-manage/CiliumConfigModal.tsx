@@ -1,9 +1,11 @@
 import { useId, useState } from 'react';
-import { X, Search, Loader2 } from 'lucide-react';
+import { X, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { Cluster } from '@/types';
 import { clustersApi } from '@/services/api';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { StatusDot } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 interface CiliumConfigModalProps {
   cluster: Cluster;
@@ -31,14 +33,23 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="relative bg-card border border-border rounded-xl w-full max-w-4xl mx-4 shadow-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
+        className="relative bg-card border border-border rounded-xl w-full max-w-4xl mx-4 shadow-2xl flex flex-col max-h-[80vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
           <div>
             <h3 id={titleId} className="text-base font-semibold">Cilium 설정 — {cluster.name}</h3>
             {data && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                소스: {data.source === 'live' ? '🟢 kubectl 실시간' : data.source === 'stored' ? '🟡 저장된 설정' : '⚪ 없음'}
-                {data.error && <span className="text-status-warning ml-2">⚠ {data.error}</span>}
+              <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                {/* 이모지(🟢🟡⚪)는 스크린리더/폰트에 따라 의미가 전달되지 않아 StatusDot + 텍스트로 (D-052 준용) */}
+                <span className="inline-flex items-center gap-1">
+                  소스:
+                  <StatusDot variant={data.source === 'live' ? 'healthy' : data.source === 'stored' ? 'warning' : 'neutral'} />
+                  {data.source === 'live' ? 'kubectl 실시간' : data.source === 'stored' ? '저장된 설정' : '없음'}
+                </span>
+                {data.error && (
+                  <span className="text-status-warning inline-flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" aria-hidden /> {data.error}
+                  </span>
+                )}
               </p>
             )}
           </div>
@@ -68,7 +79,11 @@ export function CiliumConfigModal({ cluster, onClose }: CiliumConfigModalProps) 
               <span className="ml-2 text-sm text-muted-foreground">kubectl로 Cilium 설정 조회 중...</span>
             </div>
           ) : error ? (
-            <p className="text-sm text-destructive py-4 text-center">조회에 실패했습니다.</p>
+            <div className="text-sm py-4 text-center space-y-1">
+              <p className="text-destructive">조회에 실패했습니다.</p>
+              {/* 페이지 수준 에러(formatApiError + 사유)와 일관 — 사유 없는 실패 문구는 복구 단서를 주지 않는다 */}
+              <p className="text-xs text-muted-foreground">{formatApiError(error)}</p>
+            </div>
           ) : !rawText ? (
             <p className="text-sm text-muted-foreground py-4 text-center">Cilium 설정 정보가 없습니다.</p>
           ) : displayText ? (

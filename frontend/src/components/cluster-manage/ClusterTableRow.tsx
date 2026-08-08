@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, ClusterCustomField, ClusterManageUpdate } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit, useToast } from '@/components/common';
-import { formatApiError } from '@/lib/utils';
+import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
 import { STATUS_STYLE } from './constants';
 import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor } from '@/hooks/useOperationLevels';
@@ -35,6 +35,8 @@ interface ClusterTableRowProps {
   onCollectNics?: (c: Cluster) => void;
   /** viewer 역할은 조회만 — 인라인 편집·수집·삭제 진입점을 노출하지 않는다 */
   canEdit?: boolean;
+  /** 페이지의 표시 컬럼 토글과 동기 — 숨긴 컬럼의 셀은 렌더하지 않는다(헤더/colgroup 과 열 수 일치). */
+  hiddenCols?: Set<string>;
 }
 
 type EditField = null | 'region' | 'operationLevel' | 'cidr' | 'podCidr' | 'svcCidr';
@@ -82,7 +84,8 @@ function EditableCell({
   );
 }
 
-export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onCilium, onAutoUpdate, autoUpdating, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics, sortable = false, canEdit = true }: ClusterTableRowProps) {
+export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onCilium, onAutoUpdate, autoUpdating, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics, sortable = false, canEdit = true, hiddenCols }: ClusterTableRowProps) {
+  const colVisible = (key: string) => key === 'name' || !hiddenCols?.has(key);
   const updateCluster = useUpdateCluster();
   // 테이블 뷰 행 드래그 — 페이지의 DndContext/SortableContext 안에서만 렌더된다.
   // sortable=false(수동 정렬 아님)면 비활성 + 그립 미노출 (D-045).
@@ -163,12 +166,21 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         {cluster.hostname && (
           <p className="text-xs font-mono text-muted-foreground mt-0.5 ml-4 truncate" title={cluster.hostname}>{cluster.hostname}</p>
         )}
+        {/* 값들은 전부 스냅샷이라 "언제 것인지"가 신뢰의 1차 변수 — 마지막 갱신 시각을 상시 노출 */}
+        {cluster.updatedAt && (
+          <p className="text-[10px] text-muted-foreground/70 mt-0.5 ml-4" title={`마지막 갱신(수집·편집 포함): ${cluster.updatedAt}`}>
+            갱신 {formatRelativeTime(cluster.updatedAt)}
+          </p>
+        )}
       </td>
+      {colVisible('status') && (
       <td className="px-3 py-2.5 overflow-hidden">
         <span className={`text-xs px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
       </td>
+      )}
 
       {/* 지역 — 인라인 편집 */}
+      {colVisible('region') && (
       <EditableCell
         isEditing={editingField === 'region'}
         onEnter={() => setEditingField('region')}
@@ -185,8 +197,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           />
         ) : (cluster.region || <span className="text-muted-foreground/60">-</span>)}
       </EditableCell>
+      )}
 
       {/* 운영레벨 — select 인라인 */}
+      {colVisible('level') && (
       <EditableCell
         isEditing={editingField === 'operationLevel'}
         onEnter={() => setEditingField('operationLevel')}
@@ -198,7 +212,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             value={cluster.operationLevel ?? ''}
             onChange={(e) => quickUpdate({ operationLevel: e.target.value || null })}
             onBlur={() => setEditingField(null)}
-            className="text-sm bg-background border border-border rounded px-1.5 py-0.5"
+            className="text-sm bg-background border border-border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">—</option>
             {(opsLevels ?? []).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
@@ -209,7 +223,9 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </span>
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
+      )}
 
+      {colVisible('bgp') && (
       <td className="px-3 py-2.5 overflow-hidden">
         {cluster.bgpEnabled ? (
           <div>
@@ -218,8 +234,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </td>
+      )}
 
       {/* INTERNAL_IP — kubectl InternalIP 들을 정규식/Glob 형식으로 묶어 표시 */}
+      {colVisible('cidr') && (
       <EditableCell
         isEditing={editingField === 'cidr'}
         onEnter={() => setEditingField('cidr')}
@@ -290,8 +308,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           );
         })()}
       </EditableCell>
+      )}
 
-      {/* bond0 — 모든 노드 bond0 IP 들 정규식/Glob 그룹화 */}
+      {/* bond0 — 모든 노드 bond0 IP 들 정규식/Glob 그룹화 (기본 숨김 — 도구 → 표시 컬럼) */}
+      {colVisible('bond0') && (
       <td className="px-3 py-2.5 align-top overflow-hidden">
         {ipBuckets.bond0.groups.length > 0 ? (
           <div>
@@ -302,8 +322,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground/50 text-sm" title="NIC 수집(SSH) 후 채워짐">-</span>}
       </td>
+      )}
 
-      {/* bond1 */}
+      {/* bond1 (기본 숨김 — 도구 → 표시 컬럼) */}
+      {colVisible('bond1') && (
       <td className="px-3 py-2.5 align-top overflow-hidden">
         {ipBuckets.bond1.groups.length > 0 ? (
           <div>
@@ -314,8 +336,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground/50 text-sm" title="NIC 수집(SSH) 후 채워짐">-</span>}
       </td>
+      )}
 
       {/* Pod CIDR */}
+      {colVisible('pod') && (
       <EditableCell
         isEditing={editingField === 'podCidr'}
         onEnter={() => setEditingField('podCidr')}
@@ -338,8 +362,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
+      )}
 
       {/* Service CIDR */}
+      {colVisible('svc') && (
       <EditableCell
         isEditing={editingField === 'svcCidr'}
         onEnter={() => setEditingField('svcCidr')}
@@ -362,13 +388,17 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground/60 text-sm">-</span>}
       </EditableCell>
+      )}
 
+      {colVisible('maxpod') && (
       <td className="px-3 py-2.5 text-sm text-center overflow-hidden">
         {cluster.maxPod
           ? <span className="font-mono text-foreground">{cluster.maxPod}</span>
           : <span className="text-muted-foreground/60 text-sm">-</span>}
       </td>
+      )}
       {/* K8s / Cilium 버전 */}
+      {colVisible('k8s') && (
       <td className="px-3 py-2.5 overflow-hidden">
         <div className="flex flex-col gap-1">
           {cluster.k8sVersion ? (
@@ -395,8 +425,10 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </button>
         </div>
       </td>
+      )}
 
       {/* 노드 IP 목록 — 노드당 여러 IP (bond0/bond1) + public/private 스코프 표시 */}
+      {colVisible('nodeip') && (
       <td className="px-3 py-2.5 overflow-hidden">
         {(() => {
           if (!cluster.nodeIps) {
@@ -523,6 +555,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           }
         })()}
       </td>
+      )}
 
       {customFields.map((f) => (
         <td key={f.id} className="px-3 py-2.5 border-l border-primary/10 align-top overflow-hidden">

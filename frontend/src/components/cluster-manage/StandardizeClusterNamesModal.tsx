@@ -90,7 +90,7 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
           <Wand2 className="w-4 h-4 text-primary" />
           <h2 id={titleId} className="text-sm font-semibold">클러스터 이름 표준화</h2>
           <span className="text-xs text-muted-foreground">현재 이름을 [업무명]-[운영타입]-[속성] 으로 정리</span>
-          <button onClick={onClose} className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground" aria-label="닫기">
+          <button onClick={onClose} className="ml-auto p-1 rounded hover:bg-secondary text-muted-foreground" title="닫기" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -139,6 +139,8 @@ export function StandardizeClusterNamesModal({ open, clusters, onClose, onRename
                     type="button"
                     onClick={() => setConfirmTarget({ cluster: c, next })}
                     disabled={!changed || busyId === c.id}
+                    // busy 중 내용이 스피너만 남으면 스크린리더가 버튼 이름을 잃는다 — aria-label 유지
+                    aria-label={`${c.name} 이름 변경`}
                     className="flex-shrink-0 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
                   >
                     {busyId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '변경'}

@@ -19,6 +19,8 @@ interface ClusterCardProps {
   onDelete: (c: Cluster) => void;
   deletingId: string | null;
   overlapGroupIdx: number | undefined;
+  /** 실제로 직접 겹치는 상대 클러스터명 — 그룹 배경색(hue)만으로는 "누구와" 겹치는지 알 수 없다 */
+  overlapPeers?: string[];
   onAutoUpdate: (c: Cluster) => void;
   /** 이 클러스터의 auto-update 진행 여부 — per-cluster 동시 진행 지원 (D-047) */
   autoUpdating: boolean;
@@ -28,7 +30,7 @@ interface ClusterCardProps {
   canEdit?: boolean;
 }
 
-export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdating, onCollectNics, canEdit = true }: ClusterCardProps) {
+export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onAutoUpdate, autoUpdating, onCollectNics, canEdit = true }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
@@ -98,6 +100,15 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
                 </span>
               )}
             </div>
+            {/* 겹침 그룹 정체를 배경 hue 만으로 전달하지 않는다 — 상대 클러스터명을 텍스트로 병기 */}
+            {overlapGroupIdx !== undefined && (
+              <p className="text-xs text-status-warning mt-1.5 flex items-start gap-1">
+                <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden />
+                <span className="min-w-0">
+                  CIDR 겹침{overlapPeers?.length ? `: ${overlapPeers.join(', ')}` : ''}
+                </span>
+              </p>
+            )}
           </div>
           {canEdit && (
             <div className="flex items-center gap-1 flex-shrink-0">

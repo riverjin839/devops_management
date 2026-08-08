@@ -1,11 +1,14 @@
 import { Fragment, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState } from '@/components/common';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, LogViewer } from '@/components/common';
+import { useModalA11y } from '@/components/common/useModalA11y';
 import { MacCard } from '@/components/ui/MacCard';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
   LayoutList, LayoutGrid, Network, Loader2, GripVertical, Globe, Tag,
+  ScrollText, Wrench, HelpCircle,
 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
@@ -28,8 +31,8 @@ import { ResizeGrip } from '@/components/common';
 import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFields';
 import { Settings2, Wand2 } from 'lucide-react';
 import { StandardizeClusterNamesModal } from '@/components/cluster-manage/StandardizeClusterNamesModal';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 type GroupByMode = 'none' | 'region' | 'level';
@@ -150,8 +153,9 @@ export function ClusterManagePage() {
   const setSortBy      = (v: 'name' | 'status' | 'level' | 'manual') => setParam('sort', v, 'manual');
   const setGroupBy     = (v: GroupByMode) => setParam('group', v, 'none');
   const setViewMode    = (v: 'table' | 'card') => setParam('view', v, 'table');
-  // 필터가 URL 에 있으면 패널을 펼친 상태로 시작 (딥링크 진입 시 조건이 보이게)
-  const [showFilter, setShowFilter]       = useState(() => !!(search || filterLevel));
+  // 필터가 URL 에 있으면 패널을 펼친 상태로 시작 (딥링크 진입 시 조건이 보이게).
+  // 검색은 툴바 상시 노출로 옮겨져 패널 펼침 조건에서 빠졌다.
+  const [showFilter, setShowFilter]       = useState(() => !!filterLevel);
   const [standardizeOpen, setStandardizeOpen] = useState(false);
   const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
 
@@ -175,11 +179,44 @@ export function ClusterManagePage() {
     setDiffWarnings([]);
   };
 
-  // 커스텀 필드
+  // 커스텀 필드 — 조회 실패 시 컬럼이 소리 없이 사라지면 "정의가 지워졌나?" 오해를
+  // 부르므로 isError 를 헤더 배지로 노출한다.
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
-  const { data: customFieldsRaw } = useClusterCustomFields();
+  const { data: customFieldsRaw, isError: customFieldsError } = useClusterCustomFields();
   const customFields = sortedFields(customFieldsRaw);
   const { data: opsLevels = [] } = useOperationLevels();
+
+  // ── 수집 실행 로그 (CLAUDE.md 실행-로그 규칙) ──────────────────────────────
+  // 실행 결과를 건수 토스트 하나로 뭉개지 않고 대상별 한 줄씩 남긴다 — 특히 일괄 수집의
+  // "실패 N"이 어느 클러스터가 왜 실패했는지 알 수 없던 막다른 골목을 없앤다.
+  const [collectLog, setCollectLog] = useState<string[]>([]);
+  const [collectLogOpen, setCollectLogOpen] = useState(false);
+  const [lastBulkFailedIds, setLastBulkFailedIds] = useState<string[]>([]);
+  const appendLog = (line: string) => {
+    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    setCollectLog((prev) => [...prev, `${ts} ${line}`]);
+  };
+
+  // ── 기본 컬럼 표시/숨김 — IP 성격 컬럼 4개가 같은 nodeIps 데이터를 반복(≈900px)하던
+  // 것을 사용자가 조절할 수 있게. bond0/bond1 은 기본 숨김(상세는 노드 IP 트리·카드 뷰·
+  // NIC 수집 모달에 그대로 있고, 아래 도구 → 표시 컬럼에서 언제든 다시 켤 수 있다).
+  const HIDDEN_COLS_KEY = 'pep:clusterManageHiddenCols';
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(HIDDEN_COLS_KEY);
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch { /* ignore */ }
+    return new Set(['bond0', 'bond1']);
+  });
+  const toggleHiddenCol = (key: string) => {
+    setHiddenCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try { localStorage.setItem(HIDDEN_COLS_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // 컬럼 너비 — drag 로 사용자 정의, localStorage 영속화
   // tip: 헤더 마우스오버 시 보여줄 의미 + 데이터 출처. (사용자 요청: 모든 항목 마우스 오버 설명)
@@ -215,6 +252,9 @@ export function ClusterManagePage() {
   customFields.forEach((f) => { columnDefaults[`custom_${f.id}`] = f.width ?? 140; });
   columnDefaults['actions'] = 100;
   const colW = useColumnWidths('cluster-table', { defaults: columnDefaults, min: 60, max: 800 });
+
+  // 클러스터명은 항상 표시 — 나머지는 도구 → 표시 컬럼에서 토글.
+  const visibleColumns = COLUMNS.filter((c) => c.key === 'name' || !hiddenCols.has(c.key));
 
   const filteredClusters = useMemo(() => {
     let list = [...clusters];
@@ -274,7 +314,12 @@ export function ClusterManagePage() {
   const groupLabelPrefix = groupBy === 'region' ? '지역' : '운영레벨';
 
   // ── 드래그 순서 변경 ─────────────────────────────────────────────────────
-  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // KeyboardSensor 병행 등록 — 그립이 포커스 가능하고 "순서 변경 핸들"로 announce 되는데
+  // Space/Arrow 가 무반응이면 보이는데 안 움직이는 가짜 affordance 가 된다 (D-052 후속).
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   // 드래그는 수동 정렬 모드에서만 — 이름/상태순에서는 드롭 직후 재정렬돼 되돌아간
   // 것처럼 보이고 seq 만 바뀐다 (D-045). 핸들 노출·useSortable 활성도 이 값을 따른다.
   const sortEnabled = sortBy === 'manual';
@@ -392,6 +437,7 @@ export function ClusterManagePage() {
         dryRun: true,
         signal: ctrl.signal,
       });
+      appendLog(`[재수집] ok ${cluster.name} — 변경 ${(data.diff ?? []).length}건 미리보기${(data.warnings ?? []).length ? ` · 경고 ${(data.warnings ?? []).length}건` : ''}`);
       const open = diffClusterRef.current;
       if (open && open.id !== cluster.id) {
         // 다른 클러스터의 diff 가 열려 있음 — 덮어쓰면 사용자가 엉뚱한 대상에 적용할 수 있다.
@@ -402,6 +448,7 @@ export function ClusterManagePage() {
     } catch (e: unknown) {
       const err = e as { name?: string; code?: string };
       if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
+        appendLog(`[재수집] FAIL ${cluster.name} — ${formatApiError(e)}`);
         toast.error('클러스터 정보 수집 실패', `${cluster.name}: ${formatApiError(e)}`);
       }
     } finally {
@@ -424,13 +471,20 @@ export function ClusterManagePage() {
     try {
       await clustersApi.autoUpdate(cluster.id);
       await queryClient.refetchQueries({ queryKey: ['clusters'] });
+      appendLog(`[IP 수집] ok ${cluster.name} — 노드 IP / k8s 버전 등 갱신됨`);
       toast.success('수집 완료', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
     } catch (e: unknown) {
+      appendLog(`[IP 수집] FAIL ${cluster.name} — ${formatApiError(e)}`);
       toast.error('노드 IP 수집 실패', formatApiError(e));
     } finally {
       setCollectingNodeIpsId(null);
     }
   };
+
+  // per-row "IP 수집"도 일괄 경로와 동일하게 확인을 받는다 — 같은 API(dryRun 없는
+  // auto-update)가 hostname/CIDR/버전/Max Pods 를 함께 덮어쓰는데 단건만 무게이트면
+  // 마찰의 비대칭이 생긴다.
+  const [collectConfirm, setCollectConfirm] = useState<Cluster | null>(null);
 
   // 일괄 수집은 dryRun 없는 auto-update 를 N개 클러스터에 적용하는 위험 동작 —
   // 확인 다이얼로그로 게이팅하고, 진행률(n/N)·중단·실패 구분 토스트를 제공한다 (D-048).
@@ -449,32 +503,43 @@ export function ClusterManagePage() {
     setBulkConfirmOpen(true);
   };
 
-  const executeBulkCollect = async () => {
+  // targetsOverride: 실패분 재시도 경로 — 확인 다이얼로그를 이미 거친 동일 동작의 반복이라
+  // 재확인 없이 실행한다.
+  const executeBulkCollect = async (targetsOverride?: Cluster[]) => {
     setBulkConfirmOpen(false);
-    const targets = clusters.filter((c) => !c.nodeIps);
+    const targets = targetsOverride ?? clusters.filter((c) => !c.nodeIps);
     if (targets.length === 0) return;
     setBulkCollecting(true);
     bulkAbortRef.current = false;
     setBulkProgress({ done: 0, total: targets.length });
+    appendLog(`[일괄 수집] 시작 — 대상 ${targets.length}개`);
     let ok = 0;
     let fail = 0;
     let aborted = false;
+    const failedIds: string[] = [];
     for (const c of targets) {
       if (bulkAbortRef.current) { aborted = true; break; }
       try {
         await clustersApi.autoUpdate(c.id);
         ok += 1;
-      } catch {
+        appendLog(`[일괄 수집] ok ${c.name}`);
+      } catch (e) {
         fail += 1;
+        failedIds.push(c.id);
+        // 실패를 익명 카운트로 삼키지 않는다 — 어느 클러스터가 왜 실패했는지 로그에 남긴다.
+        appendLog(`[일괄 수집] FAIL ${c.name} — ${formatApiError(e)}`);
       }
       setBulkProgress({ done: ok + fail, total: targets.length });
     }
     await queryClient.refetchQueries({ queryKey: ['clusters'] });
     setBulkCollecting(false);
     setBulkProgress(null);
+    setLastBulkFailedIds(failedIds);
     const summary = `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}${aborted ? ' · 중단됨' : ''}`;
-    if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', summary);
-    else if (fail > 0) toast.warning('일괄 수집 부분 실패', summary);
+    appendLog(`[일괄 수집] 종료 — ${summary}`);
+    if (fail > 0) setCollectLogOpen(true);
+    if (fail > 0 && ok === 0) toast.error('일괄 수집 실패', `${summary} — 상세는 수집 로그 참조`);
+    else if (fail > 0) toast.warning('일괄 수집 부분 실패', `${summary} — 상세는 수집 로그 참조`);
     else if (aborted) toast.info('일괄 수집 중단됨', summary);
     else toast.success('일괄 수집 완료', summary);
   };
@@ -485,14 +550,21 @@ export function ClusterManagePage() {
     try {
       await clustersApi.autoUpdate(diffCluster.id);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      appendLog(`[적용] ok ${diffCluster.name} — diff 미리보기 내용 반영됨`);
       toast.success('클러스터 정보 갱신됨', diffCluster.name);
       closeDiff();
     } catch (e: unknown) {
+      appendLog(`[적용] FAIL ${diffCluster.name} — ${formatApiError(e)}`);
       toast.error('적용 실패', formatApiError(e));
     } finally {
       setApplyingId(null);
     }
   };
+
+  // ── "도구" 팝오버 — 이름 표준화/컬럼 관리/너비 리셋(저빈도)을 접고, 표시 컬럼
+  // 토글을 함께 담는다. 툴바 6개 동일 비중 문제의 해소 지점.
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsRef = useModalA11y(toolsOpen, () => setToolsOpen(false));
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -519,6 +591,15 @@ export function ClusterManagePage() {
                 CIDR 겹침 클러스터 {overlapCount}개
               </span>
             )}
+            {customFieldsError && (
+              <span
+                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30"
+                title="커스텀 컬럼 정의를 불러오지 못해 테이블에서 임시로 빠졌습니다 — 정의가 삭제된 것이 아닙니다. 새로고침 후에도 계속되면 서버 상태를 확인하세요."
+              >
+                <AlertTriangle className="w-3 h-3" aria-hidden />
+                커스텀 컬럼 조회 실패
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ViewModeBar
@@ -530,27 +611,18 @@ export function ClusterManagePage() {
               onChange={(v) => setViewMode(v as 'table' | 'card')}
               showStylePanel={false}
             />
-            {canEdit && (
-              <button
-                onClick={() => setStandardizeOpen(true)}
-                disabled={clusters.length === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
-                title="기존 클러스터 이름을 [업무명]-[운영타입]-[속성] 표준으로 정리"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                이름 표준화
-              </button>
-            )}
-            {canEdit && (
-              <button
-                onClick={() => setCustomFieldsOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-                title="테이블에 커스텀 컬럼 추가/수정/삭제"
-              >
-                <Settings2 className="w-3.5 h-3.5" />
-                컬럼 관리 {customFields.length > 0 && <span className="text-primary">({customFields.length})</span>}
-              </button>
-            )}
+            {/* 검색 — 대장의 최빈 동작이라 토글 뒤에 숨기지 않고 상시 노출 */}
+            <div className="relative min-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="이름, 지역, 호스트명 검색"
+                aria-label="클러스터 검색"
+                className="w-full pl-8 pr-3 py-1.5 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
             {canEdit && (
               <button
                 onClick={handleBulkCollectNodeIps}
@@ -569,39 +641,135 @@ export function ClusterManagePage() {
               </button>
             )}
             <button
-              onClick={colW.reset}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-              title="저장된 컬럼 너비를 기본값으로 되돌립니다"
+              onClick={() => setCollectLogOpen((v) => !v)}
+              aria-expanded={collectLogOpen}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-lg transition-colors ${
+                collectLogOpen ? 'bg-secondary text-foreground' : 'bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground'
+              }`}
+              title="수집 실행 로그 — 재수집/IP 수집/일괄 수집의 대상별 성공·실패 기록"
             >
-              너비 리셋
+              <ScrollText className="w-3.5 h-3.5" />
+              로그 보기{collectLog.length > 0 && ` (${collectLog.length})`}
             </button>
             <button
               onClick={() => setShowFilter(v => !v)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             >
-              검색 / 필터
+              필터
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFilter ? 'rotate-180' : ''}`} />
             </button>
+            {/* 저빈도 도구(이름 표준화·컬럼 관리·너비 리셋)와 표시 컬럼 토글을 한 팝오버로 —
+                6개 동일 비중 나열이 주는 인지 부하를 줄인다. */}
+            <div className="relative inline-block">
+              <button
+                onClick={() => setToolsOpen((v) => !v)}
+                aria-haspopup="dialog"
+                aria-expanded={toolsOpen}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-lg transition-colors ${
+                  toolsOpen ? 'bg-secondary text-foreground' : 'bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground'
+                }`}
+                title="도구 — 이름 표준화 · 컬럼 관리 · 너비 리셋 · 표시 컬럼"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                도구
+              </button>
+              {toolsOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setToolsOpen(false)} />
+                  <div
+                    ref={toolsRef}
+                    role="dialog"
+                    aria-label="테이블 도구"
+                    className="absolute z-50 top-full mt-1 right-0 w-64 bg-card border border-border rounded-lg shadow-xl p-2 space-y-1"
+                  >
+                    {canEdit && (
+                      <button
+                        onClick={() => { setStandardizeOpen(true); setToolsOpen(false); }}
+                        disabled={clusters.length === 0}
+                        className="w-full text-left px-2.5 py-1.5 text-sm rounded-md hover:bg-secondary flex items-center gap-2 disabled:opacity-50"
+                        title="기존 클러스터 이름을 [업무명]-[운영타입]-[속성] 표준으로 정리"
+                      >
+                        <Wand2 className="w-3.5 h-3.5 text-muted-foreground" /> 이름 표준화
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button
+                        onClick={() => { setCustomFieldsOpen(true); setToolsOpen(false); }}
+                        className="w-full text-left px-2.5 py-1.5 text-sm rounded-md hover:bg-secondary flex items-center gap-2"
+                        title="테이블에 커스텀 컬럼 추가/수정/삭제"
+                      >
+                        <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        컬럼 관리 {customFields.length > 0 && <span className="text-primary">({customFields.length})</span>}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { colW.reset(); setToolsOpen(false); }}
+                      className="w-full text-left px-2.5 py-1.5 text-sm rounded-md hover:bg-secondary flex items-center gap-2"
+                      title="저장된 컬럼 너비를 기본값으로 되돌립니다"
+                    >
+                      너비 리셋
+                    </button>
+                    <div className="border-t border-border/50 pt-1.5 px-2.5 pb-1">
+                      <p className="text-[11px] text-muted-foreground mb-1.5">
+                        표시 컬럼 — bond0/bond1 등 IP 상세 컬럼을 켜고 끕니다
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                        {COLUMNS.map((c) => (
+                          <label key={c.key} className={`flex items-center gap-1.5 text-xs ${c.key === 'name' ? 'opacity-50' : 'cursor-pointer'}`}>
+                            <input
+                              type="checkbox"
+                              disabled={c.key === 'name'}
+                              checked={c.key === 'name' || !hiddenCols.has(c.key)}
+                              onChange={() => toggleHiddenCol(c.key)}
+                              className="rounded border-border"
+                            />
+                            <span className="truncate">{c.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 검색 / 필터 패널 — 수제 카드 div 대신 MacCard (D-050) */}
-        {showFilter && (
-          <MacCard title="검색 / 필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[200px]">
-              <label htmlFor={f('search')} className="block text-sm text-muted-foreground mb-1">검색</label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  id={f('search')}
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="이름, 지역, 호스트명, API Endpoint"
-                  className="w-full pl-8 pr-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+        {/* 수집 실행 로그 — 실행 결과를 토스트 요약이 아니라 대상별 한 줄 기록으로 (CLAUDE.md 실행-로그 규칙) */}
+        {collectLogOpen && (
+          <MacCard rootClassName="mb-5" bodyPadding="p-0">
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
+              <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">수집 로그</span>
+              <div className="ml-auto flex items-center gap-1.5">
+                {lastBulkFailedIds.length > 0 && !bulkCollecting && canEdit && (
+                  <button
+                    onClick={() => executeBulkCollect(clusters.filter((c) => lastBulkFailedIds.includes(c.id)))}
+                    className="px-2 py-1 text-xs font-medium rounded-lg bg-status-warning/10 text-status-warning border border-status-warning/30 hover:bg-status-warning/20 transition-colors"
+                    title="직전 일괄 수집에서 실패한 클러스터만 다시 수집합니다"
+                  >
+                    실패 {lastBulkFailedIds.length}개 재시도
+                  </button>
+                )}
+                <button
+                  onClick={() => { setCollectLog([]); setLastBulkFailedIds([]); }}
+                  disabled={collectLog.length === 0}
+                  className="px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
+                >
+                  지우기
+                </button>
               </div>
             </div>
+            <LogViewer
+              text={collectLog.length > 0 ? collectLog.join('\n') : '아직 수집 실행 기록이 없습니다 — 재수집 / IP 수집 / 일괄 수집 결과가 여기에 대상별로 쌓입니다.'}
+              maxHeight="max-h-48"
+            />
+          </MacCard>
+        )}
+
+        {/* 필터 패널 — 수제 카드 div 대신 MacCard (D-050). 검색은 툴바 상시 노출로 이동. */}
+        {showFilter && (
+          <MacCard title="필터" rootClassName="mb-5" className="flex flex-wrap items-end gap-3">
             <div className="min-w-[160px]">
               <label htmlFor={f('level')} className="block text-sm text-muted-foreground mb-1">운영레벨</label>
               <select id={f('level')} value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}
@@ -642,12 +810,14 @@ export function ClusterManagePage() {
         {clusters.length === 0 && clustersLoading ? (
           <MacCard bodyPadding="p-0">
             <div aria-busy="true">
-              <div className="px-3 py-2.5 bg-secondary border-b border-border flex gap-6">
-                {[90, 60, 70, 90, 120, 110, 80, 130].map((w, i) => <Skeleton key={i} width={w} height={12} />)}
+              {/* 스켈레톤 형태를 실제 표(표시 컬럼 수)와 일치시킨다 — 하드코딩 8개는 컬럼이
+                  바뀔 때마다 로드 전환 시 시프트를 만들었다. */}
+              <div className="px-3 py-2.5 bg-secondary border-b border-border flex gap-6 overflow-hidden">
+                {visibleColumns.map((c) => <Skeleton key={c.key} width={Math.min(Math.round(c.w * 0.55), 120)} height={12} />)}
               </div>
               <table className="w-full text-sm">
                 <tbody>
-                  <SkeletonTable rows={6} columns={8} />
+                  <SkeletonTable rows={6} columns={visibleColumns.length + 1} />
                 </tbody>
               </table>
             </div>
@@ -683,7 +853,7 @@ export function ClusterManagePage() {
             <DoubleScrollX bodyClassName="max-h-[calc(100vh-16rem)]">
               <table className="text-sm border-collapse" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
-                  {COLUMNS.map((c) => <col key={c.key} style={{ width: `${colW.getWidth(c.key)}px` }} />)}
+                  {visibleColumns.map((c) => <col key={c.key} style={{ width: `${colW.getWidth(c.key)}px` }} />)}
                   {customFields.map((f) => <col key={`custom_${f.id}`} style={{ width: `${colW.getWidth(`custom_${f.id}`)}px` }} />)}
                   <col style={{ width: `${colW.getWidth('actions')}px` }} />
                 </colgroup>
@@ -691,13 +861,26 @@ export function ClusterManagePage() {
                     구분선은 inset box-shadow 로 그린다. 배경은 반투명이면 행이 비쳐 보여 solid. */}
                 <thead className="sticky top-0 z-10 bg-secondary">
                   <tr>
-                    {COLUMNS.map((c) => (
+                    {visibleColumns.map((c) => (
                       <th key={c.key}
-                        title={c.tip}
                         className={`relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))] ${c.center ? 'text-center' : ''}`}>
-                        <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
-                          {c.label}
-                          <span className="text-[10px] text-muted-foreground/50" aria-hidden>ⓘ</span>
+                        <span className="truncate inline-flex items-center gap-1 max-w-full align-middle">
+                          <span title={c.tip} className="cursor-help">{c.label}</span>
+                          {/* provenance 설명이 title 전용이면 키보드/스크린리더가 화면 최고
+                              기능(데이터 출처 문서화)에 접근할 수 없다 — Tooltip 프리미티브는
+                              hover 뿐 아니라 키보드 포커스에서도 열린다. */}
+                          <Tooltip>
+                            <TooltipTrigger
+                              type="button"
+                              aria-label={`${c.label} 설명`}
+                              className="inline-flex items-center text-muted-foreground/50 hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
+                            >
+                              <HelpCircle className="w-3 h-3" />
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-72 whitespace-normal text-left leading-relaxed font-normal normal-case">
+                              {c.tip}
+                            </TooltipContent>
+                          </Tooltip>
                         </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(c.key, e)} onDoubleClick={() => colW.autoFit(c.key)} />
                       </th>
@@ -711,11 +894,21 @@ export function ClusterManagePage() {
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(`custom_${f.id}`, e)} onDoubleClick={() => colW.autoFit(`custom_${f.id}`)} />
                       </th>
                     ))}
-                    <th className="relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]"
-                      title="행 단위 동작 — 새로고침(자동수집 → diff 미리보기), 수정, 삭제. (Cilium 설정은 K8s/Cilium 셀 클릭으로 이동)">
-                      <span className="inline-flex items-center gap-1 cursor-help">
-                        편집
-                        <span className="text-[10px] text-muted-foreground/50" aria-hidden>ⓘ</span>
+                    <th className="relative px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                      <span className="inline-flex items-center gap-1">
+                        <span title="행 단위 동작 — 새로고침(자동수집 → diff 미리보기), 수정, 삭제. (Cilium 설정은 K8s/Cilium 셀 클릭으로 이동)" className="cursor-help">편집</span>
+                        <Tooltip>
+                          <TooltipTrigger
+                            type="button"
+                            aria-label="편집 컬럼 설명"
+                            className="inline-flex items-center text-muted-foreground/50 hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
+                          >
+                            <HelpCircle className="w-3 h-3" />
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-72 whitespace-normal text-left leading-relaxed font-normal normal-case">
+                            행 단위 동작 — 새로고침(자동수집 → diff 미리보기), 수정, 삭제. (Cilium 설정은 K8s/Cilium 셀 클릭으로 이동)
+                          </TooltipContent>
+                        </Tooltip>
                       </span>
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
                     </th>
@@ -726,7 +919,7 @@ export function ClusterManagePage() {
                     <Fragment key={group.key}>
                       {group.label && (
                         <tr className="bg-primary/5 border-y border-primary/20">
-                          <td colSpan={COLUMNS.length + customFields.length + 1}
+                          <td colSpan={visibleColumns.length + customFields.length + 1}
                             className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary">
                             <span className="inline-flex items-center gap-1.5 align-middle">
                               <GroupIcon className="w-3 h-3" aria-hidden />
@@ -752,11 +945,12 @@ export function ClusterManagePage() {
                             onAutoUpdate={handleAutoUpdate}
                             autoUpdating={autoUpdatingIds.has(cluster.id)}
                             customFields={customFields}
-                            onCollectNodeIps={collectNodeIps}
+                            onCollectNodeIps={(c) => setCollectConfirm(c)}
                             collectingNodeIpsId={collectingNodeIpsId}
                             onCollectNics={(c) => setNicsClusterId(c.id)}
                             sortable={sortEnabled}
                             canEdit={canEdit}
+                            hiddenCols={hiddenCols}
                           />
                         ))}
                       </SortableContext>
@@ -794,6 +988,7 @@ export function ClusterManagePage() {
                           onDelete={handleDelete}
                           deletingId={deletingId}
                           overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                          overlapPeers={overlapPeerNames.get(cluster.id)}
                           onAutoUpdate={handleAutoUpdate}
                           autoUpdating={autoUpdatingIds.has(cluster.id)}
                           onCollectNics={(c) => setNicsClusterId(c.id)}
@@ -880,6 +1075,25 @@ export function ClusterManagePage() {
           </p>
           <p className="text-xs">진행 중에는 버튼을 다시 눌러 언제든 중단할 수 있습니다.</p>
         </div>
+      </ConfirmDialog>
+
+      {/* per-row IP 수집 확인 — 일괄 경로와 동일한 write 인데 단건만 무게이트였던 비대칭 해소 */}
+      <ConfirmDialog
+        open={!!collectConfirm}
+        title="노드 IP 수집"
+        description={collectConfirm ? `"${collectConfirm.name}" 에 diff 미리보기 없이 auto-update 를 적용합니다.` : undefined}
+        confirmLabel="수집 시작"
+        onConfirm={() => {
+          const target = collectConfirm;
+          setCollectConfirm(null);
+          if (target) void collectNodeIps(target);
+        }}
+        onCancel={() => setCollectConfirm(null)}
+      >
+        <p className="text-muted-foreground">
+          노드 IP 외에도 <strong className="text-foreground">hostname · CIDR · K8s/Cilium 버전 · Max Pods</strong> 등이
+          함께 갱신될 수 있습니다. 변경분을 먼저 확인하려면 행의 재수집(↻) 버튼을 사용하세요.
+        </p>
       </ConfirmDialog>
 
       {nicsClusterId && (

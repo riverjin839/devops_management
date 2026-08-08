@@ -45,6 +45,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
   const usernameId = useId();
   const portId = useId();
   const parallelismId = useId();
+  const skipId = useId();
   const titleId = useId();
   const dialogRef = useModalA11y(open, onClose);
 
@@ -149,13 +150,13 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
             <div>
               <label htmlFor={usernameId} className="text-xs text-muted-foreground mb-1 block">SSH User</label>
               <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
               <label htmlFor={portId} className="text-xs text-muted-foreground mb-1 block">SSH Port</label>
               <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
               <label htmlFor={parallelismId} className="text-xs text-muted-foreground mb-1 block"
@@ -165,7 +166,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
               <input id={parallelismId} type="number" value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 10)}
                 min={1} max={50}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-1.5 text-sm text-foreground/80">
@@ -192,23 +193,25 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
             {authMode === 'password' ? (
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="SSH 비밀번호"
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                aria-label="SSH 비밀번호"
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             ) : (
               <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                aria-label="SSH 개인키 (PEM)"
                 rows={3}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             )}
           </div>
 
           {/* skip 패턴 */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
+            <label htmlFor={skipId} className="text-xs text-muted-foreground mb-1 block">
               제외 인터페이스 prefix ({skipPatterns.length}개, 쉼표 구분)
             </label>
-            <input value={skipText} onChange={(e) => setSkipText(e.target.value)}
+            <input id={skipId} value={skipText} onChange={(e) => setSkipText(e.target.value)}
               placeholder="lo, docker, cni, veth, kube-ipvs, flannel, cilium_, tunl, calico, br-"
-              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             <p className="mt-1 text-xs text-muted-foreground">
               loopback / 컨테이너 가상 NIC / VXLAN tunnel 같이 의미 없는 인터페이스는 제외합니다.
               <span className="font-mono"> bond0, bond1, eth0, ens*</span> 같은 물리 NIC 는 표시됩니다.
@@ -349,6 +352,13 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                                   })}
                                 </div>
                               ))}
+                              {/* 성공 호스트도 raw 출력 접근 가능하게 — "파싱 결과가 맞나?" 검증은
+                                  실패했을 때만 필요한 게 아니다 (실행-로그 규칙). */}
+                              <RawOutputDetails
+                                stdout={h.raw_stdout}
+                                stderr={h.raw_stderr}
+                                exitCode={h.exit_code}
+                              />
                             </div>
                           )}
                         </td>

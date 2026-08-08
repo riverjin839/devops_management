@@ -11,6 +11,28 @@
 1.26.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **클러스터 관리(/cluster-manage) — impeccable critique 15건 반영**: 이 화면의 수집
+  실행(재수집/IP 수집/일괄 수집)이 결과를 토스트 요약으로만 남기고, 특히 일괄 수집 실패가
+  익명 카운트("실패 3")로 삼켜지던 것을 고쳤다 — 새 **수집 로그** 패널("로그 보기" 토글)이
+  대상별 성공/실패와 사유를 한 줄씩 기록하고, 실패분만 골라 재시도할 수 있다(CLAUDE.md
+  실행-로그 필수 규칙). 행 드래그 정렬에 KeyboardSensor 를 등록해 그립이 화살표 키로도
+  실제로 동작하게 했고(D-052 미완분), per-row "IP 수집"에 일괄 경로와 동일한 확인 절차를
+  추가했다. 툴바를 재구성해 **검색을 상시 노출**하고 저빈도 도구(이름 표준화/컬럼 관리/너비
+  리셋)를 "도구" 팝오버로 접었으며, 같은 팝오버의 **표시 컬럼** 토글로 기본 컬럼을 켜고 끌
+  수 있다 — 같은 nodeIps 데이터를 반복하던 bond0/bond1 컬럼은 기본 숨김(언제든 재활성
+  가능, 상세는 노드 IP 트리·카드 뷰에 유지). 그 외: 커스텀 컬럼 조회 실패를 빈 상태와
+  구분(모달 에러 분기 + 헤더 경고 배지), 커스텀 컬럼 라벨/순서 저장 실패의 무음 처리 해소
+  (D-042 클래스 재발분) + 순서 스왑 연타/중복 sortOrder 가드, 인라인 편집·NIC 수집 모달
+  전반 focus ring 누락 보강, 컬럼 헤더 provenance 설명을 키보드/스크린리더 접근 가능한
+  Tooltip 으로 병행 제공, 카드 뷰 CIDR 겹침에 상대 클러스터명 텍스트 병기(색상 단독 해소),
+  클러스터명 아래 마지막 갱신 상대시각 표시, 체크박스 커스텀 셀 연타 가드+aria-pressed,
+  NIC 수집 성공 호스트도 raw 출력 열람 가능, Cilium 모달 오류 사유 표시+이모지 제거,
+  스켈레톤 컬럼 수 실제 표와 일치. Frontend: `pages/ClusterManagePage.tsx`,
+  `components/cluster-manage/*`(ClusterTableRow, ClusterCard, ClusterCustomFieldsManager,
+  ClusterCustomCell, CiliumConfigModal, StandardizeClusterNamesModal),
+  `components/common/InlineEdit.tsx`, `components/versions/NodeNicsCollectModal.tsx`.
+
+### Fixed
 - **노드 서버스펙 대장(/node-specs) — impeccable critique 12건 반영**: 헤더의 CSV내보내기/
   템플릿/CSV업로드/엑셀붙여넣기/HostFacts수집/클러스터임포트 6개 버튼이 색만 다르게 동일
   비중으로 나열돼 있던 것을 "내보내기"/"가져오기" 드롭다운 메뉴 2개로 접어 "신규 등록"만
