@@ -2017,6 +2017,8 @@ export interface EtcdSystemdCollectRequest {
   privateKey?: string;
   useSudo?: boolean;
   connectTimeout?: number;
+  /** systemd unit 이름 (기본 etcd) — 백엔드가 systemctl show {unit} 에 사용 */
+  unit?: string;
   envFiles?: string[];
   parallelism?: number;
   chunkSize?: number;
@@ -2034,6 +2036,10 @@ export interface EtcdSystemdPerHost {
   endpointHealth?: string | null;
   error?: string | null;
   raw?: Record<string, string> | null;
+  /** 실행-로그 규칙 — per-host 원본 stdout/stderr/exit code (axios 인터셉터가 camelCase 로 변환해 도착) */
+  rawStdout?: string | null;
+  rawStderr?: string | null;
+  exitCode?: number | null;
 }
 
 export interface EtcdSystemdCollectResponse {
@@ -2060,6 +2066,10 @@ export interface KubeadmCertsPerHost {
   host: string;
   stored?: boolean;
   error?: string | null;
+  /** 실행-로그 규칙 — per-host 원본 stdout/stderr/exit code (axios 인터셉터가 camelCase 로 변환해 도착) */
+  rawStdout?: string | null;
+  rawStderr?: string | null;
+  exitCode?: number | null;
 }
 
 export interface KubeadmCertsCollectResponse {
@@ -2091,6 +2101,10 @@ export interface KernelParamsPerHost {
   paramCount?: number;
   stored?: boolean;
   error?: string | null;
+  /** 실행-로그 규칙 — per-host 원본 stdout/stderr/exit code (axios 인터셉터가 camelCase 로 변환해 도착) */
+  rawStdout?: string | null;
+  rawStderr?: string | null;
+  exitCode?: number | null;
 }
 
 export interface KernelParamsCollectResponse {
@@ -2131,6 +2145,10 @@ export interface KubeletConfigPerHost {
   sources?: Record<string, string> | null;
   stored?: boolean;
   error?: string | null;
+  /** 실행-로그 규칙 — per-host 원본 stdout/stderr/exit code (axios 인터셉터가 camelCase 로 변환해 도착) */
+  rawStdout?: string | null;
+  rawStderr?: string | null;
+  exitCode?: number | null;
 }
 
 export interface KubeletConfigCollectResponse {
@@ -2197,7 +2215,7 @@ export interface NicInterface {
   mtu?: number | null;
   operstate?: string | null;
   addrs: NicAddrInfo[];
-  link_kind?: string | null;
+  linkKind?: string | null;
 }
 
 export interface NicAllIp {
@@ -2214,13 +2232,14 @@ export interface NodeNicsPerHost {
   host: string;
   status: string;
   interfaces?: NicInterface[];
-  all_ips?: NicAllIp[];
+  allIps?: NicAllIp[];
   error?: string | null;
-  // 진단용 — status=ok 인데 interfaces 가 0개거나 status=error 일 때 백엔드가 채움.
-  // 'ip -j' 미지원 / 권한 부족 / 출력 비어있음 진단에 사용.
-  raw_stdout?: string | null;
-  raw_stderr?: string | null;
-  exit_code?: number | null;
+  // 진단·실행 로그용 — 백엔드는 snake_case(raw_stdout)로 보내지만 axios 응답 인터셉터가
+  // 모든 키를 camelCase 로 바꾸므로 여기 키도 camelCase 여야 실제 값이 잡힌다.
+  // (이전 snake_case 선언은 런타임에 항상 undefined 였던 버그)
+  rawStdout?: string | null;
+  rawStderr?: string | null;
+  exitCode?: number | null;
 }
 
 export interface NodeNicsCollectResponse {

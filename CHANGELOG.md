@@ -11,6 +11,25 @@
 1.26.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **버전·설정(/versions) — impeccable critique P0+P1 반영 (수집 실행 로그·raw 출력 버그)**:
+  이 화면의 수집 실행 8종이 결과를 토스트 요약(오류 앞 3건 절단)으로만 남기던 것을 고쳤다.
+  페이지의 **지금 수집/MinIO 수집**에 "로그 보기" 토글 + 세션 수집 로그 패널(경고 전체
+  기록)을 추가했고, SSH 수집 모달 4종(etcd/인증서/커널/kubelet)의 결과 표에 호스트별
+  **raw 출력(stdout/stderr/exit code) 열람** 열을 추가했다 — 백엔드가 성공 호스트에도
+  원본 출력을 첨부하도록 확장(스냅샷 저장 데이터에는 미포함이라 dedup 해시 불변).
+  노드 NIC 모달의 기존 raw 출력 뷰어는 **camelCase 변환 버그로 한 번도 렌더된 적이 없었다**
+  — axios 응답 인터셉터가 `raw_stdout` 을 `rawStdout` 으로 바꾸는데 타입/코드가 snake_case
+  를 읽고 있었다(수정). etcd 모달의 **systemd unit 입력이 표시만 바뀌고 실제 수집에는
+  반영되지 않던 플라시보**였던 것을 payload 전송으로 고쳤다. 그 외: 메인 스냅샷 조회
+  실패가 "스냅샷 없음" 빈 상태로 위장되던 것(+ 히스토리/diff/모달 노드 목록 동일 패턴)을
+  오류·재시도 분기로 구분, 오류 목록 절단(slice 3건)을 펼침형 전체 목록으로 교체, SSH
+  자격증명(password/private key) 포함 입력 전반의 키보드 포커스 표시 누락을 focus ring
+  으로 보강(페이지 검색창의 이중 opt-out 포함). Backend: `routers/versions.py`(수집 5종
+  per-host raw 첨부). Frontend: `pages/VersionsPage.tsx`,
+  `components/versions/RawOutputDetails.tsx`(신규 공용),
+  `components/versions/*Modal.tsx` 5종, `types/index.ts`.
+
+### Fixed
 - **클러스터 관리(/cluster-manage) — impeccable critique 15건 반영**: 이 화면의 수집
   실행(재수집/IP 수집/일괄 수집)이 결과를 토스트 요약으로만 남기고, 특히 일괄 수집 실패가
   익명 카운트("실패 3")로 삼켜지던 것을 고쳤다 — 새 **수집 로그** 패널("로그 보기" 토글)이
