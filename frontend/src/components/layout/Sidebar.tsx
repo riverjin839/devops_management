@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   Sparkles, Palmtree, Leaf, Star,
   Moon, Sun, Monitor, LogOut, User, ChevronRight, ArrowLeft,
-  KeyRound, ScrollText, Home, MessageSquare, Bug, Bot,
+  KeyRound, Home, MessageSquare, Bot,
   Flame, Sunset, Zap, Waves, Flower2, Citrus,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
@@ -20,9 +20,7 @@ import { AGENT_CHAT_FEATURE_KEY } from '@/components/agent';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { SidePane } from '@/components/common';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
-import { ReleaseNotesPanel } from './ReleaseNotesPanel';
-import { BugFixLogPanel } from './BugFixLogPanel';
-import { VocBoardPanel } from './VocBoardPanel';
+import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
 import { FlyoutShell, FlyoutLink } from './NavFlyout';
 import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
 import { GROUPS, type GroupId } from './navConfig';
@@ -245,12 +243,11 @@ export function Sidebar() {
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
   // 사용자 아이콘 클릭 시 여는 개인 메뉴(담당자 정보 / 비밀번호 변경) — 우측 슬라이드 SidePane.
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  // 릴리즈 노트 — 우측 슬라이드 SidePane (감사 로그가 Settings 탭으로 이동한 자리).
-  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
-  // 버그 픽스 로그 — 릴리즈 노트 옆 레일 아이콘 → 우측 SidePane (CHANGELOG Fixed 항목).
-  const [bugFixLogOpen, setBugFixLogOpen] = useState(false);
-  // 사용자 VOC 게시판 — 릴리즈 노트 바로 위 레일 아이콘 → 우측 SidePane.
-  const [vocOpen, setVocOpen] = useState(false);
+  // 사용자 VOC 게시판 / 릴리즈 노트 / 버그 픽스 로그 — 예전엔 레일 아이콘 3개가 각자
+  // SidePane 을 열었지만, 성격이 비슷한 "공지·피드백" 계열이라 아이콘 1개 + 탭 3개로
+  // 통합했다(감사 로그가 Settings 탭으로 이동한 자리에 있던 릴리즈 노트 자리 포함).
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackTab, setFeedbackTab] = useState<UserFeedbackTab>('voc');
   // 즐겨찾기 — 레일 최상단 진입점 (AppTopBar 의 ★ 과 같은 본문을 공유).
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
@@ -316,9 +313,7 @@ export function Sidebar() {
     setOpenGroup(null);
     setIslandFlyoutAnchor(null);
     setUserMenuOpen(false);
-    setReleaseNotesOpen(false);
-    setBugFixLogOpen(false);
-    setVocOpen(false);
+    setFeedbackOpen(false);
     setFavoritesOpen(false);
   }, [location.pathname]);
 
@@ -329,9 +324,7 @@ export function Sidebar() {
         setOpenGroup(null);
         setIslandFlyoutAnchor(null);
         setUserMenuOpen(false);
-        setReleaseNotesOpen(false);
-        setBugFixLogOpen(false);
-        setVocOpen(false);
+        setFeedbackOpen(false);
         setFavoritesOpen(false);
       }
     };
@@ -564,29 +557,11 @@ export function Sidebar() {
           )}
           {currentUser && (
             <RailIconButton
-              label="사용자 VOC 게시판"
+              label="사용자 VOC 게시판 · 릴리즈 노트 · 버그 픽스 로그"
               Icon={MessageSquare}
-              highlighted={vocOpen}
-              suppressTooltip={vocOpen}
-              onClick={() => setVocOpen((v) => !v)}
-            />
-          )}
-          {currentUser && (
-            <RailIconButton
-              label="릴리즈 노트"
-              Icon={ScrollText}
-              highlighted={releaseNotesOpen}
-              suppressTooltip={releaseNotesOpen}
-              onClick={() => setReleaseNotesOpen((v) => !v)}
-            />
-          )}
-          {currentUser && (
-            <RailIconButton
-              label="버그 픽스 로그"
-              Icon={Bug}
-              highlighted={bugFixLogOpen}
-              suppressTooltip={bugFixLogOpen}
-              onClick={() => setBugFixLogOpen((v) => !v)}
+              highlighted={feedbackOpen}
+              suppressTooltip={feedbackOpen}
+              onClick={() => setFeedbackOpen((v) => !v)}
             />
           )}
           {currentUser && (
@@ -713,50 +688,20 @@ export function Sidebar() {
         </SidePane>
       )}
 
-      {/* 릴리즈 노트 — 우측 슬라이드 SidePane. CHANGELOG.md 를 파싱한 API 를 표로 렌더.
-          요약 텍스트가 잘리지 않도록 기본 폭을 넉넉히 잡고, 왼쪽 가장자리 드래그로 추가 확장 가능. */}
+      {/* 사용자 VOC 게시판 / 릴리즈 노트 / 버그 픽스 로그 — 우측 슬라이드 SidePane 하나에
+          탭 3개로 통합. 제목은 활성 탭을 따라간다. */}
       <SidePane
-        open={releaseNotesOpen}
-        onClose={() => setReleaseNotesOpen(false)}
-        title="릴리즈 노트"
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        title={USER_FEEDBACK_TAB_TITLE[feedbackTab]}
         width="640px"
         bodyClassName="p-0"
         resizable
-        widthStorageKey="k8s:releaseNotesPanelWidth"
+        widthStorageKey="k8s:userFeedbackPanelWidth"
         minWidth={420}
         maxWidth={1100}
       >
-        <ReleaseNotesPanel open={releaseNotesOpen} />
-      </SidePane>
-
-      {/* 버그 픽스 로그 — 릴리즈 노트와 동일한 우측 슬라이드 SidePane. CHANGELOG 의 Fixed 항목만 표시. */}
-      <SidePane
-        open={bugFixLogOpen}
-        onClose={() => setBugFixLogOpen(false)}
-        title="버그 픽스 로그"
-        width="640px"
-        bodyClassName="p-0"
-        resizable
-        widthStorageKey="k8s:bugFixLogPanelWidth"
-        minWidth={420}
-        maxWidth={1100}
-      >
-        <BugFixLogPanel open={bugFixLogOpen} />
-      </SidePane>
-
-      {/* 사용자 VOC 게시판 — 릴리즈 노트와 동일한 우측 슬라이드 SidePane. */}
-      <SidePane
-        open={vocOpen}
-        onClose={() => setVocOpen(false)}
-        title="사용자 VOC 게시판"
-        width="640px"
-        bodyClassName="p-0"
-        resizable
-        widthStorageKey="k8s:vocPanelWidth"
-        minWidth={420}
-        maxWidth={1100}
-      >
-        <VocBoardPanel open={vocOpen} />
+        <UserFeedbackPanel open={feedbackOpen} activeTab={feedbackTab} onTabChange={setFeedbackTab} />
       </SidePane>
 
     </>
