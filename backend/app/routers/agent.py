@@ -302,6 +302,9 @@ async def agent_chat_stream(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            # GZipMiddleware 는 이 헤더가 있으면 압축을 건너뛴다 — SSE 를 gzip 하면
+            # zlib 내부 버퍼링 때문에 X-Accel-Buffering:no 의 실시간성이 깨진다.
+            "Content-Encoding": "identity",
         },
     )
 

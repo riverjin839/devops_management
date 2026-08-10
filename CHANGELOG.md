@@ -10,6 +10,36 @@
 
 1.27.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **Pod 로그/클러스터 이벤트 SSE 스트림 — 무응답 원인이던 스레드풀 고갈 방지**: 로그
+  뷰어 탭을 여러 개 열면(특히 `follow=True` tail) kubernetes SDK 의 blocking 스트림이
+  anyio 스레드풀 슬롯을 스트림 수명 내내 점유해, 그 프로세스가 받는 나머지 API 요청이
+  전부 멎는 문제를 고쳤다. 프로세스당 동시 스트림 상한(`LOG_STREAM_MAX_CONCURRENT`,
+  초과 시 429) · 최대 스트림 수명(`LOG_STREAM_MAX_DURATION_SECONDS`) · anyio 스레드풀
+  총량 상향(`SYNC_THREADPOOL_SIZE`) · uvicorn `--workers 2` 를 추가했다. Backend:
+  `routers/analyze.py`(`stream_pod_logs`, `stream_cluster_events`), `main.py`,
+  `config.py`, `Dockerfile`. Infra: `k8s/base/backend/deployment.yaml`,
+  `helm/.../backend-deployment.yaml`, `docker-compose.yml`(워커 배증에 맞춰
+  `DB_POOL_SIZE`/`DB_MAX_OVERFLOW` 재조정).
+- **버전 이력(`/versions`) — 클러스터 config 스냅샷 무제한 이력 로드**: "현재 버전",
+  CSV export, 아키텍처 그래프 3개 엔드포인트가 component 당 최신 스냅샷을 고르려고
+  클러스터 전체 스냅샷 이력(`cluster_config_snapshots`, 로그성 테이블이라 무한 증가)을
+  Python 으로 읽어와 dedup 했던 것을, PostgreSQL `DISTINCT ON` 으로 DB 에서 바로
+  최신 1건씩만 가져오도록 고쳐 운영 기간이 길어질수록 느려지던 문제를 없앴다.
+  Backend: `routers/versions.py`.
+
+### Changed
+- **대용량 JSON 응답 압축 + 직렬화 속도**: 목록 API 응답에 gzip 압축을 적용하고
+  (SSE 스트림 5곳은 실시간성 보호를 위해 자체 제외), JSON 직렬화를 stdlib `json` 에서
+  `orjson`(Rust) 으로 바꿨다. Backend: `main.py`(`GZipMiddleware`,
+  `default_response_class=ORJSONResponse`), `requirements.txt`.
+- **인증 라이브러리 교체 — 유지보수 중단된 python-jose/passlib 제거**: JWT 는
+  `python-jose`(마지막 릴리스 2021년)에서 `PyJWT` 로, 비밀번호 해시는 `passlib`(bcrypt
+  4.1+ 와 호환 문제로 `bcrypt==4.0.1` 고정이 필요했던) 대신 `bcrypt` 를 직접 호출하도록
+  바꿔 bcrypt 를 최신 버전으로 올릴 수 있게 했다. 기존 bcrypt 해시는 형식이 동일해
+  재로그인/비밀번호 재설정 없이 그대로 검증된다. Backend: `auth/security.py`,
+  `requirements.txt`.
+
 ## [1.27.1] - 2026-08-10
 
 ### Changed

@@ -1123,27 +1123,28 @@ def get_current_versions(cluster_id: UUID, db: Session = Depends(get_db)):
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
-    # component 별 가장 최근 한 건씩 — SQL 에서 window 함수 쓸 수도 있지만 간단히 Python 에서 처리
-    all_snaps = (
+    # component 별 가장 최근 한 건씩 — cluster_config_snapshots 는 LOG_TABLES 로 분류될
+    # 만큼 무한 증가하는 로그성 테이블이라, 클러스터 전체 이력을 Python 으로 읽어와
+    # dedup 하면 운영 기간이 길어질수록 이 엔드포인트 비용이 선형으로 커진다.
+    # DISTINCT ON 으로 component 당 최신 1건만 DB 에서 골라온다.
+    latest_snaps = (
         db.query(ClusterConfigSnapshot)
         .filter(ClusterConfigSnapshot.cluster_id == cluster_id)
         .order_by(ClusterConfigSnapshot.component, ClusterConfigSnapshot.collected_at.desc())
+        .distinct(ClusterConfigSnapshot.component)
         .all()
     )
-    seen = set()
-    current = []
-    for s in all_snaps:
-        if s.component in seen:
-            continue
-        seen.add(s.component)
-        current.append({
+    current = [
+        {
             "id": str(s.id),
             "component": s.component,
             "category": s.category,
             "version": s.version,
             "data": s.data,
             "collectedAt": s.collected_at.isoformat(),
-        })
+        }
+        for s in latest_snaps
+    ]
     return {"cluster_id": str(cluster_id), "components": current}
 
 
@@ -1280,23 +1281,20 @@ def export_versions_csv(
     cat_set = {c.strip() for c in (categories or "").split(",") if c.strip()}
     comp_set = {c.strip() for c in (components or "").split(",") if c.strip()}
 
-    all_snaps = (
+    # cluster_config_snapshots 는 LOG_TABLES(무한 증가) — component 당 최신 1건만
+    # DISTINCT ON 으로 DB 에서 골라오고, 클러스터 전체 이력은 읽지 않는다.
+    latest_snaps = (
         db.query(ClusterConfigSnapshot)
         .filter(ClusterConfigSnapshot.cluster_id == cluster_id)
         .order_by(ClusterConfigSnapshot.component, ClusterConfigSnapshot.collected_at.desc())
+        .distinct(ClusterConfigSnapshot.component)
         .all()
     )
-    seen: set[str] = set()
-    rows: list[ClusterConfigSnapshot] = []
-    for s in all_snaps:
-        if s.component in seen:
-            continue
-        seen.add(s.component)
-        if cat_set and (s.category or "") not in cat_set:
-            continue
-        if comp_set and s.component not in comp_set:
-            continue
-        rows.append(s)
+    rows: list[ClusterConfigSnapshot] = [
+        s for s in latest_snaps
+        if (not cat_set or (s.category or "") in cat_set)
+        and (not comp_set or s.component in comp_set)
+    ]
 
     # 컬럼 정의 — detail 별로 분기
     if detail == "none":
@@ -1377,16 +1375,16 @@ def get_versions_graph(cluster_id: UUID, db: Session = Depends(get_db)):
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
-    all_snaps = (
+    # cluster_config_snapshots 는 LOG_TABLES(무한 증가) — component 당 최신 1건만
+    # DISTINCT ON 으로 DB 에서 골라오고, 클러스터 전체 이력은 읽지 않는다.
+    latest_snaps = (
         db.query(ClusterConfigSnapshot)
         .filter(ClusterConfigSnapshot.cluster_id == cluster_id)
         .order_by(ClusterConfigSnapshot.component, ClusterConfigSnapshot.collected_at.desc())
+        .distinct(ClusterConfigSnapshot.component)
         .all()
     )
-    # component 당 최신 한 건
-    latest: dict[str, ClusterConfigSnapshot] = {}
-    for s in all_snaps:
-        latest.setdefault(s.component, s)
+    latest: dict[str, ClusterConfigSnapshot] = {s.component: s for s in latest_snaps}
 
     nodes: list[dict] = [{
         "id":       f"cluster:{cluster.id}",

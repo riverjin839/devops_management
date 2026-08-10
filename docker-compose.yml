@@ -48,6 +48,11 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # uvicorn --workers 2(Dockerfile) 라 pod 당 SQLAlchemy 엔진이 2개 뜬다 — 기본
+      # 풀(10+20=30)을 그대로 두면 서비스 당 예산이 배가돼 postgres:15-alpine 기본
+      # max_connections(100)을 다른 celery 서비스와 합쳐 쉽게 넘는다.
+      - DB_POOL_SIZE=5
+      - DB_MAX_OVERFLOW=10
     depends_on:
       postgres:
         condition: service_healthy

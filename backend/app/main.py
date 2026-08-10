@@ -2,8 +2,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from anyio.to_thread import current_default_thread_limiter
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import ORJSONResponse
 from sqlalchemy import text, inspect, func
 
 from app.config import settings
@@ -1967,6 +1970,11 @@ async def lifespan(app: FastAPI):
     # 보안 사고이므로 여기서만 fail-fast 로 부팅을 막는다.
     _assert_secret_key_is_safe()
     _startup_log = logging.getLogger("k8s_monitor.startup")
+
+    # sync 라우트(89%) 가 공유하는 anyio 스레드풀을 기본값(40)보다 넉넉하게 —
+    # §config.py sync_threadpool_size 주석 참고.
+    current_default_thread_limiter().total_tokens = settings.sync_threadpool_size
+
     try:
         _ensure_pgvector_extension()
     except Exception as e:  # noqa: BLE001
@@ -2038,6 +2046,8 @@ async def lifespan(app: FastAPI):
 
 
 # FastAPI 앱 생성
+# default_response_class=ORJSONResponse: stdlib json 대신 orjson(Rust) 으로 직렬화 —
+# 목록 엔드포인트(§.all() 124곳) 의 대용량 JSON 응답 직렬화 비용을 낮춘다.
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
@@ -2045,6 +2055,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
+    default_response_class=ORJSONResponse,
 )
 
 # CORS 설정 - Kubernetes 환경 지원
@@ -2067,6 +2078,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 대용량 목록/응답(§.all() 124곳)을 무압축으로 보내지 않도록 gzip. SSE 스트림 5곳은
+# 각 핸들러가 "Content-Encoding: identity" 헤더를 직접 얹어 스스로 제외한다 —
+# gzip 이 SSE 를 건드리면 zlib 내부 버퍼링 때문에 실시간 tail 이 깨진다.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Public routers (no auth) — login + liveness/readiness probes.
 app.include_router(auth_router, prefix="/api/v1")
