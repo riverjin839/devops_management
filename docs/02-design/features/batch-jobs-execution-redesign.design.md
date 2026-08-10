@@ -238,7 +238,47 @@ POST /api/v1/scripts/{id}/test-run
 
 - 자격증명 미저장 원칙은 §1.1·CLAUDE.md UI-First 원칙 §3 을 그대로 따른다(etcd_defrag/cert_expiry 의 "요청 시에만 SSH 자격증명 사용" 선례와 동일).
 - 결과는 `BatchJobRun`/`CheckMatrixRun` 에 안 쌓는다(테스트이지 실제 잡이 아님) — 별도 응답으로만 반환, 영속 저장 안 함(스토리지 낭비·이력 오염 방지).
-- 실행은 `kind` 에 따라 분기: `shell`→SSH(`ssh_runner.py` 재사용), `ansible_playbook`→`ansible-runner`(기존 `run_playbook()` 재사용), `python`→ 대상 서버에 SSH 로 접속해 `python3 -` 로 스크립트를 stdin 전달(SavedScript 의 `script_wrap.py` 패턴 재사용) 또는 in-cluster 배치잡이면 백엔드 프로세스 내 격리 실행(리스크 높음 — Phase 1 에서는 **원격 SSH 실행만 지원**하고 백엔드 프로세스 내 실행은 제외하는 것을 권장, §7 참고).
+- 실행은 `kind` 에 따라 분기: `shell`→SSH(`ssh_runner.py` 재사용), `ansible_playbook`→`ansible-runner`(기존 `run_playbook()` 재사용), `python`→ **일회용 K8s Job**(§4.4) — SSH 도, 백엔드 프로세스 내 실행도 아니다. `target.kind: "cluster"` + `clusterId` 만 필요하고(`host`/`username`/`password` 등 SSH 필드는 무시), 지정된 클러스터에 매번 새로 뜨는 격리 Job 이 대신 실행한다.
+
+### 4.4 Python 실행 격리 설계 — 일회용 K8s Job (§8.0 결정 사항)
+
+Python 스크립트는 원격 서버 SSH 접속도, PEP 백엔드/워커 프로세스 내부 실행(`exec()`)도 쓰지 않는다.
+대신 **지정된 대상 클러스터에 매번 새로 생성·즉시 폐기되는 K8s Job** 안에서 실행한다 — 사용자 조작
+경험은 Shell/Ansible 과 완전히 동일("실행"/"테스트 실행" 버튼 하나)하면서, 실행 자체는 격리된
+일회성 워크로드로 완전히 분리된다.
+
+```
+[테스트 실행 / 즉시 실행 요청]
+  ExecutableScriptVersion.content (python)
+        │
+        ▼
+1. 임시 ConfigMap 생성 (스크립트 본문 1개, 이 실행 전용 — Job 과 함께 정리)
+2. Job 생성 (namespace: pep-script-runner, 전용 ServiceAccount, 기본 무권한 RBAC)
+   - image: 기존 backend 이미지 재사용 (python:3.11-alpine 기반, 별도 이미지 빌드 불필요)
+   - volumeMounts: 위 ConfigMap → 스크립트 파일로 마운트
+   - env: params(JSONB) 로 명시 전달된 값만 주입 (SECRET_KEY/DATABASE_URL 등 전역 시크릿은 절대 미주입)
+   - resources.limits(cpu/mem) + activeDeadlineSeconds 필수 (무한루프·리소스 고갈 방지)
+   - ttlSecondsAfterFinished 로 자동 정리 + 완료 직후 명시적 delete (이중 안전장치)
+3. Pod 완료 대기 → kubectl logs 로 stdout/stderr 수거 (kubectl_nodes 와 동일한 subprocess+timeout 패턴)
+4. ExecutionStep/_record_command() 로 기록 → Job/ConfigMap 삭제
+```
+
+- **네트워크**: 기본 `NetworkPolicy` 로 egress 최소화 — 스크립트가 외부 통신이 필요하면
+  `param_schema` 에 명시적 허용 목록 필드를 둔다(UI-First 원칙과 동일하게 하드코딩 금지).
+- **K8s API 접근**: 기본은 무권한. 스크립트가 K8s API 가 필요한 경우에만 `param_schema` 에
+  "K8s API 접근 필요" 토글을 두고, 그때만 read-only Role 을 부여한다(최소 권한 원칙).
+- **블라스트 반경**: 뚫려도 그 1회성 Job/Pod 의 최소 RBAC 범위로 한정된다 — 이전 검토했던
+  "백엔드 프로세스 내 실행"(뚫리면 DB 커넥션·전역 시크릿·다른 클러스터 kubeconfig 까지 노출)
+  과 비교해 블라스트 반경이 근본적으로 다르다.
+- **선례 재사용**: `k8s_job_cleanup.py` 가 이미 K8s Job 을 다루는 코드베이스라 "Job 생성 →
+  관찰 → 정리" 흐름 자체는 기존 코드와 같은 결 — 신규는 Job 을 **삭제**가 아니라 **생성**하는
+  실행기라는 점뿐이다.
+- **부하 영향**: 요청 시에만 뜨는 일회성 워크로드 + 리소스 상한이라 대상 클러스터 상시
+  리소스에 미치는 영향은 미미하다고 판단(사용자 확인). 운영 규모가 커지면(동시 실행 다수)
+  클러스터별 동시 실행 상한(`ResourceQuota`)을 Phase 2 에서 검토한다.
+- **신규 인프라**: 클러스터별 전용 네임스페이스(`pep-script-runner`) + 전용 ServiceAccount
+  사전 프로비저닝이 필요 — `k8s/base` kustomize 에 추가하고, 클러스터 등록 절차(`/cluster-manage`)
+  문서에 선행조건으로 명시한다(Phase 2 구현 시).
 
 ---
 
@@ -355,7 +395,7 @@ function CellButton({ item, cell, onClick, onRunNow }: {...}) {
 |---|---|---|---|
 | **0** | 매트릭스 셀 즉시실행 + 확인 팝업(§5.1) | 매우 낮음 — 프론트만, 기존 API 재사용 | 없음, 즉시 착수 가능 |
 | **1** | `executable_scripts`/`executable_script_versions` 모델 + `/scripts` 라이브러리 화면 + 테스트 실행(§3, §4.1, §4.3, §5.4). **아직 어떤 Job/Item 도 여기 연결 안 함** | 낮음 — 신규 테이블·신규 화면, 기존 코드 무변경 | 없음 |
-| **2** | BatchJob 에 `execution_mode='script'` 배선(§3.2, §4.2). 기존 3개 executor(`etcdctl_defrag`/`shell_command`/`k8s_job_cleanup`)를 `is_system=true` 시드 스크립트로 포팅 — **동작은 100% 동일하게 유지**하면서 내용만 DB 로 옮김 | 중간 — 기존 잡 마이그레이션 스크립트 필요, 회귀 테스트 필수 | Phase 1 |
+| **2** | BatchJob 에 `execution_mode='script'` 배선(§3.2, §4.2). 기존 3개 executor(`etcdctl_defrag`/`shell_command`/`k8s_job_cleanup`)를 `is_system=true` 시드 스크립트로 포팅 — **동작은 100% 동일하게 유지**하면서 내용만 DB 로 옮김. Python 실행기(§4.4 일회용 K8s Job)와 `pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝도 이 Phase 에서 구현 | 중간 — 기존 잡 마이그레이션 스크립트 필요, 회귀 테스트 필수 + K8s Job 실행기 신규 구현 | Phase 1 |
 | **3** | `CheckMatrixSourceType.script` 추가 + 매트릭스 실행 방식 라벨 개편(§6) | 중간 — enum 확장은 안전하지만 프론트 배지·필터 전수 확인 필요 | Phase 1 |
 | **4(선택)** | 기존 딥체크/애드온 중 단순한 것(예: HTTP 헬스체크류)을 스크립트로 재구현 — 복잡하거나 상태 산정에 깊이 얽힌 것(core_bundle, cert_expiry 의 스냅샷 폴백 등)은 **영구히 파이썬 유지** | 케이스별 상이 | Phase 2, 3 |
 
@@ -363,12 +403,23 @@ function CellButton({ item, cell, onClick, onRunNow }: {...}) {
 
 ---
 
-## 8. Open Questions (착수 전 결정 필요)
+## 8. Open Questions / 결정 사항
 
-1. **Python 스크립트 실행 위치**: 원격 SSH(대상 서버에 Python3 필요) 만 지원할지, PEP 백엔드/워커 프로세스 내에서 직접 실행(샌드박스 필요 — RCE 리스크)까지 지원할지. **권장: Phase 1~2 는 원격 SSH 실행만, 백엔드 내 실행은 범위 제외**(보안 검토 별도 필요).
-2. **Ansible playbook 과 기존 `AnsiblePlaybookFile`/`Playbook`(`/playbooks` 화면) 과의 관계**: 완전히 흡수(마이그레이션)할지, 당분간 별개로 둘지. 흡수 시 `/playbooks` 화면 자체를 스크립트 라이브러리의 `kind=ansible_playbook` 필터 뷰로 재구성하는 것도 검토 가능(화면 통합 — Batch Jobs 를 홈에 합친 것과 같은 방향).
-3. **딥체크/애드온 체커도 "테스트 실행"이 가능해야 하는가**: 요청 #1(모든 동작이 UI 로 확인 가능)을 엄격히 적용하면 기존 체커도 대상 지정 테스트 실행이 필요할 수 있다 — 이미 매트릭스 셀의 "지금 실행"이 사실상 이 역할을 하고 있어 별도 구현 불필요할 가능성이 높다(확인 필요).
-4. **권한**: 스크립트 라이브러리 CRUD/테스트 실행을 `require_operator` 로 제한할지, 이 스크립트가 원격 코드 실행이라는 특성상 `require_admin` 까지 올릴지 — 임의 코드 실행 권한이라 후자를 권장.
+### 8.0 결정됨 (2026-08-10)
+
+- **Python 스크립트 실행 위치**: 원격 SSH 도, PEP 백엔드/워커 프로세스 내 실행(in-process, RCE
+  리스크)도 채택하지 않는다. 대신 **대상 클러스터에 매번 새로 뜨는 일회용 K8s Job**에서 실행한다
+  (§4.4). 근거: (a) 사용자 조작 경험은 Shell/Ansible 과 동일 — "실행" 버튼 하나로 끝나 UI 상
+  차이가 없다 (b) 리소스 상한이 걸린 1회성 워크로드라 대상 클러스터 상시 자원에 미치는 부하가
+  크지 않다고 판단(사용자 확인) (c) 격리 범위(블라스트 반경)가 Job 의 최소 RBAC 로 한정돼
+  백엔드 프로세스 내 실행보다 근본적으로 안전하다.
+
+### 8.1 남은 Open Questions (착수 전 결정 필요)
+
+1. **Ansible playbook 과 기존 `AnsiblePlaybookFile`/`Playbook`(`/playbooks` 화면) 과의 관계**: 완전히 흡수(마이그레이션)할지, 당분간 별개로 둘지. 흡수 시 `/playbooks` 화면 자체를 스크립트 라이브러리의 `kind=ansible_playbook` 필터 뷰로 재구성하는 것도 검토 가능(화면 통합 — Batch Jobs 를 홈에 합친 것과 같은 방향).
+2. **딥체크/애드온 체커도 "테스트 실행"이 가능해야 하는가**: 요청 #1(모든 동작이 UI 로 확인 가능)을 엄격히 적용하면 기존 체커도 대상 지정 테스트 실행이 필요할 수 있다 — 이미 매트릭스 셀의 "지금 실행"이 사실상 이 역할을 하고 있어 별도 구현 불필요할 가능성이 높다(확인 필요).
+3. **권한**: 스크립트 라이브러리 CRUD/테스트 실행을 `require_operator` 로 제한할지, 이 스크립트가 원격 코드 실행이라는 특성상 `require_admin` 까지 올릴지 — 임의 코드 실행 권한이라 후자를 권장.
+4. **`pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝 시점**: 클러스터 등록 시 자동 생성할지, `/cluster-manage` 에서 운영자가 수동으로 선행 설정하게 할지 — Phase 2 구현 시 확정.
 
 ---
 
@@ -408,3 +459,4 @@ Phase 1 이후(스크립트 모델)의 레이어 배정은 착수 시 `add-deep-
 | Version | Date | Changes | Author |
 |---|---|---|---|
 | 0.1 | 2026-08-06 | 최초 작성 — Option A(Strangler Fig) 채택, Phase 0~4 로 분해 | riverjin839 요청 / Claude 작성 |
+| 0.2 | 2026-08-10 | Python 스크립트 실행 위치 결정(§8.0, §4.4) — SSH/백엔드 in-process 대신 대상 클러스터의 일회용 K8s Job 채택. §4.3 실행 분기·Phase 2 범위 갱신 | riverjin839 결정 / Claude 반영 |
