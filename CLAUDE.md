@@ -344,7 +344,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
-| 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks` |
+| 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks`, `scripts` |
 
 ---
 
@@ -369,7 +369,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
-- **플랫폼/자동화**: `batch_job`, `bottleneck_run`, `ansible_assets`
+- **플랫폼/자동화**: `batch_job`(+`execution_mode`/`script_id`/`script_version_id` — Phase 2, "script" 모드 잡은 이 FK 로 스크립트를 참조), `bottleneck_run`, `ansible_assets`, `executable_script`(+`executable_script_version` — DB 저장·버전관리되는 Python/Ansible/Shell 스크립트 자산, `/scripts` 화면. `batch_job.script_id` 가 참조 중이면 스크립트 삭제가 409 로 막힌다(`check_matrix_item` 연동은 아직 없음, Phase 3 예정). `current_version_id` 는 `executable_script_versions` 를 순환 참조하는 FK 라 `use_alter=True` 로 생성됨에 유의)
 - **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`, `island`(Your Island 커스텀 화면), `saved_script`(bulk-exec 재사용 사용자별 bash/python 스크립트)
 
 ---

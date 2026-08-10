@@ -134,7 +134,9 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
         </td>
       )}
       <td className="px-3 py-2 align-top">
-        <code className="text-xs text-muted-foreground font-mono">{job.jobType}</code>
+        <code className="text-xs text-muted-foreground font-mono">
+          {job.executionMode === 'script' ? (job.scriptName ?? '스크립트') : job.jobType}
+        </code>
       </td>
       <td className="px-3 py-2 align-top">
         <CronBadge job={job} />
@@ -173,7 +175,9 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
               <TooltipContent side="left" className="max-w-[260px]">
                 <div className="space-y-1">
                   <p className="font-medium">{job.name}</p>
-                  <p className="text-muted-foreground font-mono">{job.jobType}</p>
+                  <p className="text-muted-foreground font-mono">
+                    {job.executionMode === 'script' ? (job.scriptName ?? '스크립트') : job.jobType}
+                  </p>
                   {job.defaultHost && <p className="text-muted-foreground">호스트: {job.defaultHost}</p>}
                   <p className="text-muted-foreground">최근 실행: {formatShortDate(job.lastRunAt)} ({job.lastStatus})</p>
                   {!canQuickRun && (

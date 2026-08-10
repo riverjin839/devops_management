@@ -42,6 +42,7 @@ from app.routers import (
     versions_router,
     bulk_exec_router,
     saved_scripts_router,
+    scripts_router,
     etcdctl_router,
     cilium_trace_router,
     mc_client_router,
@@ -996,6 +997,34 @@ def _run_migrations():
     # revoke(terminate=True) 로 찾아 중단하기 위한 task id 추적.
     if "batch_jobs" in inspector.get_table_names():
         _safe_add_column("batch_jobs", "active_task_id", "VARCHAR(64)")
+
+    # batch_jobs/batch_job_runs: 스크립트 라이브러리 연동(Phase 2) — 컬럼만 먼저,
+    # REFERENCES 는 별도 ADD CONSTRAINT 로 분리(대상 테이블 부재 위험 격리, playbooks
+    # FK 컬럼과 동일 패턴).
+    if "batch_jobs" in inspector.get_table_names():
+        _safe_add_column("batch_jobs", "execution_mode", "VARCHAR(20) NOT NULL DEFAULT 'system'")
+        _safe_add_column("batch_jobs", "script_id", "UUID")
+        _safe_add_column("batch_jobs", "script_version_id", "UUID")
+        _safe_add_constraint(
+            "batch_jobs", "batch_jobs_script_id_fkey",
+            "FOREIGN KEY (script_id) REFERENCES executable_scripts(id)",
+            requires_tables=("executable_scripts",),
+            label="batch_jobs.script_id FK",
+        )
+        _safe_add_constraint(
+            "batch_jobs", "batch_jobs_script_version_id_fkey",
+            "FOREIGN KEY (script_version_id) REFERENCES executable_script_versions(id)",
+            requires_tables=("executable_script_versions",),
+            label="batch_jobs.script_version_id FK",
+        )
+    if "batch_job_runs" in inspector.get_table_names():
+        _safe_add_column("batch_job_runs", "script_version_id", "UUID")
+        _safe_add_constraint(
+            "batch_job_runs", "batch_job_runs_script_version_id_fkey",
+            "FOREIGN KEY (script_version_id) REFERENCES executable_script_versions(id)",
+            requires_tables=("executable_script_versions",),
+            label="batch_job_runs.script_version_id FK",
+        )
 
     # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화 + 에디터 개인 설정
     if "users" in inspector.get_table_names():
@@ -2079,6 +2108,7 @@ app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(versions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(saved_scripts_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(scripts_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mc_client_router, prefix="/api/v1", dependencies=_auth)

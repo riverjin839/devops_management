@@ -1243,6 +1243,33 @@ export const savedScriptsApi = {
   delete: (id: string) => api.delete(`/saved-scripts/${id}`),
 };
 
+// 스크립트 라이브러리 API (DB 저장·버전관리되는 Python/Ansible/Shell 실행 스크립트 — Phase 1)
+export const scriptsApi = {
+  list: (params?: { kind?: import('@/types').ScriptKind; tag?: string; q?: string }) =>
+    api.get<import('@/types').ExecutableScript[]>('/scripts', { params }),
+  get: (id: string) => api.get<import('@/types').ExecutableScript>(`/scripts/${id}`),
+  create: (data: import('@/types').ExecutableScriptCreate) =>
+    api.post<import('@/types').ExecutableScript>('/scripts', data),
+  update: (id: string, data: import('@/types').ExecutableScriptUpdate) =>
+    api.put<import('@/types').ExecutableScript>(`/scripts/${id}`, data),
+  delete: (id: string) => api.delete(`/scripts/${id}`),
+  listVersions: (id: string) =>
+    api.get<import('@/types').ExecutableScriptVersion[]>(`/scripts/${id}/versions`),
+  getVersion: (id: string, version: number) =>
+    api.get<import('@/types').ExecutableScriptVersion>(`/scripts/${id}/versions/${version}`),
+  createVersion: (id: string, data: import('@/types').ExecutableScriptVersionCreate) =>
+    api.post<import('@/types').ExecutableScriptVersion>(`/scripts/${id}/versions`, data),
+  setCurrentVersion: (id: string, versionId: string) =>
+    api.put<import('@/types').ExecutableScript>(`/scripts/${id}/current-version`, { versionId }),
+  testRun: (id: string, data: import('@/types').ScriptTestRunRequest) =>
+    api.post<import('@/types').ScriptTestRunResponse>(`/scripts/${id}/test-run`, data, {
+      timeout: 60_000,
+    }),
+  getAccessSettings: () => api.get<{ adminOnly: boolean }>('/scripts/access-settings'),
+  updateAccessSettings: (adminOnly: boolean) =>
+    api.put<{ adminOnly: boolean }>('/scripts/access-settings', { adminOnly }),
+};
+
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
 export const commandsApi = {
   list: (params?: { category?: string; importance?: string; q?: string }) =>
@@ -1816,6 +1843,13 @@ export interface BatchJob {
   hasSavedPrivateKey: boolean;
   /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요. 구버전 응답은 undefined(=SSH 취급). */
   requiresSsh?: boolean;
+  /** 'system'(기존 job_type 하드코딩) | 'script'(스크립트 라이브러리 참조) — Phase 2. */
+  executionMode?: string;
+  scriptId?: string | null;
+  scriptVersionId?: string | null;
+  /** 표시 편의를 위해 서버에서 join — executionMode='script' 일 때만 값이 있음. */
+  scriptName?: string | null;
+  scriptKind?: string | null;
 }
 
 export interface BatchJobCreate {
@@ -1833,6 +1867,11 @@ export interface BatchJobCreate {
   // Plaintext on the way in; backend encrypts before persisting.
   savedPassword?: string;
   savedPrivateKey?: string;
+  /** 'system'(기본) | 'script' — 'script' 면 scriptId 가 필요하고 jobType 은 서버가 "script" 로 강제한다. */
+  executionMode?: string;
+  scriptId?: string;
+  /** 비우면 항상 최신 버전 — 특정 버전에 고정하려면 지정. */
+  scriptVersionId?: string;
 }
 
 export interface BatchJobUpdate {
@@ -1879,6 +1918,9 @@ export interface BatchJobRun {
   /** 이 실행에 실제로 사용된 merge 후 파라미터 스냅샷 (admin 감사용). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   paramsSnapshot?: Record<string, any> | null;
+  /** 스크립트 기반 잡이 이 실행에서 실제로 사용한 버전 — job.scriptVersionId 가 null
+   *  (항상 최신)이어도 이 실행이 정확히 어느 버전을 돌렸는지 가리킨다. */
+  scriptVersionId?: string | null;
   /** 단계별 실행 trace — DeepCheckExecStep 과 동일 shape (id/label/status/detail/metrics/startedMs/durationMs). */
   steps?: import('@/types').DeepCheckExecStep[] | null;
   /** 실제로 나간 명령 기록 (kind/command/exitCode/durationMs/stdout/stderr/truncated). */

@@ -111,6 +111,9 @@ export function CreateBatchJobWizard({
         params,
         savedPassword: sshType ? state.savedPassword || undefined : undefined,
         savedPrivateKey: sshType ? state.savedPrivateKey || undefined : undefined,
+        executionMode: state.executionMode,
+        scriptId: state.executionMode === 'script' ? state.scriptId : undefined,
+        scriptVersionId: state.executionMode === 'script' ? state.scriptVersionId || undefined : undefined,
       });
       onCreated(data);
       onClose();

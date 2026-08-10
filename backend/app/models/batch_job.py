@@ -24,8 +24,18 @@ class BatchJob(Base):
     description = Column(String(500), nullable=True)
 
     # job_type maps to a registered BatchJobExecutor key
-    # (e.g. "etcdctl_defrag", "etcdctl_snapshot", ...)
+    # (e.g. "etcdctl_defrag", "etcdctl_snapshot", ...). Script-based jobs are
+    # always job_type="script" — the actual behavior comes from script_id/
+    # script_version_id instead (see execution_mode below).
     job_type = Column(String(80), nullable=False)
+
+    # 'system'(기존 job_type 하드코딩 executor) | 'script'(스크립트 라이브러리 참조).
+    # Phase 2 — docs/02-design/features/batch-jobs-execution-redesign.design.md §3.2.
+    execution_mode = Column(String(20), nullable=False, default="system", server_default="system")
+    script_id = Column(UUID(as_uuid=True), ForeignKey("executable_scripts.id"), nullable=True)
+    # null = 항상 최신 버전(스크립트 수정 시 다음 실행부터 자동 반영). 특정 버전에
+    # 고정하면 스크립트가 갱신돼도 이 잡은 그 버전을 계속 실행한다.
+    script_version_id = Column(UUID(as_uuid=True), ForeignKey("executable_script_versions.id"), nullable=True)
 
     # Default target host/credentials are NOT stored; only the host hint is.
     # Credentials must be supplied per-run in the API payload (same pattern as
@@ -66,6 +76,7 @@ class BatchJob(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     cluster = relationship("Cluster")
+    script = relationship("ExecutableScript", foreign_keys=[script_id])
     runs = relationship(
         "BatchJobRun",
         back_populates="job",
@@ -103,6 +114,11 @@ class BatchJobRun(Base):
     # 바뀌어도 "그때 어떤 설정으로 실행됐는지"(예: k8s_job_cleanup 의 dry_run
     # 여부)를 그대로 확인할 수 있다. admin 감사/재현 목적.
     params_snapshot = Column(JSONB, nullable=True)
+
+    # 스크립트 기반 잡(execution_mode="script")이 이 실행에서 실제로 사용한 버전 —
+    # job.script_version_id 가 null(항상 최신)이어도 이 실행이 정확히 어느 버전을
+    # 돌렸는지 항상 정확히 가리킨다(params_snapshot 과 동일 철학).
+    script_version_id = Column(UUID(as_uuid=True), ForeignKey("executable_script_versions.id"), nullable=True)
 
     # 단계별 실행 trace [{id,label,status,detail,metrics,started_ms,duration_ms}] +
     # 실제로 나간 명령 기록 [{kind,command,exit_code,duration_ms,stdout,stderr,truncated}].

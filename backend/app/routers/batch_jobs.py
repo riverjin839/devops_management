@@ -54,6 +54,37 @@ def _requires_ssh(job_type: str) -> bool:
     return True if executor is None else executor.requires_ssh
 
 
+def _validate_script_selection(db: Session, *, script_id, script_version_id) -> None:
+    """execution_mode='script' 생성/수정 시 공통 검증 (create_job 전용 — job_type/
+    script 는 생성 후 변경 불가라 update 경로는 이 검증을 타지 않는다)."""
+    from app.models.executable_script import ExecutableScript, ExecutableScriptVersion
+
+    if not script_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="execution_mode='script' 는 script_id 가 필요합니다.",
+        )
+    script = db.query(ExecutableScript).filter(ExecutableScript.id == script_id).first()
+    if script is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="스크립트를 찾을 수 없습니다.")
+    if script.kind not in ("shell", "ansible_playbook"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Python 스크립트는 아직 Batch Job 실행을 지원하지 않습니다 — 대상 클러스터의 "
+                "일회용 K8s Job 실행기가 Phase 2 에 구현될 예정입니다."
+            ),
+        )
+    if script_version_id:
+        version = (
+            db.query(ExecutableScriptVersion)
+            .filter(ExecutableScriptVersion.id == script_version_id, ExecutableScriptVersion.script_id == script_id)
+            .first()
+        )
+        if version is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 스크립트 버전을 찾을 수 없습니다.")
+
+
 def _require_cron_credentials(
     *,
     cron: str | None,
@@ -102,6 +133,11 @@ def _require_cron_credentials(
 def _to_response(job: BatchJob) -> dict:
     """Serialise a BatchJob row into the response shape, hiding ciphertext
     behind boolean has_* flags."""
+    script_name = None
+    script_kind = None
+    if job.execution_mode == "script" and job.script is not None:
+        script_name = job.script.name
+        script_kind = job.script.kind
     return {
         "id": job.id,
         "cluster_id": job.cluster_id,
@@ -123,6 +159,11 @@ def _to_response(job: BatchJob) -> dict:
         "has_saved_password": bool(job.encrypted_password),
         "has_saved_private_key": bool(job.encrypted_private_key),
         "requires_ssh": _requires_ssh(job.job_type),
+        "execution_mode": job.execution_mode or "system",
+        "script_id": job.script_id,
+        "script_version_id": job.script_version_id,
+        "script_name": script_name,
+        "script_kind": script_kind,
     }
 
 
@@ -160,7 +201,12 @@ def create_job(
 ):
     if not db.query(Cluster).filter(Cluster.id == payload.cluster_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    if get_executor(payload.job_type) is None:
+
+    effective_job_type = payload.job_type
+    if payload.execution_mode == "script":
+        effective_job_type = "script"
+        _validate_script_selection(db, script_id=payload.script_id, script_version_id=payload.script_version_id)
+    elif get_executor(payload.job_type) is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unknown job_type '{payload.job_type}'. See GET /batch-jobs/types.",
@@ -172,12 +218,13 @@ def create_job(
         has_password=bool(payload.saved_password),
         has_private_key=bool(payload.saved_private_key),
         default_host=payload.default_host,
-        job_type=payload.job_type,
+        job_type=effective_job_type,
     )
 
     data = payload.model_dump()
     saved_password = data.pop("saved_password", None)
     saved_private_key = data.pop("saved_private_key", None)
+    data["job_type"] = effective_job_type
 
     job = BatchJob(**data)
     if saved_password:

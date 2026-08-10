@@ -92,6 +92,14 @@ class ExecutionContext:
     # that don't attach anything simply can't be force-stopped mid-flight.
     cancel_token: Optional[CancelToken] = None
 
+    # 스크립트 라이브러리 연동(Phase 2) — execution_mode="script" 인 잡만 채워진다.
+    # batch_job_service.execute_job() 이 BatchJob.script_id/script_version_id 로
+    # ExecutableScript(Version) 을 미리 로드해 여기 주입한다 — ScriptExecutor 는 DB
+    # 세션을 직접 쥐지 않고 이 값만으로 실행한다.
+    script_kind: Optional[str] = None  # python | ansible_playbook | shell
+    script_content: Optional[str] = None
+    script_inventory_content: Optional[str] = None
+
 
 @dataclass
 class ExecutionStep:
