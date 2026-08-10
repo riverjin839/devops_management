@@ -1843,6 +1843,13 @@ export interface BatchJob {
   hasSavedPrivateKey: boolean;
   /** false = 클러스터 스코프 잡 — host/SSH 자격증명 불필요. 구버전 응답은 undefined(=SSH 취급). */
   requiresSsh?: boolean;
+  /** 'system'(기존 job_type 하드코딩) | 'script'(스크립트 라이브러리 참조) — Phase 2. */
+  executionMode?: string;
+  scriptId?: string | null;
+  scriptVersionId?: string | null;
+  /** 표시 편의를 위해 서버에서 join — executionMode='script' 일 때만 값이 있음. */
+  scriptName?: string | null;
+  scriptKind?: string | null;
 }
 
 export interface BatchJobCreate {
@@ -1860,6 +1867,11 @@ export interface BatchJobCreate {
   // Plaintext on the way in; backend encrypts before persisting.
   savedPassword?: string;
   savedPrivateKey?: string;
+  /** 'system'(기본) | 'script' — 'script' 면 scriptId 가 필요하고 jobType 은 서버가 "script" 로 강제한다. */
+  executionMode?: string;
+  scriptId?: string;
+  /** 비우면 항상 최신 버전 — 특정 버전에 고정하려면 지정. */
+  scriptVersionId?: string;
 }
 
 export interface BatchJobUpdate {
@@ -1906,6 +1918,9 @@ export interface BatchJobRun {
   /** 이 실행에 실제로 사용된 merge 후 파라미터 스냅샷 (admin 감사용). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   paramsSnapshot?: Record<string, any> | null;
+  /** 스크립트 기반 잡이 이 실행에서 실제로 사용한 버전 — job.scriptVersionId 가 null
+   *  (항상 최신)이어도 이 실행이 정확히 어느 버전을 돌렸는지 가리킨다. */
+  scriptVersionId?: string | null;
   /** 단계별 실행 trace — DeepCheckExecStep 과 동일 shape (id/label/status/detail/metrics/startedMs/durationMs). */
   steps?: import('@/types').DeepCheckExecStep[] | null;
   /** 실제로 나간 명령 기록 (kind/command/exitCode/durationMs/stdout/stderr/truncated). */

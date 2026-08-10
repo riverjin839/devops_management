@@ -61,7 +61,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       rootClassName={overlayMode ? '' : 'sticky top-4'}
     >
       <div className="text-xs text-muted-foreground font-mono mb-3 break-all">
-        {job.jobType}
+        {job.executionMode === 'script' ? (job.scriptName ?? '스크립트') : job.jobType}
       </div>
 
       {/* 액션 바 */}

@@ -129,11 +129,21 @@ export function EditForm({ job, onSaved }: EditFormProps) {
 
   return (
     <div className="space-y-3">
-      {/* job_type 은 readonly 표시 */}
+      {/* job_type 은 readonly 표시 — 스크립트 기반 잡은 job_type="script" 대신 실제 스크립트를 보여준다. */}
       <div className="text-xs text-muted-foreground">
-        잡 타입: <span className="font-mono">{job.jobType}</span>
-        {selectedType && <span className="ml-1 opacity-70">— {selectedType.label}</span>}
-        <span className="ml-1 opacity-70">(변경 불가 — 타입 바꾸려면 삭제 후 재생성)</span>
+        {job.executionMode === 'script' ? (
+          <>
+            스크립트: <span className="font-mono">{job.scriptName ?? '(알 수 없음)'}</span>
+            {job.scriptKind && <span className="ml-1 opacity-70">({job.scriptKind === 'shell' ? 'Shell' : 'Ansible'})</span>}
+            <span className="ml-1 opacity-70">— {job.scriptVersionId ? '특정 버전 고정' : '항상 최신 버전'}</span>
+          </>
+        ) : (
+          <>
+            잡 타입: <span className="font-mono">{job.jobType}</span>
+            {selectedType && <span className="ml-1 opacity-70">— {selectedType.label}</span>}
+          </>
+        )}
+        <span className="ml-1 opacity-70">(변경 불가 — 바꾸려면 삭제 후 재생성)</span>
       </div>
 
       {/* enabled toggle */}

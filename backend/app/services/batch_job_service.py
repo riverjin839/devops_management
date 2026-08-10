@@ -117,10 +117,37 @@ async def execute_job(
         params=merged_params,
         timeout=timeout,
     )
+
+    script_version_id_used: Optional[UUID] = None
+    if job.execution_mode == "script":
+        # 스크립트 라이브러리 연동(Phase 2) — 실제 내용을 여기서 미리 로드해 ctx 에
+        # 주입한다. ScriptExecutor(job_type="script") 는 DB 세션을 쥐지 않는다.
+        from app.models.executable_script import ExecutableScript, ExecutableScriptVersion
+
+        script = db.query(ExecutableScript).filter(ExecutableScript.id == job.script_id).first()
+        if script is not None:
+            version = None
+            if job.script_version_id:
+                version = (
+                    db.query(ExecutableScriptVersion)
+                    .filter(ExecutableScriptVersion.id == job.script_version_id)
+                    .first()
+                )
+            else:
+                version = script.current_version
+            if version is not None:
+                ctx.script_kind = script.kind
+                ctx.script_content = version.content
+                ctx.script_inventory_content = version.inventory_content
+                script_version_id_used = version.id
+        # script 또는 version 을 못 찾으면 ctx.script_kind 는 None 으로 남고,
+        # ScriptExecutor 가 "스크립트 내용을 불러오지 못했습니다" 로 명확히 실패한다.
+
     return await _run_and_record(
         db, job, executor, ctx, host=target_host, trigger=trigger,
         triggered_by_user_id=triggered_by_user_id,
         triggered_by_username=triggered_by_username,
+        script_version_id=script_version_id_used,
     )
 
 
@@ -134,6 +161,7 @@ async def _run_and_record(
     trigger: str,
     triggered_by_user_id: Optional[str] = None,
     triggered_by_username: Optional[str] = None,
+    script_version_id: Optional[UUID] = None,
 ) -> tuple[BatchJobRun, ExecutionResult]:
     """Run the executor and persist the outcome as a BatchJobRun row.
 
@@ -161,6 +189,7 @@ async def _run_and_record(
         # admin 이 "이 실행이 정확히 어떤 설정으로 이뤄졌는지"(예: k8s_job_cleanup
         # 의 dry_run) 나중에도 확인할 수 있도록 merge 후 파라미터를 그대로 남긴다.
         params_snapshot=ctx.params or None,
+        script_version_id=script_version_id,
         duration_ms=0,
         started_at=started_at,
     )

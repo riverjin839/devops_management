@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import require_admin, require_operator
 from app.database import get_db
 from app.models.app_setting import AppSetting
+from app.models.batch_job import BatchJob
 from app.models.executable_script import ExecutableScript, ExecutableScriptVersion, SCRIPT_KINDS
 from app.models.user import User
 from app.schemas.executable_script import (
@@ -64,7 +65,12 @@ def _get_script(db: Session, script_id: UUID) -> ExecutableScript:
     return script
 
 
-def _script_response(script: ExecutableScript) -> ExecutableScriptResponse:
+def _used_by_count(db: Session, script_id: UUID) -> int:
+    # Phase 2 — BatchJob 만 참조한다(CheckMatrixItem 연동은 아직 없음, §7 Phase 3).
+    return db.query(BatchJob).filter(BatchJob.script_id == script_id).count()
+
+
+def _script_response(db: Session, script: ExecutableScript) -> ExecutableScriptResponse:
     current_version = None
     if script.current_version is not None:
         current_version = ExecutableScriptVersionResponse.model_validate(script.current_version)
@@ -73,8 +79,7 @@ def _script_response(script: ExecutableScript) -> ExecutableScriptResponse:
         tags=script.tags, is_system=script.is_system, current_version_id=script.current_version_id,
         created_by=script.created_by, created_at=script.created_at, updated_at=script.updated_at,
         current_version=current_version,
-        # Phase 2(BatchJob/CheckMatrixItem 연결) 전까지는 실제 참조가 없다.
-        used_by_count=0,
+        used_by_count=_used_by_count(db, script.id),
     )
 
 
@@ -125,7 +130,7 @@ def list_scripts(
     scripts = query.order_by(ExecutableScript.updated_at.desc()).all()
     if tag:
         scripts = [s for s in scripts if s.tags and tag in s.tags]
-    return [_script_response(s) for s in scripts]
+    return [_script_response(db, s) for s in scripts]
 
 
 @router.post("", response_model=ExecutableScriptResponse, status_code=status.HTTP_201_CREATED)
@@ -161,7 +166,7 @@ def create_script(
         db, action="script.create", actor=actor, target_type="executable_script", target_id=script.id,
         details={"name": script.name, "kind": script.kind}, request=request,
     )
-    return _script_response(script)
+    return _script_response(db, script)
 
 
 @router.get("/{script_id}", response_model=ExecutableScriptResponse)
@@ -170,7 +175,7 @@ def get_script(
     db: Session = Depends(get_db),
     _: User = Depends(require_script_access),
 ):
-    return _script_response(_get_script(db, script_id))
+    return _script_response(db, _get_script(db, script_id))
 
 
 @router.put("/{script_id}", response_model=ExecutableScriptResponse)
@@ -190,7 +195,7 @@ def update_script(
         db, action="script.update", actor=actor, target_type="executable_script", target_id=script.id,
         details={"name": script.name}, request=request,
     )
-    return _script_response(script)
+    return _script_response(db, script)
 
 
 @router.delete("/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -203,8 +208,12 @@ def delete_script(
     script = _get_script(db, script_id)
     if script.is_system:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="시스템 제공 스크립트는 삭제할 수 없습니다.")
-    # Phase 2(BatchJob/CheckMatrixItem 이 script_id 를 참조하기 시작하면) 부터는
-    # 여기서 참조 여부를 확인해 409 로 막아야 한다 — 지금은 참조하는 곳이 없다.
+    used_by = _used_by_count(db, script.id)
+    if used_by > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"이 스크립트를 참조하는 Batch Job {used_by}건이 있어 삭제할 수 없습니다 — 먼저 연결을 해제하거나 해당 Job 을 삭제해주세요.",
+        )
     audit_logger.record(
         db, action="script.delete", actor=actor, target_type="executable_script", target_id=script.id,
         details={"name": script.name}, request=request,
@@ -311,7 +320,7 @@ def set_current_version(
         db, action="script.rollback", actor=actor, target_type="executable_script", target_id=script.id,
         details={"name": script.name, "version": version.version}, request=request,
     )
-    return _script_response(script)
+    return _script_response(db, script)
 
 
 @router.post("/{script_id}/test-run", response_model=ScriptTestRunResponse)

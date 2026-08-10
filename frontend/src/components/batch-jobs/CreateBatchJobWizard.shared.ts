@@ -15,6 +15,11 @@ export interface WizardState {
   cron: string;
   savedPassword: string;
   savedPrivateKey: string;
+  /** 'system'(기존 job_type 하드코딩) | 'script'(스크립트 라이브러리 참조) — Phase 2. */
+  executionMode: 'system' | 'script';
+  scriptId: string;
+  /** '' = 항상 최신 버전. */
+  scriptVersionId: string;
 }
 
 export const EMPTY_WIZARD: WizardState = {
@@ -31,10 +36,15 @@ export const EMPTY_WIZARD: WizardState = {
   cron: '',
   savedPassword: '',
   savedPrivateKey: '',
+  executionMode: 'system',
+  scriptId: '',
+  scriptVersionId: '',
 };
 
 export function isStepTypeValid(state: WizardState): boolean {
-  return !!state.clusterId && !!state.jobType && state.name.trim().length > 0;
+  if (!state.clusterId || state.name.trim().length === 0) return false;
+  if (state.executionMode === 'script') return !!state.scriptId;
+  return !!state.jobType;
 }
 
 export function isStepHostValid(state: WizardState): boolean {

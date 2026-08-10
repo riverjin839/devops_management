@@ -24,6 +24,20 @@
   설계: `docs/02-design/features/batch-jobs-execution-redesign.design.md`. Backend:
   `routers/scripts.py`, `models/executable_script.py`, `services/script_test_run.py`.
   Frontend: `pages/ScriptsPage.tsx`, `components/scripts/`, `hooks/useScripts.ts`.
+- **Batch Jobs — 스크립트 라이브러리 연동 (Phase 2)**: "새 잡" 등록 시 **실행 방식** 을
+  시스템 제공(기존 3종 하드코딩 executor) 또는 **스크립트 선택**(`/scripts` 라이브러리의
+  Shell/Ansible Playbook 스크립트) 중 고를 수 있다 — 버전은 항상 최신 또는 특정 버전에
+  고정 가능하며, 실제 실행 시점에 사용된 버전은 매 실행 기록에 스냅샷으로 남는다(스크립트가
+  나중에 수정돼도 과거 실행 기록은 그때 정확히 뭐가 돌았는지 그대로 보여준다). 실행은 기존
+  단계별 추적(`ExecutionStepsTimeline`/`CommandTraceList`)에 그대로 편입돼 스케줄(cron)·
+  수동 실행·중지가 기존 배치 잡과 동일하게 동작한다. 스크립트가 Batch Job 에 연결돼 있으면
+  스크립트 라이브러리에서 삭제할 수 없다(409, 참조 건수 안내). Python 스크립트는 아직
+  지원하지 않는다(Phase 2 의 K8s Job 실행기 구현 예정). Backend: `models/batch_job.py`
+  (`execution_mode`/`script_id`/`script_version_id`), `services/batch_jobs/script_executor.py`,
+  `services/batch_job_service.py`, `routers/batch_jobs.py`, `routers/scripts.py`(사용 중
+  스크립트 삭제 차단). Frontend: `CreateBatchJobWizard.StepType.tsx`(실행 방식 토글 +
+  스크립트/버전 선택), `BatchJobRow.tsx`/`BatchJobSlideOver.tsx`/`.EditForm.tsx`(스크립트
+  이름 표시).
 
 ## [1.27.0] - 2026-08-10
 

@@ -261,3 +261,32 @@ async def test_test_run_shell_delegates_to_service_and_wraps_input_errors(db, mo
             request=None, db=db, actor=user,
         )
     assert exc_info.value.status_code == 400
+
+
+def test_delete_blocked_when_referenced_by_batch_job(db):
+    """Phase 2 — BatchJob.script_id 가 이 스크립트를 참조하면 삭제가 409 로 막혀야 한다."""
+    from app.models.batch_job import BatchJob
+    from app.models.cluster import Cluster
+
+    user = _User()
+    script = _create(db, user)
+    cluster = Cluster(name=f"c-{uuid.uuid4().hex[:8]}", api_endpoint="https://10.0.0.1:6443")
+    db.add(cluster)
+    db.commit()
+    job = BatchJob(
+        cluster_id=cluster.id, name="uses script", job_type="script", execution_mode="script",
+        script_id=script.id,
+    )
+    db.add(job)
+    db.commit()
+
+    refreshed = scripts_router.get_script(script.id, db=db, _=user)
+    assert refreshed.used_by_count == 1
+
+    with pytest.raises(HTTPException) as exc_info:
+        scripts_router.delete_script(script.id, request=None, db=db, actor=user)
+    assert exc_info.value.status_code == 409
+
+    db.delete(job)
+    db.commit()
+    scripts_router.delete_script(script.id, request=None, db=db, actor=user)  # 이제는 성공해야 한다

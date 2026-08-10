@@ -15,6 +15,10 @@ class BatchJobBase(BaseModel):
     params: Optional[dict[str, Any]] = None
     cron: Optional[str] = None
     enabled: bool = True
+    # 'system'(기존 job_type 하드코딩 executor) | 'script'(스크립트 라이브러리 참조).
+    # 'script' 면 job_type 은 항상 "script" 로 취급되고 실제 동작은 script_id/
+    # script_version_id 가 가리키는 ExecutableScript(Version) 에서 온다(Phase 2).
+    execution_mode: str = "system"
 
 
 class BatchJobCreate(BatchJobBase):
@@ -24,6 +28,10 @@ class BatchJobCreate(BatchJobBase):
     # these — they pass credentials per-request.
     saved_password: Optional[str] = None
     saved_private_key: Optional[str] = None
+    # execution_mode="script" 일 때만 사용.
+    script_id: Optional[UUID] = None
+    # null = 항상 최신 버전. 특정 버전에 고정하려면 지정.
+    script_version_id: Optional[UUID] = None
 
 
 class BatchJobUpdate(BaseModel):
@@ -56,6 +64,11 @@ class BatchJobResponse(BatchJobBase):
     has_saved_private_key: bool = False
     # Executor 특성 — False 면 host/SSH 자격증명 없이 실행되는 클러스터 스코프 잡.
     requires_ssh: bool = True
+    # execution_mode="script" 일 때만 값이 있음 — 표시 편의를 위해 서버에서 join.
+    script_id: Optional[UUID] = None
+    script_version_id: Optional[UUID] = None
+    script_name: Optional[str] = None
+    script_kind: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -109,6 +122,9 @@ class BatchJobRunResponse(BaseModel):
     error: Optional[str] = None
     # 이 실행에 실제로 사용된 merge 후 파라미터(예: k8s_job_cleanup 의 dry_run) — admin 감사용.
     params_snapshot: Optional[dict[str, Any]] = None
+    # 스크립트 기반 잡이 이 실행에서 실제로 사용한 버전 — job.script_version_id 가
+    # null(항상 최신)이어도 이 실행이 정확히 어느 버전을 돌렸는지 가리킨다.
+    script_version_id: Optional[UUID] = None
     # 단계별 실행 trace + 실측 명령 기록 — top-level 클린 필드명으로 노출
     # (details._steps 류의 `_` 접두 키는 프론트 camelize 인터셉터가 이름을 망가뜨림).
     steps: Optional[list[dict[str, Any]]] = None
