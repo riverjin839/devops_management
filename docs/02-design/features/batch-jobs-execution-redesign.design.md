@@ -280,6 +280,18 @@ Python 스크립트는 원격 서버 SSH 접속도, PEP 백엔드/워커 프로�
   사전 프로비저닝이 필요 — `k8s/base` kustomize 에 추가하고, 클러스터 등록 절차(`/cluster-manage`)
   문서에 선행조건으로 명시한다(Phase 2 구현 시).
 
+### 4.5 권한 (결정, §8.0)
+
+- **기본값은 `require_operator`** — 스크립트 라이브러리 CRUD(`/scripts/*`)·테스트 실행(`/scripts/{id}/test-run`)
+  모두 기존 실행 계열 라우터(`batch-jobs`, `check-matrix`)와 동일한 권한 레벨로 시작한다. Python/Ansible/Shell
+  임의 코드 실행이라는 특성상 admin 전용이 안전하지만, 운영 편의를 우선해 operator 부터 열고 필요 시 좁힌다.
+- **admin 이 나중에 좁힐 수 있어야 한다** — 재배포 없이 전환 가능하도록 하드코딩된 `require_operator`
+  대신, `AppSetting`(`script_library_admin_only: bool`, 기본 `false`)을 하나 두고 인증 dependency 가
+  이 값을 읽어 `true` 면 `require_admin` 으로 승격한다(UI-First 원칙과 동일 패턴 — 코드 재배포가 아니라
+  Settings 화면 토글로 정책을 바꾼다).
+- Settings 화면(`/settings`)의 기존 AppSetting 토글들과 같은 자리에 "스크립트 라이브러리를 관리자
+  전용으로 제한" 스위치를 노출한다.
+
 ---
 
 ## 5. UI/UX Design
@@ -381,11 +393,12 @@ function CellButton({ item, cell, onClick, onRunNow }: {...}) {
 |---|---|---|
 | `core_bundle`(핵심) | 그대로 유지해도 무방 — Cluster.status 산정과 직결된다는 것만 명확히 툴팁 보강 | **핵심**(무변경, 툴팁: "클러스터 상태 판정에 직접 쓰이는 내장 점검 — 삭제 불가") |
 | `deep_check`("Deep") | "Deep"이 무엇의 반대말인지 사용자가 알 길이 없음(내부적으로는 "Addon 이 아닌, params/thresholds 기반 체커"라는 뜻) | **내장 점검**(레거시, 파이썬 하드코딩이라는 사실을 툴팁에 명시: "PEP 가 기본 제공하는 점검 — 코드 수정은 배포가 필요합니다") |
-| `addon`("Addon") | "Addon"이 K8s 애드온(ArgoCD 등) 등록 여부에 달려 있다는 전제가 화면에 안 보임 | **내장 점검**으로 `deep_check` 와 라벨 통합(사용자 입장에선 둘 다 "코드로 미리 만들어진 점검"이라 구분 의미가 약함) — 필요하면 상세 툴팁에서만 "애드온 등록 기반"이라고 구분 |
+| `addon`("Addon") | "Addon"이 K8s 애드온(ArgoCD 등) 등록 여부에 달려 있다는 전제가 화면에 안 보임 | **내장 점검**으로 `deep_check` 와 라벨 완전 통합 — "애드온 등록 기반"이라는 구분조차 툴팁에 남기지 않는다(결정, §8.0) |
 | (없음) | 스크립트 기반 실행이 아예 없었음 | **Python 스크립트 / Ansible Playbook / Shell 스크립트** 3종 신설 — §5.2 배지 |
 | `manual`(수동 입력) | 비교적 명확하지만 "실행"과 나란히 있어 헷갈릴 수 있음 | **수동 값 입력**으로 라벨만 보강(실행이 아니라 사람이 직접 값을 적어 넣는다는 것을 명시) |
 
 - **DB enum 값 자체(`deep_check`/`addon`)는 안 바꾼다** — 코드 전역에 참조가 많고(§Research B) 라벨은 프론트 상수 하나(`SOURCE_BADGE`, `PlatformStatusMatrix.tsx`)만 바꾸면 되므로 문자열 변경보다 훨씬 안전하다. "용어 개편"은 **UI 라벨/툴팁 개편**이지 스키마 마이그레이션이 아니다.
+- **결정(§8.0)**: "딥체크"/"애드온"이라는 단어는 라벨·툴팁·필터명·빈 상태 문구 등 **사용자가 보는 모든 지점에서 제거**한다 — 신규 스크립트 3종(Python/Ansible/Shell)뿐 아니라 **기존 방식(`core_bundle`/`deep_check`/`addon`/`manual`)도 예외 없이** 새 라벨(핵심/내장 점검/수동 값 입력)로만 노출한다. 내부 코드(모델·enum·변수명)는 유지하되, 이는 코드베이스 내부 구현이라 사용자 요구사항과 무관하다.
 
 ---
 
@@ -395,7 +408,7 @@ function CellButton({ item, cell, onClick, onRunNow }: {...}) {
 |---|---|---|---|
 | **0** | 매트릭스 셀 즉시실행 + 확인 팝업(§5.1) | 매우 낮음 — 프론트만, 기존 API 재사용 | 없음, 즉시 착수 가능 |
 | **1** | `executable_scripts`/`executable_script_versions` 모델 + `/scripts` 라이브러리 화면 + 테스트 실행(§3, §4.1, §4.3, §5.4). **아직 어떤 Job/Item 도 여기 연결 안 함** | 낮음 — 신규 테이블·신규 화면, 기존 코드 무변경 | 없음 |
-| **2** | BatchJob 에 `execution_mode='script'` 배선(§3.2, §4.2). 기존 3개 executor(`etcdctl_defrag`/`shell_command`/`k8s_job_cleanup`)를 `is_system=true` 시드 스크립트로 포팅 — **동작은 100% 동일하게 유지**하면서 내용만 DB 로 옮김. Python 실행기(§4.4 일회용 K8s Job)와 `pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝도 이 Phase 에서 구현 | 중간 — 기존 잡 마이그레이션 스크립트 필요, 회귀 테스트 필수 + K8s Job 실행기 신규 구현 | Phase 1 |
+| **2** | BatchJob 에 `execution_mode='script'` 배선(§3.2, §4.2). 기존 3개 executor(`etcdctl_defrag`/`shell_command`/`k8s_job_cleanup`)를 `is_system=true` 시드 스크립트로 포팅 — **동작은 100% 동일하게 유지**하면서 내용만 DB 로 옮김. Python 실행기(§4.4 일회용 K8s Job)와 `pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝도 이 Phase 에서 구현. **`/playbooks` 화면·`Playbook`/`AnsiblePlaybookFile`/`AnsibleInventory` 모델·라우터 완전 제거**(결정, §8.0 — 미사용 확인됨, 데이터 마이그레이션 불필요) 후 스크립트 라이브러리의 `kind=ansible_playbook` 필터 뷰로 대체 | 중간 — 기존 잡 마이그레이션 스크립트 필요, 회귀 테스트 필수 + K8s Job 실행기 신규 구현. `/playbooks` 제거는 미사용 확인으로 리스크 낮음(라우터·모델 삭제 + 레거시 경로 redirect, `CLAUDE.md`/`CODE_MAP.md`/`SCREENS.md` 동시 갱신 필요 — docs-sync 대상) | Phase 1 |
 | **3** | `CheckMatrixSourceType.script` 추가 + 매트릭스 실행 방식 라벨 개편(§6) | 중간 — enum 확장은 안전하지만 프론트 배지·필터 전수 확인 필요 | Phase 1 |
 | **4(선택)** | 기존 딥체크/애드온 중 단순한 것(예: HTTP 헬스체크류)을 스크립트로 재구현 — 복잡하거나 상태 산정에 깊이 얽힌 것(core_bundle, cert_expiry 의 스냅샷 폴백 등)은 **영구히 파이썬 유지** | 케이스별 상이 | Phase 2, 3 |
 
@@ -413,13 +426,20 @@ function CellButton({ item, cell, onClick, onRunNow }: {...}) {
   차이가 없다 (b) 리소스 상한이 걸린 1회성 워크로드라 대상 클러스터 상시 자원에 미치는 부하가
   크지 않다고 판단(사용자 확인) (c) 격리 범위(블라스트 반경)가 Job 의 최소 RBAC 로 한정돼
   백엔드 프로세스 내 실행보다 근본적으로 안전하다.
+- **`/playbooks` 화면과의 관계**: 흡수가 아니라 **완전 제거**한다 — 사용자 확인 결과 미사용
+  중이라 마이그레이션 리스크가 없다. `Playbook`/`AnsiblePlaybookFile`/`AnsibleInventory` 모델과
+  `routers/playbooks.py`를 삭제하고, 스크립트 라이브러리의 `kind=ansible_playbook` 필터 뷰로
+  완전히 대체한다(§7 Phase 2).
+- **용어 개편 범위**: 신규 스크립트 3종뿐 아니라 **기존 실행 방식(core_bundle/deep_check/addon/manual)도
+  예외 없이** "딥체크"/"애드온"이라는 단어를 완전히 배제하고 새 라벨(핵심/내장 점검/수동 값 입력)로만
+  노출한다 — 툴팁에도 구 용어를 남기지 않는다(§6).
+- **권한**: 스크립트 라이브러리 CRUD/테스트 실행은 **`require_operator` 로 기본 허용**하고,
+  admin 이 재배포 없이 admin 전용으로 좁힐 수 있는 `AppSetting` 토글을 함께 둔다(§4.5).
 
 ### 8.1 남은 Open Questions (착수 전 결정 필요)
 
-1. **Ansible playbook 과 기존 `AnsiblePlaybookFile`/`Playbook`(`/playbooks` 화면) 과의 관계**: 완전히 흡수(마이그레이션)할지, 당분간 별개로 둘지. 흡수 시 `/playbooks` 화면 자체를 스크립트 라이브러리의 `kind=ansible_playbook` 필터 뷰로 재구성하는 것도 검토 가능(화면 통합 — Batch Jobs 를 홈에 합친 것과 같은 방향).
-2. **딥체크/애드온 체커도 "테스트 실행"이 가능해야 하는가**: 요청 #1(모든 동작이 UI 로 확인 가능)을 엄격히 적용하면 기존 체커도 대상 지정 테스트 실행이 필요할 수 있다 — 이미 매트릭스 셀의 "지금 실행"이 사실상 이 역할을 하고 있어 별도 구현 불필요할 가능성이 높다(확인 필요).
-3. **권한**: 스크립트 라이브러리 CRUD/테스트 실행을 `require_operator` 로 제한할지, 이 스크립트가 원격 코드 실행이라는 특성상 `require_admin` 까지 올릴지 — 임의 코드 실행 권한이라 후자를 권장.
-4. **`pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝 시점**: 클러스터 등록 시 자동 생성할지, `/cluster-manage` 에서 운영자가 수동으로 선행 설정하게 할지 — Phase 2 구현 시 확정.
+1. **딥체크/애드온 체커도 "테스트 실행"이 가능해야 하는가**: 요청 #1(모든 동작이 UI 로 확인 가능)을 엄격히 적용하면 기존 체커도 대상 지정 테스트 실행이 필요할 수 있다 — 이미 매트릭스 셀의 "지금 실행"이 사실상 이 역할을 하고 있어 별도 구현 불필요할 가능성이 높다(확인 필요).
+2. **`pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝 시점**: 클러스터 등록 시 자동 생성할지, `/cluster-manage` 에서 운영자가 수동으로 선행 설정하게 할지 — Phase 2 구현 시 확정.
 
 ---
 
@@ -460,3 +480,4 @@ Phase 1 이후(스크립트 모델)의 레이어 배정은 착수 시 `add-deep-
 |---|---|---|---|
 | 0.1 | 2026-08-06 | 최초 작성 — Option A(Strangler Fig) 채택, Phase 0~4 로 분해 | riverjin839 요청 / Claude 작성 |
 | 0.2 | 2026-08-10 | Python 스크립트 실행 위치 결정(§8.0, §4.4) — SSH/백엔드 in-process 대신 대상 클러스터의 일회용 K8s Job 채택. §4.3 실행 분기·Phase 2 범위 갱신 | riverjin839 결정 / Claude 반영 |
+| 0.3 | 2026-08-10 | 나머지 Open Questions 3건 결정 반영: `/playbooks` 완전 제거(§7 Phase 2), 용어 개편을 기존 방식까지 예외 없이 적용(§6), 권한은 `require_operator` 기본 + admin 전용 `AppSetting` 토글(§4.5 신설) | riverjin839 결정 / Claude 반영 |
