@@ -276,9 +276,15 @@ Python 스크립트는 원격 서버 SSH 접속도, PEP 백엔드/워커 프로�
 - **부하 영향**: 요청 시에만 뜨는 일회성 워크로드 + 리소스 상한이라 대상 클러스터 상시
   리소스에 미치는 영향은 미미하다고 판단(사용자 확인). 운영 규모가 커지면(동시 실행 다수)
   클러스터별 동시 실행 상한(`ResourceQuota`)을 Phase 2 에서 검토한다.
-- **신규 인프라**: 클러스터별 전용 네임스페이스(`pep-script-runner`) + 전용 ServiceAccount
-  사전 프로비저닝이 필요 — `k8s/base` kustomize 에 추가하고, 클러스터 등록 절차(`/cluster-manage`)
-  문서에 선행조건으로 명시한다(Phase 2 구현 시).
+- **신규 인프라 — 자동 등록 우선, 실패 시 수동 설정(결정, §8.0)**: 클러스터별 전용 네임스페이스
+  (`pep-script-runner`)+전용 ServiceAccount 는 **첫 Python 스크립트 실행 시점(또는 `/cluster-manage`
+  클러스터 등록 직후)에 백엔드가 자동 생성을 먼저 시도**한다(kubectl apply 또는 kubernetes SDK,
+  `resolve_kubeconfig` 와 동일하게 이미 등록된 kubeconfig 권한으로 수행). 클러스터 RBAC 상 backend
+  서비스계정에 네임스페이스 생성 권한이 없는 등 자동 생성이 실패하면, **에러를 숨기지 않고 사유를
+  그대로 노출**(`kubeconfig.py` 의 "사유 반환" 패턴과 동일)하고 `/cluster-manage` 화면에 "수동 설정
+  필요" 안내 + 적용할 manifest(namespace+ServiceAccount yaml, `k8s/base` 에 템플릿으로 함께 제공)를
+  보여준 뒤 운영자가 직접 적용 후 "재확인" 버튼으로 프로비저닝 상태를 재검증하게 한다 — 신규 클러스터
+  등록 시 코드/배포 없이 UI 흐름만으로 해결되게 하는 것이 목표(UI-First 원칙).
 
 ### 4.5 권한 (결정, §8.0)
 
@@ -435,11 +441,12 @@ function CellButton({ item, cell, onClick, onRunNow }: {...}) {
   노출한다 — 툴팁에도 구 용어를 남기지 않는다(§6).
 - **권한**: 스크립트 라이브러리 CRUD/테스트 실행은 **`require_operator` 로 기본 허용**하고,
   admin 이 재배포 없이 admin 전용으로 좁힐 수 있는 `AppSetting` 토글을 함께 둔다(§4.5).
+- **딥체크/애드온 체커의 "테스트 실행"**: 별도로 만들지 않는다 — 매트릭스 셀의 기존 "지금 실행"이
+  이미 대상 지정 실행+결과 확인 역할을 하고 있어 충분하다고 판단, 신규 구현 범위에서 제외한다.
+- **`pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝**: **자동 등록을 우선**하고, 실패
+  시에만 `/cluster-manage` 에서 수동 설정 폴백을 제공한다(§4.4).
 
-### 8.1 남은 Open Questions (착수 전 결정 필요)
-
-1. **딥체크/애드온 체커도 "테스트 실행"이 가능해야 하는가**: 요청 #1(모든 동작이 UI 로 확인 가능)을 엄격히 적용하면 기존 체커도 대상 지정 테스트 실행이 필요할 수 있다 — 이미 매트릭스 셀의 "지금 실행"이 사실상 이 역할을 하고 있어 별도 구현 불필요할 가능성이 높다(확인 필요).
-2. **`pep-script-runner` 네임스페이스/ServiceAccount 프로비저닝 시점**: 클러스터 등록 시 자동 생성할지, `/cluster-manage` 에서 운영자가 수동으로 선행 설정하게 할지 — Phase 2 구현 시 확정.
+이 문서의 모든 Open Question 이 결정됐다 — 착수 시점은 사용자 결정 대기.
 
 ---
 
@@ -481,3 +488,4 @@ Phase 1 이후(스크립트 모델)의 레이어 배정은 착수 시 `add-deep-
 | 0.1 | 2026-08-06 | 최초 작성 — Option A(Strangler Fig) 채택, Phase 0~4 로 분해 | riverjin839 요청 / Claude 작성 |
 | 0.2 | 2026-08-10 | Python 스크립트 실행 위치 결정(§8.0, §4.4) — SSH/백엔드 in-process 대신 대상 클러스터의 일회용 K8s Job 채택. §4.3 실행 분기·Phase 2 범위 갱신 | riverjin839 결정 / Claude 반영 |
 | 0.3 | 2026-08-10 | 나머지 Open Questions 3건 결정 반영: `/playbooks` 완전 제거(§7 Phase 2), 용어 개편을 기존 방식까지 예외 없이 적용(§6), 권한은 `require_operator` 기본 + admin 전용 `AppSetting` 토글(§4.5 신설) | riverjin839 결정 / Claude 반영 |
+| 0.4 | 2026-08-10 | 마지막 Open Questions 2건 결정 — 딥체크/애드온 별도 테스트 실행 불필요(매트릭스 셀 "지금 실행"으로 충분), `pep-script-runner` 프로비저닝은 자동 등록 우선+실패 시 수동 폴백(§4.4). 문서의 모든 Open Question 해소 | riverjin839 결정 / Claude 반영 |
