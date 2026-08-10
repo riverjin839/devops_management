@@ -12,7 +12,7 @@ import { useModalA11y } from '@/components/common/useModalA11y';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
-  useRunCheckMatrixCluster, useRunCheckMatrixItem, useCheckMatrixActiveRuns,
+  useRunCheckMatrixCluster, useRunCheckMatrixItem, useRunCheckMatrixCell, useCheckMatrixActiveRuns,
 } from '@/hooks/useCheckMatrix';
 import type { CheckMatrixCell, CheckMatrixItem, CheckMatrixGridCluster, Status } from '@/types';
 import { formatApiError } from '@/lib/utils';
@@ -66,29 +66,50 @@ function emptyCellHint(item: CheckMatrixItem, cell: CheckMatrixCell | undefined)
 }
 
 function CellButton({
-  item, cell, onClick, minH,
-}: { item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void; minH: number }) {
+  item, cell, onClick, onRunNow, running, minH,
+}: {
+  item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void;
+  /** 수동 입력 항목엔 실행 개념이 없어 전달되지 않는다 — undefined 면 ▶ 버튼 자체를 안 그린다. */
+  onRunNow?: () => void; running?: boolean; minH: number;
+}) {
   const empty = !cell || !cell.hasResult || !cell.status;
   const StatusIcon = !empty ? CELL_STATUS_ICON[cell.status!] : undefined;
   return (
-    <button
-      onClick={onClick}
-      style={{ minHeight: minH }}
-      className="w-full h-full flex items-center justify-center gap-1.5 px-2 rounded-md hover:bg-muted/60 transition-colors"
-      title={empty ? emptyCellHint(item, cell) : (cell?.message || undefined)}
-    >
-      {empty ? (
-        <span className="text-muted-foreground/50 text-xs">—</span>
-      ) : (
-        <>
-          <StatusDot variant={cell.status!} />
-          {StatusIcon && <StatusIcon className="w-3 h-3 flex-shrink-0" aria-hidden="true" />}
-          <span className="text-xs font-medium tabular-nums">
-            {cell.value != null ? `${cell.value}${item.unit ?? ''}` : STATUS_LABEL[cell.status!]}
-          </span>
-        </>
+    <div className="relative group w-full h-full">
+      <button
+        onClick={onClick}
+        style={{ minHeight: minH }}
+        className="w-full h-full flex items-center justify-center gap-1.5 px-2 rounded-md hover:bg-muted/60 transition-colors"
+        title={empty ? emptyCellHint(item, cell) : (cell?.message || undefined)}
+      >
+        {empty ? (
+          <span className="text-muted-foreground/50 text-xs">—</span>
+        ) : (
+          <>
+            <StatusDot variant={cell.status!} />
+            {StatusIcon && <StatusIcon className="w-3 h-3 flex-shrink-0" aria-hidden="true" />}
+            <span className="text-xs font-medium tabular-nums">
+              {cell.value != null ? `${cell.value}${item.unit ?? ''}` : STATUS_LABEL[cell.status!]}
+            </span>
+          </>
+        )}
+      </button>
+      {onRunNow && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRunNow(); }}
+          disabled={running}
+          title={`${item.name} 지금 실행`}
+          aria-label={`${item.name} 지금 실행`}
+          className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-secondary disabled:opacity-100 transition-opacity"
+        >
+          {running ? (
+            <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" aria-hidden="true" />
+          ) : (
+            <Play className="w-3 h-3 text-primary" aria-hidden="true" />
+          )}
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -359,6 +380,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const deleteMut = useDeleteCheckMatrixItem();
   const runClusterMut = useRunCheckMatrixCluster();
   const runItemMut = useRunCheckMatrixItem();
+  const runCellMut = useRunCheckMatrixCell();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -370,6 +392,8 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     { type: 'cluster'; cluster: CheckMatrixGridCluster } | { type: 'item'; item: CheckMatrixItem } | null
   >(null);
   const [cellTarget, setCellTarget] = useState<{ item: CheckMatrixItem; cluster: CheckMatrixGridCluster } | null>(null);
+  // 셀 단위 즉시실행 확인 팝업 — 클러스터/항목 일괄 실행과 동일하게 실제 명령이 나가므로 확인을 받는다.
+  const [cellRunConfirm, setCellRunConfirm] = useState<{ item: CheckMatrixItem; cluster: CheckMatrixGridCluster } | null>(null);
   // 로그 패널은 두 가지로 쓰인다 — batch 가 있으면 방금 트리거한 일괄 수행 추적, 없으면 전체 로그.
   const [runLog, setRunLog] = useState<{ open: boolean; batchId?: string | null; label?: string | null }>(
     { open: false },
@@ -449,6 +473,26 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     if (runConfirm.type === 'cluster') await handleRunCluster(runConfirm.cluster);
     else await handleRunItem(runConfirm.item);
     setRunConfirm(null);
+  };
+
+  const handleRunCell = async (item: CheckMatrixItem, cluster: CheckMatrixGridCluster) => {
+    const key = `cell:${item.id}:${cluster.id}`;
+    setRunningKey(key);
+    try {
+      await runCellMut.mutateAsync({ itemId: item.id, clusterId: cluster.id });
+      toast.success(`"${item.name}" 을(를) ${cluster.name} 에서 실행했습니다.`);
+    } catch (e) {
+      toast.error('실행 실패', formatApiError(e));
+    } finally {
+      setRunningKey(null);
+    }
+  };
+
+  const confirmCellRun = async () => {
+    if (!cellRunConfirm) return;
+    const { item, cluster } = cellRunConfirm;
+    setCellRunConfirm(null);
+    await handleRunCell(item, cluster);
   };
 
   // 행 드래그 정렬 — HTML5 DnD. 그립 핸들에서 시작하고 행 위로 드롭한다.
@@ -800,6 +844,8 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           item={item}
                           cell={grid?.cells[item.id]?.[cluster.id]}
                           onClick={() => setCellTarget({ item, cluster })}
+                          onRunNow={item.sourceType === 'manual' ? undefined : () => setCellRunConfirm({ item, cluster })}
+                          running={runningKey === `cell:${item.id}:${cluster.id}`}
                           minH={ROW_MIN_H[rowDensity]}
                         />
                       </td>
@@ -888,6 +934,17 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
           confirmLabel="실행"
           onConfirm={confirmRun}
           onCancel={() => setRunConfirm(null)}
+        />
+      )}
+      {cellRunConfirm && (
+        <ConfirmDialog
+          open={!!cellRunConfirm}
+          title="지금 실행"
+          description={`"${cellRunConfirm.item.name}" 을(를) ${cellRunConfirm.cluster.name} 에서 지금 실행하시겠습니까? 실제 클러스터에 점검 명령이 나갑니다.`}
+          danger
+          confirmLabel="실행"
+          onConfirm={confirmCellRun}
+          onCancel={() => setCellRunConfirm(null)}
         />
       )}
     </div>

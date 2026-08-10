@@ -10,6 +10,15 @@
 
 1.26.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **플랫폼 현황 — 점검 매트릭스 셀 즉시실행**: 매트릭스 셀에 hover 시 ▶ 버튼이 나타나고,
+  클릭하면 "지금 실행하시겠습니까?" 확인 팝업 후 그 셀(항목×클러스터)만 즉시 실행한다
+  (수동 입력 항목은 제외). 기존 클러스터/항목 단위 일괄 실행과 같은 확인 절차·실행
+  인프라(`ConfirmDialog`, `useRunCheckMatrixCell`)를 그대로 재사용한 프론트엔드 전용
+  변경으로, 스키마·API 변경은 없다(배치 잡 실행 모델 재설계 Phase 0 —
+  `docs/02-design/features/batch-jobs-execution-redesign.design.md`). Frontend:
+  `components/platform-status/PlatformStatusMatrix.tsx`.
+
 ### Fixed
 - **버전·설정(/versions) — impeccable critique P0+P1 반영 (수집 실행 로그·raw 출력 버그)**:
   이 화면의 수집 실행 8종이 결과를 토스트 요약(오류 앞 3건 절단)으로만 남기던 것을 고쳤다.
