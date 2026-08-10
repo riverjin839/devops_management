@@ -10,6 +10,20 @@
 
 1.27.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **업무 관리 게시판 — Jira 마감일 미반영 및 UX 개선**: 행 단위 "보내기"(Jira 반영)가
+  제목/설명/우선순위만 전송하고 마감일(due date)은 빠뜨려 PEP 에서 마감일을 바꾸고
+  보내도 Jira 쪽 duedate 가 그대로였던 것을 고쳤다. 그 외 "Jira 가져오기" 버튼 아이콘을
+  행의 "보내기"(Upload) 아이콘과 대칭되는 방향(Download)으로 바꿔 일관성을 맞추고, 목록
+  최상단의 인라인 "행 추가" 기능을 제거했으며(등록은 "업무 등록" 팝업으로 통일), "필터
+  더보기" 버튼에 마우스오버 hover 배경을 추가했다. Backend: `routers/jira.py`
+  (`push_to_jira`). Frontend: `pages/WorkItemBoardPage.tsx`,
+  `components/work-items/WorkItemTableRow.tsx`(`AddWorkItemRow` 제거),
+  `components/work-items/JiraPushDialog.tsx`.
+- **업무 등록 팝업 — 담당자 기본값**: `QuickAddTaskModal` 신규 등록 시 담당자가 비어있던
+  것을 로그인한 본인으로 기본 채움(하위 업무는 기존대로 상위 업무 담당자를 물려받음).
+  Frontend: `components/dashboard/QuickAddTaskModal.tsx`.
+
 ## [1.27.0] - 2026-08-10
 
 ### Added

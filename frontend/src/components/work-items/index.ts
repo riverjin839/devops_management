@@ -3,7 +3,7 @@ export { WorkItemKanban } from './WorkItemKanban';
 export { WorkItemForm } from './WorkItemForm';
 export { WorkItemFormModal } from './WorkItemFormModal';
 export { WorkItemReadView } from './WorkItemReadView';
-export { WorkItemTableRow, AddWorkItemRow } from './WorkItemTableRow';
+export { WorkItemTableRow } from './WorkItemTableRow';
 export { JiraPushDialog } from './JiraPushDialog';
 export { JiraLinkDialog } from './JiraLinkDialog';
 export { JiraProvisionModal } from './JiraProvisionModal';

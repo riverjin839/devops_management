@@ -10,6 +10,7 @@ import { useAssignees } from '@/hooks/useAssignees';
 import { useJiraConfig } from '@/hooks/useJira';
 import { useToast } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { useAuthStore } from '@/stores/authStore';
 import { JiraProvisionModal } from '@/components/work-items/JiraProvisionModal';
 import type { KanbanStatus, WorkItem, WorkItemType } from '@/types';
 import { WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
@@ -100,8 +101,7 @@ function extractTimeHHMM(iso?: string | null): string {
  * `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성 팝업)로 전환한다 — 그 안의
  * 체크박스 + "생성"/"나중에" 가 "Jira/Confluence 에도 등록할지" 를 묻는 절차를 겸한다.
  * "나중에" 를 누르면 PEP 에만 저장된 채로 끝난다. 연동이 꺼져 있으면 이 단계 자체가
- * 생략되고 바로 닫힌다. `AddWorkItemRow`(업무 관리 게시판 인라인 등록행)의 기존
- * 패턴과 동일하다. 수정 모드는 이미 연결된 Jira/Confluence 상태를 건드리지 않으므로
+ * 생략되고 바로 닫힌다. 수정 모드는 이미 연결된 Jira/Confluence 상태를 건드리지 않으므로
  * 저장 후 바로 닫힌다(연동 관리는 행의 별도 아이콘으로 수행).
  */
 export function QuickAddTaskModal({
@@ -116,6 +116,8 @@ export function QuickAddTaskModal({
   const isEdit = !!initial;
   const effectiveDate = isEdit ? extractDateYMD(initial!.startedAt) : (defaultDate ?? todayStr());
 
+  const currentUser = useAuthStore((s) => s.user);
+  const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
   const { data: clusters = [] } = useClusters();
   const { data: assignees = [] } = useAssignees();
   const { data: jiraConfig } = useJiraConfig();
@@ -151,7 +153,8 @@ export function QuickAddTaskModal({
       setSelectedType(null);
       setTitle('');
       // 하위 업무는 상위 업무의 담당자를 기본값으로 물려받는다(그대로 두거나 바꿀 수 있음).
-      setAssignee(defaultAssignee ?? parentItem?.primaryAssignee ?? parentItem?.assignee ?? '');
+      // 그 외에는 로그인한 본인을 기본 담당자로 채운다(그대로 두거나 바꿀 수 있음).
+      setAssignee(defaultAssignee ?? parentItem?.primaryAssignee ?? parentItem?.assignee ?? myName);
       setPriority('medium');
       setKanbanStatus('todo');
       setTime(defaultTime ?? '09:00');

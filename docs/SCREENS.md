@@ -1077,12 +1077,12 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
-- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `AddWorkItemRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`, `components/dashboard/QuickAddTaskModal.tsx`)
+- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`, `components/dashboard/QuickAddTaskModal.tsx`)
 - **목적 / UX**: 전사 업무(유형: 이슈 대응/회의/운영 대응/기타 — 내부 저장값은 `issue`/`meeting`/`task`/`etc`, 레거시 `training` 도 조회는 계속 됨)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
 - **UI 구성**:
   - 헤더: 전체/WIP/Done 카운트 배지, 뷰 전환(`ViewModeBar`: 목록/달력/칸반), Jira 가져오기 버튼(`jiraConfig.enabled`일 때만), CSV 추출, 업무 등록 버튼
   - 필터 바(**업무 분류 드롭다운**(4개 유형 — 이슈 대응/회의/운영 대응/기타) · **상태 드롭다운**(칸반 상태) · 제목 검색 · **내 업무 토글(기본 ON)** · 담당자/우선순위/모듈/스프린트/기간(**이번주→2주→이번달→해제 4단 순환** 버튼, from~to))가 하나의 `flex-wrap` 행으로 통일돼 넓은 화면에서도 정렬이 어긋나지 않는다. "분류"(자유 텍스트) 필터는 "업무 분류" 드롭다운과 이름이 겹쳐 혼동을 줘 제거. 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴는 같은 행 우측(`ml-auto`)에 배치
-  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`) — **컬럼 폭/순서/표시여부도 필터와 동일하게 계정별 localStorage 키(`item-board-table:{username}`)로 분리 저장**, **상단 인라인 `AddWorkItemRow`**(헤더 바로 아래 — 목록 최상단)
+  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`) — **컬럼 폭/순서/표시여부도 필터와 동일하게 계정별 localStorage 키(`item-board-table:{username}`)로 분리 저장**. 등록은 헤더의 "업무 등록" 버튼(`QuickAddTaskModal`) 하나로 통일 — 구 상단 인라인 행 추가(`AddWorkItemRow`)는 제거됨
   - "작업 제목" 셀(구 "제목"): Jira 키 박스(`JiraIssueChip` 계열) + **Confluence 문서 박스**(`DocLinkChip` — 대표 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장)
   - **마감일** 컬럼(기본 노출): Jira 연동 업무는 `duedate` 동기화, 미연동 업무는 직접 편집(인라인 date input). 마감 지났고 미완료(`kanbanStatus !== 'done'`)면 빨간색 강조
   - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): **상위업무**(구 "Epic") · 이슈 종류 · 컴포넌트 · 라벨. **"상위업무" 는 Epic→Task 체인을 함께 보여준다** — Epic 과 상위(Task) 가 둘 다 있고 서로 다르면 `JiraIssueChip` 2개를 화살표로 이어 표시(Epic → Task), 하나만 있으면 그 칩만(`jiraEpicKey`/`jiraParentKey` 동시 참조). **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
@@ -1095,7 +1095,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **핵심 기능**:
   - 표/달력/칸반 3뷰 전환 및 유형·상태·제목·담당자·우선순위·모듈·스프린트·시작일 범위 복합 필터
   - 컬럼 순서/폭/표시여부 + 필터 조건 모두 계정별 개인화(localStorage) + 헤더 드래그 정렬, 행 드래그(dnd-kit) 순서 저장
-  - 인라인 행 추가(AddWorkItemRow), 팝업 등록/하위 등록(`QuickAddTaskModal`), 상세 페이지 편집 딥링크(`?edit=1`)
+  - 팝업 등록(담당자 기본값 = 로그인 본인)/하위 등록(`QuickAddTaskModal`), 상세 페이지 편집 딥링크(`?edit=1`)
   - CSV 추출, Jira 이슈 가져오기(JiraImportModal), 업무 사용자 정의 필드 관리
   - 기본 화면이 로그인 사용자 담당 업무로 필터링됨 ("내 업무" 토글로 해제, localStorage 기억)
   - **Jira 동기화 확장** — 가져오기/재가져오기/재연결 시마다 `backend/app/routers/jira.py` 가 최신값으로 반영:
