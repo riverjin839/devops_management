@@ -151,9 +151,9 @@ function TaskCard({ item, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
       <div className="flex flex-col gap-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <User className="w-3 h-3 flex-shrink-0" />
-          <span className="px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border">정:{item.primaryAssignee || item.assignee}</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border">{item.primaryAssignee || item.assignee}</span>
           {item.secondaryAssignee && (
-            <span className="px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border">부:{item.secondaryAssignee}</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border">{item.secondaryAssignee}</span>
           )}
           {item.clusterName && (
             <>

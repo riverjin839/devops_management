@@ -23,6 +23,9 @@
 - **업무 등록 팝업 — 담당자 기본값**: `QuickAddTaskModal` 신규 등록 시 담당자가 비어있던
   것을 로그인한 본인으로 기본 채움(하위 업무는 기존대로 상위 업무 담당자를 물려받음).
   Frontend: `components/dashboard/QuickAddTaskModal.tsx`.
+- **업무 관리 게시판 — 담당자 뱃지 정/부 표시 제거**: 목록 뷰·칸반 카드의 담당자 뱃지에
+  붙던 "정:"/"부:" 접두어를 지우고 이름만 표시. Frontend:
+  `components/work-items/WorkItemTableRow.tsx`, `WorkItemKanban.tsx`.
 
 ## [1.27.0] - 2026-08-10
 

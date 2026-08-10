@@ -399,7 +399,7 @@ export function WorkItemTableRow({
                   title="클릭하여 수정"
                   aria-label="정 담당자 클릭하여 수정"
                 >
-                  정: {item.primaryAssignee || item.assignee || '-'}
+                  {item.primaryAssignee || item.assignee || '-'}
                 </span>
               )}
               {editing === 'secondaryAssignee' ? (
@@ -422,7 +422,7 @@ export function WorkItemTableRow({
                   title="클릭하여 수정"
                   aria-label="부 담당자 클릭하여 수정"
                 >
-                  부: {item.secondaryAssignee}
+                  {item.secondaryAssignee}
                 </span>
               ) : (
                 <button
