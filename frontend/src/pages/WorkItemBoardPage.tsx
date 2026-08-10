@@ -7,7 +7,7 @@ import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -19,7 +19,7 @@ import { QuickAddTaskModal } from '@/components/dashboard/QuickAddTaskModal';
 import { useJiraConfig, useJiraRefreshItem, useJiraPush, useConfluenceSync } from '@/hooks/useJira';
 import { Settings2 } from 'lucide-react';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER, KANBAN_COLUMNS } from '@/components/work-items/workItemKanbanUtils';
-import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
+import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useProjects } from '@/hooks/useProjects';
 import { useSprints, useCurrentSprint } from '@/hooks/useSprints';
@@ -418,7 +418,6 @@ export function WorkItemBoardPage() {
     : dndTasks;
 
   const deleteTask = useDeleteWorkItem();
-  const createTask = useCreateWorkItem();
   const toast = useToast();
 
   // 스프린트 딥링크(?sprint=)가 없으면 현재(2주) 스프린트로 기본 필터를 맞춘다 — 마운트 시 1회.
@@ -746,7 +745,7 @@ export function WorkItemBoardPage() {
                 className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
                 title="Jira 이슈를 work item 으로 가져오기"
               >
-                <DownloadCloud className="w-4 h-4" />
+                <Download className="w-4 h-4" />
                 Jira 가져오기
               </button>
             )}
@@ -816,7 +815,7 @@ export function WorkItemBoardPage() {
               aria-haspopup="dialog"
               aria-expanded={moreFiltersOpen}
               className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
-                moreFiltersActiveCount > 0 ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                moreFiltersActiveCount > 0 ? 'bg-primary/10 text-primary border-primary/40 hover:bg-primary/20' : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:bg-secondary/60'
               }`}
             >
               <ListFilter className="w-3.5 h-3.5" /> 필터 더보기
@@ -1086,21 +1085,6 @@ export function WorkItemBoardPage() {
                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
                   <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   <tbody>
-                  {/* 헤더 바로 아래(목록 최상단)에 배치 — 새 업무를 스크롤 없이 바로 추가 */}
-                  <AddWorkItemRow
-                    clusters={clusters}
-                    colSpan={visibleCols.length + 1}
-                    defaultClusterId={filterClusterId || undefined}
-                    defaultAssignee={effectiveAssignee || undefined}
-                    onCreate={(data) => createTask.mutate(data, {
-                      onSuccess: (created) => {
-                        toast.success('업무 등록됨');
-                        // 연동이 켜져 있으면 바로 Jira/Confluence 생성 단계로 이어준다.
-                        if (jiraConfig?.enabled && created?.data) setProvisionItem(created.data);
-                      },
-                      onError: (err) => toast.error('등록 실패', formatApiError(err, '업무를 등록할 수 없습니다.')),
-                    })}
-                  />
                   {sortedTasks.map((item) => (
                     <WorkItemTableRow
                       key={item.id}

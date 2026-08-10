@@ -2611,8 +2611,8 @@ async def push_to_jira(
             jira_status=(jfields.get("status") or {}).get("name"),
         )
 
-    # 1.5) 값 필드 편집 반영 (제목/설명/우선순위). assignee 는 PEP 담당자명 ↔ Jira username
-    #      역매핑이 불안정해 제외한다. summary/description 은 저위험이라 한 번에 PUT 하고,
+    # 1.5) 값 필드 편집 반영 (제목/설명/마감일/우선순위). assignee 는 PEP 담당자명 ↔ Jira username
+    #      역매핑이 불안정해 제외한다. summary/description/duedate 는 저위험이라 한 번에 PUT 하고,
     #      priority 는 프로젝트별 우선순위 스킴 차이로 실패할 수 있어 별도 best-effort PUT.
     fields_updated: list[str] = []
     field_errors: list[str] = []
@@ -2623,6 +2623,8 @@ async def push_to_jira(
             core["summary"] = summary[:255]
         if item.content is not None:
             core["description"] = item.content or ""
+        if item.due_date:
+            core["duedate"] = item.due_date.isoformat()
         if core:
             upd = await svc.update_issue(key, core)
             if upd.get("status") == "ok":
@@ -2689,7 +2691,7 @@ async def push_to_jira(
     if changed:
         parts = []
         if fields_updated:
-            _labels = {"summary": "제목", "description": "설명", "priority": "우선순위"}
+            _labels = {"summary": "제목", "description": "설명", "duedate": "마감일", "priority": "우선순위"}
             parts.append("필드(" + ", ".join(_labels.get(f, f) for f in fields_updated) + ")")
         if transitioned:
             parts.append("상태")

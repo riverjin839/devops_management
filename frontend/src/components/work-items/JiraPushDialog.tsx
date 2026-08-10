@@ -75,7 +75,7 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
           <div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={pushFields} onChange={(e) => setPushFields(e.target.checked)} disabled={busy} />
-              <span className="font-medium">제목 · 설명 · 우선순위 반영</span>
+              <span className="font-medium">제목 · 설명 · 마감일 · 우선순위 반영</span>
             </label>
             <p className="text-xs text-muted-foreground ml-6 mt-0.5">담당자(assignee)는 반영되지 않습니다.</p>
           </div>
@@ -86,6 +86,12 @@ export function JiraPushDialog({ open, onClose, item }: JiraPushDialogProps) {
                 <span className="text-muted-foreground w-16 flex-shrink-0">제목</span>
                 <span className="truncate">{item.title || '—'}</span>
               </div>
+              {item.dueDate && (
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-16 flex-shrink-0">마감일</span>
+                  <span>{item.dueDate}</span>
+                </div>
+              )}
               <div className="flex gap-2">
                 <span className="text-muted-foreground w-16 flex-shrink-0">우선순위</span>
                 <span>{PRIORITY_LABEL[item.priority] ?? item.priority}</span>
