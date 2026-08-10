@@ -1052,6 +1052,24 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 스크립트 라이브러리 (`/scripts`)
+
+- **파일**: `frontend/src/pages/ScriptsPage.tsx` (+ `components/scripts/{ScriptListPanel,ScriptCreateForm,ScriptDetailPanel}.tsx`, `components/common/{ConfirmDialog,CommandTraceList}`, `components/daily-check/ExecutionStepsTimeline`)
+- **목적 / UX**: Batch Jobs·점검 매트릭스의 실행 로직을 파이썬 파일 하드코딩이 아니라 **DB 저장·버전관리되는 스크립트**(Python/Ansible Playbook/Shell)로 관리하는 신규 화면 — `docs/02-design/features/batch-jobs-execution-redesign.design.md` Phase 1. 클러스터 종속 화면이 아닌 전역 라이브러리라 `ClusterSidebar` 미사용. Phase 1 시점에는 아직 어떤 Batch Job/점검 항목도 스크립트를 참조하지 않는다(연결은 Phase 2).
+- **UI 구성**:
+  - 좌측 `MacCard`: "새 스크립트" 버튼 + 이름 검색 + kind 필터 칩(전체/Python/Ansible/Shell) + 스크립트 목록(kind 배지·태그·시스템 스크립트 표시).
+  - 우측 `MacCard`: 선택 상태에 따라 3가지 뷰 — 생성 폼(`ScriptCreateForm`) / 상세(`ScriptDetailPanel`) / 빈 상태 안내.
+  - 상세 패널 탭 4종: **편집**(textarea 에디터 + 변경 메모 입력 + "저장(새 버전)", ansible_playbook 은 인벤토리 textarea 추가 노출) / **버전 이력**(버전별 메모·작성자·시각, 현재 버전이 아니면 "롤백" 버튼) / **테스트 실행**(대상 호스트/포트/사용자/인증방식(비밀번호·개인키) 입력 폼 → 실행 → `ExecutionStepsTimeline` + `CommandTraceList` 로 결과 표시, python kind 는 안내 배너로 Phase 2 예정임을 명시) / **어디서 쓰이나**(참조하는 Batch Job/점검 항목 수 — Phase 1 은 항상 0).
+  - 헤더 우측 연필(이름/설명/태그 인라인 수정) + 휴지통(삭제, `ConfirmDialog`, 시스템 스크립트는 버튼 자체가 숨음) 아이콘.
+- **Frontend**: `hooks/useScripts.ts` — `useScripts(filter)`, `useScript(id)`, `useScriptVersions(id)`, `useCreateScript`, `useUpdateScript`, `useDeleteScript`, `useCreateScriptVersion`, `useSetCurrentScriptVersion`, `useTestRunScript`(결과 영속화 없음 — mutate 결과만 로컬 state 로 표시). `services/api.ts` `scriptsApi`.
+- **Backend**: `backend/app/routers/scripts.py` — CRUD(`GET/POST /scripts`, `GET/PUT/DELETE /scripts/{id}`), 버전(`GET/POST /scripts/{id}/versions`, `GET /scripts/{id}/versions/{version}`, `PUT /scripts/{id}/current-version`), 테스트 실행(`POST /scripts/{id}/test-run` — `shell`→SSH(`services/ssh_runner.py` 재사용), `ansible_playbook`→`services/playbook_executor.run_playbook` 재사용, `python`→501 안내(Phase 2 K8s Job 실행기 예정)), 접근 토글(`GET/PUT /scripts/access-settings`). 권한은 `require_operator` 기본 + `AppSetting(script_library_admin_only)` 토글이 켜지면 `require_admin` 으로 승격(§4.5). 모델: `backend/app/models/executable_script.py`(`ExecutableScript`/`ExecutableScriptVersion` — 버전은 append-only, `current_version_id` 는 순환 FK라 `use_alter=True`로 생성).
+- **핵심 기능**:
+  - 새 버전 저장은 자동으로 "현재 버전"이 되고, 이전 버전은 불변으로 남아 롤백 가능(포인터만 이동, 새 버전 생성 없음)
+  - 테스트 실행은 저장 전 편집 중인 초안 그대로 실행 가능 — 결과/자격증명 모두 영속화하지 않음
+  - is_system 스크립트(향후 Phase 2 에서 기존 executor 이관분)는 삭제 불가
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 명령어 등록 / 수정 (`/commands/new`, `/commands/:id/edit`)
 
 - **파일**: `frontend/src/pages/CommandFormPage.tsx` (내부 `CommandForm` 컴포넌트, `components/common/ConfluenceUrlInput`)

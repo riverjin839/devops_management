@@ -10,6 +10,21 @@
 
 1.27.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **스크립트 라이브러리(`/scripts`, 신규 화면)**: Batch Jobs·점검 매트릭스의 실행 로직이
+  파이썬 파일에 하드코딩돼 있어 UI 편집·재사용·버전관리가 불가능하던 것을 해소하는 배치 잡
+  실행 모델 재설계 **Phase 1** — Python/Ansible Playbook/Shell 스크립트를 DB 에 저장하고
+  UI 에서 바로 작성·버전관리(새 버전 저장 시 자동으로 "현재 버전"이 되고 이전 버전은 불변
+  보존, 롤백은 새 버전 없이 포인터만 이동)·테스트 실행(저장 전 초안도 즉시 실행, 자격증명·
+  결과 모두 영속화하지 않음)할 수 있다. 테스트 실행 결과는 기존 `ExecutionStepsTimeline`/
+  `CommandTraceList` 를 그대로 재사용해 단계별 진행과 실행된 명령을 시각화한다. Python
+  스크립트 실행(대상 클러스터의 일회용 K8s Job)은 Phase 2 예정 — 지금은 명확한 사유와 함께
+  501 을 반환한다. 권한은 `require_operator` 기본 허용 + `AppSetting` 토글로 admin 전용
+  전환 가능. 아직 Batch Job/점검 항목이 스크립트를 참조하지는 않는다(연결은 Phase 2).
+  설계: `docs/02-design/features/batch-jobs-execution-redesign.design.md`. Backend:
+  `routers/scripts.py`, `models/executable_script.py`, `services/script_test_run.py`.
+  Frontend: `pages/ScriptsPage.tsx`, `components/scripts/`, `hooks/useScripts.ts`.
+
 ## [1.27.0] - 2026-08-10
 
 ### Added

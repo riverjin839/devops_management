@@ -1243,6 +1243,33 @@ export const savedScriptsApi = {
   delete: (id: string) => api.delete(`/saved-scripts/${id}`),
 };
 
+// 스크립트 라이브러리 API (DB 저장·버전관리되는 Python/Ansible/Shell 실행 스크립트 — Phase 1)
+export const scriptsApi = {
+  list: (params?: { kind?: import('@/types').ScriptKind; tag?: string; q?: string }) =>
+    api.get<import('@/types').ExecutableScript[]>('/scripts', { params }),
+  get: (id: string) => api.get<import('@/types').ExecutableScript>(`/scripts/${id}`),
+  create: (data: import('@/types').ExecutableScriptCreate) =>
+    api.post<import('@/types').ExecutableScript>('/scripts', data),
+  update: (id: string, data: import('@/types').ExecutableScriptUpdate) =>
+    api.put<import('@/types').ExecutableScript>(`/scripts/${id}`, data),
+  delete: (id: string) => api.delete(`/scripts/${id}`),
+  listVersions: (id: string) =>
+    api.get<import('@/types').ExecutableScriptVersion[]>(`/scripts/${id}/versions`),
+  getVersion: (id: string, version: number) =>
+    api.get<import('@/types').ExecutableScriptVersion>(`/scripts/${id}/versions/${version}`),
+  createVersion: (id: string, data: import('@/types').ExecutableScriptVersionCreate) =>
+    api.post<import('@/types').ExecutableScriptVersion>(`/scripts/${id}/versions`, data),
+  setCurrentVersion: (id: string, versionId: string) =>
+    api.put<import('@/types').ExecutableScript>(`/scripts/${id}/current-version`, { versionId }),
+  testRun: (id: string, data: import('@/types').ScriptTestRunRequest) =>
+    api.post<import('@/types').ScriptTestRunResponse>(`/scripts/${id}/test-run`, data, {
+      timeout: 60_000,
+    }),
+  getAccessSettings: () => api.get<{ adminOnly: boolean }>('/scripts/access-settings'),
+  updateAccessSettings: (adminOnly: boolean) =>
+    api.put<{ adminOnly: boolean }>('/scripts/access-settings', { adminOnly }),
+};
+
 // Commands API (지식 허브 - 주요 명령어/파라미터 모음)
 export const commandsApi = {
   list: (params?: { category?: string; importance?: string; q?: string }) =>

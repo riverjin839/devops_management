@@ -2311,6 +2311,110 @@ export interface SavedScriptUpdate {
   description?: string;
 }
 
+// ── 스크립트 라이브러리 — DB 저장·버전관리되는 실행 스크립트 (Phase 1) ─────────
+// 설계: docs/02-design/features/batch-jobs-execution-redesign.design.md
+export type ScriptKind = 'python' | 'ansible_playbook' | 'shell';
+
+export interface ExecutableScriptVersion {
+  id: string;
+  scriptId: string;
+  version: number;
+  content: string;
+  inventoryContent?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  paramSchema?: Record<string, any>[] | null;
+  changelog?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export interface ExecutableScript {
+  id: string;
+  name: string;
+  description?: string | null;
+  kind: ScriptKind;
+  tags?: string[] | null;
+  isSystem: boolean;
+  currentVersionId?: string | null;
+  currentVersion?: ExecutableScriptVersion | null;
+  usedByCount: number;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExecutableScriptCreate {
+  name: string;
+  description?: string;
+  kind: ScriptKind;
+  tags?: string[];
+  content: string;
+  inventoryContent?: string;
+  changelog?: string;
+}
+
+export interface ExecutableScriptUpdate {
+  name?: string;
+  description?: string;
+  tags?: string[];
+}
+
+export interface ExecutableScriptVersionCreate {
+  content: string;
+  inventoryContent?: string;
+  changelog?: string;
+}
+
+export interface ScriptTestRunTarget {
+  kind: 'ssh' | 'cluster';
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  clusterId?: string;
+}
+
+export interface ScriptTestRunRequest {
+  content: string;
+  inventoryContent?: string;
+  target: ScriptTestRunTarget;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any>;
+}
+
+// DeepCheckExecStep 과 동일 shape — ExecutionStepsTimeline(components/daily-check/) 재사용.
+export interface ScriptExecutionStep {
+  id: string;
+  label: string;
+  status: 'running' | 'success' | 'failed' | 'skipped';
+  detail?: string;
+  startedMs?: number;
+  durationMs?: number;
+}
+
+// BatchJobCommandTrace 와 동일 shape — CommandTraceList(components/common/) 재사용.
+export interface ScriptExecutedCommand {
+  kind: string;
+  command: string;
+  exitCode?: number | null;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  truncated: boolean;
+}
+
+export interface ScriptTestRunResponse {
+  status: string;
+  steps: ScriptExecutionStep[];
+  commands: ScriptExecutedCommand[];
+  stdout: string;
+  stderr: string;
+  exitCode?: number | null;
+  durationMs: number;
+  error?: string | null;
+}
+
 // ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────
 export interface MinioCollectTenantSummary {
   namespace: string | null;

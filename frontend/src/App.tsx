@@ -29,6 +29,7 @@ import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { DocumentsPage } from '@/pages/DocumentsPage';
 import { CommandsPage } from '@/pages/CommandsPage';
+import { ScriptsPage } from '@/pages/ScriptsPage';
 import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
 import { OpsNoteDetailPage } from '@/pages/OpsNoteDetailPage';
@@ -209,6 +210,7 @@ function AppShell() {
               <Route path="/commands" element={<CommandsPage />} />
               <Route path="/commands/new" element={<CommandFormPage />} />
               <Route path="/commands/:id/edit" element={<CommandFormPage />} />
+              <Route path="/scripts" element={<ScriptsPage />} />
               <Route path="/ops-notes" element={<OpsNotesPage />} />
               <Route path="/ops-notes/new" element={<OpsNoteFormPage />} />
               <Route path="/ops-notes/:id" element={<OpsNoteDetailPage />} />

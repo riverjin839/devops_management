@@ -118,6 +118,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 주요 명령어 모음 | `backend/app/routers/commands.py` → `frontend/src/pages/CommandsPage.tsx` · `CommandFormPage.tsx` |
 | Batch Jobs (cron) | `backend/app/routers/batch_jobs.py` + `services/batch_jobs/`(SSH: `etcdctl_defrag`/`shell_command`, non-SSH kubectl: `k8s_job_cleanup`; base.py 에 단계 trace `_step`/`_record_command`/`step_plan`) + `services/k8s_diagnose.py`(kubectl 실패 분류·연결 원인 힌트) → `frontend/src/pages/BatchJobsPage.tsx`(독립 라우트 아님 — `HomePage.tsx` 의 "플랫폼 현황" 탭 → "배치잡" 서브탭이 임베드, 구 `/batch-jobs` 는 `/` 리다이렉트) |
 | Ansible 자산 (파일/인벤토리) | `backend/app/routers/ansible_assets.py` |
+| 스크립트 라이브러리 (DB 저장·버전관리 Python/Ansible/Shell, Phase 1) | `backend/app/routers/scripts.py` + `models/executable_script.py`(`ExecutableScript`/`ExecutableScriptVersion`) + `services/script_test_run.py`(test-run: shell→`ssh_runner`, ansible→`playbook_executor.run_playbook`, python→501 Phase 2 예정) → `frontend/src/pages/ScriptsPage.tsx` + `components/scripts/` + `hooks/useScripts.ts`. 설계: `docs/02-design/features/batch-jobs-execution-redesign.design.md` |
 
 ### 네트워크 / 토폴로지 / 스토리지
 | 기능 | 위치 |

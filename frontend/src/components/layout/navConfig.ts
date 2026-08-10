@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, BellRing, Dog,
-  TrendingUp, FileSpreadsheet, Palmtree, FileText,
+  TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -61,6 +61,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
   '/work-guides':        { defaultLabel: '표준 작업 가이드', icon: BookMarked },
   '/commands':           { defaultLabel: '주요 명령어',     icon: TerminalSquare },
+  '/scripts':            { defaultLabel: '스크립트 라이브러리', icon: FileCode2 },
   '/ops-notes':          { defaultLabel: '운영 노트보드',   icon: Layers },
   '/wbs':                { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
   '/mindmap':            { defaultLabel: '마인드맵',       icon: Map },
@@ -88,7 +89,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   { id: 'services',  label: '서비스/앱',  icon: Package,   paths: ['/lake-services'], domain: 'platform' },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로
   // 병합됐다(NAV_MAP 항목은 접근 제어/라벨 커스터마이징/Island 패널을 위해 유지).
-  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/commands'], domain: 'platform' },
+  { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/commands', '/scripts'], domain: 'platform' },
   { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report', '/jira-import'], domain: 'work' },
   // "문서 관리" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
   // 개편 때 그룹을 잃고 URL 전용으로 남았던 지식 화면들(/work-guides, /docs, /ops-notes,
