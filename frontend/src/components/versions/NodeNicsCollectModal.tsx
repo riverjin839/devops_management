@@ -5,8 +5,9 @@ import type { NodeSummary } from '@/services/api';
 import type { NodeNicsCollectResponse } from '@/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { useToast, DoubleScrollX, LogViewer } from '@/components/common';
+import { useToast, DoubleScrollX } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
@@ -308,11 +309,11 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                           {h.status !== 'ok' ? (
                             <div className="space-y-1">
                               <span className="text-xs text-status-critical">{h.error ?? '-'}</span>
-                              {(h.raw_stdout || h.raw_stderr) && (
+                              {(h.rawStdout || h.rawStderr) && (
                                 <RawOutputDetails
-                                  stdout={h.raw_stdout}
-                                  stderr={h.raw_stderr}
-                                  exitCode={h.exit_code}
+                                  stdout={h.rawStdout}
+                                  stderr={h.rawStderr}
+                                  exitCode={h.exitCode}
                                 />
                               )}
                             </div>
@@ -322,9 +323,9 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                                 검출된 NIC 없음 — bond/eth/en*/em* 정규식과 일치하지 않거나 출력 파싱 실패
                               </span>
                               <RawOutputDetails
-                                stdout={h.raw_stdout}
-                                stderr={h.raw_stderr}
-                                exitCode={h.exit_code}
+                                stdout={h.rawStdout}
+                                stderr={h.rawStderr}
+                                exitCode={h.exitCode}
                               />
                             </div>
                           ) : (
@@ -355,9 +356,9 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                               {/* 성공 호스트도 raw 출력 접근 가능하게 — "파싱 결과가 맞나?" 검증은
                                   실패했을 때만 필요한 게 아니다 (실행-로그 규칙). */}
                               <RawOutputDetails
-                                stdout={h.raw_stdout}
-                                stderr={h.raw_stderr}
-                                exitCode={h.exit_code}
+                                stdout={h.rawStdout}
+                                stderr={h.rawStderr}
+                                exitCode={h.exitCode}
                               />
                             </div>
                           )}
@@ -367,11 +368,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                   </tbody>
                 </table>
               </DoubleScrollX>
-              {result.errors.length > 0 && (
-                <div className="px-3 py-2 text-xs text-status-warning border-t border-border bg-status-warning/5">
-                  {result.errors.length}건 오류: {result.errors.slice(0, 3).join(' / ')}
-                </div>
-              )}
+              <CollectErrorList errors={result.errors} />
             </div>
           )}
         </div>
@@ -396,44 +393,6 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
         </div>
       </div>
     </div>
-  );
-}
-
-// "검출된 NIC 없음" / 에러 케이스 진단용 — 백엔드가 응답에 같이 실어준
-// 원본 stdout / stderr / exit code 를 펼침형으로 노출.
-function RawOutputDetails({
-  stdout, stderr, exitCode,
-}: {
-  stdout?: string | null;
-  stderr?: string | null;
-  exitCode?: number | null;
-}) {
-  const hasStdout = !!stdout;
-  const hasStderr = !!stderr;
-  if (!hasStdout && !hasStderr && exitCode === undefined) return null;
-  return (
-    <details className="text-xs">
-      <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
-        raw 출력 보기
-        {exitCode !== null && exitCode !== undefined && (
-          <span className="ml-1 font-mono">(exit {exitCode})</span>
-        )}
-      </summary>
-      <div className="mt-1 space-y-1">
-        {hasStdout && (
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">stdout</div>
-            <LogViewer text={stdout!} maxHeight="max-h-40" hideToolbar />
-          </div>
-        )}
-        {hasStderr && (
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">stderr</div>
-            <LogViewer text={stderr!} maxHeight="max-h-40" asError hideToolbar />
-          </div>
-        )}
-      </div>
-    </details>
   );
 }
 

@@ -432,6 +432,11 @@ async def collect_etcd_systemd(
         )
 
         entry: dict = {"host": host, "status": r_show.status}
+        # 실행-로그 규칙 — systemctl show 의 원본 출력을 성공/실패 무관하게 첨부해
+        # 모달에서 per-host 로 열람 가능하게 한다.
+        entry["raw_stdout"] = (r_show.stdout or "")[:1500]
+        entry["raw_stderr"] = (r_show.stderr or "")[:800]
+        entry["exit_code"] = r_show.exit_code
 
         if r_show.status != "ok":
             entry["error"] = r_show.error or r_show.stderr[:200]
@@ -623,6 +628,10 @@ async def collect_kernel_params(
         )
         res = _exec_ssh(target, cmd, connect_timeout=payload.connect_timeout, exec_timeout=20)
         entry: dict = {"host": host, "status": res.status}
+        # 실행-로그 규칙 — sysctl 원본 출력 첨부 (성공/실패 무관).
+        entry["raw_stdout"] = (res.stdout or "")[:1500]
+        entry["raw_stderr"] = (res.stderr or "")[:800]
+        entry["exit_code"] = res.exit_code
         if res.status != "ok":
             entry["error"] = res.error or res.stderr[:200]
             return entry
@@ -772,6 +781,10 @@ async def collect_kubelet_config(
         )
         r_ps = _exec_ssh(target, ps_cmd, connect_timeout=payload.connect_timeout, exec_timeout=10)
         entry: dict = {"host": host, "status": "ok"}
+        # 실행-로그 규칙 — 1차 probe(ps) 원본 출력 첨부 (성공/실패 무관).
+        entry["raw_stdout"] = (r_ps.stdout or "")[:1500]
+        entry["raw_stderr"] = (r_ps.stderr or "")[:800]
+        entry["exit_code"] = r_ps.exit_code
         sources: dict[str, str] = {}
 
         ps_line: str | None = None
@@ -1064,6 +1077,10 @@ def collect_kubeadm_certs(
             connect_timeout=payload.connect_timeout, exec_timeout=20,
         )
         entry: dict = {"host": host}
+        # 실행-로그 규칙 — check-expiration 원본 출력(인증서 표) 첨부 (성공/실패 무관).
+        entry["raw_stdout"] = (r.stdout or "")[:1500]
+        entry["raw_stderr"] = (r.stderr or "")[:800]
+        entry["exit_code"] = r.exit_code
         if r.status != "ok" or not (r.stdout or "").strip():
             entry["error"] = r.error or "kubeadm certs check-expiration 실패 (kubeadm 미설치 또는 권한 부족)"
             errors.append(f"{host}: {entry['error']}")
@@ -1651,13 +1668,12 @@ async def collect_node_nics(
                     "scope": _categorize_ip(a["ip"]),  # public / private / linklocal
                 })
         entry["all_ips"] = all_ips
-        # status=ok 인데 인터페이스가 0개로 검출되는 케이스 — 'ip -j' 미지원,
-        # 권한 부족, 출력이 비어있음 등 — raw 출력을 같이 실어서 모달에서 진단할
-        # 수 있게 한다.
-        if not ifaces:
-            entry["raw_stdout"] = (res.stdout or "")[:1500]
-            entry["raw_stderr"] = (res.stderr or "")[:800]
-            entry["exit_code"] = res.exit_code
+        # raw 출력은 성공 호스트에도 항상 첨부한다 — "파싱 결과가 맞나?" 검증은 실패했을
+        # 때만 필요한 게 아니고, 실행-로그 규칙(CLAUDE.md)상 모든 수집 실행은 원본 출력을
+        # 사용자에게 열람 가능해야 한다. (기존: 실패/0-NIC 케이스만 첨부)
+        entry["raw_stdout"] = (res.stdout or "")[:1500]
+        entry["raw_stderr"] = (res.stderr or "")[:800]
+        entry["exit_code"] = res.exit_code
         return entry
 
     per_host = await _parallel_collect(

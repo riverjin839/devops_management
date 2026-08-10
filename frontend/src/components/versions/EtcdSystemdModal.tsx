@@ -7,6 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { DoubleScrollX } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
+import { formatApiError } from '@/lib/utils';
 
 interface Props {
   open: boolean;
@@ -64,6 +66,7 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
         password: authMode === 'password' ? password : undefined,
         privateKey: authMode === 'key' ? privateKey : undefined,
         useSudo,
+        unit: unit.trim() || 'etcd',
         envFiles: envFilesText.split(',').map((s) => s.trim()).filter(Boolean),
         parallelism,
       }, signal);
@@ -106,19 +109,19 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
             <div>
               <label htmlFor={usernameId} className="text-xs text-muted-foreground mb-1 block">SSH User</label>
               <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
               <label htmlFor={portId} className="text-xs text-muted-foreground mb-1 block">SSH Port</label>
               <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
               <label htmlFor={unitId} className="text-xs text-muted-foreground mb-1 block">systemd unit</label>
               <input id={unitId} value={unit} onChange={(e) => setUnit(e.target.value)}
                 placeholder="etcd"
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
           </div>
 
@@ -129,7 +132,7 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
             </label>
             <input id={envFilesId} value={envFilesText} onChange={(e) => setEnvFilesText(e.target.value)}
               placeholder="/etcd/etcd.env, /etc/etcd.env"
-              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             <p className="mt-1 text-xs text-muted-foreground">
               기본: <code className="font-mono">/etcd/etcd.env</code> (사내 표준) — kubeadm 은 <code className="font-mono">/etc/etcd.env</code>,
               CentOS/RHEL 은 <code className="font-mono">/etc/sysconfig/etcd</code> 경우가 많음.
@@ -146,7 +149,7 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
               <input id={parallelismId} type="number" value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 10)}
                 min={1} max={50}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
           </div>
 
@@ -167,12 +170,12 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
             {authMode === 'password' ? (
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="SSH 비밀번호"
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             ) : (
               <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                 rows={3}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             )}
           </div>
 
@@ -194,9 +197,22 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
             </div>
             <div className="max-h-40 overflow-y-auto border border-border rounded-lg bg-background p-1">
               {nodes.length === 0 ? (
-                <p className="text-center py-3 text-sm text-muted-foreground">
-                  {nodeQ.isLoading ? '노드 로딩 중...' : '노드 없음'}
-                </p>
+                <div className="text-center py-3 text-sm">
+                  {nodeQ.isLoading ? (
+                    <p className="text-muted-foreground">노드 로딩 중...</p>
+                  ) : nodeQ.isError ? (
+                    <div className="space-y-1.5">
+                      <p className="text-status-critical">노드 목록을 불러오지 못했습니다.</p>
+                      <p className="text-xs text-muted-foreground">{formatApiError(nodeQ.error)}</p>
+                      <button onClick={() => nodeQ.refetch()}
+                        className="px-2 py-1 text-xs font-medium rounded-lg border border-border hover:bg-secondary transition-colors">
+                        다시 시도
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">노드 없음</p>
+                  )}
+                </div>
               ) : nodes.map((n) => {
                 const host = n.internalIp || n.name;
                 const on = selected.has(host);
@@ -253,6 +269,7 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
                       <th className="px-2 py-1">PID</th>
                       <th className="px-2 py-1">Version</th>
                       <th className="px-2 py-1">Unit</th>
+                      <th className="px-2 py-1">출력</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -270,16 +287,16 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
                         <td className="px-2 py-1 text-muted-foreground truncate max-w-[200px]" title={h.fragmentPath ?? ''}>
                           {h.fragmentPath ?? '-'}
                         </td>
+                        <td className="px-2 py-1 align-top">
+                          {h.error && <p className="text-xs text-status-critical mb-0.5">{h.error}</p>}
+                          <RawOutputDetails stdout={h.rawStdout} stderr={h.rawStderr} exitCode={h.exitCode} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </DoubleScrollX>
-              {result.errors.length > 0 && (
-                <div className="px-3 py-2 text-xs text-amber-400 border-t border-border bg-amber-500/5">
-                  {result.errors.length}건 오류: {result.errors.slice(0, 3).join(' / ')}
-                </div>
-              )}
+              <CollectErrorList errors={result.errors} />
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useToast, DoubleScrollX} from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { RawOutputDetails, CollectErrorList } from './RawOutputDetails';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
@@ -136,20 +137,20 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
             <div>
               <label htmlFor={usernameId} className="text-xs text-muted-foreground mb-1 block">SSH User</label>
               <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
               <label htmlFor={portId} className="text-xs text-muted-foreground mb-1 block">SSH Port</label>
               <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div>
               <label htmlFor={parallelismId} className="text-xs text-muted-foreground mb-1 block">Parallelism</label>
               <input id={parallelismId} type="number" value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 10)}
                 min={1} max={50}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-1.5 text-sm text-foreground/80"
@@ -177,12 +178,14 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
             {authMode === 'password' ? (
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="SSH 비밀번호"
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                aria-label="SSH 비밀번호"
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             ) : (
               <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                 rows={3}
-                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+                aria-label="SSH 개인키 (PEM)"
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
             )}
           </div>
 
@@ -193,7 +196,7 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
             </label>
             <textarea id={fallbacksId} value={fallbacksText} onChange={(e) => setFallbacksText(e.target.value)}
               rows={4}
-              className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded-lg" />
+              className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
           </div>
 
           <div>
@@ -209,7 +212,16 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
             <div className="max-h-52 overflow-y-auto border border-border rounded-lg bg-background p-1">
               {nodes.length === 0 ? (
                 <p className="text-center py-3 text-sm text-muted-foreground">
-                  {nodeQ.isLoading ? '노드 로딩 중...' : '노드 없음'}
+                  {nodeQ.isLoading ? '노드 로딩 중...' : nodeQ.isError ? (
+                    <span className="block space-y-1.5">
+                      <span className="block text-status-critical">노드 목록을 불러오지 못했습니다.</span>
+                      <span className="block text-xs text-muted-foreground">{formatApiError(nodeQ.error)}</span>
+                      <button onClick={() => nodeQ.refetch()}
+                        className="px-2 py-1 text-xs font-medium rounded-lg border border-border hover:bg-secondary transition-colors">
+                        다시 시도
+                      </button>
+                    </span>
+                  ) : '노드 없음'}
                 </p>
               ) : nodes.map((n) => {
                 const host = n.internalIp || n.name;
@@ -253,6 +265,7 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
                       <th className="px-2 py-1">config 경로</th>
                       <th className="px-2 py-1">출처</th>
                       <th className="px-2 py-1">저장</th>
+                      <th className="px-2 py-1">출력</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -272,17 +285,16 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
                                 ? <span className="text-xs text-muted-foreground">동일 (skip)</span>
                                 : <span className="text-xs text-red-400">{h.error ?? '실패'}</span>}
                           </td>
+                          <td className="px-2 py-1 align-top">
+                            <RawOutputDetails stdout={h.rawStdout} stderr={h.rawStderr} exitCode={h.exitCode} />
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </DoubleScrollX>
-              {result.errors.length > 0 && (
-                <div className="px-3 py-2 text-xs text-amber-500 border-t border-border bg-amber-500/5">
-                  {result.errors.length}건 오류: {result.errors.slice(0, 3).join(' / ')}
-                </div>
-              )}
+              <CollectErrorList errors={result.errors} />
             </div>
           )}
         </div>

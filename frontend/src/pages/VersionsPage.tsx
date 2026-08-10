@@ -4,9 +4,10 @@ import { Link } from 'react-router-dom';
 import {
   GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
   Server, Cpu, Network, Settings2, HardDrive, Search, FileSpreadsheet, FileText,
+  AlertTriangle, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard, DoubleScrollX} from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard, DoubleScrollX, LogViewer } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
@@ -106,7 +107,7 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder="파라미터 필터 (예: net.ipv4.ip_forward)"
-        className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-md font-mono"
+        className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-primary"
       />
       <div className="space-y-2">
         {orderedKeys.map((g) => (
@@ -276,7 +277,7 @@ function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
             value={envFilter}
             onChange={(e) => setEnvFilter(e.target.value)}
             placeholder="env 파일 라인 필터 (예: ETCD_LISTEN_CLIENT_URLS)"
-            className="w-full px-2 py-1 mb-1 text-xs font-mono bg-background border border-border rounded-md"
+            className="w-full px-2 py-1 mb-1 text-xs font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 max-h-72 overflow-auto whitespace-pre-wrap">
             {filteredEnv || (envFilter ? '(필터 매칭 없음)' : '')}
@@ -359,7 +360,7 @@ function KubeletConfigDetails({ data }: { data: Record<string, unknown> }) {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="라인 필터 (예: cgroupDriver, runtimeRequestTimeout)"
-            className="w-full px-2 py-1 mb-1 text-xs font-mono bg-background border border-border rounded-md"
+            className="w-full px-2 py-1 mb-1 text-xs font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <pre className="text-xs font-mono bg-muted/30 rounded-md p-2 max-h-96 overflow-auto whitespace-pre-wrap">
             {filtered || (filter ? '(필터 매칭 없음)' : '')}
@@ -451,7 +452,7 @@ function GenericComponentDetails({
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder={`이 모듈의 키/값 필터 (총 ${totalSearchable}개)`}
-          className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded-md"
+          className="w-full px-2 py-1 text-xs font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
         />
       )}
 
@@ -681,7 +682,7 @@ function HistoryTimeline({
   component: string;
   onPickDiff: (from: ComponentSnapshot, to: ComponentSnapshot) => void;
 }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['versions', 'history', clusterId, component],
     queryFn: () => versionsApi.history(clusterId, component).then((r) => r.data),
     staleTime: 30_000,
@@ -708,6 +709,14 @@ function HistoryTimeline({
   }, [pickedIds, snapshots, onPickDiff]);
 
   if (isLoading) return <p className="text-sm text-muted-foreground px-4 py-3">불러오는 중…</p>;
+  if (isError) {
+    return (
+      <p className="text-sm px-4 py-3">
+        <span className="text-status-critical">히스토리를 불러오지 못했습니다.</span>{' '}
+        <span className="text-xs text-muted-foreground">{formatApiError(error)}</span>
+      </p>
+    );
+  }
   if (snapshots.length === 0) return <p className="text-sm text-muted-foreground px-4 py-3">히스토리 없음</p>;
 
   return (
@@ -757,7 +766,7 @@ function DiffPanel({
   to: ComponentSnapshot;
   onClose: () => void;
 }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['versions', 'diff', clusterId, from.id, to.id],
     queryFn: () => versionsApi.diff(clusterId, from.id, to.id).then((r) => r.data),
   });
@@ -780,6 +789,11 @@ function DiffPanel({
       </div>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">분석 중…</p>
+      ) : isError ? (
+        <p className="text-sm">
+          <span className="text-status-critical">diff 를 불러오지 못했습니다.</span>{' '}
+          <span className="text-xs text-muted-foreground">{formatApiError(error)}</span>
+        </p>
       ) : data?.changes.length === 0 ? (
         <p className="text-sm text-muted-foreground">변경 없음</p>
       ) : (
@@ -826,25 +840,40 @@ export function VersionsPage() {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
   }, [clusters, clusterId]);
 
-  const { data: current, isLoading } = useQuery({
+  const { data: current, isLoading, isError: currentError, error: currentErrorObj, refetch: refetchCurrent } = useQuery({
     queryKey: ['versions', 'current', clusterId],
     queryFn: () => versionsApi.current(clusterId).then((r) => r.data),
     enabled: !!clusterId,
     staleTime: 30_000,
   });
 
+  // ── 수집 실행 로그 (CLAUDE.md 실행-로그 규칙) — 지금 수집/MinIO 결과를 토스트
+  // 요약(앞 3건 절단)으로 끝내지 않고 전체 오류·요약을 세션 로그로 남긴다.
+  const [collectLog, setCollectLog] = useState<string[]>([]);
+  const [collectLogOpen, setCollectLogOpen] = useState(false);
+  const appendCollectLog = useCallback((lines: string[]) => {
+    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    setCollectLog((prev) => [...prev, ...lines.map((l) => `${ts} ${l}`)]);
+  }, []);
+
   const collect = useAbortableMutation({
     mutationFn: (_: void, signal) => versionsApi.collect(clusterId, signal),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
       const { changed, errors } = res.data;
+      appendCollectLog([
+        `[지금 수집] ok — 변경 ${changed}건${errors.length ? ` · 경고 ${errors.length}건` : ''}`,
+        ...errors.map((e) => `[지금 수집]   경고: ${e}`),
+      ]);
       if (errors.length > 0) {
-        toast.warning(`${changed}개 변경 감지됨 · 경고 ${errors.length}건`, errors.slice(0, 3).join('\n'));
+        setCollectLogOpen(true);
+        toast.warning(`${changed}개 변경 감지됨 · 경고 ${errors.length}건`, '상세는 수집 로그 참조');
       } else {
         toast.success(`${changed}개 변경 감지됨`, '스냅샷 갱신 완료');
       }
     },
     onError: (err: unknown) => {
+      appendCollectLog([`[지금 수집] FAIL — ${formatApiError(err)}`]);
       toast.error('수집 실패', formatApiError(err));
     },
   });
@@ -858,6 +887,10 @@ export function VersionsPage() {
       const op = summary.operator ? '운영자 OK' : '운영자 X';
       const directpv = summary.directpv ? `DirectPV ${summary.directpv.totalDrives}드라이브` : 'DirectPV X';
       const desc = `${op} · 테넌트 ${tenants}개 · ${directpv}`;
+      appendCollectLog([
+        `[MinIO 수집] ok — 변경 ${changed}건 · ${desc}`,
+        ...warnings.map((w) => `[MinIO 수집]   경고: ${w}`),
+      ]);
       if (changed > 0) {
         toast.success(`MinIO ${changed}건 변경 감지`, desc);
       } else if (tenants === 0 && !summary.operator) {
@@ -867,6 +900,7 @@ export function VersionsPage() {
       }
     },
     onError: (err: unknown) => {
+      appendCollectLog([`[MinIO 수집] FAIL — ${formatApiError(err)}`]);
       toast.error('MinIO 수집 실패', formatApiError(err));
     },
   });
@@ -1009,6 +1043,17 @@ export function VersionsPage() {
                 <Network className="w-4 h-4" />
                 노드 NIC
               </button>
+              <button
+                onClick={() => setCollectLogOpen((v) => !v)}
+                aria-expanded={collectLogOpen}
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-border rounded-lg transition-colors ${
+                  collectLogOpen ? 'bg-secondary text-foreground' : 'bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground'
+                }`}
+                title="수집 실행 로그 — 지금 수집/MinIO 수집의 결과·경고 전체 기록"
+              >
+                <ScrollText className="w-4 h-4" />
+                로그 보기{collectLog.length > 0 && ` (${collectLog.length})`}
+              </button>
               {collectMinio.isPending ? (
                 <button
                   onClick={collectMinio.abort}
@@ -1056,6 +1101,25 @@ export function VersionsPage() {
         {/* 선택된 클러스터 상세 */}
         {clusterId && (
           <>
+            {collectLogOpen && (
+              <MacCard rootClassName="mb-4" bodyPadding="p-0">
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-container-high">
+                  <ScrollText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none">수집 로그</span>
+                  <button
+                    onClick={() => setCollectLog([])}
+                    disabled={collectLog.length === 0}
+                    className="ml-auto px-2 py-1 text-xs rounded-lg hover:bg-secondary text-muted-foreground disabled:opacity-40 transition-colors"
+                  >
+                    지우기
+                  </button>
+                </div>
+                <LogViewer
+                  text={collectLog.length > 0 ? collectLog.join('\n') : '아직 수집 실행 기록이 없습니다 — 지금 수집 / MinIO 수집 결과가 여기에 쌓입니다. (SSH 수집 모달은 각 모달 안에서 per-host raw 출력을 제공합니다)'}
+                  maxHeight="max-h-48"
+                />
+              </MacCard>
+            )}
             <div className="bg-card border border-border rounded-xl p-4 mb-5 text-sm text-muted-foreground leading-relaxed">
               kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
               동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
@@ -1064,11 +1128,12 @@ export function VersionsPage() {
             {/* 노드/컴포넌트 검색 — 노드가 많을 때 빠르게 찾기.
                 키워드는 component 이름 / version / data 의 host·config_path 에 매칭한다. */}
             {totalComponents > 0 && (
-              <div className="bg-card border border-border rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3">
+              <div className="bg-card border border-border rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3 focus-within:ring-1 focus-within:ring-primary">
                 <Search className="w-4 h-4 text-muted-foreground" />
                 <input
                   value={nodeSearch}
                   onChange={(e) => setNodeSearch(e.target.value)}
+                  aria-label="노드·컴포넌트 검색"
                   placeholder="노드 이름·컴포넌트·버전·config 경로로 검색 (예: master-1, kubelet, /var/lib)"
                   className="flex-1 bg-transparent border-0 text-sm font-mono focus:outline-none focus:ring-0"
                 />
@@ -1097,6 +1162,15 @@ export function VersionsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
+        ) : currentError ? (
+          /* 조회 실패를 "스냅샷 없음"으로 위장하지 않는다 — 빈 상태의 CTA(지금 수집)는
+             방금 실패한 백엔드에 실행을 권유하는 꼴이 된다. */
+          <EmptyState
+            icon={AlertTriangle}
+            title="스냅샷을 불러오지 못했습니다"
+            description={formatApiError(currentErrorObj)}
+            action={{ label: '다시 시도', onClick: () => { void refetchCurrent(); }, variant: 'secondary' }}
+          />
         ) : (current?.components.length ?? 0) === 0 ? (
           <EmptyState
             icon={Clock}
