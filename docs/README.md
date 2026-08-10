@@ -31,6 +31,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 ## 아키텍처 / 로드맵
 - [openlens-architecture-roadmap.md](openlens-architecture-roadmap.md) — 범용 K8s 관리 + 300노드 실시간 로드맵(P0~P5)
 - [collab-tooling-borrow-report.md](collab-tooling-borrow-report.md) — AFFiNE/AppFlowy 차용 분석
+- [03-analysis/backend-language-migration-review.md](03-analysis/backend-language-migration-review.md) — **백엔드 언어 변경(Python→TypeScript) 검토**: 무응답 원인(스레드풀 고갈)·타입 게이트 부재 실측, 권고 = 변경하지 않음
 - [architecture.drawio](architecture.drawio) — 아키텍처 다이어그램 소스
 - [observability-agentic-architecture.drawio](observability-agentic-architecture.drawio) — 관측/에이전틱 아키텍처 다이어그램 소스
 
