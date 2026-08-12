@@ -399,6 +399,19 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
         </div>
       </div>
 
+      {/* ── legend ──────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground px-1">
+        <span className="font-medium">범례</span>
+        {(Object.keys(STATUS_COLOR) as KanbanStatus[]).map((k) => (
+          <span key={k} className="flex items-center gap-1">
+            <span className="w-3 h-2.5 rounded-sm" style={barBackgroundStyle(STATUS_COLOR[k], barOpacity)} />
+            {STATUS_COLOR[k].label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1"><Star className="w-3 h-3 text-status-warning fill-status-warning" />미해결 이슈</span>
+        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-healthy" />해결 이슈</span>
+        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
+      </div>
 
       {/* ── timeline grid ───────────────────────────────────────────────────── */}
       {/* 부모(HomePage)가 이미 MacCard 로 카드 테두리/배경을 제공하므로 여기선 내부 그룹핑만
@@ -631,20 +644,6 @@ export function WeeklyStatusTimeline({ items, isLoading, selectedClusterId }: We
             )}
           </div>
         )}
-      </div>
-
-      {/* ── legend ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground px-1">
-        <span className="font-medium">범례</span>
-        {(Object.keys(STATUS_COLOR) as KanbanStatus[]).map((k) => (
-          <span key={k} className="flex items-center gap-1">
-            <span className="w-3 h-2.5 rounded-sm" style={barBackgroundStyle(STATUS_COLOR[k], barOpacity)} />
-            {STATUS_COLOR[k].label}
-          </span>
-        ))}
-        <span className="flex items-center gap-1"><Star className="w-3 h-3 text-status-warning fill-status-warning" />미해결 이슈</span>
-        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-healthy" />해결 이슈</span>
-        <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-foreground/60" />진행 중(완료일 미입력)</span>
       </div>
     </div>
   );
