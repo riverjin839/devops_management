@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, Clock, CalendarRange, UserRound, Search } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -12,17 +12,15 @@ import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAY
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
-import { WorkItemCustomFieldsManager } from '@/components/work-items/WorkItemCustomFieldsManager';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
 import { ConfluenceLinkModal } from '@/components/work-items/ConfluenceLinkModal';
 import { QuickAddTaskModal } from '@/components/dashboard/QuickAddTaskModal';
 import { useJiraConfig, useJiraRefreshItem, useJiraPush, useConfluenceSync } from '@/hooks/useJira';
-import { Settings2 } from 'lucide-react';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER, KANBAN_COLUMNS } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useProjects } from '@/hooks/useProjects';
-import { useSprints, useCurrentSprint } from '@/hooks/useSprints';
+import { useSprints } from '@/hooks/useSprints';
 import { useClusterStore } from '@/stores/clusterStore';
 import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
@@ -41,13 +39,17 @@ interface WorkItemFilterPrefs {
   priority: string;
   status: KanbanStatus | 'all';
   module: WorkItemModule | '';
+  sprintId: string;
   from: string;
   to: string;
   searchTitle: string;
+  onlyMine: boolean;
 }
 
+// 기본 필터링은 아무것도 없는 상태(전체 담당자 · 전체 유형/상태 · 조건 없음)로 시작한다.
+// "필터 저장" 버튼을 눌러야 이 값이 사용자별로 덮어써진다 — 매 키 입력마다 자동 저장하지 않는다.
 const EMPTY_FILTER_PREFS: WorkItemFilterPrefs = {
-  type: 'all', assignee: '', priority: '', status: 'all', module: '', from: '', to: '', searchTitle: '',
+  type: 'all', assignee: '', priority: '', status: 'all', module: '', sprintId: '', from: '', to: '', searchTitle: '', onlyMine: false,
 };
 
 function filterPrefsKey(username: string): string {
@@ -245,9 +247,10 @@ export function WorkItemBoardPage() {
   const currentUser = useAuthStore((s) => s.user);
   const myName = (currentUser?.displayName?.trim() || currentUser?.username || '').trim();
   const myUsername = currentUser?.username || '';
-  // 필터 개인화 — 로그인 사용자가 마지막으로 쓴 조건을 이번 마운트에서 딱 1번만 읽는다
-  // (이후 변경은 아래 useEffect 가 저장). 사용자가 바뀌어도(재로그인) 컴포넌트가
-  // 다시 마운트되므로 그 시점 값을 다시 읽는다.
+  // 필터 개인화 — 로그인 사용자가 마지막으로 "필터 저장" 을 눌렀을 때의 조건을 이번
+  // 마운트에서 딱 1번만 읽는다(저장 버튼을 누르지 않으면 다음 방문은 항상 빈 필터로
+  // 시작한다). 사용자가 바뀌어도(재로그인) 컴포넌트가 다시 마운트되므로 그 시점 값을
+  // 다시 읽는다.
   const savedFilters = useMemo(() => loadFilterPrefs(myUsername), [myUsername]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('table');
@@ -271,41 +274,14 @@ export function WorkItemBoardPage() {
   // 없으면 아래 useEffect 가 현재(진행중) 스프린트로 기본값을 채운다(개인화 저장 대상에서는
   // 제외 — 그 기본값 effect 가 항상 덮어써 저장해봐야 의미가 없다).
   const [searchParams] = useSearchParams();
-  const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') ?? '');
-  // 담당자/우선순위/모듈/스프린트/기간 — 자주 안 쓰는 조건은 "필터 더보기" 팝오버로 묶어
-  // 상시 노출 컨트롤 수를 줄인다(유형/상태/검색/내 업무만 항상 보임).
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  // 스프린트 페이지의 '게시판에서 보기' 딥링크(?sprint=...)가 저장된 필터보다 우선한다.
+  const [filterSprintId, setFilterSprintId] = useState(searchParams.get('sprint') || savedFilters.sprintId);
   // 기본 정렬 = 시작일 최신순(기존 백엔드 정렬과 동일 — 사용자가 다른 컬럼을 클릭하면 바뀐다).
   const [sortKey, setSortKey] = useState<WorkItemSortKey | ''>('startedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  // 이 필터들이 바뀔 때마다 사용자별로 저장 — 다음 방문 때 그대로 복원된다.
-  useEffect(() => {
-    if (!myUsername) return;
-    const prefs: WorkItemFilterPrefs = {
-      type: typeFilter, assignee: filterAssignee, priority: filterPriority, status: filterKanbanStatus,
-      module: filterModule, from: filterFrom, to: filterTo, searchTitle: debouncedSearchTitle,
-    };
-    try { localStorage.setItem(filterPrefsKey(myUsername), JSON.stringify(prefs)); } catch { /* ignore */ }
-  }, [myUsername, typeFilter, filterAssignee, filterPriority, filterKanbanStatus, filterModule, filterFrom, filterTo, debouncedSearchTitle]);
-  // 기본 화면은 **내 업무**만 — 전사 업무가 통째로 뜨면 매번 담당자를 직접 입력해야 한다.
-  // 끈 상태는 localStorage 로 기억한다(팀 전체를 보는 사용자가 매번 다시 끄지 않도록).
-  const [onlyMine, setOnlyMine] = useState<boolean>(() => {
-    try { return localStorage.getItem('k8s:item-board:only-mine') !== '0'; } catch { return true; }
-  });
-  const toggleOnlyMine = () => setOnlyMine((v) => {
-    const next = !v;
-    try { localStorage.setItem('k8s:item-board:only-mine', next ? '1' : '0'); } catch { /* ignore */ }
-    return next;
-  });
-  // 시작일/완료일 시간 표시 토글 (기본 off = 날짜만). localStorage 영속.
-  const [showTime, setShowTime] = useState<boolean>(() => {
-    try { return localStorage.getItem('k8s:item-board:show-time') === '1'; } catch { return false; }
-  });
-  const toggleShowTime = () => setShowTime((v) => {
-    const next = !v;
-    try { localStorage.setItem('k8s:item-board:show-time', next ? '1' : '0'); } catch { /* ignore */ }
-    return next;
-  });
+  // "내 업무" 토글 — 기본은 꺼짐(전체 담당자). "필터 저장" 을 눌러야 다음 방문에도 유지된다.
+  const [onlyMine, setOnlyMine] = useState<boolean>(savedFilters.onlyMine);
+  const toggleOnlyMine = () => setOnlyMine((v) => !v);
 
   // 컬럼 폭/순서/표시여부 개인화 — 필터와 동일하게 사용자별로 분리 저장한다(로그인 전
   // 짧은 순간은 공용 키로 폴백, loadFilterPrefs 와 같은 guard 패턴).
@@ -361,7 +337,6 @@ export function WorkItemBoardPage() {
   const items = data?.data ?? [];
   // G-I9: ConfirmDialog state — window.confirm 대체
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
-  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
   const [confluenceOpen, setConfluenceOpen] = useState(false);
   // 업무 등록/수정/하위 업무 등록 — 홈 화면 "업무 등록"과 동일한 팝업(QuickAddTaskModal)
@@ -420,36 +395,23 @@ export function WorkItemBoardPage() {
   const deleteTask = useDeleteWorkItem();
   const toast = useToast();
 
-  // 스프린트 딥링크(?sprint=)가 없으면 현재(2주) 스프린트로 기본 필터를 맞춘다 — 마운트 시 1회.
-  const currentSprintQuery = useCurrentSprint();
-  const sprintDefaultedRef = useRef(false);
-  useEffect(() => {
-    if (sprintDefaultedRef.current) return;
-    if (searchParams.get('sprint')) { sprintDefaultedRef.current = true; return; } // 딥링크 우선
-    if (currentSprintQuery.isLoading) return; // 응답 대기 후 1회만 적용
-    sprintDefaultedRef.current = true;
-    if (currentSprintQuery.data?.id) setFilterSprintId(currentSprintQuery.data.id);
-  }, [currentSprintQuery.isLoading, currentSprintQuery.data, searchParams]);
+  // 필터 저장 — 자동 저장 대신 이 버튼을 눌러야 다음 방문에 그대로 복원된다(기본 필터는
+  // 항상 빈 상태로 시작 — EMPTY_FILTER_PREFS).
+  const saveFilterPrefs = () => {
+    if (!myUsername) return;
+    const prefs: WorkItemFilterPrefs = {
+      type: typeFilter, assignee: filterAssignee, priority: filterPriority, status: filterKanbanStatus,
+      module: filterModule, sprintId: filterSprintId, from: filterFrom, to: filterTo,
+      searchTitle: debouncedSearchTitle, onlyMine,
+    };
+    try {
+      localStorage.setItem(filterPrefsKey(myUsername), JSON.stringify(prefs));
+      toast.success('필터 저장됨', '지금 설정을 다음 방문에도 그대로 사용합니다.');
+    } catch {
+      toast.error('필터 저장 실패', '브라우저 저장 공간을 확인해주세요.');
+    }
+  };
 
-  // 로드 시 "OOO님, 어떤 기준으로 필터된 결과인지" 안내 토스트 — 마운트 시 1회.
-  // 위 sprint-default effect 가 setFilterSprintId 한 값은 같은 tick 에 아직 반영되지 않으므로
-  // (state 는 다음 렌더에야 갱신) filterSprintId state 를 읽지 않고 직접 재계산한다.
-  const filterToastShownRef = useRef(false);
-  useEffect(() => {
-    if (filterToastShownRef.current) return;
-    if (!myName) return;
-    if (currentSprintQuery.isLoading) return; // 스프린트명까지 함께 보여주기 위해 로딩 대기
-    filterToastShownRef.current = true;
-    const deepLinkSprintId = searchParams.get('sprint');
-    const sprintLabel = deepLinkSprintId
-      ? (sprintNameById.get(deepLinkSprintId) ? `'${sprintNameById.get(deepLinkSprintId)}' 스프린트` : '지정 스프린트')
-      : (currentSprintQuery.data?.name ? `'${currentSprintQuery.data.name}' 스프린트` : '전체 스프린트');
-    toast.info(
-      `${myName}님, 필터 적용됨`,
-      `${onlyMine ? '본인 담당 업무' : '전체 담당자'} · ${sprintLabel} 기준으로 필터된 결과입니다.`,
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myName, currentSprintQuery.isLoading, currentSprintQuery.data]);
   // Jira 연결 업무의 행 단위 동기화 — 다시 가져오기 / 수정 내용 보내기.
   const jiraRefresh = useJiraRefreshItem();
   const jiraPush = useJiraPush();
@@ -658,10 +620,6 @@ export function WorkItemBoardPage() {
   const hasFilters = !!(filterClusterId || filterAssignee || filterPriority
     || filterKanbanStatus !== 'all' || filterModule || filterSprintId || filterFrom || filterTo || searchTitle);
   const isFilteredView = hasFilters || (onlyMine && !!myName);
-  // "필터 더보기" 팝오버 트리거에 표시할 활성 조건 개수 — 기간(from/to)은 한 조건으로 묶어 센다.
-  const moreFiltersActiveCount = [
-    !!filterAssignee, !!filterPriority, !!filterModule, !!filterSprintId, !!(filterFrom || filterTo),
-  ].filter(Boolean).length;
 
   const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
   const doneCount = items.filter((t) => t.kanbanStatus === 'done').length;
@@ -778,9 +736,9 @@ export function WorkItemBoardPage() {
           </div>
         </div>
 
-        {/* 필터 바 — 자주 쓰는 조건(유형/상태/검색/내 업무)만 상시 노출하고, 나머지(담당자/
-            우선순위/모듈/스프린트/기간)는 "필터 더보기" 팝오버로 묶는다. 표시 옵션(시간/필드/
-            컬럼설정)은 구분선(border-l)으로 필터 그룹과 시각적으로 분리. */}
+        {/* 필터 바 — 모든 조건을 한 줄에 인라인으로 노출한다("필터 더보기" 팝오버로 묶지
+            않음). 기본 필터링은 항상 비어 있고(EMPTY_FILTER_PREFS), "필터 저장" 을 눌러야
+            지금 조합이 다음 방문에도 그대로 복원된다. */}
         <div className="flex items-center gap-1.5 flex-wrap mb-3">
           <TypeFilterDropdown value={typeFilter} onChange={setTypeFilter} />
           <StatusFilterDropdown value={filterKanbanStatus} onChange={setFilterKanbanStatus} />
@@ -792,7 +750,7 @@ export function WorkItemBoardPage() {
               onChange={(e) => setSearchTitle(e.target.value)}
               placeholder="제목 검색"
               aria-label="제목 검색"
-              className="w-36 pl-8 pr-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+              className="w-32 pl-8 pr-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             />
           </div>
           {myName && (
@@ -808,127 +766,82 @@ export function WorkItemBoardPage() {
               <UserRound className="w-3.5 h-3.5" /> 내 업무
             </button>
           )}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMoreFiltersOpen((o) => !o)}
-              aria-haspopup="dialog"
-              aria-expanded={moreFiltersOpen}
-              className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
-                moreFiltersActiveCount > 0 ? 'bg-primary/10 text-primary border-primary/40 hover:bg-primary/20' : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-              }`}
+          <input
+            type="text"
+            value={filterAssignee}
+            onChange={(e) => setFilterAssignee(e.target.value)}
+            placeholder={onlyMine && myName ? myName : '담당자'}
+            aria-label="담당자"
+            className="w-24 px-2.5 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+          />
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            aria-label="우선순위"
+            className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+          >
+            <option value="">전체 우선순위</option>
+            <option value="high">높음</option>
+            <option value="medium">보통</option>
+            <option value="low">낮음</option>
+          </select>
+          <select
+            value={filterModule}
+            onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}
+            aria-label="모듈"
+            className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+          >
+            <option value="">전체 모듈</option>
+            {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
+              <option key={key} value={key}>{cfg.label}</option>
+            ))}
+          </select>
+          {sprintList.length > 0 && (
+            <select
+              value={filterSprintId}
+              onChange={(e) => setFilterSprintId(e.target.value)}
+              aria-label="스프린트"
+              className="max-w-[140px] px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
             >
-              <ListFilter className="w-3.5 h-3.5" /> 필터 더보기
-              {moreFiltersActiveCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
-                  {moreFiltersActiveCount}
-                </span>
-              )}
-              <ChevronDown className="w-3 h-3 opacity-60" />
-            </button>
-            {moreFiltersOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setMoreFiltersOpen(false)} />
-                <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-3 w-72 space-y-2.5" role="dialog" aria-label="추가 필터">
-                  <div>
-                    <label htmlFor="wi-filter-assignee" className="text-xs text-muted-foreground mb-1 block">담당자</label>
-                    <input
-                      id="wi-filter-assignee"
-                      type="text"
-                      value={filterAssignee}
-                      onChange={(e) => setFilterAssignee(e.target.value)}
-                      placeholder={onlyMine && myName ? myName : '담당자 이름'}
-                      className="w-full px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label htmlFor="wi-filter-priority" className="text-xs text-muted-foreground mb-1 block">우선순위</label>
-                      <select
-                        id="wi-filter-priority"
-                        value={filterPriority}
-                        onChange={(e) => setFilterPriority(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-                      >
-                        <option value="">전체</option>
-                        <option value="high">높음</option>
-                        <option value="medium">보통</option>
-                        <option value="low">낮음</option>
-                      </select>
-                    </div>
-                    <div className="flex-1">
-                      <label htmlFor="wi-filter-module" className="text-xs text-muted-foreground mb-1 block">모듈</label>
-                      <select
-                        id="wi-filter-module"
-                        value={filterModule}
-                        onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}
-                        className="w-full px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-                      >
-                        <option value="">전체 모듈</option>
-                        {(Object.entries(MODULE_CONFIG) as [WorkItemModule, { label: string; cls: string }][]).map(([key, cfg]) => (
-                          <option key={key} value={key}>{cfg.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  {sprintList.length > 0 && (
-                    <div>
-                      <label htmlFor="wi-filter-sprint" className="text-xs text-muted-foreground mb-1 block">스프린트</label>
-                      <select
-                        id="wi-filter-sprint"
-                        value={filterSprintId}
-                        onChange={(e) => setFilterSprintId(e.target.value)}
-                        className="w-full px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
-                      >
-                        <option value="">전체 스프린트</option>
-                        {sprintList.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}{s.status === 'active' ? ' (진행중)' : ''}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-xs text-muted-foreground mb-1 block">시작일 범위</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={cycleDateFilter}
-                        aria-pressed={dateFilterMode !== null}
-                        title={
-                          dateFilterMode === null ? '이번주(월~일) 시작 업무만 보기 — 다시 누르면 2주, 이번달 순으로 넓어지고 그다음엔 해제됩니다.'
-                            : dateFilterMode === 'week' ? '2주(이번주+다음주)로 넓히기'
-                            : dateFilterMode === 'twoWeek' ? '이번달로 넓히기'
-                            : '날짜 필터 해제'
-                        }
-                        className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 flex-shrink-0 ${
-                          dateFilterMode !== null ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        <CalendarRange className="w-3.5 h-3.5" /> {dateFilterMode !== null ? DATE_FILTER_LABELS[dateFilterMode] : '이번주'}
-                      </button>
-                      <input
-                        type="date"
-                        value={filterFrom}
-                        onChange={(e) => setFilterFrom(e.target.value)}
-                        aria-label="시작일 (이후)"
-                        title="시작일 (이후)"
-                        className="min-w-0 flex-1 px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
-                      />
-                      <span className="text-muted-foreground text-sm">~</span>
-                      <input
-                        type="date"
-                        value={filterTo}
-                        onChange={(e) => setFilterTo(e.target.value)}
-                        aria-label="시작일 (이전)"
-                        title="시작일 (이전)"
-                        className="min-w-0 flex-1 px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+              <option value="">전체 스프린트</option>
+              {sprintList.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}{s.status === 'active' ? ' (진행중)' : ''}</option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            onClick={cycleDateFilter}
+            aria-pressed={dateFilterMode !== null}
+            title={
+              dateFilterMode === null ? '이번주(월~일) 시작 업무만 보기 — 다시 누르면 2주, 이번달 순으로 넓어지고 그다음엔 해제됩니다.'
+                : dateFilterMode === 'week' ? '2주(이번주+다음주)로 넓히기'
+                : dateFilterMode === 'twoWeek' ? '이번달로 넓히기'
+                : '날짜 필터 해제'
+            }
+            className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 flex-shrink-0 ${
+              dateFilterMode !== null ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <CalendarRange className="w-3.5 h-3.5" /> {dateFilterMode !== null ? DATE_FILTER_LABELS[dateFilterMode] : '이번주'}
+          </button>
+          <input
+            type="date"
+            value={filterFrom}
+            onChange={(e) => setFilterFrom(e.target.value)}
+            aria-label="시작일 (이후)"
+            title="시작일 (이후)"
+            className="w-[130px] px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+          />
+          <span className="text-muted-foreground text-sm">~</span>
+          <input
+            type="date"
+            value={filterTo}
+            onChange={(e) => setFilterTo(e.target.value)}
+            aria-label="시작일 (이전)"
+            title="시작일 (이전)"
+            className="w-[130px] px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50 font-mono"
+          />
           {hasFilters && (
             <button
               type="button"
@@ -940,26 +853,15 @@ export function WorkItemBoardPage() {
               초기화
             </button>
           )}
+          <button
+            type="button"
+            onClick={saveFilterPrefs}
+            title="지금 설정한 필터를 다음 방문에도 그대로 사용"
+            className="px-2.5 py-1.5 text-sm rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors inline-flex items-center gap-1"
+          >
+            <Save className="w-3.5 h-3.5" /> 필터 저장
+          </button>
           <div className="ml-auto flex items-center gap-1.5 flex-wrap border-l border-border pl-2">
-            <button
-              type="button"
-              onClick={toggleShowTime}
-              aria-pressed={showTime}
-              title={showTime ? '시작일/완료일에서 시간 숨기기' : '시작일/완료일에 시간 표시'}
-              className={`px-2.5 py-1.5 text-sm rounded-lg border transition-colors inline-flex items-center gap-1 ${
-                showTime ? 'bg-primary/10 text-primary border-primary/40' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" /> 시간
-            </button>
-            <button
-              type="button"
-              onClick={() => setCustomFieldsOpen(true)}
-              title="업무 사용자 정의 필드 관리"
-              className="px-2.5 py-1.5 text-sm rounded-lg border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
-            >
-              <Settings2 className="w-3.5 h-3.5" /> 필드
-            </button>
             <ColumnSettingsMenu
               order={colLayout.order}
               isVisible={colLayout.isVisible}
@@ -1094,7 +996,6 @@ export function WorkItemBoardPage() {
                       projectNameById={projectNameById}
                       sprintNameById={sprintNameById}
                       isDragDisabled={!!sortKey}
-                      showTime={showTime}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
                       onAddSubItem={handleAddSubItem}
@@ -1117,8 +1018,6 @@ export function WorkItemBoardPage() {
         ))}
         </div>
       </main>
-
-      <WorkItemCustomFieldsManager open={customFieldsOpen} onClose={() => setCustomFieldsOpen(false)} />
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
       <ConfluenceLinkModal open={confluenceOpen} onClose={() => setConfluenceOpen(false)} />

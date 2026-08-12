@@ -1095,27 +1095,27 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
-- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `ColumnSettingsMenu.tsx`, `WorkItemCustomFieldsManager.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`, `components/dashboard/QuickAddTaskModal.tsx`)
+- **파일**: `frontend/src/pages/WorkItemBoardPage.tsx` (+ `components/work-items/WorkItemKanban.tsx`, `WorkItemCalendar.tsx`, `WorkItemTableRow.tsx`, `ColumnSettingsMenu.tsx`, `JiraImportModal.tsx`, `JiraProvisionModal.tsx`, `JiraLinkDialog.tsx`, `JiraIssueChip.tsx`, `DocLinkChip.tsx`, `components/dashboard/QuickAddTaskModal.tsx`)
 - **목적 / UX**: 전사 업무(유형: 이슈 대응/회의/운영 대응/기타 — 내부 저장값은 `issue`/`meeting`/`task`/`etc`, 레거시 `training` 도 조회는 계속 됨)를 표(목록)/달력/칸반 3가지 뷰로 조회·필터링·정렬하고, 등록·수정·삭제·CSV 추출·Jira 가져오기까지 처리하는 업무 관리의 메인 허브.
 - **UI 구성**:
   - 헤더: 전체/WIP/Done 카운트 배지, 뷰 전환(`ViewModeBar`: 목록/달력/칸반), Jira 가져오기 버튼(`jiraConfig.enabled`일 때만), CSV 추출, 업무 등록 버튼
-  - 필터 바(**업무 분류 드롭다운**(4개 유형 — 이슈 대응/회의/운영 대응/기타) · **상태 드롭다운**(칸반 상태) · 제목 검색 · **내 업무 토글(기본 ON)** · 담당자/우선순위/모듈/스프린트/기간(**이번주→2주→이번달→해제 4단 순환** 버튼, from~to))가 하나의 `flex-wrap` 행으로 통일돼 넓은 화면에서도 정렬이 어긋나지 않는다. "분류"(자유 텍스트) 필터는 "업무 분류" 드롭다운과 이름이 겹쳐 혼동을 줘 제거. 시간표시 토글, 사용자 정의 필드 관리, 컬럼 설정 메뉴는 같은 행 우측(`ml-auto`)에 배치
-  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`) — **컬럼 폭/순서/표시여부도 필터와 동일하게 계정별 localStorage 키(`item-board-table:{username}`)로 분리 저장**. 등록은 헤더의 "업무 등록" 버튼(`QuickAddTaskModal`) 하나로 통일 — 구 상단 인라인 행 추가(`AddWorkItemRow`)는 제거됨
-  - "작업 제목" 셀(구 "제목"): Jira 키 박스(`JiraIssueChip` 계열) + **Confluence 문서 박스**(`DocLinkChip` — 대표 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장)
+  - 필터 바 — **업무 분류 드롭다운**(4개 유형) · **상태 드롭다운**(칸반 상태) · 제목 검색 · **내 업무 토글** · 담당자·우선순위·모듈·스프린트·기간(**이번주→2주→이번달→해제 4단 순환** 버튼, from~to)까지 **전부 한 줄에 인라인으로** 노출한다("필터 더보기" 팝오버로 묶지 않음). 우측(`ml-auto`)엔 컬럼 설정 메뉴만 남음(시간표시 토글·사용자 정의 필드 관리 버튼은 제거됨). **기본 필터링은 항상 아무 조건도 없는 상태로 시작** — "필터 저장" 버튼을 눌러야 지금 조합이 사용자별로 저장돼 다음 방문에 복원된다(값이 바뀔 때마다 자동 저장되던 이전 동작 폐지)
+  - 목록 뷰: dnd-kit 기반 컬럼 드래그 정렬 + 행 드래그 정렬(로컬 순서, `useLocalOrder`), 컬럼 리사이즈(`useColumnWidths`)·표시여부(`useColumnLayout`) — **컬럼 폭/순서/표시여부도 필터와 동일하게 계정별 localStorage 키(`item-board-table:{username}`)로 분리 저장**. 기본 컬럼 순서는 상태·담당자·상위업무·이슈종류·DL·WIKI·작업제목·시작일·마감일·관리·업무 분류(그 외는 기본 숨김, 컬럼 설정에서 켬). 등록은 헤더의 "업무 등록" 버튼(`QuickAddTaskModal`) 하나로 통일
+  - **"작업 제목" 셀**: 제목 텍스트만 표시(Jira 이슈 키가 섞여 들어가지 않음 — 가져오기 시 요약문만 저장). Jira 키 박스·Confluence 문서 박스는 **"DL"/"WIKI" 독립 컬럼**으로 분리됨(기본 노출)
+  - **DL 컬럼**: Jira 이슈 키 칩(`jiraIssueKey`, 클릭 시 Jira 새창)
+  - **WIKI 컬럼**: Confluence 문서 링크 — `DocLinkChip`(대표 링크가 없으면 점선 `＋문서` 버튼, 클릭하면 그 자리에서 URL 입력·저장), Jira 원격 링크에서 찾은 Confluence 페이지가 2개 이상이면 "N" 배지 + 클릭 시 전체 목록 드롭다운(제목·새창 열기)
   - **마감일** 컬럼(기본 노출): Jira 연동 업무는 `duedate` 동기화, 미연동 업무는 직접 편집(인라인 date input). 마감 지났고 미완료(`kanbanStatus !== 'done'`)면 빨간색 강조
-  - Jira 원본 축 컬럼(기본 숨김, 컬럼 설정에서 켬): **상위업무**(구 "Epic") · 이슈 종류 · 컴포넌트 · 라벨. **"상위업무" 는 Epic→Task 체인을 함께 보여준다** — Epic 과 상위(Task) 가 둘 다 있고 서로 다르면 `JiraIssueChip` 2개를 화살표로 이어 표시(Epic → Task), 하나만 있으면 그 칩만(`jiraEpicKey`/`jiraParentKey` 동시 참조). **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
-  - **Confl. 링크 컬럼**: Jira 원격 링크에서 찾은 Confluence 페이지가 2개 이상이면 "Confl. N" 배지 + 클릭 시 전체 목록 드롭다운(제목·새창 열기), 1개 이하면 기존처럼 단일 링크만
+  - Jira 원본 축 컬럼: **상위업무**(구 "Epic", 기본 노출) · 이슈 종류(기본 노출) · 컴포넌트 · 라벨(둘 다 기본 숨김). **"상위업무" 는 Epic→Task 체인을 함께 보여준다** — Epic 과 상위(Task) 가 둘 다 있고 서로 다르면 `JiraIssueChip` 2개를 화살표로 이어 표시(Epic → Task), 하나만 있으면 그 칩만(`jiraEpicKey`/`jiraParentKey` 동시 참조). **"상태" 컬럼이 Jira 상태를 겸한다** — Jira 연결 업무면 칸반 라벨 대신 **Jira 원본 상태명**을 보여주고 점 색은 `statusCategory` 기준(별도 "Jira 상태" 컬럼 없음 — 중복이라 병합)
   - 칸반 뷰: `WorkItemKanban` (상태별 컬럼)
   - 달력 뷰: `WorkItemCalendar`
-  - 모달: `QuickAddTaskModal`(신규 등록 **및 하위 업무 등록** — 상위 업무 등록과 동일한 컴팩트 팝업을 재사용, 하위 업무 등록 시 상위 업무를 읽기전용 칩으로 표시), `WorkItemCustomFieldsManager`, `JiraImportModal`, `JiraProvisionModal`(Jira 이슈 + Confluence 문서 동시 생성 — `QuickAddTaskModal` 저장 성공 후 연동이 켜져 있으면 자동으로 이어짐, 하위 업무도 대상), 삭제 `ConfirmDialog`
-- **Frontend**: `useWorkItems(filters)`, `useCreateWorkItem`, `useDeleteWorkItem`(hooks/useWorkItems.ts, TanStack Query), `useClusters`/`useClusterStore`(Zustand), `useProjects`, `useSprints`, `useJiraConfig`(hooks/useJira.ts). 로컬 state로 뷰모드·필터·정렬·show-time·only-mine(localStorage 영속) 관리. 기본 조회는 로그인 사용자(`useAuthStore` 의 displayName/username)를 담당자 필터로 넣어 **내 업무만** 보여주고, 토글을 끄면 전체가 나온다. `workItemsApi.exportCsv`(axios blob) 직접 호출. **필터 개인화**: 유형/담당자/우선순위/상태/모듈/제목검색/기간 필터를 사용자별 localStorage 키(`k8s:item-board:filters:{username}`)에 저장해 다음 방문 때 마지막으로 쓴 조건을 그대로 복원한다(계정별로 분리 — 같은 브라우저를 여러 계정이 써도 섞이지 않음). 스프린트는 제외 — 딥링크가 없으면 항상 현재(진행중) 스프린트로 기본값을 다시 채우는 별도 effect 가 있어 영속시켜도 의미가 없다.
-- **Backend**: `GET /api/v1/work-items`(목록, 필터 쿼리파라미터 snake_case 변환), `POST /api/v1/work-items`, `DELETE /api/v1/work-items/{id}`, `GET /api/v1/work-items/export/csv` — `backend/app/routers/work_items.py`. 프로젝트명/스프린트명 매핑을 위해 `GET /api/v1/projects`(`projects.py`), `GET /api/v1/sprints`(`sprint.py`)도 호출. Jira 가져오기 가능 여부는 `GET /api/v1/jira/config`(`jira.py`). 행 단위 동기화는 `POST /api/v1/jira/refresh/{id}` · `POST /api/v1/jira/push/{id}`, 연계 생성은 `GET /api/v1/jira/provision/defaults` · `POST /api/v1/jira/provision`. 연결 복구는 `POST /api/v1/jira/unlink/{id}` · `POST /api/v1/jira/relink/{id}` · `POST /api/v1/jira/verify-links`. 모델: `backend/app/models/work_item.py` (WorkItem).
+  - 모달: `QuickAddTaskModal`(신규 등록 **및 하위 업무 등록** — 상위 업무 등록과 동일한 컴팩트 팝업을 재사용, 하위 업무 등록 시 상위 업무를 읽기전용 칩으로 표시), `JiraImportModal`, `JiraProvisionModal`(Jira 이슈 + Confluence 문서 동시 생성 — `QuickAddTaskModal` 저장 성공 후 연동이 켜져 있으면 자동으로 이어짐, 하위 업무도 대상), 삭제 `ConfirmDialog`. 업무 사용자 정의 필드 관리(`WorkItemCustomFieldsManager`)는 이 페이지에서 진입할 방법이 없음(값 표시/편집은 `WorkItemForm`/`WorkItemReadView` 에서 계속 됨 — 필드 정의 추가/삭제만 접근 경로가 없어진 상태)
+- **Frontend**: `useWorkItems(filters)`, `useCreateWorkItem`, `useDeleteWorkItem`(hooks/useWorkItems.ts, TanStack Query), `useClusters`/`useClusterStore`(Zustand), `useProjects`, `useSprints`, `useJiraConfig`(hooks/useJira.ts). 로컬 state로 뷰모드·필터·정렬·only-mine 관리(더 이상 show-time 없음). 기본 조회는 담당자 필터가 비어 있으면 전체 담당자 — "내 업무" 토글을 켜야 로그인 사용자(`useAuthStore` 의 displayName/username)로 좁혀진다. `workItemsApi.exportCsv`(axios blob) 직접 호출. **필터 개인화**: 유형/담당자/우선순위/상태/모듈/스프린트/제목검색/기간/내 업무 여부를 사용자별 localStorage 키(`k8s:item-board:filters:{username}`)에 저장하되, **"필터 저장" 버튼을 눌렀을 때만** 갱신된다(계정별로 분리 — 같은 브라우저를 여러 계정이 써도 섞이지 않음). 스프린트 딥링크(`?sprint=`)는 저장된 값보다 우선하고, 진행중 스프린트 자동 선택 effect 는 제거됨(기본 필터링 없음 원칙과 상충).
+- **Backend**: `GET /api/v1/work-items`(목록, 필터 쿼리파라미터 snake_case 변환), `POST /api/v1/work-items`, `DELETE /api/v1/work-items/{id}`, `GET /api/v1/work-items/export/csv` — `backend/app/routers/work_items.py`. 프로젝트명/스프린트명 매핑을 위해 `GET /api/v1/projects`(`projects.py`), `GET /api/v1/sprints`(`sprint.py`)도 호출. Jira 가져오기 가능 여부는 `GET /api/v1/jira/config`(`jira.py`). 행 단위 동기화는 `POST /api/v1/jira/refresh/{id}` · `POST /api/v1/jira/push/{id}`, 연계 생성은 `GET /api/v1/jira/provision/defaults` · `POST /api/v1/jira/provision`. 연결 복구는 `POST /api/v1/jira/unlink/{id}` · `POST /api/v1/jira/relink/{id}` · `POST /api/v1/jira/verify-links`. 모델: `backend/app/models/work_item.py` (WorkItem). **Jira 가져오기 제목**: `map_jira_issue`(`services/jira_service.py`)와 엑셀 저장(`import_excel_save`) 모두 `title` 을 요약문만 저장한다(구 `"{키} {요약}"` 접두어 형식 제거 — 이슈 키는 화면에서 DL 컬럼이 별도로 보여줌). Jira 로 되돌려 보낼 때 접두어를 떼는 `strip_issue_key_prefix` 는 과거 데이터 호환용으로 유지.
 - **핵심 기능**:
-  - 표/달력/칸반 3뷰 전환 및 유형·상태·제목·담당자·우선순위·모듈·스프린트·시작일 범위 복합 필터
-  - 컬럼 순서/폭/표시여부 + 필터 조건 모두 계정별 개인화(localStorage) + 헤더 드래그 정렬, 행 드래그(dnd-kit) 순서 저장
+  - 표/달력/칸반 3뷰 전환 및 유형·상태·제목·담당자·우선순위·모듈·스프린트·시작일 범위 복합 필터(전부 한 줄 인라인 노출)
+  - 컬럼 순서/폭/표시여부 + 필터 조건 모두 계정별 개인화(localStorage) + 헤더 드래그 정렬, 행 드래그(dnd-kit) 순서 저장. 필터는 "필터 저장" 버튼을 눌러야 영속화(기본은 항상 무필터)
   - 팝업 등록(담당자 기본값 = 로그인 본인)/하위 등록(`QuickAddTaskModal`), 상세 페이지 편집 딥링크(`?edit=1`)
-  - CSV 추출, Jira 이슈 가져오기(JiraImportModal), 업무 사용자 정의 필드 관리
-  - 기본 화면이 로그인 사용자 담당 업무로 필터링됨 ("내 업무" 토글로 해제, localStorage 기억)
+  - CSV 추출, Jira 이슈 가져오기(JiraImportModal)
   - **Jira 동기화 확장** — 가져오기/재가져오기/재연결 시마다 `backend/app/routers/jira.py` 가 최신값으로 반영:
     - **담당자**: 이제 title/content 와 동일하게 Jira 가 무조건 소유(매 동기화마다 PEP 담당자명으로 갱신 — 이전엔 비어있을 때만 채움). Jira displayName↔PEP 담당자명 매핑은 이메일 우선, 실패 시 첫 토큰 매칭
     - **마감일**(`due_date`): Jira `duedate` 동기화
@@ -1124,7 +1124,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
     - **Confluence 링크 전체 목록**: `confluence_base_url` 설정 시 이슈당 원격 링크(remote link) 조회를 추가해(옵트인, N+1 비용 수용) 찾은 모든 Confluence 페이지를 `confluence_links` 에 저장(대표 링크 `confluence_url` 은 기존처럼 1개)
   - 행 단위 Jira 재가져오기 / Jira 로 보내기 / Jira·Confluence 연계 생성(Epic·Sub-task 상위 이슈 지정, 기준 조건은 사용자별로 기억)
   - **일부만 생성됨 재시도**: Jira·Confluence 연계 생성이 한쪽만 성공하면(`provision_status='partial'`) Rocket 아이콘이 노란색으로 바뀌어 해당 행에 남는다 — 클릭하면 이미 만들어진 쪽은 건드리지 않고 실패한 쪽만 다시 시도하도록 모달이 미리 채워진다. 모달의 재시도 결과 화면은 실패 사유가 토큰/세션 문제로 보이면 `JiraConnectCard` 를 그 자리에서 띄워 재연결 후 바로 재시도할 수 있게 한다
-  - **Jira 연결 관리**(`JiraLinkDialog`): 연결 해제 · 다른 이슈로 변경(서버가 존재 확인) · 연결 해제+업무 삭제. 재가져오기가 `missing` 이면 사유와 함께 자동으로 열린다. 해제하면 자동 생성(Rocket)이 다시 열려 다른 프로젝트로 재생성할 수 있다
+  - **Jira 연결 관리**(`JiraLinkDialog`): 연결 해제 · 다른 이슈로 변경(서버가 존재 확인) · 연결 해제+업무 삭제. 재가져오기가 `missing` 이면 사유와 함께 자동으로 열린다. 해제하면 자동 생성(Rocket)이 다시 열려 다른 프로젝트로 재생성할 수 있다. "연결 해제하고 이 업무도 삭제" 확인 팝업(`ConfirmDialog`)은 이 다이얼로그(shadcn `Dialog`, z-50) 위에 겹쳐 뜨는데, 둘 다 z-index 가 같으면 DOM 순서상 뒤로 가려 클릭이 먹지 않아 `ConfirmDialog` 를 z-[60] 으로 올려 항상 위에 그려지게 고쳤다(공용 컴포넌트라 다른 곳의 같은 중첩 패턴에도 적용됨)
   - 가져오기 팝업의 **연결 점검** 탭: 내 업무의 Jira 연결 생사를 확인해 죽은 링크를 골라 일괄 해제/삭제
   - 완료일(`closed_at`) 자동 관리: done 전이 시 자동 set, done 에서 벗어나면(재오픈) 자동으로 채웠던 완료일을 해제 — 정식 폼 저장(PUT)과 칸반 드래그(PATCH `/status`) 두 경로 모두 동일하게 동작
   - 삭제 시 403(본인 등록/담당만 삭제 가능) 등 서버 에러 메시지를 토스트로 구체 노출

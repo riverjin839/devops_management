@@ -54,14 +54,14 @@ export interface WorkItemColumnMeta {
 }
 
 export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = {
-  project:   { label: '프로젝트명',    defaultWidth: 150, defaultVisible: true,  hideable: true },
+  project:   { label: '프로젝트명',    defaultWidth: 150, defaultVisible: false, hideable: true },
   sprint:    { label: '스프린트',      defaultWidth: 140, defaultVisible: false, hideable: true },
   status:    { label: '상태',          defaultWidth: 110, defaultVisible: true,  hideable: true, sortKey: 'kanbanStatus' },
   assignee:  { label: '담당자(정/부)', defaultWidth: 200, defaultVisible: true,  hideable: true, sortKey: 'assignee' },
   category:  { label: '업무 분류',     defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'category' },
   title:     { label: '작업 제목',     defaultWidth: 260, defaultVisible: true,  hideable: true },
   startedAt: { label: '시작일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'startedAt' },
-  closedAt:  { label: '완료일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'closedAt' },
+  closedAt:  { label: '완료일',        defaultWidth: 130, defaultVisible: false, hideable: true, sortKey: 'closedAt' },
   dueDate:   { label: '마감일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'dueDate' },
   actions:   { label: '관리',          defaultWidth: 110, defaultVisible: true,  hideable: false, headerAlign: 'center' },
   priority:  { label: '우선순위',      defaultWidth: 90,  defaultVisible: false, hideable: true, sortKey: 'priority' },
@@ -69,22 +69,23 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
   content:   { label: '업무 내용',     defaultWidth: 280, defaultVisible: false, hideable: true },
   result:    { label: '업무 결과',     defaultWidth: 280, defaultVisible: false, hideable: true },
   remarks:   { label: '비고',          defaultWidth: 160, defaultVisible: false, hideable: true },
-  jiraLink:       { label: 'Jira 링크',        defaultWidth: 110, defaultVisible: false, hideable: true },
-  confluenceLink: { label: 'Confl. 링크',      defaultWidth: 110, defaultVisible: false, hideable: true },
-  // Jira 원본 축 — 가져오기를 쓰는 팀만 켜면 되므로 기본 숨김.
+  // 구 "작업 제목" 셀에 인라인으로 붙어 있던 Jira/Confluence 칩을 독립 컬럼으로 분리한 것 —
+  // WorkItemTableRow.tsx 의 'jiraLink'/'confluenceLink' case 가 각각 DL/WIKI 칩을 그린다.
+  jiraLink:       { label: 'DL',   defaultWidth: 90, defaultVisible: true, hideable: true },
+  confluenceLink: { label: 'WIKI', defaultWidth: 90, defaultVisible: true, hideable: true },
   // "상위업무" = Epic→Task 체인(둘 다 있으면 두 칩을 함께 표시, WorkItemTableRow.tsx 참고).
-  jiraEpic:       { label: '상위업무',         defaultWidth: 260, defaultVisible: false, hideable: true, sortKey: 'jiraEpic' },
-  jiraType:       { label: '이슈 종류',        defaultWidth: 100, defaultVisible: false, hideable: true, sortKey: 'jiraType' },
+  jiraEpic:       { label: '상위업무',         defaultWidth: 260, defaultVisible: true,  hideable: true, sortKey: 'jiraEpic' },
+  jiraType:       { label: '이슈 종류',        defaultWidth: 100, defaultVisible: true,  hideable: true, sortKey: 'jiraType' },
   jiraComponents: { label: '컴포넌트',         defaultWidth: 160, defaultVisible: false, hideable: true },
   jiraLabels:     { label: '라벨',             defaultWidth: 160, defaultVisible: false, hideable: true },
 };
 
-/** 기본 컬럼 순서 (사용자 요청: 프로젝트명·상태·담당자·작업분류·제목·시작일·완료일·작업,
- *  이후 기본 숨김 컬럼). 행 드래그 핸들(`drag`)은 개인화 대상이 아니라 항상 선두 고정이므로 제외. */
+/** 기본 컬럼 순서/표시여부 (사용자 요청 고정값): 상태·담당자·상위업무·이슈종류·DL·WIKI·
+ *  작업제목·시작일·마감일·관리·업무 분류. 나머지는 기본 숨김(컬럼 설정에서 켤 수 있음).
+ *  행 드래그 핸들(`drag`)은 개인화 대상이 아니라 항상 선두 고정이므로 제외. */
 export const DEFAULT_COLUMN_ORDER: WorkItemColumnKey[] = [
-  'project', 'sprint', 'status', 'assignee', 'category', 'title', 'startedAt', 'closedAt', 'dueDate', 'actions',
-  'priority', 'cluster', 'content', 'result', 'remarks', 'jiraLink', 'confluenceLink',
-  'jiraEpic', 'jiraType', 'jiraComponents', 'jiraLabels',
+  'status', 'assignee', 'jiraEpic', 'jiraType', 'jiraLink', 'confluenceLink', 'title', 'startedAt', 'dueDate', 'actions', 'category',
+  'project', 'sprint', 'closedAt', 'priority', 'cluster', 'content', 'result', 'remarks', 'jiraComponents', 'jiraLabels',
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: WorkItemColumnKey[] = (

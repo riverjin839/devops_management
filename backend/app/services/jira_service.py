@@ -74,8 +74,9 @@ PEP_PRIORITY_TO_JIRA = {"high": "High", "medium": "Medium", "low": "Low"}
 
 
 def strip_issue_key_prefix(title: str | None, key: str | None) -> str:
-    """PEP title 은 가져올 때 `"{KEY} {summary}"` 로 저장되므로, Jira 로 summary 를 되돌릴
-    때 앞의 키 접두어를 제거한다. 접두어가 없으면(사용자가 제목을 통째로 바꿈) 원본 그대로."""
+    """레거시 호환용 — 예전에는 PEP title 을 가져올 때 `"{KEY} {summary}"` 로 저장했으므로,
+    Jira 로 summary 를 되돌릴 때 앞의 키 접두어를 제거한다(현재는 title 이 summary 만 담아
+    보통 no-op). 접두어가 없으면(신규 가져오기 결과 또는 사용자가 제목을 통째로 바꿈) 원본 그대로."""
     t = (title or "").strip()
     if key and t.startswith(f"{key} "):
         return t[len(key) + 1:].strip()
@@ -638,7 +639,7 @@ def map_jira_issue(
     out = {
         "type": wtype,
         "type_label": type_label,
-        "title": f"{key} {summary}".strip()[:200],
+        "title": (summary or key)[:200],
         "category": category,
         "content": content,
         "kanban_status": kanban,

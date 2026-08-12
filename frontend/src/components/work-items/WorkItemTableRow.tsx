@@ -66,14 +66,7 @@ function ChipList({ values, className = '' }: { values?: string[] | null; classN
   );
 }
 
-function formatDateTime(dateStr?: string | null): string {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/** 날짜만(시간 제외) 표시. 기본 표시는 이 형식, '시간 표시' 옵션이 켜지면 formatDateTime 사용. */
+/** 날짜만(시간 제외) 표시. */
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
@@ -239,8 +232,6 @@ interface WorkItemTableRowProps {
   /** sprintId → 스프린트명 매핑 (읽기전용 표시용). */
   sprintNameById?: Map<string, string>;
   isDragDisabled: boolean;
-  /** 시작일/완료일 셀에 시간까지 표시할지. 기본 false(날짜만). */
-  showTime?: boolean;
   onEdit: (item: WorkItem) => void;
   onDelete: (item: WorkItem) => void;
   onAddSubItem: (parent: WorkItem) => void;
@@ -262,11 +253,10 @@ interface WorkItemTableRowProps {
 }
 
 export function WorkItemTableRow({
-  item, clusters, columns, projectNameById, sprintNameById, isDragDisabled, showTime = false,
+  item, clusters, columns, projectNameById, sprintNameById, isDragDisabled,
   onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, onJiraLink,
   jiraBusy = false, onConfluenceSync, confluenceBusy = false,
 }: WorkItemTableRowProps) {
-  const fmtDate = showTime ? formatDateTime : formatDate;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -486,38 +476,21 @@ export function WorkItemTableRow({
         );
 
       case 'title':
-        // 제목 클릭 → 상세 보기. title 미설정 레거시 항목은 내용 첫 줄로 대체.
+        // 제목만 표시(Jira 키·Confluence 문서 링크는 DL/WIKI 컬럼으로 분리됨). 클릭 → 상세
+        // 보기. title 미설정 레거시 항목은 내용 첫 줄로 대체.
         return (
           <td key="title" className="px-4 py-1.5 max-w-xs">
-            <div className="flex items-start gap-1.5">
-              {item.jiraIssueKey && (
-                <a
-                  href={item.jiraUrl ?? undefined}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
-                  className="flex-shrink-0 mt-0.5 inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
-                >
-                  {item.jiraIssueKey}
-                </a>
-              )}
-              {/* Jira 키 박스 옆의 Confluence 문서 박스 — 없으면 그 자리에서 링크를 붙인다. */}
-              <DocLinkChip
-                url={item.confluenceUrl}
-                onSave={(url) => save({ confluenceUrl: url || null })}
-              />
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
-                className="text-left flex-1 min-w-0 text-foreground/90 hover:text-primary transition-colors"
-                title="클릭하여 상세 보기"
-              >
-                <span className="line-clamp-2 hover:underline">
-                  {item.title?.trim() || stripHtml(item.content) || '-'}
-                </span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
+              className="text-left w-full min-w-0 text-foreground/90 hover:text-primary transition-colors"
+              title="클릭하여 상세 보기"
+              aria-label={`${item.title?.trim() || stripHtml(item.content) || '업무'} — 클릭하여 상세 보기`}
+            >
+              <span className="line-clamp-2 hover:underline">
+                {item.title?.trim() || stripHtml(item.content) || '-'}
+              </span>
+            </button>
           </td>
         );
 
@@ -576,7 +549,7 @@ export function WorkItemTableRow({
                 onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
                 className="px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
               />
-            ) : fmtDate(item.startedAt)}
+            ) : formatDate(item.startedAt)}
           </EditableCell>
         );
 
@@ -596,7 +569,7 @@ export function WorkItemTableRow({
                 onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
                 className="px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary"
               />
-            ) : fmtDate(item.closedAt)}
+            ) : formatDate(item.closedAt)}
           </EditableCell>
         );
 
@@ -623,27 +596,27 @@ export function WorkItemTableRow({
             ) : overdue ? (
               <span className="inline-flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
-                {fmtDate(item.dueDate)}
+                {formatDate(item.dueDate)}
               </span>
-            ) : fmtDate(item.dueDate)}
+            ) : formatDate(item.dueDate)}
           </EditableCell>
         );
       }
 
       case 'jiraLink':
+        // "DL" — 구 작업제목 셀에 있던 Jira 키 칩을 그대로 옮긴 것.
         return (
           <td key="jiraLink" className="px-4 py-1.5 whitespace-nowrap">
-            {item.jiraUrl ? (
+            {item.jiraIssueKey ? (
               <a
-                href={item.jiraUrl}
+                href={item.jiraUrl ?? undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                title={item.jiraUrl}
-                className="inline-flex items-center gap-1 text-sm text-brand-jira dark:text-blue-300 hover:underline"
+                title={`Jira ${item.jiraIssueKey}${item.jiraStatus ? ` · ${item.jiraStatus}` : ''} (새 창)`}
+                className="inline-flex items-center font-mono text-[10px] font-semibold px-1 py-0.5 rounded bg-brand-jira/10 text-brand-jira dark:text-blue-300 border border-brand-jira/20 hover:bg-brand-jira/20"
               >
-                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                {item.jiraIssueKey || 'Jira'}
+                {item.jiraIssueKey}
               </a>
             ) : (
               <span className="text-muted-foreground/50 text-sm">-</span>
@@ -652,8 +625,8 @@ export function WorkItemTableRow({
         );
 
       case 'confluenceLink': {
-        // 다중 링크(Jira 원격 링크에서 찾은 전체 목록)가 있으면 배지+드롭다운, 없으면
-        // 기존처럼 대표(단일) 링크만 표시(하위호환).
+        // "WIKI" — 다중 링크(Jira 원격 링크에서 찾은 전체 목록)가 있으면 배지+드롭다운,
+        // 0~1개면 구 작업제목 셀에 있던 DocLinkChip 을 그대로 옮겨 추가/수정까지 지원한다.
         const links = item.confluenceLinks ?? [];
         if (links.length > 1) {
           return (
@@ -664,7 +637,7 @@ export function WorkItemTableRow({
                 className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
               >
                 <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                Confl. {links.length}
+                {links.length}
                 <ChevronDown className="w-3 h-3 opacity-60" />
               </button>
               {confluenceLinksOpen && (
@@ -692,21 +665,10 @@ export function WorkItemTableRow({
         }
         return (
           <td key="confluenceLink" className="px-4 py-1.5 whitespace-nowrap">
-            {item.confluenceUrl ? (
-              <a
-                href={item.confluenceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                title={item.confluenceUrl}
-                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              >
-                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                Confl.
-              </a>
-            ) : (
-              <span className="text-muted-foreground/50 text-sm">-</span>
-            )}
+            <DocLinkChip
+              url={item.confluenceUrl}
+              onSave={(url) => save({ confluenceUrl: url || null })}
+            />
           </td>
         );
       }
