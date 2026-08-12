@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { WorkItemForm, WorkItemReadView, JiraPushDialog } from '@/components/work-items';
 import { ConfirmDialog, useToast } from '@/components/common';
-import { useWorkItems, useDeleteWorkItem } from '@/hooks/useWorkItems';
+import { useWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { cn, formatApiError } from '@/lib/utils';
 
 export function WorkItemDetailPage() {
@@ -14,16 +14,17 @@ export function WorkItemDetailPage() {
   // (칸반 보드 등 다른 화면의 ✏️ 버튼이 여기로 딥링크).
   const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1');
 
-  const { data: listData } = useWorkItems();
-  const item = listData?.data.find((x) => x.id === id) ?? null;
+  // 단건 API 로 직접 조회 — 목록(useWorkItems) 은 정렬/상한이 있어 그 범위 밖의 업무는
+  // 목록에서 못 찾고 "업무를 찾을 수 없습니다"로 오탐했다(홈 위젯 등 더 넓은 범위로 조회한
+  // 화면에서 딥링크로 들어올 때 특히 발생).
+  const { data: item, isLoading, isError } = useWorkItem(id);
   const deleteTask = useDeleteWorkItem();
   const toast = useToast();
   // G-I9: window.confirm 대신 ConfirmDialog 사용
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pushOpen, setPushOpen] = useState(false);
 
-
-  if (listData && !item) {
+  if (!isLoading && (isError || !item)) {
     return (
       <div className="app-min-h-screen bg-background">
         <main className="max-w-[1200px] mx-auto px-8 py-8">

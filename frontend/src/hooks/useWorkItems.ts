@@ -19,6 +19,18 @@ export function useWorkItems(filters?: WorkItemFilters) {
   });
 }
 
+/** 업무 상세 단건 조회 — 목록(useWorkItems)은 정렬/상한이 걸려 있어 그 범위 밖의(오래된)
+ *  업무는 목록에서 찾지 못해 "업무를 찾을 수 없습니다"로 오탐한다(홈 위젯처럼 더 넓은
+ *  범위로 조회한 화면에서 딥링크로 들어올 때 특히). 상세 화면은 항상 단건 API 로 직접 조회. */
+export function useWorkItem(id?: string) {
+  return useQuery({
+    queryKey: workItemKeys.detail(id ?? ''),
+    queryFn: async () => (await workItemsApi.getById(id!)).data,
+    enabled: !!id,
+    staleTime: 1000 * 30,
+  });
+}
+
 // 홈(업무 현황) 대시보드 위젯 전용 상한. 기본 GET /work-items 는 started_at desc +
 // limit=100 이라, 업무가 100건을 넘으면 가장 오래된(=지연되기 쉬운) 건부터 조용히 잘려
 // KPI/알람/달력이 부분 데이터 기준이 된다. 홈 위젯은 넉넉한 상한으로 조회해 이를 완화한다.
