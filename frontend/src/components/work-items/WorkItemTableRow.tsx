@@ -812,7 +812,10 @@ export function WorkItemTableRow({
                 type="button"
                 onMouseEnter={openActions}
                 onMouseLeave={scheduleCloseActions}
-                onClick={(e) => { e.stopPropagation(); setActionsOpen((v) => !v); }}
+                // 클릭은 항상 "열기" — hover 가 먼저 열어둔 상태에서 클릭이 토글로 동작하면
+                // mouseenter 가 이미 켠 것을 곧바로 꺼버려 마우스 사용자에게 무반응처럼
+                // 보였다(닫기는 바깥 클릭/마우스아웃 지연으로 충분히 처리됨).
+                onClick={(e) => { e.stopPropagation(); openActions(); }}
                 className={`p-1.5 rounded-md transition-colors inline-flex items-center gap-1 ${
                   isPartial ? 'text-status-warning hover:bg-status-warning/10' : 'text-primary hover:bg-primary/10'
                 }`}
