@@ -943,6 +943,8 @@ def _run_migrations():
         _safe_add_column("user_jira_credentials", "sso_login_encrypted", "TEXT")
         # SSO 폼 로그인이 Jira 와 함께 캡처하는 Confluence 세션 쿠키(secret_box 암호문).
         _safe_add_column("user_jira_credentials", "confluence_cookie_encrypted", "TEXT")
+        # Jira 원본 로그인 계정(username/key) — 이슈 생성 시 담당자(assignee) 지정용.
+        _safe_add_column("user_jira_credentials", "jira_username", "VARCHAR(150)")
 
     # work_items: Jira Epic(상위 이슈) — 주간보고 진척률 집계 기준.
     if "work_items" in inspector.get_table_names():

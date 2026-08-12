@@ -973,6 +973,16 @@ export const jiraApi = {
     api.post<import('@/types').WorkItem>('/jira/confluence/link', data),
   confluenceSync: (itemId: string) =>
     api.post<import('@/types').ConfluenceSyncResult>(`/jira/confluence/sync/${itemId}`),
+  // 상위 페이지 ID 입력칸 hover 툴팁용 — 페이지 ID → 제목 단건 조회.
+  confluencePageInfo: (pageId: string) =>
+    api.get<import('@/types').ConfluencePageInfo>('/jira/confluence/page-info', {
+      params: { page_id: pageId },
+    }),
+  // 상위 페이지 ID 아래 하위 페이지 "가져오기" — 고른 페이지를 새 상위로 선택.
+  confluenceChildren: (pageId: string) =>
+    api.get<import('@/types').ConfluenceChildPagesResult>('/jira/confluence/children', {
+      params: { page_id: pageId },
+    }),
   ssoDiagnose: () =>
     api.post<import('@/types').SsoDiagnoseResult>('/jira/sso/diagnose', undefined, { timeout: 90_000 }),
   // SSO 자동 로그인 — data 지정 시 파드 내 폼 로그인(ID/PW), 생략 시 서버측 브라우저(헤디드).

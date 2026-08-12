@@ -10,6 +10,23 @@
 
 1.27.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **Jira·Confluence 자동 생성 — 담당자 미등록 버그, 상위 페이지 탐색 개선**: Jira 이슈
+  자동 생성 시 담당자(assignee) 필드를 아예 전송하지 않아 Jira 쪽에 담당자가 비어있던
+  것을 고쳤다. 기본값은 로그인한 사용자 자신(본인 Jira 계정이 연동돼 있을 때)이고,
+  화면에서 다른 PEP 사용자로 바꿀 수 있다(단, 그 사용자도 본인 Jira 계정을 연동해야
+  선택 목록에 나온다 — 검증되지 않은 이름 매칭은 하지 않음). 이를 위해 사용자별 Jira
+  자격증명에 표시명과 별개로 **원본 로그인 계정**(`jira_username`)을 저장하도록 스키마를
+  보강했다. Confluence 문서 생성에서는 "상위 페이지 ID" 입력칸에 mouseover 하면 그
+  페이지의 제목을 툴팁으로 보여주고, "가져오기" 버튼으로 그 아래 하위 페이지 목록을
+  조회해 그중 하나를 새 상위 페이지로 선택할 수 있게 했다(선택한 페이지 밑에 문서 생성).
+  Backend: `models/user_jira_credential.py`(`jira_username` 컬럼), `main.py`(마이그레이션),
+  `services/jira_service.py`(`create_issue` assignee), `services/confluence_service.py`
+  (`get_children`), `schemas/jira.py`, `routers/jira.py`(`provision_defaults`/
+  `provision_work_item`/`create_jira_issue` + `/jira/confluence/page-info`,
+  `/jira/confluence/children`). Frontend: `components/work-items/JiraProvisionModal.tsx`,
+  `hooks/useJira.ts`, `services/api.ts`, `types/index.ts`.
+
 ## [1.27.2] - 2026-08-12
 
 ### Fixed

@@ -161,6 +161,28 @@ class ConfluenceSyncResult(BaseModel):
     status: Literal["ok", "error", "offline", "not_linked"]
     detail: str = ""
     confluence_url: Optional[str] = None
+
+
+class ConfluencePageInfo(BaseModel):
+    """페이지 ID → 제목 조회 — 상위 페이지 ID 입력칸 hover 툴팁용(가벼운 단건 조회)."""
+    status: Literal["ok", "offline", "error"]
+    detail: str = ""
+    id: str = ""
+    title: str = ""
+    url: str = ""
+
+
+class ConfluenceChildPage(BaseModel):
+    id: str
+    title: str = ""
+    url: str = ""
+
+
+class ConfluenceChildPagesResult(BaseModel):
+    """상위 페이지 아래 하위 페이지 목록 — "가져오기" 로 조회해 그중 하나를 새 상위로 고른다."""
+    status: Literal["ok", "offline", "error"]
+    detail: str = ""
+    items: list[ConfluenceChildPage] = []
     synced_at: Optional[datetime] = None
 
 
@@ -281,6 +303,9 @@ class JiraCreateRequest(BaseModel):
     priority: Optional[str] = None
     labels: list[str] = []
     components: list[str] = []
+    # 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신. 해당 PEP 사용자가 Jira
+    # 연동을 하지 않아 매핑할 계정이 없으면 담당자 없이 생성한다(생성 자체는 막지 않음).
+    assignee_username: Optional[str] = None
 
 
 class JiraCreateResult(BaseModel):
@@ -402,6 +427,13 @@ class JiraIssueLookupResult(BaseModel):
     items: list[JiraIssueLookupItem] = []
 
 
+class AssignableUser(BaseModel):
+    """담당자 선택 드롭다운 후보 — Jira 연동을 마쳐 계정 매핑이 되는 PEP 사용자만 나온다."""
+    username: str                 # PEP 로그인 계정 (username)
+    display_name: str = ""        # PEP 표시 이름
+    is_self: bool = False
+
+
 class ProvisionDefaults(BaseModel):
     """사용자/설정 기반 기본값 — 화면에 채워 보여주고 사용자가 수정할 수 있다."""
     jira_enabled: bool = False
@@ -425,6 +457,11 @@ class ProvisionDefaults(BaseModel):
     # Confluence 문서의 기여자(Contributor) 표시명 — 기본은 로그인한 사용자 자신이고
     # 화면에서 수정할 수 있다.
     contributor: str = ""
+    # 담당자(assignee) — 기본은 로그인한 사용자 자신(Jira 연동을 마쳤을 때만 채워짐),
+    # 화면에서 다른 PEP 사용자로 바꿀 수 있다. assignable_users 는 그 후보 목록 —
+    # 본인 계정을 Jira 에 연동한 PEP 사용자만 매핑 가능해 여기 나온다.
+    assignee_username: str = ""
+    assignable_users: list[AssignableUser] = []
     # 이 기본값이 **내가 지난번에 쓴 조건**(user preset)에서 왔는지, 관리자 공통 설정에서
     # 왔는지 — 화면에서 "저장된 조건을 불러왔습니다" 안내를 띄우는 데 쓴다.
     preset_source: Literal["none", "settings", "user"] = "settings"
@@ -446,6 +483,9 @@ class ProvisionRequest(BaseModel):
     # Jira 계층 — Epic Link(epic_key) 또는 Sub-task 상위 이슈(parent_key).
     epic_key: Optional[str] = None
     parent_key: Optional[str] = None
+    # 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신(ProvisionDefaults.assignee_username
+    # 를 그대로 받는 게 보통). 매핑할 Jira 계정이 없으면 담당자 없이 생성(생성 자체는 막지 않음).
+    assignee_username: Optional[str] = None
     # Confluence
     space_key: Optional[str] = None
     # 기존 문서를 제목 검색 없이 직접 지정 — 지정하면 스페이스 키 대신 이 페이지를
