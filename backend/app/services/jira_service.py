@@ -380,14 +380,16 @@ class JiraService:
         issue_type: str = "Task", priority: Optional[str] = None,
         labels: Optional[list[str]] = None, components: Optional[list[str]] = None,
         parent_key: str = "", epic_key: str = "", epic_field: str = "",
+        assignee: str = "",
     ) -> dict:
         """새 이슈 생성 — `POST /rest/api/2/issue`. 성공 시 key/id 반환.
 
-        priority/labels/components/epic 은 프로젝트 스킴에 없으면 400 이 나므로, 400 이면
-        해당 선택 필드를 빼고 1회 재시도한다(핵심 필드만으로라도 생성되게).
+        priority/labels/components/epic/assignee 는 프로젝트 스킴/권한에 없으면 400 이 나므로,
+        400 이면 해당 선택 필드를 빼고 1회 재시도한다(핵심 필드만으로라도 생성되게).
 
         `parent_key` 는 Sub-task 생성용 상위 이슈 — Jira 가 필수로 요구하므로 재시도에서도
-        빼지 않는다. `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다."""
+        빼지 않는다. `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다. `assignee` 는
+        Jira **원본 로그인 계정**(username/key, displayName 아님)이어야 한다."""
         if not self.configured:
             return {"status": "offline", "detail": "Jira 미설정"}
         if not (project_key and summary):
@@ -413,6 +415,8 @@ class JiraService:
                     fields["components"] = [{"name": c} for c in components]
                 if epic_key and epic_field:
                     fields[epic_field] = epic_key
+                if assignee:
+                    fields["assignee"] = {"name": assignee}
             return {"fields": fields}
 
         try:

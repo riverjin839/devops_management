@@ -56,6 +56,9 @@ from app.schemas.jira import (
     ConfluenceSearchResult,
     ConfluenceLinkRequest,
     ConfluenceSyncResult,
+    ConfluencePageInfo,
+    ConfluenceChildPage,
+    ConfluenceChildPagesResult,
     SsoDiagnoseEntry,
     SsoDiagnoseResult,
     JiraImportRequest,
@@ -87,6 +90,7 @@ from app.schemas.jira import (
     ProvisionResult,
     JiraIssueLookupItem,
     JiraIssueLookupResult,
+    AssignableUser,
 )
 from app.services import weekly_report_service
 from app.services.user_settings import get_user_setting, set_user_setting
@@ -201,6 +205,49 @@ def _resolve_self_assignee_name(actor: User, db: Session) -> str:
                 if name:
                     return name
     return (actor.display_name or "").strip() or username
+
+
+def _resolve_jira_username(db: Session, pep_username: str) -> Optional[str]:
+    """PEP 사용자명 → Jira **원본 로그인 계정**(`UserJiraCredential.jira_username`).
+
+    이슈 생성 시 담당자(assignee) 필드에 그대로 쓸 수 있는 값만 반환한다 — 그 PEP 사용자가
+    본인 Jira 계정을 한 번도 연동하지 않았으면 매핑할 수 없어 None(호출부는 담당자 없이
+    생성을 계속 진행, 생성 자체를 막지 않는다). 구버전 데이터 호환을 위해 `jira_username`
+    이 비어 있으면 `jira_account`(표시명 우선 컬럼)로 한 번 더 시도한다."""
+    name = (pep_username or "").strip()
+    if not name:
+        return None
+    cred = db.query(UserJiraCredential).filter(UserJiraCredential.username == name).first()
+    if not cred:
+        return None
+    return (cred.jira_username or "").strip() or (cred.jira_account or "").strip() or None
+
+
+def _list_assignable_users(db: Session, actor: User) -> list[AssignableUser]:
+    """담당자 드롭다운 후보 — 본인 Jira 계정을 연동해 매핑 가능한 PEP 사용자만 나온다.
+
+    "다른 PEP 유저를 선택 가능"한 범위가 여기서 정해진다 — Jira 담당자는 계정 단위라
+    PEP 표시 이름을 문자열로 대충 맞출 수 없고(동명이인·회사명 접미사 등으로 불안정),
+    본인이 직접 연동해 검증된 계정만 신뢰할 수 있다."""
+    rows = (
+        db.query(UserJiraCredential, User)
+        .join(User, User.username == UserJiraCredential.username)
+        .filter(
+            (UserJiraCredential.jira_username.isnot(None))
+            | (UserJiraCredential.jira_account.isnot(None)),
+        )
+        .all()
+    )
+    out = [
+        AssignableUser(
+            username=u.username,
+            display_name=(u.display_name or u.username or ""),
+            is_self=(u.username == actor.username),
+        )
+        for _cred, u in rows
+    ]
+    out.sort(key=lambda a: (not a.is_self, a.display_name.lower()))
+    return out
 
 
 async def _resolve_epic_chain(
@@ -633,6 +680,10 @@ async def test_connection(db: Session = Depends(get_db), actor: User = Depends(g
             cred.last_verified_at = datetime.utcnow()
             if res.get("account") and not cred.jira_account:
                 cred.jira_account = res.get("display_name") or res.get("account")
+            # jira_username(원본 로그인 계정)은 표시명과 달리 assignee 매핑에 그대로 쓰이므로
+            # 검증할 때마다 최신값으로 갱신한다(jira_account 와 달리 "비어있을 때만" 이 아님).
+            if res.get("account"):
+                cred.jira_username = res.get("account")
             db.commit()
         return JiraTestResult(ok=True, detail="연결 정상", display_name=res.get("display_name"))
     return JiraTestResult(ok=False, detail=res.get("detail", "연결 실패"))
@@ -696,6 +747,8 @@ async def _sso_relogin(db: Session, actor: User, cfg: dict) -> Optional[str]:
     cred.last_verified_at = datetime.utcnow()
     if result.get("display_name") and not cred.jira_account:
         cred.jira_account = result["display_name"]
+    if result.get("account"):
+        cred.jira_username = result["account"]
     conf = (result.get("products") or {}).get("confluence")
     if conf and conf.get("status") == "ok":
         cred.confluence_cookie_encrypted = secret_box.encrypt(conf["cookie_header"])
@@ -841,11 +894,12 @@ async def sso_login(
         cred.token_encrypted = enc
         cred.auth_type = "sso"
         cred.jira_account = display or account or cred.jira_account
+        cred.jira_username = account or cred.jira_username
         cred.last_verified_at = now
     else:
         cred = UserJiraCredential(
             username=actor.username, token_encrypted=enc, auth_type="sso",
-            jira_account=display or account, last_verified_at=now,
+            jira_account=display or account, jira_username=account, last_verified_at=now,
         )
         db.add(cred)
     # 옵트인 — 로그인 정보 저장(원클릭/자동 재로그인용). 저장 없이 성공한 로그인은 기존 값을 유지.
@@ -1134,6 +1188,53 @@ async def confluence_search(
     )
 
 
+@router.get("/confluence/page-info", response_model=ConfluencePageInfo)
+async def confluence_page_info(
+    page_id: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    """페이지 ID → 제목 — 상위 페이지 ID 입력칸에서 mouseover 시 제목을 보여주는 용도의
+    가벼운 단건 조회. 프론트가 입력이 멈춘 뒤 디바운스로 호출한다."""
+    pid = (page_id or "").strip()
+    if not pid:
+        return ConfluencePageInfo(status="error", detail="페이지 ID 를 입력하세요.")
+    cfg = _get_config(db)
+    svc, res = await _confluence_service_verified(db, actor, cfg)
+    if svc is None or res.get("status") != "ok":
+        return ConfluencePageInfo(status="error", detail=res.get("detail", "Confluence 세션 없음"))
+    got = await svc.get_page(pid)
+    if got.get("status") != "ok":
+        return ConfluencePageInfo(status=got.get("status", "error"), detail=got.get("detail", "페이지 조회 실패"))
+    page = got.get("page") or {}
+    return ConfluencePageInfo(
+        status="ok", id=page.get("id", pid), title=page.get("title", ""), url=page.get("url", ""),
+    )
+
+
+@router.get("/confluence/children", response_model=ConfluenceChildPagesResult)
+async def confluence_children(
+    page_id: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+):
+    """상위 페이지 ID 아래 하위 페이지 목록 — "가져오기" 버튼으로 조회해 그중 하나를
+    새 상위 페이지로 선택하면 그 페이지 밑에 문서가 생성된다."""
+    pid = (page_id or "").strip()
+    if not pid:
+        return ConfluenceChildPagesResult(status="error", detail="페이지 ID 를 입력하세요.")
+    cfg = _get_config(db)
+    svc, res = await _confluence_service_verified(db, actor, cfg)
+    if svc is None or res.get("status") != "ok":
+        return ConfluenceChildPagesResult(status="error", detail=res.get("detail", "Confluence 세션 없음"))
+    found = await svc.get_children(pid)
+    return ConfluenceChildPagesResult(
+        status=found.get("status", "error"),
+        detail=found.get("detail", ""),
+        items=[ConfluenceChildPage(**i) for i in found.get("items", [])],
+    )
+
+
 @router.post("/confluence/link", response_model=WorkItemResponse)
 async def link_confluence_page(
     payload: ConfluenceLinkRequest,
@@ -1333,9 +1434,12 @@ async def create_jira_issue(
     svc, _myself = await _jira_service_verified(db, actor, cfg)
     if svc is None:
         return JiraCreateResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다 (설정 > 연동).")
+    assignee_pep_user = (payload.assignee_username or "").strip() or actor.username
+    assignee = _resolve_jira_username(db, assignee_pep_user)
     res = await svc.create_issue(
         project_key, summary, description=description or "", issue_type=payload.issue_type,
         priority=priority, labels=payload.labels, components=payload.components,
+        assignee=assignee or "",
     )
     if res.get("status") != "ok":
         return JiraCreateResult(status=res.get("status", "error"),
@@ -1752,6 +1856,11 @@ async def provision_defaults(
         if item.jira_components:
             base["components"] = list(item.jira_components)
 
+    # 담당자 기본값 = 로그인 사용자 자신(본인 Jira 계정이 연동돼 있을 때만 채워짐) —
+    # 화면에서 assignable_users 목록으로 다른 PEP 사용자로 바꿀 수 있다.
+    self_jira_username = _resolve_jira_username(db, actor.username)
+    assignable_users = _list_assignable_users(db, actor)
+
     return ProvisionDefaults(
         jira_enabled=bool(cfg.get("base_url") and cfg.get("enabled", False) and cred),
         confluence_enabled=bool((cfg.get("confluence_base_url") or "").strip() and cred),
@@ -1760,6 +1869,8 @@ async def provision_defaults(
         page_title=title,
         reporter=(cred.jira_account if cred and cred.jira_account else actor.username),
         contributor=(actor.display_name or actor.username or ""),
+        assignee_username=(actor.username if self_jira_username else ""),
+        assignable_users=assignable_users,
         preset_source="user" if preset else "settings",
         detail=("바로 생성할 수 있습니다." if not missing
                 else "미설정: " + ", ".join(missing)),
@@ -1829,6 +1940,11 @@ async def provision_work_item(
                 epic_key = (payload.epic_key or "").strip()
                 parent_key = (payload.parent_key or "").strip()
                 jira_description_base = (payload.description if payload.description is not None else item.content) or ""
+                # 담당자 — 지정한 PEP 사용자(미지정 시 로그인 사용자 자신)의 Jira 계정으로
+                # 매핑한다. 매핑할 계정이 없으면(그 사용자가 Jira 연동을 안 함) 담당자 없이
+                # 생성만 진행한다 — 매핑 실패가 이슈 생성 자체를 막지 않는다.
+                assignee_pep_user = (payload.assignee_username or "").strip() or actor.username
+                assignee = _resolve_jira_username(db, assignee_pep_user)
                 res = await svc.create_issue(
                     project_key, summary,
                     description=jira_description_base,
@@ -1836,7 +1952,7 @@ async def provision_work_item(
                     priority=payload.priority or PEP_PRIORITY_TO_JIRA.get(item.priority or ""),
                     labels=payload.labels, components=payload.components,
                     epic_key=epic_key, epic_field=(cfg.get("jira_epic_field") or "").strip(),
-                    parent_key=parent_key,
+                    parent_key=parent_key, assignee=assignee or "",
                 )
                 if res.get("status") == "ok":
                     jira_ok = True

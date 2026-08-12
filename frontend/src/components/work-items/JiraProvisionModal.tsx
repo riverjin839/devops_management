@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   X, Loader2, Rocket, CheckCircle2, AlertTriangle, ExternalLink, FileText, RotateCcw, KeyRound,
-  ListChecks,
+  ListChecks, FolderTree,
 } from 'lucide-react';
-import { useProvisionDefaults, useProvision, useJiraIssueLookup } from '@/hooks/useJira';
+import {
+  useProvisionDefaults, useProvision, useJiraIssueLookup, useConfluencePageInfo, useConfluenceChildren,
+} from '@/hooks/useJira';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { useToast } from '@/components/common';
 import { JiraConnectCard } from '@/components/settings/JiraConnectCard';
 import { formatApiError } from '@/lib/utils';
-import type { JiraIssueLookupItem, ProvisionResult, WorkItem } from '@/types';
+import type { ConfluenceChildPage, JiraIssueLookupItem, ProvisionResult, WorkItem } from '@/types';
 
 const ISSUE_TYPES = ['Epic', 'Task', 'Sub-task'] as const;
 type IssueTypeOption = (typeof ISSUE_TYPES)[number];
@@ -50,6 +52,43 @@ function IssueLookupPicker({
   );
 }
 
+/** 상위 페이지 ID 아래 "하위 페이지 가져오기" 피커 — 고른 페이지를 새 상위로 선택하면
+ * 그 페이지 밑에 문서가 생성된다(IssueLookupPicker 와 동일한 결).  */
+function ChildPagePicker({
+  open, loading, status, detail, items, onPick,
+}: {
+  open: boolean;
+  loading: boolean;
+  status?: 'ok' | 'offline' | 'error';
+  detail?: string;
+  items: ConfluenceChildPage[];
+  onPick: (page: ConfluenceChildPage) => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="mt-1 border border-border rounded-lg bg-card max-h-36 overflow-y-auto mac-shadow">
+      {loading && (
+        <div className="p-2 text-xs text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin" /> 불러오는 중…
+        </div>
+      )}
+      {!loading && status && status !== 'ok' && (
+        <div className="p-2 text-xs text-status-critical">{detail || '조회 실패'}</div>
+      )}
+      {!loading && status === 'ok' && items.length === 0 && (
+        <div className="p-2 text-xs text-muted-foreground">하위 페이지가 없습니다.</div>
+      )}
+      {!loading && items.map((p) => (
+        <button key={p.id} type="button" onClick={() => onPick(p)}
+          className="w-full text-left px-2 py-1.5 text-xs hover:bg-secondary flex items-center gap-1.5">
+          <span className="font-mono text-muted-foreground/70 flex-shrink-0">{p.id}</span>
+          <span className="text-foreground truncate">{p.title || '(제목 없음)'}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 interface JiraProvisionModalProps {
   open: boolean;
   onClose: () => void;
@@ -73,6 +112,8 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const provision = useProvision();
   const epicLookup = useJiraIssueLookup();
   const parentLookup = useJiraIssueLookup();
+  const pageInfoLookup = useConfluencePageInfo();
+  const childLookup = useConfluenceChildren();
 
   const [createJira, setCreateJira] = useState(true);
   const [createConfluence, setCreateConfluence] = useState(true);
@@ -85,16 +126,37 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const [description, setDescription] = useState('');
   const [epicKey, setEpicKey] = useState('');
   const [parentKey, setParentKey] = useState('');
+  // 담당자 — 기본은 로그인 사용자 자신(defaults.assigneeUsername), 화면에서 다른 PEP
+  // 사용자로 바꿀 수 있다(defaults.assignableUsers 중에서만 — 계정 매핑 불안정 방지).
+  const [assigneeUsername, setAssigneeUsername] = useState('');
   const [showEpicPicker, setShowEpicPicker] = useState(false);
   const [showParentPicker, setShowParentPicker] = useState(false);
   const [spaceKey, setSpaceKey] = useState('');
   const [pageId, setPageId] = useState('');
   const [parentPageId, setParentPageId] = useState('');
+  // 상위 페이지 ID 입력 후 조회된 제목 — mouseover(title 속성) 툴팁 + 인라인 확인용.
+  const [parentPageTitle, setParentPageTitle] = useState('');
+  const [showChildPicker, setShowChildPicker] = useState(false);
   const [pageTitle, setPageTitle] = useState('');
   const [confluenceLabels, setConfluenceLabels] = useState('');
   const [contributor, setContributor] = useState('');
   const [rememberPreset, setRememberPreset] = useState(true);
   const [result, setResult] = useState<ProvisionResult | null>(null);
+
+  // 상위 페이지 ID 입력이 멈춘 뒤(디바운스) 제목을 조회 — mouseover 시 title 속성으로
+  // 보여줄 값을 준비한다. ID 를 지우면 즉시 초기화.
+  useEffect(() => {
+    const id = parentPageId.trim();
+    if (!id) { setParentPageTitle(''); return; }
+    const t = window.setTimeout(() => {
+      pageInfoLookup.mutate(id, {
+        onSuccess: (res) => setParentPageTitle(res.data.status === 'ok' ? res.data.title : ''),
+        onError: () => setParentPageTitle(''),
+      });
+    }, 500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parentPageId]);
 
   // 서버가 준 기본값으로 폼을 채운다 — 이후 사용자가 자유롭게 수정.
   // 이미 한쪽이 만들어져 있으면(재시도 진입) 그쪽은 기본으로 체크 해제해 "나머지만"
@@ -113,11 +175,14 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     setDescription(defaults.description);
     setEpicKey(defaults.epicKey ?? '');
     setParentKey(defaults.parentKey ?? '');
+    setAssigneeUsername(defaults.assigneeUsername ?? '');
     setShowEpicPicker(false);
     setShowParentPicker(false);
     setSpaceKey(defaults.spaceKey);
     setPageId('');
     setParentPageId(defaults.parentPageId);
+    setParentPageTitle('');
+    setShowChildPicker(false);
     setPageTitle(defaults.pageTitle);
     setConfluenceLabels('');
     setContributor(defaults.contributor ?? '');
@@ -138,6 +203,16 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const openParentPicker = () => {
     setShowParentPicker((v) => !v);
     if (!showParentPicker) parentLookup.mutate({ projectKey: projectKey.trim(), issueType: 'Task' });
+  };
+  // 상위 페이지 ID 아래 하위 페이지 "가져오기" — 고른 페이지를 새 상위 페이지 ID 로 교체.
+  const openChildPicker = () => {
+    setShowChildPicker((v) => !v);
+    if (!showChildPicker) childLookup.mutate(parentPageId.trim());
+  };
+  const pickChildPage = (page: ConfluenceChildPage) => {
+    setParentPageId(page.id);
+    setParentPageTitle(page.title);
+    setShowChildPicker(false);
   };
 
   const submit = async () => {
@@ -160,6 +235,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
         description: description || undefined,
         epicKey: issueType === 'Task' ? (epicKey.trim() || undefined) : undefined,
         parentKey: issueType === 'Sub-task' ? (parentKey.trim() || undefined) : undefined,
+        assigneeUsername: assigneeUsername || undefined,
         spaceKey: spaceKey.trim() || undefined,
         pageId: pageId.trim() || undefined,
         parentPageId: parentPageId.trim() || undefined,
@@ -379,6 +455,24 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                       <span className="text-xs font-medium text-muted-foreground mb-1 block">제목(summary)</span>
                       <input className={inputCls} value={summary} onChange={(e) => setSummary(e.target.value)} />
                     </div>
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground mb-1 block">담당자</span>
+                      {defaults && defaults.assignableUsers.length > 0 ? (
+                        <select className={inputCls} value={assigneeUsername}
+                          onChange={(e) => setAssigneeUsername(e.target.value)}>
+                          <option value="">지정 안 함</option>
+                          {defaults.assignableUsers.map((u) => (
+                            <option key={u.username} value={u.username}>
+                              {u.displayName}{u.isSelf ? ' (나)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground py-2">
+                          선택 가능한 담당자가 없습니다 — 설정 &gt; 연동에서 Jira 계정을 먼저 연동하세요.
+                        </p>
+                      )}
+                    </div>
                     {/* Jira 계층 — 이슈 종류에 따라 필요한 상위 연결만 보여준다.
                         Epic 은 상위가 없고, Task 는 Epic 링크, Sub-task 는 상위 이슈가 필요하다. */}
                     {issueType === 'Epic' && (
@@ -458,10 +552,34 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                           title="지정하면 제목 검색 없이 이 문서를 그대로 갱신합니다."
                           onChange={(e) => setPageId(e.target.value)} />
                       </div>
-                      <div>
+                      <div className="col-span-2 relative">
                         <span className="text-xs font-medium text-muted-foreground mb-1 block">상위 페이지 ID (선택)</span>
-                        <input className={inputCls} value={parentPageId}
-                          onChange={(e) => setParentPageId(e.target.value)} />
+                        <div className="flex items-center gap-1.5">
+                          <input className={inputCls} value={parentPageId}
+                            title={parentPageTitle ? `제목: ${parentPageTitle}` : undefined}
+                            placeholder="예: 123456"
+                            onChange={(e) => setParentPageId(e.target.value)} />
+                          <button type="button" onClick={openChildPicker} disabled={!parentPageId.trim()}
+                            title="이 페이지의 하위 페이지 목록에서 선택" aria-label="하위 페이지 목록에서 선택"
+                            className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-border bg-secondary text-xs hover:bg-secondary/80 disabled:opacity-40">
+                            <FolderTree className="w-3.5 h-3.5" /> 가져오기
+                          </button>
+                        </div>
+                        {pageInfoLookup.isPending ? (
+                          <p className="text-[11px] text-muted-foreground mt-0.5 inline-flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> 제목 확인 중…
+                          </p>
+                        ) : parentPageTitle && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate" title={parentPageTitle}>
+                            → {parentPageTitle}
+                          </p>
+                        )}
+                        <ChildPagePicker
+                          open={showChildPicker} loading={childLookup.isPending}
+                          status={childLookup.data?.data.status} detail={childLookup.data?.data.detail}
+                          items={childLookup.data?.data.items ?? []}
+                          onPick={pickChildPage}
+                        />
                       </div>
                       <div>
                         <span className="text-xs font-medium text-muted-foreground mb-1 block">라벨 (쉼표)</span>

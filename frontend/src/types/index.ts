@@ -727,6 +727,8 @@ export interface JiraCreateRequest {
   priority?: string;
   labels?: string[];
   components?: string[];
+  /** 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신. */
+  assigneeUsername?: string;
 }
 
 export interface JiraCreateResult {
@@ -4430,6 +4432,13 @@ export interface JiraIssueLookupResult {
   items: JiraIssueLookupItem[];
 }
 
+/** 담당자 선택 드롭다운 후보 — 본인 Jira 계정을 연동해 매핑 가능한 PEP 사용자만 나온다. */
+export interface AssignableUser {
+  username: string;
+  displayName: string;
+  isSelf: boolean;
+}
+
 export interface ProvisionDefaults {
   jiraEnabled: boolean;
   confluenceEnabled: boolean;
@@ -4450,6 +4459,10 @@ export interface ProvisionDefaults {
   parentKey: string;
   /** Confluence 문서 기여자(Contributor) 기본값 — 로그인 사용자 자신. */
   contributor: string;
+  /** 담당자(assignee) 기본값 — 로그인 사용자 자신(본인 Jira 계정이 연동돼 있을 때만
+   *  채워짐). assignableUsers 중에서 다른 PEP 사용자로 바꿀 수 있다. */
+  assigneeUsername: string;
+  assignableUsers: AssignableUser[];
   /** 기본값 출처 — 'user' 면 지난번 내가 쓴 조건을 불러온 것. */
   presetSource: 'none' | 'settings' | 'user';
 }
@@ -4467,6 +4480,8 @@ export interface ProvisionRequest {
   description?: string;
   epicKey?: string;
   parentKey?: string;
+  /** 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신. */
+  assigneeUsername?: string;
   spaceKey?: string;
   /** 제목 검색 없이 기존 문서를 직접 지정 — 지정하면 이 문서를 그대로 갱신한다. */
   pageId?: string;
@@ -4479,6 +4494,27 @@ export interface ProvisionRequest {
   contributor?: string;
   /** 이번에 쓴 기준 조건을 내 기본값으로 저장할지 (다음 등록에서 자동 채움). */
   rememberPreset?: boolean;
+}
+
+/** 페이지 ID → 제목 — 상위 페이지 ID 입력칸 mouseover 툴팁용 가벼운 단건 조회. */
+export interface ConfluencePageInfo {
+  status: 'ok' | 'offline' | 'error';
+  detail: string;
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface ConfluenceChildPage {
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface ConfluenceChildPagesResult {
+  status: 'ok' | 'offline' | 'error';
+  detail: string;
+  items: ConfluenceChildPage[];
 }
 
 export interface ProvisionResult {

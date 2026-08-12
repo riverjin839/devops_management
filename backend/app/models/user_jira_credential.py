@@ -31,8 +31,12 @@ class UserJiraCredential(Base):
     token_encrypted = Column(Text, nullable=False)        # secret_box.encrypt(PAT 또는 세션 쿠키)
     # 인증 방식: 'pat'(Bearer) | 'cookie'(세션 쿠키 재사용). 구버전 DB 는 PAT 만 썼으므로 기본 'pat'.
     auth_type = Column(String(16), nullable=False, default="pat", server_default="pat")
-    # 선택 — Jira 상 displayName/name (assignee 이름 매핑 보조용).
+    # 선택 — Jira 상 displayName (화면 표시용, 사람이 읽기 좋은 이름 우선).
     jira_account = Column(String(150), nullable=True)
+    # 선택 — Jira 원본 로그인 계정(username/key). displayName 과 달리 Jira 이슈 생성 시
+    # assignee 필드(`{"name": ...}`)에 그대로 쓸 수 있는 값이라 별도 컬럼으로 둔다 —
+    # jira_account 는 표시 우선이라 표시명이 있으면 계정명을 덮어써 assignee 매핑에 못 쓴다.
+    jira_username = Column(String(150), nullable=True)
     last_verified_at = Column(DateTime, nullable=True)    # 마지막 연결 테스트 성공 시각
     # (선택, 옵트인) 파드 내 SSO 폼 자동 로그인용 로그인 정보 — secret_box.encrypt(JSON
     # {"username","password"}). 세션 만료 시 원클릭 재로그인에 쓰인다. 사용자가 "로그인

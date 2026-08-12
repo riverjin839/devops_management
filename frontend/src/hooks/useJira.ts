@@ -140,6 +140,21 @@ export function useJiraIssueLookup() {
   });
 }
 
+// 상위 페이지 ID 입력칸 mouseover 툴팁 — 입력이 멈춘 뒤(디바운스)에만 조회하므로
+// useJiraIssueLookup 과 동일하게 useMutation 으로 필요할 때만 부른다.
+export function useConfluencePageInfo() {
+  return useMutation({
+    mutationFn: (pageId: string) => jiraApi.confluencePageInfo(pageId),
+  });
+}
+
+// 상위 페이지 ID 아래 하위 페이지 "가져오기" 피커.
+export function useConfluenceChildren() {
+  return useMutation({
+    mutationFn: (pageId: string) => jiraApi.confluenceChildren(pageId),
+  });
+}
+
 export function useJiraRefreshItem() {
   const qc = useQueryClient();
   return useMutation({

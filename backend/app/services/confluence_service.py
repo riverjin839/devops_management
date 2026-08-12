@@ -364,6 +364,46 @@ class ConfluenceService:
             logger.exception("Confluence get_attachment error: %s", exc)
             return {"status": "offline", "detail": str(exc)[:200]}
 
+    async def get_children(self, page_id: str, *, limit: int = 50) -> dict:
+        """하위 페이지 목록 (`GET /rest/api/content/{id}/child/page`).
+
+        상위 페이지 ID 입력칸에서 "가져오기" 로 그 아래 문서 트리를 보여주고, 고른 페이지를
+        새 상위로 선택해 그 밑에 문서를 만들 수 있게 하는 용도."""
+        if not self.configured:
+            return {"status": "offline", "items": [], "detail": "Confluence 미설정"}
+        if not (page_id or "").strip():
+            return {"status": "error", "items": [], "detail": "페이지 ID 를 입력하세요."}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify) as client:
+                resp = await client.get(
+                    f"{self.base_url}/rest/api/content/{page_id}/child/page",
+                    headers=self._headers(),
+                    params={"limit": max(1, min(int(limit), 100))},
+                )
+                if resp.status_code == 404:
+                    return {"status": "error", "items": [], "detail": f"페이지 {page_id} 없음 (404)"}
+                if resp.status_code == 401:
+                    return {"status": "error", "items": [], "detail": "인증 실패 (401)", "auth_failed": True}
+                if resp.status_code != 200:
+                    return {"status": "error", "items": [], "detail": f"HTTP {resp.status_code}"}
+                data = resp.json()
+                items = []
+                for r in data.get("results", []):
+                    webui = ((r.get("_links") or {}).get("webui") or "")
+                    items.append({
+                        "id": str(r.get("id", "")),
+                        "title": r.get("title", ""),
+                        "url": f"{self.base_url}{webui}" if webui else "",
+                    })
+                return {"status": "ok", "items": items, "total": data.get("size", len(items))}
+        except httpx.ConnectError:
+            return {"status": "offline", "items": [], "detail": "Confluence 연결 불가"}
+        except httpx.TimeoutException:
+            return {"status": "offline", "items": [], "detail": "Confluence 응답 시간 초과"}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Confluence get_children error: %s", exc)
+            return {"status": "offline", "items": [], "detail": str(exc)[:200]}
+
     async def get_page(self, page_id: str) -> dict:
         """단일 페이지 조회 (`GET /rest/api/content/{id}`) — storage 본문 포함."""
         if not self.configured:
