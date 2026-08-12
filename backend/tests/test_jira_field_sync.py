@@ -124,9 +124,12 @@ def test_sync_keeps_epic_when_jira_returns_nothing():
 
 
 def test_unchanged_stays_unchanged_on_repeated_import():
-    """diff 와 apply 가 같은 규칙을 봐야 재가져오기가 매번 update 로 잡히지 않는다."""
+    """diff 와 apply 가 같은 규칙을 봐야 재가져오기가 매번 update 로 잡히지 않는다.
+
+    title 은 요약문만 담는다(이슈 키 접두어 없음) — map_jira_issue 가 반환하는 형식과 맞춰야
+    "이미 최신값" 케이스를 검증할 수 있다."""
     existing = _Existing(
-        title="DL-42 노드 NIC 점검", content="본문", kanban_status="in_progress",
+        title="노드 NIC 점검", content="본문", kanban_status="in_progress",
         priority="high", jira_status="In Progress", category="K8s",
         jira_issue_type="Sub-task", jira_epic="DL-10 인프라 고도화",
         jira_parent_key="DL-10", jira_components=["K8s", "Network"],

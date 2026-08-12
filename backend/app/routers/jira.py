@@ -2487,7 +2487,7 @@ async def import_excel_save(
             wtype, type_label = map_issue_type(row.issue_type)
             kanban = _map_excel_status_to_kanban(row.status)
             summary = (row.summary or "").strip()
-            title = f"{key} {summary}".strip()[:200]
+            title = (summary or key)[:200]
             content = row.description if (row.description or "").strip() else (summary or key)
             started_at = _parse_excel_date(row.created) or now
             closed_at = _parse_excel_date(row.resolved) if kanban == "done" else None

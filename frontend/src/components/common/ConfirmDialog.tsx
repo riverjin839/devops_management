@@ -38,7 +38,10 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    // z-[60] — 다른 모달(shadcn/base-ui Dialog, z-50) 위에서 최종 확인을 받는 용도로도
+    // 쓰이므로(예: JiraLinkDialog) 그 모달들보다 항상 위에 그려져야 한다. 같은 z-50 이면
+    // DOM 순서(포탈로 나중에 붙는 쪽이 위)에 따라 뒤로 숨어 클릭이 먹지 않는 문제가 있었다.
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div
         ref={dialogRef}

@@ -22,6 +22,23 @@
   업무도 "찾을 수 없음"으로 오판했다. 단건 조회 API(`GET /work-items/{id}`)를 직접 쓰도록
   고쳤다. Frontend: `hooks/useWorkItems.ts`(`useWorkItem` 신규), `pages/WorkItemDetailPage.tsx`.
 
+### Fixed
+- **업무 관리 게시판 — 필터/컬럼 개편, Jira 가져오기 제목 정리**: "필터 더보기" 팝오버를
+  없애고 담당자/우선순위/모듈/스프린트/기간 필터를 전부 한 줄에 인라인으로 노출, "시간"
+  토글과 "필드"(사용자 정의 필드 관리) 버튼을 제거했다. 필터는 더 이상 값이 바뀔 때마다
+  자동 저장되지 않고 "필터 저장" 버튼을 눌러야 사용자별로 유지되며(기본 필터링은 항상
+  빈 상태로 시작 — "내 업무" 기본 ON, 진행중 스프린트 자동 선택도 제거), 기본 컬럼
+  순서를 상태·담당자·상위업무·이슈종류·DL·WIKI·작업제목·시작일·마감일·관리·업무 분류로
+  재지정했다. 구 "작업 제목" 셀에 인라인으로 붙어 있던 Jira 키 칩과 Confluence 문서
+  칩을 "DL"/"WIKI" 독립 컬럼으로 분리하고, Jira 가져오기 시 제목에 섞여 들어가던 이슈
+  키 접두어(`"DL-42 요약"` 형식)를 제거해 요약문만 저장하도록 고쳤다. Jira 연결 관리
+  다이얼로그에서 "연결 해제하고 이 업무도 삭제"를 눌렀을 때 확인 팝업이 뒤에 가려져
+  동작하지 않던 버그도 함께 고쳤다(공용 `ConfirmDialog` 가 다른 모달보다 항상 위에
+  그려지도록 z-index 조정). Backend: `services/jira_service.py`(`map_jira_issue`),
+  `routers/jira.py`(`import_excel_save`). Frontend: `pages/WorkItemBoardPage.tsx`,
+  `components/work-items/WorkItemTableRow.tsx`, `components/work-items/workItemColumns.ts`,
+  `components/common/ConfirmDialog.tsx`.
+
 ## [1.27.1] - 2026-08-10
 
 ### Changed
