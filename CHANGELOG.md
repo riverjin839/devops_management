@@ -14,6 +14,11 @@
 - **플랫폼 업무 현황 — 담당자별 진행 현황 범례 위치**: 주간 스윔레인 뷰의 상태 색 범례가
   패널 하단(스크롤해야 보임)에 있어 눈에 띄지 않던 것을 툴바 바로 아래로 옮겨 스크롤 없이
   보이게 했다. Frontend: `components/dashboard/WeeklyStatusTimeline.tsx`.
+- **업무 상세 — 담당자별 진행 현황에서 열 때 "업무를 찾을 수 없습니다" 오탐**: 상세 화면이
+  상한(100건)·정렬이 걸린 목록 조회 결과에서 `find` 로 항목을 찾다 보니, 홈 위젯처럼 더
+  넓은 범위(500건)로 조회한 화면에서 그 범위 밖(오래된) 업무를 클릭하면 실제로는 존재하는
+  업무도 "찾을 수 없음"으로 오판했다. 단건 조회 API(`GET /work-items/{id}`)를 직접 쓰도록
+  고쳤다. Frontend: `hooks/useWorkItems.ts`(`useWorkItem` 신규), `pages/WorkItemDetailPage.tsx`.
 
 ## [1.27.1] - 2026-08-10
 
