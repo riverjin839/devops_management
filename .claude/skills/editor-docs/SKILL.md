@@ -40,6 +40,19 @@ description: 리치텍스트 에디터·문서 기능 작업 시 사용. TipTap 
 - 새 이미지 삽입 경로를 추가하면 **반드시 동일 압축을 거치게** 할 것. 대용량 원본 저장 지양.
 - 후속 옵션: 서버 업로드 + URL 참조(가장 근본적 경량화), draw.io 도식은 PNG 가 아닌 .drawio XML/SVG(벡터)로.
 
+## 마크다운 가져오기 · 붙여넣기 (MarkText 참고 패턴)
+`marked` 로 마크다운 → HTML 변환 후 커서 위치에 `insertContent`. 두 경로가 있다:
+- **파일 불러오기**: 툴바 `FileUp` 버튼 — `.md`/`.markdown`/`.txt` 파일을 읽어 변환.
+- **원문 붙여넣기**: `handlePaste` 가 클립보드에 서식 있는 HTML(`RICH_HTML_TAG_RE` —
+  `h1-6`/`strong`/`em`/`ul`/`ol`/`li`/`table`/`blockquote`/`pre`)이 **없고**, 순수 텍스트가
+  마크다운 문법(`looksLikeMarkdown` — 헤딩/목록/인용/코드블록/굵게/링크/표)으로 보일 때만
+  변환한다. Word/Google Docs/웹페이지처럼 이미 리치 HTML 을 들고 오는 붙여넣기는 TipTap 기본
+  처리에 맡기고 건드리지 않는다 — VSCode·터미널·다른 마크다운 편집기 원문처럼 서식 없는
+  소스만 대상.
+- 두 경로 모두 삽입 전 `normalizeTemplateHtml` 로 보정한다(빈 표 셀 등 스키마 위반 방지).
+- 붙여넣기 휴리스틱을 넓힐 때는 오탐(일반 텍스트를 마크다운으로 오인 변환)에 주의 —
+  `RICH_HTML_TAG_RE`/`looksLikeMarkdown` 은 `RichTextEditor.tsx` 모듈 스코프에 있다.
+
 ## 검증
 ```
 cd frontend && npm run lint && npx tsc --noEmit && npm run build
