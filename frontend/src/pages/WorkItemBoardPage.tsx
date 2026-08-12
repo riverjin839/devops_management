@@ -285,7 +285,11 @@ export function WorkItemBoardPage() {
 
   // 컬럼 폭/순서/표시여부 개인화 — 필터와 동일하게 사용자별로 분리 저장한다(로그인 전
   // 짧은 순간은 공용 키로 폴백, loadFilterPrefs 와 같은 guard 패턴).
-  const colStorageKey = myUsername ? `item-board-table:${myUsername}` : 'item-board-table';
+  // v2 — 기본 컬럼 순서/표시여부를 재정의(DL/WIKI/상위업무/이슈종류 기본 노출)하면서 키를
+  // 올렸다. 이전에 방문해 구 기본값이 이미 저장된 사용자도 새 기본값을 그대로 받게 하기
+  // 위함 — 키를 그대로 두면 저장된 값이 새 기본값을 덮어써 컬럼 설정에서 수동으로
+  // "기본값으로 복원"을 누르기 전까지 새 기본 배치가 전혀 반영되지 않는다.
+  const colStorageKey = myUsername ? `item-board-table-v2:${myUsername}` : 'item-board-table-v2';
   const colW = useColumnWidths(colStorageKey, {
     defaults: COLUMN_WIDTH_DEFAULTS,
     min: 60, max: 800,

@@ -625,21 +625,29 @@ export function WorkItemTableRow({
         );
 
       case 'confluenceLink': {
-        // "WIKI" — 다중 링크(Jira 원격 링크에서 찾은 전체 목록)가 있으면 배지+드롭다운,
-        // 0~1개면 구 작업제목 셀에 있던 DocLinkChip 을 그대로 옮겨 추가/수정까지 지원한다.
+        // "WIKI" — 다중 링크(Jira 원격 링크에서 찾은 전체 목록)가 있으면 배지+드롭다운 옆에
+        // 대표 링크(confluenceUrl) 편집용 DocLinkChip 도 함께 둔다 — 링크가 몇 개든 대표
+        // 링크를 추가/수정/해제할 수 있어야 한다(구 작업제목 셀의 DocLinkChip 과 동일 역할).
         const links = item.confluenceLinks ?? [];
         if (links.length > 1) {
           return (
             <td key="confluenceLink" className="px-4 py-1.5 whitespace-nowrap relative">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setConfluenceLinksOpen((v) => !v); }}
-                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              >
-                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                {links.length}
-                <ChevronDown className="w-3 h-3 opacity-60" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setConfluenceLinksOpen((v) => !v); }}
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                  {links.length}
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                </button>
+                <DocLinkChip
+                  url={item.confluenceUrl}
+                  onSave={(url) => save({ confluenceUrl: url || null })}
+                  label="대표"
+                />
+              </div>
               {confluenceLinksOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setConfluenceLinksOpen(false); }} />
