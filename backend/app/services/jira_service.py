@@ -385,17 +385,24 @@ class JiraService:
         """새 이슈 생성 — `POST /rest/api/2/issue`. 성공 시 key/id 반환.
 
         priority/labels/components/epic/assignee 는 프로젝트 스킴/권한에 없으면 400 이 나므로,
-        400 이면 해당 선택 필드를 빼고 1회 재시도한다(핵심 필드만으로라도 생성되게).
+        400 응답의 `errors` 에 실제로 찍힌 필드만 골라 빼고 재시도한다 — 예를 들어 담당자만
+        스킴에 없어도 이전엔 라벨·컴포넌트까지 통째로 빼고 재시도해 이슈는 생성되지만 Jira
+        화면엔 라벨/컴포넌트가 비어 있는 버그가 있었다. `errors` 에 특정 필드가 안 찍히는 400
+        (핵심 필드 문제 등)은 더 빼볼 게 없으므로 재시도 없이 바로 에러로 반환한다.
 
-        `parent_key` 는 Sub-task 생성용 상위 이슈 — Jira 가 필수로 요구하므로 재시도에서도
-        빼지 않는다. `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다. `assignee` 는
+        `parent_key` 는 Sub-task 생성용 상위 이슈 — Jira 가 필수로 요구하므로 절대 빼지 않는다.
+        `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다. `assignee` 는
         Jira **원본 로그인 계정**(username/key, displayName 아님)이어야 한다."""
         if not self.configured:
             return {"status": "offline", "detail": "Jira 미설정"}
         if not (project_key and summary):
             return {"status": "error", "detail": "프로젝트 키와 제목은 필수입니다."}
 
-        def _payload(with_optional: bool) -> dict:
+        optional_keys = {"priority", "labels", "components", "assignee"}
+        if epic_field:
+            optional_keys.add(epic_field)
+
+        def _payload(exclude: set[str]) -> dict:
             fields: dict[str, Any] = {
                 "project": {"key": project_key},
                 "summary": summary[:255],
@@ -403,28 +410,28 @@ class JiraService:
             }
             if description:
                 fields["description"] = description
-            # Sub-task 는 parent 가 없으면 생성 자체가 불가 — 선택 필드로 취급하지 않는다.
+            # Sub-task 는 parent 가 없으면 생성 자체가 불가 — 절대 빼지 않는다.
             if parent_key:
                 fields["parent"] = {"key": parent_key}
-            if with_optional:
-                if priority:
-                    fields["priority"] = {"name": priority}
-                if labels:
-                    fields["labels"] = labels
-                if components:
-                    fields["components"] = [{"name": c} for c in components]
-                if epic_key and epic_field:
-                    fields[epic_field] = epic_key
-                if assignee:
-                    fields["assignee"] = {"name": assignee}
+            if priority and "priority" not in exclude:
+                fields["priority"] = {"name": priority}
+            if labels and "labels" not in exclude:
+                fields["labels"] = labels
+            if components and "components" not in exclude:
+                fields["components"] = [{"name": c} for c in components]
+            if epic_key and epic_field and epic_field not in exclude:
+                fields[epic_field] = epic_key
+            if assignee and "assignee" not in exclude:
+                fields["assignee"] = {"name": assignee}
             return {"fields": fields}
 
+        exclude: set[str] = set()
         try:
             async with self._client() as client:
-                for with_optional in (True, False):
+                for _ in range(len(optional_keys) + 1):
                     resp = await client.post(
                         f"{self.base_url}/rest/api/2/issue",
-                        headers=self._headers(), json=_payload(with_optional),
+                        headers=self._headers(), json=_payload(exclude),
                     )
                     if resp.status_code in (200, 201):
                         data = resp.json()
@@ -434,16 +441,27 @@ class JiraService:
                     if resp.status_code == 401:
                         return {"status": "error", "detail": "인증 실패 — 토큰을 확인하세요 (401).",
                                 "auth_failed": True}
-                    if resp.status_code != 400 or not with_optional:
+                    if resp.status_code != 400:
                         detail = ""
                         try:
-                            body = resp.json()
-                            msgs = list(body.get("errorMessages", []))
-                            msgs.extend(f"{k}: {v}" for k, v in (body.get("errors", {}) or {}).items())
-                            detail = "; ".join(msgs)
+                            detail = "; ".join(resp.json().get("errorMessages", []))
                         except Exception:  # noqa: BLE001
                             detail = resp.text[:200]
                         return {"status": "error", "detail": detail or f"HTTP {resp.status_code}"}
+                    try:
+                        body = resp.json()
+                    except Exception:  # noqa: BLE001
+                        return {"status": "error", "detail": resp.text[:200] or "HTTP 400"}
+                    errors = body.get("errors", {}) or {}
+                    msgs = list(body.get("errorMessages", []))
+                    msgs.extend(f"{k}: {v}" for k, v in errors.items())
+                    detail = "; ".join(msgs)
+                    new_exclude = (set(errors.keys()) & optional_keys) - exclude
+                    if not new_exclude:
+                        # 핵심 필드 문제거나 이미 뺀 필드가 다시 걸린 경우 — 더 빼봤자
+                        # 소용없으니 나머지 선택 필드는 건드리지 않고 바로 에러로 반환한다.
+                        return {"status": "error", "detail": detail or "HTTP 400"}
+                    exclude |= new_exclude
                 return {"status": "error", "detail": "이슈 생성 실패"}
         except httpx.ConnectError:
             return {"status": "offline", "detail": "Jira 연결 불가"}
