@@ -43,6 +43,16 @@ function isDarkColor(hex: string): boolean {
   return 0.299 * r + 0.587 * g + 0.114 * b < 140;
 }
 
+// 클립보드에 이미 이런 서식 태그가 있으면 "리치 텍스트 붙여넣기"로 보고 TipTap 기본 처리에 맡긴다
+// (Word/Google Docs/웹페이지 등). 이 태그가 없을 때만(=VSCode·터미널·raw 텍스트 등 서식 없는
+// 소스) 아래 텍스트 휴리스틱으로 마크다운 원문 여부를 판별한다.
+const RICH_HTML_TAG_RE = /<(h[1-6]|strong|em|b|i|ul|ol|li|table|blockquote|pre)\b/i;
+
+/** 붙여넣은 순수 텍스트가 마크다운 문법(헤딩/목록/인용/코드블록/굵게/링크/표)으로 보이면 true. */
+function looksLikeMarkdown(text: string): boolean {
+  return /(^|\n)#{1,6}\s|(^|\n)[-*+]\s|(^|\n)\d+\.\s|(^|\n)>\s|```|\*\*[^*\n]+\*\*|\[[^\]]+\]\([^)]+\)|(^|\n)\|.+\|/.test(text);
+}
+
 interface LinkOption { id: string; label: string; href: string; }
 
 interface RichTextEditorProps {
@@ -661,26 +671,40 @@ export function RichTextEditor({
     return false;
   };
 
-  // Image paste handler
+  // 붙여넣기 핸들러 — 이미지는 압축 후 삽입, 서식 없는 마크다운 원문은 변환해서 삽입.
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const items = Array.from(e.clipboardData.items);
       const imageItems = items.filter((item) => item.type.startsWith('image/'));
-      if (imageItems.length === 0) return;
+      if (imageItems.length > 0) {
+        e.preventDefault();
+        imageItems.forEach((item) => {
+          const file = item.getAsFile();
+          if (!file) return;
+          // base64 가 본문에 박혀 DB 가 비대해지지 않도록 다운스케일+압축 후 삽입.
+          compressImageFile(file)
+            .then((dataUrl) => {
+              if (!dataUrl) return;
+              editor?.chain().focus().setImage({ src: dataUrl }).run();
+              onImagePaste?.(dataUrl);
+            })
+            .catch(() => { /* 압축 실패 시 조용히 무시 */ });
+        });
+        return;
+      }
 
-      e.preventDefault();
-      imageItems.forEach((item) => {
-        const file = item.getAsFile();
-        if (!file) return;
-        // base64 가 본문에 박혀 DB 가 비대해지지 않도록 다운스케일+압축 후 삽입.
-        compressImageFile(file)
-          .then((dataUrl) => {
-            if (!dataUrl) return;
-            editor?.chain().focus().setImage({ src: dataUrl }).run();
-            onImagePaste?.(dataUrl);
+      // VSCode/터미널/다른 마크다운 편집기 등에서 복사한 서식 없는 마크다운 원문 —
+      // 그대로 두면 '#'/'-'/'```' 이 글자 그대로 박히므로 HTML 로 변환해 삽입한다.
+      const html = e.clipboardData.getData('text/html');
+      const text = e.clipboardData.getData('text/plain');
+      if (text && !RICH_HTML_TAG_RE.test(html) && looksLikeMarkdown(text)) {
+        e.preventDefault();
+        marked.parse(text, { async: true })
+          .then((parsed) => {
+            editor?.chain().focus().insertContent(normalizeTemplateHtml(parsed)).run();
           })
-          .catch(() => { /* 압축 실패 시 조용히 무시 */ });
-      });
+          .catch(() => { /* 변환 실패 시 무시 — 기본 붙여넣기로 폴백 */ });
+      }
     },
     [editor, onImagePaste],
   );

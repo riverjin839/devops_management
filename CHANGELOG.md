@@ -24,6 +24,16 @@
   새로 게시판을 여는 사용자만 좁아진 기본 폭을 받는다. Frontend:
   `components/work-items/WorkItemTableRow.tsx`, `components/work-items/workItemColumns.ts`.
 
+### Added
+- **리치텍스트 에디터 — 마크다운 원문 붙여넣기 인식**: 업무 노트(work guide/ops note 등)
+  에서 쓰는 `RichTextEditor` 에 다른 곳(VSCode·터미널·다른 마크다운 편집기 등)에서 복사한
+  서식 없는 마크다운 원문을 붙여넣으면 `#`/`-`/`` ``` `` 같은 문법 기호가 그대로 박히는 대신
+  자동으로 리치 콘텐츠(제목/목록/코드블록/굵게/링크/표)로 변환되도록 했다. 이미 서식 있는
+  HTML 을 들고 오는 붙여넣기(Word/웹페이지 등)는 기존 동작 그대로 유지한다. 파일로 `.md` 를
+  불러오는 툴바 버튼과 동일한 변환 엔진(`marked`)을 공유한다.
+  Frontend: `components/editor/RichTextEditor.tsx`(`handlePaste`, `looksLikeMarkdown`,
+  `RICH_HTML_TAG_RE`).
+
 ## [1.27.3] - 2026-08-12
 
 ### Fixed
