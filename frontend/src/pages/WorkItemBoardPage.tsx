@@ -207,7 +207,9 @@ function DraggableSortHeader({
     <th
       ref={setNodeRef}
       style={style}
-      className="relative px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap select-none bg-muted/30 group"
+      className={`relative py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap select-none bg-muted/30 group ${
+        meta.tightRight ? 'pl-4 pr-1' : 'px-4'
+      }`}
     >
       <span className={`inline-flex items-center gap-1 ${meta.headerAlign === 'center' ? 'w-full justify-center' : ''}`}>
         <button
@@ -286,10 +288,12 @@ export function WorkItemBoardPage() {
   // 컬럼 폭/순서/표시여부 개인화 — 필터와 동일하게 사용자별로 분리 저장한다(로그인 전
   // 짧은 순간은 공용 키로 폴백, loadFilterPrefs 와 같은 guard 패턴).
   // v2 — 기본 컬럼 순서/표시여부를 재정의(DL/WIKI/상위업무/이슈종류 기본 노출)하면서 키를
-  // 올렸다. 이전에 방문해 구 기본값이 이미 저장된 사용자도 새 기본값을 그대로 받게 하기
-  // 위함 — 키를 그대로 두면 저장된 값이 새 기본값을 덮어써 컬럼 설정에서 수동으로
-  // "기본값으로 복원"을 누르기 전까지 새 기본 배치가 전혀 반영되지 않는다.
-  const colStorageKey = myUsername ? `item-board-table-v2:${myUsername}` : 'item-board-table-v2';
+  // 올렸다. v3 — 상위업무 기본 숨김 전환, 담당자 단일화로 폭 축소(200→130), 등록
+  // 타입/DL#/WIKI 기본폭을 칩 크기에 맞게 축소(오른쪽 여백 버그 수정)하면서 다시 올렸다.
+  // 이전에 방문해 구 기본값이 이미 저장된 사용자도 새 기본값을 그대로 받게 하기 위함 —
+  // 키를 그대로 두면 저장된 값이 새 기본값을 덮어써 컬럼 설정에서 수동으로 "기본값으로
+  // 복원"을 누르기 전까지 새 기본 배치가 전혀 반영되지 않는다.
+  const colStorageKey = myUsername ? `item-board-table-v3:${myUsername}` : 'item-board-table-v3';
   const colW = useColumnWidths(colStorageKey, {
     defaults: COLUMN_WIDTH_DEFAULTS,
     min: 60, max: 800,
@@ -414,6 +418,20 @@ export function WorkItemBoardPage() {
     } catch {
       toast.error('필터 저장 실패', '브라우저 저장 공간을 확인해주세요.');
     }
+  };
+
+  // 컬럼 순서/표시여부/폭은 이미 바뀔 때마다 자동 저장되지만(디바운스), "지금 이대로
+  // 저장됐다"를 사용자가 확인할 방법이 없었다 — 컬럼 설정 박스의 "저장" 버튼은 디바운스를
+  // 건너뛰고 즉시 저장 + 토스트로 확인해준다. "기본값으로 복원"은 순서/표시여부만 되돌리던
+  // 것을 폭까지 함께 되돌리도록 같이 고쳤다(그동안 폭만 안 돌아가는 게 실질적인 버그였음).
+  const saveColumnPrefs = () => {
+    colLayout.saveNow();
+    colW.saveNow();
+    toast.success('컬럼 설정 저장됨', '지금 순서·표시여부·폭을 다음 방문에도 그대로 사용합니다.');
+  };
+  const resetColumnPrefs = () => {
+    colLayout.reset();
+    colW.reset();
   };
 
   // Jira 연결 업무의 행 단위 동기화 — 다시 가져오기 / 수정 내용 보내기.
@@ -871,7 +889,8 @@ export function WorkItemBoardPage() {
               order={colLayout.order}
               isVisible={colLayout.isVisible}
               onToggle={colLayout.toggleVisible}
-              onReset={colLayout.reset}
+              onReset={resetColumnPrefs}
+              onSave={saveColumnPrefs}
             />
           </div>
         </div>

@@ -48,6 +48,12 @@ export function useColumnWidths(storageKey: string, opts: UseColumnWidthsOpts) {
     };
   }, [widths, fullKey]);
 
+  /** rAF 디바운스를 건너뛰고 지금 상태를 즉시 저장 — "설정 저장" 같은 명시적 액션용. */
+  const saveNow = useCallback(() => {
+    if (saveRef.current !== null) { cancelAnimationFrame(saveRef.current); saveRef.current = null; }
+    try { localStorage.setItem(fullKey, JSON.stringify(widths)); } catch { /* ignore */ }
+  }, [widths, fullKey]);
+
   const getWidth = useCallback((col: string): number => {
     return widths[col] ?? opts.defaults[col] ?? 120;
   }, [widths, opts.defaults]);
@@ -96,5 +102,5 @@ export function useColumnWidths(storageKey: string, opts: UseColumnWidthsOpts) {
     });
   }, [opts.defaults]);
 
-  return { widths, getWidth, setWidth, beginResize, autoFit, reset };
+  return { widths, getWidth, setWidth, beginResize, autoFit, reset, saveNow };
 }

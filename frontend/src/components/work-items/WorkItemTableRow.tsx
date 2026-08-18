@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { GripVertical, ImagePlus, Plus, Check, X, ExternalLink, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
+import { GripVertical, ImagePlus, Check, X, ExternalLink, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, KanbanStatus } from '@/types';
@@ -106,7 +106,6 @@ type EditField =
   | 'kanbanStatus'
   | 'priority'
   | 'primaryAssignee'
-  | 'secondaryAssignee'
   | 'cluster'
   | 'category'
   | 'content'
@@ -367,66 +366,26 @@ export function WorkItemTableRow({
         );
 
       case 'assignee':
+        // 단일 담당자 지정 — 예전엔 정/부 두 명을 한 셀에서 관리했지만(부 담당자는
+        // secondaryAssignee), 실무에서 거의 안 쓰이고 UI 만 복잡해져 실제 담당자 한 명만
+        // 빠르게 지정하는 셀로 단순화했다. secondaryAssignee 필드/값 자체는 건드리지
+        // 않는다 — 칸반/에픽뷰/멤버보드 등 다른 화면은 여전히 참조한다.
         return (
-          <td key="assignee" className="px-4 py-1.5 font-medium whitespace-nowrap">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {editing === 'primaryAssignee' ? (
-                <TextInlineInput
-                  initial={item.primaryAssignee || item.assignee || ''}
-                  onSave={(v) => save({ primaryAssignee: v, assignee: v })}
-                  onCancel={() => setEditing(null)}
-                  placeholder="정 담당자"
-                  className="text-xs w-32"
-                />
-              ) : (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setEditing('primaryAssignee')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing('primaryAssignee'); }
-                  }}
-                  className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border cursor-pointer hover:bg-secondary/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
-                  title="클릭하여 수정"
-                  aria-label="정 담당자 클릭하여 수정"
-                >
-                  {item.primaryAssignee || item.assignee || '-'}
-                </span>
-              )}
-              {editing === 'secondaryAssignee' ? (
-                <TextInlineInput
-                  initial={item.secondaryAssignee ?? ''}
-                  onSave={(v) => save({ secondaryAssignee: v || undefined })}
-                  onCancel={() => setEditing(null)}
-                  placeholder="부 담당자"
-                  className="text-xs w-32"
-                />
-              ) : item.secondaryAssignee ? (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setEditing('secondaryAssignee')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing('secondaryAssignee'); }
-                  }}
-                  className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border cursor-pointer hover:bg-secondary/80 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
-                  title="클릭하여 수정"
-                  aria-label="부 담당자 클릭하여 수정"
-                >
-                  {item.secondaryAssignee}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditing('secondaryAssignee')}
-                  className="px-1.5 py-0.5 text-xs rounded-full border border-dashed border-border text-muted-foreground/60 hover:text-foreground hover:border-primary/40 transition-colors inline-flex items-center gap-0.5"
-                  title="부 담당자 추가"
-                >
-                  <Plus className="w-2.5 h-2.5" />부
-                </button>
-              )}
-            </div>
-          </td>
+          <EditableCell key="assignee" isEditing={editing === 'primaryAssignee'} onEnter={() => setEditing('primaryAssignee')} className="font-medium whitespace-nowrap" title="클릭하여 담당자 변경">
+            {editing === 'primaryAssignee' ? (
+              <TextInlineInput
+                initial={item.primaryAssignee || item.assignee || ''}
+                onSave={(v) => save({ primaryAssignee: v, assignee: v })}
+                onCancel={() => setEditing(null)}
+                placeholder="담당자"
+                className="text-sm"
+              />
+            ) : (
+              <span className="px-2 py-0.5 text-xs rounded-full bg-secondary text-secondary-foreground border border-border">
+                {item.primaryAssignee || item.assignee || '-'}
+              </span>
+            )}
+          </EditableCell>
         );
 
       case 'cluster':
@@ -605,9 +564,10 @@ export function WorkItemTableRow({
       }
 
       case 'jiraLink':
-        // "DL" — 구 작업제목 셀에 있던 Jira 키 칩을 그대로 옮긴 것.
+        // "DL#" — 구 작업제목 셀에 있던 Jira 키 칩을 그대로 옮긴 것. 짧은 칩 하나만 들어가는
+        // 컬럼이라 오른쪽 패딩을 줄여 여백을 없앤다(헤더도 동일하게 tightRight).
         return (
-          <td key="jiraLink" className="px-4 py-1.5 whitespace-nowrap">
+          <td key="jiraLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
             {item.jiraIssueKey ? (
               <a
                 href={item.jiraUrl ?? undefined}
@@ -632,7 +592,7 @@ export function WorkItemTableRow({
         const links = item.confluenceLinks ?? [];
         if (links.length > 1) {
           return (
-            <td key="confluenceLink" className="px-4 py-1.5 whitespace-nowrap relative">
+            <td key="confluenceLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap relative">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -673,7 +633,7 @@ export function WorkItemTableRow({
           );
         }
         return (
-          <td key="confluenceLink" className="px-4 py-1.5 whitespace-nowrap">
+          <td key="confluenceLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
             <DocLinkChip
               url={item.confluenceUrl}
               onSave={(url) => save({ confluenceUrl: url || null })}
@@ -719,8 +679,9 @@ export function WorkItemTableRow({
         );
 
       case 'jiraType':
+        // "등록 타입" — 짧은 배지 하나만 들어가는 컬럼이라 오른쪽 패딩을 줄인다.
         return (
-          <td key="jiraType" className="px-4 py-1.5 whitespace-nowrap">
+          <td key="jiraType" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
             {item.jiraIssueType ? (
               <span className={`inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
                 {item.jiraIssueType}

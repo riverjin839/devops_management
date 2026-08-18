@@ -65,6 +65,15 @@ export function useColumnLayout<K extends string>(storageKey: string, opts: UseC
     };
   }, [order, visible, orderKey, visKey]);
 
+  /** rAF 디바운스를 건너뛰고 지금 상태를 즉시 저장 — "설정 저장" 같은 명시적 액션용. */
+  const saveNow = useCallback(() => {
+    if (saveRef.current !== null) { cancelAnimationFrame(saveRef.current); saveRef.current = null; }
+    try {
+      localStorage.setItem(orderKey, JSON.stringify(order));
+      localStorage.setItem(visKey, JSON.stringify(visible));
+    } catch { /* ignore */ }
+  }, [order, visible, orderKey, visKey]);
+
   const isVisible = useCallback(
     (k: K): boolean => always.has(k) || visible[k] !== false,
     [always, visible],
@@ -99,5 +108,5 @@ export function useColumnLayout<K extends string>(storageKey: string, opts: UseC
     } catch { /* ignore */ }
   }, [opts.defaultOrder, defaultVisibleMap, orderKey, visKey]);
 
-  return { order, visibleOrder, isVisible, toggleVisible, reorder, reset };
+  return { order, visibleOrder, isVisible, toggleVisible, reorder, reset, saveNow };
 }
