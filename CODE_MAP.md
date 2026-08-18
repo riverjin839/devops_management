@@ -56,7 +56,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 기능 | 백엔드 | 프론트엔드 |
 |---|---|---|
 | 업무 CRUD + 상태/우선순위 + 서브업무 + CSV | `backend/app/routers/work_items.py` (`/work-items`) | 게시판: `frontend/src/pages/WorkItemBoardPage.tsx`, 등록: `tasks-mgmt/new` → `WorkItemFormPage.tsx`(`WorkItemForm.tsx`), 상세/수정: `WorkItemDetailPage.tsx` (`:id/edit` 는 상세 `?edit=1` 로 redirect) |
-| 표 행(인라인 편집·시간옵션) / 칸반 / 캘린더 | — | `components/work-items/WorkItemTableRow.tsx` · `WorkItemKanban.tsx` · `WorkItemCalendar.tsx` |
+| 표 행(인라인 편집·시간옵션) / 칸반 / 캘린더 / 에픽뷰(Epic→Task→Sub-task 계층) | — | `components/work-items/WorkItemTableRow.tsx` · `WorkItemKanban.tsx` · `WorkItemCalendar.tsx` · `WorkItemEpicView.tsx` · `WorkItemActionsMenu.tsx`("변경" 드롭다운, 표 행/에픽뷰 공유) |
 | 상세 보기 / 댓글·활동 | — | `WorkItemReadView.tsx` · `CommentThread.tsx` · `ActivityTimeline.tsx` |
 | 저장된 뷰(필터·정렬·보기 스냅샷, localStorage) | — | `components/work-items/SavedViews.tsx` |
 | 사용자 정의 필드(custom_values) | `backend/app/routers/work_item_custom_fields.py` | `WorkItemCustomFieldsManager.tsx` |
