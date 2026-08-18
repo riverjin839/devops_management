@@ -3,11 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, ListTree, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, WorkItemEpicView, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -27,7 +27,7 @@ import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { useAuthStore } from '@/stores/authStore';
 import { WorkItem, WorkItemModule, WorkItemType, JiraFieldChange, KanbanStatus } from '@/types';
 
-type ViewMode = 'table' | 'calendar' | 'kanban';
+type ViewMode = 'table' | 'calendar' | 'kanban' | 'epic';
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
@@ -692,9 +692,10 @@ export function WorkItemBoardPage() {
             {/* View mode toggle */}
             <ViewModeBar
               modes={[
-                { id: 'table',    label: '목록', icon: <List        className="w-3.5 h-3.5" /> },
-                { id: 'calendar', label: '달력', icon: <CalendarDays className="w-3.5 h-3.5" /> },
-                { id: 'kanban',   label: '칸반', icon: <Kanban      className="w-3.5 h-3.5" /> },
+                { id: 'table',    label: '목록',   icon: <List        className="w-3.5 h-3.5" /> },
+                { id: 'calendar', label: '달력',   icon: <CalendarDays className="w-3.5 h-3.5" /> },
+                { id: 'kanban',   label: '칸반',   icon: <Kanban      className="w-3.5 h-3.5" /> },
+                { id: 'epic',     label: '에픽뷰', icon: <ListTree    className="w-3.5 h-3.5" /> },
               ]}
               active={viewMode}
               onChange={(v) => setViewMode(v as ViewMode)}
@@ -915,8 +916,8 @@ export function WorkItemBoardPage() {
           )
         )}
 
-        {/* Table / Calendar view */}
-        {viewMode !== 'kanban' && (viewMode === 'calendar' ? (
+        {/* Calendar view */}
+        {viewMode === 'calendar' && (
           <MacCard bodyPadding="p-6">
             {isLoading ? (
               <div className="grid grid-cols-7 gap-0">
@@ -928,98 +929,148 @@ export function WorkItemBoardPage() {
               <WorkItemCalendar items={items} onItemClick={openTaskDetail} />
             )}
           </MacCard>
-        ) : isLoading ? (
-          <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
-            ))}
-          </MacCard>
-        ) : items.length === 0 ? (
-          <div className="text-center py-20">
-            <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">
-              {onlyMine && myName && !hasFilters
-                ? `${myName} 담당 업무가 없습니다 — "내 업무" 를 끄면 전체를 볼 수 있습니다.`
-                : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
-            </p>
-            {!isFilteredView && (
-              <button
-                onClick={handleCreateNew}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                + 첫 번째 업무 등록
-              </button>
-            )}
-          </div>
-        ) : (
-          <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
-            <DoubleScrollX>
-              <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
-                <colgroup>
-                  <col style={{ width: `${colW.getWidth('drag')}px` }} />
-                  {visibleCols.map((k) => (
-                    <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />
-                  ))}
-                </colgroup>
-                <thead>
-                  <DndContext
-                    sensors={headerSensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={(e: DragEndEvent) => {
-                      if (e.over && e.active.id !== e.over.id) {
-                        colLayout.reorder(e.active.id as WorkItemColumnKey, e.over.id as WorkItemColumnKey);
-                      }
-                    }}
-                  >
-                    <SortableContext items={visibleCols} strategy={horizontalListSortingStrategy}>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th><span className="sr-only">정렬</span></th>
-                        {visibleCols.map((k) => (
-                          <DraggableSortHeader
-                            key={k}
-                            colKey={k}
-                            sortKey={sortKey}
-                            sortDir={sortDir}
-                            onSort={handleSort}
-                            colW={colW}
-                          />
-                        ))}
-                      </tr>
-                    </SortableContext>
+        )}
+
+        {/* Epic view — Epic → Task → Sub-task 계층 (기본 펼침, 접기/펼치기 가능) */}
+        {viewMode === 'epic' && (
+          isLoading ? (
+            <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+              ))}
+            </MacCard>
+          ) : items.length === 0 ? (
+            <div className="text-center py-20">
+              <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+              <p className="text-muted-foreground mb-4">
+                {onlyMine && myName && !hasFilters
+                  ? `${myName} 담당 업무가 없습니다 — "내 업무" 를 끄면 전체를 볼 수 있습니다.`
+                  : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
+              </p>
+              {!isFilteredView && (
+                <button
+                  onClick={handleCreateNew}
+                  className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+                >
+                  + 첫 번째 업무 등록
+                </button>
+              )}
+            </div>
+          ) : (
+            <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
+              <WorkItemEpicView
+                items={items}
+                onItemClick={openTaskDetail}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onAddSubItem={handleAddSubItem}
+                onJiraRefresh={handleJiraRefresh}
+                onJiraPush={handleJiraPush}
+                jiraBusyId={jiraBusyId}
+                onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
+                onJiraLink={(t) => openJiraLink(t)}
+                onConfluenceSync={handleConfluenceSync}
+                confluenceBusyId={confluenceBusyId}
+              />
+            </MacCard>
+          )
+        )}
+
+        {/* Table view */}
+        {viewMode === 'table' && (
+          isLoading ? (
+            <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+              ))}
+            </MacCard>
+          ) : items.length === 0 ? (
+            <div className="text-center py-20">
+              <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+              <p className="text-muted-foreground mb-4">
+                {onlyMine && myName && !hasFilters
+                  ? `${myName} 담당 업무가 없습니다 — "내 업무" 를 끄면 전체를 볼 수 있습니다.`
+                  : isFilteredView ? '검색 조건에 해당하는 업무가 없습니다.' : '등록된 업무가 없습니다.'}
+              </p>
+              {!isFilteredView && (
+                <button
+                  onClick={handleCreateNew}
+                  className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+                >
+                  + 첫 번째 업무 등록
+                </button>
+              )}
+            </div>
+          ) : (
+            <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
+              <DoubleScrollX>
+                <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                  <colgroup>
+                    <col style={{ width: `${colW.getWidth('drag')}px` }} />
+                    {visibleCols.map((k) => (
+                      <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />
+                    ))}
+                  </colgroup>
+                  <thead>
+                    <DndContext
+                      sensors={headerSensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={(e: DragEndEvent) => {
+                        if (e.over && e.active.id !== e.over.id) {
+                          colLayout.reorder(e.active.id as WorkItemColumnKey, e.over.id as WorkItemColumnKey);
+                        }
+                      }}
+                    >
+                      <SortableContext items={visibleCols} strategy={horizontalListSortingStrategy}>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th><span className="sr-only">정렬</span></th>
+                          {visibleCols.map((k) => (
+                            <DraggableSortHeader
+                              key={k}
+                              colKey={k}
+                              sortKey={sortKey}
+                              sortDir={sortDir}
+                              onSort={handleSort}
+                              colW={colW}
+                            />
+                          ))}
+                        </tr>
+                      </SortableContext>
+                    </DndContext>
+                  </thead>
+                  <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
+                    <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                    <tbody>
+                    {sortedTasks.map((item) => (
+                      <WorkItemTableRow
+                        key={item.id}
+                        item={item}
+                        clusters={clusters}
+                        columns={visibleCols}
+                        projectNameById={projectNameById}
+                        sprintNameById={sprintNameById}
+                        isDragDisabled={!!sortKey}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onAddSubItem={handleAddSubItem}
+                        onOpenDetail={openTaskDetail}
+                        onJiraRefresh={handleJiraRefresh}
+                        onJiraPush={handleJiraPush}
+                        jiraBusy={jiraBusyId === item.id}
+                        onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
+                        onJiraLink={(t) => openJiraLink(t)}
+                        onConfluenceSync={handleConfluenceSync}
+                        confluenceBusy={confluenceBusyId === item.id}
+                      />
+                    ))}
+                  </tbody>
+                  </SortableContext>
                   </DndContext>
-                </thead>
-                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
-                  <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                  <tbody>
-                  {sortedTasks.map((item) => (
-                    <WorkItemTableRow
-                      key={item.id}
-                      item={item}
-                      clusters={clusters}
-                      columns={visibleCols}
-                      projectNameById={projectNameById}
-                      sprintNameById={sprintNameById}
-                      isDragDisabled={!!sortKey}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                      onAddSubItem={handleAddSubItem}
-                      onOpenDetail={openTaskDetail}
-                      onJiraRefresh={handleJiraRefresh}
-                      onJiraPush={handleJiraPush}
-                      jiraBusy={jiraBusyId === item.id}
-                      onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
-                      onJiraLink={(t) => openJiraLink(t)}
-                      onConfluenceSync={handleConfluenceSync}
-                      confluenceBusy={confluenceBusyId === item.id}
-                    />
-                  ))}
-                </tbody>
-                </SortableContext>
-                </DndContext>
-              </table>
-            </DoubleScrollX>
-          </MacCard>
-        ))}
+                </table>
+              </DoubleScrollX>
+            </MacCard>
+          )
+        )}
         </div>
       </main>
 

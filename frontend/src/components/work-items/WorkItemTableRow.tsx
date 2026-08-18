@@ -1,6 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X, GitBranch, ExternalLink, RefreshCw, Upload, Loader2, Rocket, Link2Off, ChevronRight, ChevronDown, AlertTriangle, Settings2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { GripVertical, ImagePlus, Plus, Check, X, ExternalLink, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, KanbanStatus } from '@/types';
@@ -10,6 +9,7 @@ import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
 import { DocLinkChip } from './DocLinkChip';
 import { JiraIssueChip } from './JiraIssueChip';
+import { WorkItemActionsMenu } from './WorkItemActionsMenu';
 import type { WorkItemColumnKey } from './workItemColumns';
 
 // 상태색은 semantic status 토큰으로 (D-011). backlog=대기→unknown, todo=정보→info,
@@ -266,39 +266,6 @@ export function WorkItemTableRow({
   const toast = useToast();
   const [editing, setEditing] = useState<EditField>(null);
   const [confluenceLinksOpen, setConfluenceLinksOpen] = useState(false);
-  // "변경" 열 — 개별 아이콘을 늘어놓지 않고 대표 아이콘 하나에 hover 하면 작업 목록이
-  // 드롭다운으로 열린다. 트리거→목록으로 마우스가 넘어갈 때 깜빡이지 않도록 살짝의
-  // 닫기 지연을 둔다(ClusterSidebar 툴팁과 동일 패턴). 표가 가로 스크롤 컨테이너
-  // (`overflow-x-auto`) + 모서리 라운딩용 `overflow-hidden` 안에 있어서 inline
-  // absolute 로 열면 잘려 보이지 않는다 — SearchableSelect 의 `menuPortal` 과 동일하게
-  // document.body 로 portal + fixed 좌표 앵커링한다.
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [actionsMenuPos, setActionsMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
-  const actionsCloseTimer = useRef<number | null>(null);
-  const openActions = () => {
-    if (actionsCloseTimer.current !== null) { window.clearTimeout(actionsCloseTimer.current); actionsCloseTimer.current = null; }
-    setActionsOpen(true);
-  };
-  const scheduleCloseActions = () => {
-    actionsCloseTimer.current = window.setTimeout(() => setActionsOpen(false), 150);
-  };
-  useEffect(() => {
-    if (!actionsOpen) { setActionsMenuPos(null); return; }
-    const update = () => {
-      const el = actionsTriggerRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setActionsMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
-    };
-    update();
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [actionsOpen]);
 
   const save = (patch: WorkItemUpdate) => {
     updateTask.mutate({ id: item.id, data: patch }, {
@@ -797,137 +764,26 @@ export function WorkItemTableRow({
           </EditableCell>
         );
 
-      case 'actions': {
-        // "변경" 열 — 예전엔 최대 8개 아이콘을 한 줄에 늘어놓았다. 대표 아이콘(Settings2)
-        // 하나로 묶고, hover(또는 클릭)하면 실제 작업이 아이콘·색상·라벨을 갖춘 드롭다운
-        // 목록으로 펼쳐진다. 각 항목은 원래 있던 아이콘/색/조건부 노출 규칙을 그대로 옮긴 것.
-        const isPartial = item.provisionStatus === 'partial';
-        const menuItem = (className: string) =>
-          `w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-left hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`;
+      case 'actions':
+        // "변경" 열 — WorkItemActionsMenu(대표 아이콘 + hover 드롭다운)를 그대로 위임한다.
+        // WorkItemEpicView(에픽뷰)도 동일 컴포넌트를 재사용 — 로직은 그쪽에 단일 소스로 있다.
         return (
           <td key="actions" className="px-4 py-1.5">
-            <div className="relative flex justify-center">
-              <button
-                ref={actionsTriggerRef}
-                type="button"
-                onMouseEnter={openActions}
-                onMouseLeave={scheduleCloseActions}
-                // 클릭은 항상 "열기" — hover 가 먼저 열어둔 상태에서 클릭이 토글로 동작하면
-                // mouseenter 가 이미 켠 것을 곧바로 꺼버려 마우스 사용자에게 무반응처럼
-                // 보였다(닫기는 바깥 클릭/마우스아웃 지연으로 충분히 처리됨).
-                onClick={(e) => { e.stopPropagation(); openActions(); }}
-                className={`p-1.5 rounded-md transition-colors inline-flex items-center gap-1 ${
-                  isPartial ? 'text-status-warning hover:bg-status-warning/10' : 'text-primary hover:bg-primary/10'
-                }`}
-                title="변경 작업 목록"
-                aria-haspopup="menu"
-                aria-expanded={actionsOpen}
-                aria-label="변경 작업 목록 열기"
-              >
-                <Settings2 className="w-4 h-4" />
-                {isPartial && <span className="w-1.5 h-1.5 rounded-full bg-status-warning flex-shrink-0" aria-hidden="true" />}
-              </button>
-              {actionsOpen && actionsMenuPos && createPortal(
-                <>
-                  <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setActionsOpen(false); }} />
-                  <div
-                    onMouseEnter={openActions}
-                    onMouseLeave={scheduleCloseActions}
-                    style={{ position: 'fixed', top: actionsMenuPos.top, right: actionsMenuPos.right }}
-                    className="z-40 w-60 bg-card border border-border rounded-lg mac-shadow p-1"
-                  >
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onEdit(item); }}
-                      className={menuItem('text-foreground')}
-                      title="전체 수정 (리치 텍스트 / 이미지 포함)"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                      전체 수정
-                    </button>
-                    {(!item.jiraIssueKey || isPartial) && onJiraProvision && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onJiraProvision(item); }}
-                        className={menuItem(isPartial ? 'text-status-warning' : 'text-foreground')}
-                        title={isPartial
-                          ? `일부만 생성됨 — ${!item.jiraIssueKey ? item.provisionJiraError || 'Jira 생성 실패' : item.provisionConfluenceError || 'Confluence 생성 실패'} (클릭해서 재시도)`
-                          : 'Jira 이슈 · Confluence 문서 자동 생성'}
-                      >
-                        <Rocket className={`w-3.5 h-3.5 flex-shrink-0 ${isPartial ? 'text-status-warning' : 'text-primary'}`} />
-                        {isPartial ? '일부만 생성됨 — 재시도' : 'Jira · Confluence 자동 생성'}
-                      </button>
-                    )}
-                    {item.jiraIssueKey && onJiraRefresh && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onJiraRefresh(item); }}
-                        disabled={jiraBusy}
-                        className={menuItem('text-foreground')}
-                        title={`Jira(${item.jiraIssueKey})에서 다시 가져오기`}
-                      >
-                        {jiraBusy
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-jira flex-shrink-0" />
-                          : <RefreshCw className="w-3.5 h-3.5 text-brand-jira flex-shrink-0" />}
-                        Jira 다시 가져오기
-                      </button>
-                    )}
-                    {item.jiraIssueKey && onJiraPush && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onJiraPush(item); }}
-                        disabled={jiraBusy}
-                        className={menuItem('text-foreground')}
-                        title={`수정한 내용을 Jira(${item.jiraIssueKey})로 보내기`}
-                      >
-                        <Upload className="w-3.5 h-3.5 text-brand-jira flex-shrink-0" />
-                        Jira 로 보내기
-                      </button>
-                    )}
-                    {item.jiraIssueKey && onJiraLink && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onJiraLink(item); }}
-                        className={menuItem('text-foreground')}
-                        title={`Jira 연결 관리 (${item.jiraIssueKey} 해제 · 다른 이슈로 변경)`}
-                      >
-                        <Link2Off className="w-3.5 h-3.5 text-brand-jira flex-shrink-0" />
-                        Jira 연결 관리
-                      </button>
-                    )}
-                    {item.confluenceUrl && onConfluenceSync && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onConfluenceSync(item); }}
-                        disabled={confluenceBusy}
-                        className={menuItem('text-foreground')}
-                        title="수정한 내용을 연결된 Confluence 문서에 반영"
-                      >
-                        {confluenceBusy
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin text-status-info flex-shrink-0" />
-                          : <Upload className="w-3.5 h-3.5 text-status-info flex-shrink-0" />}
-                        Confluence 문서 동기화
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onAddSubItem(item); }}
-                      className={menuItem('text-foreground')}
-                      title="하위 업무 추가"
-                    >
-                      <GitBranch className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                      하위 업무 추가
-                    </button>
-                    <div className="my-1 border-t border-border" />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActionsOpen(false); onDelete(item); }}
-                      className={menuItem('text-status-critical hover:bg-status-critical/10')}
-                      title="삭제"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
-                      삭제
-                    </button>
-                  </div>
-                </>,
-                document.body,
-              )}
-            </div>
+            <WorkItemActionsMenu
+              item={item}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onAddSubItem={onAddSubItem}
+              onJiraRefresh={onJiraRefresh}
+              onJiraPush={onJiraPush}
+              jiraBusy={jiraBusy}
+              onJiraProvision={onJiraProvision}
+              onJiraLink={onJiraLink}
+              onConfluenceSync={onConfluenceSync}
+              confluenceBusy={confluenceBusy}
+            />
           </td>
         );
-      }
 
       default:
         return null;

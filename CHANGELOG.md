@@ -10,6 +10,25 @@
 
 1.27.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무 관리 게시판 — 에픽뷰 추가**: 목록/달력/칸반 옆에 네 번째 뷰(`에픽뷰`)를 추가했다.
+  Epic → Task → Sub-task 순으로 정렬한 표로, Epic 은 Jira Epic Link(`jiraEpicKey`, 없으면
+  레거시 `jiraEpic` 문자열)로 묶고 Task/Sub-task 는 PEP 자체 상하위(`parentId`) 또는 Jira
+  Task→Sub-task(`jiraParentKey`→`jiraIssueKey`) 체인으로 임의 깊이까지 재귀 구성한다. Epic
+  없는 업무는 "에픽 없음" 그룹으로 모아 목록에서 빠지지 않는다. Epic 그룹·각 하위 노드
+  모두 기본 펼침이며 개별 접기/펼치기가 가능하다. "변경" 열 드롭다운(대표 아이콘 + hover
+  메뉴)은 목록 뷰와 로직을 공유하도록 `WorkItemActionsMenu` 로 분리해 재사용한다.
+  Frontend: `pages/WorkItemBoardPage.tsx`, `components/work-items/WorkItemEpicView.tsx`(신규),
+  `components/work-items/WorkItemActionsMenu.tsx`(신규, `WorkItemTableRow.tsx` 에서 추출).
+
+### Fixed
+- **Jira 신규 이슈 생성 — 라벨/컴포넌트가 Jira 화면에 반영되지 않는 버그**: 업무 등록에서
+  Jira 신규 생성 시 우선순위/담당자/Epic 등 다른 선택 필드 하나만 프로젝트 스킴에 없어도
+  400 응답을 받아 라벨·컴포넌트까지 통째로 빼고 재시도했고, 그 결과 이슈는 생성되지만
+  Jira 화면엔 라벨/컴포넌트가 비어 있었다(PEP 는 요청값 그대로 저장해 표에는 정상 표시되는
+  것처럼 보임). 이제 400 응답의 `errors` 에 실제로 찍힌 필드만 빼고 재시도해, 문제 없는
+  라벨/컴포넌트는 그대로 전송된다. Backend: `services/jira_service.py`(`create_issue`).
+
 ## [1.27.4] - 2026-08-18
 
 ### Changed

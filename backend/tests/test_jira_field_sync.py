@@ -142,8 +142,11 @@ def test_unchanged_stays_unchanged_on_repeated_import():
 
 # ── Sub-task / Epic 생성 ───────────────────────────────────────────────────────
 def test_create_issue_keeps_parent_when_retrying_without_optional_fields():
-    """선택 필드가 프로젝트 스킴에 없어 400 이 나면 그것들만 빼고 재시도하는데,
-    Sub-task 의 `parent` 는 Jira 가 필수로 요구하므로 재시도에서도 남아 있어야 한다."""
+    """선택 필드가 프로젝트 스킴에 없어 400 이 나면 **그 필드만** 빼고 재시도한다 —
+    Sub-task 의 `parent` 는 Jira 가 필수로 요구하므로 재시도에서도 남아 있어야 하고,
+    400 을 유발하지 않은 다른 선택 필드(라벨)는 통째로 같이 빠지면 안 된다(회귀:
+    담당자/우선순위 등 딴 필드 때문에 400 이 나도 라벨·컴포넌트가 함께 날아가
+    Jira 화면에 반영되지 않던 버그)."""
     import asyncio
     import json
 
@@ -156,7 +159,7 @@ def test_create_issue_keeps_parent_when_retrying_without_optional_fields():
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content.decode())
         sent.append(body["fields"])
-        if len(sent) == 1:  # 첫 시도는 선택 필드 때문에 거절
+        if len(sent) == 1:  # 첫 시도는 Epic 필드만 스킴에 없어 거절
             return httpx.Response(400, json={"errors": {"customfield_10008": "not on screen"}})
         return httpx.Response(201, json={"key": "DL-99", "id": "20001"})
 
@@ -167,13 +170,13 @@ def test_create_issue_keeps_parent_when_retrying_without_optional_fields():
     ))
 
     assert res["status"] == "ok" and res["key"] == "DL-99"
-    assert len(sent) == 2, "400 이면 선택 필드를 빼고 1회 재시도해야 한다"
+    assert len(sent) == 2, "400 이면 그 필드만 빼고 1회 재시도해야 한다"
     assert sent[0]["parent"] == {"key": "DL-10"}
     assert sent[0]["customfield_10008"] == "DL-7"
-    # 재시도: Epic/라벨은 빠지고 parent 는 유지.
+    # 재시도: 400 을 유발한 Epic 필드만 빠지고, parent 와 무관한 라벨은 그대로 유지.
     assert sent[1]["parent"] == {"key": "DL-10"}
     assert "customfield_10008" not in sent[1]
-    assert "labels" not in sent[1]
+    assert sent[1]["labels"] == ["infra"]
 
 
 # ── 담당자/마감일 — 이제 title/content 와 동일하게 Jira 가 무조건 소유 ───────────────

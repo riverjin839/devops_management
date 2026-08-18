@@ -4,6 +4,8 @@ export { WorkItemForm } from './WorkItemForm';
 export { WorkItemFormModal } from './WorkItemFormModal';
 export { WorkItemReadView } from './WorkItemReadView';
 export { WorkItemTableRow } from './WorkItemTableRow';
+export { WorkItemActionsMenu } from './WorkItemActionsMenu';
+export { WorkItemEpicView } from './WorkItemEpicView';
 export { JiraPushDialog } from './JiraPushDialog';
 export { JiraLinkDialog } from './JiraLinkDialog';
 export { JiraProvisionModal } from './JiraProvisionModal';
