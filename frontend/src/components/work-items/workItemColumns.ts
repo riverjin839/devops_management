@@ -63,7 +63,9 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
   startedAt: { label: '시작일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'startedAt' },
   closedAt:  { label: '완료일',        defaultWidth: 130, defaultVisible: false, hideable: true, sortKey: 'closedAt' },
   dueDate:   { label: '마감일',        defaultWidth: 130, defaultVisible: true,  hideable: true, sortKey: 'dueDate' },
-  actions:   { label: '관리',          defaultWidth: 110, defaultVisible: true,  hideable: false, headerAlign: 'center' },
+  // 개별 아이콘을 한 줄에 늘어놓던 방식(최대 8개)에서 대표 아이콘 1개 + hover 드롭다운으로
+  // 바뀌면서 폭이 크게 줄었다(WorkItemTableRow.tsx 'actions' case 참고).
+  actions:   { label: '변경',          defaultWidth: 64,  defaultVisible: true,  hideable: false, headerAlign: 'center' },
   priority:  { label: '우선순위',      defaultWidth: 90,  defaultVisible: false, hideable: true, sortKey: 'priority' },
   cluster:   { label: '대상 클러스터', defaultWidth: 140, defaultVisible: false, hideable: true, sortKey: 'clusterName' },
   content:   { label: '업무 내용',     defaultWidth: 280, defaultVisible: false, hideable: true },
@@ -81,7 +83,7 @@ export const WORK_ITEM_COLUMNS: Record<WorkItemColumnKey, WorkItemColumnMeta> = 
 };
 
 /** 기본 컬럼 순서/표시여부 (사용자 요청 고정값): 상태·담당자·상위업무·이슈종류·DL·WIKI·
- *  작업제목·시작일·마감일·관리·업무 분류. 나머지는 기본 숨김(컬럼 설정에서 켤 수 있음).
+ *  작업제목·시작일·마감일·변경·업무 분류. 나머지는 기본 숨김(컬럼 설정에서 켤 수 있음).
  *  행 드래그 핸들(`drag`)은 개인화 대상이 아니라 항상 선두 고정이므로 제외. */
 export const DEFAULT_COLUMN_ORDER: WorkItemColumnKey[] = [
   'status', 'assignee', 'jiraEpic', 'jiraType', 'jiraLink', 'confluenceLink', 'title', 'startedAt', 'dueDate', 'actions', 'category',

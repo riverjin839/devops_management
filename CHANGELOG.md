@@ -10,6 +10,18 @@
 
 1.27.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **업무 관리 게시판 — "관리" 컬럼을 "변경" 으로 개편**: 전체 수정·Jira/Confluence 생성·
+  재가져오기·보내기·연결 관리·동기화·하위 업무 추가·삭제까지 최대 8개였던 개별 아이콘을
+  대표 아이콘(`Settings2`) 하나로 접고, hover(또는 클릭) 시 아이콘·색상·라벨을 갖춘
+  드롭다운으로 펼치도록 바꿨다. 컬럼 라벨도 "관리"→"변경"으로, 기본 폭도 110px→64px로
+  줄었다. 드롭다운은 표의 가로 스크롤/모서리 라운딩 컨테이너에 잘리지 않도록 `document.body`
+  로 portal + fixed 좌표 앵커링(`SearchableSelect` 의 `menuPortal` 과 동일 패턴)한다(기존
+  inline `absolute` 로는 컨테이너 경계에서 잘려 보이지 않는 문제가 있었음). 이미 컬럼 폭을
+  개인화해 저장한 사용자는 기존 폭을 유지하며(컬럼 설정의 "기본값으로 복원"으로 반영 가능),
+  새로 게시판을 여는 사용자만 좁아진 기본 폭을 받는다. Frontend:
+  `components/work-items/WorkItemTableRow.tsx`, `components/work-items/workItemColumns.ts`.
+
 ## [1.27.3] - 2026-08-12
 
 ### Fixed
