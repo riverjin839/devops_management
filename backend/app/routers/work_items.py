@@ -200,7 +200,8 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
                    started_to: Optional[date], closed: Optional[bool],
                    all_attendees: Optional[bool] = None,
                    sprint_id: Optional[UUID] = None,
-                   q: Optional[str] = None):
+                   q: Optional[str] = None,
+                   jira_issue_type: Optional[str] = None):
     if type_:
         query = query.filter(WorkItem.type == type_)
     if q:
@@ -229,6 +230,10 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
         query = query.filter(WorkItem.priority == priority)
     if kanban_status:
         query = query.filter(WorkItem.kanban_status == kanban_status)
+    if jira_issue_type:
+        # "등록 타입" 필터 — Jira 이슈 종류(Task/Sub-task/Bug/...)는 프로젝트마다 값이
+        # 달라 고정 enum 이 아니다. 대소문자 차이까지 같은 값으로 보이게 ILIKE 정확 매칭.
+        query = query.filter(WorkItem.jira_issue_type.ilike(jira_issue_type))
     if module:
         query = query.filter(WorkItem.module == module)
     if started_from:
@@ -253,6 +258,7 @@ def list_work_items(
     category: str | None = Query(default=None, description="카테고리 ILIKE 부분 일치"),
     priority: str | None = Query(default=None, description="우선순위 (high/medium/low)"),
     kanban_status: str | None = Query(default=None, description="칸반 상태 (backlog/todo/in_progress/review_test/done)"),
+    jira_issue_type: str | None = Query(default=None, description="등록 타입 — Jira 이슈 종류 (Task/Sub-task/Bug/... 정확 일치, 대소문자 무시)"),
     module: str | None = Query(default=None, description="모듈 (k8s/keycloak/... 또는 frontend MODULE_CONFIG)"),
     started_from: date | None = Query(default=None, description="started_at 시작 (포함)"),
     started_to: date | None = Query(default=None, description="started_at 종료 (포함)"),
@@ -278,6 +284,7 @@ def list_work_items(
         priority=priority, kanban_status=kanban_status, module=module,
         started_from=started_from, started_to=started_to, closed=closed,
         all_attendees=all_attendees, sprint_id=sprint_id, q=q,
+        jira_issue_type=jira_issue_type,
     )
     # G-C2: 진짜 COUNT 쿼리 (limit 이전) + offset/limit 적용.
     total = query.count()
@@ -301,6 +308,7 @@ def export_csv(
     category: str | None = Query(default=None),
     priority: str | None = Query(default=None),
     kanban_status: str | None = Query(default=None),
+    jira_issue_type: str | None = Query(default=None, description="등록 타입 — Jira 이슈 종류 (Task/Sub-task/Bug/... 정확 일치, 대소문자 무시)"),
     module: str | None = Query(default=None),
     started_from: date | None = Query(default=None),
     started_to: date | None = Query(default=None),
@@ -319,6 +327,7 @@ def export_csv(
     query = db.query(WorkItem)
     query = _apply_filters(
         query, type_=type, cluster_id=cluster_id, assignee=assignee, category=category,
+        jira_issue_type=jira_issue_type,
         priority=priority, kanban_status=kanban_status, module=module,
         started_from=started_from, started_to=started_to, closed=None, q=q,
     )

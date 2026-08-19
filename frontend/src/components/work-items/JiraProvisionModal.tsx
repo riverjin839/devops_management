@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X, Loader2, Rocket, CheckCircle2, AlertTriangle, ExternalLink, FileText, RotateCcw, KeyRound,
-  ListChecks, FolderTree,
+  ListChecks, FolderTree, Search,
 } from 'lucide-react';
 import {
   useProvisionDefaults, useProvision, useJiraIssueLookup, useConfluencePageInfo, useConfluenceChildren,
@@ -16,7 +16,10 @@ const ISSUE_TYPES = ['Epic', 'Task', 'Sub-task'] as const;
 type IssueTypeOption = (typeof ISSUE_TYPES)[number];
 
 /** Epic/상위 이슈 "목록에서 선택" 인라인 피커 — 버튼을 누르면 조회하고, 결과에서 골라
- * 바로 입력칸을 채운다(수동 입력을 대체하지 않고 보조).  */
+ * 바로 입력칸을 채운다(수동 입력을 대체하지 않고 보조). 프로젝트 이슈가 많으면 스크롤로
+ * 찾기 번거로워 키/요약 텍스트로 좁히는 필터 입력을 맨 위에 둔다(로컬 필터 — 별도 조회
+ * 없이 이미 받아온 목록만 좁힌다). `open` 이 꺼지면 언마운트되므로 다시 열 때마다
+ * 필터가 자연히 비워진다.  */
 function IssueLookupPicker({
   open, loading, status, detail, items, onPick,
 }: {
@@ -27,9 +30,33 @@ function IssueLookupPicker({
   items: JiraIssueLookupItem[];
   onPick: (key: string) => void;
 }) {
+  const [filterText, setFilterText] = useState('');
+  const filtered = useMemo(() => {
+    const q = filterText.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((it) => it.key.toLowerCase().includes(q) || it.summary.toLowerCase().includes(q));
+  }, [items, filterText]);
+
   if (!open) return null;
   return (
-    <div className="mt-1 border border-border rounded-lg bg-card max-h-36 overflow-y-auto mac-shadow">
+    <div className="mt-1 border border-border rounded-lg bg-card max-h-48 overflow-y-auto mac-shadow">
+      {!loading && (status === undefined || status === 'ok') && items.length > 0 && (
+        <div className="sticky top-0 bg-card border-b border-border p-1.5">
+          <div className="relative">
+            <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              autoFocus
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="키 또는 제목으로 필터"
+              aria-label="이슈 목록 필터"
+              className="w-full pl-6 pr-2 py-1 text-xs bg-secondary border border-border rounded focus:outline-none focus:border-primary/50"
+            />
+          </div>
+        </div>
+      )}
       {loading && (
         <div className="p-2 text-xs text-muted-foreground flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" /> 불러오는 중…
@@ -41,7 +68,10 @@ function IssueLookupPicker({
       {!loading && status === 'ok' && items.length === 0 && (
         <div className="p-2 text-xs text-muted-foreground">해당 프로젝트에 이슈가 없습니다.</div>
       )}
-      {!loading && items.map((it) => (
+      {!loading && status === 'ok' && items.length > 0 && filtered.length === 0 && (
+        <div className="p-2 text-xs text-muted-foreground">필터에 맞는 이슈가 없습니다.</div>
+      )}
+      {!loading && filtered.map((it) => (
         <button key={it.key} type="button" onClick={() => onPick(it.key)}
           className="w-full text-left px-2 py-1.5 text-xs hover:bg-secondary flex items-center gap-1.5">
           <span className="font-medium text-primary flex-shrink-0">{it.key}</span>
@@ -158,11 +188,22 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parentPageId]);
 
-  // 서버가 준 기본값으로 폼을 채운다 — 이후 사용자가 자유롭게 수정.
-  // 이미 한쪽이 만들어져 있으면(재시도 진입) 그쪽은 기본으로 체크 해제해 "나머지만"
-  // 만드는 흐름을 바로 보여준다.
+  // 모달이 열려 있는 동안 배경에서 defaults 가 다시 조회되면(포커스 복귀·재연결 등 —
+  // useProvisionDefaults 의 staleTime 10초가 지나면 트리거될 수 있음) useQuery 가 새
+  // 객체를 반환한다. 이 effect 가 [defaults, item] 만 보고 무조건 재실행되면 그때마다
+  // 폼 전체가 서버 기본값으로 덮어써져, 사용자가 이미 골라 넣은 Epic 키/상위 이슈를
+  // 포함한 모든 입력이 흔적도 없이 사라지는 버그가 있었다("입력이 안 되는 것"처럼
+  // 보였던 원인). 이번에 모달이 열린 뒤 이 업무 1건에 대해 **한 번만** 초기화하도록
+  // ref 로 막는다 — 모달을 닫았다 다시 열거나 다른 업무로 바뀌면 다시 초기화된다.
+  const initializedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!defaults) return;
+    if (!open) initializedForRef.current = null;
+  }, [open]);
+
+  useEffect(() => {
+    if (!defaults || !item) return;
+    if (initializedForRef.current === item.id) return;
+    initializedForRef.current = item.id;
     setCreateJira(defaults.jiraEnabled && !item?.jiraIssueKey);
     setCreateConfluence(defaults.confluenceEnabled && !item?.confluenceUrl);
     setProjectKey(defaults.projectKey);
