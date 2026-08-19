@@ -23,6 +23,26 @@
   Frontend: `pages/WorkItemBoardPage.tsx`, `components/work-items/WorkItemEpicView.tsx`(신규),
   `components/work-items/WorkItemActionsMenu.tsx`(신규, `WorkItemTableRow.tsx` 에서 추출).
 
+### Changed
+- **업무 관리 게시판 — 목록 컬럼 정리**: "상위업무" 컬럼을 기본 숨김으로 전환했다(Epic→Task
+  체인이 필요하면 에픽뷰를 쓰거나 컬럼 설정에서 켠다). "이슈 종류"→"등록 타입", "DL"→"DL#"
+  으로 라벨을 바꾸고, 이 둘과 "WIKI" 세 컬럼은 짧은 칩 하나만 들어가는데도 기본폭이 넓어
+  오른쪽에 빈 공간이 크게 남던 문제를 폭 자체를 줄이고 오른쪽 패딩도 좁혀(`tightRight`
+  컬럼 메타) 해결했다. "담당자(정/부)" 컬럼은 "담당자"로 이름을 바꾸고 정/부 두 명을
+  함께 관리하던 편집 UI 를 실제 담당자 한 명만 지정하는 단일 편집 셀로 단순화했다
+  (`secondaryAssignee` 필드 자체는 유지 — 칸반/에픽뷰/멤버보드 등 다른 화면은 계속 참조).
+  컬럼 기본값이 여러 곳에서 바뀌어 로컬 저장 키를 `item-board-table-v2`→`v3` 로 올렸다(기존
+  방문자도 새 기본값을 그대로 받는다).
+  Frontend: `components/work-items/workItemColumns.ts`, `WorkItemTableRow.tsx`,
+  `pages/WorkItemBoardPage.tsx`.
+- **업무 관리 게시판 — 컬럼 설정 박스에 "저장" 기능 추가**: 컬럼 순서/표시여부/폭은 이미
+  바뀔 때마다 자동 저장됐지만 사용자가 "지금 저장됐다"를 확인할 방법이 없었다. "컬럼"
+  버튼을 눌러 여는 박스에 "현재 설정을 기본값으로 저장"(디바운스 없이 즉시 저장 + 토스트
+  확인) 버튼을 추가했다. "기본값으로 복원"도 그동안 순서/표시여부만 되돌리고 폭은 그대로
+  두던 걸 폭까지 함께 초기화하도록 고쳤다.
+  Frontend: `hooks/useColumnWidths.ts`/`useColumnLayout.ts`(`saveNow`),
+  `components/work-items/ColumnSettingsMenu.tsx`, `pages/WorkItemBoardPage.tsx`.
+
 ### Fixed
 - **Jira 신규 이슈 생성 — 라벨/컴포넌트가 Jira 화면에 반영되지 않는 버그**: 업무 등록에서
   Jira 신규 생성 시 우선순위/담당자/Epic 등 다른 선택 필드 하나만 프로젝트 스킴에 없어도
@@ -30,6 +50,12 @@
   Jira 화면엔 라벨/컴포넌트가 비어 있었다(PEP 는 요청값 그대로 저장해 표에는 정상 표시되는
   것처럼 보임). 이제 400 응답의 `errors` 에 실제로 찍힌 필드만 빼고 재시도해, 문제 없는
   라벨/컴포넌트는 그대로 전송된다. Backend: `services/jira_service.py`(`create_issue`).
+- **업무 관리 게시판 — "변경" 드롭다운이 hover 시 깜빡이는 버그**: 바깥 클릭을 감지하려고
+  깔았던 전체화면 `fixed inset-0` 오버레이가 (portal 이라 트리거보다 나중에 마운트되면서)
+  트리거 버튼 바로 위에 얹혀 hover 이벤트를 가로챘다 — mouseleave→닫힘→오버레이 사라짐→
+  다시 마우스가 트리거에 닿아 mouseenter→열림 이 반복되며 박스가 깜빡였다. `ColumnSettingsMenu`
+  와 동일한 `mousedown` 전역 리스너 방식으로 바꿔 해결했다.
+  Frontend: `components/work-items/WorkItemActionsMenu.tsx`.
 
 ## [1.27.4] - 2026-08-18
 

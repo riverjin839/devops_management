@@ -40,6 +40,7 @@ export function WorkItemActionsMenu({
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
 
   const openMenu = () => {
@@ -65,6 +66,22 @@ export function WorkItemActionsMenu({
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
     };
+  }, [open]);
+
+  // 바깥 클릭 시 닫기 — 예전엔 `fixed inset-0` 전체화면 오버레이로 처리했는데, 그 오버레이가
+  // (portal 이라 트리거보다 나중에 마운트돼) 트리거 버튼 바로 위에 얹히면서 hover 이벤트를
+  // 가로채 mouseleave→닫힘→다시 마우스가 트리거에 닿아 mouseenter→열림 을 반복해 박스가
+  // 깜빡이는 버그가 있었다(ColumnSettingsMenu 와 동일하게 mousedown 리스너로 교체해 해결).
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
   }, [open]);
 
   const isPartial = item.provisionStatus === 'partial';
@@ -94,9 +111,8 @@ export function WorkItemActionsMenu({
         {isPartial && <span className="w-1.5 h-1.5 rounded-full bg-status-warning flex-shrink-0" aria-hidden="true" />}
       </button>
       {open && menuPos && createPortal(
-        <>
-          <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
           <div
+            ref={menuRef}
             onMouseEnter={openMenu}
             onMouseLeave={scheduleClose}
             style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
@@ -186,8 +202,7 @@ export function WorkItemActionsMenu({
               <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
               삭제
             </button>
-          </div>
-        </>,
+          </div>,
         document.body,
       )}
     </div>
