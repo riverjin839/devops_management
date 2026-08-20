@@ -10,6 +10,17 @@
 
 1.28.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무 관리 게시판 — Settings(공통 설정, admin 전용)**: 게시판 제목 옆 Settings 아이콘을
+  admin 만 볼 수 있고, 클릭하면 (1) 보여주기 뷰(목록/달력/칸반/에픽뷰) 노출 여부 + 기본
+  뷰, (2) 헤더 배지(전체/WIP/Done/지연) 노출 여부를 전 사용자 공통으로 설정할 수 있다.
+  기본값은 에픽뷰+목록만 노출(기본 뷰=에픽뷰, 달력·칸반 숨김), 배지 4개는 전부 숨김.
+  Backend: `GET/PUT /api/v1/ui-settings/work-item-board`(`routers/ui_settings.py`,
+  `AppSetting` key `work_item_board_settings`, GET 은 인증만·PUT 은 `require_admin`).
+  Frontend: `components/work-items/WorkItemBoardSettingsModal.tsx`,
+  `hooks/useUiSettings.ts`(`useWorkItemBoardSettings`/`useUpdateWorkItemBoardSettings`),
+  `pages/WorkItemBoardPage.tsx`.
+
 ## [1.28.0] - 2026-08-20
 
 ### Added

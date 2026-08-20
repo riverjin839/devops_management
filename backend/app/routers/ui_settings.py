@@ -28,6 +28,16 @@ ASSIGNEES_KEY = "assignees"
 FEATURE_ACCESS_KEY = "feature_access"
 DEFAULT_FEATURE_ACCESS: dict = {}
 OPERATION_LEVELS_KEY = "operation_levels"
+WORK_ITEM_BOARD_SETTINGS_KEY = "work_item_board_settings"
+BOARD_VIEW_KEYS = ("epic", "table", "calendar", "kanban")
+BOARD_BADGE_KEYS = ("total", "wip", "done", "overdue")
+# 업무 관리 게시판 공통(전 사용자 공유) 설정 — admin 전용 편집. 기본값은 에픽뷰·목록만
+# 노출하고 달력·칸반은 숨김, 헤더 배지(전체/WIP/Done/지연) 4개는 전부 숨김으로 시작한다.
+DEFAULT_WORK_ITEM_BOARD_SETTINGS = {
+    "view_visibility": {"epic": True, "table": True, "calendar": False, "kanban": False},
+    "default_view": "epic",
+    "badge_visibility": {"total": False, "wip": False, "done": False, "overdue": False},
+}
 DEFAULT_ASSIGNEES = []
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 DEFAULT_OPERATION_LEVELS = {
@@ -375,6 +385,70 @@ def update_feature_access(payload: dict, db: Session = Depends(get_db),
     db.commit()
     db.refresh(setting)
     return {"data": access}
+
+
+# ── 업무 관리 게시판 공통 설정 (Settings) ─────────────────────────────────────────
+# 뷰(목록/달력/칸반/에픽뷰) 노출 여부 + 기본 뷰, 헤더 배지(전체/WIP/Done/지연) 노출 여부 —
+# 전 사용자 공통 적용(개인화 아님). admin 만 PUT 가능, 조회는 게시판을 보는 모든
+# 사용자가 필요해 인증만 요구한다.
+def _normalize_board_settings(raw) -> dict:
+    if not isinstance(raw, dict):
+        raw = {}
+
+    raw_vis = raw.get("view_visibility")
+    raw_vis = raw_vis if isinstance(raw_vis, dict) else {}
+    view_visibility = {
+        k: bool(raw_vis[k]) if k in raw_vis else DEFAULT_WORK_ITEM_BOARD_SETTINGS["view_visibility"][k]
+        for k in BOARD_VIEW_KEYS
+    }
+    # 전부 꺼지면 게시판이 아예 안 보이게 되므로 기본값으로 되돌린다.
+    if not any(view_visibility.values()):
+        view_visibility = dict(DEFAULT_WORK_ITEM_BOARD_SETTINGS["view_visibility"])
+
+    default_view = raw.get("default_view")
+    if default_view not in BOARD_VIEW_KEYS or not view_visibility.get(default_view):
+        # 보이는 뷰 중 우선순위(에픽뷰 → 목록 → 칸반 → 달력)로 폴백.
+        default_view = next(
+            (k for k in ("epic", "table", "kanban", "calendar") if view_visibility.get(k)),
+            "table",
+        )
+
+    raw_badges = raw.get("badge_visibility")
+    raw_badges = raw_badges if isinstance(raw_badges, dict) else {}
+    badge_visibility = {
+        k: bool(raw_badges[k]) if k in raw_badges else DEFAULT_WORK_ITEM_BOARD_SETTINGS["badge_visibility"][k]
+        for k in BOARD_BADGE_KEYS
+    }
+
+    return {
+        "view_visibility": view_visibility,
+        "default_view": default_view,
+        "badge_visibility": badge_visibility,
+    }
+
+
+@router.get("/work-item-board")
+def get_work_item_board_settings(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    setting = _get_or_create(db, WORK_ITEM_BOARD_SETTINGS_KEY, DEFAULT_WORK_ITEM_BOARD_SETTINGS)
+    return {"data": _normalize_board_settings(setting.value)}
+
+
+@router.put("/work-item-board")
+def update_work_item_board_settings(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """업무 관리 게시판 공통 설정 저장 — admin 전용."""
+    settings = _normalize_board_settings(payload.get("data", payload))
+    setting = _get_or_create(db, WORK_ITEM_BOARD_SETTINGS_KEY, DEFAULT_WORK_ITEM_BOARD_SETTINGS)
+    setting.value = settings
+    db.commit()
+    db.refresh(setting)
+    return {"data": settings}
 
 
 # ── 운영레벨 (사용자 정의) ──────────────────────────────────────────────

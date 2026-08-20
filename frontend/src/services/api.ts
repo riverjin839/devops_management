@@ -1088,6 +1088,10 @@ export const uiSettingsApi = {
     api.get<{ data: import('@/types').FeatureAccessMap }>('/ui-settings/feature-access'),
   updateFeatureAccess: (access: import('@/types').FeatureAccessMap) =>
     api.put<{ data: import('@/types').FeatureAccessMap }>('/ui-settings/feature-access', { access }),
+  getWorkItemBoardSettings: () =>
+    api.get<{ data: import('@/types').WorkItemBoardSettings }>('/ui-settings/work-item-board'),
+  updateWorkItemBoardSettings: (data: import('@/types').WorkItemBoardSettings) =>
+    api.put<{ data: import('@/types').WorkItemBoardSettings }>('/ui-settings/work-item-board', { data }),
 };
 
 export const nodeLabelsApi = {
