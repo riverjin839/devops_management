@@ -746,7 +746,7 @@ export function WorkItemBoardPage() {
                 title="Jira 이슈를 work item 으로 가져오기"
               >
                 <Download className="w-4 h-4" />
-                Jira 가져오기
+                JIRA
               </button>
             )}
             {jiraConfig?.confluenceBaseUrl && (
@@ -756,16 +756,17 @@ export function WorkItemBoardPage() {
                 title="Confluence 문서를 work item 으로 가져오기"
               >
                 <DownloadCloud className="w-4 h-4" />
-                Confluence 연동
+                Confluence
               </button>
             )}
             {viewMode !== 'calendar' && items.length > 0 && (
               <button
                 onClick={handleExportCsv}
                 className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
+                title="현재 목록을 CSV 로 추출"
               >
                 <Download className="w-4 h-4" />
-                CSV 추출
+                CSV
               </button>
             )}
             <button

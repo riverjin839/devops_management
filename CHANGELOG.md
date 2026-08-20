@@ -23,6 +23,12 @@
   필터 입력을 추가했다(로컬 필터 — 이미 받아온 목록만 좁히고 추가 조회는 하지 않음).
   Frontend: `components/work-items/JiraProvisionModal.tsx`(`IssueLookupPicker`).
 
+### Changed
+- **업무 관리 게시판 — 헤더 버튼 라벨 축약**: "Jira 가져오기"→"JIRA", "Confluence 연동"→
+  "Confluence", "CSV 추출"→"CSV" 로 버튼 표시 텍스트를 줄였다. 전체 설명은 각 버튼의
+  `title` 툴팁으로 옮겼다(CSV 버튼은 툴팁이 없었어서 새로 추가).
+  Frontend: `pages/WorkItemBoardPage.tsx`.
+
 ### Fixed
 - **Jira 자동 생성 팝업 — Epic/상위 이슈를 고른 뒤 입력이 안 되는(사라지는) 버그**: 폼을
   서버 기본값으로 채우는 effect 가 `[defaults, item]` 이 바뀔 때마다(모달을 열어둔 채로
