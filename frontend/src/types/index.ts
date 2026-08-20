@@ -1603,6 +1603,16 @@ export interface FeatureAccessRule {
 }
 export type FeatureAccessMap = Record<string, FeatureAccessRule>;
 
+// 업무 관리 게시판 공통 설정 — 뷰(목록/달력/칸반/에픽뷰) 노출 여부 + 기본 뷰,
+// 헤더 배지(전체/WIP/Done/지연) 노출 여부. 전 사용자 공통 적용, admin 만 수정 가능.
+export type WorkItemBoardViewKey = 'epic' | 'table' | 'calendar' | 'kanban';
+export type WorkItemBoardBadgeKey = 'total' | 'wip' | 'done' | 'overdue';
+export interface WorkItemBoardSettings {
+  viewVisibility: Record<WorkItemBoardViewKey, boolean>;
+  defaultView: WorkItemBoardViewKey;
+  badgeVisibility: Record<WorkItemBoardBadgeKey, boolean>;
+}
+
 // Assignee (담당자)
 export interface Assignee {
   name: string;

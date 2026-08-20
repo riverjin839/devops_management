@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { formatApiError } from '@/lib/utils';
-import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, ListTree, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save } from 'lucide-react';
+import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban, ListTree, AlertCircle, AlertTriangle, GripVertical, ListFilter, DownloadCloud, CalendarRange, UserRound, Search, Save, Settings } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -14,6 +14,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useColumnLayout } from '@/hooks/useColumnLayout';
 import { JiraImportModal } from '@/components/work-items/JiraImportModal';
 import { ConfluenceLinkModal } from '@/components/work-items/ConfluenceLinkModal';
+import { WorkItemBoardSettingsModal } from '@/components/work-items/WorkItemBoardSettingsModal';
 import { QuickAddTaskModal } from '@/components/dashboard/QuickAddTaskModal';
 import { useJiraConfig, useJiraRefreshItem, useJiraPush, useConfluenceSync } from '@/hooks/useJira';
 import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER, KANBAN_COLUMNS } from '@/components/work-items/workItemKanbanUtils';
@@ -24,7 +25,8 @@ import { useSprints } from '@/hooks/useSprints';
 import { useClusterStore } from '@/stores/clusterStore';
 import { workItemsApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, hasRole } from '@/stores/authStore';
+import { useWorkItemBoardSettings } from '@/hooks/useUiSettings';
 import { WorkItem, WorkItemModule, WorkItemType, JiraFieldChange, KanbanStatus } from '@/types';
 
 type ViewMode = 'table' | 'calendar' | 'kanban' | 'epic';
@@ -258,6 +260,17 @@ export function WorkItemBoardPage() {
   const savedFilters = useMemo(() => loadFilterPrefs(myUsername), [myUsername]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  // 업무 관리 게시판 공통 설정(admin 전용) — 뷰 노출/기본 뷰, 헤더 배지 노출.
+  const { data: boardSettings } = useWorkItemBoardSettings();
+  const isAdmin = hasRole(currentUser, 'admin');
+  // 서버 기본 뷰는 최초 로드 시 1번만 적용 — 이후 리페치로 사용자가 이미 바꾼 뷰를
+  // 덮어쓰지 않는다 (HomePage.tsx 의 appliedServerDefault 패턴과 동일).
+  const appliedDefaultView = useRef(false);
+  useEffect(() => {
+    if (appliedDefaultView.current || boardSettings === undefined) return;
+    appliedDefaultView.current = true;
+    setViewMode(boardSettings.defaultView);
+  }, [boardSettings]);
   const [typeFilter, setTypeFilter] = useState<WorkItemType | 'all'>(savedFilters.type);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState(savedFilters.assignee);
@@ -365,6 +378,7 @@ export function WorkItemBoardPage() {
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
   const [jiraOpen, setJiraOpen] = useState(false);
   const [confluenceOpen, setConfluenceOpen] = useState(false);
+  const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
   // 업무 등록/수정/하위 업무 등록 — 홈 화면 "업무 등록"과 동일한 팝업(QuickAddTaskModal)
   // 하나로 통일. initial 이 있으면 수정 모드, subItemParent 가 있으면 하위 업무 등록
   // 모드(상위 업무를 읽기전용으로 보여줌), 둘 다 없으면 신규(상위) 등록.
@@ -688,12 +702,25 @@ export function WorkItemBoardPage() {
           <div className="flex items-center gap-3">
             <ListTodo className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">업무 관리 게시판</h1>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setBoardSettingsOpen(true)}
+                title="업무 관리 게시판 설정"
+                aria-label="업무 관리 게시판 설정"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
             {items.length > 0 && (
               <div className="flex items-center gap-2 ml-4">
-                <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
-                  전체 {items.length}
-                </span>
-                {inProgressCount > 0 && (
+                {boardSettings?.badgeVisibility.total && (
+                  <span className="text-sm px-2 py-0.5 rounded-full bg-status-unknown/15 text-status-unknown border border-status-unknown/30">
+                    전체 {items.length}
+                  </span>
+                )}
+                {boardSettings?.badgeVisibility.wip && inProgressCount > 0 && (
                   <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border ${
                     inProgressCount > wipLimit
                       ? 'bg-status-critical/15 text-status-critical border-status-critical/30'
@@ -705,12 +732,12 @@ export function WorkItemBoardPage() {
                     )}
                   </span>
                 )}
-                {doneCount > 0 && (
+                {boardSettings?.badgeVisibility.done && doneCount > 0 && (
                   <span className="text-sm px-2 py-0.5 rounded-full bg-status-healthy/15 text-status-healthy border border-status-healthy/30">
                     Done {doneCount}
                   </span>
                 )}
-                {overdueCount > 0 && (
+                {boardSettings?.badgeVisibility.overdue && overdueCount > 0 && (
                   <button
                     type="button"
                     onClick={focusOverdue}
@@ -733,7 +760,7 @@ export function WorkItemBoardPage() {
                 { id: 'calendar', label: '달력',   icon: <CalendarDays className="w-3.5 h-3.5" /> },
                 { id: 'kanban',   label: '칸반',   icon: <Kanban      className="w-3.5 h-3.5" /> },
                 { id: 'epic',     label: '에픽뷰', icon: <ListTree    className="w-3.5 h-3.5" /> },
-              ]}
+              ].filter((m) => !boardSettings || boardSettings.viewVisibility[m.id as ViewMode])}
               active={viewMode}
               onChange={(v) => setViewMode(v as ViewMode)}
               showStylePanel={false}
@@ -1128,6 +1155,9 @@ export function WorkItemBoardPage() {
 
       <JiraImportModal open={jiraOpen} onClose={() => setJiraOpen(false)} defaultProjectKey={jiraConfig?.defaultProjectKey} />
       <ConfluenceLinkModal open={confluenceOpen} onClose={() => setConfluenceOpen(false)} />
+      {isAdmin && (
+        <WorkItemBoardSettingsModal open={boardSettingsOpen} onClose={() => setBoardSettingsOpen(false)} />
+      )}
       <JiraProvisionModal open={!!provisionItem} onClose={() => setProvisionItem(null)} item={provisionItem} />
       <JiraLinkDialog
         open={!!linkItem}
