@@ -38,6 +38,8 @@ interface WorkItemFilterPrefs {
   assignee: string;
   priority: string;
   status: KanbanStatus | 'all';
+  /** 등록 타입 — Jira 이슈 종류(Task/Sub-task/Bug/...). 빈 문자열 = 전체. */
+  jiraType: string;
   module: WorkItemModule | '';
   sprintId: string;
   from: string;
@@ -49,7 +51,7 @@ interface WorkItemFilterPrefs {
 // 기본 필터링은 아무것도 없는 상태(전체 담당자 · 전체 유형/상태 · 조건 없음)로 시작한다.
 // "필터 저장" 버튼을 눌러야 이 값이 사용자별로 덮어써진다 — 매 키 입력마다 자동 저장하지 않는다.
 const EMPTY_FILTER_PREFS: WorkItemFilterPrefs = {
-  type: 'all', assignee: '', priority: '', status: 'all', module: '', sprintId: '', from: '', to: '', searchTitle: '', onlyMine: false,
+  type: 'all', assignee: '', priority: '', status: 'all', jiraType: '', module: '', sprintId: '', from: '', to: '', searchTitle: '', onlyMine: false,
 };
 
 function filterPrefsKey(username: string): string {
@@ -264,6 +266,7 @@ export function WorkItemBoardPage() {
   const [filterTo, setFilterTo] = useState(savedFilters.to);
   const [filterModule, setFilterModule] = useState<WorkItemModule | ''>(savedFilters.module);
   const [filterKanbanStatus, setFilterKanbanStatus] = useState<KanbanStatus | 'all'>(savedFilters.status);
+  const [filterJiraType, setFilterJiraType] = useState(savedFilters.jiraType);
   // 제목 검색 — 서버사이드 ILIKE(title/content). 타이핑 중 매 키 입력마다 재조회하지
   // 않도록 300ms 디바운스 후 실제 필터(debouncedSearchTitle)에 반영.
   const [searchTitle, setSearchTitle] = useState(savedFilters.searchTitle);
@@ -334,6 +337,7 @@ export function WorkItemBoardPage() {
     assignee: effectiveAssignee || undefined,
     priority: filterPriority || undefined,
     kanbanStatus: filterKanbanStatus === 'all' ? undefined : filterKanbanStatus,
+    jiraIssueType: filterJiraType || undefined,
     module: filterModule || undefined,
     sprintId: filterSprintId || undefined,
     startedFrom: filterFrom || undefined,
@@ -343,6 +347,20 @@ export function WorkItemBoardPage() {
 
   const { data, isLoading, error } = useWorkItems(filters);
   const items = data?.data ?? [];
+  // "등록 타입" 드롭다운 옵션 — Jira 이슈 종류는 프로젝트마다 값이 달라 고정 enum 이 아니다.
+  // 지금까지 어떤 필터 조합으로든 조회에 걸려든 값을 계속 누적해 옵션으로 쓴다 — 등록
+  // 타입으로 좁혀 걸었을 때 그 값 하나만 남아 다른 옵션이 사라지는 걸 막기 위함(한 번이라도
+  // 넓게 조회된 적이 있으면 계속 선택지에 남는다).
+  const [seenJiraTypes, setSeenJiraTypes] = useState<string[]>([]);
+  useEffect(() => {
+    const found = Array.from(new Set(items.map((i) => i.jiraIssueType).filter((t): t is string => !!t)));
+    if (found.some((t) => !seenJiraTypes.includes(t))) {
+      setSeenJiraTypes((prev) => Array.from(new Set([...prev, ...found])).sort());
+    }
+    // seenJiraTypes 를 deps 에 넣으면 갱신 직후 다시 실행되며 무한 루프가 될 수 있어 제외 —
+    // items 가 바뀔 때만 "새로 본 값이 있는지" 확인하면 충분하다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
   // G-I9: ConfirmDialog state — window.confirm 대체
   const [confirmDelete, setConfirmDelete] = useState<WorkItem | null>(null);
   const [jiraOpen, setJiraOpen] = useState(false);
@@ -409,7 +427,7 @@ export function WorkItemBoardPage() {
     if (!myUsername) return;
     const prefs: WorkItemFilterPrefs = {
       type: typeFilter, assignee: filterAssignee, priority: filterPriority, status: filterKanbanStatus,
-      module: filterModule, sprintId: filterSprintId, from: filterFrom, to: filterTo,
+      jiraType: filterJiraType, module: filterModule, sprintId: filterSprintId, from: filterFrom, to: filterTo,
       searchTitle: debouncedSearchTitle, onlyMine,
     };
     try {
@@ -631,6 +649,7 @@ export function WorkItemBoardPage() {
     setFilterAssignee('');
     setFilterPriority('');
     setFilterKanbanStatus('all');
+    setFilterJiraType('');
     setFilterModule('');
     setFilterSprintId('');
     setFilterFrom('');
@@ -640,7 +659,7 @@ export function WorkItemBoardPage() {
 
   // "내 업무"(기본값)는 초기화 대상이 아니다 — 빈 목록이 떴을 때 안내 문구를 고르는 데만 쓴다.
   const hasFilters = !!(filterClusterId || filterAssignee || filterPriority
-    || filterKanbanStatus !== 'all' || filterModule || filterSprintId || filterFrom || filterTo || searchTitle);
+    || filterKanbanStatus !== 'all' || filterJiraType || filterModule || filterSprintId || filterFrom || filterTo || searchTitle);
   const isFilteredView = hasFilters || (onlyMine && !!myName);
 
   const inProgressCount = items.filter((t) => t.kanbanStatus === 'in_progress').length;
@@ -727,7 +746,7 @@ export function WorkItemBoardPage() {
                 title="Jira 이슈를 work item 으로 가져오기"
               >
                 <Download className="w-4 h-4" />
-                Jira 가져오기
+                JIRA
               </button>
             )}
             {jiraConfig?.confluenceBaseUrl && (
@@ -737,16 +756,17 @@ export function WorkItemBoardPage() {
                 title="Confluence 문서를 work item 으로 가져오기"
               >
                 <DownloadCloud className="w-4 h-4" />
-                Confluence 연동
+                Confluence
               </button>
             )}
             {viewMode !== 'calendar' && items.length > 0 && (
               <button
                 onClick={handleExportCsv}
                 className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
+                title="현재 목록을 CSV 로 추출"
               >
                 <Download className="w-4 h-4" />
-                CSV 추출
+                CSV
               </button>
             )}
             <button
@@ -808,6 +828,19 @@ export function WorkItemBoardPage() {
             <option value="medium">보통</option>
             <option value="low">낮음</option>
           </select>
+          {seenJiraTypes.length > 0 && (
+            <select
+              value={filterJiraType}
+              onChange={(e) => setFilterJiraType(e.target.value)}
+              aria-label="등록 타입"
+              className="px-2 py-1.5 text-sm bg-secondary border border-border rounded-lg focus:outline-none focus:border-primary/50"
+            >
+              <option value="">전체 등록 타입</option>
+              {seenJiraTypes.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          )}
           <select
             value={filterModule}
             onChange={(e) => setFilterModule(e.target.value as WorkItemModule | '')}

@@ -10,6 +10,35 @@
 
 1.27.5 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **업무 관리 게시판 — 등록 타입(Jira 이슈 종류) 필터**: 필터 바에 등록 타입(Task/Sub-task/
+  Bug/...) 드롭다운을 추가했다. Jira 이슈 종류는 프로젝트마다 값이 달라 고정 enum 이
+  아니라, 그동안 어떤 조회로든 걸려든 값을 계속 누적해(`seenJiraTypes`) 옵션으로 쓴다 —
+  등록 타입으로 좁혀 걸었을 때 그 값 하나만 남아 다른 선택지가 사라지는 걸 막기 위함.
+  Backend: `routers/work_items.py`(`_apply_filters` `jira_issue_type` — ILIKE 정확 일치,
+  `GET /work-items` · `GET /work-items/export/csv` 둘 다 적용). Frontend:
+  `pages/WorkItemBoardPage.tsx`, `services/api.ts`(`WorkItemFilters.jiraIssueType`).
+- **Jira 자동 생성 팝업 — Epic 키/상위 이슈 선택 목록에 텍스트 필터 추가**: 프로젝트
+  이슈가 많으면 목록에서 원하는 걸 찾기 번거로워, 조회된 목록 위에 키/제목으로 좁히는
+  필터 입력을 추가했다(로컬 필터 — 이미 받아온 목록만 좁히고 추가 조회는 하지 않음).
+  Frontend: `components/work-items/JiraProvisionModal.tsx`(`IssueLookupPicker`).
+
+### Changed
+- **업무 관리 게시판 — 헤더 버튼 라벨 축약**: "Jira 가져오기"→"JIRA", "Confluence 연동"→
+  "Confluence", "CSV 추출"→"CSV" 로 버튼 표시 텍스트를 줄였다. 전체 설명은 각 버튼의
+  `title` 툴팁으로 옮겼다(CSV 버튼은 툴팁이 없었어서 새로 추가).
+  Frontend: `pages/WorkItemBoardPage.tsx`.
+
+### Fixed
+- **Jira 자동 생성 팝업 — Epic/상위 이슈를 고른 뒤 입력이 안 되는(사라지는) 버그**: 폼을
+  서버 기본값으로 채우는 effect 가 `[defaults, item]` 이 바뀔 때마다(모달을 열어둔 채로
+  10초 넘게 있다가 창 포커스가 돌아오는 등, `useProvisionDefaults` 의 배경 재조회로도
+  트리거됨) 무조건 다시 실행돼 폼 전체를 초기화했다 — 사용자가 이미 골라 넣은 Epic
+  키·상위 이슈를 포함한 모든 입력이 조용히 사라져 "입력이 안 되는" 것처럼 보였다. 이
+  모달이 열린 뒤 업무 1건당 **한 번만** 초기화하도록 고쳐, 배경 재조회가 입력값을 덮어
+  쓰지 않는다.
+  Frontend: `components/work-items/JiraProvisionModal.tsx`.
+
 ## [1.27.5] - 2026-08-18
 
 ### Added

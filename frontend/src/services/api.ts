@@ -866,6 +866,8 @@ export interface WorkItemFilters {
   category?: string;
   priority?: string;
   kanbanStatus?: string;
+  /** 등록 타입 — Jira 이슈 종류 (Task/Sub-task/Bug/... 정확 일치, 대소문자 무시). */
+  jiraIssueType?: string;
   module?: string;
   startedFrom?: string;
   startedTo?: string;
