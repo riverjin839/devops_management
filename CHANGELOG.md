@@ -10,6 +10,26 @@
 
 1.29.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **시스템 담당자 명부와 로그인 계정을 하나로 통합**: 지금까지 담당자 명부(사번/이메일/
+  좌석 등)는 `app_settings` 의 JSON 목록, 로그인 계정(`users` 테이블)은 별도 저장소였고
+  둘 사이는 "사번이 있으면 로그인 계정을 한 번 만들어 준다"는 단방향·생성전용 동기화로만
+  이어져 있었다 — 명부에서 이름을 고쳐도 이미 만든 계정에는 반영되지 않고, 계정 쪽에서
+  역할을 바꿔도 명부에는 보이지 않는 문제가 있었다. 이제 `users` 테이블 자체가 담당자
+  명부를 겸한다(사번이 있으면 로그인 필드까지 채워진 한 행, 없으면 로그인 없는 순수 명부
+  행). Settings ▸ 시스템 담당자 탭의 "담당자 명부"/"로그인 계정" 서브탭 2개도 하나의 표로
+  합쳐졌다 — 사번 입력 시 로그인 계정이 자동 발급되고, 사번을 지우면 자동 해제된다.
+  Backend: `models/user.py`(`User` 에 `employee_id`/`email`/`ip`/`seat_location`/
+  `primary_role`/`secondary_role` 추가, `username`/`hashed_password` nullable),
+  `routers/ui_settings.py`(`/assignees`·`/assignees/me` 가 `users` 테이블을 직접
+  다룸), `routers/jira.py`(담당자 매칭 헬퍼가 `users` 테이블 기준으로 단순화),
+  `routers/work_items.py`(ownership 판정의 사번↔이름 브리지가 더 이상 별도 조회 없이
+  로그인 사용자 자신의 행에서 바로 나옴), `services/assignee_accounts.py`(구 JSON
+  명부를 흡수하는 1회성 마이그레이션), `main.py`(부팅 시 1회 마이그레이션 실행).
+  Frontend: `components/settings/AssigneeManager.tsx`(명부+계정 통합 표, 역할 변경·
+  비밀번호 재설정·삭제·명부 무관 계정 추가 포함), `SystemUserAccountManager.tsx` 제거,
+  `SettingsPage.tsx`(서브탭 제거), `types/index.ts`(`Assignee` 타입에 계정 필드 추가).
+
 ## [1.29.0] - 2026-08-20
 
 ### Added

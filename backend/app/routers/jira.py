@@ -101,7 +101,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jira", tags=["jira"])
 
 JIRA_SETTINGS_KEY = "jira_integration"
-ASSIGNEES_KEY = "assignees"
 DEFAULT_JIRA_SETTINGS = {
     "base_url": "",
     "enabled": False,
@@ -140,8 +139,8 @@ def _build_assignee_resolver(db: Session, *, self_name: Optional[str] = None):
          `assignee = currentUser()`)임을 이미 알 때 넘긴다. Jira 쪽 표시명이 어떻게
          생겼든(회사명 접미사 등) 신원이 이미 확정돼 있으므로 문자열 매칭을 아예
          건너뛰고 그대로 쓴다.
-      2. Jira `emailAddress` ↔ 담당자 레지스트리 `email` — 이름은 동명이인이 있을 수
-         있지만 이메일은 고유하므로, Jira 가 이메일을 노출하는 인스턴스에서는 표시명
+      2. Jira `emailAddress` ↔ 담당자 명부(users 테이블) `email` — 이름은 동명이인이 있을
+         수 있지만 이메일은 고유하므로, Jira 가 이메일을 노출하는 인스턴스에서는 표시명
          표기와 무관하게 안전하게 매칭된다.
       3. displayName 전체 문자열 정확 매칭(대소문자 무시) — 회사명이 안 붙는 인스턴스 호환.
       4. 첫 토큰(공백 앞부분) 매칭 — Jira 표시명이 "이름 회사명" 형태인 가장 흔한 케이스
@@ -149,22 +148,21 @@ def _build_assignee_resolver(db: Session, *, self_name: Optional[str] = None):
       5. 전부 실패하면 Jira 원본 표시명 그대로.
     """
     try:
-        row = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
-        registry = row.value if row and isinstance(row.value, list) else []
+        registry = db.query(User.display_name, User.email).filter(
+            User.display_name.isnot(None),
+        ).all()
     except Exception:  # noqa: BLE001
         registry = []
     by_lower: dict[str, str] = {}
     by_email: dict[str, str] = {}
-    for a in registry:
-        if not isinstance(a, dict):
-            continue
-        name = str(a.get("name") or "").strip()
+    for display_name, email in registry:
+        name = str(display_name or "").strip()
         if not name:
             continue
         by_lower[name.lower()] = name
-        email = str(a.get("email") or "").strip().lower()
-        if email:
-            by_email[email] = name
+        email_s = str(email or "").strip().lower()
+        if email_s:
+            by_email[email_s] = name
 
     def _resolve(assignee_obj: dict) -> str:
         if self_name:
@@ -184,27 +182,14 @@ def _build_assignee_resolver(db: Session, *, self_name: Optional[str] = None):
 
 
 def _resolve_self_assignee_name(actor: User, db: Session) -> str:
-    """로그인 사용자 자신의 PEP 담당자 표시 이름 — 담당자 레지스트리에서 사번(employeeId)
-    으로 역참조한다(고유 식별자 기준 — `_resolve_owner_identities` 와 동일한 사번↔이름
-    브리지). scope='me' Jira 가져오기는 JQL(`assignee = currentUser()`) 로 대상이 로그인
-    사용자 자신임이 이미 확정되므로, Jira 쪽 표시명 표기(회사명 접미사 등)와 무관하게
-    이 이름을 그대로 쓴다. 레지스트리에 없으면 로그인 표시 이름 → username 순으로 폴백."""
-    username = (actor.username or "").strip()
-    try:
-        row = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
-        registry = row.value if row and isinstance(row.value, list) else []
-    except Exception:  # noqa: BLE001
-        registry = []
-    if username:
-        for a in registry:
-            if not isinstance(a, dict):
-                continue
-            emp = str(a.get("employeeId") or a.get("employee_id") or "").strip()
-            if emp and emp == username:
-                name = str(a.get("name") or "").strip()
-                if name:
-                    return name
-    return (actor.display_name or "").strip() or username
+    """로그인 사용자 자신의 PEP 담당자 표시 이름.
+
+    담당자 명부(users 테이블) 와 로그인 계정이 한 행이므로 `actor.display_name` 이
+    곧 담당자 이름이다 — 예전엔 명부(JSON)를 고쳐도 이미 생성된 로그인 계정의
+    display_name 은 갱신되지 않아 두 값이 어긋날 수 있었고, 그래서 사번으로 명부를
+    다시 조회해 "진짜" 이름을 가져오는 역참조가 필요했다. 지금은 같은 행이라 그 드리프트
+    자체가 불가능하다. display_name 이 비어 있으면 username 으로 폴백."""
+    return (actor.display_name or "").strip() or (actor.username or "").strip()
 
 
 def _resolve_jira_username(db: Session, pep_username: str) -> Optional[str]:
@@ -305,11 +290,10 @@ def _resolve_sprint_id(db: Session, cache: dict[str, Optional[str]], sprint_name
 
 def _build_assignee_roster(db: Session) -> dict[str, str]:
     """등록된 담당자 name → name (대소문자 무시 매칭용 조회 테이블)."""
-    row = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
-    registry = row.value if row and isinstance(row.value, list) else []
+    rows = db.query(User.display_name).filter(User.display_name.isnot(None)).all()
     return {
-        str(a["name"]).strip().lower(): str(a["name"]).strip()
-        for a in registry if isinstance(a, dict) and a.get("name")
+        name.strip().lower(): name.strip()
+        for (name,) in rows if name and name.strip()
     }
 
 

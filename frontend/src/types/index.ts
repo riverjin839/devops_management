@@ -1615,6 +1615,7 @@ export interface WorkItemBoardSettings {
 
 // Assignee (담당자)
 export interface Assignee {
+  // 담당자 명부 필드 (users 테이블 자체가 명부다 — 로그인 계정과 분리된 저장소가 아니다).
   name: string;
   employeeId?: string;
   email?: string;
@@ -1622,6 +1623,13 @@ export interface Assignee {
   seatLocation?: string;
   primaryRole?: string;
   secondaryRole?: string;
+  // 로그인 계정 필드 — admin 으로 조회할 때만 채워진다(비-admin 응답에는 없음).
+  id?: string;
+  username?: string;
+  accountRole?: 'admin' | 'operator' | 'viewer';
+  isActive?: boolean;
+  hasLogin?: boolean;
+  createdAt?: string;
 }
 
 /** 본인이 직접 수정할 수 있는 담당자 필드 (이름/사번은 admin 전용이라 제외). */

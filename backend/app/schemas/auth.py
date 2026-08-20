@@ -18,7 +18,9 @@ class TokenResponse(BaseModel):
 
 class UserOut(BaseModel):
     id: str
-    username: str
+    # 로그인 없는 순수 담당자 명부 행(사번 미보유)은 username 이 없다 — users 테이블이
+    # 담당자 명부를 겸하므로 GET /auth/users 목록에 그런 행도 함께 나올 수 있다.
+    username: str | None = None
     role: str
     display_name: str | None = None
     is_active: bool

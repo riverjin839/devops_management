@@ -160,9 +160,9 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 인증 / 사용자 / 설정
 | 기능 | 위치 |
 |---|---|
-| 로그인/JWT/사용자 관리 | `backend/app/routers/auth.py` → `frontend/src/pages/LoginPage.tsx` · `components/settings/SystemUserAccountManager.tsx`(Settings ▸ 시스템 담당자 ▸ 로그인 계정 서브탭) · `ChangePasswordPage.tsx` |
+| 로그인/JWT/계정 역할·비밀번호 관리 | `backend/app/routers/auth.py`(`User` 모델 = 담당자 명부 겸 로그인 계정, `models/user.py` 참고) → `frontend/src/pages/LoginPage.tsx` · `ChangePasswordPage.tsx` |
 | 시스템 설정 (admin) | `backend/app/routers/ui_settings.py` · `terminal_appearance.py` → `frontend/src/pages/SettingsPage.tsx` |
-| 담당자 관리 / 내 담당자 정보 | `backend/app/routers/ui_settings.py` (`/assignees` = admin 전용 전체 목록, `/assignees/me` = 로그인 사용자 본인 행만 부분 수정) + `services/assignee_accounts.py` → `components/settings/AssigneeManager.tsx`(Settings ▸ 시스템 담당자 ▸ 담당자 명부 서브탭) · `components/layout/SelfAssigneePanel.tsx`(사용자 메뉴 SidePane) · `hooks/useAssignees.ts` |
+| 담당자 명부 (겸 로그인 계정) / 내 담당자 정보 | `backend/app/routers/ui_settings.py`(`/assignees` = admin 전용 전체 목록 upsert, `/assignees/me` = 로그인 사용자 본인 행만 부분 수정) — `users` 테이블을 직접 다룬다(더 이상 별도 JSON 저장소 없음). 사번(employeeId) 입력 시 로그인 계정 자동 발급/해제. 역할 변경·비밀번호 재설정·삭제는 `auth.py` 의 `/auth/users/*`(admin 전용) 재사용. `services/assignee_accounts.py` 는 구버전 JSON 명부를 흡수하는 1회성 마이그레이션만 담당 → `components/settings/AssigneeManager.tsx`(Settings ▸ 시스템 담당자 탭, 서브탭 없이 명부+계정 한 표) · `components/layout/SelfAssigneePanel.tsx`(사용자 메뉴 SidePane) · `hooks/useAssignees.ts` |
 | 감사 로그 | `backend/app/routers/audit_logs.py` + `services/audit_logger.py` (Settings 탭) |
 | 인앱 알림 | `backend/app/routers/notifications.py` + `services/user_notify.py` |
 | JSON 백업/복원 | `backend/app/routers/backup.py` + `services/backup_service.py` (Settings 탭) |

@@ -1,23 +1,14 @@
-"""담당자(assignees) → 로그인 계정 자동 provisioning.
+"""담당자 명부 → 로그인 계정 통합.
 
-담당자 관리(Settings ▸ 담당자 탭)에 사번(employeeId)과 함께 등록된 담당자는
-자동으로 DB User 계정을 부여받는다:
+과거에는 담당자 명부가 ``app_settings`` 의 JSON blob 이고, 사번이 있는 담당자만
+별도 로그인 계정(``User``)으로 단방향 provisioning 됐다(생성 전용 — 명부를 고쳐도
+이미 만든 계정은 갱신되지 않고, 삭제되지도 않았다). 지금은 ``users`` 테이블 자체가
+명부다 — 담당자 필드(이름/사번/이메일/IP/좌석/역할)와 로그인 필드(username/
+hashed_password/role/is_active) 가 한 행에 함께 있다(``models/user.py`` 참고).
 
-  - username       = 사번 (employeeId)
-  - 초기 비밀번호  = 사번 (employeeId)  ← 로그인 후 본인이 변경
-  - role           = operator
-  - display_name   = 담당자 이름
-
-설계 원칙 (codebase 의 fail-safe 관례를 따른다):
-  * **멱등** — 이미 같은 username(=사번) 의 User 가 있으면 건드리지 않는다.
-    (비밀번호/역할을 보존: 운영자가 admin 으로 승격했거나 비밀번호를 바꿨을 수 있다.)
-  * **사번 없는 담당자는 skip** — 로그인 키가 없어 계정을 만들 수 없다.
-  * **per-user commit + try/except** — 한 계정 생성이 실패(예: username race)해도
-    다른 계정 생성은 계속 진행한다.
-
-NOTE: User 모델의 ``must_change_password`` 는 부팅 마이그레이션이 매번 FALSE 로
-강제 해제하므로(강제 변경 정책 폐기) 여기서도 설정하지 않는다 — 초기 비밀번호는
-사번이며, 사용자가 /settings 에서 자발적으로 변경한다.
+이 모듈은 그 구(舊) JSON 명부를 ``users`` 테이블로 흡수하는 1회성 마이그레이션만
+담당한다(``main.py`` 부팅 시퀀스에서 한 번 호출). 이후 담당자 CRUD 는
+``routers/ui_settings.py`` 가 ``users`` 테이블을 직접 다룬다.
 """
 import logging
 
@@ -28,85 +19,88 @@ from app.auth.security import hash_password
 
 _log = logging.getLogger("k8s_monitor.assignee_accounts")
 
-# 담당자 계정에 부여하는 기본 권한.
+# 사번이 있는 담당자에게 자동 부여하는 기본 로그인 권한.
 ASSIGNEE_ACCOUNT_ROLE = "operator"
 
 
-def _employee_id(assignee: dict) -> str:
-    """assignee dict 에서 사번을 정규화해 추출. 없으면 빈 문자열."""
-    raw = assignee.get("employeeId") or assignee.get("employee_id")
-    return str(raw).strip() if raw is not None else ""
+def _normalize_legacy_entry(a) -> dict | None:
+    """구 JSON 담당자 항목(문자열 또는 dict)을 정규화. 이름이 없으면 None."""
+    if isinstance(a, str):
+        name = a.strip()
+        return {"name": name, "employee_id": None, "email": None, "ip": None,
+                "seat_location": None, "primary_role": None, "secondary_role": None} if name else None
+    if isinstance(a, dict):
+        name = str(a.get("name", "")).strip()
+        if not name:
+            return None
+        def _s(*keys) -> str | None:
+            for k in keys:
+                v = a.get(k)
+                if v is not None and str(v).strip():
+                    return str(v).strip()
+            return None
+        return {
+            "name": name,
+            "employee_id": _s("employeeId", "employee_id"),
+            "email": _s("email"),
+            "ip": _s("ip"),
+            "seat_location": _s("seatLocation", "seat_location"),
+            "primary_role": _s("primaryRole", "primary_role"),
+            "secondary_role": _s("secondaryRole", "secondary_role"),
+        }
+    return None
 
 
-def sync_assignee_accounts(db: Session, assignees: list) -> dict:
-    """등록된 담당자 목록에 대해 operator 로그인 계정을 보강한다.
+def migrate_legacy_roster_into_users(db: Session, raw_entries: list) -> dict:
+    """구 JSON 담당자 명부 항목들을 ``users`` 테이블 행으로 흡수(멱등).
 
-    Args:
-        db: 활성 SQLAlchemy 세션.
-        assignees: 정규화된 assignee dict 리스트 (``_normalize_assignee`` 출력 형태).
+    - 사번이 있는 항목: 기존 계정(``employee_id`` 또는 레거시 ``username`` 매칭)을 찾아
+      명부 필드만 갱신하고, 없으면 operator 로그인 계정을 새로 만든다(초기 비밀번호=사번 —
+      구 ``sync_assignee_accounts`` 와 동일 규칙).
+    - 사번이 없는 항목: 로그인 없는 순수 명부 행. 같은 이름(사번 없음)의 기존 행이 있으면
+      갱신, 없으면 새로 만든다.
 
-    Returns:
-        요약 dict — ``created`` / ``skipped_existing`` / ``skipped_no_employee_id`` /
-        ``errors`` (각각 사번 또는 이름 리스트). 운영자가 결과를 확인할 수 있도록
-        라우터 응답에 그대로 실어 보낸다.
+    한 항목 처리 실패가 나머지 항목 흡수를 막지 않도록 항목별 commit/rollback 격리.
     """
-    created: list[str] = []
-    skipped_existing: list[str] = []
-    skipped_no_employee_id: list[str] = []
+    migrated: list[str] = []
     errors: list[str] = []
 
-    if not isinstance(assignees, list):
-        return {
-            "created": created,
-            "skipped_existing": skipped_existing,
-            "skipped_no_employee_id": skipped_no_employee_id,
-            "errors": errors,
-        }
+    entries = [n for a in (raw_entries or []) if (n := _normalize_legacy_entry(a)) is not None]
+    if not entries:
+        return {"migrated": migrated, "errors": errors}
 
-    # 기존 username 을 한 번에 적재 — 담당자마다 SELECT 하는 N+1 회피.
-    try:
-        existing_usernames = {row[0] for row in db.query(User.username).all()}
-    except Exception as e:  # noqa: BLE001
-        _log.warning("assignee account sync: failed to load existing users (%s)", e)
-        existing_usernames = set()
-
-    seen: set[str] = set()
-    for a in assignees:
-        if not isinstance(a, dict):
-            continue
-        emp = _employee_id(a)
-        name = str(a.get("name", "")).strip()
-        if not emp:
-            if name:
-                skipped_no_employee_id.append(name)
-            continue
-        if emp in seen:
-            continue
-        seen.add(emp)
-        if emp in existing_usernames:
-            skipped_existing.append(emp)
-            continue
-
-        user = User(
-            username=emp,
-            hashed_password=hash_password(emp),
-            role=ASSIGNEE_ACCOUNT_ROLE,
-            display_name=name or emp,
-        )
-        db.add(user)
+    for e in entries:
         try:
-            db.commit()
-            created.append(emp)
-            existing_usernames.add(emp)
-            _log.info("assignee account created: 사번=%s name=%s role=%s", emp, name, ASSIGNEE_ACCOUNT_ROLE)
-        except Exception as e:  # noqa: BLE001
-            db.rollback()
-            errors.append(emp)
-            _log.warning("assignee account create failed for 사번=%s (%s) — continuing", emp, e)
+            emp = e["employee_id"]
+            user = None
+            if emp:
+                user = db.query(User).filter(
+                    (User.employee_id == emp) | (User.username == emp)
+                ).first()
+            else:
+                user = db.query(User).filter(
+                    User.employee_id.is_(None), User.display_name == e["name"],
+                ).first()
 
-    return {
-        "created": created,
-        "skipped_existing": skipped_existing,
-        "skipped_no_employee_id": skipped_no_employee_id,
-        "errors": errors,
-    }
+            if user is None:
+                user = User(display_name=e["name"], role=ASSIGNEE_ACCOUNT_ROLE if emp else "viewer")
+                if emp:
+                    user.username = emp
+                    user.hashed_password = hash_password(emp)
+                db.add(user)
+
+            user.display_name = e["name"]
+            user.employee_id = emp
+            user.email = e["email"]
+            user.ip = e["ip"]
+            user.seat_location = e["seat_location"]
+            user.primary_role = e["primary_role"]
+            user.secondary_role = e["secondary_role"]
+            db.commit()
+            migrated.append(e["name"])
+        except Exception as ex:  # noqa: BLE001
+            db.rollback()
+            errors.append(e["name"])
+            _log.warning("assignee roster migration failed for %s (%s) — continuing", e["name"], ex)
+
+    return {"migrated": migrated, "errors": errors}

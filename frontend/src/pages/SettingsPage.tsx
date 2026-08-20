@@ -13,7 +13,6 @@ import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
-import { SystemUserAccountManager } from '@/components/settings/SystemUserAccountManager';
 import { AuditLogManager } from '@/components/settings/AuditLogManager';
 import { LlmSettingsTab } from '@/components/settings/LlmSettingsTab';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
@@ -604,10 +603,6 @@ export function SettingsPage() {
   // "관리 서비스" 탭 내부 서브탭 — PEP 서비스 / APP 서비스 도메인 구분. 각 서브탭은
   // 해당 도메인의 카테고리 + 서비스 타입을 한 화면에서 관리한다.
   const [mgmtDomain, setMgmtDomain] = useState<ServiceDomain>('pep');
-  // "시스템 담당자" 탭 내부 서브탭 — 담당자 명부(사번/이메일/좌석 등) / 로그인 계정(권한·비밀번호).
-  // 사이드바 독립 "사용자 관리" 페이지가 여기로 통합됐다.
-  const [assigneeSubTab, setAssigneeSubTab] = useState<'roster' | 'accounts'>('roster');
-
   // Debug 설정
   const debugEnabled = useDebugStore((s) => s.enabled);
   const debugToggle  = useDebugStore((s) => s.toggle);
@@ -1213,32 +1208,10 @@ export function SettingsPage() {
           )}
         </MacCard>}
 
-        {/* 시스템 담당자 — 담당자 명부 / 로그인 계정 서브탭 2개. 구 사이드바 독립 "사용자 관리"
-            페이지(로그인 계정: username/password/role)가 여기로 통합됐다 — 담당자 명부에 사번을
-            입력하면 자동으로 로그인 계정이 생성되므로 개념상 같은 데이터의 두 얼굴이다. */}
-        {activeTab === 'assignee' && (
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
-              {([
-                { id: 'roster', label: '담당자 명부' },
-                { id: 'accounts', label: '로그인 계정' },
-              ] as const).map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => setAssigneeSubTab(v.id)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    assigneeSubTab === v.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-            {assigneeSubTab === 'roster' && <AssigneeManager />}
-            {assigneeSubTab === 'accounts' && <SystemUserAccountManager />}
-          </div>
-        )}
+        {/* 시스템 담당자 — 담당자 명부와 로그인 계정이 users 테이블 한 곳에 합쳐져 있어
+            (모델 docstring 참고) 더 이상 서브탭으로 나눌 필요가 없다. 구 사이드바 독립
+            "사용자 관리" 페이지도 여기로 통합됐다. */}
+        {activeTab === 'assignee' && <AssigneeManager />}
 
         {/* Debug 탭: 대시보드 별 상세 로그 토글 */}
         {activeTab === 'debug' && (
