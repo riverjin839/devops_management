@@ -8,7 +8,8 @@ from app.database import get_db
 from app.models.app_setting import AppSetting
 from app.models.user import User
 from app.auth.deps import get_current_user, require_admin
-from app.services.assignee_accounts import sync_assignee_accounts
+from app.auth.security import hash_password
+from app.services.assignee_accounts import ASSIGNEE_ACCOUNT_ROLE
 from app.schemas.ui_settings import (
     UiSettingsResponse,
     UiSettingsUpdate,
@@ -24,7 +25,6 @@ router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
 
 UI_SETTINGS_KEY = "ui_settings"
 CLUSTER_LINKS_KEY = "cluster_links"
-ASSIGNEES_KEY = "assignees"
 FEATURE_ACCESS_KEY = "feature_access"
 DEFAULT_FEATURE_ACCESS: dict = {}
 OPERATION_LEVELS_KEY = "operation_levels"
@@ -38,7 +38,6 @@ DEFAULT_WORK_ITEM_BOARD_SETTINGS = {
     "default_view": "epic",
     "badge_visibility": {"total": False, "wip": False, "done": False, "overdue": False},
 }
-DEFAULT_ASSIGNEES = []
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 DEFAULT_OPERATION_LEVELS = {
     "levels": [
@@ -171,79 +170,58 @@ def update_cluster_links(
     return ClusterLinksResponse(data=ClusterLinksPayload(**next_value))
 
 
-def _normalize_assignee(a) -> dict | None:
-    """Normalize an assignee entry: accepts both plain string (legacy) and object."""
-    if isinstance(a, str):
-        name = a.strip()
-        return {"name": name} if name else None
-    if isinstance(a, dict):
-        name = str(a.get("name", "")).strip()
-        return {
-            "name": name,
-            "employeeId": a.get("employeeId") or a.get("employee_id"),
-            "email": a.get("email"),
-            "ip": a.get("ip"),
-            "seatLocation": a.get("seatLocation") or a.get("seat_location"),
-            "primaryRole": a.get("primaryRole") or a.get("primary_role"),
-            "secondaryRole": a.get("secondaryRole") or a.get("secondary_role"),
-        } if name else None
-    return None
+# 담당자 명부는 users 테이블 자체다(모델 docstring 참고) — app_settings JSON 이 아니다.
+# 응답 dict 의 키는 프론트엔드 Assignee 타입(camelCase)과 그대로 맞춘다.
+
+def _assignee_out(u: User, *, include_account: bool) -> dict:
+    out = {
+        "name": u.display_name or u.username or "",
+        "employeeId": u.employee_id,
+        "email": u.email,
+        "ip": u.ip,
+        "seatLocation": u.seat_location,
+        "primaryRole": u.primary_role,
+        "secondaryRole": u.secondary_role,
+    }
+    if include_account:
+        out.update({
+            "id": u.id,
+            "username": u.username,
+            "accountRole": u.role,
+            "isActive": u.is_active,
+            "hasLogin": bool(u.username),
+            "createdAt": u.created_at.isoformat() if u.created_at else None,
+        })
+    return out
 
 
-# 본인이 직접 고칠 수 있는 담당자 필드 → 허용되는 payload 키(별칭 포함).
+# 본인이 직접 고칠 수 있는 담당자 필드 → 허용되는 payload 키(별칭 포함) → User 모델 속성명.
 # 이름/사번은 제외한다 — 이름은 work item 의 담당자 식별 키, 사번은 로그인 username 이라
 # 본인이 바꾸면 업무 ownership 과 계정이 끊긴다. 둘의 변경은 admin 전용 엔드포인트에서만.
 SELF_EDITABLE_ASSIGNEE_FIELDS: dict[str, tuple[str, ...]] = {
     "email": ("email",),
     "ip": ("ip",),
-    "seatLocation": ("seatLocation", "seat_location"),
-    "primaryRole": ("primaryRole", "primary_role"),
-    "secondaryRole": ("secondaryRole", "secondary_role"),
+    "seat_location": ("seatLocation", "seat_location"),
+    "primary_role": ("primaryRole", "primary_role"),
+    "secondary_role": ("secondaryRole", "secondary_role"),
 }
 
 
-def _apply_self_assignee_patch(cleaned: list[dict], username: str, payload: dict) -> int:
-    """정규화된 담당자 목록에서 본인 행을 찾아 self-editable 필드만 제자리 갱신.
-
-    본인 판정은 employeeId == username (담당자 계정은 username = employeeId 로 provisioning).
-    갱신한 인덱스를 반환하고, 본인 행이 없으면 -1 을 반환한다.
-    """
-    username = (username or "").strip()
-    if not username:
-        return -1
-    idx = next(
-        (i for i, a in enumerate(cleaned) if str(a.get("employeeId") or "").strip() == username),
-        -1,
-    )
-    if idx < 0:
-        return -1
-
-    merged = dict(cleaned[idx])
-    for field, aliases in SELF_EDITABLE_ASSIGNEE_FIELDS.items():
+def _apply_self_editable_fields(user: User, payload: dict) -> None:
+    """payload 에 들어온 self-editable 필드만 user 행에 제자리 반영(커밋은 호출측)."""
+    for attr, aliases in SELF_EDITABLE_ASSIGNEE_FIELDS.items():
         for alias in aliases:
             if alias in payload:
                 raw = payload.get(alias)
-                merged[field] = raw.strip() if isinstance(raw, str) else raw
+                setattr(user, attr, raw.strip() if isinstance(raw, str) else raw)
                 break
-
-    # 이름/사번은 payload 에 뭐가 오든 기존 값을 유지한다 (self 편집 대상 아님).
-    merged["name"] = cleaned[idx]["name"]
-    merged["employeeId"] = cleaned[idx].get("employeeId")
-
-    # cleaned 항목은 이미 _normalize_assignee 를 통과해 name 이 비어 있지 않으므로 None 이 아니다.
-    cleaned[idx] = _normalize_assignee(merged) or cleaned[idx]
-    return idx
 
 
 @router.get("/assignees")
-def get_assignees(db: Session = Depends(get_db)):
-    setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
-    value = setting.value
-    if isinstance(value, list):
-        # Normalize legacy plain strings to Assignee objects
-        normalized = [n for a in value if (n := _normalize_assignee(a)) is not None]
-        return {"data": normalized}
-    return {"data": []}
+def get_assignees(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(User).order_by(User.display_name).all()
+    include_account = user.role == "admin"
+    return {"data": [_assignee_out(u, include_account=include_account) for u in rows]}
 
 
 @router.put("/assignees")
@@ -252,25 +230,52 @@ def update_assignees(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
+    """담당자 명부를 upsert 한다 — 삭제는 하지 않는다(생성/수정 전용).
+
+    행 삭제는 로그인 계정 삭제와 동일한 작업이므로(users 테이블이 명부 자체라서)
+    감사 로그가 남고 본인 삭제를 막는 기존 `DELETE /auth/users/{id}` 로만 한다.
+    각 항목은 `id`(기존 행 갱신) 가 있으면 update, 없으면 새 행을 만든다. 사번
+    (employeeId) 이 채워지면 로그인 계정을 자동 발급(초기 비번=사번, role=operator)하고,
+    사번이 비워지면 로그인 계정을 해제한다(정책: 사번 없는 담당자는 로그인 불가).
+    """
     raw_list = payload.get("assignees", [])
     if not isinstance(raw_list, list):
         raw_list = []
 
-    cleaned = [e for raw in raw_list if (e := _normalize_assignee(raw)) is not None]
+    cleaned = []
+    for raw in raw_list:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name", "")).strip()
+        if not name:
+            continue
+
+        def _s(*keys) -> str | None:
+            for k in keys:
+                v = raw.get(k)
+                if v is not None and str(v).strip():
+                    return str(v).strip()
+            return None
+
+        cleaned.append({
+            "id": raw.get("id"),
+            "name": name,
+            "employeeId": _s("employeeId", "employee_id"),
+            "email": _s("email"),
+            "ip": _s("ip"),
+            "seatLocation": _s("seatLocation", "seat_location"),
+            "primaryRole": _s("primaryRole", "primary_role"),
+            "secondaryRole": _s("secondaryRole", "secondary_role"),
+        })
 
     # 안전 정규화: 담당자 이름과 사번(employeeId)은 고유해야 한다.
     #   - 이름은 work item 의 담당자 식별 키(primary/secondary_assignee)로 그대로 저장되므로
     #     동명이인이 있으면 ownership(본인 업무 수정/삭제) 판정이 모호해진다.
     #   - 사번은 로그인 username 으로 provisioning 되므로 중복되면 계정이 충돌한다.
-    # 중복이 있으면 저장을 막고(400) 어떤 값이 충돌하는지 알려준다.
-    name_counts = Counter(a["name"].strip().lower() for a in cleaned if a["name"].strip())
-    dup_names = sorted({
-        a["name"] for a in cleaned
-        if a["name"].strip() and name_counts[a["name"].strip().lower()] > 1
-    })
-    emp_values = [str(a.get("employeeId") or "").strip() for a in cleaned]
-    emp_counts = Counter(e for e in emp_values if e)
-    dup_emps = sorted({e for e in emp_values if e and emp_counts[e] > 1})
+    name_counts = Counter(a["name"].lower() for a in cleaned)
+    dup_names = sorted({a["name"] for a in cleaned if name_counts[a["name"].lower()] > 1})
+    emp_counts = Counter(a["employeeId"] for a in cleaned if a["employeeId"])
+    dup_emps = sorted({a["employeeId"] for a in cleaned if a["employeeId"] and emp_counts[a["employeeId"]] > 1})
     if dup_names or dup_emps:
         parts = []
         if dup_names:
@@ -287,17 +292,63 @@ def update_assignees(
             },
         )
 
-    setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
-    setting.value = cleaned
+    accounts_created: list[str] = []
+    for a in cleaned:
+        existing = db.query(User).filter(User.id == a["id"]).first() if a["id"] else None
+        if existing is None and a["employeeId"]:
+            existing = db.query(User).filter(User.employee_id == a["employeeId"]).first()
+
+        if existing is not None:
+            if a["employeeId"]:
+                conflict = db.query(User).filter(
+                    User.employee_id == a["employeeId"], User.id != existing.id,
+                ).first()
+                if conflict:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"사번 {a['employeeId']} 은(는) 이미 다른 담당자가 사용 중입니다.",
+                    )
+            existing.display_name = a["name"]
+            existing.email = a["email"]
+            existing.ip = a["ip"]
+            existing.seat_location = a["seatLocation"]
+            existing.primary_role = a["primaryRole"]
+            existing.secondary_role = a["secondaryRole"]
+            if a["employeeId"] and not existing.username:
+                # 로그인 없던 담당자에게 사번이 새로 붙음 → 계정 자동 발급.
+                existing.employee_id = a["employeeId"]
+                existing.username = a["employeeId"]
+                existing.hashed_password = hash_password(a["employeeId"])
+                existing.role = existing.role or ASSIGNEE_ACCOUNT_ROLE
+                accounts_created.append(a["employeeId"])
+            elif a["employeeId"]:
+                existing.employee_id = a["employeeId"]
+                if existing.username != a["employeeId"]:
+                    existing.username = a["employeeId"]  # 사번 변경 → username 도 함께 이동
+            else:
+                # 사번이 비워짐 → 로그인 계정 해제(정책: 사번 없는 담당자는 로그인 불가).
+                existing.employee_id = None
+                existing.username = None
+                existing.hashed_password = None
+        else:
+            new_user = User(
+                display_name=a["name"], email=a["email"], ip=a["ip"],
+                seat_location=a["seatLocation"], primary_role=a["primaryRole"],
+                secondary_role=a["secondaryRole"], employee_id=a["employeeId"],
+            )
+            if a["employeeId"]:
+                new_user.username = a["employeeId"]
+                new_user.hashed_password = hash_password(a["employeeId"])
+                new_user.role = ASSIGNEE_ACCOUNT_ROLE
+                accounts_created.append(a["employeeId"])
+            db.add(new_user)
+
     db.commit()
-    db.refresh(setting)
-    # 사번이 있는 담당자는 자동으로 operator 로그인 계정을 부여 (초기 비번 = 사번).
-    # 계정 생성 실패가 담당자 저장 자체를 막지 않도록 방어적으로 감싼다.
-    try:
-        accounts = sync_assignee_accounts(db, cleaned)
-    except Exception:  # noqa: BLE001
-        accounts = {"created": [], "skipped_existing": [], "skipped_no_employee_id": [], "errors": []}
-    return {"data": cleaned, "accounts": accounts}
+    rows = db.query(User).order_by(User.display_name).all()
+    return {
+        "data": [_assignee_out(u, include_account=True) for u in rows],
+        "accounts": {"created": accounts_created},
+    }
 
 
 @router.put("/assignees/me")
@@ -310,25 +361,17 @@ def update_my_assignee(
 
     사용자 메뉴의 "내 담당자 정보" 패널이 쓰는 엔드포인트다. 예전에는 이 패널도 전체 목록을
     덮어쓰는 admin 전용 `PUT /assignees` 를 호출해서 operator 가 본인 IP 를 바꾸면 403 이
-    났다. 여기서는 본인 행만 부분 갱신하므로 다른 담당자 데이터를 건드리지 않는다.
-
-    담당자 계정은 username = employeeId 로 provisioning 되므로 그 매칭으로 본인 행을 찾는다.
+    났다. `get_current_user` 로 이미 본인 행이 확정되므로 다른 담당자 데이터는 건드리지 않는다.
     """
-    setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
-    raw_value = setting.value if isinstance(setting.value, list) else []
-    cleaned = [e for raw in raw_value if (e := _normalize_assignee(raw)) is not None]
-
-    idx = _apply_self_assignee_patch(cleaned, user.username or "", payload)
-    if idx < 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="등록된 담당자 정보가 없습니다. 관리자에게 사번 등록을 요청하세요.",
-        )
-
-    setting.value = cleaned
+    _apply_self_editable_fields(user, payload)
     db.commit()
-    db.refresh(setting)
-    return {"data": cleaned, "me": cleaned[idx]}
+    db.refresh(user)
+    rows = db.query(User).order_by(User.display_name).all()
+    include_account = user.role == "admin"
+    return {
+        "data": [_assignee_out(u, include_account=include_account) for u in rows],
+        "me": _assignee_out(user, include_account=True),
+    }
 
 
 # ── 기능별 접근 제어 (feature access) ────────────────────────────────────

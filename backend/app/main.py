@@ -1037,6 +1037,20 @@ def _run_migrations():
             "UPDATE users SET role='viewer' WHERE role='user'",
             label="users.role 'user' → 'viewer'",
         )
+        # 담당자 명부 필드 흡수(구 app_settings.assignees JSON) — users 테이블 자체가 명부다.
+        # username/hashed_password 를 NULL 허용으로 푸는 작업은 모델이 nullable=True 로
+        # 선언하고 있어 부팅 시 _relax_not_null_drift() 가 자동으로 처리한다.
+        _safe_add_column("users", "employee_id", "VARCHAR(64)")
+        _safe_add_column("users", "email", "VARCHAR(255)")
+        _safe_add_column("users", "ip", "VARCHAR(64)")
+        _safe_add_column("users", "seat_location", "VARCHAR(64)")
+        _safe_add_column("users", "primary_role", "VARCHAR(64)")
+        _safe_add_column("users", "secondary_role", "VARCHAR(64)")
+        _safe_exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_employee_id ON users (employee_id) "
+            "WHERE employee_id IS NOT NULL",
+            label="users.employee_id unique index",
+        )
         # 강제 변경 정책 폐기 — 과거 시드/리셋으로 True 였던 사용자를 모두 해제.
         _safe_exec(
             "UPDATE users SET must_change_password = FALSE WHERE must_change_password = TRUE",
@@ -1859,26 +1873,30 @@ def _merge_service_catalog_into_pep_types():
         db.close()
 
 
-def _seed_assignee_users():
-    """이미 등록된 담당자(assignees)에 대해 operator 로그인 계정을 보강.
+def _migrate_assignee_roster_to_users():
+    """구 담당자 명부(``app_settings.assignees`` JSON) 를 ``users`` 테이블로 1회 흡수.
 
-    이 기능 도입 전에 등록된 담당자도 부팅 시 1회 계정을 부여받도록 한다. 멱등 —
-    이미 같은 사번(=username) 의 User 가 있으면 건드리지 않는다. 사번이 없는
-    담당자는 건너뛴다.
+    담당자 명부와 로그인 계정이 분리된 두 저장소였던 문제(명부를 고쳐도 이미 만들어진
+    계정에 반영 안 되고, 계정 쪽 역할 변경은 명부에 안 보이던) 를 해소한다 — 지금은
+    ``users`` 테이블 자체가 명부다. 처리 후 JSON 키를 지우므로 다음 부팅부터는 바로
+    no-op(멱등) — 이 함수는 과거 데이터를 흡수하는 1회성 다리 역할만 한다.
     """
     from app.models.app_setting import AppSetting
-    from app.routers.ui_settings import ASSIGNEES_KEY, _normalize_assignee
-    from app.services.assignee_accounts import sync_assignee_accounts
+    from app.services.assignee_accounts import migrate_legacy_roster_into_users
 
     db = SessionLocal()
     try:
-        setting = db.query(AppSetting).filter(AppSetting.key == ASSIGNEES_KEY).first()
-        if not setting or not isinstance(setting.value, list):
+        setting = db.query(AppSetting).filter(AppSetting.key == "assignees").first()
+        if setting is None:
             return
-        normalized = [n for a in setting.value if (n := _normalize_assignee(a)) is not None]
-        result = sync_assignee_accounts(db, normalized)
-        if result["created"]:
-            _log.info("seeded %d assignee operator accounts", len(result["created"]))
+        if isinstance(setting.value, list) and setting.value:
+            result = migrate_legacy_roster_into_users(db, setting.value)
+            _log.info(
+                "migrated %d legacy assignee roster row(s) into users (%d errors)",
+                len(result["migrated"]), len(result["errors"]),
+            )
+        db.delete(setting)
+        db.commit()
     finally:
         db.close()
 
@@ -2021,7 +2039,7 @@ async def lifespan(app: FastAPI):
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_observability_catalog", _seed_observability_catalog),
             ("seed_initial_admin", _seed_initial_admin),
-            ("seed_assignee_users", _seed_assignee_users),
+            ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
         ]:
             try:
                 step()
