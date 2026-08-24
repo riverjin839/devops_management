@@ -610,6 +610,9 @@ export interface JiraConfig {
   ssoUsernameField?: string;
   /** Jira Epic Link 커스텀 필드 ID (예: customfield_10008) — 진척률의 Epic 축. */
   jiraEpicField?: string;
+  /** Jira "Epic Name" 커스텀 필드 ID (예: customfield_10011) — Epic Link 와 별개로,
+   *  Server/DC classic 프로젝트가 Epic 이슈 생성 시 필수로 요구하는 짧은 이름 필드. */
+  jiraEpicNameField?: string;
 }
 
 /** SSO 진단 — 백엔드(파드)가 각 진입 경로에서 실제로 본 페이지 요약. */
@@ -727,6 +730,8 @@ export interface JiraCreateRequest {
   priority?: string;
   labels?: string[];
   components?: string[];
+  /** issueType 이 'Epic' 일 때만 쓰인다 — "Epic Name" 커스텀 필드 값. 미지정 시 summary 로 채운다. */
+  epicName?: string;
   /** 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신. */
   assigneeUsername?: string;
 }
@@ -4475,6 +4480,8 @@ export interface ProvisionDefaults {
   /** Jira 계층 — epicKey = Epic Link, parentKey = Sub-task 의 상위 이슈. */
   epicKey: string;
   parentKey: string;
+  /** issueType='Epic' 생성 시 쓸 "Epic Name" 커스텀 필드 기본값(업무 제목으로 채움). */
+  epicName: string;
   /** Confluence 문서 기여자(Contributor) 기본값 — 로그인 사용자 자신. */
   contributor: string;
   /** 담당자(assignee) 기본값 — 로그인 사용자 자신(본인 Jira 계정이 연동돼 있을 때만
@@ -4498,6 +4505,8 @@ export interface ProvisionRequest {
   description?: string;
   epicKey?: string;
   parentKey?: string;
+  /** issueType='Epic' 일 때만 쓰인다 — "Epic Name" 커스텀 필드 값. 미지정 시 summary 로 채운다. */
+  epicName?: string;
   /** 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신. */
   assigneeUsername?: string;
   spaceKey?: string;

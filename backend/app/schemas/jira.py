@@ -23,6 +23,9 @@ class JiraConfig(BaseModel):
     jira_epic_field: str = ""
     # Jira Sprint 커스텀 필드 ID (예: customfield_10007) — work_item.sprint_id 이름 매칭.
     jira_sprint_field: str = ""
+    # Jira "Epic Name" 커스텀 필드 ID (예: customfield_10011) — Epic Link 와 별개로,
+    # Server/DC classic 프로젝트가 Epic 이슈 생성 시 필수로 요구하는 짧은 이름 필드.
+    jira_epic_name_field: str = ""
 
 
 class JiraConfigUpdate(BaseModel):
@@ -35,6 +38,7 @@ class JiraConfigUpdate(BaseModel):
     sso_username_field: Optional[str] = None
     jira_epic_field: Optional[str] = None
     jira_sprint_field: Optional[str] = None
+    jira_epic_name_field: Optional[str] = None
 
 
 # ── 사용자별 자격증명 ──────────────────────────────────────────────────────────
@@ -303,6 +307,9 @@ class JiraCreateRequest(BaseModel):
     priority: Optional[str] = None
     labels: list[str] = []
     components: list[str] = []
+    # issue_type 이 Epic 일 때만 쓰인다 — Jira Server/DC classic 프로젝트가 요구하는
+    # "Epic Name" 커스텀 필드 값. 미지정 시 summary 로 채운다.
+    epic_name: Optional[str] = None
     # 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신. 해당 PEP 사용자가 Jira
     # 연동을 하지 않아 매핑할 계정이 없으면 담당자 없이 생성한다(생성 자체는 막지 않음).
     assignee_username: Optional[str] = None
@@ -454,6 +461,8 @@ class ProvisionDefaults(BaseModel):
     # parent_key 는 Sub-task 의 상위 이슈(둘 중 하나만 쓰는 게 보통이다).
     epic_key: str = ""
     parent_key: str = ""
+    # issue_type="Epic" 생성 시 쓸 "Epic Name" 커스텀 필드 기본값(업무 제목으로 채움).
+    epic_name: str = ""
     # Confluence 문서의 기여자(Contributor) 표시명 — 기본은 로그인한 사용자 자신이고
     # 화면에서 수정할 수 있다.
     contributor: str = ""
@@ -483,6 +492,8 @@ class ProvisionRequest(BaseModel):
     # Jira 계층 — Epic Link(epic_key) 또는 Sub-task 상위 이슈(parent_key).
     epic_key: Optional[str] = None
     parent_key: Optional[str] = None
+    # issue_type="Epic" 일 때만 쓰인다 — "Epic Name" 커스텀 필드 값. 미지정 시 summary 로 채운다.
+    epic_name: Optional[str] = None
     # 담당자로 지정할 PEP 사용자명 — 미지정 시 로그인 사용자 자신(ProvisionDefaults.assignee_username
     # 를 그대로 받는 게 보통). 매핑할 Jira 계정이 없으면 담당자 없이 생성(생성 자체는 막지 않음).
     assignee_username: Optional[str] = None
