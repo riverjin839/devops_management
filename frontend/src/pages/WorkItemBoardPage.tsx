@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ViewModeBar, DoubleScrollX, ConfirmDialog, useToast } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
@@ -195,12 +195,14 @@ function DraggableSortHeader({
   sortDir,
   onSort,
   colW,
+  tableRef,
 }: {
   colKey: WorkItemColumnKey;
   sortKey: WorkItemSortKey | '';
   sortDir: 'asc' | 'desc';
   onSort: (col: WorkItemSortKey) => void;
   colW: ReturnType<typeof useColumnWidths>;
+  tableRef: RefObject<HTMLTableElement>;
 }) {
   const meta = WORK_ITEM_COLUMNS[colKey];
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: colKey });
@@ -210,6 +212,7 @@ function DraggableSortHeader({
   return (
     <th
       ref={setNodeRef}
+      data-col={colKey}
       style={style}
       className={`relative py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap select-none bg-muted/30 group ${
         meta.tightRight ? 'pl-4 pr-1' : 'px-4'
@@ -243,7 +246,7 @@ function DraggableSortHeader({
           <span>{meta.label}</span>
         )}
       </span>
-      <ResizeGrip onMouseDown={(e) => colW.beginResize(colKey, e)} onDoubleClick={() => colW.autoFit(colKey)} />
+      <ResizeGrip onMouseDown={(e) => colW.beginResize(colKey, e)} onDoubleClick={() => colW.autoFit(colKey, tableRef.current)} />
     </th>
   );
 }
@@ -306,14 +309,21 @@ export function WorkItemBoardPage() {
   // v2 — 기본 컬럼 순서/표시여부를 재정의(DL/WIKI/상위업무/이슈종류 기본 노출)하면서 키를
   // 올렸다. v3 — 상위업무 기본 숨김 전환, 담당자 단일화로 폭 축소(200→130), 등록
   // 타입/DL#/WIKI 기본폭을 칩 크기에 맞게 축소(오른쪽 여백 버그 수정)하면서 다시 올렸다.
-  // 이전에 방문해 구 기본값이 이미 저장된 사용자도 새 기본값을 그대로 받게 하기 위함 —
-  // 키를 그대로 두면 저장된 값이 새 기본값을 덮어써 컬럼 설정에서 수동으로 "기본값으로
-  // 복원"을 누르기 전까지 새 기본 배치가 전혀 반영되지 않는다.
-  const colStorageKey = myUsername ? `item-board-table-v3:${myUsername}` : 'item-board-table-v3';
+  // v4 — 하드코딩 기본폭 수동 조정 대신 실제 셀 내용 기준 자동맞춤(useColumnWidths
+  // autoFit/autoFitMissing)으로 전환하면서 다시 올렸다. "현재 설정을 기본값으로 저장"을
+  // 눌러 구 하드코딩 기본폭이 이미 전 컬럼에 저장된 사용자는(모든 컬럼이 이미 "known"
+  // 이라) 자동맞춤이 조용히 건너뛰므로, 키를 올려 전 사용자가 새 로직으로 다시 시작하게
+  // 한다. 이전에 방문해 구 기본값이 이미 저장된 사용자도 새 기본값을 그대로 받게 하기
+  // 위함 — 키를 그대로 두면 저장된 값이 새 기본값을 덮어써 컬럼 설정에서 수동으로
+  // "기본값으로 복원"을 누르기 전까지 새 기본 배치가 전혀 반영되지 않는다.
+  const colStorageKey = myUsername ? `item-board-table-v4:${myUsername}` : 'item-board-table-v4';
   const colW = useColumnWidths(colStorageKey, {
     defaults: COLUMN_WIDTH_DEFAULTS,
     min: 60, max: 800,
   });
+  // 목록 테이블 DOM — 컬럼 자동맞춤(autoFit/autoFitMissing)이 실제 렌더된 셀(data-col)을
+  // 찾는 범위를 이 테이블로 한정한다(문서 전체를 뒤지지 않게).
+  const tableRef = useRef<HTMLTableElement>(null);
 
   const colLayout = useColumnLayout<WorkItemColumnKey>(colStorageKey, {
     defaultOrder: DEFAULT_COLUMN_ORDER,
@@ -431,6 +441,16 @@ export function WorkItemBoardPage() {
         return sortDir === 'asc' ? cmp : -cmp;
       })
     : dndTasks;
+
+  // 컬럼폭 기본 여백 제거 — 사용자가 한 번도 손대지 않은(드래그/자동맞춤 이력 없는) 컬럼은
+  // 데이터가 처음 로드된 직후 실제 셀 내용 기준으로 폭을 맞추고 그 값을 고정·저장한다.
+  // 이미 손댄 컬럼은 건드리지 않으므로(useColumnWidths 의 known 집합) 화면이 다시 그려질
+  // 때마다 재실행돼도 사용자가 맞춘 폭을 덮어쓰지 않는다.
+  useEffect(() => {
+    if (sortedTasks.length === 0) return;
+    colW.autoFitMissing(visibleCols, tableRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedTasks.length, visibleCols.join(',')]);
 
   const deleteTask = useDeleteWorkItem();
   const toast = useToast();
@@ -1083,7 +1103,7 @@ export function WorkItemBoardPage() {
           ) : (
             <MacCard bodyPadding="p-0" rootClassName="overflow-hidden">
               <DoubleScrollX>
-                <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                <table ref={tableRef} className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                   <colgroup>
                     <col style={{ width: `${colW.getWidth('drag')}px` }} />
                     {visibleCols.map((k) => (
@@ -1111,6 +1131,7 @@ export function WorkItemBoardPage() {
                               sortDir={sortDir}
                               onSort={handleSort}
                               colW={colW}
+                              tableRef={tableRef}
                             />
                           ))}
                         </tr>

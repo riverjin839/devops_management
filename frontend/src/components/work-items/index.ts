@@ -11,6 +11,7 @@ export { JiraLinkDialog } from './JiraLinkDialog';
 export { JiraProvisionModal } from './JiraProvisionModal';
 export { JiraIssueChip } from './JiraIssueChip';
 export { DocLinkChip } from './DocLinkChip';
+export { ConfluenceLinkCell } from './ConfluenceLinkCell';
 export { ColumnSettingsMenu } from './ColumnSettingsMenu';
 export {
   type WorkItemColumnKey,

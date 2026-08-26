@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { GripVertical, ImagePlus, Check, X, ExternalLink, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
+import { GripVertical, ImagePlus, Check, X, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WorkItem, Cluster, WorkItemUpdate, KanbanStatus } from '@/types';
@@ -7,7 +7,7 @@ import { useUpdateWorkItem } from '@/hooks/useWorkItems';
 import { Badge } from '@/components/ui/badge';
 import { stripHtml, formatApiError } from '@/lib/utils';
 import { useToast } from '@/components/common';
-import { DocLinkChip } from './DocLinkChip';
+import { ConfluenceLinkCell } from './ConfluenceLinkCell';
 import { JiraIssueChip } from './JiraIssueChip';
 import { WorkItemActionsMenu } from './WorkItemActionsMenu';
 import type { WorkItemColumnKey } from './workItemColumns';
@@ -116,19 +116,22 @@ type EditField =
   | 'remarks';
 
 function EditableCell({
-  isEditing, onEnter, children, className = '', title = '클릭하여 수정',
+  isEditing, onEnter, children, className = '', title = '클릭하여 수정', dataCol,
 }: {
   isEditing: boolean;
   onEnter: () => void;
   children: React.ReactNode;
   className?: string;
   title?: string;
+  /** 컬럼 너비 자동맞춤(useColumnWidths.autoFit*)이 실제 렌더된 셀을 찾는 데 쓰는 마커. */
+  dataCol?: string;
 }) {
   if (isEditing) {
-    return <td className={`px-4 py-1.5 ${className}`}>{children}</td>;
+    return <td data-col={dataCol} className={`px-4 py-1.5 ${className}`}>{children}</td>;
   }
   return (
     <td
+      data-col={dataCol}
       role="button"
       tabIndex={0}
       className={`px-4 py-1.5 select-none cursor-pointer hover:bg-primary/5 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors ${className}`}
@@ -264,7 +267,6 @@ export function WorkItemTableRow({
   const updateTask = useUpdateWorkItem();
   const toast = useToast();
   const [editing, setEditing] = useState<EditField>(null);
-  const [confluenceLinksOpen, setConfluenceLinksOpen] = useState(false);
 
   const save = (patch: WorkItemUpdate) => {
     updateTask.mutate({ id: item.id, data: patch }, {
@@ -282,7 +284,7 @@ export function WorkItemTableRow({
     switch (key) {
       case 'project':
         return (
-          <td key="project" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
+          <td key="project" data-col="project" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.projectId
               ? (projectNameById.get(item.projectId) ?? '-')
               : <span className="text-muted-foreground/50">-</span>}
@@ -291,7 +293,7 @@ export function WorkItemTableRow({
 
       case 'sprint':
         return (
-          <td key="sprint" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
+          <td key="sprint" data-col="sprint" className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
             {item.sprintId
               ? (sprintNameById?.get(item.sprintId) ?? '-')
               : <span className="text-muted-foreground/50">-</span>}
@@ -300,7 +302,7 @@ export function WorkItemTableRow({
 
       case 'status':
         return (
-          <EditableCell key="status" isEditing={editing === 'kanbanStatus'} onEnter={() => setEditing('kanbanStatus')} title="클릭하여 상태 변경">
+          <EditableCell key="status" dataCol="status" isEditing={editing === 'kanbanStatus'} onEnter={() => setEditing('kanbanStatus')} title="클릭하여 상태 변경">
             {editing === 'kanbanStatus' ? (
               <select
                 autoFocus
@@ -345,7 +347,7 @@ export function WorkItemTableRow({
 
       case 'priority':
         return (
-          <EditableCell key="priority" isEditing={editing === 'priority'} onEnter={() => setEditing('priority')} title="클릭하여 우선순위 변경">
+          <EditableCell key="priority" dataCol="priority" isEditing={editing === 'priority'} onEnter={() => setEditing('priority')} title="클릭하여 우선순위 변경">
             {editing === 'priority' ? (
               <select
                 autoFocus
@@ -371,7 +373,7 @@ export function WorkItemTableRow({
         // 빠르게 지정하는 셀로 단순화했다. secondaryAssignee 필드/값 자체는 건드리지
         // 않는다 — 칸반/에픽뷰/멤버보드 등 다른 화면은 여전히 참조한다.
         return (
-          <EditableCell key="assignee" isEditing={editing === 'primaryAssignee'} onEnter={() => setEditing('primaryAssignee')} className="font-medium whitespace-nowrap" title="클릭하여 담당자 변경">
+          <EditableCell key="assignee" dataCol="assignee" isEditing={editing === 'primaryAssignee'} onEnter={() => setEditing('primaryAssignee')} className="font-medium whitespace-nowrap" title="클릭하여 담당자 변경">
             {editing === 'primaryAssignee' ? (
               <TextInlineInput
                 initial={item.primaryAssignee || item.assignee || ''}
@@ -390,7 +392,7 @@ export function WorkItemTableRow({
 
       case 'cluster':
         return (
-          <EditableCell key="cluster" isEditing={editing === 'cluster'} onEnter={() => setEditing('cluster')} className="text-muted-foreground whitespace-nowrap">
+          <EditableCell key="cluster" dataCol="cluster" isEditing={editing === 'cluster'} onEnter={() => setEditing('cluster')} className="text-muted-foreground whitespace-nowrap">
             {editing === 'cluster' ? (
               <select
                 autoFocus
@@ -417,7 +419,7 @@ export function WorkItemTableRow({
 
       case 'category':
         return (
-          <EditableCell key="category" isEditing={editing === 'category'} onEnter={() => setEditing('category')}>
+          <EditableCell key="category" dataCol="category" isEditing={editing === 'category'} onEnter={() => setEditing('category')}>
             {editing === 'category' ? (
               <TextInlineInput
                 initial={item.category}
@@ -439,7 +441,7 @@ export function WorkItemTableRow({
         // 제목만 표시(Jira 키·Confluence 문서 링크는 DL/WIKI 컬럼으로 분리됨). 클릭 → 상세
         // 보기. title 미설정 레거시 항목은 내용 첫 줄로 대체.
         return (
-          <td key="title" className="px-4 py-1.5 max-w-xs">
+          <td key="title" data-col="title" className="px-4 py-1.5 max-w-xs">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onOpenDetail(item); }}
@@ -456,7 +458,7 @@ export function WorkItemTableRow({
 
       case 'content':
         return (
-          <EditableCell key="content" isEditing={editing === 'content'} onEnter={() => setEditing('content')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
+          <EditableCell key="content" dataCol="content" isEditing={editing === 'content'} onEnter={() => setEditing('content')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
             {editing === 'content' ? (
               <TextareaInline
                 initial={stripHtml(item.content)}
@@ -477,7 +479,7 @@ export function WorkItemTableRow({
 
       case 'result':
         return (
-          <EditableCell key="result" isEditing={editing === 'resolution'} onEnter={() => setEditing('resolution')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
+          <EditableCell key="result" dataCol="result" isEditing={editing === 'resolution'} onEnter={() => setEditing('resolution')} className="max-w-xs" title="클릭하여 수정 (서식 보존은 ✏ 사용)">
             {editing === 'resolution' ? (
               <TextareaInline
                 initial={stripHtml(item.resolution ?? '')}
@@ -495,7 +497,7 @@ export function WorkItemTableRow({
 
       case 'startedAt':
         return (
-          <EditableCell key="startedAt" isEditing={editing === 'startedAt'} onEnter={() => setEditing('startedAt')} className="text-muted-foreground whitespace-nowrap font-mono text-sm">
+          <EditableCell key="startedAt" dataCol="startedAt" isEditing={editing === 'startedAt'} onEnter={() => setEditing('startedAt')} className="text-muted-foreground whitespace-nowrap font-mono text-sm">
             {editing === 'startedAt' ? (
               <input
                 autoFocus
@@ -515,7 +517,7 @@ export function WorkItemTableRow({
 
       case 'closedAt':
         return (
-          <EditableCell key="closedAt" isEditing={editing === 'closedAt'} onEnter={() => setEditing('closedAt')} className="text-muted-foreground whitespace-nowrap font-mono text-sm">
+          <EditableCell key="closedAt" dataCol="closedAt" isEditing={editing === 'closedAt'} onEnter={() => setEditing('closedAt')} className="text-muted-foreground whitespace-nowrap font-mono text-sm">
             {editing === 'closedAt' ? (
               <input
                 autoFocus
@@ -538,7 +540,7 @@ export function WorkItemTableRow({
         const overdue = !!item.dueDate && item.kanbanStatus !== 'done'
           && toDateInput(item.dueDate) < todayDateInput();
         return (
-          <EditableCell key="dueDate" isEditing={editing === 'dueDate'} onEnter={() => setEditing('dueDate')}
+          <EditableCell key="dueDate" dataCol="dueDate" isEditing={editing === 'dueDate'} onEnter={() => setEditing('dueDate')}
             className={`whitespace-nowrap font-mono text-sm ${overdue ? 'text-status-critical' : 'text-muted-foreground'}`}>
             {editing === 'dueDate' ? (
               <input
@@ -567,7 +569,7 @@ export function WorkItemTableRow({
         // "DL#" — 구 작업제목 셀에 있던 Jira 키 칩을 그대로 옮긴 것. 짧은 칩 하나만 들어가는
         // 컬럼이라 오른쪽 패딩을 줄여 여백을 없앤다(헤더도 동일하게 tightRight).
         return (
-          <td key="jiraLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
+          <td key="jiraLink" data-col="jiraLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
             {item.jiraIssueKey ? (
               <a
                 href={item.jiraUrl ?? undefined}
@@ -585,68 +587,20 @@ export function WorkItemTableRow({
           </td>
         );
 
-      case 'confluenceLink': {
-        // "WIKI" — 다중 링크(Jira 원격 링크에서 찾은 전체 목록)가 있으면 배지+드롭다운 옆에
-        // 대표 링크(confluenceUrl) 편집용 DocLinkChip 도 함께 둔다 — 링크가 몇 개든 대표
-        // 링크를 추가/수정/해제할 수 있어야 한다(구 작업제목 셀의 DocLinkChip 과 동일 역할).
-        const links = item.confluenceLinks ?? [];
-        if (links.length > 1) {
-          return (
-            <td key="confluenceLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap relative">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setConfluenceLinksOpen((v) => !v); }}
-                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                  {links.length}
-                  <ChevronDown className="w-3 h-3 opacity-60" />
-                </button>
-                <DocLinkChip
-                  url={item.confluenceUrl}
-                  onSave={(url) => save({ confluenceUrl: url || null })}
-                  label="대표"
-                />
-              </div>
-              {confluenceLinksOpen && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setConfluenceLinksOpen(false); }} />
-                  <div className="absolute left-0 top-full mt-1 z-40 bg-card border border-border rounded-lg mac-shadow p-1 min-w-[220px] max-w-xs">
-                    {links.map((link, i) => (
-                      <a
-                        key={link.url + i}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        title={link.url}
-                        className="block px-2 py-1.5 rounded-md text-sm text-foreground hover:bg-secondary truncate"
-                      >
-                        {link.title || link.url}
-                      </a>
-                    ))}
-                  </div>
-                </>
-              )}
-            </td>
-          );
-        }
+      case 'confluenceLink':
+        // "WIKI" — 목록 뷰/에픽뷰가 공유하는 ConfluenceLinkCell(다중 링크 드롭다운 +
+        // 대표 링크 편집)에 위임한다.
         return (
-          <td key="confluenceLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
-            <DocLinkChip
-              url={item.confluenceUrl}
-              onSave={(url) => save({ confluenceUrl: url || null })}
-            />
+          <td key="confluenceLink" data-col="confluenceLink" className="pl-4 pr-1 py-1.5 whitespace-nowrap relative">
+            <ConfluenceLinkCell item={item} onSave={(url) => save({ confluenceUrl: url || null })} />
           </td>
         );
-      }
 
       case 'jiraEpic':
         // "상위업무" — Epic→Task 체인을 가시화한다. 둘 다 있고 서로 다르면 Epic 칩 →
         // 화살표 → 상위(Task) 칩을 나란히, 하나만 있으면 그 칩만(기존 동작 유지).
         return (
-          <td key="jiraEpic" className="px-4 py-1.5 max-w-xs">
+          <td key="jiraEpic" data-col="jiraEpic" className="px-4 py-1.5 max-w-xs">
             {(() => {
               const hasEpic = !!(item.jiraEpicKey || item.jiraEpic);
               const hasParent = !!item.jiraParentKey && item.jiraParentKey !== item.jiraEpicKey;
@@ -681,7 +635,7 @@ export function WorkItemTableRow({
       case 'jiraType':
         // "등록 타입" — 짧은 배지 하나만 들어가는 컬럼이라 오른쪽 패딩을 줄인다.
         return (
-          <td key="jiraType" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
+          <td key="jiraType" data-col="jiraType" className="pl-4 pr-1 py-1.5 whitespace-nowrap">
             {item.jiraIssueType ? (
               <span className={`inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium rounded border ${jiraTypeClass(item.jiraIssueType)}`}>
                 {item.jiraIssueType}
@@ -694,21 +648,21 @@ export function WorkItemTableRow({
 
       case 'jiraComponents':
         return (
-          <td key="jiraComponents" className="px-4 py-1.5">
+          <td key="jiraComponents" data-col="jiraComponents" className="px-4 py-1.5">
             <ChipList values={item.jiraComponents} />
           </td>
         );
 
       case 'jiraLabels':
         return (
-          <td key="jiraLabels" className="px-4 py-1.5">
+          <td key="jiraLabels" data-col="jiraLabels" className="px-4 py-1.5">
             <ChipList values={item.jiraLabels} className="text-primary border-primary/20 bg-primary/10" />
           </td>
         );
 
       case 'remarks':
         return (
-          <EditableCell key="remarks" isEditing={editing === 'remarks'} onEnter={() => setEditing('remarks')} className="max-w-[120px]">
+          <EditableCell key="remarks" dataCol="remarks" isEditing={editing === 'remarks'} onEnter={() => setEditing('remarks')} className="max-w-[120px]">
             {editing === 'remarks' ? (
               <TextInlineInput
                 initial={item.remarks ?? ''}
@@ -729,7 +683,7 @@ export function WorkItemTableRow({
         // "변경" 열 — WorkItemActionsMenu(대표 아이콘 + hover 드롭다운)를 그대로 위임한다.
         // WorkItemEpicView(에픽뷰)도 동일 컴포넌트를 재사용 — 로직은 그쪽에 단일 소스로 있다.
         return (
-          <td key="actions" className="px-4 py-1.5">
+          <td key="actions" data-col="actions" className="px-4 py-1.5">
             <WorkItemActionsMenu
               item={item}
               onEdit={onEdit}

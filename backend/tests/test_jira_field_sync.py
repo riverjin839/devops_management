@@ -75,9 +75,13 @@ def test_epic_parts_from_plain_key_string():
     assert extract_epic_parts({"customfield_10008": "DL-7"}, "customfield_10008") == ("DL-7", "")
 
 
-def test_epic_parts_fall_back_to_parent_when_field_unset():
-    """`jira_epic_field` 미설정 배포에서도 상위 이슈로 Epic 축을 잡을 수 있어야 한다."""
-    assert extract_epic_parts(_issue()["fields"]) == ("DL-10", "인프라 고도화")
+def test_epic_parts_do_not_fall_back_to_parent():
+    """Sub-task 의 상위(parent) Task 는 Epic 이 아니다 — `jira_epic_field` 가 없거나 이
+    이슈에 값이 없으면 Epic 은 빈 값이어야 한다(그렇지 않으면 일반 Task 가 에픽뷰에
+    Epic 처럼 노출되는 버그가 재발한다). 상위-하위 관계 자체는 `extract_parent_parts`
+    로 여전히 정확히 잡힌다."""
+    assert extract_epic_parts(_issue()["fields"]) == ("", "")
+    assert extract_epic_parts(_issue()["fields"], "customfield_10008") == ("", "")
     assert extract_parent_parts(_issue()["fields"]) == ("DL-10", "인프라 고도화")
 
 
