@@ -33,6 +33,12 @@
   Frontend: `hooks/useColumnWidths.ts`(`autoFit`/`autoFitMissing`),
   `pages/WorkItemBoardPage.tsx`, `components/work-items/WorkItemTableRow.tsx`
   (셀마다 `data-col` 마커 추가).
+  - **후속 수정**: 브라우저에서 실제로 확인해보니, 기본 뷰가 에픽뷰인 배포에서는 데이터
+    로드 시점에 아직 목록 뷰(및 그 `data-col` 셀)가 DOM 에 없어 자동맞춤이 조용히 한 번
+    실패하고 이후 목록 뷰로 전환해도 재시도되지 않는 문제가 있었다. 자동맞춤 effect 가
+    `viewMode === 'table'` 일 때만 실행되도록 가드를 걸고 `viewMode` 를 의존성에 추가해
+    목록 뷰로 전환되는 순간 다시 시도하게 했다. `ResizeGrip` 더블클릭 툴팁의 예전 문구
+    ("기본값 복원")도 정리했다.
 
 ## [1.30.0] - 2026-08-26
 

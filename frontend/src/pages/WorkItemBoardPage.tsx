@@ -445,12 +445,15 @@ export function WorkItemBoardPage() {
   // 컬럼폭 기본 여백 제거 — 사용자가 한 번도 손대지 않은(드래그/자동맞춤 이력 없는) 컬럼은
   // 데이터가 처음 로드된 직후 실제 셀 내용 기준으로 폭을 맞추고 그 값을 고정·저장한다.
   // 이미 손댄 컬럼은 건드리지 않으므로(useColumnWidths 의 known 집합) 화면이 다시 그려질
-  // 때마다 재실행돼도 사용자가 맞춘 폭을 덮어쓰지 않는다.
+  // 때마다 재실행돼도 사용자가 맞춘 폭을 덮어쓰지 않는다. 목록 뷰가 실제로 마운트돼 있어야
+  // `[data-col]` 셀을 찾을 수 있으므로 viewMode 가 'table' 일 때만 실행 — 기본 뷰가 에픽뷰라
+  // 데이터 로드 시점엔 아직 목록 뷰가 DOM 에 없는 경우가 흔해, viewMode 를 의존성에 넣어
+  // 이후 목록 뷰로 전환되는 순간에도 다시 시도하게 한다.
   useEffect(() => {
-    if (sortedTasks.length === 0) return;
+    if (viewMode !== 'table' || sortedTasks.length === 0) return;
     colW.autoFitMissing(visibleCols, tableRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedTasks.length, visibleCols.join(',')]);
+  }, [viewMode, sortedTasks.length, visibleCols.join(',')]);
 
   const deleteTask = useDeleteWorkItem();
   const toast = useToast();
