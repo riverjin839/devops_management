@@ -179,6 +179,63 @@ def test_create_issue_keeps_parent_when_retrying_without_optional_fields():
     assert sent[1]["labels"] == ["infra"]
 
 
+def test_create_issue_sends_epic_name_field():
+    """Epic 생성 시 "Epic Name" 커스텀 필드(epic_name_field)가 함께 전송돼야 한다 —
+    Jira Server/DC classic 프로젝트는 이 필드 없이는 Epic 생성 자체를 400 으로 거절한다."""
+    import asyncio
+    import json
+
+    import httpx
+
+    from app.services.jira_service import JiraService
+
+    sent: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        sent.append(body["fields"])
+        return httpx.Response(201, json={"key": "DL-100", "id": "20002"})
+
+    svc = JiraService(BASE, "tok", transport=httpx.MockTransport(handler))
+    res = asyncio.run(svc.create_issue(
+        "DL", "새 에픽", issue_type="Epic",
+        epic_name="새 에픽", epic_name_field="customfield_10011",
+    ))
+
+    assert res["status"] == "ok" and res["key"] == "DL-100"
+    assert sent[0]["customfield_10011"] == "새 에픽"
+    assert sent[0]["issuetype"] == {"name": "Epic"}
+
+
+def test_create_issue_epic_name_field_excluded_on_400_retry():
+    """Epic Name 필드가 프로젝트 스킴에 없어 400 이 나면 그 필드만 빼고 재시도한다."""
+    import asyncio
+    import json
+
+    import httpx
+
+    from app.services.jira_service import JiraService
+
+    sent: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        sent.append(body["fields"])
+        if len(sent) == 1:
+            return httpx.Response(400, json={"errors": {"customfield_10011": "not on screen"}})
+        return httpx.Response(201, json={"key": "DL-101", "id": "20003"})
+
+    svc = JiraService(BASE, "tok", transport=httpx.MockTransport(handler))
+    res = asyncio.run(svc.create_issue(
+        "DL", "새 에픽", issue_type="Epic",
+        epic_name="새 에픽", epic_name_field="customfield_10011",
+    ))
+
+    assert res["status"] == "ok" and res["key"] == "DL-101"
+    assert len(sent) == 2
+    assert "customfield_10011" not in sent[1]
+
+
 # ── 담당자/마감일 — 이제 title/content 와 동일하게 Jira 가 무조건 소유 ───────────────
 def test_sync_assignee_now_overwrites_existing_value():
     """이전엔 담당자가 비어있을 때만 채웠지만, 이름 매핑이 정확해진 뒤로는 재배정 여부와

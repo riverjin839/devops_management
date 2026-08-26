@@ -156,6 +156,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
   const [description, setDescription] = useState('');
   const [epicKey, setEpicKey] = useState('');
   const [parentKey, setParentKey] = useState('');
+  const [epicName, setEpicName] = useState('');
   // 담당자 — 기본은 로그인 사용자 자신(defaults.assigneeUsername), 화면에서 다른 PEP
   // 사용자로 바꿀 수 있다(defaults.assignableUsers 중에서만 — 계정 매핑 불안정 방지).
   const [assigneeUsername, setAssigneeUsername] = useState('');
@@ -216,6 +217,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
     setDescription(defaults.description);
     setEpicKey(defaults.epicKey ?? '');
     setParentKey(defaults.parentKey ?? '');
+    setEpicName(defaults.epicName || defaults.summary);
     setAssigneeUsername(defaults.assigneeUsername ?? '');
     setShowEpicPicker(false);
     setShowParentPicker(false);
@@ -276,6 +278,7 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
         description: description || undefined,
         epicKey: issueType === 'Task' ? (epicKey.trim() || undefined) : undefined,
         parentKey: issueType === 'Sub-task' ? (parentKey.trim() || undefined) : undefined,
+        epicName: issueType === 'Epic' ? (epicName.trim() || summary.trim() || undefined) : undefined,
         assigneeUsername: assigneeUsername || undefined,
         spaceKey: spaceKey.trim() || undefined,
         pageId: pageId.trim() || undefined,
@@ -517,8 +520,15 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                     {/* Jira 계층 — 이슈 종류에 따라 필요한 상위 연결만 보여준다.
                         Epic 은 상위가 없고, Task 는 Epic 링크, Sub-task 는 상위 이슈가 필요하다. */}
                     {issueType === 'Epic' && (
-                      <div className="col-span-2 text-xs text-muted-foreground px-1">
-                        Epic 은 상위 연결이 필요 없습니다 (Epic 키 / 상위 이슈 입력 불필요).
+                      <div className="col-span-2">
+                        <span className="text-xs font-medium text-muted-foreground mb-1 block">Epic 이름</span>
+                        <input className={inputCls} placeholder={summary || '에픽 이름'} value={epicName}
+                          title="Jira 의 'Epic Name' 필드 — Epic 보드에 표시되는 짧은 이름(제목과 별개). 비우면 제목(summary)으로 채웁니다."
+                          onChange={(e) => setEpicName(e.target.value)} />
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Epic 은 상위 연결이 필요 없습니다 (Epic 키 / 상위 이슈 입력 불필요). 관리자가
+                          Epic Name 필드를 설정하지 않았으면 이 값은 전송되지 않습니다.
+                        </p>
                       </div>
                     )}
                     {issueType === 'Task' && (

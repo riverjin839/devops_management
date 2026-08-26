@@ -380,6 +380,7 @@ class JiraService:
         issue_type: str = "Task", priority: Optional[str] = None,
         labels: Optional[list[str]] = None, components: Optional[list[str]] = None,
         parent_key: str = "", epic_key: str = "", epic_field: str = "",
+        epic_name: str = "", epic_name_field: str = "",
         assignee: str = "",
     ) -> dict:
         """새 이슈 생성 — `POST /rest/api/2/issue`. 성공 시 key/id 반환.
@@ -391,8 +392,11 @@ class JiraService:
         (핵심 필드 문제 등)은 더 빼볼 게 없으므로 재시도 없이 바로 에러로 반환한다.
 
         `parent_key` 는 Sub-task 생성용 상위 이슈 — Jira 가 필수로 요구하므로 절대 빼지 않는다.
-        `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다. `assignee` 는
-        Jira **원본 로그인 계정**(username/key, displayName 아님)이어야 한다."""
+        `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다. `epic_name` 은 **Epic
+        issuetype 생성 시** Jira Server/DC classic 프로젝트가 요구하는 별도 커스텀 필드
+        (`epic_name_field`, 예: customfield_10011) — summary 와 별개로 Epic 보드에 표시되는
+        짧은 이름이다. `assignee` 는 Jira **원본 로그인 계정**(username/key, displayName
+        아님)이어야 한다."""
         if not self.configured:
             return {"status": "offline", "detail": "Jira 미설정"}
         if not (project_key and summary):
@@ -401,6 +405,8 @@ class JiraService:
         optional_keys = {"priority", "labels", "components", "assignee"}
         if epic_field:
             optional_keys.add(epic_field)
+        if epic_name_field:
+            optional_keys.add(epic_name_field)
 
         def _payload(exclude: set[str]) -> dict:
             fields: dict[str, Any] = {
@@ -421,6 +427,8 @@ class JiraService:
                 fields["components"] = [{"name": c} for c in components]
             if epic_key and epic_field and epic_field not in exclude:
                 fields[epic_field] = epic_key
+            if epic_name and epic_name_field and epic_name_field not in exclude:
+                fields[epic_name_field] = epic_name
             if assignee and "assignee" not in exclude:
                 fields["assignee"] = {"name": assignee}
             return {"fields": fields}

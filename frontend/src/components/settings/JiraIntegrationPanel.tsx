@@ -37,6 +37,7 @@ export function JiraIntegrationPanel() {
   const [enabled, setEnabled] = useState(false);
   const [verifyTls, setVerifyTls] = useState(true);
   const [defaultProject, setDefaultProject] = useState('');
+  const [epicNameField, setEpicNameField] = useState('');
 
   useEffect(() => {
     if (config) {
@@ -47,6 +48,7 @@ export function JiraIntegrationPanel() {
       setEnabled(!!config.enabled);
       setVerifyTls(config.verifyTls !== false);
       setDefaultProject(config.defaultProjectKey ?? '');
+      setEpicNameField(config.jiraEpicNameField ?? '');
     }
   }, [config]);
 
@@ -126,6 +128,7 @@ export function JiraIntegrationPanel() {
         enabled,
         verifyTls,
         defaultProjectKey: defaultProject.trim() || null,
+        jiraEpicNameField: epicNameField.trim(),
       });
       toast.success('Jira 설정 저장됨');
     } catch (err) {
@@ -226,6 +229,18 @@ export function JiraIntegrationPanel() {
             <span className="block text-sm font-medium text-muted-foreground mb-1">기본 프로젝트 키 (선택)</span>
             <input className={inputCls} placeholder="PROJ" value={defaultProject}
               onChange={(e) => setDefaultProject(e.target.value)} disabled={!isAdmin} />
+          </div>
+          <div>
+            <span className="block text-sm font-medium text-muted-foreground mb-1">
+              Epic Name 커스텀 필드 ID (선택 — Epic 생성 시)
+            </span>
+            <input className={inputCls} placeholder="customfield_10011" value={epicNameField}
+              onChange={(e) => setEpicNameField(e.target.value)} disabled={!isAdmin} />
+            <p className="text-xs text-muted-foreground mt-1">
+              Jira Server/DC classic 프로젝트는 Epic 이슈 생성 시 Epic Link 와는 별개로
+              이 필드(짧은 이름)를 요구합니다. 프로젝트 화면(관리 &gt; 필드)에서 필드 ID 를
+              확인해 입력하세요 — 비워두면 Epic 생성 시 이 필드를 보내지 않습니다.
+            </p>
           </div>
           <div className="flex items-end gap-4">
             <label className="flex items-center gap-2 text-sm">

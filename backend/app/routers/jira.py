@@ -120,6 +120,10 @@ DEFAULT_JIRA_SETTINGS = {
     # Jira Sprint 커스텀 필드 ID (선택, 예: customfield_10007) — 가져오기 시 work_item.sprint_id
     # 를 이름으로 매칭한다. Epic Link 와 마찬가지로 Server/DC 는 인스턴스마다 필드 ID 가 다르다.
     "jira_sprint_field": "",
+    # Jira "Epic Name" 커스텀 필드 ID (선택, 예: customfield_10011) — Epic Link 와는 별개로,
+    # Server/DC classic 프로젝트가 Epic 이슈 **생성** 시 필수로 요구하는 짧은 이름 필드.
+    # 미설정이면 Epic 생성 시 이 필드를 보내지 않는다(프로젝트가 요구하면 400 으로 실패).
+    "jira_epic_name_field": "",
 }
 
 
@@ -574,6 +578,8 @@ def update_config(
         current["jira_epic_field"] = data["jira_epic_field"].strip()
     if "jira_sprint_field" in data and data["jira_sprint_field"] is not None:
         current["jira_sprint_field"] = data["jira_sprint_field"].strip()
+    if "jira_epic_name_field" in data and data["jira_epic_name_field"] is not None:
+        current["jira_epic_name_field"] = data["jira_epic_name_field"].strip()
     for k in ("enabled", "verify_tls", "default_project_key"):
         if k in data and data[k] is not None:
             current[k] = data[k]
@@ -1420,9 +1426,14 @@ async def create_jira_issue(
         return JiraCreateResult(status="error", detail="내 Jira 인증이 등록되지 않았습니다 (설정 > 연동).")
     assignee_pep_user = (payload.assignee_username or "").strip() or actor.username
     assignee = _resolve_jira_username(db, assignee_pep_user)
+    # Epic 은 Server/DC classic 프로젝트에서 "Epic Name" 커스텀 필드를 별도로 요구한다 —
+    # 미지정 시 summary 로 채운다(관리자가 필드 ID 를 설정하지 않았으면 아예 보내지 않음).
+    is_epic = (payload.issue_type or "").strip().lower() == "epic"
+    epic_name = (payload.epic_name or summary).strip() if is_epic else ""
     res = await svc.create_issue(
         project_key, summary, description=description or "", issue_type=payload.issue_type,
         priority=priority, labels=payload.labels, components=payload.components,
+        epic_name=epic_name, epic_name_field=(cfg.get("jira_epic_name_field") or "").strip(),
         assignee=assignee or "",
     )
     if res.get("status") != "ok":
@@ -1828,6 +1839,7 @@ async def provision_defaults(
         "components": [c for c in [(item.category if item else "")] if c],
         "epic_key": "",
         "parent_key": "",
+        "epic_name": title,
         "space_key": (weekly.get("space_key") or ""),
         "parent_page_id": (weekly.get("parent_page_id") or ""),
     }
@@ -1929,6 +1941,10 @@ async def provision_work_item(
                 # 생성만 진행한다 — 매핑 실패가 이슈 생성 자체를 막지 않는다.
                 assignee_pep_user = (payload.assignee_username or "").strip() or actor.username
                 assignee = _resolve_jira_username(db, assignee_pep_user)
+                # Epic 은 Server/DC classic 프로젝트에서 "Epic Name" 커스텀 필드를 별도로
+                # 요구한다 — 미지정 시 summary 로 채운다.
+                is_epic = (payload.issue_type or "").strip().lower() == "epic"
+                epic_name = (payload.epic_name or summary).strip() if is_epic else ""
                 res = await svc.create_issue(
                     project_key, summary,
                     description=jira_description_base,
@@ -1936,6 +1952,7 @@ async def provision_work_item(
                     priority=payload.priority or PEP_PRIORITY_TO_JIRA.get(item.priority or ""),
                     labels=payload.labels, components=payload.components,
                     epic_key=epic_key, epic_field=(cfg.get("jira_epic_field") or "").strip(),
+                    epic_name=epic_name, epic_name_field=(cfg.get("jira_epic_name_field") or "").strip(),
                     parent_key=parent_key, assignee=assignee or "",
                 )
                 if res.get("status") == "ok":

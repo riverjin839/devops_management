@@ -10,6 +10,21 @@
 
 1.29.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Jira · Confluence 자동 생성 — Epic 생성 지원**: 업무를 Jira 이슈로 만들 때 이슈 종류로
+  Epic 을 고르면 지금까지는 Jira Server/DC classic 프로젝트가 필수로 요구하는 "Epic Name"
+  커스텀 필드가 빠져 있어 생성이 400 으로 실패할 수 있었다. 이제 공통 설정에서 Epic Name
+  필드 ID(예: `customfield_10011`)를 지정하면 Epic 생성 시 함께 전송되고, 생성 모달에서
+  이름을 직접 수정할 수 있다(미지정 시 제목으로 채움). 필드 ID 를 설정하지 않은 배포는
+  기존과 동일하게 동작한다(값 전송 안 함).
+  Backend: `services/jira_service.py`(`create_issue` 에 `epic_name`/`epic_name_field`
+  추가 — 스킴에 없으면 그 필드만 빼고 재시도), `schemas/jira.py`
+  (`JiraConfig.jira_epic_name_field`, `ProvisionRequest.epic_name`,
+  `JiraCreateRequest.epic_name`), `routers/jira.py`(`/jira/config`·`/jira/provision`·
+  `/jira/create` 반영).
+  Frontend: `JiraIntegrationPanel.tsx`(Epic Name 필드 ID 설정 입력), `JiraProvisionModal.tsx`
+  (이슈 종류가 Epic 일 때 "Epic 이름" 입력 노출).
+
 ## [1.29.1] - 2026-08-24
 
 ### Changed
