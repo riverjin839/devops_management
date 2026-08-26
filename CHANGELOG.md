@@ -10,6 +10,30 @@
 
 1.30.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **에픽뷰 — Epic 이 아닌 일반 Task 가 Epic 그룹으로 잘못 노출되던 문제**: Sub-task 에
+  Epic Link 값이 없으면(설정 미완료 또는 이 이슈에 값 없음) 상위(parent) Task 를 그대로
+  Epic 대용으로 써서, 실제 Jira 에서는 Epic 이 아닌 일반 Task 가 에픽뷰의 Epic 그룹
+  헤더로 표시되던 버그를 고쳤다. 이제 진짜 Epic Link 값이 없으면 "에픽 없음"으로 정확히
+  표시하고, 실제 상하위(Task→Sub-task) 구조는 그대로 트리로 보여준다.
+  Backend: `services/jira_service.py`(`extract_epic_parts` 의 parent 폴백 제거).
+- **에픽뷰에 WIKI(Confluence 문서) 컬럼이 없던 문제**: 목록 뷰 컬럼 설정에서 WIKI 를
+  켜도 에픽뷰는 고정 컬럼이라 반영되지 않았다. 에픽뷰에도 WIKI 컬럼을 추가했다(목록
+  뷰와 동일한 `ConfluenceLinkCell` 재사용).
+  Frontend: `components/work-items/WorkItemEpicView.tsx`,
+  `components/work-items/ConfluenceLinkCell.tsx`(신규, 목록 뷰와 공유).
+
+### Changed
+- **업무 관리 게시판 — 컬럼 폭 자동맞춤**: 짧은 값만 들어가는 컬럼(DL#/WIKI/등록 타입 등)
+  도 하드코딩 기본폭이 넉넉하면 오른쪽 여백이 계속 남고, 리사이즈 그립 더블클릭도 그
+  하드코딩 기본값으로 되돌아갈 뿐이라 여백이 줄어들지 않던 문제를 고쳤다. 이제 컬럼 폭은
+  실제 렌더된 셀 내용(`scrollWidth`) 기준으로 자동 계산되고, 계산된 값은 그대로 고정·저장
+  된다 — 데이터가 처음 로드된 직후 아직 손대지 않은 컬럼에 한 번 적용되고, 더블클릭하면
+  그 컬럼만 다시 지금 내용 기준으로 재계산한다.
+  Frontend: `hooks/useColumnWidths.ts`(`autoFit`/`autoFitMissing`),
+  `pages/WorkItemBoardPage.tsx`, `components/work-items/WorkItemTableRow.tsx`
+  (셀마다 `data-col` 마커 추가).
+
 ## [1.30.0] - 2026-08-26
 
 ### Added

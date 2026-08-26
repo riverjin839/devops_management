@@ -526,11 +526,18 @@ KANBAN_TO_CATEGORY = {"todo": "new", "in_progress": "indeterminate", "done": "do
 
 
 def extract_epic_parts(fields: dict, epic_field: str = "") -> tuple[str, str]:
-    """이슈에서 Epic(또는 상위 이슈)을 ``(key, summary)`` 로 분해해 돌려준다.
+    """이슈에서 **진짜 Epic**(Epic Link 값) 만 ``(key, summary)`` 로 분해해 돌려준다.
 
     Jira Server/DC 는 Epic Link 가 **커스텀 필드**(예: customfield_10008)라 필드 ID 를
     설정으로 받는다. 값이 문자열(에픽 키)이면 key 만, dict 면 key/summary 를 쓴다.
-    설정이 없거나 값이 없으면 `parent`(서브태스크/차세대 프로젝트)로 폴백한다.
+    설정이 없거나 이 이슈에 값이 없으면 빈 값을 돌려준다 — **Sub-task 의 상위(parent)
+    Task 를 Epic 대용으로 쓰지 않는다.** Jira Server/DC 는 team-managed 프로젝트가 없어
+    `parent` 는 항상 "Sub-task→상위 Task" 관계일 뿐 Epic 이 아니다. 예전엔 여기서
+    `parent` 로 폴백해 실제로는 Epic 이 아닌 일반 Task 가 에픽뷰에 Epic 그룹 헤더로
+    잘못 노출되는 버그가 있었다 — 상위-하위 관계는 `extract_parent_parts`
+    (jira_parent_key/jira_parent_summary) 가 별도로 담당하고, 화면(WorkItemEpicView 의
+    buildForest)은 그 값으로 Task→Sub-task 트리를 그대로 보여준다. Epic 이 없는 이슈는
+    Jira 원본 그대로 "에픽 없음"으로 보여야 한다.
 
     key/summary 를 분리해 두면 화면에서 "DL-12 제목 상태" 박스로 렌더하면서 key 만
     링크로 걸 수 있다 — 합본 문자열만 있으면 링크 대상을 다시 파싱해야 한다."""
@@ -543,8 +550,7 @@ def extract_epic_parts(fields: dict, epic_field: str = "") -> tuple[str, str]:
             summary = (((raw.get("fields") or {}).get("summary")) or raw.get("name") or "").strip()
             if key or summary:
                 return key[:50], summary[:200]
-    key, summary = extract_parent_parts(fields)
-    return key, summary
+    return "", ""
 
 
 def extract_parent_parts(fields: dict) -> tuple[str, str]:

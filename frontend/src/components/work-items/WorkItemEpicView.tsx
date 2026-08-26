@@ -1,8 +1,11 @@
 import { Fragment, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import type { WorkItem } from '@/types';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, formatApiError } from '@/lib/utils';
+import { useUpdateWorkItem } from '@/hooks/useWorkItems';
+import { useToast } from '@/components/common';
 import { JiraIssueChip } from './JiraIssueChip';
+import { ConfluenceLinkCell } from './ConfluenceLinkCell';
 import { WorkItemActionsMenu, type WorkItemActionsMenuProps } from './WorkItemActionsMenu';
 
 // WorkItemTableRow.tsx 의 KS_DOT/KS_TEXT/KS_LABEL/PRI_STYLES/JIRA_CAT_*/jiraTypeClass 와 동일한
@@ -159,6 +162,14 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
   const pStyle = PRI_STYLES[item.priority] ?? PRI_STYLES.medium;
   const overdue = !!item.dueDate && item.kanbanStatus !== 'done' && item.dueDate.slice(0, 10) < todayDateInput();
 
+  const updateTask = useUpdateWorkItem();
+  const toast = useToast();
+  const saveConfluenceUrl = (url: string) => {
+    updateTask.mutate({ id: item.id, data: { confluenceUrl: url || null } }, {
+      onError: (err) => toast.error('수정 실패', formatApiError(err, '문서 링크를 저장할 수 없습니다.')),
+    });
+  };
+
   return (
     <>
       <tr className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
@@ -211,6 +222,9 @@ function TreeRow({ node, depth, collapsedIds, onToggle, onItemClick, jiraBusyId,
           ) : (
             <span className="text-muted-foreground/50 text-sm">-</span>
           )}
+        </td>
+        <td className="px-4 py-1.5 whitespace-nowrap relative">
+          <ConfluenceLinkCell item={item} onSave={saveConfluenceUrl} />
         </td>
         <td className="px-4 py-1.5 whitespace-nowrap">
           {item.jiraStatus ? (
@@ -300,11 +314,12 @@ export function WorkItemEpicView({ items, onItemClick, ...menuProps }: WorkItemE
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm" style={{ minWidth: '860px' }}>
+      <table className="w-full text-sm" style={{ minWidth: '940px' }}>
         <thead>
           <tr className="border-b border-border bg-muted/30">
             <th className="px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">작업</th>
             <th className="px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">DL</th>
+            <th className="px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">WIKI</th>
             <th className="px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">상태</th>
             <th className="px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">담당자</th>
             <th className="px-4 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">우선순위</th>
@@ -323,7 +338,7 @@ export function WorkItemEpicView({ items, onItemClick, ...menuProps }: WorkItemE
             return (
               <Fragment key={groupKey}>
                 <tr className="bg-muted/20 border-b border-border">
-                  <td colSpan={7} className="px-4 py-2">
+                  <td colSpan={8} className="px-4 py-2">
                     <button
                       type="button"
                       onClick={() => toggle(groupKey)}
