@@ -21,7 +21,7 @@ function ResizeGripBase({ onMouseDown, onDoubleClick, width = 4, className = '' 
       onClick={(e) => e.stopPropagation()}
       className={`absolute top-0 right-0 h-full select-none cursor-col-resize group/grip ${className}`}
       style={{ width: `${width + 4}px`, marginRight: `-${width / 2}px` }}
-      title="드래그로 너비 조정 · 더블클릭으로 기본값 복원"
+      title="드래그로 너비 조정 · 더블클릭으로 자동 맞춤"
     >
       {/* 시각적 막대 (가운데) */}
       <span
