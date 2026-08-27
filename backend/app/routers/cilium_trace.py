@@ -187,6 +187,7 @@ def cilium_monitor_stream(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            "Content-Encoding": "identity",
         },
     )
 
@@ -235,5 +236,6 @@ def cilium_hubble_stream(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            "Content-Encoding": "identity",
         },
     )

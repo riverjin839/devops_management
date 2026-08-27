@@ -40,6 +40,20 @@ class Settings(BaseSettings):
     check_interval_minutes: int = 5
     check_timeout_seconds: int = 30
 
+    # Pod 로그 / 이벤트 SSE 스트림 (analyze.py stream_pod_logs, stream_cluster_events)
+    # kubernetes SDK 는 blocking urllib3 라 스트림 하나가 anyio 스레드풀 슬롯 하나를
+    # 스트림 수명 내내 점유한다. follow=True 무제한 tail 이 스레드풀을 고갈시켜 나머지
+    # API 전체가 멈추는 사고를 막기 위해 (1) 프로세스당 동시 스트림 수를 제한하고
+    # (2) 스트림 최대 수명을 둔다 — 초과분은 429, 수명 초과는 정상 종료(프론트가 재연결).
+    log_stream_max_concurrent: int = 20
+    log_stream_max_duration_seconds: int = 1800
+
+    # anyio 의 sync 라우트(전체 834개 중 744개, 89%) 실행용 스레드풀 총량. anyio 기본값
+    # (40)은 범용 heuristic 이라, sync 핸들러 비중이 이례적으로 높고 그 중 다수가
+    # kubectl subprocess(최대 30s)·SSH·로그 스트림처럼 오래 걸리는 이 앱에는 작다.
+    # main.py lifespan 에서 이 값으로 CapacityLimiter.total_tokens 를 올린다.
+    sync_threadpool_size: int = 100
+
     # AI Agent (Ollama)
     ollama_url: str = "http://ollama:11434"
     ollama_model: str = "llama3"

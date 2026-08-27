@@ -39,6 +39,15 @@ spec:
                 name: k8s-monitor-config
             - secretRef:
                 name: k8s-monitor-secret
+          env:
+            # uvicorn --workers 2(Dockerfile) 라 pod 당 SQLAlchemy 엔진이 2개 뜬다.
+            # 기본 풀(10+20=30)을 그대로 두면 pod 당 예산이 60 으로 배가된다 — 워커
+            # 수만큼 나눠서 이전과 같은 pod 당 총 예산(30)을 유지 (celery-worker-llm.yaml
+            # 과 동일 패턴).
+            - name: DB_POOL_SIZE
+              value: "5"
+            - name: DB_MAX_OVERFLOW
+              value: "10"
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
           livenessProbe:
