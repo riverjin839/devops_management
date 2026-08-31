@@ -1966,8 +1966,22 @@ async def provision_work_item(
                     item.jira_components = payload.components or None
                     item.jira_labels = payload.labels or None
                     if epic_key:
-                        item.jira_epic_key = epic_key
-                        item.jira_epic = (item.jira_epic or epic_key)
+                        if res.get("epic_link_applied"):
+                            item.jira_epic_key = epic_key
+                            item.jira_epic = (item.jira_epic or epic_key)
+                        else:
+                            # 이슈 자체는 생성됐지만 Epic Link 는 실제로 안 붙었다 — PEP DB 에
+                            # 붙은 것처럼 기록하면 "PEP 에선 Epic 하위인데 실제 Jira 는 아니다"
+                            # 라는 불일치가 생긴다. jira_epic_key 를 비워두고 사유를 알린다.
+                            epic_field_cfg = (cfg.get("jira_epic_field") or "").strip()
+                            warn = (
+                                "이슈는 생성됐지만 Epic 연결에 실패했습니다 — 설정 > Jira 연동에 "
+                                "Epic Link 커스텀 필드 ID 가 등록돼 있지 않습니다."
+                                if not epic_field_cfg else
+                                "이슈는 생성됐지만 Epic 연결에 실패했습니다 — Jira 가 Epic Link "
+                                "필드를 거부했습니다 (필드 ID/프로젝트 스킴을 확인하세요)."
+                            )
+                            jira_detail = f"{jira_detail} {warn}".strip() if jira_detail else warn
                     if parent_key:
                         item.jira_parent_key = parent_key
                     item.jira_synced_at = datetime.utcnow()
