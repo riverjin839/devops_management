@@ -1,5 +1,8 @@
 """SnapshotManager 단위 테스트 — 감사에서 발견된 버그의 회귀 방지.
 
+메모리 모드 테스트는 backend="memory" 를 명시한다 — 기본값 auto 는 CI 처럼 Redis 가 떠 있으면
+공유 스토어를 잡아 테스트 간 키("k")가 새어 나가 서로의 상태를 본다(로컬은 Redis 가 없어 폴백).
+
 - 부분(절단) 결과는 완전 결과보다 짧은 TTL 로 만료되어 자동 재집계된다(BE-2).
 - computing 이 stuck_timeout 을 넘기면 새 계산으로 교체된다(BE-3, refresh 무력화 방지).
 - 정상 케이스(짧은 시간 내 완료, force 없는 재사용)는 기존 동작을 유지한다.
@@ -18,7 +21,7 @@ def _instant_builder(result):
 
 
 def test_ready_result_is_cached_within_ttl():
-    mgr = SnapshotManager(ttl=60.0)
+    mgr = SnapshotManager(backend="memory", ttl=60.0)
     calls = {"n": 0}
 
     def builder(progress):
@@ -33,7 +36,7 @@ def test_ready_result_is_cached_within_ttl():
 
 
 def test_force_ignores_ttl_and_rebuilds():
-    mgr = SnapshotManager(ttl=60.0)
+    mgr = SnapshotManager(backend="memory", ttl=60.0)
     calls = {"n": 0}
 
     def builder(progress):
@@ -49,7 +52,7 @@ def test_force_ignores_ttl_and_rebuilds():
 def test_partial_result_uses_shorter_ttl():
     """절단된(partial=True) 스냅샷은 partial_ttl 이 지나면 만료되어 재집계돼야 한다 —
     안 그러면 부분 데이터가 완전한 결과인 것처럼 ttl(예: 24h) 내내 서빙된다(BE-2)."""
-    mgr = SnapshotManager(ttl=60.0, partial_ttl=0.01)
+    mgr = SnapshotManager(backend="memory", ttl=60.0, partial_ttl=0.01)
     calls = {"n": 0}
 
     def builder(progress):
@@ -66,7 +69,7 @@ def test_partial_result_uses_shorter_ttl():
 
 def test_complete_result_not_affected_by_partial_ttl():
     """partial=False 결과는 짧은 partial_ttl 의 영향을 받지 않고 일반 ttl 을 따른다."""
-    mgr = SnapshotManager(ttl=60.0, partial_ttl=0.01)
+    mgr = SnapshotManager(backend="memory", ttl=60.0, partial_ttl=0.01)
     calls = {"n": 0}
 
     def builder(progress):
@@ -83,7 +86,7 @@ def test_complete_result_not_affected_by_partial_ttl():
 def test_stuck_computing_job_is_replaced_after_stuck_timeout():
     """빌더가 영원히 안 끝나면(행업) 기존에는 force 조차 무력했다 — stuck_timeout 이 지나면
     새 계산으로 교체돼야 refresh 로 복구 가능하다(BE-3)."""
-    mgr = SnapshotManager(ttl=60.0, stuck_timeout=0.05)
+    mgr = SnapshotManager(backend="memory", ttl=60.0, stuck_timeout=0.05)
     started = threading.Event()
     release = threading.Event()
 
@@ -109,7 +112,7 @@ def test_stuck_computing_job_is_replaced_after_stuck_timeout():
 
 def test_computing_within_stuck_timeout_is_not_replaced():
     """stuck_timeout 이내면 기존 동작(중복 작업 방지)을 유지 — 진행 중인 계산을 재시작하지 않는다."""
-    mgr = SnapshotManager(ttl=60.0, stuck_timeout=10.0)
+    mgr = SnapshotManager(backend="memory", ttl=60.0, stuck_timeout=10.0)
     started = threading.Event()
     release = threading.Event()
     calls = {"n": 0}
@@ -276,7 +279,7 @@ def test_put_warms_shared_snapshot():
 
 
 def test_memory_backend_ignores_store():
-    mgr = SnapshotManager(ttl=60.0, backend="memory")
+    mgr = SnapshotManager(backend="memory", ttl=60.0)
     assert mgr.is_shared is False
     v = mgr.get("k", _instant_builder({"partial": False, "v": 1}), initial_wait=1.0)
     assert v["status"] == "ready"
