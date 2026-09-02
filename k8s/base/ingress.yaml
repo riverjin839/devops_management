@@ -10,6 +10,13 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    # (옵션) 세션 어피니티 — backend 가 다중 replica 일 때 같은 브라우저의 폴링을 같은 파드로
+    # 보낸다. 자원 관리 스냅샷은 Redis 로 replica 간 공유되므로(K8S_ALLOC_SNAPSHOT_BACKEND)
+    # 기본은 끈다. Redis 없이 운영하거나 진행률 편차가 보이면 아래 주석을 푼다.
+    # nginx.ingress.kubernetes.io/affinity: "cookie"
+    # nginx.ingress.kubernetes.io/affinity-mode: "balanced"
+    # nginx.ingress.kubernetes.io/session-cookie-name: "pep_route"
+    # nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
     # Enable CORS
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS"

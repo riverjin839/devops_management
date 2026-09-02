@@ -1729,59 +1729,67 @@ def _classify_pod_status(p) -> str:
 
 @router.get("/{cluster_id}/pods-summary")
 def pods_summary(cluster_id: UUID, db: Session = Depends(get_db)):
-    """개요 카드용 파드 요약.
+    """개요 카드용 파드 요약 — **deprecated**: `/k8s/{id}/allocation/pods-summary` 를 쓸 것.
+
+    K8S 자원 관리 화면은 개요 스냅샷에서 파생된 새 엔드포인트로 옮겨갔다(요청 스레드가
+    apiserver 를 치지 않음). 이 경로는 호환용으로 남기되, 과거처럼 전체 Pod 를 페이징 없이
+    60초 요청 하나로 긁지 않고(ingress 60s 와 겹쳐 502 + 전량 적재 OOM) `k8s_paging` 으로
+    페이지 단위 스트리밍한다.
 
     - capacity: 노드 allocatable.pods 합계(전체/스케줄 가능 노드) 및 남은 스케줄 슬롯
       (스케줄 가능 노드 용량 − 해당 노드의 비종료 파드 수).
     - status_counts: 파드별 단일 버킷 카운트 (running/pending/error/succeeded/failed/unknown).
     """
-    from concurrent.futures import ThreadPoolExecutor
+    from app.services.k8s_paging import iter_all, list_all
 
     cluster = _require_cluster(cluster_id, db)
     client = _api_client(cluster)
     v1 = k8s_client.CoreV1Api(client)
-
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        f_nodes = ex.submit(lambda: v1.list_node(_request_timeout=30))
-        f_pods = ex.submit(lambda: v1.list_pod_for_all_namespaces(_request_timeout=60))
+    try:
         try:
-            nodes = f_nodes.result()
+            node_items = list_all(lambda **kw: v1.list_node(**kw), resource_version="0")
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"노드 조회 실패: {str(e)[:200]}")
+
+        # 노드 용량 (allocatable.pods)
+        allocatable_total = 0
+        schedulable_allocatable = 0
+        schedulable_nodes: set[str] = set()
+        nodes_total = 0
+        for n in node_items:
+            nodes_total += 1
+            try:
+                alloc = int((n.status.allocatable or {}).get("pods", 0)) if n.status else 0
+            except (ValueError, TypeError):
+                alloc = 0
+            allocatable_total += alloc
+            ready = any(c.type == "Ready" and c.status == "True" for c in ((n.status.conditions or []) if n.status else []))
+            unschedulable = bool(n.spec.unschedulable) if n.spec else False
+            if ready and not unschedulable:
+                schedulable_nodes.add(n.metadata.name)
+                schedulable_allocatable += alloc
+
+        # 파드 상태 카운트 + 스케줄 가능 노드 점유 슬롯 — 페이지 스트리밍(전량 미적재)
+        status_counts = {"running": 0, "pending": 0, "error": 0, "succeeded": 0, "failed": 0, "unknown": 0}
+        occupied_on_schedulable = 0
+        total_pods = 0
+        partial: list = []
         try:
-            pods = f_pods.result()
+            for p in iter_all(lambda **kw: v1.list_pod_for_all_namespaces(**kw), report=partial):
+                total_pods += 1
+                status_counts[_classify_pod_status(p)] += 1
+                phase = (p.status.phase if p.status else None) or ""
+                node_name = p.spec.node_name if p.spec else None
+                if phase not in _TERMINAL_PHASES and node_name in schedulable_nodes:
+                    occupied_on_schedulable += 1
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}")
-
-    # 노드 용량 (allocatable.pods)
-    allocatable_total = 0
-    schedulable_allocatable = 0
-    schedulable_nodes: set[str] = set()
-    nodes_total = 0
-    for n in (nodes.items or []):
-        nodes_total += 1
+    finally:
         try:
-            alloc = int((n.status.allocatable or {}).get("pods", 0)) if n.status else 0
-        except (ValueError, TypeError):
-            alloc = 0
-        allocatable_total += alloc
-        ready = any(c.type == "Ready" and c.status == "True" for c in ((n.status.conditions or []) if n.status else []))
-        unschedulable = bool(n.spec.unschedulable) if n.spec else False
-        if ready and not unschedulable:
-            schedulable_nodes.add(n.metadata.name)
-            schedulable_allocatable += alloc
+            client.close()
+        except Exception:  # noqa: BLE001
+            pass
 
-    # 파드 상태 카운트 + 스케줄 가능 노드 점유 슬롯
-    status_counts = {"running": 0, "pending": 0, "error": 0, "succeeded": 0, "failed": 0, "unknown": 0}
-    occupied_on_schedulable = 0
-    for p in (pods.items or []):
-        status_counts[_classify_pod_status(p)] += 1
-        phase = (p.status.phase if p.status else None) or ""
-        node_name = p.spec.node_name if p.spec else None
-        if phase not in _TERMINAL_PHASES and node_name in schedulable_nodes:
-            occupied_on_schedulable += 1
-
-    total_pods = len(pods.items or [])
     return {
         "total_pods": total_pods,
         "status_counts": status_counts,
@@ -1792,6 +1800,7 @@ def pods_summary(cluster_id: UUID, db: Session = Depends(get_db)):
             "nodes_total": nodes_total,
             "nodes_schedulable": len(schedulable_nodes),
         },
+        "partial": bool(partial),
     }
 
 

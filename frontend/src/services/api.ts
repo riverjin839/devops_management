@@ -84,6 +84,25 @@ api.interceptors.request.use(
   }
 );
 
+// GET 재시도 — 게이트웨이 502/503/504 와 네트워크 단절은 대개 일시적(replica 롤링, ingress
+// 업스트림 교체, 백엔드 재기동)이라 짧은 백오프로 2회 재시도한다. 멱등한 GET 에만 적용하고
+// 타임아웃(ECONNABORTED)·취소는 재시도하지 않는다. config.__noRetry 로 개별 opt-out.
+type RetryConfig = InternalAxiosRequestConfig & { __retryCount?: number; __noRetry?: boolean };
+const RETRY_STATUSES = new Set([502, 503, 504]);
+const RETRY_DELAYS_MS = [500, 1500];
+function retryDelay(error: unknown): number | null {
+  const err = error as { config?: RetryConfig; response?: { status?: number }; code?: string } | undefined;
+  const cfg = err?.config;
+  if (!cfg || cfg.__noRetry || (cfg.method ?? 'get').toLowerCase() !== 'get') return null;
+  const status = err?.response?.status;
+  const network = !err?.response && err?.code !== 'ECONNABORTED' && err?.code !== 'ERR_CANCELED';
+  if (!(status != null && RETRY_STATUSES.has(status)) && !network) return null;
+  const n = cfg.__retryCount ?? 0;
+  if (n >= RETRY_DELAYS_MS.length) return null;
+  cfg.__retryCount = n + 1;
+  return RETRY_DELAYS_MS[n];
+}
+
 // Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
@@ -102,7 +121,12 @@ api.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
+    const delay = retryDelay(error);
+    if (delay != null) {
+      await new Promise((r) => setTimeout(r, delay));
+      return api.request(error.config as RetryConfig);
+    }
     // 401 from any endpoint other than the login itself means the token is
     // missing/expired/invalid — drop the session so AuthGate routes back to
     // the login screen. Login's own 401 (bad credentials) is left for the
@@ -2391,6 +2415,13 @@ export const k8sAllocationApi = {
     api.get<import('@/types').AllocPodsResponse>(
       `/k8s/${clusterId}/allocation/namespaces/${namespace}/workloads/${kind}/${name}/pods`,
       { timeout: 120_000 },
+    ),
+  /** POD 용량/상태 — 개요 스냅샷에서 파생(요청 스레드가 apiserver 를 치지 않음). 구
+   * `k8sResourcesApi.podsSummary`(전량 Pod 60초 요청)를 대체한다. */
+  podsSummary: (clusterId: string, refresh = false) =>
+    api.get<import('@/types').K8sPodsSummaryResponse>(
+      `/k8s/${clusterId}/allocation/pods-summary`,
+      { params: refresh ? { refresh: true } : undefined, timeout: 30_000 },
     ),
 };
 

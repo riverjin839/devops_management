@@ -11,6 +11,24 @@
 1.30.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **K8S 자원 관리(`/k8s-allocation`) — 502 조회 실패 빈발·화면이 계속 바뀌는 문제**: 근본 원인
+  두 가지를 고쳤다. (1) 자원 집계 스냅샷이 backend 프로세스 메모리에만 있어 HPA(2~10 replica)
+  환경에서 1.5초 폴링이 매번 다른 파드에 맞아 파드마다 전수 스캔이 중복되고 진행률·부분 결과가
+  파드마다 달랐다 → 스냅샷/진행률/락을 **Redis 에 공유**(`SET NX` 로 클러스터당 빌더 1개, Redis
+  불가 시 종전 메모리 방식으로 자동 폴백). (2) POD 용량/상태 카드가 쓰던 `pods-summary` 가 전체
+  Pod 를 페이징 없이 60초 요청 하나로 긁어 ingress 타임아웃(60s)과 겹쳐 502 가 났다 → 같은
+  스냅샷 순회에서 상태 카운트까지 계산하는 `/allocation/pods-summary` 로 대체(전수 순회 1회).
+  프론트는 GET 502/503/504·네트워크 오류를 짧은 백오프로 2회 재시도하고, 카드 프레임을 항상
+  유지(early return 교체 제거)·진행바 슬롯 고정·집계 중 정렬 동결·자동갱신 타이머 재생성 방지로
+  흔들림을 없앴다.
+  Backend: `services/snapshot_jobs.py`(`_RedisStore`), `routers/k8s_allocation.py`(`pods_summary`
+  파생, `_node_usage_one`, 드릴다운 캐시 상한), `services/k8s_paging.py`(`resource_version` 옵션 —
+  노드/NS 목록 전용, Pod 순회 금지). Frontend: `services/api.ts`(GET 재시도), `hooks/useK8sAllocation.ts`
+  (`useAllocProgress`, `usePodsSummary` HOLD), `components/k8s-allocation/*`(페이지 분할).
+- **K8S 자원 관리 — 노드가 많을수록 느려지는 문제(최대 369노드)**: 노드 뷰가 48행을 넘으면
+  `react-virtuoso` 가상 스크롤(카드 `VirtuosoGrid`/테이블 `TableVirtuoso`)로 전환하고 행 컴포넌트를
+  `React.memo` 로 감싸 폴링마다 전량 리렌더되던 비용을 줄였다. 단일 노드 새로고침은 cluster-wide
+  metrics 대신 노드 1건만 조회(N+1 제거). 드릴다운 캐시는 크기 상한 + 클러스터 삭제 시 무효화.
 - **에픽뷰 — Epic 이 아닌 일반 Task 가 Epic 그룹으로 잘못 노출되던 문제**: Sub-task 에
   Epic Link 값이 없으면(설정 미완료 또는 이 이슈에 값 없음) 상위(parent) Task 를 그대로
   Epic 대용으로 써서, 실제 Jira 에서는 Epic 이 아닌 일반 Task 가 에픽뷰의 Epic 그룹

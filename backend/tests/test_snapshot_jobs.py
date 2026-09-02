@@ -126,3 +126,157 @@ def test_computing_within_stuck_timeout_is_not_replaced():
     assert v2["status"] == "computing"
     assert calls["n"] == 1, "stuck_timeout 이내에는 빌더가 재호출되면 안 됨"
     release.set()
+
+
+# ── Redis 공유 스토어 (멀티 replica) ────────────────────────────────────────────
+from app.services.snapshot_jobs import _RedisStore  # noqa: E402
+
+
+class FakeRedis:
+    """redis-py 의 최소 하위집합(get/set nx ex/delete/ping) — dict 기반, 만료는 timestamp 로 흉내."""
+
+    def __init__(self):
+        self.kv: dict[str, tuple[bytes, float | None]] = {}
+        self.fail = False
+
+    def _alive(self, k):
+        v = self.kv.get(k)
+        if v is None:
+            return None
+        if v[1] is not None and time.time() >= v[1]:
+            del self.kv[k]
+            return None
+        return v[0]
+
+    def ping(self):
+        if self.fail:
+            raise ConnectionError("down")
+        return True
+
+    def get(self, k):
+        if self.fail:
+            raise ConnectionError("down")
+        return self._alive(k)
+
+    def set(self, k, v, nx=False, ex=None):
+        if self.fail:
+            raise ConnectionError("down")
+        if nx and self._alive(k) is not None:
+            return None
+        self.kv[k] = (v.encode() if isinstance(v, str) else v, (time.time() + ex) if ex else None)
+        return True
+
+    def delete(self, *ks):
+        if self.fail:
+            raise ConnectionError("down")
+        for k in ks:
+            self.kv.pop(k, None)
+
+
+def _shared_pair(fake: FakeRedis, **kw):
+    """같은 fake Redis 를 공유하는 두 매니저(= 두 backend replica)."""
+    a = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), **kw)
+    b = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake), **kw)
+    return a, b
+
+
+def test_shared_store_single_builder_across_replicas():
+    fake = FakeRedis()
+    a, b = _shared_pair(fake)
+    calls = {"n": 0}
+    started = threading.Event()
+    release = threading.Event()
+
+    def builder(progress):
+        calls["n"] += 1
+        progress.processed = 5
+        started.set()
+        release.wait(timeout=5)
+        return {"partial": False, "v": "x", "node_usage": {"n1": (1000, 2048)}}
+
+    v1 = a.get("k", builder, initial_wait=0.01)
+    assert v1["status"] == "computing"
+    started.wait(timeout=2)
+    # 두 번째 replica 는 락을 못 잡으므로 빌더를 돌리지 않고 진행 상황만 본다
+    v2 = b.get("k", builder, initial_wait=0.01)
+    assert v2["status"] == "computing" and calls["n"] == 1
+    release.set()
+    time.sleep(0.1)
+    v3 = b.get("k", builder, initial_wait=0.01)
+    assert v3["status"] == "ready" and v3["data"]["v"] == "x"
+    # tuple 은 JSON 왕복 후 list 가 된다 — 소비처(u[0]/u[1] 인덱싱)는 그대로 동작
+    assert v3["data"]["node_usage"]["n1"] == [1000, 2048]
+    assert calls["n"] == 1
+    assert fake.get("snap:k:lock") is None, "완료 시 락 해제"
+
+
+def test_shared_store_partial_progress_visible_to_other_replica():
+    fake = FakeRedis()
+    a, b = _shared_pair(fake, publish_interval=0.0)
+    started = threading.Event()
+    release = threading.Event()
+
+    def builder(progress):
+        progress.total = 10
+        progress.processed = 3
+        progress.partial = {"partial": True, "v": "part"}
+        started.set()
+        release.wait(timeout=5)
+        return {"partial": False, "v": "done"}
+
+    a.get("k", builder, initial_wait=0.01)
+    started.wait(timeout=2)
+    v = b.get("k", builder, initial_wait=0.01)
+    assert v["status"] == "computing" and v["partial"] is True and v["data"]["v"] == "part"
+    assert v["processed"] == 3 and v["total"] == 10
+    release.set()
+
+
+def test_shared_store_stuck_lock_is_replaced():
+    fake = FakeRedis()
+    a, b = _shared_pair(fake, stuck_timeout=0.05)
+    started = threading.Event()
+    release = threading.Event()
+
+    def hung(progress):
+        started.set()
+        release.wait(timeout=5)
+        return {"partial": False, "v": "first"}
+
+    a.get("k", hung, initial_wait=0.01)
+    started.wait(timeout=2)
+    time.sleep(0.1)
+    v = b.get("k", lambda p: {"partial": False, "v": "second"}, initial_wait=1.0)
+    assert v["status"] == "ready" and v["data"]["v"] == "second"
+    release.set()
+
+
+def test_shared_store_falls_back_to_memory_when_redis_down():
+    fake = FakeRedis()
+    fake.fail = True
+    mgr = SnapshotManager(ttl=60.0, store=_RedisStore(client=fake))
+    assert mgr.is_shared is False
+    v = mgr.get("k", _instant_builder({"partial": False, "v": 1}), initial_wait=1.0)
+    assert v["status"] == "ready" and v["data"]["v"] == 1
+
+
+def test_put_warms_shared_snapshot():
+    fake = FakeRedis()
+    a, b = _shared_pair(fake)
+    a.put("k", {"partial": False, "v": "warm"}, processed=42)
+    calls = {"n": 0}
+
+    def builder(progress):
+        calls["n"] += 1
+        return {"partial": False, "v": "built"}
+
+    v = b.get("k", builder, initial_wait=1.0)
+    assert v["status"] == "ready" and v["data"]["v"] == "warm" and v["processed"] == 42
+    assert calls["n"] == 0, "워밍된 스냅샷이 신선하면 재집계하지 않는다"
+
+
+def test_memory_backend_ignores_store():
+    mgr = SnapshotManager(ttl=60.0, backend="memory")
+    assert mgr.is_shared is False
+    v = mgr.get("k", _instant_builder({"partial": False, "v": 1}), initial_wait=1.0)
+    assert v["status"] == "ready"

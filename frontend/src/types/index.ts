@@ -3869,10 +3869,12 @@ export interface K8sPodsSummaryCapacity {
   nodesTotal: number;
   nodesSchedulable: number;
 }
-export interface K8sPodsSummaryResponse {
+export interface K8sPodsSummaryResponse extends AllocSnapshotMeta {
   totalPods: number;
   statusCounts: Record<string, number>; // running/pending/error/succeeded/failed/unknown
   capacity: K8sPodsSummaryCapacity;
+  /** false 면 종료(Succeeded/Failed) 파드가 카운트에서 제외됨(K8S_ALLOC_COUNT_TERMINAL_PODS=0). */
+  terminalCounted?: boolean;
 }
 
 // 파드 컨테이너 목록 (로그/터미널 셀렉터)

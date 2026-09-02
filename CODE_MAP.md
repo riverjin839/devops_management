@@ -110,7 +110,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 기능 | 위치 |
 |---|---|
 | 리소스 탐색(읽기전용, YAML/Secret 마스킹) | `backend/app/routers/k8s_resources.py` · `k8s_helm.py` · `k8s_exec.py` → `frontend/src/pages/K8sManagePage.tsx` |
-| K8S 자원 관리(req/lim/use 랭킹) | `backend/app/routers/k8s_allocation.py` → `frontend/src/pages/K8sAllocationPage.tsx` |
+| K8S 자원 관리(req/lim/use 랭킹) | `backend/app/routers/k8s_allocation.py` · `services/snapshot_jobs.py`(Redis 공유 스냅샷) · `services/k8s_paging.py` → `frontend/src/pages/K8sAllocationPage.tsx` · `frontend/src/components/k8s-allocation/`(뷰 컴포넌트·정렬/포맷 헬퍼) · `hooks/useK8sAllocation.ts` |
 | k9s 콘솔(control-plane SSH → 내장 k9s TUI 웹 스트리밍) | `backend/app/routers/k9s_ssh.py` (WebSocket) → `frontend/src/pages/K9sPage.tsx` · `frontend/src/pages/K9sPopupPage.tsx`(별도 창) · `frontend/src/components/k8s/K9sTerminal.tsx` · `frontend/src/lib/k9sPopout.ts`(창 간 handoff) |
 | 노드 SSH 터미널(개별 노드 로그인 셸 웹 터미널) | `backend/app/routers/node_ssh.py` (WebSocket `/node-ssh/session` + REST `/node-ssh/test`) → `frontend/src/pages/NodeSshPage.tsx` · `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창) · `frontend/src/components/k8s/NodeSshTerminal.tsx` · `frontend/src/lib/nodeSshPopout.ts` |
 | ↑ 두 SSH 콘솔 공용 base 툴 | `backend/app/services/ssh_pty.py`(WS↔paramiko PTY 브리지·init 프레임·토큰 검증) + `ssh_runner.py`(TOFU 연결) → `frontend/src/components/k8s/SshTerminalWindow.tsx`(xterm 창) · `frontend/src/lib/terminalPopout.ts`(창 간 handoff) · `frontend/src/lib/terminalClipboard.ts`(Ctrl+C 복사/Ctrl+V 붙여넣기 — PodTerminal 도 사용) · `hooks/useTerminalAppearance.ts`(`useXtermTheme`) |
