@@ -56,6 +56,7 @@ from app.routers.sprint import router as sprints_router
 from app.routers.ops_check import router as ops_check_router
 from app.routers.k8s_resources import router as k8s_resources_router
 from app.routers.k8s_allocation import router as k8s_allocation_router
+from app.routers.k8s_efficiency import router as k8s_efficiency_router
 from app.routers.k8s_helm import router as k8s_helm_router
 from app.routers.k8s_exec import router as k8s_exec_router
 from app.routers.k9s_ssh import router as k9s_ssh_router
@@ -84,6 +85,7 @@ __all__ = [
     "k9s_ssh_router",
     "node_ssh_router",
     "k8s_allocation_router",
+    "k8s_efficiency_router",
     "service_topology_router",
     "architecture_docs_router",
     "projects_router",

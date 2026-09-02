@@ -10,6 +10,22 @@
 
 1.30.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8S 자원 관리 — 자원 효율화 자동화(효율화 탭)**: 점유(request) 대비 사용률이 낮은 컨테이너의
+  request 축소를 추천하고(관측 p95 × 여유율, 하한/임계/최소 절감 규칙), 드라이런(기본)→적용→롤백을
+  실행 로그와 함께 수행한다. 네임스페이스별 자동 적용은 **opt-in**(전역 마스터 스위치 + NS 정책,
+  쿨다운·1회 최대 감소폭·허용 시간대)이고 시스템 NS·opt-out annotation·오퍼레이터(CR) 관리
+  워크로드(예: StarRocks CN)는 추천만 한다(서버가 직접 적용을 422 로 거부). NS 자원 추이
+  (request/실사용/Quota 한도, 24h/7d/30d)와 저효율 NS 추이 랭킹을 가시화하고, ResourceQuota 탄력
+  (used/hard ≥ 임계 시 확장, 지속 미사용 시 회수 — min/max 안에서)과 오퍼레이터 CR 어댑터
+  (group/version/plural/jsonpath 로 replicas 조정)를 정책으로 등록할 수 있다. 사용률 소스는
+  Prometheus 우선 → metrics-server 샘플 → 데이터 부족 순으로 자동 폴백.
+  Backend: `models/k8s_efficiency.py`(NS/워크로드 샘플·추천·NS 정책·실행 로그),
+  `services/k8s_efficiency/`(collector·engine·quota·apply·automation·history), `routers/k8s_efficiency.py`,
+  Celery `k8s-efficiency-dispatcher`(클러스터별 cron, 기본 10분 — 수집이 Redis 스냅샷도 워밍).
+  Frontend: `components/k8s-allocation/{EfficiencyTab,RecommendationTable,ApplyDialog,EfficiencyRunLog,
+  NsTrendChart,LowEfficiencyRankingChart,PolicyDialog}.tsx`, `hooks/useK8sEfficiency.ts`.
+
 ### Fixed
 - **K8S 자원 관리(`/k8s-allocation`) — 502 조회 실패 빈발·화면이 계속 바뀌는 문제**: 근본 원인
   두 가지를 고쳤다. (1) 자원 집계 스냅샷이 backend 프로세스 메모리에만 있어 HPA(2~10 replica)

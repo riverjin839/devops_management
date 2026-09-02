@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import {
-  ArrowLeft, Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3,
+  ArrowLeft, Gauge, RefreshCw, AlertTriangle, Server, Layers, BarChart3, Sparkles,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
@@ -11,7 +11,7 @@ import { EmptyState, SnapshotProgressBar, ExportMenu } from '@/components/common
 import { useClusters } from '@/hooks/useCluster';
 import { useAllocProgress, useForceAllocRefresh } from '@/hooks/useK8sAllocation';
 import {
-  SummarySection, PodCapacityStatusCards, NodesView, NamespacesView, NsRankingView, csvCluster,
+  SummarySection, PodCapacityStatusCards, NodesView, NamespacesView, NsRankingView, EfficiencyTab, csvCluster,
 } from '@/components/k8s-allocation';
 
 // 자동갱신 간격 옵션 (ms). false = 끔.
@@ -23,7 +23,7 @@ const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
   { label: '5분', ms: 300_000 },
 ];
 
-type ViewMode = 'nodes' | 'namespaces' | 'ns-ranking';
+type ViewMode = 'nodes' | 'namespaces' | 'ns-ranking' | 'efficiency';
 
 export function K8sAllocationPage() {
   const { data: clusters = [] } = useClusters();
@@ -137,6 +137,7 @@ export function K8sAllocationPage() {
                   ['nodes', '노드별 자원', <Server key="i" className="w-4 h-4" />],
                   ['namespaces', '네임스페이스별 자원', <Layers key="i" className="w-4 h-4" />],
                   ['ns-ranking', '네임스페이스 비효율 랭킹', <BarChart3 key="i" className="w-4 h-4" />],
+                  ['efficiency', '효율화', <Sparkles key="i" className="w-4 h-4" />],
                 ] as [ViewMode, string, ReactNode][]).map(([k, l, icon]) => (
                   <button
                     key={k}
@@ -152,6 +153,7 @@ export function K8sAllocationPage() {
               {view === 'nodes' && <NodesView clusterId={clusterId} clusterName={clusterName} />}
               {view === 'namespaces' && <NamespacesView clusterId={clusterId} clusterName={clusterName} />}
               {view === 'ns-ranking' && <NsRankingView clusterId={clusterId} />}
+              {view === 'efficiency' && <EfficiencyTab clusterId={clusterId} clusterName={clusterName} />}
             </>
           )}
         </div>

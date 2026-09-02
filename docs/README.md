@@ -36,6 +36,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 
 ## 설계/기획 (내부)
 - `01-plan/`, `02-design/`, `03-analysis/` — 기능별 계획/설계/분석
+  - [02-design/k8s-efficiency-automation.md](02-design/k8s-efficiency-automation.md) — K8S 자원 효율화 자동화(request 축소 추천·적용/롤백·NS 정책·Quota 탄력·CR 어댑터) 설계와 안전장치
 - `superpowers/` — 기획 스펙/플랜
 - `archive/` — 완료된 기능의 분석/설계/리포트 보관
 
