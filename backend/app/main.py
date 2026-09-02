@@ -23,6 +23,7 @@ from app.routers import (
     work_items_router,
     jira_router,
     confluence_router,
+    servicenow_router,
     projects_router,
     sprints_router,
     ui_settings_router,
@@ -945,6 +946,8 @@ def _run_migrations():
         _safe_add_column("user_jira_credentials", "confluence_cookie_encrypted", "TEXT")
         # Jira 원본 로그인 계정(username/key) — 이슈 생성 시 담당자(assignee) 지정용.
         _safe_add_column("user_jira_credentials", "jira_username", "VARCHAR(150)")
+        # 내부 ServiceNow ITSM 세션 쿠키(1차 구현 — Jira 쿠키 재사용 폴백 후 승격 저장).
+        _safe_add_column("user_jira_credentials", "servicenow_cookie_encrypted", "TEXT")
 
     # work_items: Jira Epic(상위 이슈) — 주간보고 진척률 집계 기준.
     if "work_items" in inspector.get_table_names():
@@ -976,6 +979,14 @@ def _run_migrations():
         # 페이지 전체 목록(복수) — 기존 confluence_url(단일, 수동 편집)과 별개.
         _safe_add_column("work_items", "due_date", "DATE")
         _safe_add_column("work_items", "confluence_links", "JSONB")
+        # ServiceNow ITSM 연동(수동 등록) — Jira 연동 업무를 사내 ServiceNow 에도 등록한 결과.
+        _safe_add_column("work_items", "servicenow_sys_id", "VARCHAR(50)")
+        _safe_add_column("work_items", "servicenow_number", "VARCHAR(50)")
+        _safe_add_column("work_items", "servicenow_url", "TEXT")
+        _safe_add_column("work_items", "servicenow_status", "VARCHAR(100)")
+        _safe_add_column("work_items", "servicenow_synced_at", "TIMESTAMP WITHOUT TIME ZONE")
+        _safe_add_column("work_items", "servicenow_register_error", "TEXT")
+        _safe_create_index("ix_work_items_servicenow_number", "work_items", "(servicenow_number)")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
@@ -2107,6 +2118,7 @@ app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jira_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(confluence_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(servicenow_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(sprints_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)

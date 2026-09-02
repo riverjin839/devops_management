@@ -73,6 +73,7 @@ export default {
         // ── Brand tokens (외부 서비스 고유색. raw HEX 대신 이 토큰 경유) ──
         brand: {
           jira: "hsl(var(--brand-jira) / <alpha-value>)",
+          servicenow: "hsl(var(--brand-servicenow) / <alpha-value>)",
           ai:   "hsl(var(--brand-ai)   / <alpha-value>)",
         },
         // ── Categorical chart tokens (D-005) — Recharts/SVG 시리즈 구분색 ──

@@ -8,6 +8,7 @@ export { WorkItemActionsMenu } from './WorkItemActionsMenu';
 export { WorkItemEpicView } from './WorkItemEpicView';
 export { JiraPushDialog } from './JiraPushDialog';
 export { JiraLinkDialog } from './JiraLinkDialog';
+export { ServiceNowRegisterDialog } from './ServiceNowRegisterDialog';
 export { JiraProvisionModal } from './JiraProvisionModal';
 export { JiraIssueChip } from './JiraIssueChip';
 export { DocLinkChip } from './DocLinkChip';

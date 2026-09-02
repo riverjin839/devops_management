@@ -1053,6 +1053,16 @@ export const jiraApi = {
     api.put<import('@/types').WeeklyReportSettings>('/jira/weekly-report/settings', data),
 };
 
+// ── ServiceNow ITSM 연동 (Jira 연동 업무 대상, 수동 등록) ───────────────────────
+export const serviceNowApi = {
+  getConfig: () => api.get<import('@/types').ServiceNowConfig>('/servicenow/config'),
+  updateConfig: (data: import('@/types').ServiceNowConfigUpdate) =>
+    api.put<import('@/types').ServiceNowConfig>('/servicenow/config', data),
+  test: () => api.post<import('@/types').ServiceNowTestResult>('/servicenow/test'),
+  register: (itemId: string) =>
+    api.post<import('@/types').ServiceNowRegisterResult>(`/servicenow/register/${itemId}`),
+};
+
 // Today work items summary — task + issue 모두 대상 (백엔드 동일).
 // primary_assignee 와 secondary_assignee 둘 다 그룹 키로 등록되므로 같은 아이템이
 // 두 사람의 그룹에 중복 노출될 수 있다 (협업자 가시성용).
