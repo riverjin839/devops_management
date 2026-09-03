@@ -236,6 +236,54 @@ async def test_auth_failure_sets_auth_issue_flags(db, monkeypatch):
     assert item.provision_jira_error == "내 Jira 인증이 등록되지 않았습니다."
 
 
+async def test_epic_link_applied_persists_epic_key(db, monkeypatch):
+    """create_issue 가 epic_link_applied=True 를 주면(실제로 Epic Link 필드가 실렸음)
+    업무에도 jira_epic_key 가 그대로 기록된다."""
+    item = _make_work_item(db)
+    key = f"OPS-{_uid()}"
+    jira_svc = _FakeJiraSvc({"status": "ok", "key": key, "id": _uid(), "url": f"https://j/{key}",
+                             "epic_link_applied": True})
+    conf_svc = _FakeConfluenceSvc({"status": "ok", "id": _uid(), "url": "https://c/x", "action": "created"})
+    _patch(monkeypatch, jira_svc=jira_svc, conf_svc=conf_svc)
+
+    res = await provision_work_item(
+        ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
+                         project_key="OPS", space_key="OPS", epic_key="OPS-1"),
+        db, _Actor(),
+    )
+    assert res.status == "ok"
+    assert res.jira_detail == ""
+
+    db.refresh(item)
+    assert item.jira_epic_key == "OPS-1"
+
+
+async def test_epic_link_not_applied_skips_epic_key_and_warns(db, monkeypatch):
+    """Epic 을 선택해 Task 를 만들었는데 실제로는 Epic Link 필드가 안 실렸다면(관리자가
+    jira_epic_field 를 설정하지 않은 등) 이슈는 생성됐어도 PEP DB 에 Epic 연결을 기록하지
+    않고(실제 Jira 와 어긋나므로) jira_detail 에 경고를 남겨야 한다 — 회귀: 예전엔 이 경우도
+    무조건 item.jira_epic_key 를 채워 "PEP 는 Epic 하위인데 실제 Jira 는 아니다" 라는 불일치가
+    사용자 모르게 발생했다."""
+    item = _make_work_item(db)
+    key = f"OPS-{_uid()}"
+    jira_svc = _FakeJiraSvc({"status": "ok", "key": key, "id": _uid(), "url": f"https://j/{key}",
+                             "epic_link_applied": False})
+    conf_svc = _FakeConfluenceSvc({"status": "ok", "id": _uid(), "url": "https://c/x", "action": "created"})
+    _patch(monkeypatch, jira_svc=jira_svc, conf_svc=conf_svc)
+
+    res = await provision_work_item(
+        ProvisionRequest(work_item_id=str(item.id), remember_preset=False,
+                         project_key="OPS", space_key="OPS", epic_key="OPS-1"),
+        db, _Actor(),
+    )
+    assert res.status == "ok"  # 이슈 생성 자체는 성공
+    assert res.jira_key == key
+    assert "Epic 연결에 실패했습니다" in res.jira_detail
+
+    db.refresh(item)
+    assert item.jira_epic_key is None
+
+
 async def test_create_issue_auth_failed_propagates_to_jira_auth_issue(db, monkeypatch):
     """create_issue 가 401(auth_failed=True) 을 주면 jira_auth_issue 로 그대로 전달된다
     (svc 자체는 존재하지만 토큰이 만료된 케이스 — svc=None 케이스와는 다른 경로)."""

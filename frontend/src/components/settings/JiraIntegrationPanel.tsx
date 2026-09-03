@@ -37,6 +37,7 @@ export function JiraIntegrationPanel() {
   const [enabled, setEnabled] = useState(false);
   const [verifyTls, setVerifyTls] = useState(true);
   const [defaultProject, setDefaultProject] = useState('');
+  const [epicField, setEpicField] = useState('');
   const [epicNameField, setEpicNameField] = useState('');
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function JiraIntegrationPanel() {
       setEnabled(!!config.enabled);
       setVerifyTls(config.verifyTls !== false);
       setDefaultProject(config.defaultProjectKey ?? '');
+      setEpicField(config.jiraEpicField ?? '');
       setEpicNameField(config.jiraEpicNameField ?? '');
     }
   }, [config]);
@@ -128,6 +130,7 @@ export function JiraIntegrationPanel() {
         enabled,
         verifyTls,
         defaultProjectKey: defaultProject.trim() || null,
+        jiraEpicField: epicField.trim(),
         jiraEpicNameField: epicNameField.trim(),
       });
       toast.success('Jira 설정 저장됨');
@@ -229,6 +232,20 @@ export function JiraIntegrationPanel() {
             <span className="block text-sm font-medium text-muted-foreground mb-1">기본 프로젝트 키 (선택)</span>
             <input className={inputCls} placeholder="PROJ" value={defaultProject}
               onChange={(e) => setDefaultProject(e.target.value)} disabled={!isAdmin} />
+          </div>
+          <div>
+            <span className="block text-sm font-medium text-muted-foreground mb-1">
+              Epic Link 커스텀 필드 ID (Task/Sub-task 를 Epic 하위로 등록할 때 필수)
+            </span>
+            <input className={inputCls} placeholder="customfield_10008" value={epicField}
+              onChange={(e) => setEpicField(e.target.value)} disabled={!isAdmin} />
+            <p className="text-xs text-muted-foreground mt-1">
+              Jira Server/DC 는 이슈-Epic 연결이 <b>커스텀 필드</b>라 인스턴스마다 필드 ID 가
+              다릅니다. 비워두면 "업무 등록" 화면에서 Epic 을 선택해 Task 를 만들어도
+              <b> 실제 Jira 에는 Epic 연결이 반영되지 않습니다</b>(이슈 자체는 생성됨). 프로젝트
+              화면(관리 &gt; 필드) 또는 이슈 편집 화면 URL 에서 Epic Link 필드의 customfield ID 를
+              확인해 입력하세요.
+            </p>
           </div>
           <div>
             <span className="block text-sm font-medium text-muted-foreground mb-1">

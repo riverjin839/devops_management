@@ -181,6 +181,55 @@ def test_create_issue_keeps_parent_when_retrying_without_optional_fields():
     assert sent[1]["parent"] == {"key": "DL-10"}
     assert "customfield_10008" not in sent[1]
     assert sent[1]["labels"] == ["infra"]
+    # 최종 성공 요청에서는 Epic 필드가 빠져 있었으므로, 호출부가 "생성은 됐지만 Epic
+    # 은 실제로 안 붙었다"를 알 수 있어야 한다.
+    assert res["epic_link_applied"] is False
+
+
+def test_create_issue_epic_link_applied_true_when_field_survives():
+    """Epic Link 필드가 첫 시도에서 그대로 성공하면 epic_link_applied=True."""
+    import asyncio
+    import json
+
+    import httpx
+
+    from app.services.jira_service import JiraService
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        json.loads(request.content.decode())
+        return httpx.Response(201, json={"key": "DL-102", "id": "20004"})
+
+    svc = JiraService(BASE, "tok", transport=httpx.MockTransport(handler))
+    res = asyncio.run(svc.create_issue(
+        "DL", "새 작업", issue_type="Task", epic_key="DL-7", epic_field="customfield_10008",
+    ))
+
+    assert res["status"] == "ok"
+    assert res["epic_link_applied"] is True
+
+
+def test_create_issue_epic_link_applied_false_without_epic_field_configured():
+    """epic_field 미설정(관리자가 Epic Link 커스텀 필드 ID 를 등록 안 함)이면 epic_key 가
+    있어도 애초에 전송되지 않는다 — Jira 400 없이도 조용히 Epic 연결이 빠지는 경우."""
+    import asyncio
+    import json
+
+    import httpx
+
+    from app.services.jira_service import JiraService
+
+    sent: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content.decode())["fields"])
+        return httpx.Response(201, json={"key": "DL-103", "id": "20005"})
+
+    svc = JiraService(BASE, "tok", transport=httpx.MockTransport(handler))
+    res = asyncio.run(svc.create_issue("DL", "새 작업", issue_type="Task", epic_key="DL-7"))
+
+    assert res["status"] == "ok"
+    assert res["epic_link_applied"] is False
+    assert not any(k.startswith("customfield_") for k in sent[0])
 
 
 def test_create_issue_sends_epic_name_field():

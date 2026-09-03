@@ -11,6 +11,19 @@
 1.30.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Fixed
+- **업무 등록(프로비저닝) — Epic 을 선택해 만든 Task 가 실제 Jira 에는 Epic 하위로 등록되지
+  않던 문제**: Epic Link 는 Jira Server/DC 에서 커스텀 필드(예: `customfield_10008`)라
+  인스턴스마다 필드 ID 를 설정해야 하는데, 설정 화면(Jira 연동)에 이 필드 ID 를 입력할
+  곳이 아예 없어 백엔드 값이 항상 빈 채로 남아 있었다 — 그 결과 이슈 생성 자체는
+  성공하지만 Epic Link 는 조용히 빠졌고, PEP DB 는 여전히 Epic 연결을 기록해 "PEP 화면엔
+  Epic 하위인데 실제 Jira 는 아니다"라는 불일치가 생겼다. 설정 화면에 Epic Link 필드 ID
+  입력칸을 추가했고, 백엔드는 이슈 생성 응답으로 Epic Link 가 실제로 반영됐는지
+  (`epic_link_applied`)를 알려줘 반영되지 않았을 때는 PEP 에도 Epic 연결을 기록하지 않고
+  생성 결과 화면에 사유를 경고로 보여준다.
+  Backend: `services/jira_service.py`(`create_issue` 의 `epic_link_applied` 반환),
+  `routers/jira.py`(`provision_work_item`).
+  Frontend: `components/settings/JiraIntegrationPanel.tsx`(Epic Link 필드 ID 입력칸 추가),
+  `components/work-items/JiraProvisionModal.tsx`(이슈 생성 성공 시에도 경고 노출).
 - **에픽뷰 — Epic 이 아닌 일반 Task 가 Epic 그룹으로 잘못 노출되던 문제**: Sub-task 에
   Epic Link 값이 없으면(설정 미완료 또는 이 이슈에 값 없음) 상위(parent) Task 를 그대로
   Epic 대용으로 써서, 실제 Jira 에서는 Epic 이 아닌 일반 Task 가 에픽뷰의 Epic 그룹

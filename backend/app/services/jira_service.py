@@ -392,7 +392,10 @@ class JiraService:
         (핵심 필드 문제 등)은 더 빼볼 게 없으므로 재시도 없이 바로 에러로 반환한다.
 
         `parent_key` 는 Sub-task 생성용 상위 이슈 — Jira 가 필수로 요구하므로 절대 빼지 않는다.
-        `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다. `epic_name` 은 **Epic
+        `epic_key` 는 Epic Link(커스텀 필드 `epic_field`)로 보낸다 — `epic_field` 가 비어 있거나
+        Jira 가 400 으로 거부해 재시도 중 빠지면 이슈는 Epic 없이 생성된다. 성공 응답의
+        `epic_link_applied` 로 실제 반영 여부를 구분할 수 있다(호출부가 "생성됐지만 Epic 은
+        안 붙었다"를 감지해 사용자에게 알리는 데 쓴다). `epic_name` 은 **Epic
         issuetype 생성 시** Jira Server/DC classic 프로젝트가 요구하는 별도 커스텀 필드
         (`epic_name_field`, 예: customfield_10011) — summary 와 별개로 Epic 보드에 표시되는
         짧은 이름이다. `assignee` 는 Jira **원본 로그인 계정**(username/key, displayName
@@ -444,8 +447,13 @@ class JiraService:
                     if resp.status_code in (200, 201):
                         data = resp.json()
                         key = data.get("key", "")
+                        # 호출부(provision_work_item)가 "생성은 됐지만 Epic 연결은 실제로
+                        # 안 됐다"를 구분할 수 있어야 한다 — epic_field 미설정이거나 이번
+                        # 루프에서 400 으로 제외됐으면 이번 요청엔 Epic Link 가 아예 안 실렸다.
+                        epic_link_applied = bool(epic_key and epic_field and epic_field not in exclude)
                         return {"status": "ok", "key": key, "id": str(data.get("id", "")),
-                                "url": self.issue_browse_url(key)}
+                                "url": self.issue_browse_url(key),
+                                "epic_link_applied": epic_link_applied}
                     if resp.status_code == 401:
                         return {"status": "error", "detail": "인증 실패 — 토큰을 확인하세요 (401).",
                                 "auth_failed": True}
