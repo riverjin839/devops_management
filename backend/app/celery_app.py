@@ -1539,11 +1539,18 @@ def dispatch_k8s_efficiency_collect(self):
         db.close()
 
 
+_EFF_COLLECT_TIME_LIMIT = 900
+
+
 @celery_app.task(bind=True, name="app.celery_app.collect_k8s_efficiency_one",
-                 time_limit=900, soft_time_limit=840)
+                 time_limit=_EFF_COLLECT_TIME_LIMIT, soft_time_limit=840)
 def collect_k8s_efficiency_one(self, cluster_id: str, run_id: str | None = None, triggered_by: str | None = None):
     """단일 클러스터 수집 → 추천 생성 → 자동화 평가. 실행 로그(K8sEfficiencyRun)에 단계/로그 기록.
-    전역 task_time_limit(300s)은 369노드급 전수 순회에 부족해 태스크 단위로 늘린다."""
+    전역 task_time_limit(300s)은 369노드급 전수 순회에 부족해 태스크 단위로 늘린다.
+
+    클러스터당 in-flight 락(`lock.guard_or_mark_skipped`)으로 직전 실행이 아직 진행 중이면 즉시
+    반환한다 — 대형 클러스터가 한 사이클(cron 간격)보다 오래 걸릴 때 실행이 계속 쌓여 워커를
+    독점하는 걸 막는다(300노드급 실측)."""
     import logging
     from app.database import SessionLocal
     from app.models import Cluster
@@ -1551,6 +1558,7 @@ def collect_k8s_efficiency_one(self, cluster_id: str, run_id: str | None = None,
     from app.services import audit_logger
     from app.services.k8s_efficiency import automation as effauto
     from app.services.k8s_efficiency import engine as effengine
+    from app.services.k8s_efficiency import lock as efflock
     from app.services.k8s_efficiency import settings as effcfg
     from app.services.k8s_efficiency.collector import STEP_PLAN, collect_cluster
     from app.services.k8s_efficiency.runs import RunLogger, create_run
@@ -1567,53 +1575,58 @@ def collect_k8s_efficiency_one(self, cluster_id: str, run_id: str | None = None,
                              step_plan=STEP_PLAN + [{"id": "recommend", "label": "추천 생성"},
                                                     {"id": "automation", "label": "자동화 평가"}])
         run.celery_task_id = getattr(self.request, "id", None)
-        rl = RunLogger(db, run)
-        rl.start()
-        rl.log(f"클러스터 {cluster.name} 수집 시작")
-        result: dict = {}
+        if not efflock.guard_or_mark_skipped(db, cluster, run, _EFF_COLLECT_TIME_LIMIT + 120):
+            return {"skipped": "overlap", "cluster_id": cluster_id, "run_id": str(run.id)}
         try:
-            result = collect_cluster(db, cluster, log=rl.log, step=rl.step)
-        except Exception as e:  # noqa: BLE001
-            db.rollback()
-            log.exception("k8s efficiency collect failed cluster=%s", cluster_id)
-            rl.log(f"수집 실패: {str(e)[:300]}")
-            rl.finish("failed", error=str(e)[:300])
-            return {"error": str(e)[:200], "cluster_id": cluster_id, "run_id": str(run.id)}
+            rl = RunLogger(db, run)
+            rl.start()
+            rl.log(f"클러스터 {cluster.name} 수집 시작")
+            result: dict = {}
+            try:
+                result = collect_cluster(db, cluster, log=rl.log, step=rl.step)
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                log.exception("k8s efficiency collect failed cluster=%s", cluster_id)
+                rl.log(f"수집 실패: {str(e)[:300]}")
+                rl.finish("failed", error=str(e)[:300])
+                return {"error": str(e)[:200], "cluster_id": cluster_id, "run_id": str(run.id)}
 
-        defaults = effcfg.get_policy_defaults(db)
-        rl.step("recommend", "running", None)
-        try:
-            rec = effengine.generate(db, cluster, defaults, log=rl.log)
-            rl.step("recommend", "success", f"generated={rec.get('generated')} source={rec.get('usage_source')}")
-            result["recommendations"] = rec
-        except Exception as e:  # noqa: BLE001
-            db.rollback()
-            log.exception("k8s efficiency recommend failed cluster=%s", cluster_id)
-            rl.log(f"추천 생성 실패: {str(e)[:300]}")
-            rl.step("recommend", "failed", str(e)[:300])
+            defaults = effcfg.get_policy_defaults(db)
+            rl.step("recommend", "running", None)
+            try:
+                rec = effengine.generate(db, cluster, defaults, log=rl.log)
+                rl.step("recommend", "success", f"generated={rec.get('generated')} source={rec.get('usage_source')}")
+                result["recommendations"] = rec
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                log.exception("k8s efficiency recommend failed cluster=%s", cluster_id)
+                rl.log(f"추천 생성 실패: {str(e)[:300]}")
+                rl.step("recommend", "failed", str(e)[:300])
 
-        rl.step("automation", "running", None)
-        try:
-            auto = effauto.dispatch_auto(
-                db, cluster, defaults, log=rl.log,
-                enqueue=lambda rid: run_k8s_efficiency_run.delay(str(rid)),
-            )
-            rl.step("automation", "success" if auto.get("runs") else "skipped",
-                    f"runs={len(auto.get('runs') or [])}" if not auto.get("skipped") else auto["skipped"])
-            result["automation"] = auto
-        except Exception as e:  # noqa: BLE001
-            db.rollback()
-            log.exception("k8s efficiency automation failed cluster=%s", cluster_id)
-            rl.log(f"자동화 평가 실패: {str(e)[:300]}")
-            rl.step("automation", "failed", str(e)[:300])
+            rl.step("automation", "running", None)
+            try:
+                auto = effauto.dispatch_auto(
+                    db, cluster, defaults, log=rl.log,
+                    enqueue=lambda rid: run_k8s_efficiency_run.delay(str(rid)),
+                )
+                rl.step("automation", "success" if auto.get("runs") else "skipped",
+                        f"runs={len(auto.get('runs') or [])}" if not auto.get("skipped") else auto["skipped"])
+                result["automation"] = auto
+            except Exception as e:  # noqa: BLE001
+                db.rollback()
+                log.exception("k8s efficiency automation failed cluster=%s", cluster_id)
+                rl.log(f"자동화 평가 실패: {str(e)[:300]}")
+                rl.step("automation", "failed", str(e)[:300])
 
-        state = "succeeded" if "recommendations" in result else "partial"
-        rl.log(f"완료 — NS {result.get('namespaces')} / 워크로드 {result.get('workloads')} / {result.get('elapsed_ms')}ms")
-        rl.finish(state, summary=result)
-        audit_logger.record(db, action="k8s.efficiency.collect.run", actor_username=triggered_by or "scheduler",
-                            status="success" if state == "succeeded" else "failure", target_type="cluster",
-                            target_id=str(cluster.id), details={"run_id": str(run.id), **{k: v for k, v in result.items() if k != "recommendations"}})
-        return {"cluster": cluster.name, "run_id": str(run.id), **result}
+            state = "succeeded" if "recommendations" in result else "partial"
+            rl.log(f"완료 — NS {result.get('namespaces')} / 워크로드 {result.get('workloads')} / {result.get('elapsed_ms')}ms")
+            rl.finish(state, summary=result)
+            audit_logger.record(db, action="k8s.efficiency.collect.run", actor_username=triggered_by or "scheduler",
+                                status="success" if state == "succeeded" else "failure", target_type="cluster",
+                                target_id=str(cluster.id), details={"run_id": str(run.id), **{k: v for k, v in result.items() if k != "recommendations"}})
+            return {"cluster": cluster.name, "run_id": str(run.id), **result}
+        finally:
+            efflock.release(str(cluster.id))
     finally:
         db.close()
 
