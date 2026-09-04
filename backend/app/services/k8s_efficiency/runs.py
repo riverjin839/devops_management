@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.k8s_efficiency import K8sEfficiencyRun
 
-TERMINAL = ("succeeded", "failed", "partial")
+TERMINAL = ("succeeded", "failed", "partial", "skipped")
 
 
 def create_run(db: Session, cluster_id, run_type: str, *, trigger: str = "manual",

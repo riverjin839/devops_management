@@ -15,6 +15,7 @@ const STATE_META: Record<EffRunState, { label: string; cls: string }> = {
   succeeded: { label: '성공', cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30' },
   partial: { label: '부분 성공', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30' },
   failed: { label: '실패', cls: 'bg-status-critical/10 text-status-critical border-status-critical/30' },
+  skipped: { label: '건너뜀', cls: 'bg-muted text-muted-foreground border-border' },
 };
 const TRIGGER_LABEL: Record<EffRun['trigger'], string> = { manual: '수동', auto: '자동', rollback: '롤백', schedule: '스케줄' };
 

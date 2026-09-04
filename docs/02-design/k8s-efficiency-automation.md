@@ -32,6 +32,23 @@ Celery beat(매분) ─ dispatch_k8s_efficiency_collect ─ 클러스터별 cron
 수동 실행(지금 수집 / 추천 재생성 / 적용 / 롤백 / Quota 조정 / CR 스케일)도 전부 같은 run 테이블에
 단계(steps)·로그(log_lines)를 남기고 프론트가 1.5초 폴링으로 실시간 표시한다.
 
+### 클러스터당 동시 수집 1개 (lock.py)
+
+대형 클러스터(300노드급)는 전수 수집 1회가 기본 수집 주기(10분)보다 오래 걸릴 수 있다
+(`collect_k8s_efficiency_one` 의 `time_limit=900`(15분)이 이를 감안한 값이다). 디스패처는
+직전 실행의 종료 여부를 보지 않고 순수 cron 간격으로만 due 를 판단하므로, 그대로 두면 같은
+클러스터의 실행이 계속 겹쳐 쌓여 Celery 워커를 그 클러스터 하나로 독점시킨다(실측: 워커 pod
+풀가동 + 같은 apiserver 를 쓰는 온디맨드 자원 집계도 지연).
+
+`collect_k8s_efficiency_one` 진입 시 클러스터별 in-flight 락(Redis `SET NX EX`, TTL =
+`time_limit + 120초`)을 건다 — `services/login_rate_limiter.py`/`observability/analysis_hook.py`
+의 디바운스와 동일한 fail-open 패턴(Redis 불가 시 락 없이 통과, 새 장애점을 만들지 않음). 락을
+못 잡으면(이전 실행이 진행 중) 무거운 조회 없이 즉시 반환하고 run 을 `skipped` 로 남긴다 —
+자동(cron) 경로와 수동 "지금 수집" 버튼 양쪽 다 이 하나의 진입점에서 방어된다. 수집 자체를
+끄는 게 아니라 클러스터별로 자기 페이스에 맞게 스로틀링하는 것이므로, 데이터 수집(따라서
+NS/워크로드 최적화 입력)은 계속된다 — 다만 그 클러스터의 실제 수집 간격은 설정한 cron 보다
+길어질 수 있다(운영자는 실행 이력의 `skipped` 빈도를 보고 그 클러스터의 cron 을 늘리는 게 좋다).
+
 ### 사용률 소스 (정책 `usage_source`)
 
 | 값 | 순간 사용량(샘플) | 추천용 p95 |

@@ -4048,7 +4048,7 @@ export interface EffRunStep {
   id: string; label: string; status: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
   detail?: string; startedMs?: number; durationMs?: number;
 }
-export type EffRunState = 'queued' | 'running' | 'succeeded' | 'failed' | 'partial';
+export type EffRunState = 'queued' | 'running' | 'succeeded' | 'failed' | 'partial' | 'skipped';
 export interface EffRun {
   id: string; clusterId: string;
   runType: 'collect' | 'recommend' | 'rightsize_apply' | 'quota_adjust' | 'custom_scale';

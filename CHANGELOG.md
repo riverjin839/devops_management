@@ -27,6 +27,18 @@
   NsTrendChart,LowEfficiencyRankingChart,PolicyDialog}.tsx`, `hooks/useK8sEfficiency.ts`.
 
 ### Fixed
+- **K8S 자원 효율화 — 대형 클러스터에서 수집이 겹쳐 쌓여 Celery 워커를 독점하던 문제**: 300노드급
+  클러스터는 전수 수집 1회가 기본 수집 주기(10분)보다 오래 걸릴 수 있는데, 디스패처가 직전 실행의
+  종료 여부를 확인하지 않고 매 주기 새 실행을 계속 큐잉해 같은 클러스터의 실행이 겹쳐 쌓였다 —
+  Celery 워커 pod 가 이 클러스터 하나로 계속 풀가동되고, 같은 apiserver 를 두드리는 온디맨드
+  자원 집계(`/k8s-allocation`)도 덩달아 "집계중"에서 끝나지 않는 결과로 이어졌다. 클러스터당
+  in-flight 락(Redis `SET NX EX`, Redis 불가 시 기존과 동일하게 fail-open)을 걸어 이전 실행이
+  진행 중이면 새 실행은 무거운 조회 없이 즉시 건너뛰고 실행 이력에 "건너뜀"으로 남긴다 — 수집
+  자체를 끄지 않고 클러스터별로 자기 페이스에 맞게 스로틀링된다.
+  Backend: 신규 `services/k8s_efficiency/lock.py`(`try_acquire`/`release`/`guard_or_mark_skipped`),
+  `celery_app.py`(`collect_k8s_efficiency_one` 진입 시 락 획득, `finally` 에서 해제),
+  `services/k8s_efficiency/runs.py`(`TERMINAL` 에 `skipped` 추가). Frontend: `EffRunState`/
+  `EfficiencyRunLog.tsx`(건너뜀 상태 배지).
 - **K8S 자원 관리(`/k8s-allocation`) — 502 조회 실패 빈발·화면이 계속 바뀌는 문제**: 근본 원인
   두 가지를 고쳤다. (1) 자원 집계 스냅샷이 backend 프로세스 메모리에만 있어 HPA(2~10 replica)
   환경에서 1.5초 폴링이 매번 다른 파드에 맞아 파드마다 전수 스캔이 중복되고 진행률·부분 결과가
