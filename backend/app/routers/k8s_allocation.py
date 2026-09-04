@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 import time
 from contextlib import contextmanager
 from decimal import ROUND_HALF_UP
@@ -36,7 +37,9 @@ from kubernetes.utils import parse_quantity
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.routers.k8s_resources import _api_client, _require_cluster
+from app.routers.k8s_resources import (
+    _api_client, _require_cluster, _classify_pod_status, _TERMINAL_PHASES,
+)
 from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.snapshot_jobs import Progress, SnapshotManager
 from pydantic import BaseModel
@@ -78,19 +81,43 @@ _PARTIAL_TTL = _envf("K8S_ALLOC_PARTIAL_TTL", 300.0)
 _STUCK_TIMEOUT = _envf("K8S_ALLOC_STUCK_TIMEOUT", 1800.0)
 
 # 비싼 집계 스냅샷에 대한 짧은 TTL 캐시(클러스터/네임스페이스 키별 격리).
+# 크기 상한을 둔다 — 드릴다운을 많이 펼치는 대형 클러스터에서 무제한 성장·클러스터 삭제 후
+# 잔존(BE-14)을 막는다. 만료 항목 정리 후에도 상한을 넘으면 가장 오래된 항목부터 퇴출.
 _CACHE_TTL = 20.0
+_CACHE_MAX = int(_envf("K8S_ALLOC_DRILL_CACHE_MAX", 256))
 _CACHE: dict[str, tuple[float, Any]] = {}
+_CACHE_LOCK = threading.Lock()
 
 
 def _cached(key: str, producer: Callable[[], Any]) -> Any:
     """key 가 TTL 내면 캐시 반환, 아니면 producer() 실행 후 캐시. 예외는 캐시 안 함."""
     now = time.monotonic()
-    hit = _CACHE.get(key)
-    if hit is not None and (now - hit[0]) < _CACHE_TTL:
-        return hit[1]
+    with _CACHE_LOCK:
+        hit = _CACHE.get(key)
+        if hit is not None and (now - hit[0]) < _CACHE_TTL:
+            return hit[1]
     val = producer()
-    _CACHE[key] = (now, val)
+    with _CACHE_LOCK:
+        if len(_CACHE) >= _CACHE_MAX:
+            for k in [k for k, (t, _) in _CACHE.items() if (now - t) >= _CACHE_TTL]:
+                _CACHE.pop(k, None)
+            while len(_CACHE) >= _CACHE_MAX:
+                oldest = min(_CACHE.items(), key=lambda kv: kv[1][0])[0]
+                _CACHE.pop(oldest, None)
+        _CACHE[key] = (now, val)
     return val
+
+
+def invalidate_cluster_cache(cluster_id) -> None:
+    """클러스터 삭제/kubeconfig 교체 시 드릴다운 캐시 + 개요 스냅샷을 비운다."""
+    cid = str(cluster_id)
+    with _CACHE_LOCK:
+        for k in [k for k in _CACHE if k.startswith(f"{cid}:")]:
+            _CACHE.pop(k, None)
+    try:
+        _overview_mgr.invalidate(f"{cid}:overview")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _strip_hash(rs_name: str) -> str:
@@ -255,6 +282,20 @@ def _node_usage(client) -> dict[str, tuple[int, int]]:
     except Exception:  # noqa: BLE001
         pass
     return out
+
+
+def _node_usage_one(client, node: str) -> Optional[tuple[int, int]]:
+    """단일 노드 usage (cpu_m, mem_b) — 노드 1개 REFRESH 에 cluster-wide metrics 를 다 긁던
+    N+1(369노드면 369건 응답)을 단건 GET 으로 대체. metrics-server 없으면 None."""
+    try:
+        co = k8s_client.CustomObjectsApi(client)
+        it = co.get_cluster_custom_object(
+            "metrics.k8s.io", "v1beta1", "nodes", node, _request_timeout=_METRICS_TIMEOUT,
+        )
+        u = (it or {}).get("usage") or {}
+        return (_cpu_m(u.get("cpu")), _mem_b(u.get("memory")))
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _pod_usage(client, namespace: Optional[str] = None) -> dict[tuple[str, str], dict]:
@@ -440,11 +481,24 @@ class PodAllocRow(BaseModel):
 
 # ── 공유 스냅샷 (노드 + 네임스페이스 집계) ──────────────────────────────────────────
 # 부분 결과 publish 주기(초) — 너무 잦으면 직렬화 부하, 너무 길면 누적 체감 저하.
+# Redis 공유 스토어일 때는 왕복 비용이 있어 2초로 늘린다(_overview_view 에서 결정).
 _PARTIAL_PUBLISH_INTERVAL = 1.0
+_PARTIAL_PUBLISH_INTERVAL_SHARED = 2.0
+# 종료(Succeeded/Failed) 파드까지 순회해 POD 상태 카운트를 같은 스냅샷에서 계산할지.
+# 0 이면 구 동작(활성 파드만 서버측 필터) — 완료 Job 파드가 수만 개 쌓인 클러스터용 탈출구.
+_COUNT_TERMINAL_PODS = os.getenv("K8S_ALLOC_COUNT_TERMINAL_PODS", "1") not in ("0", "false", "no")
+
+_POD_STATUS_KEYS = ("running", "pending", "error", "succeeded", "failed", "unknown")
+
+
+def _empty_pod_summary() -> dict:
+    return {"total_pods": 0, "status_counts": {k: 0 for k in _POD_STATUS_KEYS},
+            "occupied_on_schedulable": 0, "terminal_counted": _COUNT_TERMINAL_PODS}
 
 
 def _assemble_overview(node_base, per_node, per_ns, node_usage, summary, ns_total, *,
-                       metrics_available: bool, pod_usage_skipped: bool, partial: bool) -> dict:
+                       metrics_available: bool, pod_usage_skipped: bool, partial: bool,
+                       pod_summary: Optional[dict] = None) -> dict:
     """누적/최종 결과를 직렬화 가능한 안정 스냅샷으로 조립(**accumulator 비파괴**).
 
     per_node/per_ns 는 복사본을 만들어 반환하므로, 빌더가 계속 집계해도 이미 publish 된
@@ -479,63 +533,100 @@ def _assemble_overview(node_base, per_node, per_ns, node_usage, summary, ns_tota
         "metrics_available": metrics_available,
         "pod_usage_skipped": pod_usage_skipped,
         "partial": partial,
+        "pods_summary": dict(pod_summary) if pod_summary else _empty_pod_summary(),
     }
 
 
-def _build_overview(cluster, progress: Optional[Progress] = None) -> dict:
+def _node_ready(n) -> bool:
+    conds = (n.status.conditions or []) if n.status else []
+    return any(getattr(c, "type", None) == "Ready" and getattr(c, "status", None) == "True"
+               for c in conds)
+
+
+def _build_overview(cluster, progress: Optional[Progress] = None, *,
+                    on_pod: Optional[Callable[[Any, tuple[int, int, int, int], tuple[str, str]], None]] = None,
+                    publish_interval: Optional[float] = None) -> dict:
     """단일 Pod 순회로 노드/네임스페이스 집계를 모두 계산. 결과는 작은 숫자 dict 만 캐시.
 
     반환: {node_base, per_node, node_usage, per_ns, summary, ns_total,
-           metrics_available, pod_usage_skipped}
+           metrics_available, pod_usage_skipped, pods_summary}
 
     백그라운드 스냅샷 매니저에서 호출되므로 게이트웨이 타임아웃과 무관 — **전수 집계를
     끝까지 수행**해 무결성을 보장한다(시간 예산으로 자르지 않고, 폭주 방지용 hard_cap 만
     유지). progress 가 주어지면 Pod 처리량을 보고한다.
+
+    on_pod(pod, (rc,rm,lc,lm), (owner_kind, owner_name)) 콜백을 주면 활성 파드마다 호출된다 —
+    수집 워커(k8s_efficiency)가 워크로드 단위 집계를 **같은 순회**에서 얻기 위한 훅.
+    POD 상태 카운트(pods_summary)도 이 순회에서 함께 계산해 별도의 전수 Pod 조회를 없앤다.
     """
+    pub_every = publish_interval if publish_interval is not None else _PARTIAL_PUBLISH_INTERVAL
     with _api(cluster) as client:
         core = k8s_client.CoreV1Api(client)
         partial_flag: list = []
 
-        nodes = _list_all(lambda **kw: core.list_node(**kw), report=partial_flag)
+        # 노드/NS 목록은 작으므로 watch cache(resource_version="0")에서 싸게 읽는다.
+        # (Pod 순회에는 절대 쓰지 않는다 — RV=0 은 limit 을 무시해 전량 단일 응답 → OOM.)
+        nodes = _list_all(lambda **kw: core.list_node(**kw), report=partial_flag,
+                          resource_version="0")
         if progress is not None:
             progress.phase = "nodes"
         node_usage = _node_usage(client)
-        ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw)))
+        ns_total = len(_list_all(lambda **kw: core.list_namespace(**kw), resource_version="0"))
         if progress is not None:
             progress.phase = "pods"
 
         # 노드 base (allocatable/capacity/roles) — raw 객체는 보관 안 함.
         node_base: dict[str, dict] = {}
+        schedulable_nodes: set[str] = set()
         for n in nodes:
             labels = n.metadata.labels or {}
             alloc = (n.status.allocatable or {}) if n.status else {}
             cap = (n.status.capacity or {}) if n.status else {}
+            unsched = bool(n.spec.unschedulable) if n.spec else False
+            ready = _node_ready(n)
             node_base[n.metadata.name] = {
                 "roles": _node_roles(labels),
-                "unschedulable": bool(n.spec.unschedulable) if n.spec else False,
+                "unschedulable": unsched,
+                "ready": ready,
                 "cpu_alloc": _cpu_m(alloc.get("cpu")), "mem_alloc": _mem_b(alloc.get("memory")),
                 "cpu_cap": _cpu_m(cap.get("cpu")), "mem_cap": _mem_b(cap.get("memory")),
                 "pods_alloc": _pods_n(alloc.get("pods")),
             }
+            if ready and not unsched:
+                schedulable_nodes.add(n.metadata.name)
 
         per_node: dict[str, dict] = {}
         per_ns: dict[str, dict] = {}
         summary = {"rc": 0, "rm": 0, "lc": 0, "lm": 0, "uc": 0, "um": 0, "pods": 0, "norq": 0}
+        pod_summary = _empty_pod_summary()
+        status_counts = pod_summary["status_counts"]
 
         # Pod 를 **페이지 단위로 스트리밍**하며 즉시 집계(전량 메모리 적재 금지 → OOM/502 방지).
         # 약 1초마다 부분 결과를 progress.partial 로 publish → 프론트가 누적 표시.
         last_pub = time.monotonic()
+        pod_selector = None if _COUNT_TERMINAL_PODS else _ACTIVE_FIELD_SELECTOR
         for p in _iter_all(lambda **kw: core.list_pod_for_all_namespaces(**kw),
-                           field_selector=_ACTIVE_FIELD_SELECTOR, report=partial_flag):
+                           field_selector=pod_selector, report=partial_flag):
             if progress is not None:
                 progress.processed += 1
-            if (p.status.phase if p.status else None) not in _ACTIVE_PHASES:
+            # POD 상태 카운트 — 종료 파드 포함(구 pods-summary 와 동일 버킷).
+            pod_summary["total_pods"] += 1
+            status_counts[_classify_pod_status(p)] += 1
+            phase = p.status.phase if p.status else None
+            node = p.spec.node_name if p.spec else None
+            if phase not in _TERMINAL_PHASES and node in schedulable_nodes:
+                pod_summary["occupied_on_schedulable"] += 1
+            if phase not in _ACTIVE_PHASES:
                 continue
             ns = p.metadata.namespace
-            node = p.spec.node_name if p.spec else None
             rc, rm, lc, lm = _pod_effective_resources(p.spec)
             no_req = (rc == 0 and rm == 0)
             owner = _top_owner(p, {})  # 대규모 보호: RS 전량 미조회(해시 strip 근사)
+            if on_pod is not None:
+                try:
+                    on_pod(p, (rc, rm, lc, lm), owner)
+                except Exception:  # noqa: BLE001
+                    logger.exception("on_pod 콜백 실패(무시): %s/%s", ns, p.metadata.name)
 
             # per-namespace
             s = per_ns.setdefault(ns, {
@@ -563,10 +654,11 @@ def _build_overview(cluster, progress: Optional[Progress] = None) -> dict:
             # 부분 결과 publish(usage 미반영=pending). accumulator 비파괴 복사로 안전.
             if progress is not None:
                 now = time.monotonic()
-                if now - last_pub >= _PARTIAL_PUBLISH_INTERVAL:
+                if now - last_pub >= pub_every:
                     progress.partial = _assemble_overview(
                         node_base, per_node, per_ns, node_usage, summary, ns_total,
                         metrics_available=False, pod_usage_skipped=True, partial=bool(partial_flag),
+                        pod_summary=pod_summary,
                     )
                     last_pub = now
 
@@ -592,6 +684,7 @@ def _build_overview(cluster, progress: Optional[Progress] = None) -> dict:
             node_base, per_node, per_ns, node_usage, summary, ns_total,
             metrics_available=metrics_available,
             pod_usage_skipped=(usage_skipped or not metrics_available), partial=partial,
+            pod_summary=pod_summary,
         )
 
 
@@ -599,8 +692,12 @@ def _build_overview(cluster, progress: Optional[Progress] = None) -> dict:
 # TTL 을 길게 둬서 완료된 결과를 **그대로 유지**한다. 재집계는 오직 명시적 refresh(force)
 # 일 때만 — 자동갱신 OFF 면 0부터 다시 누적하는 일이 없도록(누적 결과 보존).
 _OVERVIEW_TTL = _envf("K8S_ALLOC_OVERVIEW_TTL", 86400.0)
+# 스냅샷 저장소: auto(Redis 가능하면 replica 간 공유, 아니면 프로세스 메모리) | redis | memory.
+# 멀티 replica(HPA) 환경에서 memory 면 폴링이 파드마다 다른 진행률/결과를 보게 된다(BE-15).
+_SNAPSHOT_BACKEND = (os.getenv("K8S_ALLOC_SNAPSHOT_BACKEND") or "auto").strip().lower()
 _overview_mgr = SnapshotManager(ttl=_OVERVIEW_TTL, partial_ttl=_PARTIAL_TTL,
-                                stuck_timeout=_STUCK_TIMEOUT)
+                                stuck_timeout=_STUCK_TIMEOUT, backend=_SNAPSHOT_BACKEND,
+                                publish_interval=_PARTIAL_PUBLISH_INTERVAL)
 
 
 def _overview_view(cluster_id: UUID, db: Session, force: bool = False) -> dict:
@@ -613,11 +710,21 @@ def _overview_view(cluster_id: UUID, db: Session, force: bool = False) -> dict:
         ensure_kubeconfig_file(cluster)
     except Exception:  # noqa: BLE001
         pass
+    pub = _PARTIAL_PUBLISH_INTERVAL_SHARED if _overview_mgr.is_shared else _PARTIAL_PUBLISH_INTERVAL
     return _overview_mgr.get(
         f"{cid}:overview",
-        lambda prog: _build_overview(cluster, prog),
+        lambda prog: _build_overview(cluster, prog, publish_interval=pub),
         force=force,
     )
+
+
+def overview_snapshot_key(cluster_id) -> str:
+    return f"{cluster_id}:overview"
+
+
+def warm_overview_snapshot(cluster_id, overview: dict, processed: Optional[int] = None) -> None:
+    """수집 워커가 만든 완성 overview 를 스냅샷으로 등록(공유 스토어면 모든 replica 에 즉시 반영)."""
+    _overview_mgr.put(overview_snapshot_key(cluster_id), overview, processed=processed)
 
 
 # ── 엔드포인트 ───────────────────────────────────────────────────────────────────
@@ -710,8 +817,52 @@ def allocation_node_refresh(cluster_id: UUID, node: str, db: Session = Depends(g
                 continue
             rc, rm, lc, lm = _pod_effective_resources(p.spec)
             ag["rc"] += rc; ag["rm"] += rm; ag["lc"] += lc; ag["lm"] += lm; ag["pods"] += 1
-        u = _node_usage(client).get(node)
+        u = _node_usage_one(client, node)
         return {"item": _node_row(node, nb, ag, u), "metrics_available": bool(u)}
+
+
+def _pods_summary_payload(ov: dict) -> dict:
+    """스냅샷 overview → 구 `GET /k8s/{id}/pods-summary` 와 동일한 응답 형태."""
+    node_base = ov.get("node_base") or {}
+    ps = ov.get("pods_summary") or _empty_pod_summary()
+    allocatable_total = 0
+    schedulable_allocatable = 0
+    schedulable = 0
+    for nb in node_base.values():
+        alloc = int(nb.get("pods_alloc") or 0)
+        allocatable_total += alloc
+        if nb.get("ready") and not nb.get("unschedulable"):
+            schedulable += 1
+            schedulable_allocatable += alloc
+    return {
+        "total_pods": ps.get("total_pods", 0),
+        "status_counts": ps.get("status_counts") or {k: 0 for k in _POD_STATUS_KEYS},
+        "capacity": {
+            "allocatable_pods": allocatable_total,
+            "schedulable_allocatable_pods": schedulable_allocatable,
+            "schedulable_free_slots": max(0, schedulable_allocatable - int(ps.get("occupied_on_schedulable") or 0)),
+            "nodes_total": len(node_base),
+            "nodes_schedulable": schedulable,
+        },
+        "terminal_counted": bool(ps.get("terminal_counted", _COUNT_TERMINAL_PODS)),
+    }
+
+
+@router.get("/{cluster_id}/allocation/pods-summary")
+def allocation_pods_summary(cluster_id: UUID, refresh: bool = False, db: Session = Depends(get_db)):
+    """POD 용량/상태 카드 — **개요 스냅샷에서 파생**(요청 스레드가 apiserver 를 치지 않는다).
+
+    구 `GET /k8s/{id}/pods-summary` 는 전체 Pod 를 페이징 없이 60초 요청 하나로 긁어 ingress
+    타임아웃(60s)과 정확히 겹쳐 502 가 났고, 같은 화면이 allocation 스냅샷과 별개로 전수
+    순회를 한 번 더 하는 구조였다. 이제 같은 순회에서 상태 카운트까지 계산한다.
+    """
+    view = _overview_view(cluster_id, db, force=refresh)
+    ov = view["data"]
+    if ov is None:
+        if view["status"] == "error":
+            raise HTTPException(status_code=502, detail=f"자원 집계 실패: {view['error']}")
+        return {**_pods_summary_payload({}), **_alloc_meta(view)}
+    return {**_pods_summary_payload(ov), **_alloc_meta(view)}
 
 
 def _ns_row(ns: str, s: dict) -> NamespaceAllocRow:

@@ -10,7 +10,41 @@
 
 1.30.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8S 자원 관리 — 자원 효율화 자동화(효율화 탭)**: 점유(request) 대비 사용률이 낮은 컨테이너의
+  request 축소를 추천하고(관측 p95 × 여유율, 하한/임계/최소 절감 규칙), 드라이런(기본)→적용→롤백을
+  실행 로그와 함께 수행한다. 네임스페이스별 자동 적용은 **opt-in**(전역 마스터 스위치 + NS 정책,
+  쿨다운·1회 최대 감소폭·허용 시간대)이고 시스템 NS·opt-out annotation·오퍼레이터(CR) 관리
+  워크로드(예: StarRocks CN)는 추천만 한다(서버가 직접 적용을 422 로 거부). NS 자원 추이
+  (request/실사용/Quota 한도, 24h/7d/30d)와 저효율 NS 추이 랭킹을 가시화하고, ResourceQuota 탄력
+  (used/hard ≥ 임계 시 확장, 지속 미사용 시 회수 — min/max 안에서)과 오퍼레이터 CR 어댑터
+  (group/version/plural/jsonpath 로 replicas 조정)를 정책으로 등록할 수 있다. 사용률 소스는
+  Prometheus 우선 → metrics-server 샘플 → 데이터 부족 순으로 자동 폴백.
+  Backend: `models/k8s_efficiency.py`(NS/워크로드 샘플·추천·NS 정책·실행 로그),
+  `services/k8s_efficiency/`(collector·engine·quota·apply·automation·history), `routers/k8s_efficiency.py`,
+  Celery `k8s-efficiency-dispatcher`(클러스터별 cron, 기본 10분 — 수집이 Redis 스냅샷도 워밍).
+  Frontend: `components/k8s-allocation/{EfficiencyTab,RecommendationTable,ApplyDialog,EfficiencyRunLog,
+  NsTrendChart,LowEfficiencyRankingChart,PolicyDialog}.tsx`, `hooks/useK8sEfficiency.ts`.
+
 ### Fixed
+- **K8S 자원 관리(`/k8s-allocation`) — 502 조회 실패 빈발·화면이 계속 바뀌는 문제**: 근본 원인
+  두 가지를 고쳤다. (1) 자원 집계 스냅샷이 backend 프로세스 메모리에만 있어 HPA(2~10 replica)
+  환경에서 1.5초 폴링이 매번 다른 파드에 맞아 파드마다 전수 스캔이 중복되고 진행률·부분 결과가
+  파드마다 달랐다 → 스냅샷/진행률/락을 **Redis 에 공유**(`SET NX` 로 클러스터당 빌더 1개, Redis
+  불가 시 종전 메모리 방식으로 자동 폴백). (2) POD 용량/상태 카드가 쓰던 `pods-summary` 가 전체
+  Pod 를 페이징 없이 60초 요청 하나로 긁어 ingress 타임아웃(60s)과 겹쳐 502 가 났다 → 같은
+  스냅샷 순회에서 상태 카운트까지 계산하는 `/allocation/pods-summary` 로 대체(전수 순회 1회).
+  프론트는 GET 502/503/504·네트워크 오류를 짧은 백오프로 2회 재시도하고, 카드 프레임을 항상
+  유지(early return 교체 제거)·진행바 슬롯 고정·집계 중 정렬 동결·자동갱신 타이머 재생성 방지로
+  흔들림을 없앴다.
+  Backend: `services/snapshot_jobs.py`(`_RedisStore`), `routers/k8s_allocation.py`(`pods_summary`
+  파생, `_node_usage_one`, 드릴다운 캐시 상한), `services/k8s_paging.py`(`resource_version` 옵션 —
+  노드/NS 목록 전용, Pod 순회 금지). Frontend: `services/api.ts`(GET 재시도), `hooks/useK8sAllocation.ts`
+  (`useAllocProgress`, `usePodsSummary` HOLD), `components/k8s-allocation/*`(페이지 분할).
+- **K8S 자원 관리 — 노드가 많을수록 느려지는 문제(최대 369노드)**: 노드 뷰가 48행을 넘으면
+  `react-virtuoso` 가상 스크롤(카드 `VirtuosoGrid`/테이블 `TableVirtuoso`)로 전환하고 행 컴포넌트를
+  `React.memo` 로 감싸 폴링마다 전량 리렌더되던 비용을 줄였다. 단일 노드 새로고침은 cluster-wide
+  metrics 대신 노드 1건만 조회(N+1 제거). 드릴다운 캐시는 크기 상한 + 클러스터 삭제 시 무효화.
 - **업무 등록(프로비저닝) — Epic 을 선택해 만든 Task 가 실제 Jira 에는 Epic 하위로 등록되지
   않던 문제**: Epic Link 는 Jira Server/DC 에서 커스텀 필드(예: `customfield_10008`)라
   인스턴스마다 필드 ID 를 설정해야 하는데, 설정 화면(Jira 연동)에 이 필드 ID 를 입력할

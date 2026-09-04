@@ -53,12 +53,17 @@ def is_timeout_error(e: Exception) -> bool:
 
 def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
              hard_cap: int = 200_000, deadline: Optional[float] = None,
-             report: Optional[list] = None):
+             report: Optional[list] = None, resource_version: Optional[str] = None):
     """`_continue` 페이지네이션을 **페이지 단위로 스트리밍**(yield)한다.
 
     전량을 메모리에 모으지 않으므로(한 번에 한 페이지만 유지) 수만 Pod 클러스터에서도
     OOM 을 피한다. deadline(monotonic) 지정 시 페이지 사이에서 예산 초과하면 중단하고,
     상한/예산 초과 시 report(있으면)에 True 를 append 한다.
+
+    resource_version: `"0"` 을 주면 apiserver 가 etcd quorum read 대신 watch cache 에서
+    응답한다(저렴). **단, RV=0 에서는 apiserver 가 `limit` 을 무시하고 전량을 한 응답으로
+    돌려주므로(페이지네이션 비지원) 노드/네임스페이스처럼 작은 목록에만 쓴다** — Pod 전수
+    순회에 쓰면 전량 메모리 적재로 OOM(→502)이 재현된다. 기본값 None(사용 안 함).
     """
     seen = 0
     cont: Optional[str] = None
@@ -66,6 +71,8 @@ def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = Non
         kw: dict[str, Any] = {"limit": PAGE_LIMIT, "_request_timeout": API_TIMEOUT}
         if field_selector:
             kw["field_selector"] = field_selector
+        if resource_version is not None and not cont:
+            kw["resource_version"] = resource_version
         if cont:
             kw["_continue"] = cont
         try:
@@ -98,7 +105,7 @@ def iter_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = Non
 
 def list_all(list_fn: Callable[..., Any], *, field_selector: Optional[str] = None,
              hard_cap: int = 200_000, deadline: Optional[float] = None,
-             report: Optional[list] = None) -> list:
-    """`iter_all` 을 전량 리스트로 수집(소형 컬렉션용)."""
+             report: Optional[list] = None, resource_version: Optional[str] = None) -> list:
+    """`iter_all` 을 전량 리스트로 수집(소형 컬렉션용 — 여기서만 resource_version="0" 허용)."""
     return list(iter_all(list_fn, field_selector=field_selector, hard_cap=hard_cap,
-                         deadline=deadline, report=report))
+                         deadline=deadline, report=report, resource_version=resource_version))

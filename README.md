@@ -20,7 +20,7 @@
 |---|---|
 | **모니터링** | check-matrix cron 기반 자동 점검, 클러스터/노드/시스템 파드/애드온 헬스, AI 리뷰, kubewatch 실시간 이벤트 수집(심각 이벤트 인앱 알림) |
 | **운영 점검 콘솔** | 점검 항목 리스트 → 선택 일괄/개별 실행(백그라운드 진행률) → 결과·로그. Deep Check 프레임워크(인증서 만료·etcd·CoreDNS·OOM·PVC 등 16종, in-cluster CronJob 지원)로 점검 추가형 구조 |
-| **자원/용량** | K8s 자원 관리(노드·NS·랭킹, req/lim/use + 사용률 R·L, 카드 열수/페이징/검색), 클러스터 추이(per-node 메트릭 시계열, Prometheus) |
+| **자원/용량** | K8s 자원 관리(노드·NS·랭킹, req/lim/use + 사용률 R·L, 카드 열수/페이징/검색, 대형 클러스터 가상 스크롤·Redis 공유 스냅샷), **자원 효율화**(request 축소 추천·드라이런/적용/롤백·NS 자동 적용 opt-in·NS 자원 추이/저효율 랭킹·ResourceQuota 탄력·오퍼레이터 CR 어댑터·실행 로그), 클러스터 추이(per-node 메트릭 시계열, Prometheus) |
 | **딥 트러블슈팅** | Cilium/Hubble 라이브 트레이스, 패킷 흐름, Pod 병목 진단, AI 장애 분석(분석 전용 — 조치 실행 없음) |
 | **리소스 탐색(읽기전용)** | K8s 리소스 40여 종 조회 + YAML 보기(Secret 마스킹), 파드 로그 스트리밍, 실시간 이벤트 |
 | **자동화** | Ansible 플레이북·배치(SSH), Batch Jobs(cron), etcdctl/mc 콘솔, 노드 일괄 실행 |

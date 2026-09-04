@@ -107,3 +107,6 @@
 | `K8S_ALLOC_POD_USAGE_MAX` | `6000` | 동일 — cluster-wide Pod usage 조회는 활성 Pod 수가 이 값 이하일 때만 시도(초과 시 생략 — 대형 클러스터에서 metrics 응답이 타임아웃만 반복하는 것을 방지, 드릴다운은 네임스페이스 단위로 계속 확인 가능) |
 | `K8S_ALLOC_API_READ_TIMEOUT` | `12.0` | `services/k8s_paging.py` — LIST 페이지 1개당 read timeout(초). 게이트웨이 타임아웃보다 충분히 짧게 |
 | `K8S_ALLOC_PAGE_LIMIT` | `500` | 동일 — LIST `_continue` 페이지네이션 페이지 크기 |
+| `K8S_ALLOC_SNAPSHOT_BACKEND` | `auto` | `routers/k8s_allocation.py` / `services/snapshot_jobs.py` — 개요 스냅샷 저장소. `auto`(Redis 연결되면 replica 간 공유, 아니면 프로세스 메모리로 폴백) · `redis` · `memory`. 멀티 replica(HPA) 에서 `memory` 면 1.5초 폴링이 파드마다 다른 진행률/결과를 보고 파드마다 전수 스캔이 중복된다 |
+| `K8S_ALLOC_COUNT_TERMINAL_PODS` | `1` | 동일 — Pod 전수 순회에 종료(Succeeded/Failed) 파드까지 포함해 POD 상태 카운트(`/allocation/pods-summary`)를 같은 스냅샷에서 계산. 완료 Job 파드가 수만 개 쌓인 클러스터에서 순회가 너무 길면 `0`(활성 파드만 서버측 필터, succeeded/failed 는 0 표시) |
+| `K8S_ALLOC_DRILL_CACHE_MAX` | `256` | 동일 — 네임스페이스 드릴다운(워크로드/파드) 20초 캐시의 항목 상한. 초과 시 만료 항목 정리 후 가장 오래된 항목부터 퇴출 |

@@ -484,6 +484,14 @@ def delete_cluster(
             detail=f"클러스터 삭제 중 연관 데이터 정리에 실패했습니다: {getattr(exc, 'orig', exc)}",
         ) from exc
 
+    # 자원 관리 화면의 드릴다운 캐시/개요 스냅샷(Redis 공유 포함)도 비운다 — 삭제된
+    # 클러스터의 스냅샷이 TTL(기본 24h) 동안 잔존하지 않게(BE-14).
+    try:
+        from app.routers.k8s_allocation import invalidate_cluster_cache
+        invalidate_cluster_cache(cluster_id)
+    except Exception:  # noqa: BLE001
+        pass
+
     # 저장된 kubeconfig 파일 삭제 — DB 삭제가 커밋된 뒤에만. (커밋 전에 지우면 삭제가
     # 실패했을 때 클러스터는 남아 있는데 kubeconfig 파일만 사라진 상태가 된다.)
     stored_path = _kubeconfig_store_path(cluster_id)
