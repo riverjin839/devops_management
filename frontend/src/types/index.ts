@@ -592,8 +592,60 @@ export interface WorkItem {
   provisionStatus?: 'ok' | 'partial' | 'error' | null;
   provisionJiraError?: string | null;
   provisionConfluenceError?: string | null;
+  /** ServiceNow ITSM 연동 — Jira 연동 업무를 수동으로 등록한 결과(없으면 미등록). */
+  servicenowSysId?: string | null;
+  servicenowNumber?: string | null;
+  servicenowUrl?: string | null;
+  servicenowStatus?: string | null;
+  servicenowSyncedAt?: string | null;
+  servicenowRegisterError?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── ServiceNow ITSM 연동 (Jira 연동 업무 대상, 수동 등록) ───────────────────────
+export interface ServiceNowConfig {
+  baseUrl: string;
+  enabled: boolean;
+  verifyTls: boolean;
+  /** 실제 인스턴스 스펙 확인 전까지 ServiceNow 표준 Table API 를 가정한 기본값 —
+   *  다르면 코드 수정 없이 여기서(관리자 설정) 조정한다. */
+  tableName: string;
+  /** ServiceNow 필드명 → PEP WorkItem 필드명. */
+  fieldMapping: Record<string, string>;
+  /** PEP priority(high/medium/low) → ServiceNow urgency/impact 값. */
+  priorityMap: Record<string, string>;
+}
+
+export interface ServiceNowConfigUpdate {
+  baseUrl?: string;
+  enabled?: boolean;
+  verifyTls?: boolean;
+  tableName?: string;
+  fieldMapping?: Record<string, string>;
+  priorityMap?: Record<string, string>;
+}
+
+export interface ServiceNowTestResult {
+  ok: boolean;
+  detail: string;
+  displayName?: string | null;
+}
+
+export interface ServiceNowRegisterStep {
+  step: string;
+  status: 'ok' | 'error';
+  message: string;
+}
+
+export interface ServiceNowRegisterResult {
+  status: 'ok' | 'error';
+  ticketNumber?: string | null;
+  ticketUrl?: string | null;
+  detail: string;
+  authIssue: boolean;
+  steps: ServiceNowRegisterStep[];
+  syncedAt?: string | null;
 }
 
 // ── Jira 연동 ──────────────────────────────────────────────────────────────────

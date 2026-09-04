@@ -11,6 +11,15 @@
 1.30.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **ServiceNow ITSM 연동 (1차 구현) — Jira 연동 업무 수동 등록**: 이미 Jira 와 연동된
+  업무를 사내에 구축된 ServiceNow ITSM 에 수동 버튼으로 등록하고 결과(티켓 번호/링크)를
+  업무에 연결한다. 인증은 현재 로그인 사용자의 Jira/SSO 세션을 재사용하고(전용 인증은
+  추후 개선 예정), 실제 인스턴스의 테이블명·필드 매핑은 관리자 설정에서 코드 수정 없이
+  조정할 수 있다. 등록 실행 시 단계별 상세 로그를 "로그 보기" 토글로 확인할 수 있다.
+  Backend: `routers/servicenow.py`, `services/servicenow_service.py`,
+  `work_items.servicenow_*` 컬럼, `user_jira_credentials.servicenow_cookie_encrypted`.
+  Frontend: `components/work-items/ServiceNowRegisterDialog.tsx`, `hooks/useServiceNow.ts`,
+  `components/settings/ServiceNowIntegrationPanel.tsx`(Settings → 연동 (ServiceNow)).
 - **K8S 자원 관리 — 자원 효율화 자동화(효율화 탭)**: 점유(request) 대비 사용률이 낮은 컨테이너의
   request 축소를 추천하고(관측 p95 × 여유율, 하한/임계/최소 절감 규칙), 드라이런(기본)→적용→롤백을
   실행 로그와 함께 수행한다. 네임스페이스별 자동 적용은 **opt-in**(전역 마스터 스위치 + NS 정책,

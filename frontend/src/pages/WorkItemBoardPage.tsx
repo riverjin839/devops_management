@@ -7,7 +7,7 @@ import { Plus, Download, ListTodo, X, CalendarDays, List, ChevronUp, ChevronDown
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, WorkItemEpicView, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog } from '@/components/work-items';
+import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, WorkItemEpicView, ColumnSettingsMenu, JiraProvisionModal, JiraLinkDialog, ServiceNowRegisterDialog } from '@/components/work-items';
 import { WORK_ITEM_COLUMNS, DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, ALWAYS_VISIBLE_COLUMNS, COLUMN_WIDTH_DEFAULTS, type WorkItemColumnKey, type WorkItemSortKey } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
@@ -501,6 +501,8 @@ export function WorkItemBoardPage() {
   // Jira 연결 관리(해제/변경/삭제) — 재가져오기가 "Jira 에 없음"으로 끝나면 사유와 함께 자동으로 연다.
   const [linkItem, setLinkItem] = useState<WorkItem | null>(null);
   const [linkMissingDetail, setLinkMissingDetail] = useState<string | undefined>();
+  // ServiceNow ITSM 수동 등록 다이얼로그 대상 (Jira 연동 업무에서만 진입).
+  const [serviceNowItem, setServiceNowItem] = useState<WorkItem | null>(null);
 
   const openJiraLink = (item: WorkItem, missingDetail?: string) => {
     setLinkMissingDetail(missingDetail);
@@ -1071,6 +1073,7 @@ export function WorkItemBoardPage() {
                 jiraBusyId={jiraBusyId}
                 onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
                 onJiraLink={(t) => openJiraLink(t)}
+                onServiceNowRegister={(t) => setServiceNowItem(t)}
                 onConfluenceSync={handleConfluenceSync}
                 confluenceBusyId={confluenceBusyId}
               />
@@ -1162,6 +1165,7 @@ export function WorkItemBoardPage() {
                         jiraBusy={jiraBusyId === item.id}
                         onJiraProvision={jiraConfig?.enabled ? setProvisionItem : undefined}
                         onJiraLink={(t) => openJiraLink(t)}
+                        onServiceNowRegister={(t) => setServiceNowItem(t)}
                         onConfluenceSync={handleConfluenceSync}
                         confluenceBusy={confluenceBusyId === item.id}
                       />
@@ -1188,6 +1192,11 @@ export function WorkItemBoardPage() {
         onClose={() => { setLinkItem(null); setLinkMissingDetail(undefined); }}
         item={linkItem}
         missingDetail={linkMissingDetail}
+      />
+      <ServiceNowRegisterDialog
+        open={!!serviceNowItem}
+        onClose={() => setServiceNowItem(null)}
+        item={serviceNowItem}
       />
 
       {/* 업무 등록/수정/하위 업무 등록 — 홈 "업무 현황"과 동일한 팝업. initial 지정 시 수정

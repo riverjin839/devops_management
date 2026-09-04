@@ -8,6 +8,7 @@ from app.routers.promql import router as promql_router
 from app.routers.work_items import router as work_items_router
 from app.routers.jira import router as jira_router
 from app.routers.confluence import router as confluence_router
+from app.routers.servicenow import router as servicenow_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.node_labels import router as node_labels_router
 from app.routers.node_images import router as node_images_router
@@ -100,6 +101,7 @@ __all__ = [
     "work_items_router",
     "jira_router",
     "confluence_router",
+    "servicenow_router",
     "ui_settings_router",
     "node_labels_router",
     "node_images_router",
