@@ -380,6 +380,14 @@ export function JiraProvisionModal({ open, onClose, item }: JiraProvisionModalPr
                       </a>
                     ) : <span className="text-muted-foreground">{result.jiraDetail || '생성 안 함'}</span>}
                   </div>
+                  {/* 이슈 생성은 성공했지만(jiraKey 존재) Epic 연결처럼 일부만 실패한 경우 —
+                      jiraDetail 이 채워져 있으면 성공 라인 아래에 경고로 보여준다. */}
+                  {result.jiraKey && result.jiraDetail && (
+                    <div className="flex items-start gap-1.5 text-xs text-status-warning pl-[5.5rem]">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{result.jiraDetail}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground w-20">Confluence</span>
                     {result.confluenceUrl ? (

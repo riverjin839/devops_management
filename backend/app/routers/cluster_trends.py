@@ -26,7 +26,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.cluster import Cluster
 from app.routers.k8s_resources import _require_cluster
-from app.services.prometheus_service import PrometheusService, prometheus_service
+from app.services.prometheus_service import PrometheusService
 
 router = APIRouter(prefix="/k8s", tags=["cluster-trends"])
 
@@ -76,16 +76,9 @@ _METRICS: dict[str, tuple[str, str]] = {
 
 
 def _service_for(cluster: Cluster) -> Optional[PrometheusService]:
-    """클러스터별 Prometheus URL 오버라이드가 있으면 그 인스턴스, 없으면 전역.
-
-    prometheus_enabled=false 면 None(=offline 응답) 으로 부정확 데이터 노출을 막는다.
-    """
-    if not bool(getattr(cluster, "prometheus_enabled", False)):
-        return None
-    override = (getattr(cluster, "prometheus_url", None) or "").strip()
-    if override:
-        return PrometheusService(base_url=override)
-    return prometheus_service
+    """클러스터별 Prometheus 인스턴스 해석 — k8s_efficiency.prometheus.service_for_cluster 와 공유."""
+    from app.services.k8s_efficiency.prometheus import service_for_cluster
+    return service_for_cluster(cluster)
 
 
 def _build_promql(template: str, label: str, node_regex: str, window: str) -> str:

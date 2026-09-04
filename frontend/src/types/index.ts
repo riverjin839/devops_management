@@ -3921,10 +3921,12 @@ export interface K8sPodsSummaryCapacity {
   nodesTotal: number;
   nodesSchedulable: number;
 }
-export interface K8sPodsSummaryResponse {
+export interface K8sPodsSummaryResponse extends AllocSnapshotMeta {
   totalPods: number;
   statusCounts: Record<string, number>; // running/pending/error/succeeded/failed/unknown
   capacity: K8sPodsSummaryCapacity;
+  /** false 면 종료(Succeeded/Failed) 파드가 카운트에서 제외됨(K8S_ALLOC_COUNT_TERMINAL_PODS=0). */
+  terminalCounted?: boolean;
 }
 
 // 파드 컨테이너 목록 (로그/터미널 셀렉터)
@@ -4033,6 +4035,102 @@ export interface AllocNamespacesResponse extends AllocSnapshotMeta {
   metricsAvailable: boolean;
   podUsageSkipped: boolean;
   partial?: boolean;
+}
+
+// ── K8S 자원 효율화 (/k8s-allocation 효율화 탭) ───────────────────────────────
+export interface EffScheduleCluster { enabled: boolean; cron: string | null; lastRunAt?: string | null; effectiveCron?: string; nextRun?: string | null }
+export interface EffSchedule { enabled: boolean; defaultCron: string; clusters: Record<string, EffScheduleCluster>; nextRun?: string | null }
+export interface EffQuotaDefaults {
+  upThreshold: number; lowThreshold: number; sustainHours: number; lowerFactor: number; stepPct: number; cooldownMinutes: number;
+}
+export interface EffPolicyDefaults {
+  automationEnabled: boolean;
+  usageSource: 'auto' | 'prometheus' | 'metrics';
+  percentile: number; windowDays: number; headroomPct: number;
+  floorCpuM: number; floorMemB: number; thresholdRatio: number;
+  minSavingsCpuM: number; minSavingsMemB: number; minSamples: number; minCoverageHours: number;
+  systemNamespaces: string[]; optoutAnnotation: string;
+  includeDaemonsets: boolean; keepGuaranteed: boolean;
+  cooldownMinutes: number; maxStepPct: number; maxTargetsPerRun: number;
+  maintenanceCron: string | null;
+  quota: EffQuotaDefaults;
+}
+/** 오퍼레이터 CR 어댑터(예: StarRocks CN) — jsonpath 로 replicas 를 min/max 안에서 조정. */
+export interface EffCustomTarget {
+  label?: string | null; enabled?: boolean;
+  group: string; version: string; plural: string; name: string; jsonpath: string;
+  min: number; max: number; current?: number | null;
+}
+export interface EffNamespacePolicy {
+  id: string; clusterId: string; namespace: string;
+  autoRightsize: boolean; quotaElastic: boolean; quotaName: string | null;
+  quotaCpuMinM: number | null; quotaCpuMaxM: number | null; quotaMemMinB: number | null; quotaMemMaxB: number | null;
+  rightsizeParams: Record<string, number | boolean | null>;
+  quotaParams: Record<string, number | null>;
+  customTargets: EffCustomTarget[];
+  lastAutoApplyAt: string | null; lastQuotaAdjustAt: string | null;
+  updatedBy: string | null; updatedAt: string | null;
+}
+export interface EffNamespacePolicyBody {
+  autoRightsize: boolean; quotaElastic: boolean; quotaName?: string | null;
+  quotaCpuMinM?: number | null; quotaCpuMaxM?: number | null; quotaMemMinB?: number | null; quotaMemMaxB?: number | null;
+  rightsizeParams?: Record<string, number | boolean | null> | null;
+  quotaParams?: Record<string, number | null> | null;
+  customTargets?: EffCustomTarget[] | null;
+}
+export interface EffRecommendation {
+  id: string; namespace: string; kind: string; name: string; container: string;
+  resource: 'cpu' | 'memory'; podCount: number;
+  currentReq: number; targetReq: number; currentReqDisplay: string; targetReqDisplay: string;
+  currentLim: number | null; targetLim: number | null;
+  p95Use: number | null; usageSource: string; samples: number; windowDays: number;
+  savings: number; savingsDisplay: string;
+  reason: Record<string, number | string> | null;
+  managedBy: { apiVersion?: string; kind?: string; name?: string } | null;
+  recommendOnly: boolean; hint: string | null;
+  status: 'open' | 'applied' | 'dismissed' | 'superseded';
+  appliedRunId: string | null; createdAt: string | null;
+}
+export interface EffRecommendationsResponse {
+  count: number; items: EffRecommendation[];
+  totals: { cpuM: number; memB: number; applicable: number; recommendOnly: number };
+  computedAt: string | null;
+}
+export interface EffRunStep {
+  id: string; label: string; status: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
+  detail?: string; startedMs?: number; durationMs?: number;
+}
+export type EffRunState = 'queued' | 'running' | 'succeeded' | 'failed' | 'partial';
+export interface EffRun {
+  id: string; clusterId: string;
+  runType: 'collect' | 'recommend' | 'rightsize_apply' | 'quota_adjust' | 'custom_scale';
+  trigger: 'manual' | 'auto' | 'rollback' | 'schedule'; triggeredBy: string | null;
+  runState: EffRunState; dryRun: boolean;
+  targets: Record<string, unknown>[];
+  before: Record<string, unknown> | null; after: Record<string, unknown> | null;
+  steps: EffRunStep[]; logLines: string;
+  summary: Record<string, unknown> | null; error: string | null; rollbackOf: string | null;
+  queuedAt: string | null; startedAt: string | null; finishedAt: string | null; durationMs: number;
+}
+export interface EffNsSeriesPoint {
+  t: number; cpuReq: number | null; cpuUse: number | null; cpuQuota: number | null; cpuQuotaUsed: number | null;
+  memReq: number | null; memUse: number | null; memQuota: number | null; memQuotaUsed: number | null;
+  pods: number | null; n: number;
+}
+export interface EffNsSeries { namespace: string; range: string; step: number; points: EffNsSeriesPoint[] }
+export interface EffRankingItem {
+  namespace: string; avgEfficiency: number | null; avgReq: number; avgUse: number; avgSlack: number;
+  trend: 'up' | 'down' | 'flat' | null; points: { t: number; eff: number | null }[];
+}
+export interface EffRanking { range: string; metric: 'cpu' | 'mem'; step: number; items: EffRankingItem[]; total: number }
+export interface EffNsSummaryItem {
+  namespace: string; sampledAt: string; podCount: number; workloadCount: number;
+  cpuReqM: number; memReqB: number; cpuUseM: number | null; memUseB: number | null; usageSource: string;
+  quotaName: string | null; quotaHardCpuM: number | null; quotaHardMemB: number | null;
+  quotaUsedCpuM: number | null; quotaUsedMemB: number | null;
+}
+export interface EffQuotaItem {
+  namespace: string; name: string; hardCpuM: number | null; hardMemB: number | null; usedCpuM: number | null; usedMemB: number | null;
 }
 
 export interface AllocWorkloadRow {

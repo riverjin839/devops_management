@@ -217,11 +217,12 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 | `cluster-item-dispatcher` | 매시 :00 | 클러스터 아이템 점검 |
 | `arch-doc-sync-dispatcher` | 매분 | 서비스 아키텍처 문서 현행화 (AppSetting cron 평가 → `sync_all_architecture_docs`) |
 | `weekly-report-dispatcher` | 매분 | 주간보고 자동 생성·Confluence 게시 (AppSetting cron 평가, 기본 금 17:00) |
+| `k8s-efficiency-dispatcher` | 매분 | K8S 자원 효율화 — 클러스터별 cron(AppSetting `k8s_efficiency.schedule`, 기본 10분) 평가 → NS/워크로드 request·usage·quota 샘플 수집 + 추천 생성 + opt-in NS 자동화 팬아웃 |
 
 태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
 `dispatch_resource_count_snapshot`, `run_cluster_item_dispatcher`,
 `dispatch_architecture_doc_sync`), 수집류(`collect_resource_counts`, `run_trend_collect`,
-`sync_all_architecture_docs`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`, `run_auto_incident_analysis` — 전용 `llm` 큐),
+`sync_all_architecture_docs`, `collect_k8s_efficiency_one` — 태스크 단위 `time_limit=900`), 실행류(`run_single_check`, `run_batch_job`, `run_ops_check_batch`, `run_k8s_efficiency_run`(적용/롤백/쿼터/CR 스케일), `run_k8s_efficiency_recommend`, `run_auto_incident_analysis` — 전용 `llm` 큐),
 AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_work_guide_embedding`,
 `compute_ops_note_embedding`, `backfill_embeddings`, `generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
 async 서비스는 `asyncio.new_event_loop()` + `loop.run_until_complete()` 로 브리지한다.
@@ -340,7 +341,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs` |
 | 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `servicenow`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
@@ -369,6 +370,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
+- **자원 효율화**: `k8s_efficiency`(`K8sNamespaceSample`/`K8sWorkloadSample` — Celery 수집 시계열(로그성, `LOG_TABLES`+`log_retention_service` 보존 400일/8일), `K8sRightsizeRecommendation`(컨테이너 request 축소 추천, 재생성 시 open→superseded), `K8sNamespacePolicy`(NS opt-in: auto_rightsize/quota_elastic/`custom_targets` CR 어댑터), `K8sEfficiencyRun`(수집·적용·롤백·쿼터 실행 로그 — steps/log_lines 단계별 커밋, 365일)). 전역 기본값·수집 스케줄은 `AppSetting` `k8s_efficiency.policy_defaults` / `k8s_efficiency.schedule`
 - **플랫폼/자동화**: `batch_job`(+`execution_mode`/`script_id`/`script_version_id` — Phase 2, "script" 모드 잡은 이 FK 로 스크립트를 참조), `bottleneck_run`, `ansible_assets`, `executable_script`(+`executable_script_version` — DB 저장·버전관리되는 Python/Ansible/Shell 스크립트 자산, `/scripts` 화면. `batch_job.script_id` 가 참조 중이면 스크립트 삭제가 409 로 막힌다(`check_matrix_item` 연동은 아직 없음, Phase 3 예정). `current_version_id` 는 `executable_script_versions` 를 순환 참조하는 FK 라 `use_alter=True` 로 생성됨에 유의)
 - **사용자/설정**: `user`, `user_setting`, `user_jira_credential`, `user_notification`, `app_setting`, `audit_log`, `island`(Your Island 커스텀 화면), `saved_script`(bulk-exec 재사용 사용자별 bash/python 스크립트)
 

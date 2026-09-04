@@ -2,7 +2,11 @@
 
 - **감사일**: 2026-07-30
 - **1차 수정 반영(2026-07-30)**: 아래 표의 **P0/P1** 항목 대부분을 이번 배치에서 코드 수정
-  완료(상태 열 참고). **P2/백로그**는 아직 미착수 — 후속 작업 참고용으로 기록만 해둔다.
+  완료(상태 열 참고).
+- **2차 수정 반영(2026-09)**: 운영에서 재현된 **502 빈발·화면 흔들림·대형 클러스터(369노드) 지연**의
+  근본 원인이던 BE-15(프로세스 로컬 스냅샷 × HPA 다중 replica)·BE-1(E8)(pods-summary 전량 단일 요청)을
+  포함해 P2 효율화 항목 대부분을 수정(상태 열 `수정됨(2026-09)`). 프론트는 502 GET 재시도, 카드 프레임
+  고정(early return 제거), 진행 슬롯 고정, 집계 중 정렬 동결, 노드 뷰 가상화로 흔들림을 없앴다.
 - **대상 화면**: K8S 자원 관리(`/k8s-allocation`, `/k8s-allocation/:clusterId`) — 노드/네임스페이스별
   request 대비 실사용량(slack) 진단, 용량 계획 화면 (`docs/SCREENS.md` §K8S 자원 관리)
 - **대상 코드**:
@@ -109,8 +113,8 @@ degrade — 설계 의도 자체는 맞다). 문제는 `SnapshotManager` 가 완
 | BE-8 | `allocation_node_refresh` 의 pod LIST 가 무방비 — RBAC 403/필드셀렉터 오류가 502 대신 raw 500 으로 노출. try/except + 502 매핑 추가. | **수정됨** |
 | BE-11 | 구조화된 `HTTPException`(422 "kubeconfig 미등록")이 백그라운드 스레드 안에서 발생하면 `snapshot_jobs.py` 가 이를 뭉개고 502 "자원 집계 실패: 422: ..." 로 재포장 — 원인 불명확 + 원시 예외 텍스트 노출. | 백로그 |
 | BE-12 | 요청 스코프 SQLAlchemy 세션에서 로드한 `cluster` 객체를 백그라운드 스레드에서 접근(detached instance) — 오늘은 우연히 동작하지만 향후 커밋 경로가 추가되면 `DetachedInstanceError` 위험. | 백로그 |
-| BE-14 | `_CACHE`(드릴다운 20초 TTL)가 무제한 성장 + 클러스터 삭제/kubeconfig 로테이션 시 무효화 안 됨 — raw Pod 객체를 캐시하지 않는다는 모듈 docstring과도 모순. | 백로그 |
-| BE-15 | 멀티 replica(prod `replicaCount: 2`) 환경에서 `_overview_mgr`/`_CACHE` 가 프로세스 로컬 — 폴링이 서로 다른 파드에 번갈아 맞으면 진행률이 오락가락하고 apiserver 부하가 2배. | 백로그 (Redis 등 공유 캐시 필요 — 별도 설계) |
+| BE-14 | `_CACHE`(드릴다운 20초 TTL)가 무제한 성장 + 클러스터 삭제/kubeconfig 로테이션 시 무효화 안 됨 — raw Pod 객체를 캐시하지 않는다는 모듈 docstring과도 모순. → 크기 상한(`K8S_ALLOC_DRILL_CACHE_MAX`) + 클러스터 삭제 시 `invalidate_cluster_cache` 호출. | **수정됨(2026-09)** |
+| BE-15 | 멀티 replica(prod `replicaCount: 2`, HPA 최대 10) 환경에서 `_overview_mgr`/`_CACHE` 가 프로세스 로컬 — 폴링이 서로 다른 파드에 번갈아 맞으면 진행률이 오락가락하고 apiserver 부하가 N배. **502/화면 흔들림의 근본 원인.** → `SnapshotManager` 에 Redis 공유 스토어(`_RedisStore`, `SET NX` 락으로 클러스터당 빌더 1개, meta/partial/result 공유, Redis 불가 시 memory 폴백) 도입. `K8S_ALLOC_SNAPSHOT_BACKEND`. | **수정됨(2026-09)** |
 | BE-17 | `summary.namespace_count`(전체 NS)와 `items`(활성 파드 있는 NS만)의 분모가 다름, `summary.pod_count` 와 `Σ node.pod_count` 가 Pending 파드 포함 여부로 어긋남, `metrics_available` 필드가 nodes/namespaces 엔드포인트에서 서로 다른 의미로 재사용됨 — 필드 자체의 재설계가 필요해 이번 배치 범위 밖. | 백로그 |
 
 ### 프론트엔드
@@ -135,15 +139,15 @@ degrade — 설계 의도 자체는 맞다). 문제는 `SnapshotManager` 가 완
 
 | ID | 요약 |
 |---|---|
-| E1 | 1.5초 computing 폴링마다 루트 컴포넌트가 `nsQ`/`nodesQ` 를 직접 구독해 페이지 전체(요약·POD 카드·활성 뷰 전부)가 리렌더된다. progress 전용 경량 셀렉터로 분리하면 완화. |
-| E2 | `NodesView` 카드/테이블 뷰에 페이지네이션·가상화가 없다. 364노드급 클러스터에서 `GaugeRow`/`MeterBar`/`UtilPct` 가 매 폴링마다 전량 리렌더 — `React.memo` + 가상 스크롤 필요. |
-| E5/E6 | 드릴다운 쿼리(`useAllocWorkloads`/`useAllocPods`)가 전역 `refetchOnWindowFocus:true` 를 상속해 알트탭 복귀 시 펼쳐진 행 수만큼 동시 재요청. `enabled` 인자도 항상 `true` 로 호출돼 사문화(마운트/언마운트로만 lazy 를 구현 중). |
-| E7 | `usePodsSummary` 가 자동갱신/강제새로고침 대상에서 빠져 있어 POD 용량/상태 카드가 클러스터 요약 카드보다 최대 수십 초 뒤처질 수 있다. |
-| E8 | `forceRefresh` 가 nodes/namespaces 두 엔드포인트를 각각 `refresh=1` 로 호출하지만 백엔드에선 동일 스냅샷 키(`{cid}:overview`)를 공유 — 사실상 1번으로 충분. |
+| E1 | 1.5초 computing 폴링마다 루트 컴포넌트가 `nsQ`/`nodesQ` 를 직접 구독해 페이지 전체가 리렌더된다. → `useAllocProgress`(`select` 로 진행 메타만 구독). **수정됨(2026-09)** |
+| E2 | `NodesView` 카드/테이블 뷰에 페이지네이션·가상화가 없다. → 48행 초과 시 `react-virtuoso`(`VirtuosoGrid`/`TableVirtuoso`) 가상 스크롤 + `NodeCard`/`NodeRowCells`/`GaugeRow` `React.memo`, 집계 중 정렬 동결(`useTableSort frozen`). **수정됨(2026-09)** |
+| E5/E6 | 드릴다운 쿼리(`useAllocWorkloads`/`useAllocPods`)가 전역 `refetchOnWindowFocus:true` 를 상속해 알트탭 복귀 시 펼쳐진 행 수만큼 동시 재요청. → `refetchOnWindowFocus:false` + `keepPreviousData`. **수정됨(2026-09)** (`enabled` 인자 사문화는 그대로) |
+| E7 | `usePodsSummary` 가 자동갱신/강제새로고침 대상에서 빠져 있어 POD 카드가 뒤처짐. → 같은 스냅샷에서 파생(`/allocation/pods-summary`) + `useForceAllocRefresh` 에 포함. **수정됨(2026-09)** |
+| E8 | `forceRefresh` 가 nodes/namespaces 두 엔드포인트를 각각 `refresh=1` 로 호출 — 동일 스냅샷 키라 1번으로 충분. → namespaces 만 `refresh=1`. **수정됨(2026-09)** |
 | E3/E4/E9 | 정렬 tiebreak 의 `localeCompare` 비용, export 클로저 재생성, 1358줄 단일 파일(`NodesView`/`NamespacesView`/공용 테이블 프리미티브 분리 여지). |
-| BE-1(E) | 백엔드 LIST 가 `resource_version="0"` 을 전혀 안 써서 매 스냅샷이 etcd quorum read — 대형 클러스터에서 가장 저렴한 단일 최적화. |
-| BE-1(E2) | `allocation_node_refresh` 가 노드 1개 갱신에 cluster-wide metrics 를 조회(N+1) — `get_cluster_custom_object(...,"nodes",node)` 단건 조회로 대체 가능. |
-| BE-1(E8) | `pods-summary`(`k8s_resources.py`)가 페이지네이션 없이 전체 Pod 를 단일 60초 타임아웃 요청으로 조회 — `k8s_paging` 재사용 권장. `/k8s-allocation` 진입 시 allocation 스냅샷과 동시에 별도의 전량 Pod 순회가 한 번 더 발생하는 구조. |
+| BE-1(E) | 백엔드 LIST 가 `resource_version="0"` 을 전혀 안 써서 매 스냅샷이 etcd quorum read. → 노드/네임스페이스 목록에만 적용. **Pod 순회에는 쓰지 않는다** — RV=0 은 apiserver 가 `limit` 을 무시하고 전량을 한 응답으로 돌려주므로 OOM(→502)이 재현된다(`k8s_paging` docstring·테스트로 고정). **부분 수정(2026-09)** |
+| BE-1(E2) | `allocation_node_refresh` 가 노드 1개 갱신에 cluster-wide metrics 를 조회(N+1). → `_node_usage_one`(단건 GET). **수정됨(2026-09)** |
+| BE-1(E8) | `pods-summary`(`k8s_resources.py`)가 페이지네이션 없이 전체 Pod 를 단일 60초 타임아웃 요청으로 조회 — ingress `proxy-read-timeout: 60` 과 겹쳐 **502 의 직접 원인**. → 화면은 스냅샷 파생 `GET /k8s/{id}/allocation/pods-summary` 로 이전(전수 순회 1회로 통합), 구 경로는 `k8s_paging` 스트리밍으로 교체(호환용). **수정됨(2026-09)** |
 
 ---
 

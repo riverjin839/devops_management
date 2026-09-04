@@ -66,6 +66,10 @@ LOG_TABLES: frozenset[str] = frozenset({
     # AI 챗봇 대화 이력 — 로그성.
     "agent_conversations",
     "agent_messages",
+    # k8s 자원 효율화 — 샘플 시계열/실행 로그(대용량).
+    "k8s_ns_samples",
+    "k8s_workload_samples",
+    "k8s_efficiency_runs",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

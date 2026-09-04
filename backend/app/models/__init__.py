@@ -1,4 +1,7 @@
 from app.models.cluster import Cluster, StatusEnum
+from app.models.k8s_efficiency import (
+    K8sEfficiencyRun, K8sNamespacePolicy, K8sNamespaceSample, K8sRightsizeRecommendation, K8sWorkloadSample,
+)
 from app.models.addon import Addon
 from app.models.check_log import CheckLog
 from app.models.daily_check import DailyCheckLog, CheckScheduleType
@@ -172,4 +175,9 @@ __all__ = [
     "CheckMatrixSourceType",
     "CheckMatrixTrigger",
     "SavedScript",
+    "K8sNamespaceSample",
+    "K8sWorkloadSample",
+    "K8sRightsizeRecommendation",
+    "K8sNamespacePolicy",
+    "K8sEfficiencyRun",
 ]

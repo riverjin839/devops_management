@@ -155,6 +155,11 @@ ingress:
   enabled: true
   className: nginx
   host: k8s-monitor.local
+  # (옵션) 다중 replica 에서 폴링을 같은 파드로 보내는 세션 어피니티. 자원 관리 스냅샷은 Redis 로
+  # 공유되므로 기본 불필요 — Redis 없이 운영할 때만 아래를 켠다.
+  #   nginx.ingress.kubernetes.io/affinity: "cookie"
+  #   nginx.ingress.kubernetes.io/affinity-mode: "balanced"
+  #   nginx.ingress.kubernetes.io/session-cookie-name: "pep_route"
   annotations: {}
 
 # ============================================

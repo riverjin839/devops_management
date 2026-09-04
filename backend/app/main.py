@@ -69,6 +69,7 @@ from app.routers import (
     ops_check_router,
     k8s_resources_router,
     k8s_allocation_router,
+    k8s_efficiency_router,
     k8s_helm_router,
     k8s_exec_router,
     k9s_ssh_router,
@@ -1166,6 +1167,10 @@ def _run_migrations():
         _safe_create_index("ix_check_logs_checked_at", "check_logs", "(checked_at)")
     if "user_notifications" in inspector.get_table_names():
         _safe_create_index("ix_user_notifications_created_at", "user_notifications", "(created_at)")
+        # k8s 효율화 샘플/실행 로그 — purge(log_retention_service) 가 sampled_at/queued_at 로 스캔.
+        _safe_create_index("ix_k8s_ns_samples_at", "k8s_ns_samples", "(sampled_at)")
+        _safe_create_index("ix_k8s_wl_samples_at", "k8s_workload_samples", "(sampled_at)")
+        _safe_create_index("ix_k8s_eff_runs_queued", "k8s_efficiency_runs", "(queued_at)")
 
 
 def _sync_missing_model_columns() -> None:
@@ -2172,6 +2177,7 @@ app.include_router(ops_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(k8s_resources_router, prefix="/api/v1", dependencies=_auth)
 # k8s-allocation (자원 관리) — 노드/NS/워크로드/파드 단위 request vs 사용량(slack) 가시화(읽기 전용).
 app.include_router(k8s_allocation_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(k8s_efficiency_router, prefix="/api/v1", dependencies=_auth)
 # cluster-trends — per-node 메트릭 추이(Prometheus range query, 노드 명시선택+상한).
 app.include_router(cluster_trends_router, prefix="/api/v1", dependencies=_auth)
 # helm 릴리스 뷰어(읽기 전용).

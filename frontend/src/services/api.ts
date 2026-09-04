@@ -84,6 +84,25 @@ api.interceptors.request.use(
   }
 );
 
+// GET 재시도 — 게이트웨이 502/503/504 와 네트워크 단절은 대개 일시적(replica 롤링, ingress
+// 업스트림 교체, 백엔드 재기동)이라 짧은 백오프로 2회 재시도한다. 멱등한 GET 에만 적용하고
+// 타임아웃(ECONNABORTED)·취소는 재시도하지 않는다. config.__noRetry 로 개별 opt-out.
+type RetryConfig = InternalAxiosRequestConfig & { __retryCount?: number; __noRetry?: boolean };
+const RETRY_STATUSES = new Set([502, 503, 504]);
+const RETRY_DELAYS_MS = [500, 1500];
+function retryDelay(error: unknown): number | null {
+  const err = error as { config?: RetryConfig; response?: { status?: number }; code?: string } | undefined;
+  const cfg = err?.config;
+  if (!cfg || cfg.__noRetry || (cfg.method ?? 'get').toLowerCase() !== 'get') return null;
+  const status = err?.response?.status;
+  const network = !err?.response && err?.code !== 'ECONNABORTED' && err?.code !== 'ERR_CANCELED';
+  if (!(status != null && RETRY_STATUSES.has(status)) && !network) return null;
+  const n = cfg.__retryCount ?? 0;
+  if (n >= RETRY_DELAYS_MS.length) return null;
+  cfg.__retryCount = n + 1;
+  return RETRY_DELAYS_MS[n];
+}
+
 // Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
@@ -102,7 +121,12 @@ api.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
+    const delay = retryDelay(error);
+    if (delay != null) {
+      await new Promise((r) => setTimeout(r, delay));
+      return api.request(error.config as RetryConfig);
+    }
     // 401 from any endpoint other than the login itself means the token is
     // missing/expired/invalid — drop the session so AuthGate routes back to
     // the login screen. Login's own 401 (bad credentials) is left for the
@@ -2402,6 +2426,55 @@ export const k8sAllocationApi = {
       `/k8s/${clusterId}/allocation/namespaces/${namespace}/workloads/${kind}/${name}/pods`,
       { timeout: 120_000 },
     ),
+  /** POD 용량/상태 — 개요 스냅샷에서 파생(요청 스레드가 apiserver 를 치지 않음). 구
+   * `k8sResourcesApi.podsSummary`(전량 Pod 60초 요청)를 대체한다. */
+  podsSummary: (clusterId: string, refresh = false) =>
+    api.get<import('@/types').K8sPodsSummaryResponse>(
+      `/k8s/${clusterId}/allocation/pods-summary`,
+      { params: refresh ? { refresh: true } : undefined, timeout: 30_000 },
+    ),
+};
+
+// ── K8S 자원 효율화 (히스토리/추천/정책/실행) ─────────────────────────────────
+export const k8sEfficiencyApi = {
+  schedule: () => api.get<import('@/types').EffSchedule>('/k8s/efficiency/schedule'),
+  putSchedule: (body: { enabled: boolean; defaultCron: string; clusters?: Record<string, { enabled: boolean; cron: string | null }> }) =>
+    api.put<import('@/types').EffSchedule>('/k8s/efficiency/schedule', body),
+  policyDefaults: () => api.get<import('@/types').EffPolicyDefaults>('/k8s/efficiency/policy-defaults'),
+  putPolicyDefaults: (body: Partial<import('@/types').EffPolicyDefaults>) =>
+    api.put<import('@/types').EffPolicyDefaults>('/k8s/efficiency/policy-defaults', body),
+  run: (runId: string) => api.get<import('@/types').EffRun>(`/k8s/efficiency/runs/${runId}`, { timeout: 15_000 }),
+  rollback: (runId: string) => api.post<{ runId: string; taskId: string | null }>(`/k8s/efficiency/runs/${runId}/rollback`),
+  runs: (clusterId: string, runType?: string, limit = 30) =>
+    api.get<{ count: number; items: import('@/types').EffRun[] }>(`/k8s/${clusterId}/efficiency/runs`,
+      { params: { limit, ...(runType ? { run_type: runType } : {}) } }),
+  collect: (clusterId: string) => api.post<{ runId: string; taskId: string | null }>(`/k8s/${clusterId}/efficiency/collect`),
+  nsSeries: (clusterId: string, namespace: string, range: string) =>
+    api.get<import('@/types').EffNsSeries>(`/k8s/${clusterId}/efficiency/history/namespaces`, { params: { namespace, range } }),
+  ranking: (clusterId: string, range: string, metric: 'cpu' | 'mem', top = 10) =>
+    api.get<import('@/types').EffRanking>(`/k8s/${clusterId}/efficiency/history/ranking`, { params: { range, metric, top } }),
+  summary: (clusterId: string) =>
+    api.get<{ count: number; items: import('@/types').EffNsSummaryItem[] }>(`/k8s/${clusterId}/efficiency/history/summary`),
+  quotas: (clusterId: string) =>
+    api.get<{ count: number; items: import('@/types').EffQuotaItem[] }>(`/k8s/${clusterId}/efficiency/quotas`, { timeout: 60_000 }),
+  recommendations: (clusterId: string, status = 'open', namespace?: string) =>
+    api.get<import('@/types').EffRecommendationsResponse>(`/k8s/${clusterId}/efficiency/recommendations`,
+      { params: { status, ...(namespace ? { namespace } : {}) } }),
+  generate: (clusterId: string) => api.post<{ runId: string; taskId: string | null }>(`/k8s/${clusterId}/efficiency/recommendations/generate`),
+  dismiss: (clusterId: string, recId: string) =>
+    api.post<import('@/types').EffRecommendation>(`/k8s/${clusterId}/efficiency/recommendations/${recId}/dismiss`),
+  apply: (clusterId: string, body: { recommendationIds: string[]; dryRun: boolean }) =>
+    api.post<{ runId: string; taskId: string | null; targets: Record<string, unknown>[] }>(`/k8s/${clusterId}/efficiency/apply`, body),
+  quotaAdjust: (clusterId: string, body: { namespace: string; cpuM?: number | null; memB?: number | null; dryRun: boolean }) =>
+    api.post<{ runId: string; taskId: string | null }>(`/k8s/${clusterId}/efficiency/quota/adjust`, body),
+  customScale: (clusterId: string, body: { namespace: string; targetIndex: number; value: number; dryRun: boolean }) =>
+    api.post<{ runId: string; taskId: string | null }>(`/k8s/${clusterId}/efficiency/custom-targets/scale`, body),
+  policies: (clusterId: string) =>
+    api.get<{ count: number; items: import('@/types').EffNamespacePolicy[] }>(`/k8s/${clusterId}/efficiency/policies`),
+  putPolicy: (clusterId: string, namespace: string, body: import('@/types').EffNamespacePolicyBody) =>
+    api.put<import('@/types').EffNamespacePolicy>(`/k8s/${clusterId}/efficiency/policies/${encodeURIComponent(namespace)}`, body),
+  deletePolicy: (clusterId: string, namespace: string) =>
+    api.delete(`/k8s/${clusterId}/efficiency/policies/${encodeURIComponent(namespace)}`),
 };
 
 // ── Helm 릴리스 뷰어 (읽기 전용) ─────────────────────────────────────────────

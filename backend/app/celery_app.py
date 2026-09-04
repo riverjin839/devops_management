@@ -95,6 +95,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_weekly_report",
         "schedule": crontab(minute="*"),
     },
+    # K8S 자원 효율화 — NS/워크로드 request·usage·quota 샘플 수집(클러스터별 cron, 기본 10분)
+    # + 추천 생성 + opt-in NS 자동화 평가. 매분 디스패처가 클러스터별 due 를 평가해 팬아웃.
+    "k8s-efficiency-dispatcher": {
+        "task": "app.celery_app.dispatch_k8s_efficiency_collect",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 
@@ -1471,5 +1477,232 @@ def backfill_embeddings(self):
                     db.rollback()
                     stats["errors"] += 1
         return stats
+    finally:
+        db.close()
+
+
+# ── K8S 자원 효율화 (수집 → 추천 → 자동화 / 적용·롤백 실행) ───────────────────────
+@celery_app.task(bind=True, name="app.celery_app.dispatch_k8s_efficiency_collect", ignore_result=True)
+def dispatch_k8s_efficiency_collect(self):
+    """클러스터별 effective cron(전역 기본 + 오버라이드)을 croniter 로 평가해 due 한 클러스터만
+    `collect_k8s_efficiency_one` 으로 팬아웃(직렬 아님 — 대형 클러스터가 다른 클러스터를 막지 않게)."""
+    import logging
+    from datetime import datetime, timedelta, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services.k8s_efficiency import settings as effcfg
+
+    log = logging.getLogger(__name__)
+    try:
+        from croniter import croniter
+    except ImportError:
+        return {"dispatched": [], "reason": "croniter_missing"}
+    try:
+        tz = ZoneInfo(settings.batch_jobs_timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        tz = ZoneInfo("Asia/Seoul")
+
+    db = SessionLocal()
+    fired: list[str] = []
+    try:
+        sch = effcfg.get_schedule(db)
+        if not sch.get("enabled"):
+            return {"dispatched": [], "reason": "disabled"}
+        now_aware = datetime.now(_tz.utc).astimezone(tz)
+        now_naive = now_aware.replace(tzinfo=None)
+        for cluster in db.query(Cluster).all():
+            enabled, cron_expr, last = effcfg.effective_cron(sch, str(cluster.id))
+            if not enabled or not croniter.is_valid((cron_expr or "").strip()):
+                continue
+            anchor = now_naive - timedelta(days=1)
+            if last:
+                try:
+                    anchor = datetime.fromisoformat(last).astimezone(tz).replace(tzinfo=None)
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                next_fire = croniter(cron_expr.strip(), anchor).get_next(datetime)
+            except Exception:  # noqa: BLE001
+                continue
+            if next_fire > now_naive:
+                continue
+            collect_k8s_efficiency_one.delay(str(cluster.id))
+            effcfg.mark_cluster_run(db, str(cluster.id), datetime.now(_tz.utc).isoformat())
+            fired.append(cluster.name)
+        if fired:
+            log.info("k8s efficiency collect dispatched: %s", fired)
+        return {"dispatched": fired, "fired_at": now_aware.isoformat()}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.collect_k8s_efficiency_one",
+                 time_limit=900, soft_time_limit=840)
+def collect_k8s_efficiency_one(self, cluster_id: str, run_id: str | None = None, triggered_by: str | None = None):
+    """단일 클러스터 수집 → 추천 생성 → 자동화 평가. 실행 로그(K8sEfficiencyRun)에 단계/로그 기록.
+    전역 task_time_limit(300s)은 369노드급 전수 순회에 부족해 태스크 단위로 늘린다."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.models.k8s_efficiency import K8sEfficiencyRun
+    from app.services import audit_logger
+    from app.services.k8s_efficiency import automation as effauto
+    from app.services.k8s_efficiency import engine as effengine
+    from app.services.k8s_efficiency import settings as effcfg
+    from app.services.k8s_efficiency.collector import STEP_PLAN, collect_cluster
+    from app.services.k8s_efficiency.runs import RunLogger, create_run
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if cluster is None:
+            return {"error": "cluster not found", "cluster_id": cluster_id}
+        run = db.query(K8sEfficiencyRun).filter(K8sEfficiencyRun.id == run_id).first() if run_id else None
+        if run is None:
+            run = create_run(db, cluster.id, "collect", trigger="schedule", triggered_by=triggered_by,
+                             step_plan=STEP_PLAN + [{"id": "recommend", "label": "추천 생성"},
+                                                    {"id": "automation", "label": "자동화 평가"}])
+        run.celery_task_id = getattr(self.request, "id", None)
+        rl = RunLogger(db, run)
+        rl.start()
+        rl.log(f"클러스터 {cluster.name} 수집 시작")
+        result: dict = {}
+        try:
+            result = collect_cluster(db, cluster, log=rl.log, step=rl.step)
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            log.exception("k8s efficiency collect failed cluster=%s", cluster_id)
+            rl.log(f"수집 실패: {str(e)[:300]}")
+            rl.finish("failed", error=str(e)[:300])
+            return {"error": str(e)[:200], "cluster_id": cluster_id, "run_id": str(run.id)}
+
+        defaults = effcfg.get_policy_defaults(db)
+        rl.step("recommend", "running", None)
+        try:
+            rec = effengine.generate(db, cluster, defaults, log=rl.log)
+            rl.step("recommend", "success", f"generated={rec.get('generated')} source={rec.get('usage_source')}")
+            result["recommendations"] = rec
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            log.exception("k8s efficiency recommend failed cluster=%s", cluster_id)
+            rl.log(f"추천 생성 실패: {str(e)[:300]}")
+            rl.step("recommend", "failed", str(e)[:300])
+
+        rl.step("automation", "running", None)
+        try:
+            auto = effauto.dispatch_auto(
+                db, cluster, defaults, log=rl.log,
+                enqueue=lambda rid: run_k8s_efficiency_run.delay(str(rid)),
+            )
+            rl.step("automation", "success" if auto.get("runs") else "skipped",
+                    f"runs={len(auto.get('runs') or [])}" if not auto.get("skipped") else auto["skipped"])
+            result["automation"] = auto
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            log.exception("k8s efficiency automation failed cluster=%s", cluster_id)
+            rl.log(f"자동화 평가 실패: {str(e)[:300]}")
+            rl.step("automation", "failed", str(e)[:300])
+
+        state = "succeeded" if "recommendations" in result else "partial"
+        rl.log(f"완료 — NS {result.get('namespaces')} / 워크로드 {result.get('workloads')} / {result.get('elapsed_ms')}ms")
+        rl.finish(state, summary=result)
+        audit_logger.record(db, action="k8s.efficiency.collect.run", actor_username=triggered_by or "scheduler",
+                            status="success" if state == "succeeded" else "failure", target_type="cluster",
+                            target_id=str(cluster.id), details={"run_id": str(run.id), **{k: v for k, v in result.items() if k != "recommendations"}})
+        return {"cluster": cluster.name, "run_id": str(run.id), **result}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_k8s_efficiency_recommend", time_limit=600)
+def run_k8s_efficiency_recommend(self, run_id: str):
+    """추천만 재생성(수집 없이) — 수동 "추천 재생성" 버튼."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.models.k8s_efficiency import K8sEfficiencyRun
+    from app.services.k8s_efficiency import engine as effengine
+    from app.services.k8s_efficiency import settings as effcfg
+    from app.services.k8s_efficiency.runs import RunLogger
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        run = db.query(K8sEfficiencyRun).filter(K8sEfficiencyRun.id == run_id).first()
+        if run is None:
+            return {"error": "run not found"}
+        cluster = db.query(Cluster).filter(Cluster.id == run.cluster_id).first()
+        rl = RunLogger(db, run)
+        rl.start()
+        rl.step("recommend", "running", None)
+        try:
+            rec = effengine.generate(db, cluster, effcfg.get_policy_defaults(db), log=rl.log)
+            rl.step("recommend", "success", f"generated={rec.get('generated')} source={rec.get('usage_source')}")
+            rl.finish("succeeded", summary=rec)
+            return rec
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            log.exception("recommend failed run=%s", run_id)
+            rl.log(f"추천 생성 실패: {str(e)[:300]}")
+            rl.step("recommend", "failed", str(e)[:300])
+            rl.finish("failed", error=str(e)[:300])
+            return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_k8s_efficiency_run", time_limit=600)
+def run_k8s_efficiency_run(self, run_id: str):
+    """적용/롤백/쿼터 조정/CR 스케일 run 실행 — apply.execute_run + 감사 기록."""
+    import logging
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.models.k8s_efficiency import K8sEfficiencyRun, K8sNamespacePolicy
+    from app.services import audit_logger
+    from app.services.k8s_efficiency.apply import execute_run
+
+    log = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        run = db.query(K8sEfficiencyRun).filter(K8sEfficiencyRun.id == run_id).first()
+        if run is None:
+            return {"error": "run not found"}
+        if run.run_state not in ("queued",):
+            return {"error": f"run already {run.run_state}"}
+        cluster = db.query(Cluster).filter(Cluster.id == run.cluster_id).first()
+        run.celery_task_id = getattr(self.request, "id", None)
+        db.commit()
+        try:
+            execute_run(db, run, cluster)
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            log.exception("efficiency run failed run=%s", run_id)
+            run.run_state = "failed"
+            run.error = str(e)[:1000]
+            db.commit()
+        # CR 어댑터 적용 성공 시 정책의 current 값을 갱신(다음 자동화 판단 기준).
+        if run.run_state in ("succeeded", "partial") and not run.dry_run:
+            for i, t in enumerate(run.targets or []):
+                if t.get("type") == "custom_resource" and str(i) in (run.after or {}):
+                    idx = t.get("policy_target_index")
+                    pol = (db.query(K8sNamespacePolicy)
+                           .filter(K8sNamespacePolicy.cluster_id == run.cluster_id,
+                                   K8sNamespacePolicy.namespace == t.get("namespace")).first())
+                    if pol is not None and idx is not None and idx < len(pol.custom_targets or []):
+                        ct = list(pol.custom_targets)
+                        ct[idx] = {**ct[idx], "current": t.get("value")}
+                        pol.custom_targets = ct
+                        db.commit()
+        audit_logger.record(db, action=f"k8s.efficiency.{run.run_type}.run",
+                            actor_username=run.triggered_by or "automation",
+                            status="success" if run.run_state == "succeeded" else "failure",
+                            target_type="cluster", target_id=str(run.cluster_id),
+                            details={"run_id": str(run.id), "trigger": run.trigger, "dry_run": run.dry_run,
+                                     "summary": run.summary, "error": run.error})
+        return {"run_id": str(run.id), "state": run.run_state, "summary": run.summary}
     finally:
         db.close()
