@@ -96,6 +96,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - 운영 매뉴얼: `docs/CHECK_MATRIX_GUIDE.md` (화면 내 `CheckMatrixHelpPanel` 과 동일 내용의 상세판).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+  - **[2026-09-08, D-061~D-065]** 이 화면(플랫폼 현황 탭)을 로그인 직후 첫 화면으로: 홈 기본 탭 `work`→`platform` 전환 + 네비게이션에 진입 경로 추가. 행의 소스 배지("핵심/Deep/Addon/수동")를 실행 기술(K8s API/kubectl/HTTP/PromQL/스냅샷/SSH bash·python/Ansible) × 컴포넌트(기존 category) 2축으로 재명명. 클러스터 열 헤더·행 이름에 드릴다운 링크 추가(`/clusters/:id`, `/checks/:itemId` 신설). 항목 추가를 "실행기술→종류→컴포넌트→값→테스트(필수)→적용" 마법사로 재구성. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250)
 
 ### Your Island (`/island`)
 
@@ -208,6 +209,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - Daily Report(.md/.csv) 익스포트, Kubeconfig 편집 모달.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+  - **[2026-09-08, D-067]** `Cluster Status` 카드 상단에 종합 상태 원인 1줄(예: "심층 점검 cert_expiry 12일")과 "점검 허브로" 링크 추가 — writer 2곳(기본점검·애드온)이 서로 덮어쓰고 심층 점검은 반영되지 않는 문제를 단일 롤업 서비스(`cluster_status_service.recompute()`)로 해소한 뒤 노출. 상세: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §5·§10
 
 ### K8s 상세 관리 (`/k8s-manage`, `/k8s-manage/:clusterId`)
 
@@ -409,6 +411,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - 항목별 상세 로그(JSON details) 모달.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+  - **[2026-09-08, D-063·D-066]** 이 화면을 `/clusters/:id` 클러스터 상세로 승격: 헤더에 종합 상태+원인 카드 추가, 카탈로그에 core_bundle(기본 점검) 행 포함, 카탈로그 소스에 배치잡(SSH)·플레이북(Ansible) 편입(`ops_check_service.py` 의 "단계 1 이후" 미구현 어댑터), 행별 설정 편집 딥링크. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §1·§5
 
 ### K8s 로그 — AI 장애 분석 (`/incident-analysis`)
 
@@ -474,6 +477,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - `sort_order` 로 UI 표시 순서 제어.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+  - **[2026-09-08, D-063·D-064·D-065]** 이 화면을 `/checks/:itemId` 항목 상세로 흡수: 탭을 라이프사이클(정의·테스트·적용·실행방식·로그·히스토리) 순으로 재구성, 클러스터별 오버라이드 표(글로벌 값 vs 클러스터 값)를 추가하고 편집 시 클러스터 전용 정의를 copy-on-write 로 자동 생성(현재는 클러스터 전용 정의가 없으면 글로벌 정의를 직접 수정). "미리 실행" 버튼을 매트릭스 항목 등록 마법사의 테스트 단계로도 재사용. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §1·§3·§8
 
 ### Pod 병목 진단 (`/pod-bottleneck`)
 
