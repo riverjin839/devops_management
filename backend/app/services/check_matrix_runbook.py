@@ -473,7 +473,7 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
         return out
 
     if item.source_type == CheckMatrixSourceType.deep_check:
-        from app.services.deep_checkers.registry import REGISTRY, get_step_plan
+        from app.services.registered_checks.registry import REGISTRY, get_step_plan
 
         entry = REGISTRY.get(item.source_ref or "")
         spec = entry[1] if entry else None

@@ -374,7 +374,7 @@ def _fanout_channels(db: Session, event: AlertEvent, channel_ids: list) -> None:
     try:
         import asyncio
 
-        from app.models.deep_check import NotificationChannel
+        from app.models.check_definitions import NotificationChannel
         from app.services.notifier import send_via_channel
 
         subject = _notification_title(event, event.occurrences or 1)

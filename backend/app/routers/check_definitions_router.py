@@ -22,8 +22,8 @@ from app.database import get_db
 from app.models import Cluster, DeepCheckDefinition, DeepCheckResult
 from app.models.user import User
 from app.services.check_matrix_service import validate_cron_min_interval
-from app.services.deep_check_service import DeepCheckService
-from app.services.deep_checkers import REGISTRY, list_check_types
+from app.services.check_definition_runner import DeepCheckService
+from app.services.registered_checks import REGISTRY, list_check_types
 
 router = APIRouter(prefix="/deep-check", tags=["Deep Check Definitions"])
 

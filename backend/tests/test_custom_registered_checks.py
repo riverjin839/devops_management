@@ -6,11 +6,11 @@ custom_http / custom_kubectl / custom_promql 은 admin 이 UI 에서 params 만�
 from types import SimpleNamespace as NS
 
 from app.models import StatusEnum
-from app.services.deep_checkers.base import DeepCheckContext
-from app.services.deep_checkers.custom_http_checker import CustomHttpChecker, _parse_status_range
-from app.services.deep_checkers.custom_kubectl_checker import CustomKubectlChecker
-from app.services.deep_checkers.custom_promql_checker import CustomPromqlChecker
-from app.services.deep_checkers.registry import REGISTRY, get_step_plan, list_check_types
+from app.services.registered_checks.base import DeepCheckContext
+from app.services.registered_checks.custom_http_checker import CustomHttpChecker, _parse_status_range
+from app.services.registered_checks.custom_kubectl_checker import CustomKubectlChecker
+from app.services.registered_checks.custom_promql_checker import CustomPromqlChecker
+from app.services.registered_checks.registry import REGISTRY, get_step_plan, list_check_types
 
 
 # ── registry 계약 ─────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ def test_custom_promql_verdict(monkeypatch):
         def get(self, url, params=None):
             return _FakeResp()
 
-    import app.services.deep_checkers.custom_promql_checker as mod
+    import app.services.registered_checks.custom_promql_checker as mod
     monkeypatch.setattr(mod.httpx, "Client", _FakeClient)
     out = CustomPromqlChecker().safe_run(DeepCheckContext(
         thresholds={"warning_value": 5, "critical_value": 10, "compare": "gte"},

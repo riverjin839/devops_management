@@ -105,7 +105,7 @@ def _validate_item_body(body: ItemIn) -> None:
     if body.source_type == CheckMatrixSourceType.core_bundle:
         raise HTTPException(status_code=400, detail="core_bundle 항목은 시스템에서만 생성/관리됩니다.")
     if body.source_type == CheckMatrixSourceType.deep_check:
-        from app.services.deep_checkers import REGISTRY
+        from app.services.registered_checks import REGISTRY
         if not body.source_ref or body.source_ref not in REGISTRY:
             raise HTTPException(status_code=400, detail=f"알 수 없는 check_type: {body.source_ref}")
     if body.source_type == CheckMatrixSourceType.addon:

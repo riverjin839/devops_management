@@ -44,7 +44,7 @@
 | cluster-admin sprawl | 대상자 수 | 명 |
 | 커스텀 kubectl / PromQL | 측정값 그대로 | (항목 unit) |
 
-대표값 규칙은 `deep_checkers/registry.py` 의 `CELL_VALUE_SPECS` 가 원천이고, 시드 시 항목
+대표값 규칙은 `registered_checks/registry.py` 의 `CELL_VALUE_SPECS` 가 원천이고, 시드 시 항목
 unit 도 여기서 채워진다(구버전 DB 는 부팅 시 자동 보강).
 
 **영역 구분과 행 색** — 행마다 `영역(category)`(k8s/network/storage/os/app 또는 자유 문자열)과
@@ -318,7 +318,7 @@ not found in $PATH`). `etcd_defrag` 와 동일한 이유로 이 점검도 **파�
 ## 8. DB 구조 (Schema Audit)
 
 점검 매트릭스가 소유한 테이블 5개와 실행 시 참조하는 인접 테이블의 관계다. 모델 원천은
-`backend/app/models/check_matrix.py`, 인접 모델은 `deep_check.py` · `addon.py` · `cluster.py`.
+`backend/app/models/check_matrix.py`, 인접 모델은 `check_definitions.py` · `addon.py` · `cluster.py`.
 
 ```mermaid
 erDiagram

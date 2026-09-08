@@ -21,7 +21,7 @@ from app.models import (
     DeepCheckResult,
     StatusEnum,
 )
-from app.services.deep_check_service import DeepCheckService
+from app.services.check_definition_runner import DeepCheckService
 from app.services.review_service import ReviewService
 
 logger = logging.getLogger(__name__)

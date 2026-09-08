@@ -41,7 +41,7 @@ _ADDON_CATEGORY = {
 
 def _deep_check_category(check_type: str) -> str:
     try:
-        from app.services.deep_checkers import REGISTRY
+        from app.services.registered_checks import REGISTRY
         entry = REGISTRY.get(check_type)
         if entry:
             return entry[1].category
@@ -256,7 +256,7 @@ class OpsCheckService:
     def _run_deep_check(
         self, cluster: Optional[Cluster], item: OpsCheckRunItem
     ) -> tuple[StatusEnum, str, Optional[dict], int]:
-        from app.services.deep_check_service import DeepCheckService
+        from app.services.check_definition_runner import DeepCheckService
 
         svc = DeepCheckService(self.db)
         res = svc.run_definition_once(

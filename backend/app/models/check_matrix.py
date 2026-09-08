@@ -32,7 +32,7 @@ from app.models.cluster import StatusEnum
 
 class CheckMatrixSourceType(str, enum.Enum):
     core_bundle = "core_bundle"  # DailyChecker 원자 실행 결과 투영 (cron 은 Cluster.check_cron_expr)
-    deep_check = "deep_check"    # deep_checkers.REGISTRY 의 check_type 실행
+    deep_check = "deep_check"    # registered_checks.REGISTRY 의 check_type 실행
     addon = "addon"              # Addon.type 매칭 실행 (HealthChecker)
     manual = "manual"            # 자동 실행 없음 — 사용자가 값을 직접 입력
 

@@ -1,7 +1,7 @@
 """로그성 테이블 리텐션 정리 — 무한 증가 방지.
 
 ``check_matrix_result_logs``/``deep_check_results`` 는 이미 각자 도메인 서비스
-(``check_matrix_service.purge_expired_logs`` / ``deep_check_service.purge_expired_results``)
+(``check_matrix_service.purge_expired_logs`` / ``check_definition_runner.purge_expired_results``)
 에 청크 삭제 purge 가 있다. 이 모듈은 그 패턴을 나머지 로그성 테이블에도 동일하게
 적용한다 — ``daily_check_logs``/``check_logs``/``k8s_events``/``user_notifications``/
 ``alert_events`` 는 지금까지 purge 대상이 아니어서 무기한 증가했고, ``audit_logs`` 는
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
 from app.models.check_log import CheckLog
-from app.models.daily_check import DailyCheckLog
+from app.models.core_bundle_snapshot import DailyCheckLog
 from app.models.alert_event import AlertEvent
 from app.models.incident_analysis import IncidentAnalysis
 from app.models.agent_conversation import AgentConversation, AgentMessage
@@ -94,7 +94,7 @@ def _purge_daily_check_logs(db: Session, retention_days: int) -> int:
     삭제 대상 배치의 참조만 먼저 NULL 처리해 FK 위반 없이 안전하게 지운다(참조하는
     행 자체는 보존 — 그쪽은 자기 리텐션에 따라 별도로 정리된다).
     """
-    from app.models.deep_check import DeepCheckResult, NotificationLog
+    from app.models.check_definitions import DeepCheckResult, NotificationLog
 
     cutoff = datetime.utcnow() - timedelta(days=retention_days)
     total_deleted = 0

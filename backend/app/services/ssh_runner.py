@@ -303,7 +303,7 @@ def fetch_remote_file(tgt: SSHTarget, remote_path: str, connect_timeout: int,
     SCP 업로드 내용 입력을 채우는 용도라 UTF-8 텍스트만 지원 — 바이너리/디코드
     실패·용량 초과는 error 로 처리한다(그대로 화면에 보여줄 수 없으므로). "연결
     실패인데 이유를 알 수 없다"는 문제를 막기 위해 연결/파일확인/읽기 3단계를
-    각각 batch_jobs 와 동일한 step/command 로그로 남긴다(deep_checkers 패턴 이식,
+    각각 batch_jobs 와 동일한 step/command 로그로 남긴다(registered_checks 패턴 이식,
     이 모듈은 batch_jobs 를 import 하지 않으므로 절차적으로 복사).
     """
     run_start = time.time()

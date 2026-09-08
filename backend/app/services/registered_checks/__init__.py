@@ -2,12 +2,12 @@
 
 Super Pod (centralized 모드) 또는 in_cluster CronJob 에서 실행된다.
 """
-from app.services.deep_checkers.base import (
+from app.services.registered_checks.base import (
     DeepCheckContext,
     DeepCheckOutcome,
     DeepCheckerBase,
 )
-from app.services.deep_checkers.registry import (
+from app.services.registered_checks.registry import (
     REGISTRY,
     DeepCheckTypeSpec,
     get_checker_class,

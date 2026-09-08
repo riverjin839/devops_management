@@ -10,7 +10,7 @@ registry 에 등록만 하면 ① cron(`run_deep_check_all`) ② 운영 점검 �
 카탈로그에 **자동 노출**된다.
 
 ## 절차
-1. **체커 작성** — `backend/app/services/deep_checkers/<name>_checker.py`
+1. **체커 작성** — `backend/app/services/registered_checks/<name>_checker.py`
    - `class XChecker(DeepCheckerBase)`, 클래스 속성 `check_type` / `display_name`.
    - `def run(self, ctx: DeepCheckContext) -> DeepCheckOutcome` 구현. (`safe_run` 이 예외·duration 처리)
    - `ctx.cluster`(Optional), `ctx.thresholds`, `ctx.params`, `ctx.in_cluster` 사용.
@@ -19,7 +19,7 @@ registry 에 등록만 하면 ① cron(`run_deep_check_all`) ② 운영 점검 �
      `ctx.cluster is None`(in_cluster/DB 없음) 이면 `StatusEnum.pending` 으로 종료.
    - 결과: `DeepCheckOutcome(status, message, details)` — status 는 healthy/warning/critical/pending.
    - 예시(스냅샷 비교형): `kernel_param_drift_checker.py` 참고.
-2. **registry 등록** — `backend/app/services/deep_checkers/registry.py`
+2. **registry 등록** — `backend/app/services/registered_checks/registry.py`
    - import 추가 + `REGISTRY` 에 `(Checker, DeepCheckTypeSpec(...))` 항목.
    - `DeepCheckTypeSpec` 에 `category`(os|k8s|storage|network|app), `default_enabled`(위험/무거운 건 False),
      `threshold_fields`/`param_fields`(UI 동적 폼), `default_thresholds`/`default_params`.

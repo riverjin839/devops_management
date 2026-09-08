@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from app.models import StatusEnum
-from app.services.deep_checkers.base import (
+from app.services.registered_checks.base import (
     DeepCheckContext,
     DeepCheckOutcome,
     DeepCheckerBase,

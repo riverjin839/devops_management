@@ -122,7 +122,7 @@ class BatchJobRun(Base):
 
     # 단계별 실행 trace [{id,label,status,detail,metrics,started_ms,duration_ms}] +
     # 실제로 나간 명령 기록 [{kind,command,exit_code,duration_ms,stdout,stderr,truncated}].
-    # deep_checkers 의 ExecutionStep 패턴과 동일 shape — "어느 단계에서 무엇을 하다
+    # registered_checks 의 ExecutionStep 패턴과 동일 shape — "어느 단계에서 무엇을 하다
     # 실패했는지"를 화면 타임라인으로 판독하기 위한 데이터. 출력은 발췌만 저장(상한
     # 은 services/batch_jobs/base.py 의 _OUTPUT_EXCERPT_CHARS/_MAX_RECORDED_COMMANDS).
     steps = Column(JSONB, nullable=True)

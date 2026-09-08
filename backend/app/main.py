@@ -13,7 +13,7 @@ from fastapi import Depends
 from app.routers import (
     agent_router,
     clusters_router,
-    daily_check_router,
+    core_bundle_router,
     health_router,
     history_router,
     node_labels_router,
@@ -57,9 +57,9 @@ from app.routers import (
     ansible_inventories_router,
     auth_router,
     audit_logs_router,
-    deep_check_router,
-    deep_check_ingest_router,
-    deep_check_definitions_router,
+    check_results_router,
+    check_ingest_router,
+    check_definitions_router,
     notifications_router,
     lake_services_router,
     bottleneck_router,
@@ -1484,8 +1484,8 @@ def _seed_default_deep_check_definitions():
     사용자가 글로벌 정의를 삭제했다면 다음 부팅 시 다시 채워진다.
     클러스터별 정의 (cluster_id IS NOT NULL) 와 사용자 수정은 영향 없음.
     """
-    from app.models.deep_check import DeepCheckDefinition
-    from app.services.deep_checkers import REGISTRY
+    from app.models.check_definitions import DeepCheckDefinition
+    from app.services.registered_checks import REGISTRY
 
     db = SessionLocal()
     try:
@@ -2097,13 +2097,13 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 # Super pod ingest 는 bearer 토큰만 자체 검증 — JWT 의존성 없음.
-app.include_router(deep_check_ingest_router, prefix="/api/v1")
+app.include_router(check_ingest_router, prefix="/api/v1")
 
 # Protected routers — every endpoint below requires a valid JWT.
 _auth = [Depends(get_current_user)]
 app.include_router(clusters_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(history_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(core_bundle_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(check_matrix_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
@@ -2147,8 +2147,8 @@ app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_files_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_inventories_router, prefix="/api/v1", dependencies=_auth)
 # Deep check 결과 조회/관리/이력 — JWT 보호.
-app.include_router(deep_check_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(deep_check_definitions_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(check_results_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(check_definitions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(notifications_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(audit_logs_router, prefix="/api/v1", dependencies=_auth)
 # lake-service-monitoring (신규 PDCA) — LAKE OSS 서비스 모니터링.

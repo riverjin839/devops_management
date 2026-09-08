@@ -1,7 +1,7 @@
 from app.routers.clusters import router as clusters_router
 from app.routers.health import router as health_router
 from app.routers.history import router as history_router
-from app.routers.daily_check import router as daily_check_router
+from app.routers.core_bundle_router import router as core_bundle_router
 from app.routers.playbooks import router as playbooks_router
 from app.routers.agent import router as agent_router
 from app.routers.promql import router as promql_router
@@ -44,8 +44,8 @@ from app.routers.ansible_assets import (
 )
 from app.routers.auth import router as auth_router
 from app.routers.audit_logs import router as audit_logs_router
-from app.routers.deep_check import router as deep_check_router, ingest_router as deep_check_ingest_router
-from app.routers.deep_check_definitions import router as deep_check_definitions_router
+from app.routers.check_results_router import router as check_results_router, ingest_router as check_ingest_router
+from app.routers.check_definitions_router import router as check_definitions_router
 from app.routers.notifications import router as notifications_router
 from app.routers.lake_services import router as lake_services_router
 from app.routers.bottleneck import router as bottleneck_router
@@ -93,7 +93,7 @@ __all__ = [
     "clusters_router",
     "health_router",
     "history_router",
-    "daily_check_router",
+    "core_bundle_router",
     "playbooks_router",
     "agent_router",
     "promql_router",
@@ -134,9 +134,9 @@ __all__ = [
     "ansible_inventories_router",
     "auth_router",
     "audit_logs_router",
-    "deep_check_router",
-    "deep_check_ingest_router",
-    "deep_check_definitions_router",
+    "check_results_router",
+    "check_ingest_router",
+    "check_definitions_router",
     "notifications_router",
     "lake_services_router",
     "bottleneck_router",

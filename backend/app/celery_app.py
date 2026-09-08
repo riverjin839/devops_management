@@ -783,7 +783,7 @@ def run_single_check(self, cluster_id: str):
     """단일 클러스터 체크 실행 (수동)"""
     from app.database import SessionLocal
     from app.models import CheckScheduleType
-    from app.services.daily_checker import DailyChecker
+    from app.services.core_bundle_checker import DailyChecker
 
     db = SessionLocal()
 
@@ -873,7 +873,7 @@ def run_deep_check_for_cluster(self, cluster_id: str, daily_check_log_id: str | 
     직렬로 도는 동안 요청이 블로킹/504 되는 것을 막기 위해 worker 로 넘긴다.
     """
     from app.database import SessionLocal
-    from app.services.deep_check_service import DeepCheckService
+    from app.services.check_definition_runner import DeepCheckService
 
     db = SessionLocal()
     try:
@@ -919,7 +919,7 @@ def run_deep_check_results_purge(self):
     """
     import logging
     from app.database import SessionLocal
-    from app.services.deep_check_service import purge_expired_results
+    from app.services.check_definition_runner import purge_expired_results
 
     db = SessionLocal()
     try:

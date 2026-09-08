@@ -19,7 +19,7 @@ from app.schemas.infra_node import (
     NodeVerifyResult,
     SyncResult,
 )
-from app.services.deep_check_service import DeepCheckService
+from app.services.check_definition_runner import DeepCheckService
 
 router = APIRouter(prefix="/infra-nodes", tags=["infra-nodes"])
 

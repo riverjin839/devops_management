@@ -15,7 +15,7 @@ from sqlalchemy import desc
 
 from app.database import get_db
 from app.models import Cluster, DailyCheckLog, CheckScheduleType, StatusEnum
-from app.services.daily_checker import DailyChecker
+from app.services.core_bundle_checker import DailyChecker
 
 
 router = APIRouter(prefix="/daily-check", tags=["Daily Check"])

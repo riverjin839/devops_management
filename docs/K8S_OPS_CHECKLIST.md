@@ -5,7 +5,7 @@
 > 한 곳에 모아 두고, 이 문서를 기준으로 점검 항목을 단계적으로 추가한다.
 >
 > **사용법** — 새 점검을 추가할 때는 이 문서의 "미구현" 항목 중 하나를 골라
-> `add-deep-checker` 스킬(`backend/app/services/deep_checkers/`)로 구현하고,
+> `add-deep-checker` 스킬(`backend/app/services/registered_checks/`)로 구현하고,
 > 상태를 `✅ 구현됨` 으로 갱신한다. 이미 있는 항목은 `check_type` 컬럼으로
 > 기존 체커를 식별할 수 있다.
 
@@ -19,8 +19,8 @@
 
 ## 기존 구현 자산 (참조)
 
-- **딥체크 레지스트리**: `backend/app/services/deep_checkers/registry.py` (`REGISTRY`, `STEP_PLANS`)
-- **일일점검**: `backend/app/services/daily_checker.py` (`_check_api_server` / `_check_components` / `_check_nodes` / `_check_system_pods`)
+- **딥체크 레지스트리**: `backend/app/services/registered_checks/registry.py` (`REGISTRY`, `STEP_PLANS`)
+- **일일점검**: `backend/app/services/core_bundle_checker.py` (`_check_api_server` / `_check_components` / `_check_nodes` / `_check_system_pods`)
 - **리소스 수 스냅샷**: `backend/app/services/resource_count_service.py` + `metric_checklist_items`
 - **PromQL 메트릭 카드**: `backend/app/routers/promql.py` (임의 PromQL 카드 CRUD)
 - **노드 스펙/런타임**: `backend/app/routers/node_server_specs.py`, `backend/app/routers/k8s_resources.py` (rich nodes)
@@ -130,7 +130,7 @@
 
 ## 고도화 진행 메모
 
-- **신규 항목 구현 절차**: `add-deep-checker` 스킬 → `deep_checkers/<name>_checker.py` 작성 →
+- **신규 항목 구현 절차**: `add-deep-checker` 스킬 → `registered_checks/<name>_checker.py` 작성 →
   `registry.py` 의 `REGISTRY` + `STEP_PLANS` 등록(도메인 `category` 선언) → 운영 점검 콘솔/크론에 자동 노출.
 - **containerd 사용률**(2번 표)은 우선순위 후보. 두 갈래:
   1. **PromQL 우회(즉시)** — 대상 Prometheus 가 cAdvisor/containerd 메트릭을 스크랩하면
