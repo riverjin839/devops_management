@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -2145,6 +2145,10 @@ export const checkMatrixApi = {
   removeItem: (id: string) => api.delete(`/check-matrix/items/${id}`),
   reorderItems: (itemIds: string[]) =>
     api.post('/check-matrix/items/reorder', { itemIds }),
+  // 등록 마법사 — 실행기술별 점검 종류 카탈로그, 저장 전 테스트
+  getCatalog: () => api.get<CheckMatrixCatalog>('/check-matrix/exec-techs'),
+  previewItem: (data: CheckMatrixItemPreviewInput) =>
+    api.post<CheckMatrixItemPreviewResult>('/check-matrix/items/preview', data),
   getGrid: () => api.get<CheckMatrixGrid>('/check-matrix/grid'),
   getCellHistory: (itemId: string, clusterId: string, days = 30) =>
     api.get<CheckMatrixHistory>(`/check-matrix/cell/${itemId}/${clusterId}/history`, { params: { days } }),
@@ -2165,7 +2169,7 @@ export const checkMatrixApi = {
     api.get<CheckMatrixRunbook>(`/check-matrix/cell/${itemId}/${clusterId}/runbook`),
   // 소스 설정 편집 — deep_check thresholds/params 또는 addon config
   putSourceConfig: (itemId: string, clusterId: string, entries: CheckMatrixSourceConfigEntry[]) =>
-    api.put<{ updated: string; scope: 'cluster' | 'global' }>(
+    api.put<{ updated: string; scope: 'cluster' | 'global'; copiedFromGlobal: boolean }>(
       `/check-matrix/cell/${itemId}/${clusterId}/source-config`, { entries },
     ),
   // 수동 실행 — 셀은 동기(결과 즉시), 클러스터/항목은 큐잉 후 batchId 폴링

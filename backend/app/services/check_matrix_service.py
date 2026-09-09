@@ -80,6 +80,18 @@ _ADDON_LABELS: dict[str, str] = {
     "keycloak": "Keycloak",
 }
 
+# 등록 마법사 카탈로그(list_catalog)에서만 쓰는 한 줄 설명 — addon 자체엔 description 컬럼이 없다.
+_ADDON_DESCRIPTIONS: dict[str, str] = {
+    "etcd-leader": "etcd 리더 선출 상태와 헬스를 K8s API 로 확인",
+    "node-check": "노드 Ready/Pressure 컨디션을 K8s API 로 확인",
+    "control-plane": "API 서버·스케줄러·컨트롤러 매니저 상태를 K8s API 로 확인",
+    "system-pod": "CoreDNS 등 시스템 파드 상태를 K8s API 로 확인",
+    "nexus": "Nexus 저장소 가용성·쓰기 가능 여부를 HTTP 로 확인",
+    "jenkins": "Jenkins 모드·executor·큐 상태를 HTTP 로 확인",
+    "argocd": "ArgoCD 애플리케이션 동기화·헬스 상태를 확인",
+    "keycloak": "Keycloak 인증 서비스·DB 연결 상태를 HTTP 로 확인",
+}
+
 
 # ──────────────────────────────────────────────────────────────
 # 설정(이력 보관 주기)
@@ -356,6 +368,147 @@ def _resolve_addon(db: Session, addon_type: str, cluster_id) -> Optional[Addon]:
         .filter(Addon.type == addon_type, Addon.cluster_id == cluster_id)
         .first()
     )
+
+
+# ──────────────────────────────────────────────────────────────
+# 등록 마법사 — 실행 기술별 카탈로그 / 저장 전 테스트 / 신규 deep_check 정의 자동 생성
+# ──────────────────────────────────────────────────────────────
+def list_catalog(db: Session) -> dict[str, Any]:
+    """등록 마법사용 카탈로그 — "실행 기술 선택 → 그 기술의 점검 종류 목록"을 API 하나로.
+
+    프론트가 exec_tech 별 종류를 하드코딩(예: 예전 ADDON_TYPE_OPTIONS)하지 않도록,
+    deep_check(REGISTRY)·addon(CHECKER_REGISTRY)·manual 을 한 목록으로 합쳐 돌려준다.
+    core_bundle 은 시스템 전용이라 제외한다.
+    """
+    from app.services.checkers import CHECKER_REGISTRY, EXEC_TECH
+    from app.services.registered_checks.registry import list_check_types
+
+    items: list[dict[str, Any]] = []
+    for ct in list_check_types():
+        items.append({
+            "source_type": "deep_check",
+            "source_ref": ct["check_type"],
+            "display_name": ct["display_name"],
+            "description": ct["description"],
+            "category": ct["category"],
+            "exec_tech": ct["exec_tech"],
+            "threshold_fields": ct["threshold_fields"],
+            "param_fields": ct["param_fields"],
+            "default_thresholds": ct["default_thresholds"],
+            "default_params": ct["default_params"],
+            "seed_default": ct["seed_default"],
+        })
+
+    for addon_type in CHECKER_REGISTRY:
+        items.append({
+            "source_type": "addon",
+            "source_ref": addon_type,
+            "display_name": _ADDON_LABELS.get(addon_type, addon_type),
+            "description": _ADDON_DESCRIPTIONS.get(addon_type, ""),
+            "category": _ADDON_CATEGORIES.get(addon_type),
+            "exec_tech": EXEC_TECH.get(addon_type),
+            "threshold_fields": [],
+            "param_fields": [],
+            "default_thresholds": {},
+            "default_params": {},
+            "seed_default": True,
+        })
+
+    items.append({
+        "source_type": "manual",
+        "source_ref": None,
+        "display_name": "수동 입력",
+        "description": "자동 실행 없이 값을 직접 입력합니다 (예: 아직 연동이 없는 장비/외부 시스템).",
+        "category": None,
+        "exec_tech": "manual",
+        "threshold_fields": [],
+        "param_fields": [],
+        "default_thresholds": {},
+        "default_params": {},
+        "seed_default": True,
+    })
+
+    exec_techs = sorted({i["exec_tech"] for i in items if i["exec_tech"]})
+    return {"exec_techs": exec_techs, "items": items}
+
+
+def preview_item(
+    db: Session,
+    source_type: CheckMatrixSourceType,
+    source_ref: Optional[str],
+    cluster_id,
+    *,
+    thresholds: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
+    config: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """저장 전 1회 실행 — 등록 마법사의 "테스트" 단계. 아무것도 영속화하지 않는다."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise ValueError("클러스터를 찾을 수 없습니다.")
+
+    if source_type == CheckMatrixSourceType.deep_check:
+        from app.services.registered_checks.registry import REGISTRY
+        if not source_ref or source_ref not in REGISTRY:
+            raise ValueError(f"알 수 없는 check_type: {source_ref}")
+        from app.services.check_definition_runner import DeepCheckService
+        return DeepCheckService(db).run_check_type_once(
+            source_ref, cluster=cluster, thresholds=thresholds, params=params,
+            in_cluster=False, persist=False,
+        )
+
+    if source_type == CheckMatrixSourceType.addon:
+        from app.services.checkers import CHECKER_REGISTRY
+        if not source_ref or source_ref not in CHECKER_REGISTRY:
+            raise ValueError(f"알 수 없는 addon type: {source_ref}")
+        from app.services.health_checker import HealthChecker
+        result = HealthChecker(db).preview_addon_check(cluster, source_ref, config)
+        return {
+            "status": result.status.value,
+            "message": result.message,
+            "details": result.details,
+            "duration_ms": result.response_time,
+        }
+
+    raise ValueError("manual/core_bundle 항목은 미리 실행할 수 없습니다.")
+
+
+def ensure_deep_check_definition(
+    db: Session,
+    check_type: str,
+    thresholds: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
+) -> tuple[DeepCheckDefinition, bool]:
+    """글로벌 정의가 아직 없으면 등록 마법사가 입력한 값으로 새로 만든다.
+
+    이미 있으면(자동 시드된 기본 타입 포함) 손대지 않는다 — 기존 운영 값을 조용히
+    덮어쓰지 않기 위해서다. 반환값의 두 번째 요소가 True 면 이번에 새로 만든 것.
+    """
+    existing = (
+        db.query(DeepCheckDefinition)
+        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id.is_(None))
+        .first()
+    )
+    if existing is not None:
+        return existing, False
+
+    from app.services.registered_checks.registry import REGISTRY
+    entry = REGISTRY.get(check_type)
+    if entry is None:
+        raise ValueError(f"알 수 없는 check_type: {check_type}")
+    spec = entry[1]
+    definition = DeepCheckDefinition(
+        cluster_id=None,
+        check_type=check_type,
+        name=spec.display_name,
+        description=spec.description,
+        enabled=getattr(spec, "default_enabled", True),
+        thresholds={**spec.default_thresholds, **(thresholds or {})},
+        params={**spec.default_params, **(params or {})},
+    )
+    db.add(definition)
+    db.flush()
+    return definition, True
 
 
 def execute_item_for_cluster(db: Session, item: CheckMatrixItem, cluster: Cluster) -> bool:
@@ -778,11 +931,14 @@ def update_source_config(
     - deep_check: 해석된 정의(클러스터 전용 우선, 없으면 글로벌)의 thresholds/params 를
       spec 필드 타입으로 강제해 저장. 알 수 없는 필드명은 400 (오타로 조용히 무시되는 것 방지).
       값을 비우면 해당 오버라이드를 제거해 spec 기본값으로 되돌린다.
+      **copy-on-write**: 해석된 정의가 글로벌(cluster_id IS NULL)이면, 저장 직전에 그 값을
+      그대로 복제한 클러스터 전용 정의를 새로 만들고 그 사본에 편집을 적용한다 — 원본 글로벌
+      정의는 손대지 않으므로 다른 클러스터에 영향이 없다(예전엔 글로벌을 직접 수정해 전
+      클러스터에 적용됐다).
     - addon: 해석된 애드온 인스턴스의 config 를 갱신(JSON 파싱 시도 후 실패 시 문자열).
+      애드온은 원래 클러스터별 인스턴스라 글로벌 개념이 없다 — copy-on-write 대상 아님.
     - entries 는 {group, name, value(문자열)} — 응답/요청 키 케이스 변환이 실제 파라미터
       이름을 건드리지 못하도록 이름을 값 자리에 둔 런북 inputs 와 같은 형태다.
-
-    글로벌 정의 수정은 전 클러스터에 적용된다 — 호출 전 UI 가 경고를 띄운다.
     """
     if item.source_type == CheckMatrixSourceType.deep_check:
         from app.services.registered_checks.registry import REGISTRY
@@ -803,6 +959,22 @@ def update_source_config(
                 f"이 클러스터에 `{item.source_ref}` 점검 정의가 없습니다 — "
                 "운영 점검(Ops Checks) 화면에서 정의를 먼저 만드세요."
             )
+
+        copied_from_global = False
+        if definition.cluster_id is None:
+            global_def = definition
+            definition = DeepCheckDefinition(
+                cluster_id=cluster.id,
+                check_type=global_def.check_type,
+                name=global_def.name,
+                description=global_def.description,
+                enabled=global_def.enabled,
+                thresholds=dict(global_def.thresholds or {}),
+                params=dict(global_def.params or {}),
+            )
+            db.add(definition)
+            db.flush()
+            copied_from_global = True
 
         thresholds = dict(definition.thresholds or {})
         params = dict(definition.params or {})
@@ -825,7 +997,8 @@ def update_source_config(
         return {
             "updated": "definition",
             "definition_id": str(definition.id),
-            "scope": "cluster" if definition.cluster_id else "global",
+            "scope": "cluster",
+            "copied_from_global": copied_from_global,
         }
 
     if item.source_type == CheckMatrixSourceType.addon:
@@ -850,7 +1023,10 @@ def update_source_config(
                 config[name] = raw
         addon.config = config
         db.commit()
-        return {"updated": "addon", "addon_id": str(addon.id), "scope": "cluster"}
+        return {
+            "updated": "addon", "addon_id": str(addon.id), "scope": "cluster",
+            "copied_from_global": False,
+        }
 
     raise ValueError("core_bundle/manual 항목에는 편집할 소스 설정이 없습니다.")
 

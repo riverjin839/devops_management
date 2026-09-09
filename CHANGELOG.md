@@ -10,6 +10,18 @@
 
 1.31.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **점검 매트릭스 — 등록 마법사(저장 전 테스트) + 클러스터 오버라이드 자동 생성**: 점검 항목을
+  새로 등록할 때 "실행기술 선택 → 종류 선택 → 세부정보 → 값 설정 → 테스트 → 적용" 6단계 마법사로
+  안내하며, "테스트" 단계에서 아무것도 저장하지 않고 실제 클러스터를 대상으로 1회 실행해볼 수
+  있다. 커스텀 점검(HTTP/kubectl/PromQL)을 처음 등록하면 입력한 임계값으로 점검 정의가 함께
+  만들어져 등록 즉시 실행 가능하다. 매트릭스 셀에서 임계값을 편집할 때, 지금까지 전체 클러스터에
+  공통 적용되던 정의를 편집하면 그 클러스터 전용 사본이 자동으로 만들어져(copy-on-write) 다른
+  클러스터에 영향을 주지 않는다. Backend: `POST /check-matrix/items/preview`,
+  `GET /check-matrix/exec-techs`, `check_matrix_service.{list_catalog,preview_item,
+  ensure_deep_check_definition}`, `HealthChecker.preview_addon_check`. Frontend:
+  `CheckMatrixItemFormModal`(`RegisterItemWizard`).
+
 ## [1.31.0] - 2026-09-09
 
 ### Added

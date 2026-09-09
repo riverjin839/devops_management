@@ -277,14 +277,6 @@ export interface PaginatedResponse<T> {
 }
 
 // Addon Config (for easy add/remove)
-export interface AddonConfig {
-  name: string;
-  type: string;
-  icon: string;
-  description: string;
-  checkPlaybook: string;
-}
-
 // Playbook
 export interface Playbook {
   id: string;
@@ -3162,6 +3154,8 @@ export interface DeepCheckTypeSchema {
   displayName: string;
   description: string;
   category?: string;
+  /** 실행 기술 (k8s_api | kubectl | http | promql | snapshot | ssh_bash | 자유 문자열) */
+  execTech?: string | null;
   thresholdFields: DeepCheckFieldSpec[];
   paramFields: DeepCheckFieldSpec[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -4268,7 +4262,60 @@ export interface CheckMatrixItem {
 export type CheckMatrixItemInput = Omit<
   CheckMatrixItem,
   'id' | 'isSystem' | 'sortOrder' | 'createdAt' | 'updatedAt'
->;
+> & {
+  /** 등록 마법사 전용 — deep_check 항목을 새로 만들 때 아직 글로벌 정의가 없으면 이 값으로
+   *  함께 만든다. CheckMatrixItem 자체엔 저장되지 않는다(응답에도 없음). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  thresholds?: Record<string, any> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any> | null;
+};
+
+/** 등록 마법사 카탈로그의 점검 종류 1건 — deep_check/addon/manual 을 한 목록으로. */
+export interface CheckMatrixCatalogItem {
+  sourceType: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  displayName: string;
+  description?: string | null;
+  category?: string | null;
+  execTech?: string | null;
+  thresholdFields: DeepCheckFieldSpec[];
+  paramFields: DeepCheckFieldSpec[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  defaultThresholds: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  defaultParams: Record<string, any>;
+  seedDefault: boolean;
+}
+
+/** `GET /check-matrix/exec-techs` — 실행기술 선택 → 종류 선택 2단계를 그리는 데 필요한 전부. */
+export interface CheckMatrixCatalog {
+  execTechs: string[];
+  items: CheckMatrixCatalogItem[];
+}
+
+/** 저장 전 미리 실행(등록 마법사의 "테스트" 단계) 요청. */
+export interface CheckMatrixItemPreviewInput {
+  sourceType: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  clusterId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  thresholds?: Record<string, any> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  config?: Record<string, any> | null;
+}
+
+/** 미리 실행 결과 — deep_check 는 DeepCheckResult 형태, addon 은 CheckResult 형태라 필드가
+ *  약간 다르므로 공통 부분만 엄격히 두고 나머지는 열어둔다. */
+export interface CheckMatrixItemPreviewResult {
+  status: Status;
+  message?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any> | null;
+  durationMs?: number | null;
+}
 
 export interface CheckMatrixCell {
   status: Status | null;
