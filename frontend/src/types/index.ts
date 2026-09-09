@@ -4252,6 +4252,8 @@ export interface CheckMatrixItem {
   sourceRef?: string | null;
   /** 영역 구분 (k8s | network | storage | os | app | 자유 문자열) */
   category?: string | null;
+  /** 실행 기술 (k8s_api | kubectl | http | promql | snapshot | ssh_bash | manual | 자유 문자열) */
+  execTech?: string | null;
   /** 행 배경 색 — 차트 토큰 프리셋 키('chart-1'..'chart-8'), null = 무색 */
   color?: string | null;
   /** true = 시스템 항목(core_bundle) — 삭제 불가, Cluster.status 산정에 사용 */

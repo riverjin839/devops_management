@@ -21,32 +21,12 @@ import { CheckMatrixItemFormModal } from './CheckMatrixItemFormModal';
 import { CheckMatrixSettingsModal } from './CheckMatrixSettingsModal';
 import { CheckMatrixHelpPanel } from './CheckMatrixHelpPanel';
 import { CheckMatrixRunLogPanel } from './CheckMatrixRunLogPanel';
+import { ExecTechBadge } from './ExecTechBadge';
 import { rowColor } from './rowColors';
 
 const STATUS_LABEL: Record<Status, string> = {
   healthy: '정상', warning: '경고', critical: '위험', pending: '대기',
 };
-
-// 행이 어떻게 실행되는지 한눈에 — "왜 이 행엔 실행 버튼이 없지?"(수동 입력)의 답을 그리드에서 준다.
-const SOURCE_BADGE: Record<CheckMatrixItem['sourceType'], { label: string; hint: string }> = {
-  core_bundle: { label: '핵심', hint: '핵심 점검 번들 — 클러스터 열 cron 으로 자동 실행, Cluster 상태 산정에 사용' },
-  deep_check: { label: 'Deep', hint: 'Deep Check 자동 점검 — 셀 cron 또는 ▶ 로 실행' },
-  addon: { label: 'Addon', hint: '애드온 헬스 체크 — 셀 cron 또는 ▶ 로 실행' },
-  manual: { label: '수동', hint: '수동 입력 항목 — 자동 실행 없음. 셀을 클릭해 값을 직접 입력합니다. 자동 점검으로 바꾸려면 연필(수정)에서 실행 방식을 변경하세요.' },
-};
-
-function SourceBadge({ sourceType }: { sourceType: CheckMatrixItem['sourceType'] }) {
-  const meta = SOURCE_BADGE[sourceType];
-  if (!meta) return null;
-  return (
-    <span
-      title={meta.hint}
-      className="flex-shrink-0 px-1 py-px rounded border border-border text-[9px] font-medium text-muted-foreground select-none"
-    >
-      {meta.label}
-    </span>
-  );
-}
 
 // 경고/위험은 색상(StatusDot) 만으로 전달하지 않는다 — 값이 표시될 때도 상태를 알 수 있도록
 // 형태가 다른 아이콘을 함께 준다(색맹·저채도 화면에서도 구분 가능).
@@ -668,7 +648,13 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                     <th key={cluster.id} className="relative border-b border-border px-3 py-2 font-medium">
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className="truncate max-w-[120px]">{cluster.name}</span>
+                          <button
+                            onClick={() => navigate(`/ops-checks/${cluster.id}`)}
+                            className="truncate max-w-[120px] hover:text-primary hover:underline underline-offset-2"
+                            title={`${cluster.name} 상세로 이동`}
+                          >
+                            {cluster.name}
+                          </button>
                           <button
                             onClick={() => setRunConfirm({ type: 'cluster', cluster })}
                             disabled={runningKey === `cluster:${cluster.id}`}
@@ -740,7 +726,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                         );
                         const sourceMeta = (
                           <>
-                            <SourceBadge sourceType={item.sourceType} />
+                            <ExecTechBadge execTech={item.execTech} />
                             {item.isSystem && (
                               <span title="시스템 항목" className="flex-shrink-0">
                                 <Lock className="w-3 h-3 text-muted-foreground" />

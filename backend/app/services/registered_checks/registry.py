@@ -56,6 +56,11 @@ class DeepCheckTypeSpec:
     # False 면 부팅 시 글로벌 정의/체크매트릭스 자동 시드에서 제외 — custom_* 처럼
     # "같은 check_type 으로 여러 인스턴스를 admin 이 직접 만드는" 템플릿형 체커용.
     seed_default: bool = True
+    # 실제로 어떤 기술로 점검을 수행하는지 — "Deep Check"라는 내부 구현 용어 대신 매트릭스
+    # 행에 사용자가 알아보는 이름으로 노출한다. k8s_api | kubectl | http | promql | snapshot |
+    # ssh_bash. 체커가 source 파라미터로 경로를 바꾸는 하이브리드(cert_expiry 등)는 기본/대표
+    # 경로를 선언하고, 실제 실행 경로는 수행 로그의 _commands 에 남는다.
+    exec_tech: str = "k8s_api"
 
 
 REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
@@ -64,6 +69,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="cert_expiry",
             display_name="K8s 인증서 만료",
+            exec_tech="kubectl",
             description=(
                 "kubeadm certs check-expiration 으로 컨트롤 플레인 인증서 잔여일 점검. "
                 "kube-apiserver 파드 이미지는 distroless(쉘 없음)라 pod exec 이 실패하는 "
@@ -93,6 +99,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="etcd_defrag",
             display_name="etcd 단편화 / 알람",
+            exec_tech="kubectl",
             description=(
                 "etcdctl endpoint status + alarm list 로 단편화율과 alarm 점검. "
                 "파드형 etcd 는 pod exec, 데몬(systemd) etcd 는 '버전/설정 관리' 화면에서 "
@@ -121,6 +128,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="cni_flow",
             display_name="Cilium Hubble flow",
+            exec_tech="kubectl",
             description="최근 N초간 Hubble 플로우 중 DROPPED/ERROR 비율 점검",
             threshold_fields=[
                 DeepCheckFieldSpec("warning_drop_pct", "float", "drop 경고 (%)", 2),
@@ -274,6 +282,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="external_to_pod",
             display_name="외부 → 내부 Pod 호출",
+            exec_tech="http",
             description=(
                 "관리 backend (DevOps Management 가 기동된 클러스터) 에서 대상 클러스터의 "
                 "외부 노출 endpoint (URL 또는 host:port) 로 호출을 시도해 실패율 점검. "
@@ -308,6 +317,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="pod_to_pod",
             display_name="Pod-to-pod 연결성",
+            exec_tech="kubectl",
             description=(
                 "일회용 busybox 파드를 띄워 무작위 워크로드 파드 IP:포트 로 "
                 "nc TCP probe 를 돌려 실패율 점검 (pods.create 권한 필요)"
@@ -341,6 +351,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="kernel_param_drift",
             display_name="OS 파라미터 변경 점검",
+            exec_tech="snapshot",
             description=(
                 "노드별 sysctl/커널 파라미터가 직전 수집 대비 바뀌었는지 점검. "
                 "SSH·파드 없이 이미 수집된 ClusterConfigSnapshot(kernel_params:{host})의 "
@@ -367,6 +378,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="minio_health",
             display_name="MinIO 스토리지 health",
+            exec_tech="http",
             description=(
                 "MinIO 의 인증 불필요 health 엔드포인트(/minio/health/cluster·live)를 호출해 "
                 "쿼럼/degraded 여부 점검. params.endpoints 에 MinIO base URL 등록 필요. "
@@ -400,6 +412,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="isilon_nfs",
             display_name="Isilon NFS (NAS)",
+            exec_tech="ssh_bash",
             description=(
                 "Isilon(OneFS) NAS 에 SSH 접속해 isi 명령으로 NFS export 가용성·쿼터 사용률·"
                 "노드/서비스 health 를 수집하고 K8s PV(spec.nfs) 와 매칭해 판정. "
@@ -461,6 +474,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="custom_http",
             display_name="커스텀 HTTP/TCP 프로브",
+            exec_tech="http",
             description=(
                 "params.endpoints 의 URL(http/https)/host:port 를 프로브해 실패율·지연을 "
                 "판정하는 범용 점검. 같은 타입으로 대상별 정의를 여러 개 만들어 쓴다."
@@ -503,6 +517,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="custom_kubectl",
             display_name="커스텀 kubectl 점검",
+            exec_tech="kubectl",
             description=(
                 "params.args 의 kubectl 명령(기본 읽기 전용 verb 만)을 대상 클러스터에서 "
                 "실행하고 출력(라인 수/숫자/정규식 매치 수)을 임계값과 비교하는 범용 점검."
@@ -540,6 +555,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
         DeepCheckTypeSpec(
             check_type="custom_promql",
             display_name="커스텀 PromQL 점검",
+            exec_tech="promql",
             description=(
                 "params.query 의 PromQL instant 쿼리 결과를 aggregate(max/min/sum/avg/count) 로 "
                 "접어 임계값과 비교하는 범용 점검. Prometheus 도달 불가는 pending."
@@ -586,6 +602,7 @@ def list_check_types() -> list[dict[str, Any]]:
             "display_name": spec.display_name,
             "description": spec.description,
             "category": spec.category,
+            "exec_tech": spec.exec_tech,
             "threshold_fields": [_field_to_dict(f) for f in spec.threshold_fields],
             "param_fields": [_field_to_dict(f) for f in spec.param_fields],
             "default_thresholds": spec.default_thresholds,

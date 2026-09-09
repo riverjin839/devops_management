@@ -97,6 +97,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
   - **[2026-09-08, D-061~D-065]** 이 화면(플랫폼 현황 탭)을 로그인 직후 첫 화면으로: 홈 기본 탭 `work`→`platform` 전환 + 네비게이션에 진입 경로 추가. 행의 소스 배지("핵심/Deep/Addon/수동")를 실행 기술(K8s API/kubectl/HTTP/PromQL/스냅샷/SSH bash·python/Ansible) × 컴포넌트(기존 category) 2축으로 재명명. 클러스터 열 헤더·행 이름에 드릴다운 링크 추가(`/clusters/:id`, `/checks/:itemId` 신설). 항목 추가를 "실행기술→종류→컴포넌트→값→테스트(필수)→적용" 마법사로 재구성. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250)
+    - **[2026-09-09, 로드맵 1단계 완료분]** 홈 기본 탭 `work`→`platform` 전환 완료. 행 소스 배지를 `ExecTechBadge`(실행 기술: K8s API/kubectl/HTTP/PromQL/스냅샷/bash(SSH)/수동)로 교체 완료 — `CheckMatrixItem.execTech`(백엔드 `_resolve_exec_tech()` 가 `DeepCheckTypeSpec.exec_tech`/addon `EXEC_TECH`/core_bundle/manual 을 해석). 클러스터 열 헤더 이름을 클릭하면 기존 `/ops-checks/:clusterId` 로 이동(신규 `/clusters/:id` 전용 라우트는 다음 단계). 잔여: 네비게이션 진입 경로, 항목명 드릴다운(`/checks/:itemId`), 등록 마법사(실행기술→종류→컴포넌트→값→테스트→적용).
 
 ### Your Island (`/island`)
 
