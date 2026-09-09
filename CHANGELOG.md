@@ -10,6 +10,15 @@
 
 1.30.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **점검 매트릭스 — 실행 기술 배지 + 홈 기본 탭 전환**: 점검 매트릭스 행의 "핵심/Deep/Addon/수동"
+  소스 배지를 실제 실행 기술(K8s API 호출/kubectl/HTTP 프로브/PromQL/스냅샷/bash(SSH)/수동 입력)을
+  보여주는 `ExecTechBadge` 로 교체하고, 클러스터 열 헤더 이름을 클릭하면 해당 클러스터 상세(운영
+  점검 화면)로 이동한다. 로그인 직후 첫 화면(홈 기본 탭)도 업무 현황 대신 플랫폼 현황(점검 매트릭스)
+  으로 바뀐다. Backend: `DeepCheckTypeSpec.exec_tech`, `checkers.EXEC_TECH`,
+  `check_matrix_service._resolve_exec_tech()`. Frontend: `components/platform-status/ExecTechBadge.tsx`,
+  `homeStore.ts`.
+
 ## [1.30.1] - 2026-09-09
 
 ### Added

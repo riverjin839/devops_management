@@ -24,9 +24,9 @@ function loadHomeTab(): HomeTab {
       localStorage.setItem(STORAGE_KEY, legacy);
       return legacy;
     }
-    return 'work';
+    return 'platform';
   } catch {
-    return 'work';
+    return 'platform';
   }
 }
 

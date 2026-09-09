@@ -125,6 +125,26 @@ def validate_cron_min_interval(cron_expr: Optional[str]) -> None:
 # ──────────────────────────────────────────────────────────────
 # 그리드 / 이력
 # ──────────────────────────────────────────────────────────────
+def _resolve_exec_tech(item: CheckMatrixItem) -> Optional[str]:
+    """행이 실제로 어떤 기술로 실행되는지 — UI 배지(ExecTechBadge)용.
+
+    "Deep Check/Addon" 같은 내부 소스 구현 용어 대신 사용자가 알아보는 실행 기술
+    (k8s_api/kubectl/http/promql/snapshot/ssh_bash/manual) 을 노출한다.
+    """
+    if item.source_type == CheckMatrixSourceType.core_bundle:
+        return "k8s_api"
+    if item.source_type == CheckMatrixSourceType.manual:
+        return "manual"
+    if item.source_type == CheckMatrixSourceType.deep_check:
+        from app.services.registered_checks.registry import REGISTRY
+        entry = REGISTRY.get(item.source_ref or "")
+        return entry[1].exec_tech if entry else None
+    if item.source_type == CheckMatrixSourceType.addon:
+        from app.services.checkers import EXEC_TECH
+        return EXEC_TECH.get(item.source_ref or "")
+    return None
+
+
 def _item_to_dict(item: CheckMatrixItem) -> dict[str, Any]:
     return {
         "id": str(item.id),
@@ -134,6 +154,7 @@ def _item_to_dict(item: CheckMatrixItem) -> dict[str, Any]:
         "source_type": item.source_type.value,
         "source_ref": item.source_ref,
         "category": item.category,
+        "exec_tech": _resolve_exec_tech(item),
         "color": item.color,
         "is_system": item.is_system,
         "enabled": item.enabled,

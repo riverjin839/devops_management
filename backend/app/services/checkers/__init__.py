@@ -20,6 +20,18 @@ CHECKER_REGISTRY: dict[str, type[BaseChecker]] = {
     "keycloak": KeycloakChecker,
 }
 
+# addon.type → 실행 기술(exec_tech) 매핑 — 매트릭스 행에 "Addon" 대신 실제 기술 이름을 노출한다.
+EXEC_TECH: dict[str, str] = {
+    "etcd-leader": "k8s_api",
+    "node-check": "k8s_api",
+    "control-plane": "k8s_api",
+    "system-pod": "k8s_api",
+    "argocd": "k8s_api",
+    "nexus": "http",
+    "jenkins": "http",
+    "keycloak": "http",
+}
+
 __all__ = [
     "BaseChecker",
     "CheckResult",
@@ -32,4 +44,5 @@ __all__ = [
     "ArgoCDChecker",
     "KeycloakChecker",
     "CHECKER_REGISTRY",
+    "EXEC_TECH",
 ]
