@@ -152,7 +152,7 @@ class TestRunbook:
     def test_every_registered_check_type_has_commands(self):
         """새 체커를 추가하고 런북을 빠뜨리면 여기서 걸린다."""
         from app.services.check_matrix_runbook import _deep_check_commands
-        from app.services.deep_checkers.registry import REGISTRY
+        from app.services.registered_checks.registry import REGISTRY
 
         missing = [ct for ct in REGISTRY if not _deep_check_commands(ct, {})]
         assert missing == [], f"런북 명령이 없는 check_type: {missing}"
@@ -169,20 +169,20 @@ class TestRunbook:
 class TestCellValue:
     def test_every_check_type_has_value_spec(self):
         """새 체커를 추가하고 대표값 규칙을 빠뜨리면 여기서 걸린다."""
-        from app.services.deep_checkers.registry import CELL_VALUE_SPECS, REGISTRY
+        from app.services.registered_checks.registry import CELL_VALUE_SPECS, REGISTRY
 
         missing = [ct for ct in REGISTRY if ct not in CELL_VALUE_SPECS]
         assert missing == [], f"셀 대표값 규칙이 없는 check_type: {missing}"
 
     def test_cert_expiry_value_is_min_residual_days(self):
-        from app.services.deep_checkers.registry import extract_cell_value, get_cell_value_unit
+        from app.services.registered_checks.registry import extract_cell_value, get_cell_value_unit
 
         assert extract_cell_value("cert_expiry", {"min_residual_days": 361}) == 361.0
         assert get_cell_value_unit("cert_expiry") == "일"
 
     def test_extraction_is_fail_safe(self):
         """키 누락/타입 오류/미지정 타입은 None — 결과 기록 자체를 막으면 안 된다."""
-        from app.services.deep_checkers.registry import extract_cell_value
+        from app.services.registered_checks.registry import extract_cell_value
 
         assert extract_cell_value("cert_expiry", {}) is None
         assert extract_cell_value("cert_expiry", {"min_residual_days": "abc"}) is None
@@ -190,7 +190,7 @@ class TestCellValue:
         assert extract_cell_value("cert_expiry", None) is None
 
     def test_count_specs_distinguish_zero_from_unmeasured(self):
-        from app.services.deep_checkers.registry import extract_cell_value
+        from app.services.registered_checks.registry import extract_cell_value
 
         # 측정됐고 0건 → 0 (정상에 0건 표시). 키 자체가 없으면 None (미측정).
         assert extract_cell_value("pvc_health", {"pending_pvcs": [], "lost_pvcs": []}) == 0.0

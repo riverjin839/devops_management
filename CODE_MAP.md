@@ -97,9 +97,9 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 기능 | 위치 |
 |---|---|
 | 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` + `services/check_matrix_service.py`(그리드/실행/수행로그) · `services/check_matrix_runbook.py`(셀별 실행 계획 — 실제 나가는 명령) + `models/check_matrix.py`(`CheckMatrixRun` 수행 로그 포함) → `frontend/src/pages/HomePage.tsx` + `components/platform-status/` (매뉴얼: `docs/CHECK_MATRIX_GUIDE.md`) |
-| 클러스터 대시보드 | `backend/app/routers/daily_check.py` · `history.py` → `frontend/src/pages/Dashboard.tsx` (`/cluster-overview`) |
-| 일일 점검 리뷰 | `daily_check.py` → `frontend/src/pages/DailyCheckReview.tsx` |
-| Deep Check 정의/실행/수집 | `backend/app/routers/deep_check.py` · `deep_check_definitions.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/deep_checkers/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
+| 클러스터 대시보드 | `backend/app/routers/core_bundle_router.py` · `history.py` → `frontend/src/pages/Dashboard.tsx` (`/cluster-overview`) |
+| 일일 점검 리뷰 | `core_bundle_router.py` → `frontend/src/pages/DailyCheckReview.tsx` |
+| Deep Check 정의/실행/수집 | `backend/app/routers/check_results_router.py` · `check_definitions_router.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/registered_checks/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔 | `backend/app/routers/ops_check.py` + `services/ops_check_service.py` → `frontend/src/pages/OpsCheckConsolePage.tsx` |
 | K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py`(수신 직후 `analysis_hook.maybe_enqueue_analysis_for_k8s_event` 훅 + `/{id}/analysis`,`/analyze`) + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
 | Observability 지표 대시보드 (kube-prometheus-stack) | `backend/app/routers/observability.py` + `services/observability/catalog_seed.py` · `services/alertmanager_service.py` · `services/prometheus_service.py`(rules/targets/status) + `models/observability.py` → `frontend/src/pages/ObservabilityPage.tsx` + `components/observability/` |
@@ -176,7 +176,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 플레이북 CRUD + 실행 | `backend/app/routers/playbooks.py`, `backend/app/services/playbook_executor.py` |
 | 플레이북 페이지 | `frontend/src/pages/PlaybooksPage.tsx`, `frontend/src/components/playbooks/` |
 | Ansible 플레이북 소스 | `ansible/playbooks/` |
-| 일일 점검 (Celery) | `backend/app/services/daily_checker.py`, `backend/app/celery_app.py` |
+| 일일 점검 (Celery) | `backend/app/services/core_bundle_checker.py`, `backend/app/celery_app.py` |
 | 트렌드 다이제스트 | `backend/app/services/trends/trend_service.py`, `frontend/src/pages/TrendDigestPage.tsx` |
 | 온톨로지 그래프 | `backend/app/routers/ontology.py` 외, `frontend/src/pages/OntologyPage.tsx` |
 

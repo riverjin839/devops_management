@@ -4,7 +4,7 @@ from app.models.k8s_efficiency import (
 )
 from app.models.addon import Addon
 from app.models.check_log import CheckLog
-from app.models.daily_check import DailyCheckLog, CheckScheduleType
+from app.models.core_bundle_snapshot import DailyCheckLog, CheckScheduleType
 from app.models.playbook import Playbook
 from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
@@ -38,7 +38,7 @@ from app.models.user import User
 from app.models.user_setting import UserSetting
 from app.models.island import Island
 from app.models.audit_log import AuditLog
-from app.models.deep_check import (
+from app.models.check_definitions import (
     DeepCheckDefinition,
     DeepCheckResult,
     NotificationChannel,

@@ -5,7 +5,7 @@
 "도달 가능(인증 필요)" 으로 판정해야 한다.
 """
 from app.models import StatusEnum
-from app.services.daily_checker import DailyChecker
+from app.services.core_bundle_checker import DailyChecker
 
 
 class TestClassifyHealthz:

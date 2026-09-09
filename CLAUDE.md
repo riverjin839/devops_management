@@ -83,7 +83,7 @@ devops_management/
 │   ├── routers/         # APIRouter — 전부 /api/v1 마운트, 그룹 인덱스는 §API Reference
 │   ├── schemas/         # Pydantic 스키마
 │   └── services/        # 서비스 모듈 + 하위 패키지:
-│       #  checkers/(일일점검 컴포넌트)  deep_checkers/(심층 점검)  lake_checkers/(LAKE 프로브)
+│       #  checkers/(애드온 점검)  registered_checks/(심층 점검)  lake_checkers/(LAKE 프로브)
 │       #  bottleneck_probes/  analyzers/(claude|local_llm|rule_based)  batch_jobs/  trends/
 ├── backend/tests/       # pytest (pytest.ini: testpaths=tests, asyncio_mode=auto)
 ├── frontend/src/
@@ -227,7 +227,7 @@ AI/임베딩(`run_review_and_notify`, `compute_work_item_embedding`, `compute_wo
 `compute_ops_note_embedding`, `backfill_embeddings`, `generate_arch_doc_llm`), 정리류(purge)가 있다 — 전수는 `celery_app.py` 의 `@celery_app.task`.
 async 서비스는 `asyncio.new_event_loop()` + `loop.run_until_complete()` 로 브리지한다.
 
-### Health Check Logic (`services/daily_checker.py`)
+### Health Check Logic (`services/core_bundle_checker.py`)
 
 `DailyChecker.run_daily_check()` 가 API server / componentstatuses / nodes / kube-system pods 를
 순회한다. **종합 상태 우선순위는 `critical` > `warning` > `healthy`** — 하나라도 critical 이면
@@ -329,7 +329,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 확인하거나 해당 라우터 파일을 읽는다. 마운트 목록은 `backend/app/routers/__init__.py`.
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
-`auth`, `health`, `deep_check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
+`auth`, `health`, `check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
 `observability_ingest`** 다
 (`k8s_exec`/`k9s_ssh`/`node_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증하고,
 `node_ssh` 의 REST `POST /node-ssh/test` 는 엔드포인트에 `require_operator` 를 직접 건다).
@@ -340,7 +340,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | 그룹 | 라우터 |
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs` |
-| 모니터링/점검 | `clusters`, `daily_check`, `check_matrix`, `deep_check`(+ingest), `deep_check_definitions`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
+| 모니터링/점검 | `clusters`, `core_bundle_router`, `check_matrix`, `check_results_router`(+ingest), `check_definitions_router`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
 | K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `projects`, `sprint`, `workflows` |
@@ -366,7 +366,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 이외 모델은 도메인별로 아래처럼 묶인다:
 
 - **관측/알람**: `observability`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot` — 지표 카탈로그는 DB 행이라 UI 편집 대상), `alert_event`(수신 알람, fingerprint 기준 upsert), `alert_notify_rule`(알림 라우팅·중복 억제 규칙)
-- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `deep_check`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
+- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `check_definitions`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`

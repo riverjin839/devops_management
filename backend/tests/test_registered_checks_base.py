@@ -9,7 +9,7 @@ limit(240s)까지 블로킹하다 ``SoftTimeLimitExceeded`` 로 죽는다(사용
 주입해 이 실수를 구조적으로 막는다 — 이 파일은 그 프록시 자체를 DB-free 로 검증한다.
 """
 from app.models import StatusEnum
-from app.services.deep_checkers.base import (
+from app.services.registered_checks.base import (
     DeepCheckContext,
     DeepCheckerBase,
     DeepCheckOutcome,
@@ -183,7 +183,7 @@ class TestStepFailureLogging:
 
         ctx = DeepCheckContext(cluster=SimpleNamespace(name="prod-a"))
 
-        with caplog.at_level("WARNING", logger="app.services.deep_checkers.base"):
+        with caplog.at_level("WARNING", logger="app.services.registered_checks.base"):
             self._checker_with_manual_failure().safe_run(ctx)
 
         assert any(
@@ -197,7 +197,7 @@ class TestStepFailureLogging:
 
         ctx = DeepCheckContext(cluster=SimpleNamespace(name="prod-b"))
 
-        with caplog.at_level("WARNING", logger="app.services.deep_checkers.base"):
+        with caplog.at_level("WARNING", logger="app.services.registered_checks.base"):
             self._checker_with_raising_step().safe_run(ctx)
 
         assert any(
@@ -222,7 +222,7 @@ class TestStepFailureLogging:
                     st.detail = "정상"
                 return DeepCheckOutcome(status=StatusEnum.healthy, message="ok")
 
-        with caplog.at_level("WARNING", logger="app.services.deep_checkers.base"):
+        with caplog.at_level("WARNING", logger="app.services.registered_checks.base"):
             _OkChecker().safe_run(DeepCheckContext())
 
         assert caplog.records == []

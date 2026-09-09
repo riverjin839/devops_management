@@ -43,7 +43,7 @@ def main() -> int:
 
 def _run_in_cluster() -> int:
     """대상 클러스터 내부에서 모든 enabled check 를 실행하고 관리 backend 로 push."""
-    from app.services.deep_checkers import REGISTRY, DeepCheckContext
+    from app.services.registered_checks import REGISTRY, DeepCheckContext
 
     ingest_url = os.environ.get("SUPERPOD_INGEST_URL", "").strip()
     ingest_token = os.environ.get("SUPERPOD_INGEST_TOKEN", "").strip()
@@ -96,7 +96,7 @@ def _run_centralized() -> int:
     """관리 클러스터에서 등록된 모든 Cluster 행에 대해 deep check 실행."""
     from app.database import SessionLocal
     from app.models import Cluster
-    from app.services.deep_check_service import DeepCheckService
+    from app.services.check_definition_runner import DeepCheckService
 
     db = SessionLocal()
     rc = 0

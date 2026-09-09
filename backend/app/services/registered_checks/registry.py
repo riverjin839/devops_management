@@ -8,26 +8,26 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.services.deep_checkers.audit_rbac_checker import AuditRbacChecker
-from app.services.deep_checkers.base import DeepCheckerBase
-from app.services.deep_checkers.cert_expiry_checker import CertExpiryChecker
-from app.services.deep_checkers.cni_flow_checker import CniFlowChecker
-from app.services.deep_checkers.coredns_health_checker import CoreDnsHealthChecker
-from app.services.deep_checkers.custom_http_checker import CustomHttpChecker
-from app.services.deep_checkers.custom_kubectl_checker import CustomKubectlChecker
-from app.services.deep_checkers.custom_promql_checker import CustomPromqlChecker
-from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
-from app.services.deep_checkers.external_to_pod_checker import ExternalToPodChecker
-from app.services.deep_checkers.image_pull_checker import ImagePullChecker
-from app.services.deep_checkers.isilon_nfs_checker import IsilonNfsChecker
-from app.services.deep_checkers.kernel_param_drift_checker import KernelParamDriftChecker
-from app.services.deep_checkers.minio_health_checker import MinioHealthChecker
-from app.services.deep_checkers.node_health_checker import NodeHealthChecker
-from app.services.deep_checkers.node_pressure_checker import NodePressureChecker
-from app.services.deep_checkers.oom_events_checker import OomEventsChecker
-from app.services.deep_checkers.pod_to_pod_checker import PodToPodChecker
-from app.services.deep_checkers.pvc_health_checker import PvcHealthChecker
-from app.services.deep_checkers.stuck_terminating_checker import StuckTerminatingChecker
+from app.services.registered_checks.audit_rbac_checker import AuditRbacChecker
+from app.services.registered_checks.base import DeepCheckerBase
+from app.services.registered_checks.cert_expiry_checker import CertExpiryChecker
+from app.services.registered_checks.cni_flow_checker import CniFlowChecker
+from app.services.registered_checks.coredns_health_checker import CoreDnsHealthChecker
+from app.services.registered_checks.custom_http_checker import CustomHttpChecker
+from app.services.registered_checks.custom_kubectl_checker import CustomKubectlChecker
+from app.services.registered_checks.custom_promql_checker import CustomPromqlChecker
+from app.services.registered_checks.etcd_defrag_checker import EtcdDefragChecker
+from app.services.registered_checks.external_to_pod_checker import ExternalToPodChecker
+from app.services.registered_checks.image_pull_checker import ImagePullChecker
+from app.services.registered_checks.isilon_nfs_checker import IsilonNfsChecker
+from app.services.registered_checks.kernel_param_drift_checker import KernelParamDriftChecker
+from app.services.registered_checks.minio_health_checker import MinioHealthChecker
+from app.services.registered_checks.node_health_checker import NodeHealthChecker
+from app.services.registered_checks.node_pressure_checker import NodePressureChecker
+from app.services.registered_checks.oom_events_checker import OomEventsChecker
+from app.services.registered_checks.pod_to_pod_checker import PodToPodChecker
+from app.services.registered_checks.pvc_health_checker import PvcHealthChecker
+from app.services.registered_checks.stuck_terminating_checker import StuckTerminatingChecker
 
 
 @dataclass

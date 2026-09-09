@@ -43,7 +43,7 @@
 ### 1.1 Design Goals
 
 - **실행 메커니즘을 1급 시민으로**: "무엇을 실행하는가"(스크립트: python/ansible_playbook/shell)와 "어디서·언제 실행하는가"(대상: 클러스터/호스트, cron)를 분리한다 — 지금은 이 둘이 `job_type`(파이썬 클래스)/`check_type`(파이썬 클래스)에 뭉쳐 있어 재사용도, UI 편집도 안 된다.
-- **기존 실행 추적 인프라는 재사용, 재발명 금지**: `ExecutionStep`/`_step()`/`_record_command()`/`step_plan`(딥체크·배치잡에 이미 중복 구현돼 있음, `deep_checkers/base.py` ↔ `batch_jobs/base.py`)을 스크립트 실행에도 그대로 적용한다. 이번 기회에 공용 모듈로 뽑는 것도 고려(§8).
+- **기존 실행 추적 인프라는 재사용, 재발명 금지**: `ExecutionStep`/`_step()`/`_record_command()`/`step_plan`(딥체크·배치잡에 이미 중복 구현돼 있음, `registered_checks/base.py` ↔ `batch_jobs/base.py`)을 스크립트 실행에도 그대로 적용한다. 이번 기회에 공용 모듈로 뽑는 것도 고려(§8).
 - **파괴적 변경 없음, 버전으로 편집**: 스크립트를 고치면 새 버전이 생기고 이전 버전은 남는다 — 실행 이력(`run.script_version_id`)이 "그때 실제로 뭐가 돌았는지" 항상 정확히 가리키게 한다(`BatchJobRun.params_snapshot` 과 동일 철학).
 - **자격증명은 스크립트에 절대 안 담는다**: 기존 UI-First 원칙(CLAUDE.md) 그대로 — 스크립트 `content`/`param_schema` 는 JSONB/Text 로 실행 로그·런북에 노출되므로, SSH 비밀번호 등은 여전히 잡/클러스터의 별도 암호화 필드(`encrypted_password` 등)에만 저장하고 스크립트는 `{{ target_host }}` 같은 플레이스홀더만 참조한다.
 
@@ -86,7 +86,7 @@ CheckMatrixItem                                CheckMatrixItem                  
   source_type: core_bundle|deep_check|addon|manual   source_type: core_bundle|deep_check|addon|
   source_ref: str (REGISTRY/Addon.type 키)              manual|script  ← 신규
   ↓ REGISTRY/Addon 조회 (redeploy 필요)               source_ref: 위와 동일 이거나 script_id  │
-  services/deep_checkers/*.py, services/checkers/*.py (하드코딩, 무변경)               │
+  services/registered_checks/*.py, services/checkers/*.py (하드코딩, 무변경)               │
                                                                                     │
                                                 ExecutableScript ◄──────────────────┘
                                                   kind: python | ansible_playbook | shell

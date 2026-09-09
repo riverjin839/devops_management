@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.models import StatusEnum
-from app.services.deep_checkers.base import DeepCheckContext
-from app.services.deep_checkers.cert_expiry_checker import (
+from app.services.registered_checks.base import DeepCheckContext
+from app.services.registered_checks.cert_expiry_checker import (
     CertExpiryChecker,
     _parse_kubeadm_output,
     _residual_days,
@@ -217,7 +217,7 @@ def test_pod_exec_failure_is_logged_server_side(caplog):
     ctx = _ctx(source="pod")
     ctx.cluster.name = "prod-a"
 
-    with caplog.at_level("WARNING", logger="app.services.deep_checkers.cert_expiry_checker"):
+    with caplog.at_level("WARNING", logger="app.services.registered_checks.cert_expiry_checker"):
         checker.safe_run(ctx)
 
     assert any(

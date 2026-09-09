@@ -20,7 +20,7 @@ from app.models import (
     DeepCheckDefinition,
     DeepCheckResult,
 )
-from app.services.deep_checkers import (
+from app.services.registered_checks import (
     DeepCheckContext,
     DeepCheckOutcome,
     get_checker_class,
@@ -165,7 +165,7 @@ class DeepCheckService:
             cluster = self.db.query(Cluster).filter(Cluster.id == d.cluster_id).first()
 
         outcome = self._run_one(d, cluster, in_cluster)
-        from app.services.deep_checkers.registry import get_step_plan
+        from app.services.registered_checks.registry import get_step_plan
         steps = getattr(outcome, "steps", []) or []
         commands = getattr(outcome, "commands", []) or []
         # 실행 단계 로그를 details 에도 보존(영속화/조회 일관) — 스키마 변경 없음.
@@ -220,7 +220,7 @@ class DeepCheckService:
         호출자 인자를 덮어써 실행한다. (예: 노드별 '검증' 버튼 / sync 직후 자동검증)
         """
         from app.models import StatusEnum
-        from app.services.deep_checkers.registry import REGISTRY, get_step_plan
+        from app.services.registered_checks.registry import REGISTRY, get_step_plan
 
         cls = get_checker_class(check_type)
         entry = REGISTRY.get(check_type)

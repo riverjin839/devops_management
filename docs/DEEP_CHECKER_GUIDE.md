@@ -71,13 +71,13 @@ status / 노드 Ready / kube-system 파드)만 본다. 이것만으로는 "노�
 
 | 계층 | 파일 | 역할 |
 |---|---|---|
-| 체커 베이스 | `backend/app/services/deep_checkers/base.py` | `DeepCheckerBase`, `DeepCheckContext`, `DeepCheckOutcome`, `_step()` 트레이스, `safe_run()` fail-safe, `_v1()`/`_kubectl()` K8s client. |
-| 체커 구현 | `backend/app/services/deep_checkers/*_checker.py` | check_type 별 실제 점검 로직 (16개, §7 목록). |
-| 레지스트리 | `backend/app/services/deep_checkers/registry.py` | `REGISTRY` 매핑 + `DeepCheckTypeSpec`(UI 폼 스키마) + `STEP_PLANS`(메커니즘 단계). |
-| 서비스 | `backend/app/services/deep_check_service.py` | `DeepCheckService` — 정의를 읽어 체커 실행·결과 저장. `run_for_cluster` / `run_definition_once` / `run_check_type_once` / `run_node_health_once` / `persist_ingest_payload`. |
-| 결과 라우터 | `backend/app/routers/deep_check.py` | 결과 조회 / 수동 실행 / ingest / AI 리뷰 / trend. |
-| 정의 라우터 | `backend/app/routers/deep_check_definitions.py` | 정의 CRUD + `check-types` 스키마 + `test`(미리보기). |
-| 모델 | `backend/app/models/deep_check.py` | `DeepCheckDefinition`, `DeepCheckResult`, `NotificationChannel`, `NotificationLog`. |
+| 체커 베이스 | `backend/app/services/registered_checks/base.py` | `DeepCheckerBase`, `DeepCheckContext`, `DeepCheckOutcome`, `_step()` 트레이스, `safe_run()` fail-safe, `_v1()`/`_kubectl()` K8s client. |
+| 체커 구현 | `backend/app/services/registered_checks/*_checker.py` | check_type 별 실제 점검 로직 (16개, §7 목록). |
+| 레지스트리 | `backend/app/services/registered_checks/registry.py` | `REGISTRY` 매핑 + `DeepCheckTypeSpec`(UI 폼 스키마) + `STEP_PLANS`(메커니즘 단계). |
+| 서비스 | `backend/app/services/check_definition_runner.py` | `DeepCheckService` — 정의를 읽어 체커 실행·결과 저장. `run_for_cluster` / `run_definition_once` / `run_check_type_once` / `run_node_health_once` / `persist_ingest_payload`. |
+| 결과 라우터 | `backend/app/routers/check_results_router.py` | 결과 조회 / 수동 실행 / ingest / AI 리뷰 / trend. |
+| 정의 라우터 | `backend/app/routers/check_definitions_router.py` | 정의 CRUD + `check-types` 스키마 + `test`(미리보기). |
+| 모델 | `backend/app/models/check_definitions.py` | `DeepCheckDefinition`, `DeepCheckResult`, `NotificationChannel`, `NotificationLog`. |
 | 시드 | `backend/app/main.py::_seed_default_deep_check_definitions` | registry → 글로벌 정의 자동 생성 (부팅 시, idempotent). |
 | 매트릭스 디스패처 | `backend/app/services/check_matrix_service.py` | cron 평가 → deep_check 항목을 `run_definition_once(persist=True)` 로 실행. |
 | 운영 점검 콘솔 | `backend/app/services/ops_check_service.py` + `routers/ops_check.py` | deep_check/addon 을 공통 "점검 항목" 으로 normalize, 카탈로그/배치 실행. |
@@ -224,7 +224,7 @@ Base: `/api/v1`
 
 > **실제 추가 작업 시 `.claude/skills/add-deep-checker` 스킬을 반드시 로드**할 것. 아래는 개요.
 
-1. **체커 작성** — `deep_checkers/<name>_checker.py`, `class XChecker(DeepCheckerBase)`,
+1. **체커 작성** — `registered_checks/<name>_checker.py`, `class XChecker(DeepCheckerBase)`,
    클래스 속성 `check_type`/`display_name`, `run(ctx) -> DeepCheckOutcome` 구현.
    - `ctx.cluster`(Optional), `ctx.thresholds`, `ctx.params`, `ctx.in_cluster` 사용.
    - K8s 읽기(`self._v1(ctx)`/`self._kubectl(ctx, ...)`) 또는 스냅샷 비교로 **무해하게**.

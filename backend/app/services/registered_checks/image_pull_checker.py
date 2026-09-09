@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from app.models import StatusEnum
-from app.services.deep_checkers.base import (
+from app.services.registered_checks.base import (
     DeepCheckContext,
     DeepCheckOutcome,
     DeepCheckerBase,

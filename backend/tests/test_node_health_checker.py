@@ -4,9 +4,9 @@ from types import SimpleNamespace as NS
 import pytest
 
 from app.models import StatusEnum
-from app.services.deep_checkers.base import DeepCheckContext
-from app.services.deep_checkers.node_health_checker import NodeHealthChecker
-from app.services.deep_checkers.registry import REGISTRY, get_checker_class, get_step_plan
+from app.services.registered_checks.base import DeepCheckContext
+from app.services.registered_checks.node_health_checker import NodeHealthChecker
+from app.services.registered_checks.registry import REGISTRY, get_checker_class, get_step_plan
 
 
 def _cond(t, s):

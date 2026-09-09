@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from app.models import StatusEnum
-from app.services.deep_checkers.base import (
+from app.services.registered_checks.base import (
     DeepCheckContext,
     DeepCheckOutcome,
     DeepCheckerBase,

@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Any, ClassVar, Iterator, Optional
 
-# step/command trace 상한 — JSONB 무한 성장 방지 (deep_checkers 와 동일 정책)
+# step/command trace 상한 — JSONB 무한 성장 방지 (registered_checks 와 동일 정책)
 _OUTPUT_EXCERPT_CHARS = 2000
 _MAX_RECORDED_COMMANDS = 30
 
@@ -103,7 +103,7 @@ class ExecutionContext:
 
 @dataclass
 class ExecutionStep:
-    """단일 실행 단계 — 진행 상태 타임라인/로그용 (deep_checkers 와 동일 shape)."""
+    """단일 실행 단계 — 진행 상태 타임라인/로그용 (registered_checks 와 동일 shape)."""
     id: str
     label: str
     status: str = "running"  # running | success | failed | skipped
@@ -153,7 +153,7 @@ class BatchJobExecutor:
     default_params: ClassVar[dict[str, Any]] = {}
     # 정적 실행 단계 계획 [{"id","label"}] — 실행 전에도 UI 타임라인이 그려지고,
     # 실행 후에는 `_step()` 이 남긴 실측 상태가 같은 id 로 오버레이된다
-    # (deep_checkers/registry.py 의 STEP_PLANS 관례).
+    # (registered_checks/registry.py 의 STEP_PLANS 관례).
     step_plan: ClassVar[list[dict[str, str]]] = []
 
     def merge_params(self, saved: Optional[dict[str, Any]], override: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -164,8 +164,8 @@ class BatchJobExecutor:
             merged.update(override)
         return merged
 
-    # ── 단계 트레이스 (deep_checkers/base.py 패턴 이식) ────────────────
-    # deep_checkers 를 import 하지 않고 복사 — 그 모듈은 k8s SDK/Cluster 모델에
+    # ── 단계 트레이스 (registered_checks/base.py 패턴 이식) ────────────────
+    # registered_checks 를 import 하지 않고 복사 — 그 모듈은 k8s SDK/Cluster 모델에
     # 의존해 batch_jobs 를 불필요하게 무겁게 만든다. executor 는 실행마다 새
     # 인스턴스(get_executor 가 cls() 반환)라 인스턴스 수집이 안전하고,
     # `_run_and_record` 가 예외 경로에서도 수집분을 회수한다.

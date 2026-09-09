@@ -147,7 +147,7 @@ class DeepCheckerBase(ABC):
         디스패처 fan-out 이 같은 워커 프로세스에서 동시에 서로 다른 클러스터를 점검하면,
         한 클러스터의 kubeconfig 로 다른 클러스터에 exec/조회가 나가는 race 가 생길 수
         있다. ``config.new_client_from_config()`` 는 전역 상태를 건드리지 않는 별도
-        ``ApiClient`` 를 반환해 이 문제를 피한다(``daily_checker.py`` 의
+        ``ApiClient`` 를 반환해 이 문제를 피한다(``core_bundle_checker.py`` 의
         ``_get_k8s_client`` 와 동일 패턴).
 
         반환값은 실제로는 ``_TimeoutGuardedApi`` 로 감싼 ``CoreV1Api`` — 호출자는

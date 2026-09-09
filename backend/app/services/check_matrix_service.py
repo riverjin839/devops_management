@@ -4,7 +4,7 @@ cron 디스패치 실행, 이력 리텐션 정리.
 행(CheckMatrixItem)은 3가지 실행 소스를 가진다:
   - core_bundle : DailyChecker.run_daily_check() 원자 실행 결과 투영. cron 은
                   Cluster.check_cron_expr (Cluster.status authority 보존을 위해 항목별이 아님).
-  - deep_check  : deep_checkers.REGISTRY 의 check_type 을 DeepCheckService 로 실행.
+  - deep_check  : registered_checks.REGISTRY 의 check_type 을 DeepCheckService 로 실행.
   - addon       : Addon.type 매칭 인스턴스를 HealthChecker 로 실행.
   - manual      : 자동 실행 없음 — record_manual_entry() 로만 값이 채워진다.
 
@@ -366,7 +366,7 @@ def run_core_bundle(db: Session, cluster: Cluster) -> None:
 def _run_core_bundle_raw(db: Session, cluster: Cluster):
     import asyncio
     from app.models import CheckScheduleType
-    from app.services.daily_checker import DailyChecker
+    from app.services.core_bundle_checker import DailyChecker
 
     log = asyncio.run(DailyChecker(db).run_daily_check(str(cluster.id), CheckScheduleType.manual))
     project_core_bundle_result(db, cluster, log)
@@ -527,8 +527,8 @@ def _execute_into_run(
             )
             db.commit()
             return
-        from app.services.deep_check_service import DeepCheckService
-        from app.services.deep_checkers.registry import extract_cell_value
+        from app.services.check_definition_runner import DeepCheckService
+        from app.services.registered_checks.registry import extract_cell_value
 
         res = DeepCheckService(db).run_definition_once(definition.id, cluster=cluster, persist=True)
         try:
@@ -625,7 +625,7 @@ def execute_definition_for_cluster(db: Session, definition_id, cluster: Cluster)
         .first()
     )
     if item is None:
-        from app.services.deep_check_service import DeepCheckService
+        from app.services.check_definition_runner import DeepCheckService
         DeepCheckService(db).run_definition_once(definition.id, cluster=cluster, persist=True)
         return {"definition_id": str(definition.id), "cluster_id": str(cluster.id), "logged": False}
 
@@ -764,7 +764,7 @@ def update_source_config(
     글로벌 정의 수정은 전 클러스터에 적용된다 — 호출 전 UI 가 경고를 띄운다.
     """
     if item.source_type == CheckMatrixSourceType.deep_check:
-        from app.services.deep_checkers.registry import REGISTRY
+        from app.services.registered_checks.registry import REGISTRY
 
         entry = REGISTRY.get(item.source_ref or "")
         if entry is None:
@@ -1202,8 +1202,8 @@ def seed_default_items(db: Session) -> int:
     sort_order += 10
     added += 1
 
-    from app.services.deep_checkers import REGISTRY
-    from app.services.deep_checkers.registry import get_cell_value_unit
+    from app.services.registered_checks import REGISTRY
+    from app.services.registered_checks.registry import get_cell_value_unit
     for check_type, (_, spec) in REGISTRY.items():
         # custom_* 템플릿형 타입은 check_type→정의 1:1 매핑이 성립하지 않으므로 매트릭스 제외.
         if not getattr(spec, "seed_default", True):
@@ -1248,8 +1248,8 @@ def backfill_item_metadata(db: Session) -> int:
     설치본은 값 없이 남는다. 매 부팅 시 호출해도 안전하며, 운영자가 직접 지운 값을
     다시 채우지는 않는다 — NULL/'' 만 대상. (색은 category 가 방금 채워진 행에만 부여.)
     """
-    from app.services.deep_checkers import REGISTRY
-    from app.services.deep_checkers.registry import CELL_VALUE_SPECS
+    from app.services.registered_checks import REGISTRY
+    from app.services.registered_checks.registry import CELL_VALUE_SPECS
 
     updated = 0
     for row in db.query(CheckMatrixItem).all():
@@ -1291,7 +1291,7 @@ def seed_default_schedules(db: Session) -> int:
     기존 +15분 오프셋 cron 으로 클러스터마다 활성화(기존 자동 실행 동작 보존).
     addon 행은 기존에도 자동 cron 이 없었으므로 스케줄을 만들지 않는다(수동 트리거만).
     """
-    from app.services.deep_checkers import REGISTRY
+    from app.services.registered_checks import REGISTRY
 
     items = (
         db.query(CheckMatrixItem)
