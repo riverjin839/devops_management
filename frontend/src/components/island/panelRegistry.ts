@@ -5,6 +5,7 @@ import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
 import { ClusterTrendsPage } from '@/pages/ClusterTrendsPage';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
+import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
@@ -63,6 +64,7 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/k8s-manage': K8sManagePage,
   '/k8s-allocation': K8sAllocationPage,
   '/cluster-trends': ClusterTrendsPage,
+  '/clusters': ClusterDetailPage,
   '/ops-checks': OpsCheckConsolePage,
   '/k8s-logs': K8sLogsPage,
   '/daily-check/review': DailyCheckReviewPage,

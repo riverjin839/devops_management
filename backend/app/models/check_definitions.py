@@ -51,6 +51,11 @@ class DeepCheckDefinition(Base):
 
     enabled = Column(Boolean, default=True, nullable=False)
 
+    affects_cluster_status = Column(Boolean, default=False, nullable=False)
+    # opt-in — True 면 이 정의의 최신 결과가 cluster_status_service.recompute() 의 클러스터
+    # 종합 상태 집계에 들어간다. 기본 False(대부분의 심층 점검은 참고용) — 애드온은 이 플래그
+    # 없이 항상 반영된다(클러스터별 인스턴스이므로 opt-in 개념이 없음).
+
     schedule_cron = Column(String(100), nullable=True)
     # NULL 이면 체크매트릭스(CheckMatrixSchedule) 쪽 cron 만 적용.
     # 값을 주면 매분 check-matrix 디스패처가 이 정의를 단독으로 due 평가해 실행한다

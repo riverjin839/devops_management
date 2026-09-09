@@ -221,6 +221,10 @@ def build_grid(db: Session) -> dict[str, Any]:
             {
                 "id": str(c.id), "name": c.name, "check_cron_expr": c.check_cron_expr,
                 "check_cron_enabled": c.check_cron_enabled,
+                # cluster_status_service.recompute() 가 기록한 종합 상태 — 여기선 저장된 값만
+                # 읽는다(매트릭스가 60초마다 폴링하는 화면이라 매번 재집계하면 비용이 크다).
+                # 원인까지 필요하면 GET /clusters/{id}/status-breakdown.
+                "status": c.status.value if c.status else None,
             }
             for c in clusters
         ],

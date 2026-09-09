@@ -34,6 +34,9 @@ class DefinitionIn(BaseModel):
     name: str
     description: Optional[str] = None
     enabled: bool = True
+    # opt-in — True 면 이 정의의 최신 결과가 클러스터 종합 상태(cluster_status_service
+    # .recompute()) 집계에 들어간다. 기본 False.
+    affects_cluster_status: bool = False
     schedule_cron: Optional[str] = None
     thresholds: Optional[dict[str, Any]] = None
     params: Optional[dict[str, Any]] = None
@@ -47,6 +50,7 @@ class DefinitionOut(BaseModel):
     name: str
     description: Optional[str] = None
     enabled: bool
+    affects_cluster_status: bool = False
     schedule_cron: Optional[str] = None
     thresholds: Optional[dict[str, Any]] = None
     params: Optional[dict[str, Any]] = None

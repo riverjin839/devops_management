@@ -120,6 +120,7 @@ export function DeepCheckDefinitionForm({
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const [affectsClusterStatus, setAffectsClusterStatus] = useState(initial?.affectsClusterStatus ?? false);
   const [scheduleCron, setScheduleCron] = useState(initial?.scheduleCron ?? '');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [thresholds, setThresholds] = useState<Record<string, any>>({});
@@ -159,6 +160,7 @@ export function DeepCheckDefinitionForm({
         name: name || schema?.displayName || checkType,
         description: description || null,
         enabled,
+        affectsClusterStatus,
         scheduleCron: scheduleCron || null,
         thresholds,
         params,
@@ -278,6 +280,22 @@ export function DeepCheckDefinitionForm({
             <span>이 정의를 활성화</span>
           </label>
         </Field>
+        <Field label="클러스터 종합 상태">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={affectsClusterStatus}
+              onChange={(e) => setAffectsClusterStatus(e.target.checked)}
+            />
+            <span>이 정의 결과를 클러스터 상태에 반영</span>
+          </label>
+          <div className="text-xs text-muted-foreground mt-1">
+            켜면 이 점검의 최신 결과가 클러스터 카드/대시보드의 종합 상태(정상/경고/위험)
+            판정에 함께 들어간다. 대부분의 심층 점검은 참고용이라 기본은 꺼짐.
+          </div>
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="스케줄 cron (선택 — 정의별 단독 실행)">
           <div className="flex gap-2">
             <select

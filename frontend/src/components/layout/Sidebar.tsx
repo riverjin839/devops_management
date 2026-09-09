@@ -69,7 +69,7 @@ const HOVER_CLOSE_DELAY = 200;
 const CLUSTER_FLYOUT_SECTIONS: Array<{ label: string; paths: string[] }> = [
   { label: '모니터링', paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/pod-bottleneck'] },
   { label: '콘솔', paths: ['/k9s', '/node-ssh', '/etcdctl', '/bulk-exec'] },
-  { label: '점검', paths: ['/ops-checks', '/daily-check/review', '/daily-check/settings'] },
+  { label: '점검', paths: ['/clusters', '/ops-checks', '/daily-check/review', '/daily-check/settings'] },
   { label: '관리', paths: ['/cluster-manage', '/versions', '/k8s-manage', '/k8s-allocation', '/node-labels', '/node-images', '/k8s-logs'] },
 ];
 

@@ -114,20 +114,14 @@ class DailyChecker:
 
         self.db.add(check_log)
 
-        # G-1: DailyChecker 가 cluster.status 의 authoritative source.
-        # HealthChecker (addon-based) / DeepCheckService 는 자기 도메인 결과만 갱신.
-        # SELECT FOR UPDATE 로 동시 갱신 race 차단 (Beat 09:00 + 사용자 수동 동시 발생 등).
-        locked_cluster = (
-            self.db.query(Cluster)
-            .filter(Cluster.id == cluster.id)
-            .with_for_update()
-            .first()
-        )
-        if locked_cluster is not None:
-            locked_cluster.status = overall_status
-            locked_cluster.updated_at = datetime.utcnow()
+        # G-1(개정): Cluster.status 는 cluster_status_service.recompute() 가 유일하게 쓴다.
+        # DailyChecker/HealthChecker/DeepCheckService 는 자기 도메인 결과(check_log 등)를
+        # flush 한 뒤 recompute() 만 호출한다 — 직접 대입하지 않는다(세션이 autoflush=False
+        # 라 flush 를 먼저 해야 recompute() 가 방금 만든 이 로그를 "최신"으로 본다).
+        self.db.flush()
+        from app.services.cluster_status_service import recompute
+        recompute(self.db, cluster.id)  # 자체 SELECT FOR UPDATE + commit 포함
 
-        self.db.commit()
         self.db.refresh(check_log)
 
         # AI 자동 리뷰 + 알림은 Celery 로 비동기 위임 (점검 자체에는 영향 없음).

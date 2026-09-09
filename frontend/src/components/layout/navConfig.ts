@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, BellRing, Dog,
-  TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2,
+  TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2, LayoutGrid,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -21,6 +21,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/k8s-allocation':     { defaultLabel: 'K8S 자원 관리',  icon: Gauge, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
   '/k9s':                { defaultLabel: 'k9s 콘솔',        icon: Dog, iconColor: 'text-orange-500', iconSize: 'w-5 h-5' },
   '/cluster-trends':     { defaultLabel: '클러스터 추이',  icon: TrendingUp, iconColor: 'text-cyan-500', iconSize: 'w-5 h-5' },
+  '/clusters':           { defaultLabel: '클러스터 상세',    icon: LayoutGrid },
   '/ops-checks':         { defaultLabel: '운영 점검',       icon: ShieldCheck },
   '/k8s-logs':           { defaultLabel: '파드 로그',       icon: ScrollText },
   '/daily-check/review': { defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
@@ -81,7 +82,7 @@ export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' 
  * 모든 그룹이 항상 어딘가에 보이므로 반대 도메인 화면이 "사라지는" 일이 없다.
  */
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; domain: 'work' | 'platform' | 'system' }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage', '/k8s-logs'], domain: 'platform' },
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/clusters', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage', '/k8s-logs'], domain: 'platform' },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], domain: 'platform' },
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], domain: 'platform' },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], domain: 'platform' },
