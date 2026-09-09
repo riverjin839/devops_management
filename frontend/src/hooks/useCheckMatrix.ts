@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { checkMatrixApi } from '@/services/api';
-import type { CheckMatrixItemInput, CheckMatrixSourceConfigEntry } from '@/types';
+import type { CheckMatrixItemInput, CheckMatrixItemPreviewInput, CheckMatrixSourceConfigEntry } from '@/types';
 
 export const checkMatrixKeys = {
   items: ['checkMatrixItems'] as const,
+  catalog: ['checkMatrixCatalog'] as const,
   grid: ['checkMatrixGrid'] as const,
   history: (itemId: string, clusterId: string, days: number) =>
     ['checkMatrixHistory', itemId, clusterId, days] as const,
@@ -32,6 +33,26 @@ export function useCheckMatrixItems() {
       const { data } = await checkMatrixApi.listItems();
       return data;
     },
+  });
+}
+
+/** 등록 마법사 카탈로그 — 실행기술별 점검 종류 목록. 자주 안 바뀌므로 오래 캐시한다. */
+export function useCheckMatrixCatalog() {
+  return useQuery({
+    queryKey: checkMatrixKeys.catalog,
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.getCatalog();
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** 등록 마법사의 "테스트" 단계 — 저장 없이 1회 실행. */
+export function usePreviewCheckMatrixItem() {
+  return useMutation({
+    mutationFn: (body: CheckMatrixItemPreviewInput) =>
+      checkMatrixApi.previewItem(body).then((r) => r.data),
   });
 }
 

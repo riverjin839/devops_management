@@ -167,6 +167,17 @@ class HealthChecker:
         self.db.commit()
         return result
 
+    def preview_addon_check(
+        self, cluster: Cluster, addon_type: str, config: dict | None = None,
+    ) -> CheckResult:
+        """저장하지 않은 애드온 설정으로 ad-hoc 1회 실행 — 등록 마법사의 "테스트" 단계.
+
+        실제 Addon 로우를 만들지 않는다 — 세션에 추가(add)하지도, 커밋하지도 않는 transient
+        인스턴스를 체커에 넘긴다. 체커는 addon.type/addon.config/addon.name 만 읽으므로 안전하다.
+        """
+        transient = Addon(cluster_id=cluster.id, type=addon_type, name=addon_type, config=config or {})
+        return self._dispatch(cluster, transient)
+
     def _dispatch(self, cluster: Cluster, addon: Addon) -> CheckResult:
         """addon.type에 맞는 Checker를 찾아 실행 (Strategy Pattern)."""
         checker_cls = CHECKER_REGISTRY.get(addon.type)

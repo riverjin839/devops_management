@@ -187,7 +187,9 @@ function SourceConfigEditor({
       });
       toast.success(
         '소스 설정을 저장했습니다.',
-        res.scope === 'global' ? '글로벌 정의라 모든 클러스터에 적용됩니다.' : undefined,
+        res.copiedFromGlobal
+          ? '글로벌 정의를 복제해 이 클러스터 전용 정의를 만들었습니다 — 다른 클러스터에는 영향 없습니다.'
+          : undefined,
       );
       onDone();
     } catch (e) {
@@ -198,11 +200,11 @@ function SourceConfigEditor({
   return (
     <div className="rounded-md border border-primary/40 bg-secondary/20 p-3 space-y-3">
       {runbook.definitionScope === 'global' && (
-        <p className="flex items-start gap-2 text-xs text-status-warning">
-          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-          <span>이 셀은 <b>글로벌 정의</b>를 쓰고 있습니다 — 여기서 저장하면 이 점검을 쓰는
-            <b> 모든 클러스터</b>에 적용됩니다. 클러스터별로 다르게 두려면 운영 점검(Ops Checks)
-            화면에서 클러스터 전용 정의를 만드세요.</span>
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+          <span>이 셀은 지금 <b>글로벌 정의</b>(모든 클러스터 공통)를 쓰고 있습니다 — 여기서 저장하면
+            이 클러스터 전용 사본이 자동으로 만들어지고 그 사본만 바뀝니다. 글로벌 정의와
+            <b> 다른 클러스터</b>는 영향받지 않습니다.</span>
         </p>
       )}
       <div className="space-y-2">

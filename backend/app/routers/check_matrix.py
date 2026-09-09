@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,6 +39,11 @@ class ItemIn(BaseModel):
     category: Optional[str] = None
     color: Optional[str] = None
     enabled: bool = True
+    # 등록 마법사 전용 — deep_check 항목을 새로 만들 때 아직 글로벌 정의가 없으면 이 값으로
+    # 함께 만든다(CheckMatrixItem 컬럼이 아니라 생성 직후 DeepCheckDefinition 에 쓰인다).
+    # 이미 정의가 있으면(시드된 기본 타입 포함) 조용히 무시된다.
+    thresholds: Optional[dict[str, Any]] = None
+    params: Optional[dict[str, Any]] = None
 
 
 class ItemOut(BaseModel):
@@ -133,8 +138,14 @@ def create_item(body: ItemIn, db: Session = Depends(get_db), _: User = Depends(r
         .limit(1)
         .scalar()
     ) or 0
-    row = CheckMatrixItem(**body.model_dump(), is_system=False, sort_order=max_sort + 10)
+    row = CheckMatrixItem(
+        **body.model_dump(exclude={"thresholds", "params"}),
+        is_system=False, sort_order=max_sort + 10,
+    )
     db.add(row)
+    if body.source_type == CheckMatrixSourceType.deep_check and body.source_ref:
+        # 등록 마법사에서 새 커스텀 타입을 처음 만드는 경우 — 글로벌 정의가 없으면 함께 생성.
+        svc.ensure_deep_check_definition(db, body.source_ref, body.thresholds, body.params)
     db.commit()
     db.refresh(row)
     return row
@@ -165,7 +176,7 @@ def update_item(item_id: UUID, body: ItemIn, db: Session = Depends(get_db), _: U
         db.refresh(row)
         return row
     _validate_item_body(body)
-    for k, v in body.model_dump().items():
+    for k, v in body.model_dump(exclude={"thresholds", "params"}).items():
         setattr(row, k, v)
     db.commit()
     db.refresh(row)
@@ -201,6 +212,37 @@ def reorder_items(body: ReorderRequest, db: Session = Depends(get_db), _: User =
         row.sort_order = 1000 + i * 10
     db.commit()
     return {"updated": len(body.item_ids)}
+
+
+class ItemPreviewIn(BaseModel):
+    source_type: CheckMatrixSourceType
+    source_ref: Optional[str] = None
+    cluster_id: UUID
+    thresholds: Optional[dict[str, Any]] = None
+    params: Optional[dict[str, Any]] = None
+    config: Optional[dict[str, Any]] = None
+
+
+@router.post("/items/preview")
+def preview_item(
+    body: ItemPreviewIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """등록 전 저장 없이 1회 실행 — 등록 마법사의 "테스트" 단계."""
+    try:
+        return svc.preview_item(
+            db, body.source_type, body.source_ref, body.cluster_id,
+            thresholds=body.thresholds, params=body.params, config=body.config,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/exec-techs")
+def get_catalog(db: Session = Depends(get_db)):
+    """등록 마법사 카탈로그 — 실행 기술별 점검 종류 목록(프론트 하드코딩 없이 API 로 제공)."""
+    return svc.list_catalog(db)
 
 
 # ── Grid / history / manual entry ────────────────────────────────────────────
