@@ -56,6 +56,20 @@ def cluster(db):
     db.commit()
 
 
+@pytest.fixture
+def check_type(db):
+    """테스트마다 유일한 check_type 문자열 — 실제 REGISTRY 의 `cert_expiry` 등을 재사용하면
+    글로벌(cluster_id=NULL) 정의가 테스트 간에 남아 서로 오염시킨다(실제로 발생한 회귀:
+    `cluster` 픽스처의 정리 쿼리는 `cluster_id == 이 테스트의 클러스터` 만 지우므로 글로벌
+    정의는 지워지지 않고 다음 테스트가 그걸 또 집어 먹었다). 유일한 문자열을 쓰고 여기서
+    글로벌 포함 전부 정리한다."""
+    ct = f"status-svc-test-{uuid.uuid4().hex[:8]}"
+    yield ct
+    db.query(DeepCheckResult).filter(DeepCheckResult.check_type == ct).delete(synchronize_session=False)
+    db.query(DeepCheckDefinition).filter(DeepCheckDefinition.check_type == ct).delete(synchronize_session=False)
+    db.commit()
+
+
 def _add_daily_log(db, cluster_id, overall_status: StatusEnum):
     from datetime import datetime
     log = DailyCheckLog(
@@ -139,36 +153,36 @@ class TestAddonPendingPromotion:
 
 
 class TestDeepCheckOptIn:
-    def test_affects_true_critical_rolls_up(self, db, cluster):
+    def test_affects_true_critical_rolls_up(self, db, cluster, check_type):
         _add_daily_log(db, cluster.id, StatusEnum.healthy)
-        _add_definition(db, check_type="cert_expiry", affects=True)
-        _add_result(db, cluster.id, "cert_expiry", StatusEnum.critical)
+        _add_definition(db, check_type=check_type, affects=True)
+        _add_result(db, cluster.id, check_type, StatusEnum.critical)
         out = svc.recompute(db, cluster.id)
         assert out["status"] == "critical"
         assert any(c["source_type"] == "deep_check" for c in out["contributors"])
 
-    def test_affects_false_critical_is_excluded(self, db, cluster):
+    def test_affects_false_critical_is_excluded(self, db, cluster, check_type):
         _add_daily_log(db, cluster.id, StatusEnum.healthy)
-        _add_definition(db, check_type="cert_expiry", affects=False)
-        _add_result(db, cluster.id, "cert_expiry", StatusEnum.critical)
+        _add_definition(db, check_type=check_type, affects=False)
+        _add_result(db, cluster.id, check_type, StatusEnum.critical)
         out = svc.recompute(db, cluster.id)
         assert out["status"] == "healthy"
         assert not any(c["source_type"] == "deep_check" for c in out["contributors"])
 
-    def test_pending_result_excluded_not_promoted(self, db, cluster):
+    def test_pending_result_excluded_not_promoted(self, db, cluster, check_type):
         """애드온과 달리 심층 점검의 개별 pending 은 warning 으로 승격되지 않고 그냥 빠진다."""
         _add_daily_log(db, cluster.id, StatusEnum.healthy)
-        _add_definition(db, check_type="cert_expiry", affects=True)
-        _add_result(db, cluster.id, "cert_expiry", StatusEnum.pending)
+        _add_definition(db, check_type=check_type, affects=True)
+        _add_result(db, cluster.id, check_type, StatusEnum.pending)
         out = svc.recompute(db, cluster.id)
         assert out["status"] == "healthy"
         assert not any(c["source_type"] == "deep_check" for c in out["contributors"])
 
-    def test_cluster_specific_definition_overrides_global(self, db, cluster):
+    def test_cluster_specific_definition_overrides_global(self, db, cluster, check_type):
         _add_daily_log(db, cluster.id, StatusEnum.healthy)
-        _add_definition(db, check_type="cert_expiry", cluster_id=None, affects=True)
-        _add_definition(db, check_type="cert_expiry", cluster_id=cluster.id, affects=True)
-        _add_result(db, cluster.id, "cert_expiry", StatusEnum.warning)
+        _add_definition(db, check_type=check_type, cluster_id=None, affects=True)
+        _add_definition(db, check_type=check_type, cluster_id=cluster.id, affects=True)
+        _add_result(db, cluster.id, check_type, StatusEnum.warning)
         out = svc.recompute(db, cluster.id)
         deep_contributors = [c for c in out["contributors"] if c["source_type"] == "deep_check"]
         assert len(deep_contributors) == 1  # 글로벌 정의가 중복으로 잡히지 않음
