@@ -27,6 +27,8 @@ description: UX/UI 디자인 운영 절차 — DESIGN.md 를 현행화하고 디
    grep -rn 'style={{' --include='*.tsx' pages components | wc -l
    # 고정 팔레트 (테마 토큰 미사용)
    grep -rEn 'text-white|bg-white|text-black|text-gray-|bg-gray-' --include='*.tsx' pages components | wc -l
+   # zinc-* 고정 팔레트 (D-071 — 1회차 패턴이 gray-* 만 잡아 셸 flyout/툴팁을 놓쳤다)
+   grep -rEn 'zinc-[0-9]' --include='*.tsx' pages components | wc -l
    # 컨벤션 외 라운딩 (rounded-md/sm 카드·버튼)
    grep -rEn 'rounded-(md|sm)\b' --include='*.tsx' pages components | wc -l
    ```
