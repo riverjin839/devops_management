@@ -12,6 +12,7 @@ export const queryKeys = {
   summary: ['summary'] as const,
   logs: (clusterId?: string) => ['logs', clusterId] as const,
   kubeconfig: (id: string) => ['kubeconfig', id] as const,
+  statusBreakdown: (id: string) => ['clusterStatusBreakdown', id] as const,
 };
 
 // Clusters
@@ -44,6 +45,20 @@ export function useCluster(id: string) {
       return data.data;
     },
     enabled: !!id,
+  });
+}
+
+/** 클러스터 종합 상태 원인 — 호출할 때마다 서버가 재집계해 최신값을 준다(멱등). */
+export function useClusterStatusBreakdown(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.statusBreakdown(id || ''),
+    queryFn: async () => {
+      const { data } = await clustersApi.getStatusBreakdown(id!);
+      return data;
+    },
+    enabled: !!id,
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000,
   });
 }
 

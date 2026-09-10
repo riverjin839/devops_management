@@ -10,6 +10,17 @@
 
 1.32.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **클러스터 종합 상태 단일 롤업 + 클러스터 상세 화면**: 클러스터의 정상/경고/위험 판정을 여러
+  곳이 각자 덮어쓰던 것을 `cluster_status_service.recompute()` 하나로 모았다 — 핵심 점검
+  번들이 미연결이면 다른 신호와 무관하게 전체가 미연결로 표시되고, 애드온은 항상, 심층 점검은
+  정의에서 "클러스터 상태에 반영"을 켠 것만 반영된다. 신규 `/clusters/:id` 화면에서 종합 상태와
+  그 원인(어떤 점검이 왜 경고/위험을 만들었는지)을 한 번에 보고, 그 아래 점검 카탈로그에서 바로
+  실행할 수 있다. 대시보드 클러스터 카드에도 원인 요약 1줄이 추가됐다. Backend:
+  `services/cluster_status_service.py`, `DeepCheckDefinition.affects_cluster_status`,
+  `GET /clusters/{id}/status-breakdown`. Frontend: `pages/ClusterDetailPage.tsx`,
+  `components/ops-check/ClusterOpsCheckPanel.tsx`.
+
 ## [1.32.0] - 2026-09-09
 
 ### Added

@@ -66,6 +66,7 @@ export function DeepCheckDefinitionList({
         name: d.name,
         description: d.description ?? null,
         enabled: !d.enabled,
+        affectsClusterStatus: d.affectsClusterStatus,
         scheduleCron: d.scheduleCron ?? null,
         thresholds: d.thresholds ?? null,
         params: d.params ?? null,

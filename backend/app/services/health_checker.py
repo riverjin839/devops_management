@@ -36,41 +36,33 @@ class HealthChecker:
     def run_check(self, cluster_id: UUID) -> None:
         """클러스터 전체 헬스 체크 실행.
 
-        먼저 API server reachability 를 체크하고 안 되면 addon 체크는
-        skip 하고 cluster.status = pending(미연결) 로 마킹한다.
-        이렇게 해야 "연결 실패"와 "연결은 되는데 addon 문제" 가 구분됨.
+        먼저 API server reachability 를 체크하고 안 되면 애드온 체크는 건너뛴다 — 어차피
+        전부 연결 실패로 끝날 호출이기 때문이다. "연결 실패"와 "연결은 되는데 addon 문제"
+        를 구분하기 위한 최적화일 뿐, cluster.status 자체는 이 확인과 무관하게 아래
+        `cluster_status_service.recompute()` 가 최신 DailyCheckLog 기준으로 판정한다.
 
-        ── cluster.status 갱신 정책 (G-1) ────────────────────────
-        DailyChecker 가 primary authoritative source. HealthChecker 는
-        사용자의 ad-hoc 트리거이므로 cluster.status 갱신 시 row-level lock
-        (SELECT FOR UPDATE) 으로 동시 갱신 race 차단. 같은 정책을
-        DailyChecker.run_daily_check 도 따른다.
+        ── cluster.status 갱신 정책 (G-1, 개정) ────────────────────────
+        Cluster.status 는 recompute() 하나만 쓴다. 여기서는 자기 도메인 결과(애드온
+        status/CheckLog)만 flush 하고 recompute() 를 호출한다 — 직접 대입하지 않는다.
         """
         cluster = self.db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if not cluster:
             return
 
-        # ── Reachability 선제 체크 ────────────────────────────
+        from app.services.cluster_status_service import recompute
+
+        # ── Reachability 선제 체크(애드온 호출 절약용 — 아래 설명 참고) ──────────
         if not _is_api_server_reachable(cluster):
-            locked = (
-                self.db.query(Cluster)
-                .filter(Cluster.id == cluster_id)
-                .with_for_update()
-                .first()
-            )
-            if locked is not None:
-                locked.status = StatusEnum.pending
-                locked.updated_at = datetime.utcnow()
             self.db.add(CheckLog(
                 cluster_id=cluster_id,
                 status=StatusEnum.pending,
-                message="Cluster unreachable — API server probe failed (미연결)",
+                message="Cluster unreachable — API server probe failed (미연결), 애드온 점검 건너뜀",
             ))
-            self.db.commit()
+            self.db.flush()
+            recompute(self.db, cluster_id)
             return
 
         addons = self.db.query(Addon).filter(Addon.cluster_id == cluster_id).all()
-        overall_status = StatusEnum.healthy
 
         for addon in addons:
             result = self._dispatch(cluster, addon)
@@ -91,37 +83,27 @@ class HealthChecker:
             )
             self.db.add(log)
 
-            # 전체 상태 계산 — pending(개별 addon 연결 실패) 은 warning 수준.
-            # cluster 전체 pending 은 위에서 reachability 실패 시만 설정.
-            if result.status == StatusEnum.critical:
-                overall_status = StatusEnum.critical
-            elif result.status == StatusEnum.warning and overall_status != StatusEnum.critical:
-                overall_status = StatusEnum.warning
-            elif result.status == StatusEnum.pending and overall_status == StatusEnum.healthy:
-                overall_status = StatusEnum.warning
+        self.db.flush()
+        breakdown = recompute(self.db, cluster_id)
 
-        # G-1: row-level lock 으로 동시 갱신 race 차단
-        locked = (
-            self.db.query(Cluster)
-            .filter(Cluster.id == cluster_id)
-            .with_for_update()
-            .first()
-        )
-        if locked is not None:
-            locked.status = overall_status
-            locked.updated_at = datetime.utcnow()
-
-        cluster_log = CheckLog(
+        self.db.add(CheckLog(
             cluster_id=cluster_id,
-            status=overall_status,
-            message=f"Cluster check completed - Status: {overall_status.value}",
-        )
-        self.db.add(cluster_log)
+            status=StatusEnum(breakdown["status"]),
+            message=f"Cluster check completed - Status: {breakdown['status']}",
+        ))
         self.db.commit()
 
 
     def run_single_addon_check(self, cluster_id: UUID, addon_id: UUID) -> CheckResult | None:
-        """특정 addon 하나만 헬스 체크 실행"""
+        """특정 addon 하나만 헬스 체크 실행.
+
+        클러스터 전체 상태는 이 애드온 하나만 보고 재계산하지 않는다 — 예전엔 여기서
+        "이 클러스터의 애드온 전체"만 다시 훑어 cluster.status 를 덮어썼는데, 핵심 점검
+        번들의 reachability 판정을 무시하는 비대칭이 있었다(연결 자체가 끊긴 클러스터에서
+        애드온 하나만 실행해도 상태가 healthy 로 보일 수 있었음). `cluster_status_service
+        .recompute()` 가 핵심 번들·전체 애드온·opt-in 심층 점검을 모두 같은 규칙으로
+        다시 집계한다.
+        """
         cluster = self.db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if not cluster:
             return None
@@ -144,27 +126,10 @@ class HealthChecker:
             raw_output={"response_time": result.response_time, **(result.details or {})},
         )
         self.db.add(log)
+        self.db.flush()
 
-        # 클러스터 전체 상태 재계산 + row-level lock (G-1 정책)
-        addons = self.db.query(Addon).filter(Addon.cluster_id == cluster_id).all()
-        overall_status = StatusEnum.healthy
-        for a in addons:
-            if a.status == StatusEnum.critical:
-                overall_status = StatusEnum.critical
-                break
-            if a.status == StatusEnum.warning:
-                overall_status = StatusEnum.warning
-
-        locked = (
-            self.db.query(Cluster)
-            .filter(Cluster.id == cluster_id)
-            .with_for_update()
-            .first()
-        )
-        if locked is not None:
-            locked.status = overall_status
-            locked.updated_at = datetime.utcnow()
-        self.db.commit()
+        from app.services.cluster_status_service import recompute
+        recompute(self.db, cluster_id)
         return result
 
     def preview_addon_check(

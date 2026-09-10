@@ -253,8 +253,8 @@ function MatrixDisplaySettings({
 }
 
 function ClusterCronBadge({
-  cluster, isRunning, coreHealth,
-}: { cluster: CheckMatrixGridCluster; isRunning: boolean; coreHealth: Status | null }) {
+  cluster, isRunning,
+}: { cluster: CheckMatrixGridCluster; isRunning: boolean }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(cluster.checkCronExpr ?? '');
@@ -282,7 +282,7 @@ function ClusterCronBadge({
       ? 'off'
       : isRunning
         ? 'running'
-        : coreHealth === 'critical' ? 'critical' : coreHealth === 'warning' ? 'warning' : 'healthy';
+        : cluster.status === 'critical' ? 'critical' : cluster.status === 'warning' ? 'warning' : 'healthy';
 
   const ToneIcon = CRON_TONE_ICON[tone];
 
@@ -420,8 +420,6 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     () => new Set((activeRuns?.runs ?? []).map((r) => r.clusterId)),
     [activeRuns],
   );
-  const coreBundleItem = items.find((i) => i.sourceType === 'core_bundle');
-
   const handleRunCluster = async (cluster: CheckMatrixGridCluster) => {
     setRunningKey(`cluster:${cluster.id}`);
     try {
@@ -649,7 +647,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1 min-w-0">
                           <button
-                            onClick={() => navigate(`/ops-checks/${cluster.id}`)}
+                            onClick={() => navigate(`/clusters/${cluster.id}`)}
                             className="truncate max-w-[120px] hover:text-primary hover:underline underline-offset-2"
                             title={`${cluster.name} 상세로 이동`}
                           >
@@ -670,9 +668,6 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                         <ClusterCronBadge
                           cluster={cluster}
                           isRunning={runningClusterIds.has(cluster.id)}
-                          coreHealth={
-                            coreBundleItem ? (grid?.cells[coreBundleItem.id]?.[cluster.id]?.status ?? null) : null
-                          }
                         />
                       </div>
                       <ResizeGrip onMouseDown={(e) => colW.beginResize(cluster.id, e)} onDoubleClick={() => colW.autoFit(cluster.id)} />

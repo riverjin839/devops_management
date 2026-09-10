@@ -232,6 +232,18 @@ def get_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     return cluster
 
 
+@router.get("/{cluster_id}/status-breakdown")
+def get_cluster_status_breakdown(cluster_id: UUID, db: Session = Depends(get_db)):
+    """클러스터 종합 상태의 원인 목록 — `cluster_status_service.recompute()` 를 다시 돌려
+    항상 최신 신호로 답한다(조회만으로 재계산되는 게 이상해 보일 수 있지만, 이 함수는
+    멱등이라 부작용이 없고 캐시 무효화 걱정 없이 항상 신선한 원인 목록을 준다)."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    from app.services.cluster_status_service import recompute
+    return recompute(db, cluster_id)
+
+
 @router.post("", response_model=ClusterResponse, status_code=status.HTTP_201_CREATED)
 def create_cluster(
     cluster_data: ClusterCreate,

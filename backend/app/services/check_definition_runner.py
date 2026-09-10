@@ -141,7 +141,14 @@ class DeepCheckService:
             executed += 1
 
         if executed:
-            self.db.commit()
+            self.db.flush()
+            if cluster is not None:
+                from app.services.cluster_status_service import recompute
+                recompute(self.db, cluster.id)
+            else:
+                # in_cluster 모드(Super Pod)는 클러스터를 이 세션에서 조회하지 않으므로
+                # 롤업 대상이 없다 — 결과만 커밋.
+                self.db.commit()
         return executed, str(log_id) if log_id else None
 
     def run_definition_once(
@@ -199,7 +206,9 @@ class DeepCheckService:
                 checked_at=datetime.utcnow(),
             )
             self.db.add(row)
-            self.db.commit()
+            self.db.flush()
+            from app.services.cluster_status_service import recompute
+            recompute(self.db, cluster.id)
             result["persisted_result_id"] = str(row.id)
         return result
 

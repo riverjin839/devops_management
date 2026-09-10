@@ -108,7 +108,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - **상단 헤더**: 아일랜드 이름 + (공유받은 것이면) `소유자 · 읽기 전용` 배지 + 레이아웃 전환 버튼(탭↔사이드바, 소유자만) + 아일랜드 관리 버튼.
   - **탭 모드(`layoutMode='tabs'`)**: 헤더 아래 pill 탭바(`IslandTabBar`, SettingsPage 탭바 룩). 드래그로 순서 변경, hover 시 × 로 제거, 끝에 "화면 추가".
   - **사이드바 모드(`layoutMode='sidebar'`)**: 좌측 **iconOnly 56px 레일**(`IslandRail`)이 메인 사이드바에 **flush**(좌측 공백 0)로 붙는다 — CLAUDE.md 보조 사이드바 간격 표준 준수. hover 시 portal 툴팁으로 화면명 표시, 드래그로 순서 변경.
-  - **패널 본문**: `IslandPanelHost` 가 `.island-embed` 래퍼 + `IslandEmbedContext.Provider` 로 감싸 페이지를 렌더한다. 컨텍스트가 필요한 이유는 `/ops-checks/:clusterId` 처럼 **클러스터 선택을 URL 에 담는 화면**들 때문 — 이들은 파라미터가 없으면 마운트 시 자기 라우트로 `navigate` 하므로, 표식이 없으면 앱 전체가 아일랜드 밖으로 나가버린다. 공통 훅 `hooks/useClusterRouteParam.ts` 가 임베드 상태에서는 URL 대신 로컬 state 로 클러스터를 고른다(적용: `/ops-checks`, `/k8s-manage`, `/k8s-allocation`, `/k8s-logs`). 이 래퍼는 `index.css` 의 `.island-embed :is(.min-h-screen,.h-screen)` 규칙으로 페이지 루트의 전체화면 셸을 무력화하고, 스크롤을 자기가 소유해서 아일랜드 크롬(탭바/레일)이 고정되게 한다. **활성 패널 하나만 마운트**한다.
+  - **패널 본문**: `IslandPanelHost` 가 `.island-embed` 래퍼 + `IslandEmbedContext.Provider` 로 감싸 페이지를 렌더한다. 컨텍스트가 필요한 이유는 `/ops-checks/:clusterId` 처럼 **클러스터 선택을 URL 에 담는 화면**들 때문 — 이들은 파라미터가 없으면 마운트 시 자기 라우트로 `navigate` 하므로, 표식이 없으면 앱 전체가 아일랜드 밖으로 나가버린다. 공통 훅 `hooks/useClusterRouteParam.ts` 가 임베드 상태에서는 URL 대신 로컬 state 로 클러스터를 고른다(적용: `/clusters`, `/ops-checks`, `/k8s-manage`, `/k8s-allocation`, `/k8s-logs`). 이 래퍼는 `index.css` 의 `.island-embed :is(.min-h-screen,.h-screen)` 규칙으로 페이지 루트의 전체화면 셸을 무력화하고, 스크롤을 자기가 소유해서 아일랜드 크롬(탭바/레일)이 고정되게 한다. **활성 패널 하나만 마운트**한다.
   - **화면 추가 다이얼로그**(`PanelPickerDialog`): 검색 + 그룹별(사이드바 GROUPS 기준) 목록. 이미 담긴 화면은 체크 표시. 패널 수가 상한(`MAX_PANELS` = 20, 백엔드 스키마와 동일)에 도달하면 상단 안내 + 항목/추가 버튼 비활성화.
   - **아일랜드 관리 SidePane**(`IslandManagerPane`): 생성 / 이름·설명 인라인 편집 / 아이콘(`ClusterIconPicker`) / **드래그 순서 변경**(`GripVertical` 핸들, `POST /islands/reorder`) / 레이아웃 토글 / 공유 토글 / 삭제, 그리고 **팀 공유 아일랜드** 목록(읽기 전용 + 복제 버튼).
   - **패널 표시 설정 다이얼로그**(`PanelEditDialog`): 탭·레일 항목의 연필 아이콘으로 열어 패널별 표시 이름·아이콘을 오버라이드한다. 비우면 `null` 로 저장되어 사이드바 기본값(navLabels → NAV_MAP)으로 되돌아간다.
@@ -420,6 +420,31 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
   - **[2026-09-08, D-063·D-066]** 이 화면을 `/clusters/:id` 클러스터 상세로 승격: 헤더에 종합 상태+원인 카드 추가, 카탈로그에 core_bundle(기본 점검) 행 포함, 카탈로그 소스에 배치잡(SSH)·플레이북(Ansible) 편입(`ops_check_service.py` 의 "단계 1 이후" 미구현 어댑터), 행별 설정 편집 딥링크. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250) §1·§5
+    - **[2026-09-09, 로드맵 3단계 완료분]** "승격"은 기존 화면을 고치는 대신 카탈로그·실행·로그 UI 를
+      `components/ops-check/ClusterOpsCheckPanel.tsx` 로 추출해 신규 `/clusters/:id`(아래 섹션)와
+      공유하는 방식으로 구현했다 — `/ops-checks/:clusterId` 는 레거시 링크·북마크·아일랜드 패널
+      호환을 위해 그대로 남아 있다(내용은 동일한 패널). 종합 상태+원인 카드, core_bundle 행 포함은
+      `/clusters/:id` 쪽에만 추가됐다. 배치잡/플레이북 카탈로그 편입은 여전히 후속 단계(5단계).
+
+### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
+
+- **파일**: `frontend/src/pages/ClusterDetailPage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — 카탈로그/실행/로그를 `/ops-checks` 와 공유, `components/common/{ClusterSidebar,StatusBadge}`)
+- **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon, 배치잡/플레이북은 아직 미편입)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
+- **UI 구성**:
+  - `ClusterSidebar` `iconOnly` — 다른 per-cluster 화면과 동일 패턴.
+  - MacCard "종합 상태" — `StatusBadge`(healthy/warning/critical) + "N개 신호를 종합한 결과입니다" + 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각), severity(critical→warning→pending→healthy) 순 정렬. 원인 없음(전부 healthy)이면 "아직 점검 결과가 없습니다"/정상 안내만.
+  - 그 아래 `ClusterOpsCheckPanel` — 카탈로그 테이블 + 일괄/개별 실행 + 실행 진행 + 결과 상세 모달(`/ops-checks` 섹션과 동일 컴포넌트, 위 참고).
+  - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 바로가기.
+- **Frontend**: `useClusters`, `useClusterStatusBreakdown(clusterId)`(신규 — `clustersApi.getStatusBreakdown`, 30초 폴링, 호출마다 서버가 재집계), `useClusterRouteParam('/clusters', clusters)`(아일랜드 임베드 호환). 카탈로그/실행 훅은 `ClusterOpsCheckPanel` 내부에서 `/ops-checks` 섹션과 동일하게 사용.
+- **Backend**: `GET /api/v1/clusters/{cluster_id}/status-breakdown` — `backend/app/routers/clusters.py`, `services/cluster_status_service.py::recompute()` 를 그대로 다시 실행해 최신 원인 목록을 돌려준다(멱등이라 조회만으로 재계산해도 부작용 없음). 카탈로그/실행 API 는 `/ops-checks` 섹션과 동일.
+- **핵심 기능**:
+  - 클러스터 종합 상태의 **단일 롤업**(`cluster_status_service.recompute()`) — 예전엔 `DailyChecker`(core_bundle)·`HealthChecker`(addon)가 각자 `Cluster.status` 를 직접 덮어써(마지막 실행이 이김) 서로의 판정을 지웠고, 애드온 단일 실행(`run_single_addon_check`)은 핵심 번들의 연결 확인 없이 애드온 결과만으로 클러스터 전체 상태를 다시 계산하는 비대칭이 있었다(D-067). 지금은 `DailyChecker`/`HealthChecker`/`DeepCheckService` 세 곳 모두 자기 도메인 결과를 커밋(flush)한 뒤 `recompute()` 하나만 호출한다.
+  - 심층 점검은 **opt-in**(`DeepCheckDefinition.affects_cluster_status`, 기본 `false`) — 정의 편집 폼(`/daily-check/settings`)에서 "클러스터 상태에 반영" 토글로 켠다. 애드온은 기존처럼 항상 반영(클러스터별 인스턴스라 opt-in 개념 없음).
+  - 우선순위 critical > warning > healthy, 단 핵심 번들이 미연결(pending)이면 다른 신호와 무관하게 전체가 pending(다른 신호는 "연결이 안 되니 의미 없음"으로 무시). 애드온의 개별 pending(연결 실패)은 warning 으로 승격되지만, 심층 점검의 개별 pending(미판정)은 원인 목록에서 제외된다(집계 노이즈 방지).
+  - 점검 매트릭스 그리드(`GET /check-matrix/grid`)의 `clusters[].status` 도 같은 롤업 값을 읽는다 — 매트릭스 열 헤더 cron 배지(`ClusterCronBadge`)가 예전 `coreHealth`(core_bundle 셀 상태만) 대신 이 값으로 색을 정한다.
+  - 대시보드(`/cluster-overview`)의 "Cluster Status" 카드에서 특정 클러스터를 선택하면 이 롤업 상태 + 대표 원인 1건 + "클러스터 상세로" 링크가 애드온 그리드 위에 한 줄로 뜬다.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### K8s 로그 — AI 장애 분석 (`/incident-analysis`)
 
@@ -471,7 +496,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - `ClusterSidebar` — `iconOnly` + `allowAll`(`allLabel="글로벌 + 전체"`) + 단일 선택. 선택된 클러스터로 정의 목록을 필터링(글로벌 정의는 항상 포함). 글로벌 정의의 "즉시 실행" 대상 클러스터로도 사용.
   - 검색 입력 + 카테고리 필터 칩(전체/K8s/OS/스토리지/네트워크/앱 — check-types 의 `category` 기준).
   - 헤더 "정의 추가" 토글 버튼 → MacCard "새 정의"(`DeepCheckDefinitionForm`). Check Type 셀렉트는 "커스텀 (UI 에서 직접 정의)" / "내장 체커" optgroup 으로 구분(`seed_default` 플래그).
-  - 행 편집 버튼 → MacCard "편집 — {name}"(같은 폼 재사용, `initial` prop). 폼은 boolean 체크박스 / list 줄바꿈 textarea / 라벨 `(a|b)` 패턴 자동 select / cron 프리셋 + 직접 입력을 지원하고, **"미리 실행"**(저장 전 폼 값 그대로 ad-hoc 실행)과 "Test now"(저장된 값 실행) 버튼이 있다. 결과는 `ExecutionStepsTimeline` + 상세 JSON 으로 표시.
+  - 행 편집 버튼 → MacCard "편집 — {name}"(같은 폼 재사용, `initial` prop). 폼은 boolean 체크박스 / list 줄바꿈 textarea / 라벨 `(a|b)` 패턴 자동 select / cron 프리셋 + 직접 입력을 지원하고, **"미리 실행"**(저장 전 폼 값 그대로 ad-hoc 실행)과 "Test now"(저장된 값 실행) 버튼이 있다. 결과는 `ExecutionStepsTimeline` + 상세 JSON 으로 표시. "활성" 옆에 **"클러스터 종합 상태에 반영"** 토글(`affectsClusterStatus`, 기본 꺼짐) — 켜면 이 정의의 최신 결과가 클러스터 카드/대시보드 종합 상태 판정에 들어간다(`/clusters/:id` 섹션 참고).
   - `DeepCheckDefinitionList` — sortOrder → name 순 정렬. 행마다 최근 실행 상태 dot(`with_status` 요약)·최근 실행 시각/소요·즉시 실행(이력 기록)·실행 이력·복제·편집·삭제·활성 토글 버튼.
   - `DeepCheckRunHistory` — 실행 이력 버튼으로 여는 MacCard 패널: 상태 필터 칩 + 페이지네이션 목록(상태/시각/클러스터/메시지/소요), 행 펼치면 step 타임라인(`details._steps`)과 상세 JSON. "지금 실행" 버튼 포함.
   - `NotificationSettingsPanel` 하단 배치.

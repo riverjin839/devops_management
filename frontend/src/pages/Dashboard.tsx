@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server, WifiOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server, WifiOff, LayoutGrid } from 'lucide-react';
 import { formatDateTime, formatApiError } from '@/lib/utils';
 import {
   HealthHero,
@@ -17,10 +18,10 @@ import {
 import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast, StatusBadge, statusToVariant } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
-import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck, useCheckHistoryHeatmap } from '@/hooks/useCluster';
+import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck, useCheckHistoryHeatmap, useClusterStatusBreakdown } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { useClusterItems, useRunClusterItem, useUpdateClusterItem, useDeleteClusterItem } from '@/hooks/useClusterItems';
@@ -293,6 +294,9 @@ export function Dashboard() {
 
   const selectedCluster = selectedClusterId ? clusters.find((c) => c.id === selectedClusterId) : null;
   const isSelectedDisconnected = selectedCluster?.status === 'pending';
+  // 원인 요약 1줄 — 애드온 그리드만 봐서는 안 보이던 심층 점검 원인까지 한 줄로.
+  const { data: statusBreakdown } = useClusterStatusBreakdown(selectedClusterId ?? undefined);
+  const topContributor = statusBreakdown?.contributors.find((c) => c.status !== 'healthy');
 
   // 이미 등록된 타입을 제외한 missing addons 계산
   const existingTypes = new Set(currentAddons.map((a) => a.type));
@@ -447,6 +451,24 @@ export function Dashboard() {
             <ClusterOverviewGrid clusters={clusters} addons={addons} onSelectCluster={setSelectedClusterId} />
           ) : (
             <>
+              {!isSelectedDisconnected && statusBreakdown && (
+                <div className="mb-3 flex items-center gap-2 flex-wrap text-sm">
+                  <StatusBadge variant={statusToVariant(statusBreakdown.status)} />
+                  {topContributor ? (
+                    <span className="text-muted-foreground truncate">
+                      {topContributor.name}{topContributor.message ? ` — ${topContributor.message}` : ''}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">정상입니다.</span>
+                  )}
+                  <Link
+                    to={`/clusters/${selectedClusterId}`}
+                    className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
+                  >
+                    <LayoutGrid className="w-3 h-3" /> 클러스터 상세로
+                  </Link>
+                </div>
+              )}
               {isSelectedDisconnected && (
                 <div className="mb-4 px-4 py-3 rounded-xl border border-status-unknown/30 bg-status-unknown/10 flex items-start gap-3">
                   <WifiOff className="w-5 h-5 text-status-unknown flex-shrink-0 mt-0.5" />

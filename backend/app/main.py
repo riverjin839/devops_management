@@ -890,6 +890,9 @@ def _run_migrations():
     if "deep_check_definitions" in inspector.get_table_names():
         # 정의별 cron 디스패치 anchor (schedule_cron 배선) — 구버전 DB 보강.
         _safe_add_column("deep_check_definitions", "last_run_at", "TIMESTAMP WITHOUT TIME ZONE")
+        _safe_add_column(
+            "deep_check_definitions", "affects_cluster_status", "BOOLEAN NOT NULL DEFAULT FALSE",
+        )
         _safe_create_index("ix_deep_check_definitions_cluster", "deep_check_definitions", "(cluster_id)")
         _safe_create_index("ix_deep_check_definitions_type", "deep_check_definitions", "(check_type)")
     if "deep_check_results" in inspector.get_table_names():

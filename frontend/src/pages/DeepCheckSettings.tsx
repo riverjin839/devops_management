@@ -79,6 +79,7 @@ export function DeepCheckSettingsPage() {
         name: `${d.name} (${selectedCluster?.name ?? '클러스터'})`,
         description: d.description ?? null,
         enabled: d.enabled,
+        affectsClusterStatus: d.affectsClusterStatus,
         scheduleCron: d.scheduleCron ?? null,
         thresholds: d.thresholds ?? null,
         params: d.params ?? null,

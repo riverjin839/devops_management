@@ -3173,6 +3173,8 @@ export interface DeepCheckDefinition {
   name: string;
   description?: string | null;
   enabled: boolean;
+  /** opt-in — true 면 이 정의의 최신 결과가 클러스터 종합 상태 집계에 들어간다. 기본 false. */
+  affectsClusterStatus: boolean;
   scheduleCron?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   thresholds?: Record<string, any> | null;
@@ -4333,6 +4335,28 @@ export interface CheckMatrixGridCluster {
   checkCronExpr: string | null;
   /** 저장된 cron 을 지우지 않고 켜고 끄는 스위치 — false 면 cron 이 있어도 실행되지 않는다. */
   checkCronEnabled: boolean;
+  /** cluster_status_service.recompute() 가 기록한 종합 상태(핵심 번들+애드온+opt-in 심층
+   *  점검 롤업). 원인 목록은 `GET /clusters/{id}/status-breakdown`. */
+  status?: Status | null;
+}
+
+/** 클러스터 종합 상태 원인 1건 — `cluster_status_service.recompute()` 의 contributor. */
+export interface ClusterStatusContributor {
+  sourceType: 'core_bundle' | 'addon' | 'deep_check';
+  sourceRef?: string | null;
+  name: string;
+  status: Status;
+  message?: string | null;
+  checkedAt?: string | null;
+  /** addon → Addon.id, deep_check → DeepCheckDefinition.id, core_bundle → null */
+  editId?: string | null;
+}
+
+/** `GET /clusters/{id}/status-breakdown` 응답. */
+export interface ClusterStatusBreakdown {
+  clusterId: string;
+  status: Status | null;
+  contributors: ClusterStatusContributor[];
 }
 
 export interface CheckMatrixGrid {

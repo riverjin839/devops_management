@@ -52,6 +52,7 @@ import { AlertInboxPage } from '@/pages/AlertInboxPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
+import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
@@ -236,7 +237,11 @@ function AppShell() {
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />
-              {/* 운영 점검 통합 콘솔 — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그 */}
+              {/* 클러스터 상세 — 종합 상태(원인) + 점검 카탈로그. 매트릭스 클러스터명 클릭이 여기로. */}
+              <Route path="/clusters/:clusterId" element={<ClusterDetailPage />} />
+              <Route path="/clusters" element={<ClusterDetailPage />} />
+              {/* 운영 점검 통합 콘솔(레거시) — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그.
+                  /clusters/:id 가 더 완전하지만(종합 상태 포함) 기존 링크/북마크 호환을 위해 유지. */}
               <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />
               <Route path="/ops-checks" element={<OpsCheckConsolePage />} />
               {/* OpenLens P0 — 파드 로그 스트리밍(읽기전용) */}
