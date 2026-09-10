@@ -156,7 +156,7 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
         <span
           role="tooltip"
           style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateY(-50%)' }}
-          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
+          className="fixed px-2 py-1 text-sm font-medium whitespace-nowrap bg-foreground text-background rounded shadow-lg pointer-events-none z-[60]"
         >
           {label}
         </span>,
@@ -367,8 +367,8 @@ export function Sidebar() {
         <div className="space-y-1 pb-2">
           {sections.map((section, i) => (
             <div key={section.label}>
-              {i > 0 && <div className="mx-2 my-1 border-t border-zinc-200" />}
-              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+              {i > 0 && <div className="mx-2 my-1 border-t border-border" />}
+              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {section.label}
               </p>
               {section.paths.map(renderLink)}
@@ -639,8 +639,8 @@ export function Sidebar() {
                   거쳐야만 접근된다. 읽기 전용이라는 건 아일랜드 헤더 배지가 알려준다. */}
               {sharedIslands.length > 0 && (
                 <>
-                  <div className="mx-2 my-1 border-t border-zinc-200" />
-                  <p className="px-2.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <div className="mx-2 my-1 border-t border-border" />
+                  <p className="px-2.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     팀 공유
                   </p>
                   {sharedIslands.map((isl) => (

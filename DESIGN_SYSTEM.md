@@ -1,4 +1,4 @@
-# DEVOPS MANAGEMENT — Design System
+# PEP (Platform Engineering Portal) — Design System
 
 > **Stack**: React 18 + TypeScript + Tailwind CSS + Recharts + shadcn/ui (Radix)
 > **Mode**: 테마 10종 — 기본값은 `default`(Anthropic Claude 브랜드 톤, radius 14px), 대안으로
