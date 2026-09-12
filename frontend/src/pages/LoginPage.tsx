@@ -40,8 +40,8 @@ export function LoginPage() {
             ☸
           </div>
           <div>
-            <h1 className="text-base font-bold leading-tight">DEVOPS MANAGEMENT</h1>
-            <p className="text-sm text-muted-foreground">로그인</p>
+            <h1 className="text-base font-bold leading-tight">PEP</h1>
+            <p className="text-xs text-muted-foreground">Platform Engineering Portal</p>
           </div>
         </div>
 
@@ -87,6 +87,12 @@ export function LoginPage() {
             {submitting ? '로그인 중…' : '로그인'}
           </button>
         </form>
+
+        {/* D-069 — 버전은 package.json 이 원천(vite define). 도움말·지원 진입점은 D-077 에서
+            셸 메뉴와 함께 정하므로 여기서는 자리를 비워 둔다. */}
+        <p className="mt-5 text-[11px] text-muted-foreground text-center tabular-nums select-none">
+          v{__APP_VERSION__}
+        </p>
       </div>
     </div>
   );

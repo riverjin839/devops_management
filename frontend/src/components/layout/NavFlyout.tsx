@@ -42,17 +42,17 @@ export function FlyoutShell({ title, anchorRect, placement = 'right', children, 
       style={style}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col overflow-hidden min-w-[180px] max-w-[260px]"
+      className="fixed z-50 bg-popover text-popover-foreground border border-border rounded-md shadow-xl flex flex-col overflow-hidden min-w-[180px] max-w-[260px]"
       role="dialog"
       aria-label={title}
     >
-      <div className="px-3 py-1.5 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
-        <span className="text-xs font-semibold text-zinc-700 uppercase tracking-wider truncate">{title}</span>
+      <div className="px-3 py-1.5 border-b border-border flex items-center justify-between bg-muted/40">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">{title}</span>
         <button
           type="button"
           onClick={onClose}
           aria-label="닫기"
-          className="p-0.5 rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-900"
+          className="p-0.5 rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <X className="w-3 h-3" />
         </button>
@@ -65,7 +65,7 @@ export function FlyoutShell({ title, anchorRect, placement = 'right', children, 
 
 // flyout 내부에서 항목 한 줄을 그릴 때 쓰는 공통 스타일.
 const FLYOUT_LINK_BASE = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] transition-colors';
-const FLYOUT_LINK_INACTIVE = 'text-black hover:bg-zinc-100';
+const FLYOUT_LINK_INACTIVE = 'text-foreground hover:bg-secondary';
 const FLYOUT_LINK_ACTIVE = 'bg-primary/10 text-primary font-semibold';
 
 export function FlyoutLink({
@@ -101,8 +101,8 @@ export function FlyoutLink({
           title={isPinned ? '즐겨찾기 해제' : '즐겨찾기 추가'}
           className={`flex-shrink-0 ml-0.5 p-1 rounded transition-opacity ${
             isPinned
-              ? 'text-amber-500 opacity-100'
-              : 'text-zinc-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-amber-500'
+              ? 'text-status-warning opacity-100'
+              : 'text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-status-warning'
           }`}
         >
           <Star className="w-3.5 h-3.5" fill={isPinned ? 'currentColor' : 'none'} />

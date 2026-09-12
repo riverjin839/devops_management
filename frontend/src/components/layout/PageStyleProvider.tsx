@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { resolvePageStyle, pageStyleToCss } from '@/lib/pageStyles';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { AppTopBar } from './AppTopBar';
 
 /**
@@ -15,6 +16,7 @@ import { AppTopBar } from './AppTopBar';
 export function PageStyleProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { data: settings } = useUiSettings();
+  usePageTitle(); // D-075 — 라우트별 document.title ("화면명 · 앱 제목")
   const eff = resolvePageStyle(settings?.pageStyles, location.pathname);
 
   return (

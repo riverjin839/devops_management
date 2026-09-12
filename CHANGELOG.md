@@ -37,6 +37,16 @@
   한 줄로, 명령/설정값을 2열로 배치해 세로로 쌓이던 섹션 수를 줄이고, 이 탭에서만 모달이
   넓어진다(`max-w-4xl`). 명령·설정값 목록이 길어져도 팝업 전체가 아니라 그 목록만 내부
   스크롤되도록 캡핑했다.
+- **Main UI 상용화 P0 — 첫인상·테마 정합 5건 (D-069/070/071/075/081)**: ①로더·로그인 카드에
+  남아 있던 구 제품명 "DEVOPS MANAGEMENT" 를 `PEP — Platform Engineering Portal` 로 통일하고
+  로그인 카드 하단에 앱 버전(`package.json` 원천, vite `define`)을 표기. ②새로고침·첫 진입마다
+  다크→라이트로 번쩍이던 테마 플래시 제거 — `index.html` 이 React 보다 먼저 저장된 테마
+  클래스를 `<html>` 에 붙이고 로더 색도 테마별로 맞춘다. ③사이드바·상단바 flyout, 레일 툴팁,
+  즐겨찾기 패널이 10개 테마를 무시하던 고정 라이트 팔레트(`bg-white`/`zinc-*`)를 테마 토큰
+  (`bg-popover`·`border-border`·`text-muted-foreground` 등)으로 치환 — 다크/일렉트로팝에서 흰
+  팝오버가 튀지 않는다. ④브라우저 탭 제목이 전 화면에서 같던 것을 "화면명 · 앱 제목" 으로
+  라우트마다 갱신(`hooks/usePageTitle.ts`, 관리자 라벨 오버라이드·`appTitle` 설정 반영).
+  ⑤사용처 없는 레거시 `components/layout/Header.tsx` 삭제.
 
 ## [1.33.0] - 2026-09-10
 
