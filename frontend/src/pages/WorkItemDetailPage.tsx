@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud } from 'lucide-react';
-import { WorkItemForm, WorkItemReadView, JiraPushDialog } from '@/components/work-items';
+import { ArrowLeft, ListTodo, Plus, Trash2, UploadCloud, Ticket } from 'lucide-react';
+import { WorkItemForm, WorkItemReadView, JiraPushDialog, ServiceNowRegisterDialog } from '@/components/work-items';
 import { ConfirmDialog, useToast } from '@/components/common';
 import { useWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { cn, formatApiError } from '@/lib/utils';
@@ -23,6 +23,7 @@ export function WorkItemDetailPage() {
   // G-I9: window.confirm 대신 ConfirmDialog 사용
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pushOpen, setPushOpen] = useState(false);
+  const [serviceNowOpen, setServiceNowOpen] = useState(false);
 
   if (!isLoading && (isError || !item)) {
     return (
@@ -88,6 +89,18 @@ export function WorkItemDetailPage() {
                 Jira 반영
               </button>
             )}
+            {!isEditing && item.jiraIssueKey && (
+              <button
+                onClick={() => setServiceNowOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-servicenow/10 text-brand-servicenow hover:bg-brand-servicenow/20 border border-brand-servicenow/20 rounded-lg transition-colors disabled:opacity-50"
+                title={item.servicenowNumber
+                  ? `ServiceNow ${item.servicenowNumber} 등록됨 — 다시 등록`
+                  : '사내 ServiceNow ITSM 에 등록'}
+              >
+                <Ticket className="w-3.5 h-3.5" />
+                {item.servicenowNumber ? 'ServiceNow 재등록' : 'ServiceNow 등록'}
+              </button>
+            )}
             {!isEditing && (
               <>
                 <button
@@ -136,6 +149,7 @@ export function WorkItemDetailPage() {
         onCancel={() => setConfirmDeleteOpen(false)}
       />
       <JiraPushDialog open={pushOpen} onClose={() => setPushOpen(false)} item={item} />
+      <ServiceNowRegisterDialog open={serviceNowOpen} onClose={() => setServiceNowOpen(false)} item={item} />
     </div>
   );
 }

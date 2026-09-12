@@ -249,6 +249,8 @@ interface WorkItemTableRowProps {
   onJiraProvision?: (item: WorkItem) => void;
   /** 연결 관리(해제/다른 이슈로 변경/업무 삭제) 다이얼로그 진입. */
   onJiraLink?: (item: WorkItem) => void;
+  /** Jira 연동 업무 → 사내 ServiceNow ITSM 수동 등록 다이얼로그 진입. */
+  onServiceNowRegister?: (item: WorkItem) => void;
   /** Confluence 연결 업무 — 현재 내용을 연결된 문서에 반영(재게시). Jira "보내기"와 동일 역할. */
   onConfluenceSync?: (item: WorkItem) => void;
   /** 이 행에서 Confluence 동기화가 진행 중인지 (버튼 스피너/중복 클릭 방지). */
@@ -258,7 +260,7 @@ interface WorkItemTableRowProps {
 export function WorkItemTableRow({
   item, clusters, columns, projectNameById, sprintNameById, isDragDisabled,
   onEdit, onDelete, onAddSubItem, onOpenDetail, onJiraRefresh, onJiraPush, onJiraProvision, onJiraLink,
-  jiraBusy = false, onConfluenceSync, confluenceBusy = false,
+  onServiceNowRegister, jiraBusy = false, onConfluenceSync, confluenceBusy = false,
 }: WorkItemTableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: isDragDisabled });
@@ -694,6 +696,7 @@ export function WorkItemTableRow({
               jiraBusy={jiraBusy}
               onJiraProvision={onJiraProvision}
               onJiraLink={onJiraLink}
+              onServiceNowRegister={onServiceNowRegister}
               onConfluenceSync={onConfluenceSync}
               confluenceBusy={confluenceBusy}
             />

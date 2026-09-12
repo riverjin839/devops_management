@@ -119,6 +119,17 @@ class WorkItem(Base):
     # 가능한 대표 링크)와 별개로 Jira 동기화가 매번 최신 전체 목록으로 교체한다.
     confluence_links = Column(JSONB, nullable=True)
 
+    # ── ServiceNow ITSM 연동 (수동 등록, Jira 연동 업무 대상) ───────────────────
+    # sys_id = ServiceNow 내부 불변 ID(dedup 용), number = 표시용 티켓 번호(INC0012345).
+    # base_url/table_name/필드 매핑은 AppSetting(key=servicenow_integration) 공통 설정이고,
+    # 여기는 이 업무 1건이 실제로 어느 ServiceNow 레코드로 등록됐는지만 보관한다.
+    servicenow_sys_id = Column(String(50), nullable=True)
+    servicenow_number = Column(String(50), nullable=True, index=True)
+    servicenow_url = Column(Text, nullable=True)
+    servicenow_status = Column(String(100), nullable=True)     # 원본 ServiceNow 상태명
+    servicenow_synced_at = Column(DateTime, nullable=True)     # 마지막 등록 성공 시각
+    servicenow_register_error = Column(Text, nullable=True)    # 마지막 등록 실패 사유(재시도 UX)
+
     # ── 프로비저닝(Jira+Confluence 동시 생성) 마지막 시도 결과 ──────────────────
     # `POST /jira/provision` 이 호출될 때마다 갱신. null = 프로비저닝을 시도한 적 없음
     # (Jira 가져오기로 생성됐거나 수동 등록 등) — 이 경우와 "일부만 성공"을 구분해야
