@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Sparkles, Palmtree, Leaf, Star,
-  Moon, Sun, Monitor, LogOut, User, ChevronRight, ArrowLeft,
-  KeyRound, Home, MessageSquare, Bot,
+  Moon, Sun, Monitor, LogOut, User, ArrowLeft,
+  KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette,
   Flame, Sunset, Zap, Waves, Flower2, Citrus,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
@@ -18,29 +18,36 @@ import { useIslandStore } from '@/stores/islandStore';
 import { useAgentChatStore } from '@/stores/agentChatStore';
 import { AGENT_CHAT_FEATURE_KEY } from '@/components/agent';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
-import { SidePane } from '@/components/common';
+import { SidePane, ConfirmDialog } from '@/components/common';
+import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
-import { FlyoutShell, FlyoutLink } from './NavFlyout';
+import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
 import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
 import { GROUPS, type GroupId } from './navConfig';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
-// default(Claude paper) → 컴포트(크림+그린) → 번트시에나 → 토스카나 선셋 → 일렉트로팝
-// → 서머브리즈 → 와일드플라워메도우 → 트로피컬펀치 → 라이트 → 다크 → 시스템 → default …
-const THEME_CYCLE: Record<Theme, Theme> = {
-  default: 'comfort',
-  comfort: 'burnt-sienna',
-  'burnt-sienna': 'tuscan-sunset',
-  'tuscan-sunset': 'electropop',
-  electropop: 'summer-breeze',
-  'summer-breeze': 'wildflower-meadow',
-  'wildflower-meadow': 'tropical-punch',
-  'tropical-punch': 'light',
-  light: 'dark',
-  dark: 'system',
-  system: 'default',
+// D-077 — 테마는 레일 버튼 순환 클릭(최대 10클릭)이 아니라 사용자 메뉴 안의 목록에서 1클릭으로
+// 고른다. 기본 4종(default/light/dark/system)을 먼저, 노벨티 테마 7종은 그 아래 구분해서 둔다.
+// (D-072 스와치 미리보기는 후속 — 여기서는 현재 표시 + 1클릭 선택까지.)
+const THEME_BASIC: Theme[] = ['default', 'light', 'dark', 'system'];
+const THEME_EXTRA: Theme[] = [
+  'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
+  'summer-breeze', 'wildflower-meadow', 'tropical-punch',
+];
+const THEME_ICON: Record<Theme, ComponentType<{ className?: string }>> = {
+  default: Sparkles,
+  comfort: Leaf,
+  'burnt-sienna': Flame,
+  'tuscan-sunset': Sunset,
+  electropop: Zap,
+  'summer-breeze': Waves,
+  'wildflower-meadow': Flower2,
+  'tropical-punch': Citrus,
+  light: Sun,
+  dark: Moon,
+  system: Monitor,
 };
 const THEME_LABEL: Record<Theme, string> = {
   default: '기본',
@@ -79,9 +86,9 @@ interface RailIconButtonProps {
   Icon: ComponentType<{ className?: string }>;
   active?: boolean;
   highlighted?: boolean;
-  /** 클릭 시 호출. 클릭한 버튼의 화면상 위치를 같이 넘겨 — 호출 측이 popover 앵커링에 활용.
-   *  popover 가 필요 없는 단순 액션(테마 토글 / 라우팅 / 로그아웃 등) 은 rect 를 무시해도 된다. */
-  onClick: (rect?: DOMRect) => void;
+  /** 클릭 시 호출. 클릭한 버튼의 화면상 위치(popover 앵커링)와 버튼 element(D-080 — flyout 이
+   *  닫힐 때 포커스를 돌려줄 트리거)를 같이 넘긴다. 단순 액션(라우팅 등)은 무시해도 된다. */
+  onClick: (rect?: DOMRect, el?: HTMLButtonElement | null) => void;
   /** flyout 이 열려있을 때는 툴팁을 숨김 (중복) */
   suppressTooltip?: boolean;
   /** D-059 — 클릭 시 flyout 이 열리는 아이콘(하위 경로 2개 이상)에 점 인디케이터를 붙여
@@ -110,7 +117,7 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
 
   const handleClick = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) onClick(rect);
+    if (rect) onClick(rect, buttonRef.current);
   };
 
   const handleMouseEnter = () => {
@@ -131,6 +138,8 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
         ref={buttonRef}
         type="button"
         aria-label={label}
+        aria-haspopup={hasFlyout ? 'menu' : undefined}
+        aria-expanded={hasFlyout ? !!highlighted : undefined}
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -227,9 +236,10 @@ export function Sidebar() {
   const lastIslandId = useIslandStore((s) => s.lastIslandId);
   const [islandFlyoutAnchor, setIslandFlyoutAnchor] = useState<DOMRect | null>(null);
 
-  const goToIsland = (rect?: DOMRect) => {
+  const goToIsland = (rect?: DOMRect, el?: HTMLElement | null) => {
     // 내 것 + 공유받은 것을 합쳐 2개 이상이면 flyout 으로 고르고, 아니면 바로 이동한다.
     if (myIslands.length + sharedIslands.length > 1) {
+      openByClick(el);
       setIslandFlyoutAnchor((cur) => (cur ? null : rect ?? null));
       return;
     }
@@ -241,13 +251,24 @@ export function Sidebar() {
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
-  // 사용자 아이콘 클릭 시 여는 개인 메뉴(담당자 정보 / 비밀번호 변경) — 우측 슬라이드 SidePane.
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  // 사용자 VOC 게시판 / 릴리즈 노트 / 버그 픽스 로그 — 예전엔 레일 아이콘 3개가 각자
-  // SidePane 을 열었지만, 성격이 비슷한 "공지·피드백" 계열이라 아이콘 1개 + 탭 3개로
-  // 통합했다(감사 로그가 Settings 탭으로 이동한 자리에 있던 릴리즈 노트 자리 포함).
+  // D-077 — 레일 하단 개인 존을 사용자 메뉴(아바타) flyout 하나로 접었다: 내 정보·담당 설정
+  // (SidePane) / 테마 / 비밀번호 변경 / 로그아웃(확인). 예전엔 테마·사용자·VOC·로그아웃이
+  // 무라벨 아이콘 4개로 나란히 있어 로그아웃 오클릭이 잦았다.
+  const [userFlyoutAnchor, setUserFlyoutAnchor] = useState<DOMRect | null>(null);
+  const [selfPaneOpen, setSelfPaneOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  // "도움말·지원" flyout — 화면 검색(⌘K) / VOC / 릴리즈 노트 / 버그 픽스 로그(admin).
+  // 개발팀 내부 산출물(버그 픽스 로그)이 제품 셸에 상시 노출되던 것을 admin 전용으로 격리.
+  const [helpFlyoutAnchor, setHelpFlyoutAnchor] = useState<DOMRect | null>(null);
+  const openPalette = useCommandPaletteStore((s) => s.setOpen);
+  // 사용자 VOC 게시판 / 릴리즈 노트 / 버그 픽스 로그 — 우측 SidePane 하나 + 탭.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackTab, setFeedbackTab] = useState<UserFeedbackTab>('voc');
+  // D-080 — flyout 을 클릭/키보드로 열었는지(첫 항목 포커스 + 닫힐 때 트리거 복귀) hover 로
+  // 열었는지(포커스 불간섭). 열 때마다 갱신하고 모든 FlyoutShell 에 같이 넘긴다.
+  const [flyoutFocus, setFlyoutFocus] = useState<{ autoFocus: boolean; trigger: HTMLElement | null }>({ autoFocus: false, trigger: null });
+  const openByHover = () => setFlyoutFocus({ autoFocus: false, trigger: null });
+  const openByClick = (el?: HTMLElement | null) => setFlyoutFocus({ autoFocus: true, trigger: el ?? null });
   // 즐겨찾기 — 레일 최상단 진입점 (AppTopBar 의 ★ 과 같은 본문을 공유).
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
@@ -267,11 +288,14 @@ export function Sidebar() {
     setOpenGroup(null);
     setFavoritesOpen(false);
     setIslandFlyoutAnchor(null);
+    setUserFlyoutAnchor(null);
+    setHelpFlyoutAnchor(null);
   };
   const scheduleFlyoutOpen = (openFn: () => void) => {
     clearHoverTimers();
     openTimerRef.current = window.setTimeout(() => {
       closeAllFlyouts();
+      openByHover();
       openFn();
       openTimerRef.current = undefined;
     }, HOVER_OPEN_DELAY);
@@ -312,7 +336,9 @@ export function Sidebar() {
   useEffect(() => {
     setOpenGroup(null);
     setIslandFlyoutAnchor(null);
-    setUserMenuOpen(false);
+    setUserFlyoutAnchor(null);
+    setHelpFlyoutAnchor(null);
+    setSelfPaneOpen(false);
     setFeedbackOpen(false);
     setFavoritesOpen(false);
   }, [location.pathname]);
@@ -323,7 +349,9 @@ export function Sidebar() {
       if (e.key === 'Escape') {
         setOpenGroup(null);
         setIslandFlyoutAnchor(null);
-        setUserMenuOpen(false);
+        setUserFlyoutAnchor(null);
+        setHelpFlyoutAnchor(null);
+        setSelfPaneOpen(false);
         setFeedbackOpen(false);
         setFavoritesOpen(false);
       }
@@ -332,11 +360,14 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const toggleGroup = (id: GroupId, rect?: DOMRect) => {
+  const toggleGroup = (id: GroupId, rect?: DOMRect, el?: HTMLElement | null) => {
     clearHoverTimers();
+    openByClick(el);
     setOpenGroup((cur) => (cur === id ? null : id));
     if (rect) setOpenAnchor(rect);
   };
+  /** flyout 이 닫힐 때(라우팅/액션) 호출 — 포커스 복귀는 FlyoutShell 이 트리거로 알아서 한다. */
+  const focusProps = { autoFocus: flyoutFocus.autoFocus, returnFocusTo: flyoutFocus.trigger };
 
   // 그룹별 flyout 본문 렌더링
   const renderFlyoutBody = (id: GroupId) => {
@@ -450,8 +481,9 @@ export function Sidebar() {
               hasFlyout
               onHoverOpen={(rect) => scheduleFlyoutOpen(() => { setFavoritesOpen(true); setFavoritesAnchor(rect); })}
               onHoverClose={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
-              onClick={(rect) => {
+              onClick={(rect, el) => {
                 clearHoverTimers();
+                openByClick(el);
                 setFavoritesOpen((cur) => !cur);
                 if (rect) setFavoritesAnchor(rect);
               }}
@@ -470,11 +502,11 @@ export function Sidebar() {
                   hasFlyout={hasFlyout}
                   onHoverOpen={hasFlyout ? (rect) => scheduleFlyoutOpen(() => { setOpenGroup(g.id); setOpenAnchor(rect); }) : undefined}
                   onHoverClose={hasFlyout ? () => scheduleFlyoutClose(() => setOpenGroup(null)) : undefined}
-                  onClick={(rect) => {
+                  onClick={(rect, el) => {
                     // 하위 경로가 1개뿐인 그룹은 플라이아웃이 무의미하므로 바로 이동.
                     // 2개 이상이면 플라이아웃으로 하위 메뉴를 고른다.
                     if (!hasFlyout) { clearHoverTimers(); setOpenGroup(null); navigate(g.paths[0]); }
-                    else toggleGroup(g.id, rect);
+                    else toggleGroup(g.id, rect, el);
                   }}
                 />
               );
@@ -482,7 +514,8 @@ export function Sidebar() {
           </div>
         </nav>
 
-        {/* 푸터 — 설정(admin) / 테마 / 사용자 / 로그아웃 */}
+        {/* 푸터 — 설정(admin) / Your Island / AI / 도움말·지원 / 사용자 메뉴 (D-077 — 7개 → 5개.
+            테마·비밀번호·로그아웃은 사용자 메뉴 안으로, VOC·릴리즈 노트·버그 로그는 도움말로) */}
         <div className="flex-shrink-0 border-t border-border py-2 flex flex-col items-center gap-1">
           {isAdmin && systemGroup && (
             <RailIconButton
@@ -494,33 +527,15 @@ export function Sidebar() {
               hasFlyout={systemHasFlyout}
               onHoverOpen={systemHasFlyout ? (rect) => scheduleFlyoutOpen(() => { setOpenGroup('system'); setOpenAnchor(rect); }) : undefined}
               onHoverClose={systemHasFlyout ? () => scheduleFlyoutClose(() => setOpenGroup(null)) : undefined}
-              onClick={(rect) => {
+              onClick={(rect, el) => {
                 // 하위 경로가 1개뿐이면(현재 '/settings' 단일) 플라이아웃 없이 바로 이동.
                 if (!systemHasFlyout) { clearHoverTimers(); setOpenGroup(null); navigate(systemGroup.paths[0]); }
-                else toggleGroup('system', rect);
+                else toggleGroup('system', rect, el);
               }}
             />
           )}
-          <RailIconButton
-            label={`테마: ${THEME_LABEL[theme]}`}
-            Icon={
-              theme === 'default' ? Sparkles
-              : theme === 'comfort' ? Leaf
-              : theme === 'burnt-sienna' ? Flame
-              : theme === 'tuscan-sunset' ? Sunset
-              : theme === 'electropop' ? Zap
-              : theme === 'summer-breeze' ? Waves
-              : theme === 'wildflower-meadow' ? Flower2
-              : theme === 'tropical-punch' ? Citrus
-              : theme === 'light'   ? Sun
-              : theme === 'dark'    ? Moon
-              : Monitor
-            }
-            onClick={() => setTheme(THEME_CYCLE[theme])}
-          />
-          {/* Your Island — 개인 커스텀 화면이라 공용 그룹 레일이 아니라 푸터 개인 존에 둔다
-              (사용자 메뉴 · VOC · 릴리즈 노트와 같은 성격). 아일랜드가 여러 개면 flyout 으로
-              고르고, 0~1개면 바로 이동한다. 발견성은 HomePage 상단 진입 필이 보완한다. */}
+          {/* Your Island — 개인 커스텀 화면이라 공용 그룹 레일이 아니라 푸터 개인 존에 둔다.
+              아일랜드가 여러 개면 flyout 으로 고르고, 0~1개면 바로 이동한다. */}
           {currentUser && (
             <RailIconButton
               label="Your Island"
@@ -531,12 +546,11 @@ export function Sidebar() {
               hasFlyout={islandHasFlyout}
               onHoverOpen={islandHasFlyout ? (rect) => scheduleFlyoutOpen(() => setIslandFlyoutAnchor(rect)) : undefined}
               onHoverClose={islandHasFlyout ? () => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null)) : undefined}
-              onClick={(rect) => { clearHoverTimers(); goToIsland(rect); }}
+              onClick={(rect, el) => { clearHoverTimers(); goToIsland(rect, el); }}
             />
           )}
-          {/* AI 어시스턴트 — 우하단 플로팅 버튼이었던 것을 좌측 사이드바 하단 레일로 이동해
-              항상 같은 자리에 고정했다. 패널(AgentChat.tsx)은 이 상태를 Zustand 로 공유해서
-              연다 — 접근 제어(기능 접근)가 꺼진 사용자에게는 아이콘 자체를 숨긴다. */}
+          {/* AI 어시스턴트 — 패널(AgentChat.tsx)은 이 상태를 Zustand 로 공유해서 연다.
+              접근 제어(기능 접근)가 꺼진 사용자에게는 아이콘 자체를 숨긴다. */}
           {currentUser && featureAllowed(AGENT_CHAT_FEATURE_KEY) && (
             <RailIconButton
               label="AI 어시스턴트"
@@ -548,27 +562,34 @@ export function Sidebar() {
           )}
           {currentUser && (
             <RailIconButton
+              label="도움말·지원"
+              Icon={HelpCircle}
+              highlighted={!!helpFlyoutAnchor}
+              suppressTooltip={!!helpFlyoutAnchor}
+              hasFlyout
+              onHoverOpen={(rect) => scheduleFlyoutOpen(() => setHelpFlyoutAnchor(rect))}
+              onHoverClose={() => scheduleFlyoutClose(() => setHelpFlyoutAnchor(null))}
+              onClick={(rect, el) => {
+                clearHoverTimers();
+                openByClick(el);
+                setHelpFlyoutAnchor((cur) => (cur ? null : rect ?? null));
+              }}
+            />
+          )}
+          {currentUser && (
+            <RailIconButton
               label={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}
               Icon={User}
-              highlighted={userMenuOpen}
-              suppressTooltip={userMenuOpen}
-              onClick={() => setUserMenuOpen((v) => !v)}
-            />
-          )}
-          {currentUser && (
-            <RailIconButton
-              label="사용자 VOC 게시판 · 릴리즈 노트 · 버그 픽스 로그"
-              Icon={MessageSquare}
-              highlighted={feedbackOpen}
-              suppressTooltip={feedbackOpen}
-              onClick={() => setFeedbackOpen((v) => !v)}
-            />
-          )}
-          {currentUser && (
-            <RailIconButton
-              label="로그아웃"
-              Icon={LogOut}
-              onClick={logout}
+              highlighted={!!userFlyoutAnchor}
+              suppressTooltip={!!userFlyoutAnchor}
+              hasFlyout
+              onHoverOpen={(rect) => scheduleFlyoutOpen(() => setUserFlyoutAnchor(rect))}
+              onHoverClose={() => scheduleFlyoutClose(() => setUserFlyoutAnchor(null))}
+              onClick={(rect, el) => {
+                clearHoverTimers();
+                openByClick(el);
+                setUserFlyoutAnchor((cur) => (cur ? null : rect ?? null));
+              }}
             />
           )}
         </div>
@@ -588,6 +609,7 @@ export function Sidebar() {
           <FlyoutShell
             title={flyoutTitle}
             anchorRect={openAnchor}
+            {...focusProps}
             onClose={() => setOpenGroup(null)}
             onMouseEnter={cancelScheduledClose}
             onMouseLeave={() => scheduleFlyoutClose(() => setOpenGroup(null))}
@@ -604,6 +626,7 @@ export function Sidebar() {
           <FlyoutShell
             title="즐겨찾기"
             anchorRect={favoritesAnchor}
+            {...focusProps}
             onClose={() => setFavoritesOpen(false)}
             onMouseEnter={cancelScheduledClose}
             onMouseLeave={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
@@ -620,6 +643,7 @@ export function Sidebar() {
           <FlyoutShell
             title="Your Island"
             anchorRect={islandFlyoutAnchor}
+            {...focusProps}
             onClose={() => setIslandFlyoutAnchor(null)}
             onMouseEnter={cancelScheduledClose}
             onMouseLeave={() => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null))}
@@ -660,31 +684,118 @@ export function Sidebar() {
         </>
       )}
 
-      {/* 사용자 메뉴 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}
+      {/* 도움말·지원 flyout — 화면 검색(⌘K) / VOC / 릴리즈 노트 / 버그 픽스 로그(admin). */}
+      {helpFlyoutAnchor && currentUser && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setHelpFlyoutAnchor(null)} aria-hidden />
+          <FlyoutShell
+            title="도움말·지원"
+            anchorRect={helpFlyoutAnchor}
+            {...focusProps}
+            onClose={() => setHelpFlyoutAnchor(null)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setHelpFlyoutAnchor(null))}
+          >
+            <div className="space-y-1 pb-2">
+              <FlyoutAction
+                label="화면 검색"
+                Icon={Search}
+                trailing={<kbd className="text-[10px] font-mono text-muted-foreground border border-border rounded px-1">⌘K</kbd>}
+                onSelect={() => { setHelpFlyoutAnchor(null); openPalette(true); }}
+              />
+              <div className="mx-2 my-1 border-t border-border" />
+              <FlyoutAction
+                label="사용자 VOC 게시판"
+                Icon={MessageSquare}
+                onSelect={() => { setHelpFlyoutAnchor(null); setFeedbackTab('voc'); setFeedbackOpen(true); }}
+              />
+              <FlyoutAction
+                label="릴리즈 노트"
+                Icon={ScrollText}
+                onSelect={() => { setHelpFlyoutAnchor(null); setFeedbackTab('release-notes'); setFeedbackOpen(true); }}
+              />
+              {isAdmin && (
+                <FlyoutAction
+                  label="버그 픽스 로그"
+                  Icon={Bug}
+                  title="admin 전용 — 개발팀 내부 산출물"
+                  onSelect={() => { setHelpFlyoutAnchor(null); setFeedbackTab('bug-fix-log'); setFeedbackOpen(true); }}
+                />
+              )}
+            </div>
+          </FlyoutShell>
+        </>
+      )}
+
+      {/* 사용자 메뉴 flyout — 내 정보·담당 설정 / 비밀번호 변경 / 테마 / 로그아웃(확인). */}
+      {userFlyoutAnchor && currentUser && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setUserFlyoutAnchor(null)} aria-hidden />
+          <FlyoutShell
+            title={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}
+            anchorRect={userFlyoutAnchor}
+            {...focusProps}
+            onClose={() => setUserFlyoutAnchor(null)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setUserFlyoutAnchor(null))}
+          >
+            <div className="space-y-1 pb-2">
+              <FlyoutAction
+                label="내 정보 · 담당 설정"
+                Icon={UserCog}
+                onSelect={() => { setUserFlyoutAnchor(null); setSelfPaneOpen(true); }}
+              />
+              <FlyoutLink
+                to="/me/change-password"
+                label="비밀번호 변경"
+                Icon={KeyRound}
+                active={location.pathname === '/me/change-password'}
+                onSelect={() => setUserFlyoutAnchor(null)}
+              />
+              <div className="mx-2 my-1 border-t border-border" />
+              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <Palette className="w-3 h-3" aria-hidden="true" /> 테마
+              </p>
+              {THEME_BASIC.map((t) => (
+                <FlyoutAction key={t} label={THEME_LABEL[t]} Icon={THEME_ICON[t]} checked={theme === t} onSelect={() => setTheme(t)} />
+              ))}
+              <p className="px-2.5 pt-1.5 pb-0.5 text-[10px] text-muted-foreground">컬러 테마</p>
+              {THEME_EXTRA.map((t) => (
+                <FlyoutAction key={t} label={THEME_LABEL[t]} Icon={THEME_ICON[t]} checked={theme === t} onSelect={() => setTheme(t)} />
+              ))}
+              <div className="mx-2 my-1 border-t border-border" />
+              <FlyoutAction
+                label="로그아웃"
+                Icon={LogOut}
+                tone="danger"
+                onSelect={() => { setUserFlyoutAnchor(null); setLogoutConfirmOpen(true); }}
+              />
+            </div>
+          </FlyoutShell>
+        </>
+      )}
+
+      {/* 로그아웃 확인 — 1클릭 즉시 로그아웃이던 것을 확인 다이얼로그로(작성 중인 폼 보호). */}
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title="로그아웃"
+        description="작성 중인 내용은 저장되지 않습니다. 로그아웃할까요?"
+        confirmLabel="로그아웃"
+        danger
+        onConfirm={() => { setLogoutConfirmOpen(false); logout(); }}
+        onCancel={() => setLogoutConfirmOpen(false)}
+      />
+
+      {/* 내 정보·담당 설정 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}
       {currentUser && (
         <SidePane
-          open={userMenuOpen}
-          onClose={() => setUserMenuOpen(false)}
+          open={selfPaneOpen}
+          onClose={() => setSelfPaneOpen(false)}
           title={currentUser.displayName || currentUser.username}
           width="380px"
           bodyClassName="p-0"
         >
           <SelfAssigneePanel />
-          <div className="border-t border-border">
-            <Link
-              to="/me/change-password"
-              onClick={() => setUserMenuOpen(false)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm transition-colors ${
-                location.pathname === '/me/change-password'
-                  ? 'bg-primary/10 text-primary font-semibold'
-                  : 'text-foreground hover:bg-secondary'
-              }`}
-            >
-              <KeyRound className="w-4 h-4 flex-shrink-0" />
-              <span className="flex-1 min-w-0">비밀번호 변경</span>
-              {location.pathname === '/me/change-password' && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />}
-            </Link>
-          </div>
         </SidePane>
       )}
 
@@ -701,7 +812,7 @@ export function Sidebar() {
         minWidth={420}
         maxWidth={1100}
       >
-        <UserFeedbackPanel open={feedbackOpen} activeTab={feedbackTab} onTabChange={setFeedbackTab} />
+        <UserFeedbackPanel open={feedbackOpen} activeTab={feedbackTab} onTabChange={setFeedbackTab} showBugFixLog={isAdmin} />
       </SidePane>
 
     </>

@@ -611,6 +611,42 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
   의미 없기 때문. 새 페이지가 이 네 클래스 중 하나라도 새로 쓰면 자동으로 이 예외의 적용을 받는다.
 - **제외 대상**: `AppShell` 밖 라우트(`/login`, `/me/change-password`)와 팝업 escape 라우트
   (`/k9s/popup`, `/node-ssh/popup`)는 상단바가 없으므로 구 `min-h-screen`/`h-screen` 을 그대로 쓴다.
+- **화면 검색 버튼**(D-073): 우측 그룹 맨 앞의 "화면 검색 ⌘K" 버튼이 커맨드 팔레트를 연다
+  (`useCommandPaletteStore.setOpen(true)`). `md` 미만에서는 아이콘만.
+
+### 12.8 셸 flyout 메뉴 규약 (`components/layout/NavFlyout.tsx`) — 키보드 접근성 필수
+
+사이드바 레일·상단바·즐겨찾기·사용자 메뉴·도움말이 전부 `FlyoutShell` 하나를 공유한다. 포털이
+`document.body` 끝에 붙어 `Tab` 순서로는 도달할 수 없으므로 **포커스를 프로그램적으로 넣고 빼는
+것**이 키보드 사용자의 유일한 진입로다(D-080). 새 flyout/트리거를 만들 때 지킬 것:
+
+- **트리거**: `aria-haspopup="menu"` + `aria-expanded`. 클릭/Enter 로 열 때는 트리거 element 를
+  같이 넘긴다(`RailIconButton onClick(rect, el)`, 상단바는 `e.currentTarget`).
+- **열기 의도 구분**: hover 로 열면 `autoFocus=false`(포커스 불간섭), 클릭·키보드로 열면
+  `autoFocus=true` + `returnFocusTo={trigger}`. 두 값을 `flyoutFocus` state 하나로 들고 모든
+  `FlyoutShell` 에 `{...focusProps}` 로 넘긴다(Sidebar/AppTopBar 동일 패턴).
+- **항목**: 라우팅은 `FlyoutLink`(`role="menuitem"`, `aria-current="page"`), 동작(테마·패널 열기·
+  로그아웃)은 `FlyoutAction`(`role="menuitem"`, `checked` 를 주면 `menuitemradio`, `tone="danger"`).
+  plain `<button>`/`<Link>` 를 flyout 안에 직접 두면 ↑↓ 내비에서 빠진다.
+- **키보드**: ↑↓/Home/End 는 `menuitem*` 사이 이동, Tab 은 flyout 안에서 순환, Esc 는 닫기+트리거
+  복귀. `useModalA11y` 는 dialog(트랩+복원) 전용이라 flyout 에는 쓰지 않는다.
+
+### 12.9 권한 UX — 쓰기 액션 버튼은 숨기지 않고 비활성 + 사유 (`hooks/useCanOperate.ts`)
+
+백엔드 `require_operator` 가 실제 차단을 담당하고, 프론트는 "눌러보고서야 403" 을 없앤다(D-082).
+실행·추가·수정·삭제·저장·설정처럼 서버가 operator 이상을 요구하는 버튼은:
+
+```tsx
+const { canOperate, withHint } = useCanOperate();
+<button disabled={!canOperate || pending} title={withHint('지금 실행')} aria-label={withHint('지금 실행')}
+        className="… disabled:opacity-50 disabled:cursor-not-allowed">
+```
+
+- `withHint(title)` 은 권한이 있으면 원래 title, 없으면 "operator 이상 권한이 필요합니다 (현재:
+  viewer)" 를 돌려준다. 숨기지 않는 이유는 기능이 있다는 것을 알아야 권한을 요청할 수 있어서다.
+- 예외: 빈 상태(EmptyState)의 주 액션처럼 "비활성 버튼 하나만 덩그러니" 남는 자리는 viewer 에게
+  액션을 생략해도 된다. 기존 `hasRole(user,'admin','operator')` 로 버튼을 **숨기던** 화면
+  (`ClusterManagePage` 등)은 그대로 두되, 신규 화면은 이 패턴을 따른다.
 
 ---
 

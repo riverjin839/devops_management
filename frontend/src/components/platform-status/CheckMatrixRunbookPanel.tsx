@@ -8,6 +8,7 @@ import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsT
 import { KubeadmCertsModal, EtcdSystemdModal } from '@/components/versions';
 import { useUpdateSourceConfig } from '@/hooks/useCheckMatrix';
 import { formatApiError } from '@/lib/utils';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { RunStateBadge } from './CheckMatrixRunBadges';
 import type {
   CheckMatrixRunbook, CheckMatrixRunbookCommand, CheckMatrixRunbookInput,
@@ -300,6 +301,8 @@ function SourceConfigEditor({
 export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latestRun }: Props) {
   const [editing, setEditing] = useState(false);
   const [showSshCollect, setShowSshCollect] = useState(false);
+  // D-082 — 설정 편집은 operator 이상만. viewer 에겐 비활성 + 사유. (early return 위에서 호출)
+  const { canOperate, withHint } = useCanOperate();
   if (isLoading) {
     return <div className="py-8 text-center text-sm text-muted-foreground">실행 계획 불러오는 중…</div>;
   }
@@ -404,9 +407,10 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
           action={canEdit ? (
             <button
               onClick={() => setEditing(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-secondary text-muted-foreground"
-              title="이 점검의 임계값/파라미터를 여기서 바로 수정"
-              aria-label="소스 설정 편집"
+              disabled={!canOperate}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-secondary text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+              title={withHint('이 점검의 임계값/파라미터를 여기서 바로 수정')}
+              aria-label={withHint('소스 설정 편집')}
             >
               <Pencil className="w-3 h-3" /> 설정 편집
             </button>

@@ -1,10 +1,16 @@
 import { useId, useState } from 'react';
-import { Loader2, LogIn } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Loader2, LogIn, Clock } from 'lucide-react';
 import { authApi } from '@/services/api';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, consumeReturnTo } from '@/stores/authStore';
 
 export function LoginPage() {
   const setSession = useAuthStore((s) => s.setSession);
+  // D-079 — 세션 만료로 여기까지 왔으면 이유를 보여주고, 로그인 후 보던 화면으로 돌려보낸다.
+  const logoutReason = useAuthStore((s) => s.logoutReason);
+  const returnTo = useAuthStore((s) => s.returnTo);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,8 +26,11 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       const res = await authApi.login(username.trim(), password);
+      // AuthGate 가 제자리에서 로그인 화면을 그리므로 URL 은 만료 당시 화면 그대로다. 그래도
+      // 만료 후 사용자가 주소를 옮겼을 수 있으니 기록된 복귀 경로와 다르면 거기로 보낸다.
+      const rt = consumeReturnTo();
       setSession(res.data.accessToken, res.data.user);
-      // AuthGate observes the store and re-renders; no manual navigate needed.
+      if (rt && rt !== `${location.pathname}${location.search}`) navigate(rt, { replace: true });
     } catch (err) {
       const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
         ?? (err as { message?: string })?.message
@@ -44,6 +53,19 @@ export function LoginPage() {
             <p className="text-xs text-muted-foreground">Platform Engineering Portal</p>
           </div>
         </div>
+
+        {logoutReason === 'expired' && (
+          <div
+            role="status"
+            className="mb-4 flex items-start gap-2 rounded-md border border-border bg-secondary/60 px-3 py-2 text-xs text-foreground"
+          >
+            <Clock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span>
+              세션이 만료되어 로그아웃되었습니다. 다시 로그인하면
+              {returnTo ? ' 보던 화면으로 돌아갑니다.' : ' 계속 이용할 수 있습니다.'}
+            </span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

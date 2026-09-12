@@ -11,6 +11,7 @@ import {
 } from '@/hooks/useCheckMatrix';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import { useModalA11y } from '@/components/common/useModalA11y';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import { CheckMatrixRunbookPanel } from './CheckMatrixRunbookPanel';
 import { CheckMatrixRunList, CheckMatrixRunDetailView } from './CheckMatrixRunLog';
 
@@ -121,6 +122,8 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
   };
 
   const runnable = item.sourceType !== 'manual';
+  // D-082 — viewer 는 실행/저장 버튼을 보되 누르지 못하고 사유를 본다.
+  const { canOperate, withHint } = useCanOperate();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -149,10 +152,10 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
             {runnable && (
               <button
                 onClick={handleRunCell}
-                disabled={runCell.isPending}
-                title="이 셀만 지금 실행"
-                aria-label="이 셀만 지금 실행"
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
+                disabled={!canOperate || runCell.isPending}
+                title={withHint('이 셀만 지금 실행')}
+                aria-label={withHint('이 셀만 지금 실행')}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {runCell.isPending
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -275,8 +278,9 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
                     />
                     <button
                       onClick={handleSaveManualEntry}
-                      disabled={postManual.isPending}
-                      className="px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                      disabled={!canOperate || postManual.isPending}
+                      title={withHint('수동 입력 값 저장')}
+                      className="px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       저장
                     </button>
@@ -304,8 +308,9 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
                     </label>
                     <button
                       onClick={handleSaveSchedule}
-                      disabled={putSchedule.isPending}
-                      className="px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1"
+                      disabled={!canOperate || putSchedule.isPending}
+                      title={withHint('실행 주기 저장')}
+                      className="px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                     >
                       <Save className="w-3.5 h-3.5" /> 저장
                     </button>

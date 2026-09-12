@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Star, Sun } from 'lucide-react';
+import { ChevronDown, Star, Sun, Search } from 'lucide-react';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { useToday } from '@/hooks/useToday';
 import { cn, fmtKoreanDate } from '@/lib/utils';
 import { FlyoutShell, FlyoutLink } from './NavFlyout';
@@ -37,6 +38,11 @@ export function AppTopBar() {
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
+  const openPalette = useCommandPaletteStore((s) => s.setOpen);
+  // D-080 — 클릭/키보드로 연 flyout 만 첫 항목으로 포커스를 옮기고 닫힐 때 트리거로 돌아온다.
+  // hover 로 연 것은 포커스를 건드리지 않는다(Sidebar.tsx 와 동일).
+  const [flyoutFocus, setFlyoutFocus] = useState<{ autoFocus: boolean; trigger: HTMLElement | null }>({ autoFocus: false, trigger: null });
+  const focusProps = { autoFocus: flyoutFocus.autoFocus, returnFocusTo: flyoutFocus.trigger };
 
   // 마우스를 올리면(hover-intent) 클릭 없이도 드롭다운이 바로 열리고, 벗어나면 지연 후
   // 닫힌다. Sidebar.tsx 와 동일한 패턴 — 패널 위에서는 onMouseEnter 가 예약된 닫기를
@@ -56,6 +62,7 @@ export function AppTopBar() {
     clearHoverTimers();
     openTimerRef.current = window.setTimeout(() => {
       closeAllFlyouts();
+      setFlyoutFocus({ autoFocus: false, trigger: null });
       openFn();
       openTimerRef.current = undefined;
     }, HOVER_OPEN_DELAY);
@@ -129,7 +136,7 @@ export function AppTopBar() {
             <button
               key={g.id}
               type="button"
-              aria-haspopup="true"
+              aria-haspopup="menu"
               aria-expanded={isOpen}
               className={itemClass}
               onMouseEnter={(e) => {
@@ -140,6 +147,7 @@ export function AppTopBar() {
               onClick={(e) => {
                 clearHoverTimers();
                 const rect = e.currentTarget.getBoundingClientRect();
+                setFlyoutFocus({ autoFocus: true, trigger: e.currentTarget });
                 setOpenAnchor(rect);
                 setOpenGroup((cur) => (cur === g.id ? null : g.id));
               }}
@@ -153,9 +161,25 @@ export function AppTopBar() {
       </nav>
 
       <div className="relative z-10 ml-auto flex items-center gap-1.5 flex-shrink-0">
+        {/* D-073 — 화면 검색(커맨드 팔레트) 진입점. 넓은 화면에선 검색창 모양, 좁으면 아이콘만. */}
         <button
           type="button"
-          aria-haspopup="true"
+          onClick={() => openPalette(true)}
+          title="화면 검색 (Ctrl/⌘+K)"
+          aria-label="화면 검색 (Ctrl/⌘+K)"
+          aria-keyshortcuts="Control+K Meta+K"
+          className={cn(
+            'flex items-center gap-2 h-8 rounded-lg border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors',
+            'w-8 justify-center md:w-auto md:justify-start md:px-2.5 md:min-w-[180px]',
+          )}
+        >
+          <Search className="w-4 h-4 flex-shrink-0" />
+          <span className="hidden md:inline text-xs flex-1 text-left">화면 검색</span>
+          <kbd className="hidden md:inline text-[10px] font-mono border border-border rounded px-1">⌘K</kbd>
+        </button>
+        <button
+          type="button"
+          aria-haspopup="menu"
           aria-expanded={favoritesOpen}
           title="즐겨찾기"
           aria-label="즐겨찾기"
@@ -167,6 +191,7 @@ export function AppTopBar() {
           onClick={(e) => {
             clearHoverTimers();
             const rect = e.currentTarget.getBoundingClientRect();
+            setFlyoutFocus({ autoFocus: true, trigger: e.currentTarget });
             setFavoritesAnchor(rect);
             setFavoritesOpen((cur) => !cur);
           }}
@@ -197,6 +222,7 @@ export function AppTopBar() {
             title={openGroupDef.label}
             anchorRect={openAnchor}
             placement="bottom"
+            {...focusProps}
             onClose={() => setOpenGroup(null)}
             onMouseEnter={cancelScheduledClose}
             onMouseLeave={() => scheduleFlyoutClose(() => setOpenGroup(null))}
@@ -233,6 +259,7 @@ export function AppTopBar() {
             title="즐겨찾기"
             anchorRect={favoritesAnchor}
             placement="bottom"
+            {...focusProps}
             onClose={() => setFavoritesOpen(false)}
             onMouseEnter={cancelScheduledClose}
             onMouseLeave={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
