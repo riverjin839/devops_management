@@ -1,7 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
-import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
+import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -130,10 +130,11 @@ api.interceptors.response.use(
     // 401 from any endpoint other than the login itself means the token is
     // missing/expired/invalid — drop the session so AuthGate routes back to
     // the login screen. Login's own 401 (bad credentials) is left for the
-    // form to display.
+    // form to display. D-079: 무언 로그아웃이 아니라 사유('expired')와 보고 있던
+    // 경로를 남겨 로그인 화면이 안내하고 재로그인 후 복귀시킨다.
     const url: string | undefined = error?.config?.url;
     if (error?.response?.status === 401 && !url?.endsWith('/auth/login')) {
-      clearAuthSession();
+      expireAuthSession();
     }
     if (isDebugEnabled('global')) {
       const start = (error?.config as DebugConfig | undefined)?.__debugStart;

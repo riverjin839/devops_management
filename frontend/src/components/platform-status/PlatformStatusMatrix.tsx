@@ -10,6 +10,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState, ResizeGrip } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
+import { useCanOperate } from '@/hooks/useCanOperate';
 import {
   useCheckMatrixGrid, useReorderCheckMatrixItems, useDeleteCheckMatrixItem, usePutClusterCron,
   useRunCheckMatrixCluster, useRunCheckMatrixItem, useRunCheckMatrixCell, useCheckMatrixActiveRuns,
@@ -46,11 +47,13 @@ function emptyCellHint(item: CheckMatrixItem, cell: CheckMatrixCell | undefined)
 }
 
 function CellButton({
-  item, cell, onClick, onRunNow, running, minH,
+  item, cell, onClick, onRunNow, running, minH, runDisabledHint,
 }: {
   item: CheckMatrixItem; cell: CheckMatrixCell | undefined; onClick: () => void;
   /** 수동 입력 항목엔 실행 개념이 없어 전달되지 않는다 — undefined 면 ▶ 버튼 자체를 안 그린다. */
   onRunNow?: () => void; running?: boolean; minH: number;
+  /** D-082 — viewer 면 ▶ 를 그리되 비활성 + 사유(title). 숨기면 기능 존재를 모른다. */
+  runDisabledHint?: string;
 }) {
   const empty = !cell || !cell.hasResult || !cell.status;
   const StatusIcon = !empty ? CELL_STATUS_ICON[cell.status!] : undefined;
@@ -77,15 +80,15 @@ function CellButton({
       {onRunNow && (
         <button
           onClick={(e) => { e.stopPropagation(); onRunNow(); }}
-          disabled={running}
-          title={`${item.name} 지금 실행`}
-          aria-label={`${item.name} 지금 실행`}
-          className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-secondary disabled:opacity-100 transition-opacity"
+          disabled={running || !!runDisabledHint}
+          title={runDisabledHint ?? `${item.name} 지금 실행`}
+          aria-label={runDisabledHint ? `${item.name} 지금 실행 — ${runDisabledHint}` : `${item.name} 지금 실행`}
+          className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-secondary disabled:opacity-100 disabled:cursor-not-allowed transition-opacity"
         >
           {running ? (
             <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" aria-hidden="true" />
           ) : (
-            <Play className="w-3 h-3 text-primary" aria-hidden="true" />
+            <Play className={`w-3 h-3 ${runDisabledHint ? 'text-muted-foreground/60' : 'text-primary'}`} aria-hidden="true" />
           )}
         </button>
       )}
@@ -253,8 +256,8 @@ function MatrixDisplaySettings({
 }
 
 function ClusterCronBadge({
-  cluster, isRunning,
-}: { cluster: CheckMatrixGridCluster; isRunning: boolean }) {
+  cluster, isRunning, editDisabledHint,
+}: { cluster: CheckMatrixGridCluster; isRunning: boolean; editDisabledHint?: string }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(cluster.checkCronExpr ?? '');
@@ -294,10 +297,11 @@ function ClusterCronBadge({
           setEnabled(cluster.checkCronEnabled);
           setOpen((v) => !v);
         }}
-        title={`${cluster.checkCronExpr || '미설정'} — ${CRON_TONE_HINT[tone]}`}
+        disabled={!!editDisabledHint}
+        title={`${cluster.checkCronExpr || '미설정'} — ${editDisabledHint ?? CRON_TONE_HINT[tone]}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1 text-[10px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 max-w-[140px] ${CRON_TONE_CLS[tone]}`}
+        className={`inline-flex items-center gap-1 text-[10px] font-mono transition-colors px-1.5 py-0.5 rounded border hover:brightness-95 disabled:cursor-not-allowed max-w-[140px] ${CRON_TONE_CLS[tone]}`}
       >
         <ToneIcon className={`w-2.5 h-2.5 flex-shrink-0 ${tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
         <span className="truncate">{cluster.checkCronExpr || '미설정'}</span>
@@ -361,6 +365,9 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   const runClusterMut = useRunCheckMatrixCluster();
   const runItemMut = useRunCheckMatrixItem();
   const runCellMut = useRunCheckMatrixCell();
+  // D-082 — viewer 에게는 실행/추가/수정/삭제/설정 버튼을 숨기지 않고 비활성 + 사유로 보여준다
+  // (백엔드 require_operator 가 실제 차단, 프론트는 "눌러보고서야 403" 을 없앤다).
+  const { canOperate, hint: operateHint, withHint } = useCanOperate();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -551,15 +558,18 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
         </button>
         <button
           onClick={() => setFormItem('new')}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors"
+          disabled={!canOperate}
+          title={withHint('점검 항목 추가')}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-xl hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" /> 항목 추가
         </button>
         <button
           onClick={() => setSettingsOpen(true)}
-          className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground"
-          title="매트릭스 설정"
-          aria-label="매트릭스 설정"
+          disabled={!canOperate}
+          className="p-1.5 rounded-xl hover:bg-secondary transition-colors text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          title={withHint('매트릭스 설정')}
+          aria-label={withHint('매트릭스 설정')}
         >
           <Settings className="w-4 h-4" />
         </button>
@@ -619,7 +629,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                 icon={Plus}
                 title="점검 항목이 없습니다"
                 description="행(점검 항목)을 추가하면 등록된 클러스터마다 열이 자동으로 채워집니다."
-                action={{ label: '항목 추가', onClick: () => setFormItem('new') }}
+                action={canOperate ? { label: '항목 추가', onClick: () => setFormItem('new') } : undefined}
               />
             )}
           </div>
@@ -655,10 +665,10 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           </button>
                           <button
                             onClick={() => setRunConfirm({ type: 'cluster', cluster })}
-                            disabled={runningKey === `cluster:${cluster.id}`}
-                            title={`${cluster.name} 의 모든 점검 항목을 지금 실행`}
-                            aria-label={`${cluster.name} 전체 점검 실행`}
-                            className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary transition-colors disabled:opacity-50 flex-shrink-0"
+                            disabled={!canOperate || runningKey === `cluster:${cluster.id}`}
+                            title={withHint(`${cluster.name} 의 모든 점검 항목을 지금 실행`)}
+                            aria-label={operateHint ? `${cluster.name} 전체 점검 실행 — ${operateHint}` : `${cluster.name} 전체 점검 실행`}
+                            className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                           >
                             {runningKey === `cluster:${cluster.id}`
                               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -668,6 +678,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                         <ClusterCronBadge
                           cluster={cluster}
                           isRunning={runningClusterIds.has(cluster.id)}
+                          editDisabledHint={operateHint}
                         />
                       </div>
                       <ResizeGrip onMouseDown={(e) => colW.beginResize(cluster.id, e)} onDoubleClick={() => colW.autoFit(cluster.id)} />
@@ -694,17 +705,17 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                       {(() => {
                         const grip = (
                           <button
-                            draggable
+                            draggable={canOperate}
                             onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
                             onDragEnd={endDrag}
                             onKeyDown={(e) => {
                               if (e.key === 'ArrowUp') { e.preventDefault(); moveItem(idx, -1); }
                               else if (e.key === 'ArrowDown') { e.preventDefault(); moveItem(idx, 1); }
                             }}
-                            disabled={reorderMut.isPending}
-                            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground disabled:opacity-30"
-                            title="드래그하거나 화살표 위/아래로 순서 변경"
-                            aria-label={`${item.name} 순서 변경 — 드래그하거나 화살표 위/아래 키`}
+                            disabled={!canOperate || reorderMut.isPending}
+                            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={withHint('드래그하거나 화살표 위/아래로 순서 변경')}
+                            aria-label={operateHint ? `${item.name} 순서 변경 — ${operateHint}` : `${item.name} 순서 변경 — 드래그하거나 화살표 위/아래 키`}
                           >
                             <GripVertical className="w-3.5 h-3.5" />
                           </button>
@@ -735,10 +746,10 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             {item.sourceType !== 'manual' && (
                               <button
                                 onClick={() => setRunConfirm({ type: 'item', item })}
-                                disabled={runningKey === `item:${item.id}`}
-                                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50"
-                                title="모든 클러스터에서 이 항목 실행"
-                                aria-label="모든 클러스터에서 이 항목 실행"
+                                disabled={!canOperate || runningKey === `item:${item.id}`}
+                                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={withHint('모든 클러스터에서 이 항목 실행')}
+                                aria-label={withHint('모든 클러스터에서 이 항목 실행')}
                               >
                                 {runningKey === `item:${item.id}`
                                   ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -750,18 +761,20 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                             <div className="flex items-center gap-0.5 opacity-40 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                               <button
                                 onClick={() => setFormItem(item)}
-                                className="p-1 rounded hover:bg-secondary text-muted-foreground"
-                                title="수정"
-                                aria-label={`${item.name} 수정`}
+                                disabled={!canOperate}
+                                className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={withHint('수정')}
+                                aria-label={operateHint ? `${item.name} 수정 — ${operateHint}` : `${item.name} 수정`}
                               >
                                 <Pencil className="w-3 h-3" />
                               </button>
                               {!item.isSystem && (
                                 <button
                                   onClick={() => setDeleteTarget(item)}
-                                  className="p-1 rounded hover:bg-secondary text-status-critical"
-                                  title="삭제"
-                                  aria-label={`${item.name} 삭제`}
+                                  disabled={!canOperate}
+                                  className="p-1 rounded hover:bg-secondary text-status-critical disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={withHint('삭제')}
+                                  aria-label={operateHint ? `${item.name} 삭제 — ${operateHint}` : `${item.name} 삭제`}
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
@@ -828,6 +841,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           onRunNow={item.sourceType === 'manual' ? undefined : () => setCellRunConfirm({ item, cluster })}
                           running={runningKey === `cell:${item.id}:${cluster.id}`}
                           minH={ROW_MIN_H[rowDensity]}
+                          runDisabledHint={operateHint}
                         />
                       </td>
                     ))}
