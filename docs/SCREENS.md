@@ -130,7 +130,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **파일**: `frontend/src/pages/LoginPage.tsx` (+ `frontend/src/components/auth/AuthGate.tsx`)
 - **목적 / UX**: 별도 라우트 경로 없이 앱 전체를 감싸는 `AuthGate`가 유효한 세션(token+user)이 없으면 자동으로 `LoginPage`를 렌더링하는 방식의 게이트. 사용자명/비밀번호로 로그인하면 세션이 저장되고 `AuthGate`가 재렌더링되어 원래 화면으로 자연 전환된다(수동 navigate 없음).
 - **UI 구성**:
-  - 중앙 정렬 단일 카드(`max-w-sm`): 로고+타이틀("DEVOPS MANAGEMENT" / "로그인"), 사용자명·비밀번호 입력, 에러 메시지(`role="alert"`), 로그인 버튼(제출 중 스피너).
+  - 중앙 정렬 단일 카드(`max-w-sm`): 로고+타이틀("PEP" / "Platform Engineering Portal" — D-069 로 구 제품명 표기 제거), 카드 하단 앱 버전 `v{__APP_VERSION__}`(vite `define`, `package.json` 원천), 사용자명·비밀번호 입력, 에러 메시지(`role="alert"`), 로그인 버튼(제출 중 스피너).
 - **Frontend**: 로컬 state만 사용(`username`, `password`, `error`, `submitting`) — TanStack Query/Zustand 쿼리 훅 없음. `useAuthStore((s) => s.setSession)`으로 세션 저장. 호출 함수: `authApi.login(username, password)`. `authStore.setSession()`은 홈 탭을 더 이상 강제로 리셋하지 않는다(R-4 5차 D-056) — 로그인 직후 홈 탭은 이전 localStorage 값 또는 서버에 저장된 `home_prefs.defaultHomeTab` 을 따른다.
 - **Backend**: `POST /api/v1/auth/login` (`backend/app/routers/auth.py`) — `User` 모델(`backend/app/models/user.py`) 조회 후 `verify_password` 검증, 성공 시 `create_access_token`으로 JWT 발급 + `audit_logger.record(action="login.success"/"login.failure")` 감사 로그 기록. 실패 시 401 + 한글 상세 메시지.
 - **핵심 기능**:
