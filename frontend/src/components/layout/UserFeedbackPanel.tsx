@@ -30,20 +30,23 @@ interface Props {
   open: boolean;
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
+  /** D-077 — "버그 픽스 로그" 는 개발팀 내부 산출물이라 admin 에게만 탭을 보여준다. */
+  showBugFixLog?: boolean;
 }
 
-export function UserFeedbackPanel({ open, activeTab, onTabChange }: Props) {
+export function UserFeedbackPanel({ open, activeTab, onTabChange, showBugFixLog = false }: Props) {
+  const tabs = showBugFixLog ? TABS : TABS.filter((t) => t.key !== 'bug-fix-log');
   const handleTabKeyDown = (e: React.KeyboardEvent, idx: number) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
-    const next = (idx + (e.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length;
-    onTabChange(TABS[next].key);
+    const next = (idx + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    onTabChange(tabs[next].key);
   };
 
   return (
     <div className="flex flex-col h-full">
       <div role="tablist" aria-label="사용자 피드백 보기" className="flex-shrink-0 flex items-center border-b border-border px-2">
-        {TABS.map((t, idx) => (
+        {tabs.map((t, idx) => (
           <button
             key={t.key}
             type="button"
@@ -67,7 +70,7 @@ export function UserFeedbackPanel({ open, activeTab, onTabChange }: Props) {
       <div className="flex-1 min-h-0 overflow-y-auto">
         {activeTab === 'voc' && <VocBoardPanel open={open && activeTab === 'voc'} />}
         {activeTab === 'release-notes' && <ReleaseNotesPanel open={open && activeTab === 'release-notes'} />}
-        {activeTab === 'bug-fix-log' && <BugFixLogPanel open={open && activeTab === 'bug-fix-log'} />}
+        {activeTab === 'bug-fix-log' && showBugFixLog && <BugFixLogPanel open={open && activeTab === 'bug-fix-log'} />}
       </div>
     </div>
   );

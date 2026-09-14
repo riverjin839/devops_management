@@ -10,6 +10,42 @@
 
 1.33.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **커맨드 팔레트 — Ctrl/⌘+K 화면 검색 (D-073)**: 화면 이름·경로·클러스터 이름으로 검색해 바로
+  이동한다. 사이드바에 보이는 것과 같은 라벨 오버라이드·접근 제어(`useNavCatalog`)를 따르고,
+  검색어가 비면 최근 방문이 맨 위에 온다. 진입점 3곳 — 전역 단축키, 상단바 "화면 검색" 버튼,
+  사이드바 "도움말·지원 ▸ 화면 검색". Frontend: `components/layout/CommandPalette.tsx` ·
+  `stores/commandPaletteStore.ts`, 키보드 ↑↓/Enter/Esc + `useModalA11y` 포커스 트랩.
+
+### Changed
+- **사이드바 레일 하단 개인 존 재편 (D-077)**: 무라벨 아이콘 7개(설정·테마·아일랜드·AI·사용자·
+  VOC·로그아웃)를 5개로 줄였다. 테마 선택·비밀번호 변경·로그아웃은 **사용자 메뉴(아바타)**
+  flyout 안으로, VOC·릴리즈 노트·버그 픽스 로그는 **도움말·지원(?)** flyout 으로 옮겼다.
+  테마는 순환 클릭(최대 10클릭) 대신 목록에서 1클릭 선택(현재 테마 체크 표시), 로그아웃은
+  확인 다이얼로그를 거친다, 버그 픽스 로그는 admin 에게만 보인다.
+
+### Fixed
+- **flyout 상호배타 + 전환 시 포커스 재이동 (D-080 후속, 코드 리뷰 반영)**: 그룹/즐겨찾기/
+  Your Island/도움말·지원/사용자 메뉴 flyout 을 클릭으로 열 때 다른 flyout 이 이미 열려
+  있으면 닫히지 않고 함께 남아 있던 문제와, 같은 flyout 이 열린 채로 다른 그룹으로 전환할 때
+  `autoFocus` 값 자체는 바뀌지 않아 포커스가 새 메뉴의 첫 항목으로 옮겨가지 않던 문제를
+  수정했다 — 각 클릭 핸들러가 여는 것 전에 `closeAllFlyouts()` 호출을 통일하고,
+  `FlyoutShell` 의 포커스 effect 의존성에 (클릭마다 새로 계산되는) `anchorRect` 를 추가.
+- **flyout 키보드 접근성 (D-080)**: 사이드바·상단바 하위 메뉴가 `Tab` 으로 도달 불가(포털이
+  body 끝)였던 것을 — 클릭/Enter 로 열면 첫 항목으로 포커스가 들어가고 ↑↓/Home/End 로 이동,
+  Esc 로 닫히며 트리거 버튼으로 포커스가 돌아온다(`FlyoutShell` `autoFocus`/`returnFocusTo`,
+  `role="menu"`/`menuitem`, 트리거 `aria-haspopup`/`aria-expanded`). hover 로 연 flyout 은 포커스를
+  건드리지 않는다.
+- **viewer 권한 UX (D-082)**: 플랫폼 현황(점검 매트릭스)의 실행 ▶(클러스터/항목/셀)·항목 추가·
+  수정·삭제·순서 변경·매트릭스 설정·cron 저장·수동 입력 저장·설정 편집 버튼이 viewer 에게도
+  똑같이 눌리다가 403 으로 실패하던 것을 — 버튼은 보이되 `disabled` + "operator 이상 권한이
+  필요합니다 (현재: viewer)" 사유를 붙인다. 공용 `hooks/useCanOperate.ts`.
+- **세션 만료 UX (D-079 프론트)**: 만료 시 무언 로그아웃 → ①만료 5분 전 "작성 중인 내용을
+  저장하라" 경고 토스트, ②만료 시각이 지나면 다음 401 을 기다리지 않고 로그인 화면으로 보내되
+  사유·보던 경로를 기록(`authStore.markSessionExpired`), ③로그인 화면에 "세션이 만료되어
+  로그아웃되었습니다" 안내, ④재로그인 후 보던 화면으로 복귀(`returnTo`). Frontend:
+  `hooks/useSessionExpiryWatch.ts` · `lib/jwt.ts`(exp 읽기). refresh 토큰/SSO 는 로드맵 R-7.
+
 ## [1.33.1] - 2026-09-14
 
 ### Fixed
