@@ -408,6 +408,15 @@ async def run_job(
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
 
+    # 비활성 잡은 즉시 실행도 막는다 — 예전엔 스케줄(디스패처)/일괄 실행만 enabled 를
+    # 지켰고 단일 잡 "즉시 실행" 버튼은 이 검사가 없어, 꺼둔 잡을 클릭 한 번으로 실행할
+    # 수 있었다(꺼짐 = 앞으로 새 실행을 막는다는 의미와 어긋남).
+    if not job.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="비활성화된 잡입니다 — 실행하려면 먼저 활성화하세요.",
+        )
+
     # Either the request supplies credentials, or the job has saved ones.
     # Non-SSH (cluster-scoped) job types need neither.
     has_saved = bool(job.encrypted_password or job.encrypted_private_key)

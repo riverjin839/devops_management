@@ -1,7 +1,7 @@
 // frontend/src/components/batch-jobs/BatchJobRow.tsx
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Square } from 'lucide-react';
+import { Play, PowerOff, Square } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import type { Cluster } from '@/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -52,7 +52,10 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
   const showCluster = !!cluster;
   const isRunning = job.lastStatus === 'running';
   // 저장된 자격증명(or non-SSH)이 있어야 자격증명 입력 없이 즉시 실행 가능.
-  const canQuickRun = job.requiresSsh === false || job.hasSavedPassword || job.hasSavedPrivateKey;
+  // 비활성화(enabled=false)된 잡은 스케줄뿐 아니라 이 버튼으로도 실행할 수 없다 —
+  // 서버(`POST /{id}/run`)도 동일하게 거부하므로 버튼 단계에서 막아 혼란을 없앤다.
+  const hasCreds = job.requiresSsh === false || job.hasSavedPassword || job.hasSavedPrivateKey;
+  const canQuickRun = job.enabled && hasCreds;
 
   const toast = useToast();
   const runMut = useRunBatchJob();
@@ -114,8 +117,11 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
           {job.name}
         </div>
         {!job.enabled && (
-          <span className="inline-block mt-0.5 text-xs px-1.5 rounded bg-muted text-muted-foreground">
-            off
+          <span
+            className="inline-flex items-center gap-1 mt-0.5 text-xs px-1.5 py-0.5 rounded border border-slate-400/40 bg-slate-400/10 text-slate-600 dark:text-slate-400 font-medium"
+            title="비활성화 — 예약 실행과 즉시 실행 버튼 모두 막혀 있습니다"
+          >
+            <PowerOff className="w-2.5 h-2.5" /> 사용 안 함
           </span>
         )}
         {hasMissingCreds && (
@@ -180,7 +186,11 @@ export function BatchJobRow({ job, cluster, selected, onClick, checkbox, checked
                   </p>
                   {job.defaultHost && <p className="text-muted-foreground">호스트: {job.defaultHost}</p>}
                   <p className="text-muted-foreground">최근 실행: {formatShortDate(job.lastRunAt)} ({job.lastStatus})</p>
-                  {!canQuickRun && (
+                  {!job.enabled ? (
+                    <p className="text-slate-500">
+                      비활성화된 잡입니다 — 행을 열어 "활성화"를 켜야 실행할 수 있습니다.
+                    </p>
+                  ) : !hasCreds && (
                     <p className="text-amber-500">
                       저장된 자격증명이 없어 즉시 실행할 수 없습니다 — 행을 열어 자격증명을 등록하세요.
                     </p>
