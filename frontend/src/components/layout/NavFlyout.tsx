@@ -53,7 +53,11 @@ export function FlyoutShell({
       const back = returnRef.current;
       if (back && document.contains(back)) back.focus();
     };
-  }, [autoFocus]);
+    // anchorRect 를 의존성에 포함한다 — 같은 FlyoutShell 인스턴스가 다른 그룹으로 전환될 때
+    // (예: 그룹 A flyout 이 열린 채로 그룹 B 아이콘을 클릭) autoFocus 값 자체는 true 로 그대로
+    // 유지되므로 anchorRect(클릭마다 새로 계산되는 rect)가 없으면 effect 가 재실행되지 않아
+    // 포커스가 새 메뉴의 첫 항목으로 옮겨가지 않는다.
+  }, [autoFocus, anchorRect]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const container = ref.current;

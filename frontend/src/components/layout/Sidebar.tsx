@@ -239,8 +239,10 @@ export function Sidebar() {
   const goToIsland = (rect?: DOMRect, el?: HTMLElement | null) => {
     // 내 것 + 공유받은 것을 합쳐 2개 이상이면 flyout 으로 고르고, 아니면 바로 이동한다.
     if (myIslands.length + sharedIslands.length > 1) {
+      const wasOpen = !!islandFlyoutAnchor;
+      closeAllFlyouts();
       openByClick(el);
-      setIslandFlyoutAnchor((cur) => (cur ? null : rect ?? null));
+      if (!wasOpen) setIslandFlyoutAnchor(rect ?? null);
       return;
     }
     setIslandFlyoutAnchor(null);
@@ -362,9 +364,15 @@ export function Sidebar() {
 
   const toggleGroup = (id: GroupId, rect?: DOMRect, el?: HTMLElement | null) => {
     clearHoverTimers();
+    // 다른 flyout 이 열려 있는 상태에서 그룹 아이콘을 클릭하면 그 flyout 을 먼저 닫는다 —
+    // 안 그러면 포털·외부클릭 캐처가 그대로 남아 있다가 이 flyout 을 닫을 때 드러난다.
+    const wasOpen = openGroup === id;
+    closeAllFlyouts();
     openByClick(el);
-    setOpenGroup((cur) => (cur === id ? null : id));
-    if (rect) setOpenAnchor(rect);
+    if (!wasOpen) {
+      setOpenGroup(id);
+      if (rect) setOpenAnchor(rect);
+    }
   };
   /** flyout 이 닫힐 때(라우팅/액션) 호출 — 포커스 복귀는 FlyoutShell 이 트리거로 알아서 한다. */
   const focusProps = { autoFocus: flyoutFocus.autoFocus, returnFocusTo: flyoutFocus.trigger };
@@ -483,9 +491,13 @@ export function Sidebar() {
               onHoverClose={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
               onClick={(rect, el) => {
                 clearHoverTimers();
+                const wasOpen = favoritesOpen;
+                closeAllFlyouts();
                 openByClick(el);
-                setFavoritesOpen((cur) => !cur);
-                if (rect) setFavoritesAnchor(rect);
+                if (!wasOpen) {
+                  setFavoritesOpen(true);
+                  if (rect) setFavoritesAnchor(rect);
+                }
               }}
             />
             <div className="w-6 border-t border-border my-1" aria-hidden />
@@ -571,8 +583,10 @@ export function Sidebar() {
               onHoverClose={() => scheduleFlyoutClose(() => setHelpFlyoutAnchor(null))}
               onClick={(rect, el) => {
                 clearHoverTimers();
+                const wasOpen = !!helpFlyoutAnchor;
+                closeAllFlyouts();
                 openByClick(el);
-                setHelpFlyoutAnchor((cur) => (cur ? null : rect ?? null));
+                if (!wasOpen) setHelpFlyoutAnchor(rect ?? null);
               }}
             />
           )}
@@ -587,8 +601,10 @@ export function Sidebar() {
               onHoverClose={() => scheduleFlyoutClose(() => setUserFlyoutAnchor(null))}
               onClick={(rect, el) => {
                 clearHoverTimers();
+                const wasOpen = !!userFlyoutAnchor;
+                closeAllFlyouts();
                 openByClick(el);
-                setUserFlyoutAnchor((cur) => (cur ? null : rect ?? null));
+                if (!wasOpen) setUserFlyoutAnchor(rect ?? null);
               }}
             />
           )}
