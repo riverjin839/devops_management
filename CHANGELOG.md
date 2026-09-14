@@ -25,6 +25,12 @@
   확인 다이얼로그를 거친다, 버그 픽스 로그는 admin 에게만 보인다.
 
 ### Fixed
+- **flyout 상호배타 + 전환 시 포커스 재이동 (D-080 후속, 코드 리뷰 반영)**: 그룹/즐겨찾기/
+  Your Island/도움말·지원/사용자 메뉴 flyout 을 클릭으로 열 때 다른 flyout 이 이미 열려
+  있으면 닫히지 않고 함께 남아 있던 문제와, 같은 flyout 이 열린 채로 다른 그룹으로 전환할 때
+  `autoFocus` 값 자체는 바뀌지 않아 포커스가 새 메뉴의 첫 항목으로 옮겨가지 않던 문제를
+  수정했다 — 각 클릭 핸들러가 여는 것 전에 `closeAllFlyouts()` 호출을 통일하고,
+  `FlyoutShell` 의 포커스 effect 의존성에 (클릭마다 새로 계산되는) `anchorRect` 를 추가.
 - **flyout 키보드 접근성 (D-080)**: 사이드바·상단바 하위 메뉴가 `Tab` 으로 도달 불가(포털이
   body 끝)였던 것을 — 클릭/Enter 로 열면 첫 항목으로 포커스가 들어가고 ↑↓/Home/End 로 이동,
   Esc 로 닫히며 트리거 버튼으로 포커스가 돌아온다(`FlyoutShell` `autoFocus`/`returnFocusTo`,
