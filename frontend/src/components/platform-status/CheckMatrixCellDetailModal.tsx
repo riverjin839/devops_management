@@ -129,7 +129,11 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[88vh] overflow-y-auto"
+        className={`bg-card border border-border rounded-2xl shadow-xl w-full mx-4 max-h-[88vh] overflow-y-auto transition-[max-width] ${
+          // "실행 방식" 탭은 대상/최근수행/명령/설정을 2열로 배치해 스크롤을 줄이므로
+          // 그 2열이 실제로 펼쳐질 폭이 필요하다 — 다른 탭은 기존 폭을 유지.
+          tab === 'runbook' ? 'max-w-4xl' : 'max-w-2xl'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-2 px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">

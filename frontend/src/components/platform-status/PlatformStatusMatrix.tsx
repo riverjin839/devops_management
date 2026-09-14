@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Settings, Pencil, Trash2, GripVertical, Clock, Lock, HelpCircle,
   Play, ScrollText, Loader2, AlertTriangle, XCircle, CheckCircle2, Server, PauseCircle,
-  SlidersHorizontal,
+  SlidersHorizontal, ChevronRight,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { StatusDot, ConfirmDialog, useToast, Skeleton, EmptyState, ResizeGrip } from '@/components/common';
@@ -152,32 +152,38 @@ function loadRowDensity(): RowDensity {
   return 'normal';
 }
 
-// 페이지당 표시 행 수 — 점검 항목이 늘어나도 스크롤 없이 한 눈에 볼 분량을 사용자가 정할 수 있게.
-// 'all' 이 기본값(기존 동작 유지, 내부 스크롤로 전체 표시).
-type PageSize = 10 | 20 | 30 | 'all';
-const PAGE_SIZE_STORAGE_KEY = 'pep:checkMatrixPageSize';
-const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
-  { value: 'all', label: '전체' },
-  { value: 10, label: '10행' },
-  { value: 20, label: '20행' },
-  { value: 30, label: '30행' },
-];
+// 영역(카테고리)별 그룹핑 — 점검 항목이 늘어날수록 flat 목록 스크롤만으로는 admin 이
+// "지금 K8s 쪽에 문제가 있나?"를 한눈에 파악할 수 없다는 피드백에 대응. item.category
+// (k8s/network/storage/os/app 등 자유 문자열)로 행을 묶고 기본은 접어두되, 위험/경고가
+// 있는 그룹만 자동으로 펼쳐 "문제 있는 곳만 열려 있는" 초기 화면을 만든다.
+const UNCATEGORIZED_GROUP = '__uncategorized__';
+// 운영 우선순위 순서 — K8s 운영 포인트를 가장 먼저 보게 한다(사용자 요청: "주요 운영 K8S
+// 운영 포인트 점검을 확인"). 목록에 없는 카테고리는 그 뒤에 알파벳순, 미분류는 맨 끝.
+const CATEGORY_ORDER = ['k8s', 'network', 'storage', 'os', 'app'];
+const CATEGORY_LABEL: Record<string, string> = {
+  k8s: 'K8s', network: '네트워크', storage: '스토리지', os: 'OS', app: '애플리케이션',
+};
+const GROUP_COLLAPSE_STORAGE_KEY = 'pep:checkMatrixCollapsedGroups';
+const GROUP_BADGE_CLS: Record<'critical' | 'warning' | 'healthy', string> = {
+  critical: 'text-status-critical bg-status-critical-soft border-status-critical/40',
+  warning: 'text-status-warning bg-status-warning-soft border-status-warning/40',
+  healthy: 'text-status-healthy bg-status-healthy-soft border-status-healthy/40',
+};
 
-function loadPageSize(): PageSize {
+function loadCollapsedGroups(): Set<string> | null {
   try {
-    const v = localStorage.getItem(PAGE_SIZE_STORAGE_KEY);
-    if (v === 'all') return 'all';
-    const n = Number(v);
-    if (n === 10 || n === 20 || n === 30) return n;
+    const raw = localStorage.getItem(GROUP_COLLAPSE_STORAGE_KEY);
+    if (raw) return new Set(JSON.parse(raw));
   } catch { /* ignore */ }
-  return 'all';
+  // null = 아직 사용자가 손대지 않음 → 위험/경고 기반 기본값을 매 렌더 계산해서 쓴다.
+  return null;
 }
 
 function MatrixDisplaySettings({
-  density, onDensityChange, pageSize, onPageSizeChange, onResetWidths,
+  density, onDensityChange, onExpandAllGroups, onCollapseAllGroups, onResetWidths,
 }: {
   density: RowDensity; onDensityChange: (d: RowDensity) => void;
-  pageSize: PageSize; onPageSizeChange: (p: PageSize) => void;
+  onExpandAllGroups: () => void; onCollapseAllGroups: () => void;
   onResetWidths: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -222,21 +228,20 @@ function MatrixDisplaySettings({
               </div>
             </div>
             <div className="space-y-1 border-t border-border/50 pt-2">
-              <span className="text-[11px] text-muted-foreground">화면당 표시 행 수</span>
-              <div className="grid grid-cols-4 gap-px rounded-md bg-secondary/70 p-0.5">
-                {PAGE_SIZE_OPTIONS.map((o) => (
-                  <button
-                    key={o.value}
-                    onClick={() => onPageSizeChange(o.value)}
-                    className={`px-1 py-1 text-xs font-medium rounded transition-colors ${
-                      pageSize === o.value
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {o.label}
-                  </button>
-                ))}
+              <span className="text-[11px] text-muted-foreground">영역 그룹</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={onExpandAllGroups}
+                  className="flex-1 px-2 py-1 text-xs font-medium rounded bg-secondary/70 hover:bg-secondary transition-colors"
+                >
+                  모두 펼치기
+                </button>
+                <button
+                  onClick={onCollapseAllGroups}
+                  className="flex-1 px-2 py-1 text-xs font-medium rounded bg-secondary/70 hover:bg-secondary transition-colors"
+                >
+                  모두 접기
+                </button>
               </div>
             </div>
             <button
@@ -381,8 +386,8 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
   // 어느 열/행이 실행 중인지 — 버튼 스피너 표시용(mutation 은 전역 pending 만 주므로 대상 키를 따로 든다).
   const [runningKey, setRunningKey] = useState<string | null>(null);
 
-  const items = grid?.items ?? [];
-  const clusters = grid?.clusters ?? [];
+  const items = useMemo(() => grid?.items ?? [], [grid?.items]);
+  const clusters = useMemo(() => grid?.clusters ?? [], [grid?.clusters]);
 
   // 행 높이 밀도 — 3단계 토글, localStorage 영속화(다른 화면 표에도 이미 쓰는 pep: 접두어).
   const [rowDensity, setRowDensity] = useState<RowDensity>(loadRowDensity);
@@ -390,12 +395,70 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     try { localStorage.setItem(ROW_DENSITY_STORAGE_KEY, rowDensity); } catch { /* ignore */ }
   }, [rowDensity]);
 
-  // 페이지당 표시 행 수 — 'all' 이면 기존처럼 내부 스크롤로 전체 표시.
-  const [pageSize, setPageSize] = useState<PageSize>(loadPageSize);
+  // 영역(카테고리)별 그룹 — 항목이 늘어나도 admin 이 접힌 헤더의 상태 배지만으로 문제
+  // 영역을 한눈에 짚을 수 있게 한다. 정렬은 items 순서(사용자가 드래그로 조정한 순서)를
+  // 그대로 존중 — 카테고리 안에서의 상대 순서만 유지하고, 그룹 자체는 CATEGORY_ORDER 로 정렬.
+  const groups = useMemo(() => {
+    const map = new Map<string, {
+      key: string; label: string;
+      entries: { item: CheckMatrixItem; idx: number }[];
+      counts: { healthy: number; warning: number; critical: number };
+    }>();
+    items.forEach((item, idx) => {
+      const key = item.category?.trim() || UNCATEGORIZED_GROUP;
+      let g = map.get(key);
+      if (!g) {
+        g = {
+          key,
+          label: key === UNCATEGORIZED_GROUP ? '미분류' : (CATEGORY_LABEL[key] ?? key),
+          entries: [],
+          counts: { healthy: 0, warning: 0, critical: 0 },
+        };
+        map.set(key, g);
+      }
+      g.entries.push({ item, idx });
+      clusters.forEach((cluster) => {
+        const status = grid?.cells[item.id]?.[cluster.id]?.status;
+        if (status === 'healthy') g!.counts.healthy += 1;
+        else if (status === 'warning') g!.counts.warning += 1;
+        else if (status === 'critical') g!.counts.critical += 1;
+      });
+    });
+    const orderOf = (key: string) => {
+      const i = CATEGORY_ORDER.indexOf(key);
+      if (i !== -1) return i;
+      return key === UNCATEGORIZED_GROUP ? 999 : 500;
+    };
+    return Array.from(map.values()).sort((a, b) => {
+      const oa = orderOf(a.key), ob = orderOf(b.key);
+      return oa !== ob ? oa - ob : a.label.localeCompare(b.label);
+    });
+  }, [items, clusters, grid?.cells]);
+
+  // null = 사용자가 아직 그룹 펼침/접힘을 건드리지 않음 → 위험/경고가 하나라도 있는
+  // 그룹만 자동으로 펼친 기본값을 매 렌더 계산. 한 번이라도 토글하면 그 이후엔 사용자
+  // 선택을 그대로 유지·영속화한다(위험이 나타났다고 강제로 다시 펼쳐 레이아웃을 흔들지 않음
+  // — 대신 접힌 헤더에도 경고/위험 배지가 항상 보이므로 "한눈에" 요건은 충족된다).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(loadCollapsedGroups);
   useEffect(() => {
-    try { localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch { /* ignore */ }
-  }, [pageSize]);
-  const [page, setPage] = useState(0);
+    if (!collapsedGroups) return;
+    try { localStorage.setItem(GROUP_COLLAPSE_STORAGE_KEY, JSON.stringify([...collapsedGroups])); } catch { /* ignore */ }
+  }, [collapsedGroups]);
+  const effectiveCollapsed = useMemo(() => {
+    if (collapsedGroups) return collapsedGroups;
+    const s = new Set<string>();
+    groups.forEach((g) => { if (g.counts.critical === 0 && g.counts.warning === 0) s.add(g.key); });
+    return s;
+  }, [collapsedGroups, groups]);
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev ?? effectiveCollapsed);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const expandAllGroups = () => setCollapsedGroups(new Set());
+  const collapseAllGroups = () => setCollapsedGroups(new Set(groups.map((g) => g.key)));
 
   // 열 너비 — 항목 라벨 열 + 클러스터마다 하나씩, 드래그로 조정하고 더블클릭으로 기본값 복원.
   // 클러스터 목록이 늘어나면 새 컬럼도 기본 너비로 자동 반영된다(useColumnWidths 의 defaults 머지).
@@ -406,12 +469,6 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
     [grid?.clusters],
   );
   const colW = useColumnWidths('platform-status-matrix', { defaults: colDefaults, min: 90, max: 420 });
-
-  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(items.length / pageSize));
-  useEffect(() => {
-    if (page > totalPages - 1) setPage(Math.max(0, totalPages - 1));
-  }, [totalPages, page]);
-  const pagedItems = pageSize === 'all' ? items : items.slice(page * pageSize, page * pageSize + pageSize);
 
   // 클러스터 cron 배지 색상 — "실행중" 판정은 전역 활성 수행(대기열+실행중) 한 번의 가벼운
   // 폴링으로 공유하고, "정상/경고/위험"은 핵심 점검(core_bundle) 행의 최근 셀 상태로 판정한다.
@@ -533,7 +590,7 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
       <div className="ml-auto flex items-center gap-1.5 border-l border-border pl-2.5 flex-shrink-0">
         <MatrixDisplaySettings
           density={rowDensity} onDensityChange={setRowDensity}
-          pageSize={pageSize} onPageSizeChange={(p) => { setPageSize(p); setPage(0); }}
+          onExpandAllGroups={expandAllGroups} onCollapseAllGroups={collapseAllGroups}
           onResetWidths={colW.reset}
         />
         <button
@@ -676,10 +733,44 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                 </tr>
               </thead>
               <tbody>
-                {pagedItems.map((item, localIdx) => {
-                  // 페이지네이션 시 pagedItems 는 items 의 부분집합이라 로컬 idx 를 그대로 쓰면
-                  // 정렬/드래그가 페이지 안에서만 움직인다 — items 전체 기준 절대 idx 로 환산한다.
-                  const idx = pageSize === 'all' ? localIdx : page * pageSize + localIdx;
+                {groups.map((g) => {
+                  const collapsed = effectiveCollapsed.has(g.key);
+                  return (
+                  <Fragment key={g.key}>
+                    <tr className="bg-surface-container-high/70">
+                      <td colSpan={1 + clusters.length} className="sticky left-0 z-10 bg-surface-container-high px-2 py-1.5 border-b border-border">
+                        <button
+                          onClick={() => toggleGroup(g.key)}
+                          aria-expanded={!collapsed}
+                          className="w-full flex items-center gap-2 text-left"
+                        >
+                          <ChevronRight
+                            className={`w-3.5 h-3.5 flex-shrink-0 text-muted-foreground transition-transform ${collapsed ? '' : 'rotate-90'}`}
+                            aria-hidden="true"
+                          />
+                          <span className="text-xs font-semibold text-foreground">{g.label}</span>
+                          <span className="text-[11px] text-muted-foreground">{g.entries.length}개 항목</span>
+                          <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                            {g.counts.critical > 0 && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[10px] font-semibold tabular-nums ${GROUP_BADGE_CLS.critical}`}>
+                                <XCircle className="w-2.5 h-2.5" aria-hidden="true" /> {g.counts.critical}
+                              </span>
+                            )}
+                            {g.counts.warning > 0 && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[10px] font-semibold tabular-nums ${GROUP_BADGE_CLS.warning}`}>
+                                <AlertTriangle className="w-2.5 h-2.5" aria-hidden="true" /> {g.counts.warning}
+                              </span>
+                            )}
+                            {g.counts.healthy > 0 && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded border text-[10px] font-semibold tabular-nums ${GROUP_BADGE_CLS.healthy}`}>
+                                <CheckCircle2 className="w-2.5 h-2.5" aria-hidden="true" /> {g.counts.healthy}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      </td>
+                    </tr>
+                    {!collapsed && g.entries.map(({ item, idx }) => {
                   const color = rowColor(item.color);
                   return (
                   <tr
@@ -834,37 +925,12 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                   </tr>
                   );
                 })}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          {pageSize !== 'all' && items.length > 0 && (
-            <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-1.5 border-t border-border text-xs text-muted-foreground">
-              <span>
-                {page * pageSize + 1}–{Math.min(items.length, (page + 1) * pageSize)} / {items.length}행
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="px-2 py-1 rounded hover:bg-secondary disabled:opacity-30 transition-colors"
-                  title="이전 페이지"
-                  aria-label="이전 페이지"
-                >
-                  이전
-                </button>
-                <span className="tabular-nums">{page + 1} / {totalPages}</span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="px-2 py-1 rounded hover:bg-secondary disabled:opacity-30 transition-colors"
-                  title="다음 페이지"
-                  aria-label="다음 페이지"
-                >
-                  다음
-                </button>
-              </div>
-            </div>
-          )}
           </div>
         )}
       </MacCard>

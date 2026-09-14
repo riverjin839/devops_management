@@ -115,7 +115,7 @@ function InputsBlock({ inputs, action }: { inputs: CheckMatrixRunbookInput[]; ac
       {groups.length === 0 && (
         <p className="text-xs text-muted-foreground italic">저장된 설정값이 없습니다 — 기본값으로 동작합니다.</p>
       )}
-      <div className="space-y-3">
+      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
         {groups.map(({ group, rows }) => (
           <div key={group}>
             <p className="text-[11px] text-muted-foreground mb-1">{GROUP_LABEL[group] ?? group}</p>
@@ -310,48 +310,57 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
   const running = latestRun?.runState === 'queued' || latestRun?.runState === 'running';
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-md border border-border bg-secondary/30 p-3 space-y-1.5">
-        <div className="flex items-start gap-2 text-sm">
-          <Target className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <span className="text-muted-foreground text-xs">실행 대상 </span>
-            <span className="font-medium break-all">{runbook.target ?? '해석되지 않음'}</span>
-          </div>
-        </div>
-        {runbook.blockedReason && (
-          <p className="flex items-start gap-2 text-xs text-status-warning">
-            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-            <span>{runbook.blockedReason}</span>
-          </p>
-        )}
-        {runbook.kubectlPrefix && (
-          <p className="text-[11px] text-muted-foreground pl-6">
-            아래 kubectl 명령은 실제로 <code className="font-mono">{runbook.kubectlPrefix}</code> 접두사와 함께 실행됩니다.
-          </p>
-        )}
-      </section>
-
-      {/* 가장 최근 수행 상태 — 실행 중이면 잠시 후 자동으로 결과가 반영된다(폴링). */}
-      {latestRun && (
+    // 2단 배치(넓은 화면) — 예전엔 대상/최근수행/단계/명령/설정값/메모가 전부 세로로 쌓여
+    // 항목마다 팝업 전체가 스크롤이 필요했다. 실행 대상·최근 수행 상태를 한 줄로 나란히,
+    // 명령/설정을 좌우 2열로 배치해 같은 정보를 훨씬 낮은 높이에 담는다(좁은 화면은 1열로 접힘).
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <section className="rounded-md border border-border bg-secondary/30 p-3 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">최근 수행</span>
-            <RunStateBadge state={latestRun.runState} />
-            {latestRun.status && <StatusBadge variant={latestRun.status} size="sm" />}
-            {running && (
-              <span className="text-[11px] text-status-warning">
-                진행 중입니다 — 완료되면 아래 실행 단계가 자동으로 색칠됩니다.
-              </span>
-            )}
+          <div className="flex items-start gap-2 text-sm">
+            <Target className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <span className="text-muted-foreground text-xs">실행 대상 </span>
+              <span className="font-medium break-all">{runbook.target ?? '해석되지 않음'}</span>
+            </div>
           </div>
-          {(latestRun.message || latestRun.error) && (
-            <p className={`text-xs break-all ${latestRun.error ? 'text-status-critical' : 'text-foreground/90'}`}>
-              {latestRun.error || latestRun.message}
+          {runbook.blockedReason && (
+            <p className="flex items-start gap-2 text-xs text-status-warning">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span>{runbook.blockedReason}</span>
+            </p>
+          )}
+          {runbook.kubectlPrefix && (
+            <p className="text-[11px] text-muted-foreground pl-6">
+              아래 kubectl 명령은 실제로 <code className="font-mono">{runbook.kubectlPrefix}</code> 접두사와 함께 실행됩니다.
             </p>
           )}
         </section>
-      )}
+
+        {/* 가장 최근 수행 상태 — 실행 중이면 잠시 후 자동으로 결과가 반영된다(폴링). */}
+        {latestRun ? (
+          <section className="rounded-md border border-border bg-secondary/30 p-3 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-muted-foreground">최근 수행</span>
+              <RunStateBadge state={latestRun.runState} />
+              {latestRun.status && <StatusBadge variant={latestRun.status} size="sm" />}
+            </div>
+            {running && (
+              <p className="text-[11px] text-status-warning">
+                진행 중입니다 — 아래 실행 단계가 진행 상황에 따라 실시간으로 색칠됩니다.
+              </p>
+            )}
+            {(latestRun.message || latestRun.error) && (
+              <p className={`text-xs break-all ${latestRun.error ? 'text-status-critical' : 'text-foreground/90'}`}>
+                {latestRun.error || latestRun.message}
+              </p>
+            )}
+          </section>
+        ) : (
+          <section className="rounded-md border border-dashed border-border p-3 flex items-center">
+            <p className="text-xs text-muted-foreground italic">아직 수행 기록이 없습니다 — 위 "지금 실행"으로 돌려보세요.</p>
+          </section>
+        )}
+      </div>
 
       {/* pod exec 로는 구조적으로 실패하기 쉬운 점검용 — 실패 사유를 보고 있는 이 화면에서
           바로 SSH 수집을 트리거한다(별도로 /versions 를 찾아가지 않아도 되게). */}
@@ -373,62 +382,72 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
       )}
 
       {runbook.steps.length > 0 && (
-        <ExecutionStepsTimeline stepPlan={runbook.steps} steps={running ? undefined : latestRun?.steps} />
+        // 진행 중(queued/running)이어도 latestRun.steps 를 그대로 넘긴다 — 백엔드가 실행
+        // 중인 단계를 "running" 상태로 이미 채워 보내므로(2초 폴링), 완료를 기다리지 않고도
+        // 단계별 진행이 실시간으로 색칠된다. 예전엔 여기서 running 일 때 steps 를 통째로
+        // undefined 로 지워 "재생"을 눌러도 실행 중엔 전부 회색(대기)으로만 보이는 버그가 있었다.
+        <ExecutionStepsTimeline stepPlan={runbook.steps} steps={latestRun?.steps} />
       )}
 
-      <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          수행되는 명령
-        </h3>
-        {runbook.commands.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">등록된 명령 정보가 없습니다.</p>
-        ) : (
-          <ol className="space-y-2">
-            {runbook.commands.map((c, i) => (
-              <CommandRow key={`${c.kind}-${i}`} cmd={c} index={i} />
-            ))}
-          </ol>
-        )}
-      </section>
-
-      {canEdit && editing && editTarget ? (
-        <section>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className="min-w-0">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            소스 설정 편집
+            수행되는 명령
           </h3>
-          <SourceConfigEditor runbook={runbook} editTarget={editTarget} onDone={() => setEditing(false)} />
+          {runbook.commands.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">등록된 명령 정보가 없습니다.</p>
+          ) : (
+            // 명령이 많은 점검(복수 kubectl/ssh 단계)도 이 목록만 내부 스크롤하게 해
+            // 팝업 전체가 늘어나지 않게 한다.
+            <ol className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {runbook.commands.map((c, i) => (
+                <CommandRow key={`${c.kind}-${i}`} cmd={c} index={i} />
+              ))}
+            </ol>
+          )}
         </section>
-      ) : (
-        <InputsBlock
-          inputs={runbook.inputs}
-          action={canEdit ? (
-            <button
-              onClick={() => setEditing(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-secondary text-muted-foreground"
-              title="이 점검의 임계값/파라미터를 여기서 바로 수정"
-              aria-label="소스 설정 편집"
-            >
-              <Pencil className="w-3 h-3" /> 설정 편집
-            </button>
-          ) : undefined}
-        />
-      )}
 
-      {runbook.notes.length > 0 && (
-        <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            알아둘 점
-          </h3>
-          <ul className="space-y-1.5">
-            {runbook.notes.map((n, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                <span>{n}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+        <div className="min-w-0 space-y-3">
+          {canEdit && editing && editTarget ? (
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                소스 설정 편집
+              </h3>
+              <SourceConfigEditor runbook={runbook} editTarget={editTarget} onDone={() => setEditing(false)} />
+            </section>
+          ) : (
+            <InputsBlock
+              inputs={runbook.inputs}
+              action={canEdit ? (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg border border-border hover:bg-secondary text-muted-foreground"
+                  title="이 점검의 임계값/파라미터를 여기서 바로 수정"
+                  aria-label="소스 설정 편집"
+                >
+                  <Pencil className="w-3 h-3" /> 설정 편집
+                </button>
+              ) : undefined}
+            />
+          )}
+
+          {runbook.notes.length > 0 && (
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                알아둘 점
+              </h3>
+              <ul className="space-y-1.5">
+                {runbook.notes.map((n, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <span>{n}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      </div>
 
       {showSshCollect && runbook.sourceRef && SSH_COLLECT_ACTIONS[runbook.sourceRef] && (() => {
         const { Modal } = SSH_COLLECT_ACTIONS[runbook.sourceRef];
