@@ -27,6 +27,8 @@ from app.schemas.playbook import (
     PlaybookResponse,
     PlaybookListResponse,
     PlaybookRunResponse,
+    PlaybookRunHistoryEntry,
+    PlaybookRunHistoryListResponse,
 )
 from app.schemas.metric_card import (
     MetricCardBase,
@@ -73,6 +75,8 @@ __all__ = [
     "PlaybookResponse",
     "PlaybookListResponse",
     "PlaybookRunResponse",
+    "PlaybookRunHistoryEntry",
+    "PlaybookRunHistoryListResponse",
     "MetricCardBase",
     "MetricCardCreate",
     "MetricCardUpdate",

@@ -8,6 +8,7 @@ export const playbookKeys = {
   byCluster: (clusterId: string) => ['playbooks', clusterId] as const,
   dashboard: (clusterId: string) => ['playbooks', 'dashboard', clusterId] as const,
   detail: (id: string) => ['playbooks', 'detail', id] as const,
+  runs: (id: string) => ['playbooks', 'runs', id] as const,
 };
 
 export function usePlaybooks(clusterId?: string) {
@@ -93,11 +94,24 @@ export function useRunPlaybook() {
       setRunning(id);
       return playbooksApi.run(id, creds);
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: playbookKeys.all });
+      queryClient.invalidateQueries({ queryKey: playbookKeys.runs(vars.id) });
     },
     onSettled: (_, __, vars) => {
       clearRunning(vars.id);
     },
+  });
+}
+
+/** D-066 — 실행 이력(append-only). 로그 다이얼로그가 열려 있을 때만 조회한다. */
+export function usePlaybookRuns(playbookId: string | null | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: playbookKeys.runs(playbookId ?? ''),
+    queryFn: async () => {
+      const { data } = await playbooksApi.getRuns(playbookId as string);
+      return data?.data ?? [];
+    },
+    enabled: enabled && !!playbookId,
   });
 }

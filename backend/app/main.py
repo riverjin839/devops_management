@@ -1098,6 +1098,17 @@ def _run_migrations():
         _safe_create_index("ix_check_matrix_runs_queued_at", "check_matrix_runs", "(queued_at DESC)")
         _safe_create_index("ix_check_matrix_runs_batch", "check_matrix_runs", "(batch_id)")
 
+    # checkmatrixsourcetype: 'batch_job'/'playbook' 값 추가(D-066) — PostgreSQL enum 은
+    # create_all 이 새로 만들 때만 전체 값을 반영하고, 기존 DB 의 이미 존재하는 enum 타입에는
+    # 값을 추가해주지 않는다. ALTER TYPE ... ADD VALUE 는 트랜잭션 내 다른 DDL 과 묶이면
+    # 실패할 수 있어 단독 커넥션으로 분리한다(statusenum 'pending' 추가와 동일 패턴).
+    for _sourcetype_value in ("batch_job", "playbook"):
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TYPE checkmatrixsourcetype ADD VALUE IF NOT EXISTS '{_sourcetype_value}'"))
+        except Exception:
+            pass  # 이미 존재하거나 enum 이름이 다를 경우 무시
+
     # os_param_changes: OS 파라미터 변경 이력 — 테이블은 create_all, 조회 인덱스 보강.
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")

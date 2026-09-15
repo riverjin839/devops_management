@@ -35,6 +35,11 @@ class CheckMatrixSourceType(str, enum.Enum):
     deep_check = "deep_check"    # registered_checks.REGISTRY 의 check_type 실행
     addon = "addon"              # Addon.type 매칭 실행 (HealthChecker)
     manual = "manual"            # 자동 실행 없음 — 사용자가 값을 직접 입력
+    # BatchJob.name / Playbook.name 매칭 실행(addon.type 과 동일한 "논리 키 → 클러스터별
+    # 인스턴스 해석" 패턴) — D-066. 자동 실행(cron)은 이 매트릭스의 item×cluster
+    # CheckMatrixSchedule 이 담당하므로 BatchJob/Playbook 자체엔 별도 스케줄이 없어도 된다.
+    batch_job = "batch_job"      # SSH bash/python — 실제 실행은 services.batch_job_service
+    playbook = "playbook"        # Ansible — 실제 실행은 services.playbook_service
 
 
 class CheckMatrixTrigger(str, enum.Enum):

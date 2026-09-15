@@ -764,6 +764,11 @@ export const playbooksApi = {
   delete: (id: string) => api.delete(`/playbooks/${id}`),
   run: (id: string, creds?: PlaybookSshCreds) =>
     api.post<PlaybookRunResult>(`/playbooks/${id}/run`, creds ?? {}),
+  // D-066 — append-only 실행 이력(최신 lastResult 덮어쓰기와 별개로 전부 보존).
+  getRuns: (id: string, limit = 50) =>
+    api.get<ApiResponse<import('@/types').PlaybookRunHistoryEntry[]>>(`/playbooks/${id}/runs`, {
+      params: { limit },
+    }),
   toggleDashboard: (id: string) => api.patch<ApiResponse<Playbook>>(`/playbooks/${id}/dashboard`),
   getDashboard: (clusterId: string) => api.get<ApiResponse<Playbook[]>>(`/playbooks/dashboard/${clusterId}`),
   exportReport: (clusterId?: string) =>

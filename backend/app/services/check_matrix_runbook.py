@@ -21,18 +21,21 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     Addon,
+    BatchJob,
     CheckMatrixItem,
     CheckMatrixSourceType,
     Cluster,
     DeepCheckDefinition,
+    Playbook,
 )
 
 # 명령 종류 — UI 배지 색/아이콘 매핑용.
 KIND_KUBECTL = "kubectl"    # backend 컨테이너에서 kubectl 서브프로세스 실행
 KIND_K8S_API = "k8s_api"    # kubernetes python SDK → API 서버 REST 호출
 KIND_HTTP = "http"          # httpx 로 대상 엔드포인트 직접 호출
-KIND_SSH = "ssh"            # 대상 장비 SSH (Isilon 등)
+KIND_SSH = "ssh"            # 대상 장비 SSH (Isilon 등, batch_job 도 재사용 — D-066)
 KIND_DB = "db"              # 외부 호출 없이 PEP DB 만 조회
+KIND_ANSIBLE = "ansible"    # ansible-playbook 서브프로세스 실행 — D-066
 
 
 def _cmd(kind: str, command: str, description: str, *, readonly: bool = True) -> dict[str, Any]:
@@ -416,6 +419,82 @@ _ADDON_NOTES = [
 
 
 # ──────────────────────────────────────────────────────────────
+# batch_job — 등록된 BatchJob(SSH bash/python) 실행 — D-066
+# ──────────────────────────────────────────────────────────────
+def _batch_job_commands(job: Optional[BatchJob]) -> list[dict[str, Any]]:
+    if job is None:
+        return []
+    if job.execution_mode == "script":
+        target = f"등록 스크립트(script_id={job.script_id})" if job.script_id else "(스크립트 미지정)"
+        return [
+            _cmd(KIND_SSH, f"ssh {job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'} -- {target}",
+                 f"`/scripts` 화면에서 관리되는 {target} 를 대상 호스트에서 실행한다. "
+                 "전체 내용은 해당 스크립트 상세에서 버전별로 확인할 수 있다.",
+                 readonly=False),
+        ]
+    return [
+        _cmd(KIND_SSH, f"ssh {job.default_username or 'root'}@{job.default_host or '<default_host 미설정>'} "
+             f"-- <{job.job_type} 실행기(system) 명령>",
+             f"등록된 job_type=`{job.job_type}` 실행기(코드에 내장)를 대상 호스트에서 실행한다.",
+             readonly=False),
+    ]
+
+
+_BATCH_JOB_STEPS = [
+    {"id": "resolve", "label": "클러스터의 배치잡 인스턴스 해석"},
+    {"id": "connect", "label": "SSH 접속(또는 k8s API — 비SSH 실행기)"},
+    {"id": "run", "label": "명령/스크립트 실행"},
+    {"id": "record", "label": "결과 기록 · BatchJobRun 이력 append"},
+]
+
+_BATCH_JOB_NOTES = [
+    "행의 `source_ref` 는 배치잡 **이름**(논리 키)이고, 실제 대상은 실행 시점에 "
+    "`BatchJob.name == source_ref AND BatchJob.cluster_id == <이 클러스터>` 로 해석된다. "
+    "그 클러스터에 같은 이름의 배치잡이 없으면 이 셀은 건너뜀(skipped)으로 남는다.",
+    "매트릭스가 트리거하는 실행(cron 자동 포함)은 배치잡에 **저장된 스케줄용 자격증명**만 "
+    "사용한다 — 저장된 자격증명이 없으면 그 사유가 실행 로그에 그대로 남는다. 수동 자격증명 "
+    "입력이 필요하면 `/batch-jobs` 화면에서 직접 실행한다.",
+    "이 셀의 결과는 `BatchJobRun` 이력에도 동일하게 남으므로, `/batch-jobs` 화면의 실행 로그와 "
+    "이 매트릭스의 수행 로그 양쪽에서 같은 실행을 확인할 수 있다.",
+    "배치잡이 비활성화(`enabled=false`)되어 있으면 자동/수동 실행 모두 건너뛴다.",
+]
+
+
+# ──────────────────────────────────────────────────────────────
+# playbook — 등록된 Playbook(Ansible) 실행 — D-066
+# ──────────────────────────────────────────────────────────────
+def _playbook_commands(playbook: Optional[Playbook]) -> list[dict[str, Any]]:
+    if playbook is None:
+        return []
+    pb_name = playbook.playbook_file.name if playbook.playbook_file else (playbook.playbook_path or "<미지정>")
+    inv_name = playbook.inventory.name if playbook.inventory else (playbook.inventory_path or "(K8s 노드 동적 생성)")
+    tags = f" --tags {playbook.tags}" if playbook.tags else ""
+    return [
+        _cmd(KIND_ANSIBLE, f"ansible-playbook {pb_name} -i {inv_name}{tags}",
+             "등록된 플레이북을 인벤토리 대상 호스트 전체에서 실행하고 JSON callback 출력으로 "
+             "호스트별 ok/changed/failures/unreachable 을 집계한다.",
+             readonly=False),
+    ]
+
+
+_PLAYBOOK_STEPS = [
+    {"id": "resolve", "label": "클러스터의 플레이북 인스턴스 해석"},
+    {"id": "inventory", "label": "인벤토리 확정(저장된 파일 / K8s 노드 동적 생성)"},
+    {"id": "run", "label": "ansible-playbook 실행"},
+    {"id": "record", "label": "결과 기록 · PlaybookRun 이력 append"},
+]
+
+_PLAYBOOK_NOTES = [
+    "행의 `source_ref` 는 플레이북 **이름**(논리 키)이고, 실제 대상은 실행 시점에 "
+    "`Playbook.name == source_ref AND Playbook.cluster_id == <이 클러스터>` 로 해석된다. "
+    "그 클러스터에 같은 이름의 플레이북이 없으면 이 셀은 건너뜀(skipped)으로 남는다.",
+    "실패(failures>0)는 위험, unreachable 은 경고, 그 외(changed 포함)는 정상으로 판정한다.",
+    "이 셀의 결과는 `PlaybookRun` 이력에도 동일하게 남는다(D-066 이전에는 `Playbook.last_result` "
+    "1행 덮어쓰기뿐이라 이전 실행 기록이 남지 않았다) — `/playbooks` 화면 로그 보기에서도 확인 가능.",
+]
+
+
+# ──────────────────────────────────────────────────────────────
 # 조립
 # ──────────────────────────────────────────────────────────────
 def _resolve_deep_check_definition(db: Session, check_type: str, cluster_id) -> Optional[DeepCheckDefinition]:
@@ -543,6 +622,51 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
             out["addon_id"] = str(addon.id)
             out["config_editable"] = True
             out["inputs"] = _inputs({"config": addon.config or {}})
+        return out
+
+    if item.source_type == CheckMatrixSourceType.batch_job:
+        job = (
+            db.query(BatchJob)
+            .filter(BatchJob.name == item.source_ref, BatchJob.cluster_id == cluster.id)
+            .first()
+        )
+        out["steps"] = _BATCH_JOB_STEPS
+        out["commands"] = _batch_job_commands(job)
+        out["notes"] = list(_BATCH_JOB_NOTES)
+        # config_editable=False — job.params/자격증명 편집은 /batch-jobs 화면 전용(중복 UI 방지).
+        if job is None:
+            out["blocked_reason"] = (
+                f"이 클러스터에 `{item.source_ref}` 이름의 배치잡이 등록돼 있지 않습니다 — "
+                "/batch-jobs 화면에서 같은 이름으로 등록하면 이 셀이 실행됩니다."
+            )
+        elif not job.enabled:
+            out["blocked_reason"] = f"배치잡 «{job.name}» 이 비활성화(enabled=false)되어 있습니다."
+        else:
+            out["target"] = f"BatchJob «{job.name}» (job_type={job.job_type})"
+            out["runnable"] = True
+            out["inputs"] = _inputs({"job": {
+                "host": job.default_host, "port": job.default_port, "username": job.default_username,
+            }})
+        return out
+
+    if item.source_type == CheckMatrixSourceType.playbook:
+        playbook = (
+            db.query(Playbook)
+            .filter(Playbook.name == item.source_ref, Playbook.cluster_id == cluster.id)
+            .first()
+        )
+        out["steps"] = _PLAYBOOK_STEPS
+        out["commands"] = _playbook_commands(playbook)
+        out["notes"] = list(_PLAYBOOK_NOTES)
+        if playbook is None:
+            out["blocked_reason"] = (
+                f"이 클러스터에 `{item.source_ref}` 이름의 플레이북이 등록돼 있지 않습니다 — "
+                "/playbooks 화면에서 같은 이름으로 등록하면 이 셀이 실행됩니다."
+            )
+        else:
+            out["target"] = f"Playbook «{playbook.name}»"
+            out["runnable"] = True
+            out["inputs"] = _inputs({"playbook": {"tags": playbook.tags or ""}})
         return out
 
     # manual

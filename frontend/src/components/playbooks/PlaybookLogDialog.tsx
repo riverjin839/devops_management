@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { X, Copy, Check, Terminal, AlertTriangle, XCircle, CheckCircle } from 'lucide-react';
+import { X, Copy, Check, Terminal, AlertTriangle, XCircle, CheckCircle, History } from 'lucide-react';
 import type { Playbook } from '@/types';
 import { DoubleScrollX, useModalA11y } from '@/components/common';
+import { StatusBadge } from '@/components/common';
 import { parseUTC } from '@/lib/utils';
+import { usePlaybookRuns } from '@/hooks/usePlaybook';
 
 interface PlaybookLogDialogProps {
   playbook: Playbook | null;
@@ -32,6 +34,8 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
 
   // ESC 닫기 · 포커스 트랩 · 초점 복원 (공용 훅) — playbook 이 있으면 열림
   const dialogRef = useModalA11y(!!playbook, onClose);
+  // D-066 — 이전 실행 이력(append-only). 다이얼로그가 열려 있을 때만 조회.
+  const { data: runHistory } = usePlaybookRuns(playbook?.id, !!playbook);
 
   useEffect(() => {
     if (copied) {
@@ -175,6 +179,48 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
                   <FailedTaskCard key={i} task={t} variant="unreachable" />
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* 이전 실행 이력 (D-066) — 위 요약은 최신 1건 스냅샷이라, 지난 실행이 언제
+              어떤 결과였는지는 이 이력에서만 확인할 수 있다. */}
+          {runHistory && runHistory.length > 1 && (
+            <section>
+              <SectionTitle icon={History} title={`이전 실행 이력 (${runHistory.length}건)`} />
+              <DoubleScrollX className="rounded-lg border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left font-medium">시각</th>
+                      <th className="px-3 py-1.5 text-left font-medium">상태</th>
+                      <th className="px-3 py-1.5 text-left font-medium">트리거</th>
+                      <th className="px-3 py-1.5 text-left font-medium">실행자</th>
+                      <th className="px-3 py-1.5 text-right font-medium">소요시간</th>
+                      <th className="px-3 py-1.5 text-left font-medium">메시지</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runHistory.map((r) => (
+                      <tr key={r.id} className="border-t border-border">
+                        <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
+                          {parseUTC(r.startedAt).toLocaleString('ko-KR')}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <StatusBadge variant={r.status as 'healthy' | 'warning' | 'critical'} size="sm" />
+                        </td>
+                        <td className="px-3 py-1.5 text-muted-foreground">
+                          {r.trigger === 'check_matrix' ? '점검 매트릭스' : r.trigger === 'manual' ? '수동' : r.trigger}
+                        </td>
+                        <td className="px-3 py-1.5 text-muted-foreground">{r.triggeredByUsername || '—'}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                          {(r.durationMs / 1000).toFixed(2)}s
+                        </td>
+                        <td className="px-3 py-1.5 text-muted-foreground truncate max-w-xs">{r.message || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DoubleScrollX>
             </section>
           )}
 

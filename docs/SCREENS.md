@@ -100,6 +100,14 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - **[2026-09-08, D-061~D-065]** 이 화면(플랫폼 현황 탭)을 로그인 직후 첫 화면으로: 홈 기본 탭 `work`→`platform` 전환 + 네비게이션에 진입 경로 추가. 행의 소스 배지("핵심/Deep/Addon/수동")를 실행 기술(K8s API/kubectl/HTTP/PromQL/스냅샷/SSH bash·python/Ansible) × 컴포넌트(기존 category) 2축으로 재명명. 클러스터 열 헤더·행 이름에 드릴다운 링크 추가(`/clusters/:id`, `/checks/:itemId` 신설). 항목 추가를 "실행기술→종류→컴포넌트→값→테스트(필수)→적용" 마법사로 재구성. 설계안: [점검 체계 통합 설계안](https://claude.ai/code/artifact/9d204e4a-c106-48e8-91b8-4d0b37ebc250)
     - **[2026-09-09, 로드맵 1단계 완료분]** 홈 기본 탭 `work`→`platform` 전환 완료. 행 소스 배지를 `ExecTechBadge`(실행 기술: K8s API/kubectl/HTTP/PromQL/스냅샷/bash(SSH)/수동)로 교체 완료 — `CheckMatrixItem.execTech`(백엔드 `_resolve_exec_tech()` 가 `DeepCheckTypeSpec.exec_tech`/addon `EXEC_TECH`/core_bundle/manual 을 해석). 클러스터 열 헤더 이름을 클릭하면 기존 `/ops-checks/:clusterId` 로 이동(신규 `/clusters/:id` 전용 라우트는 다음 단계). 잔여: 네비게이션 진입 경로, 항목명 드릴다운(`/checks/:itemId`), 등록 마법사(실행기술→종류→컴포넌트→값→테스트→적용).
     - **[2026-09-09, 로드맵 2단계 완료분]** "항목 추가"(`CheckMatrixItemFormModal`)가 신규 항목에 한해 **실행기술→종류→세부정보→값 설정→테스트→적용** 6단계 마법사(`RegisterItemWizard`)로 바뀌었다 — 종류 목록은 `GET /check-matrix/exec-techs` 카탈로그에서 오고(하드코딩 제거), "테스트" 단계에서 `POST /check-matrix/items/preview` 로 저장 없이 1회 실행해볼 수 있다(클러스터가 있으면 다음 단계로 가려면 최소 1회 테스트 필요). 커스텀 점검(예: 커스텀 HTTP/kubectl/PromQL)을 새로 등록하면 값 설정 단계에서 입력한 임계값/파라미터로 글로벌 점검 정의가 함께 생성돼 등록 즉시 실행 가능하다. 기존 항목 수정은 여전히 단일 폼(`EditItemForm`)이지만 애드온/점검 종류 드롭다운이 같은 카탈로그를 쓴다. 셀 상세의 "실행 방식" 탭에서 임계값을 편집하면 그 정의가 글로벌일 때 클러스터 전용 사본이 자동 생성된다(copy-on-write) — 예전처럼 전 클러스터에 실수로 적용되지 않는다. 잔여: 네비게이션 진입 경로, 항목명 드릴다운, `/clusters/:id`·`/checks/:itemId` 신규 라우트, cron 3곳 분산 통합.
+    - **[2026-09-15, D-066 완료]** 실행기술 목록에 **SSH(bash/python)**·**Ansible** 이 추가됐다 —
+      단, deep_check/addon 처럼 새 "타입"을 만드는 게 아니라 `/batch-jobs`·`/playbooks` 화면에
+      이미 등록해 둔 배치잡/플레이북 **이름**을 골라 매트릭스 행으로 연결한다(값 설정 단계는
+      비어 있고, "테스트" 단계는 운영 스크립트를 실제로 돌리지 않도록 안전을 위해 생략된다).
+      셀 상세 "실행 방식" 탭의 "설정 편집" 버튼은 이 두 소스에는 뜨지 않는다(params/스크립트
+      편집은 원래 화면 전용, 중복 UI 방지). 실행 결과는 매트릭스 수행 로그와
+      `/batch-jobs`·`/playbooks` 화면의 자체 실행 이력(`BatchJobRun`/`PlaybookRun`) 양쪽에
+      남는다.
 
 ### Your Island (`/island`)
 
@@ -428,12 +436,18 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
       `components/ops-check/ClusterOpsCheckPanel.tsx` 로 추출해 신규 `/clusters/:id`(아래 섹션)와
       공유하는 방식으로 구현했다 — `/ops-checks/:clusterId` 는 레거시 링크·북마크·아일랜드 패널
       호환을 위해 그대로 남아 있다(내용은 동일한 패널). 종합 상태+원인 카드, core_bundle 행 포함은
-      `/clusters/:id` 쪽에만 추가됐다. 배치잡/플레이북 카탈로그 편입은 여전히 후속 단계(5단계).
+      `/clusters/:id` 쪽에만 추가됐다.
+    - **[2026-09-15, D-066 완료]** 배치잡(SSH)·플레이북(Ansible) 카탈로그 편입 처리 —
+      `OpsCheckService._catalog_batch_jobs`/`_catalog_playbooks` 가 그 클러스터의 등록된
+      `BatchJob`/`Playbook` 행을 카탈로그에 추가하고, `_run_batch_job`/`_run_playbook` 이 개별·일괄
+      실행을 지원한다. 자격증명은 배치잡에 저장된 스케줄용 자격증명만 쓰며(무인 실행), 없으면
+      그 사유가 결과 메시지에 남는다. `SOURCE_LABEL`/`OpsCheckSource` 는 이번 작업 전부터 이미
+      4-way 로 준비돼 있었다(프론트가 백엔드보다 먼저 만들어져 있던 상태).
 
 ### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
 
 - **파일**: `frontend/src/pages/ClusterDetailPage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — 카탈로그/실행/로그를 `/ops-checks` 와 공유, `components/common/{ClusterSidebar,StatusBadge}`)
-- **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon, 배치잡/플레이북은 아직 미편입)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
+- **목적 / UX**: 매트릭스 재편 로드맵 3단계(F3) — 점검 매트릭스의 클러스터명 클릭이 도착하는 클러스터 상세 화면. 이 클러스터의 **종합 상태(정상/경고/위험)와 그 원인**을 한눈에 보여주고, 바로 아래에 점검 카탈로그(등록된 모든 실행 기술 — deep_check/addon/배치잡(SSH)/플레이북(Ansible), D-066 로 전부 편입 완료)로 이어진다. "왜 이 클러스터가 warning 인가"를 카드 하나로 답하는 게 목적 — 예전엔 애드온 그리드만 봐서는 심층 점검이 원인이어도 보이지 않았다(D-067).
 - **UI 구성**:
   - `ClusterSidebar` `iconOnly` — 다른 per-cluster 화면과 동일 패턴.
   - MacCard "종합 상태" — `StatusBadge`(healthy/warning/critical) + "N개 신호를 종합한 결과입니다" + 원인 목록(source 배지 "핵심 점검 번들"/"애드온"/"심층 점검" + 이름 + 메시지 + 마지막 확인 시각), severity(critical→warning→pending→healthy) 순 정렬. 원인 없음(전부 healthy)이면 "아직 점검 결과가 없습니다"/정상 안내만.
@@ -1017,9 +1031,9 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - 좌측 `ClusterSidebar` — **multiSelect** 모드(`iconOnly` + `allowAll` + `multiSelect`), 빈 배열은 "전체 클러스터"를 의미 (CLAUDE.md에서 multiSelect 패턴의 기준 예시로 명시된 페이지).
   - 헤더: 상태 카운트 배지(OK/Changed/Failed), List/Card 뷰 토글, 정렬(이름/상태/최근 실행순) 컨트롤, `Export .md`, `Run All`(RoleGate: admin/operator), `Register Playbook`(RoleGate: admin/operator) 버튼.
   - 본문: List 뷰(`PlaybookListRow`, `dnd-kit` 드래그 정렬) 또는 Card 뷰(`SortableCardCell` → `PlaybookCard`) — `useLocalOrder` 훅으로 클러스터 선택 조합별 순서를 localStorage에 보존.
-  - 모달: `AddPlaybookModal`(등록/수정, DB 관리형 playbook file/inventory 또는 구형 path 방식 선택), `RunCredsModal`(단일 실행 시 SSH 자격증명 입력, sessionStorage에 세션 캐시), `PlaybookLogDialog`(실행 로그 상세).
-- **Frontend**: `usePlaybooks`, `useCreatePlaybook`, `useUpdatePlaybook`, `useDeletePlaybook`, `useRunPlaybook`, `useToggleDashboard`(모두 `hooks/usePlaybook.ts`, TanStack Query) + `usePlaybookStore`(Zustand: `playbooks`, `runningIds`) + `useClusterStore`/`useClusters`(전체 클러스터 목록) + `useLocalOrder`(드래그 순서 로컬 보존). 로컬 state로 `selectedClusterIds`(다중 선택), `sortKey/sortDir`, `viewMode`, `credsTarget`, `logTarget` 관리. 호출 함수: `playbooksApi.exportReport`(직접 호출, blob 다운로드) 외 CRUD/실행은 훅을 통해 `playbooksApi.getAll/create/update/delete/run/toggleDashboard`.
-- **Backend**: `GET /api/v1/playbooks`(목록, cluster_id 옵션), `POST /api/v1/playbooks`(등록, `require_operator`), `PUT /api/v1/playbooks/{id}`(수정), `DELETE /api/v1/playbooks/{id}`, `PATCH /api/v1/playbooks/{id}/dashboard`(대시보드 토글), `GET /api/v1/playbooks/dashboard/{cluster_id}`, `POST /api/v1/playbooks/{id}/run`(동기 실행, SSH 자격증명은 DB 저장 없이 extra_vars로만 전달), `GET /api/v1/playbooks/report`(Markdown export) — 모두 `backend/app/routers/playbooks.py`. 실행은 `backend/app/services/playbook_executor.py`(`run_playbook`, local/ssh 모드, ansible JSON callback 파싱)를 사용하며, inventory가 없으면 `_cluster_node_hosts()`로 K8s 노드 IP 동적 inventory 생성. 모델: `backend/app/models/playbook.py`(`Playbook`, FK `cluster_id`/`playbook_file_id`/`inventory_id`), `AnsiblePlaybookFile`/`AnsibleInventory`(DB 관리형 자산, `ansible_assets.py` 라우터 — `/playbook-files`, `/playbook-inventories`)도 함께 참조. 실행 시 `audit_logger.record()`로 감사 로그 기록.
+  - 모달: `AddPlaybookModal`(등록/수정, DB 관리형 playbook file/inventory 또는 구형 path 방식 선택), `RunCredsModal`(단일 실행 시 SSH 자격증명 입력, sessionStorage에 세션 캐시), `PlaybookLogDialog`(실행 로그 상세 — **[2026-09-15, D-066]** `runHistory.length > 1` 이면 "Raw output" 위에 이전 실행 이력 테이블(시각/상태/트리거/실행자/소요시간/메시지) 추가 노출).
+- **Frontend**: `usePlaybooks`, `useCreatePlaybook`, `useUpdatePlaybook`, `useDeletePlaybook`, `useRunPlaybook`, `useToggleDashboard`, `usePlaybookRuns(playbookId, enabled)`(**[2026-09-15, D-066]** 신규 — `GET /playbooks/{id}/runs` 조회, `PlaybookLogDialog` 에서 사용)(모두 `hooks/usePlaybook.ts`, TanStack Query) + `usePlaybookStore`(Zustand: `playbooks`, `runningIds`) + `useClusterStore`/`useClusters`(전체 클러스터 목록) + `useLocalOrder`(드래그 순서 로컬 보존). 로컬 state로 `selectedClusterIds`(다중 선택), `sortKey/sortDir`, `viewMode`, `credsTarget`, `logTarget` 관리. 호출 함수: `playbooksApi.exportReport`(직접 호출, blob 다운로드) 외 CRUD/실행은 훅을 통해 `playbooksApi.getAll/create/update/delete/run/toggleDashboard/getRuns`.
+- **Backend**: `GET /api/v1/playbooks`(목록, cluster_id 옵션), `POST /api/v1/playbooks`(등록, `require_operator`), `PUT /api/v1/playbooks/{id}`(수정), `DELETE /api/v1/playbooks/{id}`, `PATCH /api/v1/playbooks/{id}/dashboard`(대시보드 토글), `GET /api/v1/playbooks/dashboard/{cluster_id}`, `POST /api/v1/playbooks/{id}/run`(동기 실행, SSH 자격증명은 DB 저장 없이 extra_vars로만 전달), `GET /api/v1/playbooks/report`(Markdown export), `GET /api/v1/playbooks/{id}/runs`(**[2026-09-15, D-066]** 신규 — append-only 실행 이력, `last_result` 최신 스냅샷과 별개) — 모두 `backend/app/routers/playbooks.py`. 실행은 `backend/app/services/playbook_service.py`(`execute_playbook_run` — inventory 해석 + SSH 자격증명 병합 후 `playbook_executor.run_playbook` 호출, `Playbook.last_result`(compat) 와 신규 `PlaybookRun` 행을 함께 커밋)를 거치며, `backend/app/services/playbook_executor.py`(`run_playbook`, local/ssh 모드, ansible JSON callback 파싱)가 실제 subprocess 실행을 담당한다. inventory가 없으면 `playbook_service.cluster_node_hosts()`로 K8s 노드 IP 동적 inventory 생성. 모델: `backend/app/models/playbook.py`(`Playbook`, FK `cluster_id`/`playbook_file_id`/`inventory_id`; **`PlaybookRun`(2026-09-15 신규)** — 실행 1회 = 1행, `trigger`/`triggered_by_username`/`status`/`raw_output`/`duration_ms` 등, `BatchJobRun` 과 동일한 append-only 이력 패턴), `AnsiblePlaybookFile`/`AnsibleInventory`(DB 관리형 자산, `ansible_assets.py` 라우터 — `/playbook-files`, `/playbook-inventories`)도 함께 참조. 실행 시 `audit_logger.record()`로 감사 로그 기록.
 - **핵심 기능**:
   - 다중 클러스터 선택 필터링(클라이언트 사이드) + 클러스터 라벨 표시(2개 이상 선택 시)
   - List/Card 뷰 전환 및 드래그 앤 드롭 순서 변경(선택 조합별 별도 순서 키)
@@ -1027,6 +1041,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - 실행 상태 실시간 표시(healthy/warning/critical/running, `runningIds` Zustand 세트)
   - Dashboard 노출 토글(`show_on_dashboard`) — 메인 Dashboard 화면에 카드로 표시
   - 클러스터 단일 선택 시 해당 클러스터 한정 Markdown 리포트 export, 다중/전체 선택 시 전체 export
+  - **[2026-09-15, D-066]** 실행 이력이 `Playbook.last_result`(최신 1건만 덮어씀) 와 별개로 `PlaybookRun` 테이블에 append-only 로 전부 보존 — 로그 다이얼로그에서 과거 실행들을 함께 확인 가능. 이 화면 밖에서도 점검 매트릭스/운영 점검 콘솔이 **이름**으로 이 Playbook 을 카탈로그 항목으로 연결해 실행할 수 있다(아래 "요청사항" 및 "운영 점검 콘솔"/"홈" 섹션 참고) — 그 실행도 동일하게 `PlaybookRun` 에 쌓인다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1071,6 +1086,10 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - 미등록 job_type을 클러스터별로 안내하는 `UnregisteredTypeChips` → wizard로 바로 등록 유도
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+  - **[2026-09-15, D-066]** 이 화면 자체는 무변경 — 다만 점검 매트릭스/운영 점검 콘솔이 여기 등록된
+    잡을 **이름**으로 카탈로그에 연결해 실행할 수 있게 됐다(`BatchJob.name` 이 논리 키, 기존
+    `BatchJobRun` 이력에 그대로 쌓임). 무인 실행(매트릭스 cron/일괄)은 이 화면의 "저장된 자격증명"만
+    사용하고, 없으면 결과 메시지에 사유가 남는다. 자세한 내용은 "운영 점검 콘솔"/"홈" 섹션 참고.
 
 ### 주요 명령어 모음 목록 (`/commands`)
 

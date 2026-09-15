@@ -5,7 +5,7 @@ from app.models.k8s_efficiency import (
 from app.models.addon import Addon
 from app.models.check_log import CheckLog
 from app.models.core_bundle_snapshot import DailyCheckLog, CheckScheduleType
-from app.models.playbook import Playbook
+from app.models.playbook import Playbook, PlaybookRun
 from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
 from app.models.work_item import WorkItem
@@ -98,6 +98,7 @@ __all__ = [
     "DailyCheckLog",
     "CheckScheduleType",
     "Playbook",
+    "PlaybookRun",
     "AnsiblePlaybookFile",
     "AnsibleInventory",
     "MetricCard",

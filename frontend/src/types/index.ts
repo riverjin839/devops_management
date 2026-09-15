@@ -303,6 +303,23 @@ export interface Playbook {
   updatedAt: string;
 }
 
+/** D-066 — playbook_runs 이력 1건. `Playbook.lastResult`(최신 스냅샷 덮어쓰기)와 달리
+ *  append-only 로 전부 보존된다(수동 실행 + 점검 매트릭스 셀 실행 모두 여기 쌓인다). */
+export interface PlaybookRunHistoryEntry {
+  id: string;
+  playbookId: string;
+  status: string; // healthy | warning | critical
+  trigger: string; // manual | check_matrix | schedule
+  triggeredByUsername?: string | null;
+  message?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  stats?: Record<string, any> | null;
+  rawOutput?: string | null;
+  durationMs: number;
+  startedAt: string;
+  finishedAt?: string | null;
+}
+
 export interface AnsiblePlaybookFile {
   id: string;
   name: string;
@@ -4289,7 +4306,8 @@ export interface TerminalAppearanceResponse {
 }
 
 // ── 점검 매트릭스 (플랫폼 현황 — 행: 점검 항목, 열: 클러스터) ──────────────
-export type CheckMatrixSourceType = 'core_bundle' | 'deep_check' | 'addon' | 'manual';
+// batch_job/playbook — D-066: 등록된 BatchJob(SSH)/Playbook(Ansible)을 매트릭스 행으로 편입.
+export type CheckMatrixSourceType = 'core_bundle' | 'deep_check' | 'addon' | 'batch_job' | 'playbook' | 'manual';
 
 export interface CheckMatrixItem {
   id: string;
@@ -4441,8 +4459,9 @@ export interface CheckMatrixSettings {
 
 /** 런북 명령 1건 — 실제로 대상 클러스터에 나가는 호출. */
 export interface CheckMatrixRunbookCommand {
-  /** kubectl = 서브프로세스 · k8s_api = python SDK · http = 직접 호출 · ssh · db = PEP DB 전용 */
-  kind: 'kubectl' | 'k8s_api' | 'http' | 'ssh' | 'db';
+  /** kubectl = 서브프로세스 · k8s_api = python SDK · http = 직접 호출 · ssh = SSH(batch_job 포함) ·
+   *  ansible = ansible-playbook 서브프로세스 · db = PEP DB 전용 */
+  kind: 'kubectl' | 'k8s_api' | 'http' | 'ssh' | 'ansible' | 'db';
   command: string;
   description: string;
   /** false = 대상에 변경을 일으킬 수 있는 명령 */
