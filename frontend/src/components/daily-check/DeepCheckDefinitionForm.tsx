@@ -21,6 +21,10 @@ interface Props {
   clusterId?: string;
   onSubmit: (body: DeepCheckDefinitionInput) => Promise<void> | void;
   onCancel?: () => void;
+  /** 항목 상세(`/checks/:itemId`, R-4 6차 라운드 4단계)의 "정의" 탭 전용 — 실행 주기는 그 페이지의
+   *  "적용" 탭(매트릭스 스케줄)이 단일 창구이므로 여기 중복 필드를 숨긴다. 기존 값은 그대로
+   *  전송돼(변경 없이) 저장 시 사라지지 않는다. */
+  hideScheduleCron?: boolean;
 }
 
 const CRON_PRESETS: { label: string; value: string }[] = [
@@ -110,6 +114,7 @@ export function DeepCheckDefinitionForm({
   clusterId,
   onSubmit,
   onCancel,
+  hideScheduleCron = false,
 }: Props) {
   const { data: schemas } = useCheckTypes();
   const testMut = useTestDefinition();
@@ -295,38 +300,40 @@ export function DeepCheckDefinitionForm({
           </div>
         </Field>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Field label="스케줄 cron (선택 — 정의별 단독 실행)">
-          <div className="flex gap-2">
-            <select
-              value={CRON_PRESETS.some((p) => p.value === (scheduleCron ?? '')) ? scheduleCron ?? '' : '__custom__'}
-              onChange={(e) => {
-                if (e.target.value !== '__custom__') setScheduleCron(e.target.value);
-              }}
-              aria-label="cron 프리셋 선택"
-              className="rounded-xl border border-border bg-card px-2 py-2 text-sm"
-            >
-              {CRON_PRESETS.map((p) => (
-                <option key={p.label} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-              <option value="__custom__">직접 입력…</option>
-            </select>
-            <input
-              value={scheduleCron ?? ''}
-              onChange={(e) => setScheduleCron(e.target.value)}
-              placeholder="예: */30 * * * * (비우면 매트릭스 스케줄만)"
-              aria-label="cron 표현식"
-              className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono"
-            />
-          </div>
-          <div className="text-xs text-muted-foreground mt-1">
-            표준 5필드 cron (분 시 일 월 요일), 최소 간격 5분. 지정 시 디스패처가 이 정의만 해당
-            주기로 자동 실행합니다 (글로벌 정의는 전체 클러스터 대상).
-          </div>
-        </Field>
-      </div>
+      {!hideScheduleCron && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="스케줄 cron (선택 — 정의별 단독 실행)">
+            <div className="flex gap-2">
+              <select
+                value={CRON_PRESETS.some((p) => p.value === (scheduleCron ?? '')) ? scheduleCron ?? '' : '__custom__'}
+                onChange={(e) => {
+                  if (e.target.value !== '__custom__') setScheduleCron(e.target.value);
+                }}
+                aria-label="cron 프리셋 선택"
+                className="rounded-xl border border-border bg-card px-2 py-2 text-sm"
+              >
+                {CRON_PRESETS.map((p) => (
+                  <option key={p.label} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+                <option value="__custom__">직접 입력…</option>
+              </select>
+              <input
+                value={scheduleCron ?? ''}
+                onChange={(e) => setScheduleCron(e.target.value)}
+                placeholder="예: */30 * * * * (비우면 매트릭스 스케줄만)"
+                aria-label="cron 표현식"
+                className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              표준 5필드 cron (분 시 일 월 요일), 최소 간격 5분. 지정 시 디스패처가 이 정의만 해당
+              주기로 자동 실행합니다 (글로벌 정의는 전체 클러스터 대상).
+            </div>
+          </Field>
+        </div>
+      )}
 
       {schema && (
         <>

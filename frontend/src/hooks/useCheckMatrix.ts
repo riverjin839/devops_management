@@ -6,6 +6,7 @@ export const checkMatrixKeys = {
   items: ['checkMatrixItems'] as const,
   catalog: ['checkMatrixCatalog'] as const,
   grid: ['checkMatrixGrid'] as const,
+  itemDetail: (itemId: string) => ['checkMatrixItemDetail', itemId] as const,
   history: (itemId: string, clusterId: string, days: number) =>
     ['checkMatrixHistory', itemId, clusterId, days] as const,
   settings: ['checkMatrixSettings'] as const,
@@ -65,6 +66,19 @@ export function useCheckMatrixGrid() {
     },
     staleTime: 60 * 1000,
     refetchInterval: 60 * 1000,
+  });
+}
+
+/** 항목 상세(`/checks/:itemId`) 진입 데이터 — 이 항목의 클러스터별 cron/최근 결과. */
+export function useCheckMatrixItemDetail(itemId: string | undefined) {
+  return useQuery({
+    queryKey: checkMatrixKeys.itemDetail(itemId ?? 'none'),
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.getItemDetail(itemId!);
+      return data;
+    },
+    enabled: !!itemId,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -164,7 +178,10 @@ export function usePutSchedule() {
       itemId, clusterId, cronExpr, enabled,
     }: { itemId: string; clusterId: string; cronExpr: string | null; enabled: boolean }) =>
       checkMatrixApi.putSchedule(itemId, clusterId, { cronExpr, enabled }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: checkMatrixKeys.grid }),
+    onSuccess: (_, { itemId }) => {
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.itemDetail(itemId) });
+    },
   });
 }
 
@@ -174,7 +191,11 @@ export function usePutClusterCron() {
     mutationFn: ({ clusterId, checkCronExpr, checkCronEnabled }: {
       clusterId: string; checkCronExpr: string | null; checkCronEnabled?: boolean;
     }) => checkMatrixApi.putClusterCron(clusterId, checkCronExpr, checkCronEnabled),
-    onSuccess: () => qc.invalidateQueries({ queryKey: checkMatrixKeys.grid }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+      // core_bundle 은 모든 항목 상세가 같은 클러스터 cron 을 공유하므로 전부 무효화.
+      qc.invalidateQueries({ queryKey: ['checkMatrixItemDetail'] });
+    },
   });
 }
 
@@ -242,6 +263,7 @@ export function useRunCheckMatrixCell() {
       qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
       qc.invalidateQueries({ queryKey: ['checkMatrixHistory', itemId, clusterId] });
       qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.itemDetail(itemId) });
     },
   });
 }
@@ -260,7 +282,10 @@ export function useRunCheckMatrixItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) => checkMatrixApi.runItem(itemId).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] }),
+    onSuccess: (_, itemId) => {
+      qc.invalidateQueries({ queryKey: ['checkMatrixRuns'] });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.itemDetail(itemId) });
+    },
   });
 }
 

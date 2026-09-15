@@ -4410,6 +4410,24 @@ export interface CheckMatrixGridCluster {
   status?: Status | null;
 }
 
+/** 항목 상세(`/checks/:itemId`) 의 클러스터별 한 행 — `GET /check-matrix/items/{itemId}/detail`. */
+export interface CheckMatrixItemDetailCell {
+  clusterId: string;
+  clusterName: string;
+  status: Status | null;
+  value: number | null;
+  message?: string | null;
+  checkedAt: string | null;
+  cronExpr: string | null;
+  scheduleEnabled: boolean;
+}
+
+/** `GET /check-matrix/items/{itemId}/detail` — 항목 상세 페이지(R-4 6차 라운드 4단계)의 진입 데이터. */
+export interface CheckMatrixItemDetail {
+  item: CheckMatrixItem;
+  cells: CheckMatrixItemDetailCell[];
+}
+
 /** 클러스터 종합 상태 원인 1건 — `cluster_status_service.recompute()` 의 contributor. */
 export interface ClusterStatusContributor {
   sourceType: 'core_bundle' | 'addon' | 'deep_check';

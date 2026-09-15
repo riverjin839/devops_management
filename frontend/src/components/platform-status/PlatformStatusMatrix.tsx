@@ -874,9 +874,13 @@ export function PlatformStatusMatrix({ toolbarSlot }: PlatformStatusMatrixProps 
                           </div>
                         );
                         const nameSpan = (
-                          <span className="truncate flex-1 min-w-0" title={item.description ?? undefined}>
+                          <button
+                            onClick={() => navigate(`/checks/${item.id}`)}
+                            className="truncate flex-1 min-w-0 text-left hover:text-primary hover:underline underline-offset-2"
+                            title={item.description ? `${item.description} — 항목 상세로 이동` : '항목 상세로 이동'}
+                          >
                             {item.name}
-                          </span>
+                          </button>
                         );
 
                         // compact 는 minHeight 만으로 실제 높이가 줄지 않아(콘텐츠가 2줄이라 항상

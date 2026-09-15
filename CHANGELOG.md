@@ -30,6 +30,15 @@
   이력으로 남는다. `GET /playbooks/{id}/runs` 신규, `PlaybookLogDialog` 에 "이전 실행 이력" 표
   추가. Backend: 신규 `services/playbook_service.py` 가 라우터의 수동 실행과 매트릭스 실행 로직을
   통합(중복 제거).
+- **점검 항목 상세 화면 (`/checks/:itemId`, D-062·D-063·D-065)**: 점검 매트릭스 행 이름을 클릭하면
+  정의·테스트·적용·실행방식·로그·히스토리 6개 탭이 있는 상세 화면으로 이동한다. 예전엔 정의 편집
+  (`/daily-check/settings`)·cron 설정(셀 상세 모달·클러스터 열 배지 두 곳)·실행 로그가 서로 다른
+  화면에 흩어져 있었다 — 이제 항목 하나를 한 화면에서 관리한다. deep_check 항목은 클러스터별
+  오버라이드 표(글로벌 상속 vs 전용)에서 "전용으로 분리"/"글로벌로 복귀"로 클러스터 전용 정의를
+  만들거나 지울 수 있다. Backend: `GET /check-matrix/items/{item_id}/detail`,
+  `GET /deep-check/definitions?check_type=`(신규 필터) 2개 엔드포인트만 추가하고 나머지는 기존
+  엔드포인트를 재사용. Frontend: 신규 `CheckMatrixHistoryPanel`(셀 상세 모달과 공유) 컴포넌트로
+  추이 차트 코드를 중복 없이 분리.
 
 ### Changed
 - **사이드바 레일 하단 개인 존 재편 (D-077)**: 무라벨 아이콘 7개(설정·테마·아일랜드·AI·사용자·

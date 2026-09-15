@@ -1,19 +1,17 @@
-import { useId, useMemo, useState } from 'react';
-import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
-} from 'recharts';
+import { useId, useState } from 'react';
 import { X, Clock, Save, Play, Loader2 } from 'lucide-react';
-import { StatusBadge, useToast } from '@/components/common';
+import { useToast } from '@/components/common';
 import type { CheckMatrixItem, CheckMatrixGridCluster, Status } from '@/types';
 import {
-  useCheckMatrixCellHistory, usePostManualEntry, usePutSchedule,
+  usePostManualEntry, usePutSchedule,
   useCheckMatrixRunbook, useRunCheckMatrixCell, useCheckMatrixRuns, useCheckMatrixRun,
 } from '@/hooks/useCheckMatrix';
-import { formatApiError, parseUTC } from '@/lib/utils';
+import { formatApiError } from '@/lib/utils';
 import { useModalA11y } from '@/components/common/useModalA11y';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { CheckMatrixRunbookPanel } from './CheckMatrixRunbookPanel';
 import { CheckMatrixRunList, CheckMatrixRunDetailView } from './CheckMatrixRunLog';
+import { CheckMatrixHistoryPanel } from './CheckMatrixHistoryPanel';
 
 interface Props {
   item: CheckMatrixItem;
@@ -23,7 +21,6 @@ interface Props {
   onClose: () => void;
 }
 
-const DAY_OPTIONS = [7, 30, 90];
 const STATUS_OPTIONS: Status[] = ['healthy', 'warning', 'critical', 'pending'];
 
 type Tab = 'history' | 'runbook' | 'runs';
@@ -38,8 +35,6 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
   const titleId = useId();
   const dialogRef = useModalA11y(true, onClose);
   const [tab, setTab] = useState<Tab>('history');
-  const [days, setDays] = useState(30);
-  const { data: history, isLoading } = useCheckMatrixCellHistory(item.id, cluster.id, days);
 
   const [cronDraft, setCronDraft] = useState(cronExpr ?? '');
   const [cronOn, setCronOn] = useState(scheduleEnabled);
@@ -64,18 +59,6 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
   );
   const latestRunId = recentRuns?.runs[0]?.id;
   const { data: latestRun } = useCheckMatrixRun(tab === 'runbook' ? latestRunId : undefined);
-
-  const chartData = useMemo(
-    () => (history?.points ?? [])
-      .filter((p) => p.value != null)
-      .map((p) => ({
-        time: parseUTC(p.checkedAt).toLocaleString('ko-KR', {
-          month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-        }),
-        value: p.value,
-      })),
-    [history],
-  );
 
   const handleSaveSchedule = async () => {
     try {
@@ -197,62 +180,9 @@ export function CheckMatrixCellDetailModal({ item, cluster, cronExpr, scheduleEn
         <div className="p-6 space-y-6">
           {tab === 'history' && (
             <>
-              {/* 트렌드 차트 */}
-              <section>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">추이</h3>
-                  <div className="flex items-center rounded-md border border-border overflow-hidden text-xs">
-                    {DAY_OPTIONS.map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setDays(d)}
-                        className={`px-2 py-1 transition-colors ${
-                          days === d ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-muted-foreground'
-                        }`}
-                      >
-                        {d}일
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {isLoading ? (
-                  <div className="text-sm text-muted-foreground py-8 text-center">불러오는 중…</div>
-                ) : chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} unit={item.unit ?? ''} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={item.name} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="text-sm text-muted-foreground italic py-8 text-center">
-                    최근 {days}일간 수치 이력이 없습니다.
-                  </div>
-                )}
-              </section>
-
-              {/* 변경 이력 */}
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">변경 이력</h3>
-                {(history?.changes.length ?? 0) === 0 ? (
-                  <div className="text-sm text-muted-foreground italic">기록이 없습니다.</div>
-                ) : (
-                  <ul className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {history!.changes.map((c, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm">
-                        <StatusBadge variant={c.status} size="sm" />
-                        <span className="text-muted-foreground text-xs tabular-nums">
-                          {parseUTC(c.checkedAt).toLocaleString('ko-KR')}
-                        </span>
-                        {c.message && <span className="text-xs text-muted-foreground truncate">{c.message}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+              <CheckMatrixHistoryPanel
+                itemId={item.id} clusterId={cluster.id} unit={item.unit} seriesName={item.name}
+              />
 
               {/* 수동 입력 (manual 타입 전용) */}
               {item.sourceType === 'manual' && (

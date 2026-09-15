@@ -53,6 +53,7 @@ import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
+import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
 import { K8sAllocationPage } from '@/pages/K8sAllocationPage';
@@ -240,6 +241,9 @@ function AppShell() {
               {/* 클러스터 상세 — 종합 상태(원인) + 점검 카탈로그. 매트릭스 클러스터명 클릭이 여기로. */}
               <Route path="/clusters/:clusterId" element={<ClusterDetailPage />} />
               <Route path="/clusters" element={<ClusterDetailPage />} />
+              {/* 항목 상세(R-4 6차 라운드 4단계) — 정의·테스트·적용·실행방식·로그·히스토리.
+                  매트릭스 항목명 클릭이 여기로. /daily-check/settings 는 전 항목 검색/일괄 관리용으로 별도 유지. */}
+              <Route path="/checks/:itemId" element={<CheckItemDetailPage />} />
               {/* 운영 점검 통합 콘솔(레거시) — 점검 항목 리스트 + 일괄/개별 실행 + 결과/로그.
                   /clusters/:id 가 더 완전하지만(종합 상태 포함) 기존 링크/북마크 호환을 위해 유지. */}
               <Route path="/ops-checks/:clusterId" element={<OpsCheckConsolePage />} />

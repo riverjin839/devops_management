@@ -3,8 +3,8 @@ import { deepCheckDefinitionsApi } from '@/services/api';
 import type { DeepCheckDefinitionInput, DeepCheckPreviewInput } from '@/types';
 
 export const deepCheckDefinitionKeys = {
-  list: (clusterId?: string, withStatus?: boolean) =>
-    ['deepCheckDefinitions', clusterId ?? 'all', withStatus ? 'status' : 'plain'] as const,
+  list: (clusterId?: string, withStatus?: boolean, checkType?: string) =>
+    ['deepCheckDefinitions', clusterId ?? 'all', withStatus ? 'status' : 'plain', checkType ?? 'any'] as const,
   checkTypes: ['deepCheckTypes'] as const,
   results: (definitionId: string) => ['deepCheckDefinitionResults', definitionId] as const,
 };
@@ -24,17 +24,32 @@ export function useDeepCheckDefinitions(
   clusterId?: string,
   includeGlobal = true,
   withStatus = false,
+  checkType?: string,
 ) {
   return useQuery({
-    queryKey: deepCheckDefinitionKeys.list(clusterId, withStatus),
+    queryKey: deepCheckDefinitionKeys.list(clusterId, withStatus, checkType),
     queryFn: async () => {
       const { data } = await deepCheckDefinitionsApi.list({
         clusterId,
         includeGlobal,
         withStatus,
+        checkType,
       });
       return data;
     },
+  });
+}
+
+/** 항목 상세(`/checks/:itemId`) 의 클러스터별 오버라이드 표 — cluster_id 없이 이 check_type 의
+ *  글로벌+전 클러스터 정의를 한 번에 받는다. */
+export function useDeepCheckDefinitionsByType(checkType: string | undefined) {
+  return useQuery({
+    queryKey: deepCheckDefinitionKeys.list(undefined, true, checkType),
+    queryFn: async () => {
+      const { data } = await deepCheckDefinitionsApi.list({ checkType, includeGlobal: true });
+      return data;
+    },
+    enabled: !!checkType,
   });
 }
 

@@ -464,6 +464,29 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 항목 상세 (`/checks/:itemId`) — R-4 6차 라운드 4단계
+
+- **파일**: `frontend/src/pages/CheckItemDetailPage.tsx` (+ `components/daily-check/DeepCheckDefinitionForm`, `components/platform-status/{ExecTechBadge,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixHistoryPanel}`)
+- **목적 / UX**: 점검 매트릭스 행(`CheckMatrixItem`) 하나를 클릭하면 오는 상세 화면 — 그 항목의 **정의·테스트·적용·실행방식·로그·히스토리** 여섯 단계를 탭 하나에 모은다. 예전엔 정의 편집(`/daily-check/settings`), cron 설정(셀 상세/클러스터 열 배지), 실행 로그(수행 로그 카드)가 서로 다른 화면·모달에 흩어져 있어 "이 점검 하나"를 온전히 관리하려면 여러 화면을 오가야 했다(D-062·D-063·D-065). `ClusterSidebar` 미사용 — 이 항목은 여러 클러스터에 걸친 행이라 전역 라이브러리 화면과 같은 패턴(`/scripts`·`/commands`).
+- **UI 구성**:
+  - 헤더 — "대시보드"로 돌아가기, 항목명 + `ExecTechBadge` + 카테고리 칩 + 설명 + 소스 정보(`sourceType`/`sourceRef`).
+  - 탭 6개: **정의** / **테스트** / **적용** / **실행방식** / **로그** / **히스토리**.
+  - **정의** 탭 — `deep_check` 항목만: "기본값(모든 클러스터)" 카드(`DeepCheckDefinitionForm`, `hideScheduleCron` — cron 은 "적용" 탭이 단일 창구) + "클러스터별 오버라이드" 목록(클러스터마다 "글로벌 상속" 또는 "전용" 배지, 전용이면 편집/글로벌로 복귀, 상속이면 "전용으로 분리"). 그 외 소스 타입은 안내 카드만(addon → 실행방식 탭 설정 편집, batch_job/playbook → 해당 화면 링크, core_bundle/manual → 안내).
+  - **테스트** 탭 — 클러스터 선택 + "미리 실행"(`POST /check-matrix/items/preview`, 저장 없음) → 상태/소요시간/메시지 표시.
+  - **적용** 탭 — 전 클러스터 표(클러스터/최근 상태/cron 입력/활성화 체크박스/마지막 확인/저장+지금 실행 버튼) + 상단 "전체 실행". core_bundle 은 `Cluster.check_cron_expr`, 그 외는 `CheckMatrixSchedule` 에 저장 — 이전에 셀 상세·클러스터 열 배지 두 곳에 나뉘어 있던 cron 편집이 여기 한 표로 모였다(D-065).
+  - **실행방식** 탭 — 클러스터 선택 + `CheckMatrixRunbookPanel`(셀 상세 모달과 동일 컴포넌트 재사용 — 설정 편집 딥링크 포함).
+  - **로그** 탭 — `CheckMatrixRunList`(itemId 만 필터, 클러스터 무관 전체) + 선택 시 `CheckMatrixRunDetailView`.
+  - **히스토리** 탭 — 클러스터 선택 + `CheckMatrixHistoryPanel`(추이 차트 + 변경 이력 — 셀 상세 모달에서 이번에 추출해 공유하는 컴포넌트).
+- **Frontend**: `useCheckMatrixItemDetail(itemId)`(신규), `useClusters`, `useDeepCheckDefinitionsByType(checkType)`(신규 — `check_type` 필터로 글로벌+전 클러스터 정의 한 번에 조회), `useCreateDefinition`/`useUpdateDefinition`/`useDeleteDefinition`(기존 재사용), `usePreviewCheckMatrixItem`, `usePutSchedule`/`usePutClusterCron`/`useRunCheckMatrixCell`/`useRunCheckMatrixItem`, `useCheckMatrixRunbook`/`useCheckMatrixRuns`/`useCheckMatrixRun`. api.ts: `checkMatrixApi.getItemDetail`, `deepCheckDefinitionsApi.list({checkType})`.
+- **Backend**: `GET /api/v1/check-matrix/items/{item_id}/detail`(신규 — `check_matrix_service.item_detail()`, 클러스터별 cron/최근 결과), `GET /api/v1/deep-check/definitions?check_type=`(신규 필터 파라미터 — `cluster_id` 없이 이 check_type 의 글로벌+전 클러스터 정의를 한 번에). 나머지(정의 CRUD, preview, schedule/cluster-cron PUT, cell/item run, runbook, runs, cell history)는 기존 엔드포인트를 그대로 재사용 — 이 화면 전용의 새 쓰기 경로는 없다.
+- **핵심 기능**:
+  - 매트릭스 행 이름 클릭 → 이 화면으로 드릴다운(D-063, `PlatformStatusMatrix.tsx` 의 항목명이 이전엔 plain span 이었다).
+  - deep_check 정의의 클러스터별 오버라이드를 "분리/복귀"로 관리 — "전용으로 분리"는 글로벌 값을 복제해 새 클러스터 전용 정의를 만드는 기존 `DeepCheckSettings` 의 `duplicateToCluster` 와 동일한 copy-on-write 패턴, "글로벌로 복귀"는 그 전용 정의를 삭제해 다시 글로벌 상속으로 되돌린다.
+  - cron 편집 진입점을 "적용" 탭 하나로 통합(D-065) — 다만 저장소 자체는 그대로다(core_bundle=`Cluster.check_cron_expr`, 그 외=`CheckMatrixSchedule`). `DeepCheckDefinitionForm` 의 "스케줄 cron" 필드(정의별 단독 cron, 세 번째 저장소)는 이 화면에서 `hideScheduleCron` 로 숨겨 이중 편집을 막되, 기존에 설정된 값은 전송 바디에 그대로 포함돼 저장 시 사라지지 않는다 — `/daily-check/settings` 에는 이 필드가 그대로 남아 있다.
+  - "로그" 탭은 클러스터 필터 없이 이 항목의 전 클러스터 수행 이력을 한 목록에서 본다(`CheckMatrixRunList` 의 `showCell` 로 클러스터명 표시).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### K8s 로그 — AI 장애 분석 (`/incident-analysis`)
 
 - **파일**: `frontend/src/pages/IncidentAnalysisPage.tsx` (+ `components/common/SearchableSelect`, `components/common/LogViewTabs`)
