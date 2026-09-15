@@ -10,6 +10,15 @@
 
 1.34.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **지원 뷰포트 선언 + 상단바 축약 (D-076)**: PEP 가 지원하는 창 폭을 3단계(≥1280 정식,
+  1024~1279 축약, <1024 미지원)로 선언한다. 1024px 미만에서는 전역 경고 배너
+  (`ViewportSupportBanner`, 세션당 1회 닫기 가능)가 뜨고, 1024~1279px 에서는 상단바의
+  업무 그룹 버튼(협업/문서 관리)이 아무 표시 없이 잘려 보이던 것을 `Menu` 트리거 하나로
+  접어 전부 노출한다. Frontend: `components/layout/ViewportSupportBanner.tsx` 신규,
+  `AppTopBar.tsx`(`lg:` 미만 축약 nav), `DESIGN_SYSTEM.md` §12.10(지원 뷰포트 표,
+  검증 매트릭스 겸용).
+
 ## [1.34.0] - 2026-09-15
 
 ### Added

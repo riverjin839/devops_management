@@ -648,6 +648,24 @@ const { canOperate, withHint } = useCanOperate();
   액션을 생략해도 된다. 기존 `hasRole(user,'admin','operator')` 로 버튼을 **숨기던** 화면
   (`ClusterManagePage` 등)은 그대로 두되, 신규 화면은 이 패턴을 따른다.
 
+### 12.10 지원 뷰포트 (D-076)
+
+PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들지 않는다 — 대신 창 폭 기준으로
+3단계를 **선언**하고, 좁을수록 기능을 숨기지 않되(조회는 항상 가능) 진입점만 접는다.
+
+| 폭 | 등급 | 동작 |
+|---|---|---|
+| **≥1280px** (Tailwind `xl`) | 정식 | 모든 레이아웃이 설계 의도대로 — 홈 2열 그리드, 상단바 그룹 버튼 개별 노출 |
+| **1024~1279px** (`lg`) | 축약 | 상단바 업무 그룹 버튼이 `Menu` 트리거 하나로 접힌다(`AppTopBar.tsx` — `hidden lg:flex` 본 nav + `lg:hidden` 트리거, 두 그룹을 섹션 구분된 한 flyout 목록으로). 홈 등 `xl:` 전용 그리드는 이 구간에서 단일 열로 스택(기존 동작, 변경 없음) |
+| **<1024px** | 미지원 | `ViewportSupportBanner`(`components/layout/ViewportSupportBanner.tsx`, `PageStyleProvider` 최상단에 전역 마운트)가 "권장 지원 범위 밖" 경고를 띄운다 — **막지는 않는다**, 세션당 1회 닫기 가능(`sessionStorage`). 사이드바(고정 56px)·데이터 테이블(자체 `overflow-x-auto`)은 이 구간에서도 그대로 동작한다 |
+
+- 새 breakpoint 로직은 `matchMedia` + `useEffect`(리사이즈 시 재평가) 패턴을 쓴다 — `BatchJobsPage.tsx`
+  의 `OVERLAY_BREAKPOINT = '(max-width: 1279px)'` 가 레퍼런스.
+- 상단바처럼 "접는" 대상을 늘릴 땐 새 `<nav>`/버튼 그룹을 만들지 말고 §12.8 의 `FlyoutShell`/
+  `FlyoutLink` 를 그대로 재사용한다(`AppTopBar.tsx` 의 `moreOpen` 트리거가 예시).
+- 이 표는 검증 매트릭스의 원천이다 — 새 화면을 QA 할 때 1280/1024/768px 세 폭에서 최소 한 번씩
+  훑는다(특히 `xl:` 전용 그리드·`overflow-x-auto` nav 를 새로 추가하는 화면).
+
 ---
 
 ## 부록 A — 검증 출처

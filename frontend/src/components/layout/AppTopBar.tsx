@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Star, Sun, Search } from 'lucide-react';
+import { ChevronDown, Star, Sun, Search, Menu } from 'lucide-react';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -38,6 +38,11 @@ export function AppTopBar() {
   const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
+  // D-076 — `lg:` 미만(<1024px)에서는 그룹 버튼이 `overflow-x-auto` 로 조용히 잘려 보이지
+  // 않게 밀려나므로, 개별 버튼 대신 이 트리거 하나로 접는다(둘 다 합쳐도 그룹 수가 적어
+  // 중첩 메뉴 대신 평평한 목록으로 충분하다).
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreAnchor, setMoreAnchor] = useState<DOMRect | null>(null);
   const openPalette = useCommandPaletteStore((s) => s.setOpen);
   // D-080 — 클릭/키보드로 연 flyout 만 첫 항목으로 포커스를 옮기고 닫힐 때 트리거로 돌아온다.
   // hover 로 연 것은 포커스를 건드리지 않는다(Sidebar.tsx 와 동일).
@@ -57,6 +62,7 @@ export function AppTopBar() {
   const closeAllFlyouts = () => {
     setOpenGroup(null);
     setFavoritesOpen(false);
+    setMoreOpen(false);
   };
   const scheduleFlyoutOpen = (openFn: () => void) => {
     clearHoverTimers();
@@ -79,10 +85,10 @@ export function AppTopBar() {
   };
   useEffect(() => clearHoverTimers, []);
 
-  useEffect(() => { setOpenGroup(null); setFavoritesOpen(false); }, [location.pathname]);
+  useEffect(() => { setOpenGroup(null); setFavoritesOpen(false); setMoreOpen(false); }, [location.pathname]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setOpenGroup(null); setFavoritesOpen(false); }
+      if (e.key === 'Escape') { setOpenGroup(null); setFavoritesOpen(false); setMoreOpen(false); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -113,7 +119,7 @@ export function AppTopBar() {
           같은 스태킹 컨텍스트 안에서 자식으로 렌더됨)보다 위에 둔다 — 안 그러면 버튼이
           포지션 없는 요소라 오버레이가 z-index 값과 무관하게 항상 위에 그려져, hover 로 연
           flyout 이 열리자마자 오버레이에 가려 mouseleave 로 판정돼 바로 닫혀버린다. */}
-      <nav aria-label="업무" className="relative z-10 flex items-center gap-1 min-w-0 overflow-x-auto">
+      <nav aria-label="업무" className="relative z-10 hidden lg:flex items-center gap-1 min-w-0 overflow-x-auto">
         {WORK_GROUPS.map((g) => {
           const single = g.paths.length === 1;
           const isOpen = openGroup === g.id;
@@ -159,6 +165,39 @@ export function AppTopBar() {
           );
         })}
       </nav>
+
+      {/* D-076 — 1024px 미만은 개별 그룹 버튼 대신 이 트리거 하나로 접는다. */}
+      <div className="relative z-10 lg:hidden">
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={moreOpen}
+          title="업무 메뉴"
+          aria-label="업무 메뉴"
+          onMouseEnter={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            scheduleFlyoutOpen(() => { setMoreOpen(true); setMoreAnchor(rect); });
+          }}
+          onMouseLeave={() => scheduleFlyoutClose(() => setMoreOpen(false))}
+          onClick={(e) => {
+            clearHoverTimers();
+            const rect = e.currentTarget.getBoundingClientRect();
+            setFlyoutFocus({ autoFocus: true, trigger: e.currentTarget });
+            setMoreAnchor(rect);
+            setMoreOpen((cur) => !cur);
+          }}
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors',
+            activeGroup || moreOpen
+              ? 'bg-primary/10 text-primary font-semibold'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+          )}
+        >
+          <Menu className="w-4 h-4 flex-shrink-0" />
+          메뉴
+          <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
+        </button>
+      </div>
 
       <div className="relative z-10 ml-auto flex items-center gap-1.5 flex-shrink-0">
         {/* D-073 — 화면 검색(커맨드 팔레트) 진입점. 넓은 화면에선 검색창 모양, 좁으면 아이콘만. */}
@@ -246,6 +285,49 @@ export function AppTopBar() {
                   />
                 );
               })}
+            </div>
+          </FlyoutShell>
+        </>
+      )}
+
+      {moreOpen && moreAnchor && (
+        <>
+          <div className="fixed inset-0 z-0" onClick={() => setMoreOpen(false)} aria-hidden />
+          <FlyoutShell
+            title="업무 메뉴"
+            anchorRect={moreAnchor}
+            placement="bottom"
+            {...focusProps}
+            onClose={() => setMoreOpen(false)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setMoreOpen(false))}
+          >
+            <div className="space-y-1 pb-2">
+              {WORK_GROUPS.map((g) => (
+                <div key={g.id}>
+                  <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <g.icon className="w-3 h-3" aria-hidden="true" /> {g.label}
+                  </p>
+                  {g.paths.map((p) => {
+                    const entry = navMap[p];
+                    if (!entry || !featureAllowed(p)) return null;
+                    return (
+                      <FlyoutLink
+                        key={p}
+                        to={p}
+                        label={getLabel(p)}
+                        Icon={entry.icon}
+                        iconColor={entry.iconColor}
+                        iconSize={entry.iconSize}
+                        active={location.pathname === p}
+                        onSelect={() => setMoreOpen(false)}
+                        isPinned={isPinned(p)}
+                        onTogglePin={() => togglePin(p)}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </FlyoutShell>
         </>
