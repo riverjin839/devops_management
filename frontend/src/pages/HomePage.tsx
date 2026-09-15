@@ -94,7 +94,7 @@ function IslandPill() {
       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/5 border border-primary/30 hover:border-primary/60 transition-colors text-xs whitespace-nowrap">
         <Palmtree className="w-3 h-3 flex-shrink-0 text-primary" />
         <span className="font-semibold text-primary">
-          {target ? target.name : 'Your Island'}
+          {target ? target.name : '나의 아일랜드'}
         </span>
         {!target && <span className="text-muted-foreground">만들기</span>}
       </div>

@@ -636,7 +636,7 @@ export function SettingsPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <SettingsIcon className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">Settings</h1>
+            <h1 className="text-xl font-bold">설정</h1>
           </div>
         </div>
 

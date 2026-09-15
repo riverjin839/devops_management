@@ -220,7 +220,7 @@ export function CiliumTracePage() {
               <Waves className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">Cilium BPF Trace</h1>
+              <h1 className="text-xl font-bold leading-tight">Cilium BPF 추적</h1>
               <p className="text-sm text-muted-foreground">BPF 맵 인스펙터 · cilium monitor · Hubble flow</p>
             </div>
           </div>

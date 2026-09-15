@@ -24,7 +24,7 @@ function EmptyIslandState({ onOpenManager }: { onOpenManager: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
       <Palmtree className="w-10 h-10 text-muted-foreground" />
-      <h1 className="text-lg font-semibold text-foreground">Your Island</h1>
+      <h1 className="text-lg font-semibold text-foreground">나의 아일랜드</h1>
       <p className="max-w-md text-sm text-muted-foreground">
         자주 쓰는 PEP 화면을 하나에 모아두는 개인 화면입니다. 아일랜드를 만들고 원하는 화면을
         패널로 추가하면 탭이나 좌측 사이드바로 즉시 전환할 수 있습니다.
