@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, GitBranch, Rocket, RefreshCw, Upload, Link2Off, Loader2, Trash2, Settings2 } from 'lucide-react';
+import { Pencil, GitBranch, Rocket, RefreshCw, Upload, Link2Off, Loader2, Trash2, Settings2, Ticket } from 'lucide-react';
 import type { WorkItem } from '@/types';
 
 export interface WorkItemActionsMenuProps {
@@ -17,6 +17,8 @@ export interface WorkItemActionsMenuProps {
   onJiraProvision?: (item: WorkItem) => void;
   /** 연결 관리(해제/다른 이슈로 변경/업무 삭제) 다이얼로그 진입. */
   onJiraLink?: (item: WorkItem) => void;
+  /** Jira 연동 업무 → 사내 ServiceNow ITSM 수동 등록 다이얼로그 진입. */
+  onServiceNowRegister?: (item: WorkItem) => void;
   /** Confluence 연결 업무 — 현재 내용을 연결된 문서에 반영(재게시). Jira "보내기"와 동일 역할. */
   onConfluenceSync?: (item: WorkItem) => void;
   /** 이 행에서 Confluence 동기화가 진행 중인지 (버튼 스피너/중복 클릭 방지). */
@@ -35,7 +37,7 @@ export interface WorkItemActionsMenuProps {
  */
 export function WorkItemActionsMenu({
   item, onEdit, onDelete, onAddSubItem, onJiraRefresh, onJiraPush, onJiraProvision, onJiraLink,
-  jiraBusy = false, onConfluenceSync, confluenceBusy = false,
+  onServiceNowRegister, jiraBusy = false, onConfluenceSync, confluenceBusy = false,
 }: WorkItemActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
@@ -170,6 +172,18 @@ export function WorkItemActionsMenu({
               >
                 <Link2Off className="w-3.5 h-3.5 text-brand-jira flex-shrink-0" />
                 Jira 연결 관리
+              </button>
+            )}
+            {item.jiraIssueKey && onServiceNowRegister && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setOpen(false); onServiceNowRegister(item); }}
+                className={menuItem('text-foreground')}
+                title={item.servicenowNumber
+                  ? `ServiceNow(${item.servicenowNumber}) 등록됨 — 다시 등록`
+                  : 'Jira 연동 정보로 사내 ServiceNow ITSM 티켓 생성'}
+              >
+                <Ticket className="w-3.5 h-3.5 text-brand-servicenow flex-shrink-0" />
+                {item.servicenowNumber ? 'ServiceNow 다시 등록' : 'ServiceNow ITSM 등록'}
               </button>
             )}
             {item.confluenceUrl && onConfluenceSync && (

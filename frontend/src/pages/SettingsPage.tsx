@@ -1,11 +1,12 @@
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, Database, Home, Palette, FileSearch, Wand2, Bot, Ticket } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { SchemaHealthPanel } from '@/components/settings/SchemaHealthPanel';
 import { FeatureAccessManager } from '@/components/settings/FeatureAccessManager';
 import { JiraIntegrationPanel } from '@/components/settings/JiraIntegrationPanel';
+import { ServiceNowIntegrationPanel } from '@/components/settings/ServiceNowIntegrationPanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
 import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeManager';
 import { ServiceCategoryManager } from '@/components/settings/ServiceCategoryManager';
@@ -592,7 +593,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'debug' | 'backup' | 'jira' | 'screen-ui' | 'audit-log' | 'schema' | 'ai-llm';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'debug' | 'backup' | 'jira' | 'servicenow' | 'screen-ui' | 'audit-log' | 'schema' | 'ai-llm';
   const [searchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
   // 레거시 딥링크 호환: 최상위 "서비스"(service) 탭과 "서비스 카테고리"(service-categories)
@@ -620,6 +621,7 @@ export function SettingsPage() {
     { id: 'screen-ui', label: '화면 UI 설정', icon: <Palette className="w-4 h-4" />, count: 0 },
     { id: 'access', label: '접근 제어', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'jira', label: '연동 (Jira)', icon: <Globe className="w-4 h-4" />, count: 0 },
+    { id: 'servicenow', label: '연동 (ServiceNow)', icon: <Ticket className="w-4 h-4" />, count: 0 },
     { id: 'ai-llm', label: 'AI / LLM', icon: <Bot className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
@@ -1282,6 +1284,7 @@ export function SettingsPage() {
         {activeTab === 'ai-llm' && <LlmSettingsTab />}
 
         {activeTab === 'jira' && <JiraIntegrationPanel />}
+        {activeTab === 'servicenow' && <ServiceNowIntegrationPanel />}
 
         {activeTab === 'audit-log' && <AuditLogManager />}
       </main>

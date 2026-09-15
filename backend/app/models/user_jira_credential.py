@@ -45,6 +45,11 @@ class UserJiraCredential(Base):
     # (선택) 같은 IdP 로 SSO 연동되는 Confluence 세션 쿠키 — 파드 내 SSO 폼 로그인이 Jira 와
     # 함께 캡처해 저장한다(관리자가 Confluence Base URL 을 설정한 경우만). secret_box 암호화.
     confluence_cookie_encrypted = Column(Text, nullable=True)
+    # (선택) 내부 ServiceNow ITSM 세션 쿠키 — 1차 구현은 전용 인증 UI 없이, 사내 SSO 로
+    # Jira/Confluence 와 같은 도메인을 공유한다고 가정해 Jira 쿠키를 그대로 재사용 시도한 뒤
+    # 성공하면 여기로 승격 저장한다(confluence_cookie_encrypted 와 동일한 폴백·승격 전략).
+    # 전용 ServiceNow 자격증명(Basic/OAuth 등)은 추후 개선 범위.
+    servicenow_cookie_encrypted = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
