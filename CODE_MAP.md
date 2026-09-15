@@ -186,7 +186,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 공통 UI / 인프라
 | 기능 | 위치 |
 |---|---|
-| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) |
+| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유) |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
 | Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
 | 전역 상단바(업무 도메인) | `frontend/src/components/layout/AppTopBar.tsx` + `NavFlyout.tsx`(`FlyoutShell`/`FlyoutLink`/`FlyoutAction` 공용, Sidebar 와 공유 — 키보드 메뉴 규약은 `DESIGN_SYSTEM.md` §12.8) |

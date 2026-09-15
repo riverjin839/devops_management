@@ -51,6 +51,11 @@
   지표, `Settings`→설정, `Cilium BPF Trace`→Cilium BPF 추적으로 기본 라벨을 바꿨다(사용자가
   `NavMenuManager` 로 직접 오버라이드한 라벨은 그대로 유지). `K8S`/`K8s` 표기 혼재 4곳도
   `K8s` 로 통일. 같은 화면 본문 제목도 함께 맞춰 사이드바-본문 라벨 불일치를 없앴다.
+- **테마 스와치 미리보기 + Settings 테마 갤러리 (D-072)**: 사용자 메뉴의 컬러 테마 7종이
+  제네릭 아이콘 대신 실제 대표 색 원으로 미리보기된다. Settings ▸ 화면 UI 설정 탭에 신규
+  "테마 갤러리" — 10종(컬러 9 + system)을 배경/보조/강조 색 미니 카드로 나열하고 클릭 즉시
+  적용, 사용자 메뉴와 같은 선택을 공유한다. Frontend: 신규 `lib/themeSwatches.ts`(`index.css`
+  각 테마 토큰의 정적 스냅샷), `components/settings/ThemeGallery.tsx`.
 - **운영 점검 콘솔·일일 점검 리뷰 배지·문구 통일 (D-062)**: `/ops-checks`·`/clusters/:id` 가
   공유하는 `ClusterOpsCheckPanel` 이 "점검/애드온/SSH/Ansible" 구현 세부 배지 대신 점검
   매트릭스와 같은 `ExecTechBadge`(K8s API/kubectl/HTTP/PromQL/SSH bash/SSH python/Ansible 등)를

@@ -12,6 +12,7 @@ import { LakeServiceTypeManager } from '@/components/settings/LakeServiceTypeMan
 import { ServiceCategoryManager } from '@/components/settings/ServiceCategoryManager';
 import { NavMenuManager } from '@/components/settings/NavMenuManager';
 import { PageStyleManager } from '@/components/settings/PageStyleManager';
+import { ThemeGallery } from '@/components/settings/ThemeGallery';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
 import { AuditLogManager } from '@/components/settings/AuditLogManager';
@@ -813,6 +814,9 @@ export function SettingsPage() {
             </div>
           </div>
         </MacCard>
+
+          {/* 테마 갤러리 — 10종을 한 화면에서 비교·선택 (D-072) */}
+          <ThemeGallery />
 
           {/* 메뉴 이름 편집 (사이드바에서 이동) */}
           <NavMenuManager />
