@@ -6,6 +6,7 @@ import { resolvePageStyle, pageStyleToCss } from '@/lib/pageStyles';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSessionExpiryWatch } from '@/hooks/useSessionExpiryWatch';
 import { AppTopBar } from './AppTopBar';
+import { ViewportSupportBanner } from './ViewportSupportBanner';
 import { CommandPalette } from './CommandPalette';
 import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 
@@ -38,6 +39,7 @@ export function PageStyleProvider({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex-1 min-w-0 flex flex-col" style={{ marginLeft: NAV_WIDTH }}>
+      <ViewportSupportBanner />
       <AppTopBar />
       <div id="main-content" className="flex-1 min-h-0" style={pageStyleToCss(eff)}>
         {children}
