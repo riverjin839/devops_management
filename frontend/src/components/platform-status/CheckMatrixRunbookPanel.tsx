@@ -1,7 +1,7 @@
 import { useMemo, useState, type ComponentType } from 'react';
 import {
   Terminal, Globe, Server, Database, KeyRound, AlertTriangle, Info, Target, Pencil, Save, Plus, X,
-  ShieldCheck,
+  ShieldCheck, Workflow,
 } from 'lucide-react';
 import { StatusBadge, useToast } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
@@ -58,6 +58,7 @@ const KIND_META: Record<
   k8s_api: { label: 'K8s API', icon: Server, hint: 'kubernetes SDK 로 API 서버 직접 호출' },
   http: { label: 'HTTP', icon: Globe, hint: '대상 엔드포인트로 직접 HTTP 호출' },
   ssh: { label: 'SSH', icon: KeyRound, hint: '대상 장비에 SSH 접속해 읽기 명령 실행' },
+  ansible: { label: 'Ansible', icon: Workflow, hint: '대상 인벤토리에 ansible-playbook 실행' },
   db: { label: 'PEP DB', icon: Database, hint: '대상 클러스터 접속 없이 PEP 내부 데이터만 사용' },
 };
 

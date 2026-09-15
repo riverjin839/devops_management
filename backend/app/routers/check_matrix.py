@@ -101,7 +101,7 @@ class SettingsIn(BaseModel):
     retention_days: int = Field(..., ge=1, le=3650)
 
 
-def _validate_item_body(body: ItemIn) -> None:
+def _validate_item_body(body: ItemIn, db: Session) -> None:
     if body.color and body.color not in _ALLOWED_ROW_COLORS:
         raise HTTPException(
             status_code=422,
@@ -117,6 +117,14 @@ def _validate_item_body(body: ItemIn) -> None:
         from app.services.checkers import CHECKER_REGISTRY
         if not body.source_ref or body.source_ref not in CHECKER_REGISTRY:
             raise HTTPException(status_code=400, detail=f"알 수 없는 addon type: {body.source_ref}")
+    if body.source_type == CheckMatrixSourceType.batch_job:
+        from app.models import BatchJob
+        if not body.source_ref or not db.query(BatchJob).filter(BatchJob.name == body.source_ref).first():
+            raise HTTPException(status_code=400, detail=f"등록된 배치잡이 없습니다: {body.source_ref}")
+    if body.source_type == CheckMatrixSourceType.playbook:
+        from app.models import Playbook
+        if not body.source_ref or not db.query(Playbook).filter(Playbook.name == body.source_ref).first():
+            raise HTTPException(status_code=400, detail=f"등록된 플레이북이 없습니다: {body.source_ref}")
 
 
 # ── Items CRUD / reorder ─────────────────────────────────────────────────────
@@ -131,7 +139,7 @@ def list_items(db: Session = Depends(get_db)):
 
 @router.post("/items", response_model=ItemOut)
 def create_item(body: ItemIn, db: Session = Depends(get_db), _: User = Depends(require_operator)):
-    _validate_item_body(body)
+    _validate_item_body(body, db)
     max_sort = (
         db.query(CheckMatrixItem.sort_order)
         .order_by(CheckMatrixItem.sort_order.desc())
@@ -175,7 +183,7 @@ def update_item(item_id: UUID, body: ItemIn, db: Session = Depends(get_db), _: U
         db.commit()
         db.refresh(row)
         return row
-    _validate_item_body(body)
+    _validate_item_body(body, db)
     for k, v in body.model_dump(exclude={"thresholds", "params"}).items():
         setattr(row, k, v)
     db.commit()

@@ -16,6 +16,20 @@
   검색어가 비면 최근 방문이 맨 위에 온다. 진입점 3곳 — 전역 단축키, 상단바 "화면 검색" 버튼,
   사이드바 "도움말·지원 ▸ 화면 검색". Frontend: `components/layout/CommandPalette.tsx` ·
   `stores/commandPaletteStore.ts`, 키보드 ↑↓/Enter/Esc + `useModalA11y` 포커스 트랩.
+- **점검 매트릭스·운영 점검 콘솔에 배치잡/플레이북 편입 (D-066)**: SSH bash/python 배치잡,
+  Ansible 플레이북을 매트릭스 행·운영 점검 콘솔 항목으로 등록·실행·스케줄링할 수 있다
+  (`CheckMatrixSourceType.batch_job`/`playbook` 신설, `source_ref`=배치잡/플레이북 이름 — addon
+  과 동일한 "이름→클러스터별 인스턴스 해석" 방식이라 여러 클러스터에 같은 이름으로 등록해 두면
+  한 행이 여러 열에서 각자 실행된다). 자격증명은 배치잡에 저장된 스케줄용 자격증명만 쓰고(무인
+  실행이라 매번 입력받을 수 없음), 없으면 그 사유가 실행 로그에 남는다. Backend:
+  `check_matrix_service.py`/`check_matrix_runbook.py`/`ops_check_service.py` 확장,
+  `_safe_exec` 대신 `ALTER TYPE checkmatrixsourcetype ADD VALUE` 로 구버전 DB PostgreSQL enum
+  보강. 신규 테스트 18건.
+- **플레이북 실행 이력 (`PlaybookRun`, D-066)**: 이전에는 `Playbook.last_result` 1행 덮어쓰기뿐이라
+  실행할 때마다 과거 기록이 사라졌다 — 이제 모든 실행(수동 + 매트릭스 경유)이 append-only
+  이력으로 남는다. `GET /playbooks/{id}/runs` 신규, `PlaybookLogDialog` 에 "이전 실행 이력" 표
+  추가. Backend: 신규 `services/playbook_service.py` 가 라우터의 수동 실행과 매트릭스 실행 로직을
+  통합(중복 제거).
 
 ### Changed
 - **사이드바 레일 하단 개인 존 재편 (D-077)**: 무라벨 아이콘 7개(설정·테마·아일랜드·AI·사용자·

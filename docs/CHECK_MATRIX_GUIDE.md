@@ -59,6 +59,8 @@ unit 도 여기서 채워진다(구버전 DB 는 부팅 시 자동 보강).
 | `core_bundle` | `DailyChecker.run_daily_check()` | 클러스터 열 (`Cluster.check_cron_expr`) | 클러스터 자체 |
 | `deep_check` | `DeepCheckService` → 체커 | 셀(항목×클러스터) 또는 정의의 `schedule_cron` | `check_type` → `DeepCheckDefinition` |
 | `addon` | `HealthChecker` | 셀(항목×클러스터) | `Addon.type` → 그 클러스터의 `Addon` |
+| `batch_job`(D-066) | `batch_job_service.execute_job` | 셀(항목×클러스터) | `BatchJob.name` → 그 클러스터의 `BatchJob` |
+| `playbook`(D-066) | `playbook_service.execute_playbook_run` | 셀(항목×클러스터) | `Playbook.name` → 그 클러스터의 `Playbook` |
 | `manual` | 없음 (사람이 입력) | — | — |
 
 ### 2.1 Deep Check — 점검 정의를 실행
@@ -97,7 +99,31 @@ PEP 내장 점검기(인증서 만료, etcd 단편화, PVC, CoreDNS, OOM, 노드
    재계산에 반영된다.
 5. 애드온 행에는 기본 cron 이 시드되지 않는다 — 자동 실행을 원하면 셀에서 cron 을 직접 넣는다.
 
-### 2.3 수동 입력 — 자동 체커가 없는 대상
+### 2.3 Batch Job / Playbook — 등록된 SSH 잡·Ansible 플레이북 실행(D-066)
+
+`/batch-jobs`·`/playbooks` 화면에 이미 등록해 둔 SSH bash/python 잡, Ansible 플레이북을
+매트릭스 행으로도 실행·스케줄링할 수 있다. deep_check/addon 처럼 "논리 키(이름) → 클러스터별
+인스턴스" 해석 방식을 그대로 따른다 — `BatchJob`/`Playbook` 은 원래 클러스터별 행이므로, 여러
+클러스터에 **같은 이름**으로 등록해 두면 한 행이 여러 열에서 각자 실행된다.
+
+1. 항목 추가에서 실행 방식을 **SSH(bash/python)** 또는 **Ansible** 로 두고, 이미 등록된
+   배치잡/플레이북 이름을 고른다 — 여기서는 **새로 만들지 않는다**(임계값/설정 입력 단계가
+   없다). 등록 마법사 "테스트" 단계는 실제 실행을 하지 않는다(운영 스크립트라 부작용이 있을
+   수 있어 안전을 위해 생략).
+2. 실행 시점에 `BatchJob.name == source_ref AND BatchJob.cluster_id == 이 클러스터`(플레이북도
+   동일 패턴)로 해석한다. 그 클러스터에 같은 이름이 없으면 **건너뜀**이다.
+3. 자격증명은 배치잡에 **저장된 스케줄용 자격증명**(`encrypted_password`/`encrypted_private_key`)
+   만 쓴다 — 매트릭스 실행(cron 포함)은 무인 실행이라 매번 입력받을 수 없다. 저장된 자격증명이
+   없으면 그 사유가 실행 로그 메시지에 그대로 남는다. 플레이북은 인벤토리에 이미 있는 SSH
+   설정을 그대로 쓴다(둘 다 `/batch-jobs`·`/playbooks` 화면에서 직접 실행할 때만 인라인
+   자격증명 입력을 받는다).
+4. 배치잡/플레이북의 **params/스크립트 내용 편집은 이 화면에서 하지 않는다** — 중복 UI를
+   피하기 위해 `/batch-jobs`·`/playbooks` 화면 전용이다(셀 상세 "실행 방식" 탭의 "설정 편집"
+   버튼이 뜨지 않는다).
+5. 실행 결과는 매트릭스 수행 로그뿐 아니라 각 화면의 자체 이력(`BatchJobRun`/`PlaybookRun`)에도
+   남는다 — 어느 쪽에서 봐도 같은 실행을 확인할 수 있다.
+
+### 2.4 수동 입력 — 자동 체커가 없는 대상
 
 NAS 콘솔, 네트워크 스위치, 외주 점검 결과처럼 PEP 가 직접 찌를 수 없는 대상을 같은 매트릭스
 위에서 함께 관리한다.
@@ -110,7 +136,7 @@ NAS 콘솔, 네트워크 스위치, 외주 점검 결과처럼 PEP 가 직접 �
 4. 자동 실행이 없으므로 cron 을 설정할 수 없고 ▶ 실행 버튼도 나오지 않는다. 값을 넣기
    전까지 셀은 `—`(미실행)로 남는다.
 
-### 2.4 핵심 항목(잠금) — `core_bundle`
+### 2.5 핵심 항목(잠금) — `core_bundle`
 
 「K8S API-SERVER 응답시간」 행은 `DailyChecker.run_daily_check()` 를 **원자적으로 한 번**
 실행하고 그중 `/healthz` 응답시간만 셀에 투영한 것이다.
@@ -322,7 +348,8 @@ not found in $PATH`). `etcd_defrag` 와 동일한 이유로 이 점검도 **파�
 ## 8. DB 구조 (Schema Audit)
 
 점검 매트릭스가 소유한 테이블 5개와 실행 시 참조하는 인접 테이블의 관계다. 모델 원천은
-`backend/app/models/check_matrix.py`, 인접 모델은 `check_definitions.py` · `addon.py` · `cluster.py`.
+`backend/app/models/check_matrix.py`, 인접 모델은 `check_definitions.py` · `addon.py` ·
+`batch_job.py` · `playbook.py` · `cluster.py`.
 
 ```mermaid
 erDiagram
@@ -336,13 +363,17 @@ erDiagram
     clusters ||--o{ check_matrix_runs : "cluster_id (CASCADE)"
     check_matrix_items }o..o| deep_check_definitions : "source_ref = check_type (논리 키, FK 아님)"
     check_matrix_items }o..o| addons : "source_ref = type (논리 키, FK 아님)"
+    check_matrix_items }o..o| batch_jobs : "source_ref = name (논리 키, FK 아님, D-066)"
+    check_matrix_items }o..o| playbooks : "source_ref = name (논리 키, FK 아님, D-066)"
+    batch_jobs ||--o{ batch_job_runs : "job_id (append-only)"
+    playbooks ||--o{ playbook_runs : "playbook_id (append-only, D-066)"
 ```
 
 ### 8.1 테이블별 역할·핵심 컬럼·인덱스
 
 | 테이블 | 역할 | 핵심 컬럼 | 인덱스/제약 |
 |---|---|---|---|
-| `check_matrix_items` | 행 카탈로그 | `source_type`(enum: core_bundle/deep_check/addon/manual) · `source_ref`(논리 키) · `unit`(셀 값 단위) · `is_system` · `enabled` · `sort_order` | PK 만 (소규모 테이블) |
+| `check_matrix_items` | 행 카탈로그 | `source_type`(enum: core_bundle/deep_check/addon/batch_job/playbook/manual) · `source_ref`(논리 키) · `unit`(셀 값 단위) · `is_system` · `enabled` · `sort_order` | PK 만 (소규모 테이블) |
 | `check_matrix_schedules` | 셀 cron | `cron_expr`(NULL=미스케줄) · `enabled` · `last_run_at`(디스패처 anchor) | `uq(item_id, cluster_id)` |
 | `check_matrix_results` | 셀 최신 스냅샷 | `status` · `value` · `message` · `details`(JSONB) · `checked_at` — **upsert**(`ON CONFLICT`) | `uq(item_id, cluster_id)` |
 | `check_matrix_result_logs` | 값 이력 (append-only) | Result 와 동일 컬럼 — 추이 차트/변경 이력의 원천 | `(item_id, cluster_id, checked_at)` + `checked_at` 단독(퍼지 스캔용) |
@@ -354,6 +385,8 @@ erDiagram
 |---|---|---|
 | `items.source_ref` (deep_check) | `deep_check_definitions.check_type` | 클러스터 전용 정의 우선 → 글로벌 폴백. 정의가 삭제돼도 행은 남고 셀은 "건너뜀" |
 | `items.source_ref` (addon) | `addons.type` (+ cluster_id) | 그 클러스터에 애드온이 없으면 "건너뜀" |
+| `items.source_ref` (batch_job, D-066) | `batch_jobs.name` (+ cluster_id) | 그 클러스터에 같은 이름의 배치잡이 없거나 비활성(`enabled=false`)이면 "건너뜀" |
+| `items.source_ref` (playbook, D-066) | `playbooks.name` (+ cluster_id) | 그 클러스터에 같은 이름의 플레이북이 없으면 "건너뜀" |
 | `clusters.check_cron_expr` / `check_cron_enabled` / `check_last_run_at` | — | core_bundle 행의 cron / on-off 스위치(꺼도 cron 값은 보존) / 디스패처 anchor |
 | `app_settings` key `check_matrix.settings` | — | 이력 보관 일수 (`retention_days`) |
 

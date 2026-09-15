@@ -81,3 +81,25 @@ class PlaybookRunResponse(BaseModel):
     message: str
     stats: Optional[dict[str, Any]] = None
     duration_ms: int = 0
+
+
+class PlaybookRunHistoryEntry(BaseModel):
+    """D-066 — ``playbook_runs`` 이력 1건(``Playbook.last_result`` 와 달리 append-only)."""
+    id: UUID
+    playbook_id: UUID
+    status: str
+    trigger: str
+    triggered_by_username: Optional[str] = None
+    message: Optional[str] = None
+    stats: Optional[dict[str, Any]] = None
+    raw_output: Optional[str] = None
+    duration_ms: int = 0
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PlaybookRunHistoryListResponse(BaseModel):
+    data: list[PlaybookRunHistoryEntry]

@@ -1,16 +1,18 @@
 """CheckMatrixService — 점검 매트릭스(행 × 열) 그리드 빌드, 셀 이력, 기본 항목 시드,
 cron 디스패치 실행, 이력 리텐션 정리.
 
-행(CheckMatrixItem)은 3가지 실행 소스를 가진다:
+행(CheckMatrixItem)은 6가지 실행 소스를 가진다:
   - core_bundle : DailyChecker.run_daily_check() 원자 실행 결과 투영. cron 은
                   Cluster.check_cron_expr (Cluster.status authority 보존을 위해 항목별이 아님).
   - deep_check  : registered_checks.REGISTRY 의 check_type 을 DeepCheckService 로 실행.
   - addon       : Addon.type 매칭 인스턴스를 HealthChecker 로 실행.
+  - batch_job   : BatchJob.name 매칭 인스턴스를 batch_job_service 로 실행(SSH bash/python — D-066).
+  - playbook    : Playbook.name 매칭 인스턴스를 playbook_service 로 실행(Ansible — D-066).
   - manual      : 자동 실행 없음 — record_manual_entry() 로만 값이 채워진다.
 
-deep_check/addon 행의 source_ref 는 "논리 키"(check_type / addon.type 문자열)이며, 클러스터별
-실제 인스턴스(DeepCheckDefinition/Addon)는 실행 시점에 이 키로 해석한다(OpsCheckService 의
-``f"type:{check_type}"`` fallback 패턴과 동일 사고).
+deep_check/addon/batch_job/playbook 행의 source_ref 는 전부 "논리 키"(check_type /
+addon.type / BatchJob.name / Playbook.name 문자열)이며, 클러스터별 실제 인스턴스는 실행
+시점에 이 키로 해석한다(OpsCheckService 의 ``f"type:{check_type}"`` fallback 패턴과 동일 사고).
 """
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import (
     Addon,
+    BatchJob,
     CheckMatrixItem,
     CheckMatrixResult,
     CheckMatrixResultLog,
@@ -37,6 +40,7 @@ from app.models import (
     CheckMatrixTrigger,
     Cluster,
     DeepCheckDefinition,
+    Playbook,
     StatusEnum,
 )
 
@@ -78,6 +82,13 @@ _ADDON_LABELS: dict[str, str] = {
     "jenkins": "Jenkins",
     "argocd": "ArgoCD",
     "keycloak": "Keycloak",
+}
+
+# BatchJobRun.status(ok/error/timeout/auth_error/connect_error/cancelled) → StatusEnum.
+# cancelled 는 판정 없이 중단된 것이라 "위험"이 아니라 대기(추이 차트를 오염시키지 않기 위함).
+_BATCH_JOB_STATUS_MAP: dict[str, StatusEnum] = {
+    "ok": StatusEnum.healthy,
+    "cancelled": StatusEnum.pending,
 }
 
 # 등록 마법사 카탈로그(list_catalog)에서만 쓰는 한 줄 설명 — addon 자체엔 description 컬럼이 없다.
@@ -137,11 +148,11 @@ def validate_cron_min_interval(cron_expr: Optional[str]) -> None:
 # ──────────────────────────────────────────────────────────────
 # 그리드 / 이력
 # ──────────────────────────────────────────────────────────────
-def _resolve_exec_tech(item: CheckMatrixItem) -> Optional[str]:
+def _resolve_exec_tech(db: Session, item: CheckMatrixItem) -> Optional[str]:
     """행이 실제로 어떤 기술로 실행되는지 — UI 배지(ExecTechBadge)용.
 
     "Deep Check/Addon" 같은 내부 소스 구현 용어 대신 사용자가 알아보는 실행 기술
-    (k8s_api/kubectl/http/promql/snapshot/ssh_bash/manual) 을 노출한다.
+    (k8s_api/kubectl/http/promql/snapshot/ssh_bash/ssh_python/ansible/manual) 을 노출한다.
     """
     if item.source_type == CheckMatrixSourceType.core_bundle:
         return "k8s_api"
@@ -154,10 +165,37 @@ def _resolve_exec_tech(item: CheckMatrixItem) -> Optional[str]:
     if item.source_type == CheckMatrixSourceType.addon:
         from app.services.checkers import EXEC_TECH
         return EXEC_TECH.get(item.source_ref or "")
+    if item.source_type == CheckMatrixSourceType.batch_job:
+        return _batch_job_exec_tech(db, item.source_ref or "")
+    if item.source_type == CheckMatrixSourceType.playbook:
+        return "ansible"
     return None
 
 
-def _item_to_dict(item: CheckMatrixItem) -> dict[str, Any]:
+def _batch_job_exec_tech(db: Session, name: str) -> str:
+    """이름이 같은 BatchJob 아무 1건으로 실행 기술을 추정 — 클러스터마다 스크립트 종류가
+    갈릴 수 있으므로 "대표값"이다(정확한 값은 셀 런북에서 클러스터별로 다시 해석한다)."""
+    job = db.query(BatchJob).filter(BatchJob.name == name).first()
+    if job is None:
+        return "ssh_bash"
+    try:
+        from app.services.batch_jobs import get_executor
+        executor = get_executor(job.job_type)
+        if executor is not None and not executor.requires_ssh:
+            return "k8s_api"
+    except Exception:  # noqa: BLE001
+        pass
+    if job.execution_mode == "script" and job.script_id:
+        from app.models.executable_script import ExecutableScript
+        script = db.query(ExecutableScript).filter(ExecutableScript.id == job.script_id).first()
+        if script is not None and script.kind == "python":
+            return "ssh_python"
+        if script is not None and script.kind == "ansible_playbook":
+            return "ansible"
+    return "ssh_bash"
+
+
+def _item_to_dict(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
     return {
         "id": str(item.id),
         "name": item.name,
@@ -166,7 +204,7 @@ def _item_to_dict(item: CheckMatrixItem) -> dict[str, Any]:
         "source_type": item.source_type.value,
         "source_ref": item.source_ref,
         "category": item.category,
-        "exec_tech": _resolve_exec_tech(item),
+        "exec_tech": _resolve_exec_tech(db, item),
         "color": item.color,
         "is_system": item.is_system,
         "enabled": item.enabled,
@@ -216,7 +254,7 @@ def build_grid(db: Session) -> dict[str, Any]:
         cells[str(item.id)] = row
 
     return {
-        "items": [_item_to_dict(i) for i in items],
+        "items": [_item_to_dict(db, i) for i in items],
         "clusters": [
             {
                 "id": str(c.id), "name": c.name, "check_cron_expr": c.check_cron_expr,
@@ -374,6 +412,26 @@ def _resolve_addon(db: Session, addon_type: str, cluster_id) -> Optional[Addon]:
     )
 
 
+def _resolve_batch_job(db: Session, name: str, cluster_id) -> Optional[BatchJob]:
+    """D-066 — source_ref 는 BatchJob.name(논리 키), addon.type 과 동일 패턴으로
+    이 클러스터에 같은 이름의 잡이 있는지 해석한다. 여러 클러스터에 같은 이름의 잡을
+    등록해 두면(관리서버/운영 표준화) 한 행이 여러 열에서 각자 실행된다."""
+    return (
+        db.query(BatchJob)
+        .filter(BatchJob.name == name, BatchJob.cluster_id == cluster_id)
+        .first()
+    )
+
+
+def _resolve_playbook(db: Session, name: str, cluster_id) -> Optional[Playbook]:
+    """D-066 — source_ref 는 Playbook.name(논리 키). 위 _resolve_batch_job 과 동일 패턴."""
+    return (
+        db.query(Playbook)
+        .filter(Playbook.name == name, Playbook.cluster_id == cluster_id)
+        .first()
+    )
+
+
 # ──────────────────────────────────────────────────────────────
 # 등록 마법사 — 실행 기술별 카탈로그 / 저장 전 테스트 / 신규 deep_check 정의 자동 생성
 # ──────────────────────────────────────────────────────────────
@@ -381,8 +439,8 @@ def list_catalog(db: Session) -> dict[str, Any]:
     """등록 마법사용 카탈로그 — "실행 기술 선택 → 그 기술의 점검 종류 목록"을 API 하나로.
 
     프론트가 exec_tech 별 종류를 하드코딩(예: 예전 ADDON_TYPE_OPTIONS)하지 않도록,
-    deep_check(REGISTRY)·addon(CHECKER_REGISTRY)·manual 을 한 목록으로 합쳐 돌려준다.
-    core_bundle 은 시스템 전용이라 제외한다.
+    deep_check(REGISTRY)·addon(CHECKER_REGISTRY)·batch_job(BatchJob 행)·playbook(Playbook 행)·
+    manual 을 한 목록으로 합쳐 돌려준다. core_bundle 은 시스템 전용이라 제외한다.
     """
     from app.services.checkers import CHECKER_REGISTRY, EXEC_TECH
     from app.services.registered_checks.registry import list_check_types
@@ -411,6 +469,51 @@ def list_catalog(db: Session) -> dict[str, Any]:
             "description": _ADDON_DESCRIPTIONS.get(addon_type, ""),
             "category": _ADDON_CATEGORIES.get(addon_type),
             "exec_tech": EXEC_TECH.get(addon_type),
+            "threshold_fields": [],
+            "param_fields": [],
+            "default_thresholds": {},
+            "default_params": {},
+            "seed_default": True,
+        })
+
+    # D-066 — BatchJob(SSH bash/python)/Playbook(Ansible) 은 deep_check/addon 처럼 "타입
+    # 레지스트리"가 없다(이미 클러스터별로 존재하는 구체적인 잡/플레이북 행). 그래서 카탈로그는
+    # 실제 등록된 행에서 파생한다 — 여러 클러스터에 같은 이름으로 등록돼 있으면 이름 1개당
+    # 카탈로그 항목 1개(문서상 "논리 키"), 실제 실행 대상은 셀 실행 시점에 이름×클러스터로
+    # 다시 해석된다(_resolve_batch_job/_resolve_playbook, addon.type 과 동일 사고).
+    batch_job_names: dict[str, str] = {}
+    for name, description in (
+        db.query(BatchJob.name, BatchJob.description).order_by(BatchJob.name.asc())
+    ):
+        batch_job_names.setdefault(name, description or "")
+    for name, description in batch_job_names.items():
+        items.append({
+            "source_type": "batch_job",
+            "source_ref": name,
+            "display_name": name,
+            "description": description or "등록된 배치잡(SSH bash/python) — 클러스터별 실제 잡 설정은 /batch-jobs 화면에서 관리합니다.",
+            "category": None,
+            "exec_tech": _batch_job_exec_tech(db, name),
+            "threshold_fields": [],
+            "param_fields": [],
+            "default_thresholds": {},
+            "default_params": {},
+            "seed_default": True,
+        })
+
+    playbook_names: dict[str, str] = {}
+    for name, description in (
+        db.query(Playbook.name, Playbook.description).order_by(Playbook.name.asc())
+    ):
+        playbook_names.setdefault(name, description or "")
+    for name, description in playbook_names.items():
+        items.append({
+            "source_type": "playbook",
+            "source_ref": name,
+            "display_name": name,
+            "description": description or "등록된 플레이북(Ansible) — 클러스터별 실제 플레이북 설정은 /playbooks 화면에서 관리합니다.",
+            "category": None,
+            "exec_tech": "ansible",
             "threshold_fields": [],
             "param_fields": [],
             "default_thresholds": {},
@@ -472,6 +575,21 @@ def preview_item(
             "message": result.message,
             "details": result.details,
             "duration_ms": result.response_time,
+        }
+
+    if source_type in (CheckMatrixSourceType.batch_job, CheckMatrixSourceType.playbook):
+        # SSH bash/python·Ansible 은 deep_check/addon 과 달리 부작용이 있을 수 있는 실제
+        # 운영 스크립트다(읽기 전용 점검이 아님) — "테스트" 단계에서 실제로 돌리면 등록
+        # 마법사를 여는 것만으로 운영 변경이 나갈 위험이 있어, 여기서는 미리 실행하지 않는다.
+        label = "배치잡" if source_type == CheckMatrixSourceType.batch_job else "플레이북"
+        return {
+            "status": "healthy",
+            "message": (
+                f"{label}은 안전을 위해 등록 전 미리보기에서 실행하지 않습니다 — "
+                "이미 존재하는 항목을 매트릭스에 연결할 뿐이니 '적용' 후 셀에서 실행해 확인하세요."
+            ),
+            "details": None,
+            "duration_ms": 0,
         }
 
     raise ValueError("manual/core_bundle 항목은 미리 실행할 수 없습니다.")
@@ -752,6 +870,93 @@ def _execute_into_run(
             status=result.status, value=result.response_time,
             message=result.message or "",
             details={**base_details, **(result.details or {})},
+        )
+        db.commit()
+        return
+
+    if item.source_type == CheckMatrixSourceType.batch_job:
+        job = _resolve_batch_job(db, item.source_ref, cluster.id)
+        if job is None:
+            _finish_run(
+                run, CheckMatrixRunState.skipped,
+                message=runbook.get("blocked_reason") or f"`{item.source_ref}` 배치잡이 없습니다.",
+                details=base_details,
+            )
+            db.commit()
+            return
+        if not job.enabled:
+            _finish_run(
+                run, CheckMatrixRunState.skipped,
+                message=f"배치잡 «{job.name}» 이 비활성화(enabled=false)되어 있습니다 — /batch-jobs 화면에서 켜야 자동/수동 실행이 됩니다.",
+                details=base_details,
+            )
+            db.commit()
+            return
+        import asyncio
+        from app.services import batch_job_service
+
+        # cron 자동 실행은 scheduled 자격증명(job.encrypted_password/encrypted_private_key)
+        # 으로만 동작해야 한다는 원칙(UI-First §3)을 매트릭스 실행도 그대로 따른다 —
+        # host/password/private_key 를 넘기지 않으면 execute_job() 이 job 에 저장된
+        # 스케줄용 자격증명으로 자동 폴백한다(없으면 그 사유가 실행 결과에 그대로 남는다).
+        bj_trigger = "schedule" if run.trigger == CheckMatrixTrigger.cron else "manual"
+        try:
+            _job_run, exec_result = asyncio.run(batch_job_service.execute_job(
+                db, job, trigger=bj_trigger, triggered_by_username=run.triggered_by,
+            ))
+        except Exception as e:  # noqa: BLE001
+            _finish_run(run, CheckMatrixRunState.failed, error=str(e)[:1000], details=base_details)
+            db.commit()
+            return
+        status = _BATCH_JOB_STATUS_MAP.get(exec_result.status, StatusEnum.critical)
+        message = (
+            exec_result.error
+            or f"배치잡 «{job.name}» 실행 결과: {exec_result.status}"
+            + (f" (exit={exec_result.exit_code})" if exec_result.exit_code is not None else "")
+        )
+        details = {
+            **base_details,
+            "_steps": exec_result.steps,
+            "_commands": exec_result.commands,
+            "batch_job_run_id": str(_job_run.id),
+            "executed_command": exec_result.executed_command,
+            "exit_code": exec_result.exit_code,
+        }
+        _upsert_result(db, item.id, cluster.id, status, None, message, details)
+        _finish_run(run, CheckMatrixRunState.success, status=status, value=None, message=message, details=details)
+        db.commit()
+        return
+
+    if item.source_type == CheckMatrixSourceType.playbook:
+        playbook = _resolve_playbook(db, item.source_ref, cluster.id)
+        if playbook is None:
+            _finish_run(
+                run, CheckMatrixRunState.skipped,
+                message=runbook.get("blocked_reason") or f"`{item.source_ref}` 플레이북이 없습니다.",
+                details=base_details,
+            )
+            db.commit()
+            return
+        from app.services import playbook_service
+
+        pb_trigger = "schedule" if run.trigger == CheckMatrixTrigger.cron else "check_matrix"
+        try:
+            _pb_run, pb_result = playbook_service.execute_playbook_run(
+                db, playbook, trigger=pb_trigger, triggered_by_username=run.triggered_by,
+            )
+        except Exception as e:  # noqa: BLE001
+            _finish_run(run, CheckMatrixRunState.failed, error=str(e)[:1000], details=base_details)
+            db.commit()
+            return
+        try:
+            status = StatusEnum(pb_result.status)
+        except ValueError:
+            status = StatusEnum.critical
+        details = {**base_details, "stats": pb_result.stats, "playbook_run_id": str(_pb_run.id)}
+        _upsert_result(db, item.id, cluster.id, status, None, pb_result.message or "", details)
+        _finish_run(
+            run, CheckMatrixRunState.success,
+            status=status, value=None, message=pb_result.message or "", details=details,
         )
         db.commit()
         return

@@ -362,7 +362,8 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 `clusters`(UUID PK, `status` = healthy/warning/critical) → `daily_check_logs`(점검 1회 = 1행,
 서브 결과는 JSONB) · `check_schedules`(구 아침/점심/저녁 — 현재 스케줄링은 check-matrix cron 이
 담당) · `addons`(클러스터별 애드온 상태, 환경차는 `config` JSONB) · `metric_cards`(PromQL 카드) ·
-`playbooks`(Ansible 실행 정의 + `last_result` JSONB).
+`playbooks`(Ansible 실행 정의 + `last_result` JSONB 는 최신 스냅샷, 전체 이력은
+`playbook_runs`(D-066, `BatchJobRun` 과 동일 철학의 append-only 실행 로그)).
 
 ### Additional Model Families
 
