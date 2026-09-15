@@ -331,7 +331,7 @@ export function TodoTodayPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <CalendarCheck2 className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold">{myName ? `${myName}님의 Work To Do` : 'Work To Do'}</h1>
+            <h1 className="text-xl font-bold">{myName ? `${myName}님의 오늘 할 일` : '오늘 할 일'}</h1>
           </div>
           <p className="text-sm text-muted-foreground">내 일정·할일만 모아 봅니다 (다른 사람 일정은 표시되지 않습니다).</p>
         </div>

@@ -270,6 +270,47 @@ def build_grid(db: Session) -> dict[str, Any]:
     }
 
 
+def item_detail(db: Session, item_id) -> Optional[dict[str, Any]]:
+    """항목 상세(``/checks/:itemId``, R-4 6차 라운드 4단계) — 이 항목 하나의 클러스터별 cron/최근
+    결과를 모은다. ``build_grid()`` 와 같은 셀 계산 규칙을 항목 하나로 좁힌 lean 버전."""
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        return None
+
+    clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
+    result_by_cluster = {
+        str(r.cluster_id): r
+        for r in db.query(CheckMatrixResult).filter(CheckMatrixResult.item_id == item_id).all()
+    }
+    schedule_by_cluster = {
+        str(s.cluster_id): s
+        for s in db.query(CheckMatrixSchedule).filter(CheckMatrixSchedule.item_id == item_id).all()
+    }
+
+    cells = []
+    for cluster in clusters:
+        r = result_by_cluster.get(str(cluster.id))
+        if item.source_type == CheckMatrixSourceType.core_bundle:
+            cron_expr = cluster.check_cron_expr
+            schedule_enabled = bool(cron_expr) and cluster.check_cron_enabled
+        else:
+            sch = schedule_by_cluster.get(str(cluster.id))
+            cron_expr = sch.cron_expr if sch else None
+            schedule_enabled = bool(sch and sch.enabled and sch.cron_expr)
+        cells.append({
+            "cluster_id": str(cluster.id),
+            "cluster_name": cluster.name,
+            "status": r.status.value if r else None,
+            "value": r.value if r else None,
+            "message": r.message if r else None,
+            "checked_at": r.checked_at.isoformat() if r and r.checked_at else None,
+            "cron_expr": cron_expr,
+            "schedule_enabled": schedule_enabled,
+        })
+
+    return {"item": _item_to_dict(db, item), "cells": cells}
+
+
 def get_cell_history(db: Session, item_id, cluster_id, days: int = 30) -> dict[str, Any]:
     cutoff = datetime.utcnow() - timedelta(days=days)
     logs = (

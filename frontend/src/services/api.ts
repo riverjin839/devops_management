@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -2120,12 +2120,16 @@ export const deepCheckApi = {
 
 export const deepCheckDefinitionsApi = {
   listCheckTypes: () => api.get<DeepCheckTypeSchema[]>('/deep-check/check-types'),
-  list: (params?: { clusterId?: string; includeGlobal?: boolean; withStatus?: boolean }) => {
+  list: (params?: {
+    clusterId?: string; includeGlobal?: boolean; withStatus?: boolean; checkType?: string;
+  }) => {
     // Manual snake_case for query params so axios doesn't double-convert.
     const q: Record<string, string | boolean> = {};
     if (params?.clusterId) q.cluster_id = params.clusterId;
     if (params?.includeGlobal !== undefined) q.include_global = params.includeGlobal;
     if (params?.withStatus) q.with_status = true;
+    // 항목 상세(/checks/:itemId) — cluster_id 없이 이 check_type 의 글로벌+전 클러스터 정의를 조회.
+    if (params?.checkType) q.check_type = params.checkType;
     return api.get<DeepCheckDefinition[]>('/deep-check/definitions', { params: q });
   },
   get: (id: string) => api.get<DeepCheckDefinition>(`/deep-check/definitions/${id}`),
@@ -2168,6 +2172,9 @@ export const checkMatrixApi = {
   previewItem: (data: CheckMatrixItemPreviewInput) =>
     api.post<CheckMatrixItemPreviewResult>('/check-matrix/items/preview', data),
   getGrid: () => api.get<CheckMatrixGrid>('/check-matrix/grid'),
+  // 항목 상세(/checks/:itemId) — 이 항목의 클러스터별 cron/최근 결과
+  getItemDetail: (itemId: string) =>
+    api.get<CheckMatrixItemDetail>(`/check-matrix/items/${itemId}/detail`),
   getCellHistory: (itemId: string, clusterId: string, days = 30) =>
     api.get<CheckMatrixHistory>(`/check-matrix/cell/${itemId}/${clusterId}/history`, { params: { days } }),
   postManualEntry: (

@@ -12,6 +12,7 @@ import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useIslands } from '@/hooks/useIslands';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
+import { THEME_SWATCH } from '@/lib/themeSwatches';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useIslandStore } from '@/stores/islandStore';
@@ -29,8 +30,9 @@ import { GROUPS, type GroupId } from './navConfig';
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
 // D-077 — 테마는 레일 버튼 순환 클릭(최대 10클릭)이 아니라 사용자 메뉴 안의 목록에서 1클릭으로
-// 고른다. 기본 4종(default/light/dark/system)을 먼저, 노벨티 테마 7종은 그 아래 구분해서 둔다.
-// (D-072 스와치 미리보기는 후속 — 여기서는 현재 표시 + 1클릭 선택까지.)
+// 고른다. 기본 4종(default/light/dark/system)을 먼저, 컬러 테마 7종은 그 아래 구분해서 둔다.
+// D-072 — 컬러 테마 7종은 아이콘 대신 대표 색 스와치로 미리보기(아래 THEME_SWATCH_ICON).
+// 전체 10종을 카드로 비교하는 "테마 갤러리"는 Settings ▸ 화면 UI 설정 탭에 별도로 있다.
 const THEME_BASIC: Theme[] = ['default', 'light', 'dark', 'system'];
 const THEME_EXTRA: Theme[] = [
   'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
@@ -49,6 +51,24 @@ const THEME_ICON: Record<Theme, ComponentType<{ className?: string }>> = {
   dark: Moon,
   system: Monitor,
 };
+// D-072 — 컬러 테마 7종은 아이콘 대신 실제 대표 색 스와치로 미리보기(index.css 토큰 스냅샷,
+// lib/themeSwatches.ts). 팩토리로 한 번만 만들어 매 렌더마다 컴포넌트 정체성이 바뀌지 않게 한다.
+function makeThemeSwatchIcon(theme: Theme): ComponentType<{ className?: string }> {
+  const hsl = THEME_SWATCH[theme]?.primary;
+  return function ThemeSwatchIcon({ className }: { className?: string }) {
+    return (
+      <span
+        className={`${className ?? ''} inline-block rounded-full ring-1 ring-inset ring-border/60`}
+        style={hsl ? { backgroundColor: `hsl(${hsl})` } : undefined}
+        aria-hidden="true"
+      />
+    );
+  };
+}
+const THEME_SWATCH_ICON: Partial<Record<Theme, ComponentType<{ className?: string }>>> = Object.fromEntries(
+  THEME_EXTRA.map((t) => [t, makeThemeSwatchIcon(t)]),
+);
+
 const THEME_LABEL: Record<Theme, string> = {
   default: '기본',
   comfort: '컴포트',
@@ -777,7 +797,7 @@ export function Sidebar() {
               ))}
               <p className="px-2.5 pt-1.5 pb-0.5 text-[10px] text-muted-foreground">컬러 테마</p>
               {THEME_EXTRA.map((t) => (
-                <FlyoutAction key={t} label={THEME_LABEL[t]} Icon={THEME_ICON[t]} checked={theme === t} onSelect={() => setTheme(t)} />
+                <FlyoutAction key={t} label={THEME_LABEL[t]} Icon={THEME_SWATCH_ICON[t] ?? THEME_ICON[t]} checked={theme === t} onSelect={() => setTheme(t)} />
               ))}
               <div className="mx-2 my-1 border-t border-border" />
               <FlyoutAction

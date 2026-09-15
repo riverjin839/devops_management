@@ -242,7 +242,7 @@ export function PlaybooksPage() {
           <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
               <BookOpen className="w-6 h-6 text-primary flex-shrink-0" />
-              <h1 className="text-xl font-bold">Ansible Playbooks</h1>
+              <h1 className="text-xl font-bold">Ansible 플레이북</h1>
               {statusCounts.total > 0 && (
                 <div className="flex items-center gap-2 ml-2">
                   <span className="text-sm px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">

@@ -80,7 +80,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고).
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. KPI 스트립 아래 라벨 있는 **세그먼트 탭**(`내 업무`/`플랫폼 현황`)으로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다.
 - **UI 구성**:
-  - KPI 스트립(탭과 무관하게 항상 노출 — 업무 탭에서도 플랫폼 신호가, 플랫폼 탭에서도 업무 신호가 보인다): **Your Island 진입 필**(`IslandPill` — 마지막에 보던 아일랜드로 이동, 없으면 "만들기"), 이어서 KPI 필 5종(`내 할일`→`/todo-today`, `미해결 이슈`→`/tasks-mgmt`, `위험 클러스터`→`/cluster-overview`, **`점검 실패`**→클릭 시 라우트 이동 없이 `플랫폼 현황` 탭으로 전환(`useCheckMatrixFailureCount()` — 점검 매트릭스 그리드에서 `critical` 상태 셀 개수만 파생, `useCheckMatrixGrid()` 와 쿼리키 공유라 추가 네트워크 요청 없음), `다음 일정`→`/tasks-mgmt`). `플랫폼 현황` 탭 라벨에도 위험 클러스터+점검 실패 합계 배지가 붙고 0이면 숨는다.
+  - KPI 스트립(탭과 무관하게 항상 노출 — 업무 탭에서도 플랫폼 신호가, 플랫폼 탭에서도 업무 신호가 보인다): **나의 아일랜드 진입 필**(`IslandPill` — 마지막에 보던 아일랜드로 이동, 없으면 "만들기"), 이어서 KPI 필 5종(`내 할일`→`/todo-today`, `미해결 이슈`→`/tasks-mgmt`, `위험 클러스터`→`/cluster-overview`, **`점검 실패`**→클릭 시 라우트 이동 없이 `플랫폼 현황` 탭으로 전환(`useCheckMatrixFailureCount()` — 점검 매트릭스 그리드에서 `critical` 상태 셀 개수만 파생, `useCheckMatrixGrid()` 와 쿼리키 공유라 추가 네트워크 요청 없음), `다음 일정`→해당 업무 상세(`/tasks-mgmt/:id`, 없으면 목록)). **[2026-09-15, D-078]** 다른 4개 필은 전부 라우트 이동(`Link`)인데 `점검 실패`만 같은 화면 안에서 탭만 바꿔 동작이 3종으로 갈리던 것 — `onSelect` 형 필에 `ChevronDown` 을 붙여 "여기서 바뀐다"는 시각 표식을 추가했다(`title`도 "이 화면 안에서 탭 전환"으로 구분). `다음 일정`도 예전엔 일정 항목과 무관하게 `/tasks-mgmt` 목록으로만 가서 다시 찾아야 했는데, 지금은 그 업무의 상세(`/tasks-mgmt/:id`)로 바로 간다. `플랫폼 현황` 탭 라벨에도 위험 클러스터+점검 실패 합계 배지가 붙고 0이면 숨는다.
   - 세그먼트 탭(`role="tablist"`, 좌우 화살표 키 이동): `[업무 현황]`(`ListTodo` 아이콘) / `[플랫폼 현황]`(`ServerCog` 아이콘). 선택은 `useHomeStore().homeTab` 에 저장되고 localStorage(`pep:homeTab`)에 영속된다.
   - **내 업무 탭**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다. **업무 등록 진입점은 `DayScheduleBoard` 헤더의 "등록"(`QuickAddTaskModal`) 하나뿐** — 예전엔 `WeeklyStatusTimeline`(주간 탭)에도 별도 "업무 등록"(`WorkItemFormModal`)이 동시에 떠 있어 같은 화면에 등록 버튼이 2개였다가 통합됨. `QuickAddTaskModal`은 PEP 저장 성공 직후 Jira 연동이 켜져 있으면(`useJiraConfig().enabled`) 곧바로 `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성, 체크박스+"생성"/"나중에")로 전환된다 — "나중에"면 PEP 에만 저장. `WorkCalendar`(월간 탭)의 날짜별 "+" 버튼도 같은 `QuickAddTaskModal`을 재사용하므로 동일한 흐름을 탄다.
   - **권한 UX(D-082)**: 플랫폼 현황의 실행 ▶(클러스터/항목/셀)·항목 추가·수정·삭제·순서 변경·매트릭스 설정·cron 저장·수동 입력 저장·설정 편집은 `hooks/useCanOperate()` 로 viewer 에게 `disabled` + "operator 이상 권한이 필요합니다 (현재: viewer)" 사유(title/aria-label)를 붙인다 — 숨기지 않는다.
@@ -170,7 +170,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 
 ### 시스템 설정 (`/settings`, admin)
 
-- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `ServiceNowIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `SchemaHealthPanel.tsx`, `LlmSettingsTab.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
+- **파일**: `frontend/src/pages/SettingsPage.tsx` (+ `components/settings/BackupRestorePanel.tsx`, `FeatureAccessManager.tsx`, `JiraIntegrationPanel.tsx`, `ServiceNowIntegrationPanel.tsx`, `OperationLevelsManager.tsx`, `ServiceCategoryManager.tsx`, `LakeServiceTypeManager.tsx`, `NavMenuManager.tsx`, `PageStyleManager.tsx`, `ThemeGallery.tsx`, `TerminalAppearanceSettings.tsx`, `AssigneeManager.tsx`, `AuditLogManager.tsx`, `SchemaHealthPanel.tsx`, `LlmSettingsTab.tsx`, `components/dashboard`의 `AddClusterModal`/`KubeconfigEditModal`, `components/common`의 `ClusterIconPicker`)
 - **목적 / UX**: 클러스터·시스템 담당자·운영레벨·관리 서비스·화면 UI·접근제어·Jira 연동·ServiceNow 연동·Debug·백업/복구·감사로그·스키마 점검까지 플랫폼 전역 설정을 14개 탭으로 모아둔 관리자 콘솔 (AI/LLM 탭 포함). 구 사이드바 독립 "사용자 관리"(`/settings/users`, 로그인 계정 CRUD) 페이지와 "담당자 명부"/"로그인 계정" 서브탭 2개로 나뉘어 있던 구성은 모두 **시스템 담당자 탭 하나(서브탭 없음)로 통합**됐다 — `users` 테이블 자체가 담당자 명부 겸 로그인 계정이라(`backend/app/models/user.py` docstring) 두 화면으로 나눌 이유가 없어졌다. 구 라우트 `/settings/users` 는 `/settings?tab=assignee` 로 리다이렉트된다(`App.tsx`).
 - **UI 구성**:
   - 탭 바(`TabId`): `클러스터`/`관리서버`/`시스템 담당자`/`운영레벨`/`관리 서비스`/`화면 UI 설정`/`접근 제어`/`연동 (Jira)`/`연동 (ServiceNow)`/`AI / LLM`/`Debug`/`백업 / 복구`/`감사 로그`/`스키마 점검`, 각 탭 배지에 카운트 표시. **관리 서비스** 탭은 내부 서브탭 2개(`PEP 서비스`/`APP 서비스` — 도메인 구분)로 구성되고, 각 서브탭 본문은 `ServiceCategoryManager`(해당 도메인 카테고리) + `LakeServiceTypeManager`(해당 도메인 서비스 타입) 두 섹션을 세로로 렌더한다. 구 최상위 "서비스 카테고리" 탭과 구 "서비스 타입"/"서비스 카탈로그" 서브탭이 전부 여기로 통합됐다 — 레거시 `?tab=service`·`?tab=service-categories` 딥링크는 `mgmt-service` 로 리다이렉트.
@@ -178,7 +178,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
   - `시스템 담당자` 탭(`AssigneeManager`, 서브탭 없음): 명부 필드(사번/이름/이메일/IP/좌석/정·부담당역할, 열 리사이즈 가능, CSV/마크다운 내보내기, 사번 등록 시 로그인 계정 자동 생성·해제)와 계정 필드(로그인 아이디=사번, 역할 select, 비밀번호 재설정, 삭제)가 한 표에 함께 있다. 사번 없는 순수 명부 행("로그인 없음" 표시)도 같은 표에서 관리. 명부와 무관한 로그인 전용 계정(예: 2번째 admin)은 "관리자 계정 추가" 버튼(별도 모달)으로 만든다. 본인 행은 역할 변경·삭제 버튼이 비활성화된다(자기 강등·자기 삭제 이중 차단).
-  - `화면 UI 설정` 탭: 홈 화면 설정(좌측 상단 홈 아이콘 picker, **기본 홈 탭**(업무 현황/플랫폼 현황 — `home_prefs.defaultHomeTab`, 로그인 기기와 무관하게 서버에 저장), 스케줄 배경색 흰색/크림), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
+  - `화면 UI 설정` 탭: 홈 화면 설정(좌측 상단 홈 아이콘 picker, **기본 홈 탭**(업무 현황/플랫폼 현황 — `home_prefs.defaultHomeTab`, 로그인 기기와 무관하게 서버에 저장), 스케줄 배경색 흰색/크림), **테마 갤러리**(`ThemeGallery`, D-072 — 10종을 카드로 나열해 미리보기(배경/보조/강조 색 미니 칩) + 클릭 즉시 적용, 사이드바 사용자 메뉴의 테마 목록과 같은 `useThemeStore` 선택을 공유), `NavMenuManager`, `PageStyleManager`, `TerminalAppearanceSettings`.
   - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift / orphan_not_null_column — 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음이라 모든 저장이 실패하는 경우)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다.
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/시스템 담당자/Jira/백업/감사로그).
@@ -417,7 +417,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **목적 / UX**: 클러스터 하나를 골라 `deep_check`/`addon`/`batch_job(SSH)`/`playbook(Ansible)` 등 소스가 다른 점검 항목을 하나의 카탈로그 테이블에 모아 놓고, 카테고리(OS/K8s/Storage/Network/앱서비스)·이름 검색으로 필터링해 개별 실행 또는 체크박스 다중 선택 후 일괄 실행할 수 있게 한다. 실행 중 진행 상황을 실시간(폴링)으로 보여주고, 완료된 항목은 모달로 상세 로그(JSON)를 연다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + 단일 선택(`selectedId`/`onSelect`), `allowAll` 없음(반드시 특정 클러스터 URL로 리다이렉트).
-  - MacCard "점검 항목" — 카테고리 필터 pill 바 + 검색창 + 전체선택 체크박스 + 선택 실행 버튼 + 카탈로그 테이블(이름/분류/소스/상태/작업).
+  - MacCard "점검 항목" — 카테고리 필터 pill 바 + 검색창 + 전체선택 체크박스 + 선택 실행 버튼 + 카탈로그 테이블(이름/분류/실행기술(`ExecTechBadge`, D-062)/상태/작업).
   - MacCard "실행 진행" — 활성 run 이 있을 때만 표시, 항목별 상태(대기/실행중/완료/실패)와 총계(정상/경고/위험/실패) 라이브 업데이트.
   - 항목 상세 모달 — `LogViewer` 로 `details` JSON 렌더.
   - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 로의 바로가기 링크.
@@ -443,6 +443,11 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
       실행을 지원한다. 자격증명은 배치잡에 저장된 스케줄용 자격증명만 쓰며(무인 실행), 없으면
       그 사유가 결과 메시지에 남는다. `SOURCE_LABEL`/`OpsCheckSource` 는 이번 작업 전부터 이미
       4-way 로 준비돼 있었다(프론트가 백엔드보다 먼저 만들어져 있던 상태).
+    - **[2026-09-15, D-062 배지 통일]** "소스" 컬럼이 `SOURCE_LABEL`(점검/애드온/SSH/Ansible)
+      대신 매트릭스와 같은 `ExecTechBadge` 를 쓰도록 교체 — `OpsCheckService.build_catalog()` 가
+      항목마다 `exec_tech`(K8s API/kubectl/HTTP/PromQL/SSH bash/SSH python/Ansible 등)를 계산해
+      `CatalogItem.execTech` 로 내려준다. `SOURCE_LABEL` 자체는 exec_tech 를 못 구하는 예외
+      상황의 폴백으로만 남아 있다.
 
 ### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
 
@@ -461,6 +466,29 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
   - 우선순위 critical > warning > healthy, 단 핵심 번들이 미연결(pending)이면 다른 신호와 무관하게 전체가 pending(다른 신호는 "연결이 안 되니 의미 없음"으로 무시). 애드온의 개별 pending(연결 실패)은 warning 으로 승격되지만, 심층 점검의 개별 pending(미판정)은 원인 목록에서 제외된다(집계 노이즈 방지).
   - 점검 매트릭스 그리드(`GET /check-matrix/grid`)의 `clusters[].status` 도 같은 롤업 값을 읽는다 — 매트릭스 열 헤더 cron 배지(`ClusterCronBadge`)가 예전 `coreHealth`(core_bundle 셀 상태만) 대신 이 값으로 색을 정한다.
   - 대시보드(`/cluster-overview`)의 "Cluster Status" 카드에서 특정 클러스터를 선택하면 이 롤업 상태 + 대표 원인 1건 + "클러스터 상세로" 링크가 애드온 그리드 위에 한 줄로 뜬다.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### 항목 상세 (`/checks/:itemId`) — R-4 6차 라운드 4단계
+
+- **파일**: `frontend/src/pages/CheckItemDetailPage.tsx` (+ `components/daily-check/DeepCheckDefinitionForm`, `components/platform-status/{ExecTechBadge,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixHistoryPanel}`)
+- **목적 / UX**: 점검 매트릭스 행(`CheckMatrixItem`) 하나를 클릭하면 오는 상세 화면 — 그 항목의 **정의·테스트·적용·실행방식·로그·히스토리** 여섯 단계를 탭 하나에 모은다. 예전엔 정의 편집(`/daily-check/settings`), cron 설정(셀 상세/클러스터 열 배지), 실행 로그(수행 로그 카드)가 서로 다른 화면·모달에 흩어져 있어 "이 점검 하나"를 온전히 관리하려면 여러 화면을 오가야 했다(D-062·D-063·D-065). `ClusterSidebar` 미사용 — 이 항목은 여러 클러스터에 걸친 행이라 전역 라이브러리 화면과 같은 패턴(`/scripts`·`/commands`).
+- **UI 구성**:
+  - 헤더 — "대시보드"로 돌아가기, 항목명 + `ExecTechBadge` + 카테고리 칩 + 설명 + 소스 정보(`sourceType`/`sourceRef`).
+  - 탭 6개: **정의** / **테스트** / **적용** / **실행방식** / **로그** / **히스토리**.
+  - **정의** 탭 — `deep_check` 항목만: "기본값(모든 클러스터)" 카드(`DeepCheckDefinitionForm`, `hideScheduleCron` — cron 은 "적용" 탭이 단일 창구) + "클러스터별 오버라이드" 목록(클러스터마다 "글로벌 상속" 또는 "전용" 배지, 전용이면 편집/글로벌로 복귀, 상속이면 "전용으로 분리"). 그 외 소스 타입은 안내 카드만(addon → 실행방식 탭 설정 편집, batch_job/playbook → 해당 화면 링크, core_bundle/manual → 안내).
+  - **테스트** 탭 — 클러스터 선택 + "미리 실행"(`POST /check-matrix/items/preview`, 저장 없음) → 상태/소요시간/메시지 표시.
+  - **적용** 탭 — 전 클러스터 표(클러스터/최근 상태/cron 입력/활성화 체크박스/마지막 확인/저장+지금 실행 버튼) + 상단 "전체 실행". core_bundle 은 `Cluster.check_cron_expr`, 그 외는 `CheckMatrixSchedule` 에 저장 — 이전에 셀 상세·클러스터 열 배지 두 곳에 나뉘어 있던 cron 편집이 여기 한 표로 모였다(D-065).
+  - **실행방식** 탭 — 클러스터 선택 + `CheckMatrixRunbookPanel`(셀 상세 모달과 동일 컴포넌트 재사용 — 설정 편집 딥링크 포함).
+  - **로그** 탭 — `CheckMatrixRunList`(itemId 만 필터, 클러스터 무관 전체) + 선택 시 `CheckMatrixRunDetailView`.
+  - **히스토리** 탭 — 클러스터 선택 + `CheckMatrixHistoryPanel`(추이 차트 + 변경 이력 — 셀 상세 모달에서 이번에 추출해 공유하는 컴포넌트).
+- **Frontend**: `useCheckMatrixItemDetail(itemId)`(신규), `useClusters`, `useDeepCheckDefinitionsByType(checkType)`(신규 — `check_type` 필터로 글로벌+전 클러스터 정의 한 번에 조회), `useCreateDefinition`/`useUpdateDefinition`/`useDeleteDefinition`(기존 재사용), `usePreviewCheckMatrixItem`, `usePutSchedule`/`usePutClusterCron`/`useRunCheckMatrixCell`/`useRunCheckMatrixItem`, `useCheckMatrixRunbook`/`useCheckMatrixRuns`/`useCheckMatrixRun`. api.ts: `checkMatrixApi.getItemDetail`, `deepCheckDefinitionsApi.list({checkType})`.
+- **Backend**: `GET /api/v1/check-matrix/items/{item_id}/detail`(신규 — `check_matrix_service.item_detail()`, 클러스터별 cron/최근 결과), `GET /api/v1/deep-check/definitions?check_type=`(신규 필터 파라미터 — `cluster_id` 없이 이 check_type 의 글로벌+전 클러스터 정의를 한 번에). 나머지(정의 CRUD, preview, schedule/cluster-cron PUT, cell/item run, runbook, runs, cell history)는 기존 엔드포인트를 그대로 재사용 — 이 화면 전용의 새 쓰기 경로는 없다.
+- **핵심 기능**:
+  - 매트릭스 행 이름 클릭 → 이 화면으로 드릴다운(D-063, `PlatformStatusMatrix.tsx` 의 항목명이 이전엔 plain span 이었다).
+  - deep_check 정의의 클러스터별 오버라이드를 "분리/복귀"로 관리 — "전용으로 분리"는 글로벌 값을 복제해 새 클러스터 전용 정의를 만드는 기존 `DeepCheckSettings` 의 `duplicateToCluster` 와 동일한 copy-on-write 패턴, "글로벌로 복귀"는 그 전용 정의를 삭제해 다시 글로벌 상속으로 되돌린다.
+  - cron 편집 진입점을 "적용" 탭 하나로 통합(D-065) — 다만 저장소 자체는 그대로다(core_bundle=`Cluster.check_cron_expr`, 그 외=`CheckMatrixSchedule`). `DeepCheckDefinitionForm` 의 "스케줄 cron" 필드(정의별 단독 cron, 세 번째 저장소)는 이 화면에서 `hideScheduleCron` 로 숨겨 이중 편집을 막되, 기존에 설정된 값은 전송 바디에 그대로 포함돼 저장 시 사라지지 않는다 — `/daily-check/settings` 에는 이 필드가 그대로 남아 있다.
+  - "로그" 탭은 클러스터 필터 없이 이 항목의 전 클러스터 수행 이력을 한 목록에서 본다(`CheckMatrixRunList` 의 `showCell` 로 클러스터명 표시).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -488,10 +516,10 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 ### 일일 점검 리뷰 (`/daily-check/review`, `/daily-check/review/:clusterId`)
 
 - **파일**: `frontend/src/pages/DailyCheckReview.tsx` (+ `components/daily-check/{AiSummaryCard,TrendChart,DiffPanel,DeepCheckGrid,NotificationSettingsPanel,ResourceTrendChecklist}`)
-- **목적 / UX**: 클러스터별 daily check 회차(점검 회차 선택 드롭다운)를 고르면, 그 회차의 AI 요약/원격조치 제안, deep-check 항목별 결과 그리드, 이전 회차와의 diff, 최근 7일 트렌드 차트를 한 화면에서 확인한다. 상단 버튼으로 기본 헬스체크(Daily Check)와 등록된 deep-check 정의 실행(Deep Check)을 각각 트리거할 수 있다.
+- **목적 / UX**: 클러스터별 daily check 회차(점검 회차 선택 드롭다운)를 고르면, 그 회차의 AI 요약/원격조치 제안, deep-check 항목별 결과 그리드, 이전 회차와의 diff, 최근 7일 트렌드 차트를 한 화면에서 확인한다. 상단 버튼으로 기본 헬스체크와 등록된 심층 점검 정의 실행을 각각 트리거할 수 있다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + 단일 선택(`allowAll` 없음), URL 파라미터로 클러스터 지정, 없으면 첫 클러스터로 자동 리다이렉트.
-  - 헤더 — "Daily Check 실행"/"Deep Check 실행" 버튼, "체크 정의"(→`/daily-check/settings`) 링크.
+  - 헤더 — "기본 점검 실행"/"심층 점검 실행" 버튼(**[2026-09-15, D-062]** 이전엔 "Daily Check 실행"/"Deep Check 실행"으로 구현 용어가 그대로 버튼 문구였다), "체크 정의"(→`/daily-check/settings`) 링크.
   - MacCard "점검 회차 선택" — 최근 20개 로그 드롭다운(상태 이모지 마커 + 스케줄 타입 한글 라벨).
   - `ResourceTrendChecklist` — 리소스 추세 체크리스트(클러스터 단위, 별도 hook).
   - 로그 미선택 시 안내 카드, 선택 시 `AiSummaryCard` / `DeepCheckGrid` / `DiffPanel` / `TrendChart` / `NotificationSettingsPanel` 순서로 렌더.

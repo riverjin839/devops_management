@@ -190,7 +190,7 @@ export function BatchJobsPage() {
               <ListTree className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">Batch Jobs</h1>
+              <h1 className="text-xl font-bold leading-tight">배치잡</h1>
               <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
             </div>
           </div>

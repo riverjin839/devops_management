@@ -8,6 +8,7 @@ import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
 import { LogViewer } from '@/components/common/LogViewer';
 import { useToast, ConfirmDialog, useModalA11y } from '@/components/common';
 import { ExecutionStepsTimeline } from '@/components/daily-check/ExecutionStepsTimeline';
+import { ExecTechBadge } from '@/components/platform-status/ExecTechBadge';
 import { formatApiError, parseUTC } from '@/lib/utils';
 import {
   useOpsCheckCatalog, useStartOpsRun, useOpsRun, useOpsRunItems,
@@ -233,9 +234,13 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                     </td>
                     <td className="px-2 py-2 text-sm text-muted-foreground">{CATEGORY_LABEL[String(c.category)] ?? c.category}</td>
                     <td className="px-2 py-2">
-                      <span className="text-xs rounded-full border border-border px-2 py-0.5 text-muted-foreground">
-                        {SOURCE_LABEL[c.source] ?? c.source}
-                      </span>
+                      {c.execTech ? (
+                        <ExecTechBadge execTech={c.execTech} />
+                      ) : (
+                        <span className="text-xs rounded-full border border-border px-2 py-0.5 text-muted-foreground">
+                          {SOURCE_LABEL[c.source] ?? c.source}
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-2">
                       {live ? (
@@ -337,9 +342,13 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
           <ul className="mt-1 max-h-40 overflow-y-auto rounded-md border border-border bg-secondary/30 divide-y divide-border/50 text-sm">
             {confirmRun.map((c) => (
               <li key={itemKey(c)} className="flex items-center gap-2 px-2.5 py-1.5">
-                <span className="text-xs rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
-                  {SOURCE_LABEL[c.source] ?? c.source}
-                </span>
+                {c.execTech ? (
+                  <ExecTechBadge execTech={c.execTech} />
+                ) : (
+                  <span className="text-xs rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
+                    {SOURCE_LABEL[c.source] ?? c.source}
+                  </span>
+                )}
                 <span className="truncate">{c.name || c.checkType}</span>
               </li>
             ))}

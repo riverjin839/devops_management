@@ -222,6 +222,15 @@ def reorder_items(body: ReorderRequest, db: Session = Depends(get_db), _: User =
     return {"updated": len(body.item_ids)}
 
 
+@router.get("/items/{item_id}/detail")
+def get_item_detail(item_id: UUID, db: Session = Depends(get_db)):
+    """항목 상세(``/checks/:itemId``, R-4 6차 라운드 4단계) — 이 항목의 클러스터별 cron/최근 결과."""
+    out = svc.item_detail(db, item_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    return out
+
+
 class ItemPreviewIn(BaseModel):
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None

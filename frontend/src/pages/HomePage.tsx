@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
-  ListTodo, ServerCog, ShieldAlert, LayoutGrid, ListTree,
+  ListTodo, ServerCog, ShieldAlert, LayoutGrid, ListTree, ChevronDown,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
@@ -69,10 +69,14 @@ function KpiPill({ label, value, hint, Icon, accent, to, onSelect, isLoading, is
           {hint && !isLoading && <span className="text-muted-foreground">{hint}</span>}
         </>
       )}
+      {/* D-078 — 다른 필은 전부 다른 화면으로 이동(Link)하는데 이 필만 같은 화면 안에서
+          탭만 바꾼다(onSelect). 모양이 같아 학습 비용이 생기므로 "여기서 바뀐다"는
+          쉐브론으로 구분한다. */}
+      {onSelect && <ChevronDown className="w-3 h-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />}
     </div>
   );
   if (onSelect) {
-    return <button type="button" onClick={onSelect}>{body}</button>;
+    return <button type="button" onClick={onSelect} title={`${label} — 이 화면 안에서 탭 전환`}>{body}</button>;
   }
   return to ? <Link to={to}>{body}</Link> : body;
 }
@@ -94,7 +98,7 @@ function IslandPill() {
       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/5 border border-primary/30 hover:border-primary/60 transition-colors text-xs whitespace-nowrap">
         <Palmtree className="w-3 h-3 flex-shrink-0 text-primary" />
         <span className="font-semibold text-primary">
-          {target ? target.name : 'Your Island'}
+          {target ? target.name : '나의 아일랜드'}
         </span>
         {!target && <span className="text-muted-foreground">만들기</span>}
       </div>
@@ -251,7 +255,7 @@ export function HomePage() {
           value={upcomingLabel}
           Icon={CalendarClock}
           accent="text-status-info"
-          to="/tasks-mgmt"
+          to={upcomingTask ? `/tasks-mgmt/${upcomingTask.id}` : '/tasks-mgmt'}
           isLoading={workItemsLoading}
           isError={workItemsError}
         />

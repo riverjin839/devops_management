@@ -30,6 +30,15 @@
   이력으로 남는다. `GET /playbooks/{id}/runs` 신규, `PlaybookLogDialog` 에 "이전 실행 이력" 표
   추가. Backend: 신규 `services/playbook_service.py` 가 라우터의 수동 실행과 매트릭스 실행 로직을
   통합(중복 제거).
+- **점검 항목 상세 화면 (`/checks/:itemId`, D-062·D-063·D-065)**: 점검 매트릭스 행 이름을 클릭하면
+  정의·테스트·적용·실행방식·로그·히스토리 6개 탭이 있는 상세 화면으로 이동한다. 예전엔 정의 편집
+  (`/daily-check/settings`)·cron 설정(셀 상세 모달·클러스터 열 배지 두 곳)·실행 로그가 서로 다른
+  화면에 흩어져 있었다 — 이제 항목 하나를 한 화면에서 관리한다. deep_check 항목은 클러스터별
+  오버라이드 표(글로벌 상속 vs 전용)에서 "전용으로 분리"/"글로벌로 복귀"로 클러스터 전용 정의를
+  만들거나 지울 수 있다. Backend: `GET /check-matrix/items/{item_id}/detail`,
+  `GET /deep-check/definitions?check_type=`(신규 필터) 2개 엔드포인트만 추가하고 나머지는 기존
+  엔드포인트를 재사용. Frontend: 신규 `CheckMatrixHistoryPanel`(셀 상세 모달과 공유) 컴포넌트로
+  추이 차트 코드를 중복 없이 분리.
 
 ### Changed
 - **사이드바 레일 하단 개인 존 재편 (D-077)**: 무라벨 아이콘 7개(설정·테마·아일랜드·AI·사용자·
@@ -37,6 +46,27 @@
   flyout 안으로, VOC·릴리즈 노트·버그 픽스 로그는 **도움말·지원(?)** flyout 으로 옮겼다.
   테마는 순환 클릭(최대 10클릭) 대신 목록에서 1클릭 선택(현재 테마 체크 표시), 로그아웃은
   확인 다이얼로그를 거친다, 버그 픽스 로그는 admin 에게만 보인다.
+- **사이드바 메뉴 라벨 한국어 통일 (D-074 1단계)**: `Your Island`→나의 아일랜드,
+  `Playbooks`→플레이북, `Work To Do`→오늘 할 일, `Batch Jobs`→배치잡, `Observability`→관측
+  지표, `Settings`→설정, `Cilium BPF Trace`→Cilium BPF 추적으로 기본 라벨을 바꿨다(사용자가
+  `NavMenuManager` 로 직접 오버라이드한 라벨은 그대로 유지). `K8S`/`K8s` 표기 혼재 4곳도
+  `K8s` 로 통일. 같은 화면 본문 제목도 함께 맞춰 사이드바-본문 라벨 불일치를 없앴다.
+- **홈 KPI 필 동작 일관성 (D-078)**: KPI 필 6개 중 "점검 실패"만 라우트 이동 없이 같은
+  화면에서 탭을 바꿔 다른 필과 동작이 달랐던 것에 `ChevronDown` 표식을 붙여 구분했다.
+  "다음 일정" 필은 예전엔 항상 `/tasks-mgmt` 목록으로만 갔지만, 이제 해당 업무가 있으면
+  그 상세(`/tasks-mgmt/:id`)로 바로 간다.
+- **테마 스와치 미리보기 + Settings 테마 갤러리 (D-072)**: 사용자 메뉴의 컬러 테마 7종이
+  제네릭 아이콘 대신 실제 대표 색 원으로 미리보기된다. Settings ▸ 화면 UI 설정 탭에 신규
+  "테마 갤러리" — 10종(컬러 9 + system)을 배경/보조/강조 색 미니 카드로 나열하고 클릭 즉시
+  적용, 사용자 메뉴와 같은 선택을 공유한다. Frontend: 신규 `lib/themeSwatches.ts`(`index.css`
+  각 테마 토큰의 정적 스냅샷), `components/settings/ThemeGallery.tsx`.
+- **운영 점검 콘솔·일일 점검 리뷰 배지·문구 통일 (D-062)**: `/ops-checks`·`/clusters/:id` 가
+  공유하는 `ClusterOpsCheckPanel` 이 "점검/애드온/SSH/Ansible" 구현 세부 배지 대신 점검
+  매트릭스와 같은 `ExecTechBadge`(K8s API/kubectl/HTTP/PromQL/SSH bash/SSH python/Ansible 등)를
+  쓴다. `DailyCheckReview` 의 "Daily Check 실행"/"Deep Check 실행" 버튼을 "기본 점검 실행"/
+  "심층 점검 실행"으로 바꿔 내부 구현 용어가 그대로 버튼 문구가 되던 문제를 없앴다. Backend:
+  `ops_check_service.build_catalog()` 가 4개 소스 모두 `exec_tech` 를 계산해 `CatalogItem`
+  응답에 포함.
 
 ### Fixed
 - **flyout 상호배타 + 전환 시 포커스 재이동 (D-080 후속, 코드 리뷰 반영)**: 그룹/즐겨찾기/

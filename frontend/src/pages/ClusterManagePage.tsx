@@ -1005,7 +1005,7 @@ export function ClusterManagePage() {
         )}
 
         <p className="text-sm text-muted-foreground mt-6 text-center">
-          클러스터 등록 및 API/kubeconfig 설정은 <strong>Settings</strong> 페이지에서 할 수 있습니다.
+          클러스터 등록 및 API/kubeconfig 설정은 <strong>설정</strong> 페이지에서 할 수 있습니다.
         </p>
       </main>
 

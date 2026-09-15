@@ -97,10 +97,11 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 모니터링 / 점검
 | 기능 | 위치 |
 |---|---|
-| 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` + `services/check_matrix_service.py`(그리드/실행/수행로그, source_type: core_bundle/deep_check/addon/**batch_job/playbook**(D-066)/manual) · `services/check_matrix_runbook.py`(셀별 실행 계획 — 실제 나가는 명령) + `models/check_matrix.py`(`CheckMatrixRun` 수행 로그 포함) → `frontend/src/pages/HomePage.tsx` + `components/platform-status/` (매뉴얼: `docs/CHECK_MATRIX_GUIDE.md`) |
+| 홈(플랫폼 현황) + check-matrix | `backend/app/routers/check_matrix.py` + `services/check_matrix_service.py`(그리드/항목상세/실행/수행로그, source_type: core_bundle/deep_check/addon/**batch_job/playbook**(D-066)/manual) · `services/check_matrix_runbook.py`(셀별 실행 계획 — 실제 나가는 명령) + `models/check_matrix.py`(`CheckMatrixRun` 수행 로그 포함) → `frontend/src/pages/HomePage.tsx` + `components/platform-status/` (매뉴얼: `docs/CHECK_MATRIX_GUIDE.md`) |
 | 클러스터 대시보드 | `backend/app/routers/core_bundle_router.py` · `history.py` → `frontend/src/pages/Dashboard.tsx` (`/cluster-overview`) |
 | 일일 점검 리뷰 | `core_bundle_router.py` → `frontend/src/pages/DailyCheckReview.tsx` |
-| Deep Check 정의/실행/수집 | `backend/app/routers/check_results_router.py` · `check_definitions_router.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/registered_checks/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx` (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
+| 항목 상세 (`/checks/:itemId`, R-4 6차 라운드 4단계) | `backend/app/routers/check_matrix.py`(`GET /items/{id}/detail`) + `check_definitions_router.py`(`GET /definitions?check_type=` — cluster_id 없이 글로벌+전 클러스터 오버라이드 조회) → `frontend/src/pages/CheckItemDetailPage.tsx`(정의·테스트·적용·실행방식·로그·히스토리 탭, `components/daily-check/DeepCheckDefinitionForm.tsx` 재사용(`hideScheduleCron`) + `components/platform-status/{CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixHistoryPanel}.tsx` 재사용) |
+| Deep Check 정의/실행/수집 | `backend/app/routers/check_results_router.py` · `check_definitions_router.py`(정의별 이력/run/duplicate/preview) + `backend/app/services/registered_checks/`(UI 정의형 `custom_http`·`custom_kubectl`·`custom_promql` 포함) → `frontend/src/pages/DeepCheckSettings.tsx`(전 항목 검색/일괄 관리 — 단일 항목 편집은 `/checks/:itemId` 가 우선) (+ `components/daily-check/DeepCheckRunHistory.tsx`) |
 | 운영 점검 콘솔(레거시) | `backend/app/routers/ops_check.py` + `services/ops_check_service.py`(카탈로그·실행 소스 4종: deep_check/addon/batch_job/playbook — D-066) → `frontend/src/pages/OpsCheckConsolePage.tsx` (+ `components/ops-check/ClusterOpsCheckPanel.tsx` — `/clusters/:id` 와 공유) |
 | 클러스터 상세(종합 상태+원인) | `backend/app/routers/clusters.py`(`/status-breakdown`) + `services/cluster_status_service.py`(`recompute()` 단일 롤업) → `frontend/src/pages/ClusterDetailPage.tsx` |
 | K8s 실시간 이벤트 (kubewatch) | `backend/app/routers/k8s_events.py`(수신 직후 `analysis_hook.maybe_enqueue_analysis_for_k8s_event` 훅 + `/{id}/analysis`,`/analyze`) + `services/k8s_event_classifier.py` → `frontend/src/pages/K8sEventsPage.tsx` |
@@ -185,7 +186,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 ### 공통 UI / 인프라
 | 기능 | 위치 |
 |---|---|
-| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) |
+| 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유) |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
 | Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
 | 전역 상단바(업무 도메인) | `frontend/src/components/layout/AppTopBar.tsx` + `NavFlyout.tsx`(`FlyoutShell`/`FlyoutLink`/`FlyoutAction` 공용, Sidebar 와 공유 — 키보드 메뉴 규약은 `DESIGN_SYSTEM.md` §12.8) |

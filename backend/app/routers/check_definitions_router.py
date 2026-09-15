@@ -106,6 +106,7 @@ def list_definitions(
     cluster_id: Optional[UUID] = None,
     include_global: bool = True,
     with_status: bool = False,
+    check_type: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     q = db.query(DeepCheckDefinition)
@@ -117,6 +118,10 @@ def list_definitions(
             )
         else:
             q = q.filter(DeepCheckDefinition.cluster_id == cluster_id)
+    if check_type is not None:
+        # 항목 상세(/checks/:itemId) 의 클러스터별 오버라이드 표 — cluster_id 없이 이 check_type 의
+        # 글로벌+전 클러스터 정의를 한 번에 조회한다.
+        q = q.filter(DeepCheckDefinition.check_type == check_type)
     rows = q.order_by(DeepCheckDefinition.sort_order.asc()).all()
     out = [DefinitionOut.model_validate(r) for r in rows]
 

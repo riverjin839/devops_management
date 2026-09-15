@@ -3719,6 +3719,8 @@ export interface OpsCheckCatalogItem {
   name?: string | null;
   checkType?: string | null;
   category: OpsCheckCategory | string;
+  /** 매트릭스의 ExecTechBadge 와 같은 배지를 쓰기 위한 실행 기술(D-062). */
+  execTech?: string | null;
   requiresCredentials: boolean;
   /** false = 등록만 되고 비활성(cron 미실행) — 콘솔에서 수동 실행은 가능 */
   enabled?: boolean;
@@ -4408,6 +4410,24 @@ export interface CheckMatrixGridCluster {
   /** cluster_status_service.recompute() 가 기록한 종합 상태(핵심 번들+애드온+opt-in 심층
    *  점검 롤업). 원인 목록은 `GET /clusters/{id}/status-breakdown`. */
   status?: Status | null;
+}
+
+/** 항목 상세(`/checks/:itemId`) 의 클러스터별 한 행 — `GET /check-matrix/items/{itemId}/detail`. */
+export interface CheckMatrixItemDetailCell {
+  clusterId: string;
+  clusterName: string;
+  status: Status | null;
+  value: number | null;
+  message?: string | null;
+  checkedAt: string | null;
+  cronExpr: string | null;
+  scheduleEnabled: boolean;
+}
+
+/** `GET /check-matrix/items/{itemId}/detail` — 항목 상세 페이지(R-4 6차 라운드 4단계)의 진입 데이터. */
+export interface CheckMatrixItemDetail {
+  item: CheckMatrixItem;
+  cells: CheckMatrixItemDetailCell[];
 }
 
 /** 클러스터 종합 상태 원인 1건 — `cluster_status_service.recompute()` 의 contributor. */
