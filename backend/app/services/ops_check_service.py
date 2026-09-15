@@ -65,6 +65,45 @@ def _status_value(s: Any) -> Optional[str]:
     return s.value if isinstance(s, StatusEnum) else str(s)
 
 
+def _deep_check_exec_tech(check_type: str) -> Optional[str]:
+    try:
+        from app.services.registered_checks import REGISTRY
+        entry = REGISTRY.get(check_type)
+        return entry[1].exec_tech if entry else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _addon_exec_tech(addon_type: str) -> Optional[str]:
+    try:
+        from app.services.checkers import EXEC_TECH
+        return EXEC_TECH.get(addon_type)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _batch_job_exec_tech(db: Session, job: BatchJob) -> str:
+    """매트릭스의 이름 기반 추정과 달리 이미 로드된 인스턴스로 정확히 판정한다."""
+    try:
+        from app.services.batch_jobs import get_executor
+        executor = get_executor(job.job_type)
+        if executor is not None and not executor.requires_ssh:
+            return "k8s_api"
+    except Exception:  # noqa: BLE001
+        pass
+    if job.execution_mode == "script" and job.script_id:
+        try:
+            from app.models.executable_script import ExecutableScript
+            script = db.query(ExecutableScript).filter(ExecutableScript.id == job.script_id).first()
+            if script is not None and script.kind == "python":
+                return "ssh_python"
+            if script is not None and script.kind == "ansible_playbook":
+                return "ansible"
+        except Exception:  # noqa: BLE001
+            pass
+    return "ssh_bash"
+
+
 class OpsCheckService:
     def __init__(self, db: Session):
         self.db = db
@@ -115,6 +154,7 @@ class OpsCheckService:
                     "name": d.name,
                     "check_type": d.check_type,
                     "category": _deep_check_category(d.check_type),
+                    "exec_tech": _deep_check_exec_tech(d.check_type),
                     "requires_credentials": False,
                     "enabled": bool(d.enabled),
                     "last_status": _status_value(last.status) if last else None,
@@ -140,6 +180,7 @@ class OpsCheckService:
                 "name": a.name,
                 "check_type": a.type,
                 "category": _addon_category(a.type),
+                "exec_tech": _addon_exec_tech(a.type),
                 "requires_credentials": False,
                 "enabled": True,
                 "last_status": _status_value(a.status),
@@ -176,6 +217,7 @@ class OpsCheckService:
                     "name": j.name,
                     "check_type": j.job_type,
                     "category": "os",
+                    "exec_tech": _batch_job_exec_tech(self.db, j),
                     "requires_credentials": requires_creds,
                     "enabled": bool(j.enabled),
                     "last_status": j.last_status,
@@ -201,6 +243,7 @@ class OpsCheckService:
                 "name": p.name,
                 "check_type": "ansible",
                 "category": "os",
+                "exec_tech": "ansible",
                 "requires_credentials": False,
                 "enabled": True,
                 "last_status": p.status if p.status != "unknown" else None,

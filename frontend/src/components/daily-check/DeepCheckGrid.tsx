@@ -18,9 +18,9 @@ const STATUS_ICON: Record<Status, { Icon: typeof CheckCircle2; color: string }> 
 export function DeepCheckGrid({ results }: Props) {
   if (!results.length) {
     return (
-      <MacCard title="Deep Check 결과">
+      <MacCard title="심층 점검 결과">
         <div className="text-sm text-muted-foreground italic">
-          아직 Deep Check 결과가 없습니다. Super Pod 가 다음 점검 회차에 결과를 보내거나,
+          아직 심층 점검 결과가 없습니다. Super Pod 가 다음 점검 회차에 결과를 보내거나,
           상단의 "지금 실행" 버튼을 눌러 즉시 실행할 수 있습니다.
         </div>
       </MacCard>
@@ -28,7 +28,7 @@ export function DeepCheckGrid({ results }: Props) {
   }
 
   return (
-    <MacCard title="Deep Check 결과">
+    <MacCard title="심층 점검 결과">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {results.map((r) => {
           const meta = STATUS_ICON[r.status] || STATUS_ICON.pending;

@@ -104,7 +104,7 @@ export function DailyCheckReviewPage() {
               className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${runDaily.isPending ? 'animate-spin' : ''}`} />
-              {runDaily.isPending ? '실행 중…' : 'Daily Check 실행'}
+              {runDaily.isPending ? '실행 중…' : '기본 점검 실행'}
             </button>
             <button
               type="button"
@@ -113,11 +113,11 @@ export function DailyCheckReviewPage() {
                 runDeep.mutate(clusterId);
               }}
               disabled={!clusterId || runDeep.isPending}
-              title="등록된 Deep Check 정의 (cert/PVC/CNI 등) 실행 — 최신 daily 회차에 결과를 묶습니다"
+              title="등록된 심층 점검 정의 (cert/PVC/CNI 등) 실행 — 최신 회차에 결과를 묶습니다"
               className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
             >
               <Play className="w-3.5 h-3.5" />
-              {runDeep.isPending ? '실행 중…' : 'Deep Check 실행'}
+              {runDeep.isPending ? '실행 중…' : '심층 점검 실행'}
             </button>
             <Link
               to="/daily-check/settings"

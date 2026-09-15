@@ -417,7 +417,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 - **목적 / UX**: 클러스터 하나를 골라 `deep_check`/`addon`/`batch_job(SSH)`/`playbook(Ansible)` 등 소스가 다른 점검 항목을 하나의 카탈로그 테이블에 모아 놓고, 카테고리(OS/K8s/Storage/Network/앱서비스)·이름 검색으로 필터링해 개별 실행 또는 체크박스 다중 선택 후 일괄 실행할 수 있게 한다. 실행 중 진행 상황을 실시간(폴링)으로 보여주고, 완료된 항목은 모달로 상세 로그(JSON)를 연다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + 단일 선택(`selectedId`/`onSelect`), `allowAll` 없음(반드시 특정 클러스터 URL로 리다이렉트).
-  - MacCard "점검 항목" — 카테고리 필터 pill 바 + 검색창 + 전체선택 체크박스 + 선택 실행 버튼 + 카탈로그 테이블(이름/분류/소스/상태/작업).
+  - MacCard "점검 항목" — 카테고리 필터 pill 바 + 검색창 + 전체선택 체크박스 + 선택 실행 버튼 + 카탈로그 테이블(이름/분류/실행기술(`ExecTechBadge`, D-062)/상태/작업).
   - MacCard "실행 진행" — 활성 run 이 있을 때만 표시, 항목별 상태(대기/실행중/완료/실패)와 총계(정상/경고/위험/실패) 라이브 업데이트.
   - 항목 상세 모달 — `LogViewer` 로 `details` JSON 렌더.
   - 헤더에 `/daily-check/review/:clusterId`, `/daily-check/settings` 로의 바로가기 링크.
@@ -443,6 +443,11 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
       실행을 지원한다. 자격증명은 배치잡에 저장된 스케줄용 자격증명만 쓰며(무인 실행), 없으면
       그 사유가 결과 메시지에 남는다. `SOURCE_LABEL`/`OpsCheckSource` 는 이번 작업 전부터 이미
       4-way 로 준비돼 있었다(프론트가 백엔드보다 먼저 만들어져 있던 상태).
+    - **[2026-09-15, D-062 배지 통일]** "소스" 컬럼이 `SOURCE_LABEL`(점검/애드온/SSH/Ansible)
+      대신 매트릭스와 같은 `ExecTechBadge` 를 쓰도록 교체 — `OpsCheckService.build_catalog()` 가
+      항목마다 `exec_tech`(K8s API/kubectl/HTTP/PromQL/SSH bash/SSH python/Ansible 등)를 계산해
+      `CatalogItem.execTech` 로 내려준다. `SOURCE_LABEL` 자체는 exec_tech 를 못 구하는 예외
+      상황의 폴백으로만 남아 있다.
 
 ### 클러스터 상세 (`/clusters`, `/clusters/:clusterId`)
 
@@ -511,10 +516,10 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 ### 일일 점검 리뷰 (`/daily-check/review`, `/daily-check/review/:clusterId`)
 
 - **파일**: `frontend/src/pages/DailyCheckReview.tsx` (+ `components/daily-check/{AiSummaryCard,TrendChart,DiffPanel,DeepCheckGrid,NotificationSettingsPanel,ResourceTrendChecklist}`)
-- **목적 / UX**: 클러스터별 daily check 회차(점검 회차 선택 드롭다운)를 고르면, 그 회차의 AI 요약/원격조치 제안, deep-check 항목별 결과 그리드, 이전 회차와의 diff, 최근 7일 트렌드 차트를 한 화면에서 확인한다. 상단 버튼으로 기본 헬스체크(Daily Check)와 등록된 deep-check 정의 실행(Deep Check)을 각각 트리거할 수 있다.
+- **목적 / UX**: 클러스터별 daily check 회차(점검 회차 선택 드롭다운)를 고르면, 그 회차의 AI 요약/원격조치 제안, deep-check 항목별 결과 그리드, 이전 회차와의 diff, 최근 7일 트렌드 차트를 한 화면에서 확인한다. 상단 버튼으로 기본 헬스체크와 등록된 심층 점검 정의 실행을 각각 트리거할 수 있다.
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` + 단일 선택(`allowAll` 없음), URL 파라미터로 클러스터 지정, 없으면 첫 클러스터로 자동 리다이렉트.
-  - 헤더 — "Daily Check 실행"/"Deep Check 실행" 버튼, "체크 정의"(→`/daily-check/settings`) 링크.
+  - 헤더 — "기본 점검 실행"/"심층 점검 실행" 버튼(**[2026-09-15, D-062]** 이전엔 "Daily Check 실행"/"Deep Check 실행"으로 구현 용어가 그대로 버튼 문구였다), "체크 정의"(→`/daily-check/settings`) 링크.
   - MacCard "점검 회차 선택" — 최근 20개 로그 드롭다운(상태 이모지 마커 + 스케줄 타입 한글 라벨).
   - `ResourceTrendChecklist` — 리소스 추세 체크리스트(클러스터 단위, 별도 hook).
   - 로그 미선택 시 안내 카드, 선택 시 `AiSummaryCard` / `DeepCheckGrid` / `DiffPanel` / `TrendChart` / `NotificationSettingsPanel` 순서로 렌더.

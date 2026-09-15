@@ -33,6 +33,8 @@ class CatalogItem(BaseModel):
     name: Optional[str] = None
     check_type: Optional[str] = None
     category: str
+    # D-062 — 매트릭스의 ExecTechBadge 와 같은 배지를 쓰기 위한 실행 기술 힌트.
+    exec_tech: Optional[str] = None
     requires_credentials: bool = False
     enabled: bool = True
     last_status: Optional[str] = None

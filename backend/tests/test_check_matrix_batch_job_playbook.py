@@ -327,6 +327,25 @@ class TestOpsCheckService:
             db.delete(pb)
             db.commit()
 
+    def test_catalog_items_carry_exec_tech_for_badge_unification(self, db, cluster):
+        """D-062 — 콘솔 카탈로그도 매트릭스의 ExecTechBadge 와 같은 배지를 쓸 수 있어야 한다."""
+        bj_name = f"ops-exectech-{uuid.uuid4().hex[:8]}"
+        pb_name = f"ops-exectech-pb-{uuid.uuid4().hex[:8]}"
+        job = BatchJob(cluster_id=cluster.id, name=bj_name, job_type="script")
+        pb = Playbook(cluster_id=cluster.id, name=pb_name, playbook_path="/tmp/x.yml")
+        db.add_all([job, pb])
+        db.commit()
+        try:
+            svcobj = ops_svc.OpsCheckService(db)
+            catalog = svcobj.build_catalog(cluster.id)
+            by_name = {c["name"]: c for c in catalog}
+            assert by_name[pb_name]["exec_tech"] == "ansible"
+            assert by_name[bj_name]["exec_tech"]  # 문자열이 채워져 있어야 함(정확한 값은 job_type 별로 갈림)
+        finally:
+            db.delete(job)
+            db.delete(pb)
+            db.commit()
+
     def test_run_item_dispatches_unknown_batch_job_type_as_critical_not_exception(self, db, cluster):
         from app.models import OpsCheckRunItem
 

@@ -51,6 +51,13 @@
   지표, `Settings`→설정, `Cilium BPF Trace`→Cilium BPF 추적으로 기본 라벨을 바꿨다(사용자가
   `NavMenuManager` 로 직접 오버라이드한 라벨은 그대로 유지). `K8S`/`K8s` 표기 혼재 4곳도
   `K8s` 로 통일. 같은 화면 본문 제목도 함께 맞춰 사이드바-본문 라벨 불일치를 없앴다.
+- **운영 점검 콘솔·일일 점검 리뷰 배지·문구 통일 (D-062)**: `/ops-checks`·`/clusters/:id` 가
+  공유하는 `ClusterOpsCheckPanel` 이 "점검/애드온/SSH/Ansible" 구현 세부 배지 대신 점검
+  매트릭스와 같은 `ExecTechBadge`(K8s API/kubectl/HTTP/PromQL/SSH bash/SSH python/Ansible 등)를
+  쓴다. `DailyCheckReview` 의 "Daily Check 실행"/"Deep Check 실행" 버튼을 "기본 점검 실행"/
+  "심층 점검 실행"으로 바꿔 내부 구현 용어가 그대로 버튼 문구가 되던 문제를 없앴다. Backend:
+  `ops_check_service.build_catalog()` 가 4개 소스 모두 `exec_tech` 를 계산해 `CatalogItem`
+  응답에 포함.
 
 ### Fixed
 - **flyout 상호배타 + 전환 시 포커스 재이동 (D-080 후속, 코드 리뷰 반영)**: 그룹/즐겨찾기/
