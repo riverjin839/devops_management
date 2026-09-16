@@ -17,9 +17,12 @@
   권한을 붙일 수 있고**(기본은 ClusterRole 1개 + 네임스페이스별 RoleBinding), 생성 직후
   SubjectAccessReview 로 "정말 배포·로그 조회가 되는지" 를 API 서버에 직접 확인한다. 권한
   프리셋(배포+로그 / 조회 전용 / 디버깅 / NS 관리자 / 클러스터 조회)은 시작 템플릿일 뿐이라
-  실행 전에 규칙을 화면에서 그대로 편집한다. Backend: `routers/k8s_rbac.py`(SSE
+  실행 전에 규칙을 화면에서 그대로 편집한다. 새 화면 `/k8s-rbac` — 탭 5개(액세스 발급 마법사 /
+  ServiceAccount / Role·ClusterRole / Binding / 권한 점검). Backend: `routers/k8s_rbac.py`(SSE
   `/provision/stream` 으로 단계별 실시간 로그) · `services/k8s_rbac_service.py` ·
-  `services/k8s_rbac_presets.py` · `schemas/k8s_rbac.py`. 빌트인(`system:*`, `cluster-admin`,
+  `services/k8s_rbac_presets.py` · `schemas/k8s_rbac.py`. Frontend: `pages/K8sRbacPage.tsx` ·
+  `components/k8s-rbac/` · `hooks/useK8sRbac.ts`(SSE 소비 `useProvisionStream`). 실행 로그는 항상
+  수집하고 "로그 보기" 토글로 펼침 여부만 정한다. 빌트인(`system:*`, `cluster-admin`,
   네임스페이스 `default` SA)은 조회만 되고 수정·삭제는 막힌다.
 
 ### Changed

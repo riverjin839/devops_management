@@ -1150,6 +1150,102 @@ export const nodeLabelsApi = {
     ),
 };
 
+// ── K8S 접근 권한 (RBAC) ─────────────────────────────────────────────────────
+// 실행(provision)만 SSE 라 fetch 로 직접 소비한다 — URL 은 k8sRbacStreamUrl 참고.
+export const k8sRbacApi = {
+  getPresets: (clusterId: string) =>
+    api.get<import('@/types').RbacPresetCatalog>(`/clusters/${clusterId}/rbac/presets`),
+  getNamespaces: (clusterId: string) =>
+    api.get<{ data: import('@/types').RbacNamespace[] }>(`/clusters/${clusterId}/rbac/namespaces`),
+
+  getServiceAccounts: (clusterId: string, namespace?: string) =>
+    api.get<{ data: import('@/types').RbacServiceAccount[] }>(
+      `/clusters/${clusterId}/rbac/service-accounts`,
+      { params: namespace ? { namespace } : undefined },
+    ),
+  createServiceAccount: (
+    clusterId: string,
+    payload: { namespace: string; name: string; labels?: Record<string, string> },
+  ) => api.post(`/clusters/${clusterId}/rbac/service-accounts`, payload),
+  deleteServiceAccount: (clusterId: string, namespace: string, name: string) =>
+    api.delete(
+      `/clusters/${clusterId}/rbac/service-accounts/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    ),
+
+  getRoles: (clusterId: string, namespace?: string) =>
+    api.get<{ data: import('@/types').RbacRole[] }>(`/clusters/${clusterId}/rbac/roles`, {
+      params: namespace ? { namespace } : undefined,
+    }),
+  getClusterRoles: (clusterId: string, includeSystem = false) =>
+    api.get<{ data: import('@/types').RbacRole[] }>(`/clusters/${clusterId}/rbac/cluster-roles`, {
+      params: { include_system: includeSystem },
+    }),
+  upsertRole: (
+    clusterId: string,
+    namespace: string,
+    name: string,
+    payload: { rules: import('@/types').RbacPolicyRule[]; labels?: Record<string, string> },
+  ) =>
+    api.put(
+      `/clusters/${clusterId}/rbac/roles/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+      payload,
+    ),
+  upsertClusterRole: (
+    clusterId: string,
+    name: string,
+    payload: { rules: import('@/types').RbacPolicyRule[]; labels?: Record<string, string> },
+  ) => api.put(`/clusters/${clusterId}/rbac/cluster-roles/${encodeURIComponent(name)}`, payload),
+  deleteRole: (clusterId: string, namespace: string, name: string) =>
+    api.delete(
+      `/clusters/${clusterId}/rbac/roles/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    ),
+  deleteClusterRole: (clusterId: string, name: string) =>
+    api.delete(`/clusters/${clusterId}/rbac/cluster-roles/${encodeURIComponent(name)}`),
+
+  getBindings: (clusterId: string, namespace?: string, includeSystem = false) =>
+    api.get<{ data: import('@/types').RbacBinding[] }>(`/clusters/${clusterId}/rbac/bindings`, {
+      params: { ...(namespace ? { namespace } : {}), include_system: includeSystem },
+    }),
+  createBinding: (
+    clusterId: string,
+    payload: {
+      kind: 'RoleBinding' | 'ClusterRoleBinding';
+      name: string;
+      namespace?: string | null;
+      roleKind: 'Role' | 'ClusterRole';
+      roleName: string;
+      subjects: { kind: string; name: string; namespace?: string | null }[];
+    },
+  ) => api.post(`/clusters/${clusterId}/rbac/bindings`, payload),
+  deleteBinding: (clusterId: string, kind: string, name: string, namespace?: string | null) =>
+    api.delete(`/clusters/${clusterId}/rbac/bindings/${kind}/${encodeURIComponent(name)}`, {
+      params: namespace ? { namespace } : undefined,
+    }),
+
+  accessReview: (
+    clusterId: string,
+    payload: { namespace: string; serviceAccount: string; namespaces?: string[] },
+  ) =>
+    api.post<{ data: import('@/types').RbacAccessReviewEntry[] }>(
+      `/clusters/${clusterId}/rbac/access-review`,
+      payload,
+    ),
+  issueKubeconfig: (
+    clusterId: string,
+    payload: {
+      namespace: string;
+      serviceAccount: string;
+      longLivedToken?: boolean;
+      tokenTtlSeconds?: number;
+    },
+  ) =>
+    api.post<import('@/types').RbacKubeconfigResult>(`/clusters/${clusterId}/rbac/kubeconfig`, payload),
+};
+
+/** 액세스 발급 SSE — Authorization 헤더가 필요해 EventSource 대신 fetch 로 소비한다. */
+export const k8sRbacStreamUrl = (clusterId: string) =>
+  `/api/v1/clusters/${clusterId}/rbac/provision/stream`;
+
 // 노드 이미지 배포(prepull) — 특정 이미지를 배포되지 않은 다른 노드로 복제
 export interface NodeImageDistributeTarget {
   host: string;

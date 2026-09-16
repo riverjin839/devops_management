@@ -5,7 +5,7 @@ import {
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home, Workflow,
   ShieldCheck, Activity, Package, GitBranch, ScrollText, Rocket, ShipWheel, Gauge, Bell, BellRing, Dog,
-  TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2, LayoutGrid,
+  TrendingUp, FileSpreadsheet, Palmtree, FileText, FileCode2, LayoutGrid, KeyRound,
 } from 'lucide-react';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -47,6 +47,7 @@ export const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType
   '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
   '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
   '/node-labels':        { defaultLabel: 'K8s 노드 라벨',   icon: Tags },
+  '/k8s-rbac':           { defaultLabel: 'K8S 접근 권한',  icon: KeyRound },
   '/node-images':        { defaultLabel: 'K8s 노드 이미지', icon: Boxes },
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/k8s-events':         { defaultLabel: 'K8s 실시간 이벤트', icon: Bell, iconColor: 'text-orange-500' },
@@ -82,7 +83,7 @@ export type GroupId = 'cluster' | 'server' | 'network' | 'storage' | 'services' 
  * 모든 그룹이 항상 어딘가에 보이므로 반대 도메인 화면이 "사라지는" 일이 없다.
  */
 export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[]; domain: 'work' | 'platform' | 'system' }> = [
-  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/clusters', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage', '/k8s-logs'], domain: 'platform' },
+  { id: 'cluster',   label: '클러스터',   icon: Layers,    paths: ['/cluster-overview', '/k8s-manage', '/k8s-allocation', '/k9s', '/cluster-trends', '/node-labels', '/node-images', '/k8s-rbac', '/clusters', '/ops-checks', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/daily-check/review', '/daily-check/settings', '/pod-bottleneck', '/versions', '/bulk-exec', '/node-ssh', '/etcdctl', '/cluster-manage', '/k8s-logs'], domain: 'platform' },
   { id: 'server',    label: '서버/인프라', icon: Server,    paths: ['/node-specs', '/kernel-params', '/infra-topology'], domain: 'platform' },
   { id: 'network',   label: '네트워크',   icon: Network,   paths: ['/cilium-trace', '/service-topology', '/service-architecture', '/architecture', '/packet-flow', '/cidr', '/links'], domain: 'platform' },
   { id: 'storage',   label: '스토리지',   icon: Database,  paths: ['/mc', '/isilon-nfs'], domain: 'platform' },

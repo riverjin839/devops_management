@@ -924,4 +924,6 @@ def default_access_checks(namespaces: list[str]) -> list[dict]:
         {"label": "ConfigMap 생성", "verb": "create", "group": "", "resource": "configmaps"},
         {"label": "파드 exec", "verb": "create", "group": "", "resource": "pods", "subresource": "exec"},
     ]
-    return [{**chk, "namespace": ns} for ns in namespaces for chk in base]
+    # subresource 를 항상 키로 둔다 — 있는 것만 넣으면 소비자(프론트/응답 스키마)가
+    # 같은 목록 안에서 모양이 다른 dict 를 받게 된다.
+    return [{"subresource": None, **chk, "namespace": ns} for ns in namespaces for chk in base]
