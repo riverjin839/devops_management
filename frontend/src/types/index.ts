@@ -5177,3 +5177,171 @@ export interface HomePrefs {
 }
 
 export type HomePrefsUpdate = Partial<HomePrefs>;
+
+// ── K8S 접근 권한 (RBAC) — /k8s-rbac ────────────────────────────────────────
+// 개발자가 자기 LOCAL kubectl 로 클러스터에 붙어 배포·로그 조회를 하려면
+// ServiceAccount + (Cluster)Role + Binding + kubeconfig 가 한 세트로 필요하다.
+
+export interface RbacPolicyRule {
+  apiGroups: string[];
+  resources: string[];
+  verbs: string[];
+  resourceNames: string[];
+  nonResourceUrls: string[];
+}
+
+export interface RbacNamespace {
+  name: string;
+  status: string;
+  labels: Record<string, string>;
+  createdAt: string | null;
+}
+
+export interface RbacBindingSummary {
+  kind: string;
+  name: string;
+  namespace: string | null;
+  roleKind: string;
+  roleName: string;
+}
+
+export interface RbacServiceAccount {
+  name: string;
+  namespace: string;
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  secrets: string[];
+  createdAt: string | null;
+  bindings: RbacBindingSummary[];
+  managedByPep: boolean;
+}
+
+export interface RbacRole {
+  name: string;
+  namespace: string | null;
+  scope: 'namespace' | 'cluster';
+  rules: RbacPolicyRule[];
+  ruleCount: number;
+  labels: Record<string, string>;
+  createdAt: string | null;
+  builtin: boolean;
+}
+
+export interface RbacSubject {
+  kind: 'ServiceAccount' | 'User' | 'Group';
+  name: string;
+  namespace: string | null;
+  apiGroup: string | null;
+}
+
+export interface RbacBinding {
+  kind: 'RoleBinding' | 'ClusterRoleBinding';
+  name: string;
+  namespace: string | null;
+  roleKind: string;
+  roleName: string;
+  subjects: RbacSubject[];
+  labels: Record<string, string>;
+  createdAt: string | null;
+  builtin: boolean;
+}
+
+export type RbacBindingMode =
+  | 'clusterrole-rolebinding'
+  | 'role-per-namespace'
+  | 'clusterrole-clusterrolebinding';
+
+export interface RbacPreset {
+  key: string;
+  name: string;
+  summary: string;
+  description: string;
+  recommendedBindingMode: RbacBindingMode;
+  risk: 'low' | 'medium' | 'high';
+  rules: RbacPolicyRule[];
+}
+
+export interface RbacBindingModeInfo {
+  key: RbacBindingMode;
+  name: string;
+  description: string;
+}
+
+export interface RbacPresetCatalog {
+  presets: RbacPreset[];
+  bindingModes: RbacBindingModeInfo[];
+}
+
+export interface RbacAccessReviewEntry {
+  label: string;
+  namespace: string | null;
+  verb: string | null;
+  resource: string | null;
+  subresource: string | null;
+  allowed: boolean;
+  reason: string | null;
+}
+
+export interface RbacCreatedObject {
+  kind: string;
+  name: string;
+  namespace: string | null;
+}
+
+/** SSE `/provision/stream` 이 흘려보내는 이벤트 — 본문은 snake_case 원문이다. */
+export type RbacProvisionEvent =
+  | { type: 'log'; level: 'info' | 'warn' | 'error'; ts: string; message: string }
+  | { type: 'step'; name: string; status: 'running' | 'done' }
+  | { type: 'error'; message: string }
+  | { type: 'done' }
+  | ({ type: 'result' } & RbacProvisionResultRaw);
+
+/** SSE result 이벤트 본문 (snake_case — axios 인터셉터를 타지 않는다). */
+export interface RbacProvisionResultRaw {
+  namespace: string;
+  service_account: string;
+  namespaces: string[];
+  binding_mode: RbacBindingMode;
+  role_name: string;
+  binding_name: string;
+  created: { kind: string; name: string; namespace: string | null }[];
+  access_review: {
+    label: string;
+    namespace: string | null;
+    verb: string | null;
+    resource: string | null;
+    subresource: string | null;
+    allowed: boolean;
+    reason: string | null;
+  }[];
+  kubeconfig: string | null;
+  token_expires_at: string | null;
+  dry_run: boolean;
+  elapsed_seconds: number;
+}
+
+export interface RbacProvisionRequest {
+  namespace: string;
+  serviceAccount: string;
+  extraNamespaces: string[];
+  bindingMode: RbacBindingMode;
+  rules: RbacPolicyRule[];
+  roleName?: string | null;
+  bindingName?: string | null;
+  presetKey?: string | null;
+  createNamespace: boolean;
+  verify: boolean;
+  issueKubeconfig: boolean;
+  longLivedToken: boolean;
+  tokenTtlSeconds: number;
+  dryRun: boolean;
+}
+
+export interface RbacKubeconfigResult {
+  kubeconfig: string;
+  expiresAt: string | null;
+  mode: string;
+  server: string;
+  namespace: string;
+  serviceAccount: string;
+}

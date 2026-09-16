@@ -344,7 +344,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `audit_logs`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs` |
 | 모니터링/점검 | `clusters`, `core_bundle_router`, `check_matrix`, `check_results_router`(+ingest), `check_definitions_router`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `k8s_rbac`(SA·Role·ClusterRole·Binding + kubeconfig 발급), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `servicenow`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |

@@ -14,6 +14,7 @@ import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
+import { K8sRbacPage } from '@/pages/K8sRbacPage';
 import { NodeImagesPage } from '@/pages/NodeImagesPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
@@ -187,6 +188,7 @@ function AppShell() {
               <Route path="/weekly-report" element={<WeeklyReportPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
+              <Route path="/k8s-rbac" element={<K8sRbacPage />} />
               <Route path="/node-images" element={<NodeImagesPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />

@@ -11,6 +11,7 @@ from app.routers.confluence import router as confluence_router
 from app.routers.servicenow import router as servicenow_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.node_labels import router as node_labels_router
+from app.routers.k8s_rbac import router as k8s_rbac_router
 from app.routers.node_images import router as node_images_router
 from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
@@ -104,6 +105,7 @@ __all__ = [
     "servicenow_router",
     "ui_settings_router",
     "node_labels_router",
+    "k8s_rbac_router",
     "node_images_router",
     "workflows_router",
     "work_guide_router",
