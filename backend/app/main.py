@@ -17,6 +17,7 @@ from app.routers import (
     health_router,
     history_router,
     node_labels_router,
+    k8s_rbac_router,
     node_images_router,
     playbooks_router,
     promql_router,
@@ -2142,6 +2143,7 @@ app.include_router(projects_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(sprints_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(k8s_rbac_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
