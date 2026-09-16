@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-1.34.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.35.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.35.0] - 2026-09-16
 
 ### Added
 - **K8S 접근 권한 발급·관리 (ServiceAccount / Role / ClusterRole / Binding)**: 개발자가 자기
