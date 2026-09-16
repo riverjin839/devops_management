@@ -39,6 +39,10 @@ PROTECTED_NAMESPACES = {"kube-system", "kube-public", "kube-node-lease"}
 # 파드 생성이 깨진다.
 PROTECTED_SERVICE_ACCOUNTS = {"default"}
 
+# 이 화면은 "개발자에게 자기 네임스페이스 권한을 내주는" 용도지 클러스터 수술용이 아니다.
+# 컨트롤플레인 네임스페이스에 쓰기를 열어두면 kube-system/coredns SA 를 지우거나
+# 그 SA 토큰을 발급받는(=사실상 권한 상승) 경로가 생긴다. 조회는 열어두고 쓰기만 막는다.
+
 DNS1123_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 
 # TokenRequest 기본 만료 — 7일. API server 의 --service-account-max-token-expiration
@@ -267,6 +271,7 @@ class RbacService:
     ) -> dict:
         namespace = validate_k8s_name(namespace, "네임스페이스")
         name = validate_k8s_name(name, "ServiceAccount 이름")
+        self._assert_namespace_writable(namespace)
         body = client.V1ServiceAccount(
             metadata=client.V1ObjectMeta(
                 name=name,
@@ -288,6 +293,7 @@ class RbacService:
         }
 
     def delete_service_account(self, namespace: str, name: str) -> None:
+        self._assert_namespace_writable(namespace)
         if name in PROTECTED_SERVICE_ACCOUNTS:
             raise ValueError(
                 f"'{name}' 은(는) 네임스페이스 기본 ServiceAccount 라 삭제할 수 없습니다."
@@ -343,25 +349,63 @@ class RbacService:
                 f"'{name}' 은(는) 쿠버네티스 빌트인 롤이라 이 화면에서 수정·삭제할 수 없습니다."
             )
 
+    @staticmethod
+    def _assert_namespace_writable(namespace: str | None) -> None:
+        """컨트롤플레인 네임스페이스에는 이 화면에서 쓰지 않는다(조회는 허용).
+
+        `kube-system` 의 SA 를 지우거나 그 SA 의 토큰을 발급받는 것은 클러스터를 깨거나
+        권한을 통째로 얻는 길이다 — 개발자 액세스 발급 화면이 열어둘 문이 아니다.
+        """
+        if namespace and namespace in PROTECTED_NAMESPACES:
+            raise ValueError(
+                f"'{namespace}' 은(는) 쿠버네티스 시스템 네임스페이스라 이 화면에서 "
+                "생성·수정·삭제하거나 토큰을 발급할 수 없습니다(조회는 가능)."
+            )
+
+    def _resource_version(self, read: Any, **kwargs: Any) -> str | None:
+        """기존 오브젝트의 resourceVersion — replace(PUT) 에 실어 낙관적 동시성을 건다.
+
+        없으면 무조건 덮어쓰기가 되어, 두 사람이 같은 롤을 동시에 편집할 때 나중 저장이
+        앞 저장을 조용히 지운다. 오브젝트가 없으면(404) None 을 돌려 create 로 가게 한다.
+        """
+        try:
+            obj = read(**kwargs)
+        except ApiException as e:
+            if e.status == 404:
+                return None
+            raise
+        return getattr(obj.metadata, "resource_version", None)
+
     def upsert_role(
         self, namespace: str, name: str, rules: list[dict], labels: dict[str, str] | None = None
     ) -> dict:
         namespace = validate_k8s_name(namespace, "네임스페이스")
         name = validate_k8s_name(name, "Role 이름")
         self._assert_writable(name, "namespace")
+        self._assert_namespace_writable(namespace)
         policy_rules = [client.V1PolicyRule(**r) for r in normalize_rules(rules)]
+        version = self._resource_version(
+            self.rbac.read_namespaced_role, name=name, namespace=namespace
+        )
         meta = client.V1ObjectMeta(
             name=name,
             namespace=namespace,
             labels={**(labels or {}), "app.kubernetes.io/managed-by": "pep"},
+            resource_version=version,
         )
         body = client.V1Role(metadata=meta, rules=policy_rules)
+        if version is None:
+            return self._role_row(
+                self.rbac.create_namespaced_role(namespace=namespace, body=body), "namespace"
+            )
         try:
             obj = self.rbac.replace_namespaced_role(name=name, namespace=namespace, body=body)
         except ApiException as e:
-            if e.status != 404:
+            if e.status == 404:  # 읽은 뒤 사라짐
+                meta.resource_version = None
+                obj = self.rbac.create_namespaced_role(namespace=namespace, body=body)
+            else:
                 raise
-            obj = self.rbac.create_namespaced_role(namespace=namespace, body=body)
         return self._role_row(obj, "namespace")
 
     def upsert_cluster_role(
@@ -370,20 +414,28 @@ class RbacService:
         name = validate_k8s_name(name, "ClusterRole 이름")
         self._assert_writable(name, "cluster")
         policy_rules = [client.V1PolicyRule(**r) for r in normalize_rules(rules)]
+        version = self._resource_version(self.rbac.read_cluster_role, name=name)
         meta = client.V1ObjectMeta(
-            name=name, labels={**(labels or {}), "app.kubernetes.io/managed-by": "pep"}
+            name=name,
+            labels={**(labels or {}), "app.kubernetes.io/managed-by": "pep"},
+            resource_version=version,
         )
         body = client.V1ClusterRole(metadata=meta, rules=policy_rules)
+        if version is None:
+            return self._role_row(self.rbac.create_cluster_role(body=body), "cluster")
         try:
             obj = self.rbac.replace_cluster_role(name=name, body=body)
         except ApiException as e:
-            if e.status != 404:
+            if e.status == 404:
+                meta.resource_version = None
+                obj = self.rbac.create_cluster_role(body=body)
+            else:
                 raise
-            obj = self.rbac.create_cluster_role(body=body)
         return self._role_row(obj, "cluster")
 
     def delete_role(self, namespace: str, name: str) -> None:
         self._assert_writable(name, "namespace")
+        self._assert_namespace_writable(namespace)
         self.rbac.delete_namespaced_role(name=name, namespace=namespace)
 
     def delete_cluster_role(self, name: str) -> None:
@@ -455,6 +507,7 @@ class RbacService:
             raise ValueError("ClusterRoleBinding 은 ClusterRole 만 참조할 수 있습니다.")
         if kind == "RoleBinding" and not namespace:
             raise ValueError("RoleBinding 에는 네임스페이스가 필요합니다.")
+        self._assert_namespace_writable(namespace)
         if not subjects:
             raise ValueError("subject(대상)가 최소 하나 필요합니다.")
 
@@ -494,25 +547,40 @@ class RbacService:
         return self._binding_row(obj, "ClusterRoleBinding")
 
     def _replace_or_create_role_binding(self, namespace: str, name: str, body: Any) -> Any:
+        version = self._resource_version(
+            self.rbac.read_namespaced_role_binding, name=name, namespace=namespace
+        )
+        if version is None:
+            return self.rbac.create_namespaced_role_binding(namespace=namespace, body=body)
+        body.metadata.resource_version = version
         try:
             return self.rbac.replace_namespaced_role_binding(name=name, namespace=namespace, body=body)
         except ApiException as e:
-            if e.status == 404:
+            if e.status == 404:  # 읽은 뒤 사라짐
+                body.metadata.resource_version = None
                 return self.rbac.create_namespaced_role_binding(namespace=namespace, body=body)
             if e.status in (409, 422):
-                # roleRef 는 immutable — 참조 롤이 바뀌면 지우고 다시 만든다.
+                # roleRef 는 immutable — 참조 롤이 바뀌면 replace 로는 못 고치므로
+                # 지우고 다시 만든다(409 는 동시 편집일 수도 있어 재읽기 후 한 번 더 시도).
                 self.rbac.delete_namespaced_role_binding(name=name, namespace=namespace)
+                body.metadata.resource_version = None
                 return self.rbac.create_namespaced_role_binding(namespace=namespace, body=body)
             raise
 
     def _replace_or_create_cluster_role_binding(self, name: str, body: Any) -> Any:
+        version = self._resource_version(self.rbac.read_cluster_role_binding, name=name)
+        if version is None:
+            return self.rbac.create_cluster_role_binding(body=body)
+        body.metadata.resource_version = version
         try:
             return self.rbac.replace_cluster_role_binding(name=name, body=body)
         except ApiException as e:
             if e.status == 404:
+                body.metadata.resource_version = None
                 return self.rbac.create_cluster_role_binding(body=body)
             if e.status in (409, 422):
                 self.rbac.delete_cluster_role_binding(name=name)
+                body.metadata.resource_version = None
                 return self.rbac.create_cluster_role_binding(body=body)
             raise
 
@@ -522,6 +590,7 @@ class RbacService:
         if kind == "RoleBinding":
             if not namespace:
                 raise ValueError("RoleBinding 삭제에는 네임스페이스가 필요합니다.")
+            self._assert_namespace_writable(namespace)
             self.rbac.delete_namespaced_role_binding(name=name, namespace=namespace)
         elif kind == "ClusterRoleBinding":
             self.rbac.delete_cluster_role_binding(name=name)
@@ -531,6 +600,7 @@ class RbacService:
     # ── 토큰 / kubeconfig ─────────────────────────────────────────────────
     def issue_token(self, namespace: str, name: str, expiration_seconds: int) -> dict:
         """TokenRequest API 로 SA 의 단기 토큰을 발급한다(K8s 1.22+)."""
+        self._assert_namespace_writable(namespace)
         ttl = max(600, min(int(expiration_seconds or DEFAULT_TOKEN_TTL_SECONDS), MAX_TOKEN_TTL_SECONDS))
         body = client.AuthenticationV1TokenRequest(
             api_version="authentication.k8s.io/v1",
@@ -552,6 +622,7 @@ class RbacService:
 
     def issue_long_lived_token(self, namespace: str, name: str) -> dict:
         """만료 없는 Secret 기반 토큰(K8s 1.24+ 에서는 수동 Secret 생성이 필요)."""
+        self._assert_namespace_writable(namespace)
         secret_name = f"{name}-pep-token"
         body = client.V1Secret(
             metadata=client.V1ObjectMeta(
@@ -610,9 +681,15 @@ class RbacService:
                     spec = entry.get("cluster") or {}
                     ca = spec.get("certificate-authority-data")
                     ca_file = spec.get("certificate-authority")
-                    if not ca and ca_file and os.path.exists(ca_file):
-                        with open(ca_file, "rb") as cf:
-                            ca = base64.b64encode(cf.read()).decode("ascii")
+                    if not ca and ca_file:
+                        # kubeconfig 안의 상대 경로는 **kubeconfig 파일 위치** 기준이다
+                        # (백엔드 프로세스의 CWD 기준이 아니다). CWD 로 풀면 파일을 못 찾아
+                        # CA 없이 insecure kubeconfig 를 내주게 된다.
+                        if not os.path.isabs(ca_file):
+                            ca_file = os.path.join(os.path.dirname(os.path.abspath(path)), ca_file)
+                        if os.path.exists(ca_file):
+                            with open(ca_file, "rb") as cf:
+                                ca = base64.b64encode(cf.read()).decode("ascii")
                     return (
                         spec.get("server") or self.cluster.api_endpoint,
                         ca,
@@ -748,6 +825,8 @@ class RbacService:
         role_name = (spec.get("role_name") or f"pep-{sa_name}").strip()
         validate_k8s_name(role_name, "Role 이름")
         target_namespaces = [namespace] + [n for n in extra_namespaces if n != namespace]
+        for _ns in target_namespaces:
+            self._assert_namespace_writable(_ns)
         created: list[dict] = []
         dry_run = bool(spec.get("dry_run"))
 

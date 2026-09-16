@@ -271,3 +271,214 @@ def test_cluster_readonly_preset_excludes_secrets():
     """클러스터 전역 읽기에 secrets 가 섞이면 자격증명이 통째로 새어나간다."""
     for rule in PRESET_BY_KEY["cluster-readonly"]["rules"]:
         assert "secrets" not in rule["resources"]
+
+
+# ── 보호 네임스페이스 — 컨트롤플레인에는 쓰지 않는다 (Codex P1) ─────────────
+
+@pytest.mark.parametrize("ns", ["kube-system", "kube-public", "kube-node-lease"])
+def test_protected_namespace_blocks_service_account_writes(ns):
+    """kube-system/coredns 를 지우면 파드 재시작 때 클러스터 DNS 가 죽는다."""
+    svc = _svc()
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.delete_service_account(ns, "coredns")
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.create_service_account(ns, "anything")
+
+
+@pytest.mark.parametrize("ns", ["kube-system", "kube-public", "kube-node-lease"])
+def test_protected_namespace_blocks_token_issuance(ns):
+    """시스템 SA 의 토큰을 받아내는 건 사실상 클러스터 권한 상승이다."""
+    svc = _svc()
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.issue_token(ns, "attachdetach-controller", 3600)
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.issue_long_lived_token(ns, "attachdetach-controller")
+
+
+def test_protected_namespace_blocks_role_and_binding_writes():
+    svc = _svc()
+    rules = [{"resources": ["pods"], "verbs": ["get"]}]
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.upsert_role("kube-system", "pep-x", rules)
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.delete_role("kube-system", "pep-x")
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.delete_binding("RoleBinding", "pep-x", "kube-system")
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        svc.create_binding(
+            kind="RoleBinding", name="pep-x", namespace="kube-system",
+            role_kind="ClusterRole", role_name="r",
+            subjects=[{"kind": "ServiceAccount", "name": "sa", "namespace": "kube-system"}],
+        )
+
+
+def test_protected_namespace_blocks_provision_for_primary_and_extra():
+    svc = _svc()
+    spec = {
+        "namespace": "lake-api", "service_account": "dev-x",
+        "extra_namespaces": ["kube-system"], "binding_mode": "clusterrole-rolebinding",
+        "rules": [{"resources": ["pods"], "verbs": ["get"]}],
+    }
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        list(svc.provision(spec))
+    spec["namespace"] = "kube-system"
+    spec["extra_namespaces"] = []
+    with pytest.raises(ValueError, match="시스템 네임스페이스"):
+        list(svc.provision(spec))
+
+
+def test_normal_namespaces_are_not_blocked():
+    """가드가 일반 네임스페이스까지 막아버리면 기능 자체가 죽는다."""
+    RbacService._assert_namespace_writable("lake-api")
+    RbacService._assert_namespace_writable("kube-system-lookalike")
+    RbacService._assert_namespace_writable(None)
+
+
+# ── 상대 경로 CA 는 kubeconfig 디렉터리 기준으로 푼다 (Codex P1) ────────────
+
+def _write_kubeconfig(tmp_path, ca_ref: str) -> str:
+    (tmp_path / "ca.crt").write_bytes(b"--relative-ca--")
+    kc = tmp_path / "config.yaml"
+    kc.write_text(
+        yaml.safe_dump(
+            {
+                "apiVersion": "v1", "kind": "Config", "current-context": "ctx",
+                "contexts": [{"name": "ctx", "context": {"cluster": "c1", "user": "u"}}],
+                "clusters": [
+                    {"name": "c1", "cluster": {"server": "https://10.0.0.1:6443",
+                                               "certificate-authority": ca_ref}}
+                ],
+                "users": [{"name": "u", "user": {}}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return str(kc)
+
+
+def test_cluster_endpoint_resolves_relative_ca_against_kubeconfig_dir(tmp_path, monkeypatch):
+    """상대 경로를 프로세스 CWD 로 풀면 CA 를 못 찾아 insecure kubeconfig 를 내주게 된다."""
+    kc_path = _write_kubeconfig(tmp_path, "ca.crt")
+    monkeypatch.chdir("/")  # CWD 를 일부러 다른 곳으로
+    svc = _svc()
+    svc._kubeconfig_path = kc_path
+
+    server, ca, insecure = svc.cluster_endpoint()
+
+    assert server == "https://10.0.0.1:6443"
+    assert ca == base64.b64encode(b"--relative-ca--").decode("ascii")
+    assert insecure is False
+
+
+def test_cluster_endpoint_still_reads_absolute_ca(tmp_path):
+    kc_path = _write_kubeconfig(tmp_path, str(tmp_path / "ca.crt"))
+    svc = _svc()
+    svc._kubeconfig_path = kc_path
+    _, ca, _ = svc.cluster_endpoint()
+    assert ca == base64.b64encode(b"--relative-ca--").decode("ascii")
+
+
+def test_generated_kubeconfig_embeds_relative_ca(tmp_path, monkeypatch):
+    """발급된 kubeconfig 가 실제로 CA 를 품고 나가는지 — end 결과로 확인."""
+    kc_path = _write_kubeconfig(tmp_path, "ca.crt")
+    monkeypatch.chdir("/")
+    svc = _svc()
+    svc._kubeconfig_path = kc_path
+    doc = yaml.safe_load(svc.build_kubeconfig("lake-api", "dev-hjkim", "tok"))
+    spec = doc["clusters"][0]["cluster"]
+    assert spec["certificate-authority-data"] == base64.b64encode(b"--relative-ca--").decode("ascii")
+    assert "insecure-skip-tls-verify" not in spec
+
+
+# ── replace(PUT) 는 resourceVersion 을 실어 보낸다 (Codex P1) ───────────────
+
+class _FakeApiException(Exception):
+    def __init__(self, status):
+        self.status = status
+        self.reason = "fake"
+        self.body = "{}"
+
+
+def test_resource_version_returns_none_when_object_absent():
+    from kubernetes.client.rest import ApiException as RealApi
+
+    def _read(**_):
+        raise RealApi(status=404, reason="Not Found")
+
+    assert _svc()._resource_version(_read) is None
+
+
+def test_resource_version_reads_existing_value():
+    obj = SimpleNamespace(metadata=SimpleNamespace(resource_version="12345"))
+    assert _svc()._resource_version(lambda **_: obj) == "12345"
+
+
+def test_resource_version_propagates_non_404_errors():
+    from kubernetes.client.rest import ApiException as RealApi
+
+    def _read(**_):
+        raise RealApi(status=403, reason="Forbidden")
+
+    with pytest.raises(RealApi):
+        _svc()._resource_version(_read)
+
+
+def test_upsert_role_sends_resource_version_on_replace(monkeypatch):
+    """기존 롤을 저장할 때 resourceVersion 이 빠지면 낙관적 동시성이 꺼져,
+    두 사람이 같은 롤을 편집하면 나중 저장이 앞 저장을 조용히 지운다."""
+    svc = _svc()
+    existing = SimpleNamespace(metadata=SimpleNamespace(resource_version="777"))
+    captured = {}
+
+    class _Rbac:
+        @staticmethod
+        def read_namespaced_role(**_):
+            return existing
+
+        @staticmethod
+        def replace_namespaced_role(name, namespace, body):
+            captured["version"] = body.metadata.resource_version
+            return SimpleNamespace(
+                metadata=SimpleNamespace(
+                    name=name, namespace=namespace, labels={}, creation_timestamp=None
+                ),
+                rules=body.rules,
+            )
+
+        @staticmethod
+        def create_namespaced_role(**_):  # pragma: no cover - 여기선 불려선 안 된다
+            raise AssertionError("기존 롤이 있으면 create 로 가면 안 된다")
+
+    monkeypatch.setattr(type(svc), "rbac", property(lambda self: _Rbac))
+    svc.upsert_role("lake-api", "pep-dev", [{"resources": ["pods"], "verbs": ["get"]}])
+    assert captured["version"] == "777"
+
+
+def test_upsert_role_creates_when_absent(monkeypatch):
+    from kubernetes.client.rest import ApiException as RealApi
+
+    svc = _svc()
+    calls = []
+
+    class _Rbac:
+        @staticmethod
+        def read_namespaced_role(**_):
+            raise RealApi(status=404, reason="Not Found")
+
+        @staticmethod
+        def replace_namespaced_role(**_):  # pragma: no cover
+            raise AssertionError("없는 롤을 replace 하면 안 된다")
+
+        @staticmethod
+        def create_namespaced_role(namespace, body):
+            calls.append(body.metadata.resource_version)
+            return SimpleNamespace(
+                metadata=SimpleNamespace(
+                    name=body.metadata.name, namespace=namespace, labels={}, creation_timestamp=None
+                ),
+                rules=body.rules,
+            )
+
+    monkeypatch.setattr(type(svc), "rbac", property(lambda self: _Rbac))
+    svc.upsert_role("lake-api", "pep-new", [{"resources": ["pods"], "verbs": ["get"]}])
+    assert calls == [None]  # create 에는 resourceVersion 이 없어야 한다

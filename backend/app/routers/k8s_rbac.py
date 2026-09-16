@@ -12,7 +12,7 @@ kubeconfig 를 한 세트로 만들어 줘야 한다. 이 라우터는 그 세�
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Callable, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -513,6 +513,39 @@ def provision(
     return ProvisionResult(**result, logs=logs)
 
 
+def provision_event_stream(svc: RbacService, spec: dict, on_finish: Callable[[str], None]):
+    """provision 이벤트를 SSE 줄로 바꿔 흘리고, 끝나면 결과를 `on_finish` 로 알린다.
+
+    엔드포인트 안의 클로저가 아니라 모듈 함수인 이유는 **중단 경로를 테스트할 수 있어야**
+    해서다 — 클라이언트가 끊었을 때 감사 로그에 뭐라고 남는지가 이 함수의 핵심 계약이다.
+    """
+    # 클라이언트가 중간에 끊으면(중단 버튼/새로고침) 이미 만들어진 오브젝트는 클러스터에
+    # 남는다. 이를 "success" 로 적으면 감사 기록이 거짓말을 한다.
+    outcome = "success"
+    try:
+        for event in svc.provision(spec):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+    except GeneratorExit:  # 클라이언트가 끊음 — 중간까지 적용된 상태로 남는다
+        outcome = "aborted"
+        raise
+    except Exception as e:  # noqa: BLE001 — SSE 로는 에러도 이벤트로 보낸다
+        outcome = "failure"
+        yield (
+            "data: "
+            + json.dumps(
+                {"type": "error", "message": str(e) or "프로비저닝에 실패했습니다."},
+                ensure_ascii=False,
+            )
+            + "\n\n"
+        )
+    finally:
+        try:
+            on_finish(outcome)
+        except Exception:  # noqa: BLE001 — 감사 로그 실패가 스트림을 깨지 않게
+            pass
+    yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+
 @router.post("/provision/stream")
 def provision_stream(
     cluster_id: UUID,
@@ -529,30 +562,11 @@ def provision_stream(
     cluster, svc = _service(cluster_id, db)
     spec = _provision_spec(payload)
 
-    def _gen():
-        failed = False
-        try:
-            for event in svc.provision(spec):
-                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except GeneratorExit:  # 클라이언트가 끊음
-            return
-        except Exception as e:  # noqa: BLE001 — SSE 로는 에러도 이벤트로 보낸다
-            failed = True
-            yield (
-                "data: "
-                + json.dumps(
-                    {"type": "error", "message": str(e) or "프로비저닝에 실패했습니다."},
-                    ensure_ascii=False,
-                )
-                + "\n\n"
-            )
-        finally:
-            try:
-                _audit_provision(
-                    db, cluster, actor, payload, request, "failure" if failed else "success"
-                )
-            except Exception:  # noqa: BLE001 — 감사 로그 실패가 스트림을 깨지 않게
-                pass
-        yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+    def _finish(outcome: str) -> None:
+        _audit_provision(db, cluster, actor, payload, request, outcome)
 
-    return StreamingResponse(_gen(), media_type="text/event-stream", headers=SSE_HEADERS)
+    return StreamingResponse(
+        provision_event_stream(svc, spec, _finish),
+        media_type="text/event-stream",
+        headers=SSE_HEADERS,
+    )

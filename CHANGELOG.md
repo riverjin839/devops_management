@@ -22,8 +22,10 @@
   `/provision/stream` 으로 단계별 실시간 로그) · `services/k8s_rbac_service.py` ·
   `services/k8s_rbac_presets.py` · `schemas/k8s_rbac.py`. Frontend: `pages/K8sRbacPage.tsx` ·
   `components/k8s-rbac/` · `hooks/useK8sRbac.ts`(SSE 소비 `useProvisionStream`). 실행 로그는 항상
-  수집하고 "로그 보기" 토글로 펼침 여부만 정한다. 빌트인(`system:*`, `cluster-admin`,
-  네임스페이스 `default` SA)은 조회만 되고 수정·삭제는 막힌다.
+  수집하고 "로그 보기" 토글로 펼침 여부만 정한다. 가드레일 — 빌트인(`system:*`,
+  `cluster-admin`)과 네임스페이스 `default` SA 는 조회만 되고, 컨트롤플레인 네임스페이스
+  (`kube-system`/`kube-public`/`kube-node-lease`)는 생성·수정·삭제와 **토큰 발급**이 막힌다
+  (시스템 SA 토큰 발급은 사실상 권한 상승이다).
 
 ### Changed
 - **지원 뷰포트 선언 + 상단바 축약 (D-076)**: PEP 가 지원하는 창 폭을 3단계(≥1280 정식,
