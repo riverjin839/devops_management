@@ -102,6 +102,32 @@ def test_backfill_does_not_overwrite_already_configured_installed_apps(db, clean
     assert value["installed_apps"] == ["cluster"]
 
 
+def test_user_created_after_sentinel_stays_unbackfilled(db, cleanup):
+    """리뷰 지적 — main.py 부팅 순서상 이 백필은 `_seed_initial_admin()` 보다 먼저
+    실행돼야 한다(수정함). 안 그러면 방금 막 생긴 부트스트랩 admin 이 "기존 사용자"로
+    오인돼 빈 사이드바로 시작해야 할 신규 계정인데 전체 설치 상태를 받는다.
+
+    `_seed_initial_admin()` 자체(전역 User 개수 0일 때만 admin 생성)에 기대면 공유
+    테스트 DB 에서 다른 테스트가 남긴 admin 유무에 따라 이 테스트가 조용히 아무것도
+    검증하지 않을 수 있어, 대신 일반화된 계약을 직접 검증한다: **sentinel 이 이미 있는
+    상태에서 새로 생긴 계정은 절대 백필 대상이 아니다** — `_seed_initial_admin()` 를
+    포함해 그 계약에 의존하는 모든 호출부가 자동으로 옳아진다.
+    """
+    from app.services.user_settings import get_user_setting
+
+    _backfill_installed_sidebar_apps()  # sentinel 확정(이미 있으면 즉시 반환)
+
+    late_user = _user("after-sentinel")
+    cleanup.append(late_user.id)
+    db.add(late_user)
+    db.commit()
+
+    _backfill_installed_sidebar_apps()  # 이 시점엔 sentinel 이 있으니 no-op 이어야 한다
+
+    value = get_user_setting(db, late_user.id, "home_prefs", None)
+    assert value is None or "installed_apps" not in value
+
+
 def test_backfill_is_idempotent_via_sentinel(db, cleanup):
     from app.services.user_settings import get_user_setting, set_user_setting
 

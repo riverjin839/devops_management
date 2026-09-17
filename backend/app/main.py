@@ -2111,9 +2111,12 @@ async def lifespan(app: FastAPI):
             ("seed_service_categories", _seed_default_service_categories),
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_observability_catalog", _seed_observability_catalog),
+            # backfill_installed_sidebar_apps 는 seed_initial_admin 보다 먼저 실행돼야 한다 —
+            # 안 그러면 첫 부팅에서 방금 만든 부트스트랩 admin 이 "기존 사용자"로 오인돼 빈
+            # 사이드바로 시작해야 할 신규 계정인데도 전체 설치 상태를 받는다(리뷰 지적).
+            ("backfill_installed_sidebar_apps", _backfill_installed_sidebar_apps),
             ("seed_initial_admin", _seed_initial_admin),
             ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
-            ("backfill_installed_sidebar_apps", _backfill_installed_sidebar_apps),
         ]:
             try:
                 step()
