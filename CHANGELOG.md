@@ -24,6 +24,17 @@
   Frontend: `components/platform-status/CheckMatrixItemFormModal.tsx`.
 
 ### Changed
+- **Main UI 간소화 — 사이드바 opt-in 앱 카탈로그 + 홈 KPI 스트립 제거**: 좌측 사이드바가
+  플랫폼 그룹을 전부 항상 보여주던 것에서, 사용자가 카드형 "앱 추가" 다이얼로그에서 필요한
+  것만 골라 설치(opt-in)하는 방식으로 바뀌었다 — 신규 계정은 완전히 빈 레일 + "+" 버튼으로
+  시작하고, 기존 계정은 이전과 동일하게 전체가 설치된 상태로 1회 자동 이관돼 화면이 갑자기
+  비어 보이지 않는다. 홈(`/`)에서는 이 화면 최상단을 차지하던 KPI 스트립(내 할일/미해결
+  이슈/위험 클러스터/점검 실패/다음 일정 + 아일랜드 진입 필)을 제거해 세그먼트 탭이 바로
+  최상단에 오도록 정리했다 — 위험 신호는 플랫폼 탭 배지 하나로 압축. Backend:
+  `HomePrefs.installed_apps`(`schemas/home_prefs.py`, 기존 `/me/home-prefs` 엔드포인트 재사용) +
+  `main.py::_backfill_installed_sidebar_apps()`(기존 계정 1회 이관). Frontend:
+  `components/layout/{sidebarApps.ts,AddSidebarAppDialog.tsx}` 신규, `Sidebar.tsx`/`HomePage.tsx`
+  개편. `DESIGN_SYSTEM.md` §12.11 신설.
 - **기본 등록된 점검 카드도 설정을 커스터마이즈**: 등록 마법사의 임계값/파라미터가 기본 점검
   종류에서 더 이상 읽기 전용이 아니고, 항목 수정 폼에서도 현재 값을 바로 확인·수정한다.
   **"이 항목 전용 설정으로 분리"** 를 켜면 그 행만의 점검 정의(`CheckMatrixItem.definition_id`)가

@@ -5244,6 +5244,10 @@ export interface AlertIncidentAnalysis {
 export interface HomePrefs {
   defaultHomeTab?: 'work' | 'platform' | null;
   pinnedPaths: string[];
+  /** R-6 i18n 2단계 — 표시 언어(서버 저장, 기기/브라우저를 넘어 따라온다). */
+  locale?: 'ko' | 'en' | null;
+  /** 사이드바 "SaaS 앱" 개편 — 사용자가 설치(opt-in)한 플랫폼 그룹 id(GroupId) + "back". */
+  installedApps: string[];
 }
 
 export type HomePrefsUpdate = Partial<HomePrefs>;

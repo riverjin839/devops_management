@@ -191,6 +191,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 테마 / CSS 변수 | `frontend/src/index.css` (`:root`, `html.light`, `html.dark`) — 대표 색 스냅샷은 `frontend/src/lib/themeSwatches.ts`(D-072, 사용자 메뉴 스와치·`components/settings/ThemeGallery.tsx` 가 공유) |
 | MacCard 공통 컴포넌트 | `frontend/src/components/ui/MacCard.tsx` |
 | Sidebar(플랫폼 도메인) + 네비 설정 | `frontend/src/components/layout/Sidebar.tsx` (`NAV_MAP`/`GROUPS` 는 `navConfig.ts` 로 분리, `GROUPS.domain` 이 배치 결정) |
+| 사이드바 "앱" opt-in 설치(Main UI 간소화) | `frontend/src/components/layout/sidebarApps.ts`(설치 가능 카탈로그 — platform/system 그룹 + "back") + `AddSidebarAppDialog.tsx`(카드형 추가 다이얼로그) → `HomePrefs.installedApps`(`backend/app/schemas/home_prefs.py`, `home_prefs.py` 라우터 재사용) — 기존 계정 1회 이관은 `backend/app/main.py::_backfill_installed_sidebar_apps()` |
 | 전역 상단바(업무 도메인) | `frontend/src/components/layout/AppTopBar.tsx` + `NavFlyout.tsx`(`FlyoutShell`/`FlyoutLink`/`FlyoutAction` 공용, Sidebar 와 공유 — 키보드 메뉴 규약은 `DESIGN_SYSTEM.md` §12.8) — `lg:` 미만(<1024px)은 그룹 버튼이 `Menu` 트리거 하나로 접힘(D-076, §12.10) |
 | 지원 뷰포트 배너(D-076) | `frontend/src/components/layout/ViewportSupportBanner.tsx` → `PageStyleProvider.tsx` 최상단 전역 마운트, `DESIGN_SYSTEM.md` §12.10 |
 | 커맨드 팔레트(Ctrl/⌘+K 화면·클러스터·최근 방문 검색) | `frontend/src/components/layout/CommandPalette.tsx` + `stores/commandPaletteStore.ts` (전역 단축키·마운트는 `PageStyleProvider.tsx`) |

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Sparkles, Palmtree, Leaf, Star,
-  Moon, Sun, Monitor, LogOut, User, ArrowLeft,
+  Sparkles, Palmtree, Leaf, Star, Plus,
+  Moon, Sun, Monitor, LogOut, User,
   KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette,
   Flame, Sunset, Zap, Waves, Flower2, Citrus,
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useIslands } from '@/hooks/useIslands';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { THEME_SWATCH } from '@/lib/themeSwatches';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
@@ -25,7 +26,9 @@ import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
 import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
 import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
+import { AddSidebarAppDialog } from './AddSidebarAppDialog';
 import { GROUPS, type GroupId } from './navConfig';
+import { sidebarAppById } from './sidebarApps';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
@@ -217,6 +220,17 @@ export function Sidebar() {
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
   const { isPinned, togglePin } = useFavorites();
 
+  // 사이드바 "SaaS 앱" 개편 — 레일에는 사용자가 설치(opt-in)한 것만 순서대로 보인다.
+  // 기본값은 빈 리스트("+" 버튼만) 이고, 기존 계정은 백엔드 1회 이관으로 전체가 채워져 있다.
+  const { data: homePrefs } = useHomePrefs();
+  const updateHomePrefs = useUpdateHomePrefs();
+  const installedApps = useMemo(() => homePrefs?.installedApps ?? [], [homePrefs?.installedApps]);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const toggleInstalledApp = (id: string) => {
+    const next = installedApps.includes(id) ? installedApps.filter((x) => x !== id) : [...installedApps, id];
+    updateHomePrefs.mutate({ installedApps: next });
+  };
+
   const { open: agentChatOpen, toggle: toggleAgentChat } = useAgentChatStore();
 
   // 홈 버튼 — 항상 홈으로 이동만 한다. 예전엔 이미 홈에 있을 때 work/platform 모드를
@@ -334,16 +348,6 @@ export function Sidebar() {
   };
   useEffect(() => clearHoverTimers, []);
 
-  // 레일에는 플랫폼 도메인 그룹만 — 업무 도메인은 전역 상단바(AppTopBar)로 이동했다(D-054).
-  // 더는 홈 모드가 사이드바 노출 범위를 게이팅하지 않는다 — 항상 전체가 보인다.
-  const visibleGroups = useMemo(
-    () => GROUPS.filter((g) => g.domain === 'platform'),
-    [],
-  );
-
-  // 하단 푸터에 둘 Settings(system) 그룹 — admin 전용.
-  const systemGroup = useMemo(() => GROUPS.find((g) => g.id === 'system') ?? null, []);
-  const systemHasFlyout = (systemGroup?.paths.length ?? 0) > 1;
   const islandHasFlyout = myIslands.length + sharedIslands.length > 1;
 
   // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
@@ -481,22 +485,9 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* 전역 뒤로가기 — 홈이 아닐 때만 노출. 어느 화면에서든 이전 화면으로 돌아간다. */}
-        {location.pathname !== '/' && (
-          <div className="flex items-center justify-center py-2 border-b border-border flex-shrink-0">
-            <button
-              type="button"
-              onClick={handleBack}
-              title={canGoBack ? '뒤로 (이전 화면)' : '홈으로'}
-              aria-label={canGoBack ? '이전 화면으로 뒤로 가기' : '홈으로'}
-              className="w-9 h-9 rounded-md flex items-center justify-center text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors active:scale-95"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {/* 그룹 아이콘 레일 — 플랫폼 도메인 그룹만 (업무 도메인은 상단바로 이동) */}
+        {/* 그룹 아이콘 레일 — 사용자가 설치(opt-in)한 앱만, 설치 순서대로 보인다.
+            기본은 빈 레일 + "+" 버튼(맨 아래) 뿐이다 — 뒤로가기도 설치 대상(카탈로그의
+            "back"), 홈은 유일한 예외로 위 로고가 항상 대신한다. */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
           <div className="flex flex-col items-center gap-1">
             {/* 즐겨찾기 — 레일 최상단, 공용 그룹과 성격이 달라(개인 선택) 구분선으로 분리.
@@ -521,7 +512,17 @@ export function Sidebar() {
               }}
             />
             <div className="w-6 border-t border-border my-1" aria-hidden />
-            {visibleGroups.map((g) => {
+            {installedApps.map((appId) => {
+              if (appId === 'system' && !isAdmin) return null;
+              if (appId === 'back') {
+                if (location.pathname === '/') return null;
+                const backApp = sidebarAppById('back')!;
+                return (
+                  <RailIconButton key="back" label={backApp.label} Icon={backApp.icon} onClick={handleBack} />
+                );
+              }
+              const g = GROUPS.find((x) => x.id === appId);
+              if (!g) return null;
               const hasFlyout = g.paths.length > 1;
               return (
                 <RailIconButton
@@ -543,29 +544,13 @@ export function Sidebar() {
                 />
               );
             })}
+            <RailIconButton label="사이드바에 앱 추가" Icon={Plus} onClick={() => setCatalogOpen(true)} />
           </div>
         </nav>
 
         {/* 푸터 — 설정(admin) / Your Island / AI / 도움말·지원 / 사용자 메뉴 (D-077 — 7개 → 5개.
             테마·비밀번호·로그아웃은 사용자 메뉴 안으로, VOC·릴리즈 노트·버그 로그는 도움말로) */}
         <div className="flex-shrink-0 border-t border-border py-2 flex flex-col items-center gap-1">
-          {isAdmin && systemGroup && (
-            <RailIconButton
-              label={systemGroup.label}
-              Icon={systemGroup.icon}
-              active={activeGroup === 'system'}
-              highlighted={openGroup === 'system'}
-              suppressTooltip={openGroup === 'system'}
-              hasFlyout={systemHasFlyout}
-              onHoverOpen={systemHasFlyout ? (rect) => scheduleFlyoutOpen(() => { setOpenGroup('system'); setOpenAnchor(rect); }) : undefined}
-              onHoverClose={systemHasFlyout ? () => scheduleFlyoutClose(() => setOpenGroup(null)) : undefined}
-              onClick={(rect, el) => {
-                // 하위 경로가 1개뿐이면(현재 '/settings' 단일) 플라이아웃 없이 바로 이동.
-                if (!systemHasFlyout) { clearHoverTimers(); setOpenGroup(null); navigate(systemGroup.paths[0]); }
-                else toggleGroup('system', rect, el);
-              }}
-            />
-          )}
           {/* Your Island — 개인 커스텀 화면이라 공용 그룹 레일이 아니라 푸터 개인 존에 둔다.
               아일랜드가 여러 개면 flyout 으로 고르고, 0~1개면 바로 이동한다. */}
           {currentUser && (
@@ -820,6 +805,15 @@ export function Sidebar() {
         danger
         onConfirm={() => { setLogoutConfirmOpen(false); logout(); }}
         onCancel={() => setLogoutConfirmOpen(false)}
+      />
+
+      {/* 사이드바 "앱 추가" 카탈로그 — 레일에 설치할 그룹/버튼을 카드에서 골라 켠다. */}
+      <AddSidebarAppDialog
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        installedApps={installedApps}
+        onToggle={toggleInstalledApp}
+        isAdmin={isAdmin}
       />
 
       {/* 내 정보·담당 설정 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}
