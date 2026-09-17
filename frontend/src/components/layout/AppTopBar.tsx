@@ -1,46 +1,76 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Star, Sun, Search, Menu } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ChevronDown, Star, Sun, Search, Menu, Plus, Palmtree } from 'lucide-react';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
+import { useIslands } from '@/hooks/useIslands';
+import { useIslandStore } from '@/stores/islandStore';
 import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { useToday } from '@/hooks/useToday';
 import { cn, fmtKoreanDate } from '@/lib/utils';
-import { FlyoutShell, FlyoutLink } from './NavFlyout';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
+import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
 import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
 import { WorkAlarmBell } from './WorkAlarmBell';
-import { GROUPS, type GroupId } from './navConfig';
-
-const WORK_GROUPS = GROUPS.filter((g) => g.domain === 'work');
+import { AddAppDialog } from './AddAppDialog';
+import { installableAppById, topbarAppSections } from './installableApps';
 
 // Sidebar.tsx 의 flyout hover-intent 와 동일한 지연값 — 두 진입점의 체감 반응 속도를 맞춘다.
 const HOVER_OPEN_DELAY = 150;
 const HOVER_CLOSE_DELAY = 200;
 
+/** 아일랜드 아이콘(lucide 이름/이모지/이미지) → flyout 이 기대하는 ComponentType. */
+function islandFlyoutIcon(icon?: string | null) {
+  const resolved = resolveClusterIcon(icon);
+  return resolved?.kind === 'lucide' ? resolved.Component : Palmtree;
+}
+
 /**
- * 전역 상단바 — 업무 도메인 그룹(협업/문서 관리)을 여기서 노출한다.
+ * 전역 상단바 — 사용자가 설치(opt-in)한 업무 도메인 leaf 페이지 + 즐겨찾기/Your Island 를
+ * 이름 옆에 노출한다.
  *
- * 예전엔 이 그룹들이 사이드바에 있었고, 사이드바 홈 버튼의 숨은 "모드" 토글이 플랫폼
- * 도메인과 서로 배타적으로 갈아 끼웠다(D-054) — 반대 도메인 화면은 4클릭 없이는 갈 수
- * 없었다. 상단바는 모든 화면에서 항상 렌더되므로, 어느 플랫폼 화면에 있든 업무 도메인이
- * 1~2클릭 거리에 있다. 좌측 사이드바는 플랫폼 도메인 그룹만 남는다(`Sidebar.tsx`).
+ * 예전엔 "협업"/"문서 관리" 그룹 전체와 즐겨찾기가 항상 떠 있었다. 사용자 요청("업무 관리로
+ * 개명 + 문서관리·즐겨찾기·아일랜드도 개인이 추가하는 방식으로")에 따라 사이드바와 같은
+ * opt-in leaf 카탈로그로 바꿨다 — 기본은 빈 목록 + "+" 버튼뿐이고, 기존 계정은 1회 이관으로
+ * 이전과 동일한 항목이 채워진다(main.py::_backfill_installed_sidebar_apps).
  */
 export function AppTopBar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const myName = user?.displayName?.trim() || user?.username || null;
   useToday(); // 자정 넘기면 날짜 표기가 갱신되도록 리렌더만 구독(반환값은 안 씀)
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
   const { isPinned, togglePin } = useFavorites();
 
-  const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
-  const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
+  const { data: homePrefs } = useHomePrefs();
+  const updateHomePrefs = useUpdateHomePrefs();
+  const installedApps = useMemo(() => homePrefs?.installedApps ?? [], [homePrefs?.installedApps]);
+  const topbarInstalled = useMemo(
+    () => installedApps.filter((id) => installableAppById(id)?.domain === 'work'),
+    [installedApps],
+  );
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const toggleInstalledApp = (id: string) => {
+    const next = installedApps.includes(id) ? installedApps.filter((x) => x !== id) : [...installedApps, id];
+    updateHomePrefs.mutate({ installedApps: next });
+  };
+  const catalogSections = useMemo(() => topbarAppSections(), []);
+
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
-  // D-076 — `lg:` 미만(<1024px)에서는 그룹 버튼이 `overflow-x-auto` 로 조용히 잘려 보이지
-  // 않게 밀려나므로, 개별 버튼 대신 이 트리거 하나로 접는다(둘 다 합쳐도 그룹 수가 적어
-  // 중첩 메뉴 대신 평평한 목록으로 충분하다).
+  // Your Island — 내 아일랜드가 2개 이상이면 클릭 시 flyout 으로 고른다.
+  const { data: islandData } = useIslands();
+  const myIslands = useMemo(() => islandData?.data ?? [], [islandData?.data]);
+  const sharedIslands = useMemo(() => islandData?.shared ?? [], [islandData?.shared]);
+  const lastIslandId = useIslandStore((s) => s.lastIslandId);
+  const islandHasFlyout = myIslands.length + sharedIslands.length > 1;
+  const [islandFlyoutAnchor, setIslandFlyoutAnchor] = useState<DOMRect | null>(null);
+
+  // D-076 — `lg:` 미만(<1024px)에서는 버튼이 `overflow-x-auto` 로 조용히 잘려 보이지
+  // 않게 밀려나므로, 개별 버튼 대신 이 트리거 하나로 접는다.
   const [moreOpen, setMoreOpen] = useState(false);
   const [moreAnchor, setMoreAnchor] = useState<DOMRect | null>(null);
   const openPalette = useCommandPaletteStore((s) => s.setOpen);
@@ -60,8 +90,8 @@ export function AppTopBar() {
   };
   // 여러 드롭다운이 동시에 열리지 않도록, 새로 열기 전에 나머지를 전부 닫는다.
   const closeAllFlyouts = () => {
-    setOpenGroup(null);
     setFavoritesOpen(false);
+    setIslandFlyoutAnchor(null);
     setMoreOpen(false);
   };
   const scheduleFlyoutOpen = (openFn: () => void) => {
@@ -85,25 +115,115 @@ export function AppTopBar() {
   };
   useEffect(() => clearHoverTimers, []);
 
-  useEffect(() => { setOpenGroup(null); setFavoritesOpen(false); setMoreOpen(false); }, [location.pathname]);
+  useEffect(() => { setFavoritesOpen(false); setIslandFlyoutAnchor(null); setMoreOpen(false); }, [location.pathname]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setOpenGroup(null); setFavoritesOpen(false); setMoreOpen(false); }
+      if (e.key === 'Escape') { setFavoritesOpen(false); setIslandFlyoutAnchor(null); setMoreOpen(false); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const activeGroup = useMemo<GroupId | null>(() => {
-    for (const g of WORK_GROUPS) {
-      if (g.paths.includes(location.pathname)) return g.id;
+  const goToIsland = (rect?: DOMRect, el?: HTMLElement | null) => {
+    if (islandHasFlyout) {
+      clearHoverTimers();
+      const wasOpen = !!islandFlyoutAnchor;
+      closeAllFlyouts();
+      setFlyoutFocus({ autoFocus: true, trigger: el ?? null });
+      if (!wasOpen) setIslandFlyoutAnchor(rect ?? null);
+      return;
     }
-    return null;
-  }, [location.pathname]);
+    setIslandFlyoutAnchor(null);
+    const target = myIslands[0]?.id ?? sharedIslands[0]?.id ?? lastIslandId;
+    navigate(target ? `/island/${target}` : '/island');
+  };
 
   const dateStr = fmtKoreanDate(new Date());
 
-  const openGroupDef = openGroup ? WORK_GROUPS.find((g) => g.id === openGroup) ?? null : null;
+  /** leaf 링크 하나를 가로 pill 버튼으로 그린다 — 설치 단위 자체가 최하위 메뉴라 드롭다운이 없다. */
+  const renderLeafButton = (path: string, key: string) => {
+    const entry = navMap[path];
+    if (!entry || !featureAllowed(path)) return null;
+    const active = location.pathname === path;
+    return (
+      <Link
+        key={key}
+        to={path}
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors',
+          active ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+        )}
+      >
+        <entry.icon className={cn('w-4 h-4 flex-shrink-0', entry.iconColor)} />
+        {getLabel(path)}
+      </Link>
+    );
+  };
+
+  const renderInstalled = () => topbarInstalled.map((appId) => {
+    if (appId === 'favorites') {
+      const isOpen = favoritesOpen;
+      return (
+        <button
+          key="favorites"
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={isOpen}
+          title="즐겨찾기"
+          aria-label="즐겨찾기"
+          onMouseEnter={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            scheduleFlyoutOpen(() => { setFavoritesOpen(true); setFavoritesAnchor(rect); });
+          }}
+          onMouseLeave={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
+          onClick={(e) => {
+            clearHoverTimers();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const wasOpen = favoritesOpen;
+            closeAllFlyouts();
+            setFlyoutFocus({ autoFocus: true, trigger: e.currentTarget });
+            if (!wasOpen) { setFavoritesAnchor(rect); setFavoritesOpen(true); }
+          }}
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors',
+            isOpen ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+          )}
+        >
+          <Star className="w-4 h-4 flex-shrink-0" />
+          즐겨찾기
+        </button>
+      );
+    }
+    if (appId === 'island') {
+      const isOpen = !!islandFlyoutAnchor;
+      return (
+        <button
+          key="island"
+          type="button"
+          aria-haspopup={islandHasFlyout ? 'menu' : undefined}
+          aria-expanded={islandHasFlyout ? isOpen : undefined}
+          title="나의 아일랜드"
+          aria-label="나의 아일랜드"
+          onMouseEnter={!islandHasFlyout ? undefined : (e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            scheduleFlyoutOpen(() => setIslandFlyoutAnchor(rect));
+          }}
+          onMouseLeave={!islandHasFlyout ? undefined : () => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null))}
+          onClick={(e) => { clearHoverTimers(); goToIsland(e.currentTarget.getBoundingClientRect(), e.currentTarget); }}
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors',
+            location.pathname.startsWith('/island') || isOpen
+              ? 'bg-primary/10 text-primary font-semibold'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+          )}
+        >
+          <Palmtree className="w-4 h-4 flex-shrink-0" />
+          나의 아일랜드
+        </button>
+      );
+    }
+    return renderLeafButton(appId, appId);
+  });
 
   return (
     <header className="sticky top-0 z-30 flex-none h-[var(--topbar-h)] flex items-center gap-3 pl-3 lg:pl-4 pr-3 lg:pr-4 border-b border-border bg-background/95 backdrop-blur">
@@ -114,60 +234,25 @@ export function AppTopBar() {
         <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">{dateStr}</span>
       </div>
 
-      {/* 업무 도메인 그룹 — 라벨 있는 가로 항목. 하위 경로 1개면 직행, 2개 이상이면 드롭다운
-          (chevron 유무로 구분). relative z-10 로 아래 click-outside 오버레이(z-0, header 의
-          같은 스태킹 컨텍스트 안에서 자식으로 렌더됨)보다 위에 둔다 — 안 그러면 버튼이
-          포지션 없는 요소라 오버레이가 z-index 값과 무관하게 항상 위에 그려져, hover 로 연
-          flyout 이 열리자마자 오버레이에 가려 mouseleave 로 판정돼 바로 닫혀버린다. */}
+      {/* 설치된 업무 도메인 앱 — 사용자가 opt-in 으로 고른 leaf 페이지 + 즐겨찾기/아일랜드.
+          relative z-10 로 아래 click-outside 오버레이(z-0)보다 위에 둔다 — 안 그러면 버튼이
+          포지션 없는 요소라 오버레이가 항상 위에 그려져, hover 로 연 flyout 이 열리자마자
+          오버레이에 가려 mouseleave 로 판정돼 바로 닫혀버린다. */}
       <nav aria-label="업무" className="relative z-10 hidden lg:flex items-center gap-1 min-w-0 overflow-x-auto">
-        {WORK_GROUPS.map((g) => {
-          const single = g.paths.length === 1;
-          const isOpen = openGroup === g.id;
-          const active = activeGroup === g.id;
-          const itemClass = cn(
-            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors',
-            active || isOpen
-              ? 'bg-primary/10 text-primary font-semibold'
-              : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-          );
-          if (single) {
-            return (
-              <Link key={g.id} to={g.paths[0]} className={itemClass}>
-                <g.icon className="w-4 h-4 flex-shrink-0" />
-                {g.label}
-              </Link>
-            );
-          }
-          return (
-            <button
-              key={g.id}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={isOpen}
-              className={itemClass}
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                scheduleFlyoutOpen(() => { setOpenGroup(g.id); setOpenAnchor(rect); });
-              }}
-              onMouseLeave={() => scheduleFlyoutClose(() => setOpenGroup(null))}
-              onClick={(e) => {
-                clearHoverTimers();
-                const rect = e.currentTarget.getBoundingClientRect();
-                setFlyoutFocus({ autoFocus: true, trigger: e.currentTarget });
-                setOpenAnchor(rect);
-                setOpenGroup((cur) => (cur === g.id ? null : g.id));
-              }}
-            >
-              <g.icon className="w-4 h-4 flex-shrink-0" />
-              {g.label}
-              <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
-            </button>
-          );
-        })}
+        {renderInstalled()}
+        <button
+          type="button"
+          title="상단바에 앱 추가"
+          aria-label="상단바에 앱 추가"
+          onClick={() => setCatalogOpen(true)}
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
       </nav>
 
-      {/* D-076 — 1024px 미만은 개별 그룹 버튼 대신 이 트리거 하나로 접는다. */}
-      <div className="relative z-10 lg:hidden">
+      {/* D-076 — 1024px 미만은 개별 버튼 대신 이 트리거 하나로 접는다. */}
+      <div className="relative z-10 lg:hidden flex items-center gap-1">
         <button
           type="button"
           aria-haspopup="menu"
@@ -188,7 +273,7 @@ export function AppTopBar() {
           }}
           className={cn(
             'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors',
-            activeGroup || moreOpen
+            moreOpen
               ? 'bg-primary/10 text-primary font-semibold'
               : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
           )}
@@ -196,6 +281,15 @@ export function AppTopBar() {
           <Menu className="w-4 h-4 flex-shrink-0" />
           메뉴
           <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
+        </button>
+        <button
+          type="button"
+          title="상단바에 앱 추가"
+          aria-label="상단바에 앱 추가"
+          onClick={() => setCatalogOpen(true)}
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
+        >
+          <Plus className="w-4 h-4" />
         </button>
       </div>
 
@@ -216,79 +310,10 @@ export function AppTopBar() {
           <span className="hidden md:inline text-xs flex-1 text-left">화면 검색</span>
           <kbd className="hidden md:inline text-[10px] font-mono border border-border rounded px-1">⌘K</kbd>
         </button>
-        <button
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={favoritesOpen}
-          title="즐겨찾기"
-          aria-label="즐겨찾기"
-          onMouseEnter={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            scheduleFlyoutOpen(() => { setFavoritesOpen(true); setFavoritesAnchor(rect); });
-          }}
-          onMouseLeave={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
-          onClick={(e) => {
-            clearHoverTimers();
-            const rect = e.currentTarget.getBoundingClientRect();
-            setFlyoutFocus({ autoFocus: true, trigger: e.currentTarget });
-            setFavoritesAnchor(rect);
-            setFavoritesOpen((cur) => !cur);
-          }}
-          className={cn(
-            'flex items-center justify-center w-8 h-8 rounded-lg border transition-colors',
-            favoritesOpen
-              ? 'bg-primary/10 text-primary border-primary/30'
-              : 'text-muted-foreground border-border hover:bg-secondary hover:text-foreground',
-          )}
-        >
-          <Star className="w-4 h-4" />
-        </button>
         <div className="flex items-center rounded-lg border border-border bg-card overflow-hidden">
           <WorkAlarmBell />
         </div>
       </div>
-
-      {openGroup && openAnchor && openGroupDef && (
-        <>
-          {/* 이 캐처는 header 의 자식이라 header 자신의 z-30 과는 별개로, header 내부의 다른
-              자식들(날짜/그룹 버튼/즐겨찾기)과 같은 스태킹 컨텍스트에서 경쟁한다. 버튼들은
-              position 이 없는 요소라 z-index 값과 무관하게 위치가 있는 캐처(어떤 양수
-              z-index 든)에 항상 가려지므로, 캐처를 z-0 으로 낮추고 대신 버튼이 속한 행들에
-              `relative z-10` 을 줘서 행이 캐처보다 위에 오도록 했다 — 안 그러면 hover 로 연
-              flyout 이 열리자마자 캐처에 가려 mouseleave 로 판정돼 바로 닫혀버린다. */}
-          <div className="fixed inset-0 z-0" onClick={() => setOpenGroup(null)} aria-hidden />
-          <FlyoutShell
-            title={openGroupDef.label}
-            anchorRect={openAnchor}
-            placement="bottom"
-            {...focusProps}
-            onClose={() => setOpenGroup(null)}
-            onMouseEnter={cancelScheduledClose}
-            onMouseLeave={() => scheduleFlyoutClose(() => setOpenGroup(null))}
-          >
-            <div className="space-y-1 pb-2">
-              {openGroupDef.paths.map((p) => {
-                const entry = navMap[p];
-                if (!entry || !featureAllowed(p)) return null;
-                return (
-                  <FlyoutLink
-                    key={p}
-                    to={p}
-                    label={getLabel(p)}
-                    Icon={entry.icon}
-                    iconColor={entry.iconColor}
-                    iconSize={entry.iconSize}
-                    active={location.pathname === p}
-                    onSelect={() => setOpenGroup(null)}
-                    isPinned={isPinned(p)}
-                    onTogglePin={() => togglePin(p)}
-                  />
-                );
-              })}
-            </div>
-          </FlyoutShell>
-        </>
-      )}
 
       {moreOpen && moreAnchor && (
         <>
@@ -303,31 +328,52 @@ export function AppTopBar() {
             onMouseLeave={() => scheduleFlyoutClose(() => setMoreOpen(false))}
           >
             <div className="space-y-1 pb-2">
-              {WORK_GROUPS.map((g) => (
-                <div key={g.id}>
-                  <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                    <g.icon className="w-3 h-3" aria-hidden="true" /> {g.label}
-                  </p>
-                  {g.paths.map((p) => {
-                    const entry = navMap[p];
-                    if (!entry || !featureAllowed(p)) return null;
-                    return (
-                      <FlyoutLink
-                        key={p}
-                        to={p}
-                        label={getLabel(p)}
-                        Icon={entry.icon}
-                        iconColor={entry.iconColor}
-                        iconSize={entry.iconSize}
-                        active={location.pathname === p}
-                        onSelect={() => setMoreOpen(false)}
-                        isPinned={isPinned(p)}
-                        onTogglePin={() => togglePin(p)}
-                      />
-                    );
-                  })}
+              {topbarInstalled.length === 0 && (
+                <div className="px-3 py-4 text-xs text-muted-foreground text-center leading-relaxed">
+                  설치된 앱이 없습니다.
                 </div>
-              ))}
+              )}
+              {topbarInstalled.map((appId) => {
+                if (appId === 'favorites') {
+                  return (
+                    <FlyoutAction
+                      key="favorites"
+                      label="즐겨찾기"
+                      Icon={Star}
+                      onSelect={() => { setMoreOpen(false); setFavoritesAnchor(moreAnchor); setFavoritesOpen(true); }}
+                    />
+                  );
+                }
+                if (appId === 'island') {
+                  const target = myIslands[0]?.id ?? sharedIslands[0]?.id ?? lastIslandId;
+                  return (
+                    <FlyoutLink
+                      key="island"
+                      to={target ? `/island/${target}` : '/island'}
+                      label="나의 아일랜드"
+                      Icon={Palmtree}
+                      active={location.pathname.startsWith('/island')}
+                      onSelect={() => setMoreOpen(false)}
+                    />
+                  );
+                }
+                const entry = navMap[appId];
+                if (!entry || !featureAllowed(appId)) return null;
+                return (
+                  <FlyoutLink
+                    key={appId}
+                    to={appId}
+                    label={getLabel(appId)}
+                    Icon={entry.icon}
+                    iconColor={entry.iconColor}
+                    iconSize={entry.iconSize}
+                    active={location.pathname === appId}
+                    onSelect={() => setMoreOpen(false)}
+                    isPinned={isPinned(appId)}
+                    onTogglePin={() => togglePin(appId)}
+                  />
+                );
+              })}
             </div>
           </FlyoutShell>
         </>
@@ -335,7 +381,6 @@ export function AppTopBar() {
 
       {favoritesOpen && favoritesAnchor && (
         <>
-          {/* 위 openGroup 캐처와 같은 이유로 z-0 — 즐겨찾기 버튼이 속한 행(z-10)보다 낮게. */}
           <div className="fixed inset-0 z-0" onClick={() => setFavoritesOpen(false)} aria-hidden />
           <FlyoutShell
             title="즐겨찾기"
@@ -350,6 +395,63 @@ export function AppTopBar() {
           </FlyoutShell>
         </>
       )}
+
+      {islandFlyoutAnchor && (
+        <>
+          <div className="fixed inset-0 z-0" onClick={() => setIslandFlyoutAnchor(null)} aria-hidden />
+          <FlyoutShell
+            title="Your Island"
+            anchorRect={islandFlyoutAnchor}
+            placement="bottom"
+            {...focusProps}
+            onClose={() => setIslandFlyoutAnchor(null)}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null))}
+          >
+            <div className="space-y-1 pb-2">
+              {myIslands.map((isl) => (
+                <FlyoutLink
+                  key={isl.id}
+                  to={`/island/${isl.id}`}
+                  label={isl.name}
+                  Icon={islandFlyoutIcon(isl.icon)}
+                  active={location.pathname === `/island/${isl.id}`}
+                  onSelect={() => setIslandFlyoutAnchor(null)}
+                />
+              ))}
+              {sharedIslands.length > 0 && (
+                <>
+                  <div className="mx-2 my-1 border-t border-border" />
+                  <p className="px-2.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    팀 공유
+                  </p>
+                  {sharedIslands.map((isl) => (
+                    <FlyoutLink
+                      key={isl.id}
+                      to={`/island/${isl.id}`}
+                      label={`${isl.name} · ${isl.ownerName || '공유'}`}
+                      Icon={islandFlyoutIcon(isl.icon)}
+                      active={location.pathname === `/island/${isl.id}`}
+                      onSelect={() => setIslandFlyoutAnchor(null)}
+                    />
+                  ))}
+                </>
+              )}
+            </div>
+          </FlyoutShell>
+        </>
+      )}
+
+      {/* 상단바 "앱 추가" 카탈로그 — 이름 옆에 설치할 leaf 페이지 + 즐겨찾기/아일랜드를 고른다. */}
+      <AddAppDialog
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        title="상단바에 앱 추가"
+        description="이름 옆에 필요한 업무 화면만 골라 추가한다."
+        sections={catalogSections}
+        installedApps={installedApps}
+        onToggle={toggleInstalledApp}
+      />
     </header>
   );
 }

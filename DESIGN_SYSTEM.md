@@ -666,30 +666,57 @@ PEP 는 운영자용 내부 콘솔이라 모바일 전용 레이아웃을 만들
 - 이 표는 검증 매트릭스의 원천이다 — 새 화면을 QA 할 때 1280/1024/768px 세 폭에서 최소 한 번씩
   훑는다(특히 `xl:` 전용 그리드·`overflow-x-auto` nav 를 새로 추가하는 화면).
 
-### 12.11 사이드바 opt-in 앱 카탈로그 (Main UI 간소화, 2026-09-17)
+### 12.11 leaf 단위 opt-in 앱 카탈로그 — 사이드바 + 상단바 (Main UI 간소화, 2026-09-17 + 후속 개편)
 
-좌측 사이드바 레일(플랫폼/시스템 도메인)은 **모든 그룹을 항상 보여주지 않는다** — 사용자가
-"설치"한 것만, 설치한 순서대로 보인다. 업무 도메인(`AppTopBar`, 협업/문서 관리)은 이 패턴의
-대상이 아니다 — 두 그룹뿐이라 항상 둘 다 노출하는 기존 방식을 그대로 유지한다.
+좌측 사이드바 레일(플랫폼/시스템 도메인)과 상단바(이름 옆, 업무 도메인) 둘 다 **아무것도
+항상 보여주지 않는다** — 사용자가 "설치"한 것만, 설치한 순서대로 보인다. 설치 단위는 그룹
+전체가 아니라 **그 그룹에 속한 leaf(최하위) 페이지 하나하나**다 — "가장 하위 메뉴 기준으로
+추가"라는 사용자 요청에 따라, 예전의 그룹 단위(레일 아이콘 하나가 flyout 으로 여러 하위
+화면을 감춤) 설치에서 leaf 단위(설치한 것 하나 = 레일/상단바 아이콘 하나, 직행 링크, flyout
+없음) 설치로 바뀌었다.
 
-- **카탈로그**: `frontend/src/components/layout/sidebarApps.ts` — `GROUPS`(`navConfig.ts`) 중
-  `domain: 'platform' | 'system'` 인 것 + `"back"`(뒤로가기) 의사(疑似) 항목. 새 플랫폼 그룹을
-  추가하면 이 카탈로그에도 등록해야 opt-in 대상이 된다(등록하지 않으면 영구히 설치 불가 화면이
-  된다 — 조용히 빠지지 않도록 새 그룹 추가 체크리스트에 포함).
+- **카탈로그**: `frontend/src/components/layout/installableApps.ts` — `GROUPS`(`navConfig.ts`)
+  의 `paths` 를 펼쳐 leaf 페이지 단위 `InstallableApp` 목록을 만들고(`groupId`/`groupLabel` 은
+  카탈로그 다이얼로그의 섹션 헤더로만 쓰인다), `back`/`favorites`/`island` 세 개는 leaf 페이지가
+  아닌 "개인" 섹션 특수 항목으로 하드코딩돼 있다. `sidebarAppSections(isAdmin)` 은
+  `platform`/`system` 도메인 + `back` 을, `topbarAppSections()` 는 `work` 도메인 + `favorites`/
+  `island` 를 그룹별 섹션으로 묶어 반환한다. 새 그룹/leaf 를 추가하면 `GROUPS`/`NAV_MAP` 에만
+  등록하면 자동으로 카탈로그에 반영된다(그룹 단위이던 예전과 달리 카탈로그 쪽에 별도 목록을
+  중복 유지하지 않는다).
 - **저장**: `HomePrefs.installed_apps`(`backend/app/schemas/home_prefs.py`, 기존
-  `GET/PUT /api/v1/me/home-prefs` 재사용 — 새 라우터를 만들지 않는다) — 그룹 id 문자열 배열,
-  기본값 빈 리스트. 서버 저장이라 기기·브라우저를 넘어 따라온다(로그인=UI-First 개인화 원칙).
-- **UI**: "+" `RailIconButton`(레일 맨 끝) → `AddSidebarAppDialog.tsx`(shadcn `Dialog`, 카드형
-  그리드, 카드당 아이콘·라벨·짧은 설명 + 설치/설치됨 토글). `system`(설정) 카드는 admin 에게만
-  보인다 — 렌더링 쪽(`Sidebar.tsx`)도 `installed_apps` 에 `"system"` 이 있어도 `!isAdmin` 이면
-  건너뛰는 방어 체크를 이중으로 둔다(역할 강등 등 엣지케이스 대비).
+  `GET/PUT /api/v1/me/home-prefs` 재사용 — 새 라우터를 만들지 않는다) — leaf 경로 문자열(또는
+  `back`/`favorites`/`island`) 배열 하나를 사이드바와 상단바가 **공유**한다. 각 화면은
+  `installableAppById(id).domain` 으로 자기 몫만 걸러 그린다(`Sidebar.tsx` 는 platform/system,
+  `AppTopBar.tsx` 는 work). 기본값 빈 리스트. 서버 저장이라 기기·브라우저를 넘어 따라온다
+  (로그인=UI-First 개인화 원칙).
+- **UI**: 양쪽 다 "+" 버튼 → 공용 `AddAppDialog.tsx`(shadcn `Dialog`, 그룹 섹션 헤더 + 카드형
+  그리드, 카드당 아이콘·라벨·짧은 설명 + 설치/설치됨 토글)를 각자의 섹션 목록으로 연다.
+  `system` 도메인 leaf(`/settings`)는 admin 에게만 보인다 — 렌더링 쪽(`Sidebar.tsx`)도
+  `installableAppById(id).adminOnly` 가 참인데 `!isAdmin` 이면 건너뛰는 방어 체크를 이중으로
+  둔다(역할 강등 등 엣지케이스 대비).
 - **예외 — 홈은 opt-in 대상이 아니다**: 로고(홈 버튼)는 사용자가 레일을 전부 비워도 `/` 로 돌아올
   방법이 하나는 있어야 하므로 항상 클릭 가능하다. "뒤로가기"는 반대로 카탈로그 항목이라 기본
   미설치이고, 홈(`/`)에서는 설치돼 있어도 숨는다(의미 없는 버튼이므로).
-- **기존 계정 이관**: 이 기능이 생기기 전부터 있던 계정이 갑자기 빈 레일을 보면 안 되므로,
-  `backend/app/main.py::_backfill_installed_sidebar_apps()` 가 부팅 시 1회(app_settings sentinel
-  `installed_sidebar_apps_backfilled_v1` 로 멱등) 전체 설치 상태로 이관한다. 이 마이그레이션이
-  이미 실행된 뒤 새로 생성되는 계정만 `HomePrefs` 기본값(빈 리스트)이 적용돼 빈 레일로 시작한다.
+- **즐겨찾기 / Your Island 도 opt-in**: 후속 요청으로 상단바의 즐겨찾기(구 ★ 버튼, 상시노출)와
+  Your Island(구 사이드바 푸터 아이콘, 상시노출) 도 leaf 페이지와 동일한 "개인" 섹션 카탈로그
+  항목이 됐다 — 설치해야만 보인다. 둘 다 leaf 페이지가 아니라 자체 flyout(즐겨찾기 목록 / 내
+  아일랜드 선택)을 열므로, `Sidebar.tsx`/`AppTopBar.tsx` 렌더 쪽에서 `appId === 'favorites' |
+  'island'` 특수 분기로 처리한다(직행 링크가 아님).
+- **기존 계정 이관 — 2단계**: 이 기능이 생기기 전부터 있던 계정이 갑자기 빈 화면을 보면 안
+  되므로, `backend/app/main.py` 에 순서가 고정된 두 마이그레이션이 있다(`_seed_initial_admin`
+  보다 반드시 먼저 실행 — 안 그러면 막 생긴 부트스트랩 admin 이 "기존 사용자"로 오인된다).
+  1. `_backfill_installed_sidebar_apps()`(1단계, sentinel `installed_sidebar_apps_backfilled_v1`)
+     — 그룹 단위 개편 당시 전체 그룹 id(`cluster`/`server`/.../`system`/`back`)로 이관.
+  2. `_migrate_installed_apps_to_leaf_paths()`(2단계, sentinel `installed_apps_leaf_migration_v2`)
+     — 1단계가 넣어준 그룹 id(더 이상 `INSTALLABLE_APPS` 에 없어 방치하면 조용히 사라짐)를 그
+     그룹의 leaf 목록으로 치환하고, 상단바 업무 도메인(업무 관리·문서 관리 leaf + 즐겨찾기 +
+     Your Island, 전부 예전엔 상시노출)을 이 마이그레이션 시점 존재하던 모든 계정에
+     grandfather 로 추가한다.
+
+  두 마이그레이션이 전부 실행된 뒤 새로 생성되는 계정만 `HomePrefs` 기본값(빈 리스트)이
+  적용돼 완전히 빈 상태로 시작한다. 그룹/leaf 매핑표는 프론트 `navConfig.ts` 의 `GROUPS.paths`
+  와 반드시 일치해야 한다(`_migrate_installed_apps_to_leaf_paths()` 의 `LEGACY_GROUP_LEAF_PATHS`
+  주석 참고) — 그룹이 바뀌면 백엔드 상수도 같이 갱신할 것.
 - **재사용 시 주의**: 카탈로그 항목 순서 재배열(드래그 앤 드롭)은 아직 지원하지 않는다 — 순서는
   설치한 순서 그대로다. 재정렬이 필요해지면 `pinnedPaths`(즐겨찾기)가 이미 쓰는 순서 보존 배열
   패턴을 참고할 것.

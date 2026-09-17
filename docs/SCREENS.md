@@ -26,65 +26,80 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 4. [클러스터 — 관리 / 버전 / 실행 콘솔 / LAKE / APM](#클러스터--관리--버전--실행-콘솔--lake--apm)
 5. [서버·인프라 / 네트워크 / 스토리지](#서버인프라--네트워크--스토리지)
 6. [DevOps — Playbook / Batch Job / 명령어](#devops--playbook--batch-job--명령어)
-7. [협업 — 업무 관리 / 스프린트 / 워크플로우](#협업--업무-관리--스프린트--워크플로우)
+7. [업무 관리 그룹 — 업무 관리 게시판 / 스프린트 / 워크플로우](#업무-관리-그룹--업무-관리-게시판--스프린트--워크플로우)
 8. [관리 서비스 (서비스 타입/카테고리 관리)](#관리-서비스-서비스-타입카테고리-관리)
 9. [지식 허브](#지식-허브)
 
 각 그룹은 `frontend/src/components/layout/navConfig.ts` 의 그룹 분류(클러스터/서버·인프라/
-네트워크/스토리지/DevOps/협업/문서 관리/시스템)를 기준으로 나눴습니다. 과거 있던 "PEP 서비스"/
-"APP 서비스" 그룹과 그 화면들(`/services`, `/pep-services`, `/app-services`)은 문서 관리
-그룹과 기능이 중복되어 완전히 삭제되었다 — §8 참고.
+네트워크/스토리지/DevOps/업무 관리(구 협업)/문서 관리/시스템)를 기준으로 나눴습니다. 과거 있던
+"PEP 서비스"/"APP 서비스" 그룹과 그 화면들(`/services`, `/pep-services`, `/app-services`)은
+문서 관리 그룹과 기능이 중복되어 완전히 삭제되었다 — §8 참고.
 
 **전역 레이아웃**: 각 그룹의 `domain` 이 배치를 결정한다 — `platform`(클러스터·서버·인프라·
-네트워크·스토리지·DevOps)과 `system`(Settings)은 좌측 사이드바 레일, `work`(협업·문서 관리)은
-상단 `AppTopBar`. 예전엔 홈 모드(work/platform)가 이 배치 자체를 게이팅해 반대 도메인 그룹이
-사이드바에서 통째로 사라졌지만(R-4 5차 D-054), 지금은 `domain` 이 배치만 결정할 뿐 게이팅하지
-않는다 — `AppTopBar` 의 협업/문서 관리는 항상 둘 다 보여 어느 화면에서든 반대 도메인이 1~2클릭
-거리에 있다.
+네트워크·스토리지·DevOps)과 `system`(Settings)은 좌측 사이드바 레일, `work`(업무 관리·문서
+관리)은 상단 `AppTopBar`(이름 옆). 예전엔 홈 모드(work/platform)가 이 배치 자체를 게이팅해
+반대 도메인 그룹이 사이드바에서 통째로 사라졌지만(R-4 5차 D-054), 지금은 `domain` 이 배치만
+결정한다.
 
-**사이드바 "앱" — opt-in 설치형(Main UI 간소화, 2026-09-17)**: 좌측 사이드바 레일은 더 이상
-플랫폼 도메인 그룹을 전부 항상 보여주지 않는다 — 사용자가 `components/layout/sidebarApps.ts`
-의 카탈로그(9개 platform/system 그룹 중 8개 + "뒤로가기")에서 **설치(opt-in)한 것만**, 설치한
-순서대로 레일에 나타난다. 기본값은 **완전히 빈 레일 + "+" 버튼 하나**(신규 계정) — `Sidebar.tsx`
-의 "+" `RailIconButton` 이 카드형 `AddSidebarAppDialog`(`components/layout/AddSidebarAppDialog.tsx`,
-shadcn `Dialog`)를 연다. 각 카드는 아이콘·라벨·짧은 설명 + 설치/설치됨 토글이고, `system`
-카드(설정)는 admin 에게만 보인다. 설치 목록은 `HomePrefs.installedApps`(서버 저장,
-`GET/PUT /api/v1/me/home-prefs`, `hooks/useHomePrefs.ts` — 기기·브라우저를 넘어 따라온다)에
-저장된다. 로고(홈 버튼)는 유일한 예외로 opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로
-돌아올 방법이 하나는 남아 있어야 하므로 항상 클릭 가능하다. 이 기능이 생기기 전부터 있던 계정은
-`backend/app/main.py::_backfill_installed_sidebar_apps()` 가 부팅 1회(`app_settings` sentinel
-로 멱등) 전체 설치 상태로 이관해 갑자기 레일이 비어 보이는 일이 없다 — 이 마이그레이션 이후
-새로 만들어지는 계정만 빈 레일로 시작한다. `AppTopBar`(업무 도메인)는 이 개편 대상이 아니다 —
-협업/문서 관리는 예전처럼 항상 둘 다 노출된다.
+**앱 카탈로그 — leaf 단위 opt-in 설치형(Main UI 간소화, 2026-09-17 + 후속 개편)**: 좌측
+사이드바 레일과 상단바(이름 옆) 둘 다 더 이상 아무것도 항상 보여주지 않는다 — 사용자가
+`components/layout/installableApps.ts` 의 카탈로그에서 **설치(opt-in)한 leaf(최하위) 페이지만**,
+설치한 순서대로 나타난다. 설치 단위는 그룹 전체(예: "클러스터")가 아니라 그 그룹에 속한
+개별 화면 하나하나다 — 그룹은 카탈로그 다이얼로그에서 섹션 헤더로만 쓰인다(카드를 그룹별로
+스캔하기 쉽게). `domain` 이 `platform`/`system` 인 leaf + `back`(뒤로가기)은 사이드바 카탈로그
+(`sidebarAppSections()`)에, `work` 인 leaf(업무 관리·문서 관리 그룹) + `favorites`(즐겨찾기) +
+`island`(Your Island) 는 상단바 카탈로그(`topbarAppSections()`)에 들어간다 — 즐겨찾기와 Your
+Island 도 leaf 페이지가 아닌 "개인" 섹션의 특수 항목으로 같은 opt-in 목록에 포함된다(예전엔
+둘 다 로그인만 하면 상시 노출이었다). 기본값은 **완전히 빈 레일/상단바 + "+" 버튼 하나**
+(신규 계정) — `Sidebar.tsx`/`AppTopBar.tsx` 의 "+" 버튼이 공용 `AddAppDialog`
+(`components/layout/AddAppDialog.tsx`, shadcn `Dialog`)를 각자의 섹션 목록으로 연다. 각 카드는
+아이콘·라벨·짧은 설명 + 설치/설치됨 토글이고, `system` 도메인 leaf(`/settings`)는 admin 에게만
+보인다. 설치 목록은 `HomePrefs.installedApps`(서버 저장, `GET/PUT /api/v1/me/home-prefs`,
+`hooks/useHomePrefs.ts` — 기기·브라우저를 넘어 따라온다) 하나를 사이드바/상단바가 함께 쓰고,
+각자 `installableAppById(id).domain` 으로 자기 몫만 걸러 그린다. 로고(홈 버튼)는 유일한 예외로
+opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로 돌아올 방법이 하나는 남아 있어야 하므로
+항상 클릭 가능하다. 이 기능이 생기기 전부터 있던 계정은 `backend/app/main.py` 의 두 마이그레이션
+(둘 다 `app_settings` sentinel 로 멱등, `_seed_initial_admin` 보다 먼저 실행)이 갑자기 화면이
+비어 보이지 않게 이관해 준다 — 1단계 `_backfill_installed_sidebar_apps()` 는 그룹 단위로(구
+카탈로그 기준) 전체 설치, 2단계 `_migrate_installed_apps_to_leaf_paths()` 는 남아있는 그룹 id
+를 leaf 페이지 목록으로 치환하고 업무 관리·문서 관리 leaf + 즐겨찾기 + Your Island 도
+grandfather 로 추가한다(둘 다 예전엔 상시노출이었으므로). 두 마이그레이션 이후 새로 만들어지는
+계정만 완전히 빈 상태로 시작한다.
 
-**flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바의 그룹 아이콘(하위 경로
-2개 이상)·즐겨찾기·Your Island, 그리고 `AppTopBar`의 협업/문서 관리 드롭다운·즐겨찾기 버튼
+**flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바에서 설치된 leaf 는 개별
+직행 링크라 flyout 이 없고(설치 단위 자체가 이미 최하위 메뉴), 상단바에 설치된 `favorites`/
+`island` 특수 항목만 여전히 flyout(즐겨찾기 목록 / 내 아일랜드가 여러 개일 때의 선택지)을
+연다. 이 두 항목과 사이드바·상단바 공통 푸터(도움말·지원/사용자 메뉴, 좁은 화면의 "메뉴" 접기)
 전부 클릭뿐 아니라 마우스를 올리기만 해도(hover-intent, 150ms 오픈/200ms 닫기 지연) flyout 이
 열린다(`RailIconButton`/`AppTopBar` 의 `onHoverOpen`/`onHoverClose`, `NavFlyout.FlyoutShell` 의
-`onMouseEnter`/`onMouseLeave` 로 패널 위에서는 닫기 타이머가 취소됨). 사이드바 아이콘은 hover
-시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴팁은 띄우지 않는다(`hasFlyout` 이면
-`RailIconButton` 이 툴팁을 생략) — flyout 이 없는 아이콘(테마 토글 등)은 기존처럼 툴팁만 뜬다.
-flyout 이 있는 사이드바 아이콘에는 즉시 이동하는 아이콘과 구분되도록 작은 점 인디케이터가
-붙는다(R-4 5차 D-059). ⚠구현 유의: click-outside 캐처(`fixed inset-0`)가 `AppTopBar`처럼 이미
-포지션이 있는 조상(`<header className="sticky z-30">`) **안의 자식**으로 렌더되면, 캐처가
-같은 스태킹 컨텍스트 안에서 포지션 없는 형제(버튼들)보다 z-index 값과 무관하게 항상 위에
-그려져 hover 로 연 flyout 이 열리자마자 캐처에 가려 `mouseleave` 로 판정되고 바로 닫혀버린다
-— 버튼이 속한 행에 `relative z-10`, 캐처는 `z-0`으로 둬서 해결했다(`Sidebar.tsx`처럼 아이콘
-레일 자체가 `<aside>` 로 최상위 포지션 요소인 경우는 캐처 z-index 를 그보다 한 단계 낮추는
-것만으로 충분하다 — 두 경우의 스태킹 맥락이 다르므로 같은 처방을 그대로 복붙하면 안 됨).
-'클러스터' 그룹은 하위 화면이 20여 개로 많아 `Sidebar.renderFlyoutBody` 가 모니터링/콘솔/
-점검/관리 4개 섹션으로 나눠 보여준다(D-058, `navConfig.ts` 의 그룹 정의 자체는 그대로 두고
-렌더링만 재배열). `/jira-import`(Jira Excel 가져오기)는 마지막까지 고아 라우트였다가
-`collab`(협업) 그룹에 편입되어 R-4 5차 라운드(D-054~D-060)가 전 항목 완료됐다(D-057).
+`onMouseEnter`/`onMouseLeave` 로 패널 위에서는 닫기 타이머가 취소됨). flyout 이 있는 아이콘은
+hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴팁은 띄우지 않는다(`hasFlyout`
+이면 `RailIconButton` 이 툴팁을 생략) — flyout 이 없는 아이콘(테마 토글 등)은 기존처럼
+툴팁만 뜬다. ⚠구현 유의: click-outside 캐처(`fixed inset-0`)가 `AppTopBar`처럼 이미 포지션이
+있는 조상(`<header className="sticky z-30">`) **안의 자식**으로 렌더되면, 캐처가 같은 스태킹
+컨텍스트 안에서 포지션 없는 형제(버튼들)보다 z-index 값과 무관하게 항상 위에 그려져 hover 로
+연 flyout 이 열리자마자 캐처에 가려 `mouseleave` 로 판정되고 바로 닫혀버린다 — 버튼이 속한
+행에 `relative z-10`, 캐처는 `z-0`으로 둬서 해결했다(`Sidebar.tsx`처럼 아이콘 레일 자체가
+`<aside>` 로 최상위 포지션 요소인 경우는 캐처 z-index 를 그보다 한 단계 낮추는 것만으로
+충분하다 — 두 경우의 스태킹 맥락이 다르므로 같은 처방을 그대로 복붙하면 안 됨). `/jira-import`
+(Jira Excel 가져오기)는 마지막까지 고아 라우트였다가 `collab`(업무 관리, 구 협업) 그룹에
+편입되어 R-4 5차 라운드(D-054~D-060)가 전 항목 완료됐다(D-057). **[2026-09-17] flyout 배경이
+`bg-popover`/`text-popover-foreground` 유틸리티 클래스였는데 `tailwind.config.js` 에 `popover`
+색상 토큰 매핑이 아예 없어(index.css 의 `--popover` 변수는 정의돼 있었으나 tailwind 색상
+목록에 연결이 안 돼 있었음) 미인식 클래스로 조용히 무시되고 있었다 — 배경이 실제로는 완전
+투명이라 뒤 콘텐츠가 비쳐 보이고 겹쳐 보이던 가독성 버그(사용자 리포트: "박스가 반투명처럼
+나와서 겹쳐보임")의 원인이었다. `tailwind.config.js` 에 `popover`(DEFAULT/foreground) 매핑을
+추가해 해결 — `NavFlyout.tsx`/`components/ui/tooltip.tsx`/`WorkItemCalendar.tsx` 3곳 모두 이제
+실제 불투명 배경으로 렌더된다.
 
-**즐겨찾기 / 최근 방문**: `AppTopBar`(우측 ★)와 좌측 사이드바 최상단 "즐겨찾기" 레일 아이콘,
-두 진입점이 같은 `FavoritesFlyoutBody`(`components/layout/FavoritesFlyoutBody.tsx`)를 공유해
-드롭다운을 연다. `AppTopBar`·`Sidebar` 의 그룹 flyout(`NavFlyout.tsx` 의 `FlyoutLink`) 항목에
-마우스를 올리면 별 아이콘이 나타나 즐겨찾기를 바로 토글할 수 있다. 즐겨찾기 경로는 서버 저장
-(`hooks/useFavorites.ts` → `hooks/useHomePrefs.ts` → `GET/PUT /api/v1/me/home-prefs`, R-4 5차
-D-060 잔여 해소)이라 기기를 넘어 따라오고, 최근 방문 5개(`stores/recentPathsStore.ts`,
-localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteAccessGate` 가 접근 가능한
-라우트로 이동할 때마다 기록한다.
+**즐겨찾기 / 최근 방문**: 이제 상단바(이름 옆)의 opt-in 항목 하나("즐겨찾기")로만 존재한다
+(예전엔 상단바 우측 ★ 과 좌측 사이드바 최상단 레일 아이콘, 두 진입점이 상시 노출이었다 —
+사이드바 진입점은 이 개편으로 제거됨). `AppTopBar`·`Sidebar` 의 flyout(`NavFlyout.tsx` 의
+`FlyoutLink`) 항목에 마우스를 올리면 별 아이콘이 나타나 즐겨찾기를 바로 토글할 수 있다.
+즐겨찾기 경로는 서버 저장(`hooks/useFavorites.ts` → `hooks/useHomePrefs.ts` →
+`GET/PUT /api/v1/me/home-prefs`, R-4 5차 D-060 잔여 해소)이라 기기를 넘어 따라오고, 최근 방문
+5개(`stores/recentPathsStore.ts`, localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx`
+의 `RouteAccessGate` 가 접근 가능한 라우트로 이동할 때마다 기록한다.
 
 ---
 
@@ -93,7 +108,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 ### 홈 (`/`)
 
 - **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고).
-- **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 라벨 있는 **세그먼트 탭**(`업무 현황`/`플랫폼 현황`)이 화면 최상단이고, 이걸로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다. **[2026-09-17, Main UI 간소화]** 탭 위에 있던 KPI 스트립(나의 아일랜드 진입 필 + 내 할일/미해결 이슈/위험 클러스터/점검 실패/다음 일정 5종 필)을 통째로 제거했다 — 사용자 요청("정보를 줄이고 중요한 부분을 부각"). 위험 신호는 `플랫폼 현황` 탭 라벨의 배지(아래) 하나로 압축됐고, 아일랜드 진입은 사이드바 푸터 아이콘 하나로만 남는다(§Your Island 참고). KPI 필이 제공하던 개별 카운트(내 할일/미해결 이슈 등)는 각 목적지 화면(`/todo-today`, `/tasks-mgmt`)에서 직접 확인한다.
+- **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 라벨 있는 **세그먼트 탭**(`업무 현황`/`플랫폼 현황`)이 화면 최상단이고, 이걸로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다. **[2026-09-17, Main UI 간소화]** 탭 위에 있던 KPI 스트립(나의 아일랜드 진입 필 + 내 할일/미해결 이슈/위험 클러스터/점검 실패/다음 일정 5종 필)을 통째로 제거했다 — 사용자 요청("정보를 줄이고 중요한 부분을 부각"). 위험 신호는 `플랫폼 현황` 탭 라벨의 배지(아래) 하나로 압축됐고, 아일랜드 진입은 상단바 opt-in 항목("나의 아일랜드")으로만 남는다(§Your Island 참고). KPI 필이 제공하던 개별 카운트(내 할일/미해결 이슈 등)는 각 목적지 화면(`/todo-today`, `/tasks-mgmt`)에서 직접 확인한다.
 - **UI 구성**:
   - 세그먼트 탭(`role="tablist"`, 좌우 화살표 키 이동, 화면 최상단): `[업무 현황]`(`ListTodo` 아이콘) / `[플랫폼 현황]`(`ServerCog` 아이콘, 위험 클러스터 + 점검 실패 합계 배지 — 0이면 숨김, `useCheckMatrixFailureCount()`+`useClusters()` 파생). 선택은 `useHomeStore().homeTab` 에 저장되고 localStorage(`pep:homeTab`)에 영속된다.
   - **내 업무 탭**: 좌측 `DayScheduleBoard`(당일 시간단위 스케줄), 우측 "담당자별 진행 현황" 카드 내부 탭 3종(주간=`WeeklyStatusTimeline`, 월간=`WorkCalendar`, 담당자=`MemberTodayTodos`, 기본 탭은 `week`). `WeeklyStatusTimeline`(주간, 담당자 기준 스윔레인)은 담당자별 기본 5건 표시 + "더보기/접기", 항상 최상단 "공통" 요약 행(본인 행보다 위 — 개별 담당자 업무 전체 병합이 아니라 파트 전체 대상 업무만, `allAttendees=true`), 화면당 표시 인원 수 제한(기본 20명, 옵션 10/20/30/50, localStorage 저장), 축소된 라인 밀도(24px 레인)를 지원. `MemberTodayTodos`(담당자 탭)도 동일하게 최상단 "공통" 카드(`allAttendees=true` 항목만)를 노출한다. **업무 등록 진입점은 `DayScheduleBoard` 헤더의 "등록"(`QuickAddTaskModal`) 하나뿐** — 예전엔 `WeeklyStatusTimeline`(주간 탭)에도 별도 "업무 등록"(`WorkItemFormModal`)이 동시에 떠 있어 같은 화면에 등록 버튼이 2개였다가 통합됨. `QuickAddTaskModal`은 PEP 저장 성공 직후 Jira 연동이 켜져 있으면(`useJiraConfig().enabled`) 곧바로 `JiraProvisionModal`(Jira 이슈·Confluence 문서 생성, 체크박스+"생성"/"나중에")로 전환된다 — "나중에"면 PEP 에만 저장. `WorkCalendar`(월간 탭)의 날짜별 "+" 버튼도 같은 `QuickAddTaskModal`을 재사용하므로 동일한 흐름을 탄다.
@@ -125,12 +140,13 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
       남는다.
   - **[2026-09-17, Main UI 간소화]** 사용자 요청("정보를 줄이고 중요한 부분을 부각")으로 KPI
     스트립(나의 아일랜드 진입 필 + 5종 KPI 필)을 제거 — 세그먼트 탭이 화면 최상단이 됐다. 같은
-    요청의 사이드바 opt-in 개편은 §전역 레이아웃(문서 상단) 참고.
+    요청의 사이드바 opt-in 개편, 그리고 후속 요청으로 확장된 상단바 opt-in + leaf 단위 설치
+    전환은 §전역 레이아웃(문서 상단) 참고.
 
 ### Your Island (`/island`)
 
 - **파일**: `frontend/src/pages/IslandPage.tsx` (+ `components/island/{IslandPanelHost,IslandTabBar,IslandRail,PanelPickerDialog,IslandManagerPane,panelRegistry}.tsx`)
-- **목적 / UX**: 사용자가 자주 쓰는 PEP 화면을 하나에 모아두는 **개인 커스텀 화면**. 사이드바 레일 → flyout → 페이지 이동을 매번 반복하지 않도록, 등록한 화면을 **탭 또는 좌측 아이콘 레일**로 즉시 전환한다. 패널 내용은 새로 만든 위젯이 아니라 **기존 페이지 컴포넌트를 그대로 임베드**한 것이라, 각 화면의 기능이 원본과 100% 동일하다. 라우트는 `/island`(마지막에 보던 아일랜드로 리다이렉트)와 `/island/:islandId` 두 가지. 진입점은 사이드바 **푸터 개인 존**(테마 아래, 사용자 아이콘 위)의 야자수 아이콘 버튼 하나다. 공용 그룹 레일과 성격이 달라(개인 커스터마이즈) 조직 공용 네비게이션이 아닌 개인/메타 영역에 둔다. 내 아일랜드 + 공유받은 아일랜드가 합쳐 2개 이상이면 클릭 시 flyout 목록에서 고른다(공유분은 "팀 공유" 구분선 아래에 소유자명과 함께 표시). 마지막에 보던 아일랜드로 바로 가고, 하나도 없으면 `/island` 로 이동해 만들기로 이어진다. 아이콘은 `Palmtree` — 테마 토글이 기본 테마에서 `Sparkles` 를 쓰므로 푸터에서 겹치지 않게 구분한다. **[2026-09-17]** 예전엔 홈 상단 KPI 스트립에도 진입 필(`IslandPill`)이 있어 진입점이 두 곳이었지만, Main UI 간소화로 그 스트립 자체가 제거되며 사이드바 진입점 하나만 남았다.
+- **목적 / UX**: 사용자가 자주 쓰는 PEP 화면을 하나에 모아두는 **개인 커스텀 화면**. 사이드바 레일 → flyout → 페이지 이동을 매번 반복하지 않도록, 등록한 화면을 **탭 또는 좌측 아이콘 레일**로 즉시 전환한다. 패널 내용은 새로 만든 위젯이 아니라 **기존 페이지 컴포넌트를 그대로 임베드**한 것이라, 각 화면의 기능이 원본과 100% 동일하다. 라우트는 `/island`(마지막에 보던 아일랜드로 리다이렉트)와 `/island/:islandId` 두 가지. 진입점은 `AppTopBar`(상단바, 이름 옆)의 opt-in 항목 "나의 아일랜드"(야자수 아이콘) — 다른 업무 도메인 leaf 페이지와 같은 카탈로그(`installableApps.ts` 의 "개인" 섹션)에서 설치/제거한다. 내 아일랜드 + 공유받은 아일랜드가 합쳐 2개 이상이면 클릭 시 flyout 목록에서 고른다(공유분은 "팀 공유" 구분선 아래에 소유자명과 함께 표시). 마지막에 보던 아일랜드로 바로 가고, 하나도 없으면 `/island` 로 이동해 만들기로 이어진다. **[2026-09-17]** 예전엔 홈 상단 KPI 스트립에도 진입 필(`IslandPill`)이 있고 사이드바 푸터에도 상시 노출 아이콘이 있어 진입점이 최대 두 곳이었지만, Main UI 간소화(KPI 스트립 제거)와 후속 요청(사이드바 푸터 상시 노출 → 상단바 opt-in 전환)을 거쳐 지금은 상단바의 opt-in 항목 하나로 수렴했다.
 - **UI 구성**:
   - **상단 헤더**: 아일랜드 이름 + (공유받은 것이면) `소유자 · 읽기 전용` 배지 + 레이아웃 전환 버튼(탭↔사이드바, 소유자만) + 아일랜드 관리 버튼.
   - **탭 모드(`layoutMode='tabs'`)**: 헤더 아래 pill 탭바(`IslandTabBar`, SettingsPage 탭바 룩). 드래그로 순서 변경, hover 시 × 로 제거, 끝에 "화면 추가".
@@ -1218,7 +1234,7 @@ localStorage `pep:recentPaths`)는 기기 로컬이다 — `App.tsx` 의 `RouteA
 
 ---
 
-## 협업 — 업무 관리 / 스프린트 / 워크플로우
+## 업무 관리 그룹 — 업무 관리 게시판 / 스프린트 / 워크플로우
 
 ### 업무 관리 게시판 (`/tasks-mgmt`)
 
