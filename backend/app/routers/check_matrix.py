@@ -30,6 +30,45 @@ router = APIRouter(prefix="/check-matrix", tags=["Check Matrix"])
 _ALLOWED_ROW_COLORS = {f"chart-{i}" for i in range(1, 9)}
 
 
+class KeyValueIn(BaseModel):
+    """이름을 **값 자리**에 두는 key/value 한 쌍.
+
+    프론트 axios 인터셉터가 요청 본문의 *키* 를 camelCase→snake_case 로 바꾸기 때문에,
+    사용자가 정한 이름(ansible extra var 등)을 dict 키로 받으면 조용히 변형된다
+    (`myVar` → `my_var`). 런북 inputs 와 같은 회피 패턴이다.
+    """
+    name: str
+    value: str = ""
+
+
+def _kv_to_dict(entries: Optional[list[KeyValueIn]]) -> dict[str, Any]:
+    return {e.name.strip(): e.value for e in (entries or []) if e.name.strip()}
+
+
+class InventoryPickIn(BaseModel):
+    cluster_id: UUID
+    inventory_id: UUID
+
+
+class NewPlaybookIn(BaseModel):
+    """등록 마법사에서 그 자리에 만드는 Ansible 플레이북 — "내가 만든 파일을 점검으로".
+
+    저장 시 공용 라이브러리(`AnsiblePlaybookFile`)에 YAML 본문을 넣고, 선택한 클러스터마다
+    같은 이름의 `Playbook` 실행 단위를 만든다. 매트릭스 행의 source_ref 는 그 이름이다.
+    """
+    name: str
+    content: str = ""
+    description: Optional[str] = None
+    tags: Optional[str] = None
+    extra_vars: Optional[list[KeyValueIn]] = None
+    cluster_ids: list[UUID] = Field(default_factory=list)
+    # 클러스터별 인벤토리 지정(선택) — 비우면 클러스터 기본 인벤토리, 그것도 없으면
+    # K8s 노드 목록으로 동적 생성. 키가 아니라 값 자리에 id 를 둔다(KeyValueIn 과 같은 이유).
+    inventories: Optional[list[InventoryPickIn]] = None
+    # 라이브러리에 이미 있는 플레이북 파일을 그대로 쓸 때(본문 재작성 없음).
+    playbook_file_id: Optional[UUID] = None
+
+
 class ItemIn(BaseModel):
     name: str
     description: Optional[str] = None
@@ -39,11 +78,16 @@ class ItemIn(BaseModel):
     category: Optional[str] = None
     color: Optional[str] = None
     enabled: bool = True
-    # 등록 마법사 전용 — deep_check 항목을 새로 만들 때 아직 글로벌 정의가 없으면 이 값으로
-    # 함께 만든다(CheckMatrixItem 컬럼이 아니라 생성 직후 DeepCheckDefinition 에 쓰인다).
-    # 이미 정의가 있으면(시드된 기본 타입 포함) 조용히 무시된다.
+    # 등록 마법사 전용 — deep_check 항목의 임계값/파라미터 초기값.
+    # dedicated_definition=False 면 예전과 같이 "글로벌 정의가 없을 때만" 이 값으로 정의를
+    # 만들고, 이미 있으면 조용히 무시한다(= 같은 종류의 다른 행과 설정 공유).
     thresholds: Optional[dict[str, Any]] = None
     params: Optional[dict[str, Any]] = None
+    # True 면 이 행 전용 정의를 새로 만들어 물린다 — 같은 점검 종류로 설정이 다른 카드를
+    # 여러 장 만들 수 있게 하는 스위치(기본 등록 카드의 커스터마이즈 포함).
+    dedicated_definition: bool = False
+    # 있으면 이 플레이북을 먼저 등록하고(source_ref = 그 이름) 매트릭스 행을 만든다.
+    new_playbook: Optional[NewPlaybookIn] = None
 
 
 class ItemOut(BaseModel):
@@ -55,6 +99,8 @@ class ItemOut(BaseModel):
     source_ref: Optional[str] = None
     category: Optional[str] = None
     color: Optional[str] = None
+    # 이 행 전용 deep_check 정의 — 값이 있으면 같은 종류의 다른 행과 설정을 공유하지 않는다.
+    definition_id: Optional[UUID] = None
     is_system: bool
     enabled: bool
     sort_order: int
@@ -139,6 +185,31 @@ def list_items(db: Session = Depends(get_db)):
 
 @router.post("/items", response_model=ItemOut)
 def create_item(body: ItemIn, db: Session = Depends(get_db), _: User = Depends(require_operator)):
+    # 새 플레이북을 함께 등록하는 경우 — 실행 대상(Playbook 행)이 먼저 있어야 검증을 통과한다.
+    created_playbook: Optional[dict[str, Any]] = None
+    if body.new_playbook is not None:
+        if body.source_type != CheckMatrixSourceType.playbook:
+            raise HTTPException(status_code=400, detail="new_playbook 은 playbook 실행 방식에서만 사용합니다.")
+        try:
+            created_playbook = svc.create_playbook_card_targets(
+                db,
+                name=body.new_playbook.name,
+                content=body.new_playbook.content,
+                description=body.new_playbook.description,
+                tags=body.new_playbook.tags,
+                extra_vars=_kv_to_dict(body.new_playbook.extra_vars),
+                cluster_ids=body.new_playbook.cluster_ids,
+                inventory_ids={
+                    str(p.cluster_id): p.inventory_id
+                    for p in (body.new_playbook.inventories or [])
+                },
+                playbook_file_id=body.new_playbook.playbook_file_id,
+            )
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+        body.source_ref = created_playbook["name"]
+
     _validate_item_body(body, db)
     max_sort = (
         db.query(CheckMatrixItem.sort_order)
@@ -147,13 +218,26 @@ def create_item(body: ItemIn, db: Session = Depends(get_db), _: User = Depends(r
         .scalar()
     ) or 0
     row = CheckMatrixItem(
-        **body.model_dump(exclude={"thresholds", "params"}),
+        **body.model_dump(exclude={"thresholds", "params", "dedicated_definition", "new_playbook"}),
         is_system=False, sort_order=max_sort + 10,
     )
     db.add(row)
     if body.source_type == CheckMatrixSourceType.deep_check and body.source_ref:
-        # 등록 마법사에서 새 커스텀 타입을 처음 만드는 경우 — 글로벌 정의가 없으면 함께 생성.
-        svc.ensure_deep_check_definition(db, body.source_ref, body.thresholds, body.params)
+        if body.dedicated_definition:
+            # 이 행 전용 정의 — 같은 점검 종류를 쓰는 다른 행의 설정을 건드리지 않는다.
+            try:
+                definition = svc.create_dedicated_definition(
+                    db, body.source_ref,
+                    name=body.name, description=body.description,
+                    thresholds=body.thresholds, params=body.params,
+                )
+            except ValueError as e:
+                db.rollback()
+                raise HTTPException(status_code=400, detail=str(e))
+            row.definition_id = definition.id
+        else:
+            # 공유 정의 — 글로벌 정의가 없으면 이 값으로 함께 생성(기존 동작).
+            svc.ensure_deep_check_definition(db, body.source_ref, body.thresholds, body.params)
     db.commit()
     db.refresh(row)
     return row
@@ -184,8 +268,18 @@ def update_item(item_id: UUID, body: ItemIn, db: Session = Depends(get_db), _: U
         db.refresh(row)
         return row
     _validate_item_body(body, db)
-    for k, v in body.model_dump(exclude={"thresholds", "params"}).items():
+    # 실행 소스를 바꾸면 이전 행 전용 정의는 더 이상 이 행의 것이 아니다 — 연결만 끊는다
+    # (정의 자체는 남기고 운영 점검 화면에서 정리하게 둔다). 판정은 덮어쓰기 전에 한다.
+    source_changed = (
+        body.source_type != row.source_type
+        or (body.source_ref or None) != (row.source_ref or None)
+    )
+    for k, v in body.model_dump(
+        exclude={"thresholds", "params", "dedicated_definition", "new_playbook"},
+    ).items():
         setattr(row, k, v)
+    if row.definition_id and source_changed:
+        row.definition_id = None
     db.commit()
     db.refresh(row)
     return row
@@ -231,6 +325,44 @@ def get_item_detail(item_id: UUID, db: Session = Depends(get_db)):
     return out
 
 
+class ItemSourceConfigIn(BaseModel):
+    """항목(행) 단위 임계값/파라미터 저장 — 값은 spec 필드 타입 그대로(문자열 아님)."""
+    thresholds: Optional[dict[str, Any]] = None
+    params: Optional[dict[str, Any]] = None
+    # True 면 이 행 전용 정의로 분리해서 저장(공유 정의는 그대로 둔다).
+    dedicated: bool = False
+
+
+@router.get("/items/{item_id}/source-config")
+def get_item_source_config(item_id: UUID, db: Session = Depends(get_db)):
+    """행의 실행 설정(임계값/파라미터) + 편집 폼 스펙 — 기본 등록 카드도 확인·수정 가능하게."""
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    return svc.item_source_config(db, item)
+
+
+@router.put("/items/{item_id}/source-config")
+def put_item_source_config(
+    item_id: UUID,
+    body: ItemSourceConfigIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """행의 실행 설정 저장. ``dedicated`` 면 이 행 전용 정의로 분리(copy-on-write)."""
+    item = db.query(CheckMatrixItem).filter(CheckMatrixItem.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    try:
+        return svc.update_item_source_config(
+            db, item,
+            thresholds=body.thresholds, params=body.params, dedicated=body.dedicated,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 class ItemPreviewIn(BaseModel):
     source_type: CheckMatrixSourceType
     source_ref: Optional[str] = None
@@ -238,6 +370,13 @@ class ItemPreviewIn(BaseModel):
     thresholds: Optional[dict[str, Any]] = None
     params: Optional[dict[str, Any]] = None
     config: Optional[dict[str, Any]] = None
+    # 아직 저장 전인 플레이북 본문을 그대로 시험 실행할 때 (source_type=playbook, source_ref 없음).
+    playbook_content: Optional[str] = None
+    inventory_id: Optional[UUID] = None
+    extra_vars: Optional[list[KeyValueIn]] = None
+    tags: Optional[str] = None
+    # 기본 dry-run(ansible --check) — 실제 변경을 내려면 호출부가 명시적으로 꺼야 한다.
+    check_mode: bool = True
 
 
 @router.post("/items/preview")
@@ -246,11 +385,16 @@ def preview_item(
     db: Session = Depends(get_db),
     _: User = Depends(require_operator),
 ):
-    """등록 전 저장 없이 1회 실행 — 등록 마법사의 "테스트" 단계."""
+    """등록 전 저장 없이 1회 실행 — 등록 마법사의 "테스트" 단계.
+
+    응답의 ``log`` 는 실행 상세 로그(단계/명령 출력)다 — 화면은 "로그 보기"로 펼쳐 보여준다.
+    """
     try:
         return svc.preview_item(
             db, body.source_type, body.source_ref, body.cluster_id,
             thresholds=body.thresholds, params=body.params, config=body.config,
+            playbook_content=body.playbook_content, inventory_id=body.inventory_id,
+            extra_vars=_kv_to_dict(body.extra_vars), tags=body.tags, check_mode=body.check_mode,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -895,8 +895,18 @@ def _run_migrations():
         _safe_add_column(
             "deep_check_definitions", "affects_cluster_status", "BOOLEAN NOT NULL DEFAULT FALSE",
         )
+        # parent_id — 클러스터 전용 오버라이드가 파생된 원본(글로벌) 정의. 매트릭스 행 전용
+        # 정의(check_matrix_items.definition_id) 계보를 구분해, 같은 check_type 으로 여러 행을
+        # 만들어도 클러스터 오버라이드가 섞이지 않게 한다.
+        _safe_add_column("deep_check_definitions", "parent_id", "UUID")
+        _safe_add_constraint(
+            "deep_check_definitions", "fk_deep_check_definitions_parent",
+            "FOREIGN KEY (parent_id) REFERENCES deep_check_definitions(id) ON DELETE CASCADE",
+            label="deep_check_definitions.parent_id FK",
+        )
         _safe_create_index("ix_deep_check_definitions_cluster", "deep_check_definitions", "(cluster_id)")
         _safe_create_index("ix_deep_check_definitions_type", "deep_check_definitions", "(check_type)")
+        _safe_create_index("ix_deep_check_definitions_parent", "deep_check_definitions", "(parent_id)")
     if "deep_check_results" in inspector.get_table_names():
         # 구버전 DB 호환 — 테이블이 이미 있으면 create_all 이 컬럼을 추가하지 않으므로
         # 모델에 새로 생긴 컬럼을 명시적으로 보강한다. (index 생성보다 먼저!)
@@ -1089,6 +1099,16 @@ def _run_migrations():
     if "check_matrix_items" in inspector.get_table_names():
         _safe_add_column("check_matrix_items", "category", "VARCHAR(50)")
         _safe_add_column("check_matrix_items", "color", "VARCHAR(20)")
+        # definition_id — 이 행 전용 deep_check 정의(커스텀 카드). NULL 이면 기존처럼
+        # check_type 으로 공유 정의를 해석한다(구버전 DB 는 전부 NULL = 동작 변화 없음).
+        _safe_add_column("check_matrix_items", "definition_id", "UUID")
+        _safe_add_constraint(
+            "check_matrix_items", "fk_check_matrix_items_definition",
+            "FOREIGN KEY (definition_id) REFERENCES deep_check_definitions(id) ON DELETE SET NULL",
+            requires_tables=("deep_check_definitions",),
+            label="check_matrix_items.definition_id FK",
+        )
+        _safe_create_index("ix_check_matrix_items_definition", "check_matrix_items", "(definition_id)")
 
     # check_matrix_runs: 점검 매트릭스 수행 로그 — 테이블은 create_all 이 생성하고,
     # 셀별 최근 로그 조회 / 배치 진행률 폴링 / 리텐션 퍼지 스캔용 인덱스만 보강한다.

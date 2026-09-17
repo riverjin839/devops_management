@@ -209,6 +209,10 @@ Base: `/api/v1`
 > 시드와 체크매트릭스 항목 시드에서 제외되고, admin 이 `/daily-check/settings` 에서 같은
 > check_type 으로 **인스턴스(정의)를 여러 개 직접 생성**한다. 자동 실행은 정의별
 > `schedule_cron`(check-matrix 디스패처가 매분 due 평가, 최소 5분 간격)으로 건다.
+>
+> 점검 매트릭스에서도 등록 마법사의 **직접 만들기**로 인스턴스를 만들 수 있다 — 그 행은
+> `CheckMatrixItem.definition_id` 로 자기 정의를 물기 때문에 `check_type → 정의` 가 1:1 이
+> 아니어도 어느 정의가 도는지 모호하지 않다(`docs/CHECK_MATRIX_GUIDE.md` §2.1·§2.3b).
 | `isilon_nfs` | Isilon NFS (NAS) | storage | ❌ | `isi` 명령 SSH 수집 + K8s NFS PV 매칭, export 가용성/쿼터 |
 
 > `default_enabled=False`(kernel_param_drift, minio_health, isilon_nfs) 는 **위험/무겁거나

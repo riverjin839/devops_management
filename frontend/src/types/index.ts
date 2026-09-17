@@ -4324,6 +4324,8 @@ export interface CheckMatrixItem {
   execTech?: string | null;
   /** 행 배경 색 — 차트 토큰 프리셋 키('chart-1'..'chart-8'), null = 무색 */
   color?: string | null;
+  /** 이 행 전용 deep_check 정의 id — 값이 있으면 같은 점검 종류의 다른 행과 설정을 공유하지 않는다(커스텀 카드). */
+  definitionId?: string | null;
   /** true = 시스템 항목(core_bundle) — 삭제 불가, Cluster.status 산정에 사용 */
   isSystem: boolean;
   /** false = 그리드에서 숨김(자동 실행은 계속됨) */
@@ -4333,17 +4335,58 @@ export interface CheckMatrixItem {
   updatedAt: string;
 }
 
+/** 등록 마법사에서 그 자리에 만들어 등록하는 Ansible 플레이북 (커스텀 카드). */
+export interface CheckMatrixNewPlaybookInput {
+  name: string;
+  content: string;
+  description?: string | null;
+  tags?: string | null;
+  /** ansible extra vars — 사용자가 정한 이름이 요청 인터셉터의 키 변환에 망가지지 않도록
+   *  키가 아니라 `name` 값 자리에 둔다(런북 inputs 와 같은 패턴). */
+  extraVars?: { name: string; value: string }[] | null;
+  /** 이 플레이북을 실행할 클러스터들 — 열마다 같은 이름의 Playbook 실행 단위가 생긴다. */
+  clusterIds: string[];
+  /** 클러스터별 인벤토리 지정(선택) — 비우면 클러스터 기본 인벤토리, 그것도 없으면 K8s 노드 목록. */
+  inventories?: { clusterId: string; inventoryId: string }[] | null;
+  /** 라이브러리에 이미 있는 플레이북 파일을 그대로 쓸 때(본문 재작성 없음). */
+  playbookFileId?: string | null;
+}
+
 export type CheckMatrixItemInput = Omit<
   CheckMatrixItem,
-  'id' | 'isSystem' | 'sortOrder' | 'createdAt' | 'updatedAt'
+  'id' | 'isSystem' | 'sortOrder' | 'createdAt' | 'updatedAt' | 'definitionId'
 > & {
-  /** 등록 마법사 전용 — deep_check 항목을 새로 만들 때 아직 글로벌 정의가 없으면 이 값으로
-   *  함께 만든다. CheckMatrixItem 자체엔 저장되지 않는다(응답에도 없음). */
+  /** 등록 마법사 전용 — deep_check 항목의 임계값/파라미터 초기값.
+   *  dedicatedDefinition 이 false 면 글로벌 정의가 없을 때만 쓰인다(= 설정 공유). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   thresholds?: Record<string, any> | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params?: Record<string, any> | null;
+  /** true = 이 행 전용 정의를 새로 만들어 물린다(같은 종류로 카드 여러 장). */
+  dedicatedDefinition?: boolean;
+  /** 있으면 이 플레이북을 먼저 등록하고 그 이름으로 행을 만든다. */
+  newPlaybook?: CheckMatrixNewPlaybookInput | null;
 };
+
+/** `GET /check-matrix/items/{id}/source-config` — 행 단위 임계값/파라미터 편집 폼. */
+export interface CheckMatrixItemSourceConfig {
+  itemId: string;
+  sourceType: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  /** false 면 이 실행 방식은 행 화면에서 편집할 설정이 없다(애드온/배치잡/플레이북/수동). */
+  editable: boolean;
+  /** true = 이 행 전용 정의를 이미 쓰고 있다. */
+  dedicated: boolean;
+  definitionId?: string | null;
+  definitionName?: string | null;
+  thresholdFields: DeepCheckFieldSpec[];
+  paramFields: DeepCheckFieldSpec[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  thresholds: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params: Record<string, any>;
+  note?: string | null;
+}
 
 /** 등록 마법사 카탈로그의 점검 종류 1건 — deep_check/addon/manual 을 한 목록으로. */
 export interface CheckMatrixCatalogItem {
@@ -4360,12 +4403,27 @@ export interface CheckMatrixCatalogItem {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultParams: Record<string, any>;
   seedDefault: boolean;
+  /** true = 행 전용 정의를 붙일 수 있는 종류(deep_check) — 같은 종류로 카드 여러 장 가능. */
+  supportsDedicated?: boolean;
+}
+
+/** 카탈로그의 "새로 만들기" 선택지 — 정해진 종류 목록 밖으로 나가는 길. */
+export interface CheckMatrixCreatableOption {
+  execTech: string;
+  /** 'new_playbook' = 플레이북 작성 후 등록 / 'custom_check' = 템플릿형 점검 인스턴스 추가 */
+  kind: 'new_playbook' | 'custom_check';
+  sourceType?: CheckMatrixSourceType;
+  sourceRef?: string | null;
+  label: string;
+  description?: string | null;
 }
 
 /** `GET /check-matrix/exec-techs` — 실행기술 선택 → 종류 선택 2단계를 그리는 데 필요한 전부. */
 export interface CheckMatrixCatalog {
   execTechs: string[];
   items: CheckMatrixCatalogItem[];
+  /** 실행 기술별 "새로 만들기" 선택지 (프론트 하드코딩 없이 서버가 알려준다). */
+  creatable?: CheckMatrixCreatableOption[];
 }
 
 /** 저장 전 미리 실행(등록 마법사의 "테스트" 단계) 요청. */
@@ -4379,6 +4437,14 @@ export interface CheckMatrixItemPreviewInput {
   params?: Record<string, any> | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any> | null;
+  /** 아직 저장 전인 플레이북 본문을 그대로 시험 실행(sourceType='playbook', sourceRef 없음). */
+  playbookContent?: string | null;
+  inventoryId?: string | null;
+  /** 키 변환 회피 — 이름을 값 자리에 둔다(CheckMatrixNewPlaybookInput.extraVars 와 동일). */
+  extraVars?: { name: string; value: string }[] | null;
+  tags?: string | null;
+  /** 기본 true = ansible --check(dry-run). false 면 실제로 변경이 나간다. */
+  checkMode?: boolean;
 }
 
 /** 미리 실행 결과 — deep_check 는 DeepCheckResult 형태, addon 은 CheckResult 형태라 필드가
@@ -4389,6 +4455,8 @@ export interface CheckMatrixItemPreviewResult {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details?: Record<string, any> | null;
   durationMs?: number | null;
+  /** 실행 상세 로그(단계/명령 출력) — 화면의 "로그 보기"가 펼쳐 보여준다. */
+  log?: string | null;
 }
 
 export interface CheckMatrixCell {
@@ -4531,8 +4599,10 @@ export interface CheckMatrixRunbook {
   blockedReason?: string | null;
   /** deep_check: 해석된 점검 정의 id — 소스 설정 편집 대상 */
   definitionId?: string | null;
-  /** 'global' 이면 설정 수정이 모든 클러스터에 적용됨 (UI 경고 필요) */
-  definitionScope?: 'cluster' | 'global' | null;
+  /** 'global' = 같은 점검 종류의 모든 행/클러스터가 공유 (UI 경고 필요)
+   *  'item'   = 이 행 전용 정의 — 다른 행은 영향받지 않는다 (커스텀 카드)
+   *  'cluster'= 이 클러스터 전용 오버라이드 */
+  definitionScope?: 'cluster' | 'global' | 'item' | null;
   /** addon: 해석된 애드온 인스턴스 id */
   addonId?: string | null;
   /** 이 화면에서 params/thresholds(또는 addon config) 수정 가능 여부 */

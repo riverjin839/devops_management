@@ -81,6 +81,17 @@ class CheckMatrixItem(Base):
     # 저장한다. NULL = 무색. 실측값은 frontend index.css 의 --chart-* 가 원천.
     color = Column(String(20), nullable=True)
 
+    # 이 행 전용 deep_check 정의(글로벌 scope). NULL 이면 예전처럼 check_type 으로 해석한다
+    # (= 같은 check_type 의 모든 행이 하나의 정의를 공유). 값이 있으면 그 정의가 이 행의
+    # "기준(base) 정의"이고, 클러스터별 오버라이드는 DeepCheckDefinition.parent_id 로 그 정의에
+    # 매달린다 — 덕분에 같은 점검 종류(custom_http 등)로 서로 다른 설정의 카드를 여러 장
+    # 만들 수 있다(정해진 카드 1종류 = 1행 제약 해소).
+    definition_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("deep_check_definitions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # core_bundle 행은 삭제 불가(Cluster.status 계산에 필요한 DailyChecker 실행은 행 존재와
     # 무관하게 계속 돌아야 함) — 라우터에서 이 플래그로 삭제를 막고 "그리드에서 숨기기"만 허용.
     is_system = Column(Boolean, nullable=False, default=False)

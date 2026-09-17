@@ -12,6 +12,7 @@ export const checkMatrixKeys = {
   settings: ['checkMatrixSettings'] as const,
   runbook: (itemId: string, clusterId: string) =>
     ['checkMatrixRunbook', itemId, clusterId] as const,
+  itemSourceConfig: (itemId: string) => ['checkMatrixItemSourceConfig', itemId] as const,
   runs: (filter: CheckMatrixRunFilter) => ['checkMatrixRuns', filter] as const,
   run: (runId: string) => ['checkMatrixRun', runId] as const,
 };
@@ -54,6 +55,34 @@ export function usePreviewCheckMatrixItem() {
   return useMutation({
     mutationFn: (body: CheckMatrixItemPreviewInput) =>
       checkMatrixApi.previewItem(body).then((r) => r.data),
+  });
+}
+
+/** 행(카드) 단위 임계값/파라미터 — 기본 등록 카드도 설정을 확인·수정할 수 있게 한다. */
+export function useCheckMatrixItemSourceConfig(itemId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: checkMatrixKeys.itemSourceConfig(itemId ?? ''),
+    queryFn: async () => {
+      const { data } = await checkMatrixApi.getItemSourceConfig(itemId as string);
+      return data;
+    },
+    enabled: !!itemId && enabled,
+  });
+}
+
+export function useUpdateCheckMatrixItemSourceConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, body }: {
+      itemId: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      body: { thresholds?: Record<string, any>; params?: Record<string, any>; dedicated?: boolean };
+    }) => checkMatrixApi.putItemSourceConfig(itemId, body).then((r) => r.data),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.itemSourceConfig(vars.itemId) });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.items });
+      qc.invalidateQueries({ queryKey: checkMatrixKeys.grid });
+    },
   });
 }
 

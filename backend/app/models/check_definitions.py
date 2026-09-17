@@ -42,6 +42,16 @@ class DeepCheckDefinition(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id"), nullable=True)
 
+    # 클러스터 전용 오버라이드가 파생된 원본(글로벌) 정의. NULL 이면 독립 정의다.
+    # 매트릭스 행이 자기 전용 정의(CheckMatrixItem.definition_id)를 가질 때, 그 행의
+    # 클러스터별 임계값 조정본이 어느 행에 속하는지 구분하는 계보 키 — 같은 check_type
+    # 으로 여러 행을 만들어도 클러스터 오버라이드가 서로 섞이지 않는다.
+    parent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("deep_check_definitions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
     check_type = Column(String(50), nullable=False)
     # registry 에서 매핑되는 type key: cert_expiry / etcd_defrag / cni_flow / pvc_health /
     # image_pull / audit_rbac. 추가 체커가 들어오면 여기 enum 을 확장.
