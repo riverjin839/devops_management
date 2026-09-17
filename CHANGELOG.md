@@ -10,6 +10,19 @@
 
 1.35.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+- **Main UI 간소화 — 사이드바 opt-in 앱 카탈로그 + 홈 KPI 스트립 제거**: 좌측 사이드바가
+  플랫폼 그룹을 전부 항상 보여주던 것에서, 사용자가 카드형 "앱 추가" 다이얼로그에서 필요한
+  것만 골라 설치(opt-in)하는 방식으로 바뀌었다 — 신규 계정은 완전히 빈 레일 + "+" 버튼으로
+  시작하고, 기존 계정은 이전과 동일하게 전체가 설치된 상태로 1회 자동 이관돼 화면이 갑자기
+  비어 보이지 않는다. 홈(`/`)에서는 이 화면 최상단을 차지하던 KPI 스트립(내 할일/미해결
+  이슈/위험 클러스터/점검 실패/다음 일정 + 아일랜드 진입 필)을 제거해 세그먼트 탭이 바로
+  최상단에 오도록 정리했다 — 위험 신호는 플랫폼 탭 배지 하나로 압축. Backend:
+  `HomePrefs.installed_apps`(`schemas/home_prefs.py`, 기존 `/me/home-prefs` 엔드포인트 재사용) +
+  `main.py::_backfill_installed_sidebar_apps()`(기존 계정 1회 이관). Frontend:
+  `components/layout/{sidebarApps.ts,AddSidebarAppDialog.tsx}` 신규, `Sidebar.tsx`/`HomePage.tsx`
+  개편. `DESIGN_SYSTEM.md` §12.11 신설.
+
 ## [1.35.0] - 2026-09-16
 
 ### Added

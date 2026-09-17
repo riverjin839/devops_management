@@ -93,6 +93,42 @@ def test_put_is_partial_and_preserves_unset_fields(db, me, cleanup):
     assert updated.pinned_paths == ["/etcdctl"]
 
 
+def test_locale_partial_update_preserves_other_fields(db, me, cleanup):
+    cleanup.append(me.id)
+    home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(default_home_tab="platform", pinned_paths=["/k9s"]),
+        db=db, user=me,
+    )
+    updated = home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(locale="en"),
+        db=db, user=me,
+    )
+    assert updated.locale == "en"
+    assert updated.default_home_tab == "platform"
+    assert updated.pinned_paths == ["/k9s"]
+
+
+def test_installed_apps_partial_update_preserves_other_fields(db, me, cleanup):
+    cleanup.append(me.id)
+    home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(default_home_tab="platform", locale="en"),
+        db=db, user=me,
+    )
+    updated = home_prefs_router.update_home_prefs(
+        payload=HomePrefsUpdate(installed_apps=["cluster", "back"]),
+        db=db, user=me,
+    )
+    assert updated.installed_apps == ["cluster", "back"]
+    assert updated.default_home_tab == "platform"
+    assert updated.locale == "en"
+
+
+def test_installed_apps_defaults_to_empty_list(db, me, cleanup):
+    cleanup.append(me.id)
+    prefs = home_prefs_router.get_home_prefs(db=db, user=me)
+    assert prefs.installed_apps == []
+
+
 def test_prefs_are_isolated_per_user(db, me, other, cleanup):
     cleanup.append(me.id)
     cleanup.append(other.id)

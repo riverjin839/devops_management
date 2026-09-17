@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  ClipboardList, AlertCircle, CalendarClock, Server, CalendarDays, AlertTriangle, Palmtree,
-  ListTodo, ServerCog, ShieldAlert, LayoutGrid, ListTree, ChevronDown,
+  CalendarClock, CalendarDays,
+  ListTodo, ServerCog, LayoutGrid, ListTree,
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { MemberTodayTodos } from '@/components/dashboard/MemberTodayTodos';
@@ -11,100 +10,13 @@ import { WeeklyStatusTimeline } from '@/components/dashboard/WeeklyStatusTimelin
 import { DayScheduleBoard } from '@/components/dashboard/DayScheduleBoard';
 import { PlatformStatusMatrix } from '@/components/platform-status';
 import { BatchJobsPage } from '@/pages/BatchJobsPage';
-import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
-import { useHomeWorkItems } from '@/hooks/useWorkItems';
 import { useCheckMatrixFailureCount } from '@/hooks/useCheckMatrix';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
-import { useToday } from '@/hooks/useToday';
 import { useHomeStore, type HomeTab } from '@/stores/homeStore';
-import { useIslands } from '@/hooks/useIslands';
-import { useIslandStore } from '@/stores/islandStore';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
-import type { WorkItem } from '@/types';
-import { cn, parseUTC, assigneeNames } from '@/lib/utils';
-import { isMyDueTodo } from '@/lib/workItems';
-
-function nextDueTask(items: WorkItem[]): WorkItem | null {
-  const now = Date.now();
-  const candidates = items
-    .filter((t) => t.startedAt && t.kanbanStatus !== 'done')
-    .map((t) => ({ t, ms: parseUTC(t.startedAt as string).getTime() }))
-    // 진짜 "다음(=아직 오지 않은)" 일정만 — 지난 건은 다음 일정이 아니다.
-    .filter(({ ms }) => Number.isFinite(ms) && ms >= now)
-    .sort((a, b) => a.ms - b.ms);
-  return candidates[0]?.t ?? null;
-}
-
-// ── Compact KPI pill ─────────────────────────────────────────────────────────
-interface KpiPillProps {
-  label: string;
-  value: number | string;
-  hint?: string;
-  Icon: typeof ClipboardList;
-  accent: string;
-  to?: string;
-  /** 라우트 이동 대신 같은 화면 안에서 상태만 바꿀 때(예: 홈 탭 전환). `to` 보다 우선한다. */
-  onSelect?: () => void;
-  isLoading?: boolean;
-  isError?: boolean;
-}
-
-function KpiPill({ label, value, hint, Icon, accent, to, onSelect, isLoading, isError }: KpiPillProps) {
-  const body = (
-    <div className={cn(
-      'flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border transition-colors text-xs whitespace-nowrap',
-      isError ? 'border-status-critical/40' : 'border-border hover:border-primary/40',
-    )}>
-      {isError
-        ? <AlertTriangle className="w-3 h-3 flex-shrink-0 text-status-critical" />
-        : <Icon className={cn('w-3 h-3 flex-shrink-0', accent)} />}
-      <span className="text-muted-foreground">{label}</span>
-      {isError ? (
-        <span className="font-semibold text-status-critical" title="불러오기 실패">!</span>
-      ) : (
-        <>
-          <span className="font-semibold tabular-nums">{isLoading ? '…' : value}</span>
-          {hint && !isLoading && <span className="text-muted-foreground">{hint}</span>}
-        </>
-      )}
-      {/* D-078 — 다른 필은 전부 다른 화면으로 이동(Link)하는데 이 필만 같은 화면 안에서
-          탭만 바꾼다(onSelect). 모양이 같아 학습 비용이 생기므로 "여기서 바뀐다"는
-          쉐브론으로 구분한다. */}
-      {onSelect && <ChevronDown className="w-3 h-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />}
-    </div>
-  );
-  if (onSelect) {
-    return <button type="button" onClick={onSelect} title={`${label} — 이 화면 안에서 탭 전환`}>{body}</button>;
-  }
-  return to ? <Link to={to}>{body}</Link> : body;
-}
-
-// ── Your Island 진입 필 ──────────────────────────────────────────────────────
-// 사이드바 진입점은 푸터 개인 존으로 내려갔다(공용 그룹 레일과 성격이 달라서). 하단은
-// 발견성이 낮으므로, 로그인 후 첫 화면인 여기 상단 KPI 줄 맨 앞에 진입점을 둔다.
-// KPI 필과 달리 지표가 아니라 "목적지"라 accent 보더로 구분한다.
-function IslandPill() {
-  const { data } = useIslands();
-  const lastIslandId = useIslandStore((s) => s.lastIslandId);
-
-  const mine = data?.data ?? [];
-  const target = mine.find((i) => i.id === lastIslandId) ?? mine[0] ?? null;
-  const to = target ? `/island/${target.id}` : '/island';
-
-  return (
-    <Link to={to} className="flex-shrink-0">
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/5 border border-primary/30 hover:border-primary/60 transition-colors text-xs whitespace-nowrap">
-        <Palmtree className="w-3 h-3 flex-shrink-0 text-primary" />
-        <span className="font-semibold text-primary">
-          {target ? target.name : '나의 아일랜드'}
-        </span>
-        {!target && <span className="text-muted-foreground">만들기</span>}
-      </div>
-    </Link>
-  );
-}
+import { cn } from '@/lib/utils';
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export function HomePage() {
@@ -139,43 +51,13 @@ export function HomePage() {
   // DOM 만 여기로 옮기는 portal 이라 소유권(캡슐화)은 그대로 유지된다.
   const [platformToolbarSlot, setPlatformToolbarSlot] = useState<HTMLDivElement | null>(null);
 
-  const user = useAuthStore((s) => s.user);
-  const myName = user?.displayName?.trim() || user?.username || null;
-
+  // "위험 클러스터/점검 실패" 는 KPI 스트립 제거(Main UI 간소화 요청) 후에도 플랫폼 탭
+  // 배지(아래 TABS.badge)를 위해 계속 필요 — useClusters() 는 clusterStore 를 채우는
+  // 부수효과가 있어(다른 화면과 데이터를 공유) 호출 자체는 유지한다.
   const { clusters } = useClusterStore();
-  const { isLoading: clustersLoading, isError: clustersError } = useClusters();
-  const {
-    data: checkFailureCount, isLoading: checkFailureLoading, isError: checkFailureError,
-  } = useCheckMatrixFailureCount();
-
-  const { data: workItemsData, isLoading: workItemsLoading, isError: workItemsError } = useHomeWorkItems();
-  const allWorkItems = useMemo<WorkItem[]>(() => workItemsData?.data ?? [], [workItemsData]);
-  const allIssues = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'issue'), [allWorkItems]);
-  // "다음 일정" 후보 — 이슈를 제외한 일정성 업무(작업/회의/교육/기타). 당일 스케줄 보드와 대상 일치.
-  const allSchedulable = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type !== 'issue'), [allWorkItems]);
-
-  const today = useToday();  // 자정 넘기면 자동 갱신 (상시 대시보드)
-  // "내 할일" — /todo-today 의 지연+오늘(open) 집계와 동일 정의(공용 isMyDueTodo)를 공유해
-  // KPI 와 상세 페이지가 같은 숫자를 보이도록 한다.
-  const myTodayTasks = useMemo(
-    () => (myName ? allWorkItems.filter((t) => isMyDueTodo(t, myName, today)) : []),
-    [allWorkItems, myName, today],
-  );
-
-  const openIssueCount = useMemo(() => allIssues.filter((i) => !i.closedAt).length, [allIssues]);
+  useClusters();
+  const { data: checkFailureCount } = useCheckMatrixFailureCount();
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);
-  // "다음 일정" 은 옆의 "내 할일"과 같은 개인화 기준을 쓴다 — 이전엔 전체 담당자 기준이라
-  // 나란한 두 KPI 가 서로 다른 모집단을 보여줘 혼동을 줬다(impeccable critique, 업무 현황 P1).
-  const myUpcomingPool = useMemo(
-    () => (myName ? allSchedulable.filter((w) => assigneeNames(w).includes(myName)) : allSchedulable),
-    [allSchedulable, myName],
-  );
-  const upcomingTask = useMemo(() => nextDueTask(myUpcomingPool), [myUpcomingPool]);
-  const upcomingLabel = upcomingTask?.startedAt
-    ? parseUTC(upcomingTask.startedAt).toLocaleString('ko-KR', {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      })
-    : '없음';
 
   // 플랫폼 탭 서브뷰 — 점검 매트릭스 / 배치잡. 배치잡은 예전엔 별도 라우트(/batch-jobs)
   // 였지만 화면 개수를 줄이려 여기 서브탭으로 접었다(/batch-jobs 는 하위호환 리다이렉트).
@@ -206,66 +88,13 @@ export function HomePage() {
   return (
     <div className="app-h-screen overflow-hidden bg-background flex flex-col">
 
-      {/* ── KPI 스트립 — 업무/플랫폼 신호를 탭과 무관하게 항상 함께 보여준다 ──────── */}
-      <div className="flex-none flex items-center gap-1.5 pl-3 lg:pl-4 pr-3 lg:pr-4 py-2 border-b border-border bg-background/95 backdrop-blur flex-wrap">
-        {/* Your Island — KPI 그룹 맨 앞. 지표가 아니라 목적지라 accent 로 구분. */}
-        <IslandPill />
-        <KpiPill
-          label="내 할일"
-          value={myName ? myTodayTasks.length : '—'}
-          hint={myName ? '건' : undefined}
-          Icon={ClipboardList}
-          accent="text-primary"
-          to="/todo-today"
-          isLoading={workItemsLoading}
-          isError={workItemsError}
-        />
-        <KpiPill
-          label="미해결 이슈"
-          value={openIssueCount}
-          hint="건"
-          Icon={AlertCircle}
-          accent="text-status-critical"
-          to="/tasks-mgmt"
-          isLoading={workItemsLoading}
-          isError={workItemsError}
-        />
-        <KpiPill
-          label="위험 클러스터"
-          value={criticalClusters}
-          hint={`/ ${clusters.length}`}
-          Icon={Server}
-          accent="text-status-warning"
-          to="/cluster-overview"
-          isLoading={clustersLoading}
-          isError={clustersError}
-        />
-        <KpiPill
-          label="점검 실패"
-          value={checkFailureCount ?? 0}
-          hint="건"
-          Icon={ShieldAlert}
-          accent="text-status-critical"
-          onSelect={() => selectHomeTab('platform')}
-          isLoading={checkFailureLoading}
-          isError={checkFailureError}
-        />
-        <KpiPill
-          label="다음 일정"
-          value={upcomingLabel}
-          Icon={CalendarClock}
-          accent="text-status-info"
-          to={upcomingTask ? `/tasks-mgmt/${upcomingTask.id}` : '/tasks-mgmt'}
-          isLoading={workItemsLoading}
-          isError={workItemsError}
-        />
-      </div>
-
       {/* ── 세그먼트 탭 — 홈 본문에서 뭘 볼지 고르는 로컬 선택. 예전엔 사이드바 전체를
           게이팅하는 "모드"였지만(D-054), 지금은 이 홈 화면 안에서만 의미가 있다.
-          플랫폼 탭일 때는 오른쪽에 매트릭스 툴바(portal slot)를 같은 줄에 이어 붙여
-          카드 헤더 줄 하나를 통째로 줄인다. ───────── */}
-      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 pt-2">
+          Main UI 간소화 요청으로 KPI 스트립(내 할일/미해결 이슈/위험 클러스터 등)을
+          제거해 이 탭 줄이 홈의 최상단이 됐다 — 신호는 위험/실패가 있을 때만 뜨는
+          탭 배지 하나로 압축했다. 플랫폼 탭일 때는 오른쪽에 매트릭스 툴바(portal slot)를
+          같은 줄에 이어 붙여 카드 헤더 줄 하나를 통째로 줄인다. ───────── */}
+      <div className="flex-none flex items-center gap-2 px-3 lg:px-4 py-2 border-b border-border bg-background/95 backdrop-blur">
         <div
           role="tablist"
           aria-label="홈 화면 보기"

@@ -1932,6 +1932,48 @@ def _migrate_assignee_roster_to_users():
         db.close()
 
 
+def _backfill_installed_sidebar_apps():
+    """사이드바 "SaaS 앱" 개편(opt-in 설치형) — 기존 사용자는 이전과 동일하게 전체가 설치된
+    것으로 1회 이관, 이 마이그레이션 이후 생성되는 신규 계정은 `HomePrefs` 기본값(빈 리스트)이
+    자연히 적용돼 빈 사이드바 + "+" 버튼으로 시작한다.
+
+    설치 가능한 앱 id 는 프론트 `navConfig.ts` 의 `GroupId`(플랫폼 도메인 그룹) + `"back"`
+    (뒤로가기 버튼) 과 반드시 일치해야 한다 — 프론트에서 그룹을 추가/삭제하면 이 기본 목록도
+    같이 갱신할 것. `app_settings` 의 sentinel 키로 1회만 실행되게 막는다(재부팅마다 반복 방지).
+    """
+    from app.models.app_setting import AppSetting
+    from app.models.user import User
+    from app.models.user_setting import UserSetting
+
+    SENTINEL_KEY = "installed_sidebar_apps_backfilled_v1"
+    DEFAULT_INSTALLED_APPS = [
+        "cluster", "server", "network", "storage", "services", "devops", "system", "back",
+    ]
+
+    db = SessionLocal()
+    try:
+        if db.query(AppSetting).filter(AppSetting.key == SENTINEL_KEY).first() is not None:
+            return
+        touched = 0
+        for user in db.query(User).all():
+            row = (
+                db.query(UserSetting)
+                .filter(UserSetting.user_id == user.id, UserSetting.key == "home_prefs")
+                .first()
+            )
+            if row is None:
+                db.add(UserSetting(user_id=user.id, key="home_prefs", value={"installed_apps": DEFAULT_INSTALLED_APPS}))
+                touched += 1
+            elif isinstance(row.value, dict) and "installed_apps" not in row.value:
+                row.value = {**row.value, "installed_apps": DEFAULT_INSTALLED_APPS}
+                touched += 1
+        db.add(AppSetting(key=SENTINEL_KEY, value={"done": True}))
+        db.commit()
+        _log.info("backfilled installed_apps default for %d existing user(s)", touched)
+    finally:
+        db.close()
+
+
 def _seed_check_matrix_items():
     """점검 매트릭스 기본 행 시드 — 테이블이 비어있을 때만(사용자 삭제/추가는 보존)."""
     from app.services import check_matrix_service as cms
@@ -2071,6 +2113,7 @@ async def lifespan(app: FastAPI):
             ("seed_observability_catalog", _seed_observability_catalog),
             ("seed_initial_admin", _seed_initial_admin),
             ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
+            ("backfill_installed_sidebar_apps", _backfill_installed_sidebar_apps),
         ]:
             try:
                 step()
