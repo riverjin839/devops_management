@@ -497,19 +497,14 @@ _PLAYBOOK_NOTES = [
 # ──────────────────────────────────────────────────────────────
 # 조립
 # ──────────────────────────────────────────────────────────────
-def _resolve_deep_check_definition(db: Session, check_type: str, cluster_id) -> Optional[DeepCheckDefinition]:
-    d = (
-        db.query(DeepCheckDefinition)
-        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id == cluster_id)
-        .first()
-    )
-    if d is not None:
-        return d
-    return (
-        db.query(DeepCheckDefinition)
-        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id.is_(None))
-        .first()
-    )
+def _resolve_deep_check_definition(
+    db: Session, item: CheckMatrixItem, cluster_id,
+) -> Optional[DeepCheckDefinition]:
+    """실행 경로와 같은 해석을 쓴다 — 런북이 "실제로 돌 정의"와 어긋나면 안 되므로
+    check_matrix_service 의 단일 해석기에 위임한다(순환 import 회피용 지연 import)."""
+    from app.services.check_matrix_service import resolve_definition_for_item
+
+    return resolve_definition_for_item(db, item, cluster_id)
 
 
 def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[str, Any]:
@@ -556,7 +551,7 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
 
         entry = REGISTRY.get(item.source_ref or "")
         spec = entry[1] if entry else None
-        definition = _resolve_deep_check_definition(db, item.source_ref or "", cluster.id)
+        definition = _resolve_deep_check_definition(db, item, cluster.id)
         params = dict((definition.params if definition else None) or {})
         thresholds = dict((definition.thresholds if definition else None) or {})
         if spec is not None:
@@ -586,14 +581,25 @@ def build_runbook(db: Session, item: CheckMatrixItem, cluster: Cluster) -> dict[
                 "운영 점검(Ops Checks) 화면에서 정의를 만들면 이 셀이 실행됩니다."
             )
         else:
+            # 행 전용 정의(커스텀 카드)면 "글로벌"이 아니라 "이 항목 전용"이라고 말해야 한다 —
+            # 편집이 전 클러스터에 퍼지는지에 대한 UI 경고 문구가 여기서 갈린다.
+            dedicated = bool(item.definition_id)
+            if definition.cluster_id:
+                scope_label = "이 클러스터 전용"
+            elif dedicated:
+                scope_label = "이 항목 전용"
+            else:
+                scope_label = "글로벌"
             out["target"] = (
                 f"DeepCheckDefinition «{definition.name}»"
-                f" ({'이 클러스터 전용' if definition.cluster_id else '글로벌'}"
+                f" ({scope_label}"
                 f"{'' if definition.enabled else ' · 비활성'})"
             )
             out["runnable"] = True
             out["definition_id"] = str(definition.id)
-            out["definition_scope"] = "cluster" if definition.cluster_id else "global"
+            out["definition_scope"] = (
+                "cluster" if definition.cluster_id else ("item" if dedicated else "global")
+            )
             out["config_editable"] = True
             if not definition.enabled:
                 out["notes"].append(

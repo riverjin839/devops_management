@@ -10,6 +10,19 @@
 
 1.35.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **점검 매트릭스 커스텀 카드 — 정해진 카드 밖의 점검을 직접 만든다**: 점검 항목 추가 마법사의
+  종류 단계에 **직접 만들기** 구역이 생겨, ① 내가 쓴 **Ansible Playbook 을 그 자리에서 등록**해
+  점검으로 돌리고(이름·YAML 직접 작성/`.yml` 파일 업로드/플레이북 라이브러리 불러오기·태그·extra
+  vars·실행할 클러스터 지정 → 저장 시 플레이북 파일 + 클러스터별 실행 단위 + 매트릭스 행이 한 번에
+  생성) ② 커스텀 HTTP/kubectl/PromQL 점검을 **대상만 다르게 여러 장** 만들 수 있다. 등록 전
+  테스트는 기본 `ansible --check`(dry-run)로 돌고, 결과 아래 **"로그 보기"** 로 실행 로그 전체를
+  펼쳐 본다. Backend: `check_matrix.py`(`POST /items` 의 `new_playbook`/`dedicated_definition`,
+  `GET|PUT /items/{id}/source-config`, `POST /items/preview` 의 플레이북 본문·`check_mode`) ·
+  `check_matrix_service.py`(`create_dedicated_definition`/`create_playbook_card_targets`/
+  `resolve_definition_for_item`) · `playbook_executor.run_playbook(check_mode=)`.
+  Frontend: `components/platform-status/CheckMatrixItemFormModal.tsx`.
+
 ### Changed
 - **Main UI 간소화 — 사이드바 opt-in 앱 카탈로그 + 홈 KPI 스트립 제거**: 좌측 사이드바가
   플랫폼 그룹을 전부 항상 보여주던 것에서, 사용자가 카드형 "앱 추가" 다이얼로그에서 필요한
@@ -22,6 +35,11 @@
   `main.py::_backfill_installed_sidebar_apps()`(기존 계정 1회 이관). Frontend:
   `components/layout/{sidebarApps.ts,AddSidebarAppDialog.tsx}` 신규, `Sidebar.tsx`/`HomePage.tsx`
   개편. `DESIGN_SYSTEM.md` §12.11 신설.
+- **기본 등록된 점검 카드도 설정을 커스터마이즈**: 등록 마법사의 임계값/파라미터가 기본 점검
+  종류에서 더 이상 읽기 전용이 아니고, 항목 수정 폼에서도 현재 값을 바로 확인·수정한다.
+  **"이 항목 전용 설정으로 분리"** 를 켜면 그 행만의 점검 정의(`CheckMatrixItem.definition_id`)가
+  만들어져 같은 점검 종류를 쓰는 다른 행은 영향받지 않는다 — 클러스터별 오버라이드도
+  `DeepCheckDefinition.parent_id` 계보 안에서만 적용돼 카드끼리 설정이 섞이지 않는다.
 
 ## [1.35.0] - 2026-09-16
 

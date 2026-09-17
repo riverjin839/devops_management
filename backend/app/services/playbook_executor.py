@@ -115,6 +115,7 @@ def run_playbook(
     inventory_content: str | None = None,
     inventory_hosts: list[str] | None = None,
     ssh_private_key: str | None = None,
+    check_mode: bool = False,
 ) -> PlaybookResult:
     """ansible-playbook을 JSON callback과 함께 실행하고 결과를 파싱합니다.
 
@@ -175,6 +176,10 @@ def run_playbook(
             cmd.extend(["-e", json.dumps(merged_vars)])
         if tags:
             cmd.extend(["--tags", tags])
+        # --check = ansible dry-run. 등록 마법사의 "테스트" 처럼 아직 저장하지도 않은
+        # 플레이북을 운영 클러스터에 시험 실행할 때, 변경을 내지 않고 결과만 본다.
+        if check_mode:
+            cmd.append("--check")
 
         try:
             result = subprocess.run(
