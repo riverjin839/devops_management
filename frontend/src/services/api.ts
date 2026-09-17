@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -2265,8 +2265,19 @@ export const checkMatrixApi = {
     api.post('/check-matrix/items/reorder', { itemIds }),
   // 등록 마법사 — 실행기술별 점검 종류 카탈로그, 저장 전 테스트
   getCatalog: () => api.get<CheckMatrixCatalog>('/check-matrix/exec-techs'),
+  // 플레이북 테스트는 실제 ansible 실행이라 기본 30s 를 넘길 수 있어 여유를 준다.
   previewItem: (data: CheckMatrixItemPreviewInput) =>
-    api.post<CheckMatrixItemPreviewResult>('/check-matrix/items/preview', data),
+    api.post<CheckMatrixItemPreviewResult>('/check-matrix/items/preview', data, { timeout: 300000 }),
+  // 행(카드) 단위 임계값/파라미터 — 기본 등록 카드도 확인·수정 가능하게 하는 경로
+  getItemSourceConfig: (itemId: string) =>
+    api.get<CheckMatrixItemSourceConfig>(`/check-matrix/items/${itemId}/source-config`),
+  putItemSourceConfig: (
+    itemId: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: { thresholds?: Record<string, any>; params?: Record<string, any>; dedicated?: boolean },
+  ) => api.put<{ definitionId: string; dedicated: boolean; created: boolean }>(
+    `/check-matrix/items/${itemId}/source-config`, data,
+  ),
   getGrid: () => api.get<CheckMatrixGrid>('/check-matrix/grid'),
   // 항목 상세(/checks/:itemId) — 이 항목의 클러스터별 cron/최근 결과
   getItemDetail: (itemId: string) =>

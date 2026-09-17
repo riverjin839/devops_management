@@ -22,7 +22,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlalchemy import asc
+from sqlalchemy import asc, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -205,6 +205,8 @@ def _item_to_dict(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
         "source_ref": item.source_ref,
         "category": item.category,
         "exec_tech": _resolve_exec_tech(db, item),
+        # 값이 있으면 이 행 전용 설정(커스텀 카드) — 같은 종류의 다른 행과 공유하지 않는다.
+        "definition_id": str(item.definition_id) if item.definition_id else None,
         "color": item.color,
         "is_system": item.is_system,
         "enabled": item.enabled,
@@ -429,20 +431,62 @@ def project_core_bundle_result(db: Session, cluster: Cluster, log: Any) -> None:
 # ──────────────────────────────────────────────────────────────
 # 논리 키 → 클러스터별 실제 인스턴스 해석 + 실행
 # ──────────────────────────────────────────────────────────────
-def _resolve_deep_check_definition(db: Session, check_type: str, cluster_id) -> Optional[DeepCheckDefinition]:
-    """클러스터 전용 정의 우선, 없으면 글로벌 정의로 fallback."""
-    d = (
-        db.query(DeepCheckDefinition)
-        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id == cluster_id)
-        .first()
+def _dedicated_definition_ids(db: Session):
+    """어떤 매트릭스 행이 "자기 전용"으로 물고 있는 정의 id 들 (스칼라 서브쿼리).
+
+    check_type 기반의 공유 해석이 남의 행 전용 정의를 잘못 집지 않도록 제외하는 데 쓴다.
+    """
+    return (
+        select(CheckMatrixItem.definition_id)
+        .where(CheckMatrixItem.definition_id.isnot(None))
+        .scalar_subquery()
     )
+
+
+def _resolve_deep_check_definition(db: Session, check_type: str, cluster_id) -> Optional[DeepCheckDefinition]:
+    """check_type 공유 해석 — 클러스터 전용 정의 우선, 없으면 글로벌 정의로 fallback.
+
+    행 전용 정의(CheckMatrixItem.definition_id 가 가리키는 정의)와 그 파생본(parent_id 가
+    있는 클러스터 오버라이드)은 제외한다 — 같은 check_type 이라도 다른 행의 설정이므로.
+    """
+    dedicated = _dedicated_definition_ids(db)
+    base = db.query(DeepCheckDefinition).filter(
+        DeepCheckDefinition.check_type == check_type,
+        DeepCheckDefinition.parent_id.is_(None),
+        DeepCheckDefinition.id.notin_(dedicated),
+    )
+    d = base.filter(DeepCheckDefinition.cluster_id == cluster_id).first()
     if d is not None:
         return d
-    return (
-        db.query(DeepCheckDefinition)
-        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id.is_(None))
-        .first()
-    )
+    return base.filter(DeepCheckDefinition.cluster_id.is_(None)).first()
+
+
+def resolve_definition_for_item(
+    db: Session, item: CheckMatrixItem, cluster_id,
+) -> Optional[DeepCheckDefinition]:
+    """이 행(item)이 이 클러스터에서 실제로 실행할 deep_check 정의.
+
+    - 행 전용 정의(``item.definition_id``)가 있으면 그 계보 안에서만 해석한다:
+      그 정의를 parent 로 하는 클러스터 오버라이드가 있으면 그것, 없으면 전용 정의 자신.
+    - 없으면 예전과 동일한 check_type 공유 해석(클러스터 전용 → 글로벌).
+    """
+    if getattr(item, "definition_id", None):
+        base = (
+            db.query(DeepCheckDefinition)
+            .filter(DeepCheckDefinition.id == item.definition_id)
+            .first()
+        )
+        if base is not None:
+            override = (
+                db.query(DeepCheckDefinition)
+                .filter(
+                    DeepCheckDefinition.parent_id == base.id,
+                    DeepCheckDefinition.cluster_id == cluster_id,
+                )
+                .first()
+            )
+            return override or base
+    return _resolve_deep_check_definition(db, item.source_ref or "", cluster_id)
 
 
 def _resolve_addon(db: Session, addon_type: str, cluster_id) -> Optional[Addon]:
@@ -500,6 +544,9 @@ def list_catalog(db: Session) -> dict[str, Any]:
             "default_thresholds": ct["default_thresholds"],
             "default_params": ct["default_params"],
             "seed_default": ct["seed_default"],
+            # deep_check 는 행 전용 정의(CheckMatrixItem.definition_id)를 붙일 수 있어
+            # 같은 종류로 설정이 다른 카드를 여러 장 만들 수 있다.
+            "supports_dedicated": True,
         })
 
     for addon_type in CHECKER_REGISTRY:
@@ -515,6 +562,7 @@ def list_catalog(db: Session) -> dict[str, Any]:
             "default_thresholds": {},
             "default_params": {},
             "seed_default": True,
+            "supports_dedicated": False,
         })
 
     # D-066 — BatchJob(SSH bash/python)/Playbook(Ansible) 은 deep_check/addon 처럼 "타입
@@ -540,6 +588,7 @@ def list_catalog(db: Session) -> dict[str, Any]:
             "default_thresholds": {},
             "default_params": {},
             "seed_default": True,
+            "supports_dedicated": False,
         })
 
     playbook_names: dict[str, str] = {}
@@ -560,6 +609,7 @@ def list_catalog(db: Session) -> dict[str, Any]:
             "default_thresholds": {},
             "default_params": {},
             "seed_default": True,
+            "supports_dedicated": False,
         })
 
     items.append({
@@ -574,10 +624,67 @@ def list_catalog(db: Session) -> dict[str, Any]:
         "default_thresholds": {},
         "default_params": {},
         "seed_default": True,
+        "supports_dedicated": False,
     })
 
+    # "정해진 카드" 밖으로 나가는 길 — 실행 기술별로 운영자가 그 자리에서 새로 만들 수 있는
+    # 것들. 프론트가 하드코딩하지 않도록 카탈로그가 함께 알려준다(exec_techs 와 같은 취지).
+    creatable = [
+        {
+            "exec_tech": "ansible",
+            "kind": "new_playbook",
+            "label": "새 플레이북 만들어 등록",
+            "description": (
+                "내가 작성한 Ansible Playbook(YAML)을 등록하고 선택한 클러스터에서 "
+                "점검으로 실행합니다 — 파일을 붙여넣거나 라이브러리에서 불러올 수 있습니다."
+            ),
+        },
+    ]
+    # 커스텀(템플릿형) deep check — 같은 종류로 대상만 바꿔 카드를 여러 장 만드는 용도라
+    # "새로 만들기" 선택지로도 함께 노출한다(kind 목록에서 찾지 않아도 되게).
+    for ct in list_check_types():
+        if not ct["seed_default"]:
+            creatable.append({
+                "exec_tech": ct["exec_tech"],
+                "kind": "custom_check",
+                "source_type": "deep_check",
+                "source_ref": ct["check_type"],
+                "label": f"{ct['display_name']} — 새로 만들기",
+                "description": ct["description"],
+            })
+
     exec_techs = sorted({i["exec_tech"] for i in items if i["exec_tech"]})
-    return {"exec_techs": exec_techs, "items": items}
+    exec_techs = sorted(set(exec_techs) | {c["exec_tech"] for c in creatable if c["exec_tech"]})
+    return {"exec_techs": exec_techs, "items": items, "creatable": creatable}
+
+
+def _preview_log(payload: dict[str, Any]) -> str:
+    """미리 실행 결과를 사람이 읽을 로그 텍스트로 — "실행에는 항상 상세 로그" 원칙.
+
+    체커마다 details 의 모양이 달라 공통 파서를 둘 수 없으므로, 단계 트레이스가 있으면
+    타임라인으로 먼저 풀고 나머지 details 는 그대로 JSON 으로 덧붙인다.
+    """
+    import json as _json
+
+    lines: list[str] = []
+    status = payload.get("status")
+    if status:
+        lines.append(f"[status] {status}")
+    if payload.get("message"):
+        lines.append(f"[message] {payload['message']}")
+    if payload.get("duration_ms") is not None:
+        lines.append(f"[duration] {payload['duration_ms']}ms")
+    for step in payload.get("step_plan") or []:
+        if isinstance(step, dict):
+            lines.append(f"[step] {step.get('label') or step.get('id')} — {step.get('status', '')}".rstrip(" —"))
+    details = payload.get("details")
+    if details:
+        lines.append("[details]")
+        try:
+            lines.append(_json.dumps(details, ensure_ascii=False, indent=2, default=str))
+        except (TypeError, ValueError):
+            lines.append(str(details))
+    return "\n".join(lines)
 
 
 def preview_item(
@@ -589,6 +696,11 @@ def preview_item(
     thresholds: Optional[dict[str, Any]] = None,
     params: Optional[dict[str, Any]] = None,
     config: Optional[dict[str, Any]] = None,
+    playbook_content: Optional[str] = None,
+    inventory_id: Optional[Any] = None,
+    extra_vars: Optional[dict[str, Any]] = None,
+    tags: Optional[str] = None,
+    check_mode: bool = True,
 ) -> dict[str, Any]:
     """저장 전 1회 실행 — 등록 마법사의 "테스트" 단계. 아무것도 영속화하지 않는다."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -600,10 +712,11 @@ def preview_item(
         if not source_ref or source_ref not in REGISTRY:
             raise ValueError(f"알 수 없는 check_type: {source_ref}")
         from app.services.check_definition_runner import DeepCheckService
-        return DeepCheckService(db).run_check_type_once(
+        out = DeepCheckService(db).run_check_type_once(
             source_ref, cluster=cluster, thresholds=thresholds, params=params,
             in_cluster=False, persist=False,
         )
+        return {**out, "log": _preview_log(out)}
 
     if source_type == CheckMatrixSourceType.addon:
         from app.services.checkers import CHECKER_REGISTRY
@@ -611,29 +724,122 @@ def preview_item(
             raise ValueError(f"알 수 없는 addon type: {source_ref}")
         from app.services.health_checker import HealthChecker
         result = HealthChecker(db).preview_addon_check(cluster, source_ref, config)
-        return {
+        out = {
             "status": result.status.value,
             "message": result.message,
             "details": result.details,
             "duration_ms": result.response_time,
         }
+        return {**out, "log": _preview_log(out)}
+
+    if source_type == CheckMatrixSourceType.playbook and not source_ref:
+        # 마법사에서 방금 작성한(아직 저장 전인) 플레이북 본문을 그대로 1회 실행한다.
+        # 기본은 ansible --check (dry-run) — 등록 전 테스트가 운영을 바꾸면 안 되므로,
+        # 실제 적용 실행은 호출부가 check_mode=False 로 명시해야 한다.
+        return preview_playbook_content(
+            db, cluster,
+            content=playbook_content or "",
+            inventory_id=inventory_id,
+            extra_vars=extra_vars,
+            tags=tags,
+            check_mode=check_mode,
+        )
 
     if source_type in (CheckMatrixSourceType.batch_job, CheckMatrixSourceType.playbook):
         # SSH bash/python·Ansible 은 deep_check/addon 과 달리 부작용이 있을 수 있는 실제
         # 운영 스크립트다(읽기 전용 점검이 아님) — "테스트" 단계에서 실제로 돌리면 등록
         # 마법사를 여는 것만으로 운영 변경이 나갈 위험이 있어, 여기서는 미리 실행하지 않는다.
         label = "배치잡" if source_type == CheckMatrixSourceType.batch_job else "플레이북"
+        message = (
+            f"{label}은 안전을 위해 등록 전 미리보기에서 실행하지 않습니다 — "
+            "이미 존재하는 항목을 매트릭스에 연결할 뿐이니 '적용' 후 셀에서 실행해 확인하세요."
+        )
         return {
             "status": "healthy",
-            "message": (
-                f"{label}은 안전을 위해 등록 전 미리보기에서 실행하지 않습니다 — "
-                "이미 존재하는 항목을 매트릭스에 연결할 뿐이니 '적용' 후 셀에서 실행해 확인하세요."
-            ),
+            "message": message,
             "details": None,
             "duration_ms": 0,
+            "log": f"[skipped] {message}",
         }
 
     raise ValueError("manual/core_bundle 항목은 미리 실행할 수 없습니다.")
+
+
+def preview_playbook_content(
+    db: Session,
+    cluster: Cluster,
+    *,
+    content: str,
+    inventory_id: Optional[Any] = None,
+    extra_vars: Optional[dict[str, Any]] = None,
+    tags: Optional[str] = None,
+    check_mode: bool = True,
+) -> dict[str, Any]:
+    """작성 중인 Playbook YAML 을 대상 클러스터에 1회 실행(기본 dry-run)하고 전체 로그를 돌려준다.
+
+    인벤토리는 (1) 지정한 인벤토리 → (2) 클러스터 기본 인벤토리 → (3) K8s API 노드 목록
+    순으로 해석한다(``playbook_service`` 의 실제 실행 경로와 같은 우선순위).
+    """
+    from app.models.ansible_assets import AnsibleInventory
+    from app.services.playbook_executor import run_playbook
+
+    if not (content or "").strip():
+        raise ValueError("플레이북 내용(YAML)이 비어 있습니다.")
+
+    inventory_content = None
+    inventory_label = "K8s 노드 목록(동적)"
+    inv = None
+    if inventory_id:
+        inv = (
+            db.query(AnsibleInventory)
+            .filter(AnsibleInventory.id == inventory_id, AnsibleInventory.cluster_id == cluster.id)
+            .first()
+        )
+    if inv is None:
+        inv = (
+            db.query(AnsibleInventory)
+            .filter(
+                AnsibleInventory.cluster_id == cluster.id,
+                AnsibleInventory.is_default.is_(True),
+            )
+            .first()
+        )
+    if inv is not None:
+        inventory_content = inv.content
+        inventory_label = f"인벤토리 «{inv.name}»"
+
+    inventory_hosts = None
+    if inventory_content is None:
+        try:
+            from app.services import playbook_service
+            inventory_hosts = playbook_service.cluster_node_hosts(cluster) or None
+        except Exception as e:  # noqa: BLE001 — 노드 목록 해석 실패도 로그로만 남기고 진행
+            logger.warning("playbook preview: 노드 목록 해석 실패 (%s)", e)
+
+    result = run_playbook(
+        playbook_content=content,
+        inventory_content=inventory_content,
+        inventory_hosts=inventory_hosts,
+        extra_vars=extra_vars or None,
+        tags=tags or None,
+        check_mode=check_mode,
+    )
+    header = [
+        f"[cluster] {cluster.name}",
+        f"[inventory] {inventory_label}",
+        f"[mode] {'check (dry-run)' if check_mode else 'apply (실제 실행)'}",
+        f"[status] {result.status}",
+        f"[message] {result.message}",
+        f"[duration] {result.duration_ms}ms",
+        "",
+    ]
+    return {
+        "status": result.status,
+        "message": result.message,
+        "details": {"stats": result.stats, "check_mode": check_mode},
+        "duration_ms": result.duration_ms,
+        "log": "\n".join(header) + (result.raw_output or "(출력 없음)"),
+    }
 
 
 def ensure_deep_check_definition(
@@ -642,14 +848,22 @@ def ensure_deep_check_definition(
     thresholds: Optional[dict[str, Any]] = None,
     params: Optional[dict[str, Any]] = None,
 ) -> tuple[DeepCheckDefinition, bool]:
-    """글로벌 정의가 아직 없으면 등록 마법사가 입력한 값으로 새로 만든다.
+    """**공유** 글로벌 정의가 아직 없으면 등록 마법사가 입력한 값으로 새로 만든다.
 
     이미 있으면(자동 시드된 기본 타입 포함) 손대지 않는다 — 기존 운영 값을 조용히
     덮어쓰지 않기 위해서다. 반환값의 두 번째 요소가 True 면 이번에 새로 만든 것.
+
+    다른 행이 전용으로 물고 있는 정의(와 그 파생본)는 "이미 있음"으로 치지 않는다 —
+    그것을 공유 정의로 오인하면 이 행은 자기 정의 없이 남아 셀이 계속 건너뛰게 된다.
     """
     existing = (
         db.query(DeepCheckDefinition)
-        .filter(DeepCheckDefinition.check_type == check_type, DeepCheckDefinition.cluster_id.is_(None))
+        .filter(
+            DeepCheckDefinition.check_type == check_type,
+            DeepCheckDefinition.cluster_id.is_(None),
+            DeepCheckDefinition.parent_id.is_(None),
+            DeepCheckDefinition.id.notin_(_dedicated_definition_ids(db)),
+        )
         .first()
     )
     if existing is not None:
@@ -672,6 +886,294 @@ def ensure_deep_check_definition(
     db.add(definition)
     db.flush()
     return definition, True
+
+
+def create_dedicated_definition(
+    db: Session,
+    check_type: str,
+    *,
+    name: str,
+    description: Optional[str] = None,
+    thresholds: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
+) -> DeepCheckDefinition:
+    """행(카드) 전용 deep_check 정의를 새로 만든다 — 커스텀 카드의 뼈대.
+
+    ``ensure_deep_check_definition`` 이 "check_type 당 1개의 공유 정의"를 보장하는 것과 달리,
+    이쪽은 **항상 새 정의**를 만든다. 호출부(라우터)가 만들어진 정의를
+    ``CheckMatrixItem.definition_id`` 에 물려 주면, 같은 점검 종류로 설정이 다른 카드를
+    몇 장이든 만들 수 있다(예: custom_http 로 "사내포털 프로브" / "객체스토리지 프로브").
+    """
+    from app.services.registered_checks.registry import REGISTRY
+
+    entry = REGISTRY.get(check_type)
+    if entry is None:
+        raise ValueError(f"알 수 없는 check_type: {check_type}")
+    spec = entry[1]
+    definition = DeepCheckDefinition(
+        cluster_id=None,
+        check_type=check_type,
+        name=(name or spec.display_name)[:150],
+        description=description or spec.description,
+        enabled=True,
+        thresholds={**spec.default_thresholds, **(thresholds or {})},
+        params={**spec.default_params, **(params or {})},
+    )
+    db.add(definition)
+    db.flush()
+    return definition
+
+
+def item_source_config(db: Session, item: CheckMatrixItem) -> dict[str, Any]:
+    """행의 실행 설정(임계값/파라미터)을 편집 폼이 그릴 수 있는 형태로 돌려준다.
+
+    "기본 등록 카드도 설정을 확인·수정할 수 있어야 한다"는 요건의 조회 쪽 — 매트릭스 셀을
+    거치지 않고 항목 자체(행 = 전 클러스터 기준값)를 편집하기 위한 것이다.
+    ``dedicated`` 가 False 면 이 값은 같은 check_type 의 다른 행과 공유된다(수정 시 전파).
+    """
+    out: dict[str, Any] = {
+        "item_id": str(item.id),
+        "source_type": item.source_type.value,
+        "source_ref": item.source_ref,
+        "editable": False,
+        "dedicated": bool(item.definition_id),
+        "definition_id": str(item.definition_id) if item.definition_id else None,
+        "threshold_fields": [],
+        "param_fields": [],
+        "thresholds": {},
+        "params": {},
+        "note": None,
+    }
+    if item.source_type != CheckMatrixSourceType.deep_check:
+        out["note"] = (
+            "이 실행 방식은 항목 화면에서 직접 편집할 설정이 없습니다 — "
+            "애드온은 대시보드, 배치잡은 /batch-jobs, 플레이북은 /playbooks 에서 관리합니다."
+        )
+        return out
+
+    from app.services.registered_checks.registry import REGISTRY, list_check_types
+
+    entry = REGISTRY.get(item.source_ref or "")
+    if entry is None:
+        out["note"] = f"알 수 없는 점검 종류입니다: {item.source_ref}"
+        return out
+    catalog = {c["check_type"]: c for c in list_check_types()}
+    ct = catalog.get(item.source_ref or "", {})
+    spec = entry[1]
+
+    definition = None
+    if item.definition_id:
+        definition = (
+            db.query(DeepCheckDefinition)
+            .filter(DeepCheckDefinition.id == item.definition_id)
+            .first()
+        )
+    if definition is None:
+        definition = _resolve_deep_check_definition(db, item.source_ref or "", None)
+
+    out["editable"] = True
+    out["threshold_fields"] = ct.get("threshold_fields", [])
+    out["param_fields"] = ct.get("param_fields", [])
+    out["thresholds"] = {**spec.default_thresholds, **((definition.thresholds if definition else None) or {})}
+    out["params"] = {**spec.default_params, **((definition.params if definition else None) or {})}
+    out["definition_id"] = str(definition.id) if definition else None
+    out["definition_name"] = definition.name if definition else None
+    if definition is None:
+        out["note"] = "아직 점검 정의가 없습니다 — 저장하면 이 항목 전용 정의로 새로 만듭니다."
+    elif not item.definition_id:
+        out["note"] = (
+            f"이 설정은 `{item.source_ref}` 를 쓰는 다른 항목과 공유됩니다 — "
+            "이 항목만 다르게 쓰려면 '이 항목 전용 설정으로 분리'를 켜고 저장하세요."
+        )
+    return out
+
+
+def update_item_source_config(
+    db: Session,
+    item: CheckMatrixItem,
+    *,
+    thresholds: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
+    dedicated: bool = False,
+) -> dict[str, Any]:
+    """행의 임계값/파라미터를 저장한다. ``dedicated`` 면 이 행 전용 정의로 분리(copy-on-write).
+
+    분리 시 기존 공유 정의는 손대지 않고 값을 복제한 새 정의를 만들어 행에 물린다 —
+    같은 점검 종류를 쓰는 다른 행이 영향을 받지 않는다.
+    """
+    if item.source_type != CheckMatrixSourceType.deep_check:
+        raise ValueError("임계값/파라미터 편집은 자동 점검(등록된 점검 종류) 항목에서만 가능합니다.")
+    from app.services.registered_checks.registry import REGISTRY
+
+    entry = REGISTRY.get(item.source_ref or "")
+    if entry is None:
+        raise ValueError(f"알 수 없는 check_type: {item.source_ref}")
+    spec = entry[1]
+    known_thresholds = {f.name for f in spec.threshold_fields}
+    known_params = {f.name for f in spec.param_fields}
+    for k in (thresholds or {}):
+        if k not in known_thresholds:
+            raise ValueError(f"`{item.source_ref}` 에 없는 thresholds 필드: {k}")
+    for k in (params or {}):
+        if k not in known_params:
+            raise ValueError(f"`{item.source_ref}` 에 없는 params 필드: {k}")
+
+    definition = None
+    if item.definition_id:
+        definition = (
+            db.query(DeepCheckDefinition)
+            .filter(DeepCheckDefinition.id == item.definition_id)
+            .first()
+        )
+    # 전용 정의를 못 찾았으면(=아직 없거나 삭제돼 FK 가 NULL 로 풀린 경우) 공유 정의를 본다.
+    # 이때는 반드시 "공유"로 취급해야 남의 행과 같이 쓰는 정의를 조용히 덮어쓰지 않는다.
+    shared = definition is None
+    if definition is None:
+        item.definition_id = None
+        definition = _resolve_deep_check_definition(db, item.source_ref or "", None)
+
+    created = False
+    if definition is None or (shared and dedicated):
+        source = definition
+        definition = create_dedicated_definition(
+            db, item.source_ref or "",
+            name=item.name,
+            description=item.description,
+            thresholds=dict((source.thresholds if source else None) or {}),
+            params=dict((source.params if source else None) or {}),
+        )
+        item.definition_id = definition.id
+        created = True
+
+    definition.thresholds = {**(definition.thresholds or {}), **(thresholds or {})}
+    definition.params = {**(definition.params or {}), **(params or {})}
+    db.commit()
+    return {
+        "definition_id": str(definition.id),
+        "dedicated": bool(item.definition_id),
+        "created": created,
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# 커스텀 카드 — 내가 만든 Ansible 플레이북을 점검 항목으로 등록
+# ──────────────────────────────────────────────────────────────
+def create_playbook_card_targets(
+    db: Session,
+    *,
+    name: str,
+    content: str,
+    description: Optional[str] = None,
+    tags: Optional[str] = None,
+    extra_vars: Optional[dict[str, Any]] = None,
+    cluster_ids: Optional[list[Any]] = None,
+    inventory_ids: Optional[dict[str, Any]] = None,
+    playbook_file_id: Optional[Any] = None,
+) -> dict[str, Any]:
+    """운영자가 작성한 Playbook YAML 을 등록하고 대상 클러스터별 실행 단위를 만든다.
+
+    - ``AnsiblePlaybookFile`` — YAML 본문을 담는 공용 라이브러리 행(이름 unique). 같은
+      이름이 이미 있으면 본문을 갱신한다(마법사에서 다시 저장 = 수정).
+    - ``Playbook`` — 클러스터별 실행 단위. 매트릭스 행의 ``source_ref`` 는 이 이름(논리 키)
+      이므로, 선택한 클러스터마다 같은 이름으로 1건씩 만들어야 해당 열의 셀이 실행된다.
+
+    ``playbook_file_id`` 를 주면 그 라이브러리 파일을 그대로 쓴다(본문 재작성 없음).
+    """
+    from app.models.ansible_assets import AnsibleInventory, AnsiblePlaybookFile
+
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("플레이북 이름을 입력하세요.")
+    cluster_ids = list(cluster_ids or [])
+    if not cluster_ids:
+        raise ValueError("이 플레이북을 실행할 클러스터를 1개 이상 선택하세요.")
+
+    pb_file: Optional[AnsiblePlaybookFile] = None
+    if playbook_file_id:
+        pb_file = (
+            db.query(AnsiblePlaybookFile)
+            .filter(AnsiblePlaybookFile.id == playbook_file_id)
+            .first()
+        )
+        if pb_file is None:
+            raise ValueError("선택한 플레이북 파일을 찾을 수 없습니다.")
+    else:
+        if not (content or "").strip():
+            raise ValueError("플레이북 내용(YAML)을 입력하거나 라이브러리에서 선택하세요.")
+        pb_file = (
+            db.query(AnsiblePlaybookFile)
+            .filter(AnsiblePlaybookFile.name == name)
+            .first()
+        )
+        if pb_file is None:
+            pb_file = AnsiblePlaybookFile(
+                name=name, description=description, content=content, tags=tags or None,
+            )
+            db.add(pb_file)
+        else:
+            pb_file.content = content
+            pb_file.description = description or pb_file.description
+            pb_file.tags = tags or pb_file.tags
+        db.flush()
+
+    inventory_ids = inventory_ids or {}
+    created: list[str] = []
+    reused: list[str] = []
+    for cid in cluster_ids:
+        cluster = db.query(Cluster).filter(Cluster.id == cid).first()
+        if cluster is None:
+            raise ValueError(f"클러스터를 찾을 수 없습니다: {cid}")
+        inv_id = inventory_ids.get(str(cid))
+        if inv_id:
+            inv = (
+                db.query(AnsibleInventory)
+                .filter(AnsibleInventory.id == inv_id, AnsibleInventory.cluster_id == cluster.id)
+                .first()
+            )
+            if inv is None:
+                raise ValueError(f"«{cluster.name}» 에 없는 인벤토리입니다: {inv_id}")
+        else:
+            # 클러스터 기본 인벤토리가 있으면 자동 연결 — 없으면 playbook_executor 가
+            # K8s 노드 목록으로 동적 인벤토리를 만든다(기존 동작).
+            inv = (
+                db.query(AnsibleInventory)
+                .filter(
+                    AnsibleInventory.cluster_id == cluster.id,
+                    AnsibleInventory.is_default.is_(True),
+                )
+                .first()
+            )
+        existing = (
+            db.query(Playbook)
+            .filter(Playbook.name == name, Playbook.cluster_id == cluster.id)
+            .first()
+        )
+        if existing is not None:
+            existing.playbook_file_id = pb_file.id
+            existing.inventory_id = inv.id if inv else existing.inventory_id
+            existing.description = description or existing.description
+            existing.extra_vars = extra_vars or existing.extra_vars
+            existing.tags = tags or existing.tags
+            reused.append(str(cluster.id))
+            continue
+        db.add(Playbook(
+            cluster_id=cluster.id,
+            name=name,
+            description=description,
+            playbook_file_id=pb_file.id,
+            inventory_id=inv.id if inv else None,
+            extra_vars=extra_vars or None,
+            tags=tags or None,
+            status="unknown",
+        ))
+        created.append(str(cluster.id))
+    db.flush()
+    return {
+        "name": name,
+        "playbook_file_id": str(pb_file.id),
+        "created_cluster_ids": created,
+        "updated_cluster_ids": reused,
+    }
 
 
 def execute_item_for_cluster(db: Session, item: CheckMatrixItem, cluster: Cluster) -> bool:
@@ -855,7 +1357,7 @@ def _execute_into_run(
                 .first()
             )
         if definition is None:
-            definition = _resolve_deep_check_definition(db, item.source_ref, cluster.id)
+            definition = resolve_definition_for_item(db, item, cluster.id)
         if definition is None:
             _finish_run(
                 run, CheckMatrixRunState.skipped,
@@ -1040,14 +1542,24 @@ def execute_definition_for_cluster(db: Session, definition_id, cluster: Cluster)
     if definition is None:
         return {"error": "definition not found", "definition_id": str(definition_id)}
 
+    # 행 전용 정의(커스텀 카드)면 그 정의를 물고 있는 행이 우선 — check_type 만으로 찾으면
+    # 같은 종류의 다른 행(공유 정의 행)의 셀에 결과가 잘못 붙는다.
+    base_id = definition.parent_id or definition.id
     item = (
         db.query(CheckMatrixItem)
-        .filter(
-            CheckMatrixItem.source_type == CheckMatrixSourceType.deep_check,
-            CheckMatrixItem.source_ref == definition.check_type,
-        )
+        .filter(CheckMatrixItem.definition_id == base_id)
         .first()
     )
+    if item is None:
+        item = (
+            db.query(CheckMatrixItem)
+            .filter(
+                CheckMatrixItem.source_type == CheckMatrixSourceType.deep_check,
+                CheckMatrixItem.source_ref == definition.check_type,
+                CheckMatrixItem.definition_id.is_(None),
+            )
+            .first()
+        )
     if item is None:
         from app.services.check_definition_runner import DeepCheckService
         DeepCheckService(db).run_definition_once(definition.id, cluster=cluster, persist=True)
@@ -1203,7 +1715,7 @@ def update_source_config(
         for f in spec.param_fields:
             field_types[("params", f.name)] = f.type
 
-        definition = _resolve_deep_check_definition(db, item.source_ref, cluster.id)
+        definition = resolve_definition_for_item(db, item, cluster.id)
         if definition is None:
             raise ValueError(
                 f"이 클러스터에 `{item.source_ref}` 점검 정의가 없습니다 — "
@@ -1215,6 +1727,9 @@ def update_source_config(
             global_def = definition
             definition = DeepCheckDefinition(
                 cluster_id=cluster.id,
+                # 행 전용 정의에서 파생한 오버라이드만 계보를 남긴다 — 공유(레거시) 정의의
+                # 사본은 parent_id 를 비워 둬야 check_type 공유 해석이 계속 찾을 수 있다.
+                parent_id=global_def.id if item.definition_id else None,
                 check_type=global_def.check_type,
                 name=global_def.name,
                 description=global_def.description,

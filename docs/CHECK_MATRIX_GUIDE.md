@@ -71,11 +71,19 @@ PEP 내장 점검기(인증서 만료, etcd 단편화, PVC, CoreDNS, OOM, 노드
 1. 항목 추가/수정에서 실행 방식을 **Deep Check** 로 두고 점검 종류(`check_type`)를 고른다.
    여기서 고른 값은 **논리 키일 뿐**이고 임계값·파라미터를 담지 않는다.
 2. 실행 시점에 대상을 이렇게 해석한다.
-   - ① **이 클러스터 전용 정의**(`DeepCheckDefinition.cluster_id == 이 클러스터`)를 먼저 찾고,
+   - ⓪ **행 전용 정의**(`CheckMatrixItem.definition_id`)가 있으면 그 계보 안에서만 해석한다 —
+     그 정의를 부모(`parent_id`)로 둔 이 클러스터 오버라이드가 있으면 그것, 없으면 전용 정의 자신.
+   - ① 전용 정의가 없으면 **이 클러스터 전용 공유 정의**(`cluster_id == 이 클러스터`)를 찾고,
    - ② 없으면 **글로벌 정의**(`cluster_id IS NULL`)로 넘어간다.
    - ③ 둘 다 없으면 이 셀은 실행되지 않고 **건너뜀(skipped)** 으로 로그에 남는다.
-3. **임계값(thresholds)·파라미터(params)는 점검 정의에 저장된 값**이 쓰인다. 매트릭스 행에는
-   임계값 개념이 없다 — 값을 바꾸려면 운영 점검(Ops Checks) 화면에서 정의를 수정한다.
+3. **임계값(thresholds)·파라미터(params)는 점검 정의에 저장된 값**이 쓰인다. 바꾸는 곳은 세 군데다.
+   - **항목 수정**(행 전체 기준값) — 임계값/파라미터 폼이 뜬다. `이 항목 전용 설정으로 분리`를
+     켜고 저장하면 행 전용 정의가 만들어져, 같은 점검 종류를 쓰는 **다른 행은 영향받지 않는다**.
+   - **셀 → 실행 방식 탭 → 설정 편집** — 그 클러스터 전용 오버라이드(copy-on-write)를 만든다.
+   - **운영 점검(Ops Checks)** 화면 — 정의를 직접 편집.
+
+   전용 정의로 분리하기 전에는 그 값이 같은 `check_type` 을 쓰는 다른 행과 공유된다 — 폼과
+   런북이 어느 쪽인지("이 항목 전용" / "글로벌" / "이 클러스터 전용") 항상 명시한다.
 4. cron 은 두 경로가 있다.
    - **셀 cron** (`CheckMatrixSchedule`) — 이 화면에서 셀별로 설정. 항목별·클러스터별로 다르게 줄 수 있다.
    - **정의 cron** (`DeepCheckDefinition.schedule_cron`) — 정의 자체의 단독 스케줄. 글로벌 정의면
@@ -83,8 +91,10 @@ PEP 내장 점검기(인증서 만료, etcd 단편화, PVC, CoreDNS, OOM, 노드
      있으면 그 셀의 수행 로그로 함께 남는다.
    - 둘 다 **최소 5분 간격**이며, 그보다 촘촘한 cron 은 저장 단계에서 422 로 거부된다.
 5. 커스텀 타입(`custom_http` / `custom_kubectl` / `custom_promql`)은 같은 `check_type` 으로
-   여러 정의를 만드는 템플릿형이라 매트릭스 기본 행으로 시드되지 않는다. 매트릭스에 올리면
-   `check_type → 정의` 가 1:1 이 아니어서 어느 정의가 돌지 모호해지기 때문이다.
+   여러 정의를 만드는 템플릿형이라 매트릭스 기본 행으로 **시드되지는** 않는다. 다만 행 전용
+   정의(`definition_id`)가 생긴 뒤로는 매트릭스에 올려도 모호하지 않다 — 등록 마법사에서
+   `직접 만들기`로 고르면 행마다 자기 정의를 갖고 등록되므로, 대상만 다른 카드를 원하는
+   만큼 만들 수 있다(§2.3b).
 
 ### 2.2 Addon — 등록된 애드온을 헬스 체크
 
@@ -123,6 +133,36 @@ PEP 내장 점검기(인증서 만료, etcd 단편화, PVC, CoreDNS, OOM, 노드
    버튼이 뜨지 않는다).
 5. 실행 결과는 매트릭스 수행 로그뿐 아니라 각 화면의 자체 이력(`BatchJobRun`/`PlaybookRun`)에도
    남는다 — 어느 쪽에서 봐도 같은 실행을 확인할 수 있다.
+
+### 2.3b 커스텀 카드 — "정해진 카드" 밖으로 나가기
+
+등록 마법사(점검 항목 추가)의 **종류** 단계는 등록된 점검 종류 목록만 보여주는 곳이 아니다.
+목록 아래 **직접 만들기** 구역에 서버가 알려주는 선택지가 함께 뜬다(프론트 하드코딩 아님 —
+`GET /check-matrix/exec-techs` 의 `creatable`).
+
+**(1) 새 플레이북 만들어 등록 (Ansible)** — 내가 쓴 Playbook 을 그 자리에서 등록해 점검으로 돌린다.
+
+1. 종류 단계에서 `새 플레이북 만들어 등록` 선택 → **플레이북 작성** 단계가 생긴다.
+2. 이름 · YAML 본문(직접 작성 / `.yml` 파일 불러오기 / 플레이북 라이브러리에서 불러오기) ·
+   태그 · extra vars · **실행할 클러스터(열)** 를 지정한다.
+3. **테스트** 단계에서 고른 클러스터에 1회 실행해본다 — 기본은 `ansible --check`(dry-run)라
+   실제 변경이 나가지 않는다. 결과 아래 **로그 보기**로 ansible 출력 전체를 확인한다.
+4. **적용** 하면 다음이 한 번에 만들어진다:
+   - `AnsiblePlaybookFile` 1건 — YAML 본문(공용 라이브러리, `/playbooks` 화면에서도 보인다)
+   - 선택한 클러스터마다 `Playbook` 1건 — 같은 이름의 실행 단위
+   - `source_type=playbook`, `source_ref=<플레이북 이름>` 인 매트릭스 행
+
+   이후 동작은 기존 `playbook` 소스와 동일하다(§2.3) — 셀 cron·수동 실행·`PlaybookRun` 이력.
+   같은 이름으로 다시 등록하면 새로 만들지 않고 본문/설정을 갱신한다.
+
+   인벤토리는 **그 클러스터의 기본 인벤토리 → 없으면 K8s 노드 목록(동적)** 순으로 해석된다.
+
+**(2) 커스텀 점검(HTTP/kubectl/PromQL)의 새 인스턴스** — 대상만 다른 카드를 여러 장 만든다.
+`custom_http`/`custom_kubectl`/`custom_promql` 같은 템플릿형 체커는 이제 **행마다 자기 정의**를
+가질 수 있어 "사내포털 프로브"와 "객체스토리지 프로브"를 각각 카드로 둘 수 있다(§2.1의 행 전용 정의).
+
+**(3) SSH bash/python** — 자격증명이 필요해 마법사에서 바로 만들지 않는다. `/batch-jobs`(또는
+`/scripts` 의 스크립트를 참조하는 배치잡)에서 잡을 먼저 등록하면, 그 이름이 종류 목록에 나타난다.
 
 ### 2.4 수동 입력 — 자동 체커가 없는 대상
 
@@ -382,7 +422,7 @@ erDiagram
 
 | 테이블 | 역할 | 핵심 컬럼 | 인덱스/제약 |
 |---|---|---|---|
-| `check_matrix_items` | 행 카탈로그 | `source_type`(enum: core_bundle/deep_check/addon/batch_job/playbook/manual) · `source_ref`(논리 키) · `unit`(셀 값 단위) · `is_system` · `enabled` · `sort_order` | PK 만 (소규모 테이블) |
+| `check_matrix_items` | 행 카탈로그 | `source_type`(enum: core_bundle/deep_check/addon/batch_job/playbook/manual) · `source_ref`(논리 키) · `definition_id`(행 전용 deep_check 정의, NULL=공유) · `unit`(셀 값 단위) · `is_system` · `enabled` · `sort_order` | `definition_id` 인덱스 + FK `ON DELETE SET NULL` |
 | `check_matrix_schedules` | 셀 cron | `cron_expr`(NULL=미스케줄) · `enabled` · `last_run_at`(디스패처 anchor) | `uq(item_id, cluster_id)` |
 | `check_matrix_results` | 셀 최신 스냅샷 | `status` · `value` · `message` · `details`(JSONB) · `checked_at` — **upsert**(`ON CONFLICT`) | `uq(item_id, cluster_id)` |
 | `check_matrix_result_logs` | 값 이력 (append-only) | Result 와 동일 컬럼 — 추이 차트/변경 이력의 원천 | `(item_id, cluster_id, checked_at)` + `checked_at` 단독(퍼지 스캔용) |
@@ -392,7 +432,9 @@ erDiagram
 
 | 컬럼 | 참조 | 의미 |
 |---|---|---|
-| `items.source_ref` (deep_check) | `deep_check_definitions.check_type` | 클러스터 전용 정의 우선 → 글로벌 폴백. 정의가 삭제돼도 행은 남고 셀은 "건너뜀" |
+| `items.definition_id` (deep_check) | `deep_check_definitions.id` (**FK**, `ON DELETE SET NULL`) | 행 전용 정의. 있으면 이 계보(자기 자신 + `parent_id` 가 이것인 클러스터 오버라이드)에서만 해석한다 — 같은 `check_type` 의 다른 행과 설정을 공유하지 않는다 |
+| `items.source_ref` (deep_check) | `deep_check_definitions.check_type` | `definition_id` 가 없을 때의 공유 해석. 클러스터 전용 정의 우선 → 글로벌 폴백. 다른 행이 전용으로 물고 있는 정의(와 그 파생본)는 이 해석에서 제외된다. 정의가 삭제돼도 행은 남고 셀은 "건너뜀" |
+| `deep_check_definitions.parent_id` | `deep_check_definitions.id` (self FK, `ON DELETE CASCADE`) | 클러스터 오버라이드가 파생된 원본(행 전용 정의). 행 계보를 구분해 같은 종류의 카드끼리 설정이 섞이지 않게 한다 |
 | `items.source_ref` (addon) | `addons.type` (+ cluster_id) | 그 클러스터에 애드온이 없으면 "건너뜀" |
 | `items.source_ref` (batch_job, D-066) | `batch_jobs.name` (+ cluster_id) | 그 클러스터에 같은 이름의 배치잡이 없거나 비활성(`enabled=false`)이면 "건너뜀" |
 | `items.source_ref` (playbook, D-066) | `playbooks.name` (+ cluster_id) | 그 클러스터에 같은 이름의 플레이북이 없으면 "건너뜀" |
@@ -426,6 +468,11 @@ erDiagram
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
+| GET | `/exec-techs` | 등록 마법사 카탈로그 — 실행 기술별 점검 종류 + `creatable`(직접 만들기 선택지) |
+| POST | `/items` | 항목 추가. `dedicated_definition`(행 전용 정의) · `new_playbook`(플레이북 작성 후 등록) 지원 |
+| POST | `/items/preview` | 저장 전 1회 실행(테스트). 플레이북 본문을 직접 넘기면 `check_mode`(기본 true, `ansible --check`)로 실행하고 `log` 를 돌려준다 |
+| GET | `/items/{item_id}/source-config` | 행의 임계값/파라미터 + 편집 폼 스펙 (기본 등록 카드 포함) |
+| PUT | `/items/{item_id}/source-config` | 행의 임계값/파라미터 저장. `dedicated=true` 면 행 전용 정의로 분리 |
 | GET | `/items/{item_id}/detail` | 항목 상세(`/checks/:itemId`) 진입 데이터 — 클러스터별 cron/최근 결과 |
 | GET | `/cell/{item_id}/{cluster_id}/runbook` | 실행 계획 조회 (실행하지 않음) |
 | POST | `/cell/{item_id}/{cluster_id}/run` | 셀 1개 동기 실행 → 수행 결과 |

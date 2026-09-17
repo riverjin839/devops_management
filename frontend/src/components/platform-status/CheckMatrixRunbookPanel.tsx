@@ -209,6 +209,13 @@ function SourceConfigEditor({
             <b> 다른 클러스터</b>는 영향받지 않습니다.</span>
         </p>
       )}
+      {runbook.definitionScope === 'item' && (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+          <span>이 셀은 <b>이 점검 항목 전용 정의</b>를 쓰고 있습니다 — 같은 점검 종류를 쓰는
+            다른 항목은 영향받지 않습니다. 여기서 저장하면 이 클러스터 전용 사본이 만들어집니다.</span>
+        </p>
+      )}
       <div className="space-y-2">
         {rows.map((r, i) => {
           const spec = specByKey.get(`${r.group}.${r.name}`);
