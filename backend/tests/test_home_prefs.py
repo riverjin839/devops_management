@@ -123,10 +123,12 @@ def test_installed_apps_partial_update_preserves_other_fields(db, me, cleanup):
     assert updated.locale == "en"
 
 
-def test_installed_apps_defaults_to_empty_list(db, me, cleanup):
+def test_installed_apps_defaults_to_task_board_only(db, me, cleanup):
+    """신규 계정 기본값은 사이드바는 완전히 비어있고, 상단바는 "업무 관리"(`/tasks-mgmt`)
+    하나만 미리 설치된 상태다 — 나머지는 전부 사용자가 `+` 로 직접 추가해야 한다."""
     cleanup.append(me.id)
     prefs = home_prefs_router.get_home_prefs(db=db, user=me)
-    assert prefs.installed_apps == []
+    assert prefs.installed_apps == ["/tasks-mgmt"]
 
 
 def test_prefs_are_isolated_per_user(db, me, other, cleanup):

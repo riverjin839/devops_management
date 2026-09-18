@@ -49,6 +49,13 @@
   업무 도메인 grandfather). Frontend: `components/layout/{sidebarApps.ts,AddSidebarAppDialog.tsx}`
   → `{installableApps.ts,AddAppDialog.tsx}`(leaf 단위 카탈로그로 재작성), `Sidebar.tsx`/
   `AppTopBar.tsx` 개편. `DESIGN_SYSTEM.md` §12.11 갱신.
+- **상단바 기본 노출을 "업무 관리" 하나로 축소**: 위 상단바 opt-in 전환 후에도 기존 계정은
+  grandfather 이관으로 여전히 업무 관리·문서 관리 leaf 전부 + 즐겨찾기 + Your Island 가
+  기본 설치돼 있어 실질적으로 예전만큼 북적였다 — 이제 상단바 기본값은 "업무 관리"
+  (`/tasks-mgmt`) 하나뿐이고, 나머지는 전부 `+` 로 개인이 직접 추가해야 한다(사이드바 기본값은
+  그대로 빈 레일). Backend: `HomePrefs.installed_apps` 스키마 기본값을 `["/tasks-mgmt"]`로
+  변경 + `main.py::_prune_topbar_apps_to_default()`(3단계 이관 — 기존 계정의 상단바 설치
+  목록에서 "업무 관리" 외 나머지를 제거, 사이드바는 그대로 둠).
 
 ### Fixed
 - **flyout/툴팁 배경이 반투명해 뒤 콘텐츠와 겹쳐 보이던 문제**: `NavFlyout.tsx`(사이드바·

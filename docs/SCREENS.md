@@ -50,21 +50,28 @@ PEP(Platform Engineering Portal)의 모든 화면(라우트)을 화면 단위로
 (`sidebarAppSections()`)에, `work` 인 leaf(업무 관리·문서 관리 그룹) + `favorites`(즐겨찾기) +
 `island`(Your Island) 는 상단바 카탈로그(`topbarAppSections()`)에 들어간다 — 즐겨찾기와 Your
 Island 도 leaf 페이지가 아닌 "개인" 섹션의 특수 항목으로 같은 opt-in 목록에 포함된다(예전엔
-둘 다 로그인만 하면 상시 노출이었다). 기본값은 **완전히 빈 레일/상단바 + "+" 버튼 하나**
-(신규 계정) — `Sidebar.tsx`/`AppTopBar.tsx` 의 "+" 버튼이 공용 `AddAppDialog`
+둘 다 로그인만 하면 상시 노출이었다). 기본값은 **사이드바는 완전히 빈 레일 + "+" 버튼 하나**
+(신규 계정), **상단바는 `/tasks-mgmt`("업무 관리") leaf 하나만 미리 설치 + "+" 버튼**이다 —
+업무 관리 그룹의 나머지 leaf(오늘 할 일·스프린트·멤버별 업무·워크플로우·WBS·주간보고·
+Jira Excel 가져오기)·문서 관리 그룹 전체·즐겨찾기·Your Island 는 전부 개인이 `+` 로 직접
+추가해야 보인다(사용자 요청: "업무 관리만 기본으로 나오게 하고 나머지는 개인별 add-on 방식으로").
+`Sidebar.tsx`/`AppTopBar.tsx` 의 "+" 버튼이 공용 `AddAppDialog`
 (`components/layout/AddAppDialog.tsx`, shadcn `Dialog`)를 각자의 섹션 목록으로 연다. 각 카드는
 아이콘·라벨·짧은 설명 + 설치/설치됨 토글이고, `system` 도메인 leaf(`/settings`)는 admin 에게만
 보인다. 설치 목록은 `HomePrefs.installedApps`(서버 저장, `GET/PUT /api/v1/me/home-prefs`,
-`hooks/useHomePrefs.ts` — 기기·브라우저를 넘어 따라온다) 하나를 사이드바/상단바가 함께 쓰고,
-각자 `installableAppById(id).domain` 으로 자기 몫만 걸러 그린다. 로고(홈 버튼)는 유일한 예외로
-opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로 돌아올 방법이 하나는 남아 있어야 하므로
-항상 클릭 가능하다. 이 기능이 생기기 전부터 있던 계정은 `backend/app/main.py` 의 두 마이그레이션
-(둘 다 `app_settings` sentinel 로 멱등, `_seed_initial_admin` 보다 먼저 실행)이 갑자기 화면이
-비어 보이지 않게 이관해 준다 — 1단계 `_backfill_installed_sidebar_apps()` 는 그룹 단위로(구
-카탈로그 기준) 전체 설치, 2단계 `_migrate_installed_apps_to_leaf_paths()` 는 남아있는 그룹 id
-를 leaf 페이지 목록으로 치환하고 업무 관리·문서 관리 leaf + 즐겨찾기 + Your Island 도
-grandfather 로 추가한다(둘 다 예전엔 상시노출이었으므로). 두 마이그레이션 이후 새로 만들어지는
-계정만 완전히 빈 상태로 시작한다.
+`hooks/useHomePrefs.ts` — 기기·브라우저를 넘어 따라온다, 기본값 `["/tasks-mgmt"]`) 하나를
+사이드바/상단바가 함께 쓰고, 각자 `installableAppById(id).domain` 으로 자기 몫만 걸러 그린다.
+로고(홈 버튼)는 유일한 예외로 opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로 돌아올
+방법이 하나는 남아 있어야 하므로 항상 클릭 가능하다. 이 기능이 생기기 전부터 있던 계정은
+`backend/app/main.py` 의 세 마이그레이션(전부 `app_settings` sentinel 로 멱등,
+`_seed_initial_admin` 보다 먼저 실행)이 순서대로 정리해 준다 — 1단계
+`_backfill_installed_sidebar_apps()` 는 그룹 단위로(구 카탈로그 기준) 전체 설치, 2단계
+`_migrate_installed_apps_to_leaf_paths()` 는 남아있는 그룹 id 를 leaf 페이지 목록으로 치환하고
+업무 관리·문서 관리 leaf + 즐겨찾기 + Your Island 도 grandfather 로 추가(둘 다 예전엔
+상시노출이었으므로), 3단계 `_prune_topbar_apps_to_default()` 는 그 상단바 grandfather 결과에서
+`/tasks-mgmt` 하나만 남기고 나머지를 다시 제거한다(사이드바 설치 항목은 건드리지 않음) — 세
+마이그레이션이 전부 끝난 뒤 새로 만들어지는 계정만 스키마 기본값(사이드바 빈 리스트,
+상단바 `/tasks-mgmt`)으로 자연히 시작한다.
 
 **flyout — 호버로 열림 + 클러스터 그룹 섹션 구분**: 좌측 사이드바에서 설치된 leaf 는 개별
 직행 링크라 flyout 이 없고(설치 단위 자체가 이미 최하위 메뉴), 상단바에 설치된 `favorites`/
