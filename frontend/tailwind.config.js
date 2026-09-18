@@ -37,6 +37,14 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // `--popover`/`--popover-foreground` 는 index.css 에 이미 테마별로 정의돼 있었지만
+        // 이 매핑이 없어 `bg-popover`/`text-popover-foreground` 가 미인식 유틸리티로 조용히
+        // 무시되고 있었다 — NavFlyout/Tooltip 배경이 실제로는 완전 투명이라 뒤 콘텐츠가
+        // 비쳐 보이고 겹쳐 보이는 원인이었다(사용자 리포트: "박스가 반투명처럼 나와서 겹쳐보임").
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
         // ── Sidebar tokens (Databricks dark-navy sidebar in light theme) ──
         sidebar: {
           DEFAULT: "hsl(var(--sidebar))",

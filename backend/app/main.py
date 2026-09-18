@@ -1994,6 +1994,88 @@ def _backfill_installed_sidebar_apps():
         db.close()
 
 
+def _migrate_installed_apps_to_leaf_paths():
+    """사이드바/상단바 "leaf 단위 설치" 개편(2단계) — 두 가지를 한 번에 처리한다.
+
+    1. `_backfill_installed_sidebar_apps`(1단계)가 넣어준 그룹 단위 id(cluster/server/.../
+       system)가 남아있는 계정은 그 그룹의 leaf 페이지 목록으로 치환한다 — 그룹 id 는 더 이상
+       `installableApps.ts` 의 `INSTALLABLE_APPS` 에 존재하지 않아(설치 단위가 leaf 로 바뀜)
+       방치하면 해당 항목이 조용히 사라진다.
+    2. 상단바(업무 관리/문서 관리 그룹 + 즐겨찾기 + Your Island)는 예전엔 로그인만 하면 항상
+       보였다 — 이 마이그레이션 시점에 존재하던 계정은 동일하게 보이도록 그 leaf 목록 +
+       "favorites"/"island" 를 이관해 준다. 이 마이그레이션 이후 생성되는 계정은 `HomePrefs`
+       기본값(빈 리스트) 그대로 완전히 빈 상단바로 시작한다.
+
+    `app_settings` sentinel 로 1회만 실행되며, `_backfill_installed_sidebar_apps` 와 같은 이유로
+    `_seed_initial_admin` 보다 먼저 실행돼야 한다 — 안 그러면 이번 부팅에 막 생긴 부트스트랩
+    admin 이 "기존 사용자"로 오인돼 이관 대상이 된다.
+    """
+    from app.models.app_setting import AppSetting
+    from app.models.user import User
+    from app.models.user_setting import UserSetting
+
+    SENTINEL_KEY = "installed_apps_leaf_migration_v2"
+
+    # frontend navConfig.ts 의 GROUPS.paths 와 반드시 일치해야 한다 — 그룹이 추가/변경되면
+    # 여기도 같이 갱신할 것. collab/documents 는 그룹 id 로 설치된 적이 없어(상단바는 예전에
+    # 상시노출) 치환 대상이 아니라 아래 WORK_DOMAIN_GRANDFATHER 로 별도 취급한다.
+    LEGACY_GROUP_LEAF_PATHS = {
+        "cluster": ["/cluster-overview", "/k8s-manage", "/k8s-allocation", "/k9s", "/cluster-trends",
+                    "/node-labels", "/node-images", "/k8s-rbac", "/clusters", "/ops-checks",
+                    "/observability", "/alerts", "/k8s-events", "/incident-analysis",
+                    "/daily-check/review", "/daily-check/settings", "/pod-bottleneck", "/versions",
+                    "/bulk-exec", "/node-ssh", "/etcdctl", "/cluster-manage", "/k8s-logs"],
+        "server": ["/node-specs", "/kernel-params", "/infra-topology"],
+        "network": ["/cilium-trace", "/service-topology", "/service-architecture", "/architecture",
+                    "/packet-flow", "/cidr", "/links"],
+        "storage": ["/mc", "/isilon-nfs"],
+        "services": ["/lake-services"],
+        "devops": ["/playbooks", "/commands", "/scripts"],
+        "system": ["/settings"],
+    }
+    WORK_DOMAIN_GRANDFATHER = [
+        "/tasks-mgmt", "/todo-today", "/sprints", "/members", "/workflow", "/wbs",
+        "/weekly-report", "/jira-import",  # 업무 관리(구 협업)
+        "/documents", "/work-guides", "/docs", "/ops-notes", "/mindmap", "/ontology", "/trends",  # 문서 관리
+        "favorites", "island",
+    ]
+
+    db = SessionLocal()
+    try:
+        if db.query(AppSetting).filter(AppSetting.key == SENTINEL_KEY).first() is not None:
+            return
+        touched = 0
+        for user in db.query(User).all():
+            row = (
+                db.query(UserSetting)
+                .filter(UserSetting.user_id == user.id, UserSetting.key == "home_prefs")
+                .first()
+            )
+            current = list(row.value.get("installed_apps", [])) if row and isinstance(row.value, dict) else []
+
+            expanded: list[str] = []
+            for app_id in current:
+                for leaf in LEGACY_GROUP_LEAF_PATHS.get(app_id, [app_id]):
+                    if leaf not in expanded:
+                        expanded.append(leaf)
+            for leaf in WORK_DOMAIN_GRANDFATHER:
+                if leaf not in expanded:
+                    expanded.append(leaf)
+
+            if row is None:
+                db.add(UserSetting(user_id=user.id, key="home_prefs", value={"installed_apps": expanded}))
+            elif isinstance(row.value, dict):
+                row.value = {**row.value, "installed_apps": expanded}
+            else:
+                row.value = {"installed_apps": expanded}
+            touched += 1
+        db.add(AppSetting(key=SENTINEL_KEY, value={"done": True}))
+        db.commit()
+        _log.info("migrated installed_apps to leaf paths for %d existing user(s)", touched)
+    finally:
+        db.close()
+
+
 def _seed_check_matrix_items():
     """점검 매트릭스 기본 행 시드 — 테이블이 비어있을 때만(사용자 삭제/추가는 보존)."""
     from app.services import check_matrix_service as cms
@@ -2135,6 +2217,8 @@ async def lifespan(app: FastAPI):
             # 안 그러면 첫 부팅에서 방금 만든 부트스트랩 admin 이 "기존 사용자"로 오인돼 빈
             # 사이드바로 시작해야 할 신규 계정인데도 전체 설치 상태를 받는다(리뷰 지적).
             ("backfill_installed_sidebar_apps", _backfill_installed_sidebar_apps),
+            # migrate_installed_apps_to_leaf_paths 도 같은 이유로 seed_initial_admin 보다 먼저.
+            ("migrate_installed_apps_to_leaf_paths", _migrate_installed_apps_to_leaf_paths),
             ("seed_initial_admin", _seed_initial_admin),
             ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
         ]:

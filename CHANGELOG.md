@@ -40,6 +40,22 @@
   **"이 항목 전용 설정으로 분리"** 를 켜면 그 행만의 점검 정의(`CheckMatrixItem.definition_id`)가
   만들어져 같은 점검 종류를 쓰는 다른 행은 영향받지 않는다 — 클러스터별 오버라이드도
   `DeepCheckDefinition.parent_id` 계보 안에서만 적용돼 카드끼리 설정이 섞이지 않는다.
+- **상단바도 opt-in + leaf 단위 설치로 전환**: 위 Main UI 간소화 후속 — 상단바(이름 옆)의
+  "협업" 그룹이 "업무 관리"로 이름이 바뀌었고, 문서 관리 그룹·즐겨찾기·Your Island 도 더는
+  항상 보이지 않는다(사이드바와 동일하게 opt-in). 설치 단위도 그룹 전체가 아니라 **최하위
+  (leaf) 페이지 하나하나**로 바뀌어, 설치한 화면 하나 = 레일/상단바 아이콘 하나(직행 링크)가
+  된다. 기존 계정은 이번에도 1회 자동 이관돼 이전과 동일하게 보인다. Backend:
+  `main.py::_migrate_installed_apps_to_leaf_paths()`(2단계 이관 — 그룹 id를 leaf 로 치환 +
+  업무 도메인 grandfather). Frontend: `components/layout/{sidebarApps.ts,AddSidebarAppDialog.tsx}`
+  → `{installableApps.ts,AddAppDialog.tsx}`(leaf 단위 카탈로그로 재작성), `Sidebar.tsx`/
+  `AppTopBar.tsx` 개편. `DESIGN_SYSTEM.md` §12.11 갱신.
+
+### Fixed
+- **flyout/툴팁 배경이 반투명해 뒤 콘텐츠와 겹쳐 보이던 문제**: `NavFlyout.tsx`(사이드바·
+  상단바 드롭다운) 등에서 쓰던 `bg-popover`/`text-popover-foreground` 가 `tailwind.config.js`
+  에 매핑이 없어 미인식 클래스로 조용히 무시되고 있었다 — 배경이 실제로는 완전 투명이었다.
+  `tailwind.config.js` 에 `popover` 색상 토큰(기존 `index.css` 의 `--popover` 변수를 그대로
+  연결)을 추가해 해결.
 
 ## [1.35.0] - 2026-09-16
 

@@ -2,21 +2,18 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Sparkles, Palmtree, Leaf, Star, Plus,
+  Sparkles, Plus, Leaf,
   Moon, Sun, Monitor, LogOut, User,
   KeyRound, Home, MessageSquare, Bot, HelpCircle, Search, ScrollText, Bug, UserCog, Palette,
   Flame, Sunset, Zap, Waves, Flower2, Citrus,
 } from 'lucide-react';
 import { useUiSettings } from '@/hooks/useUiSettings';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
-import { useIslands } from '@/hooks/useIslands';
-import { useFavorites } from '@/hooks/useFavorites';
 import { useHomePrefs, useUpdateHomePrefs } from '@/hooks/useHomePrefs';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { THEME_SWATCH } from '@/lib/themeSwatches';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
-import { useIslandStore } from '@/stores/islandStore';
 import { useAgentChatStore } from '@/stores/agentChatStore';
 import { AGENT_CHAT_FEATURE_KEY } from '@/components/agent';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
@@ -25,10 +22,8 @@ import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
 import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
-import { FavoritesFlyoutBody } from './FavoritesFlyoutBody';
-import { AddSidebarAppDialog } from './AddSidebarAppDialog';
-import { GROUPS, type GroupId } from './navConfig';
-import { sidebarAppById } from './sidebarApps';
+import { AddAppDialog } from './AddAppDialog';
+import { installableAppById, sidebarAppSections } from './installableApps';
 
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
@@ -91,17 +86,6 @@ const THEME_LABEL: Record<Theme, string> = {
 // 이동 중 잠깐 hover 가 끊겨도 안 닫히도록 여유를 둔다(패널 쪽 onMouseEnter 가 다시 취소).
 const HOVER_OPEN_DELAY = 150;
 const HOVER_CLOSE_DELAY = 200;
-
-// D-058 — '클러스터' 그룹 flyout 이 20여 개 항목의 단일 플랫 리스트라 스캔 시간이 길었다
-// (Hick's law). GROUPS.cluster.paths 자체는 그대로 두고, flyout 렌더링만 성격별 섹션
-// (모니터링/콘솔/점검/관리)으로 재배열한다. 여기 없는 새 경로가 그룹에 추가되면 렌더링
-// 쪽에서 "기타" 섹션으로 떨어뜨려 드리프트를 눈에 띄게 한다.
-const CLUSTER_FLYOUT_SECTIONS: Array<{ label: string; paths: string[] }> = [
-  { label: '모니터링', paths: ['/cluster-overview', '/cluster-trends', '/observability', '/alerts', '/k8s-events', '/incident-analysis', '/pod-bottleneck'] },
-  { label: '콘솔', paths: ['/k9s', '/node-ssh', '/etcdctl', '/bulk-exec'] },
-  { label: '점검', paths: ['/clusters', '/ops-checks', '/daily-check/review', '/daily-check/settings'] },
-  { label: '관리', paths: ['/cluster-manage', '/versions', '/k8s-manage', '/k8s-allocation', '/node-labels', '/node-images', '/k8s-logs'] },
-];
 
 // ── 호버 툴팁이 붙은 아이콘 버튼 — 레일에서 사용 ────────────────────────────
 interface RailIconButtonProps {
@@ -198,13 +182,6 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
   );
 }
 
-/** 아일랜드 아이콘(lucide 이름/이모지/이미지) → flyout 이 기대하는 ComponentType.
- *  lucide 가 아닌 값은 FlyoutLink 가 컴포넌트만 받으므로 기본 아이콘으로 폴백한다. */
-function islandFlyoutIcon(icon?: string | null): ComponentType<{ className?: string }> {
-  const resolved = resolveClusterIcon(icon);
-  return resolved?.kind === 'lucide' ? resolved.Component : Palmtree;
-}
-
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
@@ -216,15 +193,23 @@ export function Sidebar() {
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.clear);
   const isAdmin = currentUser?.role === 'admin';
-  // 동적 navMap / 라벨 오버라이드 / 기능별 접근 제어 — Your Island 패널 피커와 공유.
+  // 동적 navMap / 라벨 오버라이드 / 기능별 접근 제어 — 설치된 leaf 아이콘 렌더에 사용.
   const { navMap, getLabel, featureAllowed } = useNavCatalog();
-  const { isPinned, togglePin } = useFavorites();
 
   // 사이드바 "SaaS 앱" 개편 — 레일에는 사용자가 설치(opt-in)한 것만 순서대로 보인다.
-  // 기본값은 빈 리스트("+" 버튼만) 이고, 기존 계정은 백엔드 1회 이관으로 전체가 채워져 있다.
+  // 기본값은 빈 리스트("+" 버튼만) 이고, 기존 계정은 백엔드 1회 이관으로 채워져 있다.
+  // 설치 단위는 leaf(최하위) 페이지 하나하나 — installedApps 배열은 Sidebar/AppTopBar 가
+  // 공유하므로, 여기서는 그중 platform/system 도메인(+뒤로가기)에 해당하는 것만 골라 그린다.
   const { data: homePrefs } = useHomePrefs();
   const updateHomePrefs = useUpdateHomePrefs();
   const installedApps = useMemo(() => homePrefs?.installedApps ?? [], [homePrefs?.installedApps]);
+  const sidebarInstalled = useMemo(
+    () => installedApps.filter((id) => {
+      const meta = installableAppById(id);
+      return meta && (meta.domain === 'platform' || meta.domain === 'system');
+    }),
+    [installedApps],
+  );
   const [catalogOpen, setCatalogOpen] = useState(false);
   const toggleInstalledApp = (id: string) => {
     const next = installedApps.includes(id) ? installedApps.filter((x) => x !== id) : [...installedApps, id];
@@ -263,30 +248,6 @@ export function Sidebar() {
     return <Home className="w-5 h-5" />;
   };
 
-  // Your Island — 내 아일랜드가 2개 이상이면 레일 버튼 클릭 시 flyout 으로 고른다.
-  const { data: islandData } = useIslands();
-  const myIslands = useMemo(() => islandData?.data ?? [], [islandData?.data]);
-  const sharedIslands = useMemo(() => islandData?.shared ?? [], [islandData?.shared]);
-  const lastIslandId = useIslandStore((s) => s.lastIslandId);
-  const [islandFlyoutAnchor, setIslandFlyoutAnchor] = useState<DOMRect | null>(null);
-
-  const goToIsland = (rect?: DOMRect, el?: HTMLElement | null) => {
-    // 내 것 + 공유받은 것을 합쳐 2개 이상이면 flyout 으로 고르고, 아니면 바로 이동한다.
-    if (myIslands.length + sharedIslands.length > 1) {
-      const wasOpen = !!islandFlyoutAnchor;
-      closeAllFlyouts();
-      openByClick(el);
-      if (!wasOpen) setIslandFlyoutAnchor(rect ?? null);
-      return;
-    }
-    setIslandFlyoutAnchor(null);
-    const target = myIslands[0]?.id ?? sharedIslands[0]?.id ?? lastIslandId;
-    navigate(target ? `/island/${target}` : '/island');
-  };
-
-  const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
-  // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
-  const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
   // D-077 — 레일 하단 개인 존을 사용자 메뉴(아바타) flyout 하나로 접었다: 내 정보·담당 설정
   // (SidePane) / 테마 / 비밀번호 변경 / 로그아웃(확인). 예전엔 테마·사용자·VOC·로그아웃이
   // 무라벨 아이콘 4개로 나란히 있어 로그아웃 오클릭이 잦았다.
@@ -303,16 +264,11 @@ export function Sidebar() {
   // D-080 — flyout 을 클릭/키보드로 열었는지(첫 항목 포커스 + 닫힐 때 트리거 복귀) hover 로
   // 열었는지(포커스 불간섭). 열 때마다 갱신하고 모든 FlyoutShell 에 같이 넘긴다.
   const [flyoutFocus, setFlyoutFocus] = useState<{ autoFocus: boolean; trigger: HTMLElement | null }>({ autoFocus: false, trigger: null });
-  const openByHover = () => setFlyoutFocus({ autoFocus: false, trigger: null });
   const openByClick = (el?: HTMLElement | null) => setFlyoutFocus({ autoFocus: true, trigger: el ?? null });
-  // 즐겨찾기 — 레일 최상단 진입점 (AppTopBar 의 ★ 과 같은 본문을 공유).
-  const [favoritesOpen, setFavoritesOpen] = useState(false);
-  const [favoritesAnchor, setFavoritesAnchor] = useState<DOMRect | null>(null);
 
   // 마우스를 flyout 이 있는 아이콘에 올리면(hover-intent) 클릭 없이도 열리고, 벗어나면
   // 지연 후 닫힌다. 아이콘→패널로 이동하는 짧은 순간 hover 가 끊겨도 패널 쪽
-  // onMouseEnter(cancelScheduledClose) 가 예약된 닫기를 취소해준다. 클릭은 기존처럼
-  // toggleGroup 등을 통해 즉시 토글한다(hover 타이머는 clearHoverTimers 로 정리).
+  // onMouseEnter(cancelScheduledClose) 가 예약된 닫기를 취소해준다.
   const openTimerRef = useRef<number | undefined>(undefined);
   const closeTimerRef = useRef<number | undefined>(undefined);
   const clearHoverTimers = () => {
@@ -321,9 +277,6 @@ export function Sidebar() {
   };
   // 여러 flyout 이 동시에 열리지 않도록, 새로 열기 전에 나머지를 전부 닫는다.
   const closeAllFlyouts = () => {
-    setOpenGroup(null);
-    setFavoritesOpen(false);
-    setIslandFlyoutAnchor(null);
     setUserFlyoutAnchor(null);
     setHelpFlyoutAnchor(null);
   };
@@ -331,7 +284,7 @@ export function Sidebar() {
     clearHoverTimers();
     openTimerRef.current = window.setTimeout(() => {
       closeAllFlyouts();
-      openByHover();
+      setFlyoutFocus({ autoFocus: false, trigger: null });
       openFn();
       openTimerRef.current = undefined;
     }, HOVER_OPEN_DELAY);
@@ -348,110 +301,32 @@ export function Sidebar() {
   };
   useEffect(() => clearHoverTimers, []);
 
-  const islandHasFlyout = myIslands.length + sharedIslands.length > 1;
-
-  // 현재 경로가 속한 그룹을 표시(레일에서 active 강조)
-  const activeGroup: GroupId | null = useMemo(() => {
-    for (const g of GROUPS) {
-      if (g.paths.includes(location.pathname)) return g.id;
-    }
-    return null;
-  }, [location.pathname]);
-
-  // 경로 변경되면 flyout 자동 닫기 (단 사용자가 직접 클릭 후 같은 페이지인 경우는 무시)
+  // 경로 변경되면 flyout 자동 닫기
   useEffect(() => {
-    setOpenGroup(null);
-    setIslandFlyoutAnchor(null);
     setUserFlyoutAnchor(null);
     setHelpFlyoutAnchor(null);
     setSelfPaneOpen(false);
     setFeedbackOpen(false);
-    setFavoritesOpen(false);
   }, [location.pathname]);
 
   // ESC 로 flyout / edit mode 닫기
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setOpenGroup(null);
-        setIslandFlyoutAnchor(null);
         setUserFlyoutAnchor(null);
         setHelpFlyoutAnchor(null);
         setSelfPaneOpen(false);
         setFeedbackOpen(false);
-        setFavoritesOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const toggleGroup = (id: GroupId, rect?: DOMRect, el?: HTMLElement | null) => {
-    clearHoverTimers();
-    // 다른 flyout 이 열려 있는 상태에서 그룹 아이콘을 클릭하면 그 flyout 을 먼저 닫는다 —
-    // 안 그러면 포털·외부클릭 캐처가 그대로 남아 있다가 이 flyout 을 닫을 때 드러난다.
-    const wasOpen = openGroup === id;
-    closeAllFlyouts();
-    openByClick(el);
-    if (!wasOpen) {
-      setOpenGroup(id);
-      if (rect) setOpenAnchor(rect);
-    }
-  };
   /** flyout 이 닫힐 때(라우팅/액션) 호출 — 포커스 복귀는 FlyoutShell 이 트리거로 알아서 한다. */
   const focusProps = { autoFocus: flyoutFocus.autoFocus, returnFocusTo: flyoutFocus.trigger };
 
-  // 그룹별 flyout 본문 렌더링
-  const renderFlyoutBody = (id: GroupId) => {
-    const group = GROUPS.find((g) => g.id === id);
-    if (!group) return null;
-    const close = () => setOpenGroup(null);
-
-    const renderLink = (p: string) => {
-      const entry = navMap[p];
-      if (!entry || !featureAllowed(p)) return null;
-      return (
-        <FlyoutLink key={p} to={p} label={getLabel(p)} Icon={entry.icon} iconColor={entry.iconColor} iconSize={entry.iconSize}
-          active={location.pathname === p} onSelect={close}
-          isPinned={isPinned(p)} onTogglePin={() => togglePin(p)} />
-      );
-    };
-
-    // D-058 — '클러스터' 그룹만 항목이 20여 개라 성격별 섹션으로 나눠서 보여준다.
-    // CLUSTER_FLYOUT_SECTIONS 에 없는 경로(그룹에 새로 추가됐는데 섹션 갱신을 놓친 경우)는
-    // "기타" 섹션으로 떨어뜨려 조용히 숨지 않게 한다.
-    if (id === 'cluster') {
-      const sectioned = new Set(CLUSTER_FLYOUT_SECTIONS.flatMap((s) => s.paths));
-      const leftover = group.paths.filter((p) => !sectioned.has(p));
-      const sections = leftover.length > 0
-        ? [...CLUSTER_FLYOUT_SECTIONS, { label: '기타', paths: leftover }]
-        : CLUSTER_FLYOUT_SECTIONS;
-      return (
-        <div className="space-y-1 pb-2">
-          {sections.map((section, i) => (
-            <div key={section.label}>
-              {i > 0 && <div className="mx-2 my-1 border-t border-border" />}
-              <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {section.label}
-              </p>
-              {section.paths.map(renderLink)}
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-1 pb-2">
-        {group.paths.map(renderLink)}
-      </div>
-    );
-  };
-
-  const flyoutTitle = useMemo(
-    () => (openGroup ? GROUPS.find((g) => g.id === openGroup)?.label ?? '' : ''),
-    [openGroup],
-  );
+  const catalogSections = useMemo(() => sidebarAppSections(isAdmin), [isAdmin]);
 
   return (
     <>
@@ -485,62 +360,31 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* 그룹 아이콘 레일 — 사용자가 설치(opt-in)한 앱만, 설치 순서대로 보인다.
-            기본은 빈 레일 + "+" 버튼(맨 아래) 뿐이다 — 뒤로가기도 설치 대상(카탈로그의
-            "back"), 홈은 유일한 예외로 위 로고가 항상 대신한다. */}
+        {/* leaf 아이콘 레일 — 사용자가 설치(opt-in)한 leaf 페이지만, 설치 순서대로 직행
+            링크로 보인다(그룹 flyout 없음 — 설치 단위 자체가 이미 최하위 메뉴). 기본은
+            빈 레일 + "+" 버튼(맨 아래) 뿐이다 — 뒤로가기도 설치 대상, 홈은 유일한 예외로
+            위 로고가 항상 대신한다. */}
         <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
           <div className="flex flex-col items-center gap-1">
-            {/* 즐겨찾기 — 레일 최상단, 공용 그룹과 성격이 달라(개인 선택) 구분선으로 분리.
-                마우스를 올리면 클릭 없이도 바로 열린다(hover-intent). */}
-            <RailIconButton
-              label="즐겨찾기"
-              Icon={Star}
-              highlighted={favoritesOpen}
-              suppressTooltip={favoritesOpen}
-              hasFlyout
-              onHoverOpen={(rect) => scheduleFlyoutOpen(() => { setFavoritesOpen(true); setFavoritesAnchor(rect); })}
-              onHoverClose={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
-              onClick={(rect, el) => {
-                clearHoverTimers();
-                const wasOpen = favoritesOpen;
-                closeAllFlyouts();
-                openByClick(el);
-                if (!wasOpen) {
-                  setFavoritesOpen(true);
-                  if (rect) setFavoritesAnchor(rect);
-                }
-              }}
-            />
-            <div className="w-6 border-t border-border my-1" aria-hidden />
-            {installedApps.map((appId) => {
-              if (appId === 'system' && !isAdmin) return null;
+            {sidebarInstalled.map((appId) => {
               if (appId === 'back') {
                 if (location.pathname === '/') return null;
-                const backApp = sidebarAppById('back')!;
+                const backApp = installableAppById('back')!;
                 return (
                   <RailIconButton key="back" label={backApp.label} Icon={backApp.icon} onClick={handleBack} />
                 );
               }
-              const g = GROUPS.find((x) => x.id === appId);
-              if (!g) return null;
-              const hasFlyout = g.paths.length > 1;
+              const meta = installableAppById(appId);
+              if (meta?.adminOnly && !isAdmin) return null;
+              const entry = navMap[appId];
+              if (!entry || !featureAllowed(appId)) return null;
               return (
                 <RailIconButton
-                  key={g.id}
-                  label={g.label}
-                  Icon={g.icon}
-                  active={activeGroup === g.id}
-                  highlighted={openGroup === g.id}
-                  suppressTooltip={openGroup === g.id}
-                  hasFlyout={hasFlyout}
-                  onHoverOpen={hasFlyout ? (rect) => scheduleFlyoutOpen(() => { setOpenGroup(g.id); setOpenAnchor(rect); }) : undefined}
-                  onHoverClose={hasFlyout ? () => scheduleFlyoutClose(() => setOpenGroup(null)) : undefined}
-                  onClick={(rect, el) => {
-                    // 하위 경로가 1개뿐인 그룹은 플라이아웃이 무의미하므로 바로 이동.
-                    // 2개 이상이면 플라이아웃으로 하위 메뉴를 고른다.
-                    if (!hasFlyout) { clearHoverTimers(); setOpenGroup(null); navigate(g.paths[0]); }
-                    else toggleGroup(g.id, rect, el);
-                  }}
+                  key={appId}
+                  label={getLabel(appId)}
+                  Icon={entry.icon}
+                  active={location.pathname === appId}
+                  onClick={() => navigate(appId)}
                 />
               );
             })}
@@ -548,24 +392,8 @@ export function Sidebar() {
           </div>
         </nav>
 
-        {/* 푸터 — 설정(admin) / Your Island / AI / 도움말·지원 / 사용자 메뉴 (D-077 — 7개 → 5개.
-            테마·비밀번호·로그아웃은 사용자 메뉴 안으로, VOC·릴리즈 노트·버그 로그는 도움말로) */}
+        {/* 푸터 — 설정(admin) / AI / 도움말·지원 / 사용자 메뉴. */}
         <div className="flex-shrink-0 border-t border-border py-2 flex flex-col items-center gap-1">
-          {/* Your Island — 개인 커스텀 화면이라 공용 그룹 레일이 아니라 푸터 개인 존에 둔다.
-              아일랜드가 여러 개면 flyout 으로 고르고, 0~1개면 바로 이동한다. */}
-          {currentUser && (
-            <RailIconButton
-              label="Your Island"
-              Icon={Palmtree}
-              active={location.pathname.startsWith('/island')}
-              highlighted={!!islandFlyoutAnchor}
-              suppressTooltip={!!islandFlyoutAnchor}
-              hasFlyout={islandHasFlyout}
-              onHoverOpen={islandHasFlyout ? (rect) => scheduleFlyoutOpen(() => setIslandFlyoutAnchor(rect)) : undefined}
-              onHoverClose={islandHasFlyout ? () => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null)) : undefined}
-              onClick={(rect, el) => { clearHoverTimers(); goToIsland(rect, el); }}
-            />
-          )}
           {/* AI 어시스턴트 — 패널(AgentChat.tsx)은 이 상태를 Zustand 로 공유해서 연다.
               접근 제어(기능 접근)가 꺼진 사용자에게는 아이콘 자체를 숨긴다. */}
           {currentUser && featureAllowed(AGENT_CHAT_FEATURE_KEY) && (
@@ -615,95 +443,6 @@ export function Sidebar() {
           )}
         </div>
       </aside>
-
-      {/* Flyout — 그룹 아이콘 우측에 컴팩트 popover. 외부 클릭으로 닫힘 (투명 캐처).
-          z-30(< aside 의 z-40) 로 레일보다 낮게 둔다 — 같은 z-40 이면 이 캐처가 DOM 순서상
-          레일 위에 그려져 호버 중인 아이콘이 즉시 mouseleave 로 판정되고, hover 로 연
-          flyout 이 열리자마자 닫혀버린다. */}
-      {openGroup && openAnchor && (
-        <>
-          <div
-            className="fixed inset-0 z-30"
-            onClick={() => setOpenGroup(null)}
-            aria-hidden
-          />
-          <FlyoutShell
-            title={flyoutTitle}
-            anchorRect={openAnchor}
-            {...focusProps}
-            onClose={() => setOpenGroup(null)}
-            onMouseEnter={cancelScheduledClose}
-            onMouseLeave={() => scheduleFlyoutClose(() => setOpenGroup(null))}
-          >
-            {renderFlyoutBody(openGroup)}
-          </FlyoutShell>
-        </>
-      )}
-
-      {/* 즐겨찾기 flyout — AppTopBar 의 ★ 과 같은 본문(FavoritesFlyoutBody)을 공유. */}
-      {favoritesOpen && favoritesAnchor && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setFavoritesOpen(false)} aria-hidden />
-          <FlyoutShell
-            title="즐겨찾기"
-            anchorRect={favoritesAnchor}
-            {...focusProps}
-            onClose={() => setFavoritesOpen(false)}
-            onMouseEnter={cancelScheduledClose}
-            onMouseLeave={() => scheduleFlyoutClose(() => setFavoritesOpen(false))}
-          >
-            <FavoritesFlyoutBody onClose={() => setFavoritesOpen(false)} />
-          </FlyoutShell>
-        </>
-      )}
-
-      {/* Your Island flyout — 아일랜드가 여러 개일 때 목록에서 고른다. */}
-      {islandFlyoutAnchor && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setIslandFlyoutAnchor(null)} aria-hidden />
-          <FlyoutShell
-            title="Your Island"
-            anchorRect={islandFlyoutAnchor}
-            {...focusProps}
-            onClose={() => setIslandFlyoutAnchor(null)}
-            onMouseEnter={cancelScheduledClose}
-            onMouseLeave={() => scheduleFlyoutClose(() => setIslandFlyoutAnchor(null))}
-          >
-            <div className="space-y-1 pb-2">
-              {myIslands.map((isl) => (
-                <FlyoutLink
-                  key={isl.id}
-                  to={`/island/${isl.id}`}
-                  label={isl.name}
-                  Icon={islandFlyoutIcon(isl.icon)}
-                  active={location.pathname === `/island/${isl.id}`}
-                  onSelect={() => setIslandFlyoutAnchor(null)}
-                />
-              ))}
-              {/* 공유받은 아일랜드도 여기서 바로 열 수 있어야 한다 — 없으면 관리 패널을
-                  거쳐야만 접근된다. 읽기 전용이라는 건 아일랜드 헤더 배지가 알려준다. */}
-              {sharedIslands.length > 0 && (
-                <>
-                  <div className="mx-2 my-1 border-t border-border" />
-                  <p className="px-2.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    팀 공유
-                  </p>
-                  {sharedIslands.map((isl) => (
-                    <FlyoutLink
-                      key={isl.id}
-                      to={`/island/${isl.id}`}
-                      label={`${isl.name} · ${isl.ownerName || '공유'}`}
-                      Icon={islandFlyoutIcon(isl.icon)}
-                      active={location.pathname === `/island/${isl.id}`}
-                      onSelect={() => setIslandFlyoutAnchor(null)}
-                    />
-                  ))}
-                </>
-              )}
-            </div>
-          </FlyoutShell>
-        </>
-      )}
 
       {/* 도움말·지원 flyout — 화면 검색(⌘K) / VOC / 릴리즈 노트 / 버그 픽스 로그(admin). */}
       {helpFlyoutAnchor && currentUser && (
@@ -807,13 +546,15 @@ export function Sidebar() {
         onCancel={() => setLogoutConfirmOpen(false)}
       />
 
-      {/* 사이드바 "앱 추가" 카탈로그 — 레일에 설치할 그룹/버튼을 카드에서 골라 켠다. */}
-      <AddSidebarAppDialog
+      {/* 사이드바 "앱 추가" 카탈로그 — 레일에 설치할 leaf 페이지를 그룹 섹션별 카드에서 골라 켠다. */}
+      <AddAppDialog
         open={catalogOpen}
         onClose={() => setCatalogOpen(false)}
+        title="사이드바에 앱 추가"
+        description="필요한 화면만 골라 레일에 추가한다."
+        sections={catalogSections}
         installedApps={installedApps}
         onToggle={toggleInstalledApp}
-        isAdmin={isAdmin}
       />
 
       {/* 내 정보·담당 설정 — 우측 슬라이드 SidePane. 다른 상세 편집 패널(WbsFlowPage 등)과 동일한 패턴. */}
@@ -848,4 +589,3 @@ export function Sidebar() {
     </>
   );
 }
-

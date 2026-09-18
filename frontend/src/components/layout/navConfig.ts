@@ -92,7 +92,7 @@ export const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ c
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로
   // 병합됐다(NAV_MAP 항목은 접근 제어/라벨 커스터마이징/Island 패널을 위해 유지).
   { id: 'devops',    label: 'DevOps',     icon: GitBranch, paths: ['/playbooks', '/commands', '/scripts'], domain: 'platform' },
-  { id: 'collab',    label: '협업',       icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report', '/jira-import'], domain: 'work' },
+  { id: 'collab',    label: '업무 관리',  icon: Users,     paths: ['/tasks-mgmt', '/todo-today', '/sprints', '/members', '/workflow', '/wbs', '/weekly-report', '/jira-import'], domain: 'work' },
   // "문서 관리" — /documents(Confluence 가져오기/내보내기 대시보드)가 진입점. 2026-07 사이드바
   // 개편 때 그룹을 잃고 URL 전용으로 남았던 지식 화면들(/work-guides, /docs, /ops-notes,
   // /mindmap, /ontology, /trends)을 이 그룹으로 복귀시킨다.
