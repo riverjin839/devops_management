@@ -2076,6 +2076,65 @@ def _migrate_installed_apps_to_leaf_paths():
         db.close()
 
 
+def _prune_topbar_apps_to_default():
+    """상단바(이름 옆) "leaf 단위 설치" 개편(3단계) — 사용자 요청("업무 관리만 기본으로
+    나오게 하고 나머지는 개인별 add-on 방식으로")에 따라 기본 노출을 `/tasks-mgmt`
+    ("업무 관리") 하나로 줄인다.
+
+    1/2단계(`_backfill_installed_sidebar_apps`/`_migrate_installed_apps_to_leaf_paths`)가
+    이관해 준 나머지 업무 관리 leaf(오늘 할 일/스프린트/멤버별 업무/워크플로우/WBS/주간보고/
+    Jira Excel 가져오기)·문서 관리 leaf 7종·즐겨찾기·Your Island 를 이 마이그레이션 시점
+    존재하던 계정에서 제거한다 — 사이드바(platform/system 도메인) 설치 항목은 건드리지
+    않는다. v1/v2 와 달리 **뺄셈** 마이그레이션이다(추가로 사라지는 화면이 없게 하던 이전
+    두 단계와 반대 방향) — 사용자가 그 뒤 직접 다시 설치한 항목까지는 구분할 수 없어 함께
+    제거되지만, `+` 버튼으로 언제든 다시 켤 수 있다.
+
+    `app_settings` sentinel 로 1회만 실행되며, 다른 두 이관과 같은 이유로 `_seed_initial_admin`
+    보다 먼저 실행돼야 한다 — 안 그러면 이번 부팅에 막 생긴 부트스트랩 admin 이 "기존
+    사용자"로 오인돼 방금 시딩된 기본값(`/tasks-mgmt` 하나)에서 불필요하게 다시 걸러진다.
+    """
+    from app.models.app_setting import AppSetting
+    from app.models.user import User
+    from app.models.user_setting import UserSetting
+
+    SENTINEL_KEY = "installed_apps_topbar_default_v3"
+
+    # frontend navConfig.ts 의 GROUPS.paths(collab/documents) 와 반드시 일치해야 한다 —
+    # `/tasks-mgmt`("업무 관리")만 남기고 나머지 업무 도메인 leaf + 특수 항목을 제거한다.
+    TOPBAR_ITEMS_TO_PRUNE = {
+        "/todo-today", "/sprints", "/members", "/workflow", "/wbs", "/weekly-report", "/jira-import",
+        "/documents", "/work-guides", "/docs", "/ops-notes", "/mindmap", "/ontology", "/trends",
+        "favorites", "island",
+    }
+
+    db = SessionLocal()
+    try:
+        if db.query(AppSetting).filter(AppSetting.key == SENTINEL_KEY).first() is not None:
+            return
+        touched = 0
+        for user in db.query(User).all():
+            row = (
+                db.query(UserSetting)
+                .filter(UserSetting.user_id == user.id, UserSetting.key == "home_prefs")
+                .first()
+            )
+            if row is None or not isinstance(row.value, dict):
+                continue
+            current = row.value.get("installed_apps", [])
+            if not isinstance(current, list):
+                continue
+            pruned = [a for a in current if a not in TOPBAR_ITEMS_TO_PRUNE]
+            if pruned == current:
+                continue
+            row.value = {**row.value, "installed_apps": pruned}
+            touched += 1
+        db.add(AppSetting(key=SENTINEL_KEY, value={"done": True}))
+        db.commit()
+        _log.info("pruned topbar installed_apps to default for %d existing user(s)", touched)
+    finally:
+        db.close()
+
+
 def _seed_check_matrix_items():
     """점검 매트릭스 기본 행 시드 — 테이블이 비어있을 때만(사용자 삭제/추가는 보존)."""
     from app.services import check_matrix_service as cms
@@ -2217,8 +2276,10 @@ async def lifespan(app: FastAPI):
             # 안 그러면 첫 부팅에서 방금 만든 부트스트랩 admin 이 "기존 사용자"로 오인돼 빈
             # 사이드바로 시작해야 할 신규 계정인데도 전체 설치 상태를 받는다(리뷰 지적).
             ("backfill_installed_sidebar_apps", _backfill_installed_sidebar_apps),
-            # migrate_installed_apps_to_leaf_paths 도 같은 이유로 seed_initial_admin 보다 먼저.
+            # migrate_installed_apps_to_leaf_paths / prune_topbar_apps_to_default 도 같은 이유로
+            # seed_initial_admin 보다 먼저.
             ("migrate_installed_apps_to_leaf_paths", _migrate_installed_apps_to_leaf_paths),
+            ("prune_topbar_apps_to_default", _prune_topbar_apps_to_default),
             ("seed_initial_admin", _seed_initial_admin),
             ("migrate_assignee_roster_to_users", _migrate_assignee_roster_to_users),
         ]:
