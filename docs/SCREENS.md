@@ -268,23 +268,25 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 상세 관리 (`/k8s-manage`, `/k8s-manage/:clusterId`)
 
-- **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 1147줄 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의), + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
-- **목적 / UX**: Lens/OpenLens 스타일의 K8s 리소스 탐색기. 좌측 카테고리 내비(Cluster/Nodes/Workloads/Config/Network/Storage/Namespaces/Events/Helm/AccessControl/CRD)로 리소스 종류를 전환하며 목록 조회, YAML 상세/편집, scale/restart/delete/cordon/drain 같은 쓰기 작업, Pod 터미널·이벤트 확인까지 한 화면에서 처리.
+- **파일**: `frontend/src/pages/K8sManagePage.tsx` (단일 파일 — `ResourceTablePanel`/`NodesPanel`/`PodsPanel`/`OverviewPanel`/`HelmPanel`/`CrdPanel`/`DetailDrawer`를 내부 정의하고 `ResourceTablePanel`/`PodsPanel`은 `NamespaceDashboardPanel`이 재사용할 수 있게 `export`), `frontend/src/components/k8s-manage/NamespaceDashboardPanel.tsx`(네임스페이스 대시보드 — 신규), + `components/k8s/{PodTerminal,EventsStream,NamespaceMultiSelect,ColumnToggle}`, `components/common/LogViewer`, `components/auth/RoleGate`.
+- **목적 / UX**: Lens/OpenLens 스타일의 K8s 리소스 탐색기. 좌측 카테고리 내비(Cluster/Nodes/Workloads/Config/Network/Storage/Namespaces/Events/Helm/AccessControl/CRD)로 리소스 종류를 전환하며 목록 조회, YAML 상세/편집, scale/restart/delete/cordon/drain 같은 쓰기 작업, Pod 터미널·이벤트 확인까지 한 화면에서 처리. **Namespaces 카테고리는 "목록"(기존 Namespace 오브젝트 나열)과 "대시보드"(신규, 종류가 아니라 네임스페이스를 먼저 골라 그 안의 workload/config/network/storage 전체를 한 화면에서 보는 뷰) 두 리프로 나뉜다.**
 - **UI 구성**:
   - `ClusterSidebar` — `iconOnly` 단일 선택(`allowAll` 없음), URL 파라미터(`:clusterId`) 동기화.
-  - 두 번째 sticky 사이드바 — Lens 식 카테고리 내비(`NAV` 상수, `kindAvailability` 응답으로 존재하는 kind만 노출).
-  - 리소스별 패널: `NodesPanel`(cordon/drain 포함 노드 전용 컬럼), `PodsPanel`(터미널 진입), 그 외 kind는 공통 `ResourceTablePanel`(Virtuoso 가상 스크롤, 네임스페이스 멀티셀렉트, 컬럼 토글, 검색).
+  - 두 번째 sticky 사이드바 — Lens 식 카테고리 내비(`NAV` 상수, `kindAvailability` 응답으로 존재하는 kind만 노출). `LeafMode`(`kind|overview|events|helm|crd|nsdash`)로 분기.
+  - 리소스별 패널: `NodesPanel`(cordon/drain 포함 노드 전용 컬럼), `PodsPanel`(터미널 진입), 그 외 kind는 공통 `ResourceTablePanel`(Virtuoso 가상 스크롤, 네임스페이스 멀티셀렉트, 컬럼 토글, 검색). 두 컴포넌트 모두 `hideNsSelector?` prop 지원 — 네임스페이스가 상위(대시보드)에서 이미 고정된 곳에 임베드할 때 내장 NS 선택기를 숨긴다.
+  - `NamespaceDashboardPanel`(**대시보드** 리프) — `NamespaceSingleSelect`로 네임스페이스 1개 선택 → 엑셀 스타일 **리소스 인벤토리** 표(종류/구분(Workload·Config·Network·Storage 색 점)/개수/정상/경고/위험/비고, `caps[kind].namespaced` + `avail[kind].present`로 표시 대상 자동 필터, 종류별 `k8sResourcesApi.list`/`richPods` 병렬 조회로 개수·상태 산출 — 상태 개념이 없는 종류(ConfigMap 등)는 `—`) → 행 클릭 시 아래 상세로 바로 이동(**탭 드릴인형**: 카테고리 탭 + 종류 필 로우 → 종류 하나만 렌더 / **전체 나열형**: 4개 카테고리 전부를 세로로 펼쳐 종류별 패널을 다 쌓아 렌더, 상단 토글로 두 레이아웃 전환). 실제 리소스 테이블은 두 모드 다 같은 `ResourceTablePanel`/`PodsPanel` 인스턴스(`KindPanel` 래퍼로 NS 고정)를 쓰므로 스케일/재시작/삭제/YAML 편집·Pod 터미널이 종류별 탐색과 동일하게 동작. PV/StorageClass 등 cluster-scoped 종류는 제외.
   - `OverviewPanel`(노드/네임스페이스 통계), `HelmPanel`(릴리스 목록 + values 보기), `CrdPanel`(CRD 목록 → 오브젝트 드릴다운), `EventsStream`(events 탭).
-  - `DetailDrawer` — 우측 슬라이드 패널(요약/YAML/이벤트 탭), `RoleGate(['admin','operator'])`로 편집·쓰기 UI 게이팅, viewer는 읽기 전용 배지.
+  - `DetailDrawer` — 우측 슬라이드 패널(요약/YAML/이벤트 탭), `RoleGate(['admin','operator'])`로 편집·쓰기 UI 게이팅, viewer는 읽기 전용 배지. 대시보드에서도 페이지 최상단의 같은 `DetailDrawer`/`PodTerminal`/`ConfirmDialog`를 콜백으로 그대로 재사용.
   - `PodTerminal` 모달(WebSocket exec).
-- **Frontend**: 별도 커스텀 hook 없이 TanStack `useQuery` 직접 사용(`k8s-mng-list`/`k8s-mng-nodes`/`k8s-mng-helm`/`k8s-mng-crds`/`k8s-mng-yaml`/`k8s-caps`/`k8s-avail` 등 쿼리키), `useColumnPrefs`(컬럼 표시/숨김 로컬 저장). `useClusters`. api.ts: `k8sResourcesApi.{list,yaml,resourceEvents,capabilities,kindAvailability,richNodes,richPods,scale,restart,remove,apply,cordon,drain,crds,crdObjects,crdObjectYaml}`, `k8sHelmApi.{releases,values}`.
-- **Backend**: 라우터 `backend/app/routers/k8s_resources.py`(prefix `/k8s`) — `GET /k8s/{id}/resources/{kind}`, `GET .../yaml`, `GET .../events`, `POST .../scale`, `POST .../restart`, `DELETE .../{kind}/{ns}/{name}`, `PUT .../yaml`, `POST /k8s/{id}/nodes/{name}/cordon`, `POST /k8s/{id}/nodes/{name}/drain`, `GET /k8s/{id}/crds(...)`, `GET /k8s/{id}/resources-capabilities`, `GET /k8s/{id}/nodes`, `GET /k8s/{id}/pods`, `GET /k8s/{id}/kind-availability`; `backend/app/routers/k8s_helm.py`(`/k8s/{id}/helm/releases(...)`); Pod 터미널은 `backend/app/routers/k8s_exec.py`(`WS /k8s/{id}/exec`). kubectl/kubernetes SDK 직접 호출 기반 서비스 계층(요청 시점 즉시 조회, DB 캐시 없음).
+- **Frontend**: 별도 커스텀 hook 없이 TanStack `useQuery`/`useQueries` 직접 사용(`k8s-mng-list`/`k8s-mng-nodes`/`k8s-mng-helm`/`k8s-mng-crds`/`k8s-mng-yaml`/`k8s-caps`/`k8s-avail` 등 쿼리키), `useColumnPrefs`(컬럼 표시/숨김 로컬 저장). `useClusters`. `NamespaceDashboardPanel`은 네임스페이스 목록을 `NamespaceSingleSelect`(내부적으로 `useAnalyzeNamespaces` → `analyzeApi.listNamespaces`) 경유로 얻는다. api.ts: `k8sResourcesApi.{list,yaml,resourceEvents,capabilities,kindAvailability,richNodes,richPods,scale,restart,remove,apply,cordon,drain,crds,crdObjects,crdObjectYaml}`, `k8sHelmApi.{releases,values}`.
+- **Backend**: 라우터 `backend/app/routers/k8s_resources.py`(prefix `/k8s`) — `GET /k8s/{id}/resources/{kind}`(`namespace` 쿼리 파라미터 기지원 — 대시보드도 이 엔드포인트를 그대로 재사용, 백엔드 변경 없음), `GET .../yaml`, `GET .../events`, `POST .../scale`, `POST .../restart`, `DELETE .../{kind}/{ns}/{name}`, `PUT .../yaml`, `POST /k8s/{id}/nodes/{name}/cordon`, `POST /k8s/{id}/nodes/{name}/drain`, `GET /k8s/{id}/crds(...)`, `GET /k8s/{id}/resources-capabilities`, `GET /k8s/{id}/nodes`, `GET /k8s/{id}/pods`, `GET /k8s/{id}/kind-availability`; `backend/app/routers/k8s_helm.py`(`/k8s/{id}/helm/releases(...)`); Pod 터미널은 `backend/app/routers/k8s_exec.py`(`WS /k8s/{id}/exec`). kubectl/kubernetes SDK 직접 호출 기반 서비스 계층(요청 시점 즉시 조회, DB 캐시 없음).
 - **핵심 기능**:
   - 20여 종 K8s 리소스 종류별 목록/검색/네임스페이스 필터/컬럼 커스터마이즈.
   - YAML 보기·편집(apply), scale/restart/delete/cordon/drain 등 쓰기 액션(operator/admin만).
   - CRD 자동 탐색 + 오브젝트 목록/YAML(additionalPrinterColumns 파리티).
   - Helm 릴리스 목록 및 values 조회(읽기 전용).
   - Pod exec 터미널, 리소스별 관련 이벤트 탭, 실시간 이벤트 스트림.
+  - **네임스페이스 대시보드** — 네임스페이스 하나를 기준으로 workload/config/network/storage 전체를 한 화면에서 모니터링·운영·수정.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

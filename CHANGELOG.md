@@ -11,6 +11,16 @@
 1.35.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **K8S 상세관리 — 네임스페이스 대시보드**: 종류(Workload/Config/Network/Storage) 기준 탐색과
+  별도로, `/k8s-manage`의 **Namespaces → 대시보드**에서 네임스페이스 하나를 고르면 그 안의
+  workload/config/network/storage 리소스 전체가 엑셀 스타일 인벤토리 표(종류/구분/개수/정상/
+  경고/위험)로 한 화면에 모인다. 표 행을 클릭하면 아래 상세 목록으로 바로 이동하고, **탭
+  드릴인형**(카테고리 → 종류 하나만 표시)과 **전체 나열형**(전 카테고리·전 종류를 세로로 나열)
+  두 레이아웃을 토글할 수 있다. 스케일/재시작/삭제/YAML 편집·Pod 터미널은 기존 종류별 탐색과
+  동일한 `ResourceTablePanel`/`PodsPanel`을 재사용해 그대로 동작한다. 백엔드 변경 없음(기존
+  `namespace` 쿼리 파라미터 재사용). Frontend: `components/k8s-manage/NamespaceDashboardPanel.tsx`
+  (신규), `K8sManagePage.tsx`(`ResourceTablePanel`/`PodsPanel` `export` 전환 + `hideNsSelector?`
+  prop 추가).
 - **점검 매트릭스 커스텀 카드 — 정해진 카드 밖의 점검을 직접 만든다**: 점검 항목 추가 마법사의
   종류 단계에 **직접 만들기** 구역이 생겨, ① 내가 쓴 **Ansible Playbook 을 그 자리에서 등록**해
   점검으로 돌리고(이름·YAML 직접 작성/`.yml` 파일 업로드/플레이북 라이브러리 불러오기·태그·extra

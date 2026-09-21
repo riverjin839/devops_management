@@ -21,6 +21,7 @@ import { PodTerminal } from '@/components/k8s/PodTerminal';
 import { EventsStream } from '@/components/k8s/EventsStream';
 import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
 import { ColumnToggle } from '@/components/k8s/ColumnToggle';
+import { NamespaceDashboardPanel } from '@/components/k8s-manage/NamespaceDashboardPanel';
 import { useColumnPrefs } from '@/hooks/useColumnPrefs';
 import type {
   K8sResourceRow, K8sResourceCapability, K8sCrdInfo, HelmRelease,
@@ -41,7 +42,7 @@ const CELL_LABEL: Record<K8sCellColor, string> = {
 };
 
 // ── Lens 식 카테고리 내비 모델 ────────────────────────────────────────────────
-type LeafMode = 'kind' | 'overview' | 'events' | 'helm' | 'crd';
+type LeafMode = 'kind' | 'overview' | 'events' | 'helm' | 'crd' | 'nsdash';
 interface NavLeaf { id: string; label: string; mode: LeafMode; kind?: string }
 interface NavCat { id: string; label: string; icon: React.ComponentType<{ className?: string }>; leaves: NavLeaf[] }
 
@@ -94,7 +95,12 @@ const NAV: NavCat[] = [
       { id: 'storageclasses', label: 'Storage Classes', mode: 'kind', kind: 'storageclasses' },
     ],
   },
-  { id: 'namespaces', label: 'Namespaces', icon: Layers, leaves: [{ id: 'namespaces', label: 'Namespaces', mode: 'kind', kind: 'namespaces' }] },
+  {
+    id: 'namespaces', label: 'Namespaces', icon: Layers, leaves: [
+      { id: 'namespaces', label: '목록', mode: 'kind', kind: 'namespaces' },
+      { id: 'ns-dashboard', label: '대시보드', mode: 'nsdash' },
+    ],
+  },
   { id: 'events', label: 'Events', icon: ScrollText, leaves: [{ id: 'events', label: 'Events', mode: 'events' }] },
   { id: 'helm', label: 'Helm', icon: Package, leaves: [{ id: 'helm', label: 'Releases', mode: 'helm' }] },
   {
@@ -400,6 +406,22 @@ export function K8sManagePage() {
             />
           )}
 
+          {leaf.mode === 'nsdash' && (
+            <NamespaceDashboardPanel
+              clusterId={clusterId}
+              caps={caps}
+              avail={avail}
+              onOpenDetail={(kind, row, editable) => {
+                setDetail({ kind: 'k8s', resourceKind: kind, namespace: row.namespace || '-', name: row.name, editable });
+                setEditing(false);
+              }}
+              onScale={doScale}
+              onRestart={doRestart}
+              onDelete={doDelete}
+              onTerminal={(ns, name) => setTerminalPod({ namespace: ns, name })}
+            />
+          )}
+
           {leaf.mode === 'overview' && <OverviewPanel clusterId={clusterId} />}
           {leaf.mode === 'events' && (
             <MacCard title="이벤트 (실시간)">
@@ -498,7 +520,7 @@ export function K8sManagePage() {
 }
 
 // ── 리소스 테이블 패널 ────────────────────────────────────────────────────────
-interface ResourceTablePanelProps {
+export interface ResourceTablePanelProps {
   clusterId: string;
   kind: string;
   caps?: K8sResourceCapability;
@@ -513,9 +535,11 @@ interface ResourceTablePanelProps {
   onCordon: (name: string, unschedulable: boolean) => void;
   onDrain: (name: string) => void;
   onTerminal: (ns: string, name: string) => void;
+  /** NS 대시보드처럼 네임스페이스가 이미 상위에서 고정된 곳에 임베드할 때 내장 선택기를 숨긴다. */
+  hideNsSelector?: boolean;
 }
 
-function ResourceTablePanel(p: ResourceTablePanelProps) {
+export function ResourceTablePanel(p: ResourceTablePanelProps) {
   const { clusterId, kind, caps, selectedNs, setSelectedNs, search, setSearch } = p;
   const isNamespaced = caps?.namespaced ?? true;
   // 단일 선택이면 서버에서 정확히 필터, 다중/전체면 전체 조회 후 클라이언트 필터
@@ -551,7 +575,7 @@ function ResourceTablePanel(p: ResourceTablePanelProps) {
   return (
     <MacCard title={kind} bodyPadding="p-0">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
-        {isNamespaced && (
+        {isNamespaced && !p.hideNsSelector && (
           <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
         )}
         <div className="relative">
@@ -1121,7 +1145,7 @@ function NodesPanel({ clusterId, onOpenDetail, onCordon, onDrain }: NodesPanelPr
 }
 
 // ── Pods 패널 (Lens 식 컬럼 + 색표현) ─────────────────────────────────────────
-interface PodsPanelProps {
+export interface PodsPanelProps {
   clusterId: string;
   caps?: K8sResourceCapability;
   selectedNs: Set<string>;
@@ -1131,8 +1155,9 @@ interface PodsPanelProps {
   onOpenDetail: (row: K8sPodRichRow) => void;
   onDelete: (kind: string, ns: string, name: string) => void;
   onTerminal: (ns: string, name: string) => void;
+  hideNsSelector?: boolean;
 }
-function PodsPanel(p: PodsPanelProps) {
+export function PodsPanel(p: PodsPanelProps) {
   const { clusterId, selectedNs, setSelectedNs, search, setSearch } = p;
   const navigate = useNavigate();
   const nsArr = useMemo(() => [...selectedNs], [selectedNs]);
@@ -1171,7 +1196,9 @@ function PodsPanel(p: PodsPanelProps) {
   return (
     <MacCard title="Pods" bodyPadding="p-0">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
-        <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
+        {!p.hideNsSelector && (
+          <NamespaceMultiSelect clusterId={clusterId} selected={selectedNs} onChange={setSelectedNs} />
+        )}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="이름/노드/소유자 검색"
