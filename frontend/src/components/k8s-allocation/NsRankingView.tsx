@@ -9,11 +9,32 @@ import { useAllocNamespaces } from '@/hooks/useK8sAllocation';
 import { fmtN } from './format';
 import { PageSizeSelect, Pager, SearchInput } from './primitives';
 import { paginate } from './tableSort';
+import type { AllocDetailTarget } from './AllocDetailDialog';
 
 type ChartMetric = 'cpu' | 'mem';
+
+/** Y축(네임스페이스) 라벨 — 클릭하면 그 NS 의 리소스 할당·사용 상세를 연다. */
+function NsAxisTick({ x, y, payload, onOpenDetail }: {
+  x?: number; y?: number; payload?: { value?: string };
+  onOpenDetail: (t: AllocDetailTarget) => void;
+}) {
+  const ns = payload?.value ?? '';
+  return (
+    <text
+      x={x} y={y} dy={4} textAnchor="end" fontSize={12} fill="hsl(var(--muted-foreground))"
+      className="cursor-pointer hover:fill-[hsl(var(--primary))]"
+      onClick={() => ns && onOpenDetail({ scope: 'namespace', name: ns })}
+    >
+      <title>{`${ns} — 리소스 할당·사용 상세 보기`}</title>
+      {ns}
+    </text>
+  );
+}
 const RANK_PAGE_SIZES = [10, 15, 25, 50];
 
-export function NsRankingView({ clusterId }: { clusterId: string }) {
+export function NsRankingView({ clusterId, onOpenDetail }: {
+  clusterId: string; onOpenDetail: (t: AllocDetailTarget) => void;
+}) {
   const nsQ = useAllocNamespaces(clusterId);
   const { isError, error } = nsQ;
   const [metric, setMetric] = useState<ChartMetric>('cpu');
@@ -70,10 +91,21 @@ export function NsRankingView({ clusterId }: { clusterId: string }) {
   } else {
     body = (
       <ResponsiveContainer width="100%" height={Math.max(280, chartRows * 32)}>
-        <BarChart data={nsChart} layout="vertical" margin={{ left: 12, right: 24, top: 4, bottom: 4 }}>
+        <BarChart data={nsChart} layout="vertical" margin={{ left: 12, right: 24, top: 4, bottom: 4 }}
+          onClick={(e) => {
+            // 막대/플롯 영역 클릭 → 해당 NS 상세. activeLabel 이 Y축(카테고리) 값이다.
+            const ns = (e as { activeLabel?: string })?.activeLabel;
+            if (ns) onOpenDetail({ scope: 'namespace', name: ns });
+          }}
+          className="cursor-pointer">
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
           <XAxis type="number" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} unit={unit} />
-          <YAxis type="category" dataKey="namespace" width={150} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+          <YAxis
+            type="category"
+            dataKey="namespace"
+            width={150}
+            tick={<NsAxisTick onOpenDetail={onOpenDetail} />}
+          />
           <RechartsTooltip
             formatter={(v: number, name) => [`${v}${unit}`, name === 'req' ? 'request' : '실사용']}
             contentStyle={{ fontSize: 13, borderRadius: 8, background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' }}
@@ -101,7 +133,7 @@ export function NsRankingView({ clusterId }: { clusterId: string }) {
           </button>
         ))}
         <SearchInput value={q} onChange={setQ} placeholder="네임스페이스 찾기" width="w-52" />
-        <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순</span>
+        <span className="text-xs text-muted-foreground ml-1">비효율(req−use) 내림차순 · 막대/NS 명 클릭 시 상세</span>
         <div className="ml-auto flex items-center gap-3">
           <PageSizeSelect value={pageSize} onChange={setPageSize} options={RANK_PAGE_SIZES} />
           <Pager page={safePage} totalPages={totalPages} onPage={setPage} />

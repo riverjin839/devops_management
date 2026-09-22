@@ -11,6 +11,16 @@
 1.35.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
+- **K8S 자원 관리 — 노드/네임스페이스 클릭 시 실제 리소스 할당·사용 상세**: 노드별 자원 ·
+  네임스페이스별 자원 · 네임스페이스 비효율 랭킹 세 탭에서 기준 정보(노드명 / NS 명 / 랭킹 차트의
+  막대·Y축 라벨)를 클릭하면, 그 대상이 실제로 안고 있는 리소스(Deployment/StatefulSet/DaemonSet/
+  Pod)가 **자원 할당(request·limit) vs 실제 사용(usage)** 상세로 열린다. 노드 상세는 CPU/MEM 미터
+  (allocatable 대비 req·use) + 그 노드에 뜬 파드를 워크로드 단위로 묶은 표(펼치면 파드·컨테이너별
+  req/limit/사용량·QoS·상태), NS 상세는 NS 스탯 + 워크로드 → 파드 → 컨테이너 표이며 양쪽 다 검색·
+  CSV·개별 새로고침을 제공한다. Backend: `k8s_allocation.py` `GET /k8s/{id}/allocation/nodes/{node}/pods`
+  (`spec.nodeName` field-selector, 파드 행 빌더를 NS 드릴다운과 공유, NS 수에 따라 metrics 조회
+  전략 전환 — `K8S_ALLOC_NODE_DRILL_NS_MAX`). Frontend: `AllocDetailDialog`·`drilldown.tsx`·
+  `podGroup.ts`(신규), `useAllocNodePods`.
 - **K8S 상세관리 — 네임스페이스 대시보드**: 종류(Workload/Config/Network/Storage) 기준 탐색과
   별도로, `/k8s-manage`의 **Namespaces → 대시보드**에서 네임스페이스 하나를 고르면 그 안의
   workload/config/network/storage 리소스 전체가 엑셀 스타일 인벤토리 표(종류/구분/개수/정상/
@@ -34,6 +44,12 @@
   Frontend: `components/platform-status/CheckMatrixItemFormModal.tsx`.
 
 ### Changed
+- **K8S 자원 관리 — 요약 영역 압축으로 자원 탭을 화면 중앙에**: 큰 요약 카드 7장 + POD 용량/상태
+  카드 2장이 세로를 다 먹어 정작 봐야 할 "노드별 자원 / 네임스페이스별 자원" 탭이 접히는 선 아래로
+  밀려 잘려 보이던 문제를 고쳤다. 기본 화면은 노드/NS/파드·할당·사용효율·여유·낭비·Pod 상태를
+  **칩 한 줄로 압축한 요약 스트립**이고, 기존 큰 카드는 `요약 상세` 토글(선택 유지)로만 펼친다.
+  탭 바는 sticky 로 바꿔 긴 표를 스크롤해도 화면 전환이 남는다. Frontend: `SummaryStrip`(신규),
+  `K8sAllocationPage.tsx`.
 - **Main UI 간소화 — 사이드바 opt-in 앱 카탈로그 + 홈 KPI 스트립 제거**: 좌측 사이드바가
   플랫폼 그룹을 전부 항상 보여주던 것에서, 사용자가 카드형 "앱 추가" 다이얼로그에서 필요한
   것만 골라 설치(opt-in)하는 방식으로 바뀌었다 — 신규 계정은 완전히 빈 레일 + "+" 버튼으로

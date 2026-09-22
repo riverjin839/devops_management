@@ -4186,8 +4186,19 @@ export interface AllocPodRow {
   memLimB: number;
   cpuUsageM: number | null;
   memUsageB: number | null;
+  /** 상위 워크로드 귀속 — 노드 드릴다운(여러 NS 혼재)에서 Deployment/STS/DS 단위 묶기용. */
+  ownerKind?: string | null;
+  ownerName?: string | null;
 }
 export interface AllocPodsResponse { count: number; items: AllocPodRow[]; metricsAvailable: boolean }
+/** 노드에 스케줄된 파드 전체(여러 NS 혼재) — 노드 클릭 드릴다운. */
+export interface AllocNodePodsResponse {
+  node: string;
+  count: number;
+  namespaceCount: number;
+  items: AllocPodRow[];
+  metricsAvailable: boolean;
+}
 
 // ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
 export type MetricTrendDir = 'up' | 'down' | 'flat';

@@ -166,3 +166,16 @@ export function useAllocPods(
     retry: 1,
   });
 }
+
+/** 노드에 스케줄된 파드/컨테이너 — 노드 클릭(상세 열림) 시에만 enabled(lazy 드릴다운). */
+export function useAllocNodePods(clusterId: string, node: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['alloc-node-pods', clusterId, node],
+    queryFn: async () => (await k8sAllocationApi.nodePods(clusterId, node)).data,
+    enabled: !!clusterId && !!node && enabled,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  });
+}

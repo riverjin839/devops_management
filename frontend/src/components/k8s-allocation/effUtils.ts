@@ -23,3 +23,14 @@ export function fmtTs(iso: string | null | undefined): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getMonth() + 1}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
+
+// ── 클러스터 요약 상세(큰 카드) 펼침 여부 ──────────────────────────────────────
+// 기본은 접힘 — 압축 스트립만 두고 "노드별 자원 / 네임스페이스별 자원" 탭이 화면 위쪽에
+// 오도록 한다. 펼친 선택은 사용자별로 유지한다.
+const SUMMARY_DETAIL_KEY = 'pep.k8s-allocation.summaryDetail';
+export function readSummaryDetailPref(): boolean {
+  try { return localStorage.getItem(SUMMARY_DETAIL_KEY) === '1'; } catch { return false; }
+}
+export function writeSummaryDetailPref(v: boolean) {
+  try { localStorage.setItem(SUMMARY_DETAIL_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+}

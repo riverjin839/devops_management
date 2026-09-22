@@ -1,4 +1,5 @@
 export { SummarySection } from './SummarySection';
+export { SummaryStrip } from './SummaryStrip';
 export { PodCapacityStatusCards } from './PodCapacityStatusCards';
 export { PodScheduleCalc } from './PodScheduleCalc';
 export { NodesView } from './NodesView';
@@ -6,6 +7,10 @@ export { NamespacesView } from './NamespacesView';
 export { NsRankingView } from './NsRankingView';
 export { EfficiencyTab } from './EfficiencyTab';
 export { EfficiencyRunLog } from './EfficiencyRunLog';
+export { AllocDetailDialog } from './AllocDetailDialog';
+export type { AllocDetailTarget } from './AllocDetailDialog';
+export * from './drilldown';
+export * from './podGroup';
 export * from './effUtils';
 export * from './format';
 export * from './primitives';

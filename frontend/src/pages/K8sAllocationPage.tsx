@@ -11,8 +11,10 @@ import { EmptyState, SnapshotProgressBar, ExportMenu } from '@/components/common
 import { useClusters } from '@/hooks/useCluster';
 import { useAllocProgress, useForceAllocRefresh } from '@/hooks/useK8sAllocation';
 import {
-  SummarySection, PodCapacityStatusCards, NodesView, NamespacesView, NsRankingView, EfficiencyTab, csvCluster,
+  SummarySection, SummaryStrip, PodCapacityStatusCards, NodesView, NamespacesView, NsRankingView,
+  EfficiencyTab, AllocDetailDialog, csvCluster, readSummaryDetailPref, writeSummaryDetailPref,
 } from '@/components/k8s-allocation';
+import type { AllocDetailTarget } from '@/components/k8s-allocation';
 
 // 자동갱신 간격 옵션 (ms). false = 끔.
 const AUTO_OPTIONS: { label: string; ms: number | false }[] = [
@@ -32,6 +34,12 @@ export function K8sAllocationPage() {
   const { clusterId, selectCluster } = useClusterRouteParam('/k8s-allocation', clusters);
   const [view, setView] = useState<ViewMode>('nodes');
   const [autoMs, setAutoMs] = useState<number | false>(false);
+  // 요약은 압축 스트립이 기본 — 큰 카드는 선택적으로만 펼친다(탭을 화면 위쪽에 두기 위함).
+  const [summaryDetail, setSummaryDetail] = useState<boolean>(() => readSummaryDetailPref());
+  const toggleSummaryDetail = () => setSummaryDetail((prev) => { writeSummaryDetailPref(!prev); return !prev; });
+  // 노드/네임스페이스 클릭 → 대상의 실제 리소스(워크로드·파드·컨테이너) 할당 vs 사용 상세.
+  // 세 탭이 같은 다이얼로그를 열도록 상태를 페이지에 둔다.
+  const [detailTarget, setDetailTarget] = useState<AllocDetailTarget>(null);
 
   // 페이지 레벨은 진행 메타만 구독(select) — 1.5초 폴링마다 페이지 전체가 리렌더되지 않게.
   const progQ = useAllocProgress(clusterId);
@@ -54,9 +62,9 @@ export function K8sAllocationPage() {
   }, [autoMs, clusterId, forceRefresh]);
 
   return (
-    <div className="app-min-h-screen bg-background py-3 pr-3">
+    <div className="app-min-h-screen bg-background py-2 pr-3">
       <div className="flex gap-3">
-        <div className="sticky top-3 self-start">
+        <div className="sticky top-2 self-start">
           <ClusterSidebar
             clusters={clusters}
             selectedId={clusterId || null}
@@ -65,7 +73,7 @@ export function K8sAllocationPage() {
           />
         </div>
 
-        <div ref={contentRef} className="flex-1 min-w-0 space-y-2">
+        <div ref={contentRef} className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center gap-3 flex-wrap">
             <Link to="/cluster-overview" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
               <ArrowLeft className="w-4 h-4" /> 클러스터 현황
@@ -106,7 +114,7 @@ export function K8sAllocationPage() {
           {/* 진행률/안내 슬롯 — 높이를 항상 확보해 두고 내용만 바꾼다(조건부 mount 로 아래
               내용이 위아래로 밀리던 흔들림 방지). 집계 중엔 진행바, 아니면 partial/stale 안내. */}
           {clusterId && (
-            <div className="min-h-8" aria-live="polite">
+            <div aria-live="polite">
               {computing ? (
                 <SnapshotProgressBar
                   processed={prog?.processed ?? 0}
@@ -115,7 +123,7 @@ export function K8sAllocationPage() {
                   label="자원 누적 집계 중"
                 />
               ) : (prog?.partial || prog?.stale) ? (
-                <div className="flex items-center gap-1.5 text-xs text-status-warning h-8">
+                <div className="flex items-center gap-1.5 text-xs text-status-warning py-1">
                   <AlertTriangle className="w-3.5 h-3.5" />
                   {prog?.partial
                     ? '일부만 집계된 잠정 결과입니다 — API 응답 지연/절단으로 재집계가 자동으로 재시도됩니다.'
@@ -129,31 +137,46 @@ export function K8sAllocationPage() {
             <MacCard><EmptyState title="클러스터를 선택하세요" description="좌측에서 클러스터를 고르면 자원 현황이 표시됩니다." /></MacCard>
           ) : (
             <>
-              <SummarySection clusterId={clusterId} />
-              <PodCapacityStatusCards clusterId={clusterId} />
+              <SummaryStrip clusterId={clusterId} expanded={summaryDetail} onToggle={toggleSummaryDetail} />
+              {summaryDetail && (
+                <>
+                  <SummarySection clusterId={clusterId} />
+                  <PodCapacityStatusCards clusterId={clusterId} />
+                </>
+              )}
 
-              <div className="inline-flex rounded-xl border border-border bg-card p-1">
-                {([
-                  ['nodes', '노드별 자원', <Server key="i" className="w-4 h-4" />],
-                  ['namespaces', '네임스페이스별 자원', <Layers key="i" className="w-4 h-4" />],
-                  ['ns-ranking', '네임스페이스 비효율 랭킹', <BarChart3 key="i" className="w-4 h-4" />],
-                  ['efficiency', '효율화', <Sparkles key="i" className="w-4 h-4" />],
-                ] as [ViewMode, string, ReactNode][]).map(([k, l, icon]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setView(k)}
-                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 ${view === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
-                    {icon} {l}
-                  </button>
-                ))}
+              {/* 탭 바는 sticky — 긴 표를 스크롤해도 화면 전환이 항상 손 닿는 곳에 남는다. */}
+              <div className="sticky top-0 z-20 py-1 bg-background" data-export-ignore>
+                <div className="inline-flex rounded-xl border border-border bg-card p-1">
+                  {([
+                    ['nodes', '노드별 자원', <Server key="i" className="w-4 h-4" />],
+                    ['namespaces', '네임스페이스별 자원', <Layers key="i" className="w-4 h-4" />],
+                    ['ns-ranking', '네임스페이스 비효율 랭킹', <BarChart3 key="i" className="w-4 h-4" />],
+                    ['efficiency', '효율화', <Sparkles key="i" className="w-4 h-4" />],
+                  ] as [ViewMode, string, ReactNode][]).map(([k, l, icon]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setView(k)}
+                      className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 ${view === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      {icon} {l}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {view === 'nodes' && <NodesView clusterId={clusterId} clusterName={clusterName} />}
-              {view === 'namespaces' && <NamespacesView clusterId={clusterId} clusterName={clusterName} />}
-              {view === 'ns-ranking' && <NsRankingView clusterId={clusterId} />}
+              {view === 'nodes' && <NodesView clusterId={clusterId} clusterName={clusterName} onOpenDetail={setDetailTarget} />}
+              {view === 'namespaces' && <NamespacesView clusterId={clusterId} clusterName={clusterName} onOpenDetail={setDetailTarget} />}
+              {view === 'ns-ranking' && <NsRankingView clusterId={clusterId} onOpenDetail={setDetailTarget} />}
               {view === 'efficiency' && <EfficiencyTab clusterId={clusterId} clusterName={clusterName} />}
+
+              <AllocDetailDialog
+                clusterId={clusterId}
+                target={detailTarget}
+                clusterName={clusterName}
+                onClose={() => setDetailTarget(null)}
+              />
             </>
           )}
         </div>
