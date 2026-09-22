@@ -302,13 +302,13 @@ export function AssigneeManager() {
 
   return (
     <div className="bg-card border border-border rounded-xl">
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <UserCheck className="w-4 h-4 text-primary" />
+      <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <UserCheck className="w-4 h-4 text-primary flex-shrink-0" />
           <h2 className="font-semibold">담당자 관리</h2>
           <span className="text-sm text-muted-foreground ml-1">작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정 · 로그인 계정 겸용</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleCopyMarkdown}
             disabled={assignees.length === 0}
