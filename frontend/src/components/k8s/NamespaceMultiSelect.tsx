@@ -8,13 +8,17 @@ interface Props {
   clusterId: string;
   selected: Set<string>;            // 비어있으면 전체
   onChange: (next: Set<string>) => void;
+  /** true 면 항목 클릭 시 그 하나만 선택(다른 선택을 대체)하고 드롭다운을 바로 닫는다 — 다시
+   *  클릭하면 해제. 네임스페이스가 정확히 0개 또는 1개만 필요한 화면(예: NS 대시보드)에서 사용.
+   *  기본 false(기존 다중 토글 동작 그대로, 하위 호환). */
+  singleSelect?: boolean;
 }
 
 const PANEL_W = 240;
 
 /** OpenLens 식 네임스페이스 멀티셀렉트 드롭다운. 빈 선택 = 전체. 여러 리소스 뷰에서 공용.
  *  패널은 createPortal 로 body 에 fixed 렌더 — 부모 MacCard 의 overflow-hidden 에 잘리지 않음. */
-export function NamespaceMultiSelect({ clusterId, selected, onChange }: Props) {
+export function NamespaceMultiSelect({ clusterId, selected, onChange, singleSelect = false }: Props) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
@@ -45,12 +49,19 @@ export function NamespaceMultiSelect({ clusterId, selected, onChange }: Props) {
   }, [open]);
 
   const toggle = (ns: string) => {
+    if (singleSelect) {
+      onChange(selected.has(ns) ? new Set() : new Set([ns]));
+      setOpen(false);
+      return;
+    }
     const next = new Set(selected);
     if (next.has(ns)) next.delete(ns); else next.add(ns);
     onChange(next);
   };
 
-  const label = selected.size === 0 ? '전체 네임스페이스' : `${selected.size}개 네임스페이스`;
+  const label = selected.size === 0
+    ? '전체 네임스페이스'
+    : singleSelect ? [...selected][0] : `${selected.size}개 네임스페이스`;
 
   return (
     <>

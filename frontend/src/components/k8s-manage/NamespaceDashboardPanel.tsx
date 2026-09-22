@@ -8,7 +8,7 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { Boxes, Settings as SettingsIcon, Network, Database, LayoutGrid, Rows3 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { EmptyState, Skeleton } from '@/components/common';
-import { NamespaceSingleSelect } from '@/components/common/NamespaceSingleSelect';
+import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
 import { k8sResourcesApi } from '@/services/api';
 import { ResourceTablePanel, PodsPanel } from '@/pages/K8sManagePage';
 import type { K8sResourceCapability, K8sResourceRow, K8sPodRichRow, KindAvailabilityInfo } from '@/types';
@@ -114,6 +114,7 @@ interface NamespaceDashboardPanelProps {
 export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
   const { clusterId, caps, avail, onOpenDetail, onScale, onRestart, onDelete, onTerminal } = p;
   const [ns, setNs] = useState('');
+  const nsSet = useMemo(() => new Set(ns ? [ns] : []), [ns]);
   const [mode, setMode] = useState<'tab' | 'list'>('tab');
   const [activeCat, setActiveCat] = useState<CatId>('workload');
   const [activeKind, setActiveKind] = useState<string | null>(null);
@@ -162,7 +163,10 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
     <div className="space-y-3">
       <MacCard title="네임스페이스 선택" bodyPadding="p-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <NamespaceSingleSelect clusterId={clusterId} value={ns} onChange={(v) => { setNs(v); setActiveKind(null); }} className="w-64" />
+          <NamespaceMultiSelect
+            clusterId={clusterId} selected={nsSet} singleSelect
+            onChange={(next) => { setNs([...next][0] ?? ''); setActiveKind(null); }}
+          />
           {ns && <span className="text-xs text-muted-foreground">종류 {flatKinds.length}개 · 리소스 {totalCount}개</span>}
           <div className="ml-auto inline-flex rounded-xl border border-border p-0.5 bg-secondary/30">
             <button type="button" onClick={() => setMode('tab')}
@@ -181,17 +185,17 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
         <MacCard bodyPadding="p-0">
           <EmptyState title="네임스페이스를 선택하세요" description="위에서 네임스페이스를 고르면 그 안의 workload/config/network/storage 리소스가 한 화면에 모입니다." />
         </MacCard>
-      ) : (
-        <>
+      ) : (() => {
+        const inventoryCard = (
           <MacCard title="리소스 인벤토리" bodyPadding="p-0">
-            <div className="grid gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30"
+            <div className="grid gap-2 px-4 py-1 text-xs font-semibold text-muted-foreground border-b border-border bg-secondary/30"
               style={{ gridTemplateColumns: 'minmax(150px,1.6fr) 110px 70px 60px 60px 60px 1fr' }}>
               <span>종류</span><span>구분</span><span className="text-right">개수</span>
               <span className="text-right">정상</span><span className="text-right">경고</span><span className="text-right">위험</span><span>비고</span>
             </div>
             {inventory.map(({ cat, kind, count, health, isLoading, isError }) => (
               <button key={kind} type="button" onClick={() => gotoKind(cat.id, kind)}
-                className={`w-full grid gap-2 px-4 py-1.5 text-sm border-b border-border/40 items-center text-left hover:bg-secondary/30 ${activeKind === kind ? 'bg-secondary/40' : ''}`}
+                className={`w-full grid gap-2 px-4 py-1 text-sm border-b border-border/40 items-center text-left hover:bg-secondary/30 ${activeKind === kind ? 'bg-secondary/40' : ''}`}
                 style={{ gridTemplateColumns: 'minmax(150px,1.6fr) 110px 70px 60px 60px 60px 1fr' }}>
                 <span className="font-medium truncate">{KIND_LABEL[kind] ?? kind}</span>
                 <span className="flex items-center gap-1.5 text-muted-foreground truncate">
@@ -221,13 +225,15 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                 )}
               </button>
             ))}
-            <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
-              행 클릭 시 아래 상세 목록으로 이동합니다.
+            <div className="px-4 py-1 text-xs text-muted-foreground border-t border-border">
+              행 클릭 시 해당 종류의 상세 목록으로 이동합니다.
             </div>
           </MacCard>
+        );
 
-          <div id="nsdash-detail" />
-          {mode === 'tab' ? (
+        return mode === 'tab' ? (
+          <>
+            <div id="nsdash-detail" />
             <Tabs.Root value={activeCat} onValueChange={(v) => { setActiveCat(v as CatId); setActiveKind(null); }}>
               <Tabs.List className="flex gap-1 mb-2 border-b border-border">
                 {CATS.map((cat) => (
@@ -264,7 +270,11 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                 );
               })}
             </Tabs.Root>
-          ) : (
+            {inventoryCard}
+          </>
+        ) : (
+          <>
+            {inventoryCard}
             <div className="space-y-4">
               {CATS.map((cat) => {
                 const kinds = cat.kinds.filter(isVisible);
@@ -286,9 +296,9 @@ export function NamespaceDashboardPanel(p: NamespaceDashboardPanelProps) {
                 );
               })}
             </div>
-          )}
-        </>
-      )}
+          </>
+        );
+      })()}
     </div>
   );
 }
