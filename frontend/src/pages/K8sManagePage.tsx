@@ -5,6 +5,7 @@ import {
   ArrowLeft, Boxes, Server, Settings as SettingsIcon, Network, Database, Layers,
   ScrollText, Package, ShieldCheck, Puzzle, Trash2, RotateCw, Scaling, Terminal,
   FileCode, Pencil, Save, X, Search, RefreshCw, Ban, CheckCircle2, AlertTriangle,
+  ChevronRight,
 } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import * as Tabs from '@radix-ui/react-tabs';
@@ -50,6 +51,12 @@ const NAV: NavCat[] = [
   { id: 'cluster', label: 'Cluster', icon: Layers, leaves: [{ id: 'overview', label: '개요', mode: 'overview' }] },
   { id: 'nodes', label: 'Nodes', icon: Server, leaves: [{ id: 'nodes', label: 'Nodes', mode: 'kind', kind: 'nodes' }] },
   {
+    id: 'namespaces', label: 'Namespaces', icon: Layers, leaves: [
+      { id: 'namespaces', label: '목록', mode: 'kind', kind: 'namespaces' },
+      { id: 'ns-dashboard', label: '대시보드', mode: 'nsdash' },
+    ],
+  },
+  {
     id: 'workloads', label: 'Workloads', icon: Boxes, leaves: [
       { id: 'pods', label: 'Pods', mode: 'kind', kind: 'pods' },
       { id: 'deployments', label: 'Deployments', mode: 'kind', kind: 'deployments' },
@@ -93,12 +100,6 @@ const NAV: NavCat[] = [
       { id: 'pvc', label: 'Persistent Volume Claims', mode: 'kind', kind: 'persistentvolumeclaims' },
       { id: 'persistentvolumes', label: 'Persistent Volumes', mode: 'kind', kind: 'persistentvolumes' },
       { id: 'storageclasses', label: 'Storage Classes', mode: 'kind', kind: 'storageclasses' },
-    ],
-  },
-  {
-    id: 'namespaces', label: 'Namespaces', icon: Layers, leaves: [
-      { id: 'namespaces', label: '목록', mode: 'kind', kind: 'namespaces' },
-      { id: 'ns-dashboard', label: '대시보드', mode: 'nsdash' },
     ],
   },
   { id: 'events', label: 'Events', icon: ScrollText, leaves: [{ id: 'events', label: 'Events', mode: 'events' }] },
@@ -170,6 +171,23 @@ export function K8sManagePage() {
   const cluster = clusters.find((c) => c.id === clusterId);
 
   const [activeLeaf, setActiveLeaf] = useState('pods');
+  // 좌측 내비 대분류 접기 — 마지막 저장 상태를 localStorage 에 유지(useColumnPrefs 와 동일 패턴).
+  const NAV_COLLAPSE_KEY = 'pep:k8s:navCollapsed';
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(NAV_COLLAPSE_KEY);
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch { /* 손상된 값 → 기본 전체 펼침 */ }
+    return new Set();
+  });
+  const toggleCatCollapse = (catId: string) => {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId); else next.add(catId);
+      try { localStorage.setItem(NAV_COLLAPSE_KEY, JSON.stringify([...next])); } catch { /* quota 등 → 세션 내 상태만 유지 */ }
+      return next;
+    });
+  };
   const [selectedNs, setSelectedNs] = useState<Set<string>>(new Set()); // 비어있으면 전체
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<DetailTarget | null>(null);
@@ -290,7 +308,7 @@ export function K8sManagePage() {
         {/* Lens 식 카테고리 내비 */}
         <div className="sticky top-4 self-start w-52 flex-shrink-0">
           <MacCard title="K8S 상세 관리" bodyPadding="p-2">
-            <nav className="space-y-2">
+            <nav className="space-y-1">
               {visibleCats.map((cat) => {
                 const Icon = cat.icon;
                 const single = cat.leaves.length === 1;
@@ -301,37 +319,48 @@ export function K8sManagePage() {
                     <button
                       key={cat.id}
                       onClick={() => { setActiveLeaf(lf.id); setSelectedCrd(null); }}
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-medium ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary/60'}`}
+                      className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-sm font-medium ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary/60'}`}
                     >
                       <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                       <span className="truncate">{cat.label}</span>
                     </button>
                   );
                 }
+                const isActiveInCat = cat.leaves.some((lf) => lf.id === activeLeaf);
+                const isCollapsed = collapsedCats.has(cat.id) && !isActiveInCat;
                 return (
                   <div key={cat.id}>
-                    <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
-                      <Icon className="w-3 h-3" /> {cat.label}
-                    </div>
-                    <div className="space-y-0.5">
-                      {cat.leaves.map((lf) => {
-                        const active = activeLeaf === lf.id;
-                        const cnt = lf.kind ? avail?.[lf.kind]?.count : undefined;
-                        const more = lf.kind ? avail?.[lf.kind]?.truncated : false;
-                        return (
-                          <button
-                            key={lf.id}
-                            onClick={() => { setActiveLeaf(lf.id); setSelectedCrd(null); }}
-                            className={`w-full flex items-center gap-1 pl-7 pr-2 py-1 rounded-lg text-sm ${active ? 'bg-primary/15 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary/60'}`}
-                          >
-                            <span className="flex-1 text-left truncate">{lf.label}</span>
-                            {cnt != null && (
-                              <span className="text-[10px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleCatCollapse(cat.id)}
+                      aria-expanded={!isCollapsed}
+                      className="w-full flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 hover:text-foreground hover:bg-secondary/40"
+                    >
+                      <Icon className="w-3 h-3 flex-shrink-0" />
+                      <span className="flex-1 text-left truncate">{cat.label}</span>
+                      <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                    </button>
+                    {!isCollapsed && (
+                      <div>
+                        {cat.leaves.map((lf) => {
+                          const active = activeLeaf === lf.id;
+                          const cnt = lf.kind ? avail?.[lf.kind]?.count : undefined;
+                          const more = lf.kind ? avail?.[lf.kind]?.truncated : false;
+                          return (
+                            <button
+                              key={lf.id}
+                              onClick={() => { setActiveLeaf(lf.id); setSelectedCrd(null); }}
+                              className={`w-full flex items-center gap-1 pl-7 pr-2 py-0.5 rounded-lg text-sm ${active ? 'bg-primary/15 text-primary font-semibold' : 'text-muted-foreground hover:bg-secondary/60'}`}
+                            >
+                              <span className="flex-1 text-left truncate">{lf.label}</span>
+                              {cnt != null && (
+                                <span className="text-[10px] tabular-nums rounded-full bg-secondary px-1.5 py-0.5 text-muted-foreground">{cnt}{more ? '+' : ''}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}

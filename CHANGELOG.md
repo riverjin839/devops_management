@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.35.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.35.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **K8S 자원 관리 — 노드/네임스페이스 클릭 시 실제 리소스 할당·사용 상세**: 노드별 자원 ·
@@ -21,6 +21,18 @@
   (`spec.nodeName` field-selector, 파드 행 빌더를 NS 드릴다운과 공유, NS 수에 따라 metrics 조회
   전략 전환 — `K8S_ALLOC_NODE_DRILL_NS_MAX`). Frontend: `AllocDetailDialog`·`drilldown.tsx`·
   `podGroup.ts`(신규), `useAllocNodePods`.
+
+### Changed
+- **K8S 자원 관리 — 요약 영역 압축으로 자원 탭을 화면 중앙에**: 큰 요약 카드 7장 + POD 용량/상태
+  카드 2장이 세로를 다 먹어 정작 봐야 할 "노드별 자원 / 네임스페이스별 자원" 탭이 접히는 선 아래로
+  밀려 잘려 보이던 문제를 고쳤다. 기본 화면은 노드/NS/파드·할당·사용효율·여유·낭비·Pod 상태를
+  **칩 한 줄로 압축한 요약 스트립**이고, 기존 큰 카드는 `요약 상세` 토글(선택 유지)로만 펼친다.
+  탭 바는 sticky 로 바꿔 긴 표를 스크롤해도 화면 전환이 남는다. Frontend: `SummaryStrip`(신규),
+  `K8sAllocationPage.tsx`.
+
+## [1.35.1] - 2026-09-22
+
+### Added
 - **K8S 상세관리 — 네임스페이스 대시보드**: 종류(Workload/Config/Network/Storage) 기준 탐색과
   별도로, `/k8s-manage`의 **Namespaces → 대시보드**에서 네임스페이스 하나를 고르면 그 안의
   workload/config/network/storage 리소스 전체가 엑셀 스타일 인벤토리 표(종류/구분/개수/정상/
@@ -44,12 +56,17 @@
   Frontend: `components/platform-status/CheckMatrixItemFormModal.tsx`.
 
 ### Changed
-- **K8S 자원 관리 — 요약 영역 압축으로 자원 탭을 화면 중앙에**: 큰 요약 카드 7장 + POD 용량/상태
-  카드 2장이 세로를 다 먹어 정작 봐야 할 "노드별 자원 / 네임스페이스별 자원" 탭이 접히는 선 아래로
-  밀려 잘려 보이던 문제를 고쳤다. 기본 화면은 노드/NS/파드·할당·사용효율·여유·낭비·Pod 상태를
-  **칩 한 줄로 압축한 요약 스트립**이고, 기존 큰 카드는 `요약 상세` 토글(선택 유지)로만 펼친다.
-  탭 바는 sticky 로 바꿔 긴 표를 스크롤해도 화면 전환이 남는다. Frontend: `SummaryStrip`(신규),
-  `K8sAllocationPage.tsx`.
+- **K8S 상세관리 — 좌측 내비 접기 + 네임스페이스 대시보드 다듬기**: `/k8s-manage` 좌측 카테고리
+  내비에 **대분류 접기/펼치기**가 생겼다 — 마지막으로 접거나 편 상태가 브라우저에 저장돼 다음
+  방문 때도 그대로 유지되고, 지금 보고 있는 리프가 속한 카테고리는 접혀 있어도 자동으로 펼쳐
+  보인다. **Namespaces** 카테고리는 자주 쓰는 위치인 **Nodes 바로 아래**로 옮겼다. 네임스페이스
+  대시보드(Namespaces → 대시보드)는 네임스페이스 선택기를 종류별 탐색 화면과 같은 "전체
+  네임스페이스" 버튼 + 검색 드롭다운 형태로 통일했고, **탭 드릴인형** 레이아웃에서는 탭(실제
+  작업 영역)이 먼저 보이고 리소스 인벤토리 표는 그 아래로 위치가 바뀌었다(전체 나열형은 인벤토리
+  표가 위인 기존 순서 그대로). 좌측 메뉴·인벤토리 표 행간도 더 촘촘하게 좁혔다. Frontend:
+  `K8sManagePage.tsx`(NAV 순서, `collapsedCats` state + `localStorage`(`pep:k8s:navCollapsed`)),
+  `NamespaceMultiSelect.tsx`(`singleSelect?` prop 추가), `NamespaceDashboardPanel.tsx`(필터
+  컴포넌트 교체 + 인벤토리 위치 모드별 재배치). 백엔드 변경 없음.
 - **Main UI 간소화 — 사이드바 opt-in 앱 카탈로그 + 홈 KPI 스트립 제거**: 좌측 사이드바가
   플랫폼 그룹을 전부 항상 보여주던 것에서, 사용자가 카드형 "앱 추가" 다이얼로그에서 필요한
   것만 골라 설치(opt-in)하는 방식으로 바뀌었다 — 신규 계정은 완전히 빈 레일 + "+" 버튼으로
@@ -89,6 +106,10 @@
   에 매핑이 없어 미인식 클래스로 조용히 무시되고 있었다 — 배경이 실제로는 완전 투명이었다.
   `tailwind.config.js` 에 `popover` 색상 토큰(기존 `index.css` 의 `--popover` 변수를 그대로
   연결)을 추가해 해결.
+- **설정 ▸ 시스템 담당자(사용자 관리) 박스가 좁은 화면에서 잘려 보이던 문제**: `AssigneeManager`
+  헤더 줄(제목+설명 + 4개 액션 버튼)이 줄바꿈 없이 한 줄로 강제돼, 화면이 좁으면 버튼이 카드
+  밖으로 밀려나 잘려 보였다. 헤더를 `flex-wrap` 으로 바꿔 좁은 화면에서 자연스럽게 줄바꿈되게
+  수정. Frontend: `components/settings/AssigneeManager.tsx`.
 
 ## [1.35.0] - 2026-09-16
 
