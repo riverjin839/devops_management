@@ -85,6 +85,10 @@ _STUCK_TIMEOUT = _envf("K8S_ALLOC_STUCK_TIMEOUT", 1800.0)
 # 잔존(BE-14)을 막는다. 만료 항목 정리 후에도 상한을 넘으면 가장 오래된 항목부터 퇴출.
 _CACHE_TTL = 20.0
 _CACHE_MAX = int(_envf("K8S_ALLOC_DRILL_CACHE_MAX", 256))
+# 노드 드릴다운에서 이 수 이하의 네임스페이스가 걸려 있으면 NS 단위 metrics/ReplicaSet 조회
+# (정확 + NS 드릴다운과 캐시 공유), 초과하면 cluster-wide metrics 1회 + 이름 기반 워크로드
+# 근사로 전환한다 — NS 가 흩어진 노드에서 호출 수가 선형으로 늘지 않게.
+_NODE_DRILL_NS_MAX = int(_envf("K8S_ALLOC_NODE_DRILL_NS_MAX", 12))
 _CACHE: dict[str, tuple[float, Any]] = {}
 _CACHE_LOCK = threading.Lock()
 
@@ -477,6 +481,10 @@ class PodAllocRow(BaseModel):
     mem_lim_b: int = 0
     cpu_usage_m: Optional[int] = None
     mem_usage_b: Optional[int] = None
+    # 상위 워크로드 귀속 — 노드 드릴다운(여러 NS 가 섞임)에서 Deployment/STS/DS 단위로 묶기
+    # 위해 채운다. NS 드릴다운은 이미 워크로드로 필터한 뒤라 동일 값이 들어간다.
+    owner_kind: Optional[str] = None
+    owner_name: Optional[str] = None
 
 
 # ── 공유 스냅샷 (노드 + 네임스페이스 집계) ──────────────────────────────────────────
@@ -988,6 +996,48 @@ def allocation_workloads(cluster_id: UUID, namespace: str, db: Session = Depends
         return {"count": len(rows), "items": rows, "metrics_available": bool(pusage)}
 
 
+def _pod_alloc_row(p, namespace: str, pusage: dict, rs_map: dict) -> PodAllocRow:
+    """Pod 객체 → PodAllocRow(컨테이너 단위 request/limit/usage + 상위 워크로드 귀속).
+
+    네임스페이스 드릴다운(allocation_pods)과 노드 드릴다운(allocation_node_pods)이 공유한다 —
+    한쪽만 사이드카 합산/usage 매칭 규칙이 달라지면 같은 파드가 화면마다 다르게 보인다.
+    """
+    cmap = (pusage.get((namespace, p.metadata.name)) or {}).get("containers", {})
+    cells: list[ContainerAllocCell] = []
+    prc = prm = plc = plm = puc = pum = 0
+    has_usage = False
+    # 사이드카(init, restartPolicy=Always)도 상주 컨테이너이므로 일반 컨테이너와
+    # 함께 표시·합산한다(_pod_effective_resources 의 총합과 정합성 유지).
+    display_containers = list(p.spec.containers if p.spec else [])
+    display_containers += _sidecar_containers(p.spec)
+    for c in display_containers:
+        res = getattr(c, "resources", None)
+        req = (res.requests or {}) if res else {}
+        lim = (res.limits or {}) if res else {}
+        crc, crm = _cpu_m(req.get("cpu")), _mem_b(req.get("memory"))
+        clc, clm = _cpu_m(lim.get("cpu")), _mem_b(lim.get("memory"))
+        cu = cmap.get(c.name)
+        cells.append(ContainerAllocCell(
+            name=c.name, cpu_req_m=crc, mem_req_b=crm, cpu_lim_m=clc, mem_lim_b=clm,
+            cpu_usage_m=(cu[0] if cu else None), mem_usage_b=(cu[1] if cu else None),
+            has_requests=(crc > 0 or crm > 0),
+        ))
+        prc += crc; prm += crm; plc += clc; plm += clm
+        if cu:
+            puc += cu[0]; pum += cu[1]; has_usage = True
+    okind, oname = _top_owner(p, rs_map)
+    return PodAllocRow(
+        name=p.metadata.name, namespace=namespace,
+        node=(p.spec.node_name if p.spec else None),
+        qos=(p.status.qos_class if p.status else None),
+        phase=(p.status.phase if p.status else "-") or "-",
+        containers=cells,
+        cpu_req_m=prc, mem_req_b=prm, cpu_lim_m=plc, mem_lim_b=plm,
+        cpu_usage_m=(puc if has_usage else None), mem_usage_b=(pum if has_usage else None),
+        owner_kind=okind, owner_name=oname,
+    )
+
+
 @router.get("/{cluster_id}/allocation/namespaces/{namespace}/workloads/{kind}/{name}/pods")
 def allocation_pods(
     cluster_id: UUID,
@@ -1020,37 +1070,61 @@ def allocation_pods(
             ok, on = _top_owner(p, rs_map)
             if ok != kind or on != name:
                 continue
-            cmap = (pusage.get((namespace, p.metadata.name)) or {}).get("containers", {})
-            cells: list[ContainerAllocCell] = []
-            prc = prm = plc = plm = puc = pum = 0
-            has_usage = False
-            # 사이드카(init, restartPolicy=Always)도 상주 컨테이너이므로 일반 컨테이너와
-            # 함께 표시·합산한다(_pod_effective_resources 의 총합과 정합성 유지).
-            display_containers = list(p.spec.containers if p.spec else [])
-            display_containers += _sidecar_containers(p.spec)
-            for c in display_containers:
-                res = getattr(c, "resources", None)
-                req = (res.requests or {}) if res else {}
-                lim = (res.limits or {}) if res else {}
-                crc, crm = _cpu_m(req.get("cpu")), _mem_b(req.get("memory"))
-                clc, clm = _cpu_m(lim.get("cpu")), _mem_b(lim.get("memory"))
-                cu = cmap.get(c.name)
-                cells.append(ContainerAllocCell(
-                    name=c.name, cpu_req_m=crc, mem_req_b=crm, cpu_lim_m=clc, mem_lim_b=clm,
-                    cpu_usage_m=(cu[0] if cu else None), mem_usage_b=(cu[1] if cu else None),
-                    has_requests=(crc > 0 or crm > 0),
-                ))
-                prc += crc; prm += crm; plc += clc; plm += clm
-                if cu:
-                    puc += cu[0]; pum += cu[1]; has_usage = True
-            rows.append(PodAllocRow(
-                name=p.metadata.name, namespace=namespace,
-                node=(p.spec.node_name if p.spec else None),
-                qos=(p.status.qos_class if p.status else None),
-                phase=(p.status.phase if p.status else "-") or "-",
-                containers=cells,
-                cpu_req_m=prc, mem_req_b=prm, cpu_lim_m=plc, mem_lim_b=plm,
-                cpu_usage_m=(puc if has_usage else None), mem_usage_b=(pum if has_usage else None),
-            ))
+            rows.append(_pod_alloc_row(p, namespace, pusage, rs_map))
         rows.sort(key=lambda r: r.name)
         return {"count": len(rows), "items": rows, "metrics_available": bool(pusage)}
+
+
+@router.get("/{cluster_id}/allocation/nodes/{node}/pods")
+def allocation_node_pods(cluster_id: UUID, node: str, db: Session = Depends(get_db)):
+    """노드에 스케줄된 파드 + 컨테이너 단위 request/limit/usage (+ 상위 워크로드 귀속).
+
+    "노드별 자원" 탭에서 노드를 클릭했을 때 그 노드가 실제로 어떤 리소스(Deployment/STS/DS/
+    Pod …)를 얼마나 잡아두고(request/limit) 얼마나 쓰는지(usage) 보여주기 위한 드릴다운.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    cid = str(cluster_id)
+    with _api(cluster) as client:
+        core = k8s_client.CoreV1Api(client)
+        apps = k8s_client.AppsV1Api(client)
+        # 서버측 field_selector 로 이 노드 파드만 — 전량 순회/전송을 피한다.
+        selector = f"spec.nodeName={node},{_ACTIVE_FIELD_SELECTOR}"
+        try:
+            pods = _cached(
+                f"{cid}:nodepods:{node}",
+                lambda: _list_all(core.list_pod_for_all_namespaces, field_selector=selector),
+            )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"파드 조회 실패: {str(e)[:200]}") from e
+
+        pods = [p for p in pods
+                if (p.status.phase if p.status else None) in _ACTIVE_PHASES and p.metadata]
+        namespaces = sorted({p.metadata.namespace for p in pods})
+
+        # usage: NS 가 적으면 NS 단위(캐시를 NS 드릴다운과 공유), 많으면 cluster-wide 1회.
+        # NS 수만큼 metrics 를 치면 NS 가 흩어진 노드에서 응답이 선형으로 느려진다.
+        pusage: dict[tuple[str, str], dict] = {}
+        small = len(namespaces) <= _NODE_DRILL_NS_MAX
+        if namespaces and small:
+            for ns in namespaces:
+                pusage.update(_cached(f"{cid}:nspu:{ns}", lambda ns=ns: _pod_usage(client, ns)))
+        elif namespaces:
+            pusage = _cached(f"{cid}:pu:all", lambda: _pod_usage(client))
+
+        # ownerRef → 상위 워크로드. NS 가 많으면 RS 전량 조회 대신 이름 해시 strip 근사
+        # (_top_owner 가 rs_map 미스 시 Deployment 명을 추정한다).
+        rs_maps: dict[str, dict] = {}
+        if small:
+            for ns in namespaces:
+                rs_maps[ns] = _cached(f"{cid}:rs:{ns}", lambda ns=ns: _build_rs_owner_map(apps, ns))
+
+        rows = [_pod_alloc_row(p, p.metadata.namespace, pusage, rs_maps.get(p.metadata.namespace, {}))
+                for p in pods]
+        rows.sort(key=lambda r: (-r.cpu_req_m, r.namespace, r.name))
+        return {
+            "node": node,
+            "count": len(rows),
+            "namespace_count": len(namespaces),
+            "items": rows,
+            "metrics_available": bool(pusage),
+        }

@@ -15,6 +15,7 @@ import {
 import { CsvButton, EffBadge, MeterBar, SearchInput, SortableTh, StatTooltip, UtilPct } from './primitives';
 import { nextSort, useTableSort } from './tableSort';
 import type { SortState } from './tableSort';
+import type { AllocDetailTarget } from './AllocDetailDialog';
 
 // 이 수를 넘으면 가상 스크롤(고정 높이 뷰포트)로 전환한다. 작은 클러스터는 종전처럼 전량 렌더.
 const VIRTUALIZE_AT = 48;
@@ -68,13 +69,21 @@ const GaugeRow = memo(function GaugeRow({ label, alloc, req, lim, usage }: {
 });
 
 // ── 노드 카드 / 테이블 행 (memo — 폴링 시 바뀐 노드만 리렌더) ────────────────────
-const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing }: {
+const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing, onOpenDetail }: {
   n: AllocNodeRow; onRefresh: (name: string) => void; refreshing: boolean;
+  onOpenDetail: (name: string) => void;
 }) {
   return (
     <div className="rounded-lg border border-border bg-card/50 p-2.5 h-full">
       <div className="flex items-center justify-between mb-1">
-        <div className="font-medium text-sm truncate" title={n.name}>{n.name}</div>
+        <button
+          type="button"
+          onClick={() => onOpenDetail(n.name)}
+          title={`${n.name} — 이 노드의 리소스(파드/워크로드) 할당·사용 상세 보기`}
+          className="font-medium text-sm truncate text-left hover:text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+        >
+          {n.name}
+        </button>
         <div className="flex items-center gap-1 shrink-0 ml-1.5">
           <span className="text-xs text-muted-foreground">{n.roles.join(',')}</span>
           {n.unschedulable && <span className="text-xs text-status-warning">cordoned</span>}
@@ -103,14 +112,22 @@ const NodeCard = memo(function NodeCard({ n, onRefresh, refreshing }: {
 });
 
 const CELL = 'px-3 py-2 border-t border-border align-middle';
-const NodeRowCells = memo(function NodeRowCells({ n, onRefresh, refreshing }: {
+const NodeRowCells = memo(function NodeRowCells({ n, onRefresh, refreshing, onOpenDetail }: {
   n: AllocNodeRow; onRefresh: (name: string) => void; refreshing: boolean;
+  onOpenDetail: (name: string) => void;
 }) {
   return (
     <>
       <td className={CELL}>
         <div className="flex items-center gap-1.5">
-          <span className="font-medium">{n.name}</span>
+          <button
+            type="button"
+            onClick={() => onOpenDetail(n.name)}
+            title={`${n.name} — 이 노드의 리소스(파드/워크로드) 할당·사용 상세 보기`}
+            className="font-medium text-left hover:text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+          >
+            {n.name}
+          </button>
           <button
             type="button"
             onClick={() => onRefresh(n.name)}
@@ -164,7 +181,9 @@ const GridList = forwardRef<HTMLDivElement, GridListProps & { context: GridCtx }
 );
 const GRID_COMPONENTS: GridComponents<GridCtx> = { List: GridList };
 
-export function NodesView({ clusterId, clusterName }: { clusterId: string; clusterName?: string }) {
+export function NodesView({ clusterId, clusterName, onOpenDetail }: {
+  clusterId: string; clusterName?: string; onOpenDetail: (t: AllocDetailTarget) => void;
+}) {
   const { data, isLoading, isError, error, refetch, isFetching } = useAllocNodes(clusterId);
   const refreshNode = useRefreshAllocNode(clusterId);
   const [sort, setSort] = useState<SortState>({ key: 'cpuSlackM', dir: 'desc' });
@@ -190,6 +209,7 @@ export function NodesView({ clusterId, clusterName }: { clusterId: string; clust
   const gridCtx = useMemo<GridCtx>(() => ({ cols: gridCols }), [gridCols]);
 
   const onRefreshNode = useCallback((name: string) => { refreshNode.mutate(name); }, [refreshNode]);
+  const openNodeDetail = useCallback((name: string) => onOpenDetail({ scope: 'node', name }), [onOpenDetail]);
   const refreshingName = refreshNode.isPending ? refreshNode.variables : undefined;
 
   const exportCsv = useCallback(() => {
@@ -245,13 +265,13 @@ export function NodesView({ clusterId, clusterName }: { clusterId: string; clust
         context={gridCtx}
         components={GRID_COMPONENTS}
         computeItemKey={(_i, n) => n.name}
-        itemContent={(_i, n) => <NodeCard n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} />}
+        itemContent={(_i, n) => <NodeCard n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} onOpenDetail={openNodeDetail} />}
       />
     ) : (
       <div className="p-3 overflow-x-auto">
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(min(220px, 100%), 1fr))` }}>
           {rows.map((n) => (
-            <NodeCard key={n.name} n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} />
+            <NodeCard key={n.name} n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} onOpenDetail={openNodeDetail} />
           ))}
         </div>
       </div>
@@ -264,7 +284,7 @@ export function NodesView({ clusterId, clusterName }: { clusterId: string; clust
         components={TABLE_COMPONENTS}
         computeItemKey={(_i, n) => n.name}
         fixedHeaderContent={() => headerRow}
-        itemContent={(_i, n) => <NodeRowCells n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} />}
+        itemContent={(_i, n) => <NodeRowCells n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} onOpenDetail={openNodeDetail} />}
       />
     ) : (
       <div className="overflow-x-auto">
@@ -273,7 +293,7 @@ export function NodesView({ clusterId, clusterName }: { clusterId: string; clust
           <tbody>
             {rows.map((n) => (
               <tr key={n.name} className="hover:bg-muted/10">
-                <NodeRowCells n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} />
+                <NodeRowCells n={n} onRefresh={onRefreshNode} refreshing={refreshingName === n.name} onOpenDetail={openNodeDetail} />
               </tr>
             ))}
           </tbody>
@@ -308,6 +328,7 @@ export function NodesView({ clusterId, clusterName }: { clusterId: string; clust
             </button>
           </div>
           <SearchInput value={q} onChange={setQ} placeholder="노드 찾기" />
+          <span className="text-xs text-muted-foreground">노드명을 클릭하면 그 노드의 리소스 상세가 열립니다</span>
           {viewStyle === 'table' && (
             <span className="text-xs text-muted-foreground inline-flex items-center">
               열 머리글을 클릭해 정렬

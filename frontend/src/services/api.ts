@@ -2552,6 +2552,12 @@ export const k8sAllocationApi = {
       `/k8s/${clusterId}/allocation/namespaces/${namespace}/workloads/${kind}/${name}/pods`,
       { timeout: 120_000 },
     ),
+  /** 노드에 스케줄된 파드 전량(여러 NS) + 컨테이너 req/lim/usage — 노드 클릭 드릴다운. */
+  nodePods: (clusterId: string, node: string) =>
+    api.get<import('@/types').AllocNodePodsResponse>(
+      `/k8s/${clusterId}/allocation/nodes/${encodeURIComponent(node)}/pods`,
+      { timeout: 120_000 },
+    ),
   /** POD 용량/상태 — 개요 스냅샷에서 파생(요청 스레드가 apiserver 를 치지 않음). 구
    * `k8sResourcesApi.podsSummary`(전량 Pod 60초 요청)를 대체한다. */
   podsSummary: (clusterId: string, refresh = false) =>
