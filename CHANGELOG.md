@@ -34,6 +34,17 @@
   Frontend: `components/platform-status/CheckMatrixItemFormModal.tsx`.
 
 ### Changed
+- **K8S 상세관리 — 좌측 내비 접기 + 네임스페이스 대시보드 다듬기**: `/k8s-manage` 좌측 카테고리
+  내비에 **대분류 접기/펼치기**가 생겼다 — 마지막으로 접거나 편 상태가 브라우저에 저장돼 다음
+  방문 때도 그대로 유지되고, 지금 보고 있는 리프가 속한 카테고리는 접혀 있어도 자동으로 펼쳐
+  보인다. **Namespaces** 카테고리는 자주 쓰는 위치인 **Nodes 바로 아래**로 옮겼다. 네임스페이스
+  대시보드(Namespaces → 대시보드)는 네임스페이스 선택기를 종류별 탐색 화면과 같은 "전체
+  네임스페이스" 버튼 + 검색 드롭다운 형태로 통일했고, **탭 드릴인형** 레이아웃에서는 탭(실제
+  작업 영역)이 먼저 보이고 리소스 인벤토리 표는 그 아래로 위치가 바뀌었다(전체 나열형은 인벤토리
+  표가 위인 기존 순서 그대로). 좌측 메뉴·인벤토리 표 행간도 더 촘촘하게 좁혔다. Frontend:
+  `K8sManagePage.tsx`(NAV 순서, `collapsedCats` state + `localStorage`(`pep:k8s:navCollapsed`)),
+  `NamespaceMultiSelect.tsx`(`singleSelect?` prop 추가), `NamespaceDashboardPanel.tsx`(필터
+  컴포넌트 교체 + 인벤토리 위치 모드별 재배치). 백엔드 변경 없음.
 - **Main UI 간소화 — 사이드바 opt-in 앱 카탈로그 + 홈 KPI 스트립 제거**: 좌측 사이드바가
   플랫폼 그룹을 전부 항상 보여주던 것에서, 사용자가 카드형 "앱 추가" 다이얼로그에서 필요한
   것만 골라 설치(opt-in)하는 방식으로 바뀌었다 — 신규 계정은 완전히 빈 레일 + "+" 버튼으로
