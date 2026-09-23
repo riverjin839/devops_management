@@ -4,15 +4,15 @@ import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { THEME_SWATCH } from '@/lib/themeSwatches';
 
 const GALLERY_ORDER: Theme[] = [
-  'default', 'light', 'dark', 'system',
-  'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
+  'light', 'dark', 'system',
+  'default', 'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
   'summer-breeze', 'wildflower-meadow', 'tropical-punch',
 ];
 
 const THEME_LABEL: Record<Theme, string> = {
-  default: '기본', comfort: '컴포트', 'burnt-sienna': '번트 시에나', 'tuscan-sunset': '토스카나 선셋',
+  default: '코랄', comfort: '컴포트', 'burnt-sienna': '번트 시에나', 'tuscan-sunset': '토스카나 선셋',
   electropop: '일렉트로팝', 'summer-breeze': '서머 브리즈', 'wildflower-meadow': '와일드플라워 메도우',
-  'tropical-punch': '트로피컬 펀치', light: '라이트', dark: '다크', system: '시스템',
+  'tropical-punch': '트로피컬 펀치', light: '라이트 (기본)', dark: '다크', system: '시스템',
 };
 
 /** 테마 하나의 미리보기 카드 — 실제 전환 없이 배경/카드/버튼 색을 그대로 보여준다. */

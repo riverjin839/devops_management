@@ -415,19 +415,19 @@ ui-ux-pro-max Pre-Delivery Checklist에서 추출.
 > 이 장이 **컴포넌트/레이아웃 구현 규칙의 원천**이다. `CLAUDE.md` 에는 위반 시 리뷰 반려되는
 > 불변 규칙만 요약돼 있고, props·예시 코드·레이아웃 세부는 여기를 본다.
 
-### 12.1 테마 시스템 (`stores/themeStore.ts` — `k8s:theme`, fallback `'default'`)
+### 12.1 테마 시스템 (`stores/themeStore.ts` — `k8s:theme`, fallback `'light'`)
 
 | `<html>` 클래스 | 성격 | 비고 |
 |---|---|---|
-| `html.default` | **기본값** — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경, `--radius` 14px, 은은한 그림자, 코랄 accent) | 신규 사용자 첫 진입 화면. 레거시 `'claude'` 값은 자동 마이그레이션 |
-| `html.comfort` | Comfort — 크림 배경(#F6F6F0) + 딥그린(#22593D) primary + 화이트 카드 + 민트 서페이스, `--radius` 16px, 소프트 카드 섀도(hover lift) | Donezo-inspired. 사이드바는 라이트 크림 + 활성 항목 딥그린 필 |
+| `html.default` | **코랄** — 따뜻한 페이퍼 배경, `--radius` 14px, 은은한 그림자, 코랄(#B8552E) accent | 2026-09 까지의 기본값. ID 는 호환 유지, UI 라벨은 "코랄". 저장값 `'default'` 는 1회 `light` 로 마이그레이션(`k8s:theme-migrated-light-default`) |
+| `html.comfort` | Comfort — 화이트 계열 배경(`60 15% 98%`) + 딥그린(#22593D) primary + 화이트 카드 + 민트 서페이스, `--radius` 16px, 소프트 카드 섀도(hover lift) | Donezo-inspired. 사이드바는 라이트 크림 + 활성 항목 딥그린 필 |
 | `html.burnt-sienna` | Burnt Sienna — 테라코타(#E35336)+베이지+샌드+시에나, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 시에나 브라운 |
 | `html.tuscan-sunset` | Tuscan Sunset — 테라코타(#E35336)+피치+모브+러스트, `--radius` 14px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 러스트 + 모브 액센트 필 |
 | `html.electropop` | Electropop — 인디고/라임/오렌지/마젠타 네온 액센트, 다크 베이스, `--radius` 12px | Figma 색상 조합 라이브러리 참고. 이 앱에서 유일한 비비드 다크 테마 |
 | `html.summer-breeze` | Summer Breeze — 옐로우(#FFEB3B)+코랄(#F88379)+스카이블루+샌드, `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 스카이블루-틸 |
 | `html.wildflower-meadow` | Wildflower Meadow — 데이지화이트+버터컵앰버(#FDB813)+스카이블루+그라스그린, `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 그라스그린 |
 | `html.tropical-punch` | Tropical Punch — 망고오렌지(#FF8243)+파파야핑크+파인애플옐로우+딥틸(#069494), `--radius` 16px | Figma 색상 조합 라이브러리 참고. 사이드바는 진한 딥틸 |
-| `:root` / `html.light` | Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign |
+| `:root` / `html.light` | **기본값** — Databricks-leaning 라이트 — flat 표면, slate 팔레트, sky accent, **다크 네이비 사이드바**, `--radius` 8px, `--card-shadow: none` | Phase A redesign. 신규 사용자 첫 진입 화면, 레거시 `'claude'` 도 여기로 |
 | `html.dark` | Databricks-leaning 다크 | 위 §2 "Ops Slate" 계열 |
 | (`system`) | OS 설정 따라 light/dark 자동 | 클래스는 light/dark 중 하나로 해석됨 |
 

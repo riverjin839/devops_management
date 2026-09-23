@@ -28,12 +28,12 @@ import { installableAppById, sidebarAppSections } from './installableApps';
 // 정적 네비게이션 정의(NAV_MAP / GROUPS / GroupId / DEFAULT_TITLE)는 navConfig 로 분리 —
 // Settings 의 "화면 UI 설정" 탭(NavMenuManager / PageStyleManager)과 공유한다.
 // D-077 — 테마는 레일 버튼 순환 클릭(최대 10클릭)이 아니라 사용자 메뉴 안의 목록에서 1클릭으로
-// 고른다. 기본 4종(default/light/dark/system)을 먼저, 컬러 테마 7종은 그 아래 구분해서 둔다.
+// 고른다. 기본 3종(light/dark/system)을 먼저, 컬러 테마 8종(코랄=default 포함)은 그 아래 구분해서 둔다.
 // D-072 — 컬러 테마 7종은 아이콘 대신 대표 색 스와치로 미리보기(아래 THEME_SWATCH_ICON).
 // 전체 10종을 카드로 비교하는 "테마 갤러리"는 Settings ▸ 화면 UI 설정 탭에 별도로 있다.
-const THEME_BASIC: Theme[] = ['default', 'light', 'dark', 'system'];
+const THEME_BASIC: Theme[] = ['light', 'dark', 'system'];
 const THEME_EXTRA: Theme[] = [
-  'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
+  'default', 'comfort', 'burnt-sienna', 'tuscan-sunset', 'electropop',
   'summer-breeze', 'wildflower-meadow', 'tropical-punch',
 ];
 const THEME_ICON: Record<Theme, ComponentType<{ className?: string }>> = {
@@ -68,7 +68,7 @@ const THEME_SWATCH_ICON: Partial<Record<Theme, ComponentType<{ className?: strin
 );
 
 const THEME_LABEL: Record<Theme, string> = {
-  default: '기본',
+  default: '코랄',
   comfort: '컴포트',
   'burnt-sienna': '번트 시에나',
   'tuscan-sunset': '토스카나 선셋',
@@ -76,7 +76,7 @@ const THEME_LABEL: Record<Theme, string> = {
   'summer-breeze': '서머 브리즈',
   'wildflower-meadow': '와일드플라워 메도우',
   'tropical-punch': '트로피컬 펀치',
-  light: '라이트',
+  light: '라이트 (기본)',
   dark: '다크',
   system: '시스템',
 };

@@ -10,6 +10,26 @@
 
 1.36.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **테마 대비(접근성) P0 — 상태 글자·primary 버튼/링크가 흐리게 보이던 문제**: 라이트 계열 테마에서
+  `정상`/`경고` 상태 글자가 카드 위 2.1~2.3:1, 기본 테마(코랄) primary 버튼 글자가 3.3:1 로 WCAG AA
+  (4.5:1) 에 못 미쳤다. 상태색을 면(fill)과 글자(text)로 분리하고 테마 10종 전부에서 버튼·링크·상태
+  글자가 4.5:1 이상이 되게 보정했다(미달 47건 → 0건). Frontend: `index.css` 에 테마별
+  `--primary-text`·`--status-*-text` 토큰 추가, `tailwind.config.js` `extend.textColor` 로
+  `text-primary`/`text-status-*` 만 새 토큰에 매핑(`bg-*`/`border-*`/`fill-*` 는 기존 면색 유지).
+  default·burnt-sienna·tuscan-sunset 은 primary 명도 하향, dark·electropop·summer-breeze·
+  tropical-punch 는 `--primary-foreground` 를 어두운 글자로 교체.
+
+### Changed
+- **기본 테마를 라이트(슬레이트)로 교체**: 첫 화면이 코랄 페이퍼 톤에서 슬레이트 + 블루 단일 강조로
+  바뀐다. 기존 사용자도 저장값 `default` 를 1회 자동으로 `light` 로 옮기고, 코랄은 테마 목록에
+  "코랄" 이름으로 남아 다시 고를 수 있다. Frontend: `themeStore.ts`(`DEFAULT_THEME`, 1회 마이그레이션
+  표식 `k8s:theme-migrated-light-default`), 사이드바·테마 갤러리 라벨/순서, `themeSwatches.ts`.
+- **컴포트·번트 시에나·토스카나 선셋 배경을 화이트 계열로**: 배경 98% · 카드 ~100% · 보조면 94~96% ·
+  경계 89~90% 로 라이트 테마와 같은 명도 구조를 따르고 hue 만 테마 고유값을 남긴다. 버튼·링크·
+  사이드바 색은 그대로. Frontend: `index.css` 각 테마 블록의 background/card/secondary/muted/border/
+  surface-container 토큰.
+
 ## [1.36.1] - 2026-09-23
 
 ### Fixed
