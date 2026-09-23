@@ -171,6 +171,33 @@ export function useDeleteBinding(clusterId: string) {
   });
 }
 
+/**
+ * 기존 ServiceAccount 에 (기존) Role/ClusterRole 을 새로 바인딩한다.
+ *
+ * 액세스 발급 마법사는 SA·롤·바인딩을 한 번에 새로 만드는 용도라, "이미 있는 SA 에
+ * nodes 조회처럼 클러스터 스코프 권한만 추가로 붙이고 싶다" 는 경우엔 맞지 않는다
+ * (마법사를 다시 돌리면 롤 규칙이 프리셋 기본값으로 리셋돼 기존 커스텀 규칙을 덮어쓴다).
+ * Role/ClusterRole 탭에서 규칙을 더해도, 그 롤이 RoleBinding 으로만 묶여 있으면
+ * 클러스터 스코프 리소스(nodes 등)에는 규칙이 애초에 적용되지 않는다 — 노드는
+ * 네임스페이스가 없는 리소스라 RoleBinding(네임스페이스 스코프) 으로는 권한을 줄 수
+ * 없고 ClusterRoleBinding 이 있어야 한다. 이 훅은 그 마지막 조각(바인딩 자체)을
+ * Binding 탭에서 만들 수 있게 한다.
+ */
+export function useCreateBinding(clusterId: string) {
+  const invalidate = useInvalidateRbac(clusterId);
+  return useMutation({
+    mutationFn: (payload: {
+      kind: 'RoleBinding' | 'ClusterRoleBinding';
+      name: string;
+      namespace?: string | null;
+      roleKind: 'Role' | 'ClusterRole';
+      roleName: string;
+      subjects: { kind: string; name: string; namespace?: string | null }[];
+    }) => k8sRbacApi.createBinding(clusterId, payload),
+    onSuccess: invalidate,
+  });
+}
+
 export function useAccessReview(clusterId: string) {
   return useMutation({
     mutationFn: async (payload: {

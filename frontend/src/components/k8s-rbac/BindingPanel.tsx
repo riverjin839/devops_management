@@ -1,25 +1,47 @@
-/** RoleBinding / ClusterRoleBinding 목록 — "누가 어떤 권한을 어디서 갖는가" 를 한 표로. */
+/**
+ * RoleBinding / ClusterRoleBinding 목록 — "누가 어떤 권한을 어디서 갖는가" 를 한 표로.
+ *
+ * "새 바인딩 추가" 는 **기존** ServiceAccount 에 **기존** Role/ClusterRole 을 새로 묶는
+ * 전용 경로다. `nodes` 조회처럼 클러스터 스코프 리소스는 ClusterRoleBinding 이 있어야만
+ * 실제로 권한이 발동한다(RoleBinding 은 네임스페이스 스코프라 노드처럼 네임스페이스가
+ * 없는 리소스엔 적용되지 않는다) — Role/ClusterRole 탭에서 규칙만 추가해선 끝나지 않는
+ * 케이스라 이 폼이 그 마지막 조각을 메운다.
+ */
 import { useMemo, useState } from 'react';
-import { Link2, Search, Trash2 } from 'lucide-react';
+import { Link2, Plus, Search, Trash2 } from 'lucide-react';
 import { ConfirmDialog, EmptyState, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useCanOperate } from '@/hooks/useCanOperate';
-import { useDeleteBinding } from '@/hooks/useK8sRbac';
+import { useCreateBinding, useDeleteBinding } from '@/hooks/useK8sRbac';
 import { formatApiError } from '@/lib/utils';
-import type { RbacBinding } from '@/types';
+import type { RbacBinding, RbacNamespace, RbacRole, RbacServiceAccount } from '@/types';
 import { Tag } from './RbacTags';
 
 interface Props {
   clusterId: string;
   bindings: RbacBinding[];
+  roles: RbacRole[];
+  clusterRoles: RbacRole[];
+  serviceAccounts: RbacServiceAccount[];
+  namespaces: RbacNamespace[];
   includeSystem: boolean;
   onIncludeSystemChange: (v: boolean) => void;
   isLoading: boolean;
 }
 
+type BindingKind = 'RoleBinding' | 'ClusterRoleBinding';
+type RoleKind = 'Role' | 'ClusterRole';
+
+const inputCls =
+  'px-3 py-2 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50';
+
 export function BindingPanel({
   clusterId,
   bindings,
+  roles,
+  clusterRoles,
+  serviceAccounts,
+  namespaces,
   includeSystem,
   onIncludeSystemChange,
   isLoading,
@@ -29,6 +51,71 @@ export function BindingPanel({
   const [query, setQuery] = useState('');
   const [pendingDelete, setPendingDelete] = useState<RbacBinding | null>(null);
   const remove = useDeleteBinding(clusterId);
+  const create = useCreateBinding(clusterId);
+
+  const [creating, setCreating] = useState(false);
+  const [kind, setKind] = useState<BindingKind>('RoleBinding');
+  const [name, setName] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [roleKind, setRoleKind] = useState<RoleKind>('ClusterRole');
+  const [roleName, setRoleName] = useState('');
+  const [subjectKey, setSubjectKey] = useState(''); // `${sa.namespace}/${sa.name}`
+
+  // ClusterRoleBinding 은 ClusterRole 만 참조할 수 있다(백엔드도 이걸 거부한다) —
+  // 애초에 화면에서 고를 수 없는 조합을 없앤다.
+  const effectiveRoleKind: RoleKind = kind === 'ClusterRoleBinding' ? 'ClusterRole' : roleKind;
+
+  const roleOptions = useMemo(() => {
+    if (effectiveRoleKind === 'ClusterRole') return clusterRoles;
+    // RoleBinding 이 참조하는 Role 은 바인딩과 같은 네임스페이스에 있어야 한다.
+    return roles.filter((r) => r.namespace === namespace);
+  }, [effectiveRoleKind, clusterRoles, roles, namespace]);
+
+  const subjectOptions = useMemo(
+    () => serviceAccounts.filter((sa) => sa.name !== 'default'),
+    [serviceAccounts],
+  );
+
+  const resetForm = () => {
+    setKind('RoleBinding');
+    setName('');
+    setNamespace('');
+    setRoleKind('ClusterRole');
+    setRoleName('');
+    setSubjectKey('');
+  };
+
+  const problems = useMemo(() => {
+    const out: string[] = [];
+    if (!name.trim()) out.push('바인딩 이름을 입력하세요.');
+    if (kind === 'RoleBinding' && !namespace) out.push('RoleBinding 은 네임스페이스가 필요합니다.');
+    if (!roleName) out.push('참조할 Role/ClusterRole 을 고르세요.');
+    if (!subjectKey) out.push('권한을 받을 ServiceAccount 를 고르세요.');
+    return out;
+  }, [name, kind, namespace, roleName, subjectKey]);
+
+  const handleCreate = async () => {
+    const subject = subjectOptions.find((sa) => `${sa.namespace}/${sa.name}` === subjectKey);
+    if (problems.length > 0 || !subject) return;
+    try {
+      await create.mutateAsync({
+        kind,
+        name: name.trim(),
+        namespace: kind === 'RoleBinding' ? namespace : null,
+        roleKind: effectiveRoleKind,
+        roleName,
+        subjects: [{ kind: 'ServiceAccount', name: subject.name, namespace: subject.namespace }],
+      });
+      toast.success(
+        `${kind} 생성됨`,
+        `${subject.namespace}/${subject.name} → ${effectiveRoleKind}/${roleName}`,
+      );
+      setCreating(false);
+      resetForm();
+    } catch (e) {
+      toast.error('생성 실패', formatApiError(e));
+    }
+  };
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -85,13 +172,153 @@ export function BindingPanel({
         </button>
         <div className="flex-1" />
         <span className="text-xs text-muted-foreground">{rows.length}건</span>
+        <button
+          type="button"
+          onClick={() => setCreating(!creating)}
+          disabled={!canOperate}
+          title={withHint('새 바인딩 추가 — 기존 SA 에 기존 Role/ClusterRole 을 묶는다')}
+          aria-label={withHint('새 바인딩 추가')}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Plus className="w-3.5 h-3.5" /> 바인딩 추가
+        </button>
       </div>
+
+      {creating && (
+        <div className="mb-3 p-3 rounded-xl border border-border bg-secondary space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
+              종류
+              <select
+                id="rbac-new-binding-kind"
+                value={kind}
+                onChange={(e) => {
+                  const next = e.target.value as BindingKind;
+                  setKind(next);
+                  if (next === 'ClusterRoleBinding') {
+                    setRoleKind('ClusterRole');
+                    setNamespace('');
+                  }
+                  setRoleName('');
+                }}
+                className={inputCls}
+              >
+                <option value="RoleBinding">RoleBinding (네임스페이스 스코프)</option>
+                <option value="ClusterRoleBinding">ClusterRoleBinding (전체 네임스페이스)</option>
+              </select>
+            </label>
+            {kind === 'RoleBinding' && (
+              <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
+                네임스페이스
+                <select
+                  id="rbac-new-binding-namespace"
+                  value={namespace}
+                  onChange={(e) => {
+                    setNamespace(e.target.value);
+                    setRoleName('');
+                  }}
+                  className={`${inputCls} font-mono`}
+                >
+                  <option value="">선택…</option>
+                  {namespaces.map((ns) => (
+                    <option key={ns.name} value={ns.name}>
+                      {ns.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
+              바인딩 이름
+              <input
+                id="rbac-new-binding-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="pep-dev-hjkim-nodes"
+                spellCheck={false}
+                className={`${inputCls} font-mono`}
+              />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            {kind === 'RoleBinding' && (
+              <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
+                참조 롤 종류
+                <select
+                  id="rbac-new-binding-rolekind"
+                  value={roleKind}
+                  onChange={(e) => {
+                    setRoleKind(e.target.value as RoleKind);
+                    setRoleName('');
+                  }}
+                  className={inputCls}
+                >
+                  <option value="ClusterRole">ClusterRole</option>
+                  <option value="Role">Role (이 네임스페이스 전용)</option>
+                </select>
+              </label>
+            )}
+            <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
+              {effectiveRoleKind} 선택
+              <select
+                id="rbac-new-binding-rolename"
+                value={roleName}
+                onChange={(e) => setRoleName(e.target.value)}
+                disabled={effectiveRoleKind === 'Role' && !namespace}
+                className={`${inputCls} font-mono disabled:opacity-50`}
+              >
+                <option value="">선택…</option>
+                {roleOptions.map((r) => (
+                  <option key={r.name} value={r.name}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs text-muted-foreground font-medium">
+              대상 ServiceAccount
+              <select
+                id="rbac-new-binding-subject"
+                value={subjectKey}
+                onChange={(e) => setSubjectKey(e.target.value)}
+                className={`${inputCls} font-mono`}
+              >
+                <option value="">선택…</option>
+                {subjectOptions.map((sa) => (
+                  <option key={`${sa.namespace}/${sa.name}`} value={`${sa.namespace}/${sa.name}`}>
+                    {sa.namespace} / {sa.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={problems.length > 0 || create.isPending}
+              title={problems.length > 0 ? problems[0] : '바인딩 생성'}
+              aria-label="바인딩 생성"
+              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
+            >
+              {create.isPending ? '생성 중…' : '생성'}
+            </button>
+          </div>
+
+          {kind === 'ClusterRoleBinding' && (
+            <p className="text-[11.5px] leading-relaxed rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+              nodes·namespaces·persistentvolumes 처럼 네임스페이스가 없는(클러스터 스코프) 리소스는
+              RoleBinding 으로는 권한이 발동하지 않는다 — 이 조합(ClusterRoleBinding)이 필요한 이유다.
+              선택한 롤에 해당 규칙이 이미 있는지 Role/ClusterRole 탭에서 먼저 확인한다.
+            </p>
+          )}
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState
           icon={Link2}
           title={isLoading ? '불러오는 중…' : '바인딩이 없다'}
-          description={isLoading ? undefined : '액세스 발급 탭에서 만들면 여기에 나타난다.'}
+          description={isLoading ? undefined : '액세스 발급 탭에서 만들거나, 위 "바인딩 추가" 로 직접 만든다.'}
           compact
         />
       ) : (

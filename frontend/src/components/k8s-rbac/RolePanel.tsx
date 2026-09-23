@@ -7,7 +7,7 @@ import { useCanOperate } from '@/hooks/useCanOperate';
 import { useDeleteRole, useUpsertRole } from '@/hooks/useK8sRbac';
 import { formatApiError } from '@/lib/utils';
 import type { RbacBinding, RbacPolicyRule, RbacRole } from '@/types';
-import { emptyRule } from './rbacShared';
+import { emptyRule, ruleHasClusterScopedResource } from './rbacShared';
 import { Tag } from './RbacTags';
 import { RuleEditor } from './RuleEditor';
 
@@ -112,6 +112,14 @@ export function RolePanel({
 
   const dirty =
     !!selected && !!draft && JSON.stringify(draft) !== JSON.stringify(selected.rules);
+
+  // nodes 같은 클러스터 스코프 리소스는 RoleBinding(네임스페이스 스코프)으로는 권한이
+  // 발동하지 않는다 — ClusterRoleBinding 이 하나도 없으면(바인딩이 아예 없거나 전부
+  // RoleBinding 이면) 저장해도 조용히 무효가 된다.
+  const needsClusterRoleBinding =
+    !!draft &&
+    draft.some(ruleHasClusterScopedResource) &&
+    !referencingBindings.some((b) => b.kind === 'ClusterRoleBinding');
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
@@ -241,6 +249,15 @@ export function RolePanel({
                   new Set(referencingBindings.map((b) => b.namespace ?? '전체 네임스페이스')),
                 ).join(', ')}
                 .
+              </p>
+            )}
+
+            {needsClusterRoleBinding && (
+              <p className="text-[11.5px] leading-relaxed rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+                nodes 같은 클러스터 스코프(네임스페이스 없는) 리소스가 규칙에 있다. 이 롤은{' '}
+                {referencingBindings.length === 0 ? '아직 어떤 바인딩에도 연결돼 있지 않다' : 'RoleBinding 으로만 연결돼 있다'}
+                — RoleBinding 으로는 이런 리소스에 권한이 발동하지 않는다. 저장 후 <b>Binding 탭</b>에서
+                ClusterRoleBinding 을 추가로 만들어야 실제로 동작한다.
               </p>
             )}
 
