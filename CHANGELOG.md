@@ -30,6 +30,19 @@
   탭 바는 sticky 로 바꿔 긴 표를 스크롤해도 화면 전환이 남는다. Frontend: `SummaryStrip`(신규),
   `K8sAllocationPage.tsx`.
 
+### Fixed
+- **K8S 접근 권한 — 기존 SA 에 클러스터 스코프 권한(nodes 등) 부여가 화면만으로 끝나지
+  않던 문제**: Role/ClusterRole 탭에서 `nodes` 같은 리소스를 규칙에 추가해 저장해도, 그
+  롤이 RoleBinding(네임스페이스 스코프)으로만 묶여 있으면 K8s RBAC 자체 규칙상 권한이
+  발동하지 않는다(노드는 네임스페이스가 없는 리소스라 RoleBinding 으로는 권한을 줄 수
+  없다) — 화면은 저장 성공만 보여주고 이 사실을 알려주지 않았다. Binding 탭에 **새
+  바인딩 추가**(기존 SA 에 기존 Role/ClusterRole 을 새로 묶기) 기능이 아예 없어서, 필요한
+  ClusterRoleBinding 을 만들 방법도 화면에 없었다. Role/ClusterRole 탭에 저장 전 규칙에
+  클러스터 스코프 리소스가 섞여 있고 참조 바인딩 중 ClusterRoleBinding 이 없으면 경고를
+  띄우고, Binding 탭에 바인딩 생성 폼을 추가했다. Frontend: `BindingPanel.tsx`(생성 폼),
+  `RolePanel.tsx`(`needsClusterRoleBinding` 경고), `rbacShared.ts`
+  (`CLUSTER_SCOPED_RESOURCE_HINTS`), `hooks/useK8sRbac.ts`(`useCreateBinding`).
+
 ## [1.35.1] - 2026-09-22
 
 ### Added

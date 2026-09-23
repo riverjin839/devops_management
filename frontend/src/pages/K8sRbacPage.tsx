@@ -165,6 +165,10 @@ export function K8sRbacPage() {
             <BindingPanel
               clusterId={clusterId}
               bindings={bindings}
+              roles={roles}
+              clusterRoles={clusterRoles}
+              serviceAccounts={serviceAccounts}
+              namespaces={namespaces}
               includeSystem={includeSystem}
               onIncludeSystemChange={setIncludeSystem}
               isLoading={bindingsLoading}

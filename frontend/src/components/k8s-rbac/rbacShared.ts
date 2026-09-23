@@ -53,6 +53,39 @@ export function groupsToText(groups: string[]): string {
   return (groups.length ? groups : ['']).map(groupLabel).join(', ');
 }
 
+/**
+ * 네임스페이스가 없는(=클러스터 스코프) 대표 리소스들.
+ *
+ * K8s RBAC 는 리소스가 네임스페이스에 속하는지를 API discovery 로만 알 수 있어 프론트가
+ * 완전한 판정을 할 수는 없다 — 이건 "자주 걸리는 것들" 만 담은 휴리스틱 목록이다.
+ * 이 목록에 있는 리소스는 RoleBinding(네임스페이스 스코프)으로는 아무리 규칙을 추가해도
+ * 권한이 발동하지 않는다 — ClusterRoleBinding 이 있어야 한다.
+ */
+export const CLUSTER_SCOPED_RESOURCE_HINTS = new Set([
+  'nodes',
+  'namespaces',
+  'persistentvolumes',
+  'storageclasses',
+  'clusterroles',
+  'clusterrolebindings',
+  'customresourcedefinitions',
+  'certificatesigningrequests',
+  'componentstatuses',
+  'priorityclasses',
+  'runtimeclasses',
+  'ingressclasses',
+  'volumeattachments',
+  'csidrivers',
+  'csinodes',
+  'mutatingwebhookconfigurations',
+  'validatingwebhookconfigurations',
+]);
+
+/** 이 규칙에 RoleBinding 으로는 발동하지 않는 클러스터 스코프 리소스가 섞여 있는지. */
+export function ruleHasClusterScopedResource(rule: RbacPolicyRule): boolean {
+  return rule.resources.some((r) => CLUSTER_SCOPED_RESOURCE_HINTS.has(r.split('/')[0]));
+}
+
 /** 상대 시각 — 목록 컬럼용 짧은 표기. */
 export function shortDate(iso: string | null): string {
   if (!iso) return '-';
