@@ -1,5 +1,5 @@
 /** Role / ClusterRole 목록 + 규칙 편집. 빌트인(system:*, cluster-admin …)은 읽기 전용이다. */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Save, Search, Shield, Trash2, Undo2 } from 'lucide-react';
 import { ConfirmDialog, EmptyState, useToastSafe } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
@@ -11,6 +11,15 @@ import { emptyRule, ruleHasClusterScopedResource } from './rbacShared';
 import { Tag } from './RbacTags';
 import { RuleEditor } from './RuleEditor';
 
+/** ServiceAccount 탭의 "연결된 권한" 클릭 한 건 — 그 롤을 찾아 바로 선택시킨다.
+ *  같은 롤을 두 번 연달아 눌러도 다시 반응하도록 매 클릭마다 새 객체(token)로 보낸다. */
+export interface RbacRoleFocusRequest {
+  scope: 'namespace' | 'cluster';
+  namespace: string | null;
+  name: string;
+  token: number;
+}
+
 interface Props {
   clusterId: string;
   roles: RbacRole[];
@@ -19,6 +28,8 @@ interface Props {
   includeSystem: boolean;
   onIncludeSystemChange: (v: boolean) => void;
   isLoading: boolean;
+  /** 다른 탭(ServiceAccount)에서 "이 롤 보기" 를 눌렀을 때 전달되는 대상. */
+  focusRequest?: RbacRoleFocusRequest | null;
 }
 
 function roleKey(r: RbacRole): string {
@@ -33,6 +44,7 @@ export function RolePanel({
   includeSystem,
   onIncludeSystemChange,
   isLoading,
+  focusRequest,
 }: Props) {
   const { canOperate, hint, withHint } = useCanOperate();
   const toast = useToastSafe();
@@ -40,6 +52,7 @@ export function RolePanel({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<RbacPolicyRule[] | null>(null);
   const [pendingDelete, setPendingDelete] = useState<RbacRole | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
   const upsert = useUpsertRole(clusterId);
   const remove = useDeleteRole(clusterId);
@@ -74,6 +87,39 @@ export function RolePanel({
     setSelectedKey(roleKey(r));
     setDraft(r.rules.map((rule) => ({ ...rule })));
   };
+
+  // ServiceAccount 탭에서 "연결된 권한" 을 클릭해 넘어온 요청을 처리한다. 검색어로
+  // 가려져 있을 수 있어 먼저 비우고, system:*/cluster-admin 같은 빌트인 롤을 가리키면
+  // includeSystem 이 꺼져 있어 목록에 아예 없을 수 있으니 켠 뒤 재조회 후 다시 찾는다.
+  // 한 번 찾았거나 포기했으면 그 token 에 대해선 더 반응하지 않는다 — 안 그러면 배경
+  // refetch(자동 새로고침 등)로 `all` 참조가 바뀔 때마다 같은 롤을 다시 선택하거나
+  // "찾을 수 없다" 토스트를 반복해서 띄운다.
+  const focusState = useRef<{ token: number | null; settled: boolean }>({ token: null, settled: false });
+  useEffect(() => {
+    if (!focusRequest) return;
+    if (focusState.current.token !== focusRequest.token) {
+      focusState.current = { token: focusRequest.token, settled: false };
+    }
+    if (focusState.current.settled) return;
+
+    const target = all.find(
+      (r) => r.scope === focusRequest.scope && (r.namespace ?? null) === focusRequest.namespace && r.name === focusRequest.name,
+    );
+    if (target) {
+      setQuery('');
+      select(target);
+      rowRefs.current.get(roleKey(target))?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      focusState.current.settled = true;
+      return;
+    }
+    if (focusRequest.scope === 'cluster' && !includeSystem) {
+      onIncludeSystemChange(true);
+      return; // clusterRoles 재조회 후 다음 렌더에서 다시 찾는다 — 아직 settled 아님
+    }
+    focusState.current.settled = true;
+    toast.warning('롤을 찾을 수 없다', `${focusRequest.name} — 삭제됐거나 목록에 없다`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- select/toast/onIncludeSystemChange 는 매 렌더 새 함수라 넣으면 무한 루프
+  }, [focusRequest, all, includeSystem]);
 
   const save = async () => {
     if (!selected || !draft) return;
@@ -170,6 +216,10 @@ export function RolePanel({
                 {rows.map((r) => (
                   <tr
                     key={roleKey(r)}
+                    ref={(el) => {
+                      if (el) rowRefs.current.set(roleKey(r), el);
+                      else rowRefs.current.delete(roleKey(r));
+                    }}
                     className={`border-t border-border cursor-pointer hover:bg-secondary/60 ${
                       roleKey(r) === selectedKey ? 'bg-primary/5' : ''
                     }`}
