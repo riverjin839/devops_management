@@ -3,7 +3,7 @@ import { create } from 'zustand';
 /**
  * 테마 모드.
  * - `default`        : 기본 테마 — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경 +
- *                      큰 radius + 은은한 그림자 + 코랄 #D97757 accent). 신규 사용자
+ *                      큰 radius + 은은한 그림자 + 코랄 #B8552E accent). 신규 사용자
  *                      첫 진입 시 보이는 화면.
  * - `comfort`        : 크림 배경 + 딥그린 액센트 + 화이트 카드 + 큰 radius(16px) —
  *                      부드럽고 편안한 대시보드 톤 (Donezo-inspired).

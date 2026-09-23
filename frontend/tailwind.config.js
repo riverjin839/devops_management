@@ -97,6 +97,22 @@ export default {
           8: "hsl(var(--chart-8) / <alpha-value>)",
         },
       },
+      // ── P0 대비: 글자 전용 파생 토큰 ──
+      // 면(bg/border/fill)은 위 colors 의 --primary / --status-* 를 그대로 쓰고,
+      // text-primary / text-status-* 만 4.5:1 을 보장하는 *-text 토큰으로 갈라낸다.
+      // (extend.textColor 는 colors 와 deep-merge 되어 foreground 등 하위 키는 유지된다.)
+      textColor: {
+        primary: {
+          DEFAULT: "hsl(var(--primary-text) / <alpha-value>)",
+        },
+        status: {
+          healthy:  "hsl(var(--status-healthy-text)  / <alpha-value>)",
+          warning:  "hsl(var(--status-warning-text)  / <alpha-value>)",
+          critical: "hsl(var(--status-critical-text) / <alpha-value>)",
+          unknown:  "hsl(var(--status-unknown-text)  / <alpha-value>)",
+          info:     "hsl(var(--status-info-text)     / <alpha-value>)",
+        },
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

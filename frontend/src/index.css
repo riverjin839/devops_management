@@ -15,6 +15,13 @@
     --popover-foreground: 222 47% 11%;
     --primary: 200 98% 32%;           /* #0369A1 sky-700 — calmer than macOS blue */
     --primary-foreground: 0 0% 100%;
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 200 98% 32%;
+    --status-healthy-text: 142 71% 28%;
+    --status-warning-text: 38 92% 30%;
+    --status-critical-text: 0 84% 44%;
+    --status-info-text: 199 89% 33%;
+    --status-unknown-text: 220 9% 42%;
     --secondary: 210 33% 95%;         /* #E8ECF1 — secondary surface */
     --secondary-foreground: 222 47% 11%;
     --muted: 210 33% 96%;
@@ -103,7 +110,14 @@
     --popover: 220 17% 10%;
     --popover-foreground: 220 10% 96%;
     --primary: 212 100% 63%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 220 18% 7%;  /* P0: 밝은 primary 면 → 어두운 글자 */
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 212 100% 63%;
+    --status-healthy-text: 142 71% 45%;
+    --status-warning-text: 38 92% 50%;
+    --status-critical-text: 0 84% 66%;
+    --status-info-text: 199 89% 55%;
+    --status-unknown-text: 220 9% 60%;
     --secondary: 220 14% 16%;
     --secondary-foreground: 220 10% 96%;
     --muted: 220 14% 16%;
@@ -179,6 +193,13 @@
     --popover-foreground: 222 47% 11%;
     --primary: 200 98% 32%;
     --primary-foreground: 0 0% 100%;
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 200 98% 32%;
+    --status-healthy-text: 142 71% 28%;
+    --status-warning-text: 38 92% 30%;
+    --status-critical-text: 0 84% 44%;
+    --status-info-text: 199 89% 33%;
+    --status-unknown-text: 220 9% 42%;
     --secondary: 210 33% 95%;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 33% 96%;
@@ -207,7 +228,7 @@
 
   /* ── default theme — Anthropic Claude 브랜드 톤 (기본값) ────────────────
      신규 사용자가 처음 보는 테마. 따뜻한 paper 배경 + 큰 radius + soft shadow +
-     코랄(#D97757) 액센트로 노트/문서 느낌. 대안으로 light / dark / system 제공. */
+     코랄(#B8552E, P0 대비 보정 전 #D97757) 액센트로 노트/문서 느낌. 대안으로 light / dark / system 제공. */
   html.default {
     --background: 36 38% 96%;          /* #F7F2EA — warm paper */
     --foreground: 28 18% 16%;          /* #2E2620 — deep cocoa */
@@ -215,8 +236,15 @@
     --card-foreground: 28 18% 16%;
     --popover: 38 50% 99%;
     --popover-foreground: 28 18% 16%;
-    --primary: 17 60% 56%;             /* #D97757 — Anthropic coral */
+    --primary: 17 60% 45%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
     --primary-foreground: 38 50% 99%;
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 17 60% 40%;
+    --status-healthy-text: 142 55% 30%;
+    --status-warning-text: 30 85% 34%;
+    --status-critical-text: 0 65% 45%;
+    --status-info-text: 199 65% 35%;
+    --status-unknown-text: 28 10% 38%;
     --secondary: 35 30% 92%;           /* #EFE7DA — cream */
     --secondary-foreground: 28 18% 16%;
     --muted: 35 30% 94%;
@@ -227,7 +255,7 @@
     --destructive-foreground: 38 50% 99%;
     --border: 32 22% 86%;              /* #DCD2C2 — softer than slate */
     --input: 32 22% 86%;
-    --ring: 17 60% 56%;
+    --ring: 17 60% 45%;
     --radius: 0.875rem;                /* 14px — Claude scale */
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
@@ -294,6 +322,13 @@
     --popover-foreground: 160 20% 12%;
     --primary: 150 45% 24%;            /* #22593D — deep green */
     --primary-foreground: 0 0% 100%;
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 150 45% 24%;
+    --status-healthy-text: 150 55% 30%;
+    --status-warning-text: 38 92% 30%;
+    --status-critical-text: 0 70% 45%;
+    --status-info-text: 199 75% 34%;
+    --status-unknown-text: 150 6% 39%;
     --secondary: 140 25% 93%;          /* #E9F2EC — mint cream surface */
     --secondary-foreground: 160 20% 12%;
     --muted: 70 15% 95%;
@@ -372,8 +407,15 @@
     --card-foreground: 19 35% 18%;
     --popover: 42 45% 98%;
     --popover-foreground: 19 35% 18%;
-    --primary: 10 70% 55%;             /* #E35336 terracotta */
+    --primary: 10 70% 47%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
     --primary-foreground: 42 45% 98%;
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 10 70% 42%;
+    --status-healthy-text: 142 50% 30%;
+    --status-warning-text: 32 85% 32%;
+    --status-critical-text: 6 70% 43%;
+    --status-info-text: 199 60% 35%;
+    --status-unknown-text: 20 10% 39%;
     --secondary: 32 45% 90%;           /* sandy tint */
     --secondary-foreground: 19 35% 18%;
     --muted: 40 30% 92%;
@@ -384,7 +426,7 @@
     --destructive-foreground: 42 45% 98%;
     --border: 34 25% 84%;
     --input: 34 25% 84%;
-    --ring: 10 70% 55%;
+    --ring: 10 70% 47%;
     --radius: 0.875rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
@@ -448,8 +490,15 @@
     --card-foreground: 14 40% 16%;
     --popover: 28 55% 98%;
     --popover-foreground: 14 40% 16%;
-    --primary: 10 70% 52%;             /* #E35336 terracotta */
+    --primary: 10 70% 47%;             /* P0: 흰 글자 4.5:1 확보 위해 명도 하향 */
     --primary-foreground: 28 55% 98%;
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 10 70% 41%;
+    --status-healthy-text: 142 45% 31%;
+    --status-warning-text: 34 85% 31%;
+    --status-critical-text: 8 65% 43%;
+    --status-info-text: 199 60% 35%;
+    --status-unknown-text: 281 8% 40%;
     --secondary: 28 60% 90%;           /* #FFD3AC peach surface */
     --secondary-foreground: 14 40% 16%;
     --muted: 28 30% 93%;
@@ -460,7 +509,7 @@
     --destructive-foreground: 28 55% 98%;
     --border: 28 25% 85%;
     --input: 28 25% 85%;
-    --ring: 10 70% 52%;
+    --ring: 10 70% 47%;
     --radius: 0.875rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
@@ -525,7 +574,14 @@
     --popover: 260 20% 11%;
     --popover-foreground: 70 10% 94%;
     --primary: 299 100% 60%;           /* #F900FF magenta */
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 260 25% 8%;  /* P0: 밝은 primary 면 → 어두운 글자 */
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 299 100% 60%;
+    --status-healthy-text: 142 71% 50%;
+    --status-warning-text: 38 92% 55%;
+    --status-critical-text: 0 84% 65%;
+    --status-info-text: 199 89% 58%;
+    --status-unknown-text: 260 9% 62%;
     --secondary: 260 18% 16%;
     --secondary-foreground: 70 10% 94%;
     --muted: 260 15% 16%;
@@ -603,7 +659,14 @@
     --popover: 35 55% 99%;
     --popover-foreground: 205 25% 16%;
     --primary: 5 85% 68%;              /* #F88379 coral */
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 205 25% 16%;  /* P0: 밝은 primary 면 → 어두운 글자 */
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 5 85% 42%;
+    --status-healthy-text: 142 55% 29%;
+    --status-warning-text: 45 90% 26%;
+    --status-critical-text: 5 70% 43%;
+    --status-info-text: 198 65% 34%;
+    --status-unknown-text: 205 10% 38%;
     --secondary: 198 55% 90%;          /* #82C8E5 sky blue tint */
     --secondary-foreground: 205 25% 16%;
     --muted: 35 30% 93%;
@@ -680,6 +743,13 @@
     --popover-foreground: 100 20% 14%;
     --primary: 42 95% 48%;             /* #FDB813 buttercup amber */
     --primary-foreground: 42 30% 12%;
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 42 95% 27%;
+    --status-healthy-text: 100 55% 29%;
+    --status-warning-text: 42 90% 27%;
+    --status-critical-text: 0 65% 45%;
+    --status-info-text: 198 65% 34%;
+    --status-unknown-text: 100 8% 37%;
     --secondary: 198 55% 90%;          /* #82C8E5 sky blue tint */
     --secondary-foreground: 100 20% 14%;
     --muted: 54 35% 94%;
@@ -754,7 +824,14 @@
     --popover: 50 65% 99%;
     --popover-foreground: 180 30% 14%;
     --primary: 20 90% 60%;             /* #FF8243 mango orange */
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 180 30% 14%;  /* P0: 밝은 primary 면 → 어두운 글자 */
+    /* P0 대비: 글자 전용 파생 토큰 — text-primary / text-status-* 가 참조(면색과 분리, 4.5:1 이상) */
+    --primary-text: 20 90% 36%;
+    --status-healthy-text: 160 55% 29%;
+    --status-warning-text: 42 90% 27%;
+    --status-critical-text: 5 70% 43%;
+    --status-info-text: 198 65% 34%;
+    --status-unknown-text: 180 8% 37%;
     --secondary: 350 70% 93%;          /* #FFC0CB papaya pink tint */
     --secondary-foreground: 180 30% 14%;
     --muted: 50 35% 94%;
@@ -836,7 +913,7 @@ html.default {
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
   --button-shadow:
     0 1px 2px rgba(46, 38, 32, 0.10),
-    0 4px 10px -3px rgba(217, 119, 87, 0.30),
+    0 4px 10px -3px rgba(184, 85, 46, 0.30),
     inset 0 1px 0 rgba(255, 255, 255, 0.30);
   --button-shadow-active:
     0 1px 1px rgba(46, 38, 32, 0.10),

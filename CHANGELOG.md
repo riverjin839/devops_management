@@ -10,6 +10,16 @@
 
 1.36.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **테마 대비(접근성) P0 — 상태 글자·primary 버튼/링크가 흐리게 보이던 문제**: 라이트 계열 테마에서
+  `정상`/`경고` 상태 글자가 카드 위 2.1~2.3:1, 기본 테마(코랄) primary 버튼 글자가 3.3:1 로 WCAG AA
+  (4.5:1) 에 못 미쳤다. 상태색을 면(fill)과 글자(text)로 분리하고 테마 10종 전부에서 버튼·링크·상태
+  글자가 4.5:1 이상이 되게 보정했다(미달 47건 → 0건). Frontend: `index.css` 에 테마별
+  `--primary-text`·`--status-*-text` 토큰 추가, `tailwind.config.js` `extend.textColor` 로
+  `text-primary`/`text-status-*` 만 새 토큰에 매핑(`bg-*`/`border-*`/`fill-*` 는 기존 면색 유지).
+  default·burnt-sienna·tuscan-sunset 은 primary 명도 하향, dark·electropop·summer-breeze·
+  tropical-punch 는 `--primary-foreground` 를 어두운 글자로 교체.
+
 ## [1.36.1] - 2026-09-23
 
 ### Fixed
