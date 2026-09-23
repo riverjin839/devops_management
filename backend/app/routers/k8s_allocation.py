@@ -26,6 +26,7 @@ import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from decimal import ROUND_HALF_UP
 from typing import Any, Callable, Optional
@@ -85,10 +86,13 @@ _STUCK_TIMEOUT = _envf("K8S_ALLOC_STUCK_TIMEOUT", 1800.0)
 # 잔존(BE-14)을 막는다. 만료 항목 정리 후에도 상한을 넘으면 가장 오래된 항목부터 퇴출.
 _CACHE_TTL = 20.0
 _CACHE_MAX = int(_envf("K8S_ALLOC_DRILL_CACHE_MAX", 256))
-# 노드 드릴다운에서 이 수 이하의 네임스페이스가 걸려 있으면 NS 단위 metrics/ReplicaSet 조회
-# (정확 + NS 드릴다운과 캐시 공유), 초과하면 cluster-wide metrics 1회 + 이름 기반 워크로드
-# 근사로 전환한다 — NS 가 흩어진 노드에서 호출 수가 선형으로 늘지 않게.
-_NODE_DRILL_NS_MAX = int(_envf("K8S_ALLOC_NODE_DRILL_NS_MAX", 12))
+# 노드 드릴다운은 노드에 걸린 NS 마다 metrics/ReplicaSet 을 NS 단위로 **병렬** 조회한다(정확 +
+# NS 드릴다운과 캐시 공유). 운영 노드는 DaemonSet 만으로도 NS 가 10개를 쉽게 넘으므로 상한을
+# 넉넉히 두고, 이를 넘는 극단적인 노드만 cluster-wide metrics 1회 + 이름 기반 워크로드 근사로
+# 떨어진다(응답 owner_approx 로 화면에 알림). cluster-wide metrics 는 대형 클러스터에서
+# 타임아웃으로 빈 결과가 되기 쉬워 기본 경로로 쓰지 않는다.
+_NODE_DRILL_NS_MAX = int(_envf("K8S_ALLOC_NODE_DRILL_NS_MAX", 64))
+_NODE_DRILL_WORKERS = 8
 _CACHE: dict[str, tuple[float, Any]] = {}
 _CACHE_LOCK = threading.Lock()
 
@@ -1101,22 +1105,24 @@ def allocation_node_pods(cluster_id: UUID, node: str, db: Session = Depends(get_
                 if (p.status.phase if p.status else None) in _ACTIVE_PHASES and p.metadata]
         namespaces = sorted({p.metadata.namespace for p in pods})
 
-        # usage: NS 가 적으면 NS 단위(캐시를 NS 드릴다운과 공유), 많으면 cluster-wide 1회.
-        # NS 수만큼 metrics 를 치면 NS 가 흩어진 노드에서 응답이 선형으로 느려진다.
         pusage: dict[tuple[str, str], dict] = {}
-        small = len(namespaces) <= _NODE_DRILL_NS_MAX
-        if namespaces and small:
-            for ns in namespaces:
-                pusage.update(_cached(f"{cid}:nspu:{ns}", lambda ns=ns: _pod_usage(client, ns)))
-        elif namespaces:
-            pusage = _cached(f"{cid}:pu:all", lambda: _pod_usage(client))
-
-        # ownerRef → 상위 워크로드. NS 가 많으면 RS 전량 조회 대신 이름 해시 strip 근사
-        # (_top_owner 가 rs_map 미스 시 Deployment 명을 추정한다).
         rs_maps: dict[str, dict] = {}
-        if small:
-            for ns in namespaces:
-                rs_maps[ns] = _cached(f"{cid}:rs:{ns}", lambda ns=ns: _build_rs_owner_map(apps, ns))
+        per_ns = len(namespaces) <= _NODE_DRILL_NS_MAX
+        if namespaces and per_ns:
+            # NS 별 usage + ReplicaSet→Deployment 맵을 병렬로. 둘 다 best-effort(실패 시 빈 dict)라
+            # 한 NS 가 실패해도 나머지는 채워진다. 캐시 키는 NS 드릴다운과 같다.
+            def _fetch_ns(ns: str) -> tuple[dict, dict]:
+                return (
+                    _cached(f"{cid}:nspu:{ns}", lambda: _pod_usage(client, ns)),
+                    _cached(f"{cid}:rs:{ns}", lambda: _build_rs_owner_map(apps, ns)),
+                )
+            with ThreadPoolExecutor(max_workers=min(_NODE_DRILL_WORKERS, len(namespaces))) as ex:
+                for ns, (usage, rs_map) in zip(namespaces, ex.map(_fetch_ns, namespaces)):
+                    pusage.update(usage)
+                    rs_maps[ns] = rs_map
+        elif namespaces:
+            # 상한 초과 — RS 전량 조회 대신 _top_owner 의 이름 해시 strip 근사로 Deployment 를 추정.
+            pusage = _cached(f"{cid}:pu:all", lambda: _pod_usage(client))
 
         rows = [_pod_alloc_row(p, p.metadata.namespace, pusage, rs_maps.get(p.metadata.namespace, {}))
                 for p in pods]
@@ -1127,4 +1133,6 @@ def allocation_node_pods(cluster_id: UUID, node: str, db: Session = Depends(get_
             "namespace_count": len(namespaces),
             "items": rows,
             "metrics_available": bool(pusage),
+            # True 면 ReplicaSet 조회를 생략해 Deployment 귀속을 파드 이름으로 추정한 결과다.
+            "owner_approx": bool(namespaces) and not per_ns,
         }

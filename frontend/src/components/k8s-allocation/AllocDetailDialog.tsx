@@ -122,6 +122,11 @@ function NodeDetail({ clusterId, node, clusterName }: {
       {data && !data.metricsAvailable && (
         <div className="text-sm text-muted-foreground">※ 사용량(use) 미가용 — metrics-server 응답이 없어 request/limit 만 표시됩니다.</div>
       )}
+      {data?.ownerApprox && (
+        <div className="text-sm text-muted-foreground">
+          ※ 이 노드엔 네임스페이스가 {fmtN(data.namespaceCount)}개라 ReplicaSet 조회를 생략하고 Deployment 귀속을 파드 이름으로 추정했습니다.
+        </div>
+      )}
     </div>
   );
 }
