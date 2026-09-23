@@ -12,6 +12,8 @@ import fnmatch
 import json
 import logging
 import os
+import threading
+import time
 from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
@@ -22,6 +24,7 @@ from kubernetes import client as k8s_client, config as k8s_config, watch as k8s_
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import Cluster
 from app.services.analyzers import (
@@ -35,6 +38,12 @@ from app.services.analyzers import (
 from app.services.kubeconfig import ensure_kubeconfig_file
 
 logger = logging.getLogger(__name__)
+
+# kubernetes SDK 는 blocking urllib3 라 SSE 스트림 하나가 anyio 스레드풀 슬롯 하나를
+# 스트림 수명 내내 점유한다(follow=True 는 원래 무제한). 이 세마포어가 프로세스당
+# 동시 로그/이벤트 스트림 수를 제한해, 스트림이 나머지 529개 엔드포인트의 스레드풀
+# 슬롯을 다 먹어치우는 것을 막는다 — 초과 요청은 대기시키지 않고 즉시 429.
+_stream_semaphore = threading.BoundedSemaphore(settings.log_stream_max_concurrent)
 
 _K8S_TIMEOUT = 15
 # 큰 클러스터(수천 namespace · 수만 pod) 대비 — 무거운 list 호출은 별도 타임아웃.
@@ -486,8 +495,16 @@ def stream_pod_logs(
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
 
+    if not _stream_semaphore.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail=f"동시 로그/이벤트 스트림 한도({settings.log_stream_max_concurrent})를 초과했습니다. "
+                    "다른 탭의 로그 뷰어를 닫고 다시 시도하세요.",
+        )
+
     def _gen():
         resp = None
+        deadline = time.monotonic() + settings.log_stream_max_duration_seconds
         try:
             kwargs = dict(
                 name=pod_name,
@@ -510,6 +527,9 @@ def stream_pod_logs(
                 )
                 for line in text.splitlines():
                     yield f"data: {line}\n\n"
+                if follow and time.monotonic() > deadline:
+                    yield "data: [stream ended] 최대 스트림 시간 초과 — 새로고침 시 이어서 tail 됩니다\n\n"
+                    break
         except Exception as e:  # noqa: BLE001
             yield f"data: [stream error] {str(e)[:200]}\n\n"
         finally:
@@ -518,6 +538,7 @@ def stream_pod_logs(
                     resp.release_conn()
             except Exception:  # noqa: BLE001
                 pass
+            _stream_semaphore.release()
 
     return StreamingResponse(
         _gen(),
@@ -528,6 +549,9 @@ def stream_pod_logs(
             # 응답을 다 모을 때까지 버퍼링해 로그 스트림 실시간성이 사라진다.
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            # GZipMiddleware 는 이 헤더가 있으면 압축을 건너뛴다 — SSE 를 gzip 하면
+            # zlib 내부 버퍼링 때문에 위 X-Accel-Buffering:no 의 실시간성이 깨진다.
+            "Content-Encoding": "identity",
         },
     )
 
@@ -648,6 +672,13 @@ def stream_cluster_events(
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
 
+    if not _stream_semaphore.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail=f"동시 로그/이벤트 스트림 한도({settings.log_stream_max_concurrent})를 초과했습니다. "
+                    "다른 탭의 로그 뷰어를 닫고 다시 시도하세요.",
+        )
+
     def _evt_payload(ev_type: str, obj) -> str:
         io = getattr(obj, "involved_object", None)
         ts = getattr(obj, "last_timestamp", None) or getattr(obj, "event_time", None)
@@ -694,6 +725,7 @@ def stream_cluster_events(
                 w.stop()
             except Exception:  # noqa: BLE001
                 pass
+            _stream_semaphore.release()
 
     return StreamingResponse(
         _gen(),
@@ -702,6 +734,7 @@ def stream_cluster_events(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            "Content-Encoding": "identity",
         },
     )
 
