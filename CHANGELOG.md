@@ -10,6 +10,17 @@
 
 1.35.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **K8S 접근 권한 — ServiceAccount 의 "연결된 권한" 클릭 시 해당 롤 상세로 바로 이동**:
+  ServiceAccount 탭 표의 "연결된 권한" 태그(예: `lake-api → ClusterRole/pep-dev-hjkim`)를
+  클릭하면 Role/ClusterRole 탭으로 이동해 그 롤이 바로 선택·스크롤된 상태로 열린다.
+  참조 대상이 `system:*`/`view`/`edit`/`cluster-admin` 같은 빌트인 롤이라 목록에 아직
+  없으면 `system:* 포함` 을 자동으로 켠 뒤 다시 찾는다. Frontend: `RbacTags.tsx`
+  (`Tag` 에 클릭형 버튼 변형 추가) · `RolePanel.tsx`(`focusRequest` prop, 배경 refetch
+  로 반복 재선택/토스트가 나지 않도록 token 단위로 1회만 처리) · `K8sRbacPage.tsx`
+  (`handleSelectRole` — Role 스코프면 네임스페이스를 null 로, ClusterRole 이면 바인딩
+  네임스페이스로 맞춰 찾는다).
+
 ## [1.35.2] - 2026-09-23
 
 ### Added

@@ -18,13 +18,21 @@ export function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
   );
 }
 
-/** 리소스·verb 를 작은 태그로. verb 는 쓰기 여부로 색을 가른다. */
+/**
+ * 리소스·verb 를 작은 태그로. verb 는 쓰기 여부로 색을 가른다.
+ * `onClick` 을 주면 `<button>` 로 렌더돼 다른 탭의 대상(예: 연결된 롤)으로 바로 이동하는
+ * 링크처럼 동작한다 — hover 밑줄 + focus 링으로 눌리는 요소임을 드러낸다.
+ */
 export function Tag({
   children,
   tone = 'default',
+  onClick,
+  title,
 }: {
   children: React.ReactNode;
   tone?: 'default' | 'read' | 'write' | 'muted';
+  onClick?: () => void;
+  title?: string;
 }) {
   const cls =
     tone === 'write'
@@ -34,11 +42,21 @@ export function Tag({
         : tone === 'muted'
           ? 'bg-secondary border-border text-muted-foreground italic'
           : 'bg-secondary border-border text-foreground';
-  return (
-    <span className={`inline-block font-mono text-[11px] px-1.5 py-px rounded border mr-1 mb-1 ${cls}`}>
-      {children}
-    </span>
-  );
+  const base = `inline-block font-mono text-[11px] px-1.5 py-px rounded border mr-1 mb-1 ${cls}`;
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        className={`${base} hover:underline hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-pointer`}
+      >
+        {children}
+      </button>
+    );
+  }
+  return <span className={base}>{children}</span>;
 }
 
 export function VerbTags({ verbs }: { verbs: string[] }) {

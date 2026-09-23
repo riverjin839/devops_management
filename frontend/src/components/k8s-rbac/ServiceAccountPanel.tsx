@@ -10,7 +10,7 @@ import {
   useIssueKubeconfig,
 } from '@/hooks/useK8sRbac';
 import { formatApiError } from '@/lib/utils';
-import type { RbacNamespace, RbacServiceAccount } from '@/types';
+import type { RbacBindingSummary, RbacNamespace, RbacServiceAccount } from '@/types';
 import { shortDate } from './rbacShared';
 import { Tag } from './RbacTags';
 
@@ -19,9 +19,17 @@ interface Props {
   serviceAccounts: RbacServiceAccount[];
   namespaces: RbacNamespace[];
   isLoading: boolean;
+  /** "연결된 권한" 태그 클릭 — Role/ClusterRole 탭으로 이동해 그 롤을 바로 연다. */
+  onSelectRole: (binding: RbacBindingSummary) => void;
 }
 
-export function ServiceAccountPanel({ clusterId, serviceAccounts, namespaces, isLoading }: Props) {
+export function ServiceAccountPanel({
+  clusterId,
+  serviceAccounts,
+  namespaces,
+  isLoading,
+  onSelectRole,
+}: Props) {
   const { canOperate, withHint } = useCanOperate();
   const toast = useToastSafe();
   const [query, setQuery] = useState('');
@@ -224,7 +232,11 @@ export function ServiceAccountPanel({ clusterId, serviceAccounts, namespaces, is
                           <span className="text-xs text-muted-foreground">연결된 권한 없음</span>
                         ) : (
                           sa.bindings.slice(0, 3).map((b, i) => (
-                            <Tag key={i}>
+                            <Tag
+                              key={i}
+                              onClick={() => onSelectRole(b)}
+                              title={`${b.roleKind}/${b.roleName} 상세 보기 — Role/ClusterRole 탭으로 이동`}
+                            >
                               {b.kind === 'ClusterRoleBinding' ? '전역' : b.namespace} → {b.roleKind}/{b.roleName}
                             </Tag>
                           ))

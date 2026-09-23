@@ -16,6 +16,7 @@ import {
   ProvisionWizard,
   RolePanel,
   ServiceAccountPanel,
+  type RbacRoleFocusRequest,
 } from '@/components/k8s-rbac';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -27,6 +28,7 @@ import {
   useRbacRoles,
   useRbacServiceAccounts,
 } from '@/hooks/useK8sRbac';
+import type { RbacBindingSummary } from '@/types';
 
 type TabKey = 'wizard' | 'sa' | 'roles' | 'bindings' | 'review';
 
@@ -45,6 +47,8 @@ export function K8sRbacPage() {
   const [includeSystem, setIncludeSystem] = useState(false);
   // 실행 로그를 펼쳐 볼지 — 로그는 항상 수집하고 표시 여부만 사용자가 정한다.
   const [showLogs, setShowLogs] = useState(true);
+  // ServiceAccount 탭의 "연결된 권한" 클릭 → Role/ClusterRole 탭으로 이동해 그 롤을 연다.
+  const [roleFocus, setRoleFocus] = useState<RbacRoleFocusRequest | null>(null);
 
   const clusterId = selectedClusterId ?? clusters[0]?.id ?? '';
   const cluster = useMemo(() => clusters.find((c) => c.id === clusterId), [clusters, clusterId]);
@@ -61,6 +65,20 @@ export function K8sRbacPage() {
   );
 
   const stream = useProvisionStream(clusterId);
+
+  // ClusterRole 은 롤 자체가 클러스터 스코프라 namespace 를 null 로 찾아야 하고, Role 은
+  // 바인딩과 같은 네임스페이스에 있어야 한다는 K8s 규칙을 그대로 따른다. 참조 대상이
+  // 빌트인(system:*, view/edit/cluster-admin 등)이라 지금 목록에 없을 수도 있어 —
+  // includeSystem 이 꺼진 채면 미리 켜서 RolePanel 이 재조회 없이 바로 찾게 한다.
+  const handleSelectRole = (b: RbacBindingSummary) => {
+    const scope: 'namespace' | 'cluster' = b.roleKind === 'ClusterRole' ? 'cluster' : 'namespace';
+    const namespace = scope === 'cluster' ? null : b.namespace;
+    if (scope === 'cluster' && !includeSystem && !clusterRoles.some((r) => r.name === b.roleName)) {
+      setIncludeSystem(true);
+    }
+    setRoleFocus({ scope, namespace, name: b.roleName, token: Date.now() });
+    setTab('roles');
+  };
 
   return (
     <div className="app-min-h-screen bg-background">
@@ -150,6 +168,7 @@ export function K8sRbacPage() {
               serviceAccounts={serviceAccounts}
               namespaces={namespaces}
               isLoading={saLoading}
+              onSelectRole={handleSelectRole}
             />
           ) : tab === 'roles' ? (
             <RolePanel
@@ -160,6 +179,7 @@ export function K8sRbacPage() {
               includeSystem={includeSystem}
               onIncludeSystemChange={setIncludeSystem}
               isLoading={rolesLoading}
+              focusRequest={roleFocus}
             />
           ) : tab === 'bindings' ? (
             <BindingPanel
