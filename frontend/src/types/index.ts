@@ -4198,6 +4198,8 @@ export interface AllocNodePodsResponse {
   namespaceCount: number;
   items: AllocPodRow[];
   metricsAvailable: boolean;
+  /** true 면 NS 가 너무 많아 ReplicaSet 조회를 생략하고 Deployment 귀속을 파드 이름으로 추정한 결과. */
+  ownerApprox?: boolean;
 }
 
 // ── 일일점검 리뷰: 리소스 수 추세 체크리스트 ──────────────────────────────────
